@@ -190,6 +190,11 @@ impl Central for Adapter {
         self.add(address.0)
     }
 
+    async fn clear_peripherals(&self) -> Result<()> {
+        self.manager.clear_peripherals();
+        Ok(())
+    }
+
     async fn adapter_state(&self) -> Result<CentralState> {
         Ok(CentralState::Unknown)
     }
