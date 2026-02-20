@@ -52,6 +52,10 @@ pub fn init(env: &JNIEnv) -> crate::Result<()> {
             env,
             "com/nonpolynomial/btleplug/android/impl/NoSuchCharacteristicException",
         )?;
+        jni_utils::classcache::find_add_class(
+            env,
+            "com/nonpolynomial/btleplug/android/impl/NoBluetoothAdapterException",
+        )?;
     }
     Ok(())
 }

@@ -120,6 +120,17 @@ fn get_poll_result<'a: 'b, 'b>(
                     Ok(Err(Error::NoSuchCharacteristic))
                 } else if env.is_instance_of(
                     cause,
+                    JClass::from(
+                        jni_utils::classcache::get_class(
+                            "com/nonpolynomial/btleplug/android/impl/NoBluetoothAdapterException",
+                        )
+                        .unwrap()
+                        .as_obj(),
+                    ),
+                )? {
+                    Ok(Err(Error::NoAdapterAvailable))
+                } else if env.is_instance_of(
+                    cause,
                     "java/lang/RuntimeException",
                 )? {
                     let msg = env

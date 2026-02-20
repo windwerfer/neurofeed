@@ -10,6 +10,8 @@ use crate::{
     common::adapter_manager::AdapterManager,
     Error, Result,
 };
+use jni::objects::JClass;
+use jni_utils::exceptions::try_block;
 use async_trait::async_trait;
 use futures::stream::Stream;
 use jni::{
@@ -139,13 +141,33 @@ impl Central for Adapter {
     async fn start_scan(&self, filter: ScanFilter) -> Result<()> {
         let env = global_jvm().get_env()?;
         let filter = JScanFilter::new(&env, filter)?;
-        env.call_method(
-            &self.internal,
-            "startScan",
-            "(Lcom/nonpolynomial/btleplug/android/impl/ScanFilter;)V",
-            &[filter.into()],
-        )?;
-        Ok(())
+        try_block(&env, || {
+            env.call_method(
+                &self.internal,
+                "startScan",
+                "(Lcom/nonpolynomial/btleplug/android/impl/ScanFilter;)V",
+                &[filter.into()],
+            )?;
+            Ok(Ok(()))
+        })
+        .catch(
+            JClass::from(
+                jni_utils::classcache::get_class(
+                    "com/nonpolynomial/btleplug/android/impl/NoBluetoothAdapterException",
+                )
+                .unwrap()
+                .as_obj(),
+            ),
+            |_ex| Ok(Err(Error::NoAdapterAvailable)),
+        )
+        .catch("java/lang/RuntimeException", |ex| {
+            let msg = env
+                .call_method(ex, "getMessage", "()Ljava/lang/String;", &[])?
+                .l()?;
+            let msgstr: String = env.get_string(msg.into())?.into();
+            Ok(Err(Error::RuntimeError(msgstr)))
+        })
+        .result()?
     }
 
     async fn stop_scan(&self) -> Result<()> {

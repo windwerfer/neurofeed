@@ -125,6 +125,9 @@ pub enum Error {
     #[error("No such characteristic")]
     NoSuchCharacteristic,
 
+    #[error("No Bluetooth adapter available")]
+    NoAdapterAvailable,
+
     #[error("The operation is not supported: {}", _0)]
     NotSupported(String),
 
