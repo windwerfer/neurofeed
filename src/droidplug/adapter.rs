@@ -10,6 +10,8 @@ use crate::{
     common::adapter_manager::AdapterManager,
     Error, Result,
 };
+use jni::objects::JClass;
+use jni_utils::exceptions::try_block;
 use async_trait::async_trait;
 use futures::stream::Stream;
 use jni::objects::JClass;
