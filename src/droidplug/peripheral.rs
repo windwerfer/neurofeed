@@ -238,7 +238,18 @@ impl api::Peripheral for Peripheral {
         self.with_obj(|env, _obj| {
             let result = JPollResult::from_env(env, result_ref.as_obj())?;
             get_poll_result(env, result).map(|_| {})
-        })
+        })?;
+        // Query the system-cached device name and update local_name
+        self.with_obj(|_env, obj| -> std::result::Result<(), Error> {
+            if let Ok(Some(name)) = obj.get_device_name() {
+                let mut guard = self.shared.lock().map_err(Into::<Error>::into)?;
+                if let Some(ref mut props) = guard.properties {
+                    props.local_name = Some(name);
+                }
+            }
+            Ok(())
+        })?;
+        Ok(())
     }
 
     async fn disconnect(&self) -> Result<()> {

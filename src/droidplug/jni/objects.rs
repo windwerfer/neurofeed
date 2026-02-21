@@ -24,6 +24,7 @@ pub struct JPeripheral<'a: 'b, 'b> {
     get_notifications: JMethodID<'a>,
     read_descriptor: JMethodID<'a>,
     write_descriptor: JMethodID<'a>,
+    get_device_name: JMethodID<'a>,
     env: &'b JNIEnv<'a>,
 }
 
@@ -102,6 +103,8 @@ impl<'a: 'b, 'b> JPeripheral<'a, 'b> {
             "writeDescriptor",
             "(Ljava/util/UUID;Ljava/util/UUID;[BI)Lio/github/gedgygedgy/rust/future/Future;",
         )?;
+        let get_device_name =
+            env.get_method_id(class, "getDeviceName", "()Ljava/lang/String;")?;
         Ok(Self {
             internal: obj,
             connect,
@@ -114,6 +117,7 @@ impl<'a: 'b, 'b> JPeripheral<'a, 'b> {
             get_notifications,
             read_descriptor,
             write_descriptor,
+            get_device_name,
             env,
         })
     }
@@ -263,6 +267,24 @@ impl<'a: 'b, 'b> JPeripheral<'a, 'b> {
             )?
             .l()?;
         JFuture::from_env(self.env, future_obj)
+    }
+
+    pub fn get_device_name(&self) -> Result<Option<String>> {
+        let obj = self
+            .env
+            .call_method_unchecked(
+                self.internal,
+                self.get_device_name,
+                JavaType::Object("Ljava/lang/String;".to_string()),
+                &[],
+            )?
+            .l()?;
+        if obj.is_null() {
+            Ok(None)
+        } else {
+            let name_str = self.env.get_string(obj.into())?;
+            Ok(Some(name_str.into()))
+        }
     }
 
     pub fn write_descriptor(
@@ -732,8 +754,8 @@ impl<'a: 'b, 'b> TryFrom<JScanResult<'a, 'b>> for (BDAddr, Option<PeripheralProp
             Some(PeripheralProperties {
                 address: addr,
                 address_type: None,
-                local_name: device_name,
-                advertisement_name: None,
+                local_name: device_name.clone(),
+                advertisement_name: device_name,
                 tx_power_level,
                 manufacturer_data,
                 service_data,
