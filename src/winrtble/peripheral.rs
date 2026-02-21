@@ -79,6 +79,7 @@ struct Shared {
     // Mutable, advertised, state...
     address_type: RwLock<Option<AddressType>>,
     local_name: RwLock<Option<String>>,
+    advertisement_name: RwLock<Option<String>>,
     last_tx_power_level: RwLock<Option<i16>>, // XXX: would be nice to avoid lock here!
     last_rssi: RwLock<Option<i16>>,           // XXX: would be nice to avoid lock here!
     latest_manufacturer_data: RwLock<HashMap<u16, Vec<u8>>>,
@@ -100,6 +101,7 @@ impl Peripheral {
                 notifications_channel: broadcast_sender,
                 address_type: RwLock::new(None),
                 local_name: RwLock::new(None),
+                advertisement_name: RwLock::new(None),
                 last_tx_power_level: RwLock::new(None),
                 last_rssi: RwLock::new(None),
                 latest_manufacturer_data: RwLock::new(HashMap::new()),
@@ -117,7 +119,7 @@ impl Peripheral {
             address: self.address(),
             address_type: *self.shared.address_type.read().unwrap(),
             local_name: self.shared.local_name.read().unwrap().clone(),
-            advertisement_name: None,
+            advertisement_name: self.shared.advertisement_name.read().unwrap().clone(),
             tx_power_level: *self.shared.last_tx_power_level.read().unwrap(),
             rssi: *self.shared.last_rssi.read().unwrap(),
             manufacturer_data: self.shared.latest_manufacturer_data.read().unwrap().clone(),
@@ -140,12 +142,17 @@ impl Peripheral {
         // Advertisements are cumulative: set/replace data only if it's set
         if let Ok(name) = advertisement.LocalName() {
             if !name.is_empty() {
-                // XXX: we could probably also assume that we've seen the
-                // advertisement before and speculatively take a read lock
-                // to confirm that the name hasn't changed...
-
-                let mut local_name_guard = self.shared.local_name.write().unwrap();
-                *local_name_guard = Some(name.to_string());
+                let name_str = name.to_string();
+                let mut adv_name_guard = self.shared.advertisement_name.write().unwrap();
+                *adv_name_guard = Some(name_str.clone());
+                drop(adv_name_guard);
+                // Also use as local_name fallback if we don't have one yet
+                let local_name_guard = self.shared.local_name.read().unwrap();
+                if local_name_guard.is_none() {
+                    drop(local_name_guard);
+                    let mut local_name_guard = self.shared.local_name.write().unwrap();
+                    *local_name_guard = Some(name_str);
+                }
             }
         }
         if let Ok(manufacturer_data) = advertisement.ManufacturerData() {
@@ -387,6 +394,14 @@ impl ApiPeripheral for Peripheral {
         .await?;
 
         device.connect().await?;
+        // Query the system-cached device name (GAP name) and update local_name
+        if let Ok(name) = device.name() {
+            let name_str = name.to_string();
+            if !name_str.is_empty() {
+                let mut local_name_guard = self.shared.local_name.write().unwrap();
+                *local_name_guard = Some(name_str);
+            }
+        }
         let mut d = self.shared.device.lock().await;
         *d = Some(device);
         self.shared.connected.store(true, Ordering::Relaxed);
