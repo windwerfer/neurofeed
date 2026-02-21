@@ -143,8 +143,8 @@ impl api::Peripheral for Peripheral {
         Ok(Some(PeripheralProperties {
             address: device_info.mac_address.into(),
             address_type: Some(device_info.address_type.into()),
-            local_name: device_info.name,
-            advertisement_name: None,
+            local_name: device_info.alias.or(device_info.name.clone()),
+            advertisement_name: device_info.name,
             tx_power_level: device_info.tx_power,
             rssi: device_info.rssi,
             manufacturer_data: device_info.manufacturer_data,
