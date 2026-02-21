@@ -580,7 +580,7 @@ impl CoreBluetoothInternal {
             .or(advertisement_name.clone());
 
         if self.peripherals.contains_key(&uuid) {
-            if local_name.is_some() {
+            if local_name.is_some() || advertisement_name.is_some() {
                 self.dispatch_event(CoreBluetoothEvent::DeviceUpdated {
                     uuid,
                     local_name,
