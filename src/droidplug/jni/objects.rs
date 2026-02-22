@@ -103,8 +103,7 @@ impl<'a: 'b, 'b> JPeripheral<'a, 'b> {
             "writeDescriptor",
             "(Ljava/util/UUID;Ljava/util/UUID;[BI)Lio/github/gedgygedgy/rust/future/Future;",
         )?;
-        let get_device_name =
-            env.get_method_id(class, "getDeviceName", "()Ljava/lang/String;")?;
+        let get_device_name = env.get_method_id(class, "getDeviceName", "()Ljava/lang/String;")?;
         Ok(Self {
             internal: obj,
             connect,
