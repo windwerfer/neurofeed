@@ -31,7 +31,7 @@ use std::{
     collections::{BTreeSet, HashMap},
     fmt::{self, Debug, Display, Formatter},
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicU16, Arc, Mutex},
 };
 use tokio::sync::broadcast;
 use tokio::task;
@@ -64,6 +64,7 @@ struct Shared {
     services: Mutex<BTreeSet<Service>>,
     properties: Mutex<PeripheralProperties>,
     message_sender: Sender<CoreBluetoothMessage>,
+    mtu: AtomicU16,
     // We're not actually holding a peripheral object here, that's held out in
     // the objc thread. We'll just communicate with it through our
     // receiver/sender pair.
@@ -112,6 +113,7 @@ impl Peripheral {
             notifications_channel,
             uuid,
             message_sender,
+            mtu: AtomicU16::new(crate::api::DEFAULT_MTU_SIZE),
         });
         let shared_clone = shared.clone();
         task::spawn(async move {
@@ -222,6 +224,10 @@ impl api::Peripheral for Peripheral {
 
     fn address(&self) -> BDAddr {
         BDAddr::default()
+    }
+
+    fn mtu(&self) -> u16 {
+        self.shared.mtu.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     async fn properties(&self) -> Result<Option<PeripheralProperties>> {

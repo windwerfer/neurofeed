@@ -25,6 +25,7 @@ pub struct JPeripheral<'a: 'b, 'b> {
     read_descriptor: JMethodID<'a>,
     write_descriptor: JMethodID<'a>,
     get_device_name: JMethodID<'a>,
+    request_mtu: JMethodID<'a>,
     env: &'b JNIEnv<'a>,
 }
 
@@ -103,8 +104,12 @@ impl<'a: 'b, 'b> JPeripheral<'a, 'b> {
             "writeDescriptor",
             "(Ljava/util/UUID;Ljava/util/UUID;[BI)Lio/github/gedgygedgy/rust/future/Future;",
         )?;
-        let get_device_name =
-            env.get_method_id(class, "getDeviceName", "()Ljava/lang/String;")?;
+        let get_device_name = env.get_method_id(class, "getDeviceName", "()Ljava/lang/String;")?;
+        let request_mtu = env.get_method_id(
+            class,
+            "requestMtu",
+            "(I)Lio/github/gedgygedgy/rust/future/Future;",
+        )?;
         Ok(Self {
             internal: obj,
             connect,
@@ -118,6 +123,7 @@ impl<'a: 'b, 'b> JPeripheral<'a, 'b> {
             read_descriptor,
             write_descriptor,
             get_device_name,
+            request_mtu,
             env,
         })
     }
@@ -285,6 +291,17 @@ impl<'a: 'b, 'b> JPeripheral<'a, 'b> {
             let name_str = self.env.get_string(obj.into())?;
             Ok(Some(name_str.into()))
         }
+    }
+
+    pub fn request_mtu(&self, mtu: jint) -> Result<JObject<'a>> {
+        self.env
+            .call_method_unchecked(
+                self.internal,
+                self.request_mtu,
+                JavaType::Object("Lio/github/gedgygedgy/rust/future/Future;".to_string()),
+                &[mtu.into()],
+            )?
+            .l()
     }
 
     pub fn write_descriptor(

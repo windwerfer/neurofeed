@@ -24,6 +24,7 @@ use std::{
     convert::TryFrom,
     fmt::{self, Debug, Display, Formatter},
     pin::Pin,
+    sync::atomic::{AtomicU16, Ordering},
     sync::{Arc, Mutex},
 };
 use uuid::Uuid;
@@ -154,6 +155,7 @@ struct PeripheralShared {
     services: BTreeSet<Service>,
     characteristics: BTreeSet<Characteristic>,
     properties: Option<PeripheralProperties>,
+    mtu: atomic::AtomicU16,
 }
 
 #[derive(Clone)]
@@ -161,6 +163,7 @@ pub struct Peripheral {
     addr: BDAddr,
     internal: GlobalRef,
     shared: Arc<Mutex<PeripheralShared>>,
+    mtu: Arc<atomic::AtomicU16>,
 }
 
 impl Peripheral {
@@ -173,7 +176,9 @@ impl Peripheral {
                 services: BTreeSet::new(),
                 characteristics: BTreeSet::new(),
                 properties: None,
+                mtu: AtomicU16::new(crate::api::DEFAULT_MTU_SIZE),
             })),
+            mtu: Arc::new(AtomicU16::new(crate::api::DEFAULT_MTU_SIZE)),
         })
     }
 
@@ -229,6 +234,10 @@ impl api::Peripheral for Peripheral {
         self.addr
     }
 
+    fn mtu(&self) -> u16 {
+        self.mtu.load(Ordering::Relaxed)
+    }
+
     async fn properties(&self) -> Result<Option<PeripheralProperties>> {
         let guard = self.shared.lock().map_err(Into::<Error>::into)?;
         Ok((&guard.properties).clone())
@@ -258,6 +267,16 @@ impl api::Peripheral for Peripheral {
                     props.local_name = Some(name);
                 }
             }
+            Ok(())
+        })?;
+        // Auto-negotiate maximum MTU (517) after connection
+        let mtu_future = self.with_obj(|_env, obj| JSendFuture::try_from(obj.request_mtu(517)?))?;
+        let mtu_result_ref = mtu_future.await?;
+        self.with_obj(|env, _obj| {
+            let mtu_result = JPollResult::from_env(env, mtu_result_ref.as_obj())?;
+            let mtu_obj = get_poll_result(env, mtu_result)?;
+            let mtu_val = env.call_method(mtu_obj, "intValue", "()I", &[])?.i()?;
+            self.mtu.store(mtu_val as u16, Ordering::Relaxed);
             Ok(())
         })?;
         Ok(())

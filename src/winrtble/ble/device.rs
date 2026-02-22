@@ -13,24 +13,25 @@
 
 use crate::{api::BDAddr, winrtble::utils, Error, Result};
 use log::{debug, trace};
-use std::future::IntoFuture;
 use windows::{
-    core::Ref,
     Devices::Bluetooth::{
         BluetoothCacheMode, BluetoothConnectionStatus, BluetoothLEDevice,
         GenericAttributeProfile::{
             GattCharacteristic, GattCommunicationStatus, GattDescriptor, GattDeviceService,
-            GattDeviceServicesResult,
+            GattDeviceServicesResult, GattSession,
         },
     },
-    Foundation::TypedEventHandler,
+    Foundation::{EventRegistrationToken, TypedEventHandler},
 };
 
 pub type ConnectedEventHandler = Box<dyn Fn(bool) + Send>;
+pub type MaxPduSizeChangedEventHandler = Box<dyn Fn(u16) + Send>;
 
 pub struct BLEDevice {
     device: BluetoothLEDevice,
-    connection_token: i64,
+    gatt_session: GattSession,
+    connection_token: EventRegistrationToken,
+    pdu_change_token: EventRegistrationToken,
     services: Vec<GattDeviceService>,
 }
 
@@ -38,16 +39,19 @@ impl BLEDevice {
     pub async fn new(
         address: BDAddr,
         connection_status_changed: ConnectedEventHandler,
+        max_pdu_size_changed: MaxPduSizeChangedEventHandler,
     ) -> Result<Self> {
         let async_op = BluetoothLEDevice::FromBluetoothAddressAsync(address.into())
             .map_err(|_| Error::DeviceNotFound)?;
-        let device = async_op
-            .into_future()
-            .await
+        let device = async_op.await.map_err(|_| Error::DeviceNotFound)?;
+
+        let async_op = GattSession::FromDeviceIdAsync(&device.BluetoothDeviceId()?)
             .map_err(|_| Error::DeviceNotFound)?;
+        let gatt_session = async_op.await.map_err(|_| Error::DeviceNotFound)?;
+
         let connection_status_handler =
-            TypedEventHandler::new(move |sender: Ref<BluetoothLEDevice>, _| {
-                if let Ok(sender) = sender.ok() {
+            TypedEventHandler::new(move |sender: &Option<BluetoothLEDevice>, _| {
+                if let Some(sender) = sender {
                     let is_connected = sender
                         .ConnectionStatus()
                         .ok()
@@ -62,9 +66,23 @@ impl BLEDevice {
             .ConnectionStatusChanged(&connection_status_handler)
             .map_err(|_| Error::Other("Could not add connection status handler".into()))?;
 
+        max_pdu_size_changed(gatt_session.MaxPduSize().unwrap());
+        let max_pdu_size_changed_handler =
+            TypedEventHandler::new(move |sender: &Option<GattSession>, _| {
+                if let Some(sender) = sender {
+                    max_pdu_size_changed(sender.MaxPduSize().unwrap());
+                }
+                Ok(())
+            });
+        let pdu_change_token = gatt_session
+            .MaxPduSizeChanged(&max_pdu_size_changed_handler)
+            .map_err(|_| Error::Other("Could not add max pdu size changed handler".into()))?;
+
         Ok(BLEDevice {
             device,
+            gatt_session,
             connection_token,
+            pdu_change_token,
             services: vec![],
         })
     }
@@ -78,7 +96,7 @@ impl BLEDevice {
             .device
             .GetGattServicesWithCacheModeAsync(cache_mode)
             .map_err(winrt_error)?;
-        let service_result = async_op.into_future().await.map_err(winrt_error)?;
+        let service_result = async_op.await.map_err(winrt_error)?;
         Ok(service_result)
     }
 
@@ -90,10 +108,6 @@ impl BLEDevice {
         let service_result = self.get_gatt_services(BluetoothCacheMode::Uncached).await?;
         let status = service_result.Status().map_err(|_| Error::DeviceNotFound)?;
         utils::to_error(status)
-    }
-
-    pub fn name(&self) -> windows::core::Result<windows::core::HSTRING> {
-        self.device.Name()
     }
 
     async fn is_connected(&self) -> Result<bool> {
@@ -108,7 +122,6 @@ impl BLEDevice {
     ) -> Result<Vec<GattCharacteristic>> {
         let async_result = service
             .GetCharacteristicsWithCacheModeAsync(BluetoothCacheMode::Uncached)?
-            .into_future()
             .await?;
 
         match async_result.Status() {
@@ -139,7 +152,6 @@ impl BLEDevice {
     ) -> Result<Vec<GattDescriptor>> {
         let async_result = characteristic
             .GetDescriptorsWithCacheModeAsync(BluetoothCacheMode::Uncached)?
-            .into_future()
             .await?;
         let status = async_result.Status();
         if status == Ok(GattCommunicationStatus::Success) {
@@ -159,7 +171,7 @@ impl BLEDevice {
 
     pub async fn discover_services(&mut self) -> Result<&[GattDeviceService]> {
         let winrt_error = |e| Error::Other(format!("{:?}", e).into());
-        let service_result = self.get_gatt_services(BluetoothCacheMode::Uncached).await?;
+        let service_result = self.get_gatt_services(BluetoothCacheMode::Cached).await?;
         let status = service_result.Status().map_err(winrt_error)?;
         if status == GattCommunicationStatus::Success {
             // We need to convert the IVectorView to a Vec, because IVectorView is not Send and so
@@ -178,6 +190,13 @@ impl BLEDevice {
 
 impl Drop for BLEDevice {
     fn drop(&mut self) {
+        let result = self
+            .gatt_session
+            .RemoveMaxPduSizeChanged(self.pdu_change_token);
+        if let Err(err) = result {
+            debug!("Drop: remove_max_pdu_size_changed {:?}", err);
+        }
+
         let result = self
             .device
             .RemoveConnectionStatusChanged(self.connection_token);
