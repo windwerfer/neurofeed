@@ -206,7 +206,7 @@ run_gradle_build() {
         chmod +x ./gradlew
     fi
 
-    ./gradlew assembleDebug "$@"
+    ./gradlew assembleDebug assembleRelease "$@"
 
     info "Java build completed successfully."
 }
