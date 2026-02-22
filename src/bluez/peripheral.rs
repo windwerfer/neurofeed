@@ -145,7 +145,7 @@ impl api::Peripheral for Peripheral {
                 return characteristic.info.mtu.unwrap();
             }
         }
-        
+
         api::DEFAULT_MTU_SIZE
     }
 

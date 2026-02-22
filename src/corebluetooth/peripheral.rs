@@ -72,11 +72,11 @@ struct Shared {
 
 impl Shared {
     fn emit_event(&self, event: CentralEvent) {
-        if let Some(manager) = self.manager.upgrade() {
+        match self.manager.upgrade() { Some(manager) => {
             manager.emit(event);
-        } else {
+        } _ => {
             trace!("Could not emit an event. AdapterManager has been dropped");
-        }
+        }}
     }
 }
 

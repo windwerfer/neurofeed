@@ -21,7 +21,7 @@ use windows::{
             GattDeviceServicesResult, GattSession,
         },
     },
-    Foundation::{EventRegistrationToken, TypedEventHandler},
+    Foundation::TypedEventHandler,
 };
 
 pub type ConnectedEventHandler = Box<dyn Fn(bool) + Send>;
@@ -30,8 +30,8 @@ pub type MaxPduSizeChangedEventHandler = Box<dyn Fn(u16) + Send>;
 pub struct BLEDevice {
     device: BluetoothLEDevice,
     gatt_session: GattSession,
-    connection_token: EventRegistrationToken,
-    pdu_change_token: EventRegistrationToken,
+    connection_token: i64,
+    pdu_change_token: i64,
     services: Vec<GattDeviceService>,
 }
 
@@ -50,8 +50,8 @@ impl BLEDevice {
         let gatt_session = async_op.await.map_err(|_| Error::DeviceNotFound)?;
 
         let connection_status_handler =
-            TypedEventHandler::new(move |sender: &Option<BluetoothLEDevice>, _| {
-                if let Some(sender) = sender {
+            TypedEventHandler::<BluetoothLEDevice, _>::new(move |sender, _| {
+                if let Some(sender) = sender.as_ref() {
                     let is_connected = sender
                         .ConnectionStatus()
                         .ok()
@@ -59,7 +59,6 @@ impl BLEDevice {
                     connection_status_changed(is_connected);
                     trace!("state {:?}", sender.ConnectionStatus());
                 }
-
                 Ok(())
             });
         let connection_token = device
@@ -68,8 +67,8 @@ impl BLEDevice {
 
         max_pdu_size_changed(gatt_session.MaxPduSize().unwrap());
         let max_pdu_size_changed_handler =
-            TypedEventHandler::new(move |sender: &Option<GattSession>, _| {
-                if let Some(sender) = sender {
+            TypedEventHandler::<GattSession, _>::new(move |sender, _| {
+                if let Some(sender) = sender.as_ref() {
                     max_pdu_size_changed(sender.MaxPduSize().unwrap());
                 }
                 Ok(())
@@ -98,6 +97,10 @@ impl BLEDevice {
             .map_err(winrt_error)?;
         let service_result = async_op.await.map_err(winrt_error)?;
         Ok(service_result)
+    }
+
+    pub fn name(&self) -> windows::core::Result<windows::core::HSTRING> {
+        self.device.Name()
     }
 
     pub async fn connect(&self) -> Result<()> {

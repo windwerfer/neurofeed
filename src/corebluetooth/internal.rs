@@ -51,7 +51,8 @@ struct DescriptorInternal {
 
 impl DescriptorInternal {
     pub fn new(descriptor: Retained<CBDescriptor>) -> Self {
-        let uuid = cbuuid_to_uuid(unsafe { &descriptor.UUID() });
+        let raw_uuid = unsafe { descriptor.UUID() };
+        let uuid = cbuuid_to_uuid(&raw_uuid);
         Self {
             descriptor,
             uuid,
@@ -90,7 +91,8 @@ impl Debug for CharacteristicInternal {
 impl CharacteristicInternal {
     pub fn new(characteristic: Retained<CBCharacteristic>) -> Self {
         let properties = CharacteristicInternal::form_flags(&*characteristic);
-        let uuid = cbuuid_to_uuid(unsafe { &characteristic.UUID() });
+        let raw_uuid = unsafe { characteristic.UUID() };
+        let uuid = cbuuid_to_uuid(&raw_uuid);
         let descriptors_arr = unsafe { characteristic.descriptors() };
         let mut descriptors = HashMap::new();
         if let Some(descriptors_arr) = descriptors_arr {
@@ -602,7 +604,8 @@ impl CoreBluetoothInternal {
         peripheral: Retained<CBPeripheral>,
         advertisement_name: Option<String>,
     ) {
-        let uuid = nsuuid_to_uuid(unsafe { &peripheral.identifier() });
+        let id = unsafe { peripheral.identifier() };
+        let uuid = nsuuid_to_uuid(&id);
         let peripheral_name = unsafe { peripheral.name() };
         let local_name = peripheral_name
             .map(|n| n.to_string())

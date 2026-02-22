@@ -17,6 +17,7 @@ use super::{
 };
 use crate::{
     api::{
+        self,
         bleuuid::{uuid_from_u16, uuid_from_u32},
         AddressType, BDAddr, CentralEvent, Characteristic, Descriptor, Peripheral as ApiPeripheral,
         PeripheralProperties, Service, ValueNotification, WriteType,
