@@ -16,6 +16,7 @@ use log::{debug, trace};
 use windows::{
     Devices::Bluetooth::{
         BluetoothCacheMode, BluetoothConnectionStatus, BluetoothLEDevice,
+        BluetoothLEPreferredConnectionParameters,
         GenericAttributeProfile::{
             GattCharacteristic, GattCommunicationStatus, GattDescriptor, GattDeviceService,
             GattDeviceServicesResult, GattSession,
@@ -168,6 +169,62 @@ impl BLEDevice {
                     characteristic, status
                 )
                 .into(),
+            ))
+        }
+    }
+
+    pub fn get_connection_parameters(
+        &self,
+    ) -> Result<crate::api::ConnectionParameters> {
+        let winrt_error = |e| Error::Other(format!("{:?}", e).into());
+        let params = self
+            .device
+            .GetConnectionParameters()
+            .map_err(winrt_error)?;
+        // ConnectionInterval is in units of 1.25ms, convert to microseconds
+        let interval_us =
+            (params.ConnectionInterval().map_err(winrt_error)? as u32) * 1250;
+        let latency =
+            params.ConnectionLatency().map_err(winrt_error)? as u16;
+        // LinkTimeout is in units of 10ms, convert to microseconds
+        let supervision_timeout_us =
+            (params.LinkTimeout().map_err(winrt_error)? as u32) * 10_000;
+        Ok(crate::api::ConnectionParameters {
+            interval_us,
+            latency,
+            supervision_timeout_us,
+        })
+    }
+
+    pub fn request_connection_parameters(
+        &self,
+        preset: crate::api::ConnectionParameterPreset,
+    ) -> Result<()> {
+        let winrt_error = |e| Error::Other(format!("{:?}", e).into());
+        let params = match preset {
+            crate::api::ConnectionParameterPreset::Balanced => {
+                BluetoothLEPreferredConnectionParameters::Balanced()
+            }
+            crate::api::ConnectionParameterPreset::ThroughputOptimized => {
+                BluetoothLEPreferredConnectionParameters::ThroughputOptimized()
+            }
+            crate::api::ConnectionParameterPreset::PowerOptimized => {
+                BluetoothLEPreferredConnectionParameters::PowerOptimized()
+            }
+        }
+        .map_err(winrt_error)?;
+        let result = self
+            .device
+            .RequestPreferredConnectionParameters(&params)
+            .map_err(winrt_error)?;
+        let status = result.Status().map_err(winrt_error)?;
+        // BluetoothLEPreferredConnectionParametersRequestStatus::Success = 0
+        if status.0 == 0 {
+            Ok(())
+        } else {
+            Err(Error::Other(
+                format!("RequestPreferredConnectionParameters failed with status {:?}", status)
+                    .into(),
             ))
         }
     }

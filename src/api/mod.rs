@@ -216,6 +216,28 @@ pub struct ScanFilter {
     pub services: Vec<Uuid>,
 }
 
+/// Current BLE connection parameters as reported by the OS.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ConnectionParameters {
+    /// Connection interval in microseconds (typically 7_500..4_000_000).
+    pub interval_us: u32,
+    /// Slave latency in number of connection events (0..499).
+    pub latency: u16,
+    /// Supervision timeout in microseconds (100_000..32_000_000).
+    pub supervision_timeout_us: u32,
+}
+
+/// Preferred connection parameter presets for requesting updates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionParameterPreset {
+    /// Balanced between throughput and power (default).
+    Balanced,
+    /// Low latency, high throughput. Use temporarily for bulk transfers.
+    ThroughputOptimized,
+    /// Reduced power consumption, higher latency.
+    PowerOptimized,
+}
+
 /// The type of write operation to use.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WriteType {
@@ -303,6 +325,41 @@ pub trait Peripheral: Send + Sync + Clone + Debug {
     /// Sends a read descriptor request to the device. Returns either an error if the request
     /// was not accepted or the response from the device.
     async fn read_descriptor(&self, descriptor: &Descriptor) -> Result<Vec<u8>>;
+
+    /// Returns current connection parameters, if available on this platform.
+    /// Returns `Ok(None)` if the platform doesn't support reading parameters.
+    /// Returns `Err` if not connected.
+    async fn connection_parameters(&self) -> Result<Option<ConnectionParameters>> {
+        Err(crate::Error::NotSupported(
+            "connection_parameters".to_string(),
+        ))
+    }
+
+    /// Request a connection parameter update using a preset.
+    /// This is a request — the remote device may accept or reject.
+    /// Returns `Err(NotSupported)` on platforms that don't support this.
+    async fn request_connection_parameters(
+        &self,
+        _preset: ConnectionParameterPreset,
+    ) -> Result<()> {
+        Err(crate::Error::NotSupported(
+            "request_connection_parameters".to_string(),
+        ))
+    }
+
+    /// Read the current RSSI (signal strength) for this peripheral, in dBm.
+    ///
+    /// Behavior varies by platform:
+    /// - **macOS/iOS/Android**: Actively reads RSSI from the connected device.
+    /// - **Linux**: Returns the latest RSSI from BlueZ device properties.
+    /// - **Windows**: Returns the most recent RSSI from advertisements
+    ///   (requires scanning to be active for fresh values).
+    ///
+    /// Returns `Err(NotConnected)` if not connected (except Windows, which may
+    /// return a cached scan value).
+    async fn read_rssi(&self) -> Result<i16> {
+        Err(crate::Error::NotSupported("read_rssi".to_string()))
+    }
 }
 
 #[cfg_attr(
@@ -345,6 +402,13 @@ pub enum CentralEvent {
     ServicesAdvertisement {
         id: PeripheralId,
         services: Vec<Uuid>,
+    },
+    /// Emitted when an RSSI (signal strength) update is received for a device.
+    /// This may come from advertisements during scanning, or from an active
+    /// `read_rssi()` call on connected platforms.
+    RssiUpdate {
+        id: PeripheralId,
+        rssi: i16,
     },
     StateUpdate(CentralState),
 }

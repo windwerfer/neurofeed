@@ -149,9 +149,15 @@ async fn central_event(
                     Some(CentralEvent::DeviceDisconnected(id.into()))
                 }
             }
-            DeviceEvent::Rssi { rssi: _ } => {
+            DeviceEvent::Rssi { rssi } => {
                 let device = session.get_device_info(&id).await.ok()?;
-                Some(CentralEvent::DeviceUpdated(device.id.into()))
+                // Emit both DeviceUpdated (for backwards compat) and RssiUpdate
+                // We can only return one event from this function, so prefer RssiUpdate
+                // which is more specific. DeviceUpdated is already emitted by other events.
+                Some(CentralEvent::RssiUpdate {
+                    id: device.id.into(),
+                    rssi,
+                })
             }
             DeviceEvent::ManufacturerData { manufacturer_data } => {
                 let device = session.get_device_info(&id).await.ok()?;

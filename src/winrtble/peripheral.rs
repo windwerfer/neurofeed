@@ -19,8 +19,9 @@ use crate::{
     api::{
         self,
         bleuuid::{uuid_from_u16, uuid_from_u32},
-        AddressType, BDAddr, CentralEvent, Characteristic, Descriptor, Peripheral as ApiPeripheral,
-        PeripheralProperties, Service, ValueNotification, WriteType,
+        AddressType, BDAddr, CentralEvent, Characteristic, ConnectionParameterPreset,
+        ConnectionParameters, Descriptor, Peripheral as ApiPeripheral, PeripheralProperties,
+        Service, ValueNotification, WriteType,
     },
     common::{adapter_manager::AdapterManager, util::notifications_stream_from_broadcast_receiver},
     Error, Result,
@@ -292,7 +293,16 @@ impl Peripheral {
         }
         if let Ok(rssi) = args.RawSignalStrengthInDBm() {
             let mut rssi_guard = self.shared.last_rssi.write().unwrap();
+            let old_rssi = *rssi_guard;
             *rssi_guard = Some(rssi);
+            drop(rssi_guard);
+            // Emit RssiUpdate event when RSSI changes
+            if old_rssi != Some(rssi) {
+                self.emit_event(CentralEvent::RssiUpdate {
+                    id: self.shared.address.into(),
+                    rssi,
+                });
+            }
         }
     }
 
@@ -630,6 +640,33 @@ impl ApiPeripheral for Peripheral {
             .get(&descriptor.uuid)
             .ok_or_else(|| Error::NotSupported("Descriptor not found for write".into()))?;
         ble_descriptor.read_value().await
+    }
+
+    async fn read_rssi(&self) -> Result<i16> {
+        self.shared
+            .last_rssi
+            .read()
+            .unwrap()
+            .ok_or(Error::NotConnected)
+    }
+
+    async fn connection_parameters(&self) -> Result<Option<ConnectionParameters>> {
+        let device = self.shared.device.lock().await;
+        match &*device {
+            Some(device) => Ok(Some(device.get_connection_parameters()?)),
+            None => Err(Error::NotConnected),
+        }
+    }
+
+    async fn request_connection_parameters(
+        &self,
+        preset: ConnectionParameterPreset,
+    ) -> Result<()> {
+        let device = self.shared.device.lock().await;
+        match &*device {
+            Some(device) => device.request_connection_parameters(preset),
+            None => Err(Error::NotConnected),
+        }
     }
 }
 

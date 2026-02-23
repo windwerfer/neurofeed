@@ -172,6 +172,12 @@ impl Peripheral {
                         shared.services.lock().unwrap().clear();
                         shared.emit_event(CentralEvent::DeviceServicesModified(shared.uuid.into()));
                     }
+                    Some(PeripheralEventInternal::RssiRead(rssi)) => {
+                        shared.emit_event(CentralEvent::RssiUpdate {
+                            id: shared.uuid.into(),
+                            rssi,
+                        });
+                    }
                     Some(PeripheralEventInternal::Disconnected) => (),
                     None => {
                         info!("Event receiver died, breaking out of corebluetooth device loop.");
@@ -448,6 +454,23 @@ impl api::Peripheral for Peripheral {
             reply => panic!("Unexpected reply: {:?}", reply),
         }
         Ok(())
+    }
+
+    async fn read_rssi(&self) -> Result<i16> {
+        let fut = CoreBluetoothReplyFuture::default();
+        self.shared
+            .message_sender
+            .to_owned()
+            .send(CoreBluetoothMessage::ReadRssi {
+                peripheral_uuid: self.shared.uuid,
+                future: fut.get_state_clone(),
+            })
+            .await?;
+        match fut.await {
+            CoreBluetoothReply::ReadRssi(rssi) => Ok(rssi),
+            CoreBluetoothReply::Err(msg) => Err(Error::RuntimeError(msg)),
+            _ => panic!("Unexpected reply for read_rssi"),
+        }
     }
 
     async fn read_descriptor(&self, descriptor: &Descriptor) -> Result<Vec<u8>> {

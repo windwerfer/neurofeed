@@ -128,6 +128,10 @@ pub enum CentralDelegateEvent {
         characteristic_uuid: Uuid,
         descriptor_uuid: Uuid,
     },
+    DidReadRssi {
+        peripheral_uuid: Uuid,
+        rssi: i16,
+    },
 }
 
 impl Debug for CentralDelegateEvent {
@@ -297,6 +301,14 @@ impl Debug for CentralDelegateEvent {
                 .field("peripheral_uuid", peripheral_uuid)
                 .field("characteristic_uuid", characteristic_uuid)
                 .field("descriptor_uuid", descriptor_uuid)
+                .finish(),
+            CentralDelegateEvent::DidReadRssi {
+                peripheral_uuid,
+                rssi,
+            } => f
+                .debug_struct("DidReadRssi")
+                .field("peripheral_uuid", peripheral_uuid)
+                .field("rssi", rssi)
                 .finish(),
         }
     }
@@ -694,14 +706,22 @@ declare_class!(
         fn delegate_peripheral_didreadrssi_error(
             &self,
             peripheral: &CBPeripheral,
-            _rssi: &NSNumber,
+            rssi: &NSNumber,
             error: Option<&NSError>,
         ) {
             trace!(
                 "delegate_peripheral_didreadrssi_error {}",
                 peripheral_debug(peripheral)
             );
-            if error.is_none() {}
+            if error.is_none() {
+                let id = unsafe { peripheral.identifier() };
+                let peripheral_uuid = nsuuid_to_uuid(&id);
+                let rssi_value = rssi.as_i16();
+                self.send_event(CentralDelegateEvent::DidReadRssi {
+                    peripheral_uuid,
+                    rssi: rssi_value,
+                });
+            }
         }
 
         #[method(peripheral:didUpdateValueForDescriptor:error:)]

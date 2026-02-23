@@ -282,6 +282,11 @@ impl api::Peripheral for Peripheral {
         })))
     }
 
+    async fn read_rssi(&self) -> Result<i16> {
+        let device_info = self.device_info().await?;
+        device_info.rssi.ok_or(Error::NotConnected)
+    }
+
     async fn write_descriptor(&self, descriptor: &Descriptor, data: &[u8]) -> Result<()> {
         let descriptor_info = self.descriptor_info(descriptor)?;
         Ok(self
