@@ -1,17 +1,9 @@
 mod common;
 
-use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter};
-use btleplug::platform::Manager;
+use btleplug::api::{Central, CentralEvent, Peripheral as _, ScanFilter};
 use futures::StreamExt;
 use std::time::Duration;
 use tokio::time;
-
-/// Helper: create manager, get first adapter
-async fn get_adapter() -> btleplug::platform::Adapter {
-    let manager = Manager::new().await.expect("failed to create manager");
-    let adapters = manager.adapters().await.expect("failed to get adapters");
-    adapters.into_iter().next().expect("no BLE adapters")
-}
 
 #[tokio::test]
 #[ignore = "requires BLE test peripheral"]
@@ -73,7 +65,7 @@ async fn test_discover_characteristics() {
 #[tokio::test]
 #[ignore = "requires BLE test peripheral"]
 async fn test_scan_filter_by_service_uuid() {
-    let adapter = get_adapter().await;
+    let adapter = common::peripheral_finder::get_adapter().await;
 
     // Scan with filter for our Control Service UUID
     adapter
@@ -98,7 +90,7 @@ async fn test_scan_filter_by_service_uuid() {
 #[tokio::test]
 #[ignore = "requires BLE test peripheral"]
 async fn test_advertisement_manufacturer_data() {
-    let adapter = get_adapter().await;
+    let adapter = common::peripheral_finder::get_adapter().await;
     let mut events = adapter.events().await.unwrap();
 
     adapter
@@ -134,7 +126,7 @@ async fn test_advertisement_manufacturer_data() {
 #[tokio::test]
 #[ignore = "requires BLE test peripheral"]
 async fn test_advertisement_services() {
-    let adapter = get_adapter().await;
+    let adapter = common::peripheral_finder::get_adapter().await;
     let mut events = adapter.events().await.unwrap();
 
     adapter

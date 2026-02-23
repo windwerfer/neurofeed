@@ -22,7 +22,7 @@
 //! ```rust,no_run
 //! use btleplug::api::{bleuuid::uuid_from_u16, Central, Manager as _, Peripheral as _, ScanFilter, WriteType};
 //! use btleplug::platform::{Adapter, Manager, Peripheral};
-//! use rand::{Rng, rng};
+//! use rand::{RngExt, rng};
 //! use std::error::Error;
 //! use std::thread;
 //! use std::time::Duration;

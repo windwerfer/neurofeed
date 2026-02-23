@@ -6,3 +6,5 @@ Cargo.lock
 **/.vscode*
 /workspace.xml
 **/*.code-workspace
+test-peripheral/zephyr/.cache
+test-peripheral/zephyr/build

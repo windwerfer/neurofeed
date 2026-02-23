@@ -23,7 +23,6 @@ from bumble.gatt import (
     Characteristic,
     CharacteristicValue,
     Descriptor,
-    GATT_CLIENT_CHARACTERISTIC_CONFIGURATION_DESCRIPTOR,
 )
 from bumble.host import Host
 from bumble.transport import open_transport_or_link

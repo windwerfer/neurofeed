@@ -5,7 +5,7 @@ use btleplug::api::{
     bleuuid::uuid_from_u16, Central, Manager as _, Peripheral as _, ScanFilter, WriteType,
 };
 use btleplug::platform::{Adapter, Manager, Peripheral};
-use rand::{rng, Rng};
+use rand::{rng, RngExt};
 use std::time::Duration;
 use uuid::Uuid;
 

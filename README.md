@@ -180,6 +180,35 @@ Everyone has different bluetooth needs, so if btleplug doesn't fit yours, try th
   features since it only supports one platform (we use
   [Bluez-async](https://crates.io/crates/bluez-async) internally.)
   
+## Integration Tests
+
+btleplug includes integration tests that exercise real BLE operations against a test peripheral.
+
+**Quick start with hardware:**
+
+```bash
+# Flash the nRF52840 DK (one-time setup)
+cd test-peripheral/zephyr
+west build -b nrf52840dk/nrf52840 && west flash
+
+# Run integration tests
+cargo test --test '*' -- --ignored
+```
+
+**Quick start without hardware:**
+
+```bash
+# Start the Bumble virtual peripheral (requires USB BLE dongle)
+cd test-peripheral/bumble
+pip install -r requirements.txt
+./run.sh usb:0
+
+# In another terminal, run integration tests
+cargo test --test '*' -- --ignored
+```
+
+See `test-peripheral/README.md` for full setup instructions.
+
 ## License
 
 BTLEPlug is covered under a BSD 3-Clause License, with some parts from

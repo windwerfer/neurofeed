@@ -1,14 +1,36 @@
 //! Helper to discover and connect to the btleplug test peripheral.
 
 use btleplug::api::{Central, Manager as _, Peripheral as _, ScanFilter, WriteType};
-use btleplug::platform::{Manager, Peripheral};
+use btleplug::platform::{Adapter, Manager, Peripheral};
 use std::time::Duration;
+use tokio::sync::OnceCell;
 use tokio::time;
 
 use super::gatt_uuids;
 
 /// Default scan timeout — how long to wait for the test peripheral to appear.
 const DEFAULT_SCAN_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Process-global adapter. Reusing a single CBCentralManager on macOS is critical —
+/// creating a second one in the same process causes CoreBluetooth to stop reporting
+/// peripherals that were discovered by the first.
+static ADAPTER: OnceCell<Adapter> = OnceCell::const_new();
+
+pub async fn get_adapter() -> &'static Adapter {
+    ADAPTER
+        .get_or_init(|| async {
+            let manager = Manager::new()
+                .await
+                .expect("failed to create BLE manager");
+            let adapters = manager.adapters().await.expect("failed to get adapters");
+            // Leak the manager so it (and the underlying CBCentralManager) lives forever.
+            // OnceCell keeps the Adapter alive; we need the Manager alive too since
+            // the Adapter borrows from it internally on some platforms.
+            std::mem::forget(manager);
+            adapters.into_iter().next().expect("no BLE adapters found")
+        })
+        .await
+}
 
 /// Discover the test peripheral by name, connect to it, and discover its services.
 ///
@@ -21,36 +43,24 @@ pub async fn find_and_connect() -> Peripheral {
     let peripheral_name = std::env::var("BTLEPLUG_TEST_PERIPHERAL")
         .unwrap_or_else(|_| gatt_uuids::TEST_PERIPHERAL_NAME.to_string());
 
-    let manager = Manager::new()
-        .await
-        .expect("failed to create BLE manager");
+    let adapter = get_adapter().await;
 
-    let adapters = manager.adapters().await.expect("failed to get adapters");
-    let adapter = adapters
-        .into_iter()
-        .next()
-        .expect("no BLE adapters found");
-
-    // Start scanning with a filter for our test service
+    // Always scan — even if the peripheral is cached from a prior test, scanning
+    // ensures CoreBluetooth refreshes its state after a disconnect.
     adapter
-        .start_scan(ScanFilter {
-            services: vec![gatt_uuids::CONTROL_SERVICE],
-        })
+        .start_scan(ScanFilter::default())
         .await
         .expect("failed to start scan");
 
-    // Wait for the test peripheral to appear
     let peripheral = tokio::time::timeout(DEFAULT_SCAN_TIMEOUT, async {
         loop {
-            let peripherals = adapter.peripherals().await.expect("failed to list peripherals");
+            let peripherals = adapter
+                .peripherals()
+                .await
+                .expect("failed to list peripherals");
             for p in peripherals {
                 if let Ok(Some(props)) = p.properties().await {
-                    let name_match = props
-                        .local_name
-                        .as_deref()
-                        .map(|n| n == peripheral_name)
-                        .unwrap_or(false);
-                    if name_match {
+                    if props.local_name.as_deref() == Some(&peripheral_name) {
                         return p;
                     }
                 }
@@ -68,14 +78,14 @@ pub async fn find_and_connect() -> Peripheral {
 
     adapter.stop_scan().await.expect("failed to stop scan");
 
-    peripheral
-        .connect()
+    tokio::time::timeout(Duration::from_secs(10), peripheral.connect())
         .await
+        .expect("timed out connecting to peripheral")
         .expect("failed to connect to test peripheral");
 
-    peripheral
-        .discover_services()
+    tokio::time::timeout(Duration::from_secs(10), peripheral.discover_services())
         .await
+        .expect("timed out discovering services")
         .expect("failed to discover services");
 
     peripheral
