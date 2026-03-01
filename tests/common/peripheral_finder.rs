@@ -60,7 +60,9 @@ pub async fn find_and_connect() -> Peripheral {
                 .expect("failed to list peripherals");
             for p in peripherals {
                 if let Ok(Some(props)) = p.properties().await {
+                    println!("{:?}", props.local_name);
                     if props.local_name.as_deref() == Some(&peripheral_name) {
+                        println!("Returning!");
                         return p;
                     }
                 }
@@ -77,17 +79,17 @@ pub async fn find_and_connect() -> Peripheral {
     });
 
     adapter.stop_scan().await.expect("failed to stop scan");
-
+    println!("Connecting");
     tokio::time::timeout(Duration::from_secs(10), peripheral.connect())
         .await
         .expect("timed out connecting to peripheral")
         .expect("failed to connect to test peripheral");
-
+println!("Connected");
     tokio::time::timeout(Duration::from_secs(10), peripheral.discover_services())
         .await
         .expect("timed out discovering services")
         .expect("failed to discover services");
-
+println!("Discovered");
     peripheral
 }
 
