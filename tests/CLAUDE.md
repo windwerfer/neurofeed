@@ -1,6 +1,6 @@
 # tests/ -- Integration Test Suite
 
-Freshness: 2026-02-22
+Freshness: 2026-03-01
 
 ## Purpose
 
@@ -8,15 +8,22 @@ Integration tests that exercise btleplug against a real or virtual BLE periphera
 
 ## Structure
 
+Each test is its own file (and therefore its own binary), ensuring process isolation. This avoids issues with CoreBluetooth and other BLE stacks that don't cleanly handle multiple connect/disconnect cycles within a single process.
+
 - `common/` -- shared test helpers (imported via `mod common;`)
   - `gatt_uuids.rs` -- canonical UUID constants for the test GATT profile (base UUID: `XXXXXXXX-b5a3-f393-e0a9-e50e24dcca9e`)
   - `peripheral_finder.rs` -- discover, connect, and control the test peripheral
-- `test_discovery.rs` -- scanning and advertisement parsing
-- `test_connection.rs` -- connect/disconnect lifecycle
-- `test_read_write.rs` -- characteristic read/write operations
-- `test_notifications.rs` -- notify/indicate subscriptions
-- `test_descriptors.rs` -- descriptor read/write
-- `test_device_info.rs` -- MTU, RSSI, connection parameters
+  - `mod.rs` -- also contains `find_descriptor()` helper for descriptor tests
+- `test_*.rs` -- one test per file, named after the test function
+
+### Test categories
+
+- **Discovery**: `test_discover_*.rs`, `test_scan_*.rs`, `test_advertisement_*.rs`
+- **Connection**: `test_connect_*.rs`, `test_reconnect_*.rs`, `test_peripheral_triggered_*.rs`
+- **Read/Write**: `test_read_*.rs`, `test_write_*.rs`, `test_long_value_*.rs`, `test_characteristic_properties.rs`
+- **Notifications**: `test_subscribe_*.rs`, `test_unsubscribe_*.rs`, `test_configurable_notification_*.rs`
+- **Descriptors**: `test_*_descriptor*.rs`
+- **Device Info**: `test_mtu_*.rs`, `test_read_rssi.rs`, `test_properties_*.rs`, `test_connection_parameters.rs`, `test_request_connection_parameters.rs`
 
 ## Contracts
 
@@ -32,6 +39,7 @@ Integration tests that exercise btleplug against a real or virtual BLE periphera
 
 ## Invariants
 
-- All test functions are `#[ignore]` and `#[tokio::test]`.
+- Each `test_*.rs` file contains exactly one `#[tokio::test]` function marked `#[ignore]`.
+- One test per file ensures process isolation — never put multiple tests in the same file.
 - Tests must not depend on execution order; each test connects independently.
 - The scan timeout is 10 seconds (hardcoded in `peripheral_finder.rs`).
