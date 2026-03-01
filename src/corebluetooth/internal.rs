@@ -923,6 +923,12 @@ impl CoreBluetoothInternal {
             fut.lock()
                 .unwrap()
                 .set_reply(CoreBluetoothReply::State(state));
+        } else {
+            // Peripheral was removed after disconnect — report as disconnected
+            // rather than hanging the future forever.
+            fut.lock()
+                .unwrap()
+                .set_reply(CoreBluetoothReply::State(CBPeripheralState::Disconnected));
         }
     }
 
