@@ -105,7 +105,7 @@ impl<'a: 'b, 'b> JPeripheral<'a, 'b> {
         let write_descriptor = env.get_method_id(
             class,
             "writeDescriptor",
-            "(Ljava/util/UUID;Ljava/util/UUID;[BI)Lio/github/gedgygedgy/rust/future/Future;",
+            "(Ljava/util/UUID;Ljava/util/UUID;[B)Lio/github/gedgygedgy/rust/future/Future;",
         )?;
         let get_device_name = env.get_method_id(class, "getDeviceName", "()Ljava/lang/String;")?;
         let request_mtu = env.get_method_id(
