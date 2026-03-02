@@ -340,7 +340,15 @@ class Peripheral {
                     }
 
                     BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIGURATION_DESCRIPTOR);
-                    descriptor.setValue(enable ? BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE : BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE);
+                    byte[] cccdValue;
+                    if (!enable) {
+                        cccdValue = BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE;
+                    } else if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0) {
+                        cccdValue = BluetoothGattDescriptor.ENABLE_INDICATION_VALUE;
+                    } else {
+                        cccdValue = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE;
+                    }
+                    descriptor.setValue(cccdValue);
                     if (!this.gatt.writeDescriptor(descriptor)) {
                         throw new RuntimeException("Unable to write client characteristic configuration descriptor");
                     }
@@ -422,7 +430,7 @@ class Peripheral {
     }
 
     @SuppressLint("MissingPermission")
-    public Future<Void> writeDescriptor(UUID characteristic, UUID uuid, byte[] data, int writeType) {
+    public Future<Void> writeDescriptor(UUID characteristic, UUID uuid, byte[] data) {
         SimpleFuture<Void> future = new SimpleFuture<>();
         synchronized (this) {
             this.queueCommand(() -> {
@@ -624,6 +632,15 @@ class Peripheral {
         }
 
         @Override
+        public void onDescriptorRead(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
+            synchronized (Peripheral.this) {
+                if (Peripheral.this.commandCallback != null) {
+                    Peripheral.this.commandCallback.onDescriptorRead(gatt, descriptor, status);
+                }
+            }
+        }
+
+        @Override
         public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
             synchronized (Peripheral.this) {
                 if (Peripheral.this.commandCallback != null) {
@@ -650,7 +667,7 @@ class Peripheral {
             }
         }
 
-        @Override
+        // Note: onConnectionUpdated is a hidden API in BluetoothGattCallback — no @Override.
         public void onConnectionUpdated(BluetoothGatt gatt, int interval, int latency, int timeout, int status) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 synchronized (Peripheral.this) {

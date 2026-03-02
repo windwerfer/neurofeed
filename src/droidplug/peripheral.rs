@@ -12,7 +12,8 @@ use jni::{
     JNIEnv,
 };
 use jni_utils::{
-    arrays::byte_array_to_vec, exceptions::try_block, future::JSendFuture, stream::JSendStream,
+    arrays::byte_array_to_vec, exceptions::try_block, future::{JFuture, JSendFuture},
+    stream::JSendStream,
     task::JPollResult, uuid::JUuid,
 };
 #[cfg(feature = "serde")]
@@ -155,7 +156,7 @@ struct PeripheralShared {
     services: BTreeSet<Service>,
     characteristics: BTreeSet<Characteristic>,
     properties: Option<PeripheralProperties>,
-    mtu: atomic::AtomicU16,
+    mtu: AtomicU16,
 }
 
 #[derive(Clone)]
@@ -163,7 +164,7 @@ pub struct Peripheral {
     addr: BDAddr,
     internal: GlobalRef,
     shared: Arc<Mutex<PeripheralShared>>,
-    mtu: Arc<atomic::AtomicU16>,
+    mtu: Arc<AtomicU16>,
 }
 
 impl Peripheral {
@@ -253,7 +254,7 @@ impl api::Peripheral for Peripheral {
     }
 
     async fn connect(&self) -> Result<()> {
-        let future = self.with_obj(|_env, obj| JSendFuture::try_from(obj.connect()?))?;
+        let future = self.with_obj(|env, obj| JSendFuture::try_from(obj.connect()?))?;
         let result_ref = future.await?;
         self.with_obj(|env, _obj| {
             let result = JPollResult::from_env(env, result_ref.as_obj())?;
@@ -270,9 +271,9 @@ impl api::Peripheral for Peripheral {
             Ok(())
         })?;
         // Auto-negotiate maximum MTU (517) after connection
-        let mtu_future = self.with_obj(|_env, obj| JSendFuture::try_from(obj.request_mtu(517)?))?;
+        let mtu_future = self.with_obj(|env, obj| JSendFuture::try_from(JFuture::from_env(env, obj.request_mtu(517)?)?))?;
         let mtu_result_ref = mtu_future.await?;
-        self.with_obj(|env, _obj| {
+        self.with_obj(|env, _obj| -> Result<()> {
             let mtu_result = JPollResult::from_env(env, mtu_result_ref.as_obj())?;
             let mtu_obj = get_poll_result(env, mtu_result)?;
             let mtu_val = env.call_method(mtu_obj, "intValue", "()I", &[])?.i()?;
@@ -283,7 +284,7 @@ impl api::Peripheral for Peripheral {
     }
 
     async fn disconnect(&self) -> Result<()> {
-        let future = self.with_obj(|_env, obj| JSendFuture::try_from(obj.disconnect()?))?;
+        let future = self.with_obj(|env, obj| JSendFuture::try_from(obj.disconnect()?))?;
         let result_ref = future.await?;
         self.with_obj(|env, _obj| {
             let result = JPollResult::from_env(env, result_ref.as_obj())?;
@@ -299,7 +300,7 @@ impl api::Peripheral for Peripheral {
     }
 
     async fn discover_services(&self) -> Result<()> {
-        let future = self.with_obj(|_env, obj| JSendFuture::try_from(obj.discover_services()?))?;
+        let future = self.with_obj(|env, obj| JSendFuture::try_from(obj.discover_services()?))?;
         let result_ref = future.await?;
         self.with_obj(|env, _obj| {
             use std::iter::FromIterator;
@@ -400,20 +401,32 @@ impl api::Peripheral for Peripheral {
 
     async fn notifications(&self) -> Result<Pin<Box<dyn Stream<Item = ValueNotification> + Send>>> {
         use futures::stream::StreamExt;
+        let shared = self.shared.clone();
         let stream = self.with_obj(|_env, obj| JSendStream::try_from(obj.get_notifications()?))?;
         let stream = stream
-            .map(|item| match item {
+            .map(move |item| match item {
                 Ok(item) => {
                     let env = global_jvm().get_env()?;
                     let item = item.as_obj();
                     let characteristic = JBluetoothGattCharacteristic::from_env(&env, item)?;
                     let uuid = characteristic.get_uuid()?;
                     let value = characteristic.get_value()?;
+                    let service_uuid = shared
+                        .lock()
+                        .ok()
+                        .and_then(|guard| {
+                            guard
+                                .services
+                                .iter()
+                                .find(|s| s.characteristics.iter().any(|c| c.uuid == uuid))
+                                .map(|s| s.uuid)
+                        })
+                        .unwrap_or_default();
                     Ok(ValueNotification {
                         uuid,
-                        service_uuid: Uuid::default(),
+                        service_uuid,
                         value,
-                    }) // TODO: get service UUID
+                    })
                 }
                 Err(err) => Err(err),
             })
@@ -422,7 +435,7 @@ impl api::Peripheral for Peripheral {
     }
 
     async fn read_rssi(&self) -> Result<i16> {
-        let future = self.with_obj(|_env, obj| JSendFuture::try_from(obj.read_remote_rssi()?))?;
+        let future = self.with_obj(|env, obj| JSendFuture::try_from(JFuture::from_env(env, obj.read_remote_rssi()?)?))?;
         let result_ref = future.await?;
         self.with_obj(|env, _obj| {
             let result = JPollResult::from_env(env, result_ref.as_obj())?;

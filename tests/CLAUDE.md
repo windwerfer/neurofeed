@@ -13,8 +13,14 @@ Each test is its own file (and therefore its own binary), ensuring process isola
 - `common/` -- shared test helpers (imported via `mod common;`)
   - `gatt_uuids.rs` -- canonical UUID constants for the test GATT profile (base UUID: `XXXXXXXX-b5a3-f393-e0a9-e50e24dcca9e`)
   - `peripheral_finder.rs` -- discover, connect, and control the test peripheral
+  - `test_cases.rs` -- async test bodies shared between desktop and Android harnesses
   - `mod.rs` -- also contains `find_descriptor()` helper for descriptor tests
-- `test_*.rs` -- one test per file, named after the test function
+- `test_*.rs` -- one test per file, thin wrapper calling `common::test_cases::*`
+- `android/` -- Android instrumentation test project
+  - `rust/` -- cdylib crate exposing test_cases as JNI functions
+  - `src/androidTest/` -- Kotlin JUnit4 instrumentation tests
+  - `src/main/` -- minimal app with BLE permissions and JNI declarations
+  - Built and run via `scripts/run-integration-tests-android.sh`
 
 ### Test categories
 
@@ -40,6 +46,8 @@ Each test is its own file (and therefore its own binary), ensuring process isola
 ## Invariants
 
 - Each `test_*.rs` file contains exactly one `#[tokio::test]` function marked `#[ignore]`.
+- Each `test_*.rs` is a thin wrapper delegating to `common::test_cases::*` — add new test logic to `test_cases.rs`.
 - One test per file ensures process isolation — never put multiple tests in the same file.
 - Tests must not depend on execution order; each test connects independently.
 - The scan timeout is 10 seconds (hardcoded in `peripheral_finder.rs`).
+- When adding a new test, also add the corresponding JNI export in `android/rust/src/lib.rs`, native declaration in `NativeTests.kt`, and `@Test` in `BleIntegrationTest.kt`.
