@@ -409,6 +409,7 @@ async def main():
                         struct.pack("<H", MANUFACTURER_COMPANY_ID)
                         + bytes([0xBB, 0xCC, 0x01]),
                     ),
+                    (AdvertisingData.TX_POWER_LEVEL, bytes([0])),  # 0 dBm
                 ]
             )
         )

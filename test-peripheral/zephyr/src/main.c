@@ -22,6 +22,7 @@ static const struct bt_data ad[] = {
 		0xFF, 0xFF,       /* Company ID 0xFFFF (little-endian) */
 		0xBB, 0xCC, 0x01  /* "bt" + version */
 	),
+	BT_DATA_BYTES(BT_DATA_TX_POWER, 0x00),  /* TX Power Level: 0 dBm */
 };
 
 /* Scan response data:
