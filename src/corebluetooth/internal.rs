@@ -166,6 +166,7 @@ pub enum PeripheralEventInternal {
     ServiceData(HashMap<Uuid, Vec<u8>>, i16),
     Services(Vec<Uuid>, i16),
     ServicesModified,
+    TxPowerLevel(i16),
     RssiRead(i16),
 }
 
@@ -1130,6 +1131,18 @@ impl CoreBluetoothInternal {
         }
     }
 
+    async fn on_tx_power_level(&mut self, peripheral_uuid: Uuid, tx_power_level: i16) {
+        if let Some(peripheral) = self.peripherals.get_mut(&peripheral_uuid) {
+            if let Err(e) = peripheral
+                .event_sender
+                .send(PeripheralEventInternal::TxPowerLevel(tx_power_level))
+                .await
+            {
+                error!("Error sending tx_power_level event: {}", e);
+            }
+        }
+    }
+
     async fn on_descriptor_read(
         &mut self,
         peripheral_uuid: Uuid,
@@ -1265,6 +1278,9 @@ impl CoreBluetoothInternal {
                         characteristic_uuid,
                         descriptor_uuid,
                     } => self.on_descriptor_written(peripheral_uuid, service_uuid, characteristic_uuid, descriptor_uuid),
+                    CentralDelegateEvent::TxPowerLevel{peripheral_uuid, tx_power_level} => {
+                        self.on_tx_power_level(peripheral_uuid, tx_power_level).await
+                    },
                     CentralDelegateEvent::DidReadRssi{peripheral_uuid, rssi} => {
                         self.on_read_rssi(peripheral_uuid, rssi).await
                     },

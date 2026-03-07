@@ -25,7 +25,8 @@ use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2::{declare_class, msg_send_id, mutability, rc::Retained, ClassType, DeclaredClass};
 use objc2_core_bluetooth::{
     CBAdvertisementDataLocalNameKey, CBAdvertisementDataManufacturerDataKey,
-    CBAdvertisementDataServiceDataKey, CBAdvertisementDataServiceUUIDsKey, CBCentralManager,
+    CBAdvertisementDataServiceDataKey, CBAdvertisementDataServiceUUIDsKey,
+    CBAdvertisementDataTxPowerLevelKey, CBCentralManager,
     CBCentralManagerDelegate, CBCharacteristic, CBDescriptor, CBManagerState, CBPeripheral,
     CBPeripheralDelegate, CBService, CBUUID,
 };
@@ -127,6 +128,10 @@ pub enum CentralDelegateEvent {
         service_uuid: Uuid,
         characteristic_uuid: Uuid,
         descriptor_uuid: Uuid,
+    },
+    TxPowerLevel {
+        peripheral_uuid: Uuid,
+        tx_power_level: i16,
     },
     DidReadRssi {
         peripheral_uuid: Uuid,
@@ -302,6 +307,14 @@ impl Debug for CentralDelegateEvent {
                 .field("characteristic_uuid", characteristic_uuid)
                 .field("descriptor_uuid", descriptor_uuid)
                 .finish(),
+            CentralDelegateEvent::TxPowerLevel {
+                peripheral_uuid,
+                tx_power_level,
+            } => f
+                .debug_struct("TxPowerLevel")
+                .field("peripheral_uuid", peripheral_uuid)
+                .field("tx_power_level", tx_power_level)
+                .finish(),
             CentralDelegateEvent::DidReadRssi {
                 peripheral_uuid,
                 rssi,
@@ -476,6 +489,21 @@ declare_class!(
                     peripheral_uuid,
                     service_uuids,
                     rssi: rssi_value,
+                });
+            }
+
+            let tx_power_level = adv_data
+                .get(unsafe { CBAdvertisementDataTxPowerLevelKey })
+                .map(|val| {
+                    let val: *const AnyObject = val;
+                    let val: *const NSNumber = val.cast();
+                    unsafe { &*val }.as_i16()
+                });
+
+            if let Some(tx_power_level) = tx_power_level {
+                self.send_event(CentralDelegateEvent::TxPowerLevel {
+                    peripheral_uuid,
+                    tx_power_level,
                 });
             }
         }
