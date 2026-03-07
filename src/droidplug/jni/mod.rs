@@ -10,7 +10,7 @@ static GLOBAL_JVM: OnceCell<JavaVM> = OnceCell::new();
 pub fn init(env: &JNIEnv) -> crate::Result<()> {
     if let Ok(()) = GLOBAL_JVM.set(env.get_java_vm()?) {
         // Initialize jni-utils' own class cache (Future, Waker, PollResult, etc.)
-        jni_utils::init(env)?;
+        super::jni_utils::init(env)?;
 
         env.register_native_methods(
             "com/nonpolynomial/btleplug/android/impl/Adapter",
@@ -27,35 +27,35 @@ pub fn init(env: &JNIEnv) -> crate::Result<()> {
                 },
             ],
         )?;
-        jni_utils::classcache::find_add_class(
+        super::jni_utils::classcache::find_add_class(
             env,
             "com/nonpolynomial/btleplug/android/impl/Peripheral",
         )?;
-        jni_utils::classcache::find_add_class(
+        super::jni_utils::classcache::find_add_class(
             env,
             "com/nonpolynomial/btleplug/android/impl/ScanFilter",
         )?;
-        jni_utils::classcache::find_add_class(
+        super::jni_utils::classcache::find_add_class(
             env,
             "com/nonpolynomial/btleplug/android/impl/NotConnectedException",
         )?;
-        jni_utils::classcache::find_add_class(
+        super::jni_utils::classcache::find_add_class(
             env,
             "com/nonpolynomial/btleplug/android/impl/PermissionDeniedException",
         )?;
-        jni_utils::classcache::find_add_class(
+        super::jni_utils::classcache::find_add_class(
             env,
             "com/nonpolynomial/btleplug/android/impl/UnexpectedCallbackException",
         )?;
-        jni_utils::classcache::find_add_class(
+        super::jni_utils::classcache::find_add_class(
             env,
             "com/nonpolynomial/btleplug/android/impl/UnexpectedCharacteristicException",
         )?;
-        jni_utils::classcache::find_add_class(
+        super::jni_utils::classcache::find_add_class(
             env,
             "com/nonpolynomial/btleplug/android/impl/NoSuchCharacteristicException",
         )?;
-        jni_utils::classcache::find_add_class(
+        super::jni_utils::classcache::find_add_class(
             env,
             "com/nonpolynomial/btleplug/android/impl/NoBluetoothAdapterException",
         )?;

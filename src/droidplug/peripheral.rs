@@ -11,7 +11,7 @@ use jni::{
     objects::{GlobalRef, JList, JObject},
     JNIEnv,
 };
-use jni_utils::{
+use super::jni_utils::{
     arrays::byte_array_to_vec, exceptions::try_block, future::{JFuture, JSendFuture},
     stream::JSendStream,
     task::JPollResult, uuid::JUuid,
@@ -55,7 +55,7 @@ fn get_poll_result<'a: 'b, 'b>(
     try_block(env, || Ok(Ok(result.get()?)))
         .catch(
             JClass::from(
-                jni_utils::classcache::get_class(
+                super::jni_utils::classcache::get_class(
                     "io/github/gedgygedgy/rust/future/FutureException",
                 )
                 .unwrap()
@@ -68,7 +68,7 @@ fn get_poll_result<'a: 'b, 'b>(
                 if env.is_instance_of(
                     cause,
                     JClass::from(
-                        jni_utils::classcache::get_class(
+                        super::jni_utils::classcache::get_class(
                             "com/nonpolynomial/btleplug/android/impl/NotConnectedException",
                         )
                         .unwrap()
@@ -79,7 +79,7 @@ fn get_poll_result<'a: 'b, 'b>(
                 } else if env.is_instance_of(
                     cause,
                     JClass::from(
-                        jni_utils::classcache::get_class(
+                        super::jni_utils::classcache::get_class(
                             "com/nonpolynomial/btleplug/android/impl/PermissionDeniedException",
                         )
                         .unwrap()
@@ -90,7 +90,7 @@ fn get_poll_result<'a: 'b, 'b>(
                 } else if env.is_instance_of(
                     cause,
                     JClass::from(
-                        jni_utils::classcache::get_class(
+                        super::jni_utils::classcache::get_class(
                             "com/nonpolynomial/btleplug/android/impl/UnexpectedCallbackException",
                         )
                         .unwrap()
@@ -101,7 +101,7 @@ fn get_poll_result<'a: 'b, 'b>(
                 } else if env.is_instance_of(
                     cause,
                     JClass::from(
-                        jni_utils::classcache::get_class(
+                        super::jni_utils::classcache::get_class(
                             "com/nonpolynomial/btleplug/android/impl/UnexpectedCharacteristicException",
                         )
                         .unwrap()
@@ -112,7 +112,7 @@ fn get_poll_result<'a: 'b, 'b>(
                 } else if env.is_instance_of(
                     cause,
                     JClass::from(
-                        jni_utils::classcache::get_class(
+                        super::jni_utils::classcache::get_class(
                             "com/nonpolynomial/btleplug/android/impl/NoSuchCharacteristicException",
                         )
                         .unwrap()
@@ -123,7 +123,7 @@ fn get_poll_result<'a: 'b, 'b>(
                 } else if env.is_instance_of(
                     cause,
                     JClass::from(
-                        jni_utils::classcache::get_class(
+                        super::jni_utils::classcache::get_class(
                             "com/nonpolynomial/btleplug/android/impl/NoBluetoothAdapterException",
                         )
                         .unwrap()
@@ -362,7 +362,7 @@ impl api::Peripheral for Peripheral {
     ) -> Result<()> {
         let future = self.with_obj(|env, obj| {
             let uuid = JUuid::new(env, characteristic.uuid)?;
-            let data_obj = jni_utils::arrays::slice_to_byte_array(env, data)?;
+            let data_obj = super::jni_utils::arrays::slice_to_byte_array(env, data)?;
             let write_type = match write_type {
                 WriteType::WithResponse => 2,
                 WriteType::WithoutResponse => 1,
@@ -449,7 +449,7 @@ impl api::Peripheral for Peripheral {
         let future = self.with_obj(|env, obj| {
             let characteristic = JUuid::new(env, descriptor.characteristic_uuid)?;
             let uuid = JUuid::new(env, descriptor.uuid)?;
-            let data_obj = jni_utils::arrays::slice_to_byte_array(env, data)?;
+            let data_obj = super::jni_utils::arrays::slice_to_byte_array(env, data)?;
             JSendFuture::try_from(obj.write_descriptor(characteristic, uuid, data_obj.into())?)
         })?;
         let result_ref = future.await?;

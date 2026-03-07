@@ -46,7 +46,6 @@ bluez-async = "0.8.2"
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.19.0"
 once_cell = "1.21.3"
-jni-utils = "0.1.1"
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 objc2 = "0.5.2"
@@ -89,3 +88,4 @@ tokio = { version = "1.49.0", features = ["macros", "rt", "rt-multi-thread"] }
 serde_json = "1.0.149"
 toml = "1.0.3"
 anyhow = "1"
+lazy_static = "1.4.0"
