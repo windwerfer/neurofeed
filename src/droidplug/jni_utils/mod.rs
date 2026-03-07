@@ -1,5 +1,3 @@
-use ::jni::{errors::Result, JNIEnv};
-
 pub mod arrays;
 pub mod classcache;
 pub mod exceptions;
@@ -9,13 +7,6 @@ pub mod stream;
 pub mod task;
 pub mod uuid;
 
-/// Initialize jni-utils by registering required native methods.
-/// This should be called before using jni-utils.
-pub fn init(env: &JNIEnv) -> Result<()> {
-    ops::jni::init(env)?;
-    Ok(())
-}
-
 #[cfg(test)]
 pub(crate) mod test_utils {
     use jni::{objects::GlobalRef, JNIEnv, JavaVM};
@@ -24,6 +15,40 @@ pub(crate) mod test_utils {
         sync::{Arc, Mutex},
         task::{Wake, Waker},
     };
+
+    use jni::NativeMethod;
+
+    fn test_init(env: &JNIEnv) -> jni::errors::Result<()> {
+        use std::ffi::c_void;
+        super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/future/Future")?;
+        super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/future/FutureException")?;
+        super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/ops/FnAdapter")?;
+        super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/stream/Stream")?;
+        super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/stream/StreamPoll")?;
+        super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/task/Waker")?;
+        super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/task/PollResult")?;
+        super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/ops/FnRunnableImpl")?;
+        super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/ops/FnBiFunctionImpl")?;
+        super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/ops/FnFunctionImpl")?;
+
+        let class = env.auto_local(env.find_class("io/github/gedgygedgy/rust/ops/FnAdapter")?);
+        env.register_native_methods(
+            &class,
+            &[
+                NativeMethod {
+                    name: "callInternal".into(),
+                    sig: "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".into(),
+                    fn_ptr: super::ops::fn_adapter_call_internal as *mut c_void,
+                },
+                NativeMethod {
+                    name: "closeInternal".into(),
+                    sig: "()V".into(),
+                    fn_ptr: super::ops::fn_adapter_close_internal as *mut c_void,
+                },
+            ],
+        )?;
+        Ok(())
+    }
 
     pub struct TestWakerData(Mutex<bool>);
 
@@ -108,7 +133,7 @@ pub(crate) mod test_utils {
             let jvm = JavaVM::new(jvm_args).unwrap();
 
             let env = jvm.attach_current_thread_permanently().unwrap();
-            super::init(&env).unwrap();
+            test_init(&env).unwrap();
 
             let thread = env
                 .call_static_method(
