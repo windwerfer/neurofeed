@@ -36,7 +36,7 @@ dashmap = "6.1.0"
 futures = "0.3.32"
 static_assertions = "1.1.0"
 # rt feature needed for block_on in macOS internal thread
-tokio = { version = "1.49.0", features = ["sync", "rt"] }
+tokio = { version = "1.49.0", features = ["sync", "rt", "time"] }
 tokio-stream = { version = "0.1.18", features = ["sync"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
