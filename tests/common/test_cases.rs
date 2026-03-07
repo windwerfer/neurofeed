@@ -11,6 +11,19 @@ use super::peripheral_finder;
 // ── Discovery ───────────────────────────────────────────────────────
 
 pub async fn test_discover_peripheral_by_name() {
+    use btleplug::api::Central;
+
+    let adapter = peripheral_finder::get_adapter().await;
+    let info = adapter
+        .adapter_info()
+        .await
+        .expect("Failed to get adapter info");
+    assert!(!info.is_empty(), "Adapter info should not be empty");
+    let _state = adapter
+        .adapter_state()
+        .await
+        .expect("Failed to get adapter state");
+
     let peripheral = peripheral_finder::find_and_connect().await;
     let props = peripheral.properties().await.unwrap().unwrap();
     let name = props.local_name.unwrap_or_default();
@@ -577,6 +590,16 @@ pub async fn test_read_rssi() {
 
 pub async fn test_properties_contain_peripheral_info() {
     let peripheral = peripheral_finder::find_and_connect().await;
+
+    let id_str = format!("{:?}", peripheral.id());
+    assert!(!id_str.is_empty(), "Peripheral ID should not be empty");
+
+    let addr_str = format!("{:?}", peripheral.address());
+    assert!(
+        !addr_str.is_empty(),
+        "Peripheral address should not be empty"
+    );
+
     let props = peripheral
         .properties()
         .await
