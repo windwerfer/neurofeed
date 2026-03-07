@@ -616,6 +616,10 @@ pub async fn test_properties_contain_peripheral_info() {
         "Properties should contain manufacturer data with company ID 0xFFFF"
     );
     assert!(props.rssi.is_some(), "RSSI from scan should be present");
+    assert!(
+        props.tx_power_level.is_some(),
+        "TX Power Level should be present in advertisement properties"
+    );
     peripheral.disconnect().await.unwrap();
 }
 
