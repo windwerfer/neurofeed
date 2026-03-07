@@ -172,6 +172,10 @@ impl Peripheral {
                         shared.services.lock().unwrap().clear();
                         shared.emit_event(CentralEvent::DeviceServicesModified(shared.uuid.into()));
                     }
+                    Some(PeripheralEventInternal::TxPowerLevel(tx_power_level)) => {
+                        let mut properties = shared.properties.lock().unwrap();
+                        properties.tx_power_level = Some(tx_power_level);
+                    }
                     Some(PeripheralEventInternal::RssiRead(rssi)) => {
                         shared.emit_event(CentralEvent::RssiUpdate {
                             id: shared.uuid.into(),
