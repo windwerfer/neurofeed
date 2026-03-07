@@ -169,34 +169,6 @@ write_local_properties() {
     info "Wrote $props"
 }
 
-# --- jni-utils SNAPSHOT dependency -------------------------------------------
-JNI_UTILS_DIR="$PROJECT_ROOT/../jni-utils-rs"
-
-build_jni_utils() {
-    if [ ! -d "$JNI_UTILS_DIR/java" ]; then
-        die "jni-utils-rs not found at $JNI_UTILS_DIR" \
-            "Clone it with: git clone https://github.com/nickelc/jni-utils-rs $JNI_UTILS_DIR"
-    fi
-
-    local jni_java_dir
-    jni_java_dir="$(cd "$JNI_UTILS_DIR/java" && pwd)"
-
-    info "Building jni-utils Java library from $jni_java_dir ..."
-
-    if [ ! -x "$jni_java_dir/gradlew" ]; then
-        chmod +x "$jni_java_dir/gradlew"
-    fi
-
-    (cd "$jni_java_dir" && ./gradlew publishToMavenLocal -q)
-
-    # Verify it landed
-    local snapshot_dir="$HOME/.m2/repository/io/github/gedgygedgy/rust/jni-utils/0.1.1-SNAPSHOT"
-    if [ ! -d "$snapshot_dir" ]; then
-        die "jni-utils publishToMavenLocal succeeded but artifact not found in $snapshot_dir"
-    fi
-    info "jni-utils 0.1.1-SNAPSHOT published to mavenLocal."
-}
-
 # --- Build -------------------------------------------------------------------
 run_gradle_build() {
     info "Running Gradle build in $JAVA_DIR ..."
@@ -220,7 +192,6 @@ main() {
     ensure_java_home
     ensure_android_sdk
     write_local_properties
-    build_jni_utils
     echo
     run_gradle_build "$@"
 }
