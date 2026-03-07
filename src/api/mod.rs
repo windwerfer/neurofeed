@@ -36,6 +36,7 @@ use std::{
     collections::{BTreeSet, HashMap},
     fmt::{self, Debug, Display, Formatter},
     pin::Pin,
+    time::Duration,
 };
 use uuid::Uuid;
 
@@ -287,11 +288,28 @@ pub trait Peripheral: Send + Sync + Clone + Debug {
     /// attempt to communicate with a device will fail until it is connected.
     async fn connect(&self) -> Result<()>;
 
+    /// Like [`connect`](Peripheral::connect), but returns [`Error::TimedOut`](crate::Error::TimedOut)
+    /// if the connection is not established within the given duration.
+    async fn connect_with_timeout(&self, timeout: Duration) -> Result<()> {
+        tokio::time::timeout(timeout, self.connect())
+            .await
+            .map_err(|_| crate::Error::TimedOut(timeout))?
+    }
+
     /// Terminates a connection to the device.
     async fn disconnect(&self) -> Result<()>;
 
     /// Discovers all services for the device, including their characteristics.
     async fn discover_services(&self) -> Result<()>;
+
+    /// Like [`discover_services`](Peripheral::discover_services), but returns
+    /// [`Error::TimedOut`](crate::Error::TimedOut) if discovery does not complete within the
+    /// given duration.
+    async fn discover_services_with_timeout(&self, timeout: Duration) -> Result<()> {
+        tokio::time::timeout(timeout, self.discover_services())
+            .await
+            .map_err(|_| crate::Error::TimedOut(timeout))?
+    }
 
     /// Write some data to the characteristic. Returns an error if the write couldn't be sent or (in
     /// the case of a write-with-response) if the device returns an error.
