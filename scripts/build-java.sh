@@ -178,9 +178,18 @@ run_gradle_build() {
         chmod +x ./gradlew
     fi
 
-    ./gradlew assembleDebug assembleRelease "$@"
+    ./gradlew assembleDebug assembleRelease testJar "$@"
 
     info "Java build completed successfully."
+
+    # Copy test JAR to location expected by desktop JVM tests
+    local test_jar="$JAVA_DIR/build/libs/btleplug-jni.jar"
+    if [ -f "$test_jar" ]; then
+        local test_dest="$PROJECT_ROOT/target/debug/java/libs"
+        mkdir -p "$test_dest"
+        cp "$test_jar" "$test_dest/"
+        info "Test JAR copied to $test_dest/"
+    fi
 }
 
 # --- Main --------------------------------------------------------------------

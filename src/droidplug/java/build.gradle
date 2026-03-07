@@ -25,3 +25,9 @@ android {
 
 dependencies {
 }
+
+tasks.register('testJar', Jar) {
+    archiveBaseName = 'btleplug-jni'
+    from android.sourceSets.main.java.srcDirs
+    destinationDirectory = file("$buildDir/libs")
+}
