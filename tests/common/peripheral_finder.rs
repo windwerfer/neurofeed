@@ -144,14 +144,14 @@ pub async fn find_and_connect() -> Peripheral {
         )
     });
 
-    tokio::time::timeout(Duration::from_secs(10), peripheral.connect())
+    peripheral
+        .connect_with_timeout(Duration::from_secs(10))
         .await
-        .expect("timed out connecting to peripheral")
         .expect("failed to connect to test peripheral");
 
-    tokio::time::timeout(Duration::from_secs(10), peripheral.discover_services())
+    peripheral
+        .discover_services_with_timeout(Duration::from_secs(10))
         .await
-        .expect("timed out discovering services")
         .expect("failed to discover services");
     peripheral
 }
