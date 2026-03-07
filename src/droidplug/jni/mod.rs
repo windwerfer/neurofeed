@@ -56,6 +56,69 @@ pub fn init(env: &JNIEnv) -> crate::Result<()> {
             env,
             "com/nonpolynomial/btleplug/android/impl/NoBluetoothAdapterException",
         )?;
+
+        // jni-utils class caching
+        super::jni_utils::classcache::find_add_class(
+            env,
+            "io/github/gedgygedgy/rust/future/Future",
+        )?;
+        super::jni_utils::classcache::find_add_class(
+            env,
+            "io/github/gedgygedgy/rust/future/FutureException",
+        )?;
+        super::jni_utils::classcache::find_add_class(
+            env,
+            "io/github/gedgygedgy/rust/ops/FnAdapter",
+        )?;
+        super::jni_utils::classcache::find_add_class(
+            env,
+            "io/github/gedgygedgy/rust/stream/Stream",
+        )?;
+        super::jni_utils::classcache::find_add_class(
+            env,
+            "io/github/gedgygedgy/rust/stream/StreamPoll",
+        )?;
+        super::jni_utils::classcache::find_add_class(
+            env,
+            "io/github/gedgygedgy/rust/task/Waker",
+        )?;
+        super::jni_utils::classcache::find_add_class(
+            env,
+            "io/github/gedgygedgy/rust/task/PollResult",
+        )?;
+        super::jni_utils::classcache::find_add_class(
+            env,
+            "io/github/gedgygedgy/rust/ops/FnRunnableImpl",
+        )?;
+        super::jni_utils::classcache::find_add_class(
+            env,
+            "io/github/gedgygedgy/rust/ops/FnBiFunctionImpl",
+        )?;
+        super::jni_utils::classcache::find_add_class(
+            env,
+            "io/github/gedgygedgy/rust/ops/FnFunctionImpl",
+        )?;
+
+        // FnAdapter native method registration
+        let fn_adapter_class =
+            env.auto_local(env.find_class("io/github/gedgygedgy/rust/ops/FnAdapter")?);
+        env.register_native_methods(
+            &fn_adapter_class,
+            &[
+                NativeMethod {
+                    name: "callInternal".into(),
+                    sig:
+                        "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+                            .into(),
+                    fn_ptr: super::jni_utils::ops::fn_adapter_call_internal as *mut c_void,
+                },
+                NativeMethod {
+                    name: "closeInternal".into(),
+                    sig: "()V".into(),
+                    fn_ptr: super::jni_utils::ops::fn_adapter_close_internal as *mut c_void,
+                },
+            ],
+        )?;
     }
     Ok(())
 }

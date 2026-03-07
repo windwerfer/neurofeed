@@ -286,91 +286,26 @@ fn fn_adapter<'a: 'b, 'b>(
     Ok(obj)
 }
 
-pub(crate) mod jni {
-    use super::FnWrapper;
-    use jni::{errors::Result, objects::JObject, JNIEnv, NativeMethod};
+pub(crate) extern "C" fn fn_adapter_call_internal<'a>(
+    env: JNIEnv<'a>,
+    obj1: JObject<'a>,
+    obj2: JObject<'a>,
+    arg1: JObject<'a>,
+    arg2: JObject<'a>,
+) -> JObject<'a> {
+    use std::panic::AssertUnwindSafe;
 
-    extern "C" fn fn_adapter_call_internal<'a>(
-        env: JNIEnv<'a>,
-        obj1: JObject<'a>,
-        obj2: JObject<'a>,
-        arg1: JObject<'a>,
-        arg2: JObject<'a>,
-    ) -> JObject<'a> {
-        use std::panic::AssertUnwindSafe;
+    let arc = if let Ok(f) = env.get_rust_field::<_, _, FnWrapper>(obj1, "data") {
+        AssertUnwindSafe(f.0.clone())
+    } else {
+        return JObject::null();
+    };
+    super::exceptions::throw_unwind(&env, || arc(&env, obj1, obj2, arg1, arg2))
+        .unwrap_or_else(|_| JObject::null())
+}
 
-        let arc = if let Ok(f) = env.get_rust_field::<_, _, FnWrapper>(obj1, "data") {
-            AssertUnwindSafe(f.0.clone())
-        } else {
-            return JObject::null();
-        };
-        super::super::exceptions::throw_unwind(&env, || arc(&env, obj1, obj2, arg1, arg2))
-            .unwrap_or_else(|_| JObject::null())
-    }
-
-    extern "C" fn fn_adapter_close_internal(env: JNIEnv, obj: JObject) {
-        let _ = super::super::exceptions::throw_unwind(&env, || {
-            let _ = env.take_rust_field::<_, _, FnWrapper>(obj, "data");
-        });
-    }
-
-    pub fn init(env: &JNIEnv) -> Result<()> {
-        use std::ffi::c_void;
-        super::super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/future/Future")
-            .unwrap();
-        super::super::classcache::find_add_class(
-            env,
-            "io/github/gedgygedgy/rust/future/FutureException",
-        )
-        .unwrap();
-        super::super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/ops/FnAdapter")
-            .unwrap();
-        super::super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/stream/Stream")
-            .unwrap();
-        super::super::classcache::find_add_class(
-            env,
-            "io/github/gedgygedgy/rust/stream/StreamPoll",
-        )
-        .unwrap();
-        super::super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/task/Waker")
-            .unwrap();
-        super::super::classcache::find_add_class(env, "io/github/gedgygedgy/rust/task/PollResult")
-            .unwrap();
-        super::super::classcache::find_add_class(
-            env,
-            "io/github/gedgygedgy/rust/ops/FnRunnableImpl",
-        )
-        .unwrap();
-        super::super::classcache::find_add_class(
-            env,
-            "io/github/gedgygedgy/rust/ops/FnBiFunctionImpl",
-        )
-        .unwrap();
-        super::super::classcache::find_add_class(
-            env,
-            "io/github/gedgygedgy/rust/ops/FnFunctionImpl",
-        )
-        .unwrap();
-        let class =
-            env.auto_local(env.find_class("io/github/gedgygedgy/rust/ops/FnAdapter")?);
-        env.register_native_methods(
-            &class,
-            &[
-                NativeMethod {
-                    name: "callInternal".into(),
-                    sig:
-                        "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
-                            .into(),
-                    fn_ptr: fn_adapter_call_internal as *mut c_void,
-                },
-                NativeMethod {
-                    name: "closeInternal".into(),
-                    sig: "()V".into(),
-                    fn_ptr: fn_adapter_close_internal as *mut c_void,
-                },
-            ],
-        )?;
-
-        Ok(())
-    }
+pub(crate) extern "C" fn fn_adapter_close_internal(env: JNIEnv, obj: JObject) {
+    let _ = super::exceptions::throw_unwind(&env, || {
+        let _ = env.take_rust_field::<_, _, FnWrapper>(obj, "data");
+    });
 }

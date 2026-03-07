@@ -12,7 +12,6 @@ static GLOBAL_ADAPTER: OnceCell<adapter::Adapter> = OnceCell::new();
 
 pub fn init(env: &JNIEnv) -> crate::Result<()> {
     self::jni::init(env)?;
-    self::jni_utils::init(env)?;
     GLOBAL_ADAPTER.get_or_try_init(|| adapter::Adapter::new())?;
     Ok(())
 }
