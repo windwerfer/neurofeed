@@ -3,7 +3,6 @@ plugins {
 }
 
 repositories {
-    mavenLocal()
     google()
     mavenCentral()
 }
@@ -25,52 +24,4 @@ android {
 }
 
 dependencies {
-    implementation 'io.github.gedgygedgy.rust:jni-utils:0.1.1-SNAPSHOT'
-    //implementation files('c:/Users/qdot/code/jni-utils-rs/java/build/libs/jni-utils-0.1.1-SNAPSHOT.jar')
-}
-
-// Embed jni-utils classes into the AAR's classes.jar so consumers that include
-// this AAR as a flat file (without Maven dependency resolution) get the
-// transitive dependency bundled automatically.
-android.libraryVariants.configureEach { variant ->
-    def name = variant.name.capitalize()
-    tasks.named("bundle${name}Aar").configure { bundleTask ->
-        bundleTask.doLast {
-            def aarFile = bundleTask.archiveFile.get().asFile
-            def tmpDir = new File(project.layout.buildDirectory.asFile.get(), "tmp/fataar-${variant.name}")
-            if (tmpDir.exists()) tmpDir.deleteDir()
-            tmpDir.mkdirs()
-
-            // Extract the AAR
-            ant.unzip(src: aarFile, dest: tmpDir)
-
-            // Collect runtime dependency JARs and merge into classes.jar
-            def classesJar = new File(tmpDir, "classes.jar")
-            def mergeDir = new File(tmpDir, "_merge")
-            mergeDir.mkdirs()
-
-            // Extract existing classes.jar
-            ant.unzip(src: classesJar, dest: mergeDir)
-
-            // Extract each runtime dependency JAR
-            configurations.getByName("${variant.name}RuntimeClasspath").files.each { jar ->
-                if (jar.name.endsWith(".jar")) {
-                    ant.unzip(src: jar, dest: mergeDir) {
-                        patternset { exclude(name: "META-INF/**") }
-                    }
-                }
-            }
-
-            // Re-jar
-            classesJar.delete()
-            ant.jar(destfile: classesJar, basedir: mergeDir)
-
-            // Cleanup merge dir before re-packaging
-            mergeDir.deleteDir()
-
-            // Re-package the AAR
-            aarFile.delete()
-            ant.zip(destfile: aarFile, basedir: tmpDir)
-        }
-    }
 }
