@@ -9,9 +9,6 @@ static GLOBAL_JVM: OnceCell<JavaVM> = OnceCell::new();
 
 pub fn init(env: &JNIEnv) -> crate::Result<()> {
     if let Ok(()) = GLOBAL_JVM.set(env.get_java_vm()?) {
-        // Initialize jni-utils' own class cache (Future, Waker, PollResult, etc.)
-        super::jni_utils::init(env)?;
-
         env.register_native_methods(
             "com/nonpolynomial/btleplug/android/impl/Adapter",
             &[
