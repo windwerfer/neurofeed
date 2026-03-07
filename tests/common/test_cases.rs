@@ -84,10 +84,7 @@ pub async fn test_advertisement_manufacturer_data() {
 
     let adapter = peripheral_finder::get_adapter().await;
     let mut events = adapter.events().await.unwrap();
-    adapter
-        .start_scan(ScanFilter::default())
-        .await
-        .unwrap();
+    adapter.start_scan(ScanFilter::default()).await.unwrap();
 
     let mut found_manufacturer_data = false;
     let timeout = time::sleep(Duration::from_secs(10));
@@ -122,10 +119,7 @@ pub async fn test_advertisement_services() {
 
     let adapter = peripheral_finder::get_adapter().await;
     let mut events = adapter.events().await.unwrap();
-    adapter
-        .start_scan(ScanFilter::default())
-        .await
-        .unwrap();
+    adapter.start_scan(ScanFilter::default()).await.unwrap();
 
     let mut found_services = false;
     let timeout = time::sleep(Duration::from_secs(10));
@@ -190,11 +184,7 @@ pub async fn test_peripheral_triggered_disconnect() {
 
     let peripheral = peripheral_finder::find_and_connect().await;
     assert!(peripheral.is_connected().await.unwrap());
-    peripheral_finder::send_control_command(
-        &peripheral,
-        gatt_uuids::CMD_TRIGGER_DISCONNECT,
-    )
-    .await;
+    peripheral_finder::send_control_command(&peripheral, gatt_uuids::CMD_TRIGGER_DISCONNECT).await;
     time::sleep(Duration::from_secs(2)).await;
     assert!(
         !peripheral.is_connected().await.unwrap(),
@@ -207,10 +197,7 @@ pub async fn test_peripheral_triggered_disconnect() {
 pub async fn test_read_static_value() {
     let peripheral = peripheral_finder::find_and_connect().await;
     peripheral_finder::reset_peripheral(&peripheral).await;
-    let char = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::STATIC_READ,
-    );
+    let char = peripheral_finder::find_characteristic(&peripheral, gatt_uuids::STATIC_READ);
     let value = peripheral.read(&char).await.unwrap();
     assert_eq!(
         value,
@@ -223,10 +210,7 @@ pub async fn test_read_static_value() {
 pub async fn test_read_counter_increments() {
     let peripheral = peripheral_finder::find_and_connect().await;
     peripheral_finder::reset_peripheral(&peripheral).await;
-    let char = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::COUNTER_READ,
-    );
+    let char = peripheral_finder::find_characteristic(&peripheral, gatt_uuids::COUNTER_READ);
     let first = peripheral.read(&char).await.unwrap();
     let second = peripheral.read(&char).await.unwrap();
     let first_val = u32::from_le_bytes(first[..4].try_into().unwrap());
@@ -245,10 +229,7 @@ pub async fn test_write_with_response() {
 
     let peripheral = peripheral_finder::find_and_connect().await;
     peripheral_finder::reset_peripheral(&peripheral).await;
-    let char = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::WRITE_WITH_RESPONSE,
-    );
+    let char = peripheral_finder::find_characteristic(&peripheral, gatt_uuids::WRITE_WITH_RESPONSE);
     let data = vec![0xAA, 0xBB, 0xCC];
     peripheral
         .write(&char, &data, WriteType::WithResponse)
@@ -262,10 +243,8 @@ pub async fn test_write_without_response() {
 
     let peripheral = peripheral_finder::find_and_connect().await;
     peripheral_finder::reset_peripheral(&peripheral).await;
-    let char = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::WRITE_WITHOUT_RESPONSE,
-    );
+    let char =
+        peripheral_finder::find_characteristic(&peripheral, gatt_uuids::WRITE_WITHOUT_RESPONSE);
     let data = vec![0x11, 0x22, 0x33];
     peripheral
         .write(&char, &data, WriteType::WithoutResponse)
@@ -279,10 +258,7 @@ pub async fn test_read_write_roundtrip() {
 
     let peripheral = peripheral_finder::find_and_connect().await;
     peripheral_finder::reset_peripheral(&peripheral).await;
-    let char = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::READ_WRITE,
-    );
+    let char = peripheral_finder::find_characteristic(&peripheral, gatt_uuids::READ_WRITE);
     let data = vec![0xDE, 0xAD, 0xBE, 0xEF];
     peripheral
         .write(&char, &data, WriteType::WithResponse)
@@ -298,10 +274,7 @@ pub async fn test_long_value_read_write() {
 
     let peripheral = peripheral_finder::find_and_connect().await;
     peripheral_finder::reset_peripheral(&peripheral).await;
-    let char = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::LONG_VALUE,
-    );
+    let char = peripheral_finder::find_characteristic(&peripheral, gatt_uuids::LONG_VALUE);
     let data: Vec<u8> = (0..200).map(|i| (i % 256) as u8).collect();
     peripheral
         .write(&char, &data, WriteType::WithResponse)
@@ -319,26 +292,19 @@ pub async fn test_characteristic_properties() {
     use btleplug::api::CharPropFlags;
 
     let peripheral = peripheral_finder::find_and_connect().await;
-    let static_read = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::STATIC_READ,
-    );
+    let static_read = peripheral_finder::find_characteristic(&peripheral, gatt_uuids::STATIC_READ);
     assert!(
         static_read.properties.contains(CharPropFlags::READ),
         "Static Read should have READ property"
     );
-    let write_char = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::WRITE_WITH_RESPONSE,
-    );
+    let write_char =
+        peripheral_finder::find_characteristic(&peripheral, gatt_uuids::WRITE_WITH_RESPONSE);
     assert!(
         write_char.properties.contains(CharPropFlags::WRITE),
         "Write With Response should have WRITE property"
     );
-    let write_no_resp = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::WRITE_WITHOUT_RESPONSE,
-    );
+    let write_no_resp =
+        peripheral_finder::find_characteristic(&peripheral, gatt_uuids::WRITE_WITHOUT_RESPONSE);
     assert!(
         write_no_resp
             .properties
@@ -357,17 +323,10 @@ pub async fn test_subscribe_and_receive_notifications() {
 
     let peripheral = peripheral_finder::find_and_connect().await;
     peripheral_finder::reset_peripheral(&peripheral).await;
-    let char = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::NOTIFY_CHAR,
-    );
+    let char = peripheral_finder::find_characteristic(&peripheral, gatt_uuids::NOTIFY_CHAR);
     let mut stream = peripheral.notifications().await.unwrap();
     peripheral.subscribe(&char).await.unwrap();
-    peripheral_finder::send_control_command(
-        &peripheral,
-        gatt_uuids::CMD_START_NOTIFICATIONS,
-    )
-    .await;
+    peripheral_finder::send_control_command(&peripheral, gatt_uuids::CMD_START_NOTIFICATIONS).await;
 
     let mut received = Vec::new();
     let timeout = time::sleep(Duration::from_secs(5));
@@ -387,11 +346,7 @@ pub async fn test_subscribe_and_receive_notifications() {
         }
     }
 
-    peripheral_finder::send_control_command(
-        &peripheral,
-        gatt_uuids::CMD_STOP_NOTIFICATIONS,
-    )
-    .await;
+    peripheral_finder::send_control_command(&peripheral, gatt_uuids::CMD_STOP_NOTIFICATIONS).await;
     peripheral.unsubscribe(&char).await.unwrap();
 
     assert!(
@@ -412,17 +367,10 @@ pub async fn test_subscribe_and_receive_indications() {
 
     let peripheral = peripheral_finder::find_and_connect().await;
     peripheral_finder::reset_peripheral(&peripheral).await;
-    let char = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::INDICATE_CHAR,
-    );
+    let char = peripheral_finder::find_characteristic(&peripheral, gatt_uuids::INDICATE_CHAR);
     let mut stream = peripheral.notifications().await.unwrap();
     peripheral.subscribe(&char).await.unwrap();
-    peripheral_finder::send_control_command(
-        &peripheral,
-        gatt_uuids::CMD_START_NOTIFICATIONS,
-    )
-    .await;
+    peripheral_finder::send_control_command(&peripheral, gatt_uuids::CMD_START_NOTIFICATIONS).await;
 
     let mut received = Vec::new();
     let timeout = time::sleep(Duration::from_secs(5));
@@ -442,11 +390,7 @@ pub async fn test_subscribe_and_receive_indications() {
         }
     }
 
-    peripheral_finder::send_control_command(
-        &peripheral,
-        gatt_uuids::CMD_STOP_NOTIFICATIONS,
-    )
-    .await;
+    peripheral_finder::send_control_command(&peripheral, gatt_uuids::CMD_STOP_NOTIFICATIONS).await;
     peripheral.unsubscribe(&char).await.unwrap();
 
     assert!(
@@ -464,17 +408,10 @@ pub async fn test_unsubscribe_stops_notifications() {
 
     let peripheral = peripheral_finder::find_and_connect().await;
     peripheral_finder::reset_peripheral(&peripheral).await;
-    let char = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::NOTIFY_CHAR,
-    );
+    let char = peripheral_finder::find_characteristic(&peripheral, gatt_uuids::NOTIFY_CHAR);
     let mut stream = peripheral.notifications().await.unwrap();
     peripheral.subscribe(&char).await.unwrap();
-    peripheral_finder::send_control_command(
-        &peripheral,
-        gatt_uuids::CMD_START_NOTIFICATIONS,
-    )
-    .await;
+    peripheral_finder::send_control_command(&peripheral, gatt_uuids::CMD_START_NOTIFICATIONS).await;
 
     let timeout = time::sleep(Duration::from_secs(3));
     tokio::pin!(timeout);
@@ -495,11 +432,7 @@ pub async fn test_unsubscribe_stops_notifications() {
     peripheral.unsubscribe(&char).await.unwrap();
     time::sleep(Duration::from_secs(2)).await;
 
-    peripheral_finder::send_control_command(
-        &peripheral,
-        gatt_uuids::CMD_STOP_NOTIFICATIONS,
-    )
-    .await;
+    peripheral_finder::send_control_command(&peripheral, gatt_uuids::CMD_STOP_NOTIFICATIONS).await;
     peripheral.disconnect().await.unwrap();
 }
 
@@ -510,14 +443,10 @@ pub async fn test_configurable_notification_payload() {
 
     let peripheral = peripheral_finder::find_and_connect().await;
     peripheral_finder::reset_peripheral(&peripheral).await;
-    let config_char = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::CONFIGURABLE_NOTIFY,
-    );
-    let control_point = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::CONTROL_POINT,
-    );
+    let config_char =
+        peripheral_finder::find_characteristic(&peripheral, gatt_uuids::CONFIGURABLE_NOTIFY);
+    let control_point =
+        peripheral_finder::find_characteristic(&peripheral, gatt_uuids::CONTROL_POINT);
 
     let mut cmd = vec![gatt_uuids::CMD_SET_NOTIFICATION_PAYLOAD];
     cmd.extend_from_slice(&[0xCA, 0xFE, 0xBA, 0xBE]);
@@ -528,11 +457,7 @@ pub async fn test_configurable_notification_payload() {
 
     let mut stream = peripheral.notifications().await.unwrap();
     peripheral.subscribe(&config_char).await.unwrap();
-    peripheral_finder::send_control_command(
-        &peripheral,
-        gatt_uuids::CMD_START_NOTIFICATIONS,
-    )
-    .await;
+    peripheral_finder::send_control_command(&peripheral, gatt_uuids::CMD_START_NOTIFICATIONS).await;
 
     let timeout = time::sleep(Duration::from_secs(5));
     tokio::pin!(timeout);
@@ -552,13 +477,12 @@ pub async fn test_configurable_notification_payload() {
         }
     }
 
-    peripheral_finder::send_control_command(
-        &peripheral,
-        gatt_uuids::CMD_STOP_NOTIFICATIONS,
-    )
-    .await;
+    peripheral_finder::send_control_command(&peripheral, gatt_uuids::CMD_STOP_NOTIFICATIONS).await;
     peripheral.unsubscribe(&config_char).await.unwrap();
-    assert!(matching, "Should receive notification with custom payload [0xCA, 0xFE, 0xBA, 0xBE]");
+    assert!(
+        matching,
+        "Should receive notification with custom payload [0xCA, 0xFE, 0xBA, 0xBE]"
+    );
     peripheral.disconnect().await.unwrap();
 }
 
@@ -604,10 +528,8 @@ pub async fn test_read_write_descriptor_roundtrip() {
 
 pub async fn test_descriptor_discovery() {
     let peripheral = peripheral_finder::find_and_connect().await;
-    let char = peripheral_finder::find_characteristic(
-        &peripheral,
-        gatt_uuids::DESCRIPTOR_TEST_CHAR,
-    );
+    let char =
+        peripheral_finder::find_characteristic(&peripheral, gatt_uuids::DESCRIPTOR_TEST_CHAR);
     let descriptor_uuids: Vec<_> = char.descriptors.iter().map(|d| d.uuid).collect();
     assert!(
         descriptor_uuids.contains(&gatt_uuids::READ_ONLY_DESCRIPTOR),
@@ -663,10 +585,7 @@ pub async fn test_properties_contain_peripheral_info() {
 
     let expected_name = std::env::var("BTLEPLUG_TEST_PERIPHERAL")
         .unwrap_or_else(|_| gatt_uuids::TEST_PERIPHERAL_NAME.to_string());
-    assert_eq!(
-        props.local_name.as_deref(),
-        Some(expected_name.as_str()),
-    );
+    assert_eq!(props.local_name.as_deref(), Some(expected_name.as_str()),);
     assert!(
         props
             .manufacturer_data
