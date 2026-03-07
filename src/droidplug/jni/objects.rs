@@ -6,7 +6,7 @@ use jni::{
     sys::jint,
     JNIEnv,
 };
-use jni_utils::{future::JFuture, stream::JStream, uuid::JUuid};
+use crate::droidplug::jni_utils::{future::JFuture, stream::JStream, uuid::JUuid};
 use std::{collections::HashMap, convert::TryFrom, iter::Iterator};
 use uuid::Uuid;
 
@@ -57,7 +57,7 @@ impl<'a: 'b, 'b> JPeripheral<'a, 'b> {
     fn from_env_impl(env: &'b JNIEnv<'a>, obj: JObject<'a>) -> Result<Self> {
         //let class = env.auto_local(class);
         let class_static =
-            jni_utils::classcache::get_class("com/nonpolynomial/btleplug/android/impl/Peripheral")
+            crate::droidplug::jni_utils::classcache::get_class("com/nonpolynomial/btleplug/android/impl/Peripheral")
                 .unwrap();
         let class = JClass::from(class_static.as_obj());
 
@@ -148,7 +148,7 @@ impl<'a: 'b, 'b> JPeripheral<'a, 'b> {
         let addr_jstr = env.new_string(format!("{:X}", addr))?;
         let obj = env.new_object(
             JClass::from(
-                jni_utils::classcache::get_class(
+                crate::droidplug::jni_utils::classcache::get_class(
                     "com/nonpolynomial/btleplug/android/impl/Peripheral",
                 )
                 .unwrap()
@@ -526,7 +526,7 @@ impl<'a: 'b, 'b> JBluetoothGattCharacteristic<'a, 'b> {
                 &[],
             )?
             .l()?;
-        jni_utils::arrays::byte_array_to_vec(self.env, value.into_inner())
+        crate::droidplug::jni_utils::arrays::byte_array_to_vec(self.env, value.into_inner())
     }
 
     pub fn get_descriptors(&self) -> Result<Vec<JBluetoothGattDescriptor>> {
@@ -630,7 +630,7 @@ impl<'a> JScanFilter<'a> {
         }
         let obj = env.new_object(
             JClass::from(
-                jni_utils::classcache::get_class(
+                crate::droidplug::jni_utils::classcache::get_class(
                     "com/nonpolynomial/btleplug/android/impl/ScanFilter",
                 )
                 .unwrap()
@@ -797,7 +797,7 @@ impl<'a: 'b, 'b> TryFrom<JScanResult<'a, 'b>> for (BDAddr, Option<PeripheralProp
                     let (index, data) = item?;
 
                     let index = index as u16;
-                    let data = jni_utils::arrays::byte_array_to_vec(result.env, data.into_inner())?;
+                    let data = crate::droidplug::jni_utils::arrays::byte_array_to_vec(result.env, data.into_inner())?;
                     manufacturer_data.insert(index, data);
                 }
             }
@@ -814,7 +814,7 @@ impl<'a: 'b, 'b> TryFrom<JScanResult<'a, 'b>> for (BDAddr, Option<PeripheralProp
                         .get_uuid()?
                         .as_uuid()?;
                     let data =
-                        jni_utils::arrays::byte_array_to_vec(result.env, value.into_inner())?;
+                        crate::droidplug::jni_utils::arrays::byte_array_to_vec(result.env, value.into_inner())?;
                     service_data.insert(uuid, data);
                 }
             }

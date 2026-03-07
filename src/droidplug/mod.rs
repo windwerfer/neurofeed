@@ -6,6 +6,7 @@ use ::jni::JNIEnv;
 use once_cell::sync::OnceCell;
 
 mod jni;
+mod jni_utils;
 
 static GLOBAL_ADAPTER: OnceCell<adapter::Adapter> = OnceCell::new();
 

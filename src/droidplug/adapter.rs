@@ -19,7 +19,7 @@ use jni::{
     sys::jboolean,
     JNIEnv,
 };
-use jni_utils::exceptions::try_block;
+use super::jni_utils::exceptions::try_block;
 use std::{
     fmt::{Debug, Formatter},
     pin::Pin,
@@ -152,7 +152,7 @@ impl Central for Adapter {
         })
         .catch(
             JClass::from(
-                jni_utils::classcache::get_class(
+                super::jni_utils::classcache::get_class(
                     "com/nonpolynomial/btleplug/android/impl/NoBluetoothAdapterException",
                 )
                 .unwrap()
