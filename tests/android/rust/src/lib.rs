@@ -164,6 +164,10 @@ jni_test!(
     test_cases::test_write_without_response
 );
 jni_test!(
+    Java_com_nonpolynomial_btleplug_test_NativeTests_testWriteWithoutResponseBurst,
+    test_cases::test_write_without_response_burst
+);
+jni_test!(
     Java_com_nonpolynomial_btleplug_test_NativeTests_testReadWriteRoundtrip,
     test_cases::test_read_write_roundtrip
 );

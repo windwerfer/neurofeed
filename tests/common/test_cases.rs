@@ -266,6 +266,28 @@ pub async fn test_write_without_response() {
     peripheral.disconnect().await.unwrap();
 }
 
+pub async fn test_write_without_response_burst() {
+    use btleplug::api::WriteType;
+
+    let peripheral = peripheral_finder::find_and_connect().await;
+    peripheral_finder::reset_peripheral(&peripheral).await;
+    let char =
+        peripheral_finder::find_characteristic(&peripheral, gatt_uuids::WRITE_WITHOUT_RESPONSE);
+
+    // Send a burst of writes to exercise flow control. Without proper
+    // canSendWriteWithoutResponse handling, later writes would be silently
+    // dropped by CoreBluetooth.
+    let num_writes = 50;
+    for i in 0u8..num_writes {
+        let data = vec![i; 20];
+        peripheral
+            .write(&char, &data, WriteType::WithoutResponse)
+            .await
+            .expect(&format!("write-without-response #{} should succeed", i));
+    }
+    peripheral.disconnect().await.unwrap();
+}
+
 pub async fn test_read_write_roundtrip() {
     use btleplug::api::WriteType;
 
