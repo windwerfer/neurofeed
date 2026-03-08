@@ -218,14 +218,17 @@ impl BLEDevice {
             .RequestPreferredConnectionParameters(&params)
             .map_err(winrt_error)?;
         let status = result.Status().map_err(winrt_error)?;
-        // BluetoothLEPreferredConnectionParametersRequestStatus::Success = 0
-        if status.0 == 0 {
-            Ok(())
-        } else {
-            Err(Error::Other(
+        // BluetoothLEPreferredConnectionParametersRequestStatus:
+        //   Unspecified = 0, Success = 1, DeviceNotAvailable = 2, AccessDenied = 3
+        match status.0 {
+            1 => Ok(()),
+            2 | 3 => Err(Error::NotSupported(
+                format!("request_connection_parameters not supported (status {:?})", status),
+            )),
+            _ => Err(Error::Other(
                 format!("RequestPreferredConnectionParameters failed with status {:?}", status)
                     .into(),
-            ))
+            )),
         }
     }
 
