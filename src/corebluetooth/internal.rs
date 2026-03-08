@@ -306,8 +306,8 @@ impl PeripheralInternal {
         // we have all of our services and characteristics. We assume that
         // set_characteristics should be called once for every entry in the
         // service map. Once that's done, we're filled out enough and can send
-        // back a Connected reply to the waiting future with all of the
-        // characteristic info in it.
+        // back a ServicesDiscovered reply to the waiting future with all of
+        // the characteristic info in it.
         if !self.services.values().any(|service| !service.discovered) {
             if self.services_discovered_future_state.is_none() {
                 panic!("We should still have a future at this point!");

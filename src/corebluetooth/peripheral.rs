@@ -328,7 +328,7 @@ impl api::Peripheral for Peripheral {
             .await?;
         match fut.await {
             CoreBluetoothReply::ServicesDiscovered(services) => {
-                *(self.shared.services.lock().unwrap()) = services.clone();
+                *(self.shared.services.lock().map_err(Into::<Error>::into)?) = services;
                 return Ok(());
             }
             CoreBluetoothReply::Err(msg) => return Err(Error::RuntimeError(msg)),
