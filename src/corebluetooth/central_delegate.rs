@@ -374,7 +374,8 @@ declare_class!(
                 peripheral_debug(peripheral)
             );
             unsafe { peripheral.setDelegate(Some(ProtocolObject::from_ref(self))) };
-            let peripheral_uuid = nsuuid_to_uuid(unsafe { &peripheral.identifier() });
+            let id = unsafe { peripheral.identifier() };
+            let peripheral_uuid = nsuuid_to_uuid(&id);
             self.send_event(CentralDelegateEvent::ConnectedDevice { peripheral_uuid });
         }
 
@@ -842,8 +843,10 @@ declare_class!(
             // Trigger the removal of internal corebluetooth peripheral discovered services. It is also expected that
             // discover_services() will be performed again on the peripheral at the API level as soon as is practical.
             // NOTE: the list of modified services does not appear to be particularly useful; a full service rediscovery is needed.
+            let id = unsafe { peripheral.identifier() };
+            let peripheral_uuid = nsuuid_to_uuid(&id);
             self.send_event(CentralDelegateEvent::ServicesModified {
-                peripheral_uuid: nsuuid_to_uuid(unsafe { &peripheral.identifier() }),
+                peripheral_uuid,
             });
         }
 
