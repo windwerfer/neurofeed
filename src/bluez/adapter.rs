@@ -117,9 +117,8 @@ impl Central for Adapter {
     }
 
     async fn clear_peripherals(&self) -> Result<()> {
-        Err(Error::NotSupported(
-            "Can't clear peripheral list on this platform".to_string(),
-        ))
+        // BlueZ queries the daemon live; peripherals aren't cached locally.
+        Ok(())
     }
 
     async fn adapter_info(&self) -> Result<String> {
