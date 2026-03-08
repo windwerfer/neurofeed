@@ -70,6 +70,19 @@ support.
 | Request Connection Parameters         | X       |             |       | X       |
 | Add Peripheral by Address             |         |             |       | X       |
 
+### Platform Caveats
+
+#### Scan Filtering on Linux (BlueZ)
+
+The `ScanFilter` passed to `start_scan()` behaves differently on Linux than
+other platforms. btleplug forwards service UUID filters to BlueZ, but BlueZ
+[merges discovery filters across all D-Bus clients](https://github.com/bluez/bluez/blob/290f9973c9069f293367284e95fd338a221ab90d/doc/org.bluez.Adapter.rst?plain=1#L171-L173).
+Your application will receive advertisements matching the **union** of all
+applications' filters, not just your own. Additionally, BlueZ's UUID filter can
+drop some advertisement types (such as service data) that it shouldn't.
+Applications targeting Linux should perform their own post-filtering on scan
+results rather than relying solely on `ScanFilter`.
+
 ## Library Features
 
 #### Serialization/Deserialization
