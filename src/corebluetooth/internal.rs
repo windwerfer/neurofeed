@@ -241,25 +241,25 @@ impl PeripheralInternal {
         service_uuid: Uuid,
         characteristics: HashMap<Uuid, Retained<CBCharacteristic>>,
     ) {
-        let characteristics = characteristics.into_iter().fold(
-            // Only consider the first characteristic of each UUID
-            // This "should" be unique, but of course it's not enforced
-            HashMap::<Uuid, CharacteristicInternal>::new(),
-            |mut map, (characteristic_uuid, characteristic)| {
-                if !map.contains_key(&characteristic_uuid) {
-                    map.insert(
-                        characteristic_uuid,
-                        CharacteristicInternal::new(characteristic),
-                    );
-                }
-                map
-            },
-        );
         let service = self
             .services
             .get_mut(&service_uuid)
             .expect("Got characteristics for a service we don't know about");
-        service.characteristics = characteristics;
+        for (characteristic_uuid, cb_characteristic) in characteristics {
+            if let Some(existing) = service.characteristics.get_mut(&characteristic_uuid) {
+                // Update the CB object reference and properties, but preserve
+                // in-flight future state and already-discovered descriptors to
+                // avoid dropping pending operations during late re-discovery
+                // events (see issue #167).
+                existing.properties = CharacteristicInternal::form_flags(&*cb_characteristic);
+                existing.characteristic = cb_characteristic;
+            } else {
+                service.characteristics.insert(
+                    characteristic_uuid,
+                    CharacteristicInternal::new(cb_characteristic),
+                );
+            }
+        }
         if service.characteristics.is_empty() {
             service.discovered = true;
             self.check_discovered();
@@ -272,12 +272,6 @@ impl PeripheralInternal {
         characteristic_uuid: Uuid,
         descriptors: HashMap<Uuid, Retained<CBDescriptor>>,
     ) {
-        let descriptors = descriptors
-            .into_iter()
-            .map(|(descriptor_uuid, descriptor)| {
-                (descriptor_uuid, DescriptorInternal::new(descriptor))
-            })
-            .collect();
         let service = self
             .services
             .get_mut(&service_uuid)
@@ -286,7 +280,18 @@ impl PeripheralInternal {
             .characteristics
             .get_mut(&characteristic_uuid)
             .expect("Got descriptors for a characteristic we don't know about");
-        characteristic.descriptors = descriptors;
+        for (descriptor_uuid, cb_descriptor) in descriptors {
+            if let Some(existing) = characteristic.descriptors.get_mut(&descriptor_uuid) {
+                // Update the CB object reference but preserve in-flight future
+                // state to avoid dropping pending operations during late
+                // re-discovery events (see issue #167).
+                existing.descriptor = cb_descriptor;
+            } else {
+                characteristic
+                    .descriptors
+                    .insert(descriptor_uuid, DescriptorInternal::new(cb_descriptor));
+            }
+        }
         characteristic.discovered = true;
 
         if !service
@@ -908,8 +913,9 @@ impl CoreBluetoothInternal {
             self.get_characteristic(peripheral_uuid, service_uuid, characteristic_uuid)
         {
             trace!("Got written event!");
-            let state = characteristic.write_future_state.pop_back().unwrap();
-            state.lock().unwrap().set_reply(CoreBluetoothReply::Ok);
+            if let Some(state) = characteristic.write_future_state.pop_back() {
+                state.lock().unwrap().set_reply(CoreBluetoothReply::Ok);
+            }
         }
     }
 
@@ -1222,11 +1228,12 @@ impl CoreBluetoothInternal {
                         for byte in data.iter() {
                             data_clone.push(*byte);
                         }
-                        let state = descriptor.read_future_state.pop_back().unwrap();
-                        state
-                            .lock()
-                            .unwrap()
-                            .set_reply(CoreBluetoothReply::ReadResult(data_clone));
+                        if let Some(state) = descriptor.read_future_state.pop_back() {
+                            state
+                                .lock()
+                                .unwrap()
+                                .set_reply(CoreBluetoothReply::ReadResult(data_clone));
+                        }
                     }
                 }
             }
@@ -1247,8 +1254,9 @@ impl CoreBluetoothInternal {
             descriptor_uuid,
         ) {
             trace!("Got written event!");
-            let state = descriptor.write_future_state.pop_back().unwrap();
-            state.lock().unwrap().set_reply(CoreBluetoothReply::Ok);
+            if let Some(state) = descriptor.write_future_state.pop_back() {
+                state.lock().unwrap().set_reply(CoreBluetoothReply::Ok);
+            }
         }
     }
 
