@@ -25,7 +25,7 @@ support.
 
 ## Platform Status
 
-- **Linux / Windows / macOS / iOS / Android**
+- **Linux / Windows / macOS (>= 10.15) / iOS / Android**
   - Device enumeration and characteristic/services implemented and working.
   - Please file bugs and missing features if you find them.
 - **WASM/WebBluetooth**
@@ -63,8 +63,12 @@ support.
 | Get Characteristic Notification Event | X       | X           | X     | X       |
 | Read Descriptor                       | X       | X           | X     | X       |
 | Write Descriptor                      | X       | X           | X     | X       |
-| Retrieve MTU                          |         |             |       |         |
-| Retrieve Connection Interval          |         |             |       |         |
+| Retrieve MTU                          | X       | X           | X     | X       |
+| Retrieve Connection Parameters        | X       |             |       | X       |
+| Read RSSI                             | X       | X           | X     | X       |
+| Retrieve Adapter State                | X       | X           | X     |         |
+| Request Connection Parameters         | X       |             |       | X       |
+| Add Peripheral by Address             |         |             |       | X       |
 
 ## Library Features
 
