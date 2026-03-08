@@ -80,6 +80,7 @@ class BleIntegrationTest {
     @Test fun testReadCounterIncrements() = NativeTests.testReadCounterIncrements()
     @Test fun testWriteWithResponse() = NativeTests.testWriteWithResponse()
     @Test fun testWriteWithoutResponse() = NativeTests.testWriteWithoutResponse()
+    @Test fun testWriteWithoutResponseBurst() = NativeTests.testWriteWithoutResponseBurst()
     @Test fun testReadWriteRoundtrip() = NativeTests.testReadWriteRoundtrip()
     @Test fun testLongValueReadWrite() = NativeTests.testLongValueReadWrite()
     @Test fun testCharacteristicProperties() = NativeTests.testCharacteristicProperties()

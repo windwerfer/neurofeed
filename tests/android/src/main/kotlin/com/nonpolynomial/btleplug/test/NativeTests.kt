@@ -22,6 +22,7 @@ object NativeTests {
     external fun testReadCounterIncrements()
     external fun testWriteWithResponse()
     external fun testWriteWithoutResponse()
+    external fun testWriteWithoutResponseBurst()
     external fun testReadWriteRoundtrip()
     external fun testLongValueReadWrite()
     external fun testCharacteristicProperties()
