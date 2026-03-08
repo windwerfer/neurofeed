@@ -463,7 +463,9 @@ pub trait Central: Send + Sync + Clone {
     /// Add a [`Peripheral`] from a MAC address without a scan result. Not supported on all Bluetooth systems.
     async fn add_peripheral(&self, address: &PeripheralId) -> Result<Self::Peripheral>;
 
-    /// Clear the list of [`Peripheral`]s that have been discovered so far.
+    /// Clears the list of [`Peripheral`]s that have been discovered so far. Connected peripherals
+    /// should be disconnected before calling this method. On platforms that do not cache peripherals
+    /// locally (e.g. BlueZ on Linux), this is a no-op.
     async fn clear_peripherals(&self) -> Result<()>;
 
     /// Get information about the Bluetooth adapter being used, such as the model or type.
