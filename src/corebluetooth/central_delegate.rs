@@ -137,6 +137,9 @@ pub enum CentralDelegateEvent {
         peripheral_uuid: Uuid,
         rssi: i16,
     },
+    ReadyToSendWriteWithoutResponse {
+        peripheral_uuid: Uuid,
+    },
 }
 
 impl Debug for CentralDelegateEvent {
@@ -322,6 +325,10 @@ impl Debug for CentralDelegateEvent {
                 .debug_struct("DidReadRssi")
                 .field("peripheral_uuid", peripheral_uuid)
                 .field("rssi", rssi)
+                .finish(),
+            CentralDelegateEvent::ReadyToSendWriteWithoutResponse { peripheral_uuid } => f
+                .debug_struct("ReadyToSendWriteWithoutResponse")
+                .field("peripheral_uuid", peripheral_uuid)
                 .finish(),
         }
     }
@@ -837,6 +844,22 @@ declare_class!(
             // NOTE: the list of modified services does not appear to be particularly useful; a full service rediscovery is needed.
             self.send_event(CentralDelegateEvent::ServicesModified {
                 peripheral_uuid: nsuuid_to_uuid(unsafe { &peripheral.identifier() }),
+            });
+        }
+
+        #[method(peripheralIsReadyToSendWriteWithoutResponse:)]
+        fn delegate_peripheral_is_ready_to_send_write_without_response(
+            &self,
+            peripheral: &CBPeripheral,
+        ) {
+            trace!(
+                "delegate_peripheral_is_ready_to_send_write_without_response {}",
+                peripheral_debug(peripheral)
+            );
+            let id = unsafe { peripheral.identifier() };
+            let peripheral_uuid = nsuuid_to_uuid(&id);
+            self.send_event(CentralDelegateEvent::ReadyToSendWriteWithoutResponse {
+                peripheral_uuid,
             });
         }
     }
