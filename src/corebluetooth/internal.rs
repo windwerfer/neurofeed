@@ -146,6 +146,13 @@ impl CharacteristicInternal {
     }
 }
 
+struct PendingWriteWithoutResponse {
+    service_uuid: Uuid,
+    characteristic_uuid: Uuid,
+    data: Vec<u8>,
+    fut: CoreBluetoothReplyStateShared,
+}
+
 #[derive(Clone, Debug)]
 pub enum CoreBluetoothReply {
     AdapterState(CBManagerState),
@@ -187,6 +194,7 @@ struct PeripheralInternal {
     pub connected_future_state: Option<CoreBluetoothReplyStateShared>,
     pub services_discovered_future_state: Option<CoreBluetoothReplyStateShared>,
     pub read_rssi_future_state: VecDeque<CoreBluetoothReplyStateShared>,
+    pub write_without_response_queue: VecDeque<PendingWriteWithoutResponse>,
 }
 
 impl Debug for PeripheralInternal {
@@ -224,6 +232,7 @@ impl PeripheralInternal {
             disconnected_future_state: None,
             services_discovered_future_state: None,
             read_rssi_future_state: VecDeque::with_capacity(4),
+            write_without_response_queue: VecDeque::new(),
         }
     }
 
@@ -352,6 +361,11 @@ impl PeripheralInternal {
         let error = CoreBluetoothReply::Err(String::from("Device disconnected"));
         for state in self.read_rssi_future_state.drain(..) {
             state.lock().unwrap().set_reply(error.clone());
+        }
+
+        // Fulfill pending write-without-response futures
+        for pending in self.write_without_response_queue.drain(..) {
+            pending.fut.lock().unwrap().set_reply(error.clone());
         }
 
         // Fulfill all pending futures
@@ -947,27 +961,73 @@ impl CoreBluetoothInternal {
                 if let Some(characteristic) = service.characteristics.get_mut(&characteristic_uuid)
                 {
                     trace!("Writing value! With kind {:?}", kind);
-                    unsafe {
-                        peripheral.peripheral.writeValue_forCharacteristic_type(
-                            &NSData::from_vec(data),
-                            &characteristic.characteristic,
-                            match kind {
-                                WriteType::WithResponse => {
-                                    CBCharacteristicWriteType::CBCharacteristicWriteWithResponse
+                    match kind {
+                        WriteType::WithoutResponse => {
+                            if unsafe { peripheral.peripheral.canSendWriteWithoutResponse() } {
+                                unsafe {
+                                    peripheral.peripheral.writeValue_forCharacteristic_type(
+                                        &NSData::from_vec(data),
+                                        &characteristic.characteristic,
+                                        CBCharacteristicWriteType::CBCharacteristicWriteWithoutResponse,
+                                    );
                                 }
-                                WriteType::WithoutResponse => {
-                                    CBCharacteristicWriteType::CBCharacteristicWriteWithoutResponse
-                                }
-                            },
-                        );
+                                fut.lock().unwrap().set_reply(CoreBluetoothReply::Ok);
+                            } else {
+                                trace!("Queueing write-without-response (peripheral not ready)");
+                                peripheral.write_without_response_queue.push_back(
+                                    PendingWriteWithoutResponse {
+                                        service_uuid,
+                                        characteristic_uuid,
+                                        data,
+                                        fut,
+                                    },
+                                );
+                            }
+                        }
+                        WriteType::WithResponse => {
+                            unsafe {
+                                peripheral.peripheral.writeValue_forCharacteristic_type(
+                                    &NSData::from_vec(data),
+                                    &characteristic.characteristic,
+                                    CBCharacteristicWriteType::CBCharacteristicWriteWithResponse,
+                                );
+                            }
+                            characteristic.write_future_state.push_front(fut);
+                        }
                     }
-                    // WriteWithoutResponse does not call the corebluetooth
-                    // callback, it just always succeeds silently.
-                    if kind == WriteType::WithoutResponse {
-                        fut.lock().unwrap().set_reply(CoreBluetoothReply::Ok);
+                }
+            }
+        }
+    }
+
+    fn drain_write_without_response_queue(&mut self, peripheral_uuid: Uuid) {
+        if let Some(peripheral) = self.peripherals.get_mut(&peripheral_uuid) {
+            while let Some(pending) = peripheral.write_without_response_queue.pop_front() {
+                if !unsafe { peripheral.peripheral.canSendWriteWithoutResponse() } {
+                    peripheral.write_without_response_queue.push_front(pending);
+                    break;
+                }
+                if let Some(service) = peripheral.services.get(&pending.service_uuid) {
+                    if let Some(characteristic) =
+                        service.characteristics.get(&pending.characteristic_uuid)
+                    {
+                        unsafe {
+                            peripheral.peripheral.writeValue_forCharacteristic_type(
+                                &NSData::from_vec(pending.data),
+                                &characteristic.characteristic,
+                                CBCharacteristicWriteType::CBCharacteristicWriteWithoutResponse,
+                            );
+                        }
+                        pending.fut.lock().unwrap().set_reply(CoreBluetoothReply::Ok);
                     } else {
-                        characteristic.write_future_state.push_front(fut);
+                        pending.fut.lock().unwrap().set_reply(CoreBluetoothReply::Err(
+                            "Characteristic no longer available".into(),
+                        ));
                     }
+                } else {
+                    pending.fut.lock().unwrap().set_reply(CoreBluetoothReply::Err(
+                        "Service no longer available".into(),
+                    ));
                 }
             }
         }
@@ -1283,6 +1343,9 @@ impl CoreBluetoothInternal {
                     },
                     CentralDelegateEvent::DidReadRssi{peripheral_uuid, rssi} => {
                         self.on_read_rssi(peripheral_uuid, rssi).await
+                    },
+                    CentralDelegateEvent::ReadyToSendWriteWithoutResponse{peripheral_uuid} => {
+                        self.drain_write_without_response_queue(peripheral_uuid)
                     },
                 };
             }
