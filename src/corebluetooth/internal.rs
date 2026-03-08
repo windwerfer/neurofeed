@@ -773,6 +773,30 @@ impl CoreBluetoothInternal {
         }
     }
 
+    async fn on_adapter_powered_off(&mut self) {
+        warn!("Adapter powered off, canceling all pending operations");
+        let peripheral_uuids: Vec<Uuid> = self.peripherals.keys().cloned().collect();
+        for uuid in peripheral_uuids {
+            if let Err(e) = self
+                .peripherals
+                .get_mut(&uuid)
+                .unwrap()
+                .event_sender
+                .send(PeripheralEventInternal::Disconnected)
+                .await
+            {
+                error!("Error sending disconnect event for {}: {}", uuid, e);
+            }
+            self.peripherals
+                .get_mut(&uuid)
+                .unwrap()
+                .confirm_disconnect();
+            self.dispatch_event(CoreBluetoothEvent::DeviceDisconnected { uuid })
+                .await;
+        }
+        self.peripherals.clear();
+    }
+
     async fn on_peripheral_disconnect(&mut self, peripheral_uuid: Uuid) {
         trace!("Got disconnect event!");
         if self.peripherals.contains_key(&peripheral_uuid) {
@@ -1277,6 +1301,9 @@ impl CoreBluetoothInternal {
                     // "ready" variable in our adapter that will cause scans/etc
                     // to fail if this hasn't updated.
                     CentralDelegateEvent::DidUpdateState{state} => {
+                        if state == CBManagerState::PoweredOff {
+                            self.on_adapter_powered_off().await;
+                        }
                         self.dispatch_event(CoreBluetoothEvent::DidUpdateState{state}).await
                     }
                     CentralDelegateEvent::DiscoveredPeripheral{cbperipheral, advertisement_name} => {
