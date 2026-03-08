@@ -63,45 +63,62 @@ foreach ($testName in $TestNames) {
     $TestNum++
     Write-Host -NoNewline ("[{0,2}/{1,2}] {2,-55} " -f $TestNum, $Total, $testName)
 
-    # Run cargo test with a timeout via Start-Process.
-    $proc = Start-Process -FilePath 'cargo' `
-        -ArgumentList "test --test $testName -- --ignored" `
-        -NoNewWindow -PassThru `
-        -RedirectStandardError $LogFile `
-        -RedirectStandardOutput "$LogFile.stdout"
+    # Run cargo test with a timeout.
+    # Use [System.Diagnostics.Process] directly: Start-Process -PassThru opens
+    # the handle without PROCESS_QUERY_INFORMATION, making ExitCode unavailable.
+    $psi = [System.Diagnostics.ProcessStartInfo]@{
+        FileName               = 'cargo'
+        Arguments              = "test --test $testName -- --ignored"
+        UseShellExecute        = $false
+        RedirectStandardOutput = $true
+        RedirectStandardError  = $true
+        WorkingDirectory       = (Get-Location).Path
+    }
+    $proc = [System.Diagnostics.Process]::new()
+    $proc.StartInfo = $psi
+    $proc.Start() | Out-Null
+
+    # Drain both pipes concurrently to prevent deadlock if buffers fill.
+    $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+    $stderrTask = $proc.StandardError.ReadToEndAsync()
 
     $finished = $proc.WaitForExit($Timeout * 1000)
-
     if (-not $finished) {
-        # Timed out — kill the process tree.
         try { $proc.Kill($true) } catch {}
-        $proc.WaitForExit()
+    }
+    # No-arg WaitForExit ensures the process and its readers are fully done.
+    $proc.WaitForExit()
+    [System.Threading.Tasks.Task]::WaitAll($stdoutTask, $stderrTask)
+
+    # Persist captured output for potential display below.
+    [System.IO.File]::WriteAllText("$LogFile.stdout", $stdoutTask.Result)
+    [System.IO.File]::WriteAllText($LogFile, $stderrTask.Result)
+
+    $showOutput = $false
+    if (-not $finished) {
         Write-Host "TIMEOUT (${Timeout}s)"
         $Failed++
         $Failures += $testName
-        Write-Host "  --- output ---"
-        if (Test-Path $LogFile) {
-            Get-Content $LogFile -Tail 20 | ForEach-Object { "  $_" }
-        }
-        if (Test-Path "$LogFile.stdout") {
-            Get-Content "$LogFile.stdout" -Tail 20 | ForEach-Object { "  $_" }
-        }
-        Write-Host "  --- end ---"
+        $showOutput = $true
     } elseif ($proc.ExitCode -ne 0) {
         Write-Host "FAIL"
         $Failed++
         $Failures += $testName
-        Write-Host "  --- output ---"
-        if (Test-Path $LogFile) {
-            Get-Content $LogFile -Tail 20 | ForEach-Object { "  $_" }
-        }
-        if (Test-Path "$LogFile.stdout") {
-            Get-Content "$LogFile.stdout" -Tail 20 | ForEach-Object { "  $_" }
-        }
-        Write-Host "  --- end ---"
+        $showOutput = $true
     } else {
         Write-Host "PASS"
         $Passed++
+    }
+
+    if ($showOutput) {
+        Write-Host "  --- output ---"
+        if (Test-Path "$LogFile.stdout") {
+            Get-Content "$LogFile.stdout" -Tail 20 | ForEach-Object { "  $_" }
+        }
+        if (Test-Path $LogFile) {
+            Get-Content $LogFile -Tail 20 | ForEach-Object { "  $_" }
+        }
+        Write-Host "  --- end ---"
     }
 
     # Brief delay to let the BLE stack settle between tests.
