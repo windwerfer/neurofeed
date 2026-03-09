@@ -1,3 +1,49 @@
+# 0.12.0 (2026-03-08)
+
+## Features
+
+- Add `mtu()` method to `Peripheral` trait (returns negotiated MTU)
+- Add `connect_with_timeout()` and `discover_services_with_timeout()` convenience methods
+- Add `read_rssi()` to `Peripheral` trait (supported on all platforms)
+- Add `connection_parameters()` and `request_connection_parameters()` to `Peripheral` trait (Windows/Android)
+- Add `ConnectionParameters` and `ConnectionParameterPreset` types
+- Add `clear_peripherals()` to `Central` trait
+  - Thanks danielstuart14!
+- Add `adapter_state()` to `Central` trait for querying Bluetooth on/off state
+- Add `add_peripheral()` to `Central` trait for adding a device by address without scanning (Android)
+- Add `advertisement_name` field to `PeripheralProperties`
+  - Thanks szymonlesisz!
+- Add `service_uuid` field to `ValueNotification`
+  - Thanks MnlPhlp!
+- Add `CentralEvent::RssiUpdate` for RSSI change events
+- Add `CentralEvent::DeviceServicesModified` (CoreBluetooth only)
+  - Thanks kragacles!
+- Add `Error::NoAdapterAvailable` variant
+- Add `DEFAULT_MTU_SIZE` constant
+- Add `From<BDAddr> for [u8; 6]` conversion
+  - Thanks gabevenberg!
+- Add `./scripts/build-java.sh` for building the Android Java components
+- Add integration test suite with Zephyr and Bumble test peripherals
+- Vendor jni-utils-rs Java classes directly into the btleplug source tree (no longer a separate Maven dependency)
+
+## Bugfixes
+
+- Fix CoreBluetooth peripheral name handling
+  - Thanks szymonlesisz!
+- Fix BlueZ device disconnection (#446)
+  - Thanks szymonlesisz!
+- Improve CoreBluetooth didModifyServices handling and comments
+  - Thanks kragacles!
+- Add NSError to CoreBluetooth trace logging
+  - Thanks tternes!
+
+## Breaking Changes
+
+- **`CentralEvent` enum**: New variants `DeviceServicesModified` and `RssiUpdate`. Exhaustive matches will need updating.
+- **`Error` enum**: New variant `NoAdapterAvailable`. Exhaustive matches will need updating.
+
+- Update dependencies
+
 # 0.11.8 (2025-04-20)
 
 ## Features
