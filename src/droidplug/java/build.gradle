@@ -28,6 +28,7 @@ dependencies {
 
 tasks.register('testJar', Jar) {
     archiveBaseName = 'btleplug-jni'
-    from android.sourceSets.main.java.srcDirs
+    from compileDebugJavaWithJavac.destinationDirectory
     destinationDirectory = file("$buildDir/libs")
+    dependsOn 'compileDebugJavaWithJavac'
 }
