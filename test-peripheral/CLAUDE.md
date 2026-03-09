@@ -12,7 +12,7 @@ Two implementations of the same GATT profile used by the integration tests in `t
   - `test_peripheral.py` -- full GATT profile implementation
   - `run.sh` -- launcher script (usage: `./run.sh usb:0`)
   - `requirements.txt` -- Python dependencies (bumble)
-- `zephyr/` -- C firmware for nRF52840 DK
+- `zephyr/` -- C firmware for Zephyr RTOS (nRF52840 DK, ESP32-S3 DevKitC)
   - `src/gatt_profile.h` -- UUID definitions and GATT service declarations
   - `src/gatt_profile.c` -- read/write/notify handlers
   - `src/control_service.c` -- Control Point command dispatch

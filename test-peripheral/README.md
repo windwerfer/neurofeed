@@ -4,18 +4,27 @@ This directory contains BLE test peripheral implementations for btleplug's integ
 
 ## Quick Start
 
-### Option A: Hardware (nRF52840 DK + Zephyr)
+### Option A: Hardware (Zephyr)
+
+The Zephyr firmware supports multiple boards. Pick whichever you have.
 
 **Prerequisites:**
-- [nRF52840 DK](https://www.nordicsemi.com/Products/Development-hardware/nRF52840-DK) (~$45)
 - [Zephyr SDK](https://docs.zephyrproject.org/latest/develop/getting_started/index.html) and `west` tool
-- [nRF Command Line Tools](https://www.nordicsemi.com/Products/Development-tools/nRF-Command-Line-Tools)
+- One of the supported boards:
+  - [nRF52840 DK](https://www.nordicsemi.com/Products/Development-hardware/nRF52840-DK) — also needs [nRF Command Line Tools](https://www.nordicsemi.com/Products/Development-tools/nRF-Command-Line-Tools)
+  - [ESP32-S3 DevKitC](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/) — also needs `esptool` (`pip install esptool`)
 
 **Build and flash:**
 
 ```bash
 cd zephyr
+
+# nRF52840 DK
 west build -b nrf52840dk/nrf52840
+west flash
+
+# ESP32-S3 DevKitC
+west build -b esp32s3_devkitc/esp32s3/procpu
 west flash
 ```
 
@@ -99,8 +108,9 @@ Write these opcodes to the Control Point characteristic (`00000101-...`):
 ### Zephyr build fails
 
 1. **Verify Zephyr SDK:** Run `west --version` and `cmake --version`.
-2. **Verify board target:** The board target is `nrf52840dk/nrf52840` (with slash, not underscore).
-3. **Clean build:** `west build -b nrf52840dk/nrf52840 --pristine`
+2. **Verify board target:** Board targets use slashes, not underscores (e.g. `nrf52840dk/nrf52840`, `esp32s3_devkitc/esp32s3/procpu`).
+3. **Clean build:** `west build -b <board> --pristine`
+4. **ESP32 first build:** The Espressif HAL is large — first build takes significantly longer than subsequent builds. This is normal.
 
 ### Bumble can't find USB dongle
 
