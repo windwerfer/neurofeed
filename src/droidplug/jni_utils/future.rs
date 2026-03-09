@@ -1,9 +1,9 @@
 use super::task::JPollResult;
 use ::jni::{
+    JNIEnv, JavaVM,
     errors::{Error, Result},
     objects::{GlobalRef, JClass, JMethodID, JObject},
     signature::JavaType,
-    JNIEnv, JavaVM,
 };
 use static_assertions::assert_impl_all;
 use std::{
@@ -80,9 +80,7 @@ pub struct JFutureIntoFuture<'a: 'b, 'b>(JFuture<'a, 'b>);
 impl<'a: 'b, 'b> JFutureIntoFuture<'a, 'b> {
     fn poll_internal(&self, context: &mut Context<'_>) -> Result<Poll<JPollResult<'a, 'b>>> {
         use super::task::waker;
-        let result = self
-            .0
-            .poll(waker(self.0.env, context.waker().clone())?)?;
+        let result = self.0.poll(waker(self.0.env, context.waker().clone())?)?;
         Ok(
             if self.0.env.is_same_object(result.clone(), JObject::null())? {
                 Poll::Pending
@@ -169,8 +167,8 @@ assert_impl_all!(JSendFuture: Send);
 
 #[cfg(test)]
 mod test {
-    use super::{JFuture, JSendFuture};
     use super::super::{task::JPollResult, test_utils};
+    use super::{JFuture, JSendFuture};
     use std::{
         future::Future,
         pin::Pin,
@@ -215,9 +213,10 @@ mod test {
 
             let poll = Future::poll(Pin::new(&mut future), &mut Context::from_waker(&waker));
             if let Poll::Ready(result) = poll {
-                assert!(env
-                    .is_same_object(result.unwrap().get().unwrap(), obj)
-                    .unwrap());
+                assert!(
+                    env.is_same_object(result.unwrap().get().unwrap(), obj)
+                        .unwrap()
+                );
             } else {
                 panic!("Poll result should be ready");
             }
@@ -226,9 +225,10 @@ mod test {
 
             let poll = Future::poll(Pin::new(&mut future), &mut Context::from_waker(&waker));
             if let Poll::Ready(result) = poll {
-                assert!(env
-                    .is_same_object(result.unwrap().get().unwrap(), obj)
-                    .unwrap());
+                assert!(
+                    env.is_same_object(result.unwrap().get().unwrap(), obj)
+                        .unwrap()
+                );
             } else {
                 panic!("Poll result should be ready");
             }
@@ -255,9 +255,13 @@ mod test {
                             .unwrap();
                     },
                     async {
-                        assert!(env
-                            .is_same_object(future.into_future().await.unwrap().get().unwrap(), obj)
-                            .unwrap());
+                        assert!(
+                            env.is_same_object(
+                                future.into_future().await.unwrap().get().unwrap(),
+                                obj
+                            )
+                            .unwrap()
+                        );
                     }
                 );
             });

@@ -2,10 +2,10 @@
 // Big Sur or later.
 
 use btleplug::api::{
-    bleuuid::uuid_from_u16, Central, Manager as _, Peripheral as _, ScanFilter, WriteType,
+    Central, Manager as _, Peripheral as _, ScanFilter, WriteType, bleuuid::uuid_from_u16,
 };
 use btleplug::platform::{Adapter, Manager, Peripheral};
-use rand::{rng, RngExt};
+use rand::{RngExt, rng};
 use std::time::Duration;
 use uuid::Uuid;
 

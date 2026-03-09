@@ -1,7 +1,7 @@
 use ::jni::{
+    JNIEnv,
     errors::Result,
     objects::{JClass, JObject},
-    JNIEnv,
 };
 use std::sync::{Arc, Mutex};
 
@@ -201,13 +201,13 @@ type FnWrapper = SendSyncWrapper<
 fn fn_once_adapter<'a: 'b, 'b>(
     env: &'b JNIEnv<'a>,
     f: impl for<'c, 'd> FnOnce(
-            &'d JNIEnv<'c>,
-            JObject<'c>,
-            JObject<'c>,
-            JObject<'c>,
-            JObject<'c>,
-        ) -> JObject<'c>
-        + 'static,
+        &'d JNIEnv<'c>,
+        JObject<'c>,
+        JObject<'c>,
+        JObject<'c>,
+        JObject<'c>,
+    ) -> JObject<'c>
+    + 'static,
     local: bool,
 ) -> Result<JObject<'a>> {
     let mutex = Mutex::new(Some(f));
@@ -231,13 +231,13 @@ fn fn_once_adapter<'a: 'b, 'b>(
 fn fn_mut_adapter<'a: 'b, 'b>(
     env: &'b JNIEnv<'a>,
     f: impl for<'c, 'd> FnMut(
-            &'d JNIEnv<'c>,
-            JObject<'c>,
-            JObject<'c>,
-            JObject<'c>,
-            JObject<'c>,
-        ) -> JObject<'c>
-        + 'static,
+        &'d JNIEnv<'c>,
+        JObject<'c>,
+        JObject<'c>,
+        JObject<'c>,
+        JObject<'c>,
+    ) -> JObject<'c>
+    + 'static,
     local: bool,
 ) -> Result<JObject<'a>> {
     let mutex = Mutex::new(f);
@@ -254,13 +254,13 @@ fn fn_mut_adapter<'a: 'b, 'b>(
 fn fn_adapter<'a: 'b, 'b>(
     env: &'b JNIEnv<'a>,
     f: impl for<'c, 'd> Fn(
-            &'d JNIEnv<'c>,
-            JObject<'c>,
-            JObject<'c>,
-            JObject<'c>,
-            JObject<'c>,
-        ) -> JObject<'c>
-        + 'static,
+        &'d JNIEnv<'c>,
+        JObject<'c>,
+        JObject<'c>,
+        JObject<'c>,
+        JObject<'c>,
+    ) -> JObject<'c>
+    + 'static,
     local: bool,
 ) -> Result<JObject<'a>> {
     let arc: Arc<

@@ -22,13 +22,13 @@ use futures::channel::mpsc::Sender;
 use futures::sink::SinkExt;
 use log::{error, trace};
 use objc2::runtime::{AnyObject, ProtocolObject};
-use objc2::{declare_class, msg_send_id, mutability, rc::Retained, ClassType, DeclaredClass};
+use objc2::{ClassType, DeclaredClass, declare_class, msg_send_id, mutability, rc::Retained};
 use objc2_core_bluetooth::{
     CBAdvertisementDataLocalNameKey, CBAdvertisementDataManufacturerDataKey,
     CBAdvertisementDataServiceDataKey, CBAdvertisementDataServiceUUIDsKey,
-    CBAdvertisementDataTxPowerLevelKey, CBCentralManager,
-    CBCentralManagerDelegate, CBCharacteristic, CBDescriptor, CBManagerState, CBPeripheral,
-    CBPeripheralDelegate, CBService, CBUUID,
+    CBAdvertisementDataTxPowerLevelKey, CBCentralManager, CBCentralManagerDelegate,
+    CBCharacteristic, CBDescriptor, CBManagerState, CBPeripheral, CBPeripheralDelegate, CBService,
+    CBUUID,
 };
 use objc2_foundation::{
     NSArray, NSData, NSDictionary, NSError, NSNumber, NSObject, NSObjectProtocol, NSString,
@@ -936,11 +936,14 @@ fn get_descriptor_value(descriptor: &CBDescriptor) -> Vec<u8> {
 
 fn peripheral_debug(peripheral: &CBPeripheral) -> String {
     let uuid = unsafe { peripheral.identifier() }.UUIDString();
-    match unsafe { peripheral.name() } { Some(name) => {
-        format!("CBPeripheral({}, {})", name, uuid)
-    } _ => {
-        format!("CBPeripheral({})", uuid)
-    }}
+    match unsafe { peripheral.name() } {
+        Some(name) => {
+            format!("CBPeripheral({}, {})", name, uuid)
+        }
+        _ => {
+            format!("CBPeripheral({})", uuid)
+        }
+    }
 }
 
 fn service_debug(service: &CBService) -> String {

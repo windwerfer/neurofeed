@@ -2,7 +2,7 @@
 // Big Sur or later.
 
 use btleplug::api::{
-    bleuuid::BleUuid, Central, CentralEvent, Manager as _, Peripheral, ScanFilter,
+    Central, CentralEvent, Manager as _, Peripheral, ScanFilter, bleuuid::BleUuid,
 };
 use btleplug::platform::{Adapter, Manager};
 use futures::stream::StreamExt;

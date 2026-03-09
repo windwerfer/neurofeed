@@ -11,8 +11,8 @@
 //
 // Copyright (c) 2014 The Rust Project Developers
 
-use crate::{api::ScanFilter, winrtble::utils, Error, Result};
-use windows::{core::Ref, Devices::Bluetooth::Advertisement::*, Foundation::TypedEventHandler};
+use crate::{Error, Result, api::ScanFilter, winrtble::utils};
+use windows::{Devices::Bluetooth::Advertisement::*, Foundation::TypedEventHandler, core::Ref};
 
 pub type AdvertisementEventHandler =
     Box<dyn Fn(&BluetoothLEAdvertisementReceivedEventArgs) -> windows::core::Result<()> + Send>;
@@ -50,8 +50,7 @@ impl BLEWatcher {
         let _ = self.watcher.SetAllowExtendedAdvertisements(true);
 
         // Pre-convert the filter UUIDs once so the handler closure is cheap.
-        let filter_guids: Vec<windows::core::GUID> =
-            services.iter().map(utils::to_guid).collect();
+        let filter_guids: Vec<windows::core::GUID> = services.iter().map(utils::to_guid).collect();
 
         let handler: TypedEventHandler<
             BluetoothLEAdvertisementWatcher,
@@ -64,12 +63,10 @@ impl BLEWatcher {
                         if let Ok(ad) = args.Advertisement() {
                             if let Ok(ad_uuids) = ad.ServiceUuids() {
                                 let count = ad_uuids.Size().unwrap_or(0);
-                                let advertised: Vec<windows::core::GUID> = (0..count)
-                                    .filter_map(|i| ad_uuids.GetAt(i).ok())
-                                    .collect();
-                                let all_present = filter_guids
-                                    .iter()
-                                    .all(|g| advertised.contains(g));
+                                let advertised: Vec<windows::core::GUID> =
+                                    (0..count).filter_map(|i| ad_uuids.GetAt(i).ok()).collect();
+                                let all_present =
+                                    filter_guids.iter().all(|g| advertised.contains(g));
                                 if !all_present {
                                     return Ok(());
                                 }

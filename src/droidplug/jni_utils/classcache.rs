@@ -1,5 +1,5 @@
 use dashmap::DashMap;
-use jni::{errors::Result, objects::GlobalRef, JNIEnv};
+use jni::{JNIEnv, errors::Result, objects::GlobalRef};
 use once_cell::sync::OnceCell;
 
 static CLASSCACHE: OnceCell<DashMap<String, GlobalRef>> = OnceCell::new();

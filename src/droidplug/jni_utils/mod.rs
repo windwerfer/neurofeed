@@ -9,7 +9,7 @@ pub mod uuid;
 
 #[cfg(test)]
 pub(crate) mod test_utils {
-    use jni::{objects::GlobalRef, JNIEnv, JavaVM};
+    use jni::{JNIEnv, JavaVM, objects::GlobalRef};
     use lazy_static::lazy_static;
     use std::{
         sync::{Arc, Mutex},
@@ -37,7 +37,9 @@ pub(crate) mod test_utils {
             &[
                 NativeMethod {
                     name: "callInternal".into(),
-                    sig: "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;".into(),
+                    sig:
+                        "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"
+                            .into(),
                     fn_ptr: super::ops::fn_adapter_call_internal as *mut c_void,
                 },
                 NativeMethod {

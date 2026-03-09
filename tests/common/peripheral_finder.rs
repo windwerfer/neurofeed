@@ -38,18 +38,14 @@ pub async fn get_adapter() -> &'static Adapter {
                         .build()
                         .expect("failed to create adapter runtime");
                     rt.block_on(async {
-                        let manager = Manager::new()
-                            .await
-                            .expect("failed to create BLE manager");
-                        let adapters =
-                            manager.adapters().await.expect("failed to get adapters");
+                        let manager = Manager::new().await.expect("failed to create BLE manager");
+                        let adapters = manager.adapters().await.expect("failed to get adapters");
                         // Leak the manager so it (and the underlying CBCentralManager)
                         // lives forever. OnceCell keeps the Adapter alive; we need the
                         // Manager alive too since the Adapter borrows from it internally
                         // on some platforms.
                         std::mem::forget(manager);
-                        let adapter =
-                            adapters.into_iter().next().expect("no BLE adapters found");
+                        let adapter = adapters.into_iter().next().expect("no BLE adapters found");
                         tx.send(adapter).ok();
                         // Block forever so the runtime (and its spawned event loop)
                         // stays alive.

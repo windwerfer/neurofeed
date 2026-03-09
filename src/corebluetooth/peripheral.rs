@@ -9,12 +9,12 @@ use super::internal::{
     CoreBluetoothMessage, CoreBluetoothReply, CoreBluetoothReplyFuture, PeripheralEventInternal,
 };
 use crate::{
+    Error, Result,
     api::{
         self, BDAddr, CentralEvent, CharPropFlags, Characteristic, Descriptor,
         PeripheralProperties, Service, ValueNotification, WriteType,
     },
     common::{adapter_manager::AdapterManager, util::notifications_stream_from_broadcast_receiver},
-    Error, Result,
 };
 use async_trait::async_trait;
 use futures::channel::mpsc::{Receiver, SendError, Sender};
@@ -31,7 +31,7 @@ use std::{
     collections::{BTreeSet, HashMap},
     fmt::{self, Debug, Display, Formatter},
     pin::Pin,
-    sync::{atomic::AtomicU16, Arc, Mutex},
+    sync::{Arc, Mutex, atomic::AtomicU16},
 };
 use tokio::sync::broadcast;
 use tokio::task;
@@ -72,11 +72,14 @@ struct Shared {
 
 impl Shared {
     fn emit_event(&self, event: CentralEvent) {
-        match self.manager.upgrade() { Some(manager) => {
-            manager.emit(event);
-        } _ => {
-            trace!("Could not emit an event. AdapterManager has been dropped");
-        }}
+        match self.manager.upgrade() {
+            Some(manager) => {
+                manager.emit(event);
+            }
+            _ => {
+                trace!("Could not emit an event. AdapterManager has been dropped");
+            }
+        }
     }
 }
 

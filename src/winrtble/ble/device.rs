@@ -13,7 +13,7 @@
 
 use std::time::Duration;
 
-use crate::{api::BDAddr, winrtble::utils, Error, Result};
+use crate::{Error, Result, api::BDAddr, winrtble::utils};
 use log::{debug, trace, warn};
 use tokio::time::timeout;
 use windows::{
@@ -206,22 +206,14 @@ impl BLEDevice {
         }
     }
 
-    pub fn get_connection_parameters(
-        &self,
-    ) -> Result<crate::api::ConnectionParameters> {
+    pub fn get_connection_parameters(&self) -> Result<crate::api::ConnectionParameters> {
         let winrt_error = |e| Error::Other(format!("{:?}", e).into());
-        let params = self
-            .device
-            .GetConnectionParameters()
-            .map_err(winrt_error)?;
+        let params = self.device.GetConnectionParameters().map_err(winrt_error)?;
         // ConnectionInterval is in units of 1.25ms, convert to microseconds
-        let interval_us =
-            (params.ConnectionInterval().map_err(winrt_error)? as u32) * 1250;
-        let latency =
-            params.ConnectionLatency().map_err(winrt_error)? as u16;
+        let interval_us = (params.ConnectionInterval().map_err(winrt_error)? as u32) * 1250;
+        let latency = params.ConnectionLatency().map_err(winrt_error)? as u16;
         // LinkTimeout is in units of 10ms, convert to microseconds
-        let supervision_timeout_us =
-            (params.LinkTimeout().map_err(winrt_error)? as u32) * 10_000;
+        let supervision_timeout_us = (params.LinkTimeout().map_err(winrt_error)? as u32) * 10_000;
         Ok(crate::api::ConnectionParameters {
             interval_us,
             latency,
@@ -255,12 +247,16 @@ impl BLEDevice {
         //   Unspecified = 0, Success = 1, DeviceNotAvailable = 2, AccessDenied = 3
         match status.0 {
             1 => Ok(()),
-            2 | 3 => Err(Error::NotSupported(
-                format!("request_connection_parameters not supported (status {:?})", status),
-            )),
+            2 | 3 => Err(Error::NotSupported(format!(
+                "request_connection_parameters not supported (status {:?})",
+                status
+            ))),
             _ => Err(Error::Other(
-                format!("RequestPreferredConnectionParameters failed with status {:?}", status)
-                    .into(),
+                format!(
+                    "RequestPreferredConnectionParameters failed with status {:?}",
+                    status
+                )
+                .into(),
             )),
         }
     }

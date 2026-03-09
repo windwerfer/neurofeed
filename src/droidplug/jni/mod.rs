@@ -1,6 +1,6 @@
 pub mod objects;
 
-use ::jni::{objects::JObject, JNIEnv, JavaVM, NativeMethod};
+use ::jni::{JNIEnv, JavaVM, NativeMethod, objects::JObject};
 use jni::{objects::JString, sys::jboolean};
 use once_cell::sync::OnceCell;
 use std::ffi::c_void;
@@ -78,10 +78,7 @@ pub fn init(env: &JNIEnv) -> crate::Result<()> {
             env,
             "io/github/gedgygedgy/rust/stream/StreamPoll",
         )?;
-        super::jni_utils::classcache::find_add_class(
-            env,
-            "io/github/gedgygedgy/rust/task/Waker",
-        )?;
+        super::jni_utils::classcache::find_add_class(env, "io/github/gedgygedgy/rust/task/Waker")?;
         super::jni_utils::classcache::find_add_class(
             env,
             "io/github/gedgygedgy/rust/task/PollResult",

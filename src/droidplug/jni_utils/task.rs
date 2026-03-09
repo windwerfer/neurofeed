@@ -1,8 +1,8 @@
 use ::jni::{
+    JNIEnv,
     errors::Result,
     objects::{JClass, JMethodID, JObject},
     signature::JavaType,
-    JNIEnv,
 };
 use std::task::Waker;
 
