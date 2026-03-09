@@ -1,20 +1,23 @@
+use super::jni_utils::{
+    arrays::byte_array_to_vec,
+    exceptions::try_block,
+    future::{JFuture, JSendFuture},
+    stream::JSendStream,
+    task::JPollResult,
+    uuid::JUuid,
+};
 use crate::{
+    Error, Result,
     api::{
         self, BDAddr, Characteristic, ConnectionParameterPreset, ConnectionParameters, Descriptor,
         PeripheralProperties, Service, ValueNotification, WriteType,
     },
-    Error, Result,
 };
 use async_trait::async_trait;
 use futures::stream::Stream;
 use jni::{
-    objects::{GlobalRef, JList, JObject},
     JNIEnv,
-};
-use super::jni_utils::{
-    arrays::byte_array_to_vec, exceptions::try_block, future::{JFuture, JSendFuture},
-    stream::JSendStream,
-    task::JPollResult, uuid::JUuid,
+    objects::{GlobalRef, JList, JObject},
 };
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -271,7 +274,9 @@ impl api::Peripheral for Peripheral {
             Ok(())
         })?;
         // Auto-negotiate maximum MTU (517) after connection
-        let mtu_future = self.with_obj(|env, obj| JSendFuture::try_from(JFuture::from_env(env, obj.request_mtu(517)?)?))?;
+        let mtu_future = self.with_obj(|env, obj| {
+            JSendFuture::try_from(JFuture::from_env(env, obj.request_mtu(517)?)?)
+        })?;
         let mtu_result_ref = mtu_future.await?;
         self.with_obj(|env, _obj| -> Result<()> {
             let mtu_result = JPollResult::from_env(env, mtu_result_ref.as_obj())?;
@@ -435,7 +440,9 @@ impl api::Peripheral for Peripheral {
     }
 
     async fn read_rssi(&self) -> Result<i16> {
-        let future = self.with_obj(|env, obj| JSendFuture::try_from(JFuture::from_env(env, obj.read_remote_rssi()?)?))?;
+        let future = self.with_obj(|env, obj| {
+            JSendFuture::try_from(JFuture::from_env(env, obj.read_remote_rssi()?)?)
+        })?;
         let result_ref = future.await?;
         self.with_obj(|env, _obj| {
             let result = JPollResult::from_env(env, result_ref.as_obj())?;
@@ -475,18 +482,17 @@ impl api::Peripheral for Peripheral {
 
     async fn connection_parameters(&self) -> Result<Option<ConnectionParameters>> {
         self.with_obj(|_env, obj| {
-            Ok(obj.get_connection_parameters().map_err(|e| Error::Other(format!("{:?}", e).into()))?)
+            Ok(obj
+                .get_connection_parameters()
+                .map_err(|e| Error::Other(format!("{:?}", e).into()))?)
         })
     }
 
-    async fn request_connection_parameters(
-        &self,
-        preset: ConnectionParameterPreset,
-    ) -> Result<()> {
+    async fn request_connection_parameters(&self, preset: ConnectionParameterPreset) -> Result<()> {
         let priority = match preset {
-            ConnectionParameterPreset::Balanced => 0,          // CONNECTION_PRIORITY_BALANCED
+            ConnectionParameterPreset::Balanced => 0, // CONNECTION_PRIORITY_BALANCED
             ConnectionParameterPreset::ThroughputOptimized => 1, // CONNECTION_PRIORITY_HIGH
-            ConnectionParameterPreset::PowerOptimized => 2,    // CONNECTION_PRIORITY_LOW_POWER
+            ConnectionParameterPreset::PowerOptimized => 2, // CONNECTION_PRIORITY_LOW_POWER
         };
         self.with_obj(|_env, obj| {
             let success = obj

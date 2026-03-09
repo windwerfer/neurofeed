@@ -17,14 +17,14 @@ use super::{
         nsuuid_to_uuid,
     },
 };
-use crate::api::{CharPropFlags, Characteristic, Descriptor, ScanFilter, Service, WriteType};
 use crate::Error;
+use crate::api::{CharPropFlags, Characteristic, Descriptor, ScanFilter, Service, WriteType};
 use futures::channel::mpsc::{self, Receiver, Sender};
 use futures::select;
 use futures::sink::SinkExt;
 use futures::stream::{Fuse, StreamExt};
 use log::{error, trace, warn};
-use objc2::{msg_send_id, ClassType};
+use objc2::{ClassType, msg_send_id};
 use objc2::{rc::Retained, runtime::AnyObject};
 use objc2_core_bluetooth::{
     CBCentralManager, CBCentralManagerScanOptionAllowDuplicatesKey, CBCharacteristic,
@@ -566,8 +566,7 @@ impl CoreBluetoothInternal {
     ) {
         trace!(
             "Got manufacturer data advertisement! {}: {:?}",
-            manufacturer_id,
-            manufacturer_data
+            manufacturer_id, manufacturer_data
         );
         if let Some(p) = self.peripherals.get_mut(&peripheral_uuid) {
             if let Err(e) = p
@@ -703,8 +702,7 @@ impl CoreBluetoothInternal {
     ) {
         trace!(
             "Found characteristics for peripheral {} service {}:",
-            peripheral_uuid,
-            service_uuid
+            peripheral_uuid, service_uuid
         );
         for id in characteristics.keys() {
             trace!("{}", id);
@@ -723,9 +721,7 @@ impl CoreBluetoothInternal {
     ) {
         trace!(
             "Found descriptors for peripheral {} service {} characteristic {}:",
-            peripheral_uuid,
-            service_uuid,
-            characteristic_uuid,
+            peripheral_uuid, service_uuid, characteristic_uuid,
         );
         for id in descriptors.keys() {
             trace!("{}", id);
@@ -1048,16 +1044,28 @@ impl CoreBluetoothInternal {
                                 CBCharacteristicWriteType::CBCharacteristicWriteWithoutResponse,
                             );
                         }
-                        pending.fut.lock().unwrap().set_reply(CoreBluetoothReply::Ok);
+                        pending
+                            .fut
+                            .lock()
+                            .unwrap()
+                            .set_reply(CoreBluetoothReply::Ok);
                     } else {
-                        pending.fut.lock().unwrap().set_reply(CoreBluetoothReply::Err(
-                            "Characteristic no longer available".into(),
-                        ));
+                        pending
+                            .fut
+                            .lock()
+                            .unwrap()
+                            .set_reply(CoreBluetoothReply::Err(
+                                "Characteristic no longer available".into(),
+                            ));
                     }
                 } else {
-                    pending.fut.lock().unwrap().set_reply(CoreBluetoothReply::Err(
-                        "Service no longer available".into(),
-                    ));
+                    pending
+                        .fut
+                        .lock()
+                        .unwrap()
+                        .set_reply(CoreBluetoothReply::Err(
+                            "Service no longer available".into(),
+                        ));
                 }
             }
         }
@@ -1187,11 +1195,7 @@ impl CoreBluetoothInternal {
         }
     }
 
-    fn read_rssi(
-        &mut self,
-        peripheral_uuid: Uuid,
-        fut: CoreBluetoothReplyStateShared,
-    ) {
+    fn read_rssi(&mut self, peripheral_uuid: Uuid, fut: CoreBluetoothReplyStateShared) {
         if let Some(peripheral) = self.peripherals.get_mut(&peripheral_uuid) {
             trace!("Reading RSSI!");
             unsafe {

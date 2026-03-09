@@ -1,9 +1,9 @@
 use jni::{
+    JNIEnv,
     errors::Result,
     objects::{AutoLocal, JMethodID, JObject},
     signature::{JavaType, Primitive},
     sys::jlong,
-    JNIEnv,
 };
 use uuid::Uuid;
 
@@ -89,8 +89,8 @@ impl<'a: 'b, 'b> From<JUuid<'a, 'b>> for JObject<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::JUuid;
     use super::super::test_utils;
+    use super::JUuid;
     use jni::{objects::JObject, sys::jlong};
     use uuid::Uuid;
 

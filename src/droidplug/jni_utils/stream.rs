@@ -1,9 +1,9 @@
 use super::task::JPollResult;
 use ::jni::{
+    JNIEnv, JavaVM,
     errors::{Error, Result},
     objects::{GlobalRef, JClass, JMethodID, JObject},
     signature::JavaType,
-    JNIEnv, JavaVM,
 };
 use futures::stream::Stream;
 use static_assertions::assert_impl_all;
@@ -58,10 +58,7 @@ impl<'a: 'b, 'b> JStream<'a, 'b> {
             Poll::Ready({
                 let poll = JPollResult::from_env(self.env, result)?;
                 let stream_poll_obj = poll.get()?;
-                if self
-                    .env
-                    .is_same_object(stream_poll_obj, JObject::null())?
-                {
+                if self.env.is_same_object(stream_poll_obj, JObject::null())? {
                     None
                 } else {
                     let stream_poll = JStreamPoll::from_env(self.env, stream_poll_obj)?;
@@ -192,8 +189,8 @@ impl<'a: 'b, 'b> JStreamPoll<'a, 'b> {
 
 #[cfg(test)]
 mod test {
-    use super::JStream;
     use super::super::test_utils;
+    use super::JStream;
     use futures::stream::Stream;
     use std::{
         pin::Pin,
@@ -218,9 +215,11 @@ mod test {
                 .unwrap();
             let mut stream = JStream::from_env(env, stream_obj).unwrap();
 
-            assert!(Pin::new(&mut stream)
-                .poll_next(&mut Context::from_waker(&waker))
-                .is_pending());
+            assert!(
+                Pin::new(&mut stream)
+                    .poll_next(&mut Context::from_waker(&waker))
+                    .is_pending()
+            );
             assert_eq!(Arc::strong_count(&data), 3);
             assert_eq!(data.value(), false);
 
@@ -256,9 +255,11 @@ mod test {
             assert_eq!(Arc::strong_count(&data), 2);
             assert_eq!(data.value(), false);
 
-            assert!(Pin::new(&mut stream)
-                .poll_next(&mut Context::from_waker(&waker))
-                .is_pending());
+            assert!(
+                Pin::new(&mut stream)
+                    .poll_next(&mut Context::from_waker(&waker))
+                    .is_pending()
+            );
             assert_eq!(Arc::strong_count(&data), 3);
             assert_eq!(data.value(), false);
 
@@ -300,12 +301,14 @@ mod test {
                     },
                     async {
                         use futures::StreamExt;
-                        assert!(env
-                            .is_same_object(stream.next().await.unwrap().unwrap(), obj1)
-                            .unwrap());
-                        assert!(env
-                            .is_same_object(stream.next().await.unwrap().unwrap(), obj2)
-                            .unwrap());
+                        assert!(
+                            env.is_same_object(stream.next().await.unwrap().unwrap(), obj1)
+                                .unwrap()
+                        );
+                        assert!(
+                            env.is_same_object(stream.next().await.unwrap().unwrap(), obj2)
+                                .unwrap()
+                        );
                         assert!(stream.next().await.is_none());
                     }
                 );
@@ -339,12 +342,20 @@ mod test {
                     },
                     async {
                         use futures::StreamExt;
-                        assert!(env
-                            .is_same_object(stream.next().await.unwrap().unwrap().as_obj(), obj1)
-                            .unwrap());
-                        assert!(env
-                            .is_same_object(stream.next().await.unwrap().unwrap().as_obj(), obj2)
-                            .unwrap());
+                        assert!(
+                            env.is_same_object(
+                                stream.next().await.unwrap().unwrap().as_obj(),
+                                obj1
+                            )
+                            .unwrap()
+                        );
+                        assert!(
+                            env.is_same_object(
+                                stream.next().await.unwrap().unwrap().as_obj(),
+                                obj2
+                            )
+                            .unwrap()
+                        );
                         assert!(stream.next().await.is_none());
                     }
                 );

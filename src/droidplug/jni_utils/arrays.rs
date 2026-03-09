@@ -1,7 +1,7 @@
 use jni::{
+    JNIEnv,
     errors::Result,
     sys::{jbyte, jbyteArray, jint},
-    JNIEnv,
 };
 use std::slice;
 
@@ -45,8 +45,7 @@ mod test {
     fn test_byte_array_to_vec() {
         test_utils::JVM_ENV.with(|env| {
             let obj = env.new_byte_array(5).unwrap();
-            env.set_byte_array_region(obj, 0, &[1, 2, 3, 4, 5])
-                .unwrap();
+            env.set_byte_array_region(obj, 0, &[1, 2, 3, 4, 5]).unwrap();
 
             let vec = super::byte_array_to_vec(env, obj).unwrap();
             assert_eq!(vec, vec![1, 2, 3, 4, 5]);

@@ -1,6 +1,6 @@
 use super::internal::{
-    run_corebluetooth_thread, CoreBluetoothEvent, CoreBluetoothMessage, CoreBluetoothReply,
-    CoreBluetoothReplyFuture,
+    CoreBluetoothEvent, CoreBluetoothMessage, CoreBluetoothReply, CoreBluetoothReplyFuture,
+    run_corebluetooth_thread,
 };
 use super::peripheral::{Peripheral, PeripheralId};
 use crate::api::{Central, CentralEvent, CentralState, ScanFilter};

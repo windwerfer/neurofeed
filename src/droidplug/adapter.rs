@@ -1,3 +1,4 @@
+use super::jni_utils::exceptions::try_block;
 use super::{
     jni::{
         global_jvm,
@@ -6,20 +7,19 @@ use super::{
     peripheral::{Peripheral, PeripheralId},
 };
 use crate::{
+    Error, Result,
     api::{BDAddr, Central, CentralEvent, CentralState, PeripheralProperties, ScanFilter},
     common::adapter_manager::AdapterManager,
-    Error, Result,
 };
 use async_trait::async_trait;
 use futures::stream::Stream;
 use jni::objects::JClass;
 use jni::{
+    JNIEnv,
     objects::{GlobalRef, JObject, JString},
     strings::JavaStr,
     sys::jboolean,
-    JNIEnv,
 };
-use super::jni_utils::exceptions::try_block;
 use std::{
     fmt::{Debug, Formatter},
     pin::Pin,

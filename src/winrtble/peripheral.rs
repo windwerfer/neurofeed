@@ -16,15 +16,14 @@ use super::{
     ble::descriptor::BLEDescriptor, ble::device::BLEDevice, ble::service::BLEService, utils,
 };
 use crate::{
+    Error, Result,
     api::{
-        self,
-        bleuuid::{uuid_from_u16, uuid_from_u32},
-        AddressType, BDAddr, CentralEvent, Characteristic, ConnectionParameterPreset,
+        self, AddressType, BDAddr, CentralEvent, Characteristic, ConnectionParameterPreset,
         ConnectionParameters, Descriptor, Peripheral as ApiPeripheral, PeripheralProperties,
         Service, ValueNotification, WriteType,
+        bleuuid::{uuid_from_u16, uuid_from_u32},
     },
     common::{adapter_manager::AdapterManager, util::notifications_stream_from_broadcast_receiver},
-    Error, Result,
 };
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -46,9 +45,9 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use std::sync::Weak;
-use windows::core::GUID;
 use windows::Devices::Bluetooth::GenericAttributeProfile::GattCharacteristic;
 use windows::Devices::Bluetooth::{Advertisement::*, BluetoothAddressType};
+use windows::core::GUID;
 
 #[cfg_attr(
     feature = "serde",
@@ -658,10 +657,7 @@ impl ApiPeripheral for Peripheral {
         }
     }
 
-    async fn request_connection_parameters(
-        &self,
-        preset: ConnectionParameterPreset,
-    ) -> Result<()> {
+    async fn request_connection_parameters(&self, preset: ConnectionParameterPreset) -> Result<()> {
         let device = self.shared.device.lock().await;
         match &*device {
             Some(device) => device.request_connection_parameters(preset),

@@ -1,13 +1,13 @@
 use jni::{
+    JNIEnv,
     descriptors::Desc,
     errors::Error,
     objects::{JClass, JObject, JThrowable},
-    JNIEnv,
 };
 use std::{
     any::Any,
     convert::TryFrom,
-    panic::{catch_unwind, resume_unwind, UnwindSafe},
+    panic::{UnwindSafe, catch_unwind, resume_unwind},
     sync::MutexGuard,
 };
 
@@ -197,10 +197,10 @@ pub fn throw_unwind<'a: 'b, 'b, R>(
 
 #[cfg(test)]
 mod test {
-    use jni::{errors::Error, objects::JThrowable, JNIEnv};
+    use jni::{JNIEnv, errors::Error, objects::JThrowable};
 
-    use super::try_block;
     use super::super::test_utils;
+    use super::try_block;
 
     fn test_catch<'a: 'b, 'b>(
         env: &'b JNIEnv<'a>,
@@ -338,9 +338,10 @@ mod test {
                 assert!(env.exception_check().unwrap());
                 let ex = env.exception_occurred().unwrap();
                 env.exception_clear().unwrap();
-                assert!(env
-                    .is_instance_of(ex, "java/lang/SecurityException")
-                    .unwrap());
+                assert!(
+                    env.is_instance_of(ex, "java/lang/SecurityException")
+                        .unwrap()
+                );
             } else {
                 panic!("No JavaException");
             }
@@ -407,9 +408,10 @@ mod test {
                 assert!(env.exception_check().unwrap());
                 let ex = env.exception_occurred().unwrap();
                 env.exception_clear().unwrap();
-                assert!(env
-                    .is_instance_of(ex, "java/lang/StringIndexOutOfBoundsException")
-                    .unwrap());
+                assert!(
+                    env.is_instance_of(ex, "java/lang/StringIndexOutOfBoundsException")
+                        .unwrap()
+                );
             } else {
                 panic!("JavaException not found");
             }
@@ -529,9 +531,10 @@ mod test {
             assert!(env.exception_check().unwrap());
             let ex = env.exception_occurred().unwrap();
             env.exception_clear().unwrap();
-            assert!(env
-                .is_instance_of(ex, "io/github/gedgygedgy/rust/panic/PanicException")
-                .unwrap());
+            assert!(
+                env.is_instance_of(ex, "io/github/gedgygedgy/rust/panic/PanicException")
+                    .unwrap()
+            );
 
             let suppressed_list = env
                 .call_method(ex, "getSuppressed", "()[Ljava/lang/Throwable;", &[])
@@ -565,9 +568,10 @@ mod test {
             assert!(env.exception_check().unwrap());
             let ex = env.exception_occurred().unwrap();
             env.exception_clear().unwrap();
-            assert!(env
-                .is_instance_of(ex, "io/github/gedgygedgy/rust/panic/PanicException")
-                .unwrap());
+            assert!(
+                env.is_instance_of(ex, "io/github/gedgygedgy/rust/panic/PanicException")
+                    .unwrap()
+            );
 
             let suppressed_list = env
                 .call_method(ex, "getSuppressed", "()[Ljava/lang/Throwable;", &[])
