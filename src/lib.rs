@@ -98,6 +98,10 @@ mod common;
 mod corebluetooth;
 #[cfg(target_os = "android")]
 mod droidplug;
+#[cfg(all(not(target_os = "android"), feature = "jni-host-tests"))]
+mod droidplug {
+    mod jni_utils;
+}
 pub mod platform;
 #[cfg(feature = "serde")]
 pub mod serde;
