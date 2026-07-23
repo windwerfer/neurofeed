@@ -1,51 +1,49 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
-import 'package:muse_ml/src/charts/eeg_data_buffer.dart';
-
-const _channelColors = [
-  Color(0xFF4FC3F7),
-  Color(0xFFFF7043),
-  Color(0xFF66BB6A),
-  Color(0xFFAB47BC),
-  Color(0xFFFFA726),
-  Color(0xFF26C6DA),
-  Color(0xFFEC407A),
-  Color(0xFF8D6E63),
-];
+import 'package:muse_ml/src/charts/eeg_data_source.dart';
 
 class EegChartWidget extends StatefulWidget {
-  final EegDataBuffer buffer;
-  const EegChartWidget({super.key, required this.buffer});
+  final EegDataSource source;
+  const EegChartWidget({super.key, required this.source});
 
   @override
   State<EegChartWidget> createState() => _EegChartWidgetState();
 }
 
-class _EegChartWidgetState extends State<EegChartWidget>
-    with SingleTickerProviderStateMixin {
+class _EegChartWidgetState extends State<EegChartWidget> {
   double _timeWindowSecs = 120;
   double _timeOffsetSecs = 0;
   final Set<int> _hiddenChannels = {};
   bool _autoScroll = true;
-  late final Ticker _ticker;
 
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker((_) => setState(() {}));
-    _ticker.start();
+    widget.source.addListener(_onData);
+  }
+
+  @override
+  void didUpdateWidget(EegChartWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.source != widget.source) {
+      oldWidget.source.removeListener(_onData);
+      widget.source.addListener(_onData);
+    }
   }
 
   @override
   void dispose() {
-    _ticker.dispose();
+    widget.source.removeListener(_onData);
     super.dispose();
   }
 
+  void _onData() {
+    if (mounted) setState(() {});
+  }
+
   double get _maxTimeOffsetSecs {
-    final oldest = widget.buffer.oldestTimestamp;
-    final latest = widget.buffer.latestTimestamp;
+    final oldest = widget.source.oldestTimestamp;
+    final latest = widget.source.latestTimestamp;
     if (latest <= 0) return 0;
     return (latest - oldest).clamp(0, double.infinity);
   }
@@ -112,7 +110,7 @@ class _EegChartWidgetState extends State<EegChartWidget>
     final index = dy ~/ _legendItemHeight;
     if (index < 0 || index >= slices.length) return;
 
-    final channels = widget.buffer.channels;
+    final channels = widget.source.channels;
     if (index >= channels.length) return;
     final ch = channels[index];
     setState(() {
@@ -125,14 +123,13 @@ class _EegChartWidgetState extends State<EegChartWidget>
   }
 
   List<SeriesSlice> get _currentSlices {
-    final latest = widget.buffer.latestTimestamp;
+    final latest = widget.source.latestTimestamp;
     final visibleEnd = latest - _timeOffsetSecs;
     final visibleStart = visibleEnd - _timeWindowSecs;
-    return widget.buffer.slices(
+    return widget.source.slices(
       startT: visibleStart,
       endT: visibleEnd,
       hiddenChannels: _hiddenChannels,
-      channelColors: _channelColors,
     );
   }
 
@@ -149,14 +146,13 @@ class _EegChartWidgetState extends State<EegChartWidget>
   @override
   Widget build(BuildContext context) {
     _ensureOffsetInBounds();
-    final latest = widget.buffer.latestTimestamp;
+    final latest = widget.source.latestTimestamp;
     final visibleEnd = latest - _timeOffsetSecs;
     final visibleStart = visibleEnd - _timeWindowSecs;
-    final slices = widget.buffer.slices(
+    final slices = widget.source.slices(
       startT: visibleStart,
       endT: visibleEnd,
       hiddenChannels: _hiddenChannels,
-      channelColors: _channelColors,
     );
 
     return Stack(

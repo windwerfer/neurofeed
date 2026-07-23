@@ -9,6 +9,6 @@ class RawEegView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(appStateProvider.notifier);
-    return EegChartWidget(buffer: notifier.eegBuffer);
+    return EegChartWidget(source: notifier.liveCache);
   }
 }

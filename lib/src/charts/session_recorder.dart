@@ -1,0 +1,141 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:muse_ml/src/rust/api/muse.dart';
+
+class SessionRecorder {
+  static const _magic = 0x4D55534542494E0A; // "MUSEBIN\n"
+  static const _version = 1;
+  static const _flushInterval = Duration(seconds: 30);
+  static const _maxPendingBytes = 65536;
+
+  File? _file;
+  Timer? _flushTimer;
+  final _pending = BytesBuilder();
+
+  bool get isRecording => _file != null;
+
+  Future<void> start([Directory? dir]) async {
+    if (_file != null) return;
+    final d = dir ?? Directory.systemTemp;
+    final path = '${d.path}live_${DateTime.now().millisecondsSinceEpoch}.muse';
+    _file = File(path);
+
+    final header = ByteData(12);
+    header.setUint64(0, _magic, Endian.little);
+    header.setUint32(8, _version, Endian.little);
+    await _file!.writeAsBytes(header.buffer.asUint8List(),
+        mode: FileMode.writeOnlyAppend);
+
+    _flushTimer = Timer.periodic(_flushInterval, (_) => _flush());
+  }
+
+  void writeEvent(MuseEventDto event) {
+    Uint8List? encoded;
+    switch (event) {
+      case MuseEventDto_Eeg(:final field0):
+        encoded = _encodeEeg(field0);
+      case MuseEventDto_Telemetry(:final field0):
+        encoded = _encodeTelemetry(field0);
+      case MuseEventDto_Accelerometer(:final field0):
+        encoded = _encodeImu(3, field0);
+      case MuseEventDto_Gyroscope(:final field0):
+        encoded = _encodeImu(4, field0);
+      case MuseEventDto_Ppg(:final field0):
+        encoded = _encodePpg(field0);
+      default:
+        return;
+    }
+    _pending.add(encoded);
+    if (_pending.length > _maxPendingBytes) _flush();
+  }
+
+  Uint8List _encodeEeg(EegDto d) {
+    final n = d.samples.length;
+    final buf = ByteData(1 + 8 + 2 + 2 + n * 8);
+    var off = 0;
+    buf.setUint8(off, 1); off += 1;
+    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
+    buf.setInt16(off, d.electrode, Endian.little); off += 2;
+    buf.setUint16(off, n, Endian.little); off += 2;
+    for (final s in d.samples) {
+      buf.setFloat64(off, s, Endian.little);
+      off += 8;
+    }
+    return buf.buffer.asUint8List();
+  }
+
+  Uint8List _encodeTelemetry(TelemetrySnapshot t) {
+    final buf = ByteData(1 + 8 + 4 + 4 + 2);
+    var off = 0;
+    buf.setUint8(off, 2); off += 1;
+    final ts = DateTime.now().millisecondsSinceEpoch / 1000.0;
+    buf.setFloat64(off, ts, Endian.little); off += 8;
+    buf.setFloat32(off, t.batteryLevel, Endian.little); off += 4;
+    buf.setFloat32(off, t.fuelGaugeVoltage, Endian.little); off += 4;
+    buf.setUint16(off, t.temperature, Endian.little);
+    return buf.buffer.asUint8List();
+  }
+
+  Uint8List _encodeImu(int type, ImuDto imu) {
+    final n = imu.samples.length;
+    final buf = ByteData(1 + 8 + 2 + 2 + n * 24);
+    var off = 0;
+    buf.setUint8(off, type); off += 1;
+    final ts = DateTime.now().millisecondsSinceEpoch / 1000.0;
+    buf.setFloat64(off, ts, Endian.little); off += 8;
+    buf.setUint16(off, imu.sequenceId, Endian.little); off += 2;
+    buf.setUint16(off, n, Endian.little); off += 2;
+    for (final s in imu.samples) {
+      buf.setFloat64(off, s.x, Endian.little); off += 8;
+      buf.setFloat64(off, s.y, Endian.little); off += 8;
+      buf.setFloat64(off, s.z, Endian.little); off += 8;
+    }
+    return buf.buffer.asUint8List();
+  }
+
+  Uint8List _encodePpg(PpgDto d) {
+    final n = d.samples.length;
+    final buf = ByteData(1 + 8 + 2 + 2 + n * 8);
+    var off = 0;
+    buf.setUint8(off, 5); off += 1;
+    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
+    buf.setInt16(off, d.channel, Endian.little); off += 2;
+    buf.setUint16(off, n, Endian.little); off += 2;
+    for (final s in d.samples) {
+      buf.setFloat64(off, s, Endian.little);
+      off += 8;
+    }
+    return buf.buffer.asUint8List();
+  }
+
+  Future<void> markSaved() async {
+    await _flush();
+    if (_file == null) return;
+    final dir = _file!.parent;
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final newPath = '${dir.path}session_$ts.muse';
+    await _file!.rename(newPath);
+    _file = null;
+  }
+
+  Future<void> stop() async {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    await _flush();
+    if (_file != null) {
+      try {
+        await _file!.delete();
+      } catch (_) {}
+      _file = null;
+    }
+  }
+
+  Future<void> _flush() async {
+    if (_pending.isEmpty || _file == null) return;
+    final bytes = _pending.toBytes();
+    _pending.clear();
+    await _file!.writeAsBytes(bytes, mode: FileMode.writeOnlyAppend);
+  }
+}

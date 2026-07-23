@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/app.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/charts/eeg_data_buffer.dart';
+import 'package:muse_ml/src/charts/live_cache.dart';
+import 'package:muse_ml/src/charts/session_recorder.dart';
 
 /// Duration of each scan chunk when scanning continuously.
 const _scanChunkSecs = 3;
@@ -41,7 +42,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   bool _scanEnabled = false;
   final StreamController<MuseEventDto> _eventController =
       StreamController<MuseEventDto>.broadcast();
-  final EegDataBuffer eegBuffer = EegDataBuffer();
+  final LiveCache liveCache = LiveCache();
+  final SessionRecorder sessionRecorder = SessionRecorder();
 
   Stream<MuseEventDto> get eventStream => _eventController.stream;
 
@@ -171,10 +173,12 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   }
 
   void _onEvent(MuseEventDto event) {
+    sessionRecorder.writeEvent(event);
     switch (event) {
       case MuseEventDto_Connected():
         debugPrint('[muse] event: connected ${event.field0}');
         _scanEnabled = false;
+        sessionRecorder.start();
         state = state.copyWith(
           status: state.status.copyWith(connected: true, name: event.field0),
           connectWindowOpen: false,
@@ -183,6 +187,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         );
       case MuseEventDto_Disconnected():
         debugPrint('[muse] event: disconnected');
+        sessionRecorder.stop();
         state = state.copyWith(
           status: const ConnectionStatus(
             connected: false,
@@ -204,7 +209,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         );
         _startContinuousScan();
       case MuseEventDto_Eeg():
-        eegBuffer.append(event.field0);
+        liveCache.appendEeg(event.field0);
       case MuseEventDto_Telemetry():
         state = state.copyWith(
           telemetry: event.field0,
