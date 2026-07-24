@@ -33,17 +33,13 @@ Color bandChannelColor(int channel) {
 
 class BandCache extends ChangeNotifier implements EegDataSource {
   static const int _capacityPerBand = 60000;
-  static const int _decimateEvery = 3;
 
   final Map<int, _BandRing> _channels = {};
-  int _counter = 0;
 
   @override
   double get maxTimeWindowSecs => 7200.0;
 
   void appendBands(BandsDto dto) {
-    _counter++;
-    if (_counter % _decimateEvery != 0) return;
     final ts = dto.timestamp / 1000.0;
     _insert(dto.electrode, 0, ts, dto.delta);
     _insert(dto.electrode, 1, ts, dto.theta);

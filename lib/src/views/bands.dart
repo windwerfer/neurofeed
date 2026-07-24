@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/charts/eeg_data_source.dart';
 import 'package:muse_ml/src/charts/band_cache.dart';
@@ -25,19 +26,29 @@ class BandsDashboard extends StatefulWidget {
   State<BandsDashboard> createState() => _BandsDashboardState();
 }
 
-class _BandsDashboardState extends State<BandsDashboard> {
+class _BandsDashboardState extends State<BandsDashboard> with SingleTickerProviderStateMixin {
   final ChartController _controller = ChartController();
   final Set<int> _hiddenBands = {};
   Set<int> _activeElectrodes = {};
   List<int> _allElectrodes = const [];
   List<int> _lastChannels = const [];
   VoidCallback? _ctrlListener;
+  bool _smooth = true;
+  bool _realTime = false;
+
+  Ticker? _scrollTicker;
+  double _wallAtLastData = 0;
+  double _dataAtLastData = 0;
+  bool _hasData = false;
+  static const double _futureOffset = 1.0;
+  double get _offset => _realTime ? 0.0 : _futureOffset;
 
   @override
   void initState() {
     super.initState();
     _syncElectrodes();
     _lastChannels = widget.source.channels;
+    _controller.timeWindowSecs = 30;
     _controller.snapToLive(widget.source);
     widget.source.addListener(_onSourceData);
     _ctrlListener = () {
@@ -52,6 +63,7 @@ class _BandsDashboardState extends State<BandsDashboard> {
     if (_ctrlListener != null) {
       _controller.removeListener(_ctrlListener!);
     }
+    _scrollTicker?.dispose();
     super.dispose();
   }
 
@@ -61,7 +73,35 @@ class _BandsDashboardState extends State<BandsDashboard> {
       _lastChannels = ch;
       _syncElectrodes();
     }
+    if (_controller.autoScroll) {
+      final now = DateTime.now().millisecondsSinceEpoch / 1000.0;
+      final newData = widget.source.latestTimestamp;
+      if (_hasData) {
+        _wallAtLastData += (newData - _dataAtLastData);
+        _dataAtLastData = newData;
+      } else {
+        _wallAtLastData = now;
+        _dataAtLastData = newData;
+        _hasData = true;
+        _controller.visibleEnd = newData - _offset;
+      }
+      _scrollTicker ??= createTicker(_onTick);
+      if (!_scrollTicker!.isActive) {
+        _scrollTicker!.start();
+      }
+    }
     if (mounted) setState(() {});
+  }
+
+  void _onTick(Duration elapsed) {
+    if (!_controller.autoScroll || !_hasData) {
+      _scrollTicker?.stop();
+      return;
+    }
+    final now = DateTime.now().millisecondsSinceEpoch / 1000.0;
+    final wallDelta = now - _wallAtLastData;
+    _controller.visibleEnd = _dataAtLastData + wallDelta - _offset;
+    _controller.forceNotify();
   }
 
   bool _listEquals(List<int> a, List<int> b) {
@@ -103,6 +143,7 @@ class _BandsDashboardState extends State<BandsDashboard> {
 
   List<SeriesSlice> _buildSlices() {
     final ctrl = _controller;
+    const queryPad = 5.0;
     final visibleStart = ctrl.visibleEnd - ctrl.timeWindowSecs;
     final source = widget.source;
     if (_activeElectrodes.isEmpty) return [];
@@ -113,7 +154,7 @@ class _BandsDashboardState extends State<BandsDashboard> {
       final perElectrode = <List<ChartSample>>[];
       for (final e in _activeElectrodes) {
         final id = bandChannelId(e, b);
-        perElectrode.add(source.getRange(id, visibleStart, ctrl.visibleEnd));
+        perElectrode.add(source.getRange(id, visibleStart - queryPad, ctrl.visibleEnd + queryPad));
       }
       final minLen = perElectrode.map((l) => l.length).reduce(math.min);
       if (minLen < 2) continue;
@@ -137,7 +178,9 @@ class _BandsDashboardState extends State<BandsDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    _controller.ensureBounds(widget.source);
+    if (!(_scrollTicker?.isActive ?? false) || !_controller.autoScroll) {
+      _controller.ensureBounds(widget.source);
+    }
     final visibleStart = _controller.visibleEnd - _controller.timeWindowSecs;
     final visibleEnd = _controller.visibleEnd;
     final slices = _buildSlices();
@@ -146,35 +189,41 @@ class _BandsDashboardState extends State<BandsDashboard> {
       children: [
         _buildHeader(),
         Expanded(
-          child: ClipRect(
-            child: Stack(
-              children: [
-                Listener(
-                  onPointerSignal: (event) {
-                    if (event is PointerScrollEvent) {
-                      _controller.onPointerSignal(event, widget.source.maxTimeWindowSecs);
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Listener(
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent) {
+                    _controller.onPointerSignal(event, widget.source.maxTimeWindowSecs);
+                  }
+                  if (_scrollTicker?.isActive ?? false) {
+                    _scrollTicker?.stop();
+                  }
+                },
+                child: GestureDetector(
+                  onScaleUpdate: (d) {
+                    _controller.onScaleUpdate(d, widget.source.maxTimeWindowSecs, context.size!.width);
+                    if (_scrollTicker?.isActive ?? false) {
+                      _scrollTicker?.stop();
                     }
                   },
-                  child: GestureDetector(
-                    onScaleUpdate: (d) {
-                      _controller.onScaleUpdate(d, widget.source.maxTimeWindowSecs, context.size!.width);
-                    },
-                    child: RepaintBoundary(
-                      child: CustomPaint(
-                        size: Size.infinite,
-                        painter: _EegChartPainter(
-                          slices: slices,
-                          visibleStart: visibleStart,
-                          visibleEnd: visibleEnd,
-                          autoScroll: _controller.autoScroll,
-                        ),
+                  child: RepaintBoundary(
+                    child: CustomPaint(
+                      size: Size.infinite,
+                      painter: _EegChartPainter(
+                        slices: slices,
+                        visibleStart: visibleStart,
+                        visibleEnd: visibleEnd,
+                        autoScroll: _controller.autoScroll,
+                        smooth: _smooth,
                       ),
                     ),
                   ),
                 ),
-                _buildControls(),
-              ],
-            ),
+              ),
+              _buildControls(),
+            ],
           ),
         ),
       ],
@@ -184,7 +233,7 @@ class _BandsDashboardState extends State<BandsDashboard> {
   Widget _buildControls() {
     final itemH = 22.0;
     return Positioned(
-      right: 8,
+      left: 8,
       bottom: 40,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -195,7 +244,7 @@ class _BandsDashboardState extends State<BandsDashboard> {
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (int i = 0; i < bandCountPerElectrode; i++) ...[
               if (i > 0) SizedBox(height: itemH - 16),
@@ -242,9 +291,71 @@ class _BandsDashboardState extends State<BandsDashboard> {
             '${_controller.timeWindowSecs.toStringAsFixed(0)}s',
             style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11, fontFeatures: [FontFeature.tabularFigures()]),
           ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => setState(() => _smooth = !_smooth),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: _smooth ? const Color(0xFF0055FF).withAlpha(60) : Colors.transparent,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: _smooth ? const Color(0xFF0055FF) : const Color(0xFF4A4D57)),
+              ),
+              child: Text(
+                'SMOOTH',
+                style: TextStyle(
+                  color: _smooth ? const Color(0xFF66AAFF) : const Color(0xFF4A4D57),
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: () => setState(() => _realTime = !_realTime),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: _realTime ? const Color(0xFF0055FF).withAlpha(60) : Colors.transparent,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: _realTime ? const Color(0xFF0055FF) : const Color(0xFF4A4D57)),
+              ),
+              child: Text(
+                'REALTIME',
+                style: TextStyle(
+                  color: _realTime ? const Color(0xFF66AAFF) : const Color(0xFF4A4D57),
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+          ),
           const Spacer(),
           GestureDetector(
-            onTap: () => _controller.enableAutoScroll(widget.source),
+            onTap: () {
+              _controller.autoScroll = true;
+              final now = DateTime.now().millisecondsSinceEpoch / 1000.0;
+              final latest = widget.source.latestTimestamp;
+              if (latest > 0) {
+                if (_hasData) {
+                  _wallAtLastData += (latest - _dataAtLastData);
+                  _dataAtLastData = latest;
+                } else {
+                  _wallAtLastData = now;
+                  _dataAtLastData = latest;
+                  _hasData = true;
+                  _controller.visibleEnd = latest - _offset;
+                }
+                _scrollTicker ??= createTicker(_onTick);
+                if (!_scrollTicker!.isActive) _scrollTicker!.start();
+              } else {
+                _controller.snapToLive(widget.source);
+              }
+              _controller.forceNotify();
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -267,9 +378,13 @@ class _BandsDashboardState extends State<BandsDashboard> {
           _headerBtn(Icons.add_box_outlined, 'Add graph', () {}),
           const SizedBox(width: 4),
           _headerBtn(Icons.refresh, 'Reset defaults', () {
+            _scrollTicker?.stop();
+            _hasData = false;
             setState(() {
               _hiddenBands.clear();
               _syncElectrodes();
+              _smooth = true;
+              _realTime = false;
               _controller.autoScroll = true;
               _controller.timeWindowSecs = 30;
               _controller.snapToLive(widget.source);
@@ -354,12 +469,14 @@ class _EegChartPainter extends CustomPainter {
     required this.visibleStart,
     required this.visibleEnd,
     required this.autoScroll,
+    required this.smooth,
   });
 
   final List<SeriesSlice> slices;
   final double visibleStart;
   final double visibleEnd;
   final bool autoScroll;
+  final bool smooth;
 
   late Size _size;
   late Rect _chartRect;
@@ -377,9 +494,12 @@ class _EegChartPainter extends CustomPainter {
     _computeLayout();
     _drawBackground(canvas);
     _drawGrid(canvas);
+    canvas.save();
+    canvas.clipRect(_chartRect);
     for (final slice in slices) {
       _drawSlice(canvas, slice);
     }
+    canvas.restore();
     _drawBorder(canvas);
     _drawAxisLabels(canvas);
   }
@@ -499,19 +619,73 @@ class _EegChartPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    final path = Path();
+    // Find first on-screen index
+    int firstVis = -1;
     for (int i = 0; i < samples.length; i += step) {
-      final x =
-          _chartRect.left + (samples[i].t - visibleStart) * _xScale;
-      final y = _chartRect.top + (_niceMax - samples[i].v) * _yScale;
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
+      if (samples[i].t >= visibleStart) {
+        firstVis = i;
+        break;
       }
     }
+    if (firstVis < 0) return;
 
+    // Build screen-coordinate points
+    final pts = <Offset>[];
+
+    // Interpolate left edge if there's a point before the first visible one
+    if (firstVis > 0) {
+      final prev = samples[firstVis - step];
+      final next = samples[firstVis];
+      final frac = (visibleStart - prev.t) / (next.t - prev.t);
+      final v = prev.v + (next.v - prev.v) * frac;
+      pts.add(Offset(
+        _chartRect.left,
+        _chartRect.top + (_niceMax - v) * _yScale,
+      ));
+    }
+
+    // Include all points from first visible onward
+    // (off-screen-right points extend beyond the right edge naturally)
+    for (int i = firstVis; i < samples.length; i += step) {
+      pts.add(Offset(
+        _chartRect.left + (samples[i].t - visibleStart) * _xScale,
+        _chartRect.top + (_niceMax - samples[i].v) * _yScale,
+      ));
+    }
+    if (pts.length < 2) return;
+
+    final path = Path();
+    if (smooth) {
+      _buildSmoothPath(path, pts);
+    } else {
+      path.moveTo(pts[0].dx, pts[0].dy);
+      for (int i = 1; i < pts.length; i++) {
+        path.lineTo(pts[i].dx, pts[i].dy);
+      }
+    }
     canvas.drawPath(path, paint);
+  }
+
+  void _buildSmoothPath(Path path, List<Offset> pts) {
+    // Catmull-Rom → Cubic Bezier
+    // CP1 = P[i] + (P[i+1] - P[i-1]) / 6
+    // CP2 = P[i+1] - (P[i+2] - P[i]) / 6
+    path.moveTo(pts[0].dx, pts[0].dy);
+    for (int i = 0; i < pts.length - 1; i++) {
+      final p0 = i > 0 ? pts[i - 1] : pts[i];
+      final p1 = pts[i];
+      final p2 = pts[i + 1];
+      final p3 = i + 2 < pts.length ? pts[i + 2] : pts[i + 1];
+      final cp1 = Offset(
+        p1.dx + (p2.dx - p0.dx) / 6,
+        p1.dy + (p2.dy - p0.dy) / 6,
+      );
+      final cp2 = Offset(
+        p2.dx - (p3.dx - p1.dx) / 6,
+        p2.dy - (p3.dy - p1.dy) / 6,
+      );
+      path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p2.dx, p2.dy);
+    }
   }
 
   void _drawAxisLabels(Canvas canvas) {
@@ -585,5 +759,6 @@ class _EegChartPainter extends CustomPainter {
       old.visibleStart != visibleStart ||
       old.visibleEnd != visibleEnd ||
       old.slices != slices ||
-      old.autoScroll != autoScroll;
+      old.autoScroll != autoScroll ||
+      old.smooth != smooth;
 }

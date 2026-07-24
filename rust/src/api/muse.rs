@@ -348,6 +348,8 @@ fn spawn_event_forwarder() {
         }
         let mut counts = PktCounts::default();
         let mut last_print = tokio::time::Instant::now();
+        let mut accums: std::collections::HashMap<i32, Vec<f64>> = std::collections::HashMap::new();
+        const FFT_N: usize = 256;
         loop {
             let rx = {
                 let mut guard = state().inner.lock().unwrap();
@@ -379,8 +381,7 @@ fn spawn_event_forwarder() {
                     last_print = tokio::time::Instant::now();
                 }
                 let dto = map_event(ev);
-                let is_eeg = matches!(&dto, MuseEventDto::Eeg(_));
-                let electrode = if let MuseEventDto::Eeg(ref e) = dto {
+                let eeg_samples = if let MuseEventDto::Eeg(ref e) = dto {
                     Some((e.electrode, e.timestamp, e.samples.clone()))
                 } else {
                     None
@@ -402,22 +403,35 @@ fn spawn_event_forwarder() {
                 if should_stop {
                     break;
                 }
-                if is_eeg {
-                    if let Some((electrode, timestamp, samples)) = electrode {
-                        let bands = compute_bands(electrode, timestamp, &samples);
+                if let Some((electrode, timestamp, samples)) = eeg_samples {
+                    let buf = accums.entry(electrode).or_default();
+                    for s in &samples {
+                        buf.push(*s);
+                    }
+                    if buf.len() >= FFT_N {
+                        let trimmed: Vec<f64> = buf.drain(..FFT_N).collect();
+                        let powers = compute_fft_bands(&trimmed);
                         counts.bands += 1;
                         let should_stop = {
                             let mut guard = state().inner.lock().unwrap();
                             match guard.sink.as_ref() {
                                 Some(sink) => {
-                                    if sink.add(MuseEventDto::Bands(bands)).is_err() {
+                                    if sink.add(MuseEventDto::Bands(BandsDto {
+                                        electrode,
+                                        timestamp,
+                                        delta: powers[0],
+                                        theta: powers[1],
+                                        alpha: powers[2],
+                                        beta: powers[3],
+                                        gamma: powers[4],
+                                    })).is_err() {
                                         guard.sink = None;
                                         true
                                     } else {
                                         false
                                     }
                                 }
-                                None => false,
+                                None => true,
                             }
                         };
                         if should_stop {
@@ -440,6 +454,34 @@ fn spawn_event_forwarder() {
             }
         }
     });
+}
+
+fn compute_fft_bands(samples: &[f64]) -> [f64; 5] {
+    let n = samples.len();
+    if n < 2 {
+        return [0.0; 5];
+    }
+    let sample_rate = 256.0;
+    let mut bin_power = vec![0.0f64; n / 2 + 1];
+    for k in 0..=n / 2 {
+        let mut re = 0.0;
+        let mut im = 0.0;
+        for (i, &x) in samples.iter().enumerate() {
+            let angle = -2.0 * std::f64::consts::PI * k as f64 * i as f64 / n as f64;
+            re += x * angle.cos();
+            im += x * angle.sin();
+        }
+        bin_power[k] = (re * re + im * im) / (n as f64 * n as f64);
+    }
+    let hz_per_bin = sample_rate / n as f64;
+    let bin = |hz: f64| (hz / hz_per_bin).round() as usize;
+    [
+        bin_power[bin(0.5)..=bin(4.0)].iter().sum(),
+        bin_power[bin(4.0)..=bin(8.0)].iter().sum(),
+        bin_power[bin(8.0)..=bin(13.0)].iter().sum(),
+        bin_power[bin(13.0)..=bin(30.0)].iter().sum(),
+        bin_power[bin(30.0)..=bin(50.0)].iter().sum(),
+    ]
 }
 
 fn map_event(ev: MuseEvent) -> MuseEventDto {
@@ -473,34 +515,6 @@ fn map_event(ev: MuseEvent) -> MuseEventDto {
                 .map(|(k, v)| (k, v.to_string()))
                 .collect(),
         }),
-    }
-}
-
-fn compute_bands(electrode: i32, timestamp: f64, samples: &[f64]) -> BandsDto {
-    let n = samples.len() as f64;
-    let sample_rate = 256.0;
-    let band_centers = [(2.0, "delta"), (6.0, "theta"), (10.0, "alpha"), (22.0, "beta"), (40.0, "gamma")];
-
-    let mut powers = [0.0f64; 5];
-    for (i, &(freq, _)) in band_centers.iter().enumerate() {
-        let mut re = 0.0;
-        let mut im = 0.0;
-        for (k, &x) in samples.iter().enumerate() {
-            let angle = -2.0 * std::f64::consts::PI * freq * k as f64 / sample_rate;
-            re += x * angle.cos();
-            im += x * angle.sin();
-        }
-        powers[i] = (re * re + im * im) / (n * n);
-    }
-
-    BandsDto {
-        electrode,
-        timestamp,
-        delta: powers[0],
-        theta: powers[1],
-        alpha: powers[2],
-        beta: powers[3],
-        gamma: powers[4],
     }
 }
 
