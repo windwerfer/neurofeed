@@ -209,10 +209,9 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           connectWindowOpen: true,
           connectingTo: null,
           scanning: false,
-          scanMessage: null,
-          disconnecting: false,
+          scanMessage: 'Reconnecting…',
         );
-        _startContinuousScan();
+        _tryReconnect();
       case MuseEventDto_Eeg():
         final eeg = event.field0;
         // if (eeg.index % 50 == 0) {
@@ -255,6 +254,17 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         scanMessage: 'Connection failed: $e',
       );
     }
+  }
+
+  /// Attempt to reconnect to the last known device; fall back to continuous
+  /// scan if the last device ID is missing or the device is not found.
+  Future<void> _tryReconnect() async {
+    final lastId = _settings.lastDeviceId;
+    if (lastId != null && lastId.isNotEmpty) {
+      final ok = await _tryAutoconnect(lastId);
+      if (ok) return;
+    }
+    _startContinuousScan();
   }
 
   Future<void> disconnectDevice() async {
