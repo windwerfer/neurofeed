@@ -49,6 +49,11 @@ abstract class EegDataSource implements Listenable {
   bool get hasData;
   List<int> get channels;
 
+  /// Maximum zoom-out window in seconds for this data source.
+  /// Live sources cap at the ring buffer duration; disk sessions return
+  /// the total recording length.
+  double get maxTimeWindowSecs;
+
   List<SeriesSlice> slices({
     required double startT,
     required double endT,

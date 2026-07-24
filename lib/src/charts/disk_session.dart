@@ -22,6 +22,9 @@ class DiskSession extends ChangeNotifier implements EegDataSource {
   }
 
   @override
+  double get maxTimeWindowSecs => 86400; // 24h for disk replay
+
+  @override
   bool get hasData => _loaded;
 
   @override

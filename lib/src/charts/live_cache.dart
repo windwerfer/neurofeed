@@ -11,6 +11,9 @@ class LiveCache extends ChangeNotifier implements EegDataSource {
 
   LiveCache() : _maxSamples = (_durationSecs * _sampleRate).toInt();
 
+  @override
+  double get maxTimeWindowSecs => _durationSecs.toDouble();
+
   int get maxSamples => _maxSamples;
 
   void appendEeg(EegDto dto) {

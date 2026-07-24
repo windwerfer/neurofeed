@@ -49,16 +49,24 @@ class _EegChartWidgetState extends State<EegChartWidget> {
     if (latest > 0) _visibleEnd = latest;
   }
 
+  double get _maxTimeWindowSecs => widget.source.maxTimeWindowSecs;
+
   void _ensureBounds() {
     final latest = widget.source.latestTimestamp;
     final oldest = widget.source.oldestTimestamp;
+    _timeWindowSecs = _timeWindowSecs.clamp(2.0, _maxTimeWindowSecs);
+
     if (_autoScroll) {
       _visibleEnd = latest;
     }
-    final minEnd = oldest > 0 ? oldest + _timeWindowSecs : 0.0;
-    final maxEnd = latest > 0 ? latest : _timeWindowSecs;
-    _visibleEnd = _visibleEnd.clamp(minEnd, maxEnd);
-    _timeWindowSecs = _timeWindowSecs.clamp(2.0, 600.0);
+    if (latest <= 0 || oldest <= 0) return;
+    final minEnd = oldest + _timeWindowSecs;
+    final maxEnd = latest;
+    if (minEnd < maxEnd) {
+      _visibleEnd = _visibleEnd.clamp(minEnd, maxEnd);
+    } else {
+      _visibleEnd = latest;
+    }
   }
 
   void _onScaleStart(ScaleStartDetails d) {
@@ -68,7 +76,7 @@ class _EegChartWidgetState extends State<EegChartWidget> {
   void _onScaleUpdate(ScaleUpdateDetails d) {
     setState(() {
       final prevWindow = _timeWindowSecs;
-      _timeWindowSecs = (prevWindow / d.scale).clamp(2.0, 600.0);
+      _timeWindowSecs = (prevWindow / d.scale).clamp(2.0, _maxTimeWindowSecs);
       final effectiveDelta =
           d.focalPointDelta.dx * _timeWindowSecs / context.size!.width;
       _visibleEnd -= effectiveDelta;
@@ -79,22 +87,22 @@ class _EegChartWidgetState extends State<EegChartWidget> {
     if (event is! PointerScrollEvent) return;
     setState(() {
       _autoScroll = false;
-      final factor = event.scrollDelta.dy < 0 ? 1.2 : 1.0 / 1.2;
-      _timeWindowSecs = (_timeWindowSecs * factor).clamp(2.0, 600.0);
+      final factor = event.scrollDelta.dy < 0 ? 1.0 / 1.2 : 1.2;
+      _timeWindowSecs = (_timeWindowSecs * factor).clamp(2.0, _maxTimeWindowSecs);
     });
   }
 
   void _zoomIn() {
     setState(() {
       _autoScroll = false;
-      _timeWindowSecs = (_timeWindowSecs / 1.5).clamp(2.0, 600.0);
+      _timeWindowSecs = (_timeWindowSecs / 1.5).clamp(2.0, _maxTimeWindowSecs);
     });
   }
 
   void _zoomOut() {
     setState(() {
       _autoScroll = false;
-      _timeWindowSecs = (_timeWindowSecs * 1.5).clamp(2.0, 600.0);
+      _timeWindowSecs = (_timeWindowSecs * 1.5).clamp(2.0, _maxTimeWindowSecs);
     });
   }
 

@@ -19,7 +19,8 @@ class SessionRecorder {
   Future<void> start([Directory? dir]) async {
     if (_file != null) return;
     final d = dir ?? Directory.systemTemp;
-    final path = '${d.path}live_${DateTime.now().millisecondsSinceEpoch}.muse';
+    final sep = d.path.endsWith('/') ? '' : '/';
+    final path = '${d.path}${sep}live_${DateTime.now().millisecondsSinceEpoch}.muse';
     _file = File(path);
 
     final header = ByteData(12);
@@ -136,6 +137,10 @@ class SessionRecorder {
     if (_pending.isEmpty || _file == null) return;
     final bytes = _pending.toBytes();
     _pending.clear();
-    await _file!.writeAsBytes(bytes, mode: FileMode.writeOnlyAppend);
+    try {
+      await _file!.writeAsBytes(bytes, mode: FileMode.writeOnlyAppend);
+    } catch (e) {
+      _pending.add(bytes);
+    }
   }
 }
