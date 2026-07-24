@@ -23,12 +23,18 @@ class _EegDashboardState extends State<EegDashboard> {
     _graphs = _defaultGraphs();
     _lastChannels = widget.source.channels;
     widget.source.addListener(_onSourceData);
+    _controller.addListener(_onControllerChange);
   }
 
   @override
   void dispose() {
     widget.source.removeListener(_onSourceData);
+    _controller.removeListener(_onControllerChange);
     super.dispose();
+  }
+
+  void _onControllerChange() {
+    if (mounted) setState(() {});
   }
 
   void _onSourceData() {
