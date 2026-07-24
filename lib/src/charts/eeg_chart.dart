@@ -9,12 +9,18 @@ class EegChartWidget extends StatefulWidget {
   final EegDataSource source;
   final ChartController controller;
   final GraphConfig config;
+  final VoidCallback? onToggleAvg;
+  final ValueChanged<int>? onToggleElectrode;
+  final VoidCallback? onRemove;
 
   const EegChartWidget({
     super.key,
     required this.source,
     required this.controller,
     required this.config,
+    this.onToggleAvg,
+    this.onToggleElectrode,
+    this.onRemove,
   });
 
   @override
@@ -109,26 +115,134 @@ class _EegChartWidgetState extends State<EegChartWidget> {
     final slices = _buildSlices();
 
     return ClipRect(
-      child: Listener(
-        onPointerSignal: (event) {
-          if (event is PointerScrollEvent) {
-            ctrl.onPointerSignal(event, widget.source.maxTimeWindowSecs);
-          }
-        },
-          child: GestureDetector(
-            onScaleUpdate: (d) {
-              ctrl.onScaleUpdate(d, widget.source.maxTimeWindowSecs, context.size!.width);
+      child: Stack(
+        children: [
+          Listener(
+            onPointerSignal: (event) {
+              if (event is PointerScrollEvent) {
+                ctrl.onPointerSignal(event, widget.source.maxTimeWindowSecs);
+              }
             },
-          child: RepaintBoundary(
-            child: CustomPaint(
-              size: Size.infinite,
-              painter: _EegChartPainter(
-                slices: slices,
-                visibleStart: visibleStart,
-                visibleEnd: visibleEnd,
-                autoScroll: ctrl.autoScroll,
+            child: GestureDetector(
+              onScaleUpdate: (d) {
+                ctrl.onScaleUpdate(d, widget.source.maxTimeWindowSecs, context.size!.width);
+              },
+              child: RepaintBoundary(
+                child: CustomPaint(
+                  size: Size.infinite,
+                  painter: _EegChartPainter(
+                    slices: slices,
+                    visibleStart: visibleStart,
+                    visibleEnd: visibleEnd,
+                    autoScroll: ctrl.autoScroll,
+                  ),
+                ),
               ),
             ),
+          ),
+          if (widget.onToggleAvg != null) _buildControls(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildControls() {
+    final config = widget.config;
+    final activeList = config.allElectrodes;
+    return Positioned(
+      right: 8,
+      top: 8,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: const Color(0xBB111218),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFF2A2D37)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (int i = 0; i < activeList.length; i++) ...[
+              if (i > 0) const SizedBox(height: 3),
+              _SensorChip(
+                electrode: activeList[i],
+                active: config.activeElectrodes.contains(activeList[i]),
+                onTap: widget.onToggleElectrode != null
+                    ? () => widget.onToggleElectrode!(activeList[i])
+                    : null,
+              ),
+            ],
+            const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: widget.onToggleAvg,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: config.avgMode ? const Color(0xFF4FC3F7).withAlpha(40) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: config.avgMode ? const Color(0xFF4FC3F7) : const Color(0xFF4A4D57),
+                      ),
+                    ),
+                    child: Text(
+                      'avg',
+                      style: TextStyle(
+                        color: config.avgMode ? const Color(0xFF4FC3F7) : const Color(0xFF6B7280),
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                if (widget.onRemove != null) ...[
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: widget.onRemove,
+                    child: const Icon(Icons.close, color: Color(0xFF6B7280), size: 14),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SensorChip extends StatelessWidget {
+  final int electrode;
+  final bool active;
+  final VoidCallback? onTap;
+
+  const _SensorChip({
+    required this.electrode,
+    required this.active,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = channelColor(electrode);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: active ? color.withAlpha(40) : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: active ? color : color.withAlpha(60)),
+        ),
+        child: Text(
+          channelName(electrode),
+          style: TextStyle(
+            color: active ? color : color.withAlpha(120),
+            fontSize: 10,
+            fontWeight: active ? FontWeight.bold : FontWeight.normal,
           ),
         ),
       ),
@@ -170,12 +284,11 @@ class _EegChartPainter extends CustomPainter {
     }
     _drawBorder(canvas);
     _drawAxisLabels(canvas);
-    _drawLegend(canvas);
     _drawLiveIndicator(canvas);
   }
 
   void _computeLayout() {
-    const marginL = 60.0, marginR = 100.0;
+    const marginL = 60.0, marginR = 16.0;
     const marginT = 24.0, marginB = 32.0;
     _chartRect = Rect.fromLTWH(
       marginL,
@@ -206,8 +319,8 @@ class _EegChartPainter extends CustomPainter {
   }
 
   void _drawLiveIndicator(Canvas canvas) {
-    final x = _size.width - 60;
-    final y = 8.0;
+    final x = _chartRect.right - 52;
+    final y = _chartRect.top - 20;
     final r = RRect.fromRectAndRadius(
       Rect.fromLTWH(x, y, 52, 20),
       const Radius.circular(4),
@@ -389,73 +502,6 @@ class _EegChartPainter extends CustomPainter {
     return '${dt.hour.toString().padLeft(2, '0')}:'
         '${dt.minute.toString().padLeft(2, '0')}:'
         '${dt.second.toString().padLeft(2, '0')}';
-  }
-
-  void _drawLegend(Canvas canvas) {
-    if (slices.isEmpty) return;
-
-    const pad = 12.0;
-    const itemH = 28.0;
-    final count = slices.length;
-    const w = 90.0;
-    final h = pad * 2 + count * itemH;
-    final rect =
-        Rect.fromLTWH(_size.width - w - 8, _size.height - h - 8, w, h);
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(6)),
-      Paint()..color = const Color(0xBB111218),
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect, const Radius.circular(6)),
-      Paint()
-        ..color = const Color(0xFF2A2D37)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
-
-    for (int i = 0; i < count; i++) {
-      final slice = slices[i];
-      final y = rect.top + pad + i * itemH;
-
-      canvas.drawCircle(
-        Offset(rect.left + 10, y + itemH / 2),
-        4,
-        Paint()
-          ..color =
-              slice.visible ? slice.color : slice.color.withAlpha(60)
-          ..style = PaintingStyle.fill,
-      );
-
-      final tp = TextPainter(
-        text: TextSpan(
-          text: slice.name,
-          style: TextStyle(
-            color: slice.visible ? Colors.white : Colors.white38,
-            fontSize: 11,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(
-        canvas,
-        Offset(rect.left + 20, y + itemH / 2 - tp.height / 2),
-      );
-
-      if (!slice.visible) {
-        final cx = rect.right - pad;
-        canvas.drawLine(
-          Offset(cx - 5, y + itemH / 2 - 5),
-          Offset(cx + 5, y + itemH / 2 + 5),
-          Paint()..color = Colors.white38..strokeWidth = 1.5,
-        );
-        canvas.drawLine(
-          Offset(cx + 5, y + itemH / 2 - 5),
-          Offset(cx - 5, y + itemH / 2 + 5),
-          Paint()..color = Colors.white38..strokeWidth = 1.5,
-        );
-      }
-    }
   }
 
   @override
