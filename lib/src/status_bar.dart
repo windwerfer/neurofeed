@@ -82,7 +82,7 @@ class StatusBar extends ConsumerWidget {
                               const SizedBox(width: 16),
                               const Icon(Icons.battery_full, size: 18),
                               const SizedBox(width: 4),
-                              Text('${state.batteryLevel.toInt()}%'),
+                              Text('${(state.batteryLevel < 1 ? state.batteryLevel * 100 : state.batteryLevel).toInt()}%'),
                               const SizedBox(width: 16),
                               _signalQualityRow(state.signalQuality),
                             ],

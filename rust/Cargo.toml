@@ -8,7 +8,7 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 flutter_rust_bridge = "=2.11.1"
-muse-rs = { git = "https://github.com/eugenehp/muse-rs.git", tag = "0.1.0", default-features = false }
+muse-rs = { path = "../third_party/muse-rs", default-features = false }
 btleplug = { git = "https://github.com/eugenehp/btleplug.git", branch = "imrpoved_mac_version", version = "0.11.8" }
 jni = "=0.19"
 tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time"] }

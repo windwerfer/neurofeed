@@ -222,6 +222,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       case MuseEventDto_Bands():
         bandCache.appendBands(event.field0);
       case MuseEventDto_Telemetry():
+        debugPrint('[muse] telemetry: battery=${event.field0.batteryLevel} '
+            'fuel=${event.field0.fuelGaugeVoltage} temp=${event.field0.temperature}');
         state = state.copyWith(
           telemetry: event.field0,
           batteryLevel: event.field0.batteryLevel,

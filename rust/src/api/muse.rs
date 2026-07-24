@@ -230,6 +230,8 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
         }
         .to_string();
 
+        log::info!("[muse] connected to {name} ({firmware} firmware)");
+
         // Start streaming — best-effort with its own timeout.  The BLE link
         // from connect_to() is already established, so a timeout here still
         // leaves a usable (but silent) connection.
@@ -238,6 +240,11 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
             handle.start(false, false),
         )
         .await;
+
+        // Request device info once so the control JSON with bp (battery
+        // percentage) arrives.  The forwarder extracts bp from Control events
+        // and emits a Telemetry event with the correct 0-100 value.
+        let _ = handle.send_command("v1").await;
 
         {
             let mut guard = state().inner.lock().unwrap();
@@ -349,6 +356,7 @@ fn spawn_event_forwarder() {
         let mut counts = PktCounts::default();
         let mut last_print = tokio::time::Instant::now();
         let mut accums: std::collections::HashMap<i32, Vec<f64>> = std::collections::HashMap::new();
+        let mut bp_override: Option<f32> = None;
         const FFT_N: usize = 256;
         loop {
             let rx = {
@@ -380,7 +388,22 @@ fn spawn_event_forwarder() {
                     counts = PktCounts::default();
                     last_print = tokio::time::Instant::now();
                 }
-                let dto = map_event(ev);
+                let mut dto = map_event(ev);
+                // Capture battery percentage (bp) from control JSON and inject it
+                // into telemetry events so the UI gets the correct 0-100 value.
+                // muse-rs parses the dedicated telemetry characteristic (273e000b)
+                // which carries a raw fuel-gauge fraction (0.0-1.0) — not the
+                // actual percentage.  The v1 command response includes bp.
+                if let MuseEventDto::Control(ref c) = dto {
+                    if let Some(bp) = c.fields.get("bp").and_then(|s| s.parse::<f32>().ok()) {
+                        bp_override = Some(bp);
+                    }
+                }
+                if let MuseEventDto::Telemetry(ref mut t) = dto {
+                    if let Some(bp) = bp_override {
+                        t.battery_level = bp;
+                    }
+                }
                 let eeg_samples = if let MuseEventDto::Eeg(ref e) = dto {
                     Some((e.electrode, e.timestamp, e.samples.clone()))
                 } else {
@@ -500,11 +523,25 @@ fn map_event(ev: MuseEvent) -> MuseEventDto {
             timestamp: r.timestamp,
             samples: r.samples.into_iter().map(|s| s as f64).collect(),
         }),
-        MuseEvent::Telemetry(t) => MuseEventDto::Telemetry(TelemetrySnapshot {
-            battery_level: t.battery_level,
-            fuel_gauge_voltage: t.fuel_gauge_voltage,
-            temperature: t.temperature,
-        }),
+        MuseEvent::Telemetry(t) => {
+            log::info!(
+                "[muse] telemetry: battery={:.6} fuel_gauge={:.2} temp={}",
+                t.battery_level, t.fuel_gauge_voltage, t.temperature,
+            );
+            // If fuel gauge > 5000 mV (impossible for Li-Po) the offset/
+            // scaling is wrong — log the raw TelemetryData fields.
+            if t.fuel_gauge_voltage > 5_000.0 {
+                log::warn!(
+                    "[muse] telemetry raw reconst: seq={} batt_u16={:.0} fuel_u16={:.0}",
+                    t.sequence_id, t.battery_level * 512.0, t.fuel_gauge_voltage / 2.2,
+                );
+            }
+            MuseEventDto::Telemetry(TelemetrySnapshot {
+                battery_level: t.battery_level,
+                fuel_gauge_voltage: t.fuel_gauge_voltage,
+                temperature: t.temperature,
+            })
+        }
         MuseEvent::Accelerometer(imu) => MuseEventDto::Accelerometer(map_imu(imu)),
         MuseEvent::Gyroscope(imu) => MuseEventDto::Gyroscope(map_imu(imu)),
         MuseEvent::Control(c) => MuseEventDto::Control(ControlDto {
