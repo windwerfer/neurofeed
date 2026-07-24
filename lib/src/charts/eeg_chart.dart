@@ -515,6 +515,8 @@ class _EegChartPainter extends CustomPainter {
     final windowSecs = visibleEnd - visibleStart;
     final offsetLines =
         _niceGridValues(-windowSecs, 0, _chartRect.width, 60);
+    var lastLabelEnd = double.negativeInfinity;
+    const labelGap = 8.0;
     for (final offset in offsetLines) {
       final px = _chartRect.left + (offset + windowSecs) * _xScale;
       final text = autoScroll
@@ -524,7 +526,10 @@ class _EegChartPainter extends CustomPainter {
         text: TextSpan(text: text, style: labelStyle),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(px - tp.width / 2, _chartRect.bottom + 6));
+      final half = tp.width / 2;
+      if (px - half < lastLabelEnd) continue;
+      lastLabelEnd = px + half + labelGap;
+      tp.paint(canvas, Offset(px - half, _chartRect.bottom + 6));
     }
   }
 
