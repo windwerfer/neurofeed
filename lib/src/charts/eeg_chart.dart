@@ -441,9 +441,10 @@ class _EegChartPainter extends CustomPainter {
     final samples = slice.samples;
     if (samples.length < 2) return;
 
-    final rawCount = samples.length;
     final targetCount = (_chartRect.width * 2).toInt();
-    final step = rawCount > targetCount ? (rawCount / targetCount).ceil() : 1;
+    final step = samples.length > targetCount
+        ? (samples.length / targetCount).ceil()
+        : 1;
 
     final paint = Paint()
       ..color = slice.color
@@ -452,39 +453,16 @@ class _EegChartPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    final x0 = _chartRect.left + (samples[0].t - visibleStart) * _xScale;
-    final y0 = _chartRect.top + (_niceMax - samples[0].v) * _yScale;
-    final path = Path()..moveTo(x0, y0);
-
-    if (step == 1) {
-      for (int i = 1; i < samples.length; i++) {
-        final x =
-            _chartRect.left + (samples[i].t - visibleStart) * _xScale;
-        final y = _chartRect.top + (_niceMax - samples[i].v) * _yScale;
-        final prevX =
-            _chartRect.left + (samples[i - 1].t - visibleStart) * _xScale;
-        final prevY =
-            _chartRect.top + (_niceMax - samples[i - 1].v) * _yScale;
-        path.cubicTo(
-          prevX + (x - prevX) * 0.5, prevY,
-          prevX + (x - prevX) * 0.5, y,
-          x, y,
-        );
-      }
-    } else {
-      int i = step;
-      while (i < samples.length) {
-        final x =
-            _chartRect.left + (samples[i].t - visibleStart) * _xScale;
-        final y = _chartRect.top + (_niceMax - samples[i].v) * _yScale;
+    final path = Path();
+    for (int i = 0; i < samples.length; i += step) {
+      final x =
+          _chartRect.left + (samples[i].t - visibleStart) * _xScale;
+      final y = _chartRect.top + (_niceMax - samples[i].v) * _yScale;
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
         path.lineTo(x, y);
-        i += step;
       }
-      final last = samples.last;
-      final xl =
-          _chartRect.left + (last.t - visibleStart) * _xScale;
-      final yl = _chartRect.top + (_niceMax - last.v) * _yScale;
-      if ((samples.length - 1) % step != 0) path.lineTo(xl, yl);
     }
 
     canvas.drawPath(path, paint);
