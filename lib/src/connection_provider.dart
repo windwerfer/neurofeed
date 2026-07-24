@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,6 +46,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   bool _scanEnabled = false;
   final StreamController<MuseEventDto> _eventController =
       StreamController<MuseEventDto>.broadcast();
+  double _lastQualityCheck = 0;
   final LiveCache liveCache = LiveCache();
   final BandCache bandCache = BandCache();
   final SessionRecorder sessionRecorder = SessionRecorder();
@@ -201,6 +203,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
             firmware: '',
           ),
           batteryLevel: 0,
+          signalQuality: null,
           telemetry: const TelemetrySnapshot(
             batteryLevel: 0,
             fuelGaugeVoltage: 0,
@@ -214,11 +217,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         _tryReconnect();
       case MuseEventDto_Eeg():
         final eeg = event.field0;
-        // if (eeg.index % 50 == 0) {
-        //   final last = eeg.samples.isNotEmpty ? eeg.samples.last : 0.0;
-        //   debugPrint('[eeg] ch=${eeg.electrode} idx=${eeg.index} ts=${eeg.timestamp} n=${eeg.samples.length} last=$last');
-        // }
         liveCache.appendEeg(eeg);
+        _maybeComputeSignalQuality();
       case MuseEventDto_Bands():
         bandCache.appendBands(event.field0);
       case MuseEventDto_Telemetry():
@@ -229,6 +229,46 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       default:
         break;
     }
+  }
+
+  void _maybeComputeSignalQuality() {
+    final now = liveCache.latestTimestamp;
+    if (now - _lastQualityCheck < 0.9) return;
+    _lastQualityCheck = now;
+
+    const window = 1.0;
+    final quals = List.filled(4, 0.0);
+
+    for (final ch in liveCache.channels) {
+      if (ch < 0 || ch > 3) continue;
+      final samples = liveCache.getRange(ch, now - window, now);
+      if (samples.length < 10) continue;
+
+      final n = samples.length;
+      double sum = 0;
+      for (final s in samples) { sum += s.v; }
+      final mean = sum / n;
+
+      double sumSq = 0;
+      for (final s in samples) { sumSq += (s.v - mean) * (s.v - mean); }
+      final variance = sumSq / n;
+      final std = sqrt(variance);
+
+      double score;
+      if (std < 1.0 || std > 100.0) {
+        score = 0;
+      } else if (std < 15.0) {
+        score = 80.0 + (15.0 - std) / 15.0 * 20.0;
+      } else if (std < 40.0) {
+        score = 50.0 + (40.0 - std) / 25.0 * 25.0;
+      } else {
+        score = 40.0 * (100.0 - std) / 60.0;
+        if (score < 0) score = 0;
+      }
+      quals[ch] = score;
+    }
+
+    state = state.copyWith(signalQuality: quals);
   }
 
   Future<void> connectTo(DeviceInfo device) async {
@@ -332,6 +372,7 @@ class AppUiState {
     required this.devices,
     required this.batteryLevel,
     required this.telemetry,
+    this.signalQuality,
     this.scanMessage,
     this.connectingTo,
     this.disconnecting = false,
@@ -345,6 +386,7 @@ class AppUiState {
   final List<DeviceInfo> devices;
   final double batteryLevel;
   final TelemetrySnapshot telemetry;
+  final List<double>? signalQuality;
   final String? scanMessage;
   final String? connectingTo;
   final bool disconnecting;
@@ -360,6 +402,7 @@ class AppUiState {
     List<DeviceInfo>? devices,
     double? batteryLevel,
     TelemetrySnapshot? telemetry,
+    Object? signalQuality = _sentinel,
     Object? scanMessage = _sentinel,
     Object? connectingTo = _sentinel,
     bool? disconnecting,
@@ -372,6 +415,9 @@ class AppUiState {
     devices: devices ?? this.devices,
     batteryLevel: batteryLevel ?? this.batteryLevel,
     telemetry: telemetry ?? this.telemetry,
+    signalQuality: identical(signalQuality, _sentinel)
+        ? this.signalQuality
+        : signalQuality as List<double>?,
     scanMessage: switch (scanMessage) {
       Object() when identical(scanMessage, _sentinel) => this.scanMessage,
       _ => scanMessage as String?,

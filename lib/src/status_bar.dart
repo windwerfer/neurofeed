@@ -2,6 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 
+const _kSignalSymbols = ['/', '‾', '‾', '\\'];
+
+Widget _signalQualityRow(List<double>? qualities) {
+  if (qualities == null) return const SizedBox.shrink();
+  final children = <Widget>[];
+  for (int i = 0; i < 4; i++) {
+    final score = i < qualities.length ? qualities[i] : 0.0;
+    final color = score >= 80
+        ? const Color(0xFF4CAF50)
+        : score >= 40
+            ? const Color(0xFFFF9800)
+            : const Color(0xFFF44336);
+    children.add(Text(
+      _kSignalSymbols[i],
+      style: TextStyle(
+        color: color,
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        fontFamily: 'monospace',
+      ),
+    ));
+    if (i < 3) children.add(const SizedBox(width: 2));
+  }
+  return Row(mainAxisSize: MainAxisSize.min, children: children);
+}
+
 /// Top status bar: hamburger menu (left), device/battery/signal (center),
 /// disconnect button (right, only when connected).
 class StatusBar extends ConsumerWidget {
@@ -58,9 +84,7 @@ class StatusBar extends ConsumerWidget {
                               const SizedBox(width: 4),
                               Text('${state.batteryLevel.toInt()}%'),
                               const SizedBox(width: 16),
-                              const Icon(Icons.signal_cellular_alt, size: 18),
-                              const SizedBox(width: 4),
-                              Text(state.status.firmware),
+                              _signalQualityRow(state.signalQuality),
                             ],
                           )
                         : state.connectingTo != null
