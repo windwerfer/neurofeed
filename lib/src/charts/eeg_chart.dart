@@ -22,8 +22,6 @@ class EegChartWidget extends StatefulWidget {
 }
 
 class _EegChartWidgetState extends State<EegChartWidget> {
-  final Set<int> _hiddenChannels = {};
-
   @override
   void initState() {
     super.initState();
@@ -57,42 +55,16 @@ class _EegChartWidgetState extends State<EegChartWidget> {
     if (mounted) setState(() {});
   }
 
-  void _onTapUp(TapUpDetails d) {
-    if (widget.config.avgMode) return;
-    final slices = _buildSlices();
-    if (slices.isEmpty) return;
-    final size = context.size!;
-    final count = slices.length;
-    const pad = 12.0;
-    const itemH = 28.0;
-    const w = 90.0;
-    final h = pad * 2 + count * itemH;
-    final legendRect = Rect.fromLTWH(size.width - w - 8, size.height - h - 8, w, h);
-    if (!legendRect.contains(d.localPosition)) return;
-    final dy = d.localPosition.dy - legendRect.top - pad;
-    final index = dy ~/ itemH;
-    if (index < 0 || index >= count) return;
-    final electrodes = widget.config.electrodes;
-    if (index >= electrodes.length) return;
-    final ch = electrodes[index];
-    setState(() {
-      if (_hiddenChannels.contains(ch)) {
-        _hiddenChannels.remove(ch);
-      } else {
-        _hiddenChannels.add(ch);
-      }
-    });
-  }
-
   List<SeriesSlice> _buildSlices() {
     final ctrl = widget.controller;
     final visibleStart = ctrl.visibleEnd - ctrl.timeWindowSecs;
     final source = widget.source;
     final config = widget.config;
+    final active = config.activeElectrodes.toList()..sort();
 
-    if (config.avgMode && config.electrodes.length > 1) {
+    if (config.avgMode && active.length > 1) {
       final perChannel = <List<ChartSample>>[];
-      for (final ch in config.electrodes) {
+      for (final ch in active) {
         perChannel.add(source.getRange(ch, visibleStart, ctrl.visibleEnd));
       }
       final minLen = perChannel.map((l) => l.length).reduce(math.min);
@@ -106,8 +78,8 @@ class _EegChartWidgetState extends State<EegChartWidget> {
       });
       return [
         SeriesSlice(
-          name: '${config.label} avg',
-          color: config.color(0),
+          name: 'avg',
+          color: const Color(0xFF4FC3F7),
           unit: 'µV',
           samples: avgSamples,
           visible: true,
@@ -116,15 +88,13 @@ class _EegChartWidgetState extends State<EegChartWidget> {
     }
 
     final result = <SeriesSlice>[];
-    for (int i = 0; i < config.electrodes.length; i++) {
-      final ch = config.electrodes[i];
-      final hidden = _hiddenChannels.contains(ch);
+    for (final ch in active) {
       result.add(SeriesSlice(
         name: channelName(ch),
         color: channelColor(ch),
         unit: 'µV',
-        samples: hidden ? const [] : source.getRange(ch, visibleStart, ctrl.visibleEnd),
-        visible: !hidden,
+        samples: source.getRange(ch, visibleStart, ctrl.visibleEnd),
+        visible: true,
       ));
     }
     return result;
@@ -145,11 +115,10 @@ class _EegChartWidgetState extends State<EegChartWidget> {
             ctrl.onPointerSignal(event, widget.source.maxTimeWindowSecs);
           }
         },
-        child: GestureDetector(
-          onScaleUpdate: (d) {
-            ctrl.onScaleUpdate(d, widget.source.maxTimeWindowSecs, context.size!.width);
-          },
-          onTapUp: _onTapUp,
+          child: GestureDetector(
+            onScaleUpdate: (d) {
+              ctrl.onScaleUpdate(d, widget.source.maxTimeWindowSecs, context.size!.width);
+            },
           child: RepaintBoundary(
             child: CustomPaint(
               size: Size.infinite,

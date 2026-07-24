@@ -14,7 +14,8 @@ const _scanChunkSecs = 3;
 /// Holds all connection + UI state for the app.
 class AppStateNotifier extends StateNotifier<AppUiState> {
   AppStateNotifier(this._settings)
-      : super(AppUiState(
+    : super(
+        AppUiState(
           status: const ConnectionStatus(
             connected: false,
             name: '',
@@ -33,7 +34,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
             fuelGaugeVoltage: 0,
             temperature: 0,
           ),
-        )) {
+        ),
+      ) {
     _init();
   }
 
@@ -94,7 +96,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       }
       for (var i = 0; i < 5; i++) {
         final devices = await scan(timeoutSecs: BigInt.from(_scanChunkSecs));
-        final match = devices.where((d) => d.id == lastId).firstOrNull ??
+        final match =
+            devices.where((d) => d.id == lastId).firstOrNull ??
             devices.where((d) => d.name == lastId).firstOrNull;
         if (match != null) {
           debugPrint('[muse] autoconnect: found ${match.name}, connecting');
@@ -210,10 +213,10 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         _startContinuousScan();
       case MuseEventDto_Eeg():
         final eeg = event.field0;
-        if (eeg.index % 50 == 0) {
-          final last = eeg.samples.isNotEmpty ? eeg.samples.last : 0.0;
-          debugPrint('[eeg] ch=${eeg.electrode} idx=${eeg.index} ts=${eeg.timestamp} n=${eeg.samples.length} last=$last');
-        }
+        // if (eeg.index % 50 == 0) {
+        //   final last = eeg.samples.isNotEmpty ? eeg.samples.last : 0.0;
+        //   debugPrint('[eeg] ch=${eeg.electrode} idx=${eeg.index} ts=${eeg.timestamp} n=${eeg.samples.length} last=$last');
+        // }
         liveCache.appendEeg(eeg);
       case MuseEventDto_Telemetry():
         state = state.copyWith(
@@ -239,10 +242,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       final status = await connect(deviceId: device.id);
       debugPrint('[muse] connect returned: connected=${status.connected}');
       await _settings.setLastDeviceId(device.id);
-      state = state.copyWith(
-        status: status,
-        connectingTo: null,
-      );
+      state = state.copyWith(status: status, connectingTo: null);
     } catch (e) {
       debugPrint('[muse] connect failed: $e');
       state = state.copyWith(
@@ -349,29 +349,29 @@ class AppUiState {
     Object? scanMessage = _sentinel,
     Object? connectingTo = _sentinel,
     bool? disconnecting,
-  }) =>
-      AppUiState(
-        status: status ?? this.status,
-        currentView: currentView ?? this.currentView,
-        sidebarOpen: sidebarOpen ?? this.sidebarOpen,
-        connectWindowOpen: connectWindowOpen ?? this.connectWindowOpen,
-        scanning: scanning ?? this.scanning,
-        devices: devices ?? this.devices,
-        batteryLevel: batteryLevel ?? this.batteryLevel,
-        telemetry: telemetry ?? this.telemetry,
-        scanMessage: switch (scanMessage) {
-          Object() when identical(scanMessage, _sentinel) => this.scanMessage,
-          _ => scanMessage as String?,
-        },
-        connectingTo: switch (connectingTo) {
-          Object() when identical(connectingTo, _sentinel) => this.connectingTo,
-          _ => connectingTo as String?,
-        },
-        disconnecting: disconnecting ?? this.disconnecting,
-      );
+  }) => AppUiState(
+    status: status ?? this.status,
+    currentView: currentView ?? this.currentView,
+    sidebarOpen: sidebarOpen ?? this.sidebarOpen,
+    connectWindowOpen: connectWindowOpen ?? this.connectWindowOpen,
+    scanning: scanning ?? this.scanning,
+    devices: devices ?? this.devices,
+    batteryLevel: batteryLevel ?? this.batteryLevel,
+    telemetry: telemetry ?? this.telemetry,
+    scanMessage: switch (scanMessage) {
+      Object() when identical(scanMessage, _sentinel) => this.scanMessage,
+      _ => scanMessage as String?,
+    },
+    connectingTo: switch (connectingTo) {
+      Object() when identical(connectingTo, _sentinel) => this.connectingTo,
+      _ => connectingTo as String?,
+    },
+    disconnecting: disconnecting ?? this.disconnecting,
+  );
 }
 
-final appStateProvider =
-    StateNotifierProvider<AppStateNotifier, AppUiState>((ref) {
+final appStateProvider = StateNotifierProvider<AppStateNotifier, AppUiState>((
+  ref,
+) {
   throw UnimplementedError('Initialize with settings before use');
 });

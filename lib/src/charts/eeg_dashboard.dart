@@ -19,12 +19,23 @@ class _EegDashboardState extends State<EegDashboard> {
   @override
   void initState() {
     super.initState();
-    _graphs = GraphConfig.defaults.map((g) => g).toList();
+    _graphs = _defaultGraphs();
+  }
+
+  List<GraphConfig> _defaultGraphs() {
+    final ch = widget.source.channels;
+    if (ch.length < 4) {
+      return [GraphConfig.defaultFor(ch)];
+    }
+    return [
+      GraphConfig.defaultFor([ch[0], ch[3]]),
+      GraphConfig.defaultFor([ch[1], ch[2]]),
+    ];
   }
 
   void _reset() {
     setState(() {
-      _graphs = GraphConfig.defaults.map((g) => g).toList();
+      _graphs = _defaultGraphs();
       _controller.autoScroll = true;
       _controller.timeWindowSecs = 10;
       _controller.snapToLive(widget.source);
@@ -38,73 +49,22 @@ class _EegDashboardState extends State<EegDashboard> {
   }
 
   void _addGraph() {
-    final allChannels = widget.source.channels;
-    if (allChannels.isEmpty) return;
-    final selected = <int>{};
-    var label = '';
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDState) => AlertDialog(
-          backgroundColor: const Color(0xFF1E212A),
-          title: const Text('Add Graph', style: TextStyle(color: Colors.white, fontSize: 14)),
-          content: SizedBox(
-            width: 240,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final ch in allChannels) ...[
-                  CheckboxListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    value: selected.contains(ch),
-                    onChanged: (v) {
-                      setDState(() {
-                        if (v == true) { selected.add(ch); } else { selected.remove(ch); }
-                      });
-                    },
-                    title: Text(channelName(ch), style: const TextStyle(color: Colors.white, fontSize: 13)),
-                    activeColor: channelColor(ch),
-                    checkColor: Colors.black,
-                  ),
-                ],
-                const SizedBox(height: 8),
-                TextField(
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                  decoration: const InputDecoration(
-                    hintText: 'Label (optional)',
-                    hintStyle: TextStyle(color: Colors.white38, fontSize: 13),
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  ),
-                  onChanged: (v) => label = v,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white54, fontSize: 12)),
-            ),
-            TextButton(
-              onPressed: selected.isEmpty ? null : () {
-                Navigator.pop(ctx);
-                final names = selected.map((ch) => channelName(ch)).join('+');
-                setState(() {
-                  _graphs.add(GraphConfig(
-                    label: label.isNotEmpty ? label : names,
-                    electrodes: selected.toList()..sort(),
-                    avgMode: selected.length > 1,
-                  ));
-                });
-              },
-              child: const Text('Add', style: TextStyle(color: Color(0xFF4FC3F7), fontSize: 12)),
-            ),
-          ],
-        ),
-      ),
-    );
+    setState(() {
+      _graphs.add(GraphConfig.defaultFor(widget.source.channels));
+    });
+  }
+
+  void _toggleElectrode(int graphIndex, int electrode) {
+    setState(() {
+      final g = _graphs[graphIndex];
+      final active = Set<int>.from(g.activeElectrodes);
+      if (active.contains(electrode)) {
+        active.remove(electrode);
+      } else {
+        active.add(electrode);
+      }
+      _graphs[graphIndex] = g.copyWith(activeElectrodes: active);
+    });
   }
 
   void _toggleAvg(int index) {
@@ -135,6 +95,7 @@ class _EegDashboardState extends State<EegDashboard> {
                         controller: _controller,
                         onRemove: _graphs.length > 1 ? () => _removeGraph(i) : null,
                         onToggleAvg: () => _toggleAvg(i),
+                        onToggleElectrode: (e) => _toggleElectrode(i, e),
                       ),
                     ),
                 ],
@@ -208,6 +169,7 @@ class _GraphCard extends StatelessWidget {
   final ChartController controller;
   final VoidCallback? onRemove;
   final VoidCallback onToggleAvg;
+  final ValueChanged<int> onToggleElectrode;
 
   const _GraphCard({
     super.key,
@@ -216,6 +178,7 @@ class _GraphCard extends StatelessWidget {
     required this.controller,
     this.onRemove,
     required this.onToggleAvg,
+    required this.onToggleElectrode,
   });
 
   @override
@@ -226,7 +189,12 @@ class _GraphCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _Sidebar(config: config, onRemove: onRemove, onToggleAvg: onToggleAvg),
+          _Sidebar(
+            config: config,
+            onRemove: onRemove,
+            onToggleAvg: onToggleAvg,
+            onToggleElectrode: onToggleElectrode,
+          ),
           Expanded(
             child: EegChartWidget(
               source: source,
@@ -244,18 +212,20 @@ class _Sidebar extends StatelessWidget {
   final GraphConfig config;
   final VoidCallback? onRemove;
   final VoidCallback onToggleAvg;
+  final ValueChanged<int> onToggleElectrode;
 
   const _Sidebar({
     required this.config,
     this.onRemove,
     required this.onToggleAvg,
+    required this.onToggleElectrode,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: 64,
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
       decoration: const BoxDecoration(
         color: Color(0xFF16181F),
         border: Border(right: BorderSide(color: Color(0xFF2A2D37))),
@@ -263,44 +233,88 @@ class _Sidebar extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            config.label,
-            style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              GestureDetector(
+                onTap: onToggleAvg,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: config.avgMode ? const Color(0xFF4FC3F7).withAlpha(40) : Colors.transparent,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: config.avgMode ? const Color(0xFF4FC3F7) : const Color(0xFF4A4D57),
+                    ),
+                  ),
+                  child: Text(
+                    'avg',
+                    style: TextStyle(
+                      color: config.avgMode ? const Color(0xFF4FC3F7) : const Color(0xFF6B7280),
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              if (onRemove != null) ...[
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: onRemove,
+                  child: const Icon(Icons.close, color: Color(0xFF6B7280), size: 10),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 4),
-          GestureDetector(
-            onTap: onToggleAvg,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: config.avgMode ? const Color(0xFF4FC3F7).withAlpha(40) : Colors.transparent,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: config.avgMode ? const Color(0xFF4FC3F7) : const Color(0xFF4A4D57),
-                  width: 1,
-                ),
-              ),
-              child: Text(
-                'avg',
-                style: TextStyle(
-                  color: config.avgMode ? const Color(0xFF4FC3F7) : const Color(0xFF6B7280),
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          if (onRemove != null) ...[
-            const SizedBox(height: 4),
-            GestureDetector(
-              onTap: onRemove,
-              child: const Icon(Icons.close, color: Color(0xFF6B7280), size: 14),
+          for (int i = 0; i < config.allElectrodes.length; i++) ...[
+            if (i > 0) const SizedBox(height: 2),
+            _ElectrodeChip(
+              electrode: config.allElectrodes[i],
+              active: config.activeElectrodes.contains(config.allElectrodes[i]),
+              onTap: () => onToggleElectrode(config.allElectrodes[i]),
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ElectrodeChip extends StatelessWidget {
+  final int electrode;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _ElectrodeChip({
+    required this.electrode,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = channelColor(electrode);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        decoration: BoxDecoration(
+          color: active ? color.withAlpha(40) : Colors.transparent,
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(
+            color: active ? color : color.withAlpha(60),
+          ),
+        ),
+        child: Text(
+          channelName(electrode),
+          style: TextStyle(
+            color: active ? color : color.withAlpha(120),
+            fontSize: 8,
+            fontWeight: active ? FontWeight.bold : FontWeight.normal,
+          ),
+          textAlign: TextAlign.center,
+        ),
       ),
     );
   }
