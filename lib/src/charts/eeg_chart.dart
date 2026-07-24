@@ -149,11 +149,12 @@ class _EegChartWidgetState extends State<EegChartWidget> {
   Widget _buildControls() {
     final config = widget.config;
     final activeList = config.allElectrodes;
+    final itemH = 22.0;
     return Positioned(
-      left: 8,
-      top: 8,
+      right: 8,
+      bottom: 40,
       child: Container(
-        padding: const EdgeInsets.all(6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: const Color(0xBB111218),
           borderRadius: BorderRadius.circular(6),
@@ -161,44 +162,32 @@ class _EegChartWidgetState extends State<EegChartWidget> {
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            if (widget.onRemove != null)
-              GestureDetector(
-                onTap: widget.onRemove,
-                child: const Icon(Icons.remove_circle_outline, color: Color(0xFF6B7280), size: 16),
-              ),
-            const SizedBox(height: 4),
-            GestureDetector(
-              onTap: widget.onToggleAvg,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: config.avgMode ? const Color(0xFF4FC3F7).withAlpha(40) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color: config.avgMode ? const Color(0xFF4FC3F7) : const Color(0xFF4A4D57),
-                  ),
-                ),
-                child: Text(
-                  'avg',
-                  style: TextStyle(
-                    color: config.avgMode ? const Color(0xFF4FC3F7) : const Color(0xFF6B7280),
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
             for (int i = 0; i < activeList.length; i++) ...[
-              if (i > 0) const SizedBox(height: 3),
-              _SensorChip(
-                electrode: activeList[i],
+              if (i > 0) SizedBox(height: itemH - 16),
+              _LegendRow(
+                color: channelColor(activeList[i]),
+                label: channelName(activeList[i]),
                 active: config.activeElectrodes.contains(activeList[i]),
                 onTap: widget.onToggleElectrode != null
                     ? () => widget.onToggleElectrode!(activeList[i])
                     : null,
+              ),
+            ],
+            SizedBox(height: itemH - 14),
+            _LegendRow(
+              color: const Color(0xFF4FC3F7),
+              label: 'avg',
+              active: config.avgMode,
+              bold: true,
+              onTap: widget.onToggleAvg,
+            ),
+            if (widget.onRemove != null) ...[
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: widget.onRemove,
+                child: const Icon(Icons.remove_circle_outline, color: Color(0xFF6B7280), size: 14),
               ),
             ],
           ],
@@ -208,37 +197,48 @@ class _EegChartWidgetState extends State<EegChartWidget> {
   }
 }
 
-class _SensorChip extends StatelessWidget {
-  final int electrode;
+class _LegendRow extends StatelessWidget {
+  final Color color;
+  final String label;
   final bool active;
+  final bool bold;
   final VoidCallback? onTap;
 
-  const _SensorChip({
-    required this.electrode,
+  const _LegendRow({
+    required this.color,
+    required this.label,
     required this.active,
+    this.bold = false,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = channelColor(electrode);
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: active ? color.withAlpha(40) : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: active ? color : color.withAlpha(60)),
-        ),
-        child: Text(
-          channelName(electrode),
-          style: TextStyle(
-            color: active ? color : color.withAlpha(120),
-            fontSize: 10,
-            fontWeight: active ? FontWeight.bold : FontWeight.normal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: active ? Colors.white : Colors.white38,
+              fontSize: 11,
+              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+            ),
           ),
-        ),
+          const SizedBox(width: 5),
+          SizedBox(
+            width: 8,
+            height: 8,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: active ? color : color.withAlpha(60),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
