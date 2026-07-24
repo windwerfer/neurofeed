@@ -128,6 +128,7 @@ class _EegDashboardState extends State<EegDashboard> {
   }
 
   Widget _buildHeader() {
+    final isLive = _controller.autoScroll;
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -145,20 +146,28 @@ class _EegDashboardState extends State<EegDashboard> {
             '${_controller.timeWindowSecs.toStringAsFixed(0)}s',
             style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11, fontFeatures: [FontFeature.tabularFigures()]),
           ),
-          const SizedBox(width: 8),
-          if (!_controller.autoScroll)
-            GestureDetector(
-              onTap: () => _controller.enableAutoScroll(widget.source),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00AA00).withAlpha(60),
-                  borderRadius: BorderRadius.circular(4),
+          const Spacer(),
+          GestureDetector(
+            onTap: () => _controller.enableAutoScroll(widget.source),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: isLive ? const Color(0xFF00AA00).withAlpha(60) : Colors.transparent,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: isLive ? const Color(0xFF00AA00) : const Color(0xFF4A4D57)),
+              ),
+              child: Text(
+                'LIVE',
+                style: TextStyle(
+                  color: isLive ? const Color(0xFF66FF66) : const Color(0xFF4A4D57),
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
                 ),
-                child: const Text('LIVE', style: TextStyle(color: Color(0xFF66FF66), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
               ),
             ),
-          const Spacer(),
+          ),
+          const SizedBox(width: 8),
           _headerBtn(Icons.add_box_outlined, 'Add graph', _addGraph),
           const SizedBox(width: 4),
           _headerBtn(Icons.refresh, 'Reset defaults', _reset),

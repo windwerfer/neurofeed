@@ -282,7 +282,6 @@ class _EegChartPainter extends CustomPainter {
     }
     _drawBorder(canvas);
     _drawAxisLabels(canvas);
-    _drawLiveIndicator(canvas);
   }
 
   void _computeLayout() {
@@ -314,34 +313,6 @@ class _EegChartPainter extends CustomPainter {
     _niceMax = _yMax + padding;
     _yRange = _niceMax - _niceMin;
     _yScale = _chartRect.height / _yRange;
-  }
-
-  void _drawLiveIndicator(Canvas canvas) {
-    final x = _chartRect.right - 52;
-    final y = _chartRect.top - 20;
-    final r = RRect.fromRectAndRadius(
-      Rect.fromLTWH(x, y, 52, 20),
-      const Radius.circular(4),
-    );
-
-    canvas.drawRRect(
-      r,
-      Paint()..color = autoScroll ? const Color(0xCC00AA00) : const Color(0xCC444444),
-    );
-
-    final tp = TextPainter(
-      text: TextSpan(
-        text: 'LIVE',
-        style: TextStyle(
-          color: autoScroll ? const Color(0xFF66FF66) : const Color(0xFF888888),
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(canvas, Offset(x + (52 - tp.width) / 2, y + (20 - tp.height) / 2));
   }
 
   void _drawBackground(Canvas canvas) {
