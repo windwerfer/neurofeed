@@ -150,7 +150,7 @@ class _EegChartWidgetState extends State<EegChartWidget> {
     final config = widget.config;
     final activeList = config.allElectrodes;
     return Positioned(
-      right: 8,
+      left: 8,
       top: 8,
       child: Container(
         padding: const EdgeInsets.all(6),
@@ -161,8 +161,36 @@ class _EegChartWidgetState extends State<EegChartWidget> {
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (widget.onRemove != null)
+              GestureDetector(
+                onTap: widget.onRemove,
+                child: const Icon(Icons.remove_circle_outline, color: Color(0xFF6B7280), size: 16),
+              ),
+            const SizedBox(height: 4),
+            GestureDetector(
+              onTap: widget.onToggleAvg,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: config.avgMode ? const Color(0xFF4FC3F7).withAlpha(40) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: config.avgMode ? const Color(0xFF4FC3F7) : const Color(0xFF4A4D57),
+                  ),
+                ),
+                child: Text(
+                  'avg',
+                  style: TextStyle(
+                    color: config.avgMode ? const Color(0xFF4FC3F7) : const Color(0xFF6B7280),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
             for (int i = 0; i < activeList.length; i++) ...[
               if (i > 0) const SizedBox(height: 3),
               _SensorChip(
@@ -173,40 +201,6 @@ class _EegChartWidgetState extends State<EegChartWidget> {
                     : null,
               ),
             ],
-            const SizedBox(height: 6),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GestureDetector(
-                  onTap: widget.onToggleAvg,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: config.avgMode ? const Color(0xFF4FC3F7).withAlpha(40) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(
-                        color: config.avgMode ? const Color(0xFF4FC3F7) : const Color(0xFF4A4D57),
-                      ),
-                    ),
-                    child: Text(
-                      'avg',
-                      style: TextStyle(
-                        color: config.avgMode ? const Color(0xFF4FC3F7) : const Color(0xFF6B7280),
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                if (widget.onRemove != null) ...[
-                  const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: widget.onRemove,
-                    child: const Icon(Icons.close, color: Color(0xFF6B7280), size: 14),
-                  ),
-                ],
-              ],
-            ),
           ],
         ),
       ),
