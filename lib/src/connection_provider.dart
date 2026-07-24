@@ -209,7 +209,12 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         );
         _startContinuousScan();
       case MuseEventDto_Eeg():
-        liveCache.appendEeg(event.field0);
+        final eeg = event.field0;
+        if (eeg.index % 50 == 0) {
+          final last = eeg.samples.isNotEmpty ? eeg.samples.last : 0.0;
+          debugPrint('[eeg] ch=${eeg.electrode} idx=${eeg.index} ts=${eeg.timestamp} n=${eeg.samples.length} last=$last');
+        }
+        liveCache.appendEeg(eeg);
       case MuseEventDto_Telemetry():
         state = state.copyWith(
           telemetry: event.field0,
