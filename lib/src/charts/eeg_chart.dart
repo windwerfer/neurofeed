@@ -517,7 +517,9 @@ class _EegChartPainter extends CustomPainter {
         _niceGridValues(-windowSecs, 0, _chartRect.width, 60);
     for (final offset in offsetLines) {
       final px = _chartRect.left + (offset + windowSecs) * _xScale;
-      final text = _formatTimeOffset(offset);
+      final text = autoScroll
+          ? _formatTimeOffset(offset)
+          : _formatTimestamp(visibleEnd + offset);
       final tp = TextPainter(
         text: TextSpan(text: text, style: labelStyle),
         textDirection: TextDirection.ltr,
@@ -533,6 +535,13 @@ class _EegChartPainter extends CustomPainter {
         ? '${abs.toStringAsFixed(abs < 10 ? 1 : 0)}s'
         : '${(abs / 60).floor()}m${(abs % 60).toInt()}s';
     return offset < 0 ? '-$label' : '+$label';
+  }
+
+  String _formatTimestamp(double t) {
+    final dt = DateTime.fromMillisecondsSinceEpoch((t * 1000).toInt());
+    return '${dt.hour.toString().padLeft(2, '0')}:'
+        '${dt.minute.toString().padLeft(2, '0')}:'
+        '${dt.second.toString().padLeft(2, '0')}';
   }
 
   void _drawLegend(Canvas canvas) {
