@@ -33,7 +33,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  BandsDto dco_decode_bands_dto(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  BandsDto dco_decode_box_autoadd_bands_dto(dynamic raw);
 
   @protected
   ControlDto dco_decode_box_autoadd_control_dto(dynamic raw);
@@ -139,7 +145,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  BandsDto sse_decode_bands_dto(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  BandsDto sse_decode_box_autoadd_bands_dto(SseDeserializer deserializer);
 
   @protected
   ControlDto sse_decode_box_autoadd_control_dto(SseDeserializer deserializer);
@@ -256,7 +268,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_bands_dto(BandsDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_bands_dto(
+    BandsDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_control_dto(

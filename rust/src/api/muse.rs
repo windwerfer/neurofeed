@@ -91,12 +91,26 @@ pub struct ControlDto {
     pub fields: std::collections::HashMap<String, String>,
 }
 
+/// Band power estimates for a single electrode.
+/// Bands: [delta, theta, alpha, beta, gamma] in µV²/Hz.
+#[frb(dart_metadata = ("freezed",))]
+pub struct BandsDto {
+    pub electrode: i32,
+    pub timestamp: f64,
+    pub delta: f64,
+    pub theta: f64,
+    pub alpha: f64,
+    pub beta: f64,
+    pub gamma: f64,
+}
+
 /// All events streamed from the headset to the UI.
 #[frb(dart_metadata = ("freezed",))]
 pub enum MuseEventDto {
     Connected(String),
     Disconnected,
     Eeg(EegDto),
+    Bands(BandsDto),
     Ppg(PpgDto),
     Telemetry(TelemetrySnapshot),
     Accelerometer(ImuDto),
@@ -323,6 +337,7 @@ fn spawn_event_forwarder() {
         #[derive(Default)]
         struct PktCounts {
             eeg: u64,
+            bands: u64,
             ppg: u64,
             telemetry: u64,
             accelerometer: u64,
@@ -355,14 +370,21 @@ fn spawn_event_forwarder() {
                 }
                 if last_print.elapsed() >= std::time::Duration::from_secs(1) {
                     log::info!(
-                        "[muse] pkt/s: eeg={} ppg={} telem={} accel={} gyro={} ctrl={} conn={} other={}",
-                        counts.eeg, counts.ppg, counts.telemetry, counts.accelerometer,
-                        counts.gyroscope, counts.control, counts.connected, counts.other,
+                        "[muse] pkt/s: eeg={} bands={} ppg={} telem={} accel={} gyro={} ctrl={} conn={} other={}",
+                        counts.eeg, counts.bands, counts.ppg, counts.telemetry,
+                        counts.accelerometer, counts.gyroscope, counts.control,
+                        counts.connected, counts.other,
                     );
                     counts = PktCounts::default();
                     last_print = tokio::time::Instant::now();
                 }
                 let dto = map_event(ev);
+                let is_eeg = matches!(&dto, MuseEventDto::Eeg(_));
+                let electrode = if let MuseEventDto::Eeg(ref e) = dto {
+                    Some((e.electrode, e.timestamp, e.samples.clone()))
+                } else {
+                    None
+                };
                 let should_stop = {
                     let mut guard = state().inner.lock().unwrap();
                     match guard.sink.as_ref() {
@@ -379,6 +401,29 @@ fn spawn_event_forwarder() {
                 };
                 if should_stop {
                     break;
+                }
+                if is_eeg {
+                    if let Some((electrode, timestamp, samples)) = electrode {
+                        let bands = compute_bands(electrode, timestamp, &samples);
+                        counts.bands += 1;
+                        let should_stop = {
+                            let mut guard = state().inner.lock().unwrap();
+                            match guard.sink.as_ref() {
+                                Some(sink) => {
+                                    if sink.add(MuseEventDto::Bands(bands)).is_err() {
+                                        guard.sink = None;
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                None => false,
+                            }
+                        };
+                        if should_stop {
+                            break;
+                        }
+                    }
                 }
             }
             // Receiver ended (device disconnected).  Only clear active state
@@ -428,6 +473,34 @@ fn map_event(ev: MuseEvent) -> MuseEventDto {
                 .map(|(k, v)| (k, v.to_string()))
                 .collect(),
         }),
+    }
+}
+
+fn compute_bands(electrode: i32, timestamp: f64, samples: &[f64]) -> BandsDto {
+    let n = samples.len() as f64;
+    let sample_rate = 256.0;
+    let band_centers = [(2.0, "delta"), (6.0, "theta"), (10.0, "alpha"), (22.0, "beta"), (40.0, "gamma")];
+
+    let mut powers = [0.0f64; 5];
+    for (i, &(freq, _)) in band_centers.iter().enumerate() {
+        let mut re = 0.0;
+        let mut im = 0.0;
+        for (k, &x) in samples.iter().enumerate() {
+            let angle = -2.0 * std::f64::consts::PI * freq * k as f64 / sample_rate;
+            re += x * angle.cos();
+            im += x * angle.sin();
+        }
+        powers[i] = (re * re + im * im) / (n * n);
+    }
+
+    BandsDto {
+        electrode,
+        timestamp,
+        delta: powers[0],
+        theta: powers[1],
+        alpha: powers[2],
+        beta: powers[3],
+        gamma: powers[4],
     }
 }
 

@@ -8,20 +8,31 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'muse.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `map_event`, `map_imu`, `spawn_event_forwarder`
+// These functions are ignored because they are not marked as `pub`: `compute_bands`, `map_event`, `map_imu`, `spawn_event_forwarder`
 
 /// Scan for nearby Muse devices for `timeout_secs` seconds and return what was
-/// found. Results are cached on the Rust side so `connect` can resolve the id
-/// back to a live peripheral.
+/// found. Results are **merged** into the existing device cache so that the UI
+/// can call `scan` repeatedly in short chunks without losing previously
+/// discovered peripherals (which `connect` needs via `MuseDevice`).
 Future<List<DeviceInfo>> scan({BigInt? timeoutSecs}) =>
     RustLib.instance.api.crateApiMuseScan(timeoutSecs: timeoutSecs);
 
 /// Connect to a previously discovered device by its BLE id and begin streaming.
 /// Returns the connection status on success.
+///
+/// The entire operation is guarded by an overall timeout so the caller never
+/// waits more than ≈18 s.  Inside, each BLE step already has its own shorter
+/// timeout (10 s connect, 15 s discover services, 8 s startup commands).
 Future<ConnectionStatus> connect({required String deviceId}) =>
     RustLib.instance.api.crateApiMuseConnect(deviceId: deviceId);
 
 /// Disconnect from the active device, if any.
+///
+/// Takes the active connection and immediately clears `guard.events` so the
+/// event forwarder stops waiting.  Then sends the BLE disconnect command and
+/// fires `Disconnected` through the Dart sink directly — the UI updates
+/// straight away instead of waiting for the disconnect-watcher event (which
+/// can be delayed on some BLE stacks).
 Future<void> disconnect() => RustLib.instance.api.crateApiMuseDisconnect();
 
 /// Current connection status (used on app launch to restore UI state).
@@ -40,6 +51,21 @@ Future<bool> isConnected() => RustLib.instance.api.crateApiMuseIsConnected();
 /// connection. The Rust side forwards events into the provided `StreamSink`.
 Stream<MuseEventDto> subscribeEvents() =>
     RustLib.instance.api.crateApiMuseSubscribeEvents();
+
+/// Band power estimates for a single electrode.
+/// Bands: [delta, theta, alpha, beta, gamma] in µV²/Hz.
+@freezed
+sealed class BandsDto with _$BandsDto {
+  const factory BandsDto({
+    required int electrode,
+    required double timestamp,
+    required double delta,
+    required double theta,
+    required double alpha,
+    required double beta,
+    required double gamma,
+  }) = _BandsDto;
+}
 
 /// Connection / link status reported to the UI.
 @freezed
@@ -98,6 +124,7 @@ sealed class MuseEventDto with _$MuseEventDto {
   const factory MuseEventDto.connected(String field0) = MuseEventDto_Connected;
   const factory MuseEventDto.disconnected() = MuseEventDto_Disconnected;
   const factory MuseEventDto.eeg(EegDto field0) = MuseEventDto_Eeg;
+  const factory MuseEventDto.bands(BandsDto field0) = MuseEventDto_Bands;
   const factory MuseEventDto.ppg(PpgDto field0) = MuseEventDto_Ppg;
   const factory MuseEventDto.telemetry(TelemetrySnapshot field0) =
       MuseEventDto_Telemetry;

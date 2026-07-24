@@ -6,6 +6,7 @@ import 'package:muse_ml/src/app.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/charts/live_cache.dart';
+import 'package:muse_ml/src/charts/band_cache.dart';
 import 'package:muse_ml/src/charts/session_recorder.dart';
 
 /// Duration of each scan chunk when scanning continuously.
@@ -45,6 +46,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   final StreamController<MuseEventDto> _eventController =
       StreamController<MuseEventDto>.broadcast();
   final LiveCache liveCache = LiveCache();
+  final BandCache bandCache = BandCache();
   final SessionRecorder sessionRecorder = SessionRecorder();
 
   Stream<MuseEventDto> get eventStream => _eventController.stream;
@@ -218,6 +220,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         //   debugPrint('[eeg] ch=${eeg.electrode} idx=${eeg.index} ts=${eeg.timestamp} n=${eeg.samples.length} last=$last');
         // }
         liveCache.appendEeg(eeg);
+      case MuseEventDto_Bands():
+        bandCache.appendBands(event.field0);
       case MuseEventDto_Telemetry():
         state = state.copyWith(
           telemetry: event.field0,

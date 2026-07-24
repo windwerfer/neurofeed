@@ -16,6 +16,279 @@ final _privateConstructorUsedError = UnsupportedError(
 );
 
 /// @nodoc
+mixin _$BandsDto {
+  int get electrode => throw _privateConstructorUsedError;
+  double get timestamp => throw _privateConstructorUsedError;
+  double get delta => throw _privateConstructorUsedError;
+  double get theta => throw _privateConstructorUsedError;
+  double get alpha => throw _privateConstructorUsedError;
+  double get beta => throw _privateConstructorUsedError;
+  double get gamma => throw _privateConstructorUsedError;
+
+  /// Create a copy of BandsDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $BandsDtoCopyWith<BandsDto> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $BandsDtoCopyWith<$Res> {
+  factory $BandsDtoCopyWith(BandsDto value, $Res Function(BandsDto) then) =
+      _$BandsDtoCopyWithImpl<$Res, BandsDto>;
+  @useResult
+  $Res call({
+    int electrode,
+    double timestamp,
+    double delta,
+    double theta,
+    double alpha,
+    double beta,
+    double gamma,
+  });
+}
+
+/// @nodoc
+class _$BandsDtoCopyWithImpl<$Res, $Val extends BandsDto>
+    implements $BandsDtoCopyWith<$Res> {
+  _$BandsDtoCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of BandsDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? electrode = null,
+    Object? timestamp = null,
+    Object? delta = null,
+    Object? theta = null,
+    Object? alpha = null,
+    Object? beta = null,
+    Object? gamma = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            electrode: null == electrode
+                ? _value.electrode
+                : electrode // ignore: cast_nullable_to_non_nullable
+                      as int,
+            timestamp: null == timestamp
+                ? _value.timestamp
+                : timestamp // ignore: cast_nullable_to_non_nullable
+                      as double,
+            delta: null == delta
+                ? _value.delta
+                : delta // ignore: cast_nullable_to_non_nullable
+                      as double,
+            theta: null == theta
+                ? _value.theta
+                : theta // ignore: cast_nullable_to_non_nullable
+                      as double,
+            alpha: null == alpha
+                ? _value.alpha
+                : alpha // ignore: cast_nullable_to_non_nullable
+                      as double,
+            beta: null == beta
+                ? _value.beta
+                : beta // ignore: cast_nullable_to_non_nullable
+                      as double,
+            gamma: null == gamma
+                ? _value.gamma
+                : gamma // ignore: cast_nullable_to_non_nullable
+                      as double,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$BandsDtoImplCopyWith<$Res>
+    implements $BandsDtoCopyWith<$Res> {
+  factory _$$BandsDtoImplCopyWith(
+    _$BandsDtoImpl value,
+    $Res Function(_$BandsDtoImpl) then,
+  ) = __$$BandsDtoImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({
+    int electrode,
+    double timestamp,
+    double delta,
+    double theta,
+    double alpha,
+    double beta,
+    double gamma,
+  });
+}
+
+/// @nodoc
+class __$$BandsDtoImplCopyWithImpl<$Res>
+    extends _$BandsDtoCopyWithImpl<$Res, _$BandsDtoImpl>
+    implements _$$BandsDtoImplCopyWith<$Res> {
+  __$$BandsDtoImplCopyWithImpl(
+    _$BandsDtoImpl _value,
+    $Res Function(_$BandsDtoImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of BandsDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? electrode = null,
+    Object? timestamp = null,
+    Object? delta = null,
+    Object? theta = null,
+    Object? alpha = null,
+    Object? beta = null,
+    Object? gamma = null,
+  }) {
+    return _then(
+      _$BandsDtoImpl(
+        electrode: null == electrode
+            ? _value.electrode
+            : electrode // ignore: cast_nullable_to_non_nullable
+                  as int,
+        timestamp: null == timestamp
+            ? _value.timestamp
+            : timestamp // ignore: cast_nullable_to_non_nullable
+                  as double,
+        delta: null == delta
+            ? _value.delta
+            : delta // ignore: cast_nullable_to_non_nullable
+                  as double,
+        theta: null == theta
+            ? _value.theta
+            : theta // ignore: cast_nullable_to_non_nullable
+                  as double,
+        alpha: null == alpha
+            ? _value.alpha
+            : alpha // ignore: cast_nullable_to_non_nullable
+                  as double,
+        beta: null == beta
+            ? _value.beta
+            : beta // ignore: cast_nullable_to_non_nullable
+                  as double,
+        gamma: null == gamma
+            ? _value.gamma
+            : gamma // ignore: cast_nullable_to_non_nullable
+                  as double,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$BandsDtoImpl implements _BandsDto {
+  const _$BandsDtoImpl({
+    required this.electrode,
+    required this.timestamp,
+    required this.delta,
+    required this.theta,
+    required this.alpha,
+    required this.beta,
+    required this.gamma,
+  });
+
+  @override
+  final int electrode;
+  @override
+  final double timestamp;
+  @override
+  final double delta;
+  @override
+  final double theta;
+  @override
+  final double alpha;
+  @override
+  final double beta;
+  @override
+  final double gamma;
+
+  @override
+  String toString() {
+    return 'BandsDto(electrode: $electrode, timestamp: $timestamp, delta: $delta, theta: $theta, alpha: $alpha, beta: $beta, gamma: $gamma)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$BandsDtoImpl &&
+            (identical(other.electrode, electrode) ||
+                other.electrode == electrode) &&
+            (identical(other.timestamp, timestamp) ||
+                other.timestamp == timestamp) &&
+            (identical(other.delta, delta) || other.delta == delta) &&
+            (identical(other.theta, theta) || other.theta == theta) &&
+            (identical(other.alpha, alpha) || other.alpha == alpha) &&
+            (identical(other.beta, beta) || other.beta == beta) &&
+            (identical(other.gamma, gamma) || other.gamma == gamma));
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    runtimeType,
+    electrode,
+    timestamp,
+    delta,
+    theta,
+    alpha,
+    beta,
+    gamma,
+  );
+
+  /// Create a copy of BandsDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$BandsDtoImplCopyWith<_$BandsDtoImpl> get copyWith =>
+      __$$BandsDtoImplCopyWithImpl<_$BandsDtoImpl>(this, _$identity);
+}
+
+abstract class _BandsDto implements BandsDto {
+  const factory _BandsDto({
+    required final int electrode,
+    required final double timestamp,
+    required final double delta,
+    required final double theta,
+    required final double alpha,
+    required final double beta,
+    required final double gamma,
+  }) = _$BandsDtoImpl;
+
+  @override
+  int get electrode;
+  @override
+  double get timestamp;
+  @override
+  double get delta;
+  @override
+  double get theta;
+  @override
+  double get alpha;
+  @override
+  double get beta;
+  @override
+  double get gamma;
+
+  /// Create a copy of BandsDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$BandsDtoImplCopyWith<_$BandsDtoImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
 mixin _$ConnectionStatus {
   bool get connected => throw _privateConstructorUsedError;
   String get name => throw _privateConstructorUsedError;
@@ -888,6 +1161,7 @@ mixin _$MuseEventDto {
     required TResult Function(String field0) connected,
     required TResult Function() disconnected,
     required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
     required TResult Function(PpgDto field0) ppg,
     required TResult Function(TelemetrySnapshot field0) telemetry,
     required TResult Function(ImuDto field0) accelerometer,
@@ -899,6 +1173,7 @@ mixin _$MuseEventDto {
     TResult? Function(String field0)? connected,
     TResult? Function()? disconnected,
     TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
     TResult? Function(PpgDto field0)? ppg,
     TResult? Function(TelemetrySnapshot field0)? telemetry,
     TResult? Function(ImuDto field0)? accelerometer,
@@ -910,6 +1185,7 @@ mixin _$MuseEventDto {
     TResult Function(String field0)? connected,
     TResult Function()? disconnected,
     TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
     TResult Function(PpgDto field0)? ppg,
     TResult Function(TelemetrySnapshot field0)? telemetry,
     TResult Function(ImuDto field0)? accelerometer,
@@ -922,6 +1198,7 @@ mixin _$MuseEventDto {
     required TResult Function(MuseEventDto_Connected value) connected,
     required TResult Function(MuseEventDto_Disconnected value) disconnected,
     required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
     required TResult Function(MuseEventDto_Ppg value) ppg,
     required TResult Function(MuseEventDto_Telemetry value) telemetry,
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
@@ -933,6 +1210,7 @@ mixin _$MuseEventDto {
     TResult? Function(MuseEventDto_Connected value)? connected,
     TResult? Function(MuseEventDto_Disconnected value)? disconnected,
     TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
     TResult? Function(MuseEventDto_Ppg value)? ppg,
     TResult? Function(MuseEventDto_Telemetry value)? telemetry,
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -944,6 +1222,7 @@ mixin _$MuseEventDto {
     TResult Function(MuseEventDto_Connected value)? connected,
     TResult Function(MuseEventDto_Disconnected value)? disconnected,
     TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
     TResult Function(MuseEventDto_Ppg value)? ppg,
     TResult Function(MuseEventDto_Telemetry value)? telemetry,
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -1052,6 +1331,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     required TResult Function(String field0) connected,
     required TResult Function() disconnected,
     required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
     required TResult Function(PpgDto field0) ppg,
     required TResult Function(TelemetrySnapshot field0) telemetry,
     required TResult Function(ImuDto field0) accelerometer,
@@ -1067,6 +1347,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult? Function(String field0)? connected,
     TResult? Function()? disconnected,
     TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
     TResult? Function(PpgDto field0)? ppg,
     TResult? Function(TelemetrySnapshot field0)? telemetry,
     TResult? Function(ImuDto field0)? accelerometer,
@@ -1082,6 +1363,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult Function(String field0)? connected,
     TResult Function()? disconnected,
     TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
     TResult Function(PpgDto field0)? ppg,
     TResult Function(TelemetrySnapshot field0)? telemetry,
     TResult Function(ImuDto field0)? accelerometer,
@@ -1101,6 +1383,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     required TResult Function(MuseEventDto_Connected value) connected,
     required TResult Function(MuseEventDto_Disconnected value) disconnected,
     required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
     required TResult Function(MuseEventDto_Ppg value) ppg,
     required TResult Function(MuseEventDto_Telemetry value) telemetry,
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
@@ -1116,6 +1399,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult? Function(MuseEventDto_Connected value)? connected,
     TResult? Function(MuseEventDto_Disconnected value)? disconnected,
     TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
     TResult? Function(MuseEventDto_Ppg value)? ppg,
     TResult? Function(MuseEventDto_Telemetry value)? telemetry,
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -1131,6 +1415,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult Function(MuseEventDto_Connected value)? connected,
     TResult Function(MuseEventDto_Disconnected value)? disconnected,
     TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
     TResult Function(MuseEventDto_Ppg value)? ppg,
     TResult Function(MuseEventDto_Telemetry value)? telemetry,
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -1206,6 +1491,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     required TResult Function(String field0) connected,
     required TResult Function() disconnected,
     required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
     required TResult Function(PpgDto field0) ppg,
     required TResult Function(TelemetrySnapshot field0) telemetry,
     required TResult Function(ImuDto field0) accelerometer,
@@ -1221,6 +1507,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult? Function(String field0)? connected,
     TResult? Function()? disconnected,
     TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
     TResult? Function(PpgDto field0)? ppg,
     TResult? Function(TelemetrySnapshot field0)? telemetry,
     TResult? Function(ImuDto field0)? accelerometer,
@@ -1236,6 +1523,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult Function(String field0)? connected,
     TResult Function()? disconnected,
     TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
     TResult Function(PpgDto field0)? ppg,
     TResult Function(TelemetrySnapshot field0)? telemetry,
     TResult Function(ImuDto field0)? accelerometer,
@@ -1255,6 +1543,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     required TResult Function(MuseEventDto_Connected value) connected,
     required TResult Function(MuseEventDto_Disconnected value) disconnected,
     required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
     required TResult Function(MuseEventDto_Ppg value) ppg,
     required TResult Function(MuseEventDto_Telemetry value) telemetry,
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
@@ -1270,6 +1559,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult? Function(MuseEventDto_Connected value)? connected,
     TResult? Function(MuseEventDto_Disconnected value)? disconnected,
     TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
     TResult? Function(MuseEventDto_Ppg value)? ppg,
     TResult? Function(MuseEventDto_Telemetry value)? telemetry,
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -1285,6 +1575,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult Function(MuseEventDto_Connected value)? connected,
     TResult Function(MuseEventDto_Disconnected value)? disconnected,
     TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
     TResult Function(MuseEventDto_Ppg value)? ppg,
     TResult Function(MuseEventDto_Telemetry value)? telemetry,
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -1392,6 +1683,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     required TResult Function(String field0) connected,
     required TResult Function() disconnected,
     required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
     required TResult Function(PpgDto field0) ppg,
     required TResult Function(TelemetrySnapshot field0) telemetry,
     required TResult Function(ImuDto field0) accelerometer,
@@ -1407,6 +1699,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult? Function(String field0)? connected,
     TResult? Function()? disconnected,
     TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
     TResult? Function(PpgDto field0)? ppg,
     TResult? Function(TelemetrySnapshot field0)? telemetry,
     TResult? Function(ImuDto field0)? accelerometer,
@@ -1422,6 +1715,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult Function(String field0)? connected,
     TResult Function()? disconnected,
     TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
     TResult Function(PpgDto field0)? ppg,
     TResult Function(TelemetrySnapshot field0)? telemetry,
     TResult Function(ImuDto field0)? accelerometer,
@@ -1441,6 +1735,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     required TResult Function(MuseEventDto_Connected value) connected,
     required TResult Function(MuseEventDto_Disconnected value) disconnected,
     required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
     required TResult Function(MuseEventDto_Ppg value) ppg,
     required TResult Function(MuseEventDto_Telemetry value) telemetry,
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
@@ -1456,6 +1751,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult? Function(MuseEventDto_Connected value)? connected,
     TResult? Function(MuseEventDto_Disconnected value)? disconnected,
     TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
     TResult? Function(MuseEventDto_Ppg value)? ppg,
     TResult? Function(MuseEventDto_Telemetry value)? telemetry,
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -1471,6 +1767,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult Function(MuseEventDto_Connected value)? connected,
     TResult Function(MuseEventDto_Disconnected value)? disconnected,
     TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
     TResult Function(MuseEventDto_Ppg value)? ppg,
     TResult Function(MuseEventDto_Telemetry value)? telemetry,
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -1495,6 +1792,207 @@ abstract class MuseEventDto_Eeg extends MuseEventDto {
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$MuseEventDto_EegImplCopyWith<_$MuseEventDto_EegImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$MuseEventDto_BandsImplCopyWith<$Res> {
+  factory _$$MuseEventDto_BandsImplCopyWith(
+    _$MuseEventDto_BandsImpl value,
+    $Res Function(_$MuseEventDto_BandsImpl) then,
+  ) = __$$MuseEventDto_BandsImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({BandsDto field0});
+
+  $BandsDtoCopyWith<$Res> get field0;
+}
+
+/// @nodoc
+class __$$MuseEventDto_BandsImplCopyWithImpl<$Res>
+    extends _$MuseEventDtoCopyWithImpl<$Res, _$MuseEventDto_BandsImpl>
+    implements _$$MuseEventDto_BandsImplCopyWith<$Res> {
+  __$$MuseEventDto_BandsImplCopyWithImpl(
+    _$MuseEventDto_BandsImpl _value,
+    $Res Function(_$MuseEventDto_BandsImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? field0 = null}) {
+    return _then(
+      _$MuseEventDto_BandsImpl(
+        null == field0
+            ? _value.field0
+            : field0 // ignore: cast_nullable_to_non_nullable
+                  as BandsDto,
+      ),
+    );
+  }
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $BandsDtoCopyWith<$Res> get field0 {
+    return $BandsDtoCopyWith<$Res>(_value.field0, (value) {
+      return _then(_value.copyWith(field0: value));
+    });
+  }
+}
+
+/// @nodoc
+
+class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
+  const _$MuseEventDto_BandsImpl(this.field0) : super._();
+
+  @override
+  final BandsDto field0;
+
+  @override
+  String toString() {
+    return 'MuseEventDto.bands(field0: $field0)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$MuseEventDto_BandsImpl &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$MuseEventDto_BandsImplCopyWith<_$MuseEventDto_BandsImpl> get copyWith =>
+      __$$MuseEventDto_BandsImplCopyWithImpl<_$MuseEventDto_BandsImpl>(
+        this,
+        _$identity,
+      );
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String field0) connected,
+    required TResult Function() disconnected,
+    required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
+    required TResult Function(PpgDto field0) ppg,
+    required TResult Function(TelemetrySnapshot field0) telemetry,
+    required TResult Function(ImuDto field0) accelerometer,
+    required TResult Function(ImuDto field0) gyroscope,
+    required TResult Function(ControlDto field0) control,
+  }) {
+    return bands(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String field0)? connected,
+    TResult? Function()? disconnected,
+    TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
+    TResult? Function(PpgDto field0)? ppg,
+    TResult? Function(TelemetrySnapshot field0)? telemetry,
+    TResult? Function(ImuDto field0)? accelerometer,
+    TResult? Function(ImuDto field0)? gyroscope,
+    TResult? Function(ControlDto field0)? control,
+  }) {
+    return bands?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String field0)? connected,
+    TResult Function()? disconnected,
+    TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
+    TResult Function(PpgDto field0)? ppg,
+    TResult Function(TelemetrySnapshot field0)? telemetry,
+    TResult Function(ImuDto field0)? accelerometer,
+    TResult Function(ImuDto field0)? gyroscope,
+    TResult Function(ControlDto field0)? control,
+    required TResult orElse(),
+  }) {
+    if (bands != null) {
+      return bands(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(MuseEventDto_Connected value) connected,
+    required TResult Function(MuseEventDto_Disconnected value) disconnected,
+    required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
+    required TResult Function(MuseEventDto_Ppg value) ppg,
+    required TResult Function(MuseEventDto_Telemetry value) telemetry,
+    required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
+    required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
+    required TResult Function(MuseEventDto_Control value) control,
+  }) {
+    return bands(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(MuseEventDto_Connected value)? connected,
+    TResult? Function(MuseEventDto_Disconnected value)? disconnected,
+    TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
+    TResult? Function(MuseEventDto_Ppg value)? ppg,
+    TResult? Function(MuseEventDto_Telemetry value)? telemetry,
+    TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
+    TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
+    TResult? Function(MuseEventDto_Control value)? control,
+  }) {
+    return bands?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(MuseEventDto_Connected value)? connected,
+    TResult Function(MuseEventDto_Disconnected value)? disconnected,
+    TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
+    TResult Function(MuseEventDto_Ppg value)? ppg,
+    TResult Function(MuseEventDto_Telemetry value)? telemetry,
+    TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
+    TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
+    TResult Function(MuseEventDto_Control value)? control,
+    required TResult orElse(),
+  }) {
+    if (bands != null) {
+      return bands(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class MuseEventDto_Bands extends MuseEventDto {
+  const factory MuseEventDto_Bands(final BandsDto field0) =
+      _$MuseEventDto_BandsImpl;
+  const MuseEventDto_Bands._() : super._();
+
+  BandsDto get field0;
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$MuseEventDto_BandsImplCopyWith<_$MuseEventDto_BandsImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 
@@ -1586,6 +2084,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     required TResult Function(String field0) connected,
     required TResult Function() disconnected,
     required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
     required TResult Function(PpgDto field0) ppg,
     required TResult Function(TelemetrySnapshot field0) telemetry,
     required TResult Function(ImuDto field0) accelerometer,
@@ -1601,6 +2100,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult? Function(String field0)? connected,
     TResult? Function()? disconnected,
     TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
     TResult? Function(PpgDto field0)? ppg,
     TResult? Function(TelemetrySnapshot field0)? telemetry,
     TResult? Function(ImuDto field0)? accelerometer,
@@ -1616,6 +2116,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult Function(String field0)? connected,
     TResult Function()? disconnected,
     TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
     TResult Function(PpgDto field0)? ppg,
     TResult Function(TelemetrySnapshot field0)? telemetry,
     TResult Function(ImuDto field0)? accelerometer,
@@ -1635,6 +2136,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     required TResult Function(MuseEventDto_Connected value) connected,
     required TResult Function(MuseEventDto_Disconnected value) disconnected,
     required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
     required TResult Function(MuseEventDto_Ppg value) ppg,
     required TResult Function(MuseEventDto_Telemetry value) telemetry,
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
@@ -1650,6 +2152,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult? Function(MuseEventDto_Connected value)? connected,
     TResult? Function(MuseEventDto_Disconnected value)? disconnected,
     TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
     TResult? Function(MuseEventDto_Ppg value)? ppg,
     TResult? Function(MuseEventDto_Telemetry value)? telemetry,
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -1665,6 +2168,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult Function(MuseEventDto_Connected value)? connected,
     TResult Function(MuseEventDto_Disconnected value)? disconnected,
     TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
     TResult Function(MuseEventDto_Ppg value)? ppg,
     TResult Function(MuseEventDto_Telemetry value)? telemetry,
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -1781,6 +2285,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     required TResult Function(String field0) connected,
     required TResult Function() disconnected,
     required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
     required TResult Function(PpgDto field0) ppg,
     required TResult Function(TelemetrySnapshot field0) telemetry,
     required TResult Function(ImuDto field0) accelerometer,
@@ -1796,6 +2301,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult? Function(String field0)? connected,
     TResult? Function()? disconnected,
     TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
     TResult? Function(PpgDto field0)? ppg,
     TResult? Function(TelemetrySnapshot field0)? telemetry,
     TResult? Function(ImuDto field0)? accelerometer,
@@ -1811,6 +2317,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult Function(String field0)? connected,
     TResult Function()? disconnected,
     TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
     TResult Function(PpgDto field0)? ppg,
     TResult Function(TelemetrySnapshot field0)? telemetry,
     TResult Function(ImuDto field0)? accelerometer,
@@ -1830,6 +2337,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     required TResult Function(MuseEventDto_Connected value) connected,
     required TResult Function(MuseEventDto_Disconnected value) disconnected,
     required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
     required TResult Function(MuseEventDto_Ppg value) ppg,
     required TResult Function(MuseEventDto_Telemetry value) telemetry,
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
@@ -1845,6 +2353,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult? Function(MuseEventDto_Connected value)? connected,
     TResult? Function(MuseEventDto_Disconnected value)? disconnected,
     TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
     TResult? Function(MuseEventDto_Ppg value)? ppg,
     TResult? Function(MuseEventDto_Telemetry value)? telemetry,
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -1860,6 +2369,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult Function(MuseEventDto_Connected value)? connected,
     TResult Function(MuseEventDto_Disconnected value)? disconnected,
     TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
     TResult Function(MuseEventDto_Ppg value)? ppg,
     TResult Function(MuseEventDto_Telemetry value)? telemetry,
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -1976,6 +2486,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     required TResult Function(String field0) connected,
     required TResult Function() disconnected,
     required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
     required TResult Function(PpgDto field0) ppg,
     required TResult Function(TelemetrySnapshot field0) telemetry,
     required TResult Function(ImuDto field0) accelerometer,
@@ -1991,6 +2502,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult? Function(String field0)? connected,
     TResult? Function()? disconnected,
     TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
     TResult? Function(PpgDto field0)? ppg,
     TResult? Function(TelemetrySnapshot field0)? telemetry,
     TResult? Function(ImuDto field0)? accelerometer,
@@ -2006,6 +2518,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult Function(String field0)? connected,
     TResult Function()? disconnected,
     TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
     TResult Function(PpgDto field0)? ppg,
     TResult Function(TelemetrySnapshot field0)? telemetry,
     TResult Function(ImuDto field0)? accelerometer,
@@ -2025,6 +2538,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     required TResult Function(MuseEventDto_Connected value) connected,
     required TResult Function(MuseEventDto_Disconnected value) disconnected,
     required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
     required TResult Function(MuseEventDto_Ppg value) ppg,
     required TResult Function(MuseEventDto_Telemetry value) telemetry,
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
@@ -2040,6 +2554,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult? Function(MuseEventDto_Connected value)? connected,
     TResult? Function(MuseEventDto_Disconnected value)? disconnected,
     TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
     TResult? Function(MuseEventDto_Ppg value)? ppg,
     TResult? Function(MuseEventDto_Telemetry value)? telemetry,
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -2055,6 +2570,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult Function(MuseEventDto_Connected value)? connected,
     TResult Function(MuseEventDto_Disconnected value)? disconnected,
     TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
     TResult Function(MuseEventDto_Ppg value)? ppg,
     TResult Function(MuseEventDto_Telemetry value)? telemetry,
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -2172,6 +2688,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     required TResult Function(String field0) connected,
     required TResult Function() disconnected,
     required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
     required TResult Function(PpgDto field0) ppg,
     required TResult Function(TelemetrySnapshot field0) telemetry,
     required TResult Function(ImuDto field0) accelerometer,
@@ -2187,6 +2704,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult? Function(String field0)? connected,
     TResult? Function()? disconnected,
     TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
     TResult? Function(PpgDto field0)? ppg,
     TResult? Function(TelemetrySnapshot field0)? telemetry,
     TResult? Function(ImuDto field0)? accelerometer,
@@ -2202,6 +2720,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult Function(String field0)? connected,
     TResult Function()? disconnected,
     TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
     TResult Function(PpgDto field0)? ppg,
     TResult Function(TelemetrySnapshot field0)? telemetry,
     TResult Function(ImuDto field0)? accelerometer,
@@ -2221,6 +2740,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     required TResult Function(MuseEventDto_Connected value) connected,
     required TResult Function(MuseEventDto_Disconnected value) disconnected,
     required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
     required TResult Function(MuseEventDto_Ppg value) ppg,
     required TResult Function(MuseEventDto_Telemetry value) telemetry,
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
@@ -2236,6 +2756,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult? Function(MuseEventDto_Connected value)? connected,
     TResult? Function(MuseEventDto_Disconnected value)? disconnected,
     TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
     TResult? Function(MuseEventDto_Ppg value)? ppg,
     TResult? Function(MuseEventDto_Telemetry value)? telemetry,
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -2251,6 +2772,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult Function(MuseEventDto_Connected value)? connected,
     TResult Function(MuseEventDto_Disconnected value)? disconnected,
     TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
     TResult Function(MuseEventDto_Ppg value)? ppg,
     TResult Function(MuseEventDto_Telemetry value)? telemetry,
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -2368,6 +2890,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     required TResult Function(String field0) connected,
     required TResult Function() disconnected,
     required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
     required TResult Function(PpgDto field0) ppg,
     required TResult Function(TelemetrySnapshot field0) telemetry,
     required TResult Function(ImuDto field0) accelerometer,
@@ -2383,6 +2906,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult? Function(String field0)? connected,
     TResult? Function()? disconnected,
     TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
     TResult? Function(PpgDto field0)? ppg,
     TResult? Function(TelemetrySnapshot field0)? telemetry,
     TResult? Function(ImuDto field0)? accelerometer,
@@ -2398,6 +2922,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult Function(String field0)? connected,
     TResult Function()? disconnected,
     TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
     TResult Function(PpgDto field0)? ppg,
     TResult Function(TelemetrySnapshot field0)? telemetry,
     TResult Function(ImuDto field0)? accelerometer,
@@ -2417,6 +2942,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     required TResult Function(MuseEventDto_Connected value) connected,
     required TResult Function(MuseEventDto_Disconnected value) disconnected,
     required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
     required TResult Function(MuseEventDto_Ppg value) ppg,
     required TResult Function(MuseEventDto_Telemetry value) telemetry,
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
@@ -2432,6 +2958,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult? Function(MuseEventDto_Connected value)? connected,
     TResult? Function(MuseEventDto_Disconnected value)? disconnected,
     TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
     TResult? Function(MuseEventDto_Ppg value)? ppg,
     TResult? Function(MuseEventDto_Telemetry value)? telemetry,
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
@@ -2447,6 +2974,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult Function(MuseEventDto_Connected value)? connected,
     TResult Function(MuseEventDto_Disconnected value)? disconnected,
     TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
     TResult Function(MuseEventDto_Ppg value)? ppg,
     TResult Function(MuseEventDto_Telemetry value)? telemetry,
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,

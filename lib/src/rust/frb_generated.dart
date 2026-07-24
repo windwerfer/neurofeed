@@ -388,9 +388,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BandsDto dco_decode_bands_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return BandsDto(
+      electrode: dco_decode_i_32(arr[0]),
+      timestamp: dco_decode_f_64(arr[1]),
+      delta: dco_decode_f_64(arr[2]),
+      theta: dco_decode_f_64(arr[3]),
+      alpha: dco_decode_f_64(arr[4]),
+      beta: dco_decode_f_64(arr[5]),
+      gamma: dco_decode_f_64(arr[6]),
+    );
+  }
+
+  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
+  }
+
+  @protected
+  BandsDto dco_decode_box_autoadd_bands_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_bands_dto(raw);
   }
 
   @protected
@@ -552,18 +575,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case 2:
         return MuseEventDto_Eeg(dco_decode_box_autoadd_eeg_dto(raw[1]));
       case 3:
-        return MuseEventDto_Ppg(dco_decode_box_autoadd_ppg_dto(raw[1]));
+        return MuseEventDto_Bands(dco_decode_box_autoadd_bands_dto(raw[1]));
       case 4:
+        return MuseEventDto_Ppg(dco_decode_box_autoadd_ppg_dto(raw[1]));
+      case 5:
         return MuseEventDto_Telemetry(
           dco_decode_box_autoadd_telemetry_snapshot(raw[1]),
         );
-      case 5:
+      case 6:
         return MuseEventDto_Accelerometer(
           dco_decode_box_autoadd_imu_dto(raw[1]),
         );
-      case 6:
-        return MuseEventDto_Gyroscope(dco_decode_box_autoadd_imu_dto(raw[1]));
       case 7:
+        return MuseEventDto_Gyroscope(dco_decode_box_autoadd_imu_dto(raw[1]));
+      case 8:
         return MuseEventDto_Control(dco_decode_box_autoadd_control_dto(raw[1]));
       default:
         throw Exception("unreachable");
@@ -682,9 +707,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BandsDto sse_decode_bands_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_electrode = sse_decode_i_32(deserializer);
+    var var_timestamp = sse_decode_f_64(deserializer);
+    var var_delta = sse_decode_f_64(deserializer);
+    var var_theta = sse_decode_f_64(deserializer);
+    var var_alpha = sse_decode_f_64(deserializer);
+    var var_beta = sse_decode_f_64(deserializer);
+    var var_gamma = sse_decode_f_64(deserializer);
+    return BandsDto(
+      electrode: var_electrode,
+      timestamp: var_timestamp,
+      delta: var_delta,
+      theta: var_theta,
+      alpha: var_alpha,
+      beta: var_beta,
+      gamma: var_gamma,
+    );
+  }
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  BandsDto sse_decode_box_autoadd_bands_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_bands_dto(deserializer));
   }
 
   @protected
@@ -864,20 +916,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         var var_field0 = sse_decode_box_autoadd_eeg_dto(deserializer);
         return MuseEventDto_Eeg(var_field0);
       case 3:
+        var var_field0 = sse_decode_box_autoadd_bands_dto(deserializer);
+        return MuseEventDto_Bands(var_field0);
+      case 4:
         var var_field0 = sse_decode_box_autoadd_ppg_dto(deserializer);
         return MuseEventDto_Ppg(var_field0);
-      case 4:
+      case 5:
         var var_field0 = sse_decode_box_autoadd_telemetry_snapshot(
           deserializer,
         );
         return MuseEventDto_Telemetry(var_field0);
-      case 5:
-        var var_field0 = sse_decode_box_autoadd_imu_dto(deserializer);
-        return MuseEventDto_Accelerometer(var_field0);
       case 6:
         var var_field0 = sse_decode_box_autoadd_imu_dto(deserializer);
-        return MuseEventDto_Gyroscope(var_field0);
+        return MuseEventDto_Accelerometer(var_field0);
       case 7:
+        var var_field0 = sse_decode_box_autoadd_imu_dto(deserializer);
+        return MuseEventDto_Gyroscope(var_field0);
+      case 8:
         var var_field0 = sse_decode_box_autoadd_control_dto(deserializer);
         return MuseEventDto_Control(var_field0);
       default:
@@ -1013,9 +1068,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_bands_dto(BandsDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.electrode, serializer);
+    sse_encode_f_64(self.timestamp, serializer);
+    sse_encode_f_64(self.delta, serializer);
+    sse_encode_f_64(self.theta, serializer);
+    sse_encode_f_64(self.alpha, serializer);
+    sse_encode_f_64(self.beta, serializer);
+    sse_encode_f_64(self.gamma, serializer);
+  }
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_bands_dto(
+    BandsDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bands_dto(self, serializer);
   }
 
   @protected
@@ -1185,20 +1261,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case MuseEventDto_Eeg(field0: final field0):
         sse_encode_i_32(2, serializer);
         sse_encode_box_autoadd_eeg_dto(field0, serializer);
-      case MuseEventDto_Ppg(field0: final field0):
+      case MuseEventDto_Bands(field0: final field0):
         sse_encode_i_32(3, serializer);
+        sse_encode_box_autoadd_bands_dto(field0, serializer);
+      case MuseEventDto_Ppg(field0: final field0):
+        sse_encode_i_32(4, serializer);
         sse_encode_box_autoadd_ppg_dto(field0, serializer);
       case MuseEventDto_Telemetry(field0: final field0):
-        sse_encode_i_32(4, serializer);
+        sse_encode_i_32(5, serializer);
         sse_encode_box_autoadd_telemetry_snapshot(field0, serializer);
       case MuseEventDto_Accelerometer(field0: final field0):
-        sse_encode_i_32(5, serializer);
-        sse_encode_box_autoadd_imu_dto(field0, serializer);
-      case MuseEventDto_Gyroscope(field0: final field0):
         sse_encode_i_32(6, serializer);
         sse_encode_box_autoadd_imu_dto(field0, serializer);
-      case MuseEventDto_Control(field0: final field0):
+      case MuseEventDto_Gyroscope(field0: final field0):
         sse_encode_i_32(7, serializer);
+        sse_encode_box_autoadd_imu_dto(field0, serializer);
+      case MuseEventDto_Control(field0: final field0):
+        sse_encode_i_32(8, serializer);
         sse_encode_box_autoadd_control_dto(field0, serializer);
     }
   }

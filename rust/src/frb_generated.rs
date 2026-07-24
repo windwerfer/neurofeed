@@ -391,6 +391,28 @@ impl SseDecode for String {
     }
 }
 
+impl SseDecode for crate::api::muse::BandsDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_electrode = <i32>::sse_decode(deserializer);
+        let mut var_timestamp = <f64>::sse_decode(deserializer);
+        let mut var_delta = <f64>::sse_decode(deserializer);
+        let mut var_theta = <f64>::sse_decode(deserializer);
+        let mut var_alpha = <f64>::sse_decode(deserializer);
+        let mut var_beta = <f64>::sse_decode(deserializer);
+        let mut var_gamma = <f64>::sse_decode(deserializer);
+        return crate::api::muse::BandsDto {
+            electrode: var_electrode,
+            timestamp: var_timestamp,
+            delta: var_delta,
+            theta: var_theta,
+            alpha: var_alpha,
+            beta: var_beta,
+            gamma: var_gamma,
+        };
+    }
+}
+
 impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -564,23 +586,27 @@ impl SseDecode for crate::api::muse::MuseEventDto {
                 return crate::api::muse::MuseEventDto::Eeg(var_field0);
             }
             3 => {
+                let mut var_field0 = <crate::api::muse::BandsDto>::sse_decode(deserializer);
+                return crate::api::muse::MuseEventDto::Bands(var_field0);
+            }
+            4 => {
                 let mut var_field0 = <crate::api::muse::PpgDto>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::Ppg(var_field0);
             }
-            4 => {
+            5 => {
                 let mut var_field0 =
                     <crate::api::muse::TelemetrySnapshot>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::Telemetry(var_field0);
             }
-            5 => {
+            6 => {
                 let mut var_field0 = <crate::api::muse::ImuDto>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::Accelerometer(var_field0);
             }
-            6 => {
+            7 => {
                 let mut var_field0 = <crate::api::muse::ImuDto>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::Gyroscope(var_field0);
             }
-            7 => {
+            8 => {
                 let mut var_field0 = <crate::api::muse::ControlDto>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::Control(var_field0);
             }
@@ -728,6 +754,27 @@ fn pde_ffi_dispatcher_sync_impl(
 // Section: rust2dart
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::muse::BandsDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.electrode.into_into_dart().into_dart(),
+            self.timestamp.into_into_dart().into_dart(),
+            self.delta.into_into_dart().into_dart(),
+            self.theta.into_into_dart().into_dart(),
+            self.alpha.into_into_dart().into_dart(),
+            self.beta.into_into_dart().into_dart(),
+            self.gamma.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::muse::BandsDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::BandsDto> for crate::api::muse::BandsDto {
+    fn into_into_dart(self) -> crate::api::muse::BandsDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::muse::ConnectionStatus {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -831,20 +878,23 @@ impl flutter_rust_bridge::IntoDart for crate::api::muse::MuseEventDto {
             crate::api::muse::MuseEventDto::Eeg(field0) => {
                 [2.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
-            crate::api::muse::MuseEventDto::Ppg(field0) => {
+            crate::api::muse::MuseEventDto::Bands(field0) => {
                 [3.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
-            crate::api::muse::MuseEventDto::Telemetry(field0) => {
+            crate::api::muse::MuseEventDto::Ppg(field0) => {
                 [4.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
-            crate::api::muse::MuseEventDto::Accelerometer(field0) => {
+            crate::api::muse::MuseEventDto::Telemetry(field0) => {
                 [5.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
-            crate::api::muse::MuseEventDto::Gyroscope(field0) => {
+            crate::api::muse::MuseEventDto::Accelerometer(field0) => {
                 [6.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
-            crate::api::muse::MuseEventDto::Control(field0) => {
+            crate::api::muse::MuseEventDto::Gyroscope(field0) => {
                 [7.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::muse::MuseEventDto::Control(field0) => {
+                [8.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
             _ => {
                 unimplemented!("");
@@ -948,6 +998,19 @@ impl SseEncode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<u8>>::sse_encode(self.into_bytes(), serializer);
+    }
+}
+
+impl SseEncode for crate::api::muse::BandsDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.electrode, serializer);
+        <f64>::sse_encode(self.timestamp, serializer);
+        <f64>::sse_encode(self.delta, serializer);
+        <f64>::sse_encode(self.theta, serializer);
+        <f64>::sse_encode(self.alpha, serializer);
+        <f64>::sse_encode(self.beta, serializer);
+        <f64>::sse_encode(self.gamma, serializer);
     }
 }
 
@@ -1088,24 +1151,28 @@ impl SseEncode for crate::api::muse::MuseEventDto {
                 <i32>::sse_encode(2, serializer);
                 <crate::api::muse::EegDto>::sse_encode(field0, serializer);
             }
-            crate::api::muse::MuseEventDto::Ppg(field0) => {
+            crate::api::muse::MuseEventDto::Bands(field0) => {
                 <i32>::sse_encode(3, serializer);
+                <crate::api::muse::BandsDto>::sse_encode(field0, serializer);
+            }
+            crate::api::muse::MuseEventDto::Ppg(field0) => {
+                <i32>::sse_encode(4, serializer);
                 <crate::api::muse::PpgDto>::sse_encode(field0, serializer);
             }
             crate::api::muse::MuseEventDto::Telemetry(field0) => {
-                <i32>::sse_encode(4, serializer);
+                <i32>::sse_encode(5, serializer);
                 <crate::api::muse::TelemetrySnapshot>::sse_encode(field0, serializer);
             }
             crate::api::muse::MuseEventDto::Accelerometer(field0) => {
-                <i32>::sse_encode(5, serializer);
-                <crate::api::muse::ImuDto>::sse_encode(field0, serializer);
-            }
-            crate::api::muse::MuseEventDto::Gyroscope(field0) => {
                 <i32>::sse_encode(6, serializer);
                 <crate::api::muse::ImuDto>::sse_encode(field0, serializer);
             }
-            crate::api::muse::MuseEventDto::Control(field0) => {
+            crate::api::muse::MuseEventDto::Gyroscope(field0) => {
                 <i32>::sse_encode(7, serializer);
+                <crate::api::muse::ImuDto>::sse_encode(field0, serializer);
+            }
+            crate::api::muse::MuseEventDto::Control(field0) => {
+                <i32>::sse_encode(8, serializer);
                 <crate::api::muse::ControlDto>::sse_encode(field0, serializer);
             }
             _ => {
