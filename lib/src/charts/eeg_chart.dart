@@ -2,135 +2,79 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:muse_ml/src/charts/eeg_data_source.dart';
+import 'package:muse_ml/src/charts/chart_controller.dart';
+import 'package:muse_ml/src/charts/graph_config.dart';
 
 class EegChartWidget extends StatefulWidget {
   final EegDataSource source;
-  const EegChartWidget({super.key, required this.source});
+  final ChartController controller;
+  final GraphConfig config;
+
+  const EegChartWidget({
+    super.key,
+    required this.source,
+    required this.controller,
+    required this.config,
+  });
 
   @override
   State<EegChartWidget> createState() => _EegChartWidgetState();
 }
 
 class _EegChartWidgetState extends State<EegChartWidget> {
-  double _timeWindowSecs = 10;
-  double _visibleEnd = 0;
   final Set<int> _hiddenChannels = {};
-  bool _autoScroll = true;
 
   @override
   void initState() {
     super.initState();
-    widget.source.addListener(_onData);
-    _snapToLive();
+    widget.source.addListener(_requestRepaint);
+    widget.controller.addListener(_requestRepaint);
+    widget.controller.snapToLive(widget.source);
   }
 
   @override
   void didUpdateWidget(EegChartWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.source != widget.source) {
-      oldWidget.source.removeListener(_onData);
-      widget.source.addListener(_onData);
-      _snapToLive();
+      oldWidget.source.removeListener(_requestRepaint);
+      widget.source.addListener(_requestRepaint);
+      widget.controller.snapToLive(widget.source);
+    }
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_requestRepaint);
+      widget.controller.addListener(_requestRepaint);
     }
   }
 
   @override
   void dispose() {
-    widget.source.removeListener(_onData);
+    widget.source.removeListener(_requestRepaint);
+    widget.controller.removeListener(_requestRepaint);
     super.dispose();
   }
 
-  void _onData() {
+  void _requestRepaint() {
     if (mounted) setState(() {});
   }
 
-  void _snapToLive() {
-    final latest = widget.source.latestTimestamp;
-    if (latest > 0) _visibleEnd = latest;
-  }
-
-  double get _maxTimeWindowSecs => widget.source.maxTimeWindowSecs;
-
-  void _ensureBounds() {
-    final latest = widget.source.latestTimestamp;
-    final oldest = widget.source.oldestTimestamp;
-    _timeWindowSecs = _timeWindowSecs.clamp(2.0, _maxTimeWindowSecs);
-
-    if (_autoScroll) {
-      _visibleEnd = latest;
-    }
-    if (latest <= 0 || oldest <= 0) return;
-    final minEnd = oldest + _timeWindowSecs;
-    final maxEnd = latest;
-    if (minEnd < maxEnd) {
-      _visibleEnd = _visibleEnd.clamp(minEnd, maxEnd);
-    } else {
-      _visibleEnd = latest;
-    }
-  }
-
-  void _onScaleUpdate(ScaleUpdateDetails d) {
-    setState(() {
-      final prevWindow = _timeWindowSecs;
-      _timeWindowSecs = (prevWindow / d.scale).clamp(2.0, _maxTimeWindowSecs);
-      if (d.focalPointDelta.dx.abs() > 0.5) {
-        final effectiveDelta =
-            d.focalPointDelta.dx * _timeWindowSecs / context.size!.width;
-        _visibleEnd -= effectiveDelta;
-        _autoScroll = false;
-      }
-    });
-  }
-
-  void _onPointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent) return;
-    setState(() {
-      final factor = event.scrollDelta.dy < 0 ? 1.0 / 1.2 : 1.2;
-      _timeWindowSecs = (_timeWindowSecs * factor).clamp(2.0, _maxTimeWindowSecs);
-    });
-  }
-
-  void _zoomIn() {
-    setState(() {
-      _timeWindowSecs = (_timeWindowSecs / 1.5).clamp(2.0, _maxTimeWindowSecs);
-    });
-  }
-
-  void _zoomOut() {
-    setState(() {
-      _timeWindowSecs = (_timeWindowSecs * 1.5).clamp(2.0, _maxTimeWindowSecs);
-    });
-  }
-
-  void _enableAutoScroll() {
-    setState(() {
-      _autoScroll = true;
-      _snapToLive();
-    });
-  }
-
-  static const _legendPad = 12.0;
-  static const _legendItemHeight = 28.0;
-
   void _onTapUp(TapUpDetails d) {
-    final size = context.size!;
-    final slices = _currentSlices;
+    if (widget.config.avgMode) return;
+    final slices = _buildSlices();
     if (slices.isEmpty) return;
-    final legendRect = _legendRect(size, slices.length);
-    if (!legendRect.contains(d.localPosition)) {
-      final liveRect = _liveRect(size);
-      if (liveRect.contains(d.localPosition) && !_autoScroll) {
-        _enableAutoScroll();
-      }
-      return;
-    }
-    final dy = d.localPosition.dy - legendRect.top - _legendPad;
-    final index = dy ~/ _legendItemHeight;
-    if (index < 0 || index >= slices.length) return;
-
-    final channels = widget.source.channels;
-    if (index >= channels.length) return;
-    final ch = channels[index];
+    final size = context.size!;
+    final count = slices.length;
+    const pad = 12.0;
+    const itemH = 28.0;
+    const w = 90.0;
+    final h = pad * 2 + count * itemH;
+    final legendRect = Rect.fromLTWH(size.width - w - 8, size.height - h - 8, w, h);
+    if (!legendRect.contains(d.localPosition)) return;
+    final dy = d.localPosition.dy - legendRect.top - pad;
+    final index = dy ~/ itemH;
+    if (index < 0 || index >= count) return;
+    final electrodes = widget.config.electrodes;
+    if (index >= electrodes.length) return;
+    final ch = electrodes[index];
     setState(() {
       if (_hiddenChannels.contains(ch)) {
         _hiddenChannels.remove(ch);
@@ -140,136 +84,84 @@ class _EegChartWidgetState extends State<EegChartWidget> {
     });
   }
 
-  List<SeriesSlice> get _currentSlices {
-    final visibleStart = _visibleEnd - _timeWindowSecs;
-    return widget.source.slices(
-      startT: visibleStart,
-      endT: _visibleEnd,
-      hiddenChannels: _hiddenChannels,
-    );
-  }
+  List<SeriesSlice> _buildSlices() {
+    final ctrl = widget.controller;
+    final visibleStart = ctrl.visibleEnd - ctrl.timeWindowSecs;
+    final source = widget.source;
+    final config = widget.config;
 
-  Rect _legendRect(Size size, int count) {
-    final w = 90.0;
-    final h = _legendPad * 2 + count * _legendItemHeight;
-    return Rect.fromLTWH(size.width - w - 8, size.height - h - 8, w, h);
-  }
+    if (config.avgMode && config.electrodes.length > 1) {
+      final perChannel = <List<ChartSample>>[];
+      for (final ch in config.electrodes) {
+        perChannel.add(source.getRange(ch, visibleStart, ctrl.visibleEnd));
+      }
+      final minLen = perChannel.map((l) => l.length).reduce(math.min);
+      if (minLen < 2) return [];
+      final avgSamples = List<ChartSample>.generate(minLen, (i) {
+        double sum = 0;
+        for (final ch in perChannel) {
+          sum += ch[i].v;
+        }
+        return ChartSample(perChannel[0][i].t, sum / perChannel.length);
+      });
+      return [
+        SeriesSlice(
+          name: '${config.label} avg',
+          color: config.color(0),
+          unit: 'µV',
+          samples: avgSamples,
+          visible: true,
+        ),
+      ];
+    }
 
-  Rect _liveRect(Size size) {
-    return Rect.fromLTWH(size.width - 60, 8, 52, 20);
+    final result = <SeriesSlice>[];
+    for (int i = 0; i < config.electrodes.length; i++) {
+      final ch = config.electrodes[i];
+      final hidden = _hiddenChannels.contains(ch);
+      result.add(SeriesSlice(
+        name: channelName(ch),
+        color: channelColor(ch),
+        unit: 'µV',
+        samples: hidden ? const [] : source.getRange(ch, visibleStart, ctrl.visibleEnd),
+        visible: !hidden,
+      ));
+    }
+    return result;
   }
 
   @override
   Widget build(BuildContext context) {
-    _ensureBounds();
-    final visibleStart = _visibleEnd - _timeWindowSecs;
-    final visibleEnd = _visibleEnd;
-    final slices = widget.source.slices(
-      startT: visibleStart,
-      endT: visibleEnd,
-      hiddenChannels: _hiddenChannels,
-    );
+    final ctrl = widget.controller;
+    ctrl.ensureBounds(widget.source);
+    final visibleStart = ctrl.visibleEnd - ctrl.timeWindowSecs;
+    final visibleEnd = ctrl.visibleEnd;
+    final slices = _buildSlices();
 
-    return Stack(
-      children: [
-        Listener(
-          onPointerSignal: _onPointerSignal,
-          child: GestureDetector(
-            onScaleUpdate: _onScaleUpdate,
-            onTapUp: _onTapUp,
-            child: RepaintBoundary(
-              child: CustomPaint(
-                size: Size.infinite,
-                painter: _EegChartPainter(
-                  slices: slices,
-                  visibleStart: visibleStart,
-                  visibleEnd: visibleEnd,
-                  autoScroll: _autoScroll,
-                ),
+    return ClipRect(
+      child: Listener(
+        onPointerSignal: (event) {
+          if (event is PointerScrollEvent) {
+            ctrl.onPointerSignal(event, widget.source.maxTimeWindowSecs);
+          }
+        },
+        child: GestureDetector(
+          onScaleUpdate: (d) {
+            ctrl.onScaleUpdate(d, widget.source.maxTimeWindowSecs, context.size!.width);
+          },
+          onTapUp: _onTapUp,
+          child: RepaintBoundary(
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: _EegChartPainter(
+                slices: slices,
+                visibleStart: visibleStart,
+                visibleEnd: visibleEnd,
+                autoScroll: ctrl.autoScroll,
               ),
             ),
           ),
         ),
-        Positioned(
-          left: 64,
-          bottom: 8,
-          child: _ZoomControls(
-            onZoomIn: _zoomIn,
-            onZoomOut: _zoomOut,
-            autoScroll: _autoScroll,
-            onToggleLive: _enableAutoScroll,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ZoomControls extends StatelessWidget {
-  const _ZoomControls({
-    required this.onZoomIn,
-    required this.onZoomOut,
-    required this.autoScroll,
-    required this.onToggleLive,
-  });
-
-  final VoidCallback onZoomIn;
-  final VoidCallback onZoomOut;
-  final bool autoScroll;
-  final VoidCallback onToggleLive;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 32,
-      decoration: BoxDecoration(
-        color: const Color(0xCC111218),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _Btn(Icons.remove, onZoomOut),
-          Container(width: 1, height: 16, color: const Color(0xFF2A2D37)),
-          _Btn(Icons.add, onZoomIn),
-          if (!autoScroll) ...[
-            Container(width: 1, height: 16, color: const Color(0xFF2A2D37)),
-            GestureDetector(
-              onTap: onToggleLive,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                alignment: Alignment.center,
-                child: const Text(
-                  'LIVE',
-                  style: TextStyle(
-                    color: Color(0xFF4FC3F7),
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _Btn extends StatelessWidget {
-  const _Btn(this.icon, this.onTap);
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 32,
-        height: 32,
-        child: Icon(icon, color: Colors.white70, size: 16),
       ),
     );
   }
@@ -533,8 +425,8 @@ class _EegChartPainter extends CustomPainter {
   void _drawLegend(Canvas canvas) {
     if (slices.isEmpty) return;
 
-    const pad = _EegChartWidgetState._legendPad;
-    const itemH = _EegChartWidgetState._legendItemHeight;
+    const pad = 12.0;
+    const itemH = 28.0;
     final count = slices.length;
     const w = 90.0;
     final h = pad * 2 + count * itemH;
