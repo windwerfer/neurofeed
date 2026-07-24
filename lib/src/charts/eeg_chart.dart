@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:muse_ml/src/charts/eeg_data_source.dart';
 
 class EegChartWidget extends StatefulWidget {
@@ -71,6 +72,15 @@ class _EegChartWidgetState extends State<EegChartWidget> {
       final effectiveDelta =
           d.focalPointDelta.dx * _timeWindowSecs / context.size!.width;
       _visibleEnd -= effectiveDelta;
+    });
+  }
+
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    setState(() {
+      _autoScroll = false;
+      final factor = event.scrollDelta.dy < 0 ? 1.2 : 1.0 / 1.2;
+      _timeWindowSecs = (_timeWindowSecs * factor).clamp(2.0, 600.0);
     });
   }
 
@@ -158,18 +168,21 @@ class _EegChartWidgetState extends State<EegChartWidget> {
 
     return Stack(
       children: [
-        GestureDetector(
-          onScaleStart: _onScaleStart,
-          onScaleUpdate: _onScaleUpdate,
-          onTapUp: _onTapUp,
-          child: RepaintBoundary(
-            child: CustomPaint(
-              size: Size.infinite,
-              painter: _EegChartPainter(
-                slices: slices,
-                visibleStart: visibleStart,
-                visibleEnd: visibleEnd,
-                autoScroll: _autoScroll,
+        Listener(
+          onPointerSignal: _onPointerSignal,
+          child: GestureDetector(
+            onScaleStart: _onScaleStart,
+            onScaleUpdate: _onScaleUpdate,
+            onTapUp: _onTapUp,
+            child: RepaintBoundary(
+              child: CustomPaint(
+                size: Size.infinite,
+                painter: _EegChartPainter(
+                  slices: slices,
+                  visibleStart: visibleStart,
+                  visibleEnd: visibleEnd,
+                  autoScroll: _autoScroll,
+                ),
               ),
             ),
           ),
