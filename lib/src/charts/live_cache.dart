@@ -20,8 +20,9 @@ class LiveCache extends ChangeNotifier implements EegDataSource {
     final buf =
         _channels.putIfAbsent(dto.electrode, () => _RingChannel(_maxSamples));
     final dt = 1.0 / _sampleRate;
+    final baseSecs = dto.timestamp / 1000.0;
     for (int i = 0; i < dto.samples.length; i++) {
-      buf.add(dto.timestamp + i * dt, dto.samples[i]);
+      buf.add(baseSecs + i * dt, dto.samples[i]);
     }
     notifyListeners();
   }
