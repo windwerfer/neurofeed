@@ -15,22 +15,42 @@ class EegDashboard extends StatefulWidget {
 class _EegDashboardState extends State<EegDashboard> {
   final ChartController _controller = ChartController();
   late List<GraphConfig> _graphs;
+  List<int> _lastChannels = const [];
 
   @override
   void initState() {
     super.initState();
     _graphs = _defaultGraphs();
+    _lastChannels = widget.source.channels;
+    widget.source.addListener(_onSourceData);
+  }
+
+  @override
+  void dispose() {
+    widget.source.removeListener(_onSourceData);
+    super.dispose();
+  }
+
+  void _onSourceData() {
+    final ch = widget.source.channels;
+    if (!_listEquals(ch, _lastChannels)) {
+      _lastChannels = ch;
+      setState(() => _graphs = _defaultGraphs());
+    }
+  }
+
+  bool _listEquals(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   List<GraphConfig> _defaultGraphs() {
     final ch = widget.source.channels;
-    if (ch.length < 4) {
-      return [GraphConfig.defaultFor(ch)];
-    }
-    return [
-      GraphConfig.defaultFor([ch[0], ch[3]]),
-      GraphConfig.defaultFor([ch[1], ch[2]]),
-    ];
+    if (ch.isEmpty) return [GraphConfig.defaultFor(const [])];
+    return [GraphConfig.defaultFor(ch)];
   }
 
   void _reset() {

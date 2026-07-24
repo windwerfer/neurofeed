@@ -216,29 +216,33 @@ class _LegendRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: active ? Colors.white : Colors.white38,
-              fontSize: 11,
-              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          const SizedBox(width: 5),
-          SizedBox(
-            width: 8,
-            height: 8,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: active ? color : color.withAlpha(60),
-                shape: BoxShape.circle,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: active ? Colors.white : Colors.white38,
+                fontSize: 11,
+                fontWeight: bold ? FontWeight.bold : FontWeight.normal,
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 5),
+            SizedBox(
+              width: 8,
+              height: 8,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: active ? color : color.withAlpha(60),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
