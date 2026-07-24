@@ -21,13 +21,13 @@
 - [x] Kill ticker, switch to ChangeNotifier
 - [x] Float64List ring buffer (pre-alloc, no grow)
 - [x] Flexible channel support (CH{n} beyond TP9/AF7/AF8/TP10)
-- [ ] Create `EegDataSource` abstract class
-- [ ] Create `LiveCache` (5 min ring, implements EegDataSource)
-- [ ] Create `SessionRecorder` (binary dump writer)
-- [ ] Create `DiskSession` stub (file-backed replay, same interface)
-- [ ] Wire into `AppStateNotifier`: replace `eegBuffer` with `liveCache` + `sessionRecorder`
-- [ ] Remove old `eeg_data_buffer.dart`
-- [ ] Painter: decouple from buffer, source only
+- [x] Create `EegDataSource` abstract class
+- [x] Create `LiveCache` (5 min ring, implements EegDataSource)
+- [x] Create `SessionRecorder` (binary dump writer)
+- [x] Create `DiskSession` stub (file-backed replay, same interface)
+- [x] Wire into `AppStateNotifier`: replace `eegBuffer` with `liveCache` + `sessionRecorder`
+- [x] Remove old `eeg_data_buffer.dart`
+- [x] Painter: decouple from buffer, source only
 
 ## Phase 2 — Android foreground service
 
