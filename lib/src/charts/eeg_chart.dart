@@ -12,7 +12,7 @@ class EegChartWidget extends StatefulWidget {
 }
 
 class _EegChartWidgetState extends State<EegChartWidget> {
-  double _timeWindowSecs = 120;
+  double _timeWindowSecs = 10;
   double _visibleEnd = 0;
   final Set<int> _hiddenChannels = {};
   bool _autoScroll = true;
