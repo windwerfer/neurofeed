@@ -38,6 +38,7 @@ class _BandsDashboardState extends State<BandsDashboard> {
     super.initState();
     _syncElectrodes();
     _lastChannels = widget.source.channels;
+    _controller.snapToLive(widget.source);
     widget.source.addListener(_onSourceData);
     _ctrlListener = () {
       if (mounted) setState(() {});
@@ -59,8 +60,8 @@ class _BandsDashboardState extends State<BandsDashboard> {
     if (!_listEquals(ch, _lastChannels)) {
       _lastChannels = ch;
       _syncElectrodes();
-      setState(() {});
     }
+    if (mounted) setState(() {});
   }
 
   bool _listEquals(List<int> a, List<int> b) {
@@ -136,6 +137,11 @@ class _BandsDashboardState extends State<BandsDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    _controller.ensureBounds(widget.source);
+    final visibleStart = _controller.visibleEnd - _controller.timeWindowSecs;
+    final visibleEnd = _controller.visibleEnd;
+    final slices = _buildSlices();
+
     return Column(
       children: [
         _buildHeader(),
@@ -157,9 +163,9 @@ class _BandsDashboardState extends State<BandsDashboard> {
                       child: CustomPaint(
                         size: Size.infinite,
                         painter: _EegChartPainter(
-                          slices: _buildSlices(),
-                          visibleStart: _controller.visibleEnd - _controller.timeWindowSecs,
-                          visibleEnd: _controller.visibleEnd,
+                          slices: slices,
+                          visibleStart: visibleStart,
+                          visibleEnd: visibleEnd,
                           autoScroll: _controller.autoScroll,
                         ),
                       ),
