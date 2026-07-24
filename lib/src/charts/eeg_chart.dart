@@ -12,7 +12,7 @@ class EegChartWidget extends StatefulWidget {
 
 class _EegChartWidgetState extends State<EegChartWidget> {
   double _timeWindowSecs = 120;
-  double _timeOffsetSecs = 0;
+  double _visibleEnd = 0;
   final Set<int> _hiddenChannels = {};
   bool _autoScroll = true;
 
@@ -20,6 +20,7 @@ class _EegChartWidgetState extends State<EegChartWidget> {
   void initState() {
     super.initState();
     widget.source.addListener(_onData);
+    _snapToLive();
   }
 
   @override
@@ -28,6 +29,7 @@ class _EegChartWidgetState extends State<EegChartWidget> {
     if (oldWidget.source != widget.source) {
       oldWidget.source.removeListener(_onData);
       widget.source.addListener(_onData);
+      _snapToLive();
     }
   }
 
@@ -41,17 +43,20 @@ class _EegChartWidgetState extends State<EegChartWidget> {
     if (mounted) setState(() {});
   }
 
-  double get _maxTimeOffsetSecs {
-    final oldest = widget.source.oldestTimestamp;
+  void _snapToLive() {
     final latest = widget.source.latestTimestamp;
-    if (latest <= 0) return 0;
-    return (latest - oldest).clamp(0, double.infinity);
+    if (latest > 0) _visibleEnd = latest;
   }
 
-  void _ensureOffsetInBounds() {
-    if (_autoScroll) _timeOffsetSecs = 0;
-    final maxOffset = _maxTimeOffsetSecs;
-    if (_timeOffsetSecs > maxOffset) _timeOffsetSecs = maxOffset;
+  void _ensureBounds() {
+    final latest = widget.source.latestTimestamp;
+    final oldest = widget.source.oldestTimestamp;
+    if (_autoScroll) {
+      _visibleEnd = latest;
+    }
+    final minEnd = oldest > 0 ? oldest + _timeWindowSecs : 0.0;
+    final maxEnd = latest > 0 ? latest : _timeWindowSecs;
+    _visibleEnd = _visibleEnd.clamp(minEnd, maxEnd);
     _timeWindowSecs = _timeWindowSecs.clamp(2.0, 600.0);
   }
 
@@ -65,8 +70,7 @@ class _EegChartWidgetState extends State<EegChartWidget> {
       _timeWindowSecs = (prevWindow / d.scale).clamp(2.0, 600.0);
       final effectiveDelta =
           d.focalPointDelta.dx * _timeWindowSecs / context.size!.width;
-      _timeOffsetSecs =
-          (_timeOffsetSecs + effectiveDelta).clamp(0.0, _maxTimeOffsetSecs);
+      _visibleEnd += effectiveDelta;
     });
   }
 
@@ -87,7 +91,7 @@ class _EegChartWidgetState extends State<EegChartWidget> {
   void _enableAutoScroll() {
     setState(() {
       _autoScroll = true;
-      _timeOffsetSecs = 0;
+      _snapToLive();
     });
   }
 
@@ -123,12 +127,10 @@ class _EegChartWidgetState extends State<EegChartWidget> {
   }
 
   List<SeriesSlice> get _currentSlices {
-    final latest = widget.source.latestTimestamp;
-    final visibleEnd = latest - _timeOffsetSecs;
-    final visibleStart = visibleEnd - _timeWindowSecs;
+    final visibleStart = _visibleEnd - _timeWindowSecs;
     return widget.source.slices(
       startT: visibleStart,
-      endT: visibleEnd,
+      endT: _visibleEnd,
       hiddenChannels: _hiddenChannels,
     );
   }
@@ -145,10 +147,9 @@ class _EegChartWidgetState extends State<EegChartWidget> {
 
   @override
   Widget build(BuildContext context) {
-    _ensureOffsetInBounds();
-    final latest = widget.source.latestTimestamp;
-    final visibleEnd = latest - _timeOffsetSecs;
-    final visibleStart = visibleEnd - _timeWindowSecs;
+    _ensureBounds();
+    final visibleStart = _visibleEnd - _timeWindowSecs;
+    final visibleEnd = _visibleEnd;
     final slices = widget.source.slices(
       startT: visibleStart,
       endT: visibleEnd,
