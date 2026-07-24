@@ -70,7 +70,7 @@ class _EegChartWidgetState extends State<EegChartWidget> {
       _timeWindowSecs = (prevWindow / d.scale).clamp(2.0, 600.0);
       final effectiveDelta =
           d.focalPointDelta.dx * _timeWindowSecs / context.size!.width;
-      _visibleEnd += effectiveDelta;
+      _visibleEnd -= effectiveDelta;
     });
   }
 
