@@ -69,24 +69,22 @@ class _EegChartWidgetState extends State<EegChartWidget> {
     }
   }
 
-  void _onScaleStart(ScaleStartDetails d) {
-    _autoScroll = false;
-  }
-
   void _onScaleUpdate(ScaleUpdateDetails d) {
     setState(() {
       final prevWindow = _timeWindowSecs;
       _timeWindowSecs = (prevWindow / d.scale).clamp(2.0, _maxTimeWindowSecs);
-      final effectiveDelta =
-          d.focalPointDelta.dx * _timeWindowSecs / context.size!.width;
-      _visibleEnd -= effectiveDelta;
+      if (d.focalPointDelta.dx.abs() > 0.5) {
+        final effectiveDelta =
+            d.focalPointDelta.dx * _timeWindowSecs / context.size!.width;
+        _visibleEnd -= effectiveDelta;
+        _autoScroll = false;
+      }
     });
   }
 
   void _onPointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) return;
     setState(() {
-      _autoScroll = false;
       final factor = event.scrollDelta.dy < 0 ? 1.0 / 1.2 : 1.2;
       _timeWindowSecs = (_timeWindowSecs * factor).clamp(2.0, _maxTimeWindowSecs);
     });
@@ -94,14 +92,12 @@ class _EegChartWidgetState extends State<EegChartWidget> {
 
   void _zoomIn() {
     setState(() {
-      _autoScroll = false;
       _timeWindowSecs = (_timeWindowSecs / 1.5).clamp(2.0, _maxTimeWindowSecs);
     });
   }
 
   void _zoomOut() {
     setState(() {
-      _autoScroll = false;
       _timeWindowSecs = (_timeWindowSecs * 1.5).clamp(2.0, _maxTimeWindowSecs);
     });
   }
@@ -179,7 +175,6 @@ class _EegChartWidgetState extends State<EegChartWidget> {
         Listener(
           onPointerSignal: _onPointerSignal,
           child: GestureDetector(
-            onScaleStart: _onScaleStart,
             onScaleUpdate: _onScaleUpdate,
             onTapUp: _onTapUp,
             child: RepaintBoundary(
