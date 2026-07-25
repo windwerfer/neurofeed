@@ -71,9 +71,7 @@ do_backup() {
     local flutter_file="${run_dir}/flutter-backup-${ts}.tar.zst"
     if [[ -d "$HOME/flutter" ]]; then
         log "Backing up Flutter (~/flutter)"
-        tar -C "$HOME" \
-            --exclude='flutter/bin/cache' \
-            --zstd -cf "$flutter_file" flutter
+        tar -C "$HOME" --zstd -cf "$flutter_file" flutter
 
         local size
         size=$(du -h "${flutter_file}" | cut -f1)
