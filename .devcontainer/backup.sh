@@ -9,7 +9,7 @@ set -euo pipefail
 #   Backs up:
 #     - ~/.cargo + ~/.rustup   → one file (rust)
 #     - ~/.gradle              → one file (gradle)
-#     - ~/.opencode + ~/.grok   → one file (agents)
+    # - ~/.local/share/zed       → one file (agents)
 #     - ~/flutter               → one file
 #     - ~/android-sdk           → one file
 #
@@ -118,22 +118,24 @@ do_backup() {
         log "⚠ ~/.gradle not found — skipping gradle backup"
     fi
 
-    # --- Agents: ~/.opencode + ~/.grok (small config dirs, full backup) ---
+    # --- Agents: ~/.local/share/zed (agents history only, exclude re-fetchable caches) ---
     local agents_file="${run_dir}/agents-backup-${ts}.tar.zst"
-    local agents_paths=()
-    [[ -d "$HOME/.opencode" ]] && agents_paths+=(".opencode")
-    [[ -d "$HOME/.grok" ]] && agents_paths+=(".grok")
-
-    if (( ${#agents_paths[@]} > 0 )); then
-        log "Backing up agents config (~/.opencode + ~/.grok)"
-        tar -C "$HOME" \
-            --zstd -cf "$agents_file" "${agents_paths[@]}"
+    local zed_home="$HOME/.local/share/zed"
+    if [[ -d "$zed_home" ]]; then
+        log "Backing up Zed agents history (~/.local/share/zed)"
+        tar -C "$HOME/.local/share" \
+            --exclude='zed/node' \
+            --exclude='zed/remote_extensions' \
+            --exclude='zed/logs' \
+            --exclude='zed/hang_traces' \
+            --exclude='zed/prettier' \
+            --zstd -cf "$agents_file" zed
 
         local size
         size=$(du -h "${agents_file}" | cut -f1)
         log "✅ Created $(basename "${agents_file}") (${size})"
     else
-        log "⚠ No ~/.opencode or ~/.grok directories found — skipping agents backup"
+        log "⚠ ~/.local/share/zed not found — skipping agents backup"
     fi
 
     echo
@@ -268,13 +270,13 @@ do_restore() {
     latest_agents=$(ls -t "${run_dir}"/agents-backup-*.tar.zst 2>/dev/null | head -n1 || true)
     if [[ -n "${latest_agents}" ]]; then
         echo "Agents backup found: $(basename "${latest_agents}")"
-        echo "  WARNING: This will erase ~/.opencode and ~/.grok, then restore the backup."
+        echo "  WARNING: This will erase ~/.local/share/zed, then restore the backup."
         read -r -p "  Restore agents? (YES/no): " reply
         if [[ "${reply}" == "YES" ]]; then
             log "Erasing old agents data..."
-            rm -rf "$HOME/.opencode" "$HOME/.grok" 2>/dev/null || true
+            rm -rf "$HOME/.local/share/zed" 2>/dev/null || true
             log "Restoring..."
-            tar -C "$HOME" --zstd -xf "${latest_agents}"
+            tar -C "$HOME/.local/share" --zstd -xf "${latest_agents}"
             log "✅ Restored agents"
         else
             log "Skipped agents."
@@ -293,7 +295,7 @@ do_restore() {
 # =====================
 if [ $# -eq 0 ]; then
     echo "Usage: $0 [backup|restore] [backup_directory]"
-    echo "   backup  - Create timestamped zstd-compressed tar backups of rust, gradle, agents, flutter, and android-sdk (all under ~/)"
+    echo "   backup  - Create timestamped zstd-compressed tar backups of rust, gradle, agents (~/.local/share/zed), flutter, and android-sdk (all under ~/)"
     echo "   restore - Selectively restore the most recent backup of each component"
     echo "   (second argument = path to backup folder, defaults to ${DEFAULT_BACKUP_DIR})"
     echo

@@ -24,6 +24,21 @@
         },
         {
             "type": "volume",
+            "source": "flutter_muse_ml_worktrees",
+            "target": "/workspaces/worktrees",
+        },
+        {
+            "type": "volume",
+            "source": "flutter_muse_ml_tauri",
+            "target": "/workspaces/tauri",
+        },
+        {
+            "type": "volume",
+            "source": "flutter_muse_ml_third_party",
+            "target": "/workspaces/third_party",
+        },
+        {
+            "type": "volume",
             "source": "shared_backups",
             "target": "/opt/backups"
         }
