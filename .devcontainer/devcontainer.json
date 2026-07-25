@@ -19,8 +19,8 @@
         // },
         {
             "type": "volume",
-            "source": "flutter_muse_ml_uv_cache",
-            "target": "/home/vscode/.cache/uv",
+            "source": "flutter_muse_ml_home",
+            "target": "/home/vscode",
         },
         {
             "type": "volume",
@@ -31,16 +31,6 @@
             "type": "volume",
             "source": "flutter_muse_ml_android-sdk",
             "target": "/opt/android-sdk"
-        },
-        {
-            "type": "volume",
-            "source": "flutter_muse_ml_rustup",
-            "target": "/home/vscode/.rustup"
-        },
-        {
-            "type": "volume",
-            "source": "flutter_muse_ml_cargo",
-            "target": "/home/vscode/.cargo"
         },
         {
             "type": "volume",

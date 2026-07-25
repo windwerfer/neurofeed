@@ -8,6 +8,8 @@ set -euo pipefail
 #
 #   Backs up:
 #     - ~/.cargo + ~/.rustup   → one file (rust)
+#     - ~/.gradle              → one file (gradle)
+#     - ~/.opencode + ~/.grok   → one file (agents)
 #     - /usr/local/flutter     → one file
 #     - /opt/android-sdk       → one file
 #
@@ -95,6 +97,43 @@ do_backup() {
         log "✅ Created $(basename "${android_file}") (${size})"
     else
         log "⚠ /opt/android-sdk not found — skipping android-sdk backup"
+    fi
+
+    # --- Gradle: ~/.gradle (exclude build caches + daemon + transforms) ---
+    local gradle_file="${run_dir}/gradle-backup-${ts}.tar.zst"
+    if [[ -d "$HOME/.gradle" ]]; then
+        log "Backing up Gradle (~/.gradle)"
+        tar -C "$HOME" \
+            --exclude='.gradle/daemon' \
+            --exclude='.gradle/native' \
+            --exclude='.gradle/caches/transforms-3' \
+            --exclude='.gradle/caches/build-cache-*' \
+            --exclude='.gradle/caches/journal-*' \
+            --zstd -cf "$gradle_file" .gradle
+
+        local size
+        size=$(du -h "${gradle_file}" | cut -f1)
+        log "✅ Created $(basename "${gradle_file}") (${size})"
+    else
+        log "⚠ ~/.gradle not found — skipping gradle backup"
+    fi
+
+    # --- Agents: ~/.opencode + ~/.grok (small config dirs, full backup) ---
+    local agents_file="${run_dir}/agents-backup-${ts}.tar.zst"
+    local agents_paths=()
+    [[ -d "$HOME/.opencode" ]] && agents_paths+=(".opencode")
+    [[ -d "$HOME/.grok" ]] && agents_paths+=(".grok")
+
+    if (( ${#agents_paths[@]} > 0 )); then
+        log "Backing up agents config (~/.opencode + ~/.grok)"
+        tar -C "$HOME" \
+            --zstd -cf "$agents_file" "${agents_paths[@]}"
+
+        local size
+        size=$(du -h "${agents_file}" | cut -f1)
+        log "✅ Created $(basename "${agents_file}") (${size})"
+    else
+        log "⚠ No ~/.opencode or ~/.grok directories found — skipping agents backup"
     fi
 
     echo
@@ -203,6 +242,48 @@ do_restore() {
     else
         log "No android-sdk backup found in ${run_dir}"
     fi
+    echo
+
+    # --- Gradle ---
+    local latest_gradle
+    latest_gradle=$(ls -t "${run_dir}"/gradle-backup-*.tar.zst 2>/dev/null | head -n1 || true)
+    if [[ -n "${latest_gradle}" ]]; then
+        echo "Gradle backup found: $(basename "${latest_gradle}")"
+        echo "  WARNING: This will erase ~/.gradle, then restore the backup."
+        read -r -p "  Restore gradle? (YES/no): " reply
+        if [[ "${reply}" == "YES" ]]; then
+            log "Erasing old Gradle data..."
+            rm -rf "$HOME/.gradle" 2>/dev/null || true
+            log "Restoring..."
+            tar -C "$HOME" --zstd -xf "${latest_gradle}"
+            log "✅ Restored gradle"
+        else
+            log "Skipped gradle."
+        fi
+    else
+        log "No gradle backup found in ${run_dir}"
+    fi
+    echo
+
+    # --- Agents ---
+    local latest_agents
+    latest_agents=$(ls -t "${run_dir}"/agents-backup-*.tar.zst 2>/dev/null | head -n1 || true)
+    if [[ -n "${latest_agents}" ]]; then
+        echo "Agents backup found: $(basename "${latest_agents}")"
+        echo "  WARNING: This will erase ~/.opencode and ~/.grok, then restore the backup."
+        read -r -p "  Restore agents? (YES/no): " reply
+        if [[ "${reply}" == "YES" ]]; then
+            log "Erasing old agents data..."
+            rm -rf "$HOME/.opencode" "$HOME/.grok" 2>/dev/null || true
+            log "Restoring..."
+            tar -C "$HOME" --zstd -xf "${latest_agents}"
+            log "✅ Restored agents"
+        else
+            log "Skipped agents."
+        fi
+    else
+        log "No agents backup found in ${run_dir}"
+    fi
 
     echo
     log "Restore complete."
@@ -214,7 +295,7 @@ do_restore() {
 # =====================
 if [ $# -eq 0 ]; then
     echo "Usage: $0 [backup|restore] [backup_directory]"
-    echo "   backup  - Create timestamped zstd-compressed tar backups of rust, flutter, and android-sdk"
+    echo "   backup  - Create timestamped zstd-compressed tar backups of rust, gradle, agents, flutter, and android-sdk"
     echo "   restore - Selectively restore the most recent backup of each component"
     echo "   (second argument = path to backup folder, defaults to ${DEFAULT_BACKUP_DIR})"
     echo
