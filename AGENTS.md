@@ -52,8 +52,10 @@ android/app/src/main/java/
   com/nonpolynomial/btleplug/android/impl/  # btleplug Java classes
   io/github/gedgygedgy/rust/                # jni-utils Java sources
 .ai/                     # project docs
-muse-rs (dep, GitHub)    # transport (btleplug) + protocol
-btleplug (local, ../../btleplug)  # patched fork via [patch] in Cargo.toml
+third_party/muse-rs/    # local checkout of muse-rs (tag 0.1.0) — reference for protocol/parse debugging
+third_party/btleplug/   # local checkout of our btleplug fork (tag 0.12.0-muse-2) — reference for JNI/init debugging
+muse-rs (dep, GitHub)   # transport (btleplug) + protocol
+btleplug (local, via [patch])  # patched fork; reference copy in third_party/btleplug/
 ```
 
 ## Where things live (for navigation)
@@ -72,3 +74,4 @@ btleplug (local, ../../btleplug)  # patched fork via [patch] in Cargo.toml
 - **JNI `ThreadDetached`**: BLE ops run on tokio worker threads which aren't attached to the JVM. Our `get_env()` patch auto-attaches them.
 - **Java/Rust API alignment**: The Rust code expects Java method signatures from btleplug 0.12.0. If upgrading either side, check `jni/objects.rs` vs the Java source files.
 - **Auto-scan only on saved device**: on fresh launch with no `lastDeviceId`, `_init()` opens the connect window but does NOT scan. Scan only fires on Rescan button or autoconnect to a known device.
+- **JNI trace spam**: The `jni` crate logs `trace!()` for every JNI call. `android_logger` filters at `Debug` level, but if it's initialized after another logger (e.g. flutter_rust_bridge), `init_once` fails silently and the filter doesn't apply. The fix: always call `log::set_max_level(log::LevelFilter::Debug)` after `init_once` as a fallback. See `rust/src/api/muse.rs:init_app()`.
