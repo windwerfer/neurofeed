@@ -65,17 +65,21 @@ do_backup() {
         log "⚠ No Rust directories found — skipping rust backup"
     fi
 
-    # --- Flutter: ~/flutter (exclude heavy bin/cache) ---
+    # --- Flutter: ~/flutter + ~/.pub-cache (exclude heavy bin/cache) ---
     local flutter_file="${run_dir}/flutter-backup-${ts}.tar.zst"
-    if [[ -d "$HOME/flutter" ]]; then
-        log "Backing up Flutter (~/flutter)"
-        tar -C "$HOME" --zstd -cf "$flutter_file" flutter
+    local flutter_paths=()
+    [[ -d "$HOME/flutter" ]] && flutter_paths+=("flutter")
+    [[ -d "$HOME/.pub-cache" ]] && flutter_paths+=(".pub-cache")
+
+    if (( ${#flutter_paths[@]} > 0 )); then
+        log "Backing up Flutter (~/flutter + ~/.pub-cache)"
+        tar -C "$HOME" --zstd -cf "$flutter_file" "${flutter_paths[@]}"
 
         local size
         size=$(du -h "${flutter_file}" | cut -f1)
         log "✅ Created $(basename "${flutter_file}") (${size})"
     else
-        log "⚠ ~/flutter not found — skipping flutter backup"
+        log "⚠ Neither ~/flutter nor ~/.pub-cache found — skipping flutter backup"
     fi
 
     # --- Android SDK: ~/android-sdk (exclude large emulator images + temps) ---
