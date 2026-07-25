@@ -130,6 +130,10 @@ pub fn init_app() {
                 .with_max_level(log::LevelFilter::Debug)
                 .with_tag("muse_ml"),
         );
+        // Ensure the max level takes effect even if android_logger was
+        // already initialized (e.g. by flutter_rust_bridge). Without this,
+        // jni::trace!() spam floods logcat at verbose priority.
+        log::set_max_level(log::LevelFilter::Debug);
     }
     #[cfg(not(target_os = "android"))]
     {
@@ -232,14 +236,38 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
 
         log::info!("[muse] connected to {name} ({firmware} firmware)");
 
-        // Start streaming — best-effort with its own timeout.  The BLE link
-        // from connect_to() is already established, so a timeout here still
-        // leaves a usable (but silent) connection.
-        let _ = tokio::time::timeout(
-            std::time::Duration::from_secs(8),
-            handle.start(false, false),
-        )
-        .await;
+        // Start streaming — on Android the BLE stack drops rapid-fire
+        // WriteWithoutResponse commands, so we add delays between each
+        // step for the Classic protocol.  Athena's start() already has
+        // built-in delays and is used as-is.
+        let start_result = if handle.is_athena {
+            tokio::time::timeout(
+                std::time::Duration::from_secs(8),
+                handle.start(false, false),
+            )
+            .await
+        } else {
+            tokio::time::timeout(
+                std::time::Duration::from_secs(8),
+                async {
+                    handle.send_command("h").await?;
+                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                    handle.send_command("s").await?;
+                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                    handle.send_command("p21").await?;
+                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                    handle.send_command("d").await?;
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                    Ok(())
+                },
+            )
+            .await
+        };
+        match start_result {
+            Ok(Err(e)) => log::warn!("[muse] start commands failed: {e:?}"),
+            Err(_) => log::warn!("[muse] start commands timed out after 8 s"),
+            _ => {}
+        }
 
         // Request device info once so the control JSON with bp (battery
         // percentage) arrives.  The forwarder extracts bp from Control events
