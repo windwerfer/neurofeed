@@ -24,16 +24,6 @@
         },
         {
             "type": "volume",
-            "source": "flutter_muse_ml_flutter",
-            "target": "/usr/local/flutter"
-        },
-        {
-            "type": "volume",
-            "source": "flutter_muse_ml_android-sdk",
-            "target": "/opt/android-sdk"
-        },
-        {
-            "type": "volume",
             "source": "shared_backups",
             "target": "/opt/backups"
         }
@@ -76,8 +66,8 @@
         "DEBUGPY_PROCESS_SPAWN_TIMEOUT": "90",
         "ANDROID_ADB_SERVER_ADDRESS": "host.docker.internal",
         "VIRTUAL_ENV": "/workspaces/flutter_muse_ml/.venv",
-        "ANDROID_HOME":     "/opt/android-sdk",
-        "ANDROID_SDK_ROOT": "/opt/android-sdk",
+        "ANDROID_HOME":     "/home/vscode/android-sdk",
+        "ANDROID_SDK_ROOT": "/home/vscode/android-sdk",
         "ANDROID_NDK_HOME": "${ANDROID_HOME}/ndk/28.2.13676358",
         "JAVA_HOME": "/usr/lib/jvm/java-21-openjdk-amd64",
         "PATH": "${PATH}:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/cmdline-tools/latest/bin",

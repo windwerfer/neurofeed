@@ -12,16 +12,16 @@ echo "==> Running post-setup for fl_muse_brainflow_MVP"
 CACHE_DIR="/opt/backups"
 FLUTTER_VERSION="3.41.7"
 FLUTTER_TAR="flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
-FLUTTER_DIR="/usr/local/flutter"
+FLUTTER_DIR="$HOME/flutter"
 
 # =====================
 # OWNERSHIP (safe to run again)
 # =====================
 echo "==> Fixing volume permissions..."
 sudo chown -R vscode:vscode \
-    /usr/local/flutter \
-    /home/vscode/.cargo \
-    /opt/android-sdk \
+    "$HOME/.cargo" \
+    "$HOME/android-sdk" \
+    "$HOME/flutter" \
     /opt/backups
 
 # Make .devcontainer shell scripts executable.
@@ -77,7 +77,5 @@ else
     fi
 
     # Extract from cache
-    sudo tar -xJf "$cached_tar" -C /usr/local
+    tar -xJf "$cached_tar" -C "$HOME"
 fi
-
-sudo chown -R vscode:vscode "${FLUTTER_DIR}"

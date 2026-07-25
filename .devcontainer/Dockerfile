@@ -25,18 +25,21 @@ RUN chsh -s /usr/bin/zsh vscode
 
 
 # Pre-create volume targets and assign ownership to vscode
-RUN mkdir -p /opt/android-sdk /opt/download-cache /usr/local/flutter /home/vscode
-RUN chown -R vscode:vscode /opt/android-sdk /opt/download-cache /usr/local/flutter /home/vscode
+RUN mkdir -p /opt/download-cache /home/vscode
+RUN chown -R vscode:vscode /home/vscode /opt/download-cache
 
 
 USER $USERNAME
 WORKDIR /workspaces/flutter_muse_ml
 
+RUN mkdir -p /home/vscode/android-sdk /home/vscode/flutter
+
+
 # additional PATH var - just in case
 # These will be populated by named volumes + post-setup.sh
-ENV ANDROID_HOME="/opt/android-sdk"
+ENV ANDROID_HOME="/home/vscode/android-sdk"
 ENV ANDROID_NDK_HOME="${ANDROID_HOME}/ndk/28.2.13676358"
-ENV PATH="/usr/local/flutter/bin:/home/vscode/.cargo/bin:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
+ENV PATH="/home/vscode/flutter/bin:/home/vscode/.cargo/bin:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
 ENV PATH="/workspaces/flutter_muse_ml/.venv/bin:/root/.local/bin:/home/vscode/.local/bin:/home/vscode/.opencode/bin:/home/vscode/.grok/bin:${PATH}"
 
 

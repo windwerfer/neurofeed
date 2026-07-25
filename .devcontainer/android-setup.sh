@@ -4,7 +4,7 @@ set -e
 echo "==> Running android-setup for fl_muse_brainflow_MVP"
 
 CACHE_DIR="/opt/backups"
-ANDROID_HOME="/opt/android-sdk"
+ANDROID_HOME="$HOME/android-sdk"
 
 # =====================
 # OWNERSHIP (safe to run again)

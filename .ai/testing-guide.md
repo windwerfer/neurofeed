@@ -2,8 +2,8 @@
 
 ## Environment
 - Device attached: `adb devices` → `HA2A7MWP  device` (Lenovo/ZUI ROM, Mediatek).
-- `adb`: `/opt/android-sdk/platform-tools/adb`. SDK at `/opt/android-sdk`.
-- `flutter`: `/usr/local/flutter/bin/flutter`. Rust Android targets + `cargo-ndk` installed.
+- `adb`: `$HOME/android-sdk/platform-tools/adb`. SDK at `$HOME/android-sdk`.
+- `flutter`: `$HOME/flutter/bin/flutter`. Rust Android targets + `cargo-ndk` installed.
 - App package: `com.example.muse_ml`.
 
 ## The build/test loop (self-contained, no back-and-forth)
