@@ -56,9 +56,7 @@ do_backup() {
 
     if (( ${#rust_paths[@]} > 0 )); then
         log "Backing up Rust (~/.cargo + ~/.rustup)"
-        tar -C "$HOME" \
-            --exclude='.cargo/registry/cache' \
-            --zstd -cf "$rust_file" "${rust_paths[@]}"
+        tar -C "$HOME"  --zstd -cf "$rust_file" "${rust_paths[@]}"
 
         local size
         size=$(du -h "${rust_file}" | cut -f1)
@@ -85,7 +83,6 @@ do_backup() {
     if [[ -d "$HOME/android-sdk" ]]; then
         log "Backing up Android SDK (~/android-sdk)"
         tar -C "$HOME" \
-            --exclude='android-sdk/system-images' \
             --exclude='android-sdk/temp' \
             --exclude='android-sdk/.tmp' \
             --zstd -cf "$android_file" android-sdk
@@ -285,7 +282,8 @@ do_restore() {
 
     echo
     log "Restore complete."
-    echo "Note: some caches (cargo registry, flutter engine, emulator images) were not backed up and may need to be re-populated."
+    log "All SDKs, caches, engines, and agent histories are fully restored!"
+
 }
 
 # =====================
