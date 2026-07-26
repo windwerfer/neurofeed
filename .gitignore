@@ -12,6 +12,7 @@
 .swiftpm/
 migrate_working_dir/
 tmp/
+.Trash*/
 
 # IntelliJ related
 *.iml

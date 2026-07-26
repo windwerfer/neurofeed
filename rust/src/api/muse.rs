@@ -250,6 +250,7 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
             tokio::time::timeout(
                 std::time::Duration::from_secs(8),
                 async {
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     handle.send_command("h").await?;
                     tokio::time::sleep(std::time::Duration::from_millis(150)).await;
                     handle.send_command("s").await?;
@@ -264,7 +265,7 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
             .await
         };
         match start_result {
-            Ok(Err(e)) => log::warn!("[muse] start commands failed: {e:?}"),
+            Ok(Err(e)) => log::warn!("[muse] start commands failed: {e:#}"),
             Err(_) => log::warn!("[muse] start commands timed out after 8 s"),
             _ => {}
         }
@@ -359,16 +360,46 @@ pub fn subscribe_events(sink: StreamSink<MuseEventDto>) {
     guard.sink = Some(sink);
 }
 
+/// Guard that ensures forwarder state is cleaned up when the task exits,
+/// whether normally or via panic. Drop runs even during stack unwinding.
+struct ForwarderGuard {
+    epoch: u64,
+}
+
+impl Drop for ForwarderGuard {
+    fn drop(&mut self) {
+        let panicking = std::thread::panicking();
+        {
+            let mut guard = state().inner.lock().unwrap_or_else(|e| e.into_inner());
+            if guard.connection_epoch == self.epoch {
+                guard.active = None;
+                guard.events = None;
+                if let Some(sink) = &guard.sink {
+                    let _ = sink.add(MuseEventDto::Disconnected);
+                }
+            }
+            guard.forwarder_running = false;
+        }
+        if panicking {
+            log::error!("[muse] forwarder panicked (epoch={})", self.epoch);
+        } else {
+            log::info!("[muse] forwarder exited (epoch={})", self.epoch);
+        }
+    }
+}
+
 fn spawn_event_forwarder() {
     let epoch = {
-        let mut guard = state().inner.lock().unwrap();
+        let mut guard = state().inner.lock().unwrap_or_else(|e| e.into_inner());
         if guard.forwarder_running {
             return;
         }
         guard.forwarder_running = true;
         guard.connection_epoch
     };
+    log::info!("[muse] forwarder started (epoch={epoch})");
     tokio::spawn(async move {
+        let _guard = ForwarderGuard { epoch };
         #[derive(Default)]
         struct PktCounts {
             eeg: u64,
@@ -383,19 +414,45 @@ fn spawn_event_forwarder() {
         }
         let mut counts = PktCounts::default();
         let mut last_print = tokio::time::Instant::now();
-        let mut accums: std::collections::HashMap<i32, Vec<f64>> = std::collections::HashMap::new();
+        let mut accums: std::collections::HashMap<i32, Vec<f64>> =
+            std::collections::HashMap::new();
         let mut bp_override: Option<f32> = None;
         const FFT_N: usize = 256;
         loop {
             let rx = {
-                let mut guard = state().inner.lock().unwrap();
+                let mut guard =
+                    state().inner.lock().unwrap_or_else(|e| e.into_inner());
                 guard.events.take()
             };
             let Some(mut rx) = rx else {
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                 continue;
             };
-            while let Some(ev) = rx.recv().await {
+            loop {
+                let ev = match tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    rx.recv(),
+                )
+                .await
+                {
+                    Ok(Some(ev)) => ev,
+                    Ok(None) => {
+                        log::info!(
+                            "[muse] forwarder: event channel closed (epoch={epoch})"
+                        );
+                        break;
+                    }
+                    Err(_) => {
+                        log::info!(
+                            "[muse] forwarder: alive (epoch={epoch}, no events for 5s, eeg={} telem={} accel={} gyro={})",
+                            counts.eeg, counts.telemetry,
+                            counts.accelerometer, counts.gyroscope,
+                        );
+                        counts = PktCounts::default();
+                        last_print = tokio::time::Instant::now();
+                        continue;
+                    }
+                };
                 match &ev {
                     MuseEvent::Eeg(_) => counts.eeg += 1,
                     MuseEvent::Ppg(_) => counts.ppg += 1,
@@ -417,11 +474,6 @@ fn spawn_event_forwarder() {
                     last_print = tokio::time::Instant::now();
                 }
                 let mut dto = map_event(ev);
-                // Capture battery percentage (bp) from control JSON and inject it
-                // into telemetry events so the UI gets the correct 0-100 value.
-                // muse-rs parses the dedicated telemetry characteristic (273e000b)
-                // which carries a raw fuel-gauge fraction (0.0-1.0) — not the
-                // actual percentage.  The v1 command response includes bp.
                 if let MuseEventDto::Control(ref c) = dto {
                     if let Some(bp) = c.fields.get("bp").and_then(|s| s.parse::<f32>().ok()) {
                         bp_override = Some(bp);
@@ -438,7 +490,8 @@ fn spawn_event_forwarder() {
                     None
                 };
                 let should_stop = {
-                    let mut guard = state().inner.lock().unwrap();
+                    let mut guard =
+                        state().inner.lock().unwrap_or_else(|e| e.into_inner());
                     match guard.sink.as_ref() {
                         Some(sink) => {
                             if sink.add(dto).is_err() {
@@ -455,27 +508,49 @@ fn spawn_event_forwarder() {
                     break;
                 }
                 if let Some((electrode, timestamp, samples)) = eeg_samples {
-                    let buf = accums.entry(electrode).or_default();
-                    for s in &samples {
-                        buf.push(*s);
-                    }
-                    if buf.len() >= FFT_N {
-                        let trimmed: Vec<f64> = buf.drain(..FFT_N).collect();
-                        let powers = compute_fft_bands(&trimmed);
+                    let trimmed = {
+                        let buf = accums.entry(electrode).or_default();
+                        for s in &samples {
+                            buf.push(*s);
+                        }
+                        if buf.len() >= FFT_N {
+                            Some(buf.drain(..FFT_N).collect::<Vec<f64>>())
+                        } else {
+                            None
+                        }
+                    };
+                    if let Some(trimmed) = trimmed {
+                        let powers = match tokio::task::spawn_blocking(
+                            move || compute_fft_bands(&trimmed),
+                        )
+                        .await
+                        {
+                            Ok(p) => p,
+                            Err(e) => {
+                                log::error!("[muse] FFT blocking task panicked: {e}");
+                                continue;
+                            }
+                        };
                         counts.bands += 1;
                         let should_stop = {
-                            let mut guard = state().inner.lock().unwrap();
+                            let mut guard = state()
+                                .inner
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
                             match guard.sink.as_ref() {
                                 Some(sink) => {
-                                    if sink.add(MuseEventDto::Bands(BandsDto {
-                                        electrode,
-                                        timestamp,
-                                        delta: powers[0],
-                                        theta: powers[1],
-                                        alpha: powers[2],
-                                        beta: powers[3],
-                                        gamma: powers[4],
-                                    })).is_err() {
+                                    if sink
+                                        .add(MuseEventDto::Bands(BandsDto {
+                                            electrode,
+                                            timestamp,
+                                            delta: powers[0],
+                                            theta: powers[1],
+                                            alpha: powers[2],
+                                            beta: powers[3],
+                                            gamma: powers[4],
+                                        }))
+                                        .is_err()
+                                    {
                                         guard.sink = None;
                                         true
                                     } else {
@@ -491,18 +566,6 @@ fn spawn_event_forwarder() {
                     }
                 }
             }
-            // Receiver ended (device disconnected).  Only clear active state
-            // if no newer connection has been established since this forwarder
-            // was spawned — otherwise we would tear down the new connection's
-            // handle without calling disconnect(), leaving a stale BLE link.
-            {
-                let mut guard = state().inner.lock().unwrap();
-                if guard.connection_epoch == epoch {
-                    guard.active = None;
-                    guard.events = None;
-                }
-                guard.forwarder_running = false;
-            }
         }
     });
 }
@@ -513,26 +576,77 @@ fn compute_fft_bands(samples: &[f64]) -> [f64; 5] {
         return [0.0; 5];
     }
     let sample_rate = 256.0;
-    let mut bin_power = vec![0.0f64; n / 2 + 1];
-    for k in 0..=n / 2 {
-        let mut re = 0.0;
-        let mut im = 0.0;
-        for (i, &x) in samples.iter().enumerate() {
-            let angle = -2.0 * std::f64::consts::PI * k as f64 * i as f64 / n as f64;
-            re += x * angle.cos();
-            im += x * angle.sin();
-        }
-        bin_power[k] = (re * re + im * im) / (n as f64 * n as f64);
-    }
     let hz_per_bin = sample_rate / n as f64;
     let bin = |hz: f64| (hz / hz_per_bin).round() as usize;
-    [
-        bin_power[bin(0.5)..=bin(4.0)].iter().sum(),
-        bin_power[bin(4.0)..=bin(8.0)].iter().sum(),
-        bin_power[bin(8.0)..=bin(13.0)].iter().sum(),
-        bin_power[bin(13.0)..=bin(30.0)].iter().sum(),
-        bin_power[bin(30.0)..=bin(50.0)].iter().sum(),
-    ]
+
+    // Reuse scratch buffers across calls via a small thread-local pool to
+    // avoid repeated allocations.  Each electrode does one FFT per second,
+    // and one blocking task runs at a time, so 2 buffers × n is enough.
+    thread_local! {
+        static RE: std::cell::RefCell<Vec<f64>> = const { std::cell::RefCell::new(Vec::new()) };
+        static IM: std::cell::RefCell<Vec<f64>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    RE.with(|re_buf| IM.with(|im_buf| {
+        let mut re = re_buf.borrow_mut();
+        let mut im = im_buf.borrow_mut();
+        re.resize(n, 0.0);
+        im.resize(n, 0.0);
+
+        // Cooley–Tukey radix-2 DIT FFT, in-place, O(n log n).
+        // n = 256 (power of two) guaranteed by the caller.
+        re.copy_from_slice(samples);
+        im.fill(0.0);
+        let mut j = 0;
+        for i in 1..n {
+            let mut bit = n >> 1;
+            while j & bit != 0 {
+                j ^= bit;
+                bit >>= 1;
+            }
+            j ^= bit;
+            if i < j {
+                re.swap(i, j);
+                im.swap(i, j);
+            }
+        }
+        let mut len = 2;
+        while len <= n {
+            let angle = -2.0 * std::f64::consts::PI / len as f64;
+            let wlen_re = angle.cos();
+            let wlen_im = angle.sin();
+            for i in (0..n).step_by(len) {
+                let half = len / 2;
+                let mut w_re = 1.0;
+                let mut w_im = 0.0;
+                for j in 0..half {
+                    let k = i + j;
+                    let u_re = re[k];
+                    let u_im = im[k];
+                    let v_re = w_re * re[k + half] - w_im * im[k + half];
+                    let v_im = w_re * im[k + half] + w_im * re[k + half];
+                    re[k] = u_re + v_re;
+                    im[k] = u_im + v_im;
+                    re[k + half] = u_re - v_re;
+                    im[k + half] = u_im - v_im;
+                    let t_re = w_re * wlen_re - w_im * wlen_im;
+                    let t_im = w_re * wlen_im + w_im * wlen_re;
+                    w_re = t_re;
+                    w_im = t_im;
+                }
+            }
+            len <<= 1;
+        }
+
+        let half_n = n / 2;
+        [
+            (1..=bin(4.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
+            (bin(4.0)..=bin(8.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
+            (bin(8.0)..=bin(13.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
+            (bin(13.0)..=bin(30.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
+            (bin(30.0)..=bin(half_n.min(50) as f64)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
+        ]
+    }))
 }
 
 fn map_event(ev: MuseEvent) -> MuseEventDto {
