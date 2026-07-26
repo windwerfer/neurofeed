@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/charts/graph_config.dart';
 import 'package:muse_ml/src/charts/sweep_buffer.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
@@ -17,10 +18,8 @@ class SweepEegView extends ConsumerStatefulWidget {
 class _SweepEegViewState extends ConsumerState<SweepEegView> {
   final SweepBuffer _buffer = SweepBuffer();
   StreamSubscription<MuseEventDto>? _sub;
-  bool _drawerOpen = false;
-  final Set<int> _activeElectrodes = {};
-  final Set<int> _discoveredElectrodes = {};
-  bool _avgMode = false;
+  final List<GraphConfig> _graphs = [];
+  final List<bool> _graphDrawerOpen = [];
   int _xZoomSamples = 0;
   int? _xZoomAtPinchStart;
   int _panOffset = 0;
@@ -28,13 +27,15 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   double _yZoomFactor = 1.0;
   double? _yZoomAtPinchStart;
 
-  static const _initialXZoomSamples = 2560; // 10s at 256 Hz
+  static const _initialXZoomSamples = 2560;
 
   @override
   void initState() {
     super.initState();
     _xZoomSamples = _initialXZoomSamples;
     _buffer.setDisplayWindow(_xZoomSamples);
+    _graphs.add(GraphConfig.defaultFor([], avg: false));
+    _graphDrawerOpen.add(false);
     _buffer.addListener(_onBufferChanged);
     final notifier = ref.read(appStateProvider.notifier);
     _sub = notifier.eventStream.listen(_onEvent);
@@ -55,10 +56,16 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   void _onEvent(MuseEventDto event) {
     if (event is MuseEventDto_Eeg) {
       _buffer.append(event.field0);
-      if (!_discoveredElectrodes.contains(event.field0.electrode)) {
+      final e = event.field0.electrode;
+      final known = _graphs.any((g) => g.allElectrodes.contains(e));
+      if (!known) {
         setState(() {
-          _discoveredElectrodes.add(event.field0.electrode);
-          _activeElectrodes.add(event.field0.electrode);
+          for (int i = 0; i < _graphs.length; i++) {
+            _graphs[i] = _graphs[i].copyWith(
+              allElectrodes: [..._graphs[i].allElectrodes, e],
+              activeElectrodes: {..._graphs[i].activeElectrodes, e},
+            );
+          }
         });
       }
     }
@@ -70,7 +77,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     if (!_buffer.frozen) {
       _buffer.freeze();
       int maxCount = 0;
-      for (final e in _activeElectrodes) {
+      for (final e in _buffer.electrodes) {
         final c = _buffer.channelCount(e);
         if (c > maxCount) maxCount = c;
       }
@@ -108,7 +115,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   void _panBy(int delta) {
     setState(() {
       int maxCount = 0;
-      for (final e in _activeElectrodes) {
+      for (final e in _buffer.electrodes) {
         final c = _buffer.channelCount(e);
         if (c > maxCount) maxCount = c;
       }
@@ -153,7 +160,11 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   double _computeAutoYHalfRange() {
     double yMin = double.infinity;
     double yMax = double.negativeInfinity;
-    for (final ch in _activeElectrodes) {
+    final allActive = <int>{};
+    for (final g in _graphs) {
+      allActive.addAll(g.activeElectrodes);
+    }
+    for (final ch in allActive) {
       if (!_buffer.hasChannel(ch)) continue;
       final start = _buffer.frozen ? _panOffset : 0;
       final end = start + _xZoomSamples;
@@ -211,7 +222,47 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     _panOffset = 0;
   }
 
-  void _toggleDrawer() => setState(() => _drawerOpen = !_drawerOpen);
+  void _addGraph() {
+    setState(() {
+      final all = _buffer.electrodes;
+      _graphs.add(GraphConfig.defaultFor(all, avg: false));
+      _graphDrawerOpen.add(false);
+    });
+  }
+
+  void _removeGraph(int index) {
+    if (_graphs.length <= 1) return;
+    setState(() {
+      _graphs.removeAt(index);
+      _graphDrawerOpen.removeAt(index);
+    });
+  }
+
+  void _toggleElectrode(int graphIndex, int e) {
+    setState(() {
+      final g = _graphs[graphIndex];
+      final updated = Set<int>.from(g.activeElectrodes);
+      if (updated.contains(e)) {
+        updated.remove(e);
+      } else {
+        updated.add(e);
+      }
+      _graphs[graphIndex] = g.copyWith(activeElectrodes: updated);
+    });
+  }
+
+  void _toggleAvg(int graphIndex) {
+    setState(() {
+      final g = _graphs[graphIndex];
+      _graphs[graphIndex] = g.copyWith(avgMode: !g.avgMode);
+    });
+  }
+
+  void _toggleDrawer(int graphIndex) {
+    setState(() {
+      _graphDrawerOpen[graphIndex] = !_graphDrawerOpen[graphIndex];
+    });
+  }
 
   void _reset() {
     _buffer.freeze();
@@ -223,17 +274,17 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     });
   }
 
-  void _toggleElectrode(int e) {
-    setState(() {
-      if (_activeElectrodes.contains(e)) {
-        _activeElectrodes.remove(e);
-      } else {
-        _activeElectrodes.add(e);
-      }
-    });
-  }
-
   static const _kDrawerWidth = 180.0;
+
+  static const _kChannelNames = ['TP9', 'AF7', 'AF8', 'TP10'];
+
+  String _graphLabel(GraphConfig g) {
+    if (g.avgMode) return 'avg';
+    final sorted = g.activeElectrodes.toList()..sort();
+    return sorted
+        .map((e) => e < _kChannelNames.length ? _kChannelNames[e] : 'CH${e + 1}')
+        .join(' ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -247,15 +298,51 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
           onYZoomIn: _yZoomIn,
           yAutoZoom: _yAutoZoom,
           onToggleYAutoZoom: _toggleYAutoZoom,
-          onGear: _toggleDrawer,
-          gearActive: _drawerOpen,
           isLive: !_buffer.frozen,
           onLive: _resume,
+          onAddGraph: _addGraph,
           onReset: _reset,
         ),
         Expanded(
-          child: Row(
+          child: _graphs.length == 1
+              ? _buildGraph(0)
+              : Column(
+                  children: [
+                    for (int i = 0; i < _graphs.length; i++)
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Expanded(child: _buildGraph(i)),
+                            if (i < _graphs.length - 1)
+                              const Divider(
+                                color: Color(0xFF2A2D37),
+                                height: 1,
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGraph(int graphIndex) {
+    final config = _graphs[graphIndex];
+    final drawerOpen = _graphDrawerOpen[graphIndex];
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
             children: [
+              _GraphHeader(
+                label: _graphLabel(config),
+                canRemove: _graphs.length > 1,
+                drawerOpen: drawerOpen,
+                onRemove: () => _removeGraph(graphIndex),
+                onToggleDrawer: () => _toggleDrawer(graphIndex),
+              ),
               Expanded(
                 child: ClipRect(
                   child: Listener(
@@ -270,8 +357,8 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
                             buffer: _buffer,
                             frozen: _buffer.frozen,
                             panOffset: _panOffset,
-                            activeElectrodes: _activeElectrodes,
-                            avgMode: _avgMode,
+                            activeElectrodes: config.activeElectrodes,
+                            avgMode: config.avgMode,
                             xZoomSamples: _xZoomSamples,
                             yAutoZoom: _yAutoZoom,
                             yZoomFactor: _yZoomFactor,
@@ -282,18 +369,18 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
                   ),
                 ),
               ),
-              if (_drawerOpen)
-                _SettingsDrawer(
-                  width: _kDrawerWidth,
-                  electrodes: _buffer.electrodes,
-                  activeElectrodes: _activeElectrodes,
-                  avgMode: _avgMode,
-                  onToggleElectrode: _toggleElectrode,
-                  onToggleAvg: () => setState(() => _avgMode = !_avgMode),
-                ),
             ],
           ),
         ),
+        if (drawerOpen)
+          _SettingsDrawer(
+            width: _kDrawerWidth,
+            electrodes: config.allElectrodes,
+            activeElectrodes: config.activeElectrodes,
+            avgMode: config.avgMode,
+            onToggleElectrode: (e) => _toggleElectrode(graphIndex, e),
+            onToggleAvg: () => _toggleAvg(graphIndex),
+          ),
       ],
     );
   }
@@ -308,10 +395,9 @@ class _HeaderBar extends StatelessWidget {
     required this.onYZoomIn,
     required this.yAutoZoom,
     required this.onToggleYAutoZoom,
-    required this.onGear,
-    required this.gearActive,
     required this.isLive,
     required this.onLive,
+    required this.onAddGraph,
     required this.onReset,
   });
 
@@ -322,10 +408,9 @@ class _HeaderBar extends StatelessWidget {
   final VoidCallback onYZoomIn;
   final bool yAutoZoom;
   final VoidCallback onToggleYAutoZoom;
-  final VoidCallback onGear;
-  final bool gearActive;
   final bool isLive;
   final VoidCallback onLive;
+  final VoidCallback onAddGraph;
   final VoidCallback onReset;
 
   @override
@@ -384,8 +469,6 @@ class _HeaderBar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          _headerBtn(Icons.settings, 'Settings', onGear, active: gearActive),
           const Spacer(),
           GestureDetector(
             onTap: isLive ? null : onLive,
@@ -416,7 +499,7 @@ class _HeaderBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          _headerBtn(Icons.add_box_outlined, 'Add graph', () {}),
+          _headerBtn(Icons.add_box_outlined, 'Add graph', onAddGraph),
           const SizedBox(width: 4),
           _headerBtn(Icons.refresh, 'Reset', onReset),
         ],
@@ -444,6 +527,80 @@ class _HeaderBar extends StatelessWidget {
             size: 18,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _GraphHeader extends StatelessWidget {
+  const _GraphHeader({
+    required this.label,
+    required this.canRemove,
+    required this.drawerOpen,
+    required this.onRemove,
+    required this.onToggleDrawer,
+  });
+
+  final String label;
+  final bool canRemove;
+  final bool drawerOpen;
+  final VoidCallback onRemove;
+  final VoidCallback onToggleDrawer;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 26,
+      padding: const EdgeInsets.only(left: 12, right: 8),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFF2A2D37))),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF6B7280),
+                fontSize: 10,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          if (canRemove)
+            GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.remove_circle_outline,
+                  color: drawerOpen
+                      ? const Color(0xFF66FF66)
+                      : const Color(0xFF6B7280),
+                  size: 14,
+                ),
+              ),
+            ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onToggleDrawer,
+            child: Container(
+              width: 22,
+              height: 22,
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.settings,
+                color: drawerOpen
+                    ? const Color(0xFF66FF66)
+                    : const Color(0xFF6B7280),
+                size: 14,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
