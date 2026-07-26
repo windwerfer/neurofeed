@@ -1,8 +1,17 @@
 use flutter_rust_bridge::frb;
+use std::time::{SystemTime, UNIX_EPOCH};
 use crate::frb_generated::StreamSink;
 use muse_rs::prelude::*;
 
 use crate::connection::{state, ActiveConnection};
+
+fn now_ms() -> f64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64()
+        * 1000.0
+}
 
 // ── DTOs (serializable across the bridge) ──────────────────────────────────────
 
@@ -417,6 +426,14 @@ fn spawn_event_forwarder() {
         let mut accums: std::collections::HashMap<i32, Vec<f64>> =
             std::collections::HashMap::new();
         let mut bp_override: Option<f32> = None;
+
+        // Per-electrode virtual timestamp tracking for Athena firmware.
+        // muse-rs emits timestamp=0.0 for Athena packets because they lack
+        // per-channel sequence indices.  We synthesise wall-clock timestamps
+        // by anchoring to the first packet arrival and advancing at 256 Hz.
+        let mut eeg_ts_base: std::collections::HashMap<i32, f64> = std::collections::HashMap::new(); // ms epoch
+        let mut eeg_ts_count: std::collections::HashMap<i32, u64> = std::collections::HashMap::new(); // total samples
+
         const FFT_N: usize = 256;
         loop {
             let rx = {
@@ -474,6 +491,23 @@ fn spawn_event_forwarder() {
                     last_print = tokio::time::Instant::now();
                 }
                 let mut dto = map_event(ev);
+                // Patch Athena EEG timestamps (0.0) with virtual wall-clock
+                // timestamps derived from total sample count @ 256 Hz.
+                if let MuseEventDto::Eeg(ref mut e) = dto {
+                    if e.timestamp == 0.0 {
+                        let count = eeg_ts_count.entry(e.electrode).or_insert(0);
+                        let base = eeg_ts_base
+                            .entry(e.electrode)
+                            .or_insert_with(now_ms);
+                        e.timestamp = *base + (*count as f64) * 1000.0 / 256.0;
+                        *count += e.samples.len() as u64;
+                    } else {
+                        // Non-zero (Classic): keep tracker aligned so that
+                        // switching between Classic/Athena is seamless.
+                        eeg_ts_count.insert(e.electrode, 0);
+                        eeg_ts_base.insert(e.electrode, e.timestamp);
+                    }
+                }
                 if let MuseEventDto::Control(ref c) = dto {
                     if let Some(bp) = c.fields.get("bp").and_then(|s| s.parse::<f32>().ok()) {
                         bp_override = Some(bp);
