@@ -22,7 +22,7 @@ android_logger = "0.14"
 # with our JNI-fixed fork, so there is only ONE copy of btleplug
 # (and its GLOBAL_JVM / GLOBAL_ADAPTER statics) linked.
 [patch.'https://github.com/eugenehp/btleplug.git']
-# btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-2" }
+# btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-3" }
 
 # Local btleplug development — uncomment the git patch above before pushing.
 btleplug = { path = "../third_party/btleplug" }
