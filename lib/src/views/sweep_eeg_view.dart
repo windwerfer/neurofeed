@@ -83,6 +83,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
           }
         });
         _scheduleSaveLayout();
+        _tryAutoLayout();
       }
     }
   }
@@ -366,13 +367,20 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     _scheduleSaveLayout();
   }
 
+  void _tryAutoLayout() {
+    if (!_pendingAutoLayout) return;
+    if (_buffer.electrodes.length < 2) return;
+    _autoLayoutTimer?.cancel();
+    _applyAutoLayout();
+  }
+
   void _scheduleSaveLayout() {
     _saveTimer?.cancel();
     _saveTimer = Timer(_saveDelay, () => _saveLayout());
   }
 
   Future<void> _saveLayout() async {
-    final key = _deviceModelKey;
+    final key = _deviceModelKey ?? _deviceModelKeyFromStatus(ref.read(appStateProvider).status);
     if (key == null) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('eeg_layout_$key', _encodeLayout(_graphs));
