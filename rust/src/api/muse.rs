@@ -273,8 +273,7 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
         // Request device info once so the control JSON with bp (battery
         // percentage) arrives.  The forwarder extracts bp from Control events
         // and emits a Telemetry event with the correct 0-100 value.
-        // DISABLED: battery injection disabled to isolate crash (piece 1)
-        // let _ = handle.send_command("v1").await;
+        let _ = handle.send_command("v1").await;
 
         {
             let mut guard = state().inner.lock().unwrap();
@@ -417,6 +416,7 @@ fn spawn_event_forwarder() {
         let mut last_print = tokio::time::Instant::now();
         let mut accums: std::collections::HashMap<i32, Vec<f64>> =
             std::collections::HashMap::new();
+        let mut bp_override: Option<f32> = None;
         const FFT_N: usize = 256;
         loop {
             let rx = {
@@ -473,8 +473,17 @@ fn spawn_event_forwarder() {
                     counts = PktCounts::default();
                     last_print = tokio::time::Instant::now();
                 }
-                let dto = map_event(ev);
-                // DISABLED: battery bp_override injection (piece 1)
+                let mut dto = map_event(ev);
+                if let MuseEventDto::Control(ref c) = dto {
+                    if let Some(bp) = c.fields.get("bp").and_then(|s| s.parse::<f32>().ok()) {
+                        bp_override = Some(bp);
+                    }
+                }
+                if let MuseEventDto::Telemetry(ref mut t) = dto {
+                    if let Some(bp) = bp_override {
+                        t.battery_level = bp;
+                    }
+                }
                 let eeg_samples = if let MuseEventDto::Eeg(ref e) = dto {
                     Some((e.electrode, e.timestamp, e.samples.clone()))
                 } else {
