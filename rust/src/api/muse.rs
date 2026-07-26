@@ -666,18 +666,10 @@ fn map_event(ev: MuseEvent) -> MuseEventDto {
             samples: r.samples.into_iter().map(|s| s as f64).collect(),
         }),
         MuseEvent::Telemetry(t) => {
-            log::debug!(
-                "[muse] telemetry: battery={:.6} fuel_gauge={:.2} temp={}",
-                t.battery_level, t.fuel_gauge_voltage, t.temperature,
-            );
-            // If fuel gauge > 5000 mV (impossible for Li-Po) the offset/
-            // scaling is wrong — log the raw TelemetryData fields.
-            if t.fuel_gauge_voltage > 5_000.0 {
-                log::warn!(
-                    "[muse] telemetry raw reconst: seq={} batt_u16={:.0} fuel_u16={:.0}",
-                    t.sequence_id, t.battery_level * 512.0, t.fuel_gauge_voltage / 2.2,
-                );
-            }
+            // log::debug!(
+            //     "[muse] telemetry: battery={:.6} fuel_gauge={:.2} temp={}",
+            //     t.battery_level, t.fuel_gauge_voltage, t.temperature,
+            // );
             MuseEventDto::Telemetry(TelemetrySnapshot {
                 battery_level: t.battery_level,
                 fuel_gauge_voltage: t.fuel_gauge_voltage,
