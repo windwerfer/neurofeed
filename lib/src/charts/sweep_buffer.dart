@@ -3,7 +3,7 @@ import 'package:muse_ml/src/rust/api/muse.dart';
 
 class _ChannelBuf {
   final Float64List samples;    // main ring buffer (history)
-  final Float64List display;    // sweep display ring buffer
+  Float64List display;          // sweep display ring buffer
   int writePos = 0;             // position in samples (wraps at capacity)
   int dispPos = 0;              // position in display (wraps at displayWindow)
   int count = 0;                // total samples written (capped at capacity)
@@ -63,6 +63,7 @@ class SweepBuffer extends ChangeNotifier {
     if (window == _displayWindow) return;
     _displayWindow = window;
     for (final ch in _channels.values) {
+      ch.display = Float64List(window);
       ch.dispPos = 0;
     }
   }

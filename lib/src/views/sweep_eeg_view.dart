@@ -28,7 +28,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   double _yZoomFactor = 1.0;
   double? _yZoomAtPinchStart;
 
-  static const _initialXZoomSamples = 1536; // 6s at 256 Hz
+  static const _initialXZoomSamples = 2560; // 10s at 256 Hz
 
   @override
   void initState() {
