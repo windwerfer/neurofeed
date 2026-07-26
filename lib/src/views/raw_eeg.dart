@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/charts/eeg_dashboard.dart';
-import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/views/sweep_eeg_view.dart';
 
-class RawEegView extends ConsumerWidget {
+class RawEegView extends StatelessWidget {
   const RawEegView({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final notifier = ref.read(appStateProvider.notifier);
-    return EegDashboard(source: notifier.liveCache);
+  Widget build(BuildContext context) {
+    return const SweepEegView();
   }
 }
