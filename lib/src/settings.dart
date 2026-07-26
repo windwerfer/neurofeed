@@ -1,11 +1,13 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum AppView { bands, rawEeg, terminal }
+enum AppView { bands, rawEeg, spectrogram, psd, settings }
 
 const Map<AppView, String> _viewNames = {
   AppView.bands: 'bands',
   AppView.rawEeg: 'rawEeg',
-  AppView.terminal: 'terminal',
+  AppView.spectrogram: 'spectrogram',
+  AppView.psd: 'psd',
+  AppView.settings: 'settings',
 };
 
 AppView _viewFromName(String? name) {
@@ -14,8 +16,12 @@ AppView _viewFromName(String? name) {
       return AppView.bands;
     case 'rawEeg':
       return AppView.rawEeg;
-    case 'terminal':
-      return AppView.terminal;
+    case 'spectrogram':
+      return AppView.spectrogram;
+    case 'psd':
+      return AppView.psd;
+    case 'settings':
+      return AppView.settings;
     default:
       return AppView.bands;
   }

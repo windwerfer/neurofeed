@@ -11,6 +11,8 @@ import 'package:muse_ml/src/status_bar.dart';
 import 'package:muse_ml/src/views/bands.dart';
 import 'package:muse_ml/src/views/raw_eeg.dart';
 import 'package:muse_ml/src/views/terminal.dart';
+import 'package:muse_ml/src/views/psd_view.dart';
+import 'package:muse_ml/src/views/settings_view.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
@@ -54,8 +56,12 @@ class _AppShellState extends ConsumerState<AppShell> {
         body = const BandsView();
       case AppView.rawEeg:
         body = const RawEegView();
-      case AppView.terminal:
-        body = const TerminalView();
+      case AppView.spectrogram:
+        body = const SpectrogramView();
+      case AppView.psd:
+        body = const PsdView();
+      case AppView.settings:
+        body = const SettingsView();
     }
 
     return Scaffold(
@@ -90,12 +96,26 @@ class _AppShellState extends ConsumerState<AppShell> {
                                     .setCurrentView(AppView.rawEeg),
                               ),
                               _SideBarItem(
-                                label: 'Terminal',
+                                label: 'Spectrogram',
                                 selected:
-                                    state.currentView == AppView.terminal,
+                                    state.currentView == AppView.spectrogram,
                                 onTap: () => ref
                                     .read(appStateProvider.notifier)
-                                    .setCurrentView(AppView.terminal),
+                                    .setCurrentView(AppView.spectrogram),
+                              ),
+                              _SideBarItem(
+                                label: 'Power Spectral Density (PSD)',
+                                selected: state.currentView == AppView.psd,
+                                onTap: () => ref
+                                    .read(appStateProvider.notifier)
+                                    .setCurrentView(AppView.psd),
+                              ),
+                              _SideBarItem(
+                                label: 'Settings',
+                                selected: state.currentView == AppView.settings,
+                                onTap: () => ref
+                                    .read(appStateProvider.notifier)
+                                    .setCurrentView(AppView.settings),
                               ),
                             ],
                           ),
