@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/charts/eeg_data_source.dart';
@@ -35,6 +34,9 @@ class _BandsDashboardState extends State<BandsDashboard> with SingleTickerProvid
   VoidCallback? _ctrlListener;
   bool _smooth = true;
   bool _realTime = false;
+  bool _drawerOpen = false;
+
+  static const _kDrawerWidth = 180.0;
 
   Ticker? _scrollTicker;
   double _wallAtLastData = 0;
@@ -189,40 +191,24 @@ class _BandsDashboardState extends State<BandsDashboard> with SingleTickerProvid
       children: [
         _buildHeader(),
         Expanded(
-          child: Stack(
-            clipBehavior: Clip.none,
+          child: Row(
             children: [
-              Listener(
-                onPointerSignal: (event) {
-                  if (event is PointerScrollEvent) {
-                    _controller.onPointerSignal(event, widget.source.maxTimeWindowSecs);
-                  }
-                  if (_scrollTicker?.isActive ?? false) {
-                    _scrollTicker?.stop();
-                  }
-                },
-                child: GestureDetector(
-                  onScaleUpdate: (d) {
-                    _controller.onScaleUpdate(d, widget.source.maxTimeWindowSecs, context.size!.width);
-                    if (_scrollTicker?.isActive ?? false) {
-                      _scrollTicker?.stop();
-                    }
-                  },
-                  child: RepaintBoundary(
-                    child: CustomPaint(
-                      size: Size.infinite,
-                      painter: _EegChartPainter(
-                        slices: slices,
-                        visibleStart: visibleStart,
-                        visibleEnd: visibleEnd,
-                        autoScroll: _controller.autoScroll,
-                        smooth: _smooth,
-                      ),
+              Expanded(
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    size: Size.infinite,
+                    painter: _EegChartPainter(
+                      slices: slices,
+                      visibleStart: visibleStart,
+                      visibleEnd: visibleEnd,
+                      autoScroll: _controller.autoScroll,
+                      smooth: _smooth,
                     ),
                   ),
                 ),
               ),
-              _buildControls(),
+              if (_drawerOpen)
+                _buildDrawer(),
             ],
           ),
         ),
@@ -230,20 +216,17 @@ class _BandsDashboardState extends State<BandsDashboard> with SingleTickerProvid
     );
   }
 
-  Widget _buildControls() {
+  Widget _buildDrawer() {
     final itemH = 22.0;
-    return Positioned(
-      left: 8,
-      bottom: 40,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xBB111218),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFF2A2D37)),
-        ),
+    return Container(
+      width: _kDrawerWidth,
+      decoration: const BoxDecoration(
+        color: Color(0xFF16181F),
+        border: Border(left: BorderSide(color: Color(0xFF2A2D37))),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (int i = 0; i < bandCountPerElectrode; i++) ...[
@@ -333,6 +316,7 @@ class _BandsDashboardState extends State<BandsDashboard> with SingleTickerProvid
               ),
             ),
           ),
+          _headerBtn(Icons.settings, 'Settings', () => setState(() => _drawerOpen = !_drawerOpen)),
           const Spacer(),
           GestureDetector(
             onTap: () {

@@ -19,6 +19,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   StreamSubscription<MuseEventDto>? _sub;
   bool _drawerOpen = false;
   final Set<int> _activeElectrodes = {};
+  final Set<int> _discoveredElectrodes = {};
   bool _avgMode = false;
   int _xZoomSamples = 0;
   int? _xZoomAtPinchStart;
@@ -33,6 +34,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   void initState() {
     super.initState();
     _xZoomSamples = _initialXZoomSamples;
+    _buffer.setDisplayWindow(_xZoomSamples);
     _buffer.addListener(_onBufferChanged);
     final notifier = ref.read(appStateProvider.notifier);
     _sub = notifier.eventStream.listen(_onEvent);
@@ -53,8 +55,11 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   void _onEvent(MuseEventDto event) {
     if (event is MuseEventDto_Eeg) {
       _buffer.append(event.field0);
-      if (!_activeElectrodes.contains(event.field0.electrode)) {
-        setState(() => _activeElectrodes.add(event.field0.electrode));
+      if (!_discoveredElectrodes.contains(event.field0.electrode)) {
+        setState(() {
+          _discoveredElectrodes.add(event.field0.electrode);
+          _activeElectrodes.add(event.field0.electrode);
+        });
       }
     }
   }
@@ -81,6 +86,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
             128,
             _buffer.capacity,
           );
+          _buffer.setDisplayWindow(_xZoomSamples);
         });
       } else if (vDev > hDev && _yZoomAtPinchStart != null) {
         setState(() {
@@ -110,6 +116,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
           _buffer.capacity,
         );
       }
+      _buffer.setDisplayWindow(_xZoomSamples);
     });
   }
 
@@ -119,33 +126,70 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
         128,
         _buffer.capacity,
       );
+      _buffer.setDisplayWindow(_xZoomSamples);
     });
   }
 
   void _xZoomIn() {
     setState(() {
       _xZoomSamples = (_xZoomSamples ~/ 1.5).clamp(128, _buffer.capacity);
+      _buffer.setDisplayWindow(_xZoomSamples);
     });
+  }
+
+  double _computeAutoYHalfRange() {
+    double yMin = double.infinity;
+    double yMax = double.negativeInfinity;
+    for (final ch in _activeElectrodes) {
+      final data = _buffer.frozen ? _buffer.getChannel(ch) : _buffer.getDisplay(ch);
+      if (data == null) continue;
+      final start = _buffer.frozen ? _panOffset : 0;
+      final end = start + _xZoomSamples;
+      for (int i = start; i < end; i++) {
+        final s = _buffer.frozen ? data[i % _buffer.capacity] : data[i];
+        if (s.abs() < 1e6) {
+          if (s < yMin) yMin = s;
+          if (s > yMax) yMax = s;
+        }
+      }
+    }
+    if (yMin.isInfinite || yMax.isInfinite) return 200.0;
+    final range = yMax - yMin;
+    final padding = range > 0 ? range * 0.15 : 20.0;
+    return ((range / 2) + padding).clamp(10.0, 10000.0);
+  }
+
+  void _enterManualMode() {
+    if (!_yAutoZoom) return;
+    final autoRange = _computeAutoYHalfRange();
+    _yAutoZoom = false;
+    _yZoomFactor = 200.0 / autoRange;
   }
 
   void _yZoomOut() {
     setState(() {
-      _yAutoZoom = false;
+      _enterManualMode();
       _yZoomFactor *= 1.5;
     });
   }
 
   void _yZoomIn() {
     setState(() {
-      _yAutoZoom = false;
+      _enterManualMode();
       _yZoomFactor /= 1.5;
     });
   }
 
   void _toggleYAutoZoom() {
-    setState(() {
-      _yAutoZoom = !_yAutoZoom;
-    });
+    if (_yAutoZoom) {
+      final autoRange = _computeAutoYHalfRange();
+      setState(() {
+        _yAutoZoom = false;
+        _yZoomFactor = 200.0 / autoRange;
+      });
+    } else {
+      setState(() => _yAutoZoom = true);
+    }
   }
 
   void _resume() {
@@ -570,14 +614,8 @@ class _SweepPainter extends CustomPainter {
       _visibleStart = panOffset;
       _visibleEnd = panOffset + xZoomSamples;
     } else {
-      final cursor = buffer.cursor;
-      if (xZoomSamples >= cursor) {
-        _visibleStart = 0;
-        _visibleEnd = cursor;
-      } else {
-        _visibleStart = cursor - xZoomSamples;
-        _visibleEnd = cursor;
-      }
+      _visibleStart = 0;
+      _visibleEnd = xZoomSamples;
     }
 
     _computeYRange();
@@ -604,13 +642,12 @@ class _SweepPainter extends CustomPainter {
     if (yAutoZoom) {
       double yMin = double.infinity;
       double yMax = double.negativeInfinity;
-      final maxEnd = math.min(_visibleEnd, buffer.capacity);
       final sorted = activeElectrodes.toList()..sort();
       for (final ch in sorted) {
-        final buf = buffer.getChannel(ch);
-        if (buf == null) continue;
-        for (int i = _visibleStart; i < maxEnd; i++) {
-          final s = buf[i];
+        final data = frozen ? buffer.getChannel(ch) : buffer.getDisplay(ch);
+        if (data == null) continue;
+        for (int i = _visibleStart; i < _visibleEnd; i++) {
+          final s = frozen ? data[i % buffer.capacity] : data[i];
           if (s.abs() < 1e6) {
             if (s < yMin) yMin = s;
             if (s > yMax) yMax = s;
@@ -711,8 +748,8 @@ class _SweepPainter extends CustomPainter {
     final sorted = activeElectrodes.toList()..sort();
     final channels = <List<double>>[];
     for (final ch in sorted) {
-      final buf = buffer.getChannel(ch);
-      if (buf != null) channels.add(buf.toList());
+      final data = frozen ? buffer.getChannel(ch) : buffer.getDisplay(ch);
+      if (data != null) channels.add(frozen ? data.toList() : data.toList());
     }
     if (channels.isEmpty || channels.any((c) => c.isEmpty)) return;
 
@@ -722,15 +759,16 @@ class _SweepPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round;
 
-    final maxEnd = math.min(_visibleEnd, buffer.capacity);
+    final cap = buffer.capacity;
     bool started = false;
     final path = Path();
-    for (int i = _visibleStart; i < maxEnd; i++) {
+    for (int i = _visibleStart; i < _visibleEnd; i++) {
       double sum = 0;
       int count = 0;
       for (final c in channels) {
-        if (i < c.length && c[i].abs() < 1e6) {
-          sum += c[i];
+        final idx = frozen ? i % cap : i;
+        if (idx < c.length && c[idx].abs() < 1e6) {
+          sum += c[idx];
           count++;
         }
       }
@@ -749,8 +787,8 @@ class _SweepPainter extends CustomPainter {
   }
 
   void _drawChannel(Canvas canvas, int electrode) {
-    final buf = buffer.getChannel(electrode);
-    if (buf == null || buf.isEmpty) return;
+    final data = frozen ? buffer.getChannel(electrode) : buffer.getDisplay(electrode);
+    if (data == null || data.isEmpty) return;
 
     final color = _kChannelColors[electrode % _kChannelColors.length];
     final paint = Paint()
@@ -759,11 +797,11 @@ class _SweepPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round;
 
-    final maxEnd = math.min(_visibleEnd, buffer.capacity);
+    final cap = buffer.capacity;
     bool started = false;
     final path = Path();
-    for (int i = _visibleStart; i < maxEnd; i++) {
-      final s = buf[i];
+    for (int i = _visibleStart; i < _visibleEnd; i++) {
+      final s = frozen ? data[i % cap] : data[i];
       if (s.abs() > 1e6) continue;
       final x = _chartRect.left + (i - _visibleStart) * _xScale;
       final y = _chartRect.center.dy - s * _yScale;
@@ -778,7 +816,7 @@ class _SweepPainter extends CustomPainter {
   }
 
   void _drawCursor(Canvas canvas) {
-    final cursorPos = buffer.cursor - _visibleStart;
+    final cursorPos = frozen ? buffer.cursor - _visibleStart : buffer.cursor % xZoomSamples;
     if (cursorPos < 0 || cursorPos > xZoomSamples) return;
     final cx = _chartRect.left + cursorPos * _xScale;
 

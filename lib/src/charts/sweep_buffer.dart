@@ -6,6 +6,8 @@ class SweepBuffer extends ChangeNotifier {
 
   final int capacity;
   final Map<int, Float64List> _channels = {};
+  final Map<int, Float64List> _display = {};
+  int _displayWindow = 0;
   int _cursor = 0;
   int _count = 0;
   bool _frozen = false;
@@ -16,12 +18,25 @@ class SweepBuffer extends ChangeNotifier {
   int get cursor => _cursor;
   int get writtenCount => _count;
   bool get frozen => _frozen;
+  int get displayWindow => _displayWindow;
+
+  Float64List? getDisplay(int electrode) => _display[electrode];
+
+  void setDisplayWindow(int window) {
+    if (window == _displayWindow) return;
+    _displayWindow = window;
+    _display.clear();
+  }
 
   void append(EegDto dto) {
     if (_frozen) return;
     final buf = _channels.putIfAbsent(dto.electrode, () => Float64List(capacity));
+    final disp = _displayWindow > 0
+        ? _display.putIfAbsent(dto.electrode, () => Float64List(_displayWindow))
+        : null;
     for (final s in dto.samples) {
       buf[_cursor] = s;
+      if (disp != null) disp[_cursor % _displayWindow] = s;
       _cursor = (_cursor + 1) % capacity;
       if (_count < capacity) _count++;
     }
