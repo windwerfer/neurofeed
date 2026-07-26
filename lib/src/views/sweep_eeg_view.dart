@@ -78,11 +78,12 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
           for (int i = 0; i < _graphs.length; i++) {
             _graphs[i] = _graphs[i].copyWith(
               allElectrodes: [..._graphs[i].allElectrodes, e],
-              activeElectrodes: {..._graphs[i].activeElectrodes, e},
+              activeElectrodes: _pendingAutoLayout
+                  ? {..._graphs[i].activeElectrodes, e}
+                  : _graphs[i].activeElectrodes,
             );
           }
         });
-        _scheduleSaveLayout();
         _tryAutoLayout();
       }
     }
@@ -300,7 +301,6 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
       _graphs = _computeDefaultLayout();
       _graphDrawerOpen = List.filled(_graphs.length, false);
     });
-    _scheduleSaveLayout();
   }
 
   static const _kDrawerWidth = 180.0;
@@ -364,7 +364,6 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
       _graphs = _computeDefaultLayout();
       _graphDrawerOpen = List.filled(_graphs.length, false);
     });
-    _scheduleSaveLayout();
   }
 
   void _tryAutoLayout() {
