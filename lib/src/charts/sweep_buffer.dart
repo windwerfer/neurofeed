@@ -9,15 +9,13 @@ class SweepBuffer extends ChangeNotifier {
   int _cursor = 0;
   int _count = 0;
   bool _frozen = false;
-  int _panOffset = 0;
 
-  SweepBuffer({int windowSeconds = 6})
+  SweepBuffer({int windowSeconds = 300})
     : capacity = (windowSeconds * 256.0).toInt();
 
   int get cursor => _cursor;
+  int get writtenCount => _count;
   bool get frozen => _frozen;
-  int get panOffset => _panOffset;
-  double get windowSeconds => capacity / sampleRate;
 
   void append(EegDto dto) {
     if (_frozen) return;
@@ -32,23 +30,11 @@ class SweepBuffer extends ChangeNotifier {
 
   void freeze() {
     _frozen = true;
-    for (final buf in _channels.values) {
-      for (int i = _cursor; i < capacity; i++) {
-        buf[i] = 0;
-      }
-    }
-    notifyListeners();
-  }
-
-  void panBy(int delta) {
-    if (!_frozen) return;
-    _panOffset = (_panOffset + delta).clamp(0, _cursor > 0 ? _cursor - 1 : 0);
     notifyListeners();
   }
 
   void resume() {
     _frozen = false;
-    _panOffset = 0;
     notifyListeners();
   }
 
