@@ -69,7 +69,6 @@ class SweepBuffer extends ChangeNotifier {
   }
 
   void append(EegDto dto) {
-    if (_frozen) return;
     final ch = _channels.putIfAbsent(
       dto.electrode,
       () => _ChannelBuf(capacity, _displayWindow > 0 ? _displayWindow : 1),
