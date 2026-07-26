@@ -75,8 +75,8 @@ It remains a good second choice if btleplug ever becomes unmaintainable.
 ## JNI thread-attach workaround (btleplug fork)
 
 **Fixed 2026-07-21.** The btleplug fork at `github.com/windwerfer/btleplug`
-(tag `0.12.0-muse-2`) includes a `get_env()` wrapper that auto-attaches
-tokio worker threads to the JVM. Without this, every BLE JNI call from a
+(tag `0.12.0-muse-3`) includes a `get_env()` wrapper that auto-attaches
+tokio worker threads to the JVM and fixes the BLE notification death spiral. Without this, every BLE JNI call from a
 worker thread fails with `"JNI call failed"`.
 
 Key insight: the `jni` crate's `JavaVM::get_env()` returns

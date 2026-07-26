@@ -10,7 +10,7 @@ JVM-attached Dart/UI thread. Without this patch, every BLE scan fails with
 
 ## Where is the fork
 
-**Published:** `github.com/windwerfer/btleplug` tag `0.12.0-muse-2`
+**Published:** `github.com/windwerfer/btleplug` tag `0.12.0-muse-3`
 **Local copy:** `../../btleplug/` (sibling of `muse_ml/`) — for development.
 
 Referenced from `muse_ml/rust/Cargo.toml` via `[patch]` on `eugenehp/btleplug.git`.
@@ -22,7 +22,7 @@ of btleplug (and its `GLOBAL_JVM`/`GLOBAL_ADAPTER` statics) linked:
 btleplug = { git = "https://github.com/eugenehp/btleplug.git", branch = "imrpoved_mac_version", version = "0.11.8" }
 
 [patch.'https://github.com/eugenehp/btleplug.git']
-btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-2" }
+btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-3" }
 ```
 
 **For local development,** swap the patch to a local path:
@@ -53,7 +53,7 @@ cargo tree -p btleplug --depth 0
 The `Cargo.toml` in `muse_ml/rust/` points to the **remote git tag** by default:
 
 ```toml
-btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-2", version = "0.11.8" }
+btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-3", version = "0.11.8" }
 ```
 
 When debugging or modifying the btleplug fork, swap to the **local path**:

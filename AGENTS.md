@@ -8,7 +8,7 @@ Global orientation for any AI agent or contributor working in this repo.
   - Rust lib: `rust/` (crate `rust_lib_muse_ml`).
   - Generated bindings: `rust/src/frb_generated.rs` is **gitignored**; Dart generated files ARE tracked.
 - **muse-rs** (`github.com/eugenehp/muse-rs.git` tag `0.1.0`, `default-features = false`) — Muse BLE protocol + transport.
-- **btleplug** — forked at `github.com/windwerfer/btleplug` (tag `0.12.0-muse-2`), patched with `get_env()` → `attach_current_thread_permanently()` fallback for tokio JNI threads. **Source base is upstream 0.12.0 but `Cargo.toml` version is pinned to `0.11.8`** — required for semver matching (see `.ai/btleplug.md`).
+- **btleplug** — forked at `github.com/windwerfer/btleplug` (tag `0.12.0-muse-3`), patched with `get_env()` → `attach_current_thread_permanently()` fallback for tokio JNI threads + notification death spiral fix. **Source base is upstream 0.12.0 but `Cargo.toml` version is pinned to `0.11.8`** — required for semver matching (see `.ai/btleplug.md`).
   - Referenced via `[patch]` on `eugenehp/btleplug.git` so that BOTH
     `rust_lib_muse_ml` and `muse-rs` use the same patched copy (single
     `GLOBAL_JVM` static). Swap `[patch]` to local path for debugging.
@@ -34,6 +34,7 @@ Global orientation for any AI agent or contributor working in this repo.
 |------|----------|
 | `btleplug.md` | btleplug fork changes — what, why, pitfalls (version, Java alignment) |
 | `bugreport.md` | Structured bug report for upstream btleplug (3 sections + suggestions) |
+| `btleplug_bugreport_2.md` | Bug report #2: BLE notification stream silently dies (JNI death spiral) — fixed in `0.12.0-muse-3` |
 | `architecture.md` | Current and target architecture, module map |
 | `lessons-learned.md` | Full history of JNI attempts, what worked/failed |
 | `testing-guide.md` | Build/test loop for the device |
@@ -53,7 +54,7 @@ android/app/src/main/java/
   io/github/gedgygedgy/rust/                # jni-utils Java sources
 .ai/                     # project docs
 third_party/muse-rs/    # local checkout of muse-rs (tag 0.1.0) — reference for protocol/parse debugging
-third_party/btleplug/   # local checkout of our btleplug fork (tag 0.12.0-muse-2) — reference for JNI/init debugging
+third_party/btleplug/   # local checkout of our btleplug fork (tag 0.12.0-muse-3) — reference for JNI/init debugging
 muse-rs (dep, GitHub)   # transport (btleplug) + protocol
 btleplug (local, via [patch])  # patched fork; reference copy in third_party/btleplug/
 ```

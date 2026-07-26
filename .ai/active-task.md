@@ -13,10 +13,10 @@ the blocker was the **Android BLE transport layer**.
 - ✅ Java API alignment: added missing methods + `NoBluetoothAdapterException`.
 - ✅ `classcache.rs` panic fixed: `.unwrap()` → `?`.
 - ✅ **Scan works end-to-end without crashes** on Android.
-- ✅ Fork published: `github.com/windwerfer/btleplug` tag `0.12.0-muse-2`.
+- ✅ Fork published: `github.com/windwerfer/btleplug` tag `0.12.0-muse-3`.
 - ✅ `Cargo.toml` updated to use remote tag (swap to local `../../btleplug` via
   `[patch]` for debugging — see `.ai/btleplug.md`).
-- ✅ Docs: `.ai/btleplug.md`, `.ai/bugreport.md`, `.ai/lessons-learned.md` updated.
+- ✅ Docs: `.ai/btleplug.md`, `.ai/bugreport.md`, `.ai/btleplug_bugreport_2.md`, `.ai/lessons-learned.md` updated.
 
 ## Decision: keep btleplug
 The JNI fix works — no migration to `flutter_blue_plus`. btleplug is
@@ -30,9 +30,17 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
   misleadingly showed the raw value before override.)
 - ✅ Raw telemetry log downgraded from `info!` to `debug!` to reduce noise.
 
+## Status — 2026-07-27 Update
+- ✅ Bug 2 (BLE notification death spiral) fully diagnosed and fixed:
+  - Bug 2a: `JSendStream::poll_next_internal` bypassed auto-attach `get_env()` wrapper — fixed.
+  - Bug 2b: Pending Java exceptions never cleared, poisoning all future JNI calls — fixed.
+  - Bug 2c: `filter_map` silently dropped errors creating infinite loop — fixed with logging + exception clearing.
+- ✅ Fork published as `0.12.0-muse-3` with all three fixes.
+- ✅ `.ai/btleplug.md` updated with complete Batch 2 documentation.
+- ✅ `.ai/btleplug_bugreport_2.md` added documenting the death spiral root cause analysis.
+
 ## Next steps
-1. Long-duration streaming test (1h+) to verify notification death spiral fix.
-2. PPG streaming — currently produces no events; check muse-rs `ppg` feature
+1. PPG streaming — currently produces no events; check muse-rs `ppg` feature
    flag and `parse_athena_notification()` path.
 3. Investigate EEG data integrity / verify sample alignment.
 

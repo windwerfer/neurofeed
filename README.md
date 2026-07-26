@@ -41,7 +41,7 @@ Flutter UI (lib/src/) ←─ FFI ──→ Rust (rust/src/api/muse.rs)
 ```
 
 BLE transport: [my btleplug fork](https://github.com/windwerfer/btleplug]  from the original [deviceplug/btleplug](https://github.com/deviceplug/btleplug) (tag
-`0.12.0-muse-2`). JNI thread-attach patch for tokio worker threads; see
+`0.12.0-muse-3`). JNI thread-attach patch for tokio worker threads + BLE notification death spiral fix; see
 `.ai/btleplug.md` for details.
 
 ## Project docs (`.ai/`)
