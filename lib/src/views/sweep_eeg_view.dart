@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:muse_ml/src/charts/graph_config.dart';
 import 'package:muse_ml/src/charts/sweep_buffer.dart';
 import 'package:muse_ml/src/connection_provider.dart';
@@ -18,16 +20,21 @@ class SweepEegView extends ConsumerStatefulWidget {
 class _SweepEegViewState extends ConsumerState<SweepEegView> {
   final SweepBuffer _buffer = SweepBuffer();
   StreamSubscription<MuseEventDto>? _sub;
-  final List<GraphConfig> _graphs = [];
-  final List<bool> _graphDrawerOpen = [];
+  List<GraphConfig> _graphs = [];
+  List<bool> _graphDrawerOpen = [];
   int _xZoomSamples = 0;
   int? _xZoomAtPinchStart;
   int _panOffset = 0;
   bool _yAutoZoom = true;
   double _yZoomFactor = 1.0;
   double? _yZoomAtPinchStart;
+  Timer? _saveTimer;
+  Timer? _autoLayoutTimer;
+  String? _deviceModelKey;
+  bool _pendingAutoLayout = false;
 
   static const _initialXZoomSamples = 2560;
+  static const _saveDelay = Duration(milliseconds: 600);
 
   @override
   void initState() {
@@ -39,10 +46,18 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     _buffer.addListener(_onBufferChanged);
     final notifier = ref.read(appStateProvider.notifier);
     _sub = notifier.eventStream.listen(_onEvent);
+    final status = ref.read(appStateProvider).status;
+    if (status.connected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadLayoutForStatus(status);
+      });
+    }
   }
 
   @override
   void dispose() {
+    _saveTimer?.cancel();
+    _autoLayoutTimer?.cancel();
     _sub?.cancel();
     _buffer.removeListener(_onBufferChanged);
     _buffer.dispose();
@@ -67,6 +82,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
             );
           }
         });
+        _scheduleSaveLayout();
       }
     }
   }
@@ -223,22 +239,27 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   }
 
   void _addGraph() {
+    _pendingAutoLayout = false;
     setState(() {
       final all = _buffer.electrodes;
       _graphs.add(GraphConfig.defaultFor(all, avg: false));
       _graphDrawerOpen.add(false);
     });
+    _scheduleSaveLayout();
   }
 
   void _removeGraph(int index) {
     if (_graphs.length <= 1) return;
+    _pendingAutoLayout = false;
     setState(() {
       _graphs.removeAt(index);
       _graphDrawerOpen.removeAt(index);
     });
+    _scheduleSaveLayout();
   }
 
   void _toggleElectrode(int graphIndex, int e) {
+    _pendingAutoLayout = false;
     setState(() {
       final g = _graphs[graphIndex];
       final updated = Set<int>.from(g.activeElectrodes);
@@ -249,13 +270,16 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
       }
       _graphs[graphIndex] = g.copyWith(activeElectrodes: updated);
     });
+    _scheduleSaveLayout();
   }
 
   void _toggleAvg(int graphIndex) {
+    _pendingAutoLayout = false;
     setState(() {
       final g = _graphs[graphIndex];
       _graphs[graphIndex] = g.copyWith(avgMode: !g.avgMode);
     });
+    _scheduleSaveLayout();
   }
 
   void _toggleDrawer(int graphIndex) {
@@ -267,16 +291,116 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   void _reset() {
     _buffer.freeze();
     _buffer.resume();
+    _pendingAutoLayout = false;
     setState(() {
       _xZoomSamples = _initialXZoomSamples;
       _yAutoZoom = true;
       _yZoomFactor = 1.0;
+      _graphs = _computeDefaultLayout();
+      _graphDrawerOpen = List.filled(_graphs.length, false);
     });
+    _scheduleSaveLayout();
   }
 
   static const _kDrawerWidth = 180.0;
 
   static const _kChannelNames = ['TP9', 'AF7', 'AF8', 'TP10'];
+
+  String? _deviceModelKeyFromStatus(ConnectionStatus s) {
+    if (!s.connected) return null;
+    final n = s.name;
+    if (n.contains('Muse 2') || n.contains('Muse-2')) return 'muse_2';
+    if (n.contains('Muse S') || n.contains('MuseS') || n.contains('Muse-S') || n.contains('MuseS-')) {
+      return s.firmware == 'Athena' ? 'muse_athena' : 'muse_s_classic';
+    }
+    if (n.contains('Muse 1') || n.contains('Muse-1')) return 'muse_1';
+    if (s.firmware == 'Athena') return 'muse_athena';
+    return 'classic';
+  }
+
+  List<GraphConfig> _computeDefaultLayout() {
+    final electrodes = _buffer.electrodes;
+    if (electrodes.isEmpty) return [GraphConfig.defaultFor([], avg: false)];
+    return [
+      for (final e in electrodes)
+        GraphConfig(
+          allElectrodes: List.of(electrodes),
+          activeElectrodes: {e},
+          avgMode: false,
+        ),
+    ];
+  }
+
+  Future<void> _loadLayoutForStatus(ConnectionStatus status) async {
+    final key = _deviceModelKeyFromStatus(status);
+    if (key == null) return;
+    _deviceModelKey = key;
+    _autoLayoutTimer?.cancel();
+    final prefs = await SharedPreferences.getInstance();
+    final json = prefs.getString('eeg_layout_$key');
+    if (json == null) {
+      setState(() {
+        _graphs = [GraphConfig.defaultFor([], avg: false)];
+        _graphDrawerOpen = [false];
+        _pendingAutoLayout = true;
+      });
+      _autoLayoutTimer = Timer(const Duration(seconds: 2), _applyAutoLayout);
+    } else {
+      final saved = _decodeLayout(json, knownElectrodes: _buffer.electrodes);
+      setState(() {
+        _graphs = saved;
+        _graphDrawerOpen = List.filled(saved.length, false);
+      });
+    }
+  }
+
+  void _applyAutoLayout() {
+    if (!mounted || !_pendingAutoLayout) return;
+    final electrodes = _buffer.electrodes;
+    if (electrodes.length < 2) return;
+    _pendingAutoLayout = false;
+    setState(() {
+      _graphs = _computeDefaultLayout();
+      _graphDrawerOpen = List.filled(_graphs.length, false);
+    });
+    _scheduleSaveLayout();
+  }
+
+  void _scheduleSaveLayout() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(_saveDelay, () => _saveLayout());
+  }
+
+  Future<void> _saveLayout() async {
+    final key = _deviceModelKey;
+    if (key == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('eeg_layout_$key', _encodeLayout(_graphs));
+  }
+
+  String _encodeLayout(List<GraphConfig> graphs) {
+    final list = [
+      for (final g in graphs)
+        {
+          'ae': g.activeElectrodes.toList(),
+          'am': g.avgMode ? 1 : 0,
+        },
+    ];
+    return jsonEncode({'g': list});
+  }
+
+  List<GraphConfig> _decodeLayout(String json_, {List<int> knownElectrodes = const []}) {
+    final data = jsonDecode(json_) as Map;
+    final list = (data['g'] as List).cast<Map>();
+    return [
+      for (final item in list)
+        GraphConfig(
+          activeElectrodes: Set<int>.from((item['ae'] as List).cast<num>().map((e) => e.toInt())),
+          allElectrodes: List.of(knownElectrodes),
+          avgMode: (item['am'] as num?)?.toInt() == 1,
+        ),
+    ];
+  }
 
   String _graphLabel(GraphConfig g) {
     if (g.avgMode) return 'avg';
@@ -288,6 +412,14 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(appStateProvider, (prev, next) {
+      if (next.status.connected && !(prev?.status.connected ?? false)) {
+        _loadLayoutForStatus(next.status);
+      }
+      if (!next.status.connected && (prev?.status.connected ?? true)) {
+        _deviceModelKey = null;
+      }
+    });
     return Column(
       children: [
         _HeaderBar(
