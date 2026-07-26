@@ -134,4 +134,59 @@ No crashes or errors during scan.
 - `android/app/src/main/java/.../Peripheral.java` — methods + callbacks added
 - `android/app/src/main/java/.../NoBluetoothAdapterException.java` — new file
 - `.ai/btleplug.md` — full fork documentation
-- `.ai/bugreport.md` — structured report for upstream
+- `.ai/bugreport.md` — structured report for upstream (Bug 1)
+
+## Session 2026-07-26 — BLE notification stream death spiral (Bug 2)
+
+### The problem
+After ~6 seconds of streaming, ALL BLE notifications (EEG, telemetry, accel,
+gyro) stopped simultaneously while the BLE connection remained active. The
+forwarder task was alive (5-second heartbeat confirmed it) but `rx.recv()`
+returned no events. No crash, no error log — silent death.
+
+### Root cause
+Three conspiring bugs in the btleplug notification polling path:
+
+1. **`JSendStream::poll_next_internal`** used `self.vm.get_env()` (raw
+   JavaVM::get_env) instead of the safe `droidplug::jni::get_env()` wrapper
+   that auto-attaches detached threads. When a tokio worker thread polled the
+   notification stream, `get_env()` failed with `ThreadDetached`.
+
+2. **No Java exception clearing.** When `call_method_unchecked` failed, the
+   Java exception stayed pending on the JNIEnv. ALL subsequent JNI calls on
+   that thread failed with "Java exception was not cleared". A transient error
+   became permanent.
+
+3. **`filter_map(|item| item.ok())`** at peripheral.rs silently dropped stream
+   errors. Worse, `FilterMap` re-polls the underlying stream immediately on
+   `None`, creating an infinite tight loop at 100% CPU — no events flow but
+   the task never dies.
+
+### The trigger
+The bugs only manifest on tokio's **multi-threaded runtime** because:
+- Multiple worker threads can poll the same notification stream (Bug 1)
+- Worker threads that haven't been attached to the JVM trigger ThreadDetached
+  (Bug 2a)
+- Even with auto-attach, a transient Java exception (e.g., from Android BLE
+  stack calling back into Java) triggers Bug 2b → Bug 2c loop
+
+### The fix
+Three changes in `third_party/btleplug/src/droidplug/`:
+
+| File | Change |
+|------|--------|
+| `jni_utils/stream.rs:133` | `self.vm.get_env()` → `super::super::jni::get_env()` (auto-attach) |
+| `jni_utils/stream.rs:44-49` | New `clear_java_exception()` — clears pending Java exceptions before/after JNI calls |
+| `peripheral.rs:438-446` | Log errors instead of silent `item.ok()` |
+
+### Key lesson
+**Every JNI call site in a multi-threaded tokio context must:**
+1. Use the auto-attach `get_env()` wrapper (not raw `vm.get_env()`)
+2. Clear pending Java exceptions after any JNI error
+3. Log (don't silently drop) stream errors
+
+### Relevant files
+- `third_party/btleplug/src/droidplug/jni_utils/stream.rs` — Fix 2a + 2b
+- `third_party/btleplug/src/droidplug/peripheral.rs` — Fix 2c
+- `.ai/btleplug.md` — updated fork docs
+- `.ai/btleplug_bugreport_2.md` — structured bug report for upstream
