@@ -666,7 +666,7 @@ fn map_event(ev: MuseEvent) -> MuseEventDto {
             samples: r.samples.into_iter().map(|s| s as f64).collect(),
         }),
         MuseEvent::Telemetry(t) => {
-            log::info!(
+            log::debug!(
                 "[muse] telemetry: battery={:.6} fuel_gauge={:.2} temp={}",
                 t.battery_level, t.fuel_gauge_voltage, t.temperature,
             );

@@ -190,3 +190,37 @@ Three changes in `third_party/btleplug/src/droidplug/`:
 - `third_party/btleplug/src/droidplug/peripheral.rs` — Fix 2c
 - `.ai/btleplug.md` — updated fork docs
 - `.ai/btleplug_bugreport_2.md` — structured bug report for upstream
+
+## Session 2026-07-26 — Battery indicator fix (bp_override)
+
+### The "problem"
+Battery indicator showed raw fuel gauge value (0.81 → 81%) instead of the
+accurate percentage from the `v1` response's `bp` field (45%).
+
+### What was actually happening
+The `bp_override` logic in `muse.rs:forwarder_loop` was **already correct and
+working**. The override happens in two steps:
+
+1. `map_event()` at `muse.rs:656` converts `MuseEvent::Telemetry` into a
+   `TelemetrySnapshot`, logging the **raw** `battery_level` (the fuel-gauge
+   based estimate, 0.81) at `info!` level.
+2. Later in the forwarder loop, the `bp_override` code checks if a `Control`
+   event with `bp` field has been seen, and if so, overwrites
+   `TelemetrySnapshot.battery_level` with the accurate percentage (45.0).
+
+### The confusion
+The `info!` log in `map_event` fires BEFORE the override and always shows
+the raw fuel gauge (0.81). This made it look like the override wasn't taking
+effect, when in fact the Dart side received the overridden value correctly.
+
+### Fix
+- No code change needed — the bp_override was always working.
+- Changed the raw telemetry log from `info!` to `debug!` to eliminate noise
+  (it fires ~10×/sec during streaming).
+- Added diagnostic logs (now removed) to confirm the override.
+
+### Lesson
+When debugging values that flow through a pipeline, verify the value at the
+FINAL output (Dart side), not at intermediate stages (Rust logs before
+transformation). Log order matters — a log before a transformation always
+shows the pre-transformation value, even if the transformation is working.

@@ -23,11 +23,21 @@ The JNI fix works — no migration to `flutter_blue_plus`. btleplug is
 consistent with `muse-rs`'s native transport and avoids adding a Dart BLE
 library + second FFI bridge. See `architecture.md` for the fallback plan.
 
+## Status — 2026-07-26 Update
+- ✅ Battery indicator fixed: `bp_override` from v1 response now correctly
+  overrides raw fuel-gauge value in `TelemetrySnapshot.battery_level`.
+  (No code change needed — was always working; the `info!` log in `map_event`
+  misleadingly showed the raw value before override.)
+- ✅ Raw telemetry log downgraded from `info!` to `debug!` to reduce noise.
+
 ## Next steps
-1. Test with a real Muse headset (scan works, but connect/streaming not yet
-   verified end-to-end).
+1. Long-duration streaming test (1h+) to verify notification death spiral fix.
+2. PPG streaming — currently produces no events; check muse-rs `ppg` feature
+   flag and `parse_athena_notification()` path.
+3. Investigate EEG data integrity / verify sample alignment.
 
 ## How to verify (see testing-guide.md)
-Run `flutter run`, tap Rescan, and confirm via `adb logcat -s btleplug` that
-`[btleplug] get_env: attached permanently` appears and the scan returns
-devices.
+Run `flutter run`, observe status bar shows correct battery % (from `bp`,
+not fuel gauge). Confirm via `adb logcat | grep muse` that no unexpected
+crashes or stream deaths occur. Use debug log level to see raw telemetry:
+`adb logcat -s rust_lib_muse_ml:*:*:D`.
