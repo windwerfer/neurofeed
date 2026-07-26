@@ -67,7 +67,15 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   void _onScaleStart(ScaleStartDetails _) {
     _xZoomAtPinchStart = _xZoomSamples;
     _yZoomAtPinchStart = _yZoomFactor;
-    if (!_buffer.frozen) _buffer.freeze();
+    if (!_buffer.frozen) {
+      _buffer.freeze();
+      int maxCount = 0;
+      for (final e in _activeElectrodes) {
+        final c = _buffer.channelCount(e);
+        if (c > maxCount) maxCount = c;
+      }
+      _panOffset = math.max(0, maxCount - _xZoomSamples);
+    }
   }
 
   void _onScaleUpdate(ScaleUpdateDetails d) {
