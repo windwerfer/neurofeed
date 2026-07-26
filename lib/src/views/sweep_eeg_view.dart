@@ -99,7 +99,12 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
 
   void _panBy(int delta) {
     setState(() {
-      final maxPan = math.max(0, _buffer.cursor - _xZoomSamples);
+      int maxCount = 0;
+      for (final e in _activeElectrodes) {
+        final c = _buffer.channelCount(e);
+        if (c > maxCount) maxCount = c;
+      }
+      final maxPan = math.max(0, maxCount - _xZoomSamples);
       _panOffset = (_panOffset + delta).clamp(0, maxPan);
     });
   }
@@ -141,12 +146,13 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     double yMin = double.infinity;
     double yMax = double.negativeInfinity;
     for (final ch in _activeElectrodes) {
-      final data = _buffer.frozen ? _buffer.getChannel(ch) : _buffer.getDisplay(ch);
-      if (data == null) continue;
+      if (!_buffer.hasChannel(ch)) continue;
       final start = _buffer.frozen ? _panOffset : 0;
       final end = start + _xZoomSamples;
       for (int i = start; i < end; i++) {
-        final s = _buffer.frozen ? data[i % _buffer.capacity] : data[i];
+        final s = _buffer.frozen
+            ? _buffer.sampleAt(ch, i)
+            : _buffer.displaySample(ch, i);
         if (s.abs() < 1e6) {
           if (s < yMin) yMin = s;
           if (s > yMax) yMax = s;
@@ -627,7 +633,7 @@ class _SweepPainter extends CustomPainter {
     } else {
       final sorted = activeElectrodes.toList()..sort();
       for (final ch in sorted) {
-        if (buffer.getChannel(ch) != null) {
+        if (buffer.hasChannel(ch)) {
           _drawChannel(canvas, ch);
         }
       }
@@ -644,10 +650,11 @@ class _SweepPainter extends CustomPainter {
       double yMax = double.negativeInfinity;
       final sorted = activeElectrodes.toList()..sort();
       for (final ch in sorted) {
-        final data = frozen ? buffer.getChannel(ch) : buffer.getDisplay(ch);
-        if (data == null) continue;
+        if (!buffer.hasChannel(ch)) continue;
         for (int i = _visibleStart; i < _visibleEnd; i++) {
-          final s = frozen ? data[i % buffer.capacity] : data[i];
+          final s = frozen
+              ? buffer.sampleAt(ch, i)
+              : buffer.displaySample(ch, i);
           if (s.abs() < 1e6) {
             if (s < yMin) yMin = s;
             if (s > yMax) yMax = s;
@@ -746,12 +753,11 @@ class _SweepPainter extends CustomPainter {
 
   void _drawAvgTrace(Canvas canvas) {
     final sorted = activeElectrodes.toList()..sort();
-    final channels = <List<double>>[];
+    bool anyData = false;
     for (final ch in sorted) {
-      final data = frozen ? buffer.getChannel(ch) : buffer.getDisplay(ch);
-      if (data != null) channels.add(frozen ? data.toList() : data.toList());
+      if (buffer.hasChannel(ch)) { anyData = true; break; }
     }
-    if (channels.isEmpty || channels.any((c) => c.isEmpty)) return;
+    if (!anyData) return;
 
     final paint = Paint()
       ..color = const Color(0xFF4FC3F7)
@@ -759,16 +765,18 @@ class _SweepPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round;
 
-    final cap = buffer.capacity;
     bool started = false;
     final path = Path();
     for (int i = _visibleStart; i < _visibleEnd; i++) {
       double sum = 0;
       int count = 0;
-      for (final c in channels) {
-        final idx = frozen ? i % cap : i;
-        if (idx < c.length && c[idx].abs() < 1e6) {
-          sum += c[idx];
+      for (final ch in sorted) {
+        if (!buffer.hasChannel(ch)) continue;
+        final s = frozen
+            ? buffer.sampleAt(ch, i)
+            : buffer.displaySample(ch, i);
+        if (s.abs() < 1e6) {
+          sum += s;
           count++;
         }
       }
@@ -787,8 +795,7 @@ class _SweepPainter extends CustomPainter {
   }
 
   void _drawChannel(Canvas canvas, int electrode) {
-    final data = frozen ? buffer.getChannel(electrode) : buffer.getDisplay(electrode);
-    if (data == null || data.isEmpty) return;
+    if (!buffer.hasChannel(electrode)) return;
 
     final color = _kChannelColors[electrode % _kChannelColors.length];
     final paint = Paint()
@@ -797,11 +804,12 @@ class _SweepPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round;
 
-    final cap = buffer.capacity;
     bool started = false;
     final path = Path();
     for (int i = _visibleStart; i < _visibleEnd; i++) {
-      final s = frozen ? data[i % cap] : data[i];
+      final s = frozen
+          ? buffer.sampleAt(electrode, i)
+          : buffer.displaySample(electrode, i);
       if (s.abs() > 1e6) continue;
       final x = _chartRect.left + (i - _visibleStart) * _xScale;
       final y = _chartRect.center.dy - s * _yScale;
@@ -816,8 +824,9 @@ class _SweepPainter extends CustomPainter {
   }
 
   void _drawCursor(Canvas canvas) {
-    final cursorPos = frozen ? buffer.cursor - _visibleStart : buffer.cursor % xZoomSamples;
-    if (cursorPos < 0 || cursorPos > xZoomSamples) return;
+    final cursorPos = frozen
+        ? (buffer.cursor - _visibleStart).clamp(0, xZoomSamples)
+        : buffer.cursor % xZoomSamples;
     final cx = _chartRect.left + cursorPos * _xScale;
 
     final paint = Paint()
