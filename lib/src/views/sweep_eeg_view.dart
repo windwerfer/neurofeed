@@ -35,14 +35,15 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
 
   static const _initialXZoomSamples = 2560;
   static const _saveDelay = Duration(milliseconds: 600);
+  static const _autoLayoutDelay = Duration(seconds: 3);
 
   @override
   void initState() {
     super.initState();
     _xZoomSamples = _initialXZoomSamples;
     _buffer.setDisplayWindow(_xZoomSamples);
-    _graphs.add(GraphConfig.defaultFor([], avg: false));
-    _graphDrawerOpen.add(false);
+    _graphs = _placeholderLayout();
+    _graphDrawerOpen = List.filled(_graphs.length, false);
     _buffer.addListener(_onBufferChanged);
     final notifier = ref.read(appStateProvider.notifier);
     _sub = notifier.eventStream.listen(_onEvent);
@@ -75,16 +76,29 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
       final known = _graphs.any((g) => g.allElectrodes.contains(e));
       if (!known) {
         setState(() {
-          for (int i = 0; i < _graphs.length; i++) {
-            _graphs[i] = _graphs[i].copyWith(
-              allElectrodes: [..._graphs[i].allElectrodes, e],
-              activeElectrodes: _pendingAutoLayout
-                  ? {..._graphs[i].activeElectrodes, e}
-                  : _graphs[i].activeElectrodes,
-            );
+          if (_pendingAutoLayout) {
+            for (int i = 0; i < _graphs.length; i++) {
+              _graphs[i] = _graphs[i].copyWith(
+                allElectrodes: [..._graphs[i].allElectrodes, e],
+              );
+            }
+          } else if (_graphs.length < 12) {
+            final allE = _buffer.electrodes;
+            for (int i = 0; i < _graphs.length; i++) {
+              _graphs[i] = _graphs[i].copyWith(allElectrodes: allE);
+            }
+            _graphs.add(GraphConfig(
+              allElectrodes: allE,
+              activeElectrodes: {e},
+              avgMode: false,
+            ));
+            _graphDrawerOpen.add(false);
           }
         });
-        _tryAutoLayout();
+        if (_pendingAutoLayout) {
+          _autoLayoutTimer?.cancel();
+          _autoLayoutTimer = Timer(_autoLayoutDelay, _applyAutoLayout);
+        }
       }
     }
   }
@@ -241,6 +255,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   }
 
   void _addGraph() {
+    if (_graphs.length >= 12) return;
     _pendingAutoLayout = false;
     setState(() {
       final all = _buffer.electrodes;
@@ -285,12 +300,13 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   }
 
   void _toggleDrawer(int graphIndex) {
+    if (graphIndex >= _graphDrawerOpen.length) return;
     setState(() {
       _graphDrawerOpen[graphIndex] = !_graphDrawerOpen[graphIndex];
     });
   }
 
-  void _reset() {
+  Future<void> _reset() async {
     _buffer.freeze();
     _buffer.resume();
     _pendingAutoLayout = false;
@@ -301,6 +317,11 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
       _graphs = _computeDefaultLayout();
       _graphDrawerOpen = List.filled(_graphs.length, false);
     });
+    final key = _deviceModelKey ?? _deviceModelKeyFromStatus(ref.read(appStateProvider).status);
+    if (key != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('eeg_layout_$key');
+    }
   }
 
   static const _kDrawerWidth = 180.0;
@@ -332,6 +353,15 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     ];
   }
 
+  static List<GraphConfig> _placeholderLayout() => [
+        for (final e in [0, 1, 2, 3])
+          GraphConfig(
+            allElectrodes: [0, 1, 2, 3],
+            activeElectrodes: {e},
+            avgMode: false,
+          ),
+      ];
+
   Future<void> _loadLayoutForStatus(ConnectionStatus status) async {
     final key = _deviceModelKeyFromStatus(status);
     if (key == null) return;
@@ -341,11 +371,11 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     final json = prefs.getString('eeg_layout_$key');
     if (json == null) {
       setState(() {
-        _graphs = [GraphConfig.defaultFor([], avg: false)];
-        _graphDrawerOpen = [false];
+        _graphs = _placeholderLayout();
+        _graphDrawerOpen = List.filled(_graphs.length, false);
         _pendingAutoLayout = true;
       });
-      _autoLayoutTimer = Timer(const Duration(seconds: 2), _applyAutoLayout);
+      _autoLayoutTimer = Timer(_autoLayoutDelay, _applyAutoLayout);
     } else {
       final saved = _decodeLayout(json, knownElectrodes: _buffer.electrodes);
       setState(() {
@@ -364,13 +394,6 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
       _graphs = _computeDefaultLayout();
       _graphDrawerOpen = List.filled(_graphs.length, false);
     });
-  }
-
-  void _tryAutoLayout() {
-    if (!_pendingAutoLayout) return;
-    if (_buffer.electrodes.length < 2) return;
-    _autoLayoutTimer?.cancel();
-    _applyAutoLayout();
   }
 
   void _scheduleSaveLayout() {
@@ -468,6 +491,9 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   }
 
   Widget _buildGraph(int graphIndex) {
+    if (graphIndex >= _graphs.length || graphIndex >= _graphDrawerOpen.length) {
+      return const SizedBox.shrink();
+    }
     final config = _graphs[graphIndex];
     final drawerOpen = _graphDrawerOpen[graphIndex];
     return Row(
@@ -768,6 +794,10 @@ class _SettingsDrawer extends StatelessWidget {
     Color(0xFFFF7043),
     Color(0xFF66BB6A),
     Color(0xFFAB47BC),
+    Color(0xFFFFA726),
+    Color(0xFF26C6DA),
+    Color(0xFFEC407A),
+    Color(0xFF8D6E63),
   ];
 
   @override
