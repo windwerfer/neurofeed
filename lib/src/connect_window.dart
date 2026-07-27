@@ -42,14 +42,18 @@ class ConnectWindow extends ConsumerWidget {
               const Text('No Muse devices found. Make sure the headset is on.')
             else ...[
               ...state.devices.map(
-                (d) => ListTile(
-                  leading: const Icon(Icons.bluetooth),
-                  title: Text(d.name),
-                  subtitle: Text(d.id),
-                  enabled: state.connectingTo == null,
-                  onTap: state.connectingTo != null
-                      ? null
-                      : () => notifier.connectTo(d),
+                (d) => Material(
+                  type: MaterialType.card,
+                  color: const Color(0xFF1E212A),
+                  child: ListTile(
+                    leading: const Icon(Icons.bluetooth),
+                    title: Text(d.name),
+                    subtitle: Text(d.id),
+                    enabled: state.connectingTo == null,
+                    onTap: state.connectingTo != null
+                        ? null
+                        : () => notifier.connectTo(d),
+                  ),
                 ),
               ),
               if (state.scanning)

@@ -154,10 +154,14 @@ class _SideBarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      title: Text(label),
-      selected: selected,
-      onTap: onTap,
+    return Material(
+      type: MaterialType.card,
+      color: const Color(0xFF1E212A),
+      child: ListTile(
+        title: Text(label),
+        selected: selected,
+        onTap: onTap,
+      ),
     );
   }
 }
