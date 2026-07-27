@@ -43,6 +43,7 @@ class ConnectWindow extends ConsumerWidget {
             else ...[
               ...state.devices.map(
                 (d) => ListTile(
+                  tileColor: const Color(0xFF1E212A),
                   leading: const Icon(Icons.bluetooth),
                   title: Text(d.name),
                   subtitle: Text(d.id),

@@ -43,7 +43,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     _xZoomSamples = _initialXZoomSamples;
     _buffer.setDisplayWindow(_xZoomSamples);
     _graphs = _placeholderLayout();
-    _graphDrawerOpen = List.filled(_graphs.length, false);
+    _graphDrawerOpen = List.filled(_graphs.length, false, growable: true);
     _buffer.addListener(_onBufferChanged);
     final notifier = ref.read(appStateProvider.notifier);
     _sub = notifier.eventStream.listen(_onEvent);
@@ -315,7 +315,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
       _yAutoZoom = true;
       _yZoomFactor = 1.0;
       _graphs = _computeDefaultLayout();
-      _graphDrawerOpen = List.filled(_graphs.length, false);
+      _graphDrawerOpen = List.filled(_graphs.length, false, growable: true);
     });
     final key = _deviceModelKey ?? _deviceModelKeyFromStatus(ref.read(appStateProvider).status);
     if (key != null) {
@@ -372,7 +372,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     if (json == null) {
       setState(() {
         _graphs = _placeholderLayout();
-        _graphDrawerOpen = List.filled(_graphs.length, false);
+        _graphDrawerOpen = List.filled(_graphs.length, false, growable: true);
         _pendingAutoLayout = true;
       });
       _autoLayoutTimer = Timer(_autoLayoutDelay, _applyAutoLayout);
@@ -392,7 +392,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     _pendingAutoLayout = false;
     setState(() {
       _graphs = _computeDefaultLayout();
-      _graphDrawerOpen = List.filled(_graphs.length, false);
+      _graphDrawerOpen = List.filled(_graphs.length, false, growable: true);
     });
   }
 
