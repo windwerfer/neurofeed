@@ -87,11 +87,13 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
             for (int i = 0; i < _graphs.length; i++) {
               _graphs[i] = _graphs[i].copyWith(allElectrodes: allE);
             }
-            _graphs.add(GraphConfig(
-              allElectrodes: allE,
-              activeElectrodes: {e},
-              avgMode: false,
-            ));
+            _graphs.add(
+              GraphConfig(
+                allElectrodes: allE,
+                activeElectrodes: {e},
+                avgMode: false,
+              ),
+            );
             _graphDrawerOpen.add(false);
           }
         });
@@ -317,7 +319,9 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
       _graphs = _computeDefaultLayout();
       _graphDrawerOpen = List.filled(_graphs.length, false, growable: true);
     });
-    final key = _deviceModelKey ?? _deviceModelKeyFromStatus(ref.read(appStateProvider).status);
+    final key =
+        _deviceModelKey ??
+        _deviceModelKeyFromStatus(ref.read(appStateProvider).status);
     if (key != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('eeg_layout_$key');
@@ -332,7 +336,10 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     if (!s.connected) return null;
     final n = s.name;
     if (n.contains('Muse 2') || n.contains('Muse-2')) return 'muse_2';
-    if (n.contains('Muse S') || n.contains('MuseS') || n.contains('Muse-S') || n.contains('MuseS-')) {
+    if (n.contains('Muse S') ||
+        n.contains('MuseS') ||
+        n.contains('Muse-S') ||
+        n.contains('MuseS-')) {
       return s.firmware == 'Athena' ? 'muse_athena' : 'muse_s_classic';
     }
     if (n.contains('Muse 1') || n.contains('Muse-1')) return 'muse_1';
@@ -354,13 +361,13 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   }
 
   static List<GraphConfig> _placeholderLayout() => [
-        for (final e in [0, 1, 2, 3])
-          GraphConfig(
-            allElectrodes: [0, 1, 2, 3],
-            activeElectrodes: {e},
-            avgMode: false,
-          ),
-      ];
+    for (final e in [0, 1, 2, 3])
+      GraphConfig(
+        allElectrodes: [0, 1, 2, 3],
+        activeElectrodes: {e},
+        avgMode: false,
+      ),
+  ];
 
   Future<void> _loadLayoutForStatus(ConnectionStatus status) async {
     final key = _deviceModelKeyFromStatus(status);
@@ -402,7 +409,9 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   }
 
   Future<void> _saveLayout() async {
-    final key = _deviceModelKey ?? _deviceModelKeyFromStatus(ref.read(appStateProvider).status);
+    final key =
+        _deviceModelKey ??
+        _deviceModelKeyFromStatus(ref.read(appStateProvider).status);
     if (key == null) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('eeg_layout_$key', _encodeLayout(_graphs));
@@ -411,21 +420,23 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
   String _encodeLayout(List<GraphConfig> graphs) {
     final list = [
       for (final g in graphs)
-        {
-          'ae': g.activeElectrodes.toList(),
-          'am': g.avgMode ? 1 : 0,
-        },
+        {'ae': g.activeElectrodes.toList(), 'am': g.avgMode ? 1 : 0},
     ];
     return jsonEncode({'g': list});
   }
 
-  List<GraphConfig> _decodeLayout(String json_, {List<int> knownElectrodes = const []}) {
+  List<GraphConfig> _decodeLayout(
+    String json_, {
+    List<int> knownElectrodes = const [],
+  }) {
     final data = jsonDecode(json_) as Map;
     final list = (data['g'] as List).cast<Map>();
     return [
       for (final item in list)
         GraphConfig(
-          activeElectrodes: Set<int>.from((item['ae'] as List).cast<num>().map((e) => e.toInt())),
+          activeElectrodes: Set<int>.from(
+            (item['ae'] as List).cast<num>().map((e) => e.toInt()),
+          ),
           allElectrodes: List.of(knownElectrodes),
           avgMode: (item['am'] as num?)?.toInt() == 1,
         ),
@@ -436,7 +447,9 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
     if (g.avgMode) return 'avg';
     final sorted = g.activeElectrodes.toList()..sort();
     return sorted
-        .map((e) => e < _kChannelNames.length ? _kChannelNames[e] : 'CH${e + 1}')
+        .map(
+          (e) => e < _kChannelNames.length ? _kChannelNames[e] : 'CH${e + 1}',
+        )
         .join(' ');
   }
 
@@ -466,25 +479,40 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
           onReset: _reset,
         ),
         Expanded(
-          child: _graphs.length == 1
-              ? _buildGraph(0)
-              : Column(
-                  children: [
-                    for (int i = 0; i < _graphs.length; i++)
-                      Expanded(
-                        child: Column(
-                          children: [
-                            Expanded(child: _buildGraph(i)),
-                            if (i < _graphs.length - 1)
-                              const Divider(
-                                color: Color(0xFF2A2D37),
-                                height: 1,
-                              ),
-                          ],
-                        ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const minH = 160.0;
+              final count = _graphs.length;
+              if (count * minH >= constraints.maxHeight) {
+                return SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < count; i++) ...[
+                        SizedBox(height: minH, child: _buildGraph(i)),
+                        if (i < count - 1)
+                          const Divider(color: Color(0xFF2A2D37), height: 1),
+                      ],
+                    ],
+                  ),
+                );
+              }
+              if (count == 1) return _buildGraph(0);
+              return Column(
+                children: [
+                  for (int i = 0; i < count; i++)
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Expanded(child: _buildGraph(i)),
+                          if (i < count - 1)
+                            const Divider(color: Color(0xFF2A2D37), height: 1),
+                        ],
                       ),
-                  ],
-                ),
+                    ),
+                ],
+              );
+            },
+          ),
         ),
       ],
     );
@@ -1089,7 +1117,10 @@ class _SweepPainter extends CustomPainter {
     final sorted = activeElectrodes.toList()..sort();
     bool anyData = false;
     for (final ch in sorted) {
-      if (buffer.hasChannel(ch)) { anyData = true; break; }
+      if (buffer.hasChannel(ch)) {
+        anyData = true;
+        break;
+      }
     }
     if (!anyData) return;
 
@@ -1106,9 +1137,7 @@ class _SweepPainter extends CustomPainter {
       int count = 0;
       for (final ch in sorted) {
         if (!buffer.hasChannel(ch)) continue;
-        final s = frozen
-            ? buffer.sampleAt(ch, i)
-            : buffer.displaySample(ch, i);
+        final s = frozen ? buffer.sampleAt(ch, i) : buffer.displaySample(ch, i);
         if (s.abs() < 1e6) {
           sum += s;
           count++;
