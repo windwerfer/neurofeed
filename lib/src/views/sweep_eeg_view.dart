@@ -836,40 +836,70 @@ class _SettingsDrawer extends StatelessWidget {
         color: const Color(0xBB111218),
         border: const Border(left: BorderSide(color: Color(0xFF2A2D37))),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(12, 14, 12, 6),
-            child: Text(
-              'SENSORS',
-              style: TextStyle(
-                color: Color(0xFF6B7280),
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const sensorRowHeight = 26.0;
+          const headerHeight = 26.0;
+          const dividerHeight = 20.0;
+          const avgHeight = 26.0;
+          final sensorArea = electrodes.length * sensorRowHeight;
+          const fixed = headerHeight + dividerHeight + avgHeight;
+          final needsWrap = (sensorArea + fixed) > constraints.maxHeight;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(12, 14, 12, 6),
+                child: Text(
+                  'SENSORS',
+                  style: TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1,
+                  ),
+                ),
               ),
-            ),
-          ),
-          for (int i = 0; i < electrodes.length; i++) ...[
-            _SensorRow(
-              color: _kChannelColors[i % _kChannelColors.length],
-              label: i < _kChannelNames.length
-                  ? _kChannelNames[i]
-                  : 'CH${i + 1}',
-              active: activeElectrodes.contains(electrodes[i]),
-              onTap: () => onToggleElectrode(electrodes[i]),
-            ),
-          ],
-          const Divider(color: Color(0xFF2A2D37), height: 20),
-          _SensorRow(
-            color: const Color(0xFF4FC3F7),
-            label: 'avg',
-            active: avgMode,
-            bold: true,
-            onTap: onToggleAvg,
-          ),
-        ],
+              if (needsWrap)
+                Wrap(
+                  children: [
+                    for (int i = 0; i < electrodes.length; i++)
+                      SizedBox(
+                        width: width / 2 - 6,
+                        child: _SensorRow(
+                          color: _kChannelColors[i % _kChannelColors.length],
+                          label: i < _kChannelNames.length
+                              ? _kChannelNames[i]
+                              : 'CH${i + 1}',
+                          active: activeElectrodes.contains(electrodes[i]),
+                          onTap: () => onToggleElectrode(electrodes[i]),
+                        ),
+                      ),
+                  ],
+                )
+              else
+                for (int i = 0; i < electrodes.length; i++) ...[
+                  _SensorRow(
+                    color: _kChannelColors[i % _kChannelColors.length],
+                    label: i < _kChannelNames.length
+                        ? _kChannelNames[i]
+                        : 'CH${i + 1}',
+                    active: activeElectrodes.contains(electrodes[i]),
+                    onTap: () => onToggleElectrode(electrodes[i]),
+                  ),
+                ],
+              const Divider(color: Color(0xFF2A2D37), height: 20),
+              _SensorRow(
+                color: const Color(0xFF4FC3F7),
+                label: 'avg',
+                active: avgMode,
+                bold: true,
+                onTap: onToggleAvg,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
