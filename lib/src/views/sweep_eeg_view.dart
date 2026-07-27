@@ -387,7 +387,7 @@ class _SweepEegViewState extends ConsumerState<SweepEegView> {
       final saved = _decodeLayout(json, knownElectrodes: _buffer.electrodes);
       setState(() {
         _graphs = saved;
-        _graphDrawerOpen = List.filled(saved.length, false);
+        _graphDrawerOpen = List.filled(saved.length, false, growable: true);
       });
     }
   }
