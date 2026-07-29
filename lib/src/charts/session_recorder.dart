@@ -45,6 +45,8 @@ class SessionRecorder {
         encoded = _encodeImu(4, field0);
       case MuseEventDto_Ppg(:final field0):
         encoded = _encodePpg(field0);
+      case MuseEventDto_Bands(:final field0):
+        encoded = _encodeBands(field0);
       default:
         return;
     }
@@ -108,6 +110,21 @@ class SessionRecorder {
       buf.setFloat64(off, s, Endian.little);
       off += 8;
     }
+    return buf.buffer.asUint8List();
+  }
+
+  Uint8List _encodeBands(BandsDto d) {
+    // Type tag 6: timestamp(f64), electrode(i16), delta/theta/alpha/beta/gamma(f64×5)
+    final buf = ByteData(1 + 8 + 2 + 5 * 8);
+    var off = 0;
+    buf.setUint8(off, 6); off += 1;
+    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
+    buf.setInt16(off, d.electrode, Endian.little); off += 2;
+    buf.setFloat64(off, d.delta, Endian.little); off += 8;
+    buf.setFloat64(off, d.theta, Endian.little); off += 8;
+    buf.setFloat64(off, d.alpha, Endian.little); off += 8;
+    buf.setFloat64(off, d.beta, Endian.little); off += 8;
+    buf.setFloat64(off, d.gamma, Endian.little);
     return buf.buffer.asUint8List();
   }
 
