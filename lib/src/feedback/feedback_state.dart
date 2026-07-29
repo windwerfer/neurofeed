@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
@@ -10,7 +11,7 @@ class FeedbackState {
   final FeedbackPhase phase;
   final ProtocolType protocol;
   final int durationMinutes;
-  final String? soundName;
+  final String soundName;
   final int elapsedSeconds;
   final bool signalGood;
 
@@ -18,7 +19,7 @@ class FeedbackState {
     this.phase = FeedbackPhase.idle,
     this.protocol = ProtocolType.alphaTheta,
     this.durationMinutes = 15,
-    this.soundName,
+    this.soundName = 'Harmonic Consonance',
     this.elapsedSeconds = 0,
     this.signalGood = false,
   });
@@ -49,6 +50,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   StreamSubscription<MuseEventDto>? _eventSub;
   Timer? _ticker;
 
+  AudioService get _audio => _ref.read(audioServiceProvider);
+
   void selectProtocol(ProtocolType type) {
     state = state.copyWith(protocol: type);
   }
@@ -61,36 +64,44 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     state = state.copyWith(soundName: name);
   }
 
-  void startCalibration() {
+  /// Begin calibration: play 60s tone, then mark ready.
+  Future<void> startCalibration() async {
     state = state.copyWith(phase: FeedbackPhase.calibrating, elapsedSeconds: 0);
+    await _audio.playCalibration();
+    if (state.phase == FeedbackPhase.calibrating) {
+      state = state.copyWith(phase: FeedbackPhase.ready);
+    }
   }
 
-  void markReady() {
-    state = state.copyWith(phase: FeedbackPhase.ready);
-  }
-
-  void startPlaying() {
+  /// Start the feedback loop.
+  Future<void> startPlaying() async {
     state = state.copyWith(phase: FeedbackPhase.playing);
+    await _audio.playFeedback(sound: state.soundName);
     _startTicker();
   }
 
-  void pause() {
+  Future<void> pause() async {
     state = state.copyWith(phase: FeedbackPhase.paused);
     _ticker?.cancel();
+    await _audio.pause();
   }
 
-  void resume() {
+  Future<void> resume() async {
     state = state.copyWith(phase: FeedbackPhase.playing);
+    await _audio.resume();
     _startTicker();
   }
 
-  void end() {
+  Future<void> end() async {
     _ticker?.cancel();
     state = state.copyWith(phase: FeedbackPhase.ended);
+    await _audio.stop();
+    await _audio.playEndChime();
   }
 
   void reset() {
     _ticker?.cancel();
+    _audio.stop();
     state = const FeedbackState();
   }
 
@@ -106,7 +117,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   void _onEvent(MuseEventDto event) {
-    // Future: track signal quality for auto-start, log metrics, etc.
+    // Future: track signal quality for auto-start
   }
 
   @override

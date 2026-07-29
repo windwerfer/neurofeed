@@ -53,7 +53,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ImuDto dco_decode_box_autoadd_imu_dto(dynamic raw);
 
   @protected
+  MovementDto dco_decode_box_autoadd_movement_dto(dynamic raw);
+
+  @protected
+  PeakAlphaDto dco_decode_box_autoadd_peak_alpha_dto(dynamic raw);
+
+  @protected
   PpgDto dco_decode_box_autoadd_ppg_dto(dynamic raw);
+
+  @protected
+  PulseDto dco_decode_box_autoadd_pulse_dto(dynamic raw);
 
   @protected
   TelemetrySnapshot dco_decode_box_autoadd_telemetry_snapshot(dynamic raw);
@@ -92,6 +101,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
 
   @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
@@ -101,13 +113,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<XyzDto> dco_decode_list_xyz_dto(dynamic raw);
 
   @protected
+  MovementDto dco_decode_movement_dto(dynamic raw);
+
+  @protected
   MuseEventDto dco_decode_muse_event_dto(dynamic raw);
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
+  PeakAlphaDto dco_decode_peak_alpha_dto(dynamic raw);
+
+  @protected
   PpgDto dco_decode_ppg_dto(dynamic raw);
+
+  @protected
+  PulseDto dco_decode_pulse_dto(dynamic raw);
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
@@ -165,7 +186,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ImuDto sse_decode_box_autoadd_imu_dto(SseDeserializer deserializer);
 
   @protected
+  MovementDto sse_decode_box_autoadd_movement_dto(SseDeserializer deserializer);
+
+  @protected
+  PeakAlphaDto sse_decode_box_autoadd_peak_alpha_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PpgDto sse_decode_box_autoadd_ppg_dto(SseDeserializer deserializer);
+
+  @protected
+  PulseDto sse_decode_box_autoadd_pulse_dto(SseDeserializer deserializer);
 
   @protected
   TelemetrySnapshot sse_decode_box_autoadd_telemetry_snapshot(
@@ -206,6 +238,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
 
   @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
@@ -217,13 +252,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<XyzDto> sse_decode_list_xyz_dto(SseDeserializer deserializer);
 
   @protected
+  MovementDto sse_decode_movement_dto(SseDeserializer deserializer);
+
+  @protected
   MuseEventDto sse_decode_muse_event_dto(SseDeserializer deserializer);
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
+  PeakAlphaDto sse_decode_peak_alpha_dto(SseDeserializer deserializer);
+
+  @protected
   PpgDto sse_decode_ppg_dto(SseDeserializer deserializer);
+
+  @protected
+  PulseDto sse_decode_pulse_dto(SseDeserializer deserializer);
 
   @protected
   (String, String) sse_decode_record_string_string(
@@ -294,7 +338,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_imu_dto(ImuDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_movement_dto(
+    MovementDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_peak_alpha_dto(
+    PeakAlphaDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_ppg_dto(PpgDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_pulse_dto(
+    PulseDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_telemetry_snapshot(
@@ -345,6 +407,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
     SseSerializer serializer,
@@ -360,13 +425,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_xyz_dto(List<XyzDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_movement_dto(MovementDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_muse_event_dto(MuseEventDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_peak_alpha_dto(PeakAlphaDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_ppg_dto(PpgDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_pulse_dto(PulseDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_string_string(

@@ -8,7 +8,15 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'muse.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `compute_bands`, `map_event`, `map_imu`, `spawn_event_forwarder`
+// These functions are ignored because they are not marked as `pub`: `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `map_event`, `map_imu`, `now_ms`, `spawn_event_forwarder`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ForwarderGuard`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `drop`
+
+/// Compress a block of recording data using zstd (level 3).
+/// Returns the compressed bytes as an independent zstd frame.
+/// On failure (e.g. pathological input) returns the original data unchanged.
+Future<Uint8List> compressBlock({required List<int> data}) =>
+    RustLib.instance.api.crateApiMuseCompressBlock(data: data);
 
 /// Scan for nearby Muse devices for `timeout_secs` seconds and return what was
 /// found. Results are **merged** into the existing device cache so that the UI
@@ -117,6 +125,15 @@ sealed class ImuDto with _$ImuDto {
   }) = _ImuDto;
 }
 
+/// Movement score derived from accelerometer magnitude variance.
+@freezed
+sealed class MovementDto with _$MovementDto {
+  const factory MovementDto({
+    required double timestamp,
+    required double score,
+  }) = _MovementDto;
+}
+
 @freezed
 sealed class MuseEventDto with _$MuseEventDto {
   const MuseEventDto._();
@@ -132,6 +149,21 @@ sealed class MuseEventDto with _$MuseEventDto {
       MuseEventDto_Accelerometer;
   const factory MuseEventDto.gyroscope(ImuDto field0) = MuseEventDto_Gyroscope;
   const factory MuseEventDto.control(ControlDto field0) = MuseEventDto_Control;
+  const factory MuseEventDto.pulse(PulseDto field0) = MuseEventDto_Pulse;
+  const factory MuseEventDto.movement(MovementDto field0) =
+      MuseEventDto_Movement;
+  const factory MuseEventDto.peakAlpha(PeakAlphaDto field0) =
+      MuseEventDto_PeakAlpha;
+}
+
+/// Peak alpha frequency and power (parabolic interpolation over FFT bins).
+@freezed
+sealed class PeakAlphaDto with _$PeakAlphaDto {
+  const factory PeakAlphaDto({
+    required double timestamp,
+    required double frequency,
+    required double power,
+  }) = _PeakAlphaDto;
 }
 
 /// A PPG (optical) reading for one channel.
@@ -143,6 +175,16 @@ sealed class PpgDto with _$PpgDto {
     required double timestamp,
     required Float64List samples,
   }) = _PpgDto;
+}
+
+/// Heart-rate pulse estimate from PPG infrared channel.
+@freezed
+sealed class PulseDto with _$PulseDto {
+  const factory PulseDto({
+    required double timestamp,
+    required double bpm,
+    required double confidence,
+  }) = _PulseDto;
 }
 
 /// Telemetry snapshot (battery etc.) surfaced in the status bar.
