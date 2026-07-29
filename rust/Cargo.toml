@@ -16,6 +16,7 @@ anyhow = "1"
 log = "0.4"
 env_logger = "0.11"
 android_logger = "0.14"
+zstd = { version = "0.13", default-features = false }
 
 # Both rust_lib_muse_ml and muse-rs depend on btleplug from
 # eugenehp/btleplug.git. The [patch] below replaces ALL occurrences

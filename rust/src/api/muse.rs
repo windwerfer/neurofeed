@@ -179,6 +179,19 @@ pub fn init_app() {
     }
 }
 
+/// Compress a block of recording data using zstd (level 3).
+/// Returns the compressed bytes as an independent zstd frame.
+/// On failure (e.g. pathological input) returns the original data unchanged.
+pub fn compress_block(data: Vec<u8>) -> Vec<u8> {
+    match zstd::encode_all(std::io::Cursor::new(&data), 3) {
+        Ok(compressed) => compressed,
+        Err(e) => {
+            log::warn!("[muse] zstd compress failed: {e}, storing uncompressed");
+            data
+        }
+    }
+}
+
 /// Called from Kotlin `MainActivity.onCreate` with the JNI environment so that
 /// btleplug's global Android adapter can be registered. On Android, btleplug
 /// requires `btleplug::platform::init(&env)` to be called from a JNI context

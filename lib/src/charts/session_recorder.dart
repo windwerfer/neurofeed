@@ -6,7 +6,7 @@ import 'package:muse_ml/src/rust/api/muse.dart';
 
 class SessionRecorder {
   static const _magic = 0x4D55534542494E0A; // "MUSEBIN\n"
-  static const _version = 1;
+  static const _version = 2;
   static const _flushInterval = Duration(seconds: 30);
   static const _maxPendingBytes = 65536;
 
@@ -152,12 +152,17 @@ class SessionRecorder {
 
   Future<void> _flush() async {
     if (_pending.isEmpty || _file == null) return;
-    final bytes = _pending.toBytes();
+    final raw = _pending.toBytes();
     _pending.clear();
     try {
-      await _file!.writeAsBytes(bytes, mode: FileMode.writeOnlyAppend);
+      final compressed = await compressBlock(data: raw);
+      final size = compressed.length;
+      final frame = Uint8List(4 + size);
+      frame.buffer.asByteData().setUint32(0, size, Endian.little);
+      frame.setRange(4, 4 + size, compressed);
+      await _file!.writeAsBytes(frame, mode: FileMode.writeOnlyAppend);
     } catch (e) {
-      _pending.add(bytes);
+      _pending.add(raw);
     }
   }
 }
