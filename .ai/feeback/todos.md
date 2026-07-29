@@ -4,25 +4,42 @@
 
 - [x] Create branch
 - [x] .ai/feeback/ directory
-- [x] Phase 0a: AppView enum + settings.dart
-- [x] Phase 0b: Feedback state machine + session models
-- [x] Phase 0c: Stub views (feedback_list, feedback_session, feedback_history)
-- [x] Phase 0d: Wire up navigation + sidebar in app.dart
-- [x] Phase 1a: Enable PPG + add new DTOs in Rust
-- [x] Phase 1b: Implement pulse/movement/peak-alpha algorithms in Rust
-- [x] Phase 1c: Emit new events from forwarder
-- [x] Phase 2a: Extend .muse recording for new data types (Bands)
-- [x] Phase 2b: Feedback-aware recorder wrapper
+- [x] Phase 0a-d: AppView, state machine, stub views, navigation
+- [x] Phase 1a-c: Rust PPG, DTOs, derived metrics, forwarder
+- [x] Phase 2a-b: Recording extension + FeedbackRecorder
+- [x] Phase 2c: zstd compression via Rust compress_block FFI
 
-## Pending (require FRB codegen on dev machine)
+## REQUIRED: FRB codegen (run on dev machine)
 
-- [ ] Run `flutter_rust_bridge_codegen generate` to generate Dart types for PulseDto, MovementDto, PeakAlphaDto, and new MuseEventDto variants
-- [ ] Wire Pulse/Movement/PeakAlpha into SessionRecorder after codegen
-- [ ] Wire Pulse/Movement/PeakAlpha into connection_provider event handler (for UI display)
+After pulling this branch, run:
+```
+flutter_rust_bridge_codegen generate
+```
 
-## Future phases
-- Phase 3: Audio playback (audioplayers + AudioService)
-- Phase 4: Feedback protocol selection UI (big buttons — DONE in Phase 0c)
-- Phase 5: Full session flow (calibration → feedback → end)
-- Phase 6: Session dashboard (graphs, stats, notes, save)
-- Phase 7: Feedback history (list, thumbnails, stats)
+This resolves:
+- `PulseDto`, `MovementDto`, `PeakAlphaDto` Dart classes
+- New `MuseEventDto.pulse`, `.movement`, `.peakAlpha` variants
+- `compressBlock()` top-level function in `muse.dart`
+- `flutter analyze lib/src/` should then pass
+
+## Phase 3 backlog: Audio (next)
+- Add `audioplayers` to pubspec.yaml
+- Create `AudioService` (play calibration, feedback, end chime)
+- Place audio files in `assets/`
+- Wire into FeedbackSessionView controls
+
+## Phase 4: Full session flow
+- Calibration → feedback → end state machine wiring
+- Signal quality auto-start (4s all-green)
+- Timer display + elapsed countdown
+- Session end → dashboard navigation
+
+## Phase 5: Session dashboard
+- Bands/motion/pulse graphs from recorded data
+- Stats (peak alpha, avg concentration, stillness)
+- Notes + Save/Discard
+- Thumbnail generation
+
+## Phase 6: Feedback history
+- List view with thumbnails, dates, stats
+- Session metadata persistence
