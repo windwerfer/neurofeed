@@ -13,6 +13,8 @@ import 'package:muse_ml/src/views/raw_eeg.dart';
 import 'package:muse_ml/src/views/terminal.dart';
 import 'package:muse_ml/src/views/psd_view.dart';
 import 'package:muse_ml/src/views/settings_view.dart';
+import 'package:muse_ml/src/views/feedback_list.dart';
+import 'package:muse_ml/src/views/feedback_history.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
@@ -52,6 +54,10 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     final Widget body;
     switch (state.currentView) {
+      case AppView.feedback:
+        body = const FeedbackListView();
+      case AppView.feedbackHistory:
+        body = const FeedbackHistoryView();
       case AppView.bands:
         body = const BandsView();
       case AppView.rawEeg:
@@ -81,6 +87,20 @@ class _AppShellState extends ConsumerState<AppShell> {
                           color: Theme.of(context).colorScheme.surfaceContainer,
                           child: Column(
                             children: [
+                              _SideBarItem(
+                                label: 'Feedback',
+                                selected: state.currentView == AppView.feedback,
+                                onTap: () => ref
+                                    .read(appStateProvider.notifier)
+                                    .setCurrentView(AppView.feedback),
+                              ),
+                              _SideBarItem(
+                                label: 'Feedback History',
+                                selected: state.currentView == AppView.feedbackHistory,
+                                onTap: () => ref
+                                    .read(appStateProvider.notifier)
+                                    .setCurrentView(AppView.feedbackHistory),
+                              ),
                               _SideBarItem(
                                 label: 'Bands',
                                 selected: state.currentView == AppView.bands,
