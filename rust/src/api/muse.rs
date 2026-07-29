@@ -113,6 +113,29 @@ pub struct BandsDto {
     pub gamma: f64,
 }
 
+/// Heart-rate pulse estimate from PPG infrared channel.
+#[frb(dart_metadata = ("freezed",))]
+pub struct PulseDto {
+    pub timestamp: f64,
+    pub bpm: f64,
+    pub confidence: f64,
+}
+
+/// Movement score derived from accelerometer magnitude variance.
+#[frb(dart_metadata = ("freezed",))]
+pub struct MovementDto {
+    pub timestamp: f64,
+    pub score: f64,
+}
+
+/// Peak alpha frequency and power (parabolic interpolation over FFT bins).
+#[frb(dart_metadata = ("freezed",))]
+pub struct PeakAlphaDto {
+    pub timestamp: f64,
+    pub frequency: f64,
+    pub power: f64,
+}
+
 /// All events streamed from the headset to the UI.
 #[frb(dart_metadata = ("freezed",))]
 pub enum MuseEventDto {
@@ -125,6 +148,9 @@ pub enum MuseEventDto {
     Accelerometer(ImuDto),
     Gyroscope(ImuDto),
     Control(ControlDto),
+    Pulse(PulseDto),
+    Movement(MovementDto),
+    PeakAlpha(PeakAlphaDto),
 }
 
 // ── Bridge API ─────────────────────────────────────────────────────────────────
@@ -181,6 +207,7 @@ pub async fn scan(timeout_secs: Option<u64>) -> anyhow::Result<Vec<DeviceInfo>> 
     let timeout = timeout_secs.unwrap_or(15);
     let client = MuseClient::new(MuseClientConfig {
         scan_timeout_secs: timeout,
+        enable_ppg: true,
         ..Default::default()
     });
 
@@ -232,7 +259,10 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
     };
 
     let name = device.name.clone();
-    let client = MuseClient::new(MuseClientConfig::default());
+    let client = MuseClient::new(MuseClientConfig {
+        enable_ppg: true,
+        ..Default::default()
+    });
 
     tokio::time::timeout(std::time::Duration::from_secs(18), async {
         let (rx, handle) = client.connect_to(device).await?;
@@ -427,6 +457,11 @@ fn spawn_event_forwarder() {
             std::collections::HashMap::new();
         let mut bp_override: Option<f32> = None;
 
+        // PPG and accelerometer buffers for derived metrics
+        let mut ppg_ir_buffer: Vec<f64> = Vec::new();
+        let mut accel_mag_buffer: Vec<f64> = Vec::new();
+        let mut last_metrics = tokio::time::Instant::now();
+
         // Per-electrode virtual timestamp tracking for Athena firmware.
         // muse-rs emits timestamp=0.0 for Athena packets because they lack
         // per-channel sequence indices.  We synthesise wall-clock timestamps
@@ -518,6 +553,30 @@ fn spawn_event_forwarder() {
                         t.battery_level = bp;
                     }
                 }
+
+                // Extract PPG IR samples for pulse detection
+                if let MuseEventDto::Ppg(ref ppg) = dto {
+                    if ppg.channel == 1 {
+                        ppg_ir_buffer.extend(ppg.samples.iter().copied());
+                        if ppg_ir_buffer.len() > 1280 {
+                            let drain_to = ppg_ir_buffer.len() - 1280;
+                            ppg_ir_buffer.drain(..drain_to);
+                        }
+                    }
+                }
+
+                // Extract accelerometer magnitude for movement score
+                if let MuseEventDto::Accelerometer(ref imu) = dto {
+                    for s in &imu.samples {
+                        let mag = ((s.x * s.x + s.y * s.y + s.z * s.z) as f64).sqrt();
+                        accel_mag_buffer.push(mag);
+                    }
+                    if accel_mag_buffer.len() > 1040 {
+                        let drain_to = accel_mag_buffer.len() - 1040;
+                        accel_mag_buffer.drain(..drain_to);
+                    }
+                }
+
                 let eeg_samples = if let MuseEventDto::Eeg(ref e) = dto {
                     Some((e.electrode, e.timestamp, e.samples.clone()))
                 } else {
@@ -554,48 +613,103 @@ fn spawn_event_forwarder() {
                         }
                     };
                     if let Some(trimmed) = trimmed {
-                        let powers = match tokio::task::spawn_blocking(
+                        let result = match tokio::task::spawn_blocking(
                             move || compute_fft_bands(&trimmed),
                         )
                         .await
                         {
-                            Ok(p) => p,
+                            Ok(r) => r,
                             Err(e) => {
                                 log::error!("[muse] FFT blocking task panicked: {e}");
                                 continue;
                             }
                         };
+                        // result: [delta, theta, alpha, beta, gamma, peak_alpha_freq, peak_alpha_power]
                         counts.bands += 1;
                         let should_stop = {
                             let mut guard = state()
                                 .inner
                                 .lock()
                                 .unwrap_or_else(|e| e.into_inner());
-                            match guard.sink.as_ref() {
+                            let sink_ok = match guard.sink.as_ref() {
                                 Some(sink) => {
-                                    if sink
-                                        .add(MuseEventDto::Bands(BandsDto {
-                                            electrode,
-                                            timestamp,
-                                            delta: powers[0],
-                                            theta: powers[1],
-                                            alpha: powers[2],
-                                            beta: powers[3],
-                                            gamma: powers[4],
-                                        }))
-                                        .is_err()
-                                    {
-                                        guard.sink = None;
-                                        true
-                                    } else {
-                                        false
-                                    }
+                                    sink.add(MuseEventDto::Bands(BandsDto {
+                                        electrode,
+                                        timestamp,
+                                        delta: result[0],
+                                        theta: result[1],
+                                        alpha: result[2],
+                                        beta: result[3],
+                                        gamma: result[4],
+                                    }))
+                                    .is_ok()
                                 }
-                                None => true,
+                                None => false,
+                            };
+                            if !sink_ok {
+                                guard.sink = None;
+                                true
+                            } else {
+                                // Emit peak alpha alongside bands
+                                if result[5] > 0.0 {
+                                    let _ = guard.sink.as_ref().map(|s| {
+                                        s.add(MuseEventDto::PeakAlpha(PeakAlphaDto {
+                                            timestamp,
+                                            frequency: result[5],
+                                            power: result[6],
+                                        }))
+                                    });
+                                }
+                                false
                             }
                         };
                         if should_stop {
                             break;
+                        }
+                    }
+
+                    // Emit 1 Hz derived metrics (pulse, movement)
+                    if last_metrics.elapsed() >= std::time::Duration::from_secs(1) {
+                        let now_ms = now_ms();
+                        last_metrics = tokio::time::Instant::now();
+
+                        let (bpm, confidence) = compute_pulse(&ppg_ir_buffer);
+                        if bpm > 0.0 {
+                            let mut guard = state()
+                                .inner
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            if let Some(sink) = &guard.sink {
+                                if sink
+                                    .add(MuseEventDto::Pulse(PulseDto {
+                                        timestamp: now_ms,
+                                        bpm,
+                                        confidence,
+                                    }))
+                                    .is_err()
+                                {
+                                    guard.sink = None;
+                                }
+                            }
+                        }
+
+                        let movement_score = compute_movement(&accel_mag_buffer);
+                        {
+                            let mut guard = state()
+                                .inner
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            if let Some(sink) = &guard.sink {
+                                if sink
+                                    .add(MuseEventDto::Movement(MovementDto {
+                                        timestamp: now_ms,
+                                        score: movement_score,
+                                    }))
+                                    .is_err()
+                                {
+                                    guard.sink = None;
+                                }
+                            }
                         }
                     }
                 }
@@ -604,10 +718,10 @@ fn spawn_event_forwarder() {
     });
 }
 
-fn compute_fft_bands(samples: &[f64]) -> [f64; 5] {
+fn compute_fft_bands(samples: &[f64]) -> [f64; 7] {
     let n = samples.len();
     if n < 2 {
-        return [0.0; 5];
+        return [0.0; 7];
     }
     let sample_rate = 256.0;
     let hz_per_bin = sample_rate / n as f64;
@@ -673,14 +787,125 @@ fn compute_fft_bands(samples: &[f64]) -> [f64; 5] {
         }
 
         let half_n = n / 2;
-        [
+        let powers = [
             (1..=bin(4.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
             (bin(4.0)..=bin(8.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
             (bin(8.0)..=bin(13.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
             (bin(13.0)..=bin(30.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
             (bin(30.0)..=bin(half_n.min(50) as f64)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
+        ];
+
+        let (peak_freq, peak_power) = compute_peak_alpha(&re, &im, hz_per_bin);
+
+        [
+            powers[0], powers[1], powers[2], powers[3], powers[4],
+            peak_freq, peak_power,
         ]
     }))
+}
+
+/// Pulse detection from PPG infrared channel using peak-finding.
+/// Returns (bpm, confidence).
+fn compute_pulse(ir_samples: &[f64]) -> (f64, f64) {
+    if ir_samples.len() < 128 {
+        return (0.0, 0.0);
+    }
+    // Use the last 8 seconds of data
+    let window_size = (8.0 * 64.0) as usize;
+    let start = ir_samples.len().saturating_sub(window_size);
+    let window = &ir_samples[start..];
+
+    let mean = window.iter().copied().sum::<f64>() / window.len() as f64;
+    let ac: Vec<f64> = window.iter().map(|s| s - mean).collect();
+
+    let max_abs = ac.iter().copied().map(f64::abs).fold(0.0, f64::max);
+    if max_abs < 1.0 {
+        return (0.0, 0.0);
+    }
+    let threshold = max_abs * 0.4;
+
+    let mut peaks = Vec::new();
+    for i in 1..ac.len() - 1 {
+        if ac[i] > threshold && ac[i] > ac[i - 1] && ac[i] > ac[i + 1] {
+            peaks.push(i);
+        }
+    }
+    if peaks.len() < 2 {
+        return (0.0, 0.0);
+    }
+
+    let mut ibis = Vec::new();
+    for pair in peaks.windows(2) {
+        let ibi = (pair[1] - pair[0]) as f64 / 64.0;
+        if ibi > 0.3 && ibi < 1.5 {
+            ibis.push(ibi);
+        }
+    }
+    if ibis.len() < 2 {
+        return (0.0, 0.0);
+    }
+
+    let avg_ibi = ibis.iter().copied().sum::<f64>() / ibis.len() as f64;
+    let bpm = 60.0 / avg_ibi;
+    let variance = ibis.iter().map(|i| (i - avg_ibi).powi(2)).sum::<f64>() / ibis.len() as f64;
+    let cv = variance.sqrt() / avg_ibi;
+    let confidence = (1.0 - cv).max(0.0);
+    (bpm, confidence)
+}
+
+/// Movement score from accelerometer magnitude variance.
+/// Higher score = more movement.
+fn compute_movement(magnitudes: &[f64]) -> f64 {
+    if magnitudes.len() < 10 {
+        return 0.0;
+    }
+    // Use the last 2 seconds of data
+    let window_size = (2.0 * 52.0) as usize;
+    let start = magnitudes.len().saturating_sub(window_size);
+    let window = &magnitudes[start..];
+
+    let mean = window.iter().copied().sum::<f64>() / window.len() as f64;
+    let variance =
+        window.iter().map(|m| (m - mean).powi(2)).sum::<f64>() / window.len() as f64;
+    variance.sqrt()
+}
+
+/// Peak alpha frequency via parabolic interpolation over FFT bins.
+/// `re` and `im` are the full FFT output (half_n + 1 usable bins).
+/// Returns (frequency_hz, power).
+fn compute_peak_alpha(re: &[f64], im: &[f64], hz_per_bin: f64) -> (f64, f64) {
+    let bin_start = (8.0 / hz_per_bin).round() as usize;
+    let bin_end = (13.0 / hz_per_bin).round() as usize;
+    let bin_end = bin_end.min(re.len());
+
+    let mut max_power = 0.0f64;
+    let mut max_bin = bin_start;
+    for k in bin_start..bin_end {
+        let power = re[k] * re[k] + im[k] * im[k];
+        if power > max_power {
+            max_power = power;
+            max_bin = k;
+        }
+    }
+    if max_power < 1e-12 {
+        return (0.0, 0.0);
+    }
+
+    let prev_power = if max_bin > bin_start {
+        re[max_bin - 1] * re[max_bin - 1] + im[max_bin - 1] * im[max_bin - 1]
+    } else {
+        0.0
+    };
+    let next_power = if max_bin + 1 < bin_end {
+        re[max_bin + 1] * re[max_bin + 1] + im[max_bin + 1] * im[max_bin + 1]
+    } else {
+        0.0
+    };
+
+    let offset = (next_power - prev_power)
+        / (2.0 * (2.0 * max_power - prev_power - next_power));
+    let frequency = (max_bin as f64 + offset) * hz_per_bin;
+    (frequency, max_power)
 }
 
 fn map_event(ev: MuseEvent) -> MuseEventDto {
