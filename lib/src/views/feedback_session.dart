@@ -17,7 +17,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
   @override
   void initState() {
     super.initState();
-    ref.listen(feedbackStateProvider, (prev, next) {
+    ref.listenManual(feedbackStateProvider, (prev, next) {
       if (prev?.phase != FeedbackPhase.ended && next.phase == FeedbackPhase.ended) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {

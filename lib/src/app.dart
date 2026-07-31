@@ -17,6 +17,7 @@ import 'package:muse_ml/src/views/feedback_list.dart';
 import 'package:muse_ml/src/views/feedback_history.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 
 /// The main app shell: status bar on top, a collapsible sidebar with the three
 /// views, and the connect window overlay.
@@ -191,6 +192,9 @@ class _SideBarItem extends StatelessWidget {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await RustLib.init();
+  if (Platform.isLinux) {
+    JustAudioMediaKit.ensureInitialized();
+  }
   await requestBlePermissions();
   final settings = await Settings.load();
   runApp(

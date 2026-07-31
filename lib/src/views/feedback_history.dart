@@ -17,7 +17,11 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
   @override
   void initState() {
     super.initState();
-    ref.invalidate(sessionListProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.invalidate(sessionListProvider);
+      }
+    });
   }
 
   @override
