@@ -16,11 +16,13 @@
 - [ ] v1.1: EEG artifact flag for jaw-clench/blink EMG (accel gating only catches head motion)
 
 ## Phase 4: Full session flow
-- [ ] Signal quality auto-start (4s all-green detection in FeedbackStateNotifier)
-- [ ] Connection check on start — show connect overlay if Muse disconnected
-- [ ] Wire FeedbackRecorder into session lifecycle
-- [ ] End-of-session → session dashboard navigation
-- [ ] Calibration completed event sound
+- [x] Signal quality auto-start: 4s all-green (all channels ≥ 80) in ready phase → auto startPlaying
+- [x] Connection check on start — opens connect window if Muse disconnected (calibration + playing)
+- [x] Wire FeedbackRecorder into session lifecycle (start on playing, save on end, discard on reset)
+- [x] End-of-session → session dashboard navigation (auto pushReplacement to stub dashboard)
+- [x] Calibration completed event sound (bowl_high confirmation chime)
+- [x] Disconnect during playing/paused → interrupted phase: pause session, 10s grace countdown, auto-resume on reconnect, end only if unrecovered (connect window auto-opens via connection_provider reconnect)
+- [x] Persistent bad signal (any channel < 40 for 10s) → interrupted phase; recovers when signal returns to green
 
 ## Phase 5: Session dashboard
 - [ ] Bands/motion/pulse graphs from recorded data

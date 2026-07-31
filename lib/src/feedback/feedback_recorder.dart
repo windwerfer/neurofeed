@@ -14,13 +14,17 @@ class FeedbackRecorder {
   final Directory _sessionDir;
 
   FeedbackRecorder({Directory? sessionDir})
-    : _sessionDir = sessionDir ?? Directory.systemTemp;
+    : _sessionDir = sessionDir ??
+          Directory('${Directory.systemTemp.path}/muse_ml_sessions');
 
   bool get isRecording => _recorder.isRecording;
 
   /// Begin a session recording. If one is already active, it is ended first.
   Future<void> startSession() async {
     await _recorder.stop();
+    if (!await _sessionDir.exists()) {
+      await _sessionDir.create(recursive: true);
+    }
     await _recorder.start(_sessionDir);
   }
 

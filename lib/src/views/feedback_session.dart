@@ -1,16 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
+import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/views/feedback_dashboard.dart';
 
-class FeedbackSessionView extends ConsumerWidget {
+class FeedbackSessionView extends ConsumerStatefulWidget {
   const FeedbackSessionView({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FeedbackSessionView> createState() => _FeedbackSessionViewState();
+}
+
+class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
+  @override
+  void initState() {
+    super.initState();
+    ref.listen(feedbackStateProvider, (prev, next) {
+      if (prev?.phase != FeedbackPhase.ended && next.phase == FeedbackPhase.ended) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const FeedbackDashboardView()),
+            );
+          }
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final fb = ref.watch(feedbackStateProvider);
     final protocol = ProtocolInfo.forType(fb.protocol);
+    final connected = ref.watch(appStateProvider).status.connected;
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -35,6 +59,22 @@ class FeedbackSessionView extends ConsumerWidget {
               _TimerSelector(),
               const SizedBox(height: 12),
               _SoundSelector(),
+              if (!connected) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Icon(Icons.bluetooth_disabled, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Muse not connected — Start Session will open the '
+                        'connect window.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
             const Spacer(),
             // Phase-specific controls
@@ -140,6 +180,18 @@ class _PhaseControls extends ConsumerWidget {
               onPressed: () => ref.read(feedbackStateProvider.notifier).startCalibration(),
               child: const Text('Recalibrate'),
             ),
+            if (fb.signalStableSeconds > 0) ...[
+              const SizedBox(height: 12),
+              LinearProgressIndicator(
+                value: (fb.signalStableSeconds / autoStartSeconds).clamp(0.0, 1.0),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Signal stable ${fb.signalStableSeconds}/$autoStartSeconds s — '
+                'auto-starting…',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
           ],
         );
 
@@ -174,6 +226,31 @@ class _PhaseControls extends ConsumerWidget {
               icon: const Icon(Icons.stop),
               onPressed: () => ref.read(feedbackStateProvider.notifier).end(),
               tooltip: 'End session',
+            ),
+          ],
+        );
+
+      case FeedbackPhase.interrupted:
+        return Column(
+          children: [
+            Icon(Icons.wifi_off, color: Colors.orange, size: 48),
+            const SizedBox(height: 8),
+            Text(
+              fb.interruptMessage ?? 'Session interrupted',
+              style: theme.textTheme.titleMedium,
+            ),
+            if (fb.interruptionSecondsLeft != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Ending in ${fb.interruptionSecondsLeft}s if not recovered…',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: () => ref.read(feedbackStateProvider.notifier).end(),
+              icon: const Icon(Icons.stop),
+              label: const Text('End session'),
             ),
           ],
         );

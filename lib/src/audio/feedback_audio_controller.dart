@@ -15,9 +15,12 @@ class FeedbackAudioController {
       'assets/audio/bowl/bowl_low-531269__asuriya__aud-10-ancient-tibet-bowl-pure-vibrations.opus';
   static const String bellAsset =
       'assets/audio/bell/864397__valerie-vivegnis__2607.opus';
+  static const String bowlHighAsset =
+      'assets/audio/bowl/bowl_high-421829__dersinnsspace__tibetan-bowl_center-hit.opus';
 
   final AudioPlayer _ambient = AudioPlayer();
   final AudioPlayer _calibration = AudioPlayer();
+  final AudioPlayer _confirmation = AudioPlayer();
   final AudioPlayer _bell = AudioPlayer();
   final List<AudioPlayer> _chimes =
       List.generate(maxPolyphony, (_) => AudioPlayer());
@@ -79,6 +82,16 @@ class FeedbackAudioController {
     _movingUntil = DateTime.now().add(movementBuffer);
   }
 
+  Future<void> playConfirmation() async {
+    try {
+      await _confirmation.setAsset(bowlHighAsset);
+      await _confirmation.setLoopMode(LoopMode.off);
+      await _confirmation.play();
+    } catch (e) {
+      debugPrint('[audio] confirmation playback failed: $e');
+    }
+  }
+
   Future<void> playEndChime() async {
     try {
       await _bell.setAsset(bellAsset);
@@ -94,6 +107,7 @@ class FeedbackAudioController {
     await Future.wait([
       _ambient.stop(),
       _calibration.stop(),
+      _confirmation.stop(),
       _bell.stop(),
       for (final chime in _chimes) chime.stop(),
     ]);
@@ -102,6 +116,7 @@ class FeedbackAudioController {
   void dispose() {
     _ambient.dispose();
     _calibration.dispose();
+    _confirmation.dispose();
     _bell.dispose();
     for (final chime in _chimes) {
       chime.dispose();

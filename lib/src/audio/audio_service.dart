@@ -14,6 +14,8 @@ class AudioService {
 
   Future<void> playCalibration() => _controller.playCalibration();
 
+  Future<void> playConfirmation() => _controller.playConfirmation();
+
   Future<void> playFeedback({String sound = 'Ambient Drone'}) {
     final path = soundAssets[sound] ?? soundAssets.values.first;
     return _controller.startBackground(path);
