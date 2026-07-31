@@ -8,10 +8,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 
 class FeedbackDashboardView extends ConsumerStatefulWidget {
-  const FeedbackDashboardView({super.key});
+  const FeedbackDashboardView({
+    super.key,
+    this.sessionPath,
+    this.metadata,
+    this.readOnly = false,
+  });
+
+  final String? sessionPath;
+  final SessionMetadata? metadata;
+  final bool readOnly;
 
   @override
   ConsumerState<FeedbackDashboardView> createState() =>
@@ -29,9 +39,15 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   @override
   void initState() {
     super.initState();
-    final path = ref.read(feedbackStateProvider.notifier).sessionFilePath;
+    final path =
+        widget.sessionPath ??
+        ref.read(feedbackStateProvider.notifier).sessionFilePath;
     if (path != null) {
       _dataFuture = SessionReader.read(File(path));
+    }
+    final notes = widget.metadata?.notes;
+    if (notes != null && notes.isNotEmpty) {
+      _notes.text = notes;
     }
   }
 
@@ -44,7 +60,8 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   @override
   Widget build(BuildContext context) {
     final fb = ref.watch(feedbackStateProvider);
-    final protocol = ProtocolInfo.forType(fb.protocol);
+    final meta = widget.metadata;
+    final protocol = ProtocolInfo.forType(meta?.protocol ?? fb.protocol);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -63,18 +80,21 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
                       return _LoadError(
                         theme: theme,
                         error: snapshot.error!,
-                        onDiscard: _discard,
+                        onDiscard: widget.readOnly ? null : _discard,
                       );
                     }
                     final data = snapshot.data!;
                     _prepared ??= _prepare(data);
-                    if (_thumbnail == null) {
+                    if (_thumbnail == null && !widget.readOnly) {
                       WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
                     }
                     return _DashboardBody(
-                      fb: fb,
                       protocol: protocol,
+                      durationMinutes: meta?.durationMinutes ?? fb.durationMinutes,
+                      elapsedSeconds: meta?.elapsedSeconds ?? fb.elapsedSeconds,
+                      soundName: meta?.sound ?? fb.soundName,
                       prepared: _prepared!,
+                      readOnly: widget.readOnly,
                       thumbKey: _thumbKey,
                       notesController: _notes,
                       onSave: _save,
@@ -100,15 +120,39 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
 
   Future<void> _save() async {
     setState(() => _busy = true);
-    final saved = await ref
-        .read(feedbackStateProvider.notifier)
-        .saveSession();
-    if (saved != null && _thumbnail != null) {
-      final pngPath = saved.path.replaceFirst(RegExp(r'\.muse$'), '.png');
-      try {
-        await File(pngPath).writeAsBytes(_thumbnail!);
-      } catch (e) {
-        debugPrint('[dashboard] thumbnail save failed: $e');
+    final notifier = ref.read(feedbackStateProvider.notifier);
+    final fb = ref.read(feedbackStateProvider);
+    final saved = await notifier.saveSession();
+    if (saved != null) {
+      final stats = _prepared?.stats;
+      await ref.read(sessionStoreProvider).writeMetadata(
+        saved,
+        SessionMetadata(
+          protocol: fb.protocol,
+          durationMinutes: fb.durationMinutes,
+          elapsedSeconds: fb.elapsedSeconds,
+          sound: fb.soundName,
+          savedAt: DateTime.now(),
+          notes: _notes.text,
+          stats: stats == null
+              ? null
+              : SessionStatsData(
+                  peakAlphaFreq: stats.peakAlphaFreq,
+                  peakAlphaPower: stats.peakAlphaPower,
+                  targetPct: stats.targetPct,
+                  stillnessPct: stats.stillnessPct,
+                  avgBpm: stats.avgBpm,
+                  avgAlphaRel: stats.avgAlphaRel,
+                ),
+        ),
+      );
+      if (_thumbnail != null) {
+        final pngPath = saved.path.replaceFirst(RegExp(r'\.muse$'), '.png');
+        try {
+          await File(pngPath).writeAsBytes(_thumbnail!);
+        } catch (e) {
+          debugPrint('[dashboard] thumbnail save failed: $e');
+        }
       }
     }
     if (mounted) {
@@ -127,18 +171,24 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
 
 class _DashboardBody extends StatelessWidget {
   const _DashboardBody({
-    required this.fb,
     required this.protocol,
+    required this.durationMinutes,
+    required this.elapsedSeconds,
+    required this.soundName,
     required this.prepared,
+    required this.readOnly,
     required this.thumbKey,
     required this.notesController,
     required this.onSave,
     required this.onDiscard,
   });
 
-  final FeedbackState fb;
   final ProtocolInfo protocol;
+  final int durationMinutes;
+  final int elapsedSeconds;
+  final String soundName;
   final _Prepared prepared;
+  final bool readOnly;
   final GlobalKey thumbKey;
   final TextEditingController notesController;
   final Future<void> Function() onSave;
@@ -164,15 +214,15 @@ class _DashboardBody extends StatelessWidget {
                 _SummaryRow(label: 'Protocol', value: protocol.title),
                 _SummaryRow(
                   label: 'Duration',
-                  value: '${fb.durationMinutes} min',
+                  value: '$durationMinutes min',
                 ),
                 _SummaryRow(
                   label: 'Elapsed',
                   value:
-                      '${fb.elapsedSeconds ~/ 60}:'
-                      '${(fb.elapsedSeconds % 60).toString().padLeft(2, '0')}',
+                      '${elapsedSeconds ~/ 60}:'
+                      '${(elapsedSeconds % 60).toString().padLeft(2, '0')}',
                 ),
-                _SummaryRow(label: 'Background sound', value: fb.soundName),
+                _SummaryRow(label: 'Background sound', value: soundName),
                 if (prepared.bandsCount > 0) ...[
                   const SizedBox(height: 12),
                   Wrap(
@@ -269,39 +319,42 @@ class _DashboardBody extends StatelessWidget {
         TextField(
           controller: notesController,
           maxLines: 3,
+          enabled: !readOnly,
           decoration: const InputDecoration(
             labelText: 'Notes',
             border: OutlineInputBorder(),
           ),
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: onSave,
-                icon: const Icon(Icons.check),
-                label: const Text('Save'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  minimumSize: const Size.fromHeight(48),
+        if (!readOnly) ...[
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onSave,
+                  icon: const Icon(Icons.check),
+                  label: const Text('Save'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    minimumSize: const Size.fromHeight(48),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onDiscard,
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('Discard'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: theme.colorScheme.onSurfaceVariant,
-                  minimumSize: const Size.fromHeight(48),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onDiscard,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Discard'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.colorScheme.onSurfaceVariant,
+                    minimumSize: const Size.fromHeight(48),
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -696,7 +749,7 @@ class _LoadError extends StatelessWidget {
 
   final ThemeData theme;
   final Object error;
-  final Future<void> Function() onDiscard;
+  final Future<void> Function()? onDiscard;
 
   @override
   Widget build(BuildContext context) {
@@ -710,12 +763,14 @@ class _LoadError extends StatelessWidget {
             const SizedBox(height: 8),
             Text('Could not load session: $error',
                 style: theme.textTheme.bodySmall),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onDiscard,
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('Discard session'),
-            ),
+            if (onDiscard != null) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: onDiscard,
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Discard session'),
+              ),
+            ],
           ],
         ),
       ),

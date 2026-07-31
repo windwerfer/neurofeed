@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:muse_ml/src/charts/session_recorder.dart';
+import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 /// Wraps [SessionRecorder] with session-aware lifecycle.
@@ -14,8 +15,7 @@ class FeedbackRecorder {
   final Directory _sessionDir;
 
   FeedbackRecorder({Directory? sessionDir})
-    : _sessionDir = sessionDir ??
-          Directory('${Directory.systemTemp.path}/muse_ml_sessions');
+    : _sessionDir = sessionDir ?? defaultSessionDir();
 
   bool get isRecording => _recorder.isRecording;
 

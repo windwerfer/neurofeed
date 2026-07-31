@@ -33,6 +33,6 @@
 - [x] Thumbnail generation (RepaintBoundary → PNG next to .muse)
 
 ## Phase 6: Feedback history
-- [ ] Session metadata persistence (JSON alongside .muse)
-- [ ] History list view with thumbnails, dates, stats
-- [ ] Tap to re-open dashboard
+- [x] Session metadata persistence (JSON alongside .muse: protocol, duration, sound, savedAt, notes, stats)
+- [x] History list view with thumbnails, dates, stats (SessionStore.list + FutureProvider)
+- [x] Tap to re-open dashboard (read-only mode, notes prefilled)
