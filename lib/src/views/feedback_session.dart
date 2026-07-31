@@ -229,7 +229,7 @@ class _SoundSelector extends ConsumerWidget {
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: ListTile(
         leading: const Icon(Icons.music_note),
-        title: const Text('Feedback Sound'),
+        title: const Text('Background Sound'),
         subtitle: Text(fb.soundName),
         trailing: const Icon(Icons.chevron_right),
         onTap: sounds.length > 1
@@ -257,7 +257,7 @@ class _SoundPicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AlertDialog(
-      title: const Text('Choose Feedback Sound'),
+      title: const Text('Choose Background Sound'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: sounds.map((s) {

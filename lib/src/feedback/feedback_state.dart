@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/target_state.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 enum FeedbackPhase { idle, calibrating, ready, playing, paused, ended }
@@ -19,7 +20,7 @@ class FeedbackState {
     this.phase = FeedbackPhase.idle,
     this.protocol = ProtocolType.alphaTheta,
     this.durationMinutes = 15,
-    this.soundName = 'Harmonic Consonance',
+    this.soundName = 'Ambient Drone',
     this.elapsedSeconds = 0,
     this.signalGood = false,
   });
@@ -49,6 +50,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   final Ref _ref;
   StreamSubscription<MuseEventDto>? _eventSub;
   Timer? _ticker;
+  final TargetStateAggregator _target = TargetStateAggregator();
 
   AudioService get _audio => _ref.read(audioServiceProvider);
 
@@ -76,6 +78,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// Start the feedback loop.
   Future<void> startPlaying() async {
     state = state.copyWith(phase: FeedbackPhase.playing);
+    _target.reset();
     await _audio.playFeedback(sound: state.soundName);
     _startTicker();
   }
@@ -117,7 +120,38 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   void _onEvent(MuseEventDto event) {
-    // Future: track signal quality for auto-start
+    switch (event) {
+      case MuseEventDto_Bands(:final field0):
+        _onBands(field0);
+      case MuseEventDto_Movement(:final field0):
+        _onMovement(field0);
+      default:
+        break;
+    }
+  }
+
+  void _onBands(BandsDto bands) {
+    if (state.phase != FeedbackPhase.playing) {
+      return;
+    }
+    _target.update(bands);
+    final target = _target.evaluate();
+    if (target == null) {
+      return;
+    }
+    _audio.onStateUpdate(isAlphaThetaTarget(
+      alphaRel: target.alphaRel,
+      thetaRel: target.thetaRel,
+    ));
+  }
+
+  void _onMovement(MovementDto movement) {
+    if (state.phase != FeedbackPhase.playing) {
+      return;
+    }
+    if (movement.score > movementGateThreshold) {
+      _audio.onMovement();
+    }
   }
 
   @override

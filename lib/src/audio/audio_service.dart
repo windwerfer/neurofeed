@@ -1,74 +1,37 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:muse_ml/src/audio/feedback_audio_controller.dart';
 
 class AudioService {
-  final AudioPlayer _player = AudioPlayer();
+  final FeedbackAudioController _controller = FeedbackAudioController();
 
-  bool get isPlaying => _player.playing;
-  bool get isPaused => _player.playing == false && _player.processingState == ProcessingState.ready;
-
-  static const Map<String, String?> soundAssets = {
-    'Harmonic Consonance': 'assets/audio/harmonic_consonance.opus',
-    'your music (low pass)': null,
-    'bowl chiming': null,
-    'rain': null,
+  static const Map<String, String> soundAssets = {
+    'Ambient Drone':
+        'assets/audio/drone/859763__kkenny101__drone-loop-ambient-background-texture.opus',
+    'Rain': 'assets/audio/rain/346562__lebaston100__rain-without-thunder.opus',
   };
 
-  List<String> get availableSounds =>
-      soundAssets.entries.where((e) => e.value != null).map((e) => e.key).toList();
+  List<String> get availableSounds => soundAssets.keys.toList();
 
-  /// Play the 60s calibration tone. Returns when playback completes.
-  Future<void> playCalibration() async {
-    await _player.stop();
-    try {
-      await _player.setAsset('assets/audio/calibration.opus');
-      await _player.setLoopMode(LoopMode.off);
-      await _player.play();
-    } catch (e) {
-      debugPrint('[audio] calibration playback failed: $e');
-    }
+  Future<void> playCalibration() => _controller.playCalibration();
+
+  Future<void> playFeedback({String sound = 'Ambient Drone'}) {
+    final path = soundAssets[sound] ?? soundAssets.values.first;
+    return _controller.startBackground(path);
   }
 
-  /// Play the feedback sound in a continuous loop.
-  Future<void> playFeedback({String sound = 'Harmonic Consonance'}) async {
-    await _player.stop();
-    final path = soundAssets[sound] ?? soundAssets.values.firstWhere((v) => v != null);
-    if (path == null) {
-      debugPrint('[audio] no feedback sound available');
-      return;
-    }
-    try {
-      await _player.setAsset(path);
-      await _player.setLoopMode(LoopMode.one);
-      await _player.play();
-    } catch (e) {
-      debugPrint('[audio] feedback playback failed: $e');
-    }
-  }
+  void onStateUpdate(bool inTarget) => _controller.onStateUpdate(inTarget);
 
-  /// Play the end-of-session bowl chime.
-  Future<void> playEndChime() async {
-    await _player.stop();
-    try {
-      await _player.setAsset('assets/audio/end_chime.opus');
-      await _player.setLoopMode(LoopMode.off);
-      await _player.play();
-    } catch (e) {
-      debugPrint('[audio] end chime playback failed: $e');
-    }
-  }
+  void onMovement() => _controller.onMovement();
 
-  Future<void> pause() => _player.pause();
-  Future<void> resume() => _player.play();
+  Future<void> playEndChime() => _controller.playEndChime();
 
-  Future<void> stop() async {
-    await _player.stop();
-  }
+  Future<void> pause() => _controller.pauseBackground();
 
-  void dispose() {
-    _player.dispose();
-  }
+  Future<void> resume() => _controller.resumeBackground();
+
+  Future<void> stop() => _controller.stop();
+
+  void dispose() => _controller.dispose();
 }
 
 final audioServiceProvider = Provider<AudioService>((ref) {
