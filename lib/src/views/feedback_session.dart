@@ -4,6 +4,7 @@ import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/status_bar.dart';
 import 'package:muse_ml/src/views/feedback_dashboard.dart';
 
 class FeedbackSessionView extends ConsumerStatefulWidget {
@@ -46,6 +47,10 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
             onPressed: () => _showGuide(context, protocol),
           ),
         ],
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(56),
+          child: StatusBar(),
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
