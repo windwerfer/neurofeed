@@ -43,7 +43,11 @@ class _ProtocolCard extends ConsumerWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
-          ref.read(feedbackStateProvider.notifier).selectProtocol(protocol.type);
+          final notifier = ref.read(feedbackStateProvider.notifier);
+          if (ref.read(feedbackStateProvider).phase == FeedbackPhase.ended) {
+            notifier.reset();
+          }
+          notifier.selectProtocol(protocol.type);
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => const FeedbackSessionView(),
