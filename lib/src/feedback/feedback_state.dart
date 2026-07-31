@@ -17,6 +17,8 @@ const double signalCriticalThreshold = 40.0;
 const int autoStartSeconds = 4;
 const int badSignalPauseSeconds = 10;
 const int interruptionGraceSeconds = 10;
+const int signalWaitResetSeconds = 10;
+const List<int> neededElectrodes = [1, 2];
 
 class FeedbackState {
   final FeedbackPhase phase;
@@ -28,6 +30,8 @@ class FeedbackState {
   final int signalStableSeconds;
   final String? interruptMessage;
   final int? interruptionSecondsLeft;
+  final bool waitingForSignal;
+  final bool startAnywayAvailable;
 
   const FeedbackState({
     this.phase = FeedbackPhase.idle,
@@ -39,6 +43,8 @@ class FeedbackState {
     this.signalStableSeconds = 0,
     this.interruptMessage,
     this.interruptionSecondsLeft,
+    this.waitingForSignal = false,
+    this.startAnywayAvailable = false,
   });
 
   static const Object _sentinel = Object();
@@ -53,6 +59,8 @@ class FeedbackState {
     int? signalStableSeconds,
     Object? interruptMessage = _sentinel,
     Object? interruptionSecondsLeft = _sentinel,
+    bool? waitingForSignal,
+    bool? startAnywayAvailable,
   }) => FeedbackState(
     phase: phase ?? this.phase,
     protocol: protocol ?? this.protocol,
@@ -67,6 +75,8 @@ class FeedbackState {
     interruptionSecondsLeft: identical(interruptionSecondsLeft, _sentinel)
         ? this.interruptionSecondsLeft
         : interruptionSecondsLeft as int?,
+    waitingForSignal: waitingForSignal ?? this.waitingForSignal,
+    startAnywayAvailable: startAnywayAvailable ?? this.startAnywayAvailable,
   );
 }
 
@@ -85,6 +95,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   bool _interruptWasPlaying = false;
   int _interruptionLeft = interruptionGraceSeconds;
   int _badSignalSeconds = 0;
+  String? _lastQualityKey;
+  int _waitingSeconds = 0;
+  bool _bypassSignalGate = false;
   final TargetStateAggregator _target = TargetStateAggregator();
   final FeedbackRecorder _recorder = FeedbackRecorder();
 
@@ -104,7 +117,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   /// Begin calibration: play narrator, confirm with chime, then wait for a
   /// stable signal to auto-start feedback. Opens the connect window if the
-  /// Muse is not connected.
+  /// Muse is not connected. Calibration only proceeds once all electrodes
+  /// are green; with a defective electrode the user can start anyway after
+  /// the signal has not changed for [signalWaitResetSeconds].
   Future<void> startCalibration() async {
     if (!_ref.read(appStateProvider).status.connected) {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
@@ -114,12 +129,60 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       phase: FeedbackPhase.calibrating,
       elapsedSeconds: 0,
       signalStableSeconds: 0,
+      waitingForSignal: false,
+      startAnywayAvailable: false,
     );
+    await _runCalibration();
+  }
+
+  Future<void> _runCalibration() async {
+    if (state.phase != FeedbackPhase.calibrating) {
+      return;
+    }
+    final quality = _ref.read(appStateProvider).signalQuality;
+    if (!_allGreen(quality)) {
+      _lastQualityKey = _qualityKey(quality);
+      _waitingSeconds = 0;
+      state = state.copyWith(waitingForSignal: true, startAnywayAvailable: false);
+      return;
+    }
     await _audio.playCalibration();
     await _audio.playConfirmation();
-    if (state.phase == FeedbackPhase.calibrating) {
-      state = state.copyWith(phase: FeedbackPhase.ready, signalStableSeconds: 0);
+    if (state.phase != FeedbackPhase.calibrating) {
+      return;
     }
+    if (_bypassSignalGate) {
+      _bypassSignalGate = false;
+      state = state.copyWith(
+        phase: FeedbackPhase.ready,
+        signalStableSeconds: 0,
+        waitingForSignal: false,
+      );
+      return;
+    }
+    final qualityAfter = _ref.read(appStateProvider).signalQuality;
+    if (_allGreen(qualityAfter)) {
+      state = state.copyWith(
+        phase: FeedbackPhase.ready,
+        signalStableSeconds: 0,
+        waitingForSignal: false,
+      );
+    } else {
+      _lastQualityKey = _qualityKey(qualityAfter);
+      _waitingSeconds = 0;
+      state = state.copyWith(waitingForSignal: true, startAnywayAvailable: false);
+    }
+  }
+
+  /// Bypasses the all-green calibration gate (used when the user opts to
+  /// start anyway after a long-unchanged signal with a working electrode).
+  void startAnyway() {
+    if (state.phase != FeedbackPhase.calibrating ||
+        !state.startAnywayAvailable) {
+      return;
+    }
+    _bypassSignalGate = true;
+    _runCalibration();
   }
 
   /// Start the feedback loop: record the session and begin the background
@@ -167,6 +230,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _ticker?.cancel();
     _interruptTimer?.cancel();
     _interruptTimer = null;
+    _lastQualityKey = null;
+    _waitingSeconds = 0;
+    _bypassSignalGate = false;
     _audio.stop();
     _recorder.discardSession();
     state = const FeedbackState();
@@ -263,6 +329,33 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     final quality = next.signalQuality;
+
+    if (state.phase == FeedbackPhase.calibrating && state.waitingForSignal) {
+      final key = _qualityKey(quality);
+      if (_allGreen(quality)) {
+        state = state.copyWith(
+          waitingForSignal: false,
+          startAnywayAvailable: false,
+        );
+        unawaited(_runCalibration());
+        return;
+      }
+      if (key != _lastQualityKey) {
+        _lastQualityKey = key;
+        _waitingSeconds = 0;
+        if (state.startAnywayAvailable) {
+          state = state.copyWith(startAnywayAvailable: false);
+        }
+        return;
+      }
+      _waitingSeconds++;
+      if (_waitingSeconds >= signalWaitResetSeconds &&
+          _hasNeededElectrode(quality) &&
+          !state.startAnywayAvailable) {
+        state = state.copyWith(startAnywayAvailable: true);
+      }
+      return;
+    }
 
     if (state.phase == FeedbackPhase.ready) {
       final stable = quality != null &&
@@ -362,6 +455,28 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (movement.score > movementGateThreshold) {
       _audio.onMovement();
     }
+  }
+
+  bool _allGreen(List<double>? quality) {
+    if (quality == null || quality.length < 4) {
+      return false;
+    }
+    return quality.every((s) => s >= signalGoodThreshold);
+  }
+
+  bool _hasNeededElectrode(List<double>? quality) {
+    if (quality == null) {
+      return false;
+    }
+    return neededElectrodes
+        .any((i) => i < quality.length && quality[i] >= signalGoodThreshold);
+  }
+
+  String _qualityKey(List<double>? quality) {
+    if (quality == null) {
+      return 'null';
+    }
+    return quality.map((q) => q.toStringAsFixed(2)).join(',');
   }
 
   @override

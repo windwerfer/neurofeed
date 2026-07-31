@@ -153,9 +153,43 @@ class _PhaseControls extends ConsumerWidget {
       case FeedbackPhase.calibrating:
         return Column(
           children: [
-            const LinearProgressIndicator(),
-            const SizedBox(height: 8),
-            Text('Calibrating… (60s)', style: theme.textTheme.bodyMedium),
+            if (fb.waitingForSignal) ...[
+              Icon(Icons.sensors_off, color: Colors.orange, size: 48),
+              const SizedBox(height: 8),
+              Text('Waiting for good signal…', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                'Check headband placement and electrode contact.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
+              ),
+              if (fb.startAnywayAvailable) ...[
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () =>
+                      ref.read(feedbackStateProvider.notifier).startAnyway(),
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Start anyway'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 56),
+                    textStyle: const TextStyle(fontSize: 18),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Signal unchanged for 10s with a working electrode — '
+                  'proceed without full signal?',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ] else ...[
+              const LinearProgressIndicator(),
+              const SizedBox(height: 8),
+              Text('Calibrating… (60s)', style: theme.textTheme.bodyMedium),
+            ],
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => ref.read(feedbackStateProvider.notifier).reset(),
