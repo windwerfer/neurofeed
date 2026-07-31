@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -226254532;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1100052515;
 
 // Section: executor
 
@@ -142,6 +142,40 @@ fn wire__crate__api__muse__connection_status_default_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok =
                         Result::<_, ()>::Ok(crate::api::muse::ConnectionStatus::default())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__muse__decompress_block_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "decompress_block",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_data = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::muse::decompress_block(api_data))?;
                     Ok(output_ok)
                 })())
             }
@@ -810,13 +844,14 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        4 => wire__crate__api__muse__disconnect_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__muse__get_status_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__muse__init_app_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__muse__is_connected_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__muse__scan_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__muse__telemetry_snapshot_default_impl(
+        4 => wire__crate__api__muse__decompress_block_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__muse__disconnect_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__muse__get_status_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__muse__init_app_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__muse__is_connected_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__muse__scan_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__muse__telemetry_snapshot_default_impl(
             port,
             ptr,
             rust_vec_len,

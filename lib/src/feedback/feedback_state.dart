@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/connection_provider.dart';
@@ -147,7 +148,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _startTicker();
   }
 
-  /// End the session: save the recording, stop audio, play the end chime.
+  /// End the session: flush the recording, stop audio, play the end chime.
+  /// The temp recording stays on disk until the dashboard saves or discards it.
   Future<void> end() async {
     if (state.phase == FeedbackPhase.ended) {
       return;
@@ -156,7 +158,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _interruptTimer?.cancel();
     _interruptTimer = null;
     state = state.copyWith(phase: FeedbackPhase.ended);
-    await _recorder.saveSession();
+    await _recorder.flushSession();
     await _audio.stop();
     await _audio.playEndChime();
   }
@@ -169,6 +171,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _recorder.discardSession();
     state = const FeedbackState();
   }
+
+  String? get sessionFilePath => _recorder.currentFilePath;
+
+  Future<File?> saveSession() => _recorder.saveSession();
+
+  Future<void> discardSession() => _recorder.discardSession();
 
   void _startTicker() {
     _ticker?.cancel();

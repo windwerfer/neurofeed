@@ -18,6 +18,11 @@ part 'muse.freezed.dart';
 Future<Uint8List> compressBlock({required List<int> data}) =>
     RustLib.instance.api.crateApiMuseCompressBlock(data: data);
 
+/// Decompress a zstd frame written by [compress_block].
+/// Returns an empty vector if the frame is invalid.
+Future<Uint8List> decompressBlock({required List<int> data}) =>
+    RustLib.instance.api.crateApiMuseDecompressBlock(data: data);
+
 /// Scan for nearby Muse devices for `timeout_secs` seconds and return what was
 /// found. Results are **merged** into the existing device cache so that the UI
 /// can call `scan` repeatedly in short chunks without losing previously

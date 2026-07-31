@@ -25,11 +25,12 @@
 - [x] Persistent bad signal (any channel < 40 for 10s) → interrupted phase; recovers when signal returns to green
 
 ## Phase 5: Session dashboard
-- [ ] Bands/motion/pulse graphs from recorded data
-- [ ] Stats (peak alpha, avg concentration, stillness)
-- [ ] Notes text field
-- [ ] Save (green) / Discard (gray) buttons
-- [ ] Thumbnail generation
+- [x] Session reader (`.muse` v3 parsing: tags 1–9, zstd frames via new `decompressBlock` FFI)
+- [x] Bands/motion/pulse graphs from recorded data (alpha_rel vs theta_rel, movement score, bpm)
+- [x] Stats: peak alpha (freq@max power), target time % (alpha_rel > theta_rel), stillness %, avg BPM, avg alpha_rel
+- [x] Notes text field (persisted in Phase 6 metadata)
+- [x] Save (green, renames temp → session_<ts>.muse) / Discard (gray, deletes temp) buttons
+- [x] Thumbnail generation (RepaintBoundary → PNG next to .muse)
 
 ## Phase 6: Feedback history
 - [ ] Session metadata persistence (JSON alongside .muse)

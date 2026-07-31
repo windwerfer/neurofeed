@@ -192,6 +192,18 @@ pub fn compress_block(data: Vec<u8>) -> Vec<u8> {
     }
 }
 
+/// Decompress a zstd frame written by [compress_block].
+/// Returns an empty vector if the frame is invalid.
+pub fn decompress_block(data: Vec<u8>) -> Vec<u8> {
+    match zstd::decode_all(std::io::Cursor::new(&data)) {
+        Ok(decoded) => decoded,
+        Err(e) => {
+            log::warn!("[muse] zstd decompress failed: {e}");
+            Vec::new()
+        }
+    }
+}
+
 /// Called from Kotlin `MainActivity.onCreate` with the JNI environment so that
 /// btleplug's global Android adapter can be registered. On Android, btleplug
 /// requires `btleplug::platform::init(&env)` to be called from a JNI context

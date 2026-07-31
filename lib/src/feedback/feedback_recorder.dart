@@ -19,6 +19,8 @@ class FeedbackRecorder {
 
   bool get isRecording => _recorder.isRecording;
 
+  String? get currentFilePath => _recorder.currentFilePath;
+
   /// Begin a session recording. If one is already active, it is ended first.
   Future<void> startSession() async {
     await _recorder.stop();
@@ -33,10 +35,11 @@ class FeedbackRecorder {
     _recorder.writeEvent(event);
   }
 
+  /// Flush pending data to disk without finalizing the temp file.
+  Future<void> flushSession() => _recorder.flush();
+
   /// Mark the session as saved (rename temp file to final name).
-  Future<void> saveSession() async {
-    await _recorder.markSaved();
-  }
+  Future<File?> saveSession() => _recorder.markSaved();
 
   /// Discard the session (delete temp file).
   Future<void> discardSession() async {
