@@ -77,7 +77,9 @@
         "ANDROID_SDK_ROOT": "/home/vscode/android-sdk",
         "ANDROID_NDK_HOME": "${ANDROID_HOME}/ndk/28.2.13676358",
         "JAVA_HOME": "/usr/lib/jvm/java-21-openjdk-amd64",
-        // "PATH": "${PATH}:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/cmdline-tools/latest/bin",
+
+        // this probably will not work..
+        // "PATH": "${containerEnv:PATH}:${containerEnv:ANDROID_HOME}/platform-tools:${containerEnv:ANDROID_HOME}/cmdline-tools/latest/bin",
 
         "PULSE_SERVER": "unix:/tmp/pulse-socket"
 
