@@ -19,6 +19,10 @@ const int badSignalPauseSeconds = 10;
 const int interruptionGraceSeconds = 10;
 const int signalWaitResetSeconds = 10;
 const List<int> neededElectrodes = [1, 2];
+const Duration calibrationNarratorDuration = Duration(seconds: 7);
+const Duration confirmationChimeDuration = Duration(seconds: 1);
+const Duration calibrationAudioTimeout = Duration(seconds: 8);
+const Duration confirmationAudioTimeout = Duration(seconds: 3);
 
 class FeedbackState {
   final FeedbackPhase phase;
@@ -146,8 +150,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       state = state.copyWith(waitingForSignal: true, startAnywayAvailable: false);
       return;
     }
-    await _audio.playCalibration();
-    await _audio.playConfirmation();
+    await _audio.playCalibration().timeout(
+      calibrationAudioTimeout,
+      onTimeout: () {},
+    );
+    await Future<void>.delayed(calibrationNarratorDuration);
+    await _audio.playConfirmation().timeout(
+      confirmationAudioTimeout,
+      onTimeout: () {},
+    );
+    await Future<void>.delayed(confirmationChimeDuration);
     if (state.phase != FeedbackPhase.calibrating) {
       return;
     }

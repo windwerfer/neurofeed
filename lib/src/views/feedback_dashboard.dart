@@ -223,7 +223,7 @@ class _DashboardBody extends StatelessWidget {
                       '${(elapsedSeconds % 60).toString().padLeft(2, '0')}',
                 ),
                 _SummaryRow(label: 'Background sound', value: soundName),
-                if (prepared.bandsCount > 0) ...[
+                if (prepared.x.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
@@ -265,7 +265,7 @@ class _DashboardBody extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        if (prepared.bandsCount > 0) ...[
+        if (prepared.x.isNotEmpty) ...[
           RepaintBoundary(
             key: thumbKey,
             child: _SeriesChart(
@@ -559,21 +559,36 @@ class _SeriesChart extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            SizedBox(
-              height: 140,
-              width: double.infinity,
-              child: CustomPaint(
-                painter: _ChartPainter(series: series, x: x),
+            if (x.isEmpty || series.any((s) => s.values.length != x.length))
+              SizedBox(
+                height: 140,
+                width: double.infinity,
+                child: Center(
+                  child: Text(
+                    'No data',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              )
+            else ...[
+              SizedBox(
+                height: 140,
+                width: double.infinity,
+                child: CustomPaint(
+                  painter: _ChartPainter(series: series, x: x),
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(_fmtTime(x.first), style: theme.textTheme.bodySmall),
-                Text(_fmtTime(x.last), style: theme.textTheme.bodySmall),
-              ],
-            ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(_fmtTime(x.first), style: theme.textTheme.bodySmall),
+                  Text(_fmtTime(x.last), style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ],
           ],
         ),
       ),

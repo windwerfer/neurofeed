@@ -188,7 +188,7 @@ class _PhaseControls extends ConsumerWidget {
             ] else ...[
               const LinearProgressIndicator(),
               const SizedBox(height: 8),
-              Text('Calibrating… (60s)', style: theme.textTheme.bodyMedium),
+              Text('Calibrating…', style: theme.textTheme.bodyMedium),
             ],
             const SizedBox(height: 8),
             TextButton(
