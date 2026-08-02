@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsecret-1-0 \
     openjdk-21-jdk \
     zstd \
+    libpulse0 \
+    alsa-utils \
+    pulseaudio-utils \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -25,8 +28,8 @@ RUN chsh -s /usr/bin/zsh vscode
 
 
 # Pre-create volume targets and assign ownership to vscode
-RUN mkdir -p /opt/download-cache /home/vscode /workspaces/worktrees /workspaces/tauri /workspaces/third_party
-RUN chown -R vscode:vscode /home/vscode /opt/download-cache /workspaces/worktrees /workspaces/tauri /workspaces/third_party
+RUN mkdir -p /opt/download-cache /home/vscode
+RUN chown -R vscode:vscode /home/vscode /opt/download-cache
 
 
 USER $USERNAME
