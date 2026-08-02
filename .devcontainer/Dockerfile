@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openjdk-21-jdk \
     zstd \
     libpulse0 \
+    libmpv2 \
     alsa-utils \
     pulseaudio-utils \
     && rm -rf /var/lib/apt/lists/*
