@@ -108,14 +108,20 @@ jobs:
           if [ -n "$KEYSTORE_BASE64" ]; then
             PASS="$KEYSTORE_PASSWORD"
             ALIAS="$KEYSTORE_ALIAS"
-            echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
+            printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' > /tmp/keystore.b64
+            base64 -d /tmp/keystore.b64 > android/app/release-keystore.jks
           elif [ -n "${{ inputs.keystore-b64 }}" ]; then
-            echo "${{ inputs.keystore-b64 }}" | base64 -d > android/app/release-keystore.jks
+            printf '%s' "${{ inputs.keystore-b64 }}" | tr -d '[:space:]' > /tmp/keystore.b64
+            base64 -d /tmp/keystore.b64 > android/app/release-keystore.jks
           else
             keytool -genkeypair -v -keystore android/app/release-keystore.jks \
               -alias "$ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass "$PASS" -keypass "$PASS" \
               -dname "CN=Muse ML CI, OU=CI, O=Muse ML, C=DE"
+          fi
+          if ! keytool -list -keystore android/app/release-keystore.jks -storepass "$PASS" >/dev/null 2>&1; then
+            echo "::error::Keystore could not be opened. Check KEYSTORE_BASE64 (exact base64 line) and KEYSTORE_PASSWORD."
+            exit 1
           fi
           printf 'storeFile=release-keystore.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$PASS" "$ALIAS" "$PASS" > android/key.properties
