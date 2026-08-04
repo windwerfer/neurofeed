@@ -1,8 +1,11 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum AppView { bands, rawEeg, spectrogram, psd, settings }
+enum AppView { feedback, feedbackHistory, bands, rawEeg, spectrogram, psd, settings }
 
 const Map<AppView, String> _viewNames = {
+  AppView.feedback: 'feedback',
+  AppView.feedbackHistory: 'feedbackHistory',
   AppView.bands: 'bands',
   AppView.rawEeg: 'rawEeg',
   AppView.spectrogram: 'spectrogram',
@@ -12,6 +15,10 @@ const Map<AppView, String> _viewNames = {
 
 AppView _viewFromName(String? name) {
   switch (name) {
+    case 'feedback':
+      return AppView.feedback;
+    case 'feedbackHistory':
+      return AppView.feedbackHistory;
     case 'bands':
       return AppView.bands;
     case 'rawEeg':
@@ -23,7 +30,7 @@ AppView _viewFromName(String? name) {
     case 'settings':
       return AppView.settings;
     default:
-      return AppView.bands;
+      return AppView.feedback;
   }
 }
 
@@ -33,6 +40,15 @@ class Settings {
 
   static const String _lastViewKey = 'last_view';
   static const String _lastDeviceKey = 'last_device_id';
+  static const String _masterVolumeKey = 'master_volume';
+  static const String _backgroundVolumeKey = 'background_volume';
+  static const String _feedbackVolumeKey = 'feedback_volume';
+  static const String _introVolumeKey = 'intro_volume';
+  static const String _bellVolumeKey = 'bell_volume';
+  static const String _dynamicAdaptKey = 'dynamic_adapt';
+  static const String _responsivenessKey = 'responsiveness';
+  static const String _soundNameKey = 'sound_name';
+  static const String _durationMinutesKey = 'duration_minutes';
 
   final SharedPreferences _prefs;
 
@@ -50,4 +66,58 @@ class Settings {
 
   Future<void> setLastDeviceId(String id) =>
       _prefs.setString(_lastDeviceKey, id);
+
+  double? get masterVolume => _prefs.getDouble(_masterVolumeKey);
+
+  Future<void> setMasterVolume(double value) =>
+      _prefs.setDouble(_masterVolumeKey, value);
+
+  double? get backgroundVolume => _prefs.getDouble(_backgroundVolumeKey);
+
+  Future<void> setBackgroundVolume(double value) =>
+      _prefs.setDouble(_backgroundVolumeKey, value);
+
+  double? get feedbackVolume => _prefs.getDouble(_feedbackVolumeKey);
+
+  Future<void> setFeedbackVolume(double value) =>
+      _prefs.setDouble(_feedbackVolumeKey, value);
+
+  double? get introVolume => _prefs.getDouble(_introVolumeKey);
+
+  Future<void> setIntroVolume(double value) =>
+      _prefs.setDouble(_introVolumeKey, value);
+
+  double? get bellVolume => _prefs.getDouble(_bellVolumeKey);
+
+  Future<void> setBellVolume(double value) =>
+      _prefs.setDouble(_bellVolumeKey, value);
+
+  bool? get dynamicAdapt => _prefs.getBool(_dynamicAdaptKey);
+
+  Future<void> setDynamicAdapt(bool value) =>
+      _prefs.setBool(_dynamicAdaptKey, value);
+
+  double? get responsiveness => _prefs.getDouble(_responsivenessKey);
+
+  Future<void> setResponsiveness(double value) =>
+      _prefs.setDouble(_responsivenessKey, value);
+
+  String? get soundName => _prefs.getString(_soundNameKey);
+
+  Future<void> setSoundName(String value) =>
+      _prefs.setString(_soundNameKey, value);
+
+  int? get durationMinutes => _prefs.getInt(_durationMinutesKey);
+
+  Future<void> setDurationMinutes(int value) =>
+      _prefs.setInt(_durationMinutesKey, value);
 }
+
+/// Provides the app-wide [Settings] instance. Loaded in `main()` and
+/// overridden there with the concrete instance; [audioServiceProvider]
+/// depends on it to restore persisted volumes.
+final settingsProvider = Provider<Settings>(
+  (ref) => throw UnimplementedError(
+    'settingsProvider must be overridden in main()',
+  ),
+);

@@ -6,7 +6,7 @@ import 'package:muse_ml/src/rust/api/muse.dart';
 
 class SessionRecorder {
   static const _magic = 0x4D55534542494E0A; // "MUSEBIN\n"
-  static const _version = 1;
+  static const _version = 3;
   static const _flushInterval = Duration(seconds: 30);
   static const _maxPendingBytes = 65536;
 
@@ -15,6 +15,8 @@ class SessionRecorder {
   final _pending = BytesBuilder();
 
   bool get isRecording => _file != null;
+
+  String? get currentFilePath => _file?.path;
 
   Future<void> start([Directory? dir]) async {
     if (_file != null) return;
@@ -45,6 +47,14 @@ class SessionRecorder {
         encoded = _encodeImu(4, field0);
       case MuseEventDto_Ppg(:final field0):
         encoded = _encodePpg(field0);
+      case MuseEventDto_Bands(:final field0):
+        encoded = _encodeBands(field0);
+      case MuseEventDto_Pulse(:final field0):
+        encoded = _encodePulse(field0);
+      case MuseEventDto_Movement(:final field0):
+        encoded = _encodeMovement(field0);
+      case MuseEventDto_PeakAlpha(:final field0):
+        encoded = _encodePeakAlpha(field0);
       default:
         return;
     }
@@ -111,14 +121,62 @@ class SessionRecorder {
     return buf.buffer.asUint8List();
   }
 
-  Future<void> markSaved() async {
+  Uint8List _encodeBands(BandsDto d) {
+    // Type tag 6: timestamp(f64), electrode(i16), delta/theta/alpha/beta/gamma(f64×5)
+    final buf = ByteData(1 + 8 + 2 + 5 * 8);
+    var off = 0;
+    buf.setUint8(off, 6); off += 1;
+    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
+    buf.setInt16(off, d.electrode, Endian.little); off += 2;
+    buf.setFloat64(off, d.delta, Endian.little); off += 8;
+    buf.setFloat64(off, d.theta, Endian.little); off += 8;
+    buf.setFloat64(off, d.alpha, Endian.little); off += 8;
+    buf.setFloat64(off, d.beta, Endian.little); off += 8;
+    buf.setFloat64(off, d.gamma, Endian.little);
+    return buf.buffer.asUint8List();
+  }
+
+  Uint8List _encodePulse(PulseDto d) {
+    // Type tag 7: timestamp(f64), bpm(f32), confidence(f32)
+    final buf = ByteData(1 + 8 + 4 + 4);
+    var off = 0;
+    buf.setUint8(off, 7); off += 1;
+    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
+    buf.setFloat32(off, d.bpm, Endian.little); off += 4;
+    buf.setFloat32(off, d.confidence, Endian.little);
+    return buf.buffer.asUint8List();
+  }
+
+  Uint8List _encodeMovement(MovementDto d) {
+    // Type tag 8: timestamp(f64), score(f64)
+    final buf = ByteData(1 + 8 + 8);
+    var off = 0;
+    buf.setUint8(off, 8); off += 1;
+    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
+    buf.setFloat64(off, d.score, Endian.little);
+    return buf.buffer.asUint8List();
+  }
+
+  Uint8List _encodePeakAlpha(PeakAlphaDto d) {
+    // Type tag 9: timestamp(f64), frequency(f64), power(f64)
+    final buf = ByteData(1 + 8 + 8 + 8);
+    var off = 0;
+    buf.setUint8(off, 9); off += 1;
+    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
+    buf.setFloat64(off, d.frequency, Endian.little); off += 8;
+    buf.setFloat64(off, d.power, Endian.little);
+    return buf.buffer.asUint8List();
+  }
+
+  Future<File?> markSaved() async {
     await _flush();
-    if (_file == null) return;
+    if (_file == null) return null;
     final dir = _file!.parent;
     final ts = DateTime.now().millisecondsSinceEpoch;
     final newPath = '${dir.path}session_$ts.muse';
-    await _file!.rename(newPath);
+    final saved = await _file!.rename(newPath);
     _file = null;
+    return saved;
   }
 
   Future<void> stop() async {
@@ -133,14 +191,21 @@ class SessionRecorder {
     }
   }
 
+  Future<void> flush() => _flush();
+
   Future<void> _flush() async {
     if (_pending.isEmpty || _file == null) return;
-    final bytes = _pending.toBytes();
+    final raw = _pending.toBytes();
     _pending.clear();
     try {
-      await _file!.writeAsBytes(bytes, mode: FileMode.writeOnlyAppend);
+      final compressed = await compressBlock(data: raw);
+      final size = compressed.length;
+      final frame = Uint8List(4 + size);
+      frame.buffer.asByteData().setUint32(0, size, Endian.little);
+      frame.setRange(4, 4 + size, compressed);
+      await _file!.writeAsBytes(frame, mode: FileMode.writeOnlyAppend);
     } catch (e) {
-      _pending.add(bytes);
+      _pending.add(raw);
     }
   }
 }

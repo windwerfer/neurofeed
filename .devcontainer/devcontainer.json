@@ -5,18 +5,6 @@
         // "options": ["-t", "thomas/tts_th:latest"],
     },
     "mounts": [
-        // {
-        //     "type": "bind",
-        //     "source": "${localWorkspaceFolder}/../worktrees",
-        //     "target": "/workspaces/worktrees",
-        //     "consistency":"cached",
-        // },
-        // {
-        //     "type": "bind",
-        //     "source": "${localWorkspaceFolder}/../third_party",
-        //     "target": "/workspaces/third_party",
-        //     "consistency":"cached",
-        // },
         {
             "type": "volume",
             "source": "flutter_muse_ml_home",
@@ -24,24 +12,25 @@
         },
         {
             "type": "volume",
-            "source": "flutter_muse_ml_worktrees",
-            "target": "/workspaces/worktrees",
-        },
-        {
-            "type": "volume",
-            "source": "flutter_muse_ml_tauri",
-            "target": "/workspaces/tauri",
-        },
-        {
-            "type": "volume",
-            "source": "flutter_muse_ml_third_party",
-            "target": "/workspaces/third_party",
-        },
-        {
-            "type": "volume",
             "source": "shared_backups",
             "target": "/opt/backups"
-        }
+        },
+        // {
+        //     "type": "volume",
+        //     "source": "flutter_muse_ml_worktrees",
+        //     "target": "/workspaces/worktrees",
+        // },
+        // {
+        //     "type": "volume",
+        //     "source": "flutter_muse_ml_tauri",
+        //     "target": "/workspaces/tauri",
+        // },
+        // {
+        //     "type": "volume",
+        //     "source": "flutter_muse_ml_third_party",
+        //     "target": "/workspaces/third_party",
+        // },
+
 
     ],
     // "postCreateCommand": "uv sync --extra dev && echo '✅ Python environment ready with uv!'",
@@ -70,6 +59,9 @@
         "-e", "XDG_RUNTIME_DIR=/tmp",
         "-e", "DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/user_bus",
 
+        // Mount host's PulseAudio / PipeWire-Pulse socket into the container
+        "-v", "${localEnv:XDG_RUNTIME_DIR}/pulse/native:/tmp/pulse-socket:ro"
+
     ],
     // use zsh as the default shell
     "settings": {
@@ -85,7 +77,12 @@
         "ANDROID_SDK_ROOT": "/home/vscode/android-sdk",
         "ANDROID_NDK_HOME": "${ANDROID_HOME}/ndk/28.2.13676358",
         "JAVA_HOME": "/usr/lib/jvm/java-21-openjdk-amd64",
-        "PATH": "${PATH}:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/cmdline-tools/latest/bin",
+
+        // this probably will not work..
+        // "PATH": "${containerEnv:PATH}:${containerEnv:ANDROID_HOME}/platform-tools:${containerEnv:ANDROID_HOME}/cmdline-tools/latest/bin",
+
+        "PULSE_SERVER": "unix:/tmp/pulse-socket"
+
     },
     "forwardPorts": [5678], // forward port for debugpy
     "customizations": {

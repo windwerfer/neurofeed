@@ -1155,6 +1155,156 @@ abstract class _ImuDto implements ImuDto {
 }
 
 /// @nodoc
+mixin _$MovementDto {
+  double get timestamp => throw _privateConstructorUsedError;
+  double get score => throw _privateConstructorUsedError;
+
+  /// Create a copy of MovementDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $MovementDtoCopyWith<MovementDto> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $MovementDtoCopyWith<$Res> {
+  factory $MovementDtoCopyWith(
+    MovementDto value,
+    $Res Function(MovementDto) then,
+  ) = _$MovementDtoCopyWithImpl<$Res, MovementDto>;
+  @useResult
+  $Res call({double timestamp, double score});
+}
+
+/// @nodoc
+class _$MovementDtoCopyWithImpl<$Res, $Val extends MovementDto>
+    implements $MovementDtoCopyWith<$Res> {
+  _$MovementDtoCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of MovementDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? timestamp = null, Object? score = null}) {
+    return _then(
+      _value.copyWith(
+            timestamp: null == timestamp
+                ? _value.timestamp
+                : timestamp // ignore: cast_nullable_to_non_nullable
+                      as double,
+            score: null == score
+                ? _value.score
+                : score // ignore: cast_nullable_to_non_nullable
+                      as double,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$MovementDtoImplCopyWith<$Res>
+    implements $MovementDtoCopyWith<$Res> {
+  factory _$$MovementDtoImplCopyWith(
+    _$MovementDtoImpl value,
+    $Res Function(_$MovementDtoImpl) then,
+  ) = __$$MovementDtoImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({double timestamp, double score});
+}
+
+/// @nodoc
+class __$$MovementDtoImplCopyWithImpl<$Res>
+    extends _$MovementDtoCopyWithImpl<$Res, _$MovementDtoImpl>
+    implements _$$MovementDtoImplCopyWith<$Res> {
+  __$$MovementDtoImplCopyWithImpl(
+    _$MovementDtoImpl _value,
+    $Res Function(_$MovementDtoImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of MovementDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? timestamp = null, Object? score = null}) {
+    return _then(
+      _$MovementDtoImpl(
+        timestamp: null == timestamp
+            ? _value.timestamp
+            : timestamp // ignore: cast_nullable_to_non_nullable
+                  as double,
+        score: null == score
+            ? _value.score
+            : score // ignore: cast_nullable_to_non_nullable
+                  as double,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$MovementDtoImpl implements _MovementDto {
+  const _$MovementDtoImpl({required this.timestamp, required this.score});
+
+  @override
+  final double timestamp;
+  @override
+  final double score;
+
+  @override
+  String toString() {
+    return 'MovementDto(timestamp: $timestamp, score: $score)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$MovementDtoImpl &&
+            (identical(other.timestamp, timestamp) ||
+                other.timestamp == timestamp) &&
+            (identical(other.score, score) || other.score == score));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, timestamp, score);
+
+  /// Create a copy of MovementDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$MovementDtoImplCopyWith<_$MovementDtoImpl> get copyWith =>
+      __$$MovementDtoImplCopyWithImpl<_$MovementDtoImpl>(this, _$identity);
+}
+
+abstract class _MovementDto implements MovementDto {
+  const factory _MovementDto({
+    required final double timestamp,
+    required final double score,
+  }) = _$MovementDtoImpl;
+
+  @override
+  double get timestamp;
+  @override
+  double get score;
+
+  /// Create a copy of MovementDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$MovementDtoImplCopyWith<_$MovementDtoImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
 mixin _$MuseEventDto {
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
@@ -1167,6 +1317,9 @@ mixin _$MuseEventDto {
     required TResult Function(ImuDto field0) accelerometer,
     required TResult Function(ImuDto field0) gyroscope,
     required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
@@ -1179,6 +1332,9 @@ mixin _$MuseEventDto {
     TResult? Function(ImuDto field0)? accelerometer,
     TResult? Function(ImuDto field0)? gyroscope,
     TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
@@ -1191,6 +1347,9 @@ mixin _$MuseEventDto {
     TResult Function(ImuDto field0)? accelerometer,
     TResult Function(ImuDto field0)? gyroscope,
     TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
     required TResult orElse(),
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
@@ -1204,6 +1363,9 @@ mixin _$MuseEventDto {
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
     required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
     required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? mapOrNull<TResult extends Object?>({
@@ -1216,6 +1378,9 @@ mixin _$MuseEventDto {
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
@@ -1228,6 +1393,9 @@ mixin _$MuseEventDto {
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     required TResult orElse(),
   }) => throw _privateConstructorUsedError;
 }
@@ -1337,6 +1505,9 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     required TResult Function(ImuDto field0) accelerometer,
     required TResult Function(ImuDto field0) gyroscope,
     required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
   }) {
     return connected(field0);
   }
@@ -1353,6 +1524,9 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult? Function(ImuDto field0)? accelerometer,
     TResult? Function(ImuDto field0)? gyroscope,
     TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
   }) {
     return connected?.call(field0);
   }
@@ -1369,6 +1543,9 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult Function(ImuDto field0)? accelerometer,
     TResult Function(ImuDto field0)? gyroscope,
     TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
     required TResult orElse(),
   }) {
     if (connected != null) {
@@ -1389,6 +1566,9 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
     required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
     required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
   }) {
     return connected(this);
   }
@@ -1405,6 +1585,9 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
   }) {
     return connected?.call(this);
   }
@@ -1421,6 +1604,9 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     required TResult orElse(),
   }) {
     if (connected != null) {
@@ -1497,6 +1683,9 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     required TResult Function(ImuDto field0) accelerometer,
     required TResult Function(ImuDto field0) gyroscope,
     required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
   }) {
     return disconnected();
   }
@@ -1513,6 +1702,9 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult? Function(ImuDto field0)? accelerometer,
     TResult? Function(ImuDto field0)? gyroscope,
     TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
   }) {
     return disconnected?.call();
   }
@@ -1529,6 +1721,9 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult Function(ImuDto field0)? accelerometer,
     TResult Function(ImuDto field0)? gyroscope,
     TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
     required TResult orElse(),
   }) {
     if (disconnected != null) {
@@ -1549,6 +1744,9 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
     required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
     required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
   }) {
     return disconnected(this);
   }
@@ -1565,6 +1763,9 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
   }) {
     return disconnected?.call(this);
   }
@@ -1581,6 +1782,9 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     required TResult orElse(),
   }) {
     if (disconnected != null) {
@@ -1689,6 +1893,9 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     required TResult Function(ImuDto field0) accelerometer,
     required TResult Function(ImuDto field0) gyroscope,
     required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
   }) {
     return eeg(field0);
   }
@@ -1705,6 +1912,9 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult? Function(ImuDto field0)? accelerometer,
     TResult? Function(ImuDto field0)? gyroscope,
     TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
   }) {
     return eeg?.call(field0);
   }
@@ -1721,6 +1931,9 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult Function(ImuDto field0)? accelerometer,
     TResult Function(ImuDto field0)? gyroscope,
     TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
     required TResult orElse(),
   }) {
     if (eeg != null) {
@@ -1741,6 +1954,9 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
     required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
     required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
   }) {
     return eeg(this);
   }
@@ -1757,6 +1973,9 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
   }) {
     return eeg?.call(this);
   }
@@ -1773,6 +1992,9 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     required TResult orElse(),
   }) {
     if (eeg != null) {
@@ -1889,6 +2111,9 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     required TResult Function(ImuDto field0) accelerometer,
     required TResult Function(ImuDto field0) gyroscope,
     required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
   }) {
     return bands(field0);
   }
@@ -1905,6 +2130,9 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     TResult? Function(ImuDto field0)? accelerometer,
     TResult? Function(ImuDto field0)? gyroscope,
     TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
   }) {
     return bands?.call(field0);
   }
@@ -1921,6 +2149,9 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     TResult Function(ImuDto field0)? accelerometer,
     TResult Function(ImuDto field0)? gyroscope,
     TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
     required TResult orElse(),
   }) {
     if (bands != null) {
@@ -1941,6 +2172,9 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
     required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
     required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
   }) {
     return bands(this);
   }
@@ -1957,6 +2191,9 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
   }) {
     return bands?.call(this);
   }
@@ -1973,6 +2210,9 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     required TResult orElse(),
   }) {
     if (bands != null) {
@@ -2090,6 +2330,9 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     required TResult Function(ImuDto field0) accelerometer,
     required TResult Function(ImuDto field0) gyroscope,
     required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
   }) {
     return ppg(field0);
   }
@@ -2106,6 +2349,9 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult? Function(ImuDto field0)? accelerometer,
     TResult? Function(ImuDto field0)? gyroscope,
     TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
   }) {
     return ppg?.call(field0);
   }
@@ -2122,6 +2368,9 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult Function(ImuDto field0)? accelerometer,
     TResult Function(ImuDto field0)? gyroscope,
     TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
     required TResult orElse(),
   }) {
     if (ppg != null) {
@@ -2142,6 +2391,9 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
     required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
     required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
   }) {
     return ppg(this);
   }
@@ -2158,6 +2410,9 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
   }) {
     return ppg?.call(this);
   }
@@ -2174,6 +2429,9 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     required TResult orElse(),
   }) {
     if (ppg != null) {
@@ -2291,6 +2549,9 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     required TResult Function(ImuDto field0) accelerometer,
     required TResult Function(ImuDto field0) gyroscope,
     required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
   }) {
     return telemetry(field0);
   }
@@ -2307,6 +2568,9 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult? Function(ImuDto field0)? accelerometer,
     TResult? Function(ImuDto field0)? gyroscope,
     TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
   }) {
     return telemetry?.call(field0);
   }
@@ -2323,6 +2587,9 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult Function(ImuDto field0)? accelerometer,
     TResult Function(ImuDto field0)? gyroscope,
     TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
     required TResult orElse(),
   }) {
     if (telemetry != null) {
@@ -2343,6 +2610,9 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
     required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
     required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
   }) {
     return telemetry(this);
   }
@@ -2359,6 +2629,9 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
   }) {
     return telemetry?.call(this);
   }
@@ -2375,6 +2648,9 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     required TResult orElse(),
   }) {
     if (telemetry != null) {
@@ -2492,6 +2768,9 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     required TResult Function(ImuDto field0) accelerometer,
     required TResult Function(ImuDto field0) gyroscope,
     required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
   }) {
     return accelerometer(field0);
   }
@@ -2508,6 +2787,9 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult? Function(ImuDto field0)? accelerometer,
     TResult? Function(ImuDto field0)? gyroscope,
     TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
   }) {
     return accelerometer?.call(field0);
   }
@@ -2524,6 +2806,9 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult Function(ImuDto field0)? accelerometer,
     TResult Function(ImuDto field0)? gyroscope,
     TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
     required TResult orElse(),
   }) {
     if (accelerometer != null) {
@@ -2544,6 +2829,9 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
     required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
     required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
   }) {
     return accelerometer(this);
   }
@@ -2560,6 +2848,9 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
   }) {
     return accelerometer?.call(this);
   }
@@ -2576,6 +2867,9 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     required TResult orElse(),
   }) {
     if (accelerometer != null) {
@@ -2694,6 +2988,9 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     required TResult Function(ImuDto field0) accelerometer,
     required TResult Function(ImuDto field0) gyroscope,
     required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
   }) {
     return gyroscope(field0);
   }
@@ -2710,6 +3007,9 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult? Function(ImuDto field0)? accelerometer,
     TResult? Function(ImuDto field0)? gyroscope,
     TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
   }) {
     return gyroscope?.call(field0);
   }
@@ -2726,6 +3026,9 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult Function(ImuDto field0)? accelerometer,
     TResult Function(ImuDto field0)? gyroscope,
     TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
     required TResult orElse(),
   }) {
     if (gyroscope != null) {
@@ -2746,6 +3049,9 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
     required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
     required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
   }) {
     return gyroscope(this);
   }
@@ -2762,6 +3068,9 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
   }) {
     return gyroscope?.call(this);
   }
@@ -2778,6 +3087,9 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     required TResult orElse(),
   }) {
     if (gyroscope != null) {
@@ -2896,6 +3208,9 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     required TResult Function(ImuDto field0) accelerometer,
     required TResult Function(ImuDto field0) gyroscope,
     required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
   }) {
     return control(field0);
   }
@@ -2912,6 +3227,9 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult? Function(ImuDto field0)? accelerometer,
     TResult? Function(ImuDto field0)? gyroscope,
     TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
   }) {
     return control?.call(field0);
   }
@@ -2928,6 +3246,9 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult Function(ImuDto field0)? accelerometer,
     TResult Function(ImuDto field0)? gyroscope,
     TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
     required TResult orElse(),
   }) {
     if (control != null) {
@@ -2948,6 +3269,9 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
     required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
     required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
   }) {
     return control(this);
   }
@@ -2964,6 +3288,9 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
   }) {
     return control?.call(this);
   }
@@ -2980,6 +3307,9 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
     TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
     TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     required TResult orElse(),
   }) {
     if (control != null) {
@@ -3001,6 +3331,843 @@ abstract class MuseEventDto_Control extends MuseEventDto {
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$MuseEventDto_ControlImplCopyWith<_$MuseEventDto_ControlImpl>
   get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$MuseEventDto_PulseImplCopyWith<$Res> {
+  factory _$$MuseEventDto_PulseImplCopyWith(
+    _$MuseEventDto_PulseImpl value,
+    $Res Function(_$MuseEventDto_PulseImpl) then,
+  ) = __$$MuseEventDto_PulseImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({PulseDto field0});
+
+  $PulseDtoCopyWith<$Res> get field0;
+}
+
+/// @nodoc
+class __$$MuseEventDto_PulseImplCopyWithImpl<$Res>
+    extends _$MuseEventDtoCopyWithImpl<$Res, _$MuseEventDto_PulseImpl>
+    implements _$$MuseEventDto_PulseImplCopyWith<$Res> {
+  __$$MuseEventDto_PulseImplCopyWithImpl(
+    _$MuseEventDto_PulseImpl _value,
+    $Res Function(_$MuseEventDto_PulseImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? field0 = null}) {
+    return _then(
+      _$MuseEventDto_PulseImpl(
+        null == field0
+            ? _value.field0
+            : field0 // ignore: cast_nullable_to_non_nullable
+                  as PulseDto,
+      ),
+    );
+  }
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $PulseDtoCopyWith<$Res> get field0 {
+    return $PulseDtoCopyWith<$Res>(_value.field0, (value) {
+      return _then(_value.copyWith(field0: value));
+    });
+  }
+}
+
+/// @nodoc
+
+class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
+  const _$MuseEventDto_PulseImpl(this.field0) : super._();
+
+  @override
+  final PulseDto field0;
+
+  @override
+  String toString() {
+    return 'MuseEventDto.pulse(field0: $field0)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$MuseEventDto_PulseImpl &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$MuseEventDto_PulseImplCopyWith<_$MuseEventDto_PulseImpl> get copyWith =>
+      __$$MuseEventDto_PulseImplCopyWithImpl<_$MuseEventDto_PulseImpl>(
+        this,
+        _$identity,
+      );
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String field0) connected,
+    required TResult Function() disconnected,
+    required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
+    required TResult Function(PpgDto field0) ppg,
+    required TResult Function(TelemetrySnapshot field0) telemetry,
+    required TResult Function(ImuDto field0) accelerometer,
+    required TResult Function(ImuDto field0) gyroscope,
+    required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
+  }) {
+    return pulse(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String field0)? connected,
+    TResult? Function()? disconnected,
+    TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
+    TResult? Function(PpgDto field0)? ppg,
+    TResult? Function(TelemetrySnapshot field0)? telemetry,
+    TResult? Function(ImuDto field0)? accelerometer,
+    TResult? Function(ImuDto field0)? gyroscope,
+    TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
+  }) {
+    return pulse?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String field0)? connected,
+    TResult Function()? disconnected,
+    TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
+    TResult Function(PpgDto field0)? ppg,
+    TResult Function(TelemetrySnapshot field0)? telemetry,
+    TResult Function(ImuDto field0)? accelerometer,
+    TResult Function(ImuDto field0)? gyroscope,
+    TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
+    required TResult orElse(),
+  }) {
+    if (pulse != null) {
+      return pulse(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(MuseEventDto_Connected value) connected,
+    required TResult Function(MuseEventDto_Disconnected value) disconnected,
+    required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
+    required TResult Function(MuseEventDto_Ppg value) ppg,
+    required TResult Function(MuseEventDto_Telemetry value) telemetry,
+    required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
+    required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
+    required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
+  }) {
+    return pulse(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(MuseEventDto_Connected value)? connected,
+    TResult? Function(MuseEventDto_Disconnected value)? disconnected,
+    TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
+    TResult? Function(MuseEventDto_Ppg value)? ppg,
+    TResult? Function(MuseEventDto_Telemetry value)? telemetry,
+    TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
+    TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
+    TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
+  }) {
+    return pulse?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(MuseEventDto_Connected value)? connected,
+    TResult Function(MuseEventDto_Disconnected value)? disconnected,
+    TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
+    TResult Function(MuseEventDto_Ppg value)? ppg,
+    TResult Function(MuseEventDto_Telemetry value)? telemetry,
+    TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
+    TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
+    TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
+    required TResult orElse(),
+  }) {
+    if (pulse != null) {
+      return pulse(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class MuseEventDto_Pulse extends MuseEventDto {
+  const factory MuseEventDto_Pulse(final PulseDto field0) =
+      _$MuseEventDto_PulseImpl;
+  const MuseEventDto_Pulse._() : super._();
+
+  PulseDto get field0;
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$MuseEventDto_PulseImplCopyWith<_$MuseEventDto_PulseImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$MuseEventDto_MovementImplCopyWith<$Res> {
+  factory _$$MuseEventDto_MovementImplCopyWith(
+    _$MuseEventDto_MovementImpl value,
+    $Res Function(_$MuseEventDto_MovementImpl) then,
+  ) = __$$MuseEventDto_MovementImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({MovementDto field0});
+
+  $MovementDtoCopyWith<$Res> get field0;
+}
+
+/// @nodoc
+class __$$MuseEventDto_MovementImplCopyWithImpl<$Res>
+    extends _$MuseEventDtoCopyWithImpl<$Res, _$MuseEventDto_MovementImpl>
+    implements _$$MuseEventDto_MovementImplCopyWith<$Res> {
+  __$$MuseEventDto_MovementImplCopyWithImpl(
+    _$MuseEventDto_MovementImpl _value,
+    $Res Function(_$MuseEventDto_MovementImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? field0 = null}) {
+    return _then(
+      _$MuseEventDto_MovementImpl(
+        null == field0
+            ? _value.field0
+            : field0 // ignore: cast_nullable_to_non_nullable
+                  as MovementDto,
+      ),
+    );
+  }
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $MovementDtoCopyWith<$Res> get field0 {
+    return $MovementDtoCopyWith<$Res>(_value.field0, (value) {
+      return _then(_value.copyWith(field0: value));
+    });
+  }
+}
+
+/// @nodoc
+
+class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
+  const _$MuseEventDto_MovementImpl(this.field0) : super._();
+
+  @override
+  final MovementDto field0;
+
+  @override
+  String toString() {
+    return 'MuseEventDto.movement(field0: $field0)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$MuseEventDto_MovementImpl &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$MuseEventDto_MovementImplCopyWith<_$MuseEventDto_MovementImpl>
+  get copyWith =>
+      __$$MuseEventDto_MovementImplCopyWithImpl<_$MuseEventDto_MovementImpl>(
+        this,
+        _$identity,
+      );
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String field0) connected,
+    required TResult Function() disconnected,
+    required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
+    required TResult Function(PpgDto field0) ppg,
+    required TResult Function(TelemetrySnapshot field0) telemetry,
+    required TResult Function(ImuDto field0) accelerometer,
+    required TResult Function(ImuDto field0) gyroscope,
+    required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
+  }) {
+    return movement(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String field0)? connected,
+    TResult? Function()? disconnected,
+    TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
+    TResult? Function(PpgDto field0)? ppg,
+    TResult? Function(TelemetrySnapshot field0)? telemetry,
+    TResult? Function(ImuDto field0)? accelerometer,
+    TResult? Function(ImuDto field0)? gyroscope,
+    TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
+  }) {
+    return movement?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String field0)? connected,
+    TResult Function()? disconnected,
+    TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
+    TResult Function(PpgDto field0)? ppg,
+    TResult Function(TelemetrySnapshot field0)? telemetry,
+    TResult Function(ImuDto field0)? accelerometer,
+    TResult Function(ImuDto field0)? gyroscope,
+    TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
+    required TResult orElse(),
+  }) {
+    if (movement != null) {
+      return movement(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(MuseEventDto_Connected value) connected,
+    required TResult Function(MuseEventDto_Disconnected value) disconnected,
+    required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
+    required TResult Function(MuseEventDto_Ppg value) ppg,
+    required TResult Function(MuseEventDto_Telemetry value) telemetry,
+    required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
+    required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
+    required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
+  }) {
+    return movement(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(MuseEventDto_Connected value)? connected,
+    TResult? Function(MuseEventDto_Disconnected value)? disconnected,
+    TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
+    TResult? Function(MuseEventDto_Ppg value)? ppg,
+    TResult? Function(MuseEventDto_Telemetry value)? telemetry,
+    TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
+    TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
+    TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
+  }) {
+    return movement?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(MuseEventDto_Connected value)? connected,
+    TResult Function(MuseEventDto_Disconnected value)? disconnected,
+    TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
+    TResult Function(MuseEventDto_Ppg value)? ppg,
+    TResult Function(MuseEventDto_Telemetry value)? telemetry,
+    TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
+    TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
+    TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
+    required TResult orElse(),
+  }) {
+    if (movement != null) {
+      return movement(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class MuseEventDto_Movement extends MuseEventDto {
+  const factory MuseEventDto_Movement(final MovementDto field0) =
+      _$MuseEventDto_MovementImpl;
+  const MuseEventDto_Movement._() : super._();
+
+  MovementDto get field0;
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$MuseEventDto_MovementImplCopyWith<_$MuseEventDto_MovementImpl>
+  get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$MuseEventDto_PeakAlphaImplCopyWith<$Res> {
+  factory _$$MuseEventDto_PeakAlphaImplCopyWith(
+    _$MuseEventDto_PeakAlphaImpl value,
+    $Res Function(_$MuseEventDto_PeakAlphaImpl) then,
+  ) = __$$MuseEventDto_PeakAlphaImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({PeakAlphaDto field0});
+
+  $PeakAlphaDtoCopyWith<$Res> get field0;
+}
+
+/// @nodoc
+class __$$MuseEventDto_PeakAlphaImplCopyWithImpl<$Res>
+    extends _$MuseEventDtoCopyWithImpl<$Res, _$MuseEventDto_PeakAlphaImpl>
+    implements _$$MuseEventDto_PeakAlphaImplCopyWith<$Res> {
+  __$$MuseEventDto_PeakAlphaImplCopyWithImpl(
+    _$MuseEventDto_PeakAlphaImpl _value,
+    $Res Function(_$MuseEventDto_PeakAlphaImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? field0 = null}) {
+    return _then(
+      _$MuseEventDto_PeakAlphaImpl(
+        null == field0
+            ? _value.field0
+            : field0 // ignore: cast_nullable_to_non_nullable
+                  as PeakAlphaDto,
+      ),
+    );
+  }
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $PeakAlphaDtoCopyWith<$Res> get field0 {
+    return $PeakAlphaDtoCopyWith<$Res>(_value.field0, (value) {
+      return _then(_value.copyWith(field0: value));
+    });
+  }
+}
+
+/// @nodoc
+
+class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
+  const _$MuseEventDto_PeakAlphaImpl(this.field0) : super._();
+
+  @override
+  final PeakAlphaDto field0;
+
+  @override
+  String toString() {
+    return 'MuseEventDto.peakAlpha(field0: $field0)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$MuseEventDto_PeakAlphaImpl &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$MuseEventDto_PeakAlphaImplCopyWith<_$MuseEventDto_PeakAlphaImpl>
+  get copyWith =>
+      __$$MuseEventDto_PeakAlphaImplCopyWithImpl<_$MuseEventDto_PeakAlphaImpl>(
+        this,
+        _$identity,
+      );
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String field0) connected,
+    required TResult Function() disconnected,
+    required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
+    required TResult Function(PpgDto field0) ppg,
+    required TResult Function(TelemetrySnapshot field0) telemetry,
+    required TResult Function(ImuDto field0) accelerometer,
+    required TResult Function(ImuDto field0) gyroscope,
+    required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
+  }) {
+    return peakAlpha(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String field0)? connected,
+    TResult? Function()? disconnected,
+    TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
+    TResult? Function(PpgDto field0)? ppg,
+    TResult? Function(TelemetrySnapshot field0)? telemetry,
+    TResult? Function(ImuDto field0)? accelerometer,
+    TResult? Function(ImuDto field0)? gyroscope,
+    TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
+  }) {
+    return peakAlpha?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String field0)? connected,
+    TResult Function()? disconnected,
+    TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
+    TResult Function(PpgDto field0)? ppg,
+    TResult Function(TelemetrySnapshot field0)? telemetry,
+    TResult Function(ImuDto field0)? accelerometer,
+    TResult Function(ImuDto field0)? gyroscope,
+    TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
+    required TResult orElse(),
+  }) {
+    if (peakAlpha != null) {
+      return peakAlpha(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(MuseEventDto_Connected value) connected,
+    required TResult Function(MuseEventDto_Disconnected value) disconnected,
+    required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
+    required TResult Function(MuseEventDto_Ppg value) ppg,
+    required TResult Function(MuseEventDto_Telemetry value) telemetry,
+    required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
+    required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
+    required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
+  }) {
+    return peakAlpha(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(MuseEventDto_Connected value)? connected,
+    TResult? Function(MuseEventDto_Disconnected value)? disconnected,
+    TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
+    TResult? Function(MuseEventDto_Ppg value)? ppg,
+    TResult? Function(MuseEventDto_Telemetry value)? telemetry,
+    TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
+    TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
+    TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
+  }) {
+    return peakAlpha?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(MuseEventDto_Connected value)? connected,
+    TResult Function(MuseEventDto_Disconnected value)? disconnected,
+    TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
+    TResult Function(MuseEventDto_Ppg value)? ppg,
+    TResult Function(MuseEventDto_Telemetry value)? telemetry,
+    TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
+    TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
+    TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
+    required TResult orElse(),
+  }) {
+    if (peakAlpha != null) {
+      return peakAlpha(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class MuseEventDto_PeakAlpha extends MuseEventDto {
+  const factory MuseEventDto_PeakAlpha(final PeakAlphaDto field0) =
+      _$MuseEventDto_PeakAlphaImpl;
+  const MuseEventDto_PeakAlpha._() : super._();
+
+  PeakAlphaDto get field0;
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$MuseEventDto_PeakAlphaImplCopyWith<_$MuseEventDto_PeakAlphaImpl>
+  get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+mixin _$PeakAlphaDto {
+  double get timestamp => throw _privateConstructorUsedError;
+  double get frequency => throw _privateConstructorUsedError;
+  double get power => throw _privateConstructorUsedError;
+
+  /// Create a copy of PeakAlphaDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $PeakAlphaDtoCopyWith<PeakAlphaDto> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $PeakAlphaDtoCopyWith<$Res> {
+  factory $PeakAlphaDtoCopyWith(
+    PeakAlphaDto value,
+    $Res Function(PeakAlphaDto) then,
+  ) = _$PeakAlphaDtoCopyWithImpl<$Res, PeakAlphaDto>;
+  @useResult
+  $Res call({double timestamp, double frequency, double power});
+}
+
+/// @nodoc
+class _$PeakAlphaDtoCopyWithImpl<$Res, $Val extends PeakAlphaDto>
+    implements $PeakAlphaDtoCopyWith<$Res> {
+  _$PeakAlphaDtoCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of PeakAlphaDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? timestamp = null,
+    Object? frequency = null,
+    Object? power = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            timestamp: null == timestamp
+                ? _value.timestamp
+                : timestamp // ignore: cast_nullable_to_non_nullable
+                      as double,
+            frequency: null == frequency
+                ? _value.frequency
+                : frequency // ignore: cast_nullable_to_non_nullable
+                      as double,
+            power: null == power
+                ? _value.power
+                : power // ignore: cast_nullable_to_non_nullable
+                      as double,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$PeakAlphaDtoImplCopyWith<$Res>
+    implements $PeakAlphaDtoCopyWith<$Res> {
+  factory _$$PeakAlphaDtoImplCopyWith(
+    _$PeakAlphaDtoImpl value,
+    $Res Function(_$PeakAlphaDtoImpl) then,
+  ) = __$$PeakAlphaDtoImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({double timestamp, double frequency, double power});
+}
+
+/// @nodoc
+class __$$PeakAlphaDtoImplCopyWithImpl<$Res>
+    extends _$PeakAlphaDtoCopyWithImpl<$Res, _$PeakAlphaDtoImpl>
+    implements _$$PeakAlphaDtoImplCopyWith<$Res> {
+  __$$PeakAlphaDtoImplCopyWithImpl(
+    _$PeakAlphaDtoImpl _value,
+    $Res Function(_$PeakAlphaDtoImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of PeakAlphaDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? timestamp = null,
+    Object? frequency = null,
+    Object? power = null,
+  }) {
+    return _then(
+      _$PeakAlphaDtoImpl(
+        timestamp: null == timestamp
+            ? _value.timestamp
+            : timestamp // ignore: cast_nullable_to_non_nullable
+                  as double,
+        frequency: null == frequency
+            ? _value.frequency
+            : frequency // ignore: cast_nullable_to_non_nullable
+                  as double,
+        power: null == power
+            ? _value.power
+            : power // ignore: cast_nullable_to_non_nullable
+                  as double,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$PeakAlphaDtoImpl implements _PeakAlphaDto {
+  const _$PeakAlphaDtoImpl({
+    required this.timestamp,
+    required this.frequency,
+    required this.power,
+  });
+
+  @override
+  final double timestamp;
+  @override
+  final double frequency;
+  @override
+  final double power;
+
+  @override
+  String toString() {
+    return 'PeakAlphaDto(timestamp: $timestamp, frequency: $frequency, power: $power)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$PeakAlphaDtoImpl &&
+            (identical(other.timestamp, timestamp) ||
+                other.timestamp == timestamp) &&
+            (identical(other.frequency, frequency) ||
+                other.frequency == frequency) &&
+            (identical(other.power, power) || other.power == power));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, timestamp, frequency, power);
+
+  /// Create a copy of PeakAlphaDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$PeakAlphaDtoImplCopyWith<_$PeakAlphaDtoImpl> get copyWith =>
+      __$$PeakAlphaDtoImplCopyWithImpl<_$PeakAlphaDtoImpl>(this, _$identity);
+}
+
+abstract class _PeakAlphaDto implements PeakAlphaDto {
+  const factory _PeakAlphaDto({
+    required final double timestamp,
+    required final double frequency,
+    required final double power,
+  }) = _$PeakAlphaDtoImpl;
+
+  @override
+  double get timestamp;
+  @override
+  double get frequency;
+  @override
+  double get power;
+
+  /// Create a copy of PeakAlphaDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$PeakAlphaDtoImplCopyWith<_$PeakAlphaDtoImpl> get copyWith =>
+      throw _privateConstructorUsedError;
 }
 
 /// @nodoc
@@ -3197,6 +4364,182 @@ abstract class _PpgDto implements PpgDto {
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$PpgDtoImplCopyWith<_$PpgDtoImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+mixin _$PulseDto {
+  double get timestamp => throw _privateConstructorUsedError;
+  double get bpm => throw _privateConstructorUsedError;
+  double get confidence => throw _privateConstructorUsedError;
+
+  /// Create a copy of PulseDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $PulseDtoCopyWith<PulseDto> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $PulseDtoCopyWith<$Res> {
+  factory $PulseDtoCopyWith(PulseDto value, $Res Function(PulseDto) then) =
+      _$PulseDtoCopyWithImpl<$Res, PulseDto>;
+  @useResult
+  $Res call({double timestamp, double bpm, double confidence});
+}
+
+/// @nodoc
+class _$PulseDtoCopyWithImpl<$Res, $Val extends PulseDto>
+    implements $PulseDtoCopyWith<$Res> {
+  _$PulseDtoCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of PulseDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? timestamp = null,
+    Object? bpm = null,
+    Object? confidence = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            timestamp: null == timestamp
+                ? _value.timestamp
+                : timestamp // ignore: cast_nullable_to_non_nullable
+                      as double,
+            bpm: null == bpm
+                ? _value.bpm
+                : bpm // ignore: cast_nullable_to_non_nullable
+                      as double,
+            confidence: null == confidence
+                ? _value.confidence
+                : confidence // ignore: cast_nullable_to_non_nullable
+                      as double,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$PulseDtoImplCopyWith<$Res>
+    implements $PulseDtoCopyWith<$Res> {
+  factory _$$PulseDtoImplCopyWith(
+    _$PulseDtoImpl value,
+    $Res Function(_$PulseDtoImpl) then,
+  ) = __$$PulseDtoImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({double timestamp, double bpm, double confidence});
+}
+
+/// @nodoc
+class __$$PulseDtoImplCopyWithImpl<$Res>
+    extends _$PulseDtoCopyWithImpl<$Res, _$PulseDtoImpl>
+    implements _$$PulseDtoImplCopyWith<$Res> {
+  __$$PulseDtoImplCopyWithImpl(
+    _$PulseDtoImpl _value,
+    $Res Function(_$PulseDtoImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of PulseDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? timestamp = null,
+    Object? bpm = null,
+    Object? confidence = null,
+  }) {
+    return _then(
+      _$PulseDtoImpl(
+        timestamp: null == timestamp
+            ? _value.timestamp
+            : timestamp // ignore: cast_nullable_to_non_nullable
+                  as double,
+        bpm: null == bpm
+            ? _value.bpm
+            : bpm // ignore: cast_nullable_to_non_nullable
+                  as double,
+        confidence: null == confidence
+            ? _value.confidence
+            : confidence // ignore: cast_nullable_to_non_nullable
+                  as double,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$PulseDtoImpl implements _PulseDto {
+  const _$PulseDtoImpl({
+    required this.timestamp,
+    required this.bpm,
+    required this.confidence,
+  });
+
+  @override
+  final double timestamp;
+  @override
+  final double bpm;
+  @override
+  final double confidence;
+
+  @override
+  String toString() {
+    return 'PulseDto(timestamp: $timestamp, bpm: $bpm, confidence: $confidence)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$PulseDtoImpl &&
+            (identical(other.timestamp, timestamp) ||
+                other.timestamp == timestamp) &&
+            (identical(other.bpm, bpm) || other.bpm == bpm) &&
+            (identical(other.confidence, confidence) ||
+                other.confidence == confidence));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, timestamp, bpm, confidence);
+
+  /// Create a copy of PulseDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$PulseDtoImplCopyWith<_$PulseDtoImpl> get copyWith =>
+      __$$PulseDtoImplCopyWithImpl<_$PulseDtoImpl>(this, _$identity);
+}
+
+abstract class _PulseDto implements PulseDto {
+  const factory _PulseDto({
+    required final double timestamp,
+    required final double bpm,
+    required final double confidence,
+  }) = _$PulseDtoImpl;
+
+  @override
+  double get timestamp;
+  @override
+  double get bpm;
+  @override
+  double get confidence;
+
+  /// Create a copy of PulseDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$PulseDtoImplCopyWith<_$PulseDtoImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 

@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -338375520;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1100052515;
 
 // Section: executor
 
@@ -45,6 +45,40 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
+fn wire__crate__api__muse__compress_block_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "compress_block",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_data = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::muse::compress_block(api_data))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__muse__connect_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -108,6 +142,40 @@ fn wire__crate__api__muse__connection_status_default_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok =
                         Result::<_, ()>::Ok(crate::api::muse::ConnectionStatus::default())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__muse__decompress_block_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "decompress_block",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_data = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::muse::decompress_block(api_data))?;
                     Ok(output_ok)
                 })())
             }
@@ -569,6 +637,18 @@ impl SseDecode for Vec<crate::api::muse::XyzDto> {
     }
 }
 
+impl SseDecode for crate::api::muse::MovementDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_timestamp = <f64>::sse_decode(deserializer);
+        let mut var_score = <f64>::sse_decode(deserializer);
+        return crate::api::muse::MovementDto {
+            timestamp: var_timestamp,
+            score: var_score,
+        };
+    }
+}
+
 impl SseDecode for crate::api::muse::MuseEventDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -610,6 +690,18 @@ impl SseDecode for crate::api::muse::MuseEventDto {
                 let mut var_field0 = <crate::api::muse::ControlDto>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::Control(var_field0);
             }
+            9 => {
+                let mut var_field0 = <crate::api::muse::PulseDto>::sse_decode(deserializer);
+                return crate::api::muse::MuseEventDto::Pulse(var_field0);
+            }
+            10 => {
+                let mut var_field0 = <crate::api::muse::MovementDto>::sse_decode(deserializer);
+                return crate::api::muse::MuseEventDto::Movement(var_field0);
+            }
+            11 => {
+                let mut var_field0 = <crate::api::muse::PeakAlphaDto>::sse_decode(deserializer);
+                return crate::api::muse::MuseEventDto::PeakAlpha(var_field0);
+            }
             _ => {
                 unimplemented!("");
             }
@@ -628,6 +720,20 @@ impl SseDecode for Option<u64> {
     }
 }
 
+impl SseDecode for crate::api::muse::PeakAlphaDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_timestamp = <f64>::sse_decode(deserializer);
+        let mut var_frequency = <f64>::sse_decode(deserializer);
+        let mut var_power = <f64>::sse_decode(deserializer);
+        return crate::api::muse::PeakAlphaDto {
+            timestamp: var_timestamp,
+            frequency: var_frequency,
+            power: var_power,
+        };
+    }
+}
+
 impl SseDecode for crate::api::muse::PpgDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -640,6 +746,20 @@ impl SseDecode for crate::api::muse::PpgDto {
             channel: var_channel,
             timestamp: var_timestamp,
             samples: var_samples,
+        };
+    }
+}
+
+impl SseDecode for crate::api::muse::PulseDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_timestamp = <f64>::sse_decode(deserializer);
+        let mut var_bpm = <f64>::sse_decode(deserializer);
+        let mut var_confidence = <f64>::sse_decode(deserializer);
+        return crate::api::muse::PulseDto {
+            timestamp: var_timestamp,
+            bpm: var_bpm,
+            confidence: var_confidence,
         };
     }
 }
@@ -716,20 +836,22 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        1 => wire__crate__api__muse__connect_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__muse__connection_status_default_impl(
+        1 => wire__crate__api__muse__compress_block_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__muse__connect_impl(port, ptr, rust_vec_len, data_len),
+        3 => wire__crate__api__muse__connection_status_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        3 => wire__crate__api__muse__disconnect_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__muse__get_status_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__muse__init_app_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__muse__is_connected_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__muse__scan_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__muse__telemetry_snapshot_default_impl(
+        4 => wire__crate__api__muse__decompress_block_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__muse__disconnect_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__muse__get_status_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__muse__init_app_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__muse__is_connected_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__muse__scan_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__muse__telemetry_snapshot_default_impl(
             port,
             ptr,
             rust_vec_len,
@@ -868,6 +990,24 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::ImuDto> for crate::api:
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::muse::MovementDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.timestamp.into_into_dart().into_dart(),
+            self.score.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::muse::MovementDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::MovementDto>
+    for crate::api::muse::MovementDto
+{
+    fn into_into_dart(self) -> crate::api::muse::MovementDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::muse::MuseEventDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -896,6 +1036,15 @@ impl flutter_rust_bridge::IntoDart for crate::api::muse::MuseEventDto {
             crate::api::muse::MuseEventDto::Control(field0) => {
                 [8.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
+            crate::api::muse::MuseEventDto::Pulse(field0) => {
+                [9.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::muse::MuseEventDto::Movement(field0) => {
+                [10.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::muse::MuseEventDto::PeakAlpha(field0) => {
+                [11.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
             _ => {
                 unimplemented!("");
             }
@@ -914,6 +1063,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::MuseEventDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::muse::PeakAlphaDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.timestamp.into_into_dart().into_dart(),
+            self.frequency.into_into_dart().into_dart(),
+            self.power.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::muse::PeakAlphaDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::PeakAlphaDto>
+    for crate::api::muse::PeakAlphaDto
+{
+    fn into_into_dart(self) -> crate::api::muse::PeakAlphaDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::muse::PpgDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -928,6 +1099,23 @@ impl flutter_rust_bridge::IntoDart for crate::api::muse::PpgDto {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::muse::PpgDto {}
 impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::PpgDto> for crate::api::muse::PpgDto {
     fn into_into_dart(self) -> crate::api::muse::PpgDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::muse::PulseDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.timestamp.into_into_dart().into_dart(),
+            self.bpm.into_into_dart().into_dart(),
+            self.confidence.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::muse::PulseDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::PulseDto> for crate::api::muse::PulseDto {
+    fn into_into_dart(self) -> crate::api::muse::PulseDto {
         self
     }
 }
@@ -1136,6 +1324,14 @@ impl SseEncode for Vec<crate::api::muse::XyzDto> {
     }
 }
 
+impl SseEncode for crate::api::muse::MovementDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.timestamp, serializer);
+        <f64>::sse_encode(self.score, serializer);
+    }
+}
+
 impl SseEncode for crate::api::muse::MuseEventDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1175,6 +1371,18 @@ impl SseEncode for crate::api::muse::MuseEventDto {
                 <i32>::sse_encode(8, serializer);
                 <crate::api::muse::ControlDto>::sse_encode(field0, serializer);
             }
+            crate::api::muse::MuseEventDto::Pulse(field0) => {
+                <i32>::sse_encode(9, serializer);
+                <crate::api::muse::PulseDto>::sse_encode(field0, serializer);
+            }
+            crate::api::muse::MuseEventDto::Movement(field0) => {
+                <i32>::sse_encode(10, serializer);
+                <crate::api::muse::MovementDto>::sse_encode(field0, serializer);
+            }
+            crate::api::muse::MuseEventDto::PeakAlpha(field0) => {
+                <i32>::sse_encode(11, serializer);
+                <crate::api::muse::PeakAlphaDto>::sse_encode(field0, serializer);
+            }
             _ => {
                 unimplemented!("");
             }
@@ -1192,6 +1400,15 @@ impl SseEncode for Option<u64> {
     }
 }
 
+impl SseEncode for crate::api::muse::PeakAlphaDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.timestamp, serializer);
+        <f64>::sse_encode(self.frequency, serializer);
+        <f64>::sse_encode(self.power, serializer);
+    }
+}
+
 impl SseEncode for crate::api::muse::PpgDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1199,6 +1416,15 @@ impl SseEncode for crate::api::muse::PpgDto {
         <i32>::sse_encode(self.channel, serializer);
         <f64>::sse_encode(self.timestamp, serializer);
         <Vec<f64>>::sse_encode(self.samples, serializer);
+    }
+}
+
+impl SseEncode for crate::api::muse::PulseDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.timestamp, serializer);
+        <f64>::sse_encode(self.bpm, serializer);
+        <f64>::sse_encode(self.confidence, serializer);
     }
 }
 
