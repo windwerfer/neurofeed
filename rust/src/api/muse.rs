@@ -342,6 +342,7 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
         {
             let mut guard = state().inner.lock().unwrap();
             guard.connection_epoch += 1;
+            let _ = guard.epoch_tx.send(guard.connection_epoch);
             guard.active = Some(ActiveConnection {
                 handle,
                 name: name.clone(),
@@ -495,6 +496,10 @@ fn spawn_event_forwarder() {
         let mut eeg_ts_count: std::collections::HashMap<i32, u64> = std::collections::HashMap::new(); // total samples
 
         const FFT_N: usize = 256;
+        let mut epoch_rx = {
+            let guard = state().inner.lock().unwrap_or_else(|e| e.into_inner());
+            guard.epoch_rx.clone()
+        };
         loop {
             let rx = {
                 let mut guard =
@@ -505,29 +510,59 @@ fn spawn_event_forwarder() {
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                 continue;
             };
+            // A connected Muse streams continuously. If we see no events for
+            // this many consecutive 5 s windows, the BLE link is dead without
+            // a proper disconnect notification — report it so the app can
+            // reconnect instead of silently sitting on a dead channel.
+            const SILENT_WINDOWS: u32 = 6;
+            let mut silent_windows = 0u32;
             loop {
-                let ev = match tokio::time::timeout(
-                    std::time::Duration::from_secs(5),
-                    rx.recv(),
-                )
-                .await
-                {
-                    Ok(Some(ev)) => ev,
-                    Ok(None) => {
+                let ev = tokio::select! {
+                    _ = epoch_rx.changed() => {
                         log::info!(
-                            "[muse] forwarder: event channel closed (epoch={epoch})"
+                            "[muse] forwarder: newer connection (epoch={epoch}), switching channels"
                         );
                         break;
                     }
-                    Err(_) => {
-                        log::info!(
-                            "[muse] forwarder: alive (epoch={epoch}, no events for 5s, eeg={} telem={} accel={} gyro={})",
-                            counts.eeg, counts.telemetry,
-                            counts.accelerometer, counts.gyroscope,
-                        );
-                        counts = PktCounts::default();
-                        last_print = tokio::time::Instant::now();
-                        continue;
+                    ev = tokio::time::timeout(
+                        std::time::Duration::from_secs(5),
+                        rx.recv(),
+                    ) => {
+                        match ev {
+                            Ok(Some(ev)) => ev,
+                            Ok(None) => {
+                                log::info!(
+                                    "[muse] forwarder: event channel closed (epoch={epoch})"
+                                );
+                                break;
+                            }
+                            Err(_) => {
+                                silent_windows += 1;
+                                if silent_windows >= SILENT_WINDOWS {
+                                    log::error!(
+                                        "[muse] forwarder: no events for {} s (epoch={epoch}), link assumed dead",
+                                        SILENT_WINDOWS * 5
+                                    );
+                                    let guard = state()
+                                        .inner
+                                        .lock()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    if let Some(sink) = &guard.sink {
+                                        let _ =
+                                            sink.add(MuseEventDto::Disconnected);
+                                    }
+                                    break;
+                                }
+                                log::info!(
+                                    "[muse] forwarder: alive (epoch={epoch}, no events for 5s, eeg={} telem={} accel={} gyro={})",
+                                    counts.eeg, counts.telemetry,
+                                    counts.accelerometer, counts.gyroscope,
+                                );
+                                counts = PktCounts::default();
+                                last_print = tokio::time::Instant::now();
+                                continue;
+                            }
+                        }
                     }
                 };
                 match &ev {
