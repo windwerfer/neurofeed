@@ -794,6 +794,8 @@ class _TargetSettingsInfoDialog extends StatelessWidget {
     );
   }
 }
+
+class _SoundPicker extends StatelessWidget {
   final String current;
   final List<String> sounds;
   const _SoundPicker({required this.current, required this.sounds});
