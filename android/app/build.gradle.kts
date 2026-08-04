@@ -67,6 +67,18 @@ android {
             )
         }
     }
+
+    // Reproducible builds: AGP embeds a non-deterministic "Dependency Info"
+    // block (id 0x504b4453) in the APK Signing Block and an env-dependent
+    // VCS-info file (META-INF/version-control-info.textproto) unless disabled.
+    // Both break byte-identical rebuilds (see .ai/release.md).
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+    vcsInfo {
+        include = false
+    }
 }
 
 flutter {
