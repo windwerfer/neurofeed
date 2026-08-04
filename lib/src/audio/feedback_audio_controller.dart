@@ -278,9 +278,10 @@ class FeedbackAudioController {
       try {
         await chime.setAsset(bowlLowAsset);
         await chime.setLoopMode(LoopMode.off);
-        await chime.setVolume(0);
+        final start = _feedbackVolumeTotal * 0.05;
+        await chime.setVolume(start);
         await chime.play();
-        await _rampVolume(chime, _feedbackVolumeTotal, chimeAttack);
+        await _rampVolume(chime, start, _feedbackVolumeTotal, chimeAttack);
         return;
       } catch (e) {
         debugPrint('[audio] chime playback failed: $e');

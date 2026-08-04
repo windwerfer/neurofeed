@@ -378,9 +378,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     );
     _target.reset();
     _adaptTick = 0;
+    _startTicker();
     await _recorder.startSession();
     await _audio.playFeedback(sound: state.soundName);
-    _startTicker();
   }
 
   Future<void> pause() async {
@@ -438,6 +438,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   void _startTicker() {
     _ticker?.cancel();
+    debugPrint('[feedback] ticker started');
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (state.elapsedSeconds >= state.durationMinutes * 60) {
         end();
