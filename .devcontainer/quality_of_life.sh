@@ -2,7 +2,9 @@
 set -e
 
 sudo apt update
-sudo apt install -y fzf zoxide ripgrep fd-find zstd hx
+sudo apt install -y fzf zoxide ripgrep fd-find zstd hx npm
+
+# npm is for mcp servers in opencode
 
 rm -rf ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
 git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
