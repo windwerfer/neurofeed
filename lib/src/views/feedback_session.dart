@@ -247,42 +247,6 @@ class _PhaseControls extends ConsumerWidget {
           ],
         );
 
-      case FeedbackPhase.ready:
-        return Column(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 48),
-            const SizedBox(height: 8),
-            Text('Calibration complete', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: () => ref.read(feedbackStateProvider.notifier).startPlaying(),
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('Begin Feedback'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(double.infinity, 56),
-                textStyle: const TextStyle(fontSize: 18),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => ref.read(feedbackStateProvider.notifier).startCalibration(),
-              child: const Text('Recalibrate'),
-            ),
-            if (fb.signalStableSeconds > 0) ...[
-              const SizedBox(height: 12),
-              LinearProgressIndicator(
-                value: (fb.signalStableSeconds / autoStartSeconds).clamp(0.0, 1.0),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Signal stable ${fb.signalStableSeconds}/$autoStartSeconds s — '
-                'auto-starting…',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-          ],
-        );
-
       case FeedbackPhase.playing:
       case FeedbackPhase.paused:
         return Row(

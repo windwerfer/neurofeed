@@ -8,7 +8,6 @@ class FeedbackAudioController {
   static const Duration targetHoldDuration = Duration(milliseconds: 2500);
   static const Duration rewardCooldown = Duration(seconds: 8);
   static const Duration movementBuffer = Duration(seconds: 1);
-  static const Duration chimeAttack = Duration(milliseconds: 100);
   static const int maxPolyphony = 10;
   static const double droneVolume = 0.5;
 
@@ -278,10 +277,8 @@ class FeedbackAudioController {
       try {
         await chime.setAsset(bowlLowAsset);
         await chime.setLoopMode(LoopMode.off);
-        final start = _feedbackVolumeTotal * 0.05;
-        await chime.setVolume(start);
+        await chime.setVolume(_feedbackVolumeTotal);
         await chime.play();
-        await _rampVolume(chime, start, _feedbackVolumeTotal, chimeAttack);
         return;
       } catch (e) {
         debugPrint('[audio] chime playback failed: $e');
@@ -298,19 +295,6 @@ class FeedbackAudioController {
       await chime.seek(Duration.zero);
     } catch (e) {
       debugPrint('[audio] chime reset failed: $e');
-    }
-  }
-
-  Future<void> _rampVolume(
-    AudioPlayer player,
-    double start,
-    double target,
-    Duration duration,
-  ) async {
-    const steps = 5;
-    for (var i = 1; i <= steps; i++) {
-      await player.setVolume(start + (target - start) * i / steps);
-      await Future<void>.delayed(duration ~/ steps);
     }
   }
 }

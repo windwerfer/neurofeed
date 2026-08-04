@@ -11,13 +11,12 @@ import 'package:muse_ml/src/feedback/target_state.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/settings.dart';
 
-enum FeedbackPhase { idle, calibrating, ready, playing, paused, interrupted, ended }
+enum FeedbackPhase { idle, calibrating, playing, paused, interrupted, ended }
 
 enum FeedbackInterruptKind { disconnect, badSignal }
 
 const double signalGoodThreshold = 80.0;
 const double signalCriticalThreshold = 40.0;
-const int autoStartSeconds = 4;
 const int badSignalPauseSeconds = 10;
 const int interruptionGraceSeconds = 10;
 const int signalWaitResetSeconds = 10;
@@ -37,7 +36,6 @@ class FeedbackState {
   final String soundName;
   final int elapsedSeconds;
   final bool signalGood;
-  final int signalStableSeconds;
   final String? interruptMessage;
   final int? interruptionSecondsLeft;
   final bool waitingForSignal;
@@ -54,7 +52,6 @@ class FeedbackState {
     this.soundName = 'Ambient Drone',
     this.elapsedSeconds = 0,
     this.signalGood = false,
-    this.signalStableSeconds = 0,
     this.interruptMessage,
     this.interruptionSecondsLeft,
     this.waitingForSignal = false,
@@ -74,7 +71,6 @@ class FeedbackState {
     String? soundName,
     int? elapsedSeconds,
     bool? signalGood,
-    int? signalStableSeconds,
     Object? interruptMessage = _sentinel,
     Object? interruptionSecondsLeft = _sentinel,
     bool? waitingForSignal,
@@ -90,7 +86,6 @@ class FeedbackState {
     soundName: soundName ?? this.soundName,
     elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
     signalGood: signalGood ?? this.signalGood,
-    signalStableSeconds: signalStableSeconds ?? this.signalStableSeconds,
     interruptMessage: identical(interruptMessage, _sentinel)
         ? this.interruptMessage
         : interruptMessage as String?,
@@ -209,11 +204,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   /// Begin calibration: play the voice intro, then record a [calibrationBaselineSeconds]
-  /// silent baseline to derive the personalized ATR threshold, then wait for a
-  /// stable signal to auto-start feedback. Opens the connect window if the
-  /// Muse is not connected. Calibration only proceeds once all electrodes
-  /// are green; with a defective electrode the user can start anyway after
-  /// the signal has not changed for [signalWaitResetSeconds].
+  /// silent baseline to derive the personalized ATR threshold, then start
+  /// feedback automatically. Opens the connect window if the Muse is not
+  /// connected. Calibration only proceeds once all electrodes are green;
+  /// with a defective electrode the user can start anyway after the signal
+  /// has not changed for [signalWaitResetSeconds].
   Future<void> startCalibration() async {
     if (!_ref.read(appStateProvider).status.connected) {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
@@ -227,7 +222,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     state = state.copyWith(
       phase: FeedbackPhase.calibrating,
       elapsedSeconds: 0,
-      signalStableSeconds: 0,
       waitingForSignal: false,
       startAnywayAvailable: false,
       baselineSecondsLeft: 0,
@@ -330,27 +324,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       baselineSecondsLeft: 0,
       currentThreshold: threshold,
     );
-    if (_bypassSignalGate) {
-      _bypassSignalGate = false;
-      state = state.copyWith(
-        phase: FeedbackPhase.ready,
-        signalStableSeconds: 0,
-        waitingForSignal: false,
-      );
-      return;
-    }
+    final bypassed = _bypassSignalGate;
+    _bypassSignalGate = false;
     final qualityAfter = _ref.read(appStateProvider).signalQuality;
-    if (_allGreen(qualityAfter)) {
-      state = state.copyWith(
-        phase: FeedbackPhase.ready,
-        signalStableSeconds: 0,
-        waitingForSignal: false,
-      );
-    } else {
+    if (!bypassed && !_allGreen(qualityAfter)) {
       _lastQualityKey = _qualityKey(qualityAfter);
       _waitingSeconds = 0;
       state = state.copyWith(waitingForSignal: true, startAnywayAvailable: false);
+      return;
     }
+    unawaited(startPlaying());
   }
 
   /// Bypasses the all-green calibration gate (used when the user opts to
@@ -373,7 +356,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     state = state.copyWith(
       phase: FeedbackPhase.playing,
-      signalStableSeconds: 0,
       currentThreshold: _atr.threshold,
     );
     _target.reset();
@@ -523,18 +505,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final wasPlaying = _interruptWasPlaying;
     _clearInterruption();
     if (wasPlaying) {
-      state = state.copyWith(phase: FeedbackPhase.playing, signalStableSeconds: 0);
+      state = state.copyWith(phase: FeedbackPhase.playing);
       _audio.resume();
       _startTicker();
     } else {
-      state = state.copyWith(phase: FeedbackPhase.paused, signalStableSeconds: 0);
+      state = state.copyWith(phase: FeedbackPhase.paused);
     }
   }
 
-  /// Tracks signal quality for the ready-phase auto-start and the playing
-  /// phase bad-signal interruption. Requires all four channels to stay at or
-  /// above [signalGoodThreshold] for [autoStartSeconds] consecutive 1Hz
-  /// updates before auto-starting.
+  /// Tracks signal quality for the calibrating phase signal gate and the
+  /// playing phase bad-signal interruption.
   void _onAppState(AppUiState? prev, AppUiState next) {
     if (prev == null || identical(prev.signalQuality, next.signalQuality)) {
       return;
@@ -564,24 +544,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           _hasNeededElectrode(quality) &&
           !state.startAnywayAvailable) {
         state = state.copyWith(startAnywayAvailable: true);
-      }
-      return;
-    }
-
-    if (state.phase == FeedbackPhase.ready) {
-      final stable = quality != null &&
-          quality.length >= 4 &&
-          quality.every((s) => s >= signalGoodThreshold);
-      if (!stable) {
-        if (state.signalStableSeconds != 0) {
-          state = state.copyWith(signalStableSeconds: 0);
-        }
-        return;
-      }
-      final count = state.signalStableSeconds + 1;
-      state = state.copyWith(signalStableSeconds: count);
-      if (count >= autoStartSeconds) {
-        startPlaying();
       }
       return;
     }
