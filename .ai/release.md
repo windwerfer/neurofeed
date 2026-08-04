@@ -108,12 +108,13 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
   - Gradle archive tasks use fixed timestamps + deterministic ordering
     (`android/app/build.gradle.kts`); CI also disables parallel builds and
     caching for the Android build
-  - AGP's non-deterministic extras are disabled in `android/app/build.gradle.kts`:
-    the "Dependency Info" block (id `0x504b4453`, embedded in the APK Signing
-    Block, encrypted and randomized per build) via
-    `dependenciesInfo { includeInApk = false }`, and the VCS-info file
-    (`META-INF/version-control-info.textproto`, env-dependent) via
-    `vcsInfo { include = false }`
+  - AGP's non-deterministic "Dependency Info" block (id `0x504b4453`, embedded
+    in the APK Signing Block, encrypted and randomized per build) is disabled in
+    `android/app/build.gradle.kts` via `dependenciesInfo { includeInApk = false }`.
+    (AGP also embeds a VCS-info file `META-INF/version-control-info.textproto`,
+    but its content only depends on the built commit, so it is identical for
+    same-commit rebuilds and does not block byte-identical output. The
+    `vcsInfo { include = false }` DSL only exists in AGP 9+, so it is not used.)
 - The APK is a single fat APK (all ABIs), which F-Droid prefers.
 - When you submit to F-Droid you will also need to request an app entry in
   `fdroiddata` (metadata + build recipe). Reproducibility issues they commonly
@@ -167,6 +168,6 @@ builds between releases keeps them warm.
 - **Repro reports a diff**: the usual culprit is AGP's "Dependency Info" block
   (id `0x504b4453`) in the APK Signing Block — it is non-deterministic
   (encrypted, randomized per build). `android/app/build.gradle.kts` disables it
-  (`dependenciesInfo`) plus AGP's VCS-info file (`vcsInfo`); both settings must
-  stay. If it still differs, compare the two APKs with `diffoscope` and inspect
+  via `dependenciesInfo { includeInApk = false }`; that setting must stay.
+  If it still differs, compare the two APKs with `diffoscope` and inspect
   the signing block with `apksigtool parse`.
