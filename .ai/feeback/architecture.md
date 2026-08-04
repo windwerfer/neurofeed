@@ -17,14 +17,15 @@ ready for testing.**
 
 ## State machine (`FeedbackStateNotifier`)
 ```
-Idle → Calibrating → Ready → Playing ⇄ Paused → Ended → Dashboard
-                      └ interrupted (disconnect / bad signal, 10 s grace, auto-resume)
+Idle → Calibrating → Playing ⇄ Paused → Ended → Dashboard
+                   └ interrupted (disconnect / bad signal, 10 s grace, auto-resume)
 ```
 - Independent Riverpod provider, watches `appStateProvider` for signal quality
   and event stream.
 - `Calibrating`: voice intro + 90 s silent baseline (movement-gated samples),
   percentile threshold from baseline.
-- `Ready`: waiting for start or auto-start on 4 s all-green.
+- Auto-start: when calibration completes with all channels green, feedback
+  starts immediately (no ready phase / start button).
 - `Playing`/`Paused`: feedback active; `Interrupted` pauses session with grace
   countdown and auto-recovers on reconnect / signal recovery.
 - `Ended`: navigate to dashboard.
@@ -46,8 +47,9 @@ Idle → Calibrating → Ready → Playing ⇄ Paused → Ended → Dashboard
 
 ## Audio (dual-layer, 5 volume channels)
 - **Background**: ambient loop (Ambient Drone / Drone Loop / Rain), looped.
-- **Reward chimes**: bowl pool (10 players) with soft 100 ms attack ramp;
-  players reset on completion; movement gating (1 s buffer) blocks rewards.
+- **Reward chimes**: bowl pool (10 players) started at full feedback volume
+  (no attack ramp); players reset on completion; movement gating (1 s buffer)
+  blocks rewards.
 - **Intro**: calibration voice (once per calibration).
 - **End bell**: session end chime; also reused (at 0.6×) as the soft
   recalibrate cue.

@@ -9,13 +9,13 @@
 
 ## Phase 3.5: Dual-layer reward audio
 - [x] Target-state predicate: relative band power (alpha_rel > theta_rel), AF7/AF8 average
-- [x] Dual-layer engine: background (drone/rain) + bowl reward chime pool (10 players, soft attack, completion reset)
+- [x] Dual-layer engine: background (drone/rain) + bowl reward chime pool (10 players, full-volume start, completion reset)
 - [x] Movement gating: accel score > 0.05 resets hold timer and gates chimes (1 s buffer)
 - [x] Sound selector (Ambient Drone / Drone Loop / Rain) + on-the-fly switch during feedback
 - [ ] v1.1: EEG artifact flag for jaw-clench/blink EMG (accel gating only catches head motion)
 
 ## Phase 4: Full session flow
-- [x] Signal quality auto-start: 4 s all-green (all channels ≥ 80) in ready phase → auto startPlaying
+- [x] Auto-start after calibration (ready phase removed): all-green at end of baseline → playing immediately
 - [x] Connection check on start — opens connect window if Muse disconnected (calibration + playing)
 - [x] Wire FeedbackRecorder into session lifecycle (start on playing, save on end, discard on reset)
 - [x] End-of-session → session dashboard navigation (auto pushReplacement)
@@ -53,6 +53,7 @@
 - [ ] Restart app: volumes, sound, duration, target settings restored
 - [ ] Watch `[atr]` logs around the 2–4 min mark: threshold must stay ≤ ceiling (mean + 1.5 SD)
 - [ ] Lockout test: if target feels unreachable, threshold should reset via circuit breaker or lower fast (responsive setting)
+- [ ] Mid-session Muse drop (power off / walk away): forwarder watchdog emits Disconnected after ~30 s silence → session pauses with grace countdown, auto-reconnect resumes the stream (watch `[muse] forwarder: newer connection` in logcat)
 
 ## Next (v1.1 backlog)
 - [ ] EEG artifact flag for EMG (jaw clench / blink) into ATR epoch cleaning
