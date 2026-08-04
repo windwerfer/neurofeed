@@ -21,6 +21,10 @@ class AudioService {
 
   double get feedbackVolume => _controller.feedbackVolume;
 
+  double get introVolume => _controller.introVolume;
+
+  double get bellVolume => _controller.bellVolume;
+
   void setMasterVolume(double value) => _controller.setMasterVolume(value);
 
   void setBackgroundVolume(double value) =>
@@ -28,6 +32,10 @@ class AudioService {
 
   void setFeedbackVolume(double value) =>
       _controller.setFeedbackVolume(value);
+
+  void setIntroVolume(double value) => _controller.setIntroVolume(value);
+
+  void setBellVolume(double value) => _controller.setBellVolume(value);
 
   Future<void> playCalibration() => _controller.playCalibration();
 

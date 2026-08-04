@@ -40,12 +40,16 @@ class FeedbackAudioController {
   double _masterVolume = 1.0;
   double _backgroundVolume = droneVolume;
   double _feedbackVolume = 1.0;
+  double _introVolume = 1.0;
+  double _bellVolume = 1.0;
 
   FeedbackAudioController(Settings settings)
       : _settings = settings {
     _masterVolume = settings.masterVolume ?? 1.0;
     _backgroundVolume = settings.backgroundVolume ?? droneVolume;
     _feedbackVolume = settings.feedbackVolume ?? 1.0;
+    _introVolume = settings.introVolume ?? 1.0;
+    _bellVolume = settings.bellVolume ?? 1.0;
     for (final chime in _chimes) {
       _chimeSubs.add(
         chime.processingStateStream.listen((state) {
@@ -66,9 +70,17 @@ class FeedbackAudioController {
 
   double get feedbackVolume => _feedbackVolume;
 
+  double get introVolume => _introVolume;
+
+  double get bellVolume => _bellVolume;
+
   double get _ambientVolume => _masterVolume * _backgroundVolume;
 
   double get _feedbackVolumeTotal => _masterVolume * _feedbackVolume;
+
+  double get _introVolumeTotal => _masterVolume * _introVolume;
+
+  double get _bellVolumeTotal => _masterVolume * _bellVolume;
 
   void setMasterVolume(double value) {
     _masterVolume = value.clamp(0.0, 1.0);
@@ -88,14 +100,26 @@ class FeedbackAudioController {
     _applyFeedbackVolumes();
   }
 
+  void setIntroVolume(double value) {
+    _introVolume = value.clamp(0.0, 1.0);
+    _settings.setIntroVolume(_introVolume);
+    _calibration.setVolume(_introVolumeTotal);
+  }
+
+  void setBellVolume(double value) {
+    _bellVolume = value.clamp(0.0, 1.0);
+    _settings.setBellVolume(_bellVolume);
+    _bell.setVolume(_bellVolumeTotal);
+  }
+
   void _applyVolumes() {
     _ambient.setVolume(_ambientVolume);
     _applyFeedbackVolumes();
+    _calibration.setVolume(_introVolumeTotal);
+    _bell.setVolume(_bellVolumeTotal);
   }
 
   void _applyFeedbackVolumes() {
-    _bell.setVolume(_feedbackVolumeTotal);
-    _calibration.setVolume(_feedbackVolumeTotal);
     for (final chime in _chimes) {
       if (!_ramping.contains(chime)) {
         chime.setVolume(_feedbackVolumeTotal);
@@ -108,7 +132,7 @@ class FeedbackAudioController {
     try {
       await _calibration.setAsset(calibrationAsset);
       await _calibration.setLoopMode(LoopMode.off);
-      await _calibration.setVolume(_feedbackVolumeTotal);
+      await _calibration.setVolume(_introVolumeTotal);
       final done = _calibration.processingStateStream.firstWhere(
         (s) => s == ProcessingState.completed,
       );
@@ -177,7 +201,7 @@ class FeedbackAudioController {
     try {
       await _bell.setAsset(bellAsset);
       await _bell.setLoopMode(LoopMode.off);
-      await _bell.setVolume(_feedbackVolumeTotal);
+      await _bell.setVolume(_bellVolumeTotal);
       await _bell.play();
     } catch (e) {
       debugPrint('[audio] end chime playback failed: $e');
@@ -189,7 +213,7 @@ class FeedbackAudioController {
     try {
       await _bell.setAsset(bowlLowAsset);
       await _bell.setLoopMode(LoopMode.off);
-      await _bell.setVolume(_feedbackVolumeTotal * 0.6);
+      await _bell.setVolume(_bellVolumeTotal * 0.6);
       await _bell.play();
     } catch (e) {
       debugPrint('[audio] recalibrate chime playback failed: $e');

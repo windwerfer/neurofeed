@@ -43,6 +43,8 @@ class Settings {
   static const String _masterVolumeKey = 'master_volume';
   static const String _backgroundVolumeKey = 'background_volume';
   static const String _feedbackVolumeKey = 'feedback_volume';
+  static const String _introVolumeKey = 'intro_volume';
+  static const String _bellVolumeKey = 'bell_volume';
 
   final SharedPreferences _prefs;
 
@@ -75,6 +77,16 @@ class Settings {
 
   Future<void> setFeedbackVolume(double value) =>
       _prefs.setDouble(_feedbackVolumeKey, value);
+
+  double? get introVolume => _prefs.getDouble(_introVolumeKey);
+
+  Future<void> setIntroVolume(double value) =>
+      _prefs.setDouble(_introVolumeKey, value);
+
+  double? get bellVolume => _prefs.getDouble(_bellVolumeKey);
+
+  Future<void> setBellVolume(double value) =>
+      _prefs.setDouble(_bellVolumeKey, value);
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and

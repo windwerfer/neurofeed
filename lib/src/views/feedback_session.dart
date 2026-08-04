@@ -508,6 +508,8 @@ class _VolumeDialogState extends State<_VolumeDialog> {
   late double _master;
   late double _background;
   late double _feedback;
+  late double _intro;
+  late double _bell;
 
   @override
   void initState() {
@@ -515,6 +517,8 @@ class _VolumeDialogState extends State<_VolumeDialog> {
     _master = widget.audio.masterVolume;
     _background = widget.audio.backgroundVolume;
     _feedback = widget.audio.feedbackVolume;
+    _intro = widget.audio.introVolume;
+    _bell = widget.audio.bellVolume;
   }
 
   Widget _slider({
@@ -536,6 +540,8 @@ class _VolumeDialogState extends State<_VolumeDialog> {
                 if (label == 'Master') _master = v;
                 if (label == 'Background') _background = v;
                 if (label == 'Feedback') _feedback = v;
+                if (label == 'Intro') _intro = v;
+                if (label == 'End Bell') _bell = v;
               });
               onChanged(v);
             },
@@ -578,10 +584,22 @@ class _VolumeDialogState extends State<_VolumeDialog> {
             value: _feedback,
             onChanged: widget.audio.setFeedbackVolume,
           ),
+          _slider(
+            icon: Icons.record_voice_over,
+            label: 'Intro',
+            value: _intro,
+            onChanged: widget.audio.setIntroVolume,
+          ),
+          _slider(
+            icon: Icons.ring_volume,
+            label: 'End Bell',
+            value: _bell,
+            onChanged: widget.audio.setBellVolume,
+          ),
           const SizedBox(height: 8),
           Text(
-            'Feedback covers the bowl chimes, end chime and calibration '
-            'voice. Changes apply immediately and are remembered.',
+            'Feedback covers the reward bowl chimes. Changes apply immediately '
+            'and are remembered.',
             style: theme.textTheme.bodySmall,
           ),
         ],
