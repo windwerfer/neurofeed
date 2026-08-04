@@ -361,6 +361,21 @@ class _NerdStatsBubble extends ConsumerWidget {
     final theme = Theme.of(context);
     final percentile = stats.currentPercentile;
     final atr = stats.currentAtr;
+    final threshold = stats.threshold;
+    final baselineMean = stats.baselineMean;
+    final baselineStddev = stats.baselineStddev;
+    final lines = <String>[];
+    if (percentile == null || atr == null) {
+      lines.add('Collecting…');
+    } else {
+      lines.add(
+          'ATR ${atr.toStringAsFixed(2)} · p${percentile.round()} of baseline');
+    }
+    lines.add('thr ${threshold?.toStringAsFixed(2) ?? '—'} '
+        '(p${stats.baselinePercentile ?? '—'})');
+    lines.add('base mean ${baselineMean?.toStringAsFixed(2) ?? '—'} '
+        '± ${baselineStddev?.toStringAsFixed(2) ?? '—'} '
+        '(n=${stats.baselineCount ?? 0})');
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -369,10 +384,8 @@ class _NerdStatsBubble extends ConsumerWidget {
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
-          percentile == null
-              ? 'Collecting…'
-              : 'ATR ${atr?.toStringAsFixed(2) ?? '—'} · '
-                  'p${percentile.round()} of baseline',
+          lines.join('\n'),
+          textAlign: TextAlign.center,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSecondaryContainer,
             fontFeatures: const [FontFeature.tabularFigures()],

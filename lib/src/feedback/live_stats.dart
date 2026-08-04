@@ -13,6 +13,12 @@ class LiveStats extends ChangeNotifier {
 
   double? currentAtr;
   double? currentPercentile;
+  double? threshold;
+  int? baselinePercentile;
+  int? baselineCount;
+  double? baselineMean;
+  double? baselineStddev;
+  double? successRate;
 
   void push(double atr, double? Function(double) percentileOf) {
     final now = DateTime.now();
@@ -26,10 +32,39 @@ class LiveStats extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setThreshold(double? value) {
+    threshold = value;
+    notifyListeners();
+  }
+
+  void setBaseline({
+    int? percentile,
+    int? count,
+    double? mean,
+    double? stddev,
+  }) {
+    baselinePercentile = percentile;
+    baselineCount = count;
+    baselineMean = mean;
+    baselineStddev = stddev;
+    notifyListeners();
+  }
+
+  void setSuccessRate(double? value) {
+    successRate = value;
+    notifyListeners();
+  }
+
   void reset() {
     _samples.clear();
     currentAtr = null;
     currentPercentile = null;
+    threshold = null;
+    baselinePercentile = null;
+    baselineCount = null;
+    baselineMean = null;
+    baselineStddev = null;
+    successRate = null;
     notifyListeners();
   }
 }

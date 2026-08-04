@@ -158,10 +158,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   void selectPercentile(int percentile) {
     _atr.percentile = percentile;
     state = state.copyWith(baselinePercentile: percentile);
+    final stats = _ref.read(liveStatsProvider);
+    stats.setBaseline(
+      percentile: percentile,
+      count: _atr.baselineCount,
+      mean: _atr.baselineMean,
+      stddev: _atr.baselineStddev,
+    );
     if (state.phase == FeedbackPhase.playing ||
         state.phase == FeedbackPhase.paused) {
       _atr.computeThreshold();
       state = state.copyWith(currentThreshold: _atr.threshold);
+      stats.setThreshold(_atr.threshold);
     }
   }
 
@@ -245,6 +253,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final threshold = _atr.computeThreshold();
     debugPrint('[feedback] baseline ATR threshold = $threshold '
         '(${_atr.baselineCount} samples, p${_atr.percentile})');
+    _ref.read(liveStatsProvider).setBaseline(
+          percentile: _atr.percentile,
+          count: _atr.baselineCount,
+          mean: _atr.baselineMean,
+          stddev: _atr.baselineStddev,
+        );
+    _ref.read(liveStatsProvider).setThreshold(threshold);
     state = state.copyWith(
       baselineSecondsLeft: 0,
       currentThreshold: threshold,
@@ -368,6 +383,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         _adaptTick = 0;
         _atr.adapt();
         state = state.copyWith(currentThreshold: _atr.threshold);
+        _ref.read(liveStatsProvider).setThreshold(_atr.threshold);
+      }
+      final stats = _ref.read(liveStatsProvider);
+      stats.setSuccessRate(_atr.successRate);
+      if (state.elapsedSeconds % 10 == 0) {
+        debugPrint(
+            '[atr] t=${state.elapsedSeconds}s atr=${stats.currentAtr?.toStringAsFixed(3)} '
+            'pct=${stats.currentPercentile?.toStringAsFixed(1)} '
+            'thr=${_atr.threshold?.toStringAsFixed(3)} '
+            'success=${_atr.successRate?.toStringAsFixed(2)} '
+            'baseline n=${_atr.baselineCount} mean=${_atr.baselineMean?.toStringAsFixed(3)} '
+            'sd=${_atr.baselineStddev?.toStringAsFixed(3)}');
       }
     });
   }

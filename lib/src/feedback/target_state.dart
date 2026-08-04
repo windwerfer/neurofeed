@@ -1,3 +1,6 @@
+import 'dart:math';
+
+import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 const int electrodeAf7 = 1;
@@ -55,6 +58,35 @@ class AtrEngine {
   int get baselineCount => _baseline.length;
 
   double? get threshold => _threshold;
+
+  /// Mean of the baseline ATR samples.
+  double? get baselineMean {
+    if (_baseline.isEmpty) {
+      return null;
+    }
+    return _baseline.reduce((a, b) => a + b) / _baseline.length;
+  }
+
+  /// Standard deviation of the baseline ATR samples.
+  double? get baselineStddev {
+    if (_baseline.length < 2) {
+      return null;
+    }
+    final mean = baselineMean!;
+    final variance = _baseline
+            .fold<double>(0, (a, s) => a + pow(s - mean, 2).toDouble()) /
+        _baseline.length;
+    return sqrt(variance);
+  }
+
+  /// Success rate over the current rolling epoch window, or null when the
+  /// window is not full yet.
+  double? get successRate {
+    if (_epochs.length < epochWindow) {
+      return null;
+    }
+    return _epochs.where((b) => b).length / _epochs.length;
+  }
 
   void reset() {
     _baseline.clear();
@@ -117,8 +149,15 @@ class AtrEngine {
     final success = _epochs.where((b) => b).length / _epochs.length;
     if (success > highSuccessRate) {
       _threshold = t * raiseFactor;
+      debugPrint('[atr] adapt: success=$success > $highSuccessRate '
+          'threshold $t -> $_threshold');
     } else if (success < lowSuccessRate) {
       _threshold = t * lowerFactor;
+      debugPrint('[atr] adapt: success=$success < $lowSuccessRate '
+          'threshold $t -> $_threshold');
+    } else {
+      debugPrint('[atr] adapt: success=$success in zone, '
+          'threshold stays $t');
     }
   }
 }
