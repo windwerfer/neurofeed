@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/connection_provider.dart';
@@ -19,10 +20,11 @@ const int badSignalPauseSeconds = 10;
 const int interruptionGraceSeconds = 10;
 const int signalWaitResetSeconds = 10;
 const List<int> neededElectrodes = [1, 2];
-const Duration calibrationNarratorDuration = Duration(seconds: 7);
-const Duration confirmationChimeDuration = Duration(seconds: 1);
-const Duration calibrationAudioTimeout = Duration(seconds: 8);
-const Duration confirmationAudioTimeout = Duration(seconds: 3);
+const int calibrationBaselineSeconds = 90;
+const int adaptIntervalSeconds = 30;
+const Duration movementBuffer = Duration(seconds: 1);
+const Duration calibrationAudioTimeout = Duration(seconds: 15);
+const int defaultBaselinePercentile = 40;
 
 class FeedbackState {
   final FeedbackPhase phase;
@@ -36,6 +38,9 @@ class FeedbackState {
   final int? interruptionSecondsLeft;
   final bool waitingForSignal;
   final bool startAnywayAvailable;
+  final int baselineSecondsLeft;
+  final int baselinePercentile;
+  final double? currentThreshold;
 
   const FeedbackState({
     this.phase = FeedbackPhase.idle,
@@ -49,6 +54,9 @@ class FeedbackState {
     this.interruptionSecondsLeft,
     this.waitingForSignal = false,
     this.startAnywayAvailable = false,
+    this.baselineSecondsLeft = 0,
+    this.baselinePercentile = defaultBaselinePercentile,
+    this.currentThreshold,
   });
 
   static const Object _sentinel = Object();
@@ -65,6 +73,9 @@ class FeedbackState {
     Object? interruptionSecondsLeft = _sentinel,
     bool? waitingForSignal,
     bool? startAnywayAvailable,
+    int? baselineSecondsLeft,
+    int? baselinePercentile,
+    Object? currentThreshold = _sentinel,
   }) => FeedbackState(
     phase: phase ?? this.phase,
     protocol: protocol ?? this.protocol,
@@ -81,6 +92,11 @@ class FeedbackState {
         : interruptionSecondsLeft as int?,
     waitingForSignal: waitingForSignal ?? this.waitingForSignal,
     startAnywayAvailable: startAnywayAvailable ?? this.startAnywayAvailable,
+    baselineSecondsLeft: baselineSecondsLeft ?? this.baselineSecondsLeft,
+    baselinePercentile: baselinePercentile ?? this.baselinePercentile,
+    currentThreshold: identical(currentThreshold, _sentinel)
+        ? this.currentThreshold
+        : currentThreshold as double?,
   );
 }
 
@@ -95,6 +111,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   ProviderSubscription<AppUiState>? _appSub;
   Timer? _ticker;
   Timer? _interruptTimer;
+  Timer? _baselineTimer;
   FeedbackInterruptKind? _interruptKind;
   bool _interruptWasPlaying = false;
   int _interruptionLeft = interruptionGraceSeconds;
@@ -102,7 +119,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   String? _lastQualityKey;
   int _waitingSeconds = 0;
   bool _bypassSignalGate = false;
+  DateTime _lastMovementAt = DateTime.fromMillisecondsSinceEpoch(0);
+  int _adaptTick = 0;
   final TargetStateAggregator _target = TargetStateAggregator();
+  final AtrEngine _atr = AtrEngine();
   final FeedbackRecorder _recorder = FeedbackRecorder();
 
   AudioService get _audio => _ref.read(audioServiceProvider);
@@ -119,7 +139,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     state = state.copyWith(soundName: name);
   }
 
-  /// Begin calibration: play narrator, confirm with chime, then wait for a
+  void selectPercentile(int percentile) {
+    _atr.percentile = percentile;
+    state = state.copyWith(baselinePercentile: percentile);
+  }
+
+  /// Begin calibration: play the voice intro, then record a [calibrationBaselineSeconds]
+  /// silent baseline to derive the personalized ATR threshold, then wait for a
   /// stable signal to auto-start feedback. Opens the connect window if the
   /// Muse is not connected. Calibration only proceeds once all electrodes
   /// are green; with a defective electrode the user can start anyway after
@@ -129,12 +155,19 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
       return;
     }
+    if (state.phase == FeedbackPhase.playing ||
+        state.phase == FeedbackPhase.paused) {
+      _ticker?.cancel();
+      _audio.stop();
+    }
     state = state.copyWith(
       phase: FeedbackPhase.calibrating,
       elapsedSeconds: 0,
       signalStableSeconds: 0,
       waitingForSignal: false,
       startAnywayAvailable: false,
+      baselineSecondsLeft: 0,
+      currentThreshold: null,
     );
     await _runCalibration();
   }
@@ -150,19 +183,47 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       state = state.copyWith(waitingForSignal: true, startAnywayAvailable: false);
       return;
     }
+    _atr.reset();
     await _audio.playCalibration().timeout(
       calibrationAudioTimeout,
       onTimeout: () {},
     );
-    await Future<void>.delayed(calibrationNarratorDuration);
-    await _audio.playConfirmation().timeout(
-      confirmationAudioTimeout,
-      onTimeout: () {},
-    );
-    await Future<void>.delayed(confirmationChimeDuration);
     if (state.phase != FeedbackPhase.calibrating) {
       return;
     }
+    _startBaseline();
+  }
+
+  void _startBaseline() {
+    _baselineTimer?.cancel();
+    state = state.copyWith(
+      baselineSecondsLeft: calibrationBaselineSeconds,
+      waitingForSignal: false,
+      startAnywayAvailable: false,
+    );
+    _baselineTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final left = state.baselineSecondsLeft - 1;
+      if (left <= 0) {
+        _finishCalibration();
+      } else {
+        state = state.copyWith(baselineSecondsLeft: left);
+      }
+    });
+  }
+
+  void _finishCalibration() {
+    _baselineTimer?.cancel();
+    _baselineTimer = null;
+    if (state.phase != FeedbackPhase.calibrating) {
+      return;
+    }
+    final threshold = _atr.computeThreshold();
+    debugPrint('[feedback] baseline ATR threshold = $threshold '
+        '(${_atr.baselineCount} samples, p${_atr.percentile})');
+    state = state.copyWith(
+      baselineSecondsLeft: 0,
+      currentThreshold: threshold,
+    );
     if (_bypassSignalGate) {
       _bypassSignalGate = false;
       state = state.copyWith(
@@ -204,8 +265,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
       return;
     }
-    state = state.copyWith(phase: FeedbackPhase.playing, signalStableSeconds: 0);
+    state = state.copyWith(
+      phase: FeedbackPhase.playing,
+      signalStableSeconds: 0,
+      currentThreshold: _atr.threshold,
+    );
     _target.reset();
+    _adaptTick = 0;
     await _recorder.startSession();
     await _audio.playFeedback(sound: state.soundName);
     _startTicker();
@@ -232,6 +298,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _ticker?.cancel();
     _interruptTimer?.cancel();
     _interruptTimer = null;
+    _baselineTimer?.cancel();
+    _baselineTimer = null;
     state = state.copyWith(phase: FeedbackPhase.ended);
     await _recorder.flushSession();
     await _audio.stop();
@@ -242,11 +310,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _ticker?.cancel();
     _interruptTimer?.cancel();
     _interruptTimer = null;
+    _baselineTimer?.cancel();
+    _baselineTimer = null;
     _lastQualityKey = null;
     _waitingSeconds = 0;
     _bypassSignalGate = false;
+    _adaptTick = 0;
     _audio.stop();
     _recorder.discardSession();
+    _atr.reset();
+    _target.reset();
     state = const FeedbackState();
   }
 
@@ -264,6 +337,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         return;
       }
       state = state.copyWith(elapsedSeconds: state.elapsedSeconds + 1);
+      _adaptTick++;
+      if (_adaptTick >= adaptIntervalSeconds) {
+        _adaptTick = 0;
+        _atr.adapt();
+        state = state.copyWith(currentThreshold: _atr.threshold);
+      }
     });
   }
 
@@ -446,21 +525,36 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   void _onBands(BandsDto bands) {
-    if (state.phase != FeedbackPhase.playing) {
-      return;
-    }
     _target.update(bands);
     final target = _target.evaluate();
     if (target == null) {
       return;
     }
-    _audio.onStateUpdate(isAlphaThetaTarget(
-      alphaRel: target.alphaRel,
-      thetaRel: target.thetaRel,
-    ));
+    if (state.phase == FeedbackPhase.calibrating &&
+        state.baselineSecondsLeft > 0) {
+      if (DateTime.now().difference(_lastMovementAt) >= movementBuffer) {
+        final atr = target.atr;
+        if (atr.isFinite) {
+          _atr.addBaselineSample(atr);
+        }
+      }
+      return;
+    }
+    if (state.phase != FeedbackPhase.playing) {
+      return;
+    }
+    final atr = target.atr;
+    if (!atr.isFinite) {
+      return;
+    }
+    _atr.recordEpoch(atr);
+    _audio.onStateUpdate(_atr.isInTarget(atr));
   }
 
   void _onMovement(MovementDto movement) {
+    if (movement.score > movementGateThreshold) {
+      _lastMovementAt = DateTime.now();
+    }
     if (state.phase != FeedbackPhase.playing) {
       return;
     }
@@ -495,6 +589,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   void dispose() {
     _ticker?.cancel();
     _interruptTimer?.cancel();
+    _baselineTimer?.cancel();
     _eventSub?.cancel();
     _appSub?.close();
     super.dispose();

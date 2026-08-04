@@ -5,16 +5,13 @@ class AudioService {
   final FeedbackAudioController _controller = FeedbackAudioController();
 
   static const Map<String, String> soundAssets = {
-    'Ambient Drone':
-        'assets/audio/drone/859763__kkenny101__drone-loop-ambient-background-texture.opus',
+    'Ambient Drone': FeedbackAudioController.feedbackDroneAsset,
     'Rain': 'assets/audio/rain/346562__lebaston100__rain-without-thunder.opus',
   };
 
   List<String> get availableSounds => soundAssets.keys.toList();
 
   Future<void> playCalibration() => _controller.playCalibration();
-
-  Future<void> playConfirmation() => _controller.playConfirmation();
 
   Future<void> playFeedback({String sound = 'Ambient Drone'}) {
     final path = soundAssets[sound] ?? soundAssets.values.first;

@@ -64,6 +64,8 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
               _TimerSelector(),
               const SizedBox(height: 12),
               _SoundSelector(),
+              const SizedBox(height: 12),
+              _PercentileSelector(),
               if (!connected) ...[
                 const SizedBox(height: 12),
                 Row(
@@ -185,6 +187,24 @@ class _PhaseControls extends ConsumerWidget {
                   ),
                 ),
               ],
+            ] else if (fb.baselineSecondsLeft > 0) ...[
+              Icon(Icons.graphic_eq, color: theme.colorScheme.primary, size: 48),
+              const SizedBox(height: 8),
+              Text(
+                'Recording baseline…',
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Sit quietly, let your mind wander. ${fb.baselineSecondsLeft}s',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              LinearProgressIndicator(
+                value: (calibrationBaselineSeconds - fb.baselineSecondsLeft) /
+                    calibrationBaselineSeconds,
+              ),
             ] else ...[
               const LinearProgressIndicator(),
               const SizedBox(height: 8),
@@ -454,6 +474,124 @@ class _DurationPickerState extends State<_DurationPicker> {
             );
           }).toList(),
         ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_selected),
+          child: const Text('Select'),
+        ),
+      ],
+    );
+  }
+}
+
+class _PercentileSelector extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fb = ref.watch(feedbackStateProvider);
+    return Card(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: ListTile(
+        leading: const Icon(Icons.center_focus_strong),
+        title: const Text('Reward Threshold'),
+        subtitle: Text('Baseline ${fb.baselinePercentile}th percentile'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () async {
+          final result = await showDialog<int>(
+            context: context,
+            builder: (ctx) => _PercentilePicker(current: fb.baselinePercentile),
+          );
+          if (result != null) {
+            ref.read(feedbackStateProvider.notifier).selectPercentile(result);
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _PercentilePicker extends StatefulWidget {
+  final int current;
+  const _PercentilePicker({required this.current});
+
+  @override
+  State<_PercentilePicker> createState() => _PercentilePickerState();
+}
+
+class _PercentilePickerState extends State<_PercentilePicker> {
+  static const List<int> _values = [
+    5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95,
+  ];
+  late final FixedExtentScrollController _controller;
+  late int _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    var index = _values.indexOf(widget.current);
+    if (index < 0) index = _values.indexOf(defaultBaselinePercentile);
+    _selected = _values[index];
+    _controller = FixedExtentScrollController(initialItem: index);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Reward Threshold'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'The feedback chime fires when your Alpha/Theta ratio exceeds '
+            'this percentile of the 90s baseline. A lower percentile makes '
+            'rewards easier; higher makes them harder.',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: 140,
+            height: 200,
+            child: ListWheelScrollView(
+              controller: _controller,
+              itemExtent: 40,
+              useMagnifier: true,
+              perspective: 0.005,
+              diameterRatio: 1.5,
+              onSelectedItemChanged: (i) => _selected = _values[i],
+              children: _values.map((v) {
+                final isSel = v == _selected;
+                return Center(
+                  child: Text(
+                    '$v',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                      color: isSel
+                          ? null
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${_values.first}–${_values.last}',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
       ),
       actions: [
         TextButton(

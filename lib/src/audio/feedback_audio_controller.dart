@@ -7,20 +7,19 @@ class FeedbackAudioController {
   static const Duration movementBuffer = Duration(seconds: 1);
   static const Duration chimeAttack = Duration(milliseconds: 100);
   static const int maxPolyphony = 4;
-  static const double droneVolume = 0.35;
+  static const double droneVolume = 0.2;
 
   static const String calibrationAsset =
       'assets/audio/calibration/alpha-theta-ratio_short-clear.opus';
+  static const String feedbackDroneAsset =
+      'assets/audio/drone/845842__frame__complex-shifting-ambient-drone-8-1min.opus';
   static const String bowlLowAsset =
       'assets/audio/bowl/bowl_low-531269__asuriya__aud-10-ancient-tibet-bowl-pure-vibrations.opus';
   static const String bellAsset =
       'assets/audio/bell/864397__valerie-vivegnis__2607.opus';
-  static const String bowlHighAsset =
-      'assets/audio/bowl/bowl_high-421829__dersinnsspace__tibetan-bowl_center-hit.opus';
 
   final AudioPlayer _ambient = AudioPlayer();
   final AudioPlayer _calibration = AudioPlayer();
-  final AudioPlayer _confirmation = AudioPlayer();
   final AudioPlayer _bell = AudioPlayer();
   final List<AudioPlayer> _chimes =
       List.generate(maxPolyphony, (_) => AudioPlayer());
@@ -35,7 +34,10 @@ class FeedbackAudioController {
     try {
       await _calibration.setAsset(calibrationAsset);
       await _calibration.setLoopMode(LoopMode.off);
+      final done = _calibration.processingStateStream
+          .firstWhere((s) => s == ProcessingState.completed);
       await _calibration.play();
+      await done.timeout(const Duration(seconds: 15));
     } catch (e) {
       debugPrint('[audio] calibration playback failed: $e');
     }
@@ -82,16 +84,6 @@ class FeedbackAudioController {
     _movingUntil = DateTime.now().add(movementBuffer);
   }
 
-  Future<void> playConfirmation() async {
-    try {
-      await _confirmation.setAsset(bowlHighAsset);
-      await _confirmation.setLoopMode(LoopMode.off);
-      await _confirmation.play();
-    } catch (e) {
-      debugPrint('[audio] confirmation playback failed: $e');
-    }
-  }
-
   Future<void> playEndChime() async {
     try {
       await _bell.setAsset(bellAsset);
@@ -107,7 +99,6 @@ class FeedbackAudioController {
     await Future.wait([
       _ambient.stop(),
       _calibration.stop(),
-      _confirmation.stop(),
       _bell.stop(),
       for (final chime in _chimes) chime.stop(),
     ]);
@@ -116,7 +107,6 @@ class FeedbackAudioController {
   void dispose() {
     _ambient.dispose();
     _calibration.dispose();
-    _confirmation.dispose();
     _bell.dispose();
     for (final chime in _chimes) {
       chime.dispose();

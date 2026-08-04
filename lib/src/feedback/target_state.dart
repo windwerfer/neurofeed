@@ -5,13 +5,6 @@ const int electrodeAf8 = 2;
 
 const double movementGateThreshold = 0.05;
 
-class BaselineProfile {
-  const BaselineProfile({required this.alphaRel, required this.thetaRel});
-
-  final double alphaRel;
-  final double thetaRel;
-}
-
 class RelativeTarget {
   const RelativeTarget({
     required this.alphaRel,
@@ -24,19 +17,100 @@ class RelativeTarget {
   final double thetaRel;
   final double betaRel;
   final double gammaRel;
+
+  /// Alpha/Theta power ratio (ATR). Since both powers are relative to the
+  /// same total, this equals alpha/theta of the absolute powers and cancels
+  /// global amplitude drift.
+  double get atr {
+    if (thetaRel <= 0) {
+      return double.infinity;
+    }
+    return alphaRel / thetaRel;
+  }
 }
 
-/// v1 predicate: relative alpha power exceeds relative theta power on the
-/// AF7/AF8 average. v1.1: pass a BaselineProfile for a personalized threshold.
-bool isAlphaThetaTarget({
-  required double alphaRel,
-  required double thetaRel,
-  BaselineProfile? baseline,
-}) {
-  if (baseline != null) {
-    return alphaRel > baseline.alphaRel * 1.2;
+/// Continuous Alpha/Theta ratio (ATR) uptraining engine.
+///
+/// During calibration it collects clean ATR samples. The session threshold is
+/// the configurable percentile of that baseline distribution (e.g. 40th),
+/// which gives an initial reward rate of ~60%. During the session it adapts
+/// the threshold based on the recent success rate so the user stays in the
+/// learning zone.
+class AtrEngine {
+  static const int epochWindow = 30;
+  static const double highSuccessRate = 0.8;
+  static const double lowSuccessRate = 0.4;
+  static const double raiseFactor = 1.05;
+  static const double lowerFactor = 0.95;
+
+  int percentile;
+  final List<double> _baseline = [];
+  final List<bool> _epochs = [];
+  double? _threshold;
+
+  AtrEngine({this.percentile = 40});
+
+  bool get hasBaseline => _baseline.isNotEmpty;
+
+  int get baselineCount => _baseline.length;
+
+  double? get threshold => _threshold;
+
+  void reset() {
+    _baseline.clear();
+    _epochs.clear();
+    _threshold = null;
   }
-  return alphaRel > thetaRel;
+
+  void addBaselineSample(double atr) {
+    _baseline.add(atr);
+  }
+
+  /// Sorts the baseline ATR samples and picks the configured percentile as the
+  /// initial threshold. Returns null if there is no baseline data.
+  double? computeThreshold() {
+    if (_baseline.isEmpty) {
+      return null;
+    }
+    final sorted = [..._baseline]..sort();
+    final idx = ((percentile / 100) * (sorted.length - 1))
+        .round()
+        .clamp(0, sorted.length - 1);
+    _threshold = sorted[idx];
+    return _threshold;
+  }
+
+  bool isInTarget(double atr) {
+    final t = _threshold;
+    if (t == null) {
+      return atr > 1.0;
+    }
+    return atr > t;
+  }
+
+  void recordEpoch(double atr) {
+    _epochs.add(isInTarget(atr));
+    if (_epochs.length > epochWindow) {
+      _epochs.removeAt(0);
+    }
+  }
+
+  /// Adjusts the threshold based on the recent success rate (rolling window of
+  /// [epochWindow] epochs). Success above [highSuccessRate] means the task is
+  /// too easy (threshold raised); below [lowSuccessRate] too hard (threshold
+  /// lowered).
+  void adapt() {
+    final t = _threshold;
+    if (t == null || _epochs.length < epochWindow) {
+      return;
+    }
+    final success = _epochs.where((b) => b).length / _epochs.length;
+    if (success > highSuccessRate) {
+      _threshold = t * raiseFactor;
+    } else if (success < lowSuccessRate) {
+      _threshold = t * lowerFactor;
+    }
+  }
 }
 
 class TargetStateAggregator {
