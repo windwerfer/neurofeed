@@ -288,8 +288,27 @@ class _PhaseControls extends ConsumerWidget {
           children: [
             IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: () => ref.read(feedbackStateProvider.notifier).startCalibration(),
-              tooltip: 'Recalibrate',
+              tooltip: 'Recalibrate from last 90 s of clean signal',
+              onPressed: () {
+                final n = ref.read(feedbackStateProvider.notifier);
+                if (fb.elapsedSeconds < minRecalibrateSeconds) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                          'Recalibration needs at least $minRecalibrateSeconds s of session data.'),
+                    ),
+                  );
+                  return;
+                }
+                if (!n.recalibrate()) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                          'Not enough clean signal for recalibration yet — try again in a moment.'),
+                    ),
+                  );
+                }
+              },
             ),
             const SizedBox(width: 16),
             FilledButton.icon(

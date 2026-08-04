@@ -46,9 +46,14 @@ class AtrEngine {
   static const double raiseFactor = 1.05;
   static const double lowerFactor = 0.95;
 
+  /// Rolling window of recent session ATR samples (with a movement/artifact
+  /// flag), used for in-flight recalibration.
+  static const Duration recentWindow = Duration(seconds: 90);
+
   int percentile;
   final List<double> _baseline = [];
   final List<bool> _epochs = [];
+  final List<({DateTime time, double atr, bool clean})> _recent = [];
   double? _threshold;
 
   AtrEngine({this.percentile = 40});
@@ -91,6 +96,7 @@ class AtrEngine {
   void reset() {
     _baseline.clear();
     _epochs.clear();
+    _recent.clear();
     _threshold = null;
   }
 
@@ -135,6 +141,35 @@ class AtrEngine {
     if (_epochs.length > epochWindow) {
       _epochs.removeAt(0);
     }
+  }
+
+  /// Records a live session ATR sample for in-flight recalibration. Samples
+  /// older than [recentWindow] are pruned.
+  void recordSessionSample(double atr, {required bool clean}) {
+    final now = DateTime.now();
+    _recent.add((time: now, atr: atr, clean: clean));
+    _recent.removeWhere((s) => now.difference(s.time) > recentWindow);
+  }
+
+  /// Re-anchors the baseline from the clean samples in the recent rolling
+  /// window, recomputing the threshold at [percentile] and resetting the
+  /// success-rate window. Returns false when fewer than [minSamples] clean
+  /// samples are available.
+  bool recalibrateFromRecent({int minSamples = 30}) {
+    final now = DateTime.now();
+    final clean = _recent
+        .where((s) => now.difference(s.time) <= recentWindow && s.clean)
+        .map((s) => s.atr)
+        .toList();
+    if (clean.length < minSamples) {
+      return false;
+    }
+    _baseline
+      ..clear()
+      ..addAll(clean);
+    _epochs.clear();
+    computeThreshold();
+    return true;
   }
 
   /// Adjusts the threshold based on the recent success rate (rolling window of

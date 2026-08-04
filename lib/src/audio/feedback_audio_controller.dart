@@ -184,6 +184,18 @@ class FeedbackAudioController {
     }
   }
 
+  /// Soft, low indication that the threshold was re-anchored mid-session.
+  Future<void> playRecalibrateChime() async {
+    try {
+      await _bell.setAsset(bowlLowAsset);
+      await _bell.setLoopMode(LoopMode.off);
+      await _bell.setVolume(_feedbackVolumeTotal * 0.6);
+      await _bell.play();
+    } catch (e) {
+      debugPrint('[audio] recalibrate chime playback failed: $e');
+    }
+  }
+
   Future<void> stop() async {
     _resetRewardState();
     await Future.wait([

@@ -26,6 +26,8 @@ const int adaptIntervalSeconds = 30;
 const Duration movementBuffer = Duration(seconds: 1);
 const Duration calibrationAudioTimeout = Duration(seconds: 15);
 const int defaultBaselinePercentile = 40;
+const int minRecalibrateSeconds = 60;
+const int minRecalibrateSamples = 30;
 
 class FeedbackState {
   final FeedbackPhase phase;
@@ -203,6 +205,41 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       currentThreshold: null,
     );
     await _runCalibration();
+  }
+
+  /// In-flight re-anchoring: rebuilds the baseline from the recent clean
+  /// session ATR samples instead of running another silent calibration. Only
+  /// valid during playing/paused; returns false when the session is too young
+  /// or there are too few clean samples.
+  bool recalibrate() {
+    if (state.phase != FeedbackPhase.playing &&
+        state.phase != FeedbackPhase.paused) {
+      return false;
+    }
+    final ok = _atr.recalibrateFromRecent(minSamples: minRecalibrateSamples);
+    if (!ok) {
+      debugPrint(
+          '[feedback] in-flight recalibrate skipped at t=${state.elapsedSeconds}s: '
+          'fewer than $minRecalibrateSamples clean samples');
+      return false;
+    }
+    _adaptTick = 0;
+    final stats = _ref.read(liveStatsProvider);
+    stats
+      ..setBaseline(
+        percentile: _atr.percentile,
+        count: _atr.baselineCount,
+        mean: _atr.baselineMean,
+        stddev: _atr.baselineStddev,
+      )
+      ..setThreshold(_atr.threshold);
+    unawaited(_audio.playRecalibrateChime());
+    debugPrint('[feedback] in-flight recalibrate at t=${state.elapsedSeconds}s: '
+        'threshold -> ${_atr.threshold} (p${_atr.percentile}, '
+        'n=${_atr.baselineCount} clean samples, mean=${_atr.baselineMean}, '
+        'sd=${_atr.baselineStddev})');
+    state = state.copyWith(currentThreshold: _atr.threshold);
+    return true;
   }
 
   Future<void> _runCalibration() async {
@@ -601,6 +638,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     _atr.recordEpoch(atr);
+    _atr.recordSessionSample(
+      atr,
+      clean: DateTime.now().difference(_lastMovementAt) >= movementBuffer,
+    );
     _ref.read(liveStatsProvider).push(atr, _atr.percentileOf);
     _audio.onStateUpdate(_atr.isInTarget(atr));
   }
