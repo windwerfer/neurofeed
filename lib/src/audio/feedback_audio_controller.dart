@@ -10,7 +10,7 @@ class FeedbackAudioController {
   static const double droneVolume = 0.35;
 
   static const String calibrationAsset =
-      'assets/audio/calibration/grok_alpha_power-over-theta_power_01.opus';
+      'assets/audio/calibration/alpha-theta-ratio_short-clear.opus';
   static const String bowlLowAsset =
       'assets/audio/bowl/bowl_low-531269__asuriya__aud-10-ancient-tibet-bowl-pure-vibrations.opus';
   static const String bellAsset =
@@ -130,12 +130,15 @@ class FeedbackAudioController {
   }
 
   Future<void> _triggerChime() async {
-    for (final chime in _chimes) {
+    for (var i = 0; i < _chimes.length; i++) {
+      final chime = _chimes[i];
       if (_ramping.contains(chime) ||
           chime.playing ||
           chime.processingState == ProcessingState.loading) {
         continue;
       }
+      debugPrint(
+          '[chime] player $i starting at ${DateTime.now().toIso8601String()}');
       _ramping.add(chime);
       try {
         await chime.setAsset(bowlLowAsset);
@@ -150,6 +153,8 @@ class FeedbackAudioController {
         _ramping.remove(chime);
       }
     }
+    debugPrint(
+        '[chime] no free player at ${DateTime.now().toIso8601String()}');
   }
 
   Future<void> _rampVolume(AudioPlayer player, double target, Duration duration) async {
