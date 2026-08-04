@@ -1,8 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/feedback_audio_controller.dart';
+import 'package:muse_ml/src/settings.dart';
 
 class AudioService {
-  final FeedbackAudioController _controller = FeedbackAudioController();
+  final FeedbackAudioController _controller;
+
+  AudioService(Settings settings) : _controller = FeedbackAudioController(settings);
 
   static const Map<String, String> soundAssets = {
     'Ambient Drone': FeedbackAudioController.feedbackDroneAsset,
@@ -11,6 +14,20 @@ class AudioService {
   };
 
   List<String> get availableSounds => soundAssets.keys.toList();
+
+  double get masterVolume => _controller.masterVolume;
+
+  double get backgroundVolume => _controller.backgroundVolume;
+
+  double get feedbackVolume => _controller.feedbackVolume;
+
+  void setMasterVolume(double value) => _controller.setMasterVolume(value);
+
+  void setBackgroundVolume(double value) =>
+      _controller.setBackgroundVolume(value);
+
+  void setFeedbackVolume(double value) =>
+      _controller.setFeedbackVolume(value);
 
   Future<void> playCalibration() => _controller.playCalibration();
 
@@ -40,7 +57,7 @@ class AudioService {
 }
 
 final audioServiceProvider = Provider<AudioService>((ref) {
-  final service = AudioService();
+  final service = AudioService(ref.read(settingsProvider));
   ref.onDispose(() => service.dispose());
   return service;
 });

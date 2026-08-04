@@ -80,7 +80,13 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
             if (fb.phase == FeedbackPhase.idle ||
                 fb.phase == FeedbackPhase.playing ||
                 fb.phase == FeedbackPhase.paused) ...[
-              _SoundSelector(),
+              Row(
+                children: [
+                  Expanded(child: _SoundSelector()),
+                  const SizedBox(width: 8),
+                  const _VolumeButton(),
+                ],
+              ),
               const SizedBox(height: 12),
               _PercentileSelector(),
               if (fb.phase == FeedbackPhase.idle) ...[
@@ -445,6 +451,128 @@ class _SoundSelector extends ConsumerWidget {
               }
             : null,
       ),
+    );
+  }
+}
+
+class _VolumeButton extends ConsumerWidget {
+  const _VolumeButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final audio = ref.read(audioServiceProvider);
+    final theme = Theme.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: IconButton(
+        icon: const Icon(Icons.volume_up),
+        tooltip: 'Volume',
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (_) => _VolumeDialog(audio: audio),
+        ),
+      ),
+    );
+  }
+}
+
+class _VolumeDialog extends StatefulWidget {
+  final AudioService audio;
+  const _VolumeDialog({required this.audio});
+
+  @override
+  State<_VolumeDialog> createState() => _VolumeDialogState();
+}
+
+class _VolumeDialogState extends State<_VolumeDialog> {
+  late double _master;
+  late double _background;
+  late double _feedback;
+
+  @override
+  void initState() {
+    super.initState();
+    _master = widget.audio.masterVolume;
+    _background = widget.audio.backgroundVolume;
+    _feedback = widget.audio.feedbackVolume;
+  }
+
+  Widget _slider({
+    required IconData icon,
+    required String label,
+    required double value,
+    required ValueChanged<double> onChanged,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 20),
+        const SizedBox(width: 8),
+        SizedBox(width: 90, child: Text(label)),
+        Expanded(
+          child: Slider(
+            value: value,
+            onChanged: (v) {
+              setState(() {
+                if (label == 'Master') _master = v;
+                if (label == 'Background') _background = v;
+                if (label == 'Feedback') _feedback = v;
+              });
+              onChanged(v);
+            },
+          ),
+        ),
+        SizedBox(
+          width: 40,
+          child: Text(
+            '${(value * 100).round()}%',
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Volume'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _slider(
+            icon: Icons.speaker,
+            label: 'Master',
+            value: _master,
+            onChanged: widget.audio.setMasterVolume,
+          ),
+          _slider(
+            icon: Icons.music_note,
+            label: 'Background',
+            value: _background,
+            onChanged: widget.audio.setBackgroundVolume,
+          ),
+          _slider(
+            icon: Icons.notifications_active,
+            label: 'Feedback',
+            value: _feedback,
+            onChanged: widget.audio.setFeedbackVolume,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Feedback covers the bowl chimes, end chime and calibration '
+            'voice. Changes apply immediately and are remembered.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
+        ),
+      ],
     );
   }
 }

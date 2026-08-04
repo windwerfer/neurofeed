@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:muse_ml/src/settings.dart';
 
 class FeedbackAudioController {
   static const Duration targetHoldDuration = Duration(milliseconds: 2500);
@@ -31,11 +32,25 @@ class FeedbackAudioController {
   );
   final List<StreamSubscription<ProcessingState>> _chimeSubs = [];
 
-  FeedbackAudioController() {
+  DateTime? _inTargetSince;
+  DateTime _lastRewardAt = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _movingUntil = DateTime.fromMillisecondsSinceEpoch(0);
+  final Set<AudioPlayer> _ramping = {};
+
+  double _masterVolume = 1.0;
+  double _backgroundVolume = droneVolume;
+  double _feedbackVolume = 1.0;
+
+  FeedbackAudioController(Settings settings)
+      : _settings = settings {
+    _masterVolume = settings.masterVolume ?? 1.0;
+    _backgroundVolume = settings.backgroundVolume ?? droneVolume;
+    _feedbackVolume = settings.feedbackVolume ?? 1.0;
     for (final chime in _chimes) {
       _chimeSubs.add(
         chime.processingStateStream.listen((state) {
-          if (state == ProcessingState.completed && !_ramping.contains(chime)) {
+          if (state == ProcessingState.completed &&
+              !_ramping.contains(chime)) {
             _resetChime(chime);
           }
         }),
@@ -43,16 +58,57 @@ class FeedbackAudioController {
     }
   }
 
-  DateTime? _inTargetSince;
-  DateTime _lastRewardAt = DateTime.fromMillisecondsSinceEpoch(0);
-  DateTime _movingUntil = DateTime.fromMillisecondsSinceEpoch(0);
-  final Set<AudioPlayer> _ramping = {};
+  final Settings _settings;
+
+  double get masterVolume => _masterVolume;
+
+  double get backgroundVolume => _backgroundVolume;
+
+  double get feedbackVolume => _feedbackVolume;
+
+  double get _ambientVolume => _masterVolume * _backgroundVolume;
+
+  double get _feedbackVolumeTotal => _masterVolume * _feedbackVolume;
+
+  void setMasterVolume(double value) {
+    _masterVolume = value.clamp(0.0, 1.0);
+    _settings.setMasterVolume(_masterVolume);
+    _applyVolumes();
+  }
+
+  void setBackgroundVolume(double value) {
+    _backgroundVolume = value.clamp(0.0, 1.0);
+    _settings.setBackgroundVolume(_backgroundVolume);
+    _ambient.setVolume(_ambientVolume);
+  }
+
+  void setFeedbackVolume(double value) {
+    _feedbackVolume = value.clamp(0.0, 1.0);
+    _settings.setFeedbackVolume(_feedbackVolume);
+    _applyFeedbackVolumes();
+  }
+
+  void _applyVolumes() {
+    _ambient.setVolume(_ambientVolume);
+    _applyFeedbackVolumes();
+  }
+
+  void _applyFeedbackVolumes() {
+    _bell.setVolume(_feedbackVolumeTotal);
+    _calibration.setVolume(_feedbackVolumeTotal);
+    for (final chime in _chimes) {
+      if (!_ramping.contains(chime)) {
+        chime.setVolume(_feedbackVolumeTotal);
+      }
+    }
+  }
 
   Future<void> playCalibration() async {
     await stop();
     try {
       await _calibration.setAsset(calibrationAsset);
       await _calibration.setLoopMode(LoopMode.off);
+      await _calibration.setVolume(_feedbackVolumeTotal);
       final done = _calibration.processingStateStream.firstWhere(
         (s) => s == ProcessingState.completed,
       );
@@ -68,7 +124,7 @@ class FeedbackAudioController {
     try {
       await _ambient.setAsset(assetPath);
       await _ambient.setLoopMode(LoopMode.one);
-      await _ambient.setVolume(droneVolume);
+      await _ambient.setVolume(_ambientVolume);
       await _ambient.play();
     } catch (e) {
       debugPrint('[audio] background playback failed: $e');
@@ -85,7 +141,7 @@ class FeedbackAudioController {
     try {
       await _ambient.setAsset(assetPath);
       await _ambient.setLoopMode(LoopMode.one);
-      await _ambient.setVolume(droneVolume);
+      await _ambient.setVolume(_ambientVolume);
       await _ambient.play();
     } catch (e) {
       debugPrint('[audio] background switch failed: $e');
@@ -121,6 +177,7 @@ class FeedbackAudioController {
     try {
       await _bell.setAsset(bellAsset);
       await _bell.setLoopMode(LoopMode.off);
+      await _bell.setVolume(_feedbackVolumeTotal);
       await _bell.play();
     } catch (e) {
       debugPrint('[audio] end chime playback failed: $e');
@@ -172,7 +229,7 @@ class FeedbackAudioController {
         await chime.setLoopMode(LoopMode.off);
         await chime.setVolume(0);
         await chime.play();
-        await _rampVolume(chime, 1.0, chimeAttack);
+        await _rampVolume(chime, _feedbackVolumeTotal, chimeAttack);
         return;
       } catch (e) {
         debugPrint('[audio] chime playback failed: $e');

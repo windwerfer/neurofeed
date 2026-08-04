@@ -201,6 +201,7 @@ Future<void> main() async {
     ProviderScope(
       overrides: [
         appStateProvider.overrideWith((ref) => AppStateNotifier(settings)),
+        settingsProvider.overrideWithValue(settings),
       ],
       child: MaterialApp(
         title: 'Muse ML',
