@@ -37,7 +37,9 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-pc-windows-msvc
-          cache: true
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
 
       - name: Get version
         id: version

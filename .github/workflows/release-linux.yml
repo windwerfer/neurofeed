@@ -43,7 +43,9 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          cache: true
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
 
       - name: Get version
         id: version
