@@ -112,6 +112,21 @@ class FeedbackAudioController {
     _bell.setVolume(_bellVolumeTotal);
   }
 
+  void resetVolumes() {
+    _masterVolume = 1.0;
+    _backgroundVolume = droneVolume;
+    _feedbackVolume = 1.0;
+    _introVolume = 1.0;
+    _bellVolume = 1.0;
+    _settings
+      ..setMasterVolume(_masterVolume)
+      ..setBackgroundVolume(_backgroundVolume)
+      ..setFeedbackVolume(_feedbackVolume)
+      ..setIntroVolume(_introVolume)
+      ..setBellVolume(_bellVolume);
+    _applyVolumes();
+  }
+
   void _applyVolumes() {
     _ambient.setVolume(_ambientVolume);
     _applyFeedbackVolumes();

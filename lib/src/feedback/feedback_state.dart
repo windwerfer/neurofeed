@@ -9,6 +9,7 @@ import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:muse_ml/src/settings.dart';
 
 enum FeedbackPhase { idle, calibrating, ready, playing, paused, interrupted, ended }
 
@@ -111,6 +112,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   FeedbackStateNotifier(this._ref) : super(const FeedbackState()) {
     _eventSub = _ref.read(appStateProvider.notifier).eventStream.listen(_onEvent);
     _appSub = _ref.listen<AppUiState>(appStateProvider, _onAppState);
+    final settings = _ref.read(settingsProvider);
+    _atr.setDynamicAdapt(settings.dynamicAdapt ?? true);
+    _atr.setResponsiveness(settings.responsiveness ?? 0.5);
+    state = state.copyWith(
+      soundName: settings.soundName ?? state.soundName,
+      durationMinutes: settings.durationMinutes ?? state.durationMinutes,
+    );
   }
 
   final Ref _ref;
@@ -140,10 +148,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   void selectDuration(int minutes) {
     state = state.copyWith(durationMinutes: minutes);
+    _ref.read(settingsProvider).setDurationMinutes(minutes);
   }
 
   void selectSound(String name) {
     state = state.copyWith(soundName: name);
+    _ref.read(settingsProvider).setSoundName(name);
     if (state.phase == FeedbackPhase.playing ||
         state.phase == FeedbackPhase.paused) {
       unawaited(_switchSoundWhileKeepingPhase(name));
@@ -177,6 +187,25 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   void toggleNerdStats() {
     state = state.copyWith(showNerdStats: !state.showNerdStats);
+  }
+
+  bool get dynamicAdapt => _atr.dynamicAdapt;
+
+  double get responsiveness => _atr.responsiveness;
+
+  void setDynamicAdapt(bool enabled) {
+    _atr.setDynamicAdapt(enabled);
+    _ref.read(settingsProvider).setDynamicAdapt(enabled);
+  }
+
+  void setResponsiveness(double value) {
+    _atr.setResponsiveness(value);
+    _ref.read(settingsProvider).setResponsiveness(value);
+  }
+
+  void resetTargetSettings() {
+    setDynamicAdapt(true);
+    setResponsiveness(0.5);
   }
 
   /// Begin calibration: play the voice intro, then record a [calibrationBaselineSeconds]

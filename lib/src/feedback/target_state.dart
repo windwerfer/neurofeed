@@ -40,11 +40,13 @@ class RelativeTarget {
 /// the threshold based on the recent success rate so the user stays in the
 /// learning zone.
 class AtrEngine {
-  static const int epochWindow = 30;
+  /// Success-rate window in feedback epochs (~10 Hz, so this covers ~30 s).
+  static const int epochWindow = 300;
   static const double highSuccessRate = 0.8;
   static const double lowSuccessRate = 0.4;
-  static const double raiseFactor = 1.05;
-  static const double lowerFactor = 0.95;
+
+  /// Ceiling for dynamic adaptation, relative to the baseline stats.
+  static const double ceilingStddevs = 1.5;
 
   /// Rolling window of recent session ATR samples (with a movement/artifact
   /// flag), used for in-flight recalibration.
@@ -55,6 +57,9 @@ class AtrEngine {
   final List<bool> _epochs = [];
   final List<({DateTime time, double atr, bool clean})> _recent = [];
   double? _threshold;
+  double? _initialThreshold;
+  bool _dynamicAdapt = true;
+  double _responsiveness = 0.5;
 
   AtrEngine({this.percentile = 40});
 
@@ -63,6 +68,17 @@ class AtrEngine {
   int get baselineCount => _baseline.length;
 
   double? get threshold => _threshold;
+
+  bool get dynamicAdapt => _dynamicAdapt;
+
+  double get responsiveness => _responsiveness;
+
+  /// Raise/lower step derived from the responsiveness setting (gentle →
+  /// responsive: raise 1.01–1.03, lower 0.97–0.90).
+  (double raise, double lower) get _steps {
+    final r = _responsiveness.clamp(0.0, 1.0).toDouble();
+    return (1.01 + 0.02 * r, 1.0 - (0.03 + 0.07 * r));
+  }
 
   /// Mean of the baseline ATR samples.
   double? get baselineMean {
@@ -98,6 +114,15 @@ class AtrEngine {
     _epochs.clear();
     _recent.clear();
     _threshold = null;
+    _initialThreshold = null;
+  }
+
+  void setDynamicAdapt(bool enabled) {
+    _dynamicAdapt = enabled;
+  }
+
+  void setResponsiveness(double value) {
+    _responsiveness = value.clamp(0.0, 1.0).toDouble();
   }
 
   void addBaselineSample(double atr) {
@@ -115,6 +140,7 @@ class AtrEngine {
         .round()
         .clamp(0, sorted.length - 1);
     _threshold = sorted[idx];
+    _initialThreshold ??= _threshold;
     return _threshold;
   }
 
@@ -168,6 +194,7 @@ class AtrEngine {
       ..clear()
       ..addAll(clean);
     _epochs.clear();
+    _initialThreshold = null;
     computeThreshold();
     return true;
   }
@@ -175,21 +202,42 @@ class AtrEngine {
   /// Adjusts the threshold based on the recent success rate (rolling window of
   /// [epochWindow] epochs). Success above [highSuccessRate] means the task is
   /// too easy (threshold raised); below [lowSuccessRate] too hard (threshold
-  /// lowered).
+  /// lowered). The threshold is clamped between the baseline percentile and
+  /// baselineMean + [ceilingStddevs] standard deviations so it can never race
+  /// beyond what the user can physically produce, and a zero-success window
+  /// immediately resets it to the baseline percentile (circuit breaker).
   void adapt() {
-    final t = _threshold;
-    if (t == null || _epochs.length < epochWindow) {
+    if (!_dynamicAdapt) {
       return;
     }
+    final t = _threshold;
+    final initial = _initialThreshold;
+    if (t == null ||
+        initial == null ||
+        _epochs.length < epochWindow) {
+      return;
+    }
+    final mean = baselineMean;
+    final sd = baselineStddev;
+    final (raise, lower) = _steps;
+    final maxAllowed = mean == null || sd == null
+        ? t * raise
+        : mean + ceilingStddevs * sd;
     final success = _epochs.where((b) => b).length / _epochs.length;
-    if (success > highSuccessRate) {
-      _threshold = t * raiseFactor;
+    if (success == 0.0) {
+      _threshold = initial;
+      debugPrint('[atr] adapt: success=0.0 — circuit breaker, '
+          'threshold $t -> $initial');
+    } else if (success > highSuccessRate) {
+      final next = (t * raise).clamp(initial, maxAllowed).toDouble();
+      _threshold = next;
       debugPrint('[atr] adapt: success=$success > $highSuccessRate '
-          'threshold $t -> $_threshold');
+          'threshold $t -> $next (ceiling $maxAllowed)');
     } else if (success < lowSuccessRate) {
-      _threshold = t * lowerFactor;
+      final next = (t * lower).clamp(initial, maxAllowed).toDouble();
+      _threshold = next;
       debugPrint('[atr] adapt: success=$success < $lowSuccessRate '
-          'threshold $t -> $_threshold');
+          'threshold $t -> $next (floor $initial)');
     } else {
       debugPrint('[atr] adapt: success=$success in zone, '
           'threshold stays $t');

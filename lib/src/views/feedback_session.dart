@@ -85,6 +85,8 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
                   Expanded(child: _SoundSelector()),
                   const SizedBox(width: 8),
                   const _VolumeButton(),
+                  const SizedBox(width: 4),
+                  const _TargetSettingsButton(),
                 ],
               ),
               const SizedBox(height: 12),
@@ -558,6 +560,17 @@ class _VolumeDialogState extends State<_VolumeDialog> {
     );
   }
 
+  void _reset() {
+    widget.audio.resetVolumes();
+    setState(() {
+      _master = widget.audio.masterVolume;
+      _background = widget.audio.backgroundVolume;
+      _feedback = widget.audio.feedbackVolume;
+      _intro = widget.audio.introVolume;
+      _bell = widget.audio.bellVolume;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -606,6 +619,10 @@ class _VolumeDialogState extends State<_VolumeDialog> {
       ),
       actions: [
         TextButton(
+          onPressed: _reset,
+          child: const Text('Reset'),
+        ),
+        TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Done'),
         ),
@@ -614,7 +631,169 @@ class _VolumeDialogState extends State<_VolumeDialog> {
   }
 }
 
-class _SoundPicker extends StatelessWidget {
+class _TargetSettingsButton extends ConsumerWidget {
+  const _TargetSettingsButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: IconButton(
+        icon: const Icon(Icons.settings),
+        tooltip: 'Target settings',
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (_) => const _TargetSettingsDialog(),
+        ),
+      ),
+    );
+  }
+}
+
+class _TargetSettingsDialog extends ConsumerStatefulWidget {
+  const _TargetSettingsDialog();
+
+  @override
+  ConsumerState<_TargetSettingsDialog> createState() =>
+      _TargetSettingsDialogState();
+}
+
+class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
+  late bool _dynamicAdapt;
+  late double _responsiveness;
+
+  @override
+  void initState() {
+    super.initState();
+    final engine = ref.read(feedbackStateProvider.notifier);
+    _dynamicAdapt = engine.dynamicAdapt;
+    _responsiveness = engine.responsiveness;
+  }
+
+  void _reset() {
+    final notifier = ref.read(feedbackStateProvider.notifier);
+    notifier.resetTargetSettings();
+    setState(() {
+      _dynamicAdapt = notifier.dynamicAdapt;
+      _responsiveness = notifier.responsiveness;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final notifier = ref.read(feedbackStateProvider.notifier);
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Expanded(child: Text('Target Settings')),
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            tooltip: 'What do these do?',
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => const _TargetSettingsInfoDialog(),
+            ),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Dynamic target'),
+            subtitle: const Text('Let the target follow your performance'),
+            value: _dynamicAdapt,
+            onChanged: (v) {
+              setState(() => _dynamicAdapt = v);
+              notifier.setDynamicAdapt(v);
+            },
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const SizedBox(width: 12, child: Text('Gentle')),
+              Expanded(
+                child: Slider(
+                  value: _responsiveness,
+                  onChanged: (v) {
+                    setState(() => _responsiveness = v);
+                    notifier.setResponsiveness(v);
+                  },
+                ),
+              ),
+              const SizedBox(width: 12, child: Text('Responsive')),
+            ],
+          ),
+          Text(
+            'How quickly the target adapts to you',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _reset,
+          child: const Text('Reset'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+}
+
+class _TargetSettingsInfoDialog extends StatelessWidget {
+  const _TargetSettingsInfoDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('What do these do?'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Dynamic target', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'When on, the app gently moves your target based on how often '
+              'you reach it — it raises it a little when you are often in the '
+              'zone, and lowers it (or resets it) if you miss too often. '
+              'Turn it off to keep your calibrated target fixed for the whole '
+              'session.',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Text('Gentle ↔ Responsive', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'How quickly the target follows you. Gentle takes small, '
+              'cautious steps; Responsive moves faster, forgiving misses '
+              'sooner. If the target ever feels unreachable, slide towards '
+              'Gentle or turn Dynamic target off — the target is always '
+              'kept within reach of your baseline.',
+              style: theme.textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Got it'),
+        ),
+      ],
+    );
+  }
+}
   final String current;
   final List<String> sounds;
   const _SoundPicker({required this.current, required this.sounds});

@@ -37,6 +37,8 @@ class AudioService {
 
   void setBellVolume(double value) => _controller.setBellVolume(value);
 
+  void resetVolumes() => _controller.resetVolumes();
+
   Future<void> playCalibration() => _controller.playCalibration();
 
   Future<void> playFeedback({String sound = 'Ambient Drone'}) {

@@ -45,6 +45,10 @@ class Settings {
   static const String _feedbackVolumeKey = 'feedback_volume';
   static const String _introVolumeKey = 'intro_volume';
   static const String _bellVolumeKey = 'bell_volume';
+  static const String _dynamicAdaptKey = 'dynamic_adapt';
+  static const String _responsivenessKey = 'responsiveness';
+  static const String _soundNameKey = 'sound_name';
+  static const String _durationMinutesKey = 'duration_minutes';
 
   final SharedPreferences _prefs;
 
@@ -87,6 +91,26 @@ class Settings {
 
   Future<void> setBellVolume(double value) =>
       _prefs.setDouble(_bellVolumeKey, value);
+
+  bool? get dynamicAdapt => _prefs.getBool(_dynamicAdaptKey);
+
+  Future<void> setDynamicAdapt(bool value) =>
+      _prefs.setBool(_dynamicAdaptKey, value);
+
+  double? get responsiveness => _prefs.getDouble(_responsivenessKey);
+
+  Future<void> setResponsiveness(double value) =>
+      _prefs.setDouble(_responsivenessKey, value);
+
+  String? get soundName => _prefs.getString(_soundNameKey);
+
+  Future<void> setSoundName(String value) =>
+      _prefs.setString(_soundNameKey, value);
+
+  int? get durationMinutes => _prefs.getInt(_durationMinutesKey);
+
+  Future<void> setDurationMinutes(int value) =>
+      _prefs.setInt(_durationMinutesKey, value);
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and
