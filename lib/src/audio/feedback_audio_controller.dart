@@ -303,12 +303,13 @@ class FeedbackAudioController {
 
   Future<void> _rampVolume(
     AudioPlayer player,
+    double start,
     double target,
     Duration duration,
   ) async {
     const steps = 5;
     for (var i = 1; i <= steps; i++) {
-      await player.setVolume(target * i / steps);
+      await player.setVolume(start + (target - start) * i / steps);
       await Future<void>.delayed(duration ~/ steps);
     }
   }
