@@ -88,6 +88,16 @@ class AtrEngine {
     return atr > t;
   }
 
+  /// Percentile rank of [value] within the baseline distribution, or null if
+  /// there is no baseline yet.
+  double? percentileOf(double value) {
+    if (_baseline.isEmpty) {
+      return null;
+    }
+    final below = _baseline.where((s) => s < value).length;
+    return (below / _baseline.length) * 100;
+  }
+
   void recordEpoch(double atr) {
     _epochs.add(isInTarget(atr));
     if (_epochs.length > epochWindow) {

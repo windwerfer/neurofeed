@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -6,13 +8,15 @@ class FeedbackAudioController {
   static const Duration rewardCooldown = Duration(seconds: 8);
   static const Duration movementBuffer = Duration(seconds: 1);
   static const Duration chimeAttack = Duration(milliseconds: 100);
-  static const int maxPolyphony = 4;
-  static const double droneVolume = 0.2;
+  static const int maxPolyphony = 10;
+  static const double droneVolume = 0.5;
 
   static const String calibrationAsset =
       'assets/audio/calibration/alpha-theta-ratio_short-clear.opus';
   static const String feedbackDroneAsset =
       'assets/audio/drone/845842__frame__complex-shifting-ambient-drone-8-1min.opus';
+  static const String droneLoopAsset =
+      'assets/audio/drone/859763__kkenny101__drone-loop-ambient-background-texture.opus';
   static const String bowlLowAsset =
       'assets/audio/bowl/bowl_low-531269__asuriya__aud-10-ancient-tibet-bowl-pure-vibrations.opus';
   static const String bellAsset =
@@ -21,8 +25,23 @@ class FeedbackAudioController {
   final AudioPlayer _ambient = AudioPlayer();
   final AudioPlayer _calibration = AudioPlayer();
   final AudioPlayer _bell = AudioPlayer();
-  final List<AudioPlayer> _chimes =
-      List.generate(maxPolyphony, (_) => AudioPlayer());
+  final List<AudioPlayer> _chimes = List.generate(
+    maxPolyphony,
+    (_) => AudioPlayer(),
+  );
+  final List<StreamSubscription<ProcessingState>> _chimeSubs = [];
+
+  FeedbackAudioController() {
+    for (final chime in _chimes) {
+      _chimeSubs.add(
+        chime.processingStateStream.listen((state) {
+          if (state == ProcessingState.completed && !_ramping.contains(chime)) {
+            _resetChime(chime);
+          }
+        }),
+      );
+    }
+  }
 
   DateTime? _inTargetSince;
   DateTime _lastRewardAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -34,8 +53,9 @@ class FeedbackAudioController {
     try {
       await _calibration.setAsset(calibrationAsset);
       await _calibration.setLoopMode(LoopMode.off);
-      final done = _calibration.processingStateStream
-          .firstWhere((s) => s == ProcessingState.completed);
+      final done = _calibration.processingStateStream.firstWhere(
+        (s) => s == ProcessingState.completed,
+      );
       await _calibration.play();
       await done.timeout(const Duration(seconds: 15));
     } catch (e) {
@@ -58,6 +78,19 @@ class FeedbackAudioController {
   Future<void> pauseBackground() => _ambient.pause();
 
   Future<void> resumeBackground() => _ambient.play();
+
+  /// Switches the ambient loop to a different asset mid-session without
+  /// touching the reward state machine.
+  Future<void> switchBackground(String assetPath) async {
+    try {
+      await _ambient.setAsset(assetPath);
+      await _ambient.setLoopMode(LoopMode.one);
+      await _ambient.setVolume(droneVolume);
+      await _ambient.play();
+    } catch (e) {
+      debugPrint('[audio] background switch failed: $e');
+    }
+  }
 
   void onStateUpdate(bool inTarget) {
     if (!inTarget) {
@@ -105,6 +138,9 @@ class FeedbackAudioController {
   }
 
   void dispose() {
+    for (final sub in _chimeSubs) {
+      sub.cancel();
+    }
     _ambient.dispose();
     _calibration.dispose();
     _bell.dispose();
@@ -128,7 +164,8 @@ class FeedbackAudioController {
         continue;
       }
       debugPrint(
-          '[chime] player $i starting at ${DateTime.now().toIso8601String()}');
+        '[chime] player $i starting at ${DateTime.now().toIso8601String()}',
+      );
       _ramping.add(chime);
       try {
         await chime.setAsset(bowlLowAsset);
@@ -143,11 +180,23 @@ class FeedbackAudioController {
         _ramping.remove(chime);
       }
     }
-    debugPrint(
-        '[chime] no free player at ${DateTime.now().toIso8601String()}');
+    debugPrint('[chime] no free player at ${DateTime.now().toIso8601String()}');
   }
 
-  Future<void> _rampVolume(AudioPlayer player, double target, Duration duration) async {
+  Future<void> _resetChime(AudioPlayer chime) async {
+    try {
+      await chime.pause();
+      await chime.seek(Duration.zero);
+    } catch (e) {
+      debugPrint('[audio] chime reset failed: $e');
+    }
+  }
+
+  Future<void> _rampVolume(
+    AudioPlayer player,
+    double target,
+    Duration duration,
+  ) async {
     const steps = 5;
     for (var i = 1; i <= steps; i++) {
       await player.setVolume(target * i / steps);

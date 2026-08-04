@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_recorder.dart';
+import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
@@ -41,6 +42,7 @@ class FeedbackState {
   final int baselineSecondsLeft;
   final int baselinePercentile;
   final double? currentThreshold;
+  final bool showNerdStats;
 
   const FeedbackState({
     this.phase = FeedbackPhase.idle,
@@ -57,6 +59,7 @@ class FeedbackState {
     this.baselineSecondsLeft = 0,
     this.baselinePercentile = defaultBaselinePercentile,
     this.currentThreshold,
+    this.showNerdStats = false,
   });
 
   static const Object _sentinel = Object();
@@ -76,6 +79,7 @@ class FeedbackState {
     int? baselineSecondsLeft,
     int? baselinePercentile,
     Object? currentThreshold = _sentinel,
+    bool? showNerdStats,
   }) => FeedbackState(
     phase: phase ?? this.phase,
     protocol: protocol ?? this.protocol,
@@ -97,6 +101,7 @@ class FeedbackState {
     currentThreshold: identical(currentThreshold, _sentinel)
         ? this.currentThreshold
         : currentThreshold as double?,
+    showNerdStats: showNerdStats ?? this.showNerdStats,
   );
 }
 
@@ -137,11 +142,31 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   void selectSound(String name) {
     state = state.copyWith(soundName: name);
+    if (state.phase == FeedbackPhase.playing ||
+        state.phase == FeedbackPhase.paused) {
+      unawaited(_switchSoundWhileKeepingPhase(name));
+    }
+  }
+
+  Future<void> _switchSoundWhileKeepingPhase(String name) async {
+    await _audio.switchSound(name);
+    if (state.phase == FeedbackPhase.paused) {
+      await _audio.pause();
+    }
   }
 
   void selectPercentile(int percentile) {
     _atr.percentile = percentile;
     state = state.copyWith(baselinePercentile: percentile);
+    if (state.phase == FeedbackPhase.playing ||
+        state.phase == FeedbackPhase.paused) {
+      _atr.computeThreshold();
+      state = state.copyWith(currentThreshold: _atr.threshold);
+    }
+  }
+
+  void toggleNerdStats() {
+    state = state.copyWith(showNerdStats: !state.showNerdStats);
   }
 
   /// Begin calibration: play the voice intro, then record a [calibrationBaselineSeconds]
@@ -320,6 +345,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _recorder.discardSession();
     _atr.reset();
     _target.reset();
+    _ref.read(liveStatsProvider).reset();
     state = const FeedbackState();
   }
 
@@ -548,6 +574,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     _atr.recordEpoch(atr);
+    _ref.read(liveStatsProvider).push(atr, _atr.percentileOf);
     _audio.onStateUpdate(_atr.isInTarget(atr));
   }
 

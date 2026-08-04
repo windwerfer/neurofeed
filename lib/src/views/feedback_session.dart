@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
+import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/status_bar.dart';
 import 'package:muse_ml/src/views/feedback_dashboard.dart';
@@ -43,6 +44,15 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
         title: Text(protocol.title),
         actions: [
           IconButton(
+            icon: Icon(
+              fb.showNerdStats ? Icons.science : Icons.science_outlined,
+            ),
+            tooltip: 'Nerd stats',
+            isSelected: fb.showNerdStats,
+            onPressed: () =>
+                ref.read(feedbackStateProvider.notifier).toggleNerdStats(),
+          ),
+          IconButton(
             icon: const Icon(Icons.info_outline),
             onPressed: () => _showGuide(context, protocol),
           ),
@@ -58,29 +68,40 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
           children: [
             // Guide card
             _GuideCard(protocol: protocol),
+            // Nerd stats bubble
+            if (fb.showNerdStats &&
+                (fb.phase == FeedbackPhase.playing ||
+                    fb.phase == FeedbackPhase.paused)) ...[
+              const SizedBox(height: 8),
+              const _NerdStatsBubble(),
+            ],
             const SizedBox(height: 16),
-            // Controls (hidden during calibration)
-            if (fb.phase == FeedbackPhase.idle) ...[
-              _TimerSelector(),
-              const SizedBox(height: 12),
+            // Sound + threshold (idle and during feedback for on-the-fly changes)
+            if (fb.phase == FeedbackPhase.idle ||
+                fb.phase == FeedbackPhase.playing ||
+                fb.phase == FeedbackPhase.paused) ...[
               _SoundSelector(),
               const SizedBox(height: 12),
               _PercentileSelector(),
-              if (!connected) ...[
+              if (fb.phase == FeedbackPhase.idle) ...[
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Icon(Icons.bluetooth_disabled, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Muse not connected — Start Session will open the '
-                        'connect window.',
-                        style: theme.textTheme.bodySmall,
+                _TimerSelector(),
+                if (!connected) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Icon(Icons.bluetooth_disabled, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Muse not connected — Start Session will open the '
+                          'connect window.',
+                          style: theme.textTheme.bodySmall,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ],
             ],
             const Spacer(),
@@ -328,6 +349,37 @@ class _PhaseControls extends ConsumerWidget {
           ],
         );
     }
+  }
+}
+
+class _NerdStatsBubble extends ConsumerWidget {
+  const _NerdStatsBubble();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(liveStatsProvider);
+    final theme = Theme.of(context);
+    final percentile = stats.currentPercentile;
+    final atr = stats.currentAtr;
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.secondaryContainer,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          percentile == null
+              ? 'Collecting…'
+              : 'ATR ${atr?.toStringAsFixed(2) ?? '—'} · '
+                  'p${percentile.round()} of baseline',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSecondaryContainer,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ),
+    );
   }
 }
 
