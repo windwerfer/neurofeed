@@ -38,6 +38,7 @@ Global orientation for any AI agent or contributor working in this repo.
 | `architecture.md` | Current and target architecture, module map |
 | `lessons-learned.md` | Full history of JNI attempts, what worked/failed |
 | `testing-guide.md` | Build/test loop for the device |
+| `release.md` | Release CI: per-platform workflows, keystore/secrets setup, F-Droid + reproducibility |
 | `active-task.md` | Current development focus |
 
 ## Project layout
@@ -58,10 +59,12 @@ android/app/src/main/java/
   com/nonpolynomial/btleplug/android/impl/  # btleplug Java classes
   io/github/gedgygedgy/rust/                # jni-utils Java sources
 .ai/                     # project docs (feedback docs under .ai/feeback/)
+.github/workflows/       # release CI per platform: release-android/linux/windows, repro-android, _build-apk (reusable)
+scripts/package-linux.sh # deterministic tar.gz + best-effort AppImage packaging for release-linux
 third_party/muse-rs/    # local checkout of muse-rs (tag 0.1.0) — reference for protocol/parse debugging
 third_party/btleplug/   # local checkout of our btleplug fork (tag 0.12.0-muse-3) — reference for JNI/init debugging
 muse-rs (dep, GitHub)   # transport (btleplug) + protocol
-btleplug (local, via [patch])  # patched fork; reference copy in third_party/btleplug/
+btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in third_party/btleplug/
 ```
 
 ## Where things live (for navigation)
@@ -77,6 +80,8 @@ btleplug (local, via [patch])  # patched fork; reference copy in third_party/btl
 - ATR engine (threshold, dynamic adapt, in-flight recalibrate): `lib/src/feedback/target_state.dart` (`AtrEngine`).
 - Audio (dual-layer + 5 volume channels): `lib/src/audio/feedback_audio_controller.dart`, service in `lib/src/audio/audio_service.dart`.
 - Persisted prefs (volumes, sound, duration, target settings): `lib/src/settings.dart` (`Settings`, SharedPreferences).
+- Release CI: `.github/workflows/` — see `.ai/release.md` (keystore secrets, F-Droid, reproducibility).
+- Rust toolchain pin: `rust/rust-toolchain.toml` (kept in sync with `FLUTTER_VERSION`/`RUST_VERSION` in the workflows).
 
 ## Known hot spots
 - **Cargo `[patch]` version trap**: If the patched crate's `version` is semver-incompatible with the dependency constraint, Cargo silently ignores the patch. Our fork must stay at `version = "0.11.8"` even though the source is based on 0.12.0.

@@ -1,8 +1,18 @@
+import java.util.Properties
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val useReleaseSigning = keystorePropertiesFile.exists()
+if (useReleaseSigning) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
 android {
@@ -17,6 +27,17 @@ android {
 
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_17.toString()
+    }
+
+    signingConfigs {
+        if (useReleaseSigning) {
+            create("release") {
+                keyAlias = keystoreProperties.getProperty("keyAlias", "release")
+                keyPassword = keystoreProperties.getProperty("keyPassword", "")
+                storeFile = file(keystoreProperties.getProperty("storeFile", ""))
+                storePassword = keystoreProperties.getProperty("storePassword", "")
+            }
+        }
     }
 
     defaultConfig {
@@ -34,7 +55,12 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig =
+                if (useReleaseSigning) {
+                    signingConfigs.getByName("release")
+                } else {
+                    signingConfigs.getByName("debug")
+                }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -45,4 +71,10 @@ android {
 
 flutter {
     source = "../.."
+}
+
+// Reproducible archive output (fixed timestamps + deterministic ordering).
+tasks.withType<AbstractArchiveTask>().configureEach {
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
 }

@@ -1,0 +1,66 @@
+name: release-windows
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to attach the zip to (empty = build only, no upload)
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.41.7"
+  RUST_VERSION: "1.97.1"
+
+jobs:
+  windows:
+    name: Build Windows bundle
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-pc-windows-msvc
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          echo "version=${VERSION%%+*}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Windows release
+        shell: bash
+        run: |
+          flutter pub get
+          flutter create --platforms=windows --org com.example .
+          flutter build windows --release
+
+      - name: Zip bundle
+        shell: pwsh
+        run: |
+          $zip = "$env:GITHUB_WORKSPACE/muse_ml-${{ steps.version.outputs.version }}-windows-x64.zip"
+          Compress-Archive -Path build/windows/x64/runner/Release -DestinationPath $zip -CompressionLevel Optimal
+
+      - name: Upload to release
+        if: ${{ github.event.release.tag_name != '' || inputs.tag != '' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          gh release upload "$TAG" "muse_ml-${{ steps.version.outputs.version }}-windows-x64.zip" --clobber

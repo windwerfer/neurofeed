@@ -1,0 +1,52 @@
+name: release-android
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to attach the APK to (empty = build only, no upload)
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    name: Build signed APK
+    uses: ./.github/workflows/_build-apk.yml
+    with:
+      artifact-name: muse-apk
+      require-signing: ${{ github.event_name == 'release' }}
+    secrets: inherit
+
+  attach:
+    name: Attach APK to release
+    needs: apk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: muse-apk
+          path: apk
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          echo "version=${VERSION%%+*}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to release
+        if: ${{ github.event.release.tag_name != '' || inputs.tag != '' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          cp apk/app-release.apk "muse_ml-${{ steps.version.outputs.version }}.apk"
+          gh release upload "$TAG" "muse_ml-${{ steps.version.outputs.version }}.apk" --clobber
