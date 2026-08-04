@@ -47,12 +47,17 @@ lib/src/                 # Flutter UI + Riverpod state
   app.dart                 # main(), permission request
   connect_window.dart      # device list / rescan UI
   status_bar.dart, views/  # UI
+lib/src/feedback/         # feedback session system (merged to main, Phase I)
+  feedback_state.dart       # FeedbackStateNotifier: idle→calibrating→ready→playing⇄paused→ended
+  target_state.dart         # AtrEngine (threshold, dynamic adapt, in-flight recalibrate) + band aggregator
+  live_stats.dart, protocol.dart, session_store.dart, feedback_recorder.dart
+lib/src/audio/            # just_audio: AudioService + FeedbackAudioController (5 volume channels)
 rust/src/api/muse.rs    # FFI bridge: scan/connect/subscribe → MuseEvent stream
 rust/src/connection.rs  # in-Rust state (active connection, device cache, sink)
 android/app/src/main/java/
   com/nonpolynomial/btleplug/android/impl/  # btleplug Java classes
   io/github/gedgygedgy/rust/                # jni-utils Java sources
-.ai/                     # project docs
+.ai/                     # project docs (feedback docs under .ai/feeback/)
 third_party/muse-rs/    # local checkout of muse-rs (tag 0.1.0) — reference for protocol/parse debugging
 third_party/btleplug/   # local checkout of our btleplug fork (tag 0.12.0-muse-3) — reference for JNI/init debugging
 muse-rs (dep, GitHub)   # transport (btleplug) + protocol
@@ -68,6 +73,10 @@ btleplug (local, via [patch])  # patched fork; reference copy in third_party/btl
 - Protocol decoders (pure, no BLE): inside muse-rs `parse.rs` / `protocol.rs` / `types.rs`.
 - Permissions: `lib/src/app.dart` `requestBlePermissions()` (uses `permission_handler` + `device_info_plus` for sdk gating).
 - Manifest BLE perms: `android/app/src/main/AndroidManifest.xml` (`BLUETOOTH_SCAN` w/ `neverForLocation`, `BLUETOOTH_CONNECT`, `ACCESS_FINE_LOCATION` capped `maxSdkVersion=30`).
+- Feedback state machine: `lib/src/feedback/feedback_state.dart` (`FeedbackStateNotifier`, phases, interruption recovery).
+- ATR engine (threshold, dynamic adapt, in-flight recalibrate): `lib/src/feedback/target_state.dart` (`AtrEngine`).
+- Audio (dual-layer + 5 volume channels): `lib/src/audio/feedback_audio_controller.dart`, service in `lib/src/audio/audio_service.dart`.
+- Persisted prefs (volumes, sound, duration, target settings): `lib/src/settings.dart` (`Settings`, SharedPreferences).
 
 ## Known hot spots
 - **Cargo `[patch]` version trap**: If the patched crate's `version` is semver-incompatible with the dependency constraint, Cargo silently ignores the patch. Our fork must stay at `version = "0.11.8"` even though the source is based on 0.12.0.
@@ -77,3 +86,8 @@ btleplug (local, via [patch])  # patched fork; reference copy in third_party/btl
 - **Auto-scan only on saved device**: on fresh launch with no `lastDeviceId`, `_init()` opens the connect window but does NOT scan. Scan only fires on Rescan button or autoconnect to a known device.
 - **JNI trace spam**: The `jni` crate logs `trace!()` for every JNI call. `android_logger` filters at `Debug` level, but if it's initialized after another logger (e.g. flutter_rust_bridge), `init_once` fails silently and the filter doesn't apply. The fix: always call `log::set_max_level(log::LevelFilter::Debug)` after `init_once` as a fallback. See `rust/src/api/muse.rs:init_app()`.
 - **QueueStream race condition**: `QueueStream.java:pollNext()` returned a lambda that called `this.result.remove()` **outside** the `synchronized` block. Two tokio workers could both poll the same stream, both see a non-empty queue, both get removal lambdas, and one would crash with `NoSuchElementException` when the other had already drained it. **Fix**: remove the value from the queue inside the synchronized block and return a closure over the already-removed value. See `android/app/src/main/java/io/github/gedgygedgy/rust/stream/QueueStream.java:31`.
+- **Epoch window is events, not seconds**: band events arrive ~10 Hz, so `AtrEngine.epochWindow = 300` ≈ 30 s of feedback. `successRate` stays null until the window fills (first adapt ~30 s in). A `success == 0.0` window triggers the circuit breaker → threshold resets to the baseline percentile.
+- **Adaptive lockout guards**: ceiling = `baselineMean + 1.5·baselineStddev`, floor = baseline percentile; steps are responsiveness-derived (raise 1.01–1.03, lower 0.97–0.90). After an in-flight recalibrate the baseline is replaced, so the ceiling re-anchors automatically. Turn dynamic adapt off via the target-settings dialog for a fully static threshold.
+- **In-flight recalibrate** (refresh icon during playing/paused): needs ≥ `minRecalibrateSeconds` (60) session time and ≥ `minRecalibrateSamples` (30) clean samples from the 90 s rolling buffer; replaces the baseline, resets the success window, plays a soft low bowl chime. Full silent recalibration still available in the ready phase.
+- **5 volume channels**: effective = master × channel (background / feedback / intro / end bell). Rampping chimes skip `setVolume` re-apply (`_ramping` set). Values persist via `Settings`.
+- **Persistence**: all user prefs flow through `Settings` (SharedPreferences); `settingsProvider` is overridden in `main()`. Sound + duration are restored into `FeedbackState` at notifier construction.
