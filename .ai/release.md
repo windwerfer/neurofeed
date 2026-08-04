@@ -140,6 +140,15 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
   audio player actually ships `libmpv` on Windows. If you do not care about
   Windows, delete `release-windows.yml` and the dependency.
 
+## Caching
+
+Each run starts from a fresh runner; to save bandwidth the workflows enable
+caching (Flutter SDK + pub deps, rustup toolchain + cargo registry, Gradle
+downloads). GitHub evicts cache entries not accessed for **7 days** (and caps
+total cache at 10 GB per repo), so with release-only frequency the caches may
+be gone before the next release. Running the manual `workflow_dispatch` test
+builds between releases keeps them warm.
+
 ## Troubleshooting
 
 - **"sdkmanager not found"**: the GitHub Ubuntu image layout changed; the

@@ -36,11 +36,14 @@ jobs:
         with:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: true
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          cache: true
 
       - name: Get version
         id: version
