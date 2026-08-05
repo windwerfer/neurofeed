@@ -122,38 +122,47 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     setState(() => _busy = true);
     final notifier = ref.read(feedbackStateProvider.notifier);
     final fb = ref.read(feedbackStateProvider);
+    debugPrint('[dashboard] save: sessionFilePath=${notifier.sessionFilePath}');
     final saved = await notifier.saveSession();
     if (saved != null) {
+      debugPrint('[dashboard] save: renamed to ${saved.path}');
       final stats = _prepared?.stats;
-      await ref.read(sessionStoreProvider).writeMetadata(
-        saved,
-        SessionMetadata(
-          protocol: fb.protocol,
-          durationMinutes: fb.durationMinutes,
-          elapsedSeconds: fb.elapsedSeconds,
-          sound: fb.soundName,
-          savedAt: DateTime.now(),
-          notes: _notes.text,
-          stats: stats == null
-              ? null
-              : SessionStatsData(
-                  peakAlphaFreq: stats.peakAlphaFreq,
-                  peakAlphaPower: stats.peakAlphaPower,
-                  targetPct: stats.targetPct,
-                  stillnessPct: stats.stillnessPct,
-                  avgBpm: stats.avgBpm,
-                  avgAlphaRel: stats.avgAlphaRel,
-                ),
-        ),
-      );
+      try {
+        await ref.read(sessionStoreProvider).writeMetadata(
+          saved,
+          SessionMetadata(
+            protocol: fb.protocol,
+            durationMinutes: fb.durationMinutes,
+            elapsedSeconds: fb.elapsedSeconds,
+            sound: fb.soundName,
+            savedAt: DateTime.now(),
+            notes: _notes.text,
+            stats: stats == null
+                ? null
+                : SessionStatsData(
+                    peakAlphaFreq: stats.peakAlphaFreq,
+                    peakAlphaPower: stats.peakAlphaPower,
+                    targetPct: stats.targetPct,
+                    stillnessPct: stats.stillnessPct,
+                    avgBpm: stats.avgBpm,
+                    avgAlphaRel: stats.avgAlphaRel,
+                  ),
+          ),
+        );
+      } catch (e) {
+        debugPrint('[dashboard] save: metadata write FAILED: $e');
+      }
       if (_thumbnail != null) {
         final pngPath = saved.path.replaceFirst(RegExp(r'\.muse$'), '.png');
         try {
           await File(pngPath).writeAsBytes(_thumbnail!);
+          debugPrint('[dashboard] save: thumbnail $pngPath');
         } catch (e) {
           debugPrint('[dashboard] thumbnail save failed: $e');
         }
       }
+    } else {
+      debugPrint('[dashboard] save: saveSession returned null (nothing to save)');
     }
     if (mounted) {
       ref.invalidate(sessionListProvider);

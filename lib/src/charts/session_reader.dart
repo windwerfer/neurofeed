@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 class BandsRecord {
@@ -99,6 +99,10 @@ class SessionReader {
       }
       _parseRecords(ByteData.sublistView(decoded), session);
     }
+    debugPrint(
+        '[reader] ${file.path}: ${bytes.length}B bands=${session.bands.length} '
+        'pulses=${session.pulses.length} mov=${session.movements.length} '
+        'peak=${session.peakAlphas.length}');
     return session;
   }
 

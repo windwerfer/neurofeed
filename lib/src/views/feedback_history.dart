@@ -60,6 +60,8 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
                 ),
               ),
               data: (list) {
+                debugPrint(
+                    '[history] loaded ${list.length} session(s)');
                 if (list.isEmpty) {
                   return _EmptyHistory(theme: theme);
                 }

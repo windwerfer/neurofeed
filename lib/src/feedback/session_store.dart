@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:path_provider/path_provider.dart';
@@ -15,8 +16,12 @@ Future<Directory> defaultSessionDir() async {
   if (Platform.isAndroid || Platform.isIOS) {
     try {
       final docs = await getApplicationDocumentsDirectory();
-      return Directory('${docs.path}/muse_ml_sessions');
-    } catch (_) {}
+      final dir = Directory('${docs.path}/muse_ml_sessions');
+      debugPrint('[session] storage dir: ${dir.path}');
+      return dir;
+    } catch (e) {
+      debugPrint('[session] documents dir unavailable ($e), using systemTemp');
+    }
   }
   return Directory('${Directory.systemTemp.path}/muse_ml_sessions');
 }
@@ -136,6 +141,7 @@ class SessionStore {
 
   Future<List<SessionSummary>> list() async {
     final dir = await _dir;
+    debugPrint('[session] list(): dir=${dir.path} exists=${await dir.exists()}');
     if (!await dir.exists()) {
       return [];
     }
@@ -159,14 +165,22 @@ class SessionStore {
     summaries.sort(
       (a, b) => b.metadata.savedAt.compareTo(a.metadata.savedAt),
     );
+    debugPrint('[session] list(): found ${summaries.length} session(s)');
     return summaries;
   }
 
   Future<void> writeMetadata(File museFile, SessionMetadata metadata) async {
     final stem = museFile.path.substring(0, museFile.path.length - 5);
-    await File('$stem.json').writeAsString(
-      const JsonEncoder.withIndent('  ').convert(metadata.toJson()),
-    );
+    final jsonPath = '$stem.json';
+    try {
+      await File(jsonPath).writeAsString(
+        const JsonEncoder.withIndent('  ').convert(metadata.toJson()),
+      );
+      debugPrint('[session] metadata written: $jsonPath');
+    } catch (e) {
+      debugPrint('[session] metadata write FAILED: $jsonPath ($e)');
+      rethrow;
+    }
   }
 
   Future<SessionMetadata> _readMetadata(String jsonPath) async {

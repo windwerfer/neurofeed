@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/charts/session_recorder.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
@@ -25,8 +26,10 @@ class FeedbackRecorder {
   Future<void> startSession() async {
     await _recorder.stop();
     final dir = await _sessionDir;
+    debugPrint('[feedback] startSession: dir=${dir.path}');
     if (!await dir.exists()) {
       await dir.create(recursive: true);
+      debugPrint('[feedback] startSession: created dir');
     }
     await _recorder.start(dir);
   }

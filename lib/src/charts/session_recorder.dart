@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 class SessionRecorder {
@@ -13,6 +14,7 @@ class SessionRecorder {
   File? _file;
   Timer? _flushTimer;
   final _pending = BytesBuilder();
+  int _events = 0;
 
   bool get isRecording => _file != null;
 
@@ -24,6 +26,8 @@ class SessionRecorder {
     final sep = d.path.endsWith('/') ? '' : '/';
     final path = '${d.path}${sep}live_${DateTime.now().millisecondsSinceEpoch}.muse';
     _file = File(path);
+    _events = 0;
+    debugPrint('[session] recorder start: $path');
 
     final header = ByteData(12);
     header.setUint64(0, _magic, Endian.little);
@@ -35,6 +39,7 @@ class SessionRecorder {
   }
 
   void writeEvent(MuseEventDto event) {
+    _events++;
     Uint8List? encoded;
     switch (event) {
       case MuseEventDto_Eeg(:final field0):
@@ -170,23 +175,37 @@ class SessionRecorder {
 
   Future<File?> markSaved() async {
     await _flush();
-    if (_file == null) return null;
+    if (_file == null) {
+      debugPrint('[session] markSaved: no active file, returning null');
+      return null;
+    }
     final dir = _file!.parent;
     final ts = DateTime.now().millisecondsSinceEpoch;
     final newPath = '${dir.path}session_$ts.muse';
-    final saved = await _file!.rename(newPath);
-    _file = null;
-    return saved;
+    debugPrint('[session] markSaved: renaming ${_file!.path} -> $newPath');
+    try {
+      final saved = await _file!.rename(newPath);
+      _file = null;
+      debugPrint('[session] markSaved: OK -> ${saved.path}');
+      return saved;
+    } catch (e) {
+      debugPrint('[session] markSaved: rename FAILED ($e)');
+      rethrow;
+    }
   }
 
   Future<void> stop() async {
+    debugPrint('[session] stop(): events=$_events');
     _flushTimer?.cancel();
     _flushTimer = null;
     await _flush();
     if (_file != null) {
       try {
         await _file!.delete();
-      } catch (_) {}
+        debugPrint('[session] stop(): deleted temp file');
+      } catch (e) {
+        debugPrint('[session] stop(): delete failed ($e)');
+      }
       _file = null;
     }
   }
@@ -205,6 +224,7 @@ class SessionRecorder {
       frame.setRange(4, 4 + size, compressed);
       await _file!.writeAsBytes(frame, mode: FileMode.writeOnlyAppend);
     } catch (e) {
+      debugPrint('[session] flush FAILED, re-queueing ($e)');
       _pending.add(raw);
     }
   }
