@@ -156,6 +156,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       }
     }
     if (mounted) {
+      ref.invalidate(sessionListProvider);
       Navigator.of(context).pop();
     }
   }
@@ -287,34 +288,57 @@ class _DashboardBody extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          if (prepared.movement.isNotEmpty)
-            _SeriesChart(
-              title: 'Movement score',
-              unit: 'g stddev',
-              series: [
-                _Series(
-                  label: 'Movement',
-                  color: const Color(0xFFFFA726),
-                  values: prepared.movement,
-                ),
-              ],
-              x: prepared.movementX,
-            ),
-          if (prepared.movement.isNotEmpty) const SizedBox(height: 16),
-          if (prepared.bpm.isNotEmpty)
-            _SeriesChart(
-              title: 'Heart rate',
-              unit: 'bpm',
-              series: [
-                _Series(
-                  label: 'Pulse',
-                  color: const Color(0xFFEC407A),
-                  values: prepared.bpm,
-                ),
-              ],
-              x: prepared.bpmX,
-            ),
-          if (prepared.bpm.isNotEmpty) const SizedBox(height: 16),
+        ] else ...[
+          const _NotEnoughData(
+            title: 'Alpha vs Theta',
+            detail: 'Not enough signal data was recorded to build this graph. '
+                'This usually means the headband was not in good contact or the '
+                'connection dropped during the session. Check the electrodes and '
+                'try again.',
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (prepared.movement.isNotEmpty) ...[
+          _SeriesChart(
+            title: 'Movement score',
+            unit: 'g stddev',
+            series: [
+              _Series(
+                label: 'Movement',
+                color: const Color(0xFFFFA726),
+                values: prepared.movement,
+              ),
+            ],
+            x: prepared.movementX,
+          ),
+          const SizedBox(height: 16),
+        ] else ...[
+          const _NotEnoughData(
+            title: 'Movement score',
+            detail: 'No movement data was recorded for this session.',
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (prepared.bpm.isNotEmpty) ...[
+          _SeriesChart(
+            title: 'Heart rate',
+            unit: 'bpm',
+            series: [
+              _Series(
+                label: 'Pulse',
+                color: const Color(0xFFEC407A),
+                values: prepared.bpm,
+              ),
+            ],
+            x: prepared.bpmX,
+          ),
+          const SizedBox(height: 16),
+        ] else ...[
+          const _NotEnoughData(
+            title: 'Heart rate',
+            detail: 'No reliable heart-rate data was captured for this session.',
+          ),
+          const SizedBox(height: 16),
         ],
         TextField(
           controller: notesController,
@@ -739,9 +763,44 @@ class _StatChip extends StatelessWidget {
   }
 }
 
+class _NotEnoughData extends StatelessWidget {
+  const _NotEnoughData({required this.title, required this.detail});
+
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.cloud_off_outlined,
+                  size: 18,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Text(title, style: theme.textTheme.titleSmall),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(detail, style: theme.textTheme.bodySmall),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _NoData extends StatelessWidget {
   const _NoData({required this.theme});
-
   final ThemeData theme;
 
   @override
