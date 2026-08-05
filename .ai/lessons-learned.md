@@ -224,3 +224,42 @@ When debugging values that flow through a pipeline, verify the value at the
 FINAL output (Dart side), not at intermediate stages (Rust logs before
 transformation). Log order matters — a log before a transformation always
 shows the pre-transformation value, even if the transformation is working.
+
+## Session 2026-08-05 — Forwarder regression: `watch::changed()` spurious fire
+
+### The "problem"
+Commit `3078904` (forwarder: switch to newer connection channel on reconnect)
+broke ALL streaming on Android: `connect` succeeded (`[muse] connect returned:
+connected=true`) but no events ever flowed — no EEG, no signal quality, no
+battery. Log showed `forwarder started (epoch=1)` followed immediately by
+`forwarder: newer connection (epoch=1), switching channels`, then silence from
+the forwarder forever (muse-rs kept logging raw notifications into an
+unconsumed channel).
+
+### Root cause
+`tokio::sync::watch::Receiver::changed()` returns when the stored value differs
+from the receiver's *last-seen* bookkeeping (version/value). The primary
+receiver kept in `ManagerState` is never polled, so its bookkeeping never
+advances. Cloning it — after `connect()` had already bumped and sent the epoch —
+inherited that stale bookkeeping, so the forwarder's very first `changed()` poll
+fired instantly. It "switched channels", dropped the fresh event channel it had
+just taken from `guard.events`, and the outer loop then found nothing to take:
+a permanent dead stream.
+
+### Fix
+Reverted to a plain 1 s recv-timeout poll (commit `53e3e8f`), no watch channel:
+- On timeout, check `guard.events.is_some()` — a newer connection stored a
+  fresh channel → break and take it (reconnect switch with ≤1 s latency).
+- 30 consecutive silent windows (30 s) on a live connection → emit
+  `Disconnected` so the app reconnects (silent-dead-link watchdog; a dead BLE
+  link often never delivers a disconnect event).
+- `connection.rs` is back to plain `#[derive(Default)]`.
+
+### Lesson
+A `watch` receiver's `version`/`last_seen` only advances when the receiver is
+polled. Cloning an unpolled primary gives a clone with stale bookkeeping, and
+`changed()` fires spuriously once — exactly enough to break a one-shot wakeup
+loop. If a wakeup must mean "something happened since I last looked", either
+poll the underlying value directly, or re-sync the clone immediately after
+cloning (`borrow_and_update()`), and prefer the simplest mechanism that cannot
+self-trigger.

@@ -39,10 +39,33 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
 - ✅ `.ai/btleplug.md` updated with complete Batch 2 documentation.
 - ✅ `.ai/btleplug_bugreport_2.md` added documenting the death spiral root cause analysis.
 
+## Status — 2026-08-05 Update
+- ✅ Phase I feedback feature merged to main and committed: 5-channel volume
+  control, in-flight recalibrate, adaptive target guards, user target settings,
+  full preference persistence.
+- ✅ Feedback now auto-starts right after calibration (ready phase + manual
+  Begin Feedback button removed); reward chimes play at full volume (no attack
+  ramp — pre-play `setVolume(0)` + ramp was silently dropped by Android's audio
+  stack).
+- ✅ Forwarder reconnect robustness: 1 s poll switches to a newer connection's
+  channel (≤1 s latency), 30 s silence watchdog emits `Disconnected` so the app
+  auto-reconnects instead of sitting on a dead link. A `watch::changed()`-
+  based wakeup caused a full-stream regression (see lessons-learned.md) and was
+  reverted.
+- ⏳ On-device verification in progress on the Lenovo TB336FU tablet:
+  auto-start after calibration, chime audibility, mid-session disconnect →
+  auto-reconnect → stream resumes.
+
 ## Next steps
-1. PPG streaming — currently produces no events; check muse-rs `ppg` feature
-   flag and `parse_athena_notification()` path.
-3. Investigate EEG data integrity / verify sample alignment.
+1. On-device test pass (checklist in `.ai/feeback/todos.md`): calibration →
+   auto-start, chimes + movement gating, volume dialog, target settings,
+   recalibrate, persistence, `[atr]` ceiling/lockout logs, mid-session Muse
+   power-off → watchdog → auto-reconnect.
+2. If the reconnect test passes, remove the temporary `[muse] forwarder` debug
+   logs or drop them to debug level.
+3. v1.1 backlog: EEG artifact flag for EMG, percentile persistence, continuous
+   EMA adaptation, multi-protocol presets, calibration audio variants (see
+   `.ai/feeback/todos.md`).
 
 ## How to verify (see testing-guide.md)
 Run `flutter run`, observe status bar shows correct battery % (from `bp`,

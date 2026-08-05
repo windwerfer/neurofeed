@@ -71,6 +71,9 @@ Muse headset → BLE → muse-rs → Rust forwarder → MuseEventDto stream
                                                       ├─ Movement → gating
                                                       └─ SessionRecorder (disk)
 ```
+- Forwarder (rust/src/api/muse.rs): 1 s poll of `guard.events` — picks up a
+  reconnect's fresh channel within ~1 s; emits `Disconnected` after 30 s of
+  total silence (dead link without a disconnect event) so the app reconnects.
 
 ## Navigation
 - Sidebar for main views: Feedback, Feedback History, Bands, Raw EEG, ...
