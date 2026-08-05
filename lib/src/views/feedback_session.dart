@@ -41,7 +41,11 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(protocol.title),
+        title: Text(
+          protocol.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           IconButton(
             icon: Icon(
@@ -134,26 +138,72 @@ class _GuideCard extends StatelessWidget {
   final ProtocolInfo protocol;
   const _GuideCard({required this.protocol});
 
+  static String _truncate(String text, {int maxParagraphs = 2}) {
+    final parts = text
+        .split(RegExp(r'\n\s*\n'))
+        .where((p) => p.trim().isNotEmpty)
+        .toList();
+    if (parts.length <= maxParagraphs) {
+      return text;
+    }
+    return '${parts.take(maxParagraphs).join('\n\n')}\n…';
+  }
+
+  void _showFullGuide(BuildContext context, String guideText) {
+    final theme = Theme.of(context);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Guide'),
+        content: SingleChildScrollView(
+          child: Text(
+            guideText,
+            style: theme.textTheme.bodyMedium,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final guideText = protocol.guideText;
+    final truncated = _truncate(guideText);
     return Card(
       color: theme.colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.lightbulb_outline, color: protocol.color, size: 20),
-                const SizedBox(width: 8),
-                Text('Guide', style: theme.textTheme.titleSmall),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(protocol.guideText, style: theme.textTheme.bodyMedium),
-          ],
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _showFullGuide(context, guideText),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.lightbulb_outline, color: protocol.color, size: 20),
+                  const SizedBox(width: 8),
+                  Text('Guide', style: theme.textTheme.titleSmall),
+                  const Spacer(),
+                  Text(
+                    'Tap for full guide',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(truncated, style: theme.textTheme.bodyMedium),
+            ],
+          ),
         ),
       ),
     );
