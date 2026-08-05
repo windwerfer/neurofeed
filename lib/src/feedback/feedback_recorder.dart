@@ -12,9 +12,9 @@ import 'package:muse_ml/src/rust/api/muse.dart';
 /// peak alpha) plus the raw EEG for the session duration.
 class FeedbackRecorder {
   final SessionRecorder _recorder = SessionRecorder();
-  final Directory _sessionDir;
+  final Future<Directory> _sessionDir;
 
-  FeedbackRecorder({Directory? sessionDir})
+  FeedbackRecorder({Future<Directory>? sessionDir})
     : _sessionDir = sessionDir ?? defaultSessionDir();
 
   bool get isRecording => _recorder.isRecording;
@@ -24,10 +24,11 @@ class FeedbackRecorder {
   /// Begin a session recording. If one is already active, it is ended first.
   Future<void> startSession() async {
     await _recorder.stop();
-    if (!await _sessionDir.exists()) {
-      await _sessionDir.create(recursive: true);
+    final dir = await _sessionDir;
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
     }
-    await _recorder.start(_sessionDir);
+    await _recorder.start(dir);
   }
 
   /// Write a Muse event to the session recording.

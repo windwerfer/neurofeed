@@ -3,9 +3,23 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:path_provider/path_provider.dart';
 
-Directory defaultSessionDir() =>
-    Directory('${Directory.systemTemp.path}/muse_ml_sessions');
+/// Resolves the persistent session storage directory.
+///
+/// On Android/iOS this is under the app's documents directory so saved
+/// sessions survive process restarts. `Directory.systemTemp` maps to the app
+/// cache directory on mobile, which the OS may clear — that would silently
+/// wipe saved sessions. Desktop falls back to the system temp directory.
+Future<Directory> defaultSessionDir() async {
+  if (Platform.isAndroid || Platform.isIOS) {
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      return Directory('${docs.path}/muse_ml_sessions');
+    } catch (_) {}
+  }
+  return Directory('${Directory.systemTemp.path}/muse_ml_sessions');
+}
 
 class SessionStatsData {
   const SessionStatsData({
@@ -116,16 +130,17 @@ class SessionSummary {
 }
 
 class SessionStore {
-  SessionStore({Directory? dir}) : _dir = dir ?? defaultSessionDir();
+  SessionStore({Future<Directory>? dir}) : _dir = dir ?? defaultSessionDir();
 
-  final Directory _dir;
+  final Future<Directory> _dir;
 
   Future<List<SessionSummary>> list() async {
-    if (!await _dir.exists()) {
+    final dir = await _dir;
+    if (!await dir.exists()) {
       return [];
     }
     final summaries = <SessionSummary>[];
-    await for (final entity in _dir.list()) {
+    await for (final entity in dir.list()) {
       if (entity is! File || !entity.path.endsWith('.muse')) {
         continue;
       }
