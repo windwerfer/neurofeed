@@ -181,7 +181,7 @@ class SessionRecorder {
     }
     final dir = _file!.parent;
     final ts = DateTime.now().millisecondsSinceEpoch;
-    final newPath = '${dir.path}session_$ts.muse';
+    final newPath = '${dir.path}/session_$ts.muse';
     debugPrint('[session] markSaved: renaming ${_file!.path} -> $newPath');
     try {
       final saved = await _file!.rename(newPath);

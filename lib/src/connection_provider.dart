@@ -9,6 +9,7 @@ import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/charts/live_cache.dart';
 import 'package:muse_ml/src/charts/band_cache.dart';
 import 'package:muse_ml/src/charts/session_recorder.dart';
+import 'package:muse_ml/src/feedback/session_storage.dart';
 
 /// Duration of each scan chunk when scanning continuously.
 const _scanChunkSecs = 3;
@@ -179,13 +180,27 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     }
   }
 
+  Future<void> _startContinuousRecorder() async {
+    try {
+      final storage = await resolveSessionStorage(_settings);
+      await storage.ensureDir();
+      final dir = scratchDirectory(storage);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      await sessionRecorder.start(dir);
+    } catch (e) {
+      debugPrint('[muse] continuous recorder start failed: $e');
+    }
+  }
+
   void _onEvent(MuseEventDto event) {
     sessionRecorder.writeEvent(event);
     switch (event) {
       case MuseEventDto_Connected():
         debugPrint('[muse] event: connected ${event.field0}');
         _scanEnabled = false;
-        sessionRecorder.start();
+        unawaited(_startContinuousRecorder());
         state = state.copyWith(
           status: state.status.copyWith(connected: true, name: event.field0),
           connectWindowOpen: false,

@@ -8,7 +8,7 @@ class FeedbackAudioController {
   static const Duration targetHoldDuration = Duration(milliseconds: 2500);
   static const Duration rewardCooldown = Duration(seconds: 8);
   static const Duration movementBuffer = Duration(seconds: 1);
-  static const int maxPolyphony = 10;
+  static const int maxPolyphony = 18;
   static const double droneVolume = 0.5;
 
   static const String calibrationAsset =
@@ -35,6 +35,7 @@ class FeedbackAudioController {
   DateTime _lastRewardAt = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _movingUntil = DateTime.fromMillisecondsSinceEpoch(0);
   final Set<AudioPlayer> _ramping = {};
+  final Map<AudioPlayer, DateTime> _chimeStartedAt = {};
 
   double _masterVolume = 1.0;
   double _backgroundVolume = droneVolume;
@@ -263,30 +264,50 @@ class FeedbackAudioController {
   }
 
   Future<void> _triggerChime() async {
-    for (var i = 0; i < _chimes.length; i++) {
-      final chime = _chimes[i];
-      if (_ramping.contains(chime) ||
-          chime.playing ||
-          chime.processingState == ProcessingState.loading) {
+    AudioPlayer? free;
+    for (final chime in _chimes) {
+      if (_isBusy(chime)) {
         continue;
       }
-      debugPrint(
-        '[chime] player $i starting at ${DateTime.now().toIso8601String()}',
-      );
-      _ramping.add(chime);
-      try {
-        await chime.setAsset(bowlLowAsset);
-        await chime.setLoopMode(LoopMode.off);
-        await chime.setVolume(_feedbackVolumeTotal);
-        await chime.play();
-        return;
-      } catch (e) {
-        debugPrint('[audio] chime playback failed: $e');
-      } finally {
-        _ramping.remove(chime);
-      }
+      free = chime;
+      break;
     }
-    debugPrint('[chime] no free player at ${DateTime.now().toIso8601String()}');
+    free ??= _chimes.reduce((a, b) {
+      final ta = _chimeStartedAt[a];
+      final tb = _chimeStartedAt[b];
+      if (ta == null) return b;
+      if (tb == null) return a;
+      return ta.isBefore(tb) ? a : b;
+    });
+    final idx = _chimes.indexOf(free);
+    debugPrint(
+      '[chime] player $idx ${_ramping.contains(free) ? 'steal' : 'start'} at '
+      '${DateTime.now().toIso8601String()}',
+    );
+    _chimeStartedAt[free] = DateTime.now();
+    _ramping.add(free);
+    try {
+      await free.stop();
+      await free.setAsset(bowlLowAsset);
+      await free.setLoopMode(LoopMode.off);
+      await free.setVolume(_feedbackVolumeTotal);
+      await free.play();
+    } catch (e) {
+      debugPrint('[audio] chime playback failed: $e');
+    } finally {
+      _ramping.remove(free);
+    }
+  }
+
+  /// A chime is free when it is not being loaded, not ramping up, and not
+  /// currently playing. Finished players report `completed` (playing stays
+  /// `false` after we reset them), so they are reused immediately.
+  bool _isBusy(AudioPlayer chime) {
+    if (_ramping.contains(chime)) return true;
+    final state = chime.processingState;
+    if (state == ProcessingState.loading) return true;
+    if (state == ProcessingState.completed) return false;
+    return chime.playing;
   }
 
   Future<void> _resetChime(AudioPlayer chime) async {

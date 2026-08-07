@@ -14,14 +14,13 @@ import 'package:muse_ml/src/rust/api/muse.dart';
 /// go to the fast scratch directory — SAF is only touched on Save.
 class FeedbackRecorder {
   FeedbackRecorder({SessionStorage? storage})
-    : _scratch = _scratchDir(storage);
+    : _storage = storage == null ? _defaultStorage() : Future.value(storage);
 
-  final Future<Directory> _scratch;
+  final Future<SessionStorage> _storage;
   final SessionRecorder _recorder = SessionRecorder();
 
-  static Future<Directory> _scratchDir(SessionStorage? storage) async {
-    if (storage != null) return scratchDirectory(storage);
-    return Directory('${Directory.systemTemp.path}/muse_scratch');
+  static Future<SessionStorage> _defaultStorage() async {
+    return FileSystemSessionStorage(await defaultSessionDir());
   }
 
   bool get isRecording => _recorder.isRecording;
@@ -32,7 +31,9 @@ class FeedbackRecorder {
   /// active, it is ended first.
   Future<void> startSession() async {
     await _recorder.stop();
-    final dir = await _scratch;
+    final storage = await _storage;
+    await storage.ensureDir();
+    final dir = scratchDirectory(storage);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
       debugPrint('[feedback] startSession: created scratch $dir');

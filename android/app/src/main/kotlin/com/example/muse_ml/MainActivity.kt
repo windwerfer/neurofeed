@@ -105,8 +105,23 @@ class MainActivity : FlutterActivity() {
             return
         }
         try {
-            val doc = resolveDoc(tree, name)
-            contentResolver.openOutputStream(doc, "wt")?.use { it.write(bytes) }
+            var doc = resolveDoc(tree, name)
+            var out = contentResolver.openOutputStream(doc, "wt")
+            if (out == null) {
+                // Document doesn't exist yet — create it first, then write.
+                val parent = DocumentsContract.buildDocumentUriUsingTree(
+                    tree, DocumentsContract.getTreeDocumentId(tree)
+                )
+                doc = DocumentsContract.createDocument(
+                    contentResolver, parent, "application/octet-stream", name
+                )
+                if (doc == null) {
+                    result.error("open_failed", "could not create $name", null)
+                    return
+                }
+                out = contentResolver.openOutputStream(doc, "wt")
+            }
+            out?.use { it.write(bytes) }
                 ?: run {
                     result.error("open_failed", "could not open $name for writing", null)
                     return

@@ -66,9 +66,10 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
           child: StatusBar(),
         ),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Guide card
             _GuideCard(protocol: protocol),
@@ -116,7 +117,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
                 ],
               ],
             ],
-            const Spacer(),
+            const SizedBox(height: 16),
             // Phase-specific controls
             _PhaseControls(protocol: protocol),
             const SizedBox(height: 8),
@@ -125,6 +126,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
               Text(
                 '${fb.elapsedSeconds ~/ 60}:${(fb.elapsedSeconds % 60).toString().padLeft(2, '0')}'
                 ' / ${fb.durationMinutes}:00',
+                textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall,
               ),
           ],
