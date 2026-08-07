@@ -276,24 +276,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     return true;
   }
 
-  /// Start calibration: play the voice intro, wait for all pads to be green
-  /// for [greenStableSeconds] before starting the silent baseline, then begin
-  /// feedback automatically. No post-baseline gate: once the baseline is
-  /// captured feedback always starts. If one pad never reaches green while
-  /// the needed frontal pads do, it is assumed faulty and the start-anyway
+  /// Start calibration: wait for all pads to be green for [greenStableSeconds]
+  /// before playing the voice intro and starting the silent baseline, then
+  /// begin feedback automatically. No post-baseline gate: once the baseline is
+  /// captured feedback always starts. If one pad never reaches green while the
+  /// needed frontal pads do, it is assumed faulty and the start-anyway
   /// fallback is surfaced after [faultyPadSeconds].
   Future<void> _runCalibration() async {
     if (state.phase != FeedbackPhase.calibrating) {
       return;
     }
     _atr.reset();
-    await _audio.playCalibration().timeout(
-      calibrationAudioTimeout,
-      onTimeout: () {},
-    );
-    if (state.phase != FeedbackPhase.calibrating) {
-      return;
-    }
     _greenSeconds = 0;
     _faultyPadSeconds = 0;
     state = state.copyWith(
@@ -304,9 +297,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   /// Ticks once a second during the calibration signal gate. Starts the
-  /// baseline once all pads have been green for [greenStableSeconds]
-  /// continuously. Flags the faulty-pad fallback once a missing pad has
-  /// persisted for [faultyPadSeconds] while the frontal pads are green.
+  /// calibration (intro + baseline) once all pads have been green for
+  /// [greenStableSeconds] continuously. Flags the faulty-pad fallback once a
+  /// missing pad has persisted for [faultyPadSeconds] while the frontal pads
+  /// are green.
   void _startGateTimer() {
     _gateTimer?.cancel();
     _gateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -319,7 +313,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         _greenSeconds++;
         if (_greenSeconds >= greenStableSeconds) {
           _gateTimer?.cancel();
-          _startBaseline();
+          unawaited(_playCalibrationAndBaseline());
         }
         return;
       }
@@ -331,6 +325,20 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         }
       }
     });
+  }
+
+  /// Plays the calibration voice intro, then starts the silent baseline.
+  /// Used once the pre-calibration gate passes (or the user bypasses it).
+  Future<void> _playCalibrationAndBaseline() async {
+    state = state.copyWith(waitingForSignal: false);
+    await _audio.playCalibration().timeout(
+      calibrationAudioTimeout,
+      onTimeout: () {},
+    );
+    if (state.phase != FeedbackPhase.calibrating) {
+      return;
+    }
+    _startBaseline();
   }
 
   void _startBaseline() {
@@ -375,14 +383,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   /// Bypasses the calibration signal gate (used when the user opts to start
-  /// anyway after a faulty pad has been detected).
+  /// anyway after a faulty pad has been detected). Plays the intro and starts
+  /// the baseline immediately.
   void startAnyway() {
     if (state.phase != FeedbackPhase.calibrating ||
         !state.startAnywayAvailable) {
       return;
     }
     _gateTimer?.cancel();
-    _startBaseline();
+    unawaited(_playCalibrationAndBaseline());
   }
 
   /// Start the feedback loop: record the session and begin the background
