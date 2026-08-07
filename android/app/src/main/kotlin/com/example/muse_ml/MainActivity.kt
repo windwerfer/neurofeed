@@ -113,13 +113,14 @@ class MainActivity : FlutterActivity() {
                 val parent = DocumentsContract.buildDocumentUriUsingTree(
                     tree, DocumentsContract.getTreeDocumentId(tree)
                 )
-                doc = DocumentsContract.createDocument(
+                val created = DocumentsContract.createDocument(
                     contentResolver, parent, "application/octet-stream", name
                 )
-                if (doc == null) {
+                if (created == null) {
                     result.error("open_failed", "could not create $name", null)
                     return
                 }
+                doc = created
                 out = contentResolver.openOutputStream(doc, "wt")
             }
             out?.use { it.write(bytes) }
