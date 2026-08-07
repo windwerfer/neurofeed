@@ -24,7 +24,7 @@ class SessionRecorder {
     if (_file != null) return;
     final d = dir ?? Directory.systemTemp;
     final sep = d.path.endsWith('/') ? '' : '/';
-    final path = '${d.path}${sep}live_${DateTime.now().millisecondsSinceEpoch}.muse';
+    final path = '${d.path}${sep}live_${DateTime.now().millisecondsSinceEpoch}.muse.feedback';
     _file = File(path);
     _events = 0;
     debugPrint('[session] recorder start: $path');
@@ -181,7 +181,7 @@ class SessionRecorder {
     }
     final dir = _file!.parent;
     final ts = DateTime.now().millisecondsSinceEpoch;
-    final newPath = '${dir.path}/session_$ts.muse';
+    final newPath = '${dir.path}/session_$ts.muse.feedback';
     debugPrint('[session] markSaved: renaming ${_file!.path} -> $newPath');
     try {
       final saved = await _file!.rename(newPath);

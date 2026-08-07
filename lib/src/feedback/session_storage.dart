@@ -54,7 +54,7 @@ Directory scratchDirectory(SessionStorage history) {
 }
 
 /// A file handle inside the history folder. [name] is the bare file name
-/// (e.g. `session_123.muse`, `session_123.json`).
+/// (e.g. `session_123.muse.feedback`).
 class SessionFile {
   const SessionFile(this.name);
 
@@ -87,6 +87,11 @@ abstract class SessionStorage {
 
   /// Bytes of [name], or null if it does not exist.
   Future<List<int>?> readFile(String name);
+
+  /// The first [limit] bytes of [name], or null if it does not exist. Used
+  /// for the PNG+metadata head of a session container without pulling the
+  /// (potentially large) frame body across the SAF bridge.
+  Future<List<int>?> readPrefix(String name, int limit);
 
   /// File names currently in the folder (does not descend into subdirs).
   Future<List<String>> listFiles();
@@ -124,6 +129,18 @@ class FileSystemSessionStorage extends SessionStorage {
       return null;
     }
     return f.readAsBytes();
+  }
+
+  @override
+  Future<List<int>?> readPrefix(String name, int limit) async {
+    final f = File('${root.path}/$name');
+    if (!await f.exists()) {
+      return null;
+    }
+    return f.openRead(0, limit).fold<List<int>>([], (acc, chunk) {
+      acc.addAll(chunk);
+      return acc;
+    });
   }
 
   @override
@@ -202,6 +219,18 @@ class SafSessionStorage extends SessionStorage {
   @override
   Future<List<int>?> readFile(String name) async {
     final bytes = await _invoke('readFile', {'tree': treeUri, 'name': name});
+    if (bytes == null) {
+      return null;
+    }
+    return (bytes as List<dynamic>).cast<int>();
+  }
+
+  @override
+  Future<List<int>?> readPrefix(String name, int limit) async {
+    final bytes = await _invoke(
+      'readFilePrefix',
+      {'tree': treeUri, 'name': name, 'limit': limit},
+    );
     if (bytes == null) {
       return null;
     }

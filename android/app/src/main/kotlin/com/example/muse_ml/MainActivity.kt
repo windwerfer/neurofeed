@@ -80,6 +80,7 @@ class MainActivity : FlutterActivity() {
             "ensureDir" -> { result.success(null); }
             "writeFile" -> writeFile(call, result)
             "readFile" -> readFile(call, result)
+            "readFilePrefix" -> readFilePrefix(call, result)
             "deleteFile" -> deleteFile(call, result)
             "listFiles" -> listFiles(call, result)
             else -> result.notImplemented()
@@ -147,6 +148,36 @@ class MainActivity : FlutterActivity() {
             } ?: result.success(null)
         } catch (e: Exception) {
             Log.e(TAG, "readFile $name failed", e)
+            result.error("read_failed", e.toString(), null)
+        }
+    }
+
+    private fun readFilePrefix(call: MethodCall, result: Result) {
+        val tree = treeUri(call)
+        val name = call.argument<String>("name")
+        val limit = call.argument<Int>("limit") ?: 262144
+        if (tree == null || name == null) {
+            result.error("bad_args", "tree/name/limit required", null)
+            return
+        }
+        try {
+            val doc = resolveDoc(tree, name)
+            contentResolver.openInputStream(doc)?.use { input ->
+                val buffer = ByteArray(limit)
+                var total = 0
+                while (total < limit) {
+                    val read = input.read(buffer, total, limit - total)
+                    if (read < 0) break
+                    total += read
+                }
+                if (total == 0) {
+                    result.success(null)
+                } else {
+                    result.success(buffer.copyOf(total))
+                }
+            } ?: result.success(null)
+        } catch (e: Exception) {
+            Log.e(TAG, "readFilePrefix $name failed", e)
             result.error("read_failed", e.toString(), null)
         }
     }

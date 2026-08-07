@@ -15,6 +15,30 @@ Muse EEG headset companion app — Flutter + Rust via `flutter_rust_bridge`. Use
 
 All user preferences (volumes, sound, duration, target settings) persist across restarts.
 
+## Session file format
+
+Each finished session is a **single self-contained `.muse.feedback`** file:
+
+```
+[ PNG thumbnail ][ jsonLen u32 BE ][ metadata json ][ bodyLen u32 BE ][ frame body ]
+```
+
+- The leading PNG is the session thumbnail. Because PNG decoders stop reading at
+  the `IEND` chunk, file managers on **Linux and macOS** render a real thumbnail
+  from this file while ignoring the trailing data. Windows/Android show a generic
+  icon.
+- The `json` holds `SessionMetadata` (protocol, timings, sound, notes, stats).
+- The `body` is the compressed frame stream parsed by `SessionReader`
+  (see `lib/src/charts/session_reader.dart`).
+- **History view is fast**: listing and thumbnails only read the small head
+  (`readPrefix`) and never pull the large body. See
+  `lib/src/feedback/session_container.dart`.
+
+Sessions live in the chosen save folder (see Settings → *Save feedback to
+folder*). Changing the folder **moves** (not copies) existing sessions.
+Live recordings stream to a hidden `.cache/` subfolder and are only assembled
+into the final `.muse.feedback` on save.
+
 ## Status
 
 Feedback feature — Phase I merged to `main`, **ready for device testing** (see

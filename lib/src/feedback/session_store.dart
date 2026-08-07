@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/session_container.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/settings.dart';
 
@@ -119,7 +120,7 @@ class SessionStore {
     );
   }
 
-  String _museName(String id) => 'session_$id.muse';
+  String _museName(String id) => 'session_$id.muse.feedback';
 
   Future<List<SessionSummary>> list() async {
     final storage = await _storage;
@@ -128,35 +129,48 @@ class SessionStore {
     final names = await storage.listFiles();
     final summaries = <SessionSummary>[];
     for (final name in names) {
-      if (!name.startsWith('session_') || !name.endsWith('.muse')) {
+      if (!name.startsWith('session_') || !name.endsWith('.muse.feedback')) {
         continue;
       }
-      final id = name.substring(8, name.length - 5);
-      final jsonName = 'session_$id.json';
-      final metadata = await _readMetadata(storage, jsonName, id);
+      final id = name.substring(8, name.length - 14);
+      final metadata = await _readMetadata(storage, name, id);
       summaries.add(SessionSummary(id: id, metadata: metadata));
     }
     summaries.sort(
       (a, b) => b.metadata.savedAt.compareTo(a.metadata.savedAt),
     );
-    debugPrint('[session] list(): found ${summaries.length} session(s)');
+    debugPrint('[session] list: found ${summaries.length} session(s)');
     return summaries;
   }
 
-  /// Read the raw .muse bytes for [id], or null if missing.
+  /// Read the raw .muse frame body for [id], or null if missing.
   Future<List<int>?> readMuse(String id) async {
     final storage = await _storage;
-    return storage.readFile(_museName(id));
+    final bytes = await storage.readFile(_museName(id));
+    if (bytes == null) {
+      return null;
+    }
+    return SessionContainer.extractBody(Uint8List.fromList(bytes));
   }
 
   /// Read the thumbnail PNG bytes for [id], or null when missing.
   Future<List<int>?> readPng(String id) async {
     final storage = await _storage;
-    return storage.readFile('session_$id.png');
+    final bytes =
+        await storage.readPrefix(_museName(id), SessionContainer.headReadLimit);
+    if (bytes == null || bytes.isEmpty) {
+      return null;
+    }
+    try {
+      return SessionContainer.parseHead(Uint8List.fromList(bytes)).pngBytes;
+    } catch (_) {
+      return null;
+    }
   }
 
-  /// Persist a finished session into the history folder: the .muse bytes,
-  /// the metadata json, and an optional thumbnail png.
+  /// Persist a finished session into the history folder as a single
+  /// `.muse.feedback` container: leading PNG thumbnail, then metadata json,
+  /// then the raw frame body.
   Future<SessionSummary> publishSession(
     String id,
     List<int> museBytes,
@@ -165,27 +179,26 @@ class SessionStore {
   }) async {
     final storage = await _storage;
     await storage.ensureDir();
-    await storage.writeFile(_museName(id), museBytes);
-    await storage.writeFile(
-      'session_$id.json',
-      const JsonEncoder.withIndent('  ').convert(metadata.toJson()).codeUnits,
+    final jsonBytes = const JsonEncoder().convert(metadata.toJson()).codeUnits;
+    final container = SessionContainer.encode(
+      pngBytes: pngBytes == null ? Uint8List(0) : Uint8List.fromList(pngBytes),
+      jsonBytes: Uint8List.fromList(jsonBytes),
+      bodyBytes: Uint8List.fromList(museBytes),
     );
-    if (pngBytes != null) {
-      await storage.writeFile('session_$id.png', pngBytes);
-    }
-    debugPrint('[session] written session_$id.muse to ${storage.location}');
+    await storage.writeFile(_museName(id), container);
+    debugPrint('[session] written ${_museName(id)} to ${storage.location}');
     return SessionSummary(id: id, metadata: metadata);
   }
 
   /// Copy every session in the current storage into [target], then delete the
   /// source copies so the folder change does not duplicate history. Returns the
-  /// number of `.muse` files moved (used for folder-change migration).
+  /// number of sessions moved (used for folder-change migration).
   Future<int> moveAllTo(SessionStorage target) async {
     final storage = await _storage;
     final names = await storage.listFiles();
     var moved = 0;
     for (final name in names) {
-      if (!name.startsWith('session_') || !name.endsWith('.muse')) {
+      if (!name.startsWith('session_') || !name.endsWith('.muse.feedback')) {
         continue;
       }
       final bytes = await storage.readFile(name);
@@ -195,19 +208,6 @@ class SessionStore {
       await target.ensureDir();
       await target.writeFile(name, bytes);
       await storage.deleteFile(name);
-      final stem = name.substring(0, name.length - 5);
-      final jsonName = '$stem.json';
-      final json = await storage.readFile(jsonName);
-      if (json != null) {
-        await target.writeFile(jsonName, json);
-        await storage.deleteFile(jsonName);
-      }
-      final pngName = '$stem.png';
-      final png = await storage.readFile(pngName);
-      if (png != null) {
-        await target.writeFile(pngName, png);
-        await storage.deleteFile(pngName);
-      }
       moved++;
     }
     debugPrint('[session] moved $moved session(s)');
@@ -216,15 +216,17 @@ class SessionStore {
 
   Future<SessionMetadata> _readMetadata(
     SessionStorage storage,
-    String jsonName,
+    String name,
     String id,
   ) async {
     try {
-      final raw = await storage.readFile(jsonName);
-      if (raw == null) {
+      final raw =
+          await storage.readPrefix(name, SessionContainer.headReadLimit);
+      if (raw == null || raw.isEmpty) {
         return _fallback(id);
       }
-      final decoded = jsonDecode(String.fromCharCodes(raw));
+      final head = SessionContainer.parseHead(Uint8List.fromList(raw));
+      final decoded = jsonDecode(String.fromCharCodes(head.jsonBytes));
       return SessionMetadata.fromJson(decoded as Map<String, Object?>) ??
           _fallback(id);
     } catch (_) {

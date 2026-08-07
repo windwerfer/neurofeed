@@ -70,7 +70,7 @@ class SettingsView extends ConsumerWidget {
     final count = existing == null
         ? 0
         : (await existing.listFiles()).where(
-            (n) => n.startsWith('session_') && n.endsWith('.muse'),
+            (n) => n.startsWith('session_') && n.endsWith('.muse.feedback'),
           ).length;
     if (!context.mounted) {
       return;

@@ -53,6 +53,7 @@ lib/src/feedback/         # feedback session system (merged to main, Phase I)
   target_state.dart         # AtrEngine (threshold, dynamic adapt, in-flight recalibrate) + band aggregator
   live_stats.dart, protocol.dart, session_store.dart, feedback_recorder.dart
   session_storage.dart      # SessionStorage abstraction (FS + SAF), scratch dir, storage provider
+  session_container.dart    # .muse.feedback file format: [PNG][jsonLen][json][bodyLen][frames]
 lib/src/audio/            # just_audio: AudioService + FeedbackAudioController (5 volume channels)
 rust/src/api/muse.rs    # FFI bridge: scan/connect/subscribe → MuseEvent stream
 rust/src/connection.rs  # in-Rust state (active connection, device cache, sink)
@@ -82,7 +83,8 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - Audio (dual-layer + 5 volume channels): `lib/src/audio/feedback_audio_controller.dart`, service in `lib/src/audio/audio_service.dart`.
 - Persisted prefs (volumes, sound, duration, target settings): `lib/src/settings.dart` (`Settings`, SharedPreferences).
 - Session storage abstraction (history in chosen folder; scratch in `.cache`; SAF on Android): `lib/src/feedback/session_storage.dart` (`SessionStorage`, `FileSystemSessionStorage`, `SafSessionStorage`, `resolveSessionStorage`, `sessionStorageProvider`). `SessionStore` is storage-backed; `sessionStoreProvider` is a `FutureProvider` derived from settings.
-- SAF folder picker + MethodChannel (`muse_ml/saf`): `android/app/src/main/kotlin/com/example/muse_ml/MainActivity.kt` (`getDir`/`ensureDir`/`writeFile`/`readFile`/`deleteFile`/`listFiles`).
+- Session file format (`.muse.feedback` = single self-contained file, PNG-first so Linux/macOS file managers thumbnail it): `lib/src/feedback/session_container.dart` (`SessionContainer.encode`/`parseHead`/`extractBody`; `headReadLimit`). Read sidecar-free: `SessionStore.list()`/`readPng()`/`readMuse()` read the head via `SessionStorage.readPrefix(name, limit)` and never pull the large body.
+- SAF folder picker + MethodChannel (`muse_ml/saf`): `android/app/src/main/kotlin/com/example/muse_ml/MainActivity.kt` (`getDir`/`ensureDir`/`writeFile`/`readFile`/`readFilePrefix`/`deleteFile`/`listFiles`).
 - Folder selection UI: `lib/src/views/settings_view.dart` (`file_selector` `getDirectoryPath` on desktop, `SafSessionStorage.pickFolder()` on Android).
 - Release CI: `.github/workflows/` — see `.ai/release.md` (keystore secrets, F-Droid, reproducibility).
 - Rust toolchain pin: `rust/rust-toolchain.toml` (kept in sync with `FLUTTER_VERSION`/`RUST_VERSION` in the workflows).
@@ -102,4 +104,6 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - **5 volume channels**: effective = master × channel (background / feedback / intro / end bell). Chimes start at full volume (no attack ramp); in-flight chime players skip `setVolume` re-apply (`_ramping` set). Values persist via `Settings`.
 - **Persistence**: all user prefs flow through `Settings` (SharedPreferences); `settingsProvider` is overridden in `main()`. Sound + duration are restored into `FeedbackState` at notifier construction.
 - **Storage resolution is async**: `sessionStorageProvider` (FutureProvider) derives from `settings.sessionFolder`. A `content://` value → `SafSessionStorage`; any other non-empty string → filesystem path; null/empty → default (`Documents/meditation feedback` on desktop, app documents on Android). `SessionStore` and `sessionListProvider` are also `FutureProvider`s — always use `ref.read(sessionStoreProvider.future)`.
-- **SAF is history-only, never live**: live EEG streaming (88 pkt/s, 30 s flushes) always goes to scratch — `scratchDirectory()` is `root/.cache` for filesystem, app-private cache for SAF. SAF is only touched on Save via `SafSessionStorage` (one ContentResolver write per call). The recorder (FeedbackRecorder → SessionRecorder) always writes to scratch and the dashboard copies the finished session into history on Save.
+- **SAF is history-only, never live**: live EEG streaming (88 pkt/s, 30 s flushes) always goes to scratch — `scratchDirectory()` is `root/.cache` for filesystem, app-private cache for SAF. SAF is only touched on Save via `SafSessionStorage` (one ContentResolver write per call). The recorder (FeedbackRecorder → SessionRecorder) always writes to scratch and the dashboard publishes the finished session into history on Save.
+- **`.muse.feedback` is single-file, head-read on history**: `list()`/`readPng()` must only call `readPrefix(name, SessionContainer.headReadLimit)` and parse the container head — never `readFile` (it pulls the whole body). When adding a summary field, put it in the metadata json, not a sidecar.
+- **Desktop default dir**: when `getApplicationDocumentsDirectory()` (Linux shells to `xdg-user-dir DOCUMENTS`) fails, fall back to `$HOME/Documents`, creating the folder chain on first recording — **never** fall back to `/tmp` or users won't find their files. Changing the save folder **moves** sessions (`SessionStore.moveAllTo`), it does not copy.
