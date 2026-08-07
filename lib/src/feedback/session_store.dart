@@ -177,12 +177,13 @@ class SessionStore {
     return SessionSummary(id: id, metadata: metadata);
   }
 
-  /// Copy every session in the current storage into [target]. Returns the
-  /// number of `.muse` files copied (used for folder-change migration).
-  Future<int> copyAllTo(SessionStorage target) async {
+  /// Copy every session in the current storage into [target], then delete the
+  /// source copies so the folder change does not duplicate history. Returns the
+  /// number of `.muse` files moved (used for folder-change migration).
+  Future<int> moveAllTo(SessionStorage target) async {
     final storage = await _storage;
     final names = await storage.listFiles();
-    var copied = 0;
+    var moved = 0;
     for (final name in names) {
       if (!name.startsWith('session_') || !name.endsWith('.muse')) {
         continue;
@@ -193,21 +194,24 @@ class SessionStore {
       }
       await target.ensureDir();
       await target.writeFile(name, bytes);
+      await storage.deleteFile(name);
       final stem = name.substring(0, name.length - 5);
       final jsonName = '$stem.json';
       final json = await storage.readFile(jsonName);
       if (json != null) {
         await target.writeFile(jsonName, json);
+        await storage.deleteFile(jsonName);
       }
       final pngName = '$stem.png';
       final png = await storage.readFile(pngName);
       if (png != null) {
         await target.writeFile(pngName, png);
+        await storage.deleteFile(pngName);
       }
-      copied++;
+      moved++;
     }
-    debugPrint('[session] migrated $copied session(s)');
-    return copied;
+    debugPrint('[session] moved $moved session(s)');
+    return moved;
   }
 
   Future<SessionMetadata> _readMetadata(

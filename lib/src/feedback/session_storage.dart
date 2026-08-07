@@ -8,8 +8,23 @@ import 'package:muse_ml/src/settings.dart';
 
 /// Absolute default history folder on desktop (user Documents).
 Future<Directory> _desktopDefault() async {
-  final docs = await getApplicationDocumentsDirectory();
-  return Directory('${docs.path}/meditation feedback');
+  String? docsPath;
+  try {
+    final docs = await getApplicationDocumentsDirectory();
+    docsPath = docs.path;
+  } catch (e) {
+    debugPrint('[storage] getApplicationDocumentsDirectory failed: $e');
+  }
+  if (docsPath == null || docsPath.isEmpty) {
+    final home = Platform.environment['HOME'];
+    if (home != null && home.isNotEmpty) {
+      docsPath = '$home${Platform.pathSeparator}Documents';
+    }
+  }
+  if (docsPath == null || docsPath.isEmpty) {
+    docsPath = Directory.systemTemp.path;
+  }
+  return Directory('$docsPath${Platform.pathSeparator}meditation feedback');
 }
 
 /// Per-platform default history folder (used when the user has not picked a

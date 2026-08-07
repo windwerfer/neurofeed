@@ -36,7 +36,7 @@ class SettingsView extends ConsumerWidget {
 
     if (migrate && oldStorage != null) {
       final store = await ref.read(sessionStoreProvider.future);
-      await store.copyAllTo(resolveStorageFromFolder(folder));
+      await store.moveAllTo(resolveStorageFromFolder(folder));
     }
 
     await settings.setSessionFolder(folder);
