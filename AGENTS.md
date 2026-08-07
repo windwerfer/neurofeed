@@ -52,6 +52,7 @@ lib/src/feedback/         # feedback session system (merged to main, Phase I)
   feedback_state.dart       # FeedbackStateNotifier: idle→calibrating→playing⇄paused→ended
   target_state.dart         # AtrEngine (threshold, dynamic adapt, in-flight recalibrate) + band aggregator
   live_stats.dart, protocol.dart, session_store.dart, feedback_recorder.dart
+  session_storage.dart      # SessionStorage abstraction (FS + SAF), scratch dir, storage provider
 lib/src/audio/            # just_audio: AudioService + FeedbackAudioController (5 volume channels)
 rust/src/api/muse.rs    # FFI bridge: scan/connect/subscribe → MuseEvent stream
 rust/src/connection.rs  # in-Rust state (active connection, device cache, sink)
@@ -80,6 +81,9 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - ATR engine (threshold, dynamic adapt, in-flight recalibrate): `lib/src/feedback/target_state.dart` (`AtrEngine`).
 - Audio (dual-layer + 5 volume channels): `lib/src/audio/feedback_audio_controller.dart`, service in `lib/src/audio/audio_service.dart`.
 - Persisted prefs (volumes, sound, duration, target settings): `lib/src/settings.dart` (`Settings`, SharedPreferences).
+- Session storage abstraction (history in chosen folder; scratch in `.cache`; SAF on Android): `lib/src/feedback/session_storage.dart` (`SessionStorage`, `FileSystemSessionStorage`, `SafSessionStorage`, `resolveSessionStorage`, `sessionStorageProvider`). `SessionStore` is storage-backed; `sessionStoreProvider` is a `FutureProvider` derived from settings.
+- SAF folder picker + MethodChannel (`muse_ml/saf`): `android/app/src/main/kotlin/com/example/muse_ml/MainActivity.kt` (`getDir`/`ensureDir`/`writeFile`/`readFile`/`deleteFile`/`listFiles`).
+- Folder selection UI: `lib/src/views/settings_view.dart` (`file_selector` `getDirectoryPath` on desktop, `SafSessionStorage.pickFolder()` on Android).
 - Release CI: `.github/workflows/` — see `.ai/release.md` (keystore secrets, F-Droid, reproducibility).
 - Rust toolchain pin: `rust/rust-toolchain.toml` (kept in sync with `FLUTTER_VERSION`/`RUST_VERSION` in the workflows).
 
@@ -97,3 +101,5 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - **In-flight recalibrate** (refresh icon during playing/paused): needs ≥ `minRecalibrateSeconds` (60) session time and ≥ `minRecalibrateSamples` (30) clean samples from the 90 s rolling buffer; replaces the baseline, resets the success window, plays a soft low bowl chime. Full silent recalibration is still available by starting a new session (Start Session → calibrating).
 - **5 volume channels**: effective = master × channel (background / feedback / intro / end bell). Chimes start at full volume (no attack ramp); in-flight chime players skip `setVolume` re-apply (`_ramping` set). Values persist via `Settings`.
 - **Persistence**: all user prefs flow through `Settings` (SharedPreferences); `settingsProvider` is overridden in `main()`. Sound + duration are restored into `FeedbackState` at notifier construction.
+- **Storage resolution is async**: `sessionStorageProvider` (FutureProvider) derives from `settings.sessionFolder`. A `content://` value → `SafSessionStorage`; any other non-empty string → filesystem path; null/empty → default (`Documents/meditation feedback` on desktop, app documents on Android). `SessionStore` and `sessionListProvider` are also `FutureProvider`s — always use `ref.read(sessionStoreProvider.future)`.
+- **SAF is history-only, never live**: live EEG streaming (88 pkt/s, 30 s flushes) always goes to scratch — `scratchDirectory()` is `root/.cache` for filesystem, app-private cache for SAF. SAF is only touched on Save via `SafSessionStorage` (one ContentResolver write per call). The recorder (FeedbackRecorder → SessionRecorder) always writes to scratch and the dashboard copies the finished session into history on Save.

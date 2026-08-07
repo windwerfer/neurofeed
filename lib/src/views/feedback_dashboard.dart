@@ -15,11 +15,17 @@ class FeedbackDashboardView extends ConsumerStatefulWidget {
   const FeedbackDashboardView({
     super.key,
     this.sessionPath,
+    this.sessionId,
     this.metadata,
     this.readOnly = false,
   });
 
+  /// Scratch file to read for a live (unsaved) session.
   final String? sessionPath;
+
+  /// History id to read from the session store (read-only history viewing).
+  final String? sessionId;
+
   final SessionMetadata? metadata;
   final bool readOnly;
 
@@ -39,11 +45,19 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   @override
   void initState() {
     super.initState();
-    final path =
-        widget.sessionPath ??
-        ref.read(feedbackStateProvider.notifier).sessionFilePath;
-    if (path != null) {
-      _dataFuture = SessionReader.read(File(path));
+    final readOnly = widget.readOnly;
+    if (readOnly && widget.sessionId != null) {
+      final store = ref.read(sessionStoreProvider.future);
+      _dataFuture = SessionReader.readBytes(
+        store.then((s) => s.readMuse(widget.sessionId!)),
+      );
+    } else {
+      final path =
+          widget.sessionPath ??
+          ref.read(feedbackStateProvider.notifier).sessionFilePath;
+      if (path != null) {
+        _dataFuture = SessionReader.read(File(path));
+      }
     }
     final notes = widget.metadata?.notes;
     if (notes != null && notes.isNotEmpty) {
@@ -125,41 +139,40 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     debugPrint('[dashboard] save: sessionFilePath=${notifier.sessionFilePath}');
     final saved = await notifier.saveSession();
     if (saved != null) {
-      debugPrint('[dashboard] save: renamed to ${saved.path}');
+      debugPrint('[dashboard] save: finalized ${saved.path}');
       final stats = _prepared?.stats;
+      final metadata = SessionMetadata(
+        protocol: fb.protocol,
+        durationMinutes: fb.durationMinutes,
+        elapsedSeconds: fb.elapsedSeconds,
+        sound: fb.soundName,
+        savedAt: DateTime.now(),
+        notes: _notes.text,
+        stats: stats == null
+            ? null
+            : SessionStatsData(
+                peakAlphaFreq: stats.peakAlphaFreq,
+                peakAlphaPower: stats.peakAlphaPower,
+                targetPct: stats.targetPct,
+                stillnessPct: stats.stillnessPct,
+                avgBpm: stats.avgBpm,
+                avgAlphaRel: stats.avgAlphaRel,
+              ),
+      );
+      final id = DateTime.now().millisecondsSinceEpoch.toString();
       try {
-        await ref.read(sessionStoreProvider).writeMetadata(
-          saved,
-          SessionMetadata(
-            protocol: fb.protocol,
-            durationMinutes: fb.durationMinutes,
-            elapsedSeconds: fb.elapsedSeconds,
-            sound: fb.soundName,
-            savedAt: DateTime.now(),
-            notes: _notes.text,
-            stats: stats == null
-                ? null
-                : SessionStatsData(
-                    peakAlphaFreq: stats.peakAlphaFreq,
-                    peakAlphaPower: stats.peakAlphaPower,
-                    targetPct: stats.targetPct,
-                    stillnessPct: stats.stillnessPct,
-                    avgBpm: stats.avgBpm,
-                    avgAlphaRel: stats.avgAlphaRel,
-                  ),
-          ),
+        debugPrint('[session] publish: reading bytes ${saved.path}');
+        final museBytes = await saved.readAsBytes();
+        final store = await ref.read(sessionStoreProvider.future);
+        await store.publishSession(
+          id,
+          museBytes,
+          metadata,
+          pngBytes: _thumbnail,
         );
+        debugPrint('[session] publish: complete ($id)');
       } catch (e) {
-        debugPrint('[dashboard] save: metadata write FAILED: $e');
-      }
-      if (_thumbnail != null) {
-        final pngPath = saved.path.replaceFirst(RegExp(r'\.muse$'), '.png');
-        try {
-          await File(pngPath).writeAsBytes(_thumbnail!);
-          debugPrint('[dashboard] save: thumbnail $pngPath');
-        } catch (e) {
-          debugPrint('[dashboard] thumbnail save failed: $e');
-        }
+        debugPrint('[session] publish FAILED ($e)');
       }
     } else {
       debugPrint('[dashboard] save: saveSession returned null (nothing to save)');

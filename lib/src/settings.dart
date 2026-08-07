@@ -49,6 +49,7 @@ class Settings {
   static const String _responsivenessKey = 'responsiveness';
   static const String _soundNameKey = 'sound_name';
   static const String _durationMinutesKey = 'duration_minutes';
+  static const String _sessionFolderKey = 'session_folder';
 
   final SharedPreferences _prefs;
 
@@ -111,6 +112,15 @@ class Settings {
 
   Future<void> setDurationMinutes(int value) =>
       _prefs.setInt(_durationMinutesKey, value);
+
+  /// History folder. A `content://` value is an Android SAF tree URI; any
+  /// other value is a real filesystem path. Null means "use the default".
+  String? get sessionFolder => _prefs.getString(_sessionFolderKey);
+
+  Future<void> setSessionFolder(String value) =>
+      _prefs.setString(_sessionFolderKey, value);
+
+  Future<void> clearSessionFolder() => _prefs.remove(_sessionFolderKey);
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and

@@ -65,8 +65,25 @@ class SessionData {
 class SessionReader {
   static const _magic = 0x4D55534542494E0A; // "MUSEBIN\n"
 
-  static Future<SessionData> read(File file) async {
-    final bytes = await file.readAsBytes();
+  static Future<SessionData> read(File file) =>
+      readBytes(file.readAsBytes(), label: file.path);
+
+  static Future<SessionData> readBytes(
+    Future<List<int>?> future, {
+    String label = '<memory>',
+  }) async {
+    final bytes = await future;
+    if (bytes == null) {
+      throw const FormatException('No session bytes available');
+    }
+    return readRaw(bytes, label: label);
+  }
+
+  static Future<SessionData> readRaw(
+    List<int> raw, {
+    String label = '<memory>',
+  }) async {
+    final bytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
     final data = ByteData.sublistView(bytes);
     var off = 0;
 
@@ -100,7 +117,7 @@ class SessionReader {
       _parseRecords(ByteData.sublistView(decoded), session);
     }
     debugPrint(
-        '[reader] ${file.path}: ${bytes.length}B bands=${session.bands.length} '
+        '[reader] $label: ${bytes.length}B bands=${session.bands.length} '
         'pulses=${session.pulses.length} mov=${session.movements.length} '
         'peak=${session.peakAlphas.length}');
     return session;

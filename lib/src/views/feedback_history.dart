@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -86,13 +86,13 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
   }
 }
 
-class _HistoryTile extends StatelessWidget {
+class _HistoryTile extends ConsumerWidget {
   const _HistoryTile({required this.summary});
 
   final SessionSummary summary;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final meta = summary.metadata;
     final protocol = ProtocolInfo.forType(meta.protocol);
@@ -121,7 +121,7 @@ class _HistoryTile extends StatelessWidget {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => FeedbackDashboardView(
-                sessionPath: summary.musePath,
+                sessionId: summary.id,
                 metadata: meta,
                 readOnly: true,
               ),
@@ -132,10 +132,7 @@ class _HistoryTile extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: _Thumbnail(path: summary.pngPath),
-              ),
+              _Thumbnail(id: summary.id),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -178,42 +175,49 @@ class _HistoryTile extends StatelessWidget {
   }
 }
 
-class _Thumbnail extends StatelessWidget {
-  const _Thumbnail({required this.path});
+class _Thumbnail extends ConsumerWidget {
+  const _Thumbnail({required this.id});
 
-  final String? path;
+  final String id;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final file = path == null ? null : File(path!);
-    if (file == null || !file.existsSync()) {
-      return Container(
-        width: 64,
-        height: 48,
-        color: theme.colorScheme.surfaceContainerHighest,
-        child: Icon(
-          Icons.auto_graph,
-          size: 24,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-    }
-    return Image.file(
-      file,
-      width: 64,
-      height: 48,
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => Container(
-        width: 64,
-        height: 48,
-        color: theme.colorScheme.surfaceContainerHighest,
-        child: Icon(
-          Icons.auto_graph,
-          size: 24,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      ),
+    final store = ref.read(sessionStoreProvider.future);
+    return FutureBuilder<List<int>?>(
+      future: store.then((s) => s.readPng(id)),
+      builder: (context, snap) {
+        final bytes = snap.data;
+        if (bytes == null || bytes.isEmpty) {
+          return Container(
+            width: 64,
+            height: 48,
+            color: theme.colorScheme.surfaceContainerHighest,
+            child: Icon(
+              Icons.auto_graph,
+              size: 24,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          );
+        }
+        return Image.memory(
+          Uint8List.fromList(bytes),
+          width: 64,
+          height: 48,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => Container(
+            width: 64,
+            height: 48,
+            color: theme.colorScheme.surfaceContainerHighest,
+            child: Icon(
+              Icons.auto_graph,
+              size: 24,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        );
+      },
     );
   }
 }

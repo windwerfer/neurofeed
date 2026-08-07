@@ -1,30 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:path_provider/path_provider.dart';
-
-/// Resolves the persistent session storage directory.
-///
-/// On Android/iOS this is under the app's documents directory so saved
-/// sessions survive process restarts. `Directory.systemTemp` maps to the app
-/// cache directory on mobile, which the OS may clear — that would silently
-/// wipe saved sessions. Desktop falls back to the system temp directory.
-Future<Directory> defaultSessionDir() async {
-  if (Platform.isAndroid || Platform.isIOS) {
-    try {
-      final docs = await getApplicationDocumentsDirectory();
-      final dir = Directory('${docs.path}/muse_ml_sessions');
-      debugPrint('[session] storage dir: ${dir.path}');
-      return dir;
-    } catch (e) {
-      debugPrint('[session] documents dir unavailable ($e), using systemTemp');
-    }
-  }
-  return Directory('${Directory.systemTemp.path}/muse_ml_sessions');
-}
+import 'package:muse_ml/src/feedback/session_storage.dart';
+import 'package:muse_ml/src/settings.dart';
 
 class SessionStatsData {
   const SessionStatsData({
@@ -121,46 +101,40 @@ class SessionMetadata {
 }
 
 class SessionSummary {
-  const SessionSummary({
-    required this.id,
-    required this.metadata,
-    required this.musePath,
-    this.pngPath,
-  });
+  const SessionSummary({required this.id, required this.metadata});
 
   final String id;
   final SessionMetadata metadata;
-  final String musePath;
-  final String? pngPath;
 }
 
 class SessionStore {
-  SessionStore({Future<Directory>? dir}) : _dir = dir ?? defaultSessionDir();
+  SessionStore({Future<SessionStorage>? storage})
+    : _storage = storage ?? _defaultStorage();
 
-  final Future<Directory> _dir;
+  final Future<SessionStorage> _storage;
+
+  static Future<SessionStorage> _defaultStorage() async {
+    throw UnimplementedError(
+      'SessionStore needs an explicit storage; use sessionStoreProvider',
+    );
+  }
+
+  String _museName(String id) => 'session_$id.muse';
 
   Future<List<SessionSummary>> list() async {
-    final dir = await _dir;
-    debugPrint('[session] list(): dir=${dir.path} exists=${await dir.exists()}');
-    if (!await dir.exists()) {
-      return [];
-    }
+    final storage = await _storage;
+    debugPrint(
+        '[session] list(): storage=${storage.displayName} loc=${storage.location}');
+    final names = await storage.listFiles();
     final summaries = <SessionSummary>[];
-    await for (final entity in dir.list()) {
-      if (entity is! File || !entity.path.endsWith('.muse')) {
+    for (final name in names) {
+      if (!name.startsWith('session_') || !name.endsWith('.muse')) {
         continue;
       }
-      final stem = entity.path.substring(0, entity.path.length - 5);
-      final metadata = await _readMetadata('$stem.json');
-      final id = _idFromPath(entity.path);
-      summaries.add(
-        SessionSummary(
-          id: id,
-          metadata: metadata,
-          musePath: entity.path,
-          pngPath: File('$stem.png').existsSync() ? '$stem.png' : null,
-        ),
-      );
+      final id = name.substring(8, name.length - 5);
+      final jsonName = 'session_$id.json';
+      final metadata = await _readMetadata(storage, jsonName, id);
+      summaries.add(SessionSummary(id: id, metadata: metadata));
     }
     summaries.sort(
       (a, b) => b.metadata.savedAt.compareTo(a.metadata.savedAt),
@@ -169,62 +143,109 @@ class SessionStore {
     return summaries;
   }
 
-  Future<void> writeMetadata(File museFile, SessionMetadata metadata) async {
-    final stem = museFile.path.substring(0, museFile.path.length - 5);
-    final jsonPath = '$stem.json';
-    try {
-      await File(jsonPath).writeAsString(
-        const JsonEncoder.withIndent('  ').convert(metadata.toJson()),
-      );
-      debugPrint('[session] metadata written: $jsonPath');
-    } catch (e) {
-      debugPrint('[session] metadata write FAILED: $jsonPath ($e)');
-      rethrow;
-    }
+  /// Read the raw .muse bytes for [id], or null if missing.
+  Future<List<int>?> readMuse(String id) async {
+    final storage = await _storage;
+    return storage.readFile(_museName(id));
   }
 
-  Future<SessionMetadata> _readMetadata(String jsonPath) async {
-    final file = File(jsonPath);
-    if (!file.existsSync()) {
-      return SessionMetadata(
-        protocol: ProtocolType.alphaTheta,
-        durationMinutes: 0,
-        elapsedSeconds: 0,
-        sound: 'Ambient Drone',
-        savedAt: DateTime.fromMillisecondsSinceEpoch(
-          int.tryParse(_idFromPath(jsonPath)) ?? 0,
-        ),
-      );
+  /// Read the thumbnail PNG bytes for [id], or null when missing.
+  Future<List<int>?> readPng(String id) async {
+    final storage = await _storage;
+    return storage.readFile('session_$id.png');
+  }
+
+  /// Persist a finished session into the history folder: the .muse bytes,
+  /// the metadata json, and an optional thumbnail png.
+  Future<SessionSummary> publishSession(
+    String id,
+    List<int> museBytes,
+    SessionMetadata metadata, {
+    List<int>? pngBytes,
+  }) async {
+    final storage = await _storage;
+    await storage.ensureDir();
+    await storage.writeFile(_museName(id), museBytes);
+    await storage.writeFile(
+      'session_$id.json',
+      const JsonEncoder.withIndent('  ').convert(metadata.toJson()).codeUnits,
+    );
+    if (pngBytes != null) {
+      await storage.writeFile('session_$id.png', pngBytes);
     }
+    debugPrint('[session] written session_$id.muse to ${storage.location}');
+    return SessionSummary(id: id, metadata: metadata);
+  }
+
+  /// Copy every session in the current storage into [target]. Returns the
+  /// number of `.muse` files copied (used for folder-change migration).
+  Future<int> copyAllTo(SessionStorage target) async {
+    final storage = await _storage;
+    final names = await storage.listFiles();
+    var copied = 0;
+    for (final name in names) {
+      if (!name.startsWith('session_') || !name.endsWith('.muse')) {
+        continue;
+      }
+      final bytes = await storage.readFile(name);
+      if (bytes == null) {
+        continue;
+      }
+      await target.ensureDir();
+      await target.writeFile(name, bytes);
+      final stem = name.substring(0, name.length - 5);
+      final jsonName = '$stem.json';
+      final json = await storage.readFile(jsonName);
+      if (json != null) {
+        await target.writeFile(jsonName, json);
+      }
+      final pngName = '$stem.png';
+      final png = await storage.readFile(pngName);
+      if (png != null) {
+        await target.writeFile(pngName, png);
+      }
+      copied++;
+    }
+    debugPrint('[session] migrated $copied session(s)');
+    return copied;
+  }
+
+  Future<SessionMetadata> _readMetadata(
+    SessionStorage storage,
+    String jsonName,
+    String id,
+  ) async {
     try {
-      final raw = jsonDecode(await file.readAsString());
-      return SessionMetadata.fromJson(raw as Map<String, Object?>) ??
-          _fallback(jsonPath);
+      final raw = await storage.readFile(jsonName);
+      if (raw == null) {
+        return _fallback(id);
+      }
+      final decoded = jsonDecode(String.fromCharCodes(raw));
+      return SessionMetadata.fromJson(decoded as Map<String, Object?>) ??
+          _fallback(id);
     } catch (_) {
-      return _fallback(jsonPath);
+      return _fallback(id);
     }
   }
 
-  SessionMetadata _fallback(String jsonPath) => SessionMetadata(
+  SessionMetadata _fallback(String id) => SessionMetadata(
     protocol: ProtocolType.alphaTheta,
     durationMinutes: 0,
     elapsedSeconds: 0,
     sound: 'Ambient Drone',
-    savedAt: DateTime.fromMillisecondsSinceEpoch(
-      int.tryParse(_idFromPath(jsonPath)) ?? 0,
-    ),
+    savedAt: DateTime.fromMillisecondsSinceEpoch(int.tryParse(id) ?? 0),
   );
-
-  String _idFromPath(String path) {
-    final name = path.split(Platform.pathSeparator).last;
-    final stem = name.startsWith('session_') ? name.substring(8) : name;
-    final id = stem.split('.').first;
-    return id;
-  }
 }
 
-final sessionStoreProvider = Provider<SessionStore>((ref) => SessionStore());
+/// Storage-backed store that derives its [SessionStorage] from the active
+/// [Settings]. Reading [sessionStorageProvider] here keeps history and the
+/// recorder on the same folder.
+final sessionStoreProvider = FutureProvider<SessionStore>((ref) {
+  final settings = ref.watch(settingsProvider);
+  return SessionStore(storage: resolveSessionStorage(settings));
+});
 
-final sessionListProvider = FutureProvider<List<SessionSummary>>(
-  (ref) => ref.watch(sessionStoreProvider).list(),
-);
+final sessionListProvider = FutureProvider<List<SessionSummary>>((ref) async {
+  final store = await ref.watch(sessionStoreProvider.future);
+  return store.list();
+});

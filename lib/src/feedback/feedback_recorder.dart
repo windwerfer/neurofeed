@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/charts/session_recorder.dart';
-import 'package:muse_ml/src/feedback/session_store.dart';
+import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 /// Wraps [SessionRecorder] with session-aware lifecycle.
@@ -10,27 +10,34 @@ import 'package:muse_ml/src/rust/api/muse.dart';
 /// The continuous recorder runs during the entire connection and captures raw
 /// EEG/PPG/IMU. The [FeedbackRecorder] starts/stops in sync with feedback
 /// sessions and records only the 1Hz derived metrics (bands, pulse, movement,
-/// peak alpha) plus the raw EEG for the session duration.
+/// peak alpha) plus the raw EEG for the session duration. Live writes always
+/// go to the fast scratch directory — SAF is only touched on Save.
 class FeedbackRecorder {
-  final SessionRecorder _recorder = SessionRecorder();
-  final Future<Directory> _sessionDir;
+  FeedbackRecorder({SessionStorage? storage})
+    : _scratch = _scratchDir(storage);
 
-  FeedbackRecorder({Future<Directory>? sessionDir})
-    : _sessionDir = sessionDir ?? defaultSessionDir();
+  final Future<Directory> _scratch;
+  final SessionRecorder _recorder = SessionRecorder();
+
+  static Future<Directory> _scratchDir(SessionStorage? storage) async {
+    if (storage != null) return scratchDirectory(storage);
+    return Directory('${Directory.systemTemp.path}/muse_scratch');
+  }
 
   bool get isRecording => _recorder.isRecording;
 
   String? get currentFilePath => _recorder.currentFilePath;
 
-  /// Begin a session recording. If one is already active, it is ended first.
+  /// Begin a session recording in the scratch directory. If one is already
+  /// active, it is ended first.
   Future<void> startSession() async {
     await _recorder.stop();
-    final dir = await _sessionDir;
-    debugPrint('[feedback] startSession: dir=${dir.path}');
+    final dir = await _scratch;
     if (!await dir.exists()) {
       await dir.create(recursive: true);
-      debugPrint('[feedback] startSession: created dir');
+      debugPrint('[feedback] startSession: created scratch $dir');
     }
+    debugPrint('[feedback] startSession: scratch=${dir.path}');
     await _recorder.start(dir);
   }
 
@@ -42,7 +49,8 @@ class FeedbackRecorder {
   /// Flush pending data to disk without finalizing the temp file.
   Future<void> flushSession() => _recorder.flush();
 
-  /// Mark the session as saved (rename temp file to final name).
+  /// Mark the session as saved (rename temp file to final name). Returns the
+  /// finalized scratch file on disk.
   Future<File?> saveSession() => _recorder.markSaved();
 
   /// Discard the session (delete temp file).
