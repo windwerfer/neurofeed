@@ -6,6 +6,13 @@ import 'package:muse_ml/src/rust/api/muse.dart';
 const int electrodeAf7 = 1;
 const int electrodeAf8 = 2;
 
+/// A per-pad signal-quality score at or above this value is treated as a
+/// "good" electrode and contributes to the live ATR computation. Pads below
+/// it are dropped for that sample. Kept in sync with [signalGoodThreshold]
+/// so the calibration gate and the live autodrop use the same notion of a
+/// good contact. (Future feedback options may add per-pad weighting here.)
+const double atrUsableSignalThreshold = 80.0;
+
 const double movementGateThreshold = 0.05;
 
 class RelativeTarget {
@@ -265,23 +272,47 @@ class TargetStateAggregator {
     _latest.clear();
   }
 
-  RelativeTarget? evaluate() {
+  /// Resolves the combined per-sample relative bands from the two frontal
+  /// pads, dropping any pad whose signal quality is currently below
+  /// [atrUsableSignalThreshold] instead of averaging corrupted data into the
+  /// result. Uses the single usable pad when the other is bad, and returns
+  /// null only when neither pad is usable.
+  RelativeTarget? evaluate([List<double>? quality]) {
     final af7 = _latest[electrodeAf7];
     final af8 = _latest[electrodeAf8];
-    if (af7 == null || af8 == null) {
-      return null;
+    final picked = <_RelativeBands>[];
+    if (af7 != null && _padUsable(quality, electrodeAf7)) {
+      final rel = af7.relative();
+      if (rel != null) picked.add(rel);
     }
-    final rel7 = af7.relative();
-    final rel8 = af8.relative();
-    if (rel7 == null || rel8 == null) {
+    if (af8 != null && _padUsable(quality, electrodeAf8)) {
+      final rel = af8.relative();
+      if (rel != null) picked.add(rel);
+    }
+    if (picked.isEmpty) {
       return null;
     }
     return RelativeTarget(
-      alphaRel: (rel7.alpha + rel8.alpha) / 2,
-      thetaRel: (rel7.theta + rel8.theta) / 2,
-      betaRel: (rel7.beta + rel8.beta) / 2,
-      gammaRel: (rel7.gamma + rel8.gamma) / 2,
+      alphaRel: _avg(picked.map((r) => r.alpha)),
+      thetaRel: _avg(picked.map((r) => r.theta)),
+      betaRel: _avg(picked.map((r) => r.beta)),
+      gammaRel: _avg(picked.map((r) => r.gamma)),
     );
+  }
+
+  static bool _padUsable(List<double>? quality, int electrode) {
+    if (quality == null || electrode >= quality.length) return false;
+    return quality[electrode] >= atrUsableSignalThreshold;
+  }
+
+  static double _avg(Iterable<double> values) {
+    var sum = 0.0;
+    var count = 0;
+    for (final v in values) {
+      sum += v;
+      count++;
+    }
+    return count == 0 ? 0 : sum / count;
   }
 }
 

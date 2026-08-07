@@ -49,6 +49,21 @@ Flutter UI (lib/src)
 the Kotlin glue, bundled Java classes, JVM-attach patch, and patched fork.
 It remains a good second choice if btleplug ever becomes unmaintainable.
 
+## Signal quality, calibration gate, and ATR autodrop (feedback)
+- Per-pad `signalQuality` (0–100, from EEG std over a 1 s window,
+  `connection_provider.dart`) is the "fit" score — separate from the bands used
+  for ATR.
+- Calibration gate: all 4 pads ≥ `signalGoodThreshold` for `greenStableSeconds`
+  (3) continuous (1 s `_gateTimer`), then baseline. After baseline there is no
+  signal gate → feedback always starts.
+- Faulty pad (non-green for `faultyPadSeconds`=20 while frontal pads green) →
+  inline "Continue anyway" fallback (tier A: both AF7/AF8; tier B: ≥1).
+- Playing: pauses only when both needed pads < `signalCriticalThreshold` for
+  `badSignalPauseSeconds`; never auto-ends; auto-resumes when a needed pad
+  recovers.
+- ATR autodrop: `TargetStateAggregator.evaluate(quality)` averages only pads
+  ≥ `atrUsableSignalThreshold`; null if both frontal pads are bad.
+
 ## muse-rs module map (for the fork)
 | File | Role | Keep in fork? |
 |------|------|---------------|

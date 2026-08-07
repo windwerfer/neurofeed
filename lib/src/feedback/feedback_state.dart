@@ -19,7 +19,17 @@ const double signalGoodThreshold = 80.0;
 const double signalCriticalThreshold = 40.0;
 const int badSignalPauseSeconds = 10;
 const int interruptionGraceSeconds = 10;
-const int signalWaitResetSeconds = 10;
+/// The calibration gate requires all pads green for this long before the
+/// baseline starts (guards against a transient blink/loose contact).
+const int greenStableSeconds = 3;
+/// If one pad has not gone green for this long while the others are green, we
+/// assume that pad is faulty and surface the continue-anyway fallback.
+const int faultyPadSeconds = 20;
+/// The program's frontal electrodes (AF7/AF8). These are the only pads whose
+/// quality gates calibration (via the fallback bubble) and whose quality gates
+/// the playing-phase bad-signal pause; rear pads never block feedback. When
+/// future feedback options are added they should reuse this same "enough pads
+/// for this program" model rather than requiring all four pads.
 const List<int> neededElectrodes = [1, 2];
 const int calibrationBaselineSeconds = 90;
 const int adaptIntervalSeconds = 30;
@@ -122,13 +132,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   Timer? _ticker;
   Timer? _interruptTimer;
   Timer? _baselineTimer;
+  Timer? _gateTimer;
   FeedbackInterruptKind? _interruptKind;
   bool _interruptWasPlaying = false;
   int _interruptionLeft = interruptionGraceSeconds;
   int _badSignalSeconds = 0;
-  String? _lastQualityKey;
-  int _waitingSeconds = 0;
-  bool _bypassSignalGate = false;
+  int _greenSeconds = 0;
+  int _faultyPadSeconds = 0;
   DateTime _lastMovementAt = DateTime.fromMillisecondsSinceEpoch(0);
   int _adaptTick = 0;
   final TargetStateAggregator _target = TargetStateAggregator();
@@ -203,12 +213,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     setResponsiveness(0.5);
   }
 
-  /// Begin calibration: play the voice intro, then record a [calibrationBaselineSeconds]
-  /// silent baseline to derive the personalized ATR threshold, then start
-  /// feedback automatically. Opens the connect window if the Muse is not
-  /// connected. Calibration only proceeds once all electrodes are green;
-  /// with a defective electrode the user can start anyway after the signal
-  /// has not changed for [signalWaitResetSeconds].
+  /// Begin calibration: play the voice intro, require all electrodes green
+  /// for [greenStableSeconds] before starting a [calibrationBaselineSeconds]
+  /// silent baseline, then start feedback automatically. Opens the connect
+  /// window if the Muse is not connected. There is no gate after the
+  /// baseline. If one pad never turns green for [faultyPadSeconds] while the
+  /// needed frontal pads do, it is assumed faulty and a continue-anyway
+  /// fallback is shown.
   Future<void> startCalibration() async {
     if (!_ref.read(appStateProvider).status.connected) {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
@@ -265,15 +276,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     return true;
   }
 
+  /// Start calibration: play the voice intro, wait for all pads to be green
+  /// for [greenStableSeconds] before starting the silent baseline, then begin
+  /// feedback automatically. No post-baseline gate: once the baseline is
+  /// captured feedback always starts. If one pad never reaches green while
+  /// the needed frontal pads do, it is assumed faulty and the start-anyway
+  /// fallback is surfaced after [faultyPadSeconds].
   Future<void> _runCalibration() async {
     if (state.phase != FeedbackPhase.calibrating) {
-      return;
-    }
-    final quality = _ref.read(appStateProvider).signalQuality;
-    if (!_allGreen(quality)) {
-      _lastQualityKey = _qualityKey(quality);
-      _waitingSeconds = 0;
-      state = state.copyWith(waitingForSignal: true, startAnywayAvailable: false);
       return;
     }
     _atr.reset();
@@ -284,10 +294,47 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (state.phase != FeedbackPhase.calibrating) {
       return;
     }
-    _startBaseline();
+    _greenSeconds = 0;
+    _faultyPadSeconds = 0;
+    state = state.copyWith(
+      waitingForSignal: true,
+      startAnywayAvailable: false,
+    );
+    _startGateTimer();
+  }
+
+  /// Ticks once a second during the calibration signal gate. Starts the
+  /// baseline once all pads have been green for [greenStableSeconds]
+  /// continuously. Flags the faulty-pad fallback once a missing pad has
+  /// persisted for [faultyPadSeconds] while the frontal pads are green.
+  void _startGateTimer() {
+    _gateTimer?.cancel();
+    _gateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (state.phase != FeedbackPhase.calibrating) {
+        _gateTimer?.cancel();
+        return;
+      }
+      final quality = _ref.read(appStateProvider).signalQuality;
+      if (_allGreen(quality)) {
+        _greenSeconds++;
+        if (_greenSeconds >= greenStableSeconds) {
+          _gateTimer?.cancel();
+          _startBaseline();
+        }
+        return;
+      }
+      _greenSeconds = 0;
+      if (_hasNeededElectrode(quality) && !state.startAnywayAvailable) {
+        _faultyPadSeconds++;
+        if (_faultyPadSeconds >= faultyPadSeconds) {
+          state = state.copyWith(startAnywayAvailable: true);
+        }
+      }
+    });
   }
 
   void _startBaseline() {
+    _gateTimer?.cancel();
     _baselineTimer?.cancel();
     state = state.copyWith(
       baselineSecondsLeft: calibrationBaselineSeconds,
@@ -324,27 +371,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       baselineSecondsLeft: 0,
       currentThreshold: threshold,
     );
-    final bypassed = _bypassSignalGate;
-    _bypassSignalGate = false;
-    final qualityAfter = _ref.read(appStateProvider).signalQuality;
-    if (!bypassed && !_allGreen(qualityAfter)) {
-      _lastQualityKey = _qualityKey(qualityAfter);
-      _waitingSeconds = 0;
-      state = state.copyWith(waitingForSignal: true, startAnywayAvailable: false);
-      return;
-    }
     unawaited(startPlaying());
   }
 
-  /// Bypasses the all-green calibration gate (used when the user opts to
-  /// start anyway after a long-unchanged signal with a working electrode).
+  /// Bypasses the calibration signal gate (used when the user opts to start
+  /// anyway after a faulty pad has been detected).
   void startAnyway() {
     if (state.phase != FeedbackPhase.calibrating ||
         !state.startAnywayAvailable) {
       return;
     }
-    _bypassSignalGate = true;
-    _runCalibration();
+    _gateTimer?.cancel();
+    _startBaseline();
   }
 
   /// Start the feedback loop: record the session and begin the background
@@ -400,9 +438,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _interruptTimer = null;
     _baselineTimer?.cancel();
     _baselineTimer = null;
-    _lastQualityKey = null;
-    _waitingSeconds = 0;
-    _bypassSignalGate = false;
+    _gateTimer?.cancel();
+    _gateTimer = null;
+    _greenSeconds = 0;
+    _faultyPadSeconds = 0;
     _adaptTick = 0;
     _audio.stop();
     _recorder.discardSession();
@@ -449,9 +488,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   /// Pauses the session on a disconnect or persistent bad signal instead of
-  /// ending it, then ends it if the interruption is not resolved within
-  /// [interruptionGraceSeconds]. A later, more severe interruption kind
-  /// supersedes the current one without restarting the grace countdown.
+  /// ending it. Only a disconnect keeps a grace countdown (then ends if not
+  /// resolved within [interruptionGraceSeconds]); a signal loss waits
+  /// indefinitely and resumes automatically once the signal returns.
   void _interruptSession(
     String message, {
     required FeedbackInterruptKind kind,
@@ -465,13 +504,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _interruptWasPlaying = state.phase == FeedbackPhase.playing;
       _ticker?.cancel();
       _audio.pause();
-      _startInterruptTimer();
+      if (kind == FeedbackInterruptKind.disconnect) {
+        _startInterruptTimer();
+      }
     }
     _interruptKind = kind;
+    final showCountdown = kind == FeedbackInterruptKind.disconnect;
     state = state.copyWith(
       phase: FeedbackPhase.interrupted,
       interruptMessage: message,
-      interruptionSecondsLeft: _interruptionLeft,
+      interruptionSecondsLeft: showCountdown ? _interruptionLeft : null,
     );
   }
 
@@ -521,37 +563,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     final quality = next.signalQuality;
 
-    if (state.phase == FeedbackPhase.calibrating && state.waitingForSignal) {
-      final key = _qualityKey(quality);
-      if (_allGreen(quality)) {
-        state = state.copyWith(
-          waitingForSignal: false,
-          startAnywayAvailable: false,
-        );
-        unawaited(_runCalibration());
-        return;
-      }
-      if (key != _lastQualityKey) {
-        _lastQualityKey = key;
-        _waitingSeconds = 0;
-        if (state.startAnywayAvailable) {
-          state = state.copyWith(startAnywayAvailable: false);
-        }
-        return;
-      }
-      _waitingSeconds++;
-      if (_waitingSeconds >= signalWaitResetSeconds &&
-          _hasNeededElectrode(quality) &&
-          !state.startAnywayAvailable) {
-        state = state.copyWith(startAnywayAvailable: true);
-      }
-      return;
-    }
-
     if (state.phase == FeedbackPhase.playing) {
-      final critical = quality != null &&
-          quality.length >= 4 &&
-          quality.any((s) => s < signalCriticalThreshold);
+      final critical = quality == null ||
+          neededElectrodes
+              .where((i) => i < quality.length)
+              .every((i) => quality[i] < signalCriticalThreshold);
       if (!critical) {
         _badSignalSeconds = 0;
         return;
@@ -568,9 +584,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
     if (state.phase == FeedbackPhase.interrupted &&
         _interruptKind == FeedbackInterruptKind.badSignal) {
-      final recovered = quality != null &&
-          quality.length >= 4 &&
-          quality.every((s) => s >= signalGoodThreshold);
+      final recovered = _hasNeededElectrode(quality);
       if (recovered) {
         _recoverInterruption();
       }
@@ -608,7 +622,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   void _onBands(BandsDto bands) {
     _target.update(bands);
-    final target = _target.evaluate();
+    final target = _target.evaluate(
+      _ref.read(appStateProvider).signalQuality,
+    );
     if (target == null) {
       return;
     }
@@ -665,18 +681,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         .any((i) => i < quality.length && quality[i] >= signalGoodThreshold);
   }
 
-  String _qualityKey(List<double>? quality) {
-    if (quality == null) {
-      return 'null';
-    }
-    return quality.map((q) => q.toStringAsFixed(2)).join(',');
-  }
-
   @override
   void dispose() {
     _ticker?.cancel();
     _interruptTimer?.cancel();
     _baselineTimer?.cancel();
+    _gateTimer?.cancel();
     _eventSub?.cancel();
     _appSub?.close();
     super.dispose();

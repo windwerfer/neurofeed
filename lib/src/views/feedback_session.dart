@@ -212,6 +212,59 @@ class _GuideCard extends StatelessWidget {
   }
 }
 
+class _FaultyPadFallback extends StatelessWidget {
+  const _FaultyPadFallback({required this.ref, required this.theme});
+
+  final WidgetRef ref;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final quality = ref.read(appStateProvider).signalQuality;
+    final bothNeeded = neededElectrodes
+        .where((i) => i < (quality?.length ?? 0))
+        .every((i) => (quality?[i] ?? 0) >= signalGoodThreshold);
+    final anyNeeded = neededElectrodes.any((i) =>
+        i < (quality?.length ?? 0) && (quality?[i] ?? 0) >= signalGoodThreshold);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.tertiaryContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            anyNeeded
+                ? (bothNeeded ? _tierACopy : _tierBCopy)
+                : 'No usable electrode signal. Keep adjusting the headband.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onTertiaryContainer,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        FilledButton.icon(
+          onPressed: () => ref.read(feedbackStateProvider.notifier).startAnyway(),
+          icon: const Icon(Icons.play_arrow),
+          label: const Text('Continue'),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(double.infinity, 56),
+            textStyle: const TextStyle(fontSize: 18),
+          ),
+        ),
+      ],
+    );
+  }
+
+  static const _tierACopy = 'Not all, but enough electrodes for this program '
+      'have a good fit. Continue?';
+  static const _tierBCopy = 'At least 1 of the important electrodes have a '
+      'good fit — accuracy will be reduced but it should still be usable. Continue?';
+}
+
 class _PhaseControls extends ConsumerWidget {
   final ProtocolInfo protocol;
   const _PhaseControls({required this.protocol});
@@ -220,7 +273,6 @@ class _PhaseControls extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
     final theme = Theme.of(context);
-
     switch (fb.phase) {
       case FeedbackPhase.idle:
         return FilledButton.icon(
@@ -242,31 +294,15 @@ class _PhaseControls extends ConsumerWidget {
               Text('Waiting for good signal…', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
               Text(
-                'Check headband placement and electrode contact.',
+                'All electrodes should be green for $greenStableSeconds s before '
+                'calibration begins. Check headband placement and electrode contact.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium,
               ),
               if (fb.startAnywayAvailable) ...[
                 const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: () =>
-                      ref.read(feedbackStateProvider.notifier).startAnyway(),
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('Start anyway'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 56),
-                    textStyle: const TextStyle(fontSize: 18),
-                  ),
-                ),
+                _FaultyPadFallback(ref: ref, theme: theme),
                 const SizedBox(height: 8),
-                Text(
-                  'Signal unchanged for 10s with a working electrode — '
-                  'proceed without full signal?',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
               ],
             ] else if (fb.baselineSecondsLeft > 0) ...[
               Icon(Icons.graphic_eq, color: theme.colorScheme.primary, size: 48),
@@ -366,6 +402,13 @@ class _PhaseControls extends ConsumerWidget {
               const SizedBox(height: 8),
               Text(
                 'Ending in ${fb.interruptionSecondsLeft}s if not recovered…',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ] else ...[
+              const SizedBox(height: 8),
+              Text(
+                'Waiting for the signal to return — the session resumes '
+                'automatically.',
                 style: theme.textTheme.bodyMedium,
               ),
             ],

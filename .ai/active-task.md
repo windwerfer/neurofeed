@@ -56,6 +56,30 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
   auto-start after calibration, chime audibility, mid-session disconnect →
   auto-reconnect → stream resumes.
 
+## Status — 2026-08-07 Update (calibration signal gate redesign)
+- ✅ Root-caused and fixed the calibration boot-loop from `muse.log`: after a
+  baseline was captured, `_finishCalibration` re-checked `_allGreen`; a
+  borderline/marginal pad flipped the gate → `_onAppState` discarded the
+  finished baseline and re-ran the full 90 s calibration → loop (two baselines
+  logged, feedback never started).
+- ✅ **No gate after calibration**: `_finishCalibration` always calls
+  `startPlaying()`. A finished baseline never re-locks on signal.
+- ✅ **Gate before calibration** is now a 1 s `_gateTimer` requiring all 4 pads
+  green for `greenStableSeconds` (3) continuously before the baseline starts.
+- ✅ **Faulty-pad fallback**: a pad stuck non-green for `faultyPadSeconds` (20)
+  while the frontal pads (`neededElectrodes=[1,2]` = AF7/AF8) are green is
+  assumed faulty → inline "Continue anyway" bubble (tier A both frontal green;
+  tier B ≥1 frontal "reduced accuracy").
+- ✅ **Bad-signal handling during playing**: pauses (interrupted) only when ALL
+  needed [1,2] pads dip below `signalCriticalThreshold` (40) for
+  `badSignalPauseSeconds` (10); a rear pad (0/3) never blocks. A signal loss
+  **never auto-ends** (no countdown); it resumes automatically once any needed
+  pad is green again.
+- ✅ **ATR autodrop**: `TargetStateAggregator.evaluate(quality)` drops
+  per-pad (only pads ≥ `atrUsableSignalThreshold`=80 enter the AF7/AF8
+  average); returns null if both frontal pads are bad → no feedback that sample.
+- See the "Signal gate + autodrop model" bullet in `AGENTS.md`.
+
 ## Next steps
 1. On-device test pass (checklist in `.ai/feeback/todos.md`): calibration →
    auto-start, chimes + movement gating, volume dialog, target settings,
