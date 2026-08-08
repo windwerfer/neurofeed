@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
+
 /// Self-contained session file container.
 ///
 /// Layout (PNG-first so file managers on Linux/macOS can render a thumbnail
@@ -99,9 +101,21 @@ class SessionContainer {
     // A whole-file read; parse the head then return the trailing body.
     final head = parseHead(bytes);
     final bodyLen = head.bodyLen;
-    if (bodyLen == null) return null;
+    if (bodyLen == null) {
+      debugPrint('[container] extractBody: bodyLen null, '
+          'total=${bytes.length}, jsonLen=${head.jsonBytes.length}, '
+          'pngLen=${head.pngBytes.length}');
+      return null;
+    }
     final start = bytes.length - bodyLen;
-    if (start < 0) return null;
+    if (start < 0) {
+      debugPrint('[container] extractBody: start=$start < 0, '
+          'total=${bytes.length}, bodyLen=$bodyLen');
+      return null;
+    }
+    debugPrint('[container] extractBody: total=${bytes.length} '
+        'bodyLen=$bodyLen start=$start pngLen=${head.pngBytes.length} '
+        'jsonLen=${head.jsonBytes.length}');
     return Uint8List.sublistView(bytes, start, bytes.length);
   }
 }

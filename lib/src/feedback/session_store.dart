@@ -146,11 +146,18 @@ class SessionStore {
   /// Read the raw .muse frame body for [id], or null if missing.
   Future<List<int>?> readMuse(String id) async {
     final storage = await _storage;
-    final bytes = await storage.readFile(_museName(id));
+    final name = _museName(id);
+    final bytes = await storage.readFile(name);
+    debugPrint('[session] readMuse($id): file="$name" '
+        'read=${bytes == null ? 'null' : '${bytes.length}B'} '
+        'storage=${storage.displayName} loc=${storage.location}');
     if (bytes == null) {
       return null;
     }
-    return SessionContainer.extractBody(Uint8List.fromList(bytes));
+    final body = SessionContainer.extractBody(Uint8List.fromList(bytes));
+    debugPrint('[session] readMuse($id): extractBody='
+        '${body == null ? 'null' : '${body.length}B'}');
+    return body;
   }
 
   /// Read the thumbnail PNG bytes for [id], or null when missing.
