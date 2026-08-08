@@ -54,6 +54,7 @@ lib/src/feedback/         # feedback session system (merged to main, Phase I)
   live_stats.dart, protocol.dart, session_store.dart, feedback_recorder.dart
   session_storage.dart      # SessionStorage abstraction (FS + SAF), scratch dir, storage provider
   session_container.dart    # .muse.feedback file format: [PNG][jsonLen][json][bodyLen][frames]
+  session_summary.dart       # SessionOverview: 400-bucket decimated bands/pulse/motion/peak in metadata
 lib/src/audio/            # just_audio: AudioService + FeedbackAudioController (5 volume channels)
 rust/src/api/muse.rs    # FFI bridge: scan/connect/subscribe → MuseEvent stream
 rust/src/connection.rs  # in-Rust state (active connection, device cache, sink)
@@ -84,6 +85,7 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - Persisted prefs (volumes, sound, duration, target settings): `lib/src/settings.dart` (`Settings`, SharedPreferences).
 - Session storage abstraction (history in chosen folder; scratch in `.cache`; SAF on Android): `lib/src/feedback/session_storage.dart` (`SessionStorage`, `FileSystemSessionStorage`, `SafSessionStorage`, `resolveSessionStorage`, `sessionStorageProvider`). `SessionStore` is storage-backed; `sessionStoreProvider` is a `FutureProvider` derived from settings.
 - Session file format (`.muse.feedback` = single self-contained file, PNG-first so Linux/macOS file managers thumbnail it): `lib/src/feedback/session_container.dart` (`SessionContainer.encode`/`parseHead`/`extractBody`; `headReadLimit`). Read sidecar-free: `SessionStore.list()`/`readPng()`/`readMuse()` read the head via `SessionStorage.readPrefix(name, limit)` and never pull the large body.
+- **`.muse` body is format v4 (f32 floats)**: `session_recorder.dart` writes f32 payloads (EEG/PPG/IMU/bands/movement/peak-alpha), f64 timestamps. `SessionReader` only parses v4. Not backward compatible with v2/v3 f64 files (pre-alpha). EEG ~4 KB/s raw (~15 MB/hr). Channel count is device-driven (`i16` electrode); an 8-ch Crown works with zero layout change.
 - SAF folder picker + MethodChannel (`muse_ml/saf`): `android/app/src/main/kotlin/com/example/muse_ml/MainActivity.kt` (`getDir`/`ensureDir`/`writeFile`/`readFile`/`readFilePrefix`/`deleteFile`/`listFiles`).
 - Folder selection UI: `lib/src/views/settings_view.dart` (`file_selector` `getDirectoryPath` on desktop, `SafSessionStorage.pickFolder()` on Android).
 - Release CI: `.github/workflows/` — see `.ai/release.md` (keystore secrets, F-Droid, reproducibility).

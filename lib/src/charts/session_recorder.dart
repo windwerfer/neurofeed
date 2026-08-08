@@ -8,7 +8,10 @@ import 'package:muse_ml/src/settings.dart';
 
 class SessionRecorder {
   static const _magic = 0x4D55534542494E0A; // "MUSEBIN\n"
-  static const _version = 3;
+  /// v4 — float payloads stored as f32 (Muse K 12/14-bit, Crown 24-bit; f16
+  /// would lose ADC precision). Timestamps stay f64. Not backward compatible
+  /// with v2/v3 (previous f64 layouts).
+  static const _version = 4;
   static const _flushInterval = Duration(seconds: 30);
   static const _maxPendingBytes = 65536;
 
@@ -93,15 +96,15 @@ class SessionRecorder {
   Uint8List _encodeEeg(EegDto d) {
     channels.add(d.electrode);
     final n = d.samples.length;
-    final buf = ByteData(1 + 8 + 2 + 2 + n * 8);
+    final buf = ByteData(1 + 8 + 2 + 2 + n * 4);
     var off = 0;
     buf.setUint8(off, 1); off += 1;
     buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
     buf.setInt16(off, d.electrode, Endian.little); off += 2;
     buf.setUint16(off, n, Endian.little); off += 2;
     for (final s in d.samples) {
-      buf.setFloat64(off, s, Endian.little);
-      off += 8;
+      buf.setFloat32(off, s, Endian.little);
+      off += 4;
     }
     return buf.buffer.asUint8List();
   }
@@ -120,7 +123,7 @@ class SessionRecorder {
 
   Uint8List _encodeImu(int type, ImuDto imu) {
     final n = imu.samples.length;
-    final buf = ByteData(1 + 8 + 2 + 2 + n * 24);
+    final buf = ByteData(1 + 8 + 2 + 2 + n * 12);
     var off = 0;
     buf.setUint8(off, type); off += 1;
     final ts = DateTime.now().millisecondsSinceEpoch / 1000.0;
@@ -128,41 +131,41 @@ class SessionRecorder {
     buf.setUint16(off, imu.sequenceId, Endian.little); off += 2;
     buf.setUint16(off, n, Endian.little); off += 2;
     for (final s in imu.samples) {
-      buf.setFloat64(off, s.x, Endian.little); off += 8;
-      buf.setFloat64(off, s.y, Endian.little); off += 8;
-      buf.setFloat64(off, s.z, Endian.little); off += 8;
+      buf.setFloat32(off, s.x, Endian.little); off += 4;
+      buf.setFloat32(off, s.y, Endian.little); off += 4;
+      buf.setFloat32(off, s.z, Endian.little); off += 4;
     }
     return buf.buffer.asUint8List();
   }
 
   Uint8List _encodePpg(PpgDto d) {
     final n = d.samples.length;
-    final buf = ByteData(1 + 8 + 2 + 2 + n * 8);
+    final buf = ByteData(1 + 8 + 2 + 2 + n * 4);
     var off = 0;
     buf.setUint8(off, 5); off += 1;
     buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
     buf.setInt16(off, d.channel, Endian.little); off += 2;
     buf.setUint16(off, n, Endian.little); off += 2;
     for (final s in d.samples) {
-      buf.setFloat64(off, s, Endian.little);
-      off += 8;
+      buf.setFloat32(off, s, Endian.little);
+      off += 4;
     }
     return buf.buffer.asUint8List();
   }
 
   Uint8List _encodeBands(BandsDto d) {
     channels.add(d.electrode);
-    // Type tag 6: timestamp(f64), electrode(i16), delta/theta/alpha/beta/gamma(f64×5)
-    final buf = ByteData(1 + 8 + 2 + 5 * 8);
+    // Type tag 6: timestamp(f64), electrode(i16), delta/theta/alpha/beta/gamma(f32×5)
+    final buf = ByteData(1 + 8 + 2 + 5 * 4);
     var off = 0;
     buf.setUint8(off, 6); off += 1;
     buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
     buf.setInt16(off, d.electrode, Endian.little); off += 2;
-    buf.setFloat64(off, d.delta, Endian.little); off += 8;
-    buf.setFloat64(off, d.theta, Endian.little); off += 8;
-    buf.setFloat64(off, d.alpha, Endian.little); off += 8;
-    buf.setFloat64(off, d.beta, Endian.little); off += 8;
-    buf.setFloat64(off, d.gamma, Endian.little);
+    buf.setFloat32(off, d.delta, Endian.little); off += 4;
+    buf.setFloat32(off, d.theta, Endian.little); off += 4;
+    buf.setFloat32(off, d.alpha, Endian.little); off += 4;
+    buf.setFloat32(off, d.beta, Endian.little); off += 4;
+    buf.setFloat32(off, d.gamma, Endian.little);
     return buf.buffer.asUint8List();
   }
 
@@ -178,23 +181,23 @@ class SessionRecorder {
   }
 
   Uint8List _encodeMovement(MovementDto d) {
-    // Type tag 8: timestamp(f64), score(f64)
-    final buf = ByteData(1 + 8 + 8);
+    // Type tag 8: timestamp(f64), score(f32)
+    final buf = ByteData(1 + 8 + 4);
     var off = 0;
     buf.setUint8(off, 8); off += 1;
     buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
-    buf.setFloat64(off, d.score, Endian.little);
+    buf.setFloat32(off, d.score, Endian.little);
     return buf.buffer.asUint8List();
   }
 
   Uint8List _encodePeakAlpha(PeakAlphaDto d) {
-    // Type tag 9: timestamp(f64), frequency(f64), power(f64)
-    final buf = ByteData(1 + 8 + 8 + 8);
+    // Type tag 9: timestamp(f64), frequency(f32), power(f32)
+    final buf = ByteData(1 + 8 + 4 + 4);
     var off = 0;
     buf.setUint8(off, 9); off += 1;
     buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
-    buf.setFloat64(off, d.frequency, Endian.little); off += 8;
-    buf.setFloat64(off, d.power, Endian.little);
+    buf.setFloat32(off, d.frequency, Endian.little); off += 4;
+    buf.setFloat32(off, d.power, Endian.little);
     return buf.buffer.asUint8List();
   }
 

@@ -100,6 +100,22 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
 - ✅ Channel count is not hardcoded: an 8-electrode Crown works with zero
   format changes (electrode index is `i16`; names fall back to `CH{n+1}`).
 
+## Status — 2026-08-08 Update (format v4 f32 + session overview)
+- ✅ `.muse` body format bumped to **v4**: all float payloads (EEG/PPG/IMU/
+  bands/movement/peak-alpha) now stored as **f32** instead of f64. Timestamps
+  stay f64. Muse 12/14-bit and Crown 24-bit ADCs fit exactly in f32; f16 would
+  lose them. Raw EEG drops ~8 KB/s→4 KB/s (~15 MB/hr raw → a few MB/hr zstd).
+  **Not backward compatible** with v2/v3 files (pre-alpha, accepted). No FFI
+  change — Dart events still arrive as doubles; only the on-disk layout moved.
+- ✅ `SessionReader` only accepts v4; `_skipEeg/_skipImu/_skipPpg` counts and
+  `_parseBands`/movement/peak-alpha reads updated to f32 widths.
+- ✅ Bounded session overview: `lib/src/feedback/session_summary.dart`
+  `SessionOverview` — decimates bands (per electrode), pulse, movement, and
+  peak alpha into a fixed 400-bucket series regardless of session length, stored
+  in the metadata JSON (`summary` key). History detail can render
+  bands/HR/movement/peak without reading the `.muse` body. Computed at save in
+  `FeedbackDashboardView._save` from `SessionData`; old files parse to null.
+
 ## Next steps
 1. On-device test pass (checklist in `.ai/feeback/todos.md`): calibration →
    auto-start, chimes + movement gating, volume dialog, target settings,

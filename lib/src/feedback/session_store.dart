@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_container.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
+import 'package:muse_ml/src/feedback/session_summary.dart';
 import 'package:muse_ml/src/settings.dart';
 
 class SessionStatsData {
@@ -62,6 +63,7 @@ class SessionMetadata {
     this.deviceId,
     this.recordedChannels = const [],
     this.recordedData = const [],
+    this.summary,
   });
 
   final ProtocolType protocol;
@@ -87,8 +89,13 @@ class SessionMetadata {
   final List<String> recordedChannels;
 
   /// Streams persisted in this file (subset of [RecordingStream] names),
-  /// e.g. `['eeg','bands','ppg']`. Empty/absent on old files means "all".
+  /// e.g. `['eeg','bands','pps','pulse','imu']`. Empty/absent on old files
+  /// means "all".
   final List<String> recordedData;
+
+  /// Decimated overview (bands/pulse/movement/peak) for fast history browsing.
+  /// Null on old files.
+  final SessionOverview? summary;
 
   Map<String, Object?> toJson() => {
     'protocol': protocol.name,
@@ -103,6 +110,7 @@ class SessionMetadata {
     if (deviceId != null) 'deviceId': deviceId,
     if (recordedChannels.isNotEmpty) 'recordedChannels': recordedChannels,
     if (recordedData.isNotEmpty) 'recordedData': recordedData,
+    if (summary != null) 'summary': summary!.toJson(),
   };
 
   static SessionMetadata? fromJson(Object? json) {
@@ -136,6 +144,7 @@ class SessionMetadata {
               ?.whereType<String>()
               .toList() ??
           const [],
+      summary: SessionOverview.fromJson(json['summary']),
     );
   }
 }

@@ -97,7 +97,7 @@ class SessionReader {
     }
     final version = data.getUint32(off, Endian.little);
     off += 4;
-    if (version < 2 || version > 3) {
+    if (version != 4) {
       throw FormatException('Unsupported format version $version');
     }
 
@@ -152,16 +152,16 @@ class SessionReader {
         case 8:
           final ts = d.getFloat64(off, Endian.little);
           off += 8;
-          final score = d.getFloat64(off, Endian.little);
-          off += 8;
+          final score = d.getFloat32(off, Endian.little);
+          off += 4;
           session.movements.add(MovementRecord(timestamp: ts, score: score));
         case 9:
           final ts = d.getFloat64(off, Endian.little);
           off += 8;
-          final frequency = d.getFloat64(off, Endian.little);
-          off += 8;
-          final power = d.getFloat64(off, Endian.little);
-          off += 8;
+          final frequency = d.getFloat32(off, Endian.little);
+          off += 4;
+          final power = d.getFloat32(off, Endian.little);
+          off += 4;
           session.peakAlphas.add(
             PeakAlphaRecord(timestamp: ts, frequency: frequency, power: power),
           );
@@ -176,21 +176,21 @@ class SessionReader {
     final count = d.getUint16(off, Endian.little);
     off += 2;
     session.eegSamples += count;
-    return off + count * 8;
+    return off + count * 4;
   }
 
   static int _skipImu(ByteData d, int off) {
     off += 8 + 2;
     final count = d.getUint16(off, Endian.little);
     off += 2;
-    return off + count * 24;
+    return off + count * 12;
   }
 
   static int _skipPpg(ByteData d, int off) {
     off += 8 + 2;
     final count = d.getUint16(off, Endian.little);
     off += 2;
-    return off + count * 8;
+    return off + count * 4;
   }
 
   static int _parseBands(ByteData d, int off, SessionData session) {
@@ -198,16 +198,16 @@ class SessionReader {
     off += 8;
     final electrode = d.getInt16(off, Endian.little);
     off += 2;
-    final delta = d.getFloat64(off, Endian.little);
-    off += 8;
-    final theta = d.getFloat64(off, Endian.little);
-    off += 8;
-    final alpha = d.getFloat64(off, Endian.little);
-    off += 8;
-    final beta = d.getFloat64(off, Endian.little);
-    off += 8;
-    final gamma = d.getFloat64(off, Endian.little);
-    off += 8;
+    final delta = d.getFloat32(off, Endian.little);
+    off += 4;
+    final theta = d.getFloat32(off, Endian.little);
+    off += 4;
+    final alpha = d.getFloat32(off, Endian.little);
+    off += 4;
+    final beta = d.getFloat32(off, Endian.little);
+    off += 4;
+    final gamma = d.getFloat32(off, Endian.little);
+    off += 4;
     session.bands.add(
       BandsRecord(
         timestamp: ts,

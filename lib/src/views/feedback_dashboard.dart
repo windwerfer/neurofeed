@@ -11,6 +11,7 @@ import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
+import 'package:muse_ml/src/feedback/session_summary.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 
 class FeedbackDashboardView extends ConsumerStatefulWidget {
@@ -42,6 +43,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   Future<SessionData>? _dataFuture;
   _Prepared? _prepared;
   Uint8List? _thumbnail;
+  SessionData? _sessionData;
   bool _busy = false;
 
   @override
@@ -101,6 +103,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
                     }
                     final data = snapshot.data!;
                     _prepared ??= _prepare(data);
+                    _sessionData ??= data;
                     if (_thumbnail == null && !widget.readOnly) {
                       WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
                     }
@@ -170,6 +173,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         deviceId: app.status.connected ? app.status.id : null,
         recordedChannels: channels,
         recordedData: notifier.recordStreams.map((s) => s.name).toList(),
+        summary: _sessionData == null
+            ? null
+            : SessionOverview.fromData(_sessionData!),
       );
       final id = DateTime.now().millisecondsSinceEpoch.toString();
       try {
