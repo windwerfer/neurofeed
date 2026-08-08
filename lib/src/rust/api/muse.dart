@@ -12,17 +12,6 @@ part 'muse.freezed.dart';
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ForwarderGuard`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `drop`
 
-/// Compress a block of recording data using zstd (level 3).
-/// Returns the compressed bytes as an independent zstd frame.
-/// On failure (e.g. pathological input) returns the original data unchanged.
-Future<Uint8List> compressBlock({required List<int> data}) =>
-    RustLib.instance.api.crateApiMuseCompressBlock(data: data);
-
-/// Decompress a zstd frame written by [compress_block].
-/// Returns an empty vector if the frame is invalid.
-Future<Uint8List> decompressBlock({required List<int> data}) =>
-    RustLib.instance.api.crateApiMuseDecompressBlock(data: data);
-
 /// Scan for nearby Muse devices for `timeout_secs` seconds and return what was
 /// found. Results are **merged** into the existing device cache so that the UI
 /// can call `scan` repeatedly in short chunks without losing previously

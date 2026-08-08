@@ -4,14 +4,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:muse_ml/src/rust/api/session_format.dart';
 import 'package:muse_ml/src/settings.dart';
 
 class SessionRecorder {
-  static const _magic = 0x4D55534542494E0A; // "MUSEBIN\n"
-  /// v4 — float payloads stored as f32 (Muse K 12/14-bit, Crown 24-bit; f16
-  /// would lose ADC precision). Timestamps stay f64. Not backward compatible
-  /// with v2/v3 (previous f64 layouts).
-  static const _version = 4;
   static const _flushInterval = Duration(seconds: 30);
   static const _maxPendingBytes = 65536;
 
@@ -46,163 +42,45 @@ class SessionRecorder {
     _events = 0;
     debugPrint('[session] recorder start: $path');
 
-    final header = ByteData(12);
-    header.setUint64(0, _magic, Endian.little);
-    header.setUint32(8, _version, Endian.little);
-    await _file!.writeAsBytes(header.buffer.asUint8List(),
+    await _file!.writeAsBytes(sessionHeaderBytes(),
         mode: FileMode.writeOnlyAppend);
 
-    _flushTimer = Timer.periodic(_flushInterval, (_) => _flush());
+    _flushTimer = Timer.periodic(_flushInterval, (_) => flush());
   }
 
   void writeEvent(MuseEventDto event) {
-    Uint8List? encoded;
+    final enabled = switch (event) {
+      MuseEventDto_Eeg() => _enabled(RecordingStream.eeg),
+      MuseEventDto_Telemetry() => _enabled(RecordingStream.telemetry),
+      MuseEventDto_Accelerometer() || MuseEventDto_Gyroscope() =>
+        _enabled(RecordingStream.imu),
+      MuseEventDto_Ppg() => _enabled(RecordingStream.ppg),
+      MuseEventDto_Bands() => _enabled(RecordingStream.bands),
+      MuseEventDto_Pulse() => _enabled(RecordingStream.pulse),
+      MuseEventDto_Movement() => _enabled(RecordingStream.movement),
+      MuseEventDto_PeakAlpha() => _enabled(RecordingStream.peakAlpha),
+      _ => false,
+    };
+    if (!enabled) return;
+    // Only EEG/bands carry the electrode channel info, so track it here
+    // (encodeSessionEvent records the raw payload but no channel set).
     switch (event) {
       case MuseEventDto_Eeg():
-        if (!_enabled(RecordingStream.eeg)) return;
-        encoded = _encodeEeg(event.field0);
-      case MuseEventDto_Telemetry():
-        if (!_enabled(RecordingStream.telemetry)) return;
-        encoded = _encodeTelemetry(event.field0);
-      case MuseEventDto_Accelerometer():
-        if (!_enabled(RecordingStream.imu)) return;
-        encoded = _encodeImu(3, event.field0);
-      case MuseEventDto_Gyroscope():
-        if (!_enabled(RecordingStream.imu)) return;
-        encoded = _encodeImu(4, event.field0);
-      case MuseEventDto_Ppg():
-        if (!_enabled(RecordingStream.ppg)) return;
-        encoded = _encodePpg(event.field0);
+        channels.add(event.field0.electrode);
       case MuseEventDto_Bands():
-        if (!_enabled(RecordingStream.bands)) return;
-        encoded = _encodeBands(event.field0);
-      case MuseEventDto_Pulse():
-        if (!_enabled(RecordingStream.pulse)) return;
-        encoded = _encodePulse(event.field0);
-      case MuseEventDto_Movement():
-        if (!_enabled(RecordingStream.movement)) return;
-        encoded = _encodeMovement(event.field0);
-      case MuseEventDto_PeakAlpha():
-        if (!_enabled(RecordingStream.peakAlpha)) return;
-        encoded = _encodePeakAlpha(event.field0);
+        channels.add(event.field0.electrode);
       default:
-        return;
+        break;
     }
+    final encoded = encodeSessionEvent(event: event);
+    if (encoded.isEmpty) return;
     _events++;
     _pending.add(encoded);
-    if (_pending.length > _maxPendingBytes) _flush();
-  }
-
-  Uint8List _encodeEeg(EegDto d) {
-    channels.add(d.electrode);
-    final n = d.samples.length;
-    final buf = ByteData(1 + 8 + 2 + 2 + n * 4);
-    var off = 0;
-    buf.setUint8(off, 1); off += 1;
-    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
-    buf.setInt16(off, d.electrode, Endian.little); off += 2;
-    buf.setUint16(off, n, Endian.little); off += 2;
-    for (final s in d.samples) {
-      buf.setFloat32(off, s, Endian.little);
-      off += 4;
-    }
-    return buf.buffer.asUint8List();
-  }
-
-  Uint8List _encodeTelemetry(TelemetrySnapshot t) {
-    final buf = ByteData(1 + 8 + 4 + 4 + 2);
-    var off = 0;
-    buf.setUint8(off, 2); off += 1;
-    final ts = DateTime.now().millisecondsSinceEpoch / 1000.0;
-    buf.setFloat64(off, ts, Endian.little); off += 8;
-    buf.setFloat32(off, t.batteryLevel, Endian.little); off += 4;
-    buf.setFloat32(off, t.fuelGaugeVoltage, Endian.little); off += 4;
-    buf.setUint16(off, t.temperature, Endian.little);
-    return buf.buffer.asUint8List();
-  }
-
-  Uint8List _encodeImu(int type, ImuDto imu) {
-    final n = imu.samples.length;
-    final buf = ByteData(1 + 8 + 2 + 2 + n * 12);
-    var off = 0;
-    buf.setUint8(off, type); off += 1;
-    final ts = DateTime.now().millisecondsSinceEpoch / 1000.0;
-    buf.setFloat64(off, ts, Endian.little); off += 8;
-    buf.setUint16(off, imu.sequenceId, Endian.little); off += 2;
-    buf.setUint16(off, n, Endian.little); off += 2;
-    for (final s in imu.samples) {
-      buf.setFloat32(off, s.x, Endian.little); off += 4;
-      buf.setFloat32(off, s.y, Endian.little); off += 4;
-      buf.setFloat32(off, s.z, Endian.little); off += 4;
-    }
-    return buf.buffer.asUint8List();
-  }
-
-  Uint8List _encodePpg(PpgDto d) {
-    final n = d.samples.length;
-    final buf = ByteData(1 + 8 + 2 + 2 + n * 4);
-    var off = 0;
-    buf.setUint8(off, 5); off += 1;
-    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
-    buf.setInt16(off, d.channel, Endian.little); off += 2;
-    buf.setUint16(off, n, Endian.little); off += 2;
-    for (final s in d.samples) {
-      buf.setFloat32(off, s, Endian.little);
-      off += 4;
-    }
-    return buf.buffer.asUint8List();
-  }
-
-  Uint8List _encodeBands(BandsDto d) {
-    channels.add(d.electrode);
-    // Type tag 6: timestamp(f64), electrode(i16), delta/theta/alpha/beta/gamma(f32×5)
-    final buf = ByteData(1 + 8 + 2 + 5 * 4);
-    var off = 0;
-    buf.setUint8(off, 6); off += 1;
-    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
-    buf.setInt16(off, d.electrode, Endian.little); off += 2;
-    buf.setFloat32(off, d.delta, Endian.little); off += 4;
-    buf.setFloat32(off, d.theta, Endian.little); off += 4;
-    buf.setFloat32(off, d.alpha, Endian.little); off += 4;
-    buf.setFloat32(off, d.beta, Endian.little); off += 4;
-    buf.setFloat32(off, d.gamma, Endian.little);
-    return buf.buffer.asUint8List();
-  }
-
-  Uint8List _encodePulse(PulseDto d) {
-    // Type tag 7: timestamp(f64), bpm(f32), confidence(f32)
-    final buf = ByteData(1 + 8 + 4 + 4);
-    var off = 0;
-    buf.setUint8(off, 7); off += 1;
-    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
-    buf.setFloat32(off, d.bpm, Endian.little); off += 4;
-    buf.setFloat32(off, d.confidence, Endian.little);
-    return buf.buffer.asUint8List();
-  }
-
-  Uint8List _encodeMovement(MovementDto d) {
-    // Type tag 8: timestamp(f64), score(f32)
-    final buf = ByteData(1 + 8 + 4);
-    var off = 0;
-    buf.setUint8(off, 8); off += 1;
-    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
-    buf.setFloat32(off, d.score, Endian.little);
-    return buf.buffer.asUint8List();
-  }
-
-  Uint8List _encodePeakAlpha(PeakAlphaDto d) {
-    // Type tag 9: timestamp(f64), frequency(f32), power(f32)
-    final buf = ByteData(1 + 8 + 4 + 4);
-    var off = 0;
-    buf.setUint8(off, 9); off += 1;
-    buf.setFloat64(off, d.timestamp, Endian.little); off += 8;
-    buf.setFloat32(off, d.frequency, Endian.little); off += 4;
-    buf.setFloat32(off, d.power, Endian.little);
-    return buf.buffer.asUint8List();
+    if (_pending.length > _maxPendingBytes) flush();
   }
 
   Future<File?> markSaved() async {
-    await _flush();
+    await flush();
     if (_file == null) {
       debugPrint('[session] markSaved: no active file, returning null');
       return null;
@@ -226,7 +104,7 @@ class SessionRecorder {
     debugPrint('[session] stop(): events=$_events');
     _flushTimer?.cancel();
     _flushTimer = null;
-    await _flush();
+    await flush();
     if (_file != null) {
       try {
         await _file!.delete();
@@ -238,18 +116,12 @@ class SessionRecorder {
     }
   }
 
-  Future<void> flush() => _flush();
-
-  Future<void> _flush() async {
+  Future<void> flush() async {
     if (_pending.isEmpty || _file == null) return;
     final raw = _pending.toBytes();
     _pending.clear();
     try {
-      final compressed = await compressBlock(data: raw);
-      final size = compressed.length;
-      final frame = Uint8List(4 + size);
-      frame.buffer.asByteData().setUint32(0, size, Endian.little);
-      frame.setRange(4, 4 + size, compressed);
+      final frame = sessionFrameBytes(data: raw);
       await _file!.writeAsBytes(frame, mode: FileMode.writeOnlyAppend);
     } catch (e) {
       debugPrint('[session] flush FAILED, re-queueing ($e)');
