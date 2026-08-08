@@ -655,6 +655,7 @@ impl SseDecode for crate::api::muse::BandsDto {
         let mut var_alpha = <f64>::sse_decode(deserializer);
         let mut var_beta = <f64>::sse_decode(deserializer);
         let mut var_gamma = <f64>::sse_decode(deserializer);
+        let mut var_lineNoiseRatio = <f64>::sse_decode(deserializer);
         return crate::api::muse::BandsDto {
             electrode: var_electrode,
             timestamp: var_timestamp,
@@ -663,6 +664,7 @@ impl SseDecode for crate::api::muse::BandsDto {
             alpha: var_alpha,
             beta: var_beta,
             gamma: var_gamma,
+            line_noise_ratio: var_lineNoiseRatio,
         };
     }
 }
@@ -777,6 +779,22 @@ impl SseDecode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_f64::<NativeEndian>().unwrap()
+    }
+}
+
+impl SseDecode for crate::api::muse::GestureDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_timestamp = <f64>::sse_decode(deserializer);
+        let mut var_blinkCount = <u32>::sse_decode(deserializer);
+        let mut var_clench = <bool>::sse_decode(deserializer);
+        let mut var_eye = <u8>::sse_decode(deserializer);
+        return crate::api::muse::GestureDto {
+            timestamp: var_timestamp,
+            blink_count: var_blinkCount,
+            clench: var_clench,
+            eye: var_eye,
+        };
     }
 }
 
@@ -998,6 +1016,10 @@ impl SseDecode for crate::api::muse::MuseEventDto {
             11 => {
                 let mut var_field0 = <crate::api::muse::PeakAlphaDto>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::PeakAlpha(var_field0);
+            }
+            12 => {
+                let mut var_field0 = <crate::api::muse::GestureDto>::sse_decode(deserializer);
+                return crate::api::muse::MuseEventDto::Gestures(var_field0);
             }
             _ => {
                 unimplemented!("");
@@ -1302,6 +1324,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::muse::BandsDto {
             self.alpha.into_into_dart().into_dart(),
             self.beta.into_into_dart().into_dart(),
             self.gamma.into_into_dart().into_dart(),
+            self.line_noise_ratio.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1438,6 +1461,26 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::EegDto> for crate::api:
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::muse::GestureDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.timestamp.into_into_dart().into_dart(),
+            self.blink_count.into_into_dart().into_dart(),
+            self.clench.into_into_dart().into_dart(),
+            self.eye.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::muse::GestureDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::GestureDto>
+    for crate::api::muse::GestureDto
+{
+    fn into_into_dart(self) -> crate::api::muse::GestureDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::muse::ImuDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -1529,6 +1572,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::muse::MuseEventDto {
             }
             crate::api::muse::MuseEventDto::PeakAlpha(field0) => {
                 [11.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::muse::MuseEventDto::Gestures(field0) => {
+                [12.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
             _ => {
                 unimplemented!("");
@@ -1752,6 +1798,7 @@ impl SseEncode for crate::api::muse::BandsDto {
         <f64>::sse_encode(self.alpha, serializer);
         <f64>::sse_encode(self.beta, serializer);
         <f64>::sse_encode(self.gamma, serializer);
+        <f64>::sse_encode(self.line_noise_ratio, serializer);
     }
 }
 
@@ -1831,6 +1878,16 @@ impl SseEncode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_f64::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for crate::api::muse::GestureDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.timestamp, serializer);
+        <u32>::sse_encode(self.blink_count, serializer);
+        <bool>::sse_encode(self.clench, serializer);
+        <u8>::sse_encode(self.eye, serializer);
     }
 }
 
@@ -2012,6 +2069,10 @@ impl SseEncode for crate::api::muse::MuseEventDto {
             crate::api::muse::MuseEventDto::PeakAlpha(field0) => {
                 <i32>::sse_encode(11, serializer);
                 <crate::api::muse::PeakAlphaDto>::sse_encode(field0, serializer);
+            }
+            crate::api::muse::MuseEventDto::Gestures(field0) => {
+                <i32>::sse_encode(12, serializer);
+                <crate::api::muse::GestureDto>::sse_encode(field0, serializer);
             }
             _ => {
                 unimplemented!("");

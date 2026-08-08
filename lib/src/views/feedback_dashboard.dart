@@ -13,6 +13,7 @@ import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/session_summary.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
+import 'package:muse_ml/src/settings.dart';
 
 class FeedbackDashboardView extends ConsumerStatefulWidget {
   const FeedbackDashboardView({
@@ -97,7 +98,11 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     );
   }
 
-  Widget _dashboard(SessionMetadata? meta, FeedbackState fb, ProtocolInfo protocol) {
+  Widget _dashboard(
+    SessionMetadata? meta,
+    FeedbackState fb,
+    ProtocolInfo protocol,
+  ) {
     if (_prepared != null) {
       return _DashboardBody(
         protocol: protocol,
@@ -141,8 +146,8 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   }
 
   Future<void> _capture() async {
-    final boundary = _thumbKey.currentContext?.findRenderObject()
-        as RenderRepaintBoundary?;
+    final boundary =
+        _thumbKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
     if (boundary == null) return;
     final image = await boundary.toImage(pixelRatio: 2);
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -163,9 +168,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       debugPrint('[dashboard] save: finalized ${saved.path}');
       final stats = _prepared?.stats;
       final app = ref.read(appStateProvider);
-      final channels = notifier.recordedChannels
-          .map(channelName)
-          .toList()
+      final channels = notifier.recordedChannels.map(channelName).toList()
         ..sort();
       final metadata = SessionMetadata(
         protocol: fb.protocol,
@@ -192,6 +195,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         summary: _sessionData == null
             ? null
             : SessionOverview.fromData(_sessionData!),
+        gestures: ref.read(settingsProvider).markersInFeedbackEnabled
+            ? notifier.gestureMarkers
+            : const [],
       );
       final id = DateTime.now().millisecondsSinceEpoch.toString();
       try {
@@ -209,7 +215,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         debugPrint('[session] publish FAILED ($e)');
       }
     } else {
-      debugPrint('[dashboard] save: saveSession returned null (nothing to save)');
+      debugPrint(
+        '[dashboard] save: saveSession returned null (nothing to save)',
+      );
     }
     if (mounted) {
       ref.invalidate(sessionListProvider);
@@ -269,10 +277,7 @@ class _DashboardBody extends StatelessWidget {
                 Text('Session summary', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 12),
                 _SummaryRow(label: 'Protocol', value: protocol.title),
-                _SummaryRow(
-                  label: 'Duration',
-                  value: '$durationMinutes min',
-                ),
+                _SummaryRow(label: 'Duration', value: '$durationMinutes min'),
                 _SummaryRow(
                   label: 'Elapsed',
                   value:
@@ -347,7 +352,8 @@ class _DashboardBody extends StatelessWidget {
         ] else ...[
           const _NotEnoughData(
             title: 'Alpha vs Theta',
-            detail: 'Not enough signal data was recorded to build this graph. '
+            detail:
+                'Not enough signal data was recorded to build this graph. '
                 'This usually means the headband was not in good contact or the '
                 'connection dropped during the session. Check the electrodes and '
                 'try again.',
@@ -392,7 +398,8 @@ class _DashboardBody extends StatelessWidget {
         ] else ...[
           const _NotEnoughData(
             title: 'Heart rate',
-            detail: 'No reliable heart-rate data was captured for this session.',
+            detail:
+                'No reliable heart-rate data was captured for this session.',
           ),
           const SizedBox(height: 16),
         ],
@@ -578,8 +585,7 @@ _Prepared _prepare(SessionData data) {
 /// body. Matches the full [SessionData] path bucket-for-bucket.
 _Prepared _prepareOverview(SessionOverview overview) {
   final n = overview.bucketCount;
-  final width =
-      overview.bucketWidthSecs > 0 ? overview.bucketWidthSecs : 1.0;
+  final width = overview.bucketWidthSecs > 0 ? overview.bucketWidthSecs : 1.0;
   final af7 = overview.bands[electrodeAf7];
   final af8 = overview.bands[electrodeAf8];
 
@@ -735,9 +741,7 @@ class _SeriesChart extends StatelessWidget {
           children: [
             Row(
               children: [
-                Expanded(
-                  child: Text(title, style: theme.textTheme.titleSmall),
-                ),
+                Expanded(child: Text(title, style: theme.textTheme.titleSmall)),
                 Text(unit, style: theme.textTheme.bodySmall),
               ],
             ),
@@ -1016,8 +1020,10 @@ class _LoadError extends StatelessWidget {
           children: [
             Icon(Icons.error_outline, size: 40, color: theme.colorScheme.error),
             const SizedBox(height: 8),
-            Text('Could not load session: $error',
-                style: theme.textTheme.bodySmall),
+            Text(
+              'Could not load session: $error',
+              style: theme.textTheme.bodySmall,
+            ),
             if (onDiscard != null) ...[
               const SizedBox(height: 12),
               OutlinedButton.icon(

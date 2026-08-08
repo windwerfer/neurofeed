@@ -1,13 +1,30 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum AppView { feedback, feedbackHistory, bands, rawEeg, spectrogram, psd, settings }
+enum AppView {
+  feedback,
+  feedbackHistory,
+  bands,
+  rawEeg,
+  spectrogram,
+  psd,
+  settings,
+}
 
 /// Data streams that can be persisted into a session file. Each maps to one
 /// (or more) `.muse` event types. Future devices (e.g. an 8-electrode Crown)
 /// add streams here without changing the file container format — the body is
 /// a self-describing list of typed events.
-enum RecordingStream { eeg, bands, ppg, pulse, imu, movement, peakAlpha, telemetry }
+enum RecordingStream {
+  eeg,
+  bands,
+  ppg,
+  pulse,
+  imu,
+  movement,
+  peakAlpha,
+  telemetry,
+}
 
 const Map<AppView, String> _viewNames = {
   AppView.feedback: 'feedback',
@@ -57,6 +74,8 @@ class Settings {
   static const String _durationMinutesKey = 'duration_minutes';
   static const String _sessionFolderKey = 'session_folder';
   static const String _recordStreamsKey = 'record_streams';
+  static const String _eyeMarkersKey = 'gesture_eye_markers';
+  static const String _markersInFeedbackKey = 'gesture_markers_in_feedback';
 
   final SharedPreferences _prefs;
 
@@ -137,26 +156,39 @@ class Settings {
       return RecordingStream.values.toSet();
     }
     final set = stored
-        .map((name) => RecordingStream.values
-            .where((s) => s.name == name)
-            .firstOrNull)
+        .map(
+          (name) =>
+              RecordingStream.values.where((s) => s.name == name).firstOrNull,
+        )
         .whereType<RecordingStream>()
         .toSet();
     return set.isEmpty ? RecordingStream.values.toSet() : set;
   }
 
-  Future<void> setRecordStreams(Set<RecordingStream> streams) =>
-      _prefs.setStringList(
-        _recordStreamsKey,
-        streams.map((s) => s.name).toList(),
-      );
+  Future<void> setRecordStreams(Set<RecordingStream> streams) => _prefs
+      .setStringList(_recordStreamsKey, streams.map((s) => s.name).toList());
+
+  /// Whether eye up/down movements produce gesture markers. Off by default —
+  /// the eye track is experimental on a 4-electrode Muse.
+  bool get eyeMarkersEnabled => _prefs.getBool(_eyeMarkersKey) ?? false;
+
+  Future<void> setEyeMarkersEnabled(bool value) =>
+      _prefs.setBool(_eyeMarkersKey, value);
+
+  /// Whether gesture markers (double blink / double clench / eye) are recorded
+  /// as a track in saved feedback sessions. Independent of *detection* — when
+  /// false the live detector still runs but nothing is persisted.
+  bool get markersInFeedbackEnabled =>
+      _prefs.getBool(_markersInFeedbackKey) ?? true;
+
+  Future<void> setMarkersInFeedbackEnabled(bool value) =>
+      _prefs.setBool(_markersInFeedbackKey, value);
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and
 /// overridden there with the concrete instance; [audioServiceProvider]
 /// depends on it to restore persisted volumes.
 final settingsProvider = Provider<Settings>(
-  (ref) => throw UnimplementedError(
-    'settingsProvider must be overridden in main()',
-  ),
+  (ref) =>
+      throw UnimplementedError('settingsProvider must be overridden in main()'),
 );

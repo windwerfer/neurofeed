@@ -160,7 +160,10 @@ pub fn encode_session_event(event: &MuseEventDto) -> Vec<u8> {
             push_f32(&mut out, d.frequency as f32);
             push_f32(&mut out, d.power as f32);
         }
-        MuseEventDto::Connected(_) | MuseEventDto::Disconnected | MuseEventDto::Control(_) => {}
+        MuseEventDto::Connected(_) |
+        MuseEventDto::Disconnected |
+        MuseEventDto::Control(_) |
+        MuseEventDto::Gestures(_) => {}
     }
     out
 }

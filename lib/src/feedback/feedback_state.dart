@@ -7,6 +7,7 @@ import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_recorder.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/settings.dart';
@@ -19,12 +20,15 @@ const double signalGoodThreshold = 80.0;
 const double signalCriticalThreshold = 40.0;
 const int badSignalPauseSeconds = 10;
 const int interruptionGraceSeconds = 10;
+
 /// The calibration gate requires all pads green for this long before the
 /// baseline starts (guards against a transient blink/loose contact).
 const int greenStableSeconds = 3;
+
 /// If one pad has not gone green for this long while the others are green, we
 /// assume that pad is faulty and surface the continue-anyway fallback.
 const int faultyPadSeconds = 20;
+
 /// The program's frontal electrodes (AF7/AF8). These are the only pads whose
 /// quality gates calibration (via the fallback bubble) and whose quality gates
 /// the playing-phase bad-signal pause; rear pads never block feedback. When
@@ -115,7 +119,10 @@ class FeedbackState {
 
 class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   FeedbackStateNotifier(this._ref) : super(const FeedbackState()) {
-    _eventSub = _ref.read(appStateProvider.notifier).eventStream.listen(_onEvent);
+    _eventSub = _ref
+        .read(appStateProvider.notifier)
+        .eventStream
+        .listen(_onEvent);
     _appSub = _ref.listen<AppUiState>(appStateProvider, _onAppState);
     final settings = _ref.read(settingsProvider);
     _atr.setDynamicAdapt(settings.dynamicAdapt ?? true);
@@ -141,6 +148,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   int _greenSeconds = 0;
   int _faultyPadSeconds = 0;
   DateTime _lastMovementAt = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastGestureAt = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
+  int _prevEyeState = 0;
+  final List<GestureMarker> _gestureMarkers = [];
   int _adaptTick = 0;
   final TargetStateAggregator _target = TargetStateAggregator();
   final AtrEngine _atr = AtrEngine();
@@ -239,6 +251,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       baselineSecondsLeft: 0,
       currentThreshold: null,
     );
+    _gestureMarkers.clear();
+    _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _prevEyeState = 0;
+    _clenchWasActive = false;
     await _runCalibration();
   }
 
@@ -254,8 +271,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final ok = _atr.recalibrateFromRecent(minSamples: minRecalibrateSamples);
     if (!ok) {
       debugPrint(
-          '[feedback] in-flight recalibrate skipped at t=${state.elapsedSeconds}s: '
-          'fewer than $minRecalibrateSamples clean samples');
+        '[feedback] in-flight recalibrate skipped at t=${state.elapsedSeconds}s: '
+        'fewer than $minRecalibrateSamples clean samples',
+      );
       return false;
     }
     _adaptTick = 0;
@@ -269,10 +287,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       )
       ..setThreshold(_atr.threshold);
     unawaited(_audio.playRecalibrateChime());
-    debugPrint('[feedback] in-flight recalibrate at t=${state.elapsedSeconds}s: '
-        'threshold -> ${_atr.threshold} (p${_atr.percentile}, '
-        'n=${_atr.baselineCount} clean samples, mean=${_atr.baselineMean}, '
-        'sd=${_atr.baselineStddev})');
+    debugPrint(
+      '[feedback] in-flight recalibrate at t=${state.elapsedSeconds}s: '
+      'threshold -> ${_atr.threshold} (p${_atr.percentile}, '
+      'n=${_atr.baselineCount} clean samples, mean=${_atr.baselineMean}, '
+      'sd=${_atr.baselineStddev})',
+    );
     state = state.copyWith(currentThreshold: _atr.threshold);
     return true;
   }
@@ -290,10 +310,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _atr.reset();
     _greenSeconds = 0;
     _faultyPadSeconds = 0;
-    state = state.copyWith(
-      waitingForSignal: true,
-      startAnywayAvailable: false,
-    );
+    state = state.copyWith(waitingForSignal: true, startAnywayAvailable: false);
     _startGateTimer();
   }
 
@@ -367,19 +384,20 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     final threshold = _atr.computeThreshold();
-    debugPrint('[feedback] baseline ATR threshold = $threshold '
-        '(${_atr.baselineCount} samples, p${_atr.percentile})');
-    _ref.read(liveStatsProvider).setBaseline(
+    debugPrint(
+      '[feedback] baseline ATR threshold = $threshold '
+      '(${_atr.baselineCount} samples, p${_atr.percentile})',
+    );
+    _ref
+        .read(liveStatsProvider)
+        .setBaseline(
           percentile: _atr.percentile,
           count: _atr.baselineCount,
           mean: _atr.baselineMean,
           stddev: _atr.baselineStddev,
         );
     _ref.read(liveStatsProvider).setThreshold(threshold);
-    state = state.copyWith(
-      baselineSecondsLeft: 0,
-      currentThreshold: threshold,
-    );
+    state = state.copyWith(baselineSecondsLeft: 0, currentThreshold: threshold);
     unawaited(startPlaying());
   }
 
@@ -453,6 +471,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _greenSeconds = 0;
     _faultyPadSeconds = 0;
     _adaptTick = 0;
+    _lastMovementAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _lastGestureAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _prevEyeState = 0;
+    _clenchWasActive = false;
+    _gestureMarkers.clear();
     _audio.stop();
     _recorder.discardSession();
     _atr.reset();
@@ -493,12 +518,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       stats.setSuccessRate(_atr.successRate);
       if (state.elapsedSeconds % 10 == 0) {
         debugPrint(
-            '[atr] t=${state.elapsedSeconds}s atr=${stats.currentAtr?.toStringAsFixed(3)} '
-            'pct=${stats.currentPercentile?.toStringAsFixed(1)} '
-            'thr=${_atr.threshold?.toStringAsFixed(3)} '
-            'success=${_atr.successRate?.toStringAsFixed(2)} '
-            'baseline n=${_atr.baselineCount} mean=${_atr.baselineMean?.toStringAsFixed(3)} '
-            'sd=${_atr.baselineStddev?.toStringAsFixed(3)}');
+          '[atr] t=${state.elapsedSeconds}s atr=${stats.currentAtr?.toStringAsFixed(3)} '
+          'pct=${stats.currentPercentile?.toStringAsFixed(1)} '
+          'thr=${_atr.threshold?.toStringAsFixed(3)} '
+          'success=${_atr.successRate?.toStringAsFixed(2)} '
+          'baseline n=${_atr.baselineCount} mean=${_atr.baselineMean?.toStringAsFixed(3)} '
+          'sd=${_atr.baselineStddev?.toStringAsFixed(3)}',
+        );
       }
     });
   }
@@ -553,7 +579,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _interruptTimer = null;
     _interruptKind = null;
     _badSignalSeconds = 0;
-    state = state.copyWith(interruptMessage: null, interruptionSecondsLeft: null);
+    state = state.copyWith(
+      interruptMessage: null,
+      interruptionSecondsLeft: null,
+    );
   }
 
   /// Resumes the session after an interruption resolved. If the session was
@@ -580,7 +609,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final quality = next.signalQuality;
 
     if (state.phase == FeedbackPhase.playing) {
-      final critical = quality == null ||
+      final critical =
+          quality == null ||
           neededElectrodes
               .where((i) => i < quality.length)
               .every((i) => quality[i] < signalCriticalThreshold);
@@ -616,6 +646,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         _onBands(field0);
       case MuseEventDto_Movement(:final field0):
         _onMovement(field0);
+      case MuseEventDto_Gestures(:final field0):
+        _onGestures(field0);
       case MuseEventDto_Connected():
         if (state.phase == FeedbackPhase.interrupted &&
             _interruptKind == FeedbackInterruptKind.disconnect) {
@@ -638,15 +670,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   void _onBands(BandsDto bands) {
     _target.update(bands);
-    final target = _target.evaluate(
-      _ref.read(appStateProvider).signalQuality,
-    );
+    final target = _target.evaluate(_ref.read(appStateProvider).signalQuality);
     if (target == null) {
       return;
     }
     if (state.phase == FeedbackPhase.calibrating &&
         state.baselineSecondsLeft > 0) {
-      if (DateTime.now().difference(_lastMovementAt) >= movementBuffer) {
+      if (_sampleIsClean) {
         final atr = target.atr;
         if (atr.isFinite) {
           _atr.addBaselineSample(atr);
@@ -662,10 +692,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     _atr.recordEpoch(atr);
-    _atr.recordSessionSample(
-      atr,
-      clean: DateTime.now().difference(_lastMovementAt) >= movementBuffer,
-    );
+    _atr.recordSessionSample(atr, clean: _sampleIsClean);
     _ref.read(liveStatsProvider).push(atr, _atr.percentileOf);
     _audio.onStateUpdate(_atr.isInTarget(atr));
   }
@@ -682,6 +709,88 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
+  /// Gesture events arrive at 1 Hz from the Rust forwarder. Blink/clench
+  /// activity marks the ATR sample window as contaminated (like movement);
+  /// double-blink / double-clench and (optionally) eye up/down become
+  /// persisted markers when a feedback session is running and the relevant
+  /// settings toggle is on.
+  void _onGestures(GestureDto g) {
+    final now = DateTime.now();
+    if (g.blinkCount > 0 || g.clench) {
+      _lastGestureAt = now;
+    }
+    if (state.phase != FeedbackPhase.playing) {
+      return;
+    }
+    if (!_ref.read(settingsProvider).markersInFeedbackEnabled) {
+      return;
+    }
+    // Double blink: >=2 blinks in one report, or two blink reports <=2 s apart.
+    if (g.blinkCount >= 2) {
+      _gestureMarkers.add(
+        GestureMarker(
+          type: GestureType.doubleBlink,
+          offsetSeconds: state.elapsedSeconds,
+        ),
+      );
+      _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
+    } else if (g.blinkCount > 0) {
+      if (now.difference(_lastBlinkAt) <= const Duration(seconds: 2)) {
+        _gestureMarkers.add(
+          GestureMarker(
+            type: GestureType.doubleBlink,
+            offsetSeconds: state.elapsedSeconds,
+          ),
+        );
+        _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
+      } else {
+        _lastBlinkAt = now;
+      }
+    }
+    // Double clench: two clench onsets <=2 s apart.
+    if (g.clench && !_clenchWasActive) {
+      if (now.difference(_lastClenchAt) <= const Duration(seconds: 2)) {
+        _gestureMarkers.add(
+          GestureMarker(
+            type: GestureType.doubleClench,
+            offsetSeconds: state.elapsedSeconds,
+          ),
+        );
+        _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
+      } else {
+        _lastClenchAt = now;
+      }
+    }
+    _clenchWasActive = g.clench;
+    // Eye up/down transitions (experimental, off by default).
+    if (_ref.read(settingsProvider).eyeMarkersEnabled) {
+      if (g.eye != _prevEyeState && g.eye != 0) {
+        _gestureMarkers.add(
+          GestureMarker(
+            type: g.eye == 1 ? GestureType.eyeUp : GestureType.eyeDown,
+            offsetSeconds: state.elapsedSeconds,
+          ),
+        );
+      }
+      _prevEyeState = g.eye;
+    }
+  }
+
+  bool _clenchWasActive = false;
+
+  /// True when the current ATR sample is clean of both head movement and
+  /// blink/clench muscle artifacts (within [movementBuffer] of the last
+  /// activity). Used to keep the baseline and the rolling clean-sample buffer
+  /// uncontaminated.
+  bool get _sampleIsClean {
+    final now = DateTime.now();
+    return now.difference(_lastMovementAt) >= movementBuffer &&
+        now.difference(_lastGestureAt) >= movementBuffer;
+  }
+
+  /// Gesture markers accumulated during the current feedback session.
+  List<GestureMarker> get gestureMarkers => List.unmodifiable(_gestureMarkers);
+
   bool _allGreen(List<double>? quality) {
     if (quality == null || quality.length < 4) {
       return false;
@@ -693,8 +802,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (quality == null) {
       return false;
     }
-    return neededElectrodes
-        .any((i) => i < quality.length && quality[i] >= signalGoodThreshold);
+    return neededElectrodes.any(
+      (i) => i < quality.length && quality[i] >= signalGoodThreshold,
+    );
   }
 
   @override
@@ -711,5 +821,5 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
 final feedbackStateProvider =
     StateNotifierProvider<FeedbackStateNotifier, FeedbackState>((ref) {
-  return FeedbackStateNotifier(ref);
-});
+      return FeedbackStateNotifier(ref);
+    });

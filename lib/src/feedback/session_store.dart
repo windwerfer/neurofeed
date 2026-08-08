@@ -8,6 +8,37 @@ import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/session_summary.dart';
 import 'package:muse_ml/src/settings.dart';
 
+/// Gesture types detected during a feedback session and persisted (computed,
+/// not raw) in the session metadata.
+enum GestureType { doubleBlink, doubleClench, eyeUp, eyeDown }
+
+/// A single time-stamped gesture marker inside a feedback session.
+class GestureMarker {
+  const GestureMarker({required this.type, required this.offsetSeconds});
+
+  final GestureType type;
+
+  /// Seconds from session start (matches [FeedbackState.elapsedSeconds]).
+  final int offsetSeconds;
+
+  Map<String, Object?> toJson() => {'type': type.name, 'at': offsetSeconds};
+
+  static GestureMarker? fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      return null;
+    }
+    final name = json['type'] as String?;
+    final type = GestureType.values.where((t) => t.name == name).firstOrNull;
+    if (type == null) {
+      return null;
+    }
+    return GestureMarker(
+      type: type,
+      offsetSeconds: (json['at'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 class SessionStatsData {
   const SessionStatsData({
     this.peakAlphaFreq,
@@ -17,7 +48,6 @@ class SessionStatsData {
     this.avgBpm,
     required this.avgAlphaRel,
   });
-
   final double? peakAlphaFreq;
   final double? peakAlphaPower;
   final double targetPct;
@@ -64,6 +94,7 @@ class SessionMetadata {
     this.recordedChannels = const [],
     this.recordedData = const [],
     this.summary,
+    this.gestures = const [],
   });
 
   final ProtocolType protocol;
@@ -97,6 +128,10 @@ class SessionMetadata {
   /// Null on old files.
   final SessionOverview? summary;
 
+  /// Gesture markers (double blink / double clench / eye) recorded during the
+  /// session. Computed data — stored in metadata, not the frame body.
+  final List<GestureMarker> gestures;
+
   Map<String, Object?> toJson() => {
     'protocol': protocol.name,
     'durationMinutes': durationMinutes,
@@ -111,6 +146,7 @@ class SessionMetadata {
     if (recordedChannels.isNotEmpty) 'recordedChannels': recordedChannels,
     if (recordedData.isNotEmpty) 'recordedData': recordedData,
     if (summary != null) 'summary': summary!.toJson(),
+    if (gestures.isNotEmpty) 'gestures': [for (final g in gestures) g.toJson()],
   };
 
   static SessionMetadata? fromJson(Object? json) {
@@ -129,22 +165,31 @@ class SessionMetadata {
       durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
       elapsedSeconds: (json['elapsedSeconds'] as num?)?.toInt() ?? 0,
       sound: (json['sound'] as String?) ?? 'Ambient Drone',
-      savedAt: DateTime.tryParse((json['savedAt'] as String?) ?? '') ??
+      savedAt:
+          DateTime.tryParse((json['savedAt'] as String?) ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       notes: (json['notes'] as String?) ?? '',
       stats: SessionStatsData.fromJson(json['stats']),
       deviceName: json['deviceName'] as String?,
       deviceModel: json['deviceModel'] as String?,
       deviceId: json['deviceId'] as String?,
-      recordedChannels: (json['recordedChannels'] as List<Object?>?)
+      recordedChannels:
+          (json['recordedChannels'] as List<Object?>?)
               ?.whereType<String>()
               .toList() ??
           const [],
-      recordedData: (json['recordedData'] as List<Object?>?)
+      recordedData:
+          (json['recordedData'] as List<Object?>?)
               ?.whereType<String>()
               .toList() ??
           const [],
       summary: SessionOverview.fromJson(json['summary']),
+      gestures:
+          (json['gestures'] as List<Object?>?)
+              ?.map(GestureMarker.fromJson)
+              .whereType<GestureMarker>()
+              .toList() ??
+          const [],
     );
   }
 }
@@ -173,7 +218,8 @@ class SessionStore {
   Future<List<SessionSummary>> list() async {
     final storage = await _storage;
     debugPrint(
-        '[session] list(): storage=${storage.displayName} loc=${storage.location}');
+      '[session] list(): storage=${storage.displayName} loc=${storage.location}',
+    );
     final names = await storage.listFiles();
     final summaries = <SessionSummary>[];
     for (final name in names) {
@@ -184,9 +230,7 @@ class SessionStore {
       final metadata = await _readMetadata(storage, name, id);
       summaries.add(SessionSummary(id: id, metadata: metadata));
     }
-    summaries.sort(
-      (a, b) => b.metadata.savedAt.compareTo(a.metadata.savedAt),
-    );
+    summaries.sort((a, b) => b.metadata.savedAt.compareTo(a.metadata.savedAt));
     debugPrint('[session] list: found ${summaries.length} session(s)');
     return summaries;
   }
@@ -196,23 +240,29 @@ class SessionStore {
     final storage = await _storage;
     final name = _museName(id);
     final bytes = await storage.readFile(name);
-    debugPrint('[session] readMuse($id): file="$name" '
-        'read=${bytes == null ? 'null' : '${bytes.length}B'} '
-        'storage=${storage.displayName} loc=${storage.location}');
+    debugPrint(
+      '[session] readMuse($id): file="$name" '
+      'read=${bytes == null ? 'null' : '${bytes.length}B'} '
+      'storage=${storage.displayName} loc=${storage.location}',
+    );
     if (bytes == null) {
       return null;
     }
     final body = SessionContainer.extractBody(Uint8List.fromList(bytes));
-    debugPrint('[session] readMuse($id): extractBody='
-        '${body == null ? 'null' : '${body.length}B'}');
+    debugPrint(
+      '[session] readMuse($id): extractBody='
+      '${body == null ? 'null' : '${body.length}B'}',
+    );
     return body;
   }
 
   /// Read the thumbnail PNG bytes for [id], or null when missing.
   Future<List<int>?> readPng(String id) async {
     final storage = await _storage;
-    final bytes =
-        await storage.readPrefix(_museName(id), SessionContainer.headReadLimit);
+    final bytes = await storage.readPrefix(
+      _museName(id),
+      SessionContainer.headReadLimit,
+    );
     if (bytes == null || bytes.isEmpty) {
       return null;
     }
@@ -275,8 +325,10 @@ class SessionStore {
     String id,
   ) async {
     try {
-      final raw =
-          await storage.readPrefix(name, SessionContainer.headReadLimit);
+      final raw = await storage.readPrefix(
+        name,
+        SessionContainer.headReadLimit,
+      );
       if (raw == null || raw.isEmpty) {
         return _fallback(id);
       }

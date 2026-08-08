@@ -66,6 +66,7 @@ sealed class BandsDto with _$BandsDto {
     required double alpha,
     required double beta,
     required double gamma,
+    required double lineNoiseRatio,
   }) = _BandsDto;
 }
 
@@ -110,6 +111,17 @@ sealed class EegDto with _$EegDto {
   }) = _EegDto;
 }
 
+/// One second of gesture detection (blink / jaw clench / eye position).
+@freezed
+sealed class GestureDto with _$GestureDto {
+  const factory GestureDto({
+    required double timestamp,
+    required int blinkCount,
+    required bool clench,
+    required int eye,
+  }) = _GestureDto;
+}
+
 /// A batch of inertial measurements.
 @freezed
 sealed class ImuDto with _$ImuDto {
@@ -148,6 +160,8 @@ sealed class MuseEventDto with _$MuseEventDto {
       MuseEventDto_Movement;
   const factory MuseEventDto.peakAlpha(PeakAlphaDto field0) =
       MuseEventDto_PeakAlpha;
+  const factory MuseEventDto.gestures(GestureDto field0) =
+      MuseEventDto_Gestures;
 }
 
 /// Peak alpha frequency and power (parabolic interpolation over FFT bins).

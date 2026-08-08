@@ -633,8 +633,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BandsDto dco_decode_bands_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return BandsDto(
       electrode: dco_decode_i_32(arr[0]),
       timestamp: dco_decode_f_64(arr[1]),
@@ -643,6 +643,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       alpha: dco_decode_f_64(arr[4]),
       beta: dco_decode_f_64(arr[5]),
       gamma: dco_decode_f_64(arr[6]),
+      lineNoiseRatio: dco_decode_f_64(arr[7]),
     );
   }
 
@@ -685,6 +686,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   EegDto dco_decode_box_autoadd_eeg_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_eeg_dto(raw);
+  }
+
+  @protected
+  GestureDto dco_decode_box_autoadd_gesture_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_gesture_dto(raw);
   }
 
   @protected
@@ -816,6 +823,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double dco_decode_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
+  }
+
+  @protected
+  GestureDto dco_decode_gesture_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return GestureDto(
+      timestamp: dco_decode_f_64(arr[0]),
+      blinkCount: dco_decode_u_32(arr[1]),
+      clench: dco_decode_bool(arr[2]),
+      eye: dco_decode_u_8(arr[3]),
+    );
   }
 
   @protected
@@ -961,6 +982,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case 11:
         return MuseEventDto_PeakAlpha(
           dco_decode_box_autoadd_peak_alpha_dto(raw[1]),
+        );
+      case 12:
+        return MuseEventDto_Gestures(
+          dco_decode_box_autoadd_gesture_dto(raw[1]),
         );
       default:
         throw Exception("unreachable");
@@ -1179,6 +1204,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_alpha = sse_decode_f_64(deserializer);
     var var_beta = sse_decode_f_64(deserializer);
     var var_gamma = sse_decode_f_64(deserializer);
+    var var_lineNoiseRatio = sse_decode_f_64(deserializer);
     return BandsDto(
       electrode: var_electrode,
       timestamp: var_timestamp,
@@ -1187,6 +1213,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       alpha: var_alpha,
       beta: var_beta,
       gamma: var_gamma,
+      lineNoiseRatio: var_lineNoiseRatio,
     );
   }
 
@@ -1233,6 +1260,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   EegDto sse_decode_box_autoadd_eeg_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_eeg_dto(deserializer));
+  }
+
+  @protected
+  GestureDto sse_decode_box_autoadd_gesture_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_gesture_dto(deserializer));
   }
 
   @protected
@@ -1366,6 +1399,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double sse_decode_f_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getFloat64();
+  }
+
+  @protected
+  GestureDto sse_decode_gesture_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_timestamp = sse_decode_f_64(deserializer);
+    var var_blinkCount = sse_decode_u_32(deserializer);
+    var var_clench = sse_decode_bool(deserializer);
+    var var_eye = sse_decode_u_8(deserializer);
+    return GestureDto(
+      timestamp: var_timestamp,
+      blinkCount: var_blinkCount,
+      clench: var_clench,
+      eye: var_eye,
+    );
   }
 
   @protected
@@ -1558,6 +1606,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case 11:
         var var_field0 = sse_decode_box_autoadd_peak_alpha_dto(deserializer);
         return MuseEventDto_PeakAlpha(var_field0);
+      case 12:
+        var var_field0 = sse_decode_box_autoadd_gesture_dto(deserializer);
+        return MuseEventDto_Gestures(var_field0);
       default:
         throw UnimplementedError('');
     }
@@ -1803,6 +1854,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.alpha, serializer);
     sse_encode_f_64(self.beta, serializer);
     sse_encode_f_64(self.gamma, serializer);
+    sse_encode_f_64(self.lineNoiseRatio, serializer);
   }
 
   @protected
@@ -1845,6 +1897,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_eeg_dto(EegDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_eeg_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_gesture_dto(
+    GestureDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_gesture_dto(self, serializer);
   }
 
   @protected
@@ -1969,6 +2030,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_f_64(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putFloat64(self);
+  }
+
+  @protected
+  void sse_encode_gesture_dto(GestureDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.timestamp, serializer);
+    sse_encode_u_32(self.blinkCount, serializer);
+    sse_encode_bool(self.clench, serializer);
+    sse_encode_u_8(self.eye, serializer);
   }
 
   @protected
@@ -2159,6 +2229,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case MuseEventDto_PeakAlpha(field0: final field0):
         sse_encode_i_32(11, serializer);
         sse_encode_box_autoadd_peak_alpha_dto(field0, serializer);
+      case MuseEventDto_Gestures(field0: final field0):
+        sse_encode_i_32(12, serializer);
+        sse_encode_box_autoadd_gesture_dto(field0, serializer);
     }
   }
 

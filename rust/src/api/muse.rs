@@ -3,6 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::frb_generated::StreamSink;
 use muse_rs::prelude::*;
 
+use crate::analysis::gesture::GestureDetector;
 use crate::connection::{state, ActiveConnection};
 
 fn now_ms() -> f64 {
@@ -111,6 +112,10 @@ pub struct BandsDto {
     pub alpha: f64,
     pub beta: f64,
     pub gamma: f64,
+    /// Fraction of total spectral power landing in the 50/60 Hz mains bins.
+    /// A high ratio (vs the electrode's rolling baseline) indicates line-noise
+    /// / high skin impedance — a per-pad "fit" proxy.
+    pub line_noise_ratio: f64,
 }
 
 /// Heart-rate pulse estimate from PPG infrared channel.
@@ -136,6 +141,18 @@ pub struct PeakAlphaDto {
     pub power: f64,
 }
 
+/// One second of gesture detection (blink / jaw clench / eye position).
+#[frb(dart_metadata = ("freezed",))]
+pub struct GestureDto {
+    pub timestamp: f64,
+    /// Number of blinks detected in the last second.
+    pub blink_count: u32,
+    /// Jaw-clench muscle activity present in the last second.
+    pub clench: bool,
+    /// Vertical eye position: 0 = neutral, 1 = up, 2 = down (experimental).
+    pub eye: u8,
+}
+
 /// All events streamed from the headset to the UI.
 #[frb(dart_metadata = ("freezed",))]
 pub enum MuseEventDto {
@@ -151,6 +168,7 @@ pub enum MuseEventDto {
     Pulse(PulseDto),
     Movement(MovementDto),
     PeakAlpha(PeakAlphaDto),
+    Gestures(GestureDto),
 }
 
 // ── Bridge API ─────────────────────────────────────────────────────────────────
@@ -462,6 +480,9 @@ fn spawn_event_forwarder() {
         let mut accel_mag_buffer: Vec<f64> = Vec::new();
         let mut last_metrics = tokio::time::Instant::now();
 
+        // Blink / clench / eye-position detector, fed from raw EEG + gamma.
+        let mut gesture = GestureDetector::default();
+
         // Per-electrode virtual timestamp tracking for Athena firmware.
         // muse-rs emits timestamp=0.0 for Athena packets because they lack
         // per-channel sequence indices.  We synthesise wall-clock timestamps
@@ -623,6 +644,9 @@ fn spawn_event_forwarder() {
                 } else {
                     None
                 };
+                if let MuseEventDto::Eeg(ref e) = dto {
+                    gesture.feed_eeg(e.electrode, &e.samples);
+                }
                 let should_stop = {
                     let mut guard =
                         state().inner.lock().unwrap_or_else(|e| e.into_inner());
@@ -665,8 +689,9 @@ fn spawn_event_forwarder() {
                                 continue;
                             }
                         };
-                        // result: [delta, theta, alpha, beta, gamma, peak_alpha_freq, peak_alpha_power]
+                        // result: [delta, theta, alpha, beta, gamma, peak_alpha_freq, peak_alpha_power, line_noise_ratio]
                         counts.bands += 1;
+                        gesture.feed_gamma(electrode, result[4]);
                         let should_stop = {
                             let mut guard = state()
                                 .inner
@@ -682,6 +707,7 @@ fn spawn_event_forwarder() {
                                         alpha: result[2],
                                         beta: result[3],
                                         gamma: result[4],
+                                        line_noise_ratio: result[7],
                                     }))
                                     .is_ok()
                                 }
@@ -752,6 +778,27 @@ fn spawn_event_forwarder() {
                                 }
                             }
                         }
+
+                        let g = gesture.tick(now_ms);
+                        {
+                            let mut guard = state()
+                                .inner
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            if let Some(sink) = &guard.sink {
+                                if sink
+                                    .add(MuseEventDto::Gestures(GestureDto {
+                                        timestamp: now_ms,
+                                        blink_count: g.blink_count,
+                                        clench: g.clench,
+                                        eye: g.eye,
+                                    }))
+                                    .is_err()
+                                {
+                                    guard.sink = None;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -759,10 +806,10 @@ fn spawn_event_forwarder() {
     });
 }
 
-fn compute_fft_bands(samples: &[f64]) -> [f64; 7] {
+fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
     let n = samples.len();
     if n < 2 {
-        return [0.0; 7];
+        return [0.0; 8];
     }
     let sample_rate = 256.0;
     let hz_per_bin = sample_rate / n as f64;
@@ -838,9 +885,28 @@ fn compute_fft_bands(samples: &[f64]) -> [f64; 7] {
 
         let (peak_freq, peak_power) = compute_peak_alpha(&re, &im, hz_per_bin);
 
+        // Line-noise / impedance proxy: fraction of total power in the
+        // 50/60 Hz mains bins (each averaged over a ±1 bin window to tolerate
+        // slight mains drift). hz_per_bin = 1.0 at FFT_N=256 @ 256 Hz, so the
+        // mains spike lands directly on bins 50/60.
+        let mains = |hz: f64| -> f64 {
+            let k = bin(hz);
+            let mut p = 0.0;
+            let lo = k.saturating_sub(1).max(1);
+            let hi = (k + 1).min(half_n);
+            for kk in lo..=hi {
+                p += re[kk] * re[kk] + im[kk] * im[kk];
+            }
+            p
+        };
+        let total: f64 =
+            (1..=half_n).map(|k| re[k] * re[k] + im[k] * im[k]).sum();
+        let mains_power = mains(50.0).max(mains(60.0));
+        let line_noise_ratio = if total > 0.0 { mains_power / total } else { 0.0 };
+
         [
             powers[0], powers[1], powers[2], powers[3], powers[4],
-            peak_freq, peak_power,
+            peak_freq, peak_power, line_noise_ratio,
         ]
     }))
 }

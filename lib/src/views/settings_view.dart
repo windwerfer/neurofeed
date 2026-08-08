@@ -74,9 +74,11 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     final existing = current.valueOrNull;
     final count = existing == null
         ? 0
-        : (await existing.listFiles()).where(
-            (n) => n.startsWith('session_') && n.endsWith('.muse.feedback'),
-          ).length;
+        : (await existing.listFiles())
+              .where(
+                (n) => n.startsWith('session_') && n.endsWith('.muse.feedback'),
+              )
+              .length;
     if (!context.mounted) {
       return;
     }
@@ -87,7 +89,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         content: Text(
           count > 0
               ? 'Move $count existing session(s) into the new folder? '
-                  'Choosing No leaves them in the current folder.'
+                    'Choosing No leaves them in the current folder.'
               : 'Choose this folder for saved sessions?',
         ),
         actions: [
@@ -145,10 +147,8 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   leading: const Icon(Icons.folder_outlined),
                   title: const Text('Save feedback to folder'),
                   subtitle: storage.maybeWhen(
-                    data: (s) => Text(
-                      s.displayName,
-                      style: theme.textTheme.bodySmall,
-                    ),
+                    data: (s) =>
+                        Text(s.displayName, style: theme.textTheme.bodySmall),
                     orElse: () => const Text('Resolving storage…'),
                   ),
                   trailing: const Icon(Icons.edit_outlined),
@@ -158,9 +158,9 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 Text(
                   folder == null
                       ? 'Using the default folder. Tap to choose where session '
-                          'history is stored.'
+                            'history is stored.'
                       : 'Sessions are saved to the folder above. Cache/temp '
-                          'files live in a hidden .cache subfolder.',
+                            'files live in a hidden .cache subfolder.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -178,11 +178,104 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
           ),
         ),
         const SizedBox(height: 16),
-        _RecordingCard(
-          streams: streams,
-          onToggle: toggle,
-        ),
+        _RecordingCard(streams: streams, onToggle: toggle),
+        const SizedBox(height: 16),
+        _GesturesCard(settings: settings),
       ],
+    );
+  }
+}
+
+/// Gesture detection options: eye up/down markers (experimental) and whether
+/// gesture markers are persisted into saved feedback sessions.
+class _GesturesCard extends StatefulWidget {
+  const _GesturesCard({required this.settings});
+
+  final Settings settings;
+
+  @override
+  State<_GesturesCard> createState() => _GesturesCardState();
+}
+
+class _GesturesCardState extends State<_GesturesCard> {
+  late bool _eye;
+  late bool _persist;
+
+  @override
+  void initState() {
+    super.initState();
+    _eye = widget.settings.eyeMarkersEnabled;
+    _persist = widget.settings.markersInFeedbackEnabled;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.touch_app_outlined,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Text('Gesture markers', style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Blink twice, clench twice, or look up/down to drop a marker '
+              'during a feedback session. Detection runs in Rust at 1 Hz.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const Divider(height: 24),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.visibility_outlined),
+              title: const Text('Eye up/down markers'),
+              subtitle: Text(
+                'Experimental on a 4-electrode Muse — eye direction is '
+                'estimated from frontal-vs-rear EEG. Off by default.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              value: _eye,
+              onChanged: (on) async {
+                setState(() => _eye = on);
+                await widget.settings.setEyeMarkersEnabled(on);
+              },
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.bookmark_add_outlined),
+              title: const Text('Add markers to feedback sessions'),
+              subtitle: Text(
+                'Persist double-blink / double-clench / eye markers in the '
+                'session metadata (.muse.feedback). Detection still runs when '
+                'off, markers are just not saved.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              value: _persist,
+              onChanged: (on) async {
+                setState(() => _persist = on);
+                await widget.settings.setMarkersInFeedbackEnabled(on);
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -241,8 +334,10 @@ class _RecordingCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.dataset_outlined,
-                    color: theme.colorScheme.onSurfaceVariant),
+                Icon(
+                  Icons.dataset_outlined,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 8),
                 Text('Session recording', style: theme.textTheme.titleMedium),
               ],

@@ -48,6 +48,10 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   final StreamController<MuseEventDto> _eventController =
       StreamController<MuseEventDto>.broadcast();
   double _lastQualityCheck = 0;
+
+  /// Latest 50/60 Hz line-noise ratio per electrode from Bands events.
+  /// -1 means no data yet for that pad.
+  final List<double> _lineNoise = List.filled(4, -1);
   final LiveCache liveCache = LiveCache();
   final BandCache bandCache = BandCache();
   final SessionRecorder sessionRecorder = SessionRecorder();
@@ -210,6 +214,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       case MuseEventDto_Disconnected():
         debugPrint('[muse] event: disconnected');
         sessionRecorder.stop();
+        _lineNoise.fillRange(0, _lineNoise.length, -1);
         state = state.copyWith(
           status: const ConnectionStatus(
             connected: false,
@@ -219,6 +224,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           ),
           batteryLevel: 0,
           signalQuality: null,
+          gestures: null,
           telemetry: const TelemetrySnapshot(
             batteryLevel: 0,
             fuelGaugeVoltage: 0,
@@ -236,6 +242,12 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         _maybeComputeSignalQuality();
       case MuseEventDto_Bands():
         bandCache.appendBands(event.field0);
+        final idx = event.field0.electrode;
+        if (idx >= 0 && idx < _lineNoise.length) {
+          _lineNoise[idx] = event.field0.lineNoiseRatio;
+        }
+      case MuseEventDto_Gestures():
+        state = state.copyWith(gestures: event.field0);
       case MuseEventDto_Telemetry():
         // debugPrint('[muse] telemetry: battery=${event.field0.batteryLevel} '
         //     'fuel=${event.field0.fuelGaugeVoltage} temp=${event.field0.temperature}');
@@ -263,11 +275,15 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
       final n = samples.length;
       double sum = 0;
-      for (final s in samples) { sum += s.v; }
+      for (final s in samples) {
+        sum += s.v;
+      }
       final mean = sum / n;
 
       double sumSq = 0;
-      for (final s in samples) { sumSq += (s.v - mean) * (s.v - mean); }
+      for (final s in samples) {
+        sumSq += (s.v - mean) * (s.v - mean);
+      }
       final variance = sumSq / n;
       final std = sqrt(variance);
 
@@ -281,6 +297,14 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       } else {
         score = 40.0 * (100.0 - std) / 60.0;
         if (score < 0) score = 0;
+      }
+
+      // Line-noise (impedance) penalty: ratios above ~0.2 start to hurt a
+      // pad's fit, ~0.5 is severe (mains power is half the total spectrum).
+      final noise = _lineNoise[ch];
+      if (noise >= 0) {
+        final penalty = ((noise - 0.2) / 0.3).clamp(0.0, 1.0);
+        score = score * (1.0 - 0.6 * penalty);
       }
       quals[ch] = score;
     }
@@ -390,6 +414,7 @@ class AppUiState {
     required this.batteryLevel,
     required this.telemetry,
     this.signalQuality,
+    this.gestures,
     this.scanMessage,
     this.connectingTo,
     this.disconnecting = false,
@@ -404,6 +429,9 @@ class AppUiState {
   final double batteryLevel;
   final TelemetrySnapshot telemetry;
   final List<double>? signalQuality;
+
+  /// Latest 1 Hz gesture report (blinks / clench / eye position).
+  final GestureDto? gestures;
   final String? scanMessage;
   final String? connectingTo;
   final bool disconnecting;
@@ -420,6 +448,7 @@ class AppUiState {
     double? batteryLevel,
     TelemetrySnapshot? telemetry,
     Object? signalQuality = _sentinel,
+    Object? gestures = _sentinel,
     Object? scanMessage = _sentinel,
     Object? connectingTo = _sentinel,
     bool? disconnecting,
@@ -435,6 +464,9 @@ class AppUiState {
     signalQuality: identical(signalQuality, _sentinel)
         ? this.signalQuality
         : signalQuality as List<double>?,
+    gestures: identical(gestures, _sentinel)
+        ? this.gestures
+        : gestures as GestureDto?,
     scanMessage: switch (scanMessage) {
       Object() when identical(scanMessage, _sentinel) => this.scanMessage,
       _ => scanMessage as String?,
