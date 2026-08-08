@@ -2,7 +2,7 @@
 set -e
 
 sudo apt update
-sudo apt install -y fzf zoxide ripgrep fd-find zstd hx npm
+sudo apt install -y fzf atuin zoxide ripgrep fd-find zstd hx npm
 
 # npm is for mcp servers in opencode
 
@@ -18,7 +18,8 @@ fi
 if ! grep -q 'eval "$(fzf --zsh)"' ~/.zshrc; then
 cat >> ~/.zshrc << 'EOF'
 
-eval "$(fzf --zsh)"
+# eval "$(fzf --zsh)"
+eval "$(atuin init zsh --disable-up-arrow)"
 
 eval "$(zoxide init zsh)"
 
