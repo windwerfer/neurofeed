@@ -116,17 +116,54 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
   bands/HR/movement/peak without reading the `.muse` body. Computed at save in
   `FeedbackDashboardView._save` from `SessionData`; old files parse to null.
 
+## Status — 2026-08-08 Update (per-pad line-noise fit + gesture detection)
+- ✅ **Line-noise (fit) metric**: `BandsDto.line_noise_ratio` = fraction of
+  spectral power in the 50/60 Hz mains bins (each averaged ±1 bin) of the
+  existing per-second 256-point FFT (`hz_per_bin` = 1.0 → bins 50/60 exact).
+  Zero new crates. Folded into `signalQuality` per-pad in
+  `_maybeComputeSignalQuality`: ratios >~0.2 start to penalize, ~0.5 severe
+  (cap −60%); `-1.0` sentinel until first Bands event.
+- ✅ **Rust gesture detector**: `rust/src/analysis/gesture.rs` (`GestureDetector`,
+  no DSP crates, all thresholds auto-adaptive EWMA). Blink = frontal pad (1,2)
+  rectified-diff bin energy > `max(baseline×5, 100 µV)` w/ 500 ms refractory;
+  jaw clench = posterior pad (0,3) gamma bursts > `baseline×3` (reuses per
+  second FFT gamma); eye up/down = frontal−posterior mean shift
+  `max(scale×2, 20 µV)` (experimental, default off). Fed raw EEG + gamma in the
+  forwarder (`rust/src/api/muse.rs`), drains 1 Hz `MuseEventDto::Gestures`.
+- ✅ **Dart wiring**: `_onGestures` gates the ATR clean-sample window (like the
+  movement gate; `_sampleIsClean` requires both) and accumulates
+  `GestureMarker`s only while `playing`: `doubleBlink` (≥2 in a report or two
+  blink-seconds ≤2 s apart), `doubleClench` (two onsets ≤2 s), eye transitions
+  (gated by `Settings.eyeMarkersEnabled`).
+- ✅ **Metadata persistence**: markers persist under top-level metadata
+  `gestures` (`SessionMetadata.gestures` / `GestureMarker` / `GestureType` in
+  `session_store.dart`), written at save in `FeedbackDashboardView._save`; never
+  in the `.muse` body (`encode_session_event` → empty record) and not a
+  `RecordingStream`.
+- ✅ **Settings toggles**: `eyeMarkersEnabled` (default off) + 
+  `markersInFeedbackEnabled` (default on) with a "Gesture markers" card in
+  Settings.
+- ✅ `flutter_rust_bridge` codegen re-run; `flutter analyze lib/src` + `cargo check`
+  clean; app built + launched on the TB336FU (streaming/scanning) — the adb
+  link dropped mid-session, not a build failure.
+- ⏳ **Thresholds unvalidated on real EEG**: `BLINK_*`/`CLENCH_*`/`EYE_*` constants
+  in `gesture.rs` are initial guesses — need on-device tuning.
+
 ## Next steps
 1. On-device test pass (checklist in `.ai/feeback/todos.md`): calibration →
    auto-start, chimes + movement gating, volume dialog, target settings,
    recalibrate, persistence, `[atr]` ceiling/lockout logs, mid-session Muse
    power-off → watchdog → auto-reconnect.
-2. If the reconnect test passes, remove the temporary `[muse] forwarder` debug
+2. On-device gesture tuning: verify blink/clench double-marker timing and tune
+   `BLINK_*`/`CLENCH_*`/`EYE_*` thresholds from logcat until double blinks and
+   double clenches fire reliably without false positives; then decide if eye
+   up/down becomes a live track.
+3. If the reconnect test passes, remove the temporary `[muse] forwarder` debug
    logs or drop them to debug level.
-3. v1.1 backlog: EEG artifact flag for EMG, percentile persistence, continuous
-   EMA adaptation, multi-protocol presets, calibration audio variants (see
-   `.ai/feeback/todos.md`).
-4. v1.2 meta-block: Neurosity Crown 8-electrode support — channel labels are
+4. v1.1 backlog: gesture marker log/rendering in history detail, percentile
+   persistence, continuous EMA adaptation, multi-protocol presets, calibration
+   audio variants (see `.ai/feeback/todos.md`).
+5. v1.2 meta-block: Neurosity Crown 8-electrode support — channel labels are
    already metadata-driven; only the default channel-name list needs
    extending per device.
 

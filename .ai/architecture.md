@@ -50,9 +50,12 @@ the Kotlin glue, bundled Java classes, JVM-attach patch, and patched fork.
 It remains a good second choice if btleplug ever becomes unmaintainable.
 
 ## Signal quality, calibration gate, and ATR autodrop (feedback)
-- Per-pad `signalQuality` (0–100, from EEG std over a 1 s window,
-  `connection_provider.dart`) is the "fit" score — separate from the bands used
-  for ATR.
+- Per-pad `signalQuality` (0–100, from EEG std over a 1 s window **plus a
+  line-noise term**, `connection_provider.dart`) is the "fit" score — separate
+  from the bands used for ATR. Line noise comes from `BandsDto.line_noise_ratio`
+  (50/60 Hz mains power fraction of the existing per-second FFT); ratios above
+  ~0.2 start to penalize a pad, ~0.5 is severe (up to −60%). `_lineNoise` keeps
+  a `-1.0` sentinel until the first Bands event.
 - Calibration gate: all 4 pads ≥ `signalGoodThreshold` for `greenStableSeconds`
   (3) continuous (1 s `_gateTimer`), then baseline. After baseline there is no
   signal gate → feedback always starts.
@@ -63,6 +66,22 @@ It remains a good second choice if btleplug ever becomes unmaintainable.
   recovers.
 - ATR autodrop: `TargetStateAggregator.evaluate(quality)` averages only pads
   ≥ `atrUsableSignalThreshold`; null if both frontal pads are bad.
+
+## Gesture detection (blink / jaw clench / eye)
+- `rust/src/analysis/gesture.rs` `GestureDetector` — no DSP crates, all
+  thresholds auto-adaptive EWMA baselines. Fed raw EEG per packet + per-second
+  FFT gamma in the forwarder (`rust/src/api/muse.rs`); drains 1 Hz into the new
+  `MuseEventDto::Gestures` variant.
+- Blink: frontal pads (1,2), 125 ms rectified-diff bin energy > `max(baseline×5,
+  100 µV)`, ~500 ms refractory. Jaw clench: posterior pads (0,3) gamma bursts >
+  `baseline×3`. Eye up/down: frontal−posterior mean shift > `max(scale×2,
+  20 µV)` — experimental, off by default.
+- In Dart: `_onGestures` gates the ATR clean-sample window (like the movement
+  gate) and accumulates `GestureMarker`s (`doubleBlink`, `doubleClench`,
+  `eyeUp`/`eyeDown`) only while `playing`. Markers persist in `SessionMetadata`.
+  `gestures` (top-level metadata key), never in the `.muse` body.
+- Settings toggles: `eyeMarkersEnabled` (eye track, default off) and
+  `markersInFeedbackEnabled` (persist markers, default on).
 
 ## muse-rs module map (for the fork)
 | File | Role | Keep in fork? |
@@ -76,7 +95,11 @@ It remains a good second choice if btleplug ever becomes unmaintainable.
 
 ## Key data types (crossing the bridge)
 - `MuseEventDto` (freezed DTO) variants: `Connected`, `Disconnected`, `Eeg`,
-  `Ppg`, `Telemetry`, `Accelerometer`, `Gyroscope`, `Control`.
+  `Ppg`, `Telemetry`, `Accelerometer`, `Gyroscope`, `Control`, `Pulse`,
+  `Movement`, `PeakAlpha`, `Gestures`.
+- `BandsDto { electrode, timestamp, delta…gamma, line_noise_ratio }` — also the
+  1 Hz carrier that feeds `AppStateNotifier._lineNoise`.
+- `GestureDto { timestamp, blink_count, clench, eye }` — 1 Hz gesture report.
 - `DeviceInfo { name, id }` — produced by scan, consumed by connect.
 - `ConnectionStatus`, `TelemetrySnapshot` — UI state.
 
