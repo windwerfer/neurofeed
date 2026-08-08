@@ -104,8 +104,13 @@ class _HistoryTile extends ConsumerWidget {
         '${meta.savedAt.minute.toString().padLeft(2, '0')}';
 
     final detailParts = <String>[
+      if (meta.deviceModel != null && meta.deviceModel!.isNotEmpty)
+        meta.deviceModel!,
       '${meta.elapsedSeconds ~/ 60}:'
           '${(meta.elapsedSeconds % 60).toString().padLeft(2, '0')}',
+      if (meta.recordedChannels.isNotEmpty)
+        '${meta.recordedChannels.length}ch '
+            '${meta.recordedChannels.join('/')}',
       if (stats != null) 'target ${stats.targetPct.toStringAsFixed(0)}%',
       if (stats?.peakAlphaFreq != null)
         'peak ${stats!.peakAlphaFreq!.toStringAsFixed(1)} Hz',

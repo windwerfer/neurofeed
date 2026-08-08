@@ -5,7 +5,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/charts/eeg_data_source.dart';
 import 'package:muse_ml/src/charts/session_reader.dart';
+import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
@@ -141,6 +143,11 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     if (saved != null) {
       debugPrint('[dashboard] save: finalized ${saved.path}');
       final stats = _prepared?.stats;
+      final app = ref.read(appStateProvider);
+      final channels = notifier.recordedChannels
+          .map(channelName)
+          .toList()
+        ..sort();
       final metadata = SessionMetadata(
         protocol: fb.protocol,
         durationMinutes: fb.durationMinutes,
@@ -158,6 +165,11 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
                 avgBpm: stats.avgBpm,
                 avgAlphaRel: stats.avgAlphaRel,
               ),
+        deviceName: app.status.connected ? app.status.name : null,
+        deviceModel: app.status.connected ? app.status.firmware : null,
+        deviceId: app.status.connected ? app.status.id : null,
+        recordedChannels: channels,
+        recordedData: notifier.recordStreams.map((s) => s.name).toList(),
       );
       final id = DateTime.now().millisecondsSinceEpoch.toString();
       try {

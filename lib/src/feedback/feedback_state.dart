@@ -120,6 +120,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final settings = _ref.read(settingsProvider);
     _atr.setDynamicAdapt(settings.dynamicAdapt ?? true);
     _atr.setResponsiveness(settings.responsiveness ?? 0.5);
+    _recorder.setRecordStreams(settings.recordStreams);
     state = state.copyWith(
       soundName: settings.soundName ?? state.soundName,
       durationMinutes: settings.durationMinutes ?? state.durationMinutes,
@@ -461,6 +462,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   String? get sessionFilePath => _recorder.currentFilePath;
+
+  /// Electrode indices that produced data in the current recording.
+  Set<int> get recordedChannels => _recorder.recordedChannels;
+
+  /// Streams enabled for this session's recording.
+  Set<RecordingStream> get recordStreams => _recorder.streams;
 
   Future<File?> saveSession() => _recorder.saveSession();
 

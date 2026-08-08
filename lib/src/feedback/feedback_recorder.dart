@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/charts/session_recorder.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:muse_ml/src/settings.dart';
 
 /// Wraps [SessionRecorder] with session-aware lifecycle.
 ///
@@ -26,6 +27,18 @@ class FeedbackRecorder {
   bool get isRecording => _recorder.isRecording;
 
   String? get currentFilePath => _recorder.currentFilePath;
+
+  /// Electrode indices that produced data in the current session recording.
+  Set<int> get recordedChannels => Set.unmodifiable(_recorder.channels);
+
+  /// Streams this recorder is set to persist.
+  Set<RecordingStream> get streams => Set.unmodifiable(_recorder.recordStreams);
+
+  /// Streams to persist into the session file. Applied before [startSession]
+  /// so the recorder only writes the user-selected data types.
+  void setRecordStreams(Set<RecordingStream> streams) {
+    _recorder.recordStreams = streams;
+  }
 
   /// Begin a session recording in the scratch directory. If one is already
   /// active, it is ended first.

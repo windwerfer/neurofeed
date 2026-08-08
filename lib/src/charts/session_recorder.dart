@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:muse_ml/src/settings.dart';
 
 class SessionRecorder {
   static const _magic = 0x4D55534542494E0A; // "MUSEBIN\n"
@@ -15,6 +16,19 @@ class SessionRecorder {
   Timer? _flushTimer;
   final _pending = BytesBuilder();
   int _events = 0;
+
+  /// Streams to persist. Defaults to all — callers that want a subset (e.g.
+  /// the user turned off raw EEG in settings) assign `recordStreams` before
+  /// [start]. Streams map to event tags so the file stays self-describing
+  /// regardless of what is enabled.
+  Set<RecordingStream> recordStreams = RecordingStream.values.toSet();
+
+  /// Electrode indices that produced data during this recording. Used by the
+  /// session metadata so a file records which channels it contains — works for
+  /// any channel count (Muse 4ch, future 8ch Crown).
+  final Set<int> channels = <int>{};
+
+  bool _enabled(RecordingStream s) => recordStreams.contains(s);
 
   bool get isRecording => _file != null;
 
@@ -39,35 +53,45 @@ class SessionRecorder {
   }
 
   void writeEvent(MuseEventDto event) {
-    _events++;
     Uint8List? encoded;
     switch (event) {
-      case MuseEventDto_Eeg(:final field0):
-        encoded = _encodeEeg(field0);
-      case MuseEventDto_Telemetry(:final field0):
-        encoded = _encodeTelemetry(field0);
-      case MuseEventDto_Accelerometer(:final field0):
-        encoded = _encodeImu(3, field0);
-      case MuseEventDto_Gyroscope(:final field0):
-        encoded = _encodeImu(4, field0);
-      case MuseEventDto_Ppg(:final field0):
-        encoded = _encodePpg(field0);
-      case MuseEventDto_Bands(:final field0):
-        encoded = _encodeBands(field0);
-      case MuseEventDto_Pulse(:final field0):
-        encoded = _encodePulse(field0);
-      case MuseEventDto_Movement(:final field0):
-        encoded = _encodeMovement(field0);
-      case MuseEventDto_PeakAlpha(:final field0):
-        encoded = _encodePeakAlpha(field0);
+      case MuseEventDto_Eeg():
+        if (!_enabled(RecordingStream.eeg)) return;
+        encoded = _encodeEeg(event.field0);
+      case MuseEventDto_Telemetry():
+        if (!_enabled(RecordingStream.telemetry)) return;
+        encoded = _encodeTelemetry(event.field0);
+      case MuseEventDto_Accelerometer():
+        if (!_enabled(RecordingStream.imu)) return;
+        encoded = _encodeImu(3, event.field0);
+      case MuseEventDto_Gyroscope():
+        if (!_enabled(RecordingStream.imu)) return;
+        encoded = _encodeImu(4, event.field0);
+      case MuseEventDto_Ppg():
+        if (!_enabled(RecordingStream.ppg)) return;
+        encoded = _encodePpg(event.field0);
+      case MuseEventDto_Bands():
+        if (!_enabled(RecordingStream.bands)) return;
+        encoded = _encodeBands(event.field0);
+      case MuseEventDto_Pulse():
+        if (!_enabled(RecordingStream.pulse)) return;
+        encoded = _encodePulse(event.field0);
+      case MuseEventDto_Movement():
+        if (!_enabled(RecordingStream.movement)) return;
+        encoded = _encodeMovement(event.field0);
+      case MuseEventDto_PeakAlpha():
+        if (!_enabled(RecordingStream.peakAlpha)) return;
+        encoded = _encodePeakAlpha(event.field0);
       default:
         return;
     }
+    _events++;
     _pending.add(encoded);
     if (_pending.length > _maxPendingBytes) _flush();
   }
 
   Uint8List _encodeEeg(EegDto d) {
+    channels.add(d.electrode);
     final n = d.samples.length;
     final buf = ByteData(1 + 8 + 2 + 2 + n * 8);
     var off = 0;
@@ -127,6 +151,7 @@ class SessionRecorder {
   }
 
   Uint8List _encodeBands(BandsDto d) {
+    channels.add(d.electrode);
     // Type tag 6: timestamp(f64), electrode(i16), delta/theta/alpha/beta/gamma(f64×5)
     final buf = ByteData(1 + 8 + 2 + 5 * 8);
     var off = 0;

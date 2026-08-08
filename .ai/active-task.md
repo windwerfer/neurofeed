@@ -80,6 +80,26 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
   average); returns null if both frontal pads are bad → no feedback that sample.
 - See the "Signal gate + autodrop model" bullet in `AGENTS.md`.
 
+## Status — 2026-08-08 Update (session recording options + metadata)
+- ✅ "Session recording" card in Settings: per-stream toggles for what a saved
+  session includes (raw EEG, band powers, PPG, pulse, IMU, movement, peak
+  alpha, telemetry). Default = all (backward compatible); stored via
+  `Settings.recordStreams` (`record_streams` pref). SpO2 note added: blood
+  oxygen is not a separate stream — only raw PPG optical channels exist.
+- ✅ `SessionRecorder` filters events against `recordStreams` per event type
+  (`session_recorder.dart`), so a disabled stream is simply absent from the
+  `.muse` body. File format is self-describing (typed events), so no format
+  version bump needed.
+- ✅ Recorder tracks `channels` (electrode indices seen); surfaced via
+  `FeedbackRecorder`/`FeedbackStateNotifier` and written into metadata.
+- ✅ `SessionMetadata` now records `deviceName`, `deviceModel` (firmware tag
+  "Classic"/"Athena"), `deviceId`, `recordedChannels` (labels, e.g.
+  TP9/AF7/AF8/TP10), `recordedData` (stream names). Old files parse cleanly
+  (missing keys → empty/null).
+- ✅ History tile shows device model + `Nch TP9/…` line.
+- ✅ Channel count is not hardcoded: an 8-electrode Crown works with zero
+  format changes (electrode index is `i16`; names fall back to `CH{n+1}`).
+
 ## Next steps
 1. On-device test pass (checklist in `.ai/feeback/todos.md`): calibration →
    auto-start, chimes + movement gating, volume dialog, target settings,
@@ -90,6 +110,9 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
 3. v1.1 backlog: EEG artifact flag for EMG, percentile persistence, continuous
    EMA adaptation, multi-protocol presets, calibration audio variants (see
    `.ai/feeback/todos.md`).
+4. v1.2 meta-block: Neurosity Crown 8-electrode support — channel labels are
+   already metadata-driven; only the default channel-name list needs
+   extending per device.
 
 ## How to verify (see testing-guide.md)
 Run `flutter run`, observe status bar shows correct battery % (from `bp`,

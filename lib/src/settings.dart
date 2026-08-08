@@ -3,6 +3,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum AppView { feedback, feedbackHistory, bands, rawEeg, spectrogram, psd, settings }
 
+/// Data streams that can be persisted into a session file. Each maps to one
+/// (or more) `.muse` event types. Future devices (e.g. an 8-electrode Crown)
+/// add streams here without changing the file container format — the body is
+/// a self-describing list of typed events.
+enum RecordingStream { eeg, bands, ppg, pulse, imu, movement, peakAlpha, telemetry }
+
 const Map<AppView, String> _viewNames = {
   AppView.feedback: 'feedback',
   AppView.feedbackHistory: 'feedbackHistory',
@@ -50,6 +56,7 @@ class Settings {
   static const String _soundNameKey = 'sound_name';
   static const String _durationMinutesKey = 'duration_minutes';
   static const String _sessionFolderKey = 'session_folder';
+  static const String _recordStreamsKey = 'record_streams';
 
   final SharedPreferences _prefs;
 
@@ -121,6 +128,28 @@ class Settings {
       _prefs.setString(_sessionFolderKey, value);
 
   Future<void> clearSessionFolder() => _prefs.remove(_sessionFolderKey);
+
+  /// Streams saved into each session file. Defaults to all streams
+  /// (backward compatible with files recorded before this option existed).
+  Set<RecordingStream> get recordStreams {
+    final stored = _prefs.getStringList(_recordStreamsKey);
+    if (stored == null) {
+      return RecordingStream.values.toSet();
+    }
+    final set = stored
+        .map((name) => RecordingStream.values
+            .where((s) => s.name == name)
+            .firstOrNull)
+        .whereType<RecordingStream>()
+        .toSet();
+    return set.isEmpty ? RecordingStream.values.toSet() : set;
+  }
+
+  Future<void> setRecordStreams(Set<RecordingStream> streams) =>
+      _prefs.setStringList(
+        _recordStreamsKey,
+        streams.map((s) => s.name).toList(),
+      );
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and

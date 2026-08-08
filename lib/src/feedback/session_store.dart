@@ -57,6 +57,11 @@ class SessionMetadata {
     required this.savedAt,
     this.notes = '',
     this.stats,
+    this.deviceName,
+    this.deviceModel,
+    this.deviceId,
+    this.recordedChannels = const [],
+    this.recordedData = const [],
   });
 
   final ProtocolType protocol;
@@ -67,6 +72,24 @@ class SessionMetadata {
   final String notes;
   final SessionStatsData? stats;
 
+  /// Device display name (e.g. the BLE name) the session was recorded with.
+  final String? deviceName;
+
+  /// Device model/firmware tag (e.g. "Classic" or "Athena").
+  final String? deviceModel;
+
+  /// Stable device identifier.
+  final String? deviceId;
+
+  /// Electrode labels present in the file (e.g. `['TP9','AF7','AF8','TP10']`).
+  /// A future 8-electrode device records 8 labels here; the format is
+  /// channel-agnostic so older readers still parse the frame body.
+  final List<String> recordedChannels;
+
+  /// Streams persisted in this file (subset of [RecordingStream] names),
+  /// e.g. `['eeg','bands','ppg']`. Empty/absent on old files means "all".
+  final List<String> recordedData;
+
   Map<String, Object?> toJson() => {
     'protocol': protocol.name,
     'durationMinutes': durationMinutes,
@@ -75,6 +98,11 @@ class SessionMetadata {
     'savedAt': savedAt.toIso8601String(),
     'notes': notes,
     if (stats != null) 'stats': stats!.toJson(),
+    if (deviceName != null) 'deviceName': deviceName,
+    if (deviceModel != null) 'deviceModel': deviceModel,
+    if (deviceId != null) 'deviceId': deviceId,
+    if (recordedChannels.isNotEmpty) 'recordedChannels': recordedChannels,
+    if (recordedData.isNotEmpty) 'recordedData': recordedData,
   };
 
   static SessionMetadata? fromJson(Object? json) {
@@ -97,6 +125,17 @@ class SessionMetadata {
           DateTime.fromMillisecondsSinceEpoch(0),
       notes: (json['notes'] as String?) ?? '',
       stats: SessionStatsData.fromJson(json['stats']),
+      deviceName: json['deviceName'] as String?,
+      deviceModel: json['deviceModel'] as String?,
+      deviceId: json['deviceId'] as String?,
+      recordedChannels: (json['recordedChannels'] as List<Object?>?)
+              ?.whereType<String>()
+              .toList() ??
+          const [],
+      recordedData: (json['recordedData'] as List<Object?>?)
+              ?.whereType<String>()
+              .toList() ??
+          const [],
     );
   }
 }
