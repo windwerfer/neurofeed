@@ -51,10 +51,18 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     super.initState();
     final readOnly = widget.readOnly;
     if (readOnly && widget.sessionId != null) {
-      final store = ref.read(sessionStoreProvider.future);
-      _dataFuture = SessionReader.readBytes(
-        store.then((s) => s.readMuse(widget.sessionId!)),
-      );
+      final summary = widget.metadata?.summary;
+      if (summary != null) {
+        // Fast path: render the detail straight from the decimated overview in
+        // the metadata head, without reading (or parsing) the .muse body.
+        _prepared = _prepareOverview(summary);
+      } else {
+        // Legacy session without a summary: fall back to a full-body parse.
+        final store = ref.read(sessionStoreProvider.future);
+        _dataFuture = SessionReader.readBytes(
+          store.then((s) => s.readMuse(widget.sessionId!)),
+        );
+      }
     } else {
       final path =
           widget.sessionPath ??
@@ -80,47 +88,55 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     final fb = ref.watch(feedbackStateProvider);
     final meta = widget.metadata;
     final protocol = ProtocolInfo.forType(meta?.protocol ?? fb.protocol);
-    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(title: Text('${protocol.title} — Session')),
       body: _busy
           ? const Center(child: CircularProgressIndicator())
-          : _dataFuture == null
-              ? _NoData(theme: theme)
-              : FutureBuilder<SessionData>(
-                  future: _dataFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return _LoadError(
-                        theme: theme,
-                        error: snapshot.error!,
-                        onDiscard: widget.readOnly ? null : _discard,
-                      );
-                    }
-                    final data = snapshot.data!;
-                    _prepared ??= _prepare(data);
-                    _sessionData ??= data;
-                    if (_thumbnail == null && !widget.readOnly) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
-                    }
-                    return _DashboardBody(
-                      protocol: protocol,
-                      durationMinutes: meta?.durationMinutes ?? fb.durationMinutes,
-                      elapsedSeconds: meta?.elapsedSeconds ?? fb.elapsedSeconds,
-                      soundName: meta?.sound ?? fb.soundName,
-                      prepared: _prepared!,
-                      readOnly: widget.readOnly,
-                      thumbKey: _thumbKey,
-                      notesController: _notes,
-                      onSave: _save,
-                      onDiscard: _discard,
-                    );
-                  },
-                ),
+          : _dashboard(meta, fb, protocol),
+    );
+  }
+
+  Widget _dashboard(SessionMetadata? meta, FeedbackState fb, ProtocolInfo protocol) {
+    if (_prepared != null) {
+      return _DashboardBody(
+        protocol: protocol,
+        durationMinutes: meta?.durationMinutes ?? fb.durationMinutes,
+        elapsedSeconds: meta?.elapsedSeconds ?? fb.elapsedSeconds,
+        soundName: meta?.sound ?? fb.soundName,
+        prepared: _prepared!,
+        readOnly: widget.readOnly,
+        thumbKey: _thumbKey,
+        notesController: _notes,
+        onSave: _save,
+        onDiscard: _discard,
+      );
+    }
+    final future = _dataFuture;
+    if (future == null) {
+      return _NoData(theme: Theme.of(context));
+    }
+    return FutureBuilder<SessionData>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return _LoadError(
+            theme: Theme.of(context),
+            error: snapshot.error!,
+            onDiscard: widget.readOnly ? null : _discard,
+          );
+        }
+        final data = snapshot.data!;
+        _prepared ??= _prepare(data);
+        _sessionData ??= data;
+        if (_thumbnail == null && !widget.readOnly) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
+        }
+        return _dashboard(meta, fb, protocol);
+      },
     );
   }
 
@@ -554,6 +570,131 @@ _Prepared _prepare(SessionData data) {
       avgBpm: bpm.isEmpty ? null : bpmSum / bpm.length,
       avgAlphaRel: alphaRel.isEmpty ? 0 : alphaRelSum / alphaRel.length,
     ),
+  );
+}
+
+/// Build a [_Prepared] from the decimated [SessionOverview] stored in the
+/// metadata head, so the history detail renders without reading the `.muse`
+/// body. Matches the full [SessionData] path bucket-for-bucket.
+_Prepared _prepareOverview(SessionOverview overview) {
+  final n = overview.bucketCount;
+  final width =
+      overview.bucketWidthSecs > 0 ? overview.bucketWidthSecs : 1.0;
+  final af7 = overview.bands[electrodeAf7];
+  final af8 = overview.bands[electrodeAf8];
+
+  final x = <double>[];
+  final alphaRel = <double>[];
+  final thetaRel = <double>[];
+  var targetSeconds = 0;
+  var alphaRelSum = 0.0;
+
+  for (var i = 0; i < n; i++) {
+    final s7 = _bandAt(af7, i);
+    final s8 = _bandAt(af8, i);
+    if (s7 == null || s8 == null) {
+      continue;
+    }
+    final total7 = s7.$1 + s7.$2 + s7.$3 + s7.$4 + s7.$5;
+    final total8 = s8.$1 + s8.$2 + s8.$3 + s8.$4 + s8.$5;
+    if (total7 <= 0 || total8 <= 0) {
+      continue;
+    }
+    final aRel = (s7.$3 / total7 + s8.$3 / total8) / 2;
+    final tRel = (s7.$2 / total7 + s8.$2 / total8) / 2;
+    x.add(i * width);
+    alphaRel.add(aRel);
+    thetaRel.add(tRel);
+    alphaRelSum += aRel;
+    if (aRel > tRel) {
+      targetSeconds++;
+    }
+  }
+
+  final movementX = <double>[];
+  final movement = <double>[];
+  var still = 0;
+  for (var i = 0; i < n; i++) {
+    if (i >= overview.movement.length || overview.movement[i] == null) {
+      continue;
+    }
+    final m = overview.movement[i]!;
+    movementX.add(i * width);
+    movement.add(m);
+    if (m <= movementGateThreshold) {
+      still++;
+    }
+  }
+
+  final bpmX = <double>[];
+  final bpm = <double>[];
+  var bpmSum = 0.0;
+  for (var i = 0; i < n; i++) {
+    if (i >= overview.pulse.length || overview.pulse[i] == null) {
+      continue;
+    }
+    final b = overview.pulse[i]!;
+    bpmX.add(i * width);
+    bpm.add(b);
+    bpmSum += b;
+  }
+
+  double? peakFreq;
+  double? peakPower;
+  for (var i = 0; i < overview.peakAlphaPower.length; i++) {
+    final p = overview.peakAlphaPower[i];
+    if (p == null) {
+      continue;
+    }
+    if (peakPower == null || p > peakPower) {
+      peakPower = p;
+      peakFreq = i < overview.peakAlphaFreq.length
+          ? overview.peakAlphaFreq[i]
+          : null;
+    }
+  }
+
+  return _Prepared(
+    x: x,
+    alphaRel: alphaRel,
+    thetaRel: thetaRel,
+    movement: movement,
+    movementX: movementX,
+    bpm: bpm,
+    bpmX: bpmX,
+    bandsCount: overview.bands.length,
+    stats: _SessionStats(
+      peakAlphaFreq: peakFreq,
+      peakAlphaPower: peakPower,
+      targetPct: x.isEmpty ? 0 : targetSeconds / x.length * 100,
+      stillnessPct: movement.isEmpty ? 0 : still / movement.length * 100,
+      avgBpm: bpm.isEmpty ? null : bpmSum / bpm.length,
+      avgAlphaRel: alphaRel.isEmpty ? 0 : alphaRelSum / alphaRel.length,
+    ),
+  );
+}
+
+/// Per-electrode band powers for bucket [i] from a summary series: `(delta,
+/// theta, alpha, beta, gamma)` or null when that electrode/bucket has no data.
+(double, double, double, double, double)? _bandAt(
+  BandPowerSeries? series,
+  int i,
+) {
+  if (series == null ||
+      i >= series.delta.length ||
+      series.delta[i] == null ||
+      series.theta[i] == null ||
+      series.alpha[i] == null ||
+      series.beta[i] == null ||
+      series.gamma[i] == null) {
+    return null;
+  }
+  return (
+    series.delta[i]!,
+    series.theta[i]!,
+    series.alpha[i]!,
+    series.beta[i]!,
+    series.gamma[i]!,
   );
 }
 
