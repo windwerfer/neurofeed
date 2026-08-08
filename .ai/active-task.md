@@ -105,10 +105,19 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
   bands/movement/peak-alpha) now stored as **f32** instead of f64. Timestamps
   stay f64. Muse 12/14-bit and Crown 24-bit ADCs fit exactly in f32; f16 would
   lose them. Raw EEG drops ~8 KB/s→4 KB/s (~15 MB/hr raw → a few MB/hr zstd).
-  **Not backward compatible** with v2/v3 files (pre-alpha, accepted). No FFI
-  change — Dart events still arrive as doubles; only the on-disk layout moved.
-- ✅ `SessionReader` only accepts v4; `_skipEeg/_skipImu/_skipPpg` counts and
-  `_parseBands`/movement/peak-alpha reads updated to f32 widths.
+  **Not backward compatible** with v2/v3 files (pre-alpha, accepted). Dart
+  events still arrive as doubles; only the on-disk layout changed.
+- ✅ **Session format moved into Rust (single authority)** — `rust/src/api/
+  session_format.rs` now owns the byte layout (commit `caaff10`). Dart no longer
+  hand-encodes/parses: `SessionRecorder` → `encodeSessionEvent` +
+  `sessionFrameBytes` (zstd v3), `SessionReader` → `sessionParseBody` (returns
+  freezed `SessionData`/`BandsRecord`/…), `SessionContainer` → sync
+  `containerEncodeBytes`/`containerParseHeadBytes`/`containerExtractBodyBytes`.
+  The old `compress_block`/`decompress_block` FFI is removed (compression lives
+  inside the format module). Header golden test pins the legacy quirk that the
+  magic is an LE u64 of `"MUSEBIN\n"` (byte-reversed on disk). 25 unit tests
+  cover golden wire layouts, f32-vs-f64 precision, malformed/truncated input,
+  and hand-built frames. **Rule:** never touch the byte layout from Dart.
 - ✅ Bounded session overview: `lib/src/feedback/session_summary.dart`
   `SessionOverview` — decimates bands (per electrode), pulse, movement, and
   peak alpha into a fixed 400-bucket series regardless of session length, stored

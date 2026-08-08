@@ -15,6 +15,11 @@ flutter_rust_bridge 2.11.1  ── FFI ──►  Rust crate rust_lib_muse_ml (r
 ```
 - `scan()` / `connect()` / `subscribe_events()` are the Rust FFI entry points.
 - `subscribe_events()` returns a `Stream<MuseEventDto>` that drives all UI.
+- Session persistence runs through `rust/src/api/session_format.rs` (single
+  authority for the `.muse` v4 body + `.muse.feedback` container byte layout).
+  Dart `SessionRecorder`/`SessionReader`/`SessionContainer` are thin FFI
+  delegates (`encodeSessionEvent`/`sessionFrameBytes`/`sessionParseBody` and
+  the sync `container*` fns). See AGENTS.md "Known hot spots".
 - Permissions: `requestBlePermissions()` in `app.dart` (permission_handler +
   device_info_plus, SDK-gated).
 

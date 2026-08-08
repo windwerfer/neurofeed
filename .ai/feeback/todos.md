@@ -24,7 +24,7 @@
 - [x] Persistent bad signal (any channel < 40 for 10 s) → interrupted phase; recovers when signal returns to green
 
 ## Phase 5: Session dashboard
-- [x] Session reader (`.muse` v3 parsing: tags 1–9, zstd frames via `decompressBlock` FFI)
+- [x] Session reader (`.muse` parsing — now format v4, owned by Rust: `sessionParseBody`; the old Dart `decompressBlock` FFI path was removed in the format-migration commit)
 - [x] Bands/motion/pulse graphs from recorded data
 - [x] Stats: peak alpha, target time %, stillness %, avg BPM, avg alpha_rel
 - [x] Notes text field (persisted in Phase 6 metadata)

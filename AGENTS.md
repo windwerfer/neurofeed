@@ -6,7 +6,7 @@ Global orientation for any AI agent or contributor working in this repo.
 - **Flutter 3.41.7** (stable), Dart (bundled). UI layer.
 - **Rust** via `flutter_rust_bridge` **2.11.1** (pinned `=`, both Rust crate and Dart package).
   - Rust lib: `rust/` (crate `rust_lib_muse_ml`).
-  - Generated bindings: `rust/src/frb_generated.rs` is **gitignored**; Dart generated files ARE tracked.
+  - Generated bindings: `rust/src/frb_generated.rs` is **gitignored** (commit `81a9f41` untracked it); Dart generated files ARE tracked.
 - **muse-rs** (`github.com/eugenehp/muse-rs.git` tag `0.1.0`, `default-features = false`) — Muse BLE protocol + transport.
 - **btleplug** — forked at `github.com/windwerfer/btleplug` (tag `0.12.0-muse-3`), patched with `get_env()` → `attach_current_thread_permanently()` fallback for tokio JNI threads + notification death spiral fix. **Source base is upstream 0.12.0 but `Cargo.toml` version is pinned to `0.11.8`** — required for semver matching (see `.ai/btleplug.md`).
   - Referenced via `[patch]` on `eugenehp/btleplug.git` so that BOTH
@@ -28,6 +28,7 @@ Global orientation for any AI agent or contributor working in this repo.
 - Do not run `git` commit/push/PR unless explicitly requested.
 - When editing Rust under `rust/src/api/`, run `flutter_rust_bridge` codegen if the FFI surface changes, then `cargo check --target aarch64-linux-android` is NOT reliable in this sandbox (see Testing Guide) — rely on `flutter run` for the real compile.
 - `flutter analyze lib/src` must stay clean after edits.
+- Format changes land in `rust/src/api/session_format.rs`; keep `cargo test --lib session_format` green (golden wire-layout tests pin the byte format).
 
 ## Docs (`.ai/`)
 | File | Contents |
@@ -53,10 +54,11 @@ lib/src/feedback/         # feedback session system (merged to main, Phase I)
   target_state.dart         # AtrEngine (threshold, dynamic adapt, in-flight recalibrate) + band aggregator
   live_stats.dart, protocol.dart, session_store.dart, feedback_recorder.dart
   session_storage.dart      # SessionStorage abstraction (FS + SAF), scratch dir, storage provider
-  session_container.dart    # .muse.feedback file format: [PNG][jsonLen][json][bodyLen][frames]
+  session_container.dart    # thin Dart wrapper over the Rust container format ([PNG][jsonLen][json][bodyLen][frames])
   session_summary.dart       # SessionOverview: 400-bucket decimated bands/pulse/motion/peak in metadata
 lib/src/audio/            # just_audio: AudioService + FeedbackAudioController (5 volume channels)
 rust/src/api/muse.rs    # FFI bridge: scan/connect/subscribe → MuseEvent stream + 1 Hz derived metrics
+rust/src/api/session_format.rs  # SINGLE authority for .muse v4 + .muse.feedback byte layout (encode/parse/frames/container)
 rust/src/analysis/gesture.rs  # GestureDetector (blink/clench/eye), auto-adaptive thresholds, no DSP crates
 rust/src/connection.rs  # in-Rust state (active connection, device cache, sink)
 android/app/src/main/java/
@@ -88,14 +90,15 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - Gesture markers persist in session **metadata** (`SessionMetadata.gestures`, `GestureMarker`/`GestureType` in `session_store.dart`); captured in `feedback_state.dart` `_onGestures`, written at save in `feedback_dashboard.dart` `_save`.
 - Persisted prefs (volumes, sound, duration, target settings, gesture toggles): `lib/src/settings.dart` (`Settings`, SharedPreferences).
 - Session storage abstraction (history in chosen folder; scratch in `.cache`; SAF on Android): `lib/src/feedback/session_storage.dart` (`SessionStorage`, `FileSystemSessionStorage`, `SafSessionStorage`, `resolveSessionStorage`, `sessionStorageProvider`). `SessionStore` is storage-backed; `sessionStoreProvider` is a `FutureProvider` derived from settings.
-- Session file format (`.muse.feedback` = single self-contained file, PNG-first so Linux/macOS file managers thumbnail it): `lib/src/feedback/session_container.dart` (`SessionContainer.encode`/`parseHead`/`extractBody`; `headReadLimit`). Read sidecar-free: `SessionStore.list()`/`readPng()`/`readMuse()` read the head via `SessionStorage.readPrefix(name, limit)` and never pull the large body.
-- **`.muse` body is format v4 (f32 floats)**: `session_recorder.dart` writes f32 payloads (EEG/PPG/IMU/bands/movement/peak-alpha), f64 timestamps. `SessionReader` only parses v4. Not backward compatible with v2/v3 f64 files (pre-alpha). EEG ~4 KB/s raw (~15 MB/hr). Channel count is device-driven (`i16` electrode); an 8-ch Crown works with zero layout change.
+- Session file format (`.muse.feedback` = single self-contained file, PNG-first so Linux/macOS file managers thumbnail it; **Rust owns the layout**): `rust/src/api/session_format.rs` (`container_encode_bytes`/`container_parse_head_bytes`/`container_extract_body_bytes`/`container_head_read_limit`). Dart wrapper: `lib/src/feedback/session_container.dart` (`SessionContainer.encode`/`parseHead`/`extractBody`). Read sidecar-free: `SessionStore.list()`/`readPng()`/`readMuse()` read the head via `SessionStorage.readPrefix(name, limit)` and never pull the large body.
+- **`.muse` body is format v4 (f32 floats), owned by Rust**: `session_format.rs` writes f32 payloads (EEG/PPG/IMU/bands/movement/peak-alpha) + f64 timestamps. Dart delegates: `SessionRecorder` (`lib/src/charts/session_recorder.dart`) buffers events and calls `encodeSessionEvent`/`sessionFrameBytes` (zstd v3); `SessionReader` (`lib/src/charts/session_reader.dart`) calls `sessionParseBody` and re-exports the generated `SessionData`/`BandsRecord`/… freezed records. Not backward compatible with v2/v3 f64 files (pre-alpha). Raw EEG ~4 KB/s (~15 MB/hr). Channel count is device-driven (`i16` electrode); an 8-ch Crown works with zero layout change.
 - SAF folder picker + MethodChannel (`muse_ml/saf`): `android/app/src/main/kotlin/com/example/muse_ml/MainActivity.kt` (`getDir`/`ensureDir`/`writeFile`/`readFile`/`readFilePrefix`/`deleteFile`/`listFiles`).
 - Folder selection UI: `lib/src/views/settings_view.dart` (`file_selector` `getDirectoryPath` on desktop, `SafSessionStorage.pickFolder()` on Android).
 - Release CI: `.github/workflows/` — see `.ai/release.md` (keystore secrets, F-Droid, reproducibility).
 - Rust toolchain pin: `rust/rust-toolchain.toml` (kept in sync with `FLUTTER_VERSION`/`RUST_VERSION` in the workflows).
 
 ## Known hot spots
+- **Session format is Rust-owned**: never edit the `.muse`/`.muse.feedback` byte layout in Dart. `rust/src/api/session_format.rs` is the single authority — `encode_session_event`, `sessionFrameBytes`, `sessionParseBody`, and the container fns; Dart (`session_recorder.dart`, `session_reader.dart`, `session_container.dart`) are thin FFI delegates. Some container fns are `#[frb(sync)]` so Dart keeps `headReadLimit`/`parseHead`/`extractBody` synchronous. When changing the wire format, extend `cargo test --lib session_format` goldens and regenerate bindings.
 - **Cargo `[patch]` version trap**: If the patched crate's `version` is semver-incompatible with the dependency constraint, Cargo silently ignores the patch. Our fork must stay at `version = "0.11.8"` even though the source is based on 0.12.0.
 - **Android BLE init**: btleplug requires `btleplug::platform::init(&JNIEnv)` from a JNI context BEFORE any scan/connect, or it panics with `"Droidplug has not been initialized"`.
 - **JNI `ThreadDetached`**: BLE ops run on tokio worker threads which aren't attached to the JVM. Our `get_env()` patch auto-attaches them.

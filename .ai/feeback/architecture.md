@@ -86,15 +86,23 @@ Two parallel tracks:
 2. **Session .muse** — 1 Hz derived metrics + bands, aligned to feedback session
    lifecycle. Extended binary format with new type tags.
 
-## Binary format (.muse) extensions
+## Binary format (.muse)
+The byte layout is owned by Rust (`rust/src/api/session_format.rs`, format v4).
+This table is descriptive; the encode/parse/frame/container fns there are the
+authority, and Dart (SessionRecorder/SessionReader/SessionContainer) only
+delegates over FFI. All float payloads are f32, timestamps f64, little-endian;
+records are batched into zstd frames:
 | Tag | Type | Rate | Fields |
 |-----|------|------|--------|
-| 1   | EEG | 256 Hz | timestamp, electrode, count, samples[f64] |
+| 1   | EEG | 256 Hz | timestamp, electrode, count, samples[f32] |
 | 2   | Telemetry | ~1 Hz | timestamp, battery, fuel, temp |
-| 3   | Accelerometer | ~52 Hz | timestamp, seq_id, count, xyz[f64] |
+| 3   | Accelerometer | ~52 Hz | timestamp, seq_id, count, xyz[f32] |
 | 4   | Gyroscope | ~52 Hz | same |
-| 5   | PPG | 64 Hz | timestamp, channel, count, samples[f64] |
+| 5   | PPG | 64 Hz | timestamp, channel, count, samples[f32] |
 | 6   | BANDS | 1 Hz | timestamp, electrode, delta, theta, alpha, beta, gamma |
 | 7   | PULSE | 1 Hz | timestamp, bpm, confidence |
 | 8   | MOVEMENT | 1 Hz | timestamp, score |
 | 9   | PEAK_ALPHA | 1 Hz | timestamp, frequency, power |
+
+The `.muse.feedback` container is single-file and PNG-first:
+`[PNG][jsonLen u32 BE][json][bodyLen u32 BE][body]` (also Rust-owned).
