@@ -204,8 +204,8 @@ class _RecordingCard extends StatelessWidget {
       'Delta/theta/alpha/beta/gamma power per channel (ATR uses this)',
     ),
     RecordingStream.ppg: (
-      'PPG optical',
-      'Raw photoplethysmogram light channels',
+      'PPG optical / fNIRS',
+      'Raw light channels (incl. Athena fNIRS optical data)',
     ),
     RecordingStream.pulse: (
       'Pulse / heart rate',
@@ -273,9 +273,9 @@ class _RecordingCard extends StatelessWidget {
               ),
             const Divider(height: 24),
             Text(
-              'Note: blood-oxygen (SpO2) is not currently a separate stream — '
-              'the raw PPG light channels above are what the optical sensor '
-              'provides.',
+              'Note: blood-oxygen (SpO2) and fNIRS metrics (HbO/HbR) are not '
+              'currently derived — the raw optical light channels above are '
+              'what the sensor provides, on both Classic and Athena firmware.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
