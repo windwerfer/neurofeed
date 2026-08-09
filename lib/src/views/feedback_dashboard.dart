@@ -505,18 +505,15 @@ _Prepared _prepare(SessionData data) {
 
   for (final s in seconds) {
     final ch = bySecond[s]!;
-    final af7 = ch[electrodeAf7];
-    final af8 = ch[electrodeAf8];
-    if (af7 == null || af8 == null) {
+    final rel = _relativeAfRel(
+      _afTuple(ch[electrodeAf7]),
+      _afTuple(ch[electrodeAf8]),
+    );
+    if (rel == null) {
       continue;
     }
-    final total7 = af7.delta + af7.theta + af7.alpha + af7.beta + af7.gamma;
-    final total8 = af8.delta + af8.theta + af8.alpha + af8.beta + af8.gamma;
-    if (total7 <= 0 || total8 <= 0) {
-      continue;
-    }
-    final aRel = (af7.alpha / total7 + af8.alpha / total8) / 2;
-    final tRel = (af7.theta / total7 + af8.theta / total8) / 2;
+    final aRel = rel.$1;
+    final tRel = rel.$2;
     x.add(s - startTs);
     alphaRel.add(aRel);
     thetaRel.add(tRel);
@@ -596,18 +593,12 @@ _Prepared _prepareOverview(SessionOverview overview) {
   var alphaRelSum = 0.0;
 
   for (var i = 0; i < n; i++) {
-    final s7 = _bandAt(af7, i);
-    final s8 = _bandAt(af8, i);
-    if (s7 == null || s8 == null) {
+    final rel = _relativeAfRel(_bandAt(af7, i), _bandAt(af8, i));
+    if (rel == null) {
       continue;
     }
-    final total7 = s7.$1 + s7.$2 + s7.$3 + s7.$4 + s7.$5;
-    final total8 = s8.$1 + s8.$2 + s8.$3 + s8.$4 + s8.$5;
-    if (total7 <= 0 || total8 <= 0) {
-      continue;
-    }
-    final aRel = (s7.$3 / total7 + s8.$3 / total8) / 2;
-    final tRel = (s7.$2 / total7 + s8.$2 / total8) / 2;
+    final aRel = rel.$1;
+    final tRel = rel.$2;
     x.add(i * width);
     alphaRel.add(aRel);
     thetaRel.add(tRel);
@@ -702,6 +693,44 @@ _Prepared _prepareOverview(SessionOverview overview) {
     series.beta[i]!,
     series.gamma[i]!,
   );
+}
+
+/// Convert a parsed band record (or null) to the `(delta, theta, alpha, beta,
+/// gamma)` tuple form used by [_relativeAfRel].
+(double, double, double, double, double)? _afTuple(BandsRecord? band) {
+  if (band == null) {
+    return null;
+  }
+  return (band.delta, band.theta, band.alpha, band.beta, band.gamma);
+}
+
+/// Combined relative alpha/theta for one time point from the two frontal pads.
+/// A pad with missing/zero total band power is dropped for that sample (matching
+/// the ATR autodrop), so a session where only one AF pad was healthy still
+/// builds the graph. Returns null only when neither pad is usable.
+(double, double)? _relativeAfRel(
+  (double, double, double, double, double)? af7,
+  (double, double, double, double, double)? af8,
+) {
+  var aSum = 0.0;
+  var tSum = 0.0;
+  var count = 0;
+  for (final band in [af7, af8]) {
+    if (band == null) {
+      continue;
+    }
+    final total = band.$1 + band.$2 + band.$3 + band.$4 + band.$5;
+    if (total <= 0) {
+      continue;
+    }
+    aSum += band.$3 / total;
+    tSum += band.$2 / total;
+    count++;
+  }
+  if (count == 0) {
+    return null;
+  }
+  return (aSum / count, tSum / count);
 }
 
 class _Series {
