@@ -79,6 +79,7 @@ class MainActivity : FlutterActivity() {
             }
             "ensureDir" -> { result.success(null); }
             "writeFile" -> writeFile(call, result)
+            "writeFileAtomic" -> writeFileAtomic(call, result)
             "readFile" -> readFile(call, result)
             "readFilePrefix" -> readFilePrefix(call, result)
             "deleteFile" -> deleteFile(call, result)
@@ -158,6 +159,79 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /// Same as [writeFile] but crash-safe: SAF has no atomic rename, so we do
+    /// the closest safe sequence — write the bytes to a sibling `name.mtmp`
+    /// document, sync it, delete the old target, then rename the temp over it.
+    ///
+    /// A crash in the window between the delete and the rename leaves the
+    /// target missing with `name.mtmp` intact; [recoverDoc] rolls that forward
+    /// on the next read. A crash before the delete leaves the old target intact
+    /// plus a stale `.mtmp`, which [recoverDoc] discards.
+    private fun writeFileAtomic(call: MethodCall, result: Result) {
+        val tree = treeUri(call)
+        val name = call.argument<String>("name")
+        val bytes = call.argument<ByteArray>("bytes")
+        if (tree == null || name == null || bytes == null) {
+            result.error("bad_args", "tree/name/bytes required", null)
+            return
+        }
+        try {
+            val tmpName = "$name.mtmp"
+            // 1. Write the full new content to a sibling temp document.
+            var tmpDoc = resolveDoc(tree, tmpName)
+            if (tmpDoc == null) {
+                val parent = DocumentsContract.buildDocumentUriUsingTree(
+                    tree, DocumentsContract.getTreeDocumentId(tree)
+                )
+                tmpDoc = DocumentsContract.createDocument(
+                    contentResolver, parent, "application/octet-stream", tmpName
+                )
+                if (tmpDoc == null) {
+                    result.error("open_failed", "could not create $tmpName", null)
+                    return
+                }
+            }
+            contentResolver.openOutputStream(tmpDoc, "wt")?.use { it.write(bytes) }
+                ?: run {
+                    result.error("open_failed", "could not open $tmpName for writing", null)
+                    return
+                }
+            // 2. Remove the old target (leaving the temp intact), then swap.
+            val oldDoc = resolveDoc(tree, name)
+            if (oldDoc != null) {
+                DocumentsContract.deleteDocument(contentResolver, oldDoc)
+            }
+            val renamed = DocumentsContract.renameDocument(contentResolver, tmpDoc, name)
+            if (renamed == null) {
+                result.error("rename_failed", "could not rename $tmpName -> $name", null)
+                return
+            }
+            result.success(null)
+        } catch (e: Exception) {
+            Log.e(TAG, "writeFileAtomic $name failed", e)
+            result.error("write_failed", e.toString(), null)
+        }
+    }
+
+    /// Heal a `name.mtmp` sibling left behind by an interrupted
+    /// [writeFileAtomic]: if the target is missing but the temp exists, rename
+    /// the temp into place; if both exist, the temp is a stale leftover and is
+    /// discarded. Called before every read so a mid-swap crash cannot leave the
+    /// history unreadable.
+    private fun recoverDoc(tree: Uri, name: String) {
+        try {
+            val mainDoc = resolveDoc(tree, name)
+            val tmpDoc = resolveDoc(tree, "$name.mtmp")
+            if (mainDoc == null && tmpDoc != null) {
+                DocumentsContract.renameDocument(contentResolver, tmpDoc, name)
+            } else if (mainDoc != null && tmpDoc != null) {
+                DocumentsContract.deleteDocument(contentResolver, tmpDoc)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "recoverDoc $name failed", e)
+        }
+    }
+
     private fun readFile(call: MethodCall, result: Result) {
         val tree = treeUri(call)
         val name = call.argument<String>("name")
@@ -166,6 +240,7 @@ class MainActivity : FlutterActivity() {
             return
         }
         try {
+            recoverDoc(tree, name)
             val doc = resolveDoc(tree, name) ?: run {
                 result.success(null)
                 return
@@ -188,6 +263,7 @@ class MainActivity : FlutterActivity() {
             return
         }
         try {
+            recoverDoc(tree, name)
             val doc = resolveDoc(tree, name) ?: run {
                 result.success(null)
                 return
@@ -246,6 +322,9 @@ class MainActivity : FlutterActivity() {
             )?.use { cursor ->
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(0) ?: continue
+                    // Skip temp siblings left by writeFileAtomic; they are
+                    // either recovered by recoverDoc or stale leftovers.
+                    if (name.endsWith(".mtmp")) continue
                     files.add(name)
                 }
             }

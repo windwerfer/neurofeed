@@ -1,11 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/charts/band_cache.dart' show bandColors, bandNames;
 import 'package:muse_ml/src/charts/eeg_data_source.dart';
@@ -50,6 +51,12 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   SessionData? _sessionData;
   bool _busy = false;
 
+  /// Notes value that is persisted on disk (used to detect unsaved edits).
+  String _savedNotes = '';
+  bool _notesSaving = false;
+  bool _notesSavedFlash = false;
+  Timer? _notesFlashTimer;
+
   @override
   void initState() {
     super.initState();
@@ -79,10 +86,22 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     if (notes != null && notes.isNotEmpty) {
       _notes.text = notes;
     }
+    _savedNotes = _notes.text;
+    _notes.addListener(_onNotesChanged);
+  }
+
+  bool get _notesDirty => _notes.text != _savedNotes;
+
+  void _onNotesChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
+    _notes.removeListener(_onNotesChanged);
+    _notesFlashTimer?.cancel();
     _notes.dispose();
     super.dispose();
   }
@@ -93,12 +112,76 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     final meta = widget.metadata;
     final protocol = ProtocolInfo.forType(meta?.protocol ?? fb.protocol);
 
-    return Scaffold(
-      appBar: AppBar(title: Text('${protocol.title} — Session')),
-      body: _busy
-          ? const Center(child: CircularProgressIndicator())
-          : _dashboard(meta, fb, protocol),
+    return PopScope(
+      // Warn before leaving a history session with unsaved notes edits. The
+      // live session view has its own explicit Save/Discard path, so it is
+      // not guarded here.
+      canPop: !widget.readOnly || !_notesDirty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        _confirmUnsavedNotes();
+      },
+      child: Scaffold(
+        appBar: AppBar(title: Text('${protocol.title} — Session')),
+        body: _busy
+            ? const Center(child: CircularProgressIndicator())
+            : _dashboard(meta, fb, protocol),
+      ),
     );
+  }
+
+  /// Back-navigation guard for the read-only history detail with unsaved notes.
+  /// Offers to save before leaving.
+  Future<void> _confirmUnsavedNotes() async {
+    final theme = Theme.of(context);
+    final action = await showDialog<_UnsavedNotesChoice>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unsaved notes'),
+        content: const Text(
+          'You edited the notes for this session. Save them before leaving?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(context).pop(_UnsavedNotesChoice.leave),
+            child: const Text('Discard'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(context).pop(_UnsavedNotesChoice.cancel),
+            child: const Text('Stay'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: theme.colorScheme.primary,
+            ),
+            onPressed: () =>
+                Navigator.of(context).pop(_UnsavedNotesChoice.save),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    switch (action) {
+      case _UnsavedNotesChoice.save:
+        await _saveNotes();
+        if (mounted && !_notesDirty) {
+          Navigator.of(context).pop();
+        }
+        break;
+      case _UnsavedNotesChoice.leave:
+        Navigator.of(context).pop();
+        break;
+      case _UnsavedNotesChoice.cancel:
+      case null:
+        break;
+    }
   }
 
   Widget _dashboard(
@@ -118,6 +201,10 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         notesController: _notes,
         onSave: _save,
         onDiscard: _discard,
+        onSaveNotes: widget.readOnly ? _saveNotes : null,
+        notesDirty: _notesDirty,
+        notesSaving: _notesSaving,
+        notesSavedFlash: _notesSavedFlash,
       );
     }
     final future = _dataFuture;
@@ -235,6 +322,47 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       Navigator.of(context).pop();
     }
   }
+
+  /// Persist edited notes back into a saved (history) session file. Only wired
+  /// for the read-only detail view, where there is no live session to save.
+  Future<void> _saveNotes() async {
+    final id = widget.sessionId;
+    if (id == null) {
+      return;
+    }
+    setState(() => _notesSaving = true);
+    final store = await ref.read(sessionStoreProvider.future);
+    final ok = await store.updateNotes(id, _notes.text);
+    ref.invalidate(sessionListProvider);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _notesSaving = false;
+      if (ok) {
+        _savedNotes = _notes.text;
+        _notesSavedFlash = true;
+      }
+    });
+    _notesFlashTimer?.cancel();
+    _notesFlashTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() => _notesSavedFlash = false);
+      }
+    });
+    if (!ok) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Could not save notes'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+  }
 }
 
 class _DashboardBody extends StatefulWidget {
@@ -249,6 +377,10 @@ class _DashboardBody extends StatefulWidget {
     required this.notesController,
     required this.onSave,
     required this.onDiscard,
+    this.onSaveNotes,
+    this.notesDirty = false,
+    this.notesSaving = false,
+    this.notesSavedFlash = false,
   });
 
   final ProtocolInfo protocol;
@@ -261,6 +393,10 @@ class _DashboardBody extends StatefulWidget {
   final TextEditingController notesController;
   final Future<void> Function() onSave;
   final Future<void> Function() onDiscard;
+  final Future<void> Function()? onSaveNotes;
+  final bool notesDirty;
+  final bool notesSaving;
+  final bool notesSavedFlash;
 
   @override
   State<_DashboardBody> createState() => _DashboardBodyState();
@@ -301,14 +437,18 @@ class _DashboardBodyState extends State<_DashboardBody> {
       String title,
       String unit,
       List<_Series> series,
-      List<double> xs,
-    ) {
+      List<double> xs, {
+      double? fixedYMin,
+      double? fixedYMax,
+    }) {
       return _ZoomableChart(
         title: title,
         unit: unit,
         series: series,
         x: xs,
         viewport: vp,
+        fixedYMin: fixedYMin,
+        fixedYMax: fixedYMax,
       );
     }
 
@@ -399,6 +539,8 @@ class _DashboardBodyState extends State<_DashboardBody> {
                 ),
               ],
               prepared.x,
+              fixedYMin: 0,
+              fixedYMax: 1,
             ),
           ),
           const SizedBox(height: 16),
@@ -412,14 +554,28 @@ class _DashboardBodyState extends State<_DashboardBody> {
           ),
           const SizedBox(height: 16),
         ],
-        TextField(
-          controller: widget.notesController,
-          maxLines: 3,
-          enabled: !widget.readOnly,
-          decoration: const InputDecoration(
-            labelText: 'Notes',
-            border: OutlineInputBorder(),
-          ),
+        Stack(
+          children: [
+            TextField(
+              controller: widget.notesController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Notes',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            if (widget.onSaveNotes != null)
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: _NotesStatusIcon(
+                  dirty: widget.notesDirty,
+                  saving: widget.notesSaving,
+                  savedFlash: widget.notesSavedFlash,
+                  onSave: widget.onSaveNotes,
+                ),
+              ),
+          ],
         ),
         if (!widget.readOnly) ...[
           const SizedBox(height: 16),
@@ -453,33 +609,40 @@ class _DashboardBodyState extends State<_DashboardBody> {
         ],
         const SizedBox(height: 16),
         if (prepared.x.isNotEmpty) ...[
-          chart('Bands (relative power, AF7/AF8 avg)', 'rel. power', [
-            _Series(
-              label: bandNames[0],
-              color: bandColors[0],
-              values: prepared.deltaRel,
-            ),
-            _Series(
-              label: bandNames[1],
-              color: bandColors[1],
-              values: prepared.thetaRel,
-            ),
-            _Series(
-              label: bandNames[2],
-              color: bandColors[2],
-              values: prepared.alphaRel,
-            ),
-            _Series(
-              label: bandNames[3],
-              color: bandColors[3],
-              values: prepared.betaRel,
-            ),
-            _Series(
-              label: bandNames[4],
-              color: bandColors[4],
-              values: prepared.gammaRel,
-            ),
-          ], prepared.x),
+          chart(
+            'Bands (relative power, AF7/AF8 avg)',
+            'rel. power',
+            [
+              _Series(
+                label: bandNames[0],
+                color: bandColors[0],
+                values: prepared.deltaRel,
+              ),
+              _Series(
+                label: bandNames[1],
+                color: bandColors[1],
+                values: prepared.thetaRel,
+              ),
+              _Series(
+                label: bandNames[2],
+                color: bandColors[2],
+                values: prepared.alphaRel,
+              ),
+              _Series(
+                label: bandNames[3],
+                color: bandColors[3],
+                values: prepared.betaRel,
+              ),
+              _Series(
+                label: bandNames[4],
+                color: bandColors[4],
+                values: prepared.gammaRel,
+              ),
+            ],
+            prepared.x,
+            fixedYMin: 0,
+            fixedYMax: 1,
+          ),
           const SizedBox(height: 16),
         ] else ...[
           notEnough(
@@ -927,6 +1090,8 @@ class _ZoomableChart extends StatefulWidget {
     required this.series,
     required this.x,
     required this.viewport,
+    this.fixedYMin,
+    this.fixedYMax,
   });
 
   final String title;
@@ -934,6 +1099,11 @@ class _ZoomableChart extends StatefulWidget {
   final List<_Series> series;
   final List<double> x;
   final _ChartViewport viewport;
+
+  /// Optional fixed y bounds (e.g. 0..1 relative power) so the scale matches
+  /// across sessions.
+  final double? fixedYMin;
+  final double? fixedYMax;
 
   @override
   State<_ZoomableChart> createState() => _ZoomableChartState();
@@ -944,6 +1114,18 @@ class _ZoomableChartState extends State<_ZoomableChart> {
   double _gestureStartT = 0;
   double _gestureStartFrac = 0;
   double _chartWidth = 0;
+  final Set<String> _hidden = {};
+
+  void _toggleSeries(String label) {
+    setState(() {
+      if (!_hidden.add(label)) {
+        _hidden.remove(label);
+      }
+    });
+  }
+
+  List<_Series> get _visibleSeries =>
+      widget.series.where((s) => !_hidden.contains(s.label)).toList();
 
   void _onScaleStart(ScaleStartDetails d) {
     if (_chartWidth <= 0) return;
@@ -966,7 +1148,13 @@ class _ZoomableChartState extends State<_ZoomableChart> {
 
   void _onSignal(PointerSignalEvent e) {
     if (_chartWidth <= 0) return;
+    // Desktop zoom deliberately requires the modifier so a plain wheel or
+    // trackpad scroll still scrolls the page normally.
+    final kb = HardwareKeyboard.instance;
     if (e is PointerScrollEvent) {
+      if (!kb.isControlPressed && !kb.isMetaPressed) {
+        return;
+      }
       GestureBinding.instance.pointerSignalResolver.register(
         e,
         (_) => widget.viewport.zoomAtFrac(
@@ -1006,22 +1194,53 @@ class _ZoomableChartState extends State<_ZoomableChart> {
             const SizedBox(height: 8),
             Wrap(
               spacing: 12,
+              runSpacing: 4,
               children: [
                 for (final s in widget.series)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: s.color,
-                          borderRadius: BorderRadius.circular(2),
+                  GestureDetector(
+                    onTap: () => _toggleSeries(s.label),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: s.color,
+                            borderRadius: BorderRadius.circular(2),
+                            border: Border.all(
+                              color: _hidden.contains(s.label)
+                                  ? Colors.transparent
+                                  : theme.colorScheme.onSurfaceVariant
+                                        .withAlpha(80),
+                              width: 1,
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(s.label, style: theme.textTheme.bodySmall),
-                    ],
+                        const SizedBox(width: 4),
+                        Text(
+                          s.label,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: _hidden.contains(s.label)
+                                ? theme.colorScheme.onSurfaceVariant.withAlpha(
+                                    140,
+                                  )
+                                : null,
+                            decoration: _hidden.contains(s.label)
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          _hidden.contains(s.label)
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          size: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -1045,6 +1264,7 @@ class _ZoomableChartState extends State<_ZoomableChart> {
                 listenable: widget.viewport,
                 builder: (context, _) {
                   final vp = widget.viewport;
+                  final visible = _visibleSeries;
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1062,13 +1282,32 @@ class _ZoomableChartState extends State<_ZoomableChart> {
                                 onScaleStart: _onScaleStart,
                                 onScaleUpdate: _onScaleUpdate,
                                 onDoubleTap: vp.reset,
-                                child: CustomPaint(
-                                  painter: _ChartPainter(
-                                    series: widget.series,
-                                    x: widget.x,
-                                    viewStart: vp.viewStart,
-                                    viewEnd: vp.viewEnd,
-                                  ),
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    CustomPaint(
+                                      painter: _ChartPainter(
+                                        series: visible,
+                                        x: widget.x,
+                                        viewStart: vp.viewStart,
+                                        viewEnd: vp.viewEnd,
+                                        yMin: widget.fixedYMin,
+                                        yMax: widget.fixedYMax,
+                                      ),
+                                    ),
+                                    if (visible.isEmpty)
+                                      Center(
+                                        child: Text(
+                                          'All lines hidden — tap a label to show it',
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             );
@@ -1106,7 +1345,7 @@ class _ZoomableChartState extends State<_ZoomableChart> {
                             )
                           else
                             Text(
-                              'pinch / scroll to zoom, drag to pan',
+                              'pinch / ctrl+scroll to zoom, drag to pan',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
@@ -1139,6 +1378,8 @@ class _ChartPainter extends CustomPainter {
     required this.x,
     required this.viewStart,
     required this.viewEnd,
+    this.yMin,
+    this.yMax,
   });
 
   final List<_Series> series;
@@ -1146,25 +1387,35 @@ class _ChartPainter extends CustomPainter {
   final double viewStart;
   final double viewEnd;
 
+  /// Optional fixed y bounds. When null the y-range is auto-fit to the visible
+  /// data; when set (e.g. 0..1 relative power) the scale stays constant across
+  /// sessions for direct comparison.
+  final double? yMin;
+  final double? yMax;
+
+  static const double _yGutter = 34;
+
   @override
   void paint(Canvas canvas, Size size) {
     if (series.isEmpty || x.isEmpty || viewEnd <= viewStart) {
       return;
     }
 
-    var minY = double.infinity;
-    var maxY = double.negativeInfinity;
-    for (final s in series) {
-      if (s.values.length != x.length) {
-        continue;
-      }
-      for (var i = 0; i < s.values.length; i++) {
-        if (x[i] < viewStart || x[i] > viewEnd) {
+    var minY = yMin ?? double.infinity;
+    var maxY = yMax ?? double.negativeInfinity;
+    if (yMin == null || yMax == null) {
+      for (final s in series) {
+        if (s.values.length != x.length) {
           continue;
         }
-        final v = s.values[i];
-        if (v < minY) minY = v;
-        if (v > maxY) maxY = v;
+        for (var i = 0; i < s.values.length; i++) {
+          if (x[i] < viewStart || x[i] > viewEnd) {
+            continue;
+          }
+          final v = s.values[i];
+          if (v < minY) minY = v;
+          if (v > maxY) maxY = v;
+        }
       }
     }
     if (minY == double.infinity) {
@@ -1176,17 +1427,38 @@ class _ChartPainter extends CustomPainter {
     }
 
     const pad = 8.0;
-    final w = size.width - pad * 2;
+    final w = size.width - _yGutter - pad;
     final h = size.height - pad * 2;
-    double px(double v) => pad + (v - viewStart) / (viewEnd - viewStart) * w;
+    final x0 = pad + _yGutter;
+    double px(double v) => x0 + (v - viewStart) / (viewEnd - viewStart) * w;
     double py(double v) => pad + h - (v - minY) / (maxY - minY) * h;
 
     final grid = Paint()
       ..color = const Color(0x222A2D37)
       ..strokeWidth = 1;
-    for (var i = 0; i <= 3; i++) {
-      final y = pad + h * i / 3;
-      canvas.drawLine(Offset(pad, y), Offset(pad + w, y), grid);
+    const ticks = 4;
+    for (var i = 0; i <= ticks; i++) {
+      final y = pad + h * i / ticks;
+      canvas.drawLine(Offset(x0 - 4, y), Offset(x0, y), grid);
+      canvas.drawLine(Offset(x0, y), Offset(x0 + w, y), grid);
+    }
+
+    // Y tick labels (only drawn for a fixed scale, where comparing matters).
+    if (yMin != null && yMax != null) {
+      final tp = TextPainter(
+        text: const TextSpan(),
+        textDirection: TextDirection.ltr,
+      );
+      for (var i = 0; i <= ticks; i++) {
+        final t = maxY - (maxY - minY) * i / ticks;
+        tp.text = TextSpan(
+          text: t.toStringAsFixed(2),
+          style: const TextStyle(color: Color(0xFF9AA0AE), fontSize: 9),
+        );
+        tp.layout();
+        final y = pad + h * i / ticks;
+        tp.paint(canvas, Offset(x0 - 4 - tp.width, y - tp.height / 2));
+      }
     }
 
     for (final s in series) {
@@ -1405,6 +1677,66 @@ class _LoadError extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Outcome chosen from the unsaved-notes confirmation dialog.
+enum _UnsavedNotesChoice { save, leave, cancel }
+
+/// Discrete corner control for the notes field in the history detail view.
+///
+/// * dirty & idle → a small save chevron that persists the edit;
+/// * saving → a compact spinner;
+/// * just saved → a subtle check, fading out after a moment.
+class _NotesStatusIcon extends StatelessWidget {
+  const _NotesStatusIcon({
+    required this.dirty,
+    required this.saving,
+    required this.savedFlash,
+    this.onSave,
+  });
+
+  final bool dirty;
+  final bool saving;
+  final bool savedFlash;
+  final Future<void> Function()? onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    if (saving) {
+      return const SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+    if (savedFlash) {
+      return Icon(Icons.check_circle_outline, size: 16, color: muted);
+    }
+    if (!dirty) {
+      // Nothing to save — stay invisible so the field reads as a plain box.
+      return const SizedBox.shrink();
+    }
+    return Tooltip(
+      message: 'Save notes',
+      child: Material(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onSave,
+          child: const Padding(
+            padding: EdgeInsets.all(6),
+            child: SizedBox(
+              width: 14,
+              height: 14,
+              child: Icon(Icons.check, size: 14),
+            ),
+          ),
         ),
       ),
     );

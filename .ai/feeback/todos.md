@@ -26,15 +26,20 @@
 ## Phase 5: Session dashboard
 - [x] Session reader (`.muse` parsing — now format v4, owned by Rust: `sessionParseBody`; the old Dart `decompressBlock` FFI path was removed in the format-migration commit)
 - [x] Bands/motion/pulse graphs from recorded data
+- [x] Overview-driven summary detail (400-bucket `SessionOverview` from metadata — no body read) with zoom-synced charts: drag-pan, pinch, ctrl/⌘+scroll zoom, double-tap reset
+- [x] Fixed 0–1 y-axis (relative power) + numeric ticks for Bands and Alpha-vs-Theta; auto-scale for movement/HR
+- [x] Clickable legend rows toggle each series on/off
 - [x] Stats: peak alpha, target time %, stillness %, avg BPM, avg alpha_rel
 - [x] Notes text field (persisted in Phase 6 metadata)
-- [x] Save (green, renames temp → session_<ts>.muse) / Discard (gray, deletes temp)
+- [x] **Notes editable in the history detail**: corner save chevron (only when dirty) + spinner + brief "saved" flash; `PopScope` "Unsaved notes — Save/Stay/Discard" on Back
+- [x] Save (green, renames temp → session_<ts>.muse) / Discard (gray, deletes temp); saves via crash-safe `writeFileAtomic`
 - [x] Thumbnail generation (RepaintBoundary → PNG next to .muse)
 
 ## Phase 6: Feedback history
 - [x] Session metadata persistence (JSON alongside .muse)
 - [x] History list view with thumbnails, dates, stats
 - [x] Tap to re-open dashboard (read-only mode, notes prefilled)
+- [x] **Editable notes persisted back into the saved `.muse.feedback`** — crash-safe rewrite (`SessionStore.updateNotes`; FS tmp+rename, SAF `writeFileAtomic` + `recoverDoc`)
 
 ## Phase I (merged to main): Volume, recalibrate, adaptive target, persistence
 - [x] 5-channel volume control (master / background / feedback / intro / end bell) with live apply + reset

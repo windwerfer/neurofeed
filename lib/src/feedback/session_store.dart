@@ -295,6 +295,41 @@ class SessionStore {
     return SessionSummary(id: id, metadata: metadata);
   }
 
+  /// Replace the free-text notes of an existing session and rewrite the
+  /// container head in place, preserving the thumbnail and the .muse body.
+  /// Returns false when the session file is missing or unreadable.
+  Future<bool> updateNotes(String id, String notes) async {
+    final storage = await _storage;
+    final name = _museName(id);
+    final bytes = await storage.readFile(name);
+    if (bytes == null || bytes.isEmpty) {
+      debugPrint('[session] updateNotes($id): file not found ($name)');
+      return false;
+    }
+    final full = Uint8List.fromList(bytes);
+    final head = SessionContainer.parseHead(full);
+    final decoded =
+        jsonDecode(String.fromCharCodes(head.jsonBytes))
+            as Map<String, Object?>;
+    decoded['notes'] = notes;
+    final jsonBytes = Uint8List.fromList(
+      const JsonEncoder().convert(decoded).codeUnits,
+    );
+    final body = SessionContainer.extractBody(full);
+    if (body == null) {
+      debugPrint('[session] updateNotes($id): body missing ($name)');
+      return false;
+    }
+    final container = SessionContainer.encode(
+      pngBytes: head.pngBytes,
+      jsonBytes: jsonBytes,
+      bodyBytes: body,
+    );
+    await storage.writeFileAtomic(name, container);
+    debugPrint('[session] updateNotes($id): notes saved ($name)');
+    return true;
+  }
+
   /// Copy every session in the current storage into [target], then delete the
   /// source copies so the folder change does not duplicate history. Returns the
   /// number of sessions moved (used for folder-change migration).

@@ -3,8 +3,8 @@
 ## Overview
 Biofeedback session system for Muse EEG headset. Protocols guide meditation
 via real-time EEG metrics → audio feedback. Session data recorded, dashboard
-displayed post-session, history browsable. **Status: Phase I merged to main,
-ready for testing.**
+displayed post-session, history browsable. **Status: Phase I + session summary
+graphs + editable history notes merged to main.**
 
 ## Stack additions
 - **just_audio** (pub) — audio playback (media_kit Linux backend; the
@@ -106,3 +106,22 @@ records are batched into zstd frames:
 
 The `.muse.feedback` container is single-file and PNG-first:
 `[PNG][jsonLen u32 BE][json][bodyLen u32 BE][body]` (also Rust-owned).
+
+## Session summary dashboard & editable notes
+- The read-only history detail renders from `SessionOverview` (400-bucket
+  decimated bands/pulse/movement/peak stored in the metadata `summary` key) —
+  no `.muse` body read on the fast path; legacy files fall back to
+  `SessionReader.readBytes`.
+- Charts are zoom-synced (shared `_ChartViewport` in `feedback_dashboard.dart`):
+  drag to pan, pinch on touch, **ctrl/⌘ + scroll on desktop** to zoom, double-tap
+  to reset. Legend labels toggle each series on/off. Bands + Alpha-vs-Theta use a
+  fixed 0–1 y-axis (relative power, comparable across sessions) with numeric
+  ticks; Movement/Heart-rate stay auto-scaled.
+- **Notes are editable in the history detail too**: a small save chevron appears
+  in the corner of the notes field only while the text is dirty; a `PopScope`
+  intercepts Back with "Unsaved notes — Save / Stay / Discard". Saves go through
+  `SessionStore.updateNotes` → `SessionStorage.writeFileAtomic`.
+- Crash-safe rewrite: filesystem writes `.name.tmp` + atomic `rename()`; SAF
+  (native `writeFileAtomic` in `MainActivity.kt`) writes `name.mtmp`, deletes the
+  old target, `renameDocument` swap, with `recoverDoc()` healing an interrupted
+  swap on the next read (`listFiles` skips `.mtmp`).
