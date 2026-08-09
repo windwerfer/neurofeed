@@ -314,6 +314,25 @@ class MainActivity : FlutterActivity() {
         }
         try {
             val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+            // First pass: heal any orphaned .mtmp siblings left by an
+            // interrupted writeFileAtomic so a recovered session reappears in
+            // the listing instead of staying invisible until some other op
+            // reads the exact same name.
+            contentResolver.query(
+                children,
+                arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                null, null, null,
+            )?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(0) ?: continue
+                    if (name.endsWith(".mtmp")) {
+                        recoverDoc(tree, name.removeSuffix(".mtmp"))
+                    }
+                }
+            }
+            // Second pass: list the healed set. Any .mtmp still present is a
+            // stale leftover that recoverDoc could not resolve (e.g. the temp
+            // had no valid sibling) and is skipped.
             val files = mutableListOf<String>()
             contentResolver.query(
                 children,
@@ -322,8 +341,6 @@ class MainActivity : FlutterActivity() {
             )?.use { cursor ->
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(0) ?: continue
-                    // Skip temp siblings left by writeFileAtomic; they are
-                    // either recovered by recoverDoc or stale leftovers.
                     if (name.endsWith(".mtmp")) continue
                     files.add(name)
                 }
