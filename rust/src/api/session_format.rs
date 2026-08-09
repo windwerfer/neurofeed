@@ -556,6 +556,7 @@ mod tests {
             alpha: 3.0,
             beta: 4.0,
             gamma: 5.0,
+            line_noise_ratio: 0.0,
         })
     }
 
@@ -615,6 +616,7 @@ mod tests {
             alpha: 3.5,
             beta: 4.5,
             gamma: 5.5,
+            line_noise_ratio: 0.0,
         });
         let mut expected = Vec::new();
         expected.push(FORMAT_TAG_BANDS);
@@ -822,6 +824,7 @@ mod tests {
             alpha: 0.0,
             beta: 0.0,
             gamma: 0.0,
+            line_noise_ratio: 0.0,
         });
         // wire must carry the f32 value, not the full f64 mantissa
         assert_eq!(&encode_session_event(&dto)[1 + 8 + 2..1 + 8 + 2 + 4], &0.1f32.to_le_bytes());
@@ -928,6 +931,7 @@ MuseEventDto::Bands(BandsDto {
                 alpha: 0.5,
                 beta: 0.5,
                 gamma: 0.5,
+                line_noise_ratio: 0.0,
             }),
             MuseEventDto::Pulse(PulseDto {
                 timestamp: 1.0,

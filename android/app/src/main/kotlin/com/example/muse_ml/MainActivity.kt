@@ -92,9 +92,33 @@ class MainActivity : FlutterActivity() {
         return Uri.parse(tree)
     }
 
-    private fun resolveDoc(tree: Uri, name: String): Uri {
-        val child = DocumentsContract.buildDocumentUriUsingTree(tree, name)
-        return child
+    /// Resolve a child document by its display [name] inside [tree]. Returns
+    /// the document URI, or null if no child with that name exists.
+    ///
+    /// `buildDocumentUriUsingTree(tree, name)` cannot be used directly: it
+    /// expects the child's *document ID* (e.g. `primary:Med fed/session_x`),
+    /// not the bare display name, so it must be looked up via the tree query.
+    private fun resolveDoc(tree: Uri, name: String): Uri? {
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(
+            tree, DocumentsContract.getTreeDocumentId(tree)
+        )
+        contentResolver.query(
+            children,
+            arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            ),
+            null, null, null,
+        )?.use { cursor ->
+            while (cursor.moveToNext()) {
+                val display = cursor.getString(1) ?: continue
+                if (display == name) {
+                    val id = cursor.getString(0) ?: return null
+                    return DocumentsContract.buildDocumentUriUsingTree(tree, id)
+                }
+            }
+        }
+        return null
     }
 
     private fun writeFile(call: MethodCall, result: Result) {
@@ -107,8 +131,7 @@ class MainActivity : FlutterActivity() {
         }
         try {
             var doc = resolveDoc(tree, name)
-            var out = contentResolver.openOutputStream(doc, "wt")
-            if (out == null) {
+            if (doc == null) {
                 // Document doesn't exist yet — create it first, then write.
                 val parent = DocumentsContract.buildDocumentUriUsingTree(
                     tree, DocumentsContract.getTreeDocumentId(tree)
@@ -121,13 +144,13 @@ class MainActivity : FlutterActivity() {
                     return
                 }
                 doc = created
-                out = contentResolver.openOutputStream(doc, "wt")
             }
-            out?.use { it.write(bytes) }
+            val out = contentResolver.openOutputStream(doc, "wt")
                 ?: run {
                     result.error("open_failed", "could not open $name for writing", null)
                     return
                 }
+            out.use { it.write(bytes) }
             result.success(null)
         } catch (e: Exception) {
             Log.e(TAG, "writeFile $name failed", e)
@@ -143,7 +166,10 @@ class MainActivity : FlutterActivity() {
             return
         }
         try {
-            val doc = resolveDoc(tree, name)
+            val doc = resolveDoc(tree, name) ?: run {
+                result.success(null)
+                return
+            }
             contentResolver.openInputStream(doc)?.use { it.readBytes() }?.let {
                 result.success(it)
             } ?: result.success(null)
@@ -162,7 +188,10 @@ class MainActivity : FlutterActivity() {
             return
         }
         try {
-            val doc = resolveDoc(tree, name)
+            val doc = resolveDoc(tree, name) ?: run {
+                result.success(null)
+                return
+            }
             contentResolver.openInputStream(doc)?.use { input ->
                 val buffer = ByteArray(limit)
                 var total = 0
@@ -192,7 +221,9 @@ class MainActivity : FlutterActivity() {
         }
         try {
             val doc = resolveDoc(tree, name)
-            result.success(DocumentsContract.deleteDocument(contentResolver, doc))
+            result.success(
+                doc != null && DocumentsContract.deleteDocument(contentResolver, doc)
+            )
         } catch (e: Exception) {
             Log.e(TAG, "deleteFile $name failed", e)
             result.success(false)
