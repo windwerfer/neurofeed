@@ -1,10 +1,13 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/charts/band_cache.dart' show bandColors, bandNames;
 import 'package:muse_ml/src/charts/eeg_data_source.dart';
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/connection_provider.dart';
@@ -234,7 +237,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   }
 }
 
-class _DashboardBody extends StatelessWidget {
+class _DashboardBody extends StatefulWidget {
   const _DashboardBody({
     required this.protocol,
     required this.durationMinutes,
@@ -260,9 +263,56 @@ class _DashboardBody extends StatelessWidget {
   final Future<void> Function() onDiscard;
 
   @override
+  State<_DashboardBody> createState() => _DashboardBodyState();
+}
+
+class _DashboardBodyState extends State<_DashboardBody> {
+  late final _ChartViewport _viewport;
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.prepared;
+    var end = widget.elapsedSeconds.toDouble();
+    void take(List<double> xs) {
+      if (xs.isNotEmpty && xs.last > end) end = xs.last;
+    }
+
+    take(p.x);
+    take(p.movementX);
+    take(p.bpmX);
+    _viewport = _ChartViewport(0, math.max(end, 1.0));
+  }
+
+  @override
+  void dispose() {
+    _viewport.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final stats = prepared.stats;
+    final stats = widget.prepared.stats;
+    final prepared = widget.prepared;
+    final vp = _viewport;
+
+    Widget chart(
+      String title,
+      String unit,
+      List<_Series> series,
+      List<double> xs,
+    ) {
+      return _ZoomableChart(
+        title: title,
+        unit: unit,
+        series: series,
+        x: xs,
+        viewport: vp,
+      );
+    }
+
+    final notEnough = _notEnoughData;
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -276,15 +326,18 @@ class _DashboardBody extends StatelessWidget {
               children: [
                 Text('Session summary', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 12),
-                _SummaryRow(label: 'Protocol', value: protocol.title),
-                _SummaryRow(label: 'Duration', value: '$durationMinutes min'),
+                _SummaryRow(label: 'Protocol', value: widget.protocol.title),
+                _SummaryRow(
+                  label: 'Duration',
+                  value: '${widget.durationMinutes} min',
+                ),
                 _SummaryRow(
                   label: 'Elapsed',
                   value:
-                      '${elapsedSeconds ~/ 60}:'
-                      '${(elapsedSeconds % 60).toString().padLeft(2, '0')}',
+                      '${widget.elapsedSeconds ~/ 60}:'
+                      '${(widget.elapsedSeconds % 60).toString().padLeft(2, '0')}',
                 ),
-                _SummaryRow(label: 'Background sound', value: soundName),
+                _SummaryRow(label: 'Background sound', value: widget.soundName),
                 if (prepared.x.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Wrap(
@@ -329,11 +382,11 @@ class _DashboardBody extends StatelessWidget {
         const SizedBox(height: 16),
         if (prepared.x.isNotEmpty) ...[
           RepaintBoundary(
-            key: thumbKey,
-            child: _SeriesChart(
-              title: 'Alpha vs Theta (relative power, AF7/AF8 avg)',
-              unit: 'rel. power',
-              series: [
+            key: widget.thumbKey,
+            child: chart(
+              'Alpha vs Theta (relative power, AF7/AF8 avg)',
+              'rel. power',
+              [
                 _Series(
                   label: 'Alpha rel',
                   color: const Color(0xFF66BB6A),
@@ -345,80 +398,36 @@ class _DashboardBody extends StatelessWidget {
                   values: prepared.thetaRel,
                 ),
               ],
-              x: prepared.x,
+              prepared.x,
             ),
           ),
           const SizedBox(height: 16),
         ] else ...[
-          const _NotEnoughData(
-            title: 'Alpha vs Theta',
-            detail:
-                'Not enough signal data was recorded to build this graph. '
+          notEnough(
+            'Alpha vs Theta',
+            'Not enough signal data was recorded to build this graph. '
                 'This usually means the headband was not in good contact or the '
                 'connection dropped during the session. Check the electrodes and '
                 'try again.',
           ),
           const SizedBox(height: 16),
         ],
-        if (prepared.movement.isNotEmpty) ...[
-          _SeriesChart(
-            title: 'Movement score',
-            unit: 'g stddev',
-            series: [
-              _Series(
-                label: 'Movement',
-                color: const Color(0xFFFFA726),
-                values: prepared.movement,
-              ),
-            ],
-            x: prepared.movementX,
-          ),
-          const SizedBox(height: 16),
-        ] else ...[
-          const _NotEnoughData(
-            title: 'Movement score',
-            detail: 'No movement data was recorded for this session.',
-          ),
-          const SizedBox(height: 16),
-        ],
-        if (prepared.bpm.isNotEmpty) ...[
-          _SeriesChart(
-            title: 'Heart rate',
-            unit: 'bpm',
-            series: [
-              _Series(
-                label: 'Pulse',
-                color: const Color(0xFFEC407A),
-                values: prepared.bpm,
-              ),
-            ],
-            x: prepared.bpmX,
-          ),
-          const SizedBox(height: 16),
-        ] else ...[
-          const _NotEnoughData(
-            title: 'Heart rate',
-            detail:
-                'No reliable heart-rate data was captured for this session.',
-          ),
-          const SizedBox(height: 16),
-        ],
         TextField(
-          controller: notesController,
+          controller: widget.notesController,
           maxLines: 3,
-          enabled: !readOnly,
+          enabled: !widget.readOnly,
           decoration: const InputDecoration(
             labelText: 'Notes',
             border: OutlineInputBorder(),
           ),
         ),
-        if (!readOnly) ...[
+        if (!widget.readOnly) ...[
           const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: onSave,
+                  onPressed: widget.onSave,
                   icon: const Icon(Icons.check),
                   label: const Text('Save'),
                   style: FilledButton.styleFrom(
@@ -430,7 +439,7 @@ class _DashboardBody extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: onDiscard,
+                  onPressed: widget.onDiscard,
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('Discard'),
                   style: OutlinedButton.styleFrom(
@@ -442,6 +451,75 @@ class _DashboardBody extends StatelessWidget {
             ],
           ),
         ],
+        const SizedBox(height: 16),
+        if (prepared.x.isNotEmpty) ...[
+          chart('Bands (relative power, AF7/AF8 avg)', 'rel. power', [
+            _Series(
+              label: bandNames[0],
+              color: bandColors[0],
+              values: prepared.deltaRel,
+            ),
+            _Series(
+              label: bandNames[1],
+              color: bandColors[1],
+              values: prepared.thetaRel,
+            ),
+            _Series(
+              label: bandNames[2],
+              color: bandColors[2],
+              values: prepared.alphaRel,
+            ),
+            _Series(
+              label: bandNames[3],
+              color: bandColors[3],
+              values: prepared.betaRel,
+            ),
+            _Series(
+              label: bandNames[4],
+              color: bandColors[4],
+              values: prepared.gammaRel,
+            ),
+          ], prepared.x),
+          const SizedBox(height: 16),
+        ] else ...[
+          notEnough(
+            'Bands',
+            'Not enough signal data was recorded to build this graph.',
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (prepared.movement.isNotEmpty) ...[
+          chart('Movement score', 'g stddev', [
+            _Series(
+              label: 'Movement',
+              color: const Color(0xFFFFA726),
+              values: prepared.movement,
+            ),
+          ], prepared.movementX),
+          const SizedBox(height: 16),
+        ] else ...[
+          notEnough(
+            'Movement score',
+            'No movement data was recorded for this session.',
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (prepared.bpm.isNotEmpty) ...[
+          chart('Heart rate', 'bpm', [
+            _Series(
+              label: 'Pulse',
+              color: const Color(0xFFEC407A),
+              values: prepared.bpm,
+            ),
+          ], prepared.bpmX),
+          const SizedBox(height: 16),
+        ] else ...[
+          notEnough(
+            'Heart rate',
+            'No reliable heart-rate data was captured for this session.',
+          ),
+          const SizedBox(height: 16),
+        ],
       ],
     );
   }
@@ -451,6 +529,9 @@ class _Prepared {
   final List<double> x;
   final List<double> alphaRel;
   final List<double> thetaRel;
+  final List<double> deltaRel;
+  final List<double> betaRel;
+  final List<double> gammaRel;
   final List<double> movement;
   final List<double> movementX;
   final List<double> bpm;
@@ -462,6 +543,9 @@ class _Prepared {
     required this.x,
     required this.alphaRel,
     required this.thetaRel,
+    required this.deltaRel,
+    required this.betaRel,
+    required this.gammaRel,
     required this.movement,
     required this.movementX,
     required this.bpm,
@@ -499,24 +583,33 @@ _Prepared _prepare(SessionData data) {
   final x = <double>[];
   final alphaRel = <double>[];
   final thetaRel = <double>[];
+  final deltaRel = <double>[];
+  final betaRel = <double>[];
+  final gammaRel = <double>[];
   var targetSeconds = 0;
   var alphaRelSum = 0.0;
   final startTs = seconds.isEmpty ? 0.0 : seconds.first.toDouble();
 
   for (final s in seconds) {
     final ch = bySecond[s]!;
-    final rel = _relativeAfRel(
+    final all = _relativeAll(
       _afTuple(ch[electrodeAf7]),
       _afTuple(ch[electrodeAf8]),
     );
-    if (rel == null) {
+    if (all == null) {
       continue;
     }
-    final aRel = rel.$1;
-    final tRel = rel.$2;
+    final aRel = all.$3;
+    final tRel = all.$2;
+    final dRel = all.$1;
+    final bRel = all.$4;
+    final gRel = all.$5;
     x.add(s - startTs);
     alphaRel.add(aRel);
     thetaRel.add(tRel);
+    deltaRel.add(dRel);
+    betaRel.add(bRel);
+    gammaRel.add(gRel);
     alphaRelSum += aRel;
     if (aRel > tRel) {
       targetSeconds++;
@@ -559,6 +652,9 @@ _Prepared _prepare(SessionData data) {
     x: x,
     alphaRel: alphaRel,
     thetaRel: thetaRel,
+    deltaRel: deltaRel,
+    betaRel: betaRel,
+    gammaRel: gammaRel,
     movement: movement,
     movementX: movementX,
     bpm: bpm,
@@ -589,19 +685,28 @@ _Prepared _prepareOverview(SessionOverview overview) {
   final x = <double>[];
   final alphaRel = <double>[];
   final thetaRel = <double>[];
+  final deltaRel = <double>[];
+  final betaRel = <double>[];
+  final gammaRel = <double>[];
   var targetSeconds = 0;
   var alphaRelSum = 0.0;
 
   for (var i = 0; i < n; i++) {
-    final rel = _relativeAfRel(_bandAt(af7, i), _bandAt(af8, i));
-    if (rel == null) {
+    final all = _relativeAll(_bandAt(af7, i), _bandAt(af8, i));
+    if (all == null) {
       continue;
     }
-    final aRel = rel.$1;
-    final tRel = rel.$2;
+    final aRel = all.$3;
+    final tRel = all.$2;
+    final dRel = all.$1;
+    final bRel = all.$4;
+    final gRel = all.$5;
     x.add(i * width);
     alphaRel.add(aRel);
     thetaRel.add(tRel);
+    deltaRel.add(dRel);
+    betaRel.add(bRel);
+    gammaRel.add(gRel);
     alphaRelSum += aRel;
     if (aRel > tRel) {
       targetSeconds++;
@@ -655,6 +760,9 @@ _Prepared _prepareOverview(SessionOverview overview) {
     x: x,
     alphaRel: alphaRel,
     thetaRel: thetaRel,
+    deltaRel: deltaRel,
+    betaRel: betaRel,
+    gammaRel: gammaRel,
     movement: movement,
     movementX: movementX,
     bpm: bpm,
@@ -704,16 +812,16 @@ _Prepared _prepareOverview(SessionOverview overview) {
   return (band.delta, band.theta, band.alpha, band.beta, band.gamma);
 }
 
-/// Combined relative alpha/theta for one time point from the two frontal pads.
+/// Combined relative band powers for one time point from the two frontal pads.
 /// A pad with missing/zero total band power is dropped for that sample (matching
 /// the ATR autodrop), so a session where only one AF pad was healthy still
 /// builds the graph. Returns null only when neither pad is usable.
-(double, double)? _relativeAfRel(
+/// Tuple is (delta, theta, alpha, beta, gamma) fractions of total power.
+(double, double, double, double, double)? _relativeAll(
   (double, double, double, double, double)? af7,
   (double, double, double, double, double)? af8,
 ) {
-  var aSum = 0.0;
-  var tSum = 0.0;
+  final sums = List<double>.filled(5, 0);
   var count = 0;
   for (final band in [af7, af8]) {
     if (band == null) {
@@ -723,15 +831,27 @@ _Prepared _prepareOverview(SessionOverview overview) {
     if (total <= 0) {
       continue;
     }
-    aSum += band.$3 / total;
-    tSum += band.$2 / total;
+    sums[0] += band.$1 / total;
+    sums[1] += band.$2 / total;
+    sums[2] += band.$3 / total;
+    sums[3] += band.$4 / total;
+    sums[4] += band.$5 / total;
     count++;
   }
   if (count == 0) {
     return null;
   }
-  return (aSum / count, tSum / count);
+  return (
+    sums[0] / count,
+    sums[1] / count,
+    sums[2] / count,
+    sums[3] / count,
+    sums[4] / count,
+  );
 }
+
+_NotEnoughData _notEnoughData(String title, String detail) =>
+    _NotEnoughData(title: title, detail: detail);
 
 class _Series {
   const _Series({
@@ -745,18 +865,125 @@ class _Series {
   final List<double> values;
 }
 
-class _SeriesChart extends StatelessWidget {
-  const _SeriesChart({
+/// Shared time-window state for all summary graphs. Every chart renders the
+/// exact same slice of the session, so zooming/panning one graph moves them all.
+class _ChartViewport extends ChangeNotifier {
+  _ChartViewport(this.fullStart, this.fullEnd)
+    : _viewStart = fullStart,
+      _viewEnd = fullEnd;
+
+  final double fullStart;
+  final double fullEnd;
+  double _viewStart;
+  double _viewEnd;
+
+  double get viewStart => _viewStart;
+  double get viewEnd => _viewEnd;
+  double get span => _viewEnd - _viewStart;
+  double get fullSpan => fullEnd - fullStart;
+  bool get isZoomed => span < fullSpan - 1e-6;
+
+  double get minSpan => math.max(1.0, fullSpan / 500);
+
+  void setView(double start, double end) {
+    var span = (end - start).clamp(minSpan, fullSpan);
+    var s = start;
+    if (s < fullStart) s = fullStart;
+    if (s + span > fullEnd) s = fullEnd - span;
+    _viewStart = s;
+    _viewEnd = s + span;
+    notifyListeners();
+  }
+
+  /// Keep the time under [frac] (0..1 of chart width) fixed while scaling the
+  /// visible window by [factor] (>1 zooms in to a smaller slice).
+  void zoomAtFrac({required double frac, required double factor}) {
+    final newSpan = (span * factor).clamp(minSpan, fullSpan);
+    final anchorT = _viewStart + frac * span;
+    var s = anchorT - frac * newSpan;
+    if (s > fullEnd - newSpan) s = fullEnd - newSpan;
+    if (s < fullStart) s = fullStart;
+    setView(s, s + newSpan);
+  }
+
+  /// Shift the window horizontally. Only meaningful while zoomed in; a fully
+  /// zoomed-out view is already showing everything so nothing moves.
+  void panByDx({required double dx, required double width}) {
+    if (width <= 0 || !isZoomed) return;
+    final dt = dx / width * span;
+    var s = _viewStart - dt;
+    if (s + span > fullEnd) s = fullEnd - span;
+    if (s < fullStart) s = fullStart;
+    setView(s, s + span);
+  }
+
+  void reset() => setView(fullStart, fullEnd);
+}
+
+class _ZoomableChart extends StatefulWidget {
+  const _ZoomableChart({
     required this.title,
     required this.unit,
     required this.series,
     required this.x,
+    required this.viewport,
   });
 
   final String title;
   final String unit;
   final List<_Series> series;
   final List<double> x;
+  final _ChartViewport viewport;
+
+  @override
+  State<_ZoomableChart> createState() => _ZoomableChartState();
+}
+
+class _ZoomableChartState extends State<_ZoomableChart> {
+  double _gestureStartSpan = 0;
+  double _gestureStartT = 0;
+  double _gestureStartFrac = 0;
+  double _chartWidth = 0;
+
+  void _onScaleStart(ScaleStartDetails d) {
+    if (_chartWidth <= 0) return;
+    _gestureStartSpan = widget.viewport.span;
+    _gestureStartFrac = (d.localFocalPoint.dx / _chartWidth).clamp(0.0, 1.0);
+    _gestureStartT =
+        widget.viewport.viewStart + _gestureStartFrac * _gestureStartSpan;
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails d) {
+    if (_chartWidth <= 0) return;
+    final newSpan = (_gestureStartSpan / d.scale).clamp(
+      widget.viewport.minSpan,
+      widget.viewport.fullSpan,
+    );
+    final curFrac = (d.localFocalPoint.dx / _chartWidth).clamp(0.0, 1.0);
+    final start = _gestureStartT - curFrac * newSpan;
+    widget.viewport.setView(start, start + newSpan);
+  }
+
+  void _onSignal(PointerSignalEvent e) {
+    if (_chartWidth <= 0) return;
+    if (e is PointerScrollEvent) {
+      GestureBinding.instance.pointerSignalResolver.register(
+        e,
+        (_) => widget.viewport.zoomAtFrac(
+          frac: (e.localPosition.dx / _chartWidth).clamp(0.0, 1.0),
+          factor: math.exp(e.scrollDelta.dy * 0.002),
+        ),
+      );
+    } else if (e is PointerScaleEvent) {
+      GestureBinding.instance.pointerSignalResolver.register(
+        e,
+        (_) => widget.viewport.zoomAtFrac(
+          frac: (e.localPosition.dx / _chartWidth).clamp(0.0, 1.0),
+          factor: e.scale,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -770,15 +997,17 @@ class _SeriesChart extends StatelessWidget {
           children: [
             Row(
               children: [
-                Expanded(child: Text(title, style: theme.textTheme.titleSmall)),
-                Text(unit, style: theme.textTheme.bodySmall),
+                Expanded(
+                  child: Text(widget.title, style: theme.textTheme.titleSmall),
+                ),
+                Text(widget.unit, style: theme.textTheme.bodySmall),
               ],
             ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 12,
               children: [
-                for (final s in series)
+                for (final s in widget.series)
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -797,7 +1026,8 @@ class _SeriesChart extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            if (x.isEmpty || series.any((s) => s.values.length != x.length))
+            if (widget.x.isEmpty ||
+                widget.series.any((s) => s.values.length != widget.x.length))
               SizedBox(
                 height: 140,
                 width: double.infinity,
@@ -810,23 +1040,87 @@ class _SeriesChart extends StatelessWidget {
                   ),
                 ),
               )
-            else ...[
-              SizedBox(
-                height: 140,
-                width: double.infinity,
-                child: CustomPaint(
-                  painter: _ChartPainter(series: series, x: x),
-                ),
+            else
+              ListenableBuilder(
+                listenable: widget.viewport,
+                builder: (context, _) {
+                  final vp = widget.viewport;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        height: 140,
+                        width: double.infinity,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            _chartWidth = constraints.maxWidth;
+                            return Listener(
+                              behavior: HitTestBehavior.opaque,
+                              onPointerSignal: _onSignal,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onScaleStart: _onScaleStart,
+                                onScaleUpdate: _onScaleUpdate,
+                                onDoubleTap: vp.reset,
+                                child: CustomPaint(
+                                  painter: _ChartPainter(
+                                    series: widget.series,
+                                    x: widget.x,
+                                    viewStart: vp.viewStart,
+                                    viewEnd: vp.viewEnd,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _fmtTime(vp.viewStart),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          if (vp.isZoomed)
+                            InkWell(
+                              onTap: vp.reset,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.fullscreen_exit,
+                                    size: 14,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Reset zoom',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            Text(
+                              'pinch / scroll to zoom, drag to pan',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          Text(
+                            _fmtTime(vp.viewEnd),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
               ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(_fmtTime(x.first), style: theme.textTheme.bodySmall),
-                  Text(_fmtTime(x.last), style: theme.textTheme.bodySmall),
-                ],
-              ),
-            ],
           ],
         ),
       ),
@@ -840,23 +1134,41 @@ String _fmtTime(double seconds) {
 }
 
 class _ChartPainter extends CustomPainter {
-  const _ChartPainter({required this.series, required this.x});
+  const _ChartPainter({
+    required this.series,
+    required this.x,
+    required this.viewStart,
+    required this.viewEnd,
+  });
 
   final List<_Series> series;
   final List<double> x;
+  final double viewStart;
+  final double viewEnd;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (series.isEmpty || x.isEmpty || x.last <= x.first) {
+    if (series.isEmpty || x.isEmpty || viewEnd <= viewStart) {
       return;
     }
+
     var minY = double.infinity;
     var maxY = double.negativeInfinity;
     for (final s in series) {
-      for (final v in s.values) {
+      if (s.values.length != x.length) {
+        continue;
+      }
+      for (var i = 0; i < s.values.length; i++) {
+        if (x[i] < viewStart || x[i] > viewEnd) {
+          continue;
+        }
+        final v = s.values[i];
         if (v < minY) minY = v;
         if (v > maxY) maxY = v;
       }
+    }
+    if (minY == double.infinity) {
+      return;
     }
     if (minY == maxY) {
       minY -= 1;
@@ -866,7 +1178,7 @@ class _ChartPainter extends CustomPainter {
     const pad = 8.0;
     final w = size.width - pad * 2;
     final h = size.height - pad * 2;
-    double px(double v) => pad + (v - x.first) / (x.last - x.first) * w;
+    double px(double v) => pad + (v - viewStart) / (viewEnd - viewStart) * w;
     double py(double v) => pad + h - (v - minY) / (maxY - minY) * h;
 
     final grid = Paint()
@@ -889,7 +1201,15 @@ class _ChartPainter extends CustomPainter {
       final path = Path();
       final pts = <Offset>[];
       for (var i = 0; i < s.values.length; i++) {
+        if (x[i] < viewStart || x[i] > viewEnd) {
+          continue;
+        }
         pts.add(Offset(px(x[i]), py(s.values[i])));
+      }
+      if (pts.isNotEmpty && pts.length < 2) {
+        // A single visible sample shouldn't collapse to a dot.
+        canvas.drawCircle(pts.first, 1.6, paint);
+        continue;
       }
       _buildSmoothPath(path, pts);
       canvas.drawPath(path, paint);
@@ -921,7 +1241,10 @@ class _ChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ChartPainter oldDelegate) =>
-      oldDelegate.series != series || oldDelegate.x != x;
+      oldDelegate.series != series ||
+      oldDelegate.x != x ||
+      oldDelegate.viewStart != viewStart ||
+      oldDelegate.viewEnd != viewEnd;
 }
 
 class _SummaryRow extends StatelessWidget {
