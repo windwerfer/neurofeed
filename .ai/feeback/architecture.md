@@ -124,4 +124,6 @@ The `.muse.feedback` container is single-file and PNG-first:
 - Crash-safe rewrite: filesystem writes `.name.tmp` + atomic `rename()`; SAF
   (native `writeFileAtomic` in `MainActivity.kt`) writes `name.mtmp`, deletes the
   old target, `renameDocument` swap, with `recoverDoc()` healing an interrupted
-  swap on the next read (`listFiles` skips `.mtmp`).
+  swap on every read *and* during `listFiles` (a first pass heals any orphaned
+  `.mtmp` so a recovered session reappears in listings; surviving `.mtmp`
+  leftovers are skipped).
