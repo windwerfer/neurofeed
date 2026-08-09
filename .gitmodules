@@ -7,3 +7,8 @@
 	path = third_party/muse-rs
 	url = https://github.com/eugenehp/muse-rs
 	ignore = all
+
+[submodule "third_party/reve-rs"]
+	path = third_party/reve-rs
+	url = https://github.com/windwerfer/reve-rs
+	ignore = all
