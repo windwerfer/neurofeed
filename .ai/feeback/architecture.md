@@ -121,9 +121,11 @@ The `.muse.feedback` container is single-file and PNG-first:
   in the corner of the notes field only while the text is dirty; a `PopScope`
   intercepts Back with "Unsaved notes — Save / Stay / Discard". Saves go through
   `SessionStore.updateNotes` → `SessionStorage.writeFileAtomic`.
-- Crash-safe rewrite: filesystem writes `.name.tmp` + atomic `rename()`; SAF
-  (native `writeFileAtomic` in `MainActivity.kt`) writes `name.mtmp`, deletes the
-  old target, `renameDocument` swap, with `recoverDoc()` healing an interrupted
-  swap on every read *and* during `listFiles` (a first pass heals any orphaned
-  `.mtmp` so a recovered session reappears in listings; surviving `.mtmp`
-  leftovers are skipped).
+- Crash-safe write: **every history write** (`publishSession`, `updateNotes`,
+  `moveAllTo`) goes through `SessionStorage.writeFileAtomic`. Filesystem writes
+  `.name.tmp` + atomic `rename()`; SAF (native `writeFileAtomic` in
+  `MainActivity.kt`) writes `name.mtmp`, deletes the old target,
+  `renameDocument` swap, with `recoverDoc()` healing an interrupted swap on
+  every read *and* during `listFiles` (a first pass heals any orphaned `.mtmp`
+  so a recovered session reappears in listings; surviving `.mtmp` leftovers are
+  skipped).

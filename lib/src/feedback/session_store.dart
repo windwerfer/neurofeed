@@ -290,7 +290,7 @@ class SessionStore {
       jsonBytes: Uint8List.fromList(jsonBytes),
       bodyBytes: Uint8List.fromList(museBytes),
     );
-    await storage.writeFile(_museName(id), container);
+    await storage.writeFileAtomic(_museName(id), container);
     debugPrint('[session] written ${_museName(id)} to ${storage.location}');
     return SessionSummary(id: id, metadata: metadata);
   }
@@ -346,7 +346,7 @@ class SessionStore {
         continue;
       }
       await target.ensureDir();
-      await target.writeFile(name, bytes);
+      await target.writeFileAtomic(name, bytes);
       await storage.deleteFile(name);
       moved++;
     }
