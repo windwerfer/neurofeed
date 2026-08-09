@@ -887,15 +887,35 @@ class _ChartPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..isAntiAlias = true;
       final path = Path();
+      final pts = <Offset>[];
       for (var i = 0; i < s.values.length; i++) {
-        final pt = Offset(px(x[i]), py(s.values[i]));
-        if (i == 0) {
-          path.moveTo(pt.dx, pt.dy);
-        } else {
-          path.lineTo(pt.dx, pt.dy);
-        }
+        pts.add(Offset(px(x[i]), py(s.values[i])));
       }
+      _buildSmoothPath(path, pts);
       canvas.drawPath(path, paint);
+    }
+  }
+
+  /// Catmull-Rom → cubic Bezier smoothing (same as the live bands graph), so
+  /// the summary curves are rounded instead of spiky.
+  void _buildSmoothPath(Path path, List<Offset> pts) {
+    if (pts.isEmpty) return;
+    path.moveTo(pts[0].dx, pts[0].dy);
+    if (pts.length < 2) return;
+    for (var i = 0; i < pts.length - 1; i++) {
+      final p0 = i > 0 ? pts[i - 1] : pts[i];
+      final p1 = pts[i];
+      final p2 = pts[i + 1];
+      final p3 = i + 2 < pts.length ? pts[i + 2] : pts[i + 1];
+      final cp1 = Offset(
+        p1.dx + (p2.dx - p0.dx) / 6,
+        p1.dy + (p2.dy - p0.dy) / 6,
+      );
+      final cp2 = Offset(
+        p2.dx - (p3.dx - p1.dx) / 6,
+        p2.dy - (p3.dy - p1.dy) / 6,
+      );
+      path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p2.dx, p2.dy);
     }
   }
 
