@@ -105,6 +105,11 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
     explicitly
   - `pubspec.lock` and `rust/Cargo.lock` are committed, so pub/cargo
     dependencies are frozen
+  - `rust/src/frb_generated.rs` (flutter_rust_bridge glue) is committed too —
+    CI never runs `flutter_rust_bridge_codegen generate`, so a fresh checkout
+    must already contain it or cargokit's `cargo build` fails with E0583.
+    Regenerate with `flutter_rust_bridge_codegen generate` when the FFI
+    surface changes and commit both it and the `lib/src/rust/` Dart files
   - Gradle archive tasks use fixed timestamps + deterministic ordering
     (`android/app/build.gradle.kts`); CI also disables parallel builds and
     caching for the Android build

@@ -6,7 +6,13 @@ Global orientation for any AI agent or contributor working in this repo.
 - **Flutter 3.41.7** (stable), Dart (bundled). UI layer.
 - **Rust** via `flutter_rust_bridge` **2.11.1** (pinned `=`, both Rust crate and Dart package).
   - Rust lib: `rust/` (crate `rust_lib_muse_ml`).
-  - Generated bindings: `rust/src/frb_generated.rs` is **gitignored** (commit `81a9f41` untracked it); Dart generated files ARE tracked.
+  - Generated bindings: `rust/src/frb_generated.rs` and the Dart files under
+    `lib/src/rust/` are **both tracked in git** (the Rust glue was re-tracked in
+    commit `7543478`: nothing in CI runs `flutter_rust_bridge_codegen generate`,
+    so a fresh checkout had no `frb_generated.rs` and cargokit's `cargo build`
+    failed with `E0583`). Regenerate with `flutter_rust_bridge_codegen generate`
+    whenever the FFI surface changes and commit **both** sides. Keep the codegen
+    CLI, Rust crate, and Dart package pinned to the same `2.11.1`.
 - **muse-rs** (`github.com/eugenehp/muse-rs.git` tag `0.1.0`, `default-features = false`) — Muse BLE protocol + transport.
 - **btleplug** — forked at `github.com/windwerfer/btleplug` (tag `0.12.0-muse-3`), patched with `get_env()` → `attach_current_thread_permanently()` fallback for tokio JNI threads + notification death spiral fix. **Source base is upstream 0.12.0 but `Cargo.toml` version is pinned to `0.11.8`** — required for semver matching (see `.ai/btleplug.md`).
   - Referenced via `[patch]` on `eugenehp/btleplug.git` so that BOTH
@@ -26,7 +32,7 @@ Global orientation for any AI agent or contributor working in this repo.
 - **NEVER** commit secrets/keys.
 - **NEVER** add code comments unless explicitly asked.
 - Do not run `git` commit/push/PR unless explicitly requested.
-- When editing Rust under `rust/src/api/`, run `flutter_rust_bridge` codegen if the FFI surface changes, then `cargo check --target aarch64-linux-android` is NOT reliable in this sandbox (see Testing Guide) — rely on `flutter run` for the real compile.
+- When editing Rust under `rust/src/api/`, run `flutter_rust_bridge` codegen if the FFI surface changes (then commit both `rust/src/frb_generated.rs` and the Dart files under `lib/src/rust/`); `cargo check --target aarch64-linux-android` is NOT reliable in this sandbox (see Testing Guide) — rely on `flutter run` for the real compile.
 - `flutter analyze lib/src` must stay clean after edits.
 - Format changes land in `rust/src/api/session_format.rs`; keep `cargo test --lib session_format` green (golden wire-layout tests pin the byte format).
 

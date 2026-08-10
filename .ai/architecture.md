@@ -112,8 +112,11 @@ It remains a good second choice if btleplug ever becomes unmaintainable.
 - Manifest BLE perms: `BLUETOOTH_SCAN` (neverForLocation), `BLUETOOTH_CONNECT`,
   `ACCESS_FINE_LOCATION` (maxSdkVersion=30).
 - `targetSdkVersion = 36`, NDK 27/28, Gradle 8.14.
-- `flutter_rust_bridge` generated `rust/src/frb_generated.rs` is gitignored;
-  Dart generated files are tracked.
+- `flutter_rust_bridge` generated `rust/src/frb_generated.rs` and the Dart
+  files under `lib/src/rust/` are both tracked in git (re-tracked in `7543478`:
+  CI never runs codegen, so a fresh checkout must already contain
+  `frb_generated.rs` or cargokit's `cargo build` fails with E0583). Regenerate
+  with `flutter_rust_bridge_codegen generate` when the FFI surface changes.
 
 ## JNI thread-attach workaround (btleplug fork)
 

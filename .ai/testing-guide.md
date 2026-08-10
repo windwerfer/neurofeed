@@ -60,4 +60,7 @@ of `_init()` (mark with `// TEMP-TEST`) and revert after.
 - Local `cargo check --target aarch64-linux-android` is UNRELIABLE in this
   sandbox (NDK clang permission denied). Trust `flutter run` for the real Rust
   compile.
-- `flutter_rust_bridge` codegen must be re-run if the Rust FFI surface changes.
+- `flutter_rust_bridge` codegen must be re-run if the Rust FFI surface changes,
+  and the regenerated `rust/src/frb_generated.rs` plus `lib/src/rust/` must both
+  be committed (they are tracked in git — a fresh checkout has no
+  `frb_generated.rs` otherwise, which breaks CI's `cargo build` with E0583).
