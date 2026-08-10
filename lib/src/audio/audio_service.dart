@@ -7,10 +7,11 @@ class AudioService {
 
   AudioService(Settings settings) : _controller = FeedbackAudioController(settings);
 
-  static const Map<String, String> soundAssets = {
+  static const Map<String, String?> soundAssets = {
     'Ambient Drone': FeedbackAudioController.feedbackDroneAsset,
     'Drone Loop': FeedbackAudioController.droneLoopAsset,
     'Rain': 'assets/audio/rain/346562__lebaston100__rain-without-thunder.opus',
+    'No background': null,
   };
 
   List<String> get availableSounds => soundAssets.keys.toList();
@@ -42,12 +43,12 @@ class AudioService {
   Future<void> playCalibration() => _controller.playCalibration();
 
   Future<void> playFeedback({String sound = 'Ambient Drone'}) {
-    final path = soundAssets[sound] ?? soundAssets.values.first;
+    final path = soundAssets[sound];
     return _controller.startBackground(path);
   }
 
   Future<void> switchSound(String sound) {
-    final path = soundAssets[sound] ?? soundAssets.values.first;
+    final path = soundAssets[sound];
     return _controller.switchBackground(path);
   }
 

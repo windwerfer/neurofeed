@@ -158,8 +158,12 @@ class FeedbackAudioController {
     }
   }
 
-  Future<void> startBackground(String assetPath) async {
+  Future<void> startBackground(String? assetPath) async {
     _resetRewardState();
+    if (assetPath == null) {
+      await _ambient.stop();
+      return;
+    }
     try {
       await _ambient.setAsset(assetPath);
       await _ambient.setLoopMode(LoopMode.one);
@@ -175,8 +179,13 @@ class FeedbackAudioController {
   Future<void> resumeBackground() => _ambient.play();
 
   /// Switches the ambient loop to a different asset mid-session without
-  /// touching the reward state machine.
-  Future<void> switchBackground(String assetPath) async {
+  /// touching the reward state machine. A null asset stops the loop (the
+  /// "No background" option).
+  Future<void> switchBackground(String? assetPath) async {
+    if (assetPath == null) {
+      await _ambient.stop();
+      return;
+    }
     try {
       await _ambient.setAsset(assetPath);
       await _ambient.setLoopMode(LoopMode.one);
