@@ -5,7 +5,8 @@ import 'package:muse_ml/src/settings.dart';
 class AudioService {
   final FeedbackAudioController _controller;
 
-  AudioService(Settings settings) : _controller = FeedbackAudioController(settings);
+  AudioService(Settings settings)
+    : _controller = FeedbackAudioController(settings);
 
   static const Map<String, String?> soundAssets = {
     'Ambient Drone': FeedbackAudioController.feedbackDroneAsset,
@@ -31,8 +32,7 @@ class AudioService {
   void setBackgroundVolume(double value) =>
       _controller.setBackgroundVolume(value);
 
-  void setFeedbackVolume(double value) =>
-      _controller.setFeedbackVolume(value);
+  void setFeedbackVolume(double value) => _controller.setFeedbackVolume(value);
 
   void setIntroVolume(double value) => _controller.setIntroVolume(value);
 
@@ -40,7 +40,8 @@ class AudioService {
 
   void resetVolumes() => _controller.resetVolumes();
 
-  Future<void> playCalibration() => _controller.playCalibration();
+  Future<void> playCalibration([String? assetPath]) =>
+      _controller.playCalibration(assetPath);
 
   Future<void> playFeedback({String sound = 'Ambient Drone'}) {
     final path = soundAssets[sound];

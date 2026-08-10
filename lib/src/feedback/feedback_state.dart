@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
+import 'package:muse_ml/src/audio/calibration_clips.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_engine.dart';
 import 'package:muse_ml/src/feedback/feedback_recorder.dart';
@@ -159,6 +160,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   final FeedbackEngine _atr = AtrEngine();
   final FeedbackRecorder _recorder = FeedbackRecorder();
 
+  /// Wall-clock anchors for the calibration timeline. [_sessionStartAt] is set
+  /// when the recorder starts (calibration start); [_trainingStartAt] when
+  /// training/feedback begins. Their difference is the training-boundary
+  /// offset used to trim the displayed window.
+  DateTime? _sessionStartAt;
+  DateTime? _trainingStartAt;
+  CalibrationClip? _introClip;
+  DateTime? _introStartedAt;
+  bool _usedStartAnyway = false;
+  SessionCalibration? _calibration;
+
   AudioService get _audio => _ref.read(audioServiceProvider);
 
   void selectProtocol(ProtocolType type) {
@@ -257,6 +269,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
     _prevEyeState = 0;
     _clenchWasActive = false;
+    _sessionStartAt = DateTime.now();
+    _trainingStartAt = null;
+    _introClip = null;
+    _introStartedAt = null;
+    _usedStartAnyway = false;
+    _calibration = null;
+    await _recorder.startSession();
     await _runCalibration();
   }
 
@@ -346,14 +365,23 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     });
   }
 
-  /// Plays the calibration voice intro, then starts the silent baseline.
-  /// Used once the pre-calibration gate passes (or the user bypasses it).
+  /// Plays the calibration voice intro (from the calibration manifest for the
+  /// selected protocol), then starts the silent baseline. Used once the
+  /// pre-calibration gate passes (or the user bypasses it).
   Future<void> _playCalibrationAndBaseline() async {
     state = state.copyWith(waitingForSignal: false);
-    await _audio.playCalibration().timeout(
-      calibrationAudioTimeout,
-      onTimeout: () {},
-    );
+    CalibrationClip? clip;
+    try {
+      final manifest = await _ref.read(calibrationManifestProvider.future);
+      clip = manifest.introFor(state.protocol.name);
+    } catch (e) {
+      debugPrint('[feedback] calibration manifest unavailable: $e');
+    }
+    _introClip = clip;
+    _introStartedAt = DateTime.now();
+    await _audio
+        .playCalibration(clip?.file)
+        .timeout(calibrationAudioTimeout, onTimeout: () {});
     if (state.phase != FeedbackPhase.calibrating) {
       return;
     }
@@ -398,8 +426,51 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           stddev: _atr.baselineStddev,
         );
     _ref.read(liveStatsProvider).setThreshold(threshold);
+    _recordCalibration();
     state = state.copyWith(baselineSecondsLeft: 0, currentThreshold: threshold);
     unawaited(startPlaying());
+  }
+
+  /// Records how this calibration ran so a saved session is reproducible:
+  /// timeline (calibration start/end, training start), the gate rejection
+  /// criteria, the ATR baseline statistics, and the intro clip that played.
+  void _recordCalibration() {
+    final now = DateTime.now();
+    _trainingStartAt = now;
+    final sessionStart = _sessionStartAt;
+    final intro = _introClip;
+    final introAt = _introStartedAt;
+    final phases = <SessionCalibrationPhase>[];
+    if (intro != null && introAt != null && sessionStart != null) {
+      phases.add(
+        SessionCalibrationPhase(
+          clipId: intro.id,
+          clipFile: intro.file,
+          spokenText: intro.text,
+          eyes: intro.eyes,
+          startSecs: introAt.difference(sessionStart).inMilliseconds / 1000,
+          endSecs: now.difference(sessionStart).inMilliseconds / 1000,
+        ),
+      );
+    }
+    _calibration = SessionCalibration(
+      version: CalibrationManifest.currentVersion,
+      calibrationStartSecs: sessionStart == null
+          ? null
+          : sessionStart.millisecondsSinceEpoch / 1000,
+      calibrationEndSecs: now.millisecondsSinceEpoch / 1000,
+      trainingStartSecs: now.millisecondsSinceEpoch / 1000,
+      usedStartAnyway: _usedStartAnyway,
+      greenStableSeconds: greenStableSeconds,
+      faultyPadSeconds: faultyPadSeconds,
+      baseline: SessionBaselineStats(
+        percentile: _atr.baselinePercentile,
+        count: _atr.baselineCount,
+        mean: _atr.baselineMean,
+        stddev: _atr.baselineStddev,
+      ),
+      phases: phases,
+    );
   }
 
   /// Bypasses the calibration signal gate (used when the user opts to start
@@ -410,6 +481,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         !state.startAnywayAvailable) {
       return;
     }
+    _usedStartAnyway = true;
     _gateTimer?.cancel();
     unawaited(_playCalibrationAndBaseline());
   }
@@ -427,8 +499,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     );
     _target.reset();
     _adaptTick = 0;
+    _trainingStartAt ??= DateTime.now();
     _startTicker();
-    await _recorder.startSession();
     await _audio.playFeedback(sound: state.soundName);
   }
 
@@ -483,11 +555,25 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _recorder.discardSession();
     _atr.reset();
     _target.reset();
+    _sessionStartAt = null;
+    _trainingStartAt = null;
+    _introClip = null;
+    _introStartedAt = null;
+    _usedStartAnyway = false;
+    _calibration = null;
     _ref.read(liveStatsProvider).reset();
     state = const FeedbackState();
   }
 
   String? get sessionFilePath => _recorder.currentFilePath;
+
+  /// Recorded calibration record for the current session (timeline, gate,
+  /// baseline stats, intro clip). Null until calibration completes.
+  SessionCalibration? get calibration => _calibration;
+
+  /// Seconds from recording start to the training boundary, or null when no
+  /// calibration was recorded (e.g. legacy/unknown-session previews).
+  double? get trainingStartOffsetSecs => _calibration?.trainingStartOffsetSecs;
 
   /// Electrode indices that produced data in the current recording.
   Set<int> get recordedChannels => _recorder.recordedChannels;

@@ -17,6 +17,7 @@ class SessionOverview {
     required this.movement,
     required this.peakAlphaFreq,
     required this.peakAlphaPower,
+    this.trainingStartSecs,
   });
 
   /// Fixed number of buckets regardless of session duration.
@@ -26,6 +27,11 @@ class SessionOverview {
   final double bucketWidthSecs;
   final double startSecs;
   final double endSecs;
+
+  /// Seconds from the recording (calibration) start to the training boundary.
+  /// Null on full-window overviews, including all files recorded before
+  /// calibration recording existed — those render as they always did.
+  final double? trainingStartSecs;
 
   /// Per-electrode band series keyed by electrode index.
   final Map<int, BandPowerSeries> bands;
@@ -58,6 +64,7 @@ class SessionOverview {
       'width': bucketWidthSecs,
       'start': startSecs,
       'end': endSecs,
+      if (trainingStartSecs != null) 'trainingStart': trainingStartSecs,
       'bands': b,
       'pulse': pulse,
       'movement': movement,
@@ -96,6 +103,7 @@ class SessionOverview {
       movement: _numList(json['movement']) ?? const [],
       peakAlphaFreq: _numList(json['peakAlphaFreq']) ?? const [],
       peakAlphaPower: _numList(json['peakAlphaPower']) ?? const [],
+      trainingStartSecs: (json['trainingStart'] as num?)?.toDouble(),
     );
   }
 
@@ -107,7 +115,15 @@ class SessionOverview {
   }
 
   /// Build a decimated summary from a full parsed session.
-  factory SessionOverview.fromData(SessionData data) {
+  ///
+  /// [trainingStartSecs], when present, is the offset from recording start at
+  /// which training (feedback) began; the returned overview is then trimmed to
+  /// cover only the training portion (calibration lives in the `.muse` body
+  /// but is excluded from the displayed/metriced window).
+  factory SessionOverview.fromData(
+    SessionData data, {
+    double? trainingStartSecs,
+  }) {
     if (data.bands.isEmpty) {
       return const SessionOverview(
         bucketCount: SessionOverview.defaultBucketCount,
@@ -141,6 +157,18 @@ class SessionOverview {
     if (span <= 0) {
       span = 1;
     }
+
+    // Trim to the training portion. The boundary is an offset from the first
+    // recorded event (which coincides with calibration start), so it is
+    // insensitive to device-clock drift.
+    final effectiveTrainingStart = (trainingStartSecs ?? 0) > 0
+        ? ((trainingStartSecs!) <= span ? trainingStartSecs : null)
+        : null;
+    double startTs = minTs;
+    if (effectiveTrainingStart != null) {
+      startTs = minTs + effectiveTrainingStart;
+      span -= effectiveTrainingStart;
+    }
     final width = span / defaultBucketCount;
 
     final perElectrode = <int, List<BandsRecord>>{};
@@ -152,25 +180,30 @@ class SessionOverview {
     for (final entry in perElectrode.entries) {
       bands[entry.key] = BandPowerSeries(
         delta: _bucketAvg(
-            entry.value.map((b) => (b.timestamp, b.delta)).toList(),
-            minTs,
-            width),
+          entry.value.map((b) => (b.timestamp, b.delta)).toList(),
+          startTs,
+          width,
+        ),
         theta: _bucketAvg(
-            entry.value.map((b) => (b.timestamp, b.theta)).toList(),
-            minTs,
-            width),
+          entry.value.map((b) => (b.timestamp, b.theta)).toList(),
+          startTs,
+          width,
+        ),
         alpha: _bucketAvg(
-            entry.value.map((b) => (b.timestamp, b.alpha)).toList(),
-            minTs,
-            width),
+          entry.value.map((b) => (b.timestamp, b.alpha)).toList(),
+          startTs,
+          width,
+        ),
         beta: _bucketAvg(
-            entry.value.map((b) => (b.timestamp, b.beta)).toList(),
-            minTs,
-            width),
+          entry.value.map((b) => (b.timestamp, b.beta)).toList(),
+          startTs,
+          width,
+        ),
         gamma: _bucketAvg(
-            entry.value.map((b) => (b.timestamp, b.gamma)).toList(),
-            minTs,
-            width),
+          entry.value.map((b) => (b.timestamp, b.gamma)).toList(),
+          startTs,
+          width,
+        ),
       );
     }
 
@@ -179,20 +212,24 @@ class SessionOverview {
           .where((p) => p.confidence >= 0.3)
           .map((p) => (p.timestamp, p.bpm))
           .toList(),
-      minTs,
+      startTs,
       width,
     );
     final movement = _bucketAvg(
       data.movements.map((m) => (m.timestamp, m.score)).toList(),
-      minTs,
+      startTs,
       width,
     );
 
     final freq = List<double?>.filled(defaultBucketCount, null);
     final power = List<double?>.filled(defaultBucketCount, null);
     for (final p in data.peakAlphas) {
-      final idx = ((p.timestamp - minTs) / width).floor();
-      if (idx >= 0 && idx < defaultBucketCount &&
+      if (p.timestamp < startTs) {
+        continue;
+      }
+      final idx = ((p.timestamp - startTs) / width).floor();
+      if (idx >= 0 &&
+          idx < defaultBucketCount &&
           (power[idx] == null || p.power > power[idx]!)) {
         power[idx] = p.power;
         freq[idx] = p.frequency;
@@ -202,13 +239,14 @@ class SessionOverview {
     return SessionOverview(
       bucketCount: defaultBucketCount,
       bucketWidthSecs: width,
-      startSecs: minTs,
+      startSecs: startTs,
       endSecs: maxTs,
       bands: bands,
       pulse: pulse,
       movement: movement,
       peakAlphaFreq: freq,
       peakAlphaPower: power,
+      trainingStartSecs: effectiveTrainingStart,
     );
   }
 
@@ -221,10 +259,12 @@ class SessionOverview {
     final sum = List<double>.filled(defaultBucketCount, 0);
     final cnt = List<int>.filled(defaultBucketCount, 0);
     for (final (t, v) in points) {
-      var idx = ((t - start) / width).floor();
-      if (idx < 0) {
-        idx = 0;
+      // Points before the window start (e.g. calibration, when the overview is
+      // trimmed to training) are excluded, not clamped into bucket 0.
+      if (t < start) {
+        continue;
       }
+      var idx = ((t - start) / width).floor();
       if (idx >= defaultBucketCount) {
         idx = defaultBucketCount - 1;
       }
