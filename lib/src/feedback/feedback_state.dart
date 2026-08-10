@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/feedback/feedback_engine.dart';
 import 'package:muse_ml/src/feedback/feedback_recorder.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
@@ -155,7 +156,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   final List<GestureMarker> _gestureMarkers = [];
   int _adaptTick = 0;
   final TargetStateAggregator _target = TargetStateAggregator();
-  final AtrEngine _atr = AtrEngine();
+  final FeedbackEngine _atr = AtrEngine();
   final FeedbackRecorder _recorder = FeedbackRecorder();
 
   AudioService get _audio => _ref.read(audioServiceProvider);
@@ -186,7 +187,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   void selectPercentile(int percentile) {
-    _atr.percentile = percentile;
+    _atr.setBaselinePercentile(percentile);
     state = state.copyWith(baselinePercentile: percentile);
     final stats = _ref.read(liveStatsProvider);
     stats.setBaseline(
@@ -280,7 +281,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final stats = _ref.read(liveStatsProvider);
     stats
       ..setBaseline(
-        percentile: _atr.percentile,
+        percentile: _atr.baselinePercentile,
         count: _atr.baselineCount,
         mean: _atr.baselineMean,
         stddev: _atr.baselineStddev,
@@ -289,7 +290,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     unawaited(_audio.playRecalibrateChime());
     debugPrint(
       '[feedback] in-flight recalibrate at t=${state.elapsedSeconds}s: '
-      'threshold -> ${_atr.threshold} (p${_atr.percentile}, '
+      'threshold -> ${_atr.threshold} (p${_atr.baselinePercentile}, '
       'n=${_atr.baselineCount} clean samples, mean=${_atr.baselineMean}, '
       'sd=${_atr.baselineStddev})',
     );
@@ -386,12 +387,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final threshold = _atr.computeThreshold();
     debugPrint(
       '[feedback] baseline ATR threshold = $threshold '
-      '(${_atr.baselineCount} samples, p${_atr.percentile})',
+      '(${_atr.baselineCount} samples, p${_atr.baselinePercentile})',
     );
     _ref
         .read(liveStatsProvider)
         .setBaseline(
-          percentile: _atr.percentile,
+          percentile: _atr.baselinePercentile,
           count: _atr.baselineCount,
           mean: _atr.baselineMean,
           stddev: _atr.baselineStddev,

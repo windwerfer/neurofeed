@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:muse_ml/src/feedback/feedback_engine.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 const int electrodeAf7 = 1;
@@ -46,7 +47,7 @@ class RelativeTarget {
 /// which gives an initial reward rate of ~60%. During the session it adapts
 /// the threshold based on the recent success rate so the user stays in the
 /// learning zone.
-class AtrEngine {
+class AtrEngine implements FeedbackEngine {
   /// Success-rate window in feedback epochs (~10 Hz, so this covers ~30 s).
   static const int epochWindow = 300;
   static const double highSuccessRate = 0.8;
@@ -70,14 +71,22 @@ class AtrEngine {
 
   AtrEngine({this.percentile = 40});
 
+  @override
   bool get hasBaseline => _baseline.isNotEmpty;
 
+  @override
   int get baselineCount => _baseline.length;
 
+  @override
+  int get baselinePercentile => percentile;
+
+  @override
   double? get threshold => _threshold;
 
+  @override
   bool get dynamicAdapt => _dynamicAdapt;
 
+  @override
   double get responsiveness => _responsiveness;
 
   /// Raise/lower step derived from the responsiveness setting (gentle →
@@ -88,6 +97,7 @@ class AtrEngine {
   }
 
   /// Mean of the baseline ATR samples.
+  @override
   double? get baselineMean {
     if (_baseline.isEmpty) {
       return null;
@@ -96,19 +106,21 @@ class AtrEngine {
   }
 
   /// Standard deviation of the baseline ATR samples.
+  @override
   double? get baselineStddev {
     if (_baseline.length < 2) {
       return null;
     }
     final mean = baselineMean!;
-    final variance = _baseline
-            .fold<double>(0, (a, s) => a + pow(s - mean, 2).toDouble()) /
+    final variance =
+        _baseline.fold<double>(0, (a, s) => a + pow(s - mean, 2).toDouble()) /
         _baseline.length;
     return sqrt(variance);
   }
 
   /// Success rate over the current rolling epoch window, or null when the
   /// window is not full yet.
+  @override
   double? get successRate {
     if (_epochs.length < epochWindow) {
       return null;
@@ -116,6 +128,7 @@ class AtrEngine {
     return _epochs.where((b) => b).length / _epochs.length;
   }
 
+  @override
   void reset() {
     _baseline.clear();
     _epochs.clear();
@@ -124,33 +137,44 @@ class AtrEngine {
     _initialThreshold = null;
   }
 
+  @override
   void setDynamicAdapt(bool enabled) {
     _dynamicAdapt = enabled;
   }
 
+  @override
+  void setBaselinePercentile(int percentile) {
+    this.percentile = percentile;
+  }
+
+  @override
   void setResponsiveness(double value) {
     _responsiveness = value.clamp(0.0, 1.0).toDouble();
   }
 
+  @override
   void addBaselineSample(double atr) {
     _baseline.add(atr);
   }
 
   /// Sorts the baseline ATR samples and picks the configured percentile as the
   /// initial threshold. Returns null if there is no baseline data.
+  @override
   double? computeThreshold() {
     if (_baseline.isEmpty) {
       return null;
     }
     final sorted = [..._baseline]..sort();
-    final idx = ((percentile / 100) * (sorted.length - 1))
-        .round()
-        .clamp(0, sorted.length - 1);
+    final idx = ((percentile / 100) * (sorted.length - 1)).round().clamp(
+      0,
+      sorted.length - 1,
+    );
     _threshold = sorted[idx];
     _initialThreshold ??= _threshold;
     return _threshold;
   }
 
+  @override
   bool isInTarget(double atr) {
     final t = _threshold;
     if (t == null) {
@@ -161,6 +185,7 @@ class AtrEngine {
 
   /// Percentile rank of [value] within the baseline distribution, or null if
   /// there is no baseline yet.
+  @override
   double? percentileOf(double value) {
     if (_baseline.isEmpty) {
       return null;
@@ -169,6 +194,7 @@ class AtrEngine {
     return (below / _baseline.length) * 100;
   }
 
+  @override
   void recordEpoch(double atr) {
     _epochs.add(isInTarget(atr));
     if (_epochs.length > epochWindow) {
@@ -178,6 +204,7 @@ class AtrEngine {
 
   /// Records a live session ATR sample for in-flight recalibration. Samples
   /// older than [recentWindow] are pruned.
+  @override
   void recordSessionSample(double atr, {required bool clean}) {
     final now = DateTime.now();
     _recent.add((time: now, atr: atr, clean: clean));
@@ -188,6 +215,7 @@ class AtrEngine {
   /// window, recomputing the threshold at [percentile] and resetting the
   /// success-rate window. Returns false when fewer than [minSamples] clean
   /// samples are available.
+  @override
   bool recalibrateFromRecent({int minSamples = 30}) {
     final now = DateTime.now();
     final clean = _recent
@@ -213,15 +241,14 @@ class AtrEngine {
   /// baselineMean + [ceilingStddevs] standard deviations so it can never race
   /// beyond what the user can physically produce, and a zero-success window
   /// immediately resets it to the baseline percentile (circuit breaker).
+  @override
   void adapt() {
     if (!_dynamicAdapt) {
       return;
     }
     final t = _threshold;
     final initial = _initialThreshold;
-    if (t == null ||
-        initial == null ||
-        _epochs.length < epochWindow) {
+    if (t == null || initial == null || _epochs.length < epochWindow) {
       return;
     }
     final mean = baselineMean;
@@ -233,21 +260,29 @@ class AtrEngine {
     final success = _epochs.where((b) => b).length / _epochs.length;
     if (success == 0.0) {
       _threshold = initial;
-      debugPrint('[atr] adapt: success=0.0 — circuit breaker, '
-          'threshold $t -> $initial');
+      debugPrint(
+        '[atr] adapt: success=0.0 — circuit breaker, '
+        'threshold $t -> $initial',
+      );
     } else if (success > highSuccessRate) {
       final next = (t * raise).clamp(initial, maxAllowed).toDouble();
       _threshold = next;
-      debugPrint('[atr] adapt: success=$success > $highSuccessRate '
-          'threshold $t -> $next (ceiling $maxAllowed)');
+      debugPrint(
+        '[atr] adapt: success=$success > $highSuccessRate '
+        'threshold $t -> $next (ceiling $maxAllowed)',
+      );
     } else if (success < lowSuccessRate) {
       final next = (t * lower).clamp(initial, maxAllowed).toDouble();
       _threshold = next;
-      debugPrint('[atr] adapt: success=$success < $lowSuccessRate '
-          'threshold $t -> $next (floor $initial)');
+      debugPrint(
+        '[atr] adapt: success=$success < $lowSuccessRate '
+        'threshold $t -> $next (floor $initial)',
+      );
     } else {
-      debugPrint('[atr] adapt: success=$success in zone, '
-          'threshold stays $t');
+      debugPrint(
+        '[atr] adapt: success=$success in zone, '
+        'threshold stays $t',
+      );
     }
   }
 }
