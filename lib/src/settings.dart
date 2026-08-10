@@ -1,6 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Default warning threshold for the REVE sleep guardrail: the percent rank of
+/// the eyes-closed (rest) sleep-direction distribution above which a warning
+/// fires. Exposed on the session intro page for the drowsiness protocol.
+const int defaultWarningThresholdPercentile = 75;
+
 enum AppView {
   feedback,
   feedbackHistory,
@@ -76,6 +81,8 @@ class Settings {
   static const String _recordStreamsKey = 'record_streams';
   static const String _eyeMarkersKey = 'gesture_eye_markers';
   static const String _markersInFeedbackKey = 'gesture_markers_in_feedback';
+  static const String _warningThresholdPercentileKey =
+      'reve_warning_threshold_percentile';
 
   final SharedPreferences _prefs;
 
@@ -183,6 +190,16 @@ class Settings {
 
   Future<void> setMarkersInFeedbackEnabled(bool value) =>
       _prefs.setBool(_markersInFeedbackKey, value);
+
+  /// Percentile of the eyes-closed rest sleep-direction distribution above
+  /// which the REVE sleep-guardrail warning fires (see
+  /// [defaultWarningThresholdPercentile]).
+  int get warningThresholdPercentile =>
+      _prefs.getInt(_warningThresholdPercentileKey) ??
+      defaultWarningThresholdPercentile;
+
+  Future<void> setWarningThresholdPercentile(int value) =>
+      _prefs.setInt(_warningThresholdPercentileKey, value);
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and

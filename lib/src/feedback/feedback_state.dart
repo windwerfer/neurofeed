@@ -239,6 +239,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     setResponsiveness(0.5);
   }
 
+  /// REVE sleep-guardrail warning threshold (percentile of the eyes-closed
+  /// sleep-direction distribution). Only consumed by the drowsiness protocol.
+  int get warningThresholdPercentile =>
+      _ref.read(settingsProvider).warningThresholdPercentile;
+
+  void setWarningThresholdPercentile(int percentile) {
+    _ref.read(settingsProvider).setWarningThresholdPercentile(percentile);
+  }
+
   /// Begin calibration: play the voice intro, require all electrodes green
   /// for [greenStableSeconds] before starting a [calibrationBaselineSeconds]
   /// silent baseline, then start feedback automatically. Opens the connect

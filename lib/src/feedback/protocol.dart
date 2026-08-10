@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 /// the old placeholder protocols still parse; they were never backed by a real
 /// engine (everything ran the ATR engine) and are not selectable — see
 /// [ProtocolInfo.forType].
-enum ProtocolType { alphaTheta, focus, relaxation }
+enum ProtocolType { alphaTheta, focus, relaxation, drowsiness }
 
 class ProtocolInfo {
   final ProtocolType type;
@@ -77,7 +77,68 @@ class ProtocolInfo {
     color: Color(0xFF7C4DFF),
   );
 
-  static const List<ProtocolInfo> all = [_alphaTheta];
+  static const ProtocolInfo _drowsiness = ProtocolInfo(
+    type: ProtocolType.drowsiness,
+    title: 'Pure Jhana — deep absorption with REVE sleep guardrail',
+    subtitle:
+        'The same ATR uptraining, plus a vision-transformer layer that '
+        'watches for the deep-sleep harmonics (theta → delta) that mark '
+        '"sleep", and calls you back with a soft warning instead of rewarding '
+        'torpor.',
+    guideText:
+        'What to Meditate On\n'
+        'Radical non-striving, exactly as in Theta-over-Alpha. Hold a gentle '
+        'intention of loving stillness, then step back and let awareness '
+        'settle without effort.\n'
+        '\n'
+        'Ultimate Goal\n'
+        'A "Pure Jhana": profound absorption that keeps a thread of conscious '
+        'awareness alive. You approach the sleep border but never cross it — '
+        'the REVE layer is a gently prodding guardrail that wakes you from the '
+        'torpor before it becomes sleep.\n'
+        '\n'
+        'Mind & State Effects\n'
+        'The ATR reward drives the same parasympathetic restoration as the '
+        'pure Alpha/Theta protocol. REVE classifies each second of EEG against '
+        'deep-sleep harmonics; a drifting-into-sleep signal triggers it to '
+        'play a soft, distinct warning chime so you can come back without '
+        'breaking the state.\n'
+        '\n'
+        'Scientific Explanation\n'
+        '- Reward: identical to Theta-over-Alpha — ATR (alpha ÷ theta) on the '
+        'AF7/AF8 average.\n'
+        '- Guardrail: a sleep-direction index from the REVE vision-transformer '
+        '(a 1024-sample, 4 s window at 256 Hz, run once per second). When the '
+        'live vector points toward your rest anchor "V_sleep" beyond the '
+        'session warning threshold (75th percentile of your eyes-closed rest '
+        'baseline), or the delta is above the ceiling, a soft warning chime '
+        'fires. It never modulates the reward.\n'
+        '\n'
+        'Target Meditation Styles\n'
+        'Yoga Nidra, Non-Dual Awareness, Open Monitoring, Deep Jhana practice '
+        'with breath support.\n'
+        '\n'
+        'Who It Helps\n'
+        '- Practitioners holding deep absorption who occasionally "doze off".\n'
+        '- Anyone who wants the deep-rest benefits of falling toward sleep '
+        'while keeping a safe thread of awareness.\n'
+        '\n'
+        'Who Should Avoid This\n'
+        '- People for whom the ATR protocol acts as a lullaby (habitual '
+        'meditation sleepers) — use alertness-building protocols first.\n'
+        '- Those prone to dissociation who need grounded, eyes-open practice.',
+    algorithmDescription:
+        'ATR reward exactly as in Theta-over-Alpha, plus the '
+        'REVE AI engine (a per-second vision-transformer over a 4 s, 1024-sample '
+        'EEG window). During calibration it captures an eyes-open "V_clear" '
+        'anchor from the cleanest rest samples; during training a warning chime '
+        'fires when the live vector points toward deep sleep beyond the '
+        'Warning Threshold — a guardrail only, the reward is never affected.',
+    expectedDelay: '~1s (ATR) + ~1s (REVE per-second window)',
+    color: Color(0xFF1E88E5),
+  );
+
+  static const List<ProtocolInfo> all = [_alphaTheta, _drowsiness];
 
   /// Legacy sessions stored under the removed placeholder protocols
   /// (`focus`/`relaxation`) mapped to the ATR info since that is the engine

@@ -5,6 +5,8 @@ import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/reve_engine.dart';
+import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/status_bar.dart';
 import 'package:muse_ml/src/views/feedback_dashboard.dart';
 
@@ -12,7 +14,8 @@ class FeedbackSessionView extends ConsumerStatefulWidget {
   const FeedbackSessionView({super.key});
 
   @override
-  ConsumerState<FeedbackSessionView> createState() => _FeedbackSessionViewState();
+  ConsumerState<FeedbackSessionView> createState() =>
+      _FeedbackSessionViewState();
 }
 
 class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
@@ -20,7 +23,8 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
   void initState() {
     super.initState();
     ref.listenManual(feedbackStateProvider, (prev, next) {
-      if (prev?.phase != FeedbackPhase.ended && next.phase == FeedbackPhase.ended) {
+      if (prev?.phase != FeedbackPhase.ended &&
+          next.phase == FeedbackPhase.ended) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             Navigator.of(context).pushReplacement(
@@ -96,6 +100,10 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
               ),
               const SizedBox(height: 12),
               _PercentileSelector(),
+              if (fb.protocol == ProtocolType.drowsiness) ...[
+                const SizedBox(height: 12),
+                const _WarningThresholdSelector(),
+              ],
               if (fb.phase == FeedbackPhase.idle) ...[
                 const SizedBox(height: 12),
                 _TimerSelector(),
@@ -122,7 +130,8 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
             _PhaseControls(protocol: protocol),
             const SizedBox(height: 8),
             // Timer display
-            if (fb.phase == FeedbackPhase.playing || fb.phase == FeedbackPhase.paused)
+            if (fb.phase == FeedbackPhase.playing ||
+                fb.phase == FeedbackPhase.paused)
               Text(
                 '${fb.elapsedSeconds ~/ 60}:${(fb.elapsedSeconds % 60).toString().padLeft(2, '0')}'
                 ' / ${fb.durationMinutes}:00',
@@ -134,6 +143,29 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
       ),
     );
   }
+}
+
+/// Placeholder gate for the drowsiness protocol before the REVE engine/model
+/// download exists.
+void _showReveNotInstalled(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('REVE AI engine not installed'),
+      content: const Text(
+        'Pure Jhana needs the REVE AI engine (~280 MB, one-time download '
+        'on first use) to run the sleep-guardrail layer. It is not available '
+        'in this build yet — it ships in the next update. The Alpha/Theta '
+        'protocol remains available today.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Got it'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _GuideCard extends StatelessWidget {
@@ -158,10 +190,7 @@ class _GuideCard extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Guide'),
         content: SingleChildScrollView(
-          child: Text(
-            guideText,
-            style: theme.textTheme.bodyMedium,
-          ),
+          child: Text(guideText, style: theme.textTheme.bodyMedium),
         ),
         actions: [
           TextButton(
@@ -190,7 +219,11 @@ class _GuideCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.lightbulb_outline, color: protocol.color, size: 20),
+                  Icon(
+                    Icons.lightbulb_outline,
+                    color: protocol.color,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Text('Guide', style: theme.textTheme.titleSmall),
                   const Spacer(),
@@ -224,8 +257,11 @@ class _FaultyPadFallback extends StatelessWidget {
     final bothNeeded = neededElectrodes
         .where((i) => i < (quality?.length ?? 0))
         .every((i) => (quality?[i] ?? 0) >= signalGoodThreshold);
-    final anyNeeded = neededElectrodes.any((i) =>
-        i < (quality?.length ?? 0) && (quality?[i] ?? 0) >= signalGoodThreshold);
+    final anyNeeded = neededElectrodes.any(
+      (i) =>
+          i < (quality?.length ?? 0) &&
+          (quality?[i] ?? 0) >= signalGoodThreshold,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -247,7 +283,8 @@ class _FaultyPadFallback extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         FilledButton.icon(
-          onPressed: () => ref.read(feedbackStateProvider.notifier).startAnyway(),
+          onPressed: () =>
+              ref.read(feedbackStateProvider.notifier).startAnyway(),
           icon: const Icon(Icons.play_arrow),
           label: const Text('Continue'),
           style: FilledButton.styleFrom(
@@ -259,9 +296,11 @@ class _FaultyPadFallback extends StatelessWidget {
     );
   }
 
-  static const _tierACopy = 'Not all, but enough electrodes for this program '
+  static const _tierACopy =
+      'Not all, but enough electrodes for this program '
       'have a good fit. Continue?';
-  static const _tierBCopy = 'At least 1 of the important electrodes have a '
+  static const _tierBCopy =
+      'At least 1 of the important electrodes have a '
       'good fit — accuracy will be reduced but it should still be usable. Continue?';
 }
 
@@ -275,8 +314,32 @@ class _PhaseControls extends ConsumerWidget {
     final theme = Theme.of(context);
     switch (fb.phase) {
       case FeedbackPhase.idle:
+        if (protocol.type == ProtocolType.drowsiness &&
+            !ref.read(reveEngineAvailabilityProvider)) {
+          return Column(
+            children: [
+              FilledButton.icon(
+                onPressed: () => _showReveNotInstalled(context),
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('Start Session'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 56),
+                  textStyle: const TextStyle(fontSize: 18),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'The REVE AI engine is not installed yet — download it to '
+                'enable Pure Jhana.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          );
+        }
         return FilledButton.icon(
-          onPressed: () => ref.read(feedbackStateProvider.notifier).startCalibration(),
+          onPressed: () =>
+              ref.read(feedbackStateProvider.notifier).startCalibration(),
           icon: const Icon(Icons.play_arrow),
           label: const Text('Start Session'),
           style: FilledButton.styleFrom(
@@ -291,7 +354,10 @@ class _PhaseControls extends ConsumerWidget {
             if (fb.waitingForSignal) ...[
               Icon(Icons.sensors_off, color: Colors.orange, size: 48),
               const SizedBox(height: 8),
-              Text('Waiting for good signal…', style: theme.textTheme.titleMedium),
+              Text(
+                'Waiting for good signal…',
+                style: theme.textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
               Text(
                 'All electrodes should be green for $greenStableSeconds s before '
@@ -305,12 +371,13 @@ class _PhaseControls extends ConsumerWidget {
                 const SizedBox(height: 8),
               ],
             ] else if (fb.baselineSecondsLeft > 0) ...[
-              Icon(Icons.graphic_eq, color: theme.colorScheme.primary, size: 48),
-              const SizedBox(height: 8),
-              Text(
-                'Recording baseline…',
-                style: theme.textTheme.titleMedium,
+              Icon(
+                Icons.graphic_eq,
+                color: theme.colorScheme.primary,
+                size: 48,
               ),
+              const SizedBox(height: 8),
+              Text('Recording baseline…', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
               Text(
                 'Sit quietly, let your mind wander. ${fb.baselineSecondsLeft}s',
@@ -319,7 +386,8 @@ class _PhaseControls extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               LinearProgressIndicator(
-                value: (calibrationBaselineSeconds - fb.baselineSecondsLeft) /
+                value:
+                    (calibrationBaselineSeconds - fb.baselineSecondsLeft) /
                     calibrationBaselineSeconds,
               ),
             ] else ...[
@@ -349,7 +417,8 @@ class _PhaseControls extends ConsumerWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                          'Recalibration needs at least $minRecalibrateSeconds s of session data.'),
+                        'Recalibration needs at least $minRecalibrateSeconds s of session data.',
+                      ),
                     ),
                   );
                   return;
@@ -358,7 +427,8 @@ class _PhaseControls extends ConsumerWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text(
-                          'Not enough clean signal for recalibration yet — try again in a moment.'),
+                        'Not enough clean signal for recalibration yet — try again in a moment.',
+                      ),
                     ),
                   );
                 }
@@ -374,11 +444,15 @@ class _PhaseControls extends ConsumerWidget {
                   n.resume();
                 }
               },
-              icon: Icon(fb.phase == FeedbackPhase.playing ? Icons.pause : Icons.play_arrow),
-              label: Text(fb.phase == FeedbackPhase.playing ? 'Pause' : 'Resume'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(160, 48),
+              icon: Icon(
+                fb.phase == FeedbackPhase.playing
+                    ? Icons.pause
+                    : Icons.play_arrow,
               ),
+              label: Text(
+                fb.phase == FeedbackPhase.playing ? 'Pause' : 'Resume',
+              ),
+              style: FilledButton.styleFrom(minimumSize: const Size(160, 48)),
             ),
             const SizedBox(width: 16),
             IconButton(
@@ -455,13 +529,18 @@ class _NerdStatsBubble extends ConsumerWidget {
       lines.add('Collecting…');
     } else {
       lines.add(
-          'ATR ${atr.toStringAsFixed(2)} · p${percentile.round()} of baseline');
+        'ATR ${atr.toStringAsFixed(2)} · p${percentile.round()} of baseline',
+      );
     }
-    lines.add('thr ${threshold?.toStringAsFixed(2) ?? '—'} '
-        '(p${stats.baselinePercentile ?? '—'})');
-    lines.add('base mean ${baselineMean?.toStringAsFixed(2) ?? '—'} '
-        '± ${baselineStddev?.toStringAsFixed(2) ?? '—'} '
-        '(n=${stats.baselineCount ?? 0})');
+    lines.add(
+      'thr ${threshold?.toStringAsFixed(2) ?? '—'} '
+      '(p${stats.baselinePercentile ?? '—'})',
+    );
+    lines.add(
+      'base mean ${baselineMean?.toStringAsFixed(2) ?? '—'} '
+      '± ${baselineStddev?.toStringAsFixed(2) ?? '—'} '
+      '(n=${stats.baselineCount ?? 0})',
+    );
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -523,7 +602,8 @@ class _SoundSelector extends ConsumerWidget {
             ? () async {
                 final result = await showDialog<String>(
                   context: context,
-                  builder: (ctx) => _SoundPicker(current: fb.soundName, sounds: sounds),
+                  builder: (ctx) =>
+                      _SoundPicker(current: fb.soundName, sounds: sounds),
                 );
                 if (result != null) {
                   ref.read(feedbackStateProvider.notifier).selectSound(result);
@@ -610,10 +690,7 @@ class _VolumeDialogState extends State<_VolumeDialog> {
         ),
         SizedBox(
           width: 40,
-          child: Text(
-            '${(value * 100).round()}%',
-            textAlign: TextAlign.right,
-          ),
+          child: Text('${(value * 100).round()}%', textAlign: TextAlign.right),
         ),
       ],
     );
@@ -677,10 +754,7 @@ class _VolumeDialogState extends State<_VolumeDialog> {
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: _reset,
-          child: const Text('Reset'),
-        ),
+        TextButton(onPressed: _reset, child: const Text('Reset')),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Done'),
@@ -794,10 +868,7 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: _reset,
-          child: const Text('Reset'),
-        ),
+        TextButton(onPressed: _reset, child: const Text('Reset')),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Done'),
@@ -938,7 +1009,9 @@ class _DurationPickerState extends State<_DurationPicker> {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                  color: isSel ? null : Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: isSel
+                      ? null
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             );
@@ -994,7 +1067,25 @@ class _PercentilePicker extends StatefulWidget {
 
 class _PercentilePickerState extends State<_PercentilePicker> {
   static const List<int> _values = [
-    5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95,
+    5,
+    10,
+    15,
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70,
+    75,
+    80,
+    85,
+    90,
+    95,
   ];
   late final FixedExtentScrollController _controller;
   late int _selected;
@@ -1047,9 +1138,148 @@ class _PercentilePickerState extends State<_PercentilePicker> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                      color: isSel
-                          ? null
-                          : theme.colorScheme.onSurfaceVariant,
+                      color: isSel ? null : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${_values.first}–${_values.last}',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_selected),
+          child: const Text('Select'),
+        ),
+      ],
+    );
+  }
+}
+
+class _WarningThresholdSelector extends ConsumerWidget {
+  const _WarningThresholdSelector();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(feedbackStateProvider.notifier);
+    final threshold = notifier.warningThresholdPercentile;
+    return Card(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: ListTile(
+        leading: const Icon(Icons.bedtime),
+        title: const Text('Warning Threshold'),
+        subtitle: Text('${threshold}th percentile of eyes-closed rest'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () async {
+          final result = await showDialog<int>(
+            context: context,
+            builder: (ctx) => _WarningThresholdPicker(current: threshold),
+          );
+          if (result != null) {
+            notifier.setWarningThresholdPercentile(result);
+          }
+        },
+      ),
+    );
+  }
+}
+
+class _WarningThresholdPicker extends StatefulWidget {
+  final int current;
+  const _WarningThresholdPicker({required this.current});
+
+  @override
+  State<_WarningThresholdPicker> createState() =>
+      _WarningThresholdPickerState();
+}
+
+class _WarningThresholdPickerState extends State<_WarningThresholdPicker> {
+  static const List<int> _values = [
+    5,
+    10,
+    15,
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70,
+    75,
+    80,
+    85,
+    90,
+    95,
+  ];
+  late final FixedExtentScrollController _controller;
+  late int _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    var index = _values.indexOf(widget.current);
+    if (index < 0) {
+      index = _values.indexOf(defaultWarningThresholdPercentile);
+    }
+    _selected = _values[index];
+    _controller = FixedExtentScrollController(initialItem: index);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Warning Threshold'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'The soft warning chime fires when your sleep-direction index '
+            'exceeds this percentile of the sleep-direction readings gathered '
+            'during eyes-closed rest calibration. A higher percentile tolerates '
+            'deeper drift before warning.',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: 140,
+            height: 200,
+            child: ListWheelScrollView(
+              controller: _controller,
+              itemExtent: 40,
+              useMagnifier: true,
+              perspective: 0.005,
+              diameterRatio: 1.5,
+              onSelectedItemChanged: (i) => _selected = _values[i],
+              children: _values.map((v) {
+                final isSel = v == _selected;
+                return Center(
+                  child: Text(
+                    '$v',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                      color: isSel ? null : theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 );
