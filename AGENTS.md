@@ -45,7 +45,7 @@ Global orientation for any AI agent or contributor working in this repo.
 - `third_party/{reve-rs,luna-rs}` are **path dependencies** (unlike `muse-rs`/`btleplug`,
   which are git deps): a fresh checkout or CI run has empty dirs until
   `git submodule update --init third_party/reve-rs third_party/luna-rs` runs before any
-  `cargo build`. The release workflows do not init submodules yet — see `.ai/release.md`.
+  `cargo build`. All build workflows init them after checkout (see `.ai/release.md`).
 
 ## Docs (`.ai/`)
 | File | Contents |
@@ -126,7 +126,7 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - **Session format is Rust-owned**: never edit the `.muse`/`.muse.feedback` byte layout in Dart. `rust/src/api/session_format.rs` is the single authority — `encode_session_event`, `sessionFrameBytes`, `sessionParseBody`, and the container fns; Dart (`session_recorder.dart`, `session_reader.dart`, `session_container.dart`) are thin FFI delegates. Some container fns are `#[frb(sync)]` so Dart keeps `headReadLimit`/`parseHead`/`extractBody` synchronous. When changing the wire format, extend `cargo test --lib session_format` goldens and regenerate bindings.
 - **Cargo `[patch]` version trap**: If the patched crate's `version` is semver-incompatible with the dependency constraint, Cargo silently ignores the patch. Our fork must stay at `version = "0.11.8"` even though the source is based on 0.12.0.
 - **Vendored `rlx-cpu`** (`vendor/rlx-cpu`): `[patch.crates-io]` replaces crates.io `rlx-cpu` with our copy, which clears the default `blas` feature (its `build.rs` would hard-link OpenBLAS on x86_64 hosts and break Windows/Linux release builds). Keep `version = "0.2.13"` semver-compatible with the `rlx 0.2` constraint or the patch is silently ignored (same trap as btleplug).
-- **Model-engine path deps need submodules**: `reve-rs` + `luna-rs` are path deps on `third_party/` submodules — a fresh clone or CI run has empty dirs until `git submodule update --init third_party/reve-rs third_party/luna-rs`. No CI workflow inits them yet (see `.ai/release.md`).
+- **Model-engine path deps need submodules**: `reve-rs` + `luna-rs` are path deps on `third_party/` submodules — a fresh clone or CI run has empty dirs until `git submodule update --init third_party/reve-rs third_party/luna-rs`. The release build workflows init them after checkout; a local `cargo build` on a fresh clone needs the same command (see `.ai/release.md`).
 - **Gated weights live in `.local/`, never commit them**: LUNA/REVE weights + the abandoned `reve-base` source sit under `.local/` as embedded git repos with no remote (untracked, NOT gitignored so agents can still see them). `.gitmodules` documents them with `ignore = all` + an invalid URL so `git submodule update --init` fails loudly instead of fetching. The `#[ignore]`d smoke tests (`rust/src/analysis/{luna,reve}.rs`) read `../.local/...`; run with `cargo test --lib -- --ignored`.
 - **Android BLE init**: btleplug requires `btleplug::platform::init(&JNIEnv)` from a JNI context BEFORE any scan/connect, or it panics with `"Droidplug has not been initialized"`.
 - **JNI `ThreadDetached`**: BLE ops run on tokio worker threads which aren't attached to the JVM. Our `get_env()` patch auto-attaches them.

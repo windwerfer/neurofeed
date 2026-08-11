@@ -113,10 +113,13 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
   - `vendor/rlx-cpu` is a committed `[patch.crates-io]` replacement (its
     default `blas` feature is cleared so no system OpenBLAS is linked on
     x86_64) — no network fetch needed for it. **But `reve-rs` and `luna-rs`
-    are path deps on `third_party/` submodules**: the checkout step must init
-    them (`git submodule update --init third_party/reve-rs third_party/luna-rs`,
-    or `submodules: true` on `actions/checkout`) or `cargo build` fails on the
-    empty dirs. This is NOT wired up yet — see Troubleshooting below.
+    are path deps on `third_party/` submodules**, so a fresh checkout has
+    empty dirs until they are initialized. All three build workflows
+    (`_build-apk.yml`, `release-linux.yml`, `release-windows.yml`) run
+    `git submodule update --init third_party/reve-rs third_party/luna-rs`
+    right after checkout. This is a **targeted init, not `submodules: true`**:
+    the `btleplug` submodule gitlink (`ad6f7650`) is not reachable on the
+    fork, so a blanket init could fail CI.
   - Gradle archive tasks use fixed timestamps + deterministic ordering
     (`android/app/build.gradle.kts`); CI also disables parallel builds and
     caching for the Android build
@@ -179,11 +182,10 @@ builds between releases keeps them warm.
   the fork commit; if Cargo rewrites it, keep it. The vendored `rlx-cpu` has
   the same trap: keep its `version = "0.2.13"` semver-compatible with the
   `rlx 0.2` constraint.
-- **`cargo build` fails / `third_party/reve-rs` is empty**: the runner did not
-  init the submodules that are path deps of the model engine. Fix the workflows
-  (`_build-apk.yml`, `release-linux.yml`, `release-windows.yml`) to run
-  `git submodule update --init third_party/reve-rs third_party/luna-rs` after
-  checkout — or add `submodules: true` to the `actions/checkout` steps.
+- **`cargo build` fails / `third_party/reve-rs` is empty**: the submodule path
+  deps were not initialized (a fresh clone, or a runner before the init step).
+  Run `git submodule update --init third_party/reve-rs third_party/luna-rs`
+  after checkout — local builds and all three release workflows do this.
 - **Repro reports a diff**: the usual culprit is AGP's "Dependency Info" block
   (id `0x504b4453`) in the APK Signing Block — it is non-deterministic
   (encrypted, randomized per build). `android/app/build.gradle.kts` disables it

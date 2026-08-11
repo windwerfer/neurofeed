@@ -24,6 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Init model-engine submodules
+        run: git submodule update --init third_party/reve-rs third_party/luna-rs
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
