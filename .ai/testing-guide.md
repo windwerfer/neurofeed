@@ -55,6 +55,19 @@ of `_init()` (mark with `// TEMP-TEST`) and revert after.
 `Requesting BLE permissions…` → `Scanning…` → `Found N device(s)` (or
 `Scan error: …`). Use this to verify the scan result even if logcat is awkward.
 
+## Rust unit tests + model smoke tests (run in `rust/`)
+- Session-format goldens (must stay green — pins the `.muse` byte layout):
+  `cargo test --lib session_format` (full suite: `cargo test --lib`).
+- Model smoke tests (`#[ignore]`d — load real weights and run inference):
+  `cargo test --lib -- --ignored`
+  Needs the local-only weights present: `.local/luna-base-dl/LUNA_base.safetensors`
+  and `.local/reve-base-dl/model.safetensors` (untracked embedded repos, not in git).
+  The tests rebuild their `target/*-smoke/model.safetensors` symlink each run, so
+  stale/dangling links are not an issue.
+- Before running any `cargo build`/`cargo test`, a fresh checkout must have the
+  submodule path deps present: `git submodule update --init third_party/reve-rs
+  third_party/luna-rs` (empty dirs ⇒ cargo fails on the path dependency).
+
 ## Caveats
 - `flutter analyze lib/src` must stay clean after Dart edits.
 - Local `cargo check --target aarch64-linux-android` is UNRELIABLE in this

@@ -21,6 +21,12 @@ Global orientation for any AI agent or contributor working in this repo.
 - **`jni = "=0.19"`** — pinned to match btleplug's own `jni` dependency.
   If either side upgrades, both must be upgraded together or you get
   link-time symbol conflicts.
+- **REVE + LUNA local model engine** (Pure Jhana guardrail): `reve-rs` + `luna-rs`
+  (path deps on `third_party/` submodules, RLX CPU backend) score drowsiness on-device
+  from raw EEG. **No weights are shipped**: LUNA (Apache-2.0) downloads from HF with
+  SHA-256 verification; REVE (gated) is user-imported. FFI: `rust/src/api/reve.rs`
+  (`model_load`/`model_unload`/`model_loaded`/`model_config_json`); inference lives in
+  `rust/src/analysis/{reve,luna}.rs`; cache + UI in `lib/src/reve/`.
 - **Android**: NDK 27/28, Gradle 8.14, `targetSdkVersion = 36`.
 - **Decision:** using btleplug (forked) for BLE transport — consistent with
   `muse-rs`. `flutter_blue_plus` was the fallback if the JNI fix had failed.
@@ -35,6 +41,10 @@ Global orientation for any AI agent or contributor working in this repo.
 - When editing Rust under `rust/src/api/`, run `flutter_rust_bridge` codegen if the FFI surface changes (then commit both `rust/src/frb_generated.rs` and the Dart files under `lib/src/rust/`); `cargo check --target aarch64-linux-android` is NOT reliable in this sandbox (see Testing Guide) — rely on `flutter run` for the real compile.
 - `flutter analyze lib/src` must stay clean after edits.
 - Format changes land in `rust/src/api/session_format.rs`; keep `cargo test --lib session_format` green (golden wire-layout tests pin the byte format).
+- `third_party/{reve-rs,luna-rs}` are **path dependencies** (unlike `muse-rs`/`btleplug`,
+  which are git deps): a fresh checkout or CI run has empty dirs until
+  `git submodule update --init third_party/reve-rs third_party/luna-rs` runs before any
+  `cargo build`. The release workflows do not init submodules yet — see `.ai/release.md`.
 
 ## Docs (`.ai/`)
 | File | Contents |
@@ -63,9 +73,12 @@ lib/src/feedback/         # feedback session system (merged to main, Phase I)
   session_container.dart    # thin Dart wrapper over the Rust container format ([PNG][jsonLen][json][bodyLen][frames])
   session_summary.dart       # SessionOverview: 400-bucket decimated bands/pulse/motion/peak in metadata
 lib/src/audio/            # just_audio: AudioService + FeedbackAudioController (5 volume channels)
+lib/src/reve/            # guardrail AI model engine: ModelKind metadata, ModelCache (SHA-256-verified download/import), ModelEngineNotifier, selector + import UI
 rust/src/api/muse.rs    # FFI bridge: scan/connect/subscribe → MuseEvent stream + 1 Hz derived metrics
+rust/src/api/reve.rs    # model FFI: model_load / model_unload / model_loaded / model_config_json
 rust/src/api/session_format.rs  # SINGLE authority for .muse v4 + .muse.feedback byte layout (encode/parse/frames/container)
 rust/src/analysis/gesture.rs  # GestureDetector (blink/clench/eye), auto-adaptive thresholds, no DSP crates
+rust/src/analysis/{reve,luna}.rs  # RLX CPU inference wrappers over reveal-rs/luna-rs; #[ignore]d smoke tests need .local/ weights
 rust/src/connection.rs  # in-Rust state (active connection, device cache, sink)
 android/app/src/main/java/
   com/nonpolynomial/btleplug/android/impl/  # btleplug Java classes
@@ -75,6 +88,7 @@ android/app/src/main/java/
 scripts/package-linux.sh # deterministic tar.gz + best-effort AppImage packaging for release-linux
 third_party/muse-rs/    # local checkout of muse-rs (tag 0.1.0) — reference for protocol/parse debugging
 third_party/btleplug/   # local checkout of our btleplug fork (tag 0.12.0-muse-3) — reference for JNI/init debugging
+third_party/{reve-rs,luna-rs}/  # submodule path deps for the model engine — must be checked out to build (`git submodule update --init third_party/reve-rs third_party/luna-rs`)
 vendor/rlx-cpu/         # committed vendored copy of rlx-cpu 0.2.13 (patched: no default `blas`), wired via [patch.crates-io]
 .local/                 # LOCAL-ONLY, never committed: luna-base-dl/, reve-base-dl/ (gated model weights), reve-base/ (abandoned fork). Each is an embedded git repo with no remote — see .gitmodules (`ignore = all`, invalid URL) + smoke-test paths `rust/src/analysis/{luna,reve}.rs`
 muse-rs (dep, GitHub)   # transport (btleplug) + protocol
@@ -102,12 +116,16 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - **`.muse` body is format v4 (f32 floats), owned by Rust**: `session_format.rs` writes f32 payloads (EEG/PPG/IMU/bands/movement/peak-alpha) + f64 timestamps. Dart delegates: `SessionRecorder` (`lib/src/charts/session_recorder.dart`) buffers events and calls `encodeSessionEvent`/`sessionFrameBytes` (zstd v3); `SessionReader` (`lib/src/charts/session_reader.dart`) calls `sessionParseBody` and re-exports the generated `SessionData`/`BandsRecord`/… freezed records. Not backward compatible with v2/v3 f64 files (pre-alpha). Raw EEG ~4 KB/s (~15 MB/hr). Channel count is device-driven (`i16` electrode); an 8-ch Crown works with zero layout change.
 - SAF folder picker + MethodChannel (`muse_ml/saf`): `android/app/src/main/kotlin/com/example/muse_ml/MainActivity.kt` (`getDir`/`ensureDir`/`writeFile`/`writeFileAtomic`/`readFile`/`readFilePrefix`/`deleteFile`/`listFiles`).
 - Folder selection UI: `lib/src/views/settings_view.dart` (`file_selector` `getDirectoryPath` on desktop, `SafSessionStorage.pickFolder()` on Android).
+- Local model engine (Pure Jhana guardrail): FFI in `rust/src/api/reve.rs` (`model_load`/`model_unload`/`model_loaded`/`model_config_json`); inference wrappers in `rust/src/analysis/{reve,luna}.rs`; Dart download/import/verify/load in `lib/src/reve/model_engine.dart` (`ModelCache`, `ModelEngineNotifier`), model metadata in `lib/src/reve/models.dart` (`ModelKind`), picker in `lib/src/reve/model_selector.dart`, gated-file import in `lib/src/reve/reve_import.dart`.
 - Release CI: `.github/workflows/` — see `.ai/release.md` (keystore secrets, F-Droid, reproducibility).
 - Rust toolchain pin: `rust/rust-toolchain.toml` (kept in sync with `FLUTTER_VERSION`/`RUST_VERSION` in the workflows).
 
 ## Known hot spots
 - **Session format is Rust-owned**: never edit the `.muse`/`.muse.feedback` byte layout in Dart. `rust/src/api/session_format.rs` is the single authority — `encode_session_event`, `sessionFrameBytes`, `sessionParseBody`, and the container fns; Dart (`session_recorder.dart`, `session_reader.dart`, `session_container.dart`) are thin FFI delegates. Some container fns are `#[frb(sync)]` so Dart keeps `headReadLimit`/`parseHead`/`extractBody` synchronous. When changing the wire format, extend `cargo test --lib session_format` goldens and regenerate bindings.
 - **Cargo `[patch]` version trap**: If the patched crate's `version` is semver-incompatible with the dependency constraint, Cargo silently ignores the patch. Our fork must stay at `version = "0.11.8"` even though the source is based on 0.12.0.
+- **Vendored `rlx-cpu`** (`vendor/rlx-cpu`): `[patch.crates-io]` replaces crates.io `rlx-cpu` with our copy, which clears the default `blas` feature (its `build.rs` would hard-link OpenBLAS on x86_64 hosts and break Windows/Linux release builds). Keep `version = "0.2.13"` semver-compatible with the `rlx 0.2` constraint or the patch is silently ignored (same trap as btleplug).
+- **Model-engine path deps need submodules**: `reve-rs` + `luna-rs` are path deps on `third_party/` submodules — a fresh clone or CI run has empty dirs until `git submodule update --init third_party/reve-rs third_party/luna-rs`. No CI workflow inits them yet (see `.ai/release.md`).
+- **Gated weights live in `.local/`, never commit them**: LUNA/REVE weights + the abandoned `reve-base` source sit under `.local/` as embedded git repos with no remote (untracked, NOT gitignored so agents can still see them). `.gitmodules` documents them with `ignore = all` + an invalid URL so `git submodule update --init` fails loudly instead of fetching. The `#[ignore]`d smoke tests (`rust/src/analysis/{luna,reve}.rs`) read `../.local/...`; run with `cargo test --lib -- --ignored`.
 - **Android BLE init**: btleplug requires `btleplug::platform::init(&JNIEnv)` from a JNI context BEFORE any scan/connect, or it panics with `"Droidplug has not been initialized"`.
 - **JNI `ThreadDetached`**: BLE ops run on tokio worker threads which aren't attached to the JVM. Our `get_env()` patch auto-attaches them.
 - **Java/Rust API alignment**: The Rust code expects Java method signatures from btleplug 0.12.0. If upgrading either side, check `jni/objects.rs` vs the Java source files.
