@@ -64,8 +64,6 @@ jobs:
       - name: Upload to release
         if: ${{ github.event.release.tag_name != '' || inputs.tag != '' }}
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.event.release.tag_name || inputs.tag }}"
           gh release upload "$TAG" "muse_ml-${{ steps.version.outputs.version }}-windows-x64.zip" --clobber
