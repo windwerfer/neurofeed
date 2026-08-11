@@ -83,6 +83,7 @@ class Settings {
   static const String _markersInFeedbackKey = 'gesture_markers_in_feedback';
   static const String _warningThresholdPercentileKey =
       'reve_warning_threshold_percentile';
+  static const String _modelKindKey = 'model_kind';
 
   final SharedPreferences _prefs;
 
@@ -200,6 +201,14 @@ class Settings {
 
   Future<void> setWarningThresholdPercentile(int value) =>
       _prefs.setInt(_warningThresholdPercentileKey, value);
+
+  /// Which guardrail foundation model is selected (see `ModelKind` in
+  /// `lib/src/reve/models.dart`). Stored as the enum name; null means "use the
+  /// default (LUNA Large)".
+  String? get modelKindName => _prefs.getString(_modelKindKey);
+
+  Future<void> setModelKindName(String value) =>
+      _prefs.setString(_modelKindKey, value);
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and

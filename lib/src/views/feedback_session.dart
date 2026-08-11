@@ -5,7 +5,8 @@ import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/reve_engine.dart';
+import 'package:muse_ml/src/reve/model_engine.dart';
+import 'package:muse_ml/src/reve/reve_import.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/status_bar.dart';
 import 'package:muse_ml/src/views/feedback_dashboard.dart';
@@ -143,29 +144,6 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
       ),
     );
   }
-}
-
-/// Placeholder gate for the drowsiness protocol before the REVE engine/model
-/// download exists.
-void _showReveNotInstalled(BuildContext context) {
-  showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('REVE AI engine not installed'),
-      content: const Text(
-        'Pure Jhana needs the REVE AI engine (~280 MB, one-time download '
-        'on first use) to run the sleep-guardrail layer. It is not available '
-        'in this build yet — it ships in the next update. The Alpha/Theta '
-        'protocol remains available today.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Got it'),
-        ),
-      ],
-    ),
-  );
 }
 
 class _GuideCard extends StatelessWidget {
@@ -315,11 +293,16 @@ class _PhaseControls extends ConsumerWidget {
     switch (fb.phase) {
       case FeedbackPhase.idle:
         if (protocol.type == ProtocolType.drowsiness &&
-            !ref.read(reveEngineAvailabilityProvider)) {
+            !ref.watch(modelEngineAvailabilityProvider)) {
           return Column(
             children: [
               FilledButton.icon(
-                onPressed: () => _showReveNotInstalled(context),
+                onPressed: () async {
+                  final ready = await showModelGateDialog(context, ref);
+                  if (ready && context.mounted) {
+                    ref.read(feedbackStateProvider.notifier).startCalibration();
+                  }
+                },
                 icon: const Icon(Icons.play_arrow),
                 label: const Text('Start Session'),
                 style: FilledButton.styleFrom(
@@ -329,8 +312,8 @@ class _PhaseControls extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'The REVE AI engine is not installed yet — download it to '
-                'enable Pure Jhana.',
+                'The guardrail AI engine is not ready yet — download or '
+                'import a model to enable Pure Jhana.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall,
               ),

@@ -75,6 +75,8 @@ android/app/src/main/java/
 scripts/package-linux.sh # deterministic tar.gz + best-effort AppImage packaging for release-linux
 third_party/muse-rs/    # local checkout of muse-rs (tag 0.1.0) — reference for protocol/parse debugging
 third_party/btleplug/   # local checkout of our btleplug fork (tag 0.12.0-muse-3) — reference for JNI/init debugging
+vendor/rlx-cpu/         # committed vendored copy of rlx-cpu 0.2.13 (patched: no default `blas`), wired via [patch.crates-io]
+.local/                 # LOCAL-ONLY, never committed: luna-base-dl/, reve-base-dl/ (gated model weights), reve-base/ (abandoned fork). Each is an embedded git repo with no remote — see .gitmodules (`ignore = all`, invalid URL) + smoke-test paths `rust/src/analysis/{luna,reve}.rs`
 muse-rs (dep, GitHub)   # transport (btleplug) + protocol
 btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in third_party/btleplug/
 ```

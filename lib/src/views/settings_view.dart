@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
+import 'package:muse_ml/src/reve/reve_card.dart';
 import 'package:muse_ml/src/settings.dart';
 
 /// Settings view — session storage folder + session recording options.
@@ -181,6 +182,8 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         _RecordingCard(streams: streams, onToggle: toggle),
         const SizedBox(height: 16),
         _GesturesCard(settings: settings),
+        const SizedBox(height: 16),
+        const AiEngineCard(),
       ],
     );
   }

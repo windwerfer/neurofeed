@@ -18,12 +18,29 @@ env_logger = "0.11"
 android_logger = "0.14"
 zstd = { version = "0.13", default-features = false }
 
+# REVE EEG foundation model (RLX CPU inference) — vendored submodule.
+reve-rs = { path = "../third_party/reve-rs", default-features = false, features = ["rlx-cpu"] }
+# LUNA EEG foundation model (RLX CPU inference) — vendored submodule.
+luna-rs = { path = "../third_party/luna-rs", default-features = false, features = ["rlx-cpu"] }
+# The direct `rlx` dep is for the public `rlx::Device` type used when loading
+# the encoder; feature `cpu` matches reveal-rs `rlx-cpu` so both unify onto one
+# copy of rlx 0.2.
+rlx = { version = "0.2", default-features = false, features = ["cpu"] }
+
 # Both rust_lib_muse_ml and muse-rs depend on btleplug from
 # eugenehp/btleplug.git. The [patch] below replaces ALL occurrences
 # with our JNI-fixed fork, so there is only ONE copy of btleplug
 # (and its GLOBAL_JVM / GLOBAL_ADAPTER statics) linked.
 [patch.'https://github.com/eugenehp/btleplug.git']
 btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-3" }
+
+# rlx-cpu's default `blas` feature hard-links OpenBLAS on x86_64 hosts
+# (build.rs), which would break Windows/Linux release builds. Our vendored
+# copy clears the default so the crate uses its portable SIMD/scalar gemm
+# everywhere (the same fallback it already uses on aarch64 Linux). No system
+# BLAS dependency anywhere; feature `splat` stays enabled via rlx-runtime.
+[patch.crates-io]
+rlx-cpu = { path = "../vendor/rlx-cpu" }
 
 
 
