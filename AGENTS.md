@@ -26,6 +26,7 @@ Global orientation for any AI agent or contributor working in this repo.
   `muse-rs`. `flutter_blue_plus` was the fallback if the JNI fix had failed.
 - **JNI glue**: Kotlin `MainActivity.museAndroidInit()` → Rust `extern "C"` → `btleplug::platform::init()`. btleplug Java sources under `android/app/src/main/java/com/nonpolynomial/btleplug/`. jni-utils Java at `io/github/gedgygedgy/rust/`.
 - **iOS/macOS**: not the current target; BLE transport uses btleplug's CoreBluetooth path.
+- **Windows**: not a current dev target; built only by `release-windows.yml` CI. `windows/CMakeLists.txt` is committed (carries an MSVC workaround), but the rest of `windows/` is generated in CI via `flutter create --platforms=windows .`.
 
 ## Core rules (do / don't)
 - **NEVER** assume a library is available — check `Cargo.toml` / `pubspec.yaml` first.
@@ -104,6 +105,7 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - Rust toolchain pin: `rust/rust-toolchain.toml` (kept in sync with `FLUTTER_VERSION`/`RUST_VERSION` in the workflows).
 
 ## Known hot spots
+- **Windows build / MSVC coroutine**: only `windows/CMakeLists.txt` is committed for the Windows build — the rest of `windows/` is generated each CI run by `flutter create --platforms=windows .` (release-windows.yml), which *preserves* existing files. That file carries `add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)`: MSVC 14.50+/VS 2026 turns `<experimental/coroutine>` into a hard error (`C2338`/`STL1011`), and `permission_handler_windows` 0.2.1 still pulls it in via `/await` under C++17 (Baseflow#1534). Keep the file in sync with Flutter's `windows.tmpl/CMakeLists.txt.tmpl` when bumping the pinned Flutter version; drop the define once permission_handler ships a C++20 build.
 - **Session format is Rust-owned**: never edit the `.muse`/`.muse.feedback` byte layout in Dart. `rust/src/api/session_format.rs` is the single authority — `encode_session_event`, `sessionFrameBytes`, `sessionParseBody`, and the container fns; Dart (`session_recorder.dart`, `session_reader.dart`, `session_container.dart`) are thin FFI delegates. Some container fns are `#[frb(sync)]` so Dart keeps `headReadLimit`/`parseHead`/`extractBody` synchronous. When changing the wire format, extend `cargo test --lib session_format` goldens and regenerate bindings.
 - **Cargo `[patch]` version trap**: If the patched crate's `version` is semver-incompatible with the dependency constraint, Cargo silently ignores the patch. Our fork must stay at `version = "0.11.8"` even though the source is based on 0.12.0.
 - **Android BLE init**: btleplug requires `btleplug::platform::init(&JNIEnv)` from a JNI context BEFORE any scan/connect, or it panics with `"Droidplug has not been initialized"`.
