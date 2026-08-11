@@ -1,0 +1,15 @@
+error: can't find integration-test `bench_execute_hotloop` at path `/workspaces/flutter_muse_ml/third_party/rlx-cpu/tests/bench_execute_hotloop.rs`
+ --> /workspaces/flutter_muse_ml/third_party/rlx-cpu/Cargo.toml
+error: can't find integration-test `cpu_conv3d` at path `/workspaces/flutter_muse_ml/third_party/rlx-cpu/tests/cpu_conv3d.rs`
+ --> /workspaces/flutter_muse_ml/third_party/rlx-cpu/Cargo.toml
+error: can't find integration-test `rope_style_fusion` at path `/workspaces/flutter_muse_ml/third_party/rlx-cpu/tests/rope_style_fusion.rs`
+ --> /workspaces/flutter_muse_ml/third_party/rlx-cpu/Cargo.toml
+error: can't find bench `cumsum` at path `/workspaces/flutter_muse_ml/third_party/rlx-cpu/benches/cumsum.rs`
+ --> /workspaces/flutter_muse_ml/third_party/rlx-cpu/Cargo.toml
+error: can't find bench `sample` at path `/workspaces/flutter_muse_ml/third_party/rlx-cpu/benches/sample.rs`
+ --> /workspaces/flutter_muse_ml/third_party/rlx-cpu/Cargo.toml
+error: can't find bench `sgemm` at path `/workspaces/flutter_muse_ml/third_party/rlx-cpu/benches/sgemm.rs`
+ --> /workspaces/flutter_muse_ml/third_party/rlx-cpu/Cargo.toml
+error: can't find bench `tuned` at path `/workspaces/flutter_muse_ml/third_party/rlx-cpu/benches/tuned.rs`
+ --> /workspaces/flutter_muse_ml/third_party/rlx-cpu/Cargo.toml
+error: could not compile due to 7 previous target resolution errors
