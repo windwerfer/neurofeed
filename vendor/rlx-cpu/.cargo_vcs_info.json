@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "a1a8300b541a0df12838a3e6df25b550ac907dcd"
+  },
+  "path_in_vcs": "crates/backends/rlx-cpu"
+}

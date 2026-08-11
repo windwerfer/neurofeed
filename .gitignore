@@ -44,6 +44,9 @@ app.*.map.json
 # Kotlin daemon session cache
 android/.kotlin/
 
+# vendored rlx-cpu build artifacts (never committed)
+/vendor/rlx-cpu/target/
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile

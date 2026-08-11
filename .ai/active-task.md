@@ -158,21 +158,51 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
 - ⏳ **Thresholds unvalidated on real EEG**: `BLINK_*`/`CLENCH_*`/`EYE_*` constants
   in `gesture.rs` are initial guesses — need on-device tuning.
 
+## Status — 2026-08-11 Update (REVE/LUNA model selector + dependency layout reorg)
+- ✅ Model engine committed (`models: REVE + LUNA local model engine with selector UI`):
+  Rust FFI `rust/src/api/reve.rs` (`model_load`/`model_unload`/`model_loaded`/
+  `model_config_json`) + inference wrappers `rust/src/analysis/{reve,luna}.rs` over the
+  `reve-rs`/`luna-rs` crates; Dart `lib/src/reve/` (ModelKind metadata, `ModelCache`
+  download/import with SHA-256 verification, `ModelEngineNotifier`, selector + import UI).
+  **No weights shipped** — LUNA downloads from HF, REVE is user-imported.
+- ✅ Dependency layout reorg (two commits: `vendor:` + `models:`):
+  - `vendor/rlx-cpu/` — vendored rlx-cpu moved out of `third_party/` (cleared default
+    `blas` feature; wired via `[patch.crates-io]`); `/vendor/rlx-cpu/target/` gitignored.
+  - `third_party/luna-rs` registered as a real submodule (`eugenehp/luna-rs`, pinned to
+    upstream `main` `5025cea` — matches upstream HEAD, so fresh clones fetch it).
+  - `.local/{luna-base-dl,reve-base-dl,reve-base}` — gated weights + abandoned fork moved
+    out of `third_party/` into untracked embedded git repos; `.gitmodules` documents them
+    with `ignore = all` + an invalid URL (smoke-test paths updated to `../.local/...`).
+- ✅ Verified: `cargo test --lib` green (25 session-format tests), `cargo test --lib --
+  --ignored` passes (`luna_smoke` + `reveal_smoke` run real inference on the `.local/`
+  weights), `flutter analyze lib/src` clean.
+- ⚠️ **Known gap**: `reve-rs`/`luna-rs` are path deps on `third_party/` submodules but no
+  CI workflow inits submodules on checkout — release builds will fail until the workflows
+  add `git submodule update --init third_party/reve-rs third_party/luna-rs` (or
+  `submodules: recursive` on `actions/checkout`). See `.ai/release.md`.
+
 ## Next steps
-1. On-device test pass (checklist in `.ai/feeback/todos.md`): calibration →
+0. Fix CI: init the `reve-rs`/`luna-rs` submodules in the release workflows
+   (`_build-apk.yml`, `release-linux.yml`, `release-windows.yml`) before `cargo build`.
+1. Wire the model engine into the Pure Jhana guardrail: feed the forwarder's EEG into
+   `rust/src/analysis/{reve,luna}.rs` and surface the embedding/drowsiness score in the
+   protocol (scoring currently loads models but is not yet driven by live data).
+2. On-device pass: download LUNA Base + LUNA Large, import REVE, verify load/unload,
+   bad-hash rejection, progress UI, and model-switch persistence on the TB336FU.
+3. On-device test pass (checklist in `.ai/feeback/todos.md`): calibration →
    auto-start, chimes + movement gating, volume dialog, target settings,
    recalibrate, persistence, `[atr]` ceiling/lockout logs, mid-session Muse
    power-off → watchdog → auto-reconnect.
-2. On-device gesture tuning: verify blink/clench double-marker timing and tune
+4. On-device gesture tuning: verify blink/clench double-marker timing and tune
    `BLINK_*`/`CLENCH_*`/`EYE_*` thresholds from logcat until double blinks and
    double clenches fire reliably without false positives; then decide if eye
    up/down becomes a live track.
-3. If the reconnect test passes, remove the temporary `[muse] forwarder` debug
+5. If the reconnect test passes, remove the temporary `[muse] forwarder` debug
    logs or drop them to debug level.
-4. v1.1 backlog: gesture marker log/rendering in history detail, percentile
+6. v1.1 backlog: gesture marker log/rendering in history detail, percentile
    persistence, continuous EMA adaptation, multi-protocol presets, calibration
    audio variants (see `.ai/feeback/todos.md`).
-5. v1.2 meta-block: Neurosity Crown 8-electrode support — channel labels are
+7. v1.2 meta-block: Neurosity Crown 8-electrode support — channel labels are
    already metadata-driven; only the default channel-name list needs
    extending per device.
 

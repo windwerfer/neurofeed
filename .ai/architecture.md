@@ -88,6 +88,27 @@ It remains a good second choice if btleplug ever becomes unmaintainable.
 - Settings toggles: `eyeMarkersEnabled` (eye track, default off) and
   `markersInFeedbackEnabled` (persist markers, default on).
 
+## Local model engine (REVE / LUNA guardrail)
+- Purpose: on-device drowsiness/artifact embeddings for the Pure Jhana protocol.
+  **The app ships no weights.**
+- Rust: `rust/src/api/reve.rs` is the FFI surface (`model_load`/`model_unload`/
+  `model_loaded`/`model_config_json`). `rust/src/analysis/{reve,luna}.rs` wrap the
+  `reve-rs`/`luna-rs` crates (RLX CPU backend); scoring runs there from the event
+  forwarder, not across FFI. `reve-rs`/`luna-rs` are **path deps on `third_party/`
+  submodules**; `[patch.crates-io]` points `rlx-cpu` at the vendored `vendor/rlx-cpu`
+  (default `blas` feature cleared).
+- Dart: `lib/src/reve/models.dart` (`ModelKind` — luna_base / luna_large / reve_base,
+  each with SHA-256 + Hugging Face URLs + size), `model_engine.dart` (`ModelCache`
+  downloads LUNA or imports REVE with SHA-256 verification, atomic `.part`+rename
+  install, then `modelLoad`; `ModelEngineNotifier` drives the `ModelEngineState`),
+  `model_selector.dart` (settings-backed picker with per-model availability badges),
+  `reve_import.dart` (gated-file import), `reve_card.dart`.
+- Files land in `<sessionFolder>/ai_models/<kind>/` as `config.json` (app-generated via
+  `modelConfigJson`) + `model.safetensors`.
+- Local dev only: `.local/{luna-base-dl,reve-base-dl}` hold the real weights used by the
+  `#[ignore]`d smoke tests; `.local/reve-base` is an abandoned source fork. None are in
+  git (embedded repos, documented in `.gitmodules` with `ignore = all` + invalid URL).
+
 ## muse-rs module map (for the fork)
 | File | Role | Keep in fork? |
 |------|------|---------------|

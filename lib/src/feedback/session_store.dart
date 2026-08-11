@@ -79,6 +79,180 @@ class SessionStatsData {
   }
 }
 
+class SessionBaselineStats {
+  const SessionBaselineStats({
+    required this.percentile,
+    required this.count,
+    this.mean,
+    this.stddev,
+  });
+
+  final int percentile;
+  final int count;
+  final double? mean;
+  final double? stddev;
+
+  Map<String, Object?> toJson() => {
+    'percentile': percentile,
+    'count': count,
+    if (mean != null) 'mean': mean,
+    if (stddev != null) 'stddev': stddev,
+  };
+
+  static SessionBaselineStats? fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      return null;
+    }
+    return SessionBaselineStats(
+      percentile: (json['percentile'] as num?)?.toInt() ?? 0,
+      count: (json['count'] as num?)?.toInt() ?? 0,
+      mean: (json['mean'] as num?)?.toDouble(),
+      stddev: (json['stddev'] as num?)?.toDouble(),
+    );
+  }
+}
+
+/// One clip phase that ran during calibration (recorded per-phase, with the
+/// clip + spoken text it used so the calibration is reproducible).
+class SessionCalibrationPhase {
+  const SessionCalibrationPhase({
+    required this.clipId,
+    required this.clipFile,
+    this.spokenText = '',
+    this.eyes,
+    this.startSecs,
+    this.endSecs,
+  });
+
+  final String clipId;
+  final String clipFile;
+
+  /// Spoken transcript of the clip (placeholder until real recordings exist).
+  final String spokenText;
+
+  /// `open`, `closed`, or null when the clip does not instruct an eye state.
+  final String? eyes;
+
+  /// Start/end of the phase, in seconds from session (recording) start.
+  final double? startSecs;
+  final double? endSecs;
+
+  Map<String, Object?> toJson() => {
+    'clipId': clipId,
+    'clipFile': clipFile,
+    if (spokenText.isNotEmpty) 'spokenText': spokenText,
+    if (eyes != null) 'eyes': eyes,
+    if (startSecs != null) 'startSecs': startSecs,
+    if (endSecs != null) 'endSecs': endSecs,
+  };
+
+  static SessionCalibrationPhase? fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      return null;
+    }
+    return SessionCalibrationPhase(
+      clipId: json['clipId'] as String? ?? '',
+      clipFile: json['clipFile'] as String? ?? '',
+      spokenText: json['spokenText'] as String? ?? '',
+      eyes: json['eyes'] as String?,
+      startSecs: (json['startSecs'] as num?)?.toDouble(),
+      endSecs: (json['endSecs'] as num?)?.toDouble(),
+    );
+  }
+}
+
+/// Repro record of how a session's calibration ran: its timeline
+/// (calibration start/end, training start) in wall-clock epoch seconds, the
+/// signal-gate rejection criteria, the ATR baseline statistics, and the per-
+/// phase clip timings. Persisted in the metadata JSON, not the `.muse` body.
+class SessionCalibration {
+  const SessionCalibration({
+    required this.version,
+    this.calibrationStartSecs,
+    this.calibrationEndSecs,
+    this.trainingStartSecs,
+    this.usedStartAnyway = false,
+    this.greenStableSeconds,
+    this.faultyPadSeconds,
+    this.baseline,
+    this.phases = const [],
+  });
+
+  /// Manifest version the calibration sequence was generated from.
+  final int version;
+
+  /// Wall-clock epoch seconds when calibration began (also recording start).
+  final double? calibrationStartSecs;
+
+  /// Wall-clock epoch seconds when the baseline finished.
+  final double? calibrationEndSecs;
+
+  /// Wall-clock epoch seconds when training/feedback began. Because the
+  /// recorded event timestamps live on the Muse device clock, trimming uses
+  /// [trainingStartOffsetSecs] (relative to recording start) instead.
+  final double? trainingStartSecs;
+
+  /// Whether the user bypassed the green-stable gate via the faulty-pad
+  /// continue-anyway fallback.
+  final bool usedStartAnyway;
+
+  /// Rejection-criteria constants applied during calibration.
+  final int? greenStableSeconds;
+  final int? faultyPadSeconds;
+
+  final SessionBaselineStats? baseline;
+
+  final List<SessionCalibrationPhase> phases;
+
+  /// Seconds from recording (calibration) start to the training boundary, in
+  /// wall-clock time. Used to trim displayed/metricted data to the training
+  /// portion regardless of device-clock drift.
+  double? get trainingStartOffsetSecs {
+    final start = calibrationStartSecs;
+    final training = trainingStartSecs;
+    if (start == null || training == null) {
+      return null;
+    }
+    final offset = training - start;
+    return offset.isFinite && offset >= 0 ? offset : null;
+  }
+
+  Map<String, Object?> toJson() => {
+    'version': version,
+    if (calibrationStartSecs != null)
+      'calibrationStartSecs': calibrationStartSecs,
+    if (calibrationEndSecs != null) 'calibrationEndSecs': calibrationEndSecs,
+    if (trainingStartSecs != null) 'trainingStartSecs': trainingStartSecs,
+    if (usedStartAnyway) 'usedStartAnyway': true,
+    if (greenStableSeconds != null) 'greenStableSeconds': greenStableSeconds,
+    if (faultyPadSeconds != null) 'faultyPadSeconds': faultyPadSeconds,
+    if (baseline != null) 'baseline': baseline!.toJson(),
+    if (phases.isNotEmpty) 'phases': [for (final p in phases) p.toJson()],
+  };
+
+  static SessionCalibration? fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      return null;
+    }
+    return SessionCalibration(
+      version: (json['version'] as num?)?.toInt() ?? 0,
+      calibrationStartSecs: (json['calibrationStartSecs'] as num?)?.toDouble(),
+      calibrationEndSecs: (json['calibrationEndSecs'] as num?)?.toDouble(),
+      trainingStartSecs: (json['trainingStartSecs'] as num?)?.toDouble(),
+      usedStartAnyway: json['usedStartAnyway'] as bool? ?? false,
+      greenStableSeconds: (json['greenStableSeconds'] as num?)?.toInt(),
+      faultyPadSeconds: (json['faultyPadSeconds'] as num?)?.toInt(),
+      baseline: SessionBaselineStats.fromJson(json['baseline']),
+      phases:
+          (json['phases'] as List<Object?>?)
+              ?.map(SessionCalibrationPhase.fromJson)
+              .whereType<SessionCalibrationPhase>()
+              .toList() ??
+          const [],
+    );
+  }
+}
+
 class SessionMetadata {
   const SessionMetadata({
     required this.protocol,
@@ -95,6 +269,7 @@ class SessionMetadata {
     this.recordedData = const [],
     this.summary,
     this.gestures = const [],
+    this.calibration,
   });
 
   final ProtocolType protocol;
@@ -132,6 +307,10 @@ class SessionMetadata {
   /// session. Computed data — stored in metadata, not the frame body.
   final List<GestureMarker> gestures;
 
+  /// How the session calibrated (timeline, gate, baseline stats, clips)
+  /// when recorded. Null on files recorded before calibration recording.
+  final SessionCalibration? calibration;
+
   Map<String, Object?> toJson() => {
     'protocol': protocol.name,
     'durationMinutes': durationMinutes,
@@ -147,6 +326,7 @@ class SessionMetadata {
     if (recordedData.isNotEmpty) 'recordedData': recordedData,
     if (summary != null) 'summary': summary!.toJson(),
     if (gestures.isNotEmpty) 'gestures': [for (final g in gestures) g.toJson()],
+    if (calibration != null) 'calibration': calibration!.toJson(),
   };
 
   static SessionMetadata? fromJson(Object? json) {
@@ -190,6 +370,7 @@ class SessionMetadata {
               .whereType<GestureMarker>()
               .toList() ??
           const [],
+      calibration: SessionCalibration.fromJson(json['calibration']),
     );
   }
 }

@@ -110,6 +110,13 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
     must already contain it or cargokit's `cargo build` fails with E0583.
     Regenerate with `flutter_rust_bridge_codegen generate` when the FFI
     surface changes and commit both it and the `lib/src/rust/` Dart files
+  - `vendor/rlx-cpu` is a committed `[patch.crates-io]` replacement (its
+    default `blas` feature is cleared so no system OpenBLAS is linked on
+    x86_64) — no network fetch needed for it. **But `reve-rs` and `luna-rs`
+    are path deps on `third_party/` submodules**: the checkout step must init
+    them (`git submodule update --init third_party/reve-rs third_party/luna-rs`,
+    or `submodules: true` on `actions/checkout`) or `cargo build` fails on the
+    empty dirs. This is NOT wired up yet — see Troubleshooting below.
   - Gradle archive tasks use fixed timestamps + deterministic ordering
     (`android/app/build.gradle.kts`); CI also disables parallel builds and
     caching for the Android build
@@ -169,7 +176,14 @@ builds between releases keeps them warm.
   four secrets above and re-run the workflow.
 - **`[patch]` silently ignored in Cargo**: the btleplug fork must stay at
   `version = "0.11.8"` (see `.ai/btleplug.md`). `rust/Cargo.lock` references
-  the fork commit; if Cargo rewrites it, keep it.
+  the fork commit; if Cargo rewrites it, keep it. The vendored `rlx-cpu` has
+  the same trap: keep its `version = "0.2.13"` semver-compatible with the
+  `rlx 0.2` constraint.
+- **`cargo build` fails / `third_party/reve-rs` is empty**: the runner did not
+  init the submodules that are path deps of the model engine. Fix the workflows
+  (`_build-apk.yml`, `release-linux.yml`, `release-windows.yml`) to run
+  `git submodule update --init third_party/reve-rs third_party/luna-rs` after
+  checkout — or add `submodules: true` to the `actions/checkout` steps.
 - **Repro reports a diff**: the usual culprit is AGP's "Dependency Info" block
   (id `0x504b4453`) in the APK Signing Block — it is non-deterministic
   (encrypted, randomized per build). `android/app/build.gradle.kts` disables it

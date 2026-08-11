@@ -43,8 +43,7 @@ class FeedbackAudioController {
   double _introVolume = 1.0;
   double _bellVolume = 1.0;
 
-  FeedbackAudioController(Settings settings)
-      : _settings = settings {
+  FeedbackAudioController(Settings settings) : _settings = settings {
     _masterVolume = settings.masterVolume ?? 1.0;
     _backgroundVolume = settings.backgroundVolume ?? droneVolume;
     _feedbackVolume = settings.feedbackVolume ?? 1.0;
@@ -53,8 +52,7 @@ class FeedbackAudioController {
     for (final chime in _chimes) {
       _chimeSubs.add(
         chime.processingStateStream.listen((state) {
-          if (state == ProcessingState.completed &&
-              !_ramping.contains(chime)) {
+          if (state == ProcessingState.completed && !_ramping.contains(chime)) {
             _resetChime(chime);
           }
         }),
@@ -142,10 +140,10 @@ class FeedbackAudioController {
     }
   }
 
-  Future<void> playCalibration() async {
+  Future<void> playCalibration([String? assetPath]) async {
     await stop();
     try {
-      await _calibration.setAsset(calibrationAsset);
+      await _calibration.setAsset(assetPath ?? calibrationAsset);
       await _calibration.setLoopMode(LoopMode.off);
       await _calibration.setVolume(_introVolumeTotal);
       final done = _calibration.processingStateStream.firstWhere(
@@ -158,8 +156,12 @@ class FeedbackAudioController {
     }
   }
 
-  Future<void> startBackground(String assetPath) async {
+  Future<void> startBackground(String? assetPath) async {
     _resetRewardState();
+    if (assetPath == null) {
+      await _ambient.stop();
+      return;
+    }
     try {
       await _ambient.setAsset(assetPath);
       await _ambient.setLoopMode(LoopMode.one);
@@ -175,8 +177,13 @@ class FeedbackAudioController {
   Future<void> resumeBackground() => _ambient.play();
 
   /// Switches the ambient loop to a different asset mid-session without
-  /// touching the reward state machine.
-  Future<void> switchBackground(String assetPath) async {
+  /// touching the reward state machine. A null asset stops the loop (the
+  /// "No background" option).
+  Future<void> switchBackground(String? assetPath) async {
+    if (assetPath == null) {
+      await _ambient.stop();
+      return;
+    }
     try {
       await _ambient.setAsset(assetPath);
       await _ambient.setLoopMode(LoopMode.one);

@@ -92,6 +92,17 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
 
   bool get _notesDirty => _notes.text != _savedNotes;
 
+  /// Offset (seconds from recording start) where training began, for trimming
+  /// the displayed window/metrics to the training portion. Live sessions read
+  /// it from the notifier; history sessions from the stored calibration record
+  /// (null on old files → full-window rendering, as before).
+  double? get _trainingStartOffset {
+    if (widget.readOnly) {
+      return widget.metadata?.calibration?.trainingStartOffsetSecs;
+    }
+    return ref.read(feedbackStateProvider.notifier).trainingStartOffsetSecs;
+  }
+
   void _onNotesChanged() {
     if (mounted) {
       setState(() {});
@@ -225,7 +236,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
           );
         }
         final data = snapshot.data!;
-        _prepared ??= _prepare(data);
+        _prepared ??= _prepare(data, trainingStartOffset: _trainingStartOffset);
         _sessionData ??= data;
         if (_thumbnail == null && !widget.readOnly) {
           WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
@@ -284,10 +295,14 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         recordedData: notifier.recordStreams.map((s) => s.name).toList(),
         summary: _sessionData == null
             ? null
-            : SessionOverview.fromData(_sessionData!),
+            : SessionOverview.fromData(
+                _sessionData!,
+                trainingStartSecs: notifier.trainingStartOffsetSecs,
+              ),
         gestures: ref.read(settingsProvider).markersInFeedbackEnabled
             ? notifier.gestureMarkers
             : const [],
+        calibration: notifier.calibration,
       );
       final id = DateTime.now().millisecondsSinceEpoch.toString();
       try {
@@ -736,7 +751,27 @@ class _SessionStats {
   });
 }
 
-_Prepared _prepare(SessionData data) {
+_Prepared _prepare(SessionData data, {double? trainingStartOffset}) {
+  // When the session includes calibration, the displayed window and metrics
+  // cover the training portion only. The boundary is an offset from the first
+  // recorded event, so it works regardless of device-clock drift.
+  double? cut;
+  if (trainingStartOffset != null && trainingStartOffset > 0) {
+    var allMin = double.infinity;
+    for (final b in data.bands) {
+      if (b.timestamp < allMin) allMin = b.timestamp;
+    }
+    for (final p in data.pulses) {
+      if (p.timestamp < allMin) allMin = p.timestamp;
+    }
+    for (final m in data.movements) {
+      if (m.timestamp < allMin) allMin = m.timestamp;
+    }
+    if (allMin.isFinite) {
+      cut = allMin + trainingStartOffset;
+    }
+  }
+
   final bySecond = <int, Map<int, BandsRecord>>{};
   for (final b in data.bands) {
     bySecond.putIfAbsent(b.timestamp.floor(), () => {})[b.electrode] = b;
@@ -751,9 +786,15 @@ _Prepared _prepare(SessionData data) {
   final gammaRel = <double>[];
   var targetSeconds = 0;
   var alphaRelSum = 0.0;
-  final startTs = seconds.isEmpty ? 0.0 : seconds.first.toDouble();
+  var startTs = seconds.isEmpty ? 0.0 : seconds.first.toDouble();
+  if (cut != null && cut > startTs) {
+    startTs = cut;
+  }
 
   for (final s in seconds) {
+    if (cut != null && s < cut) {
+      continue;
+    }
     final ch = bySecond[s]!;
     final all = _relativeAll(
       _afTuple(ch[electrodeAf7]),
@@ -783,6 +824,9 @@ _Prepared _prepare(SessionData data) {
   final movement = <double>[];
   var still = 0;
   for (final m in data.movements) {
+    if (cut != null && m.timestamp < cut) {
+      continue;
+    }
     movementX.add(m.timestamp - startTs);
     movement.add(m.score);
     if (m.score <= movementGateThreshold) {
@@ -797,6 +841,9 @@ _Prepared _prepare(SessionData data) {
     if (p.confidence < 0.3) {
       continue;
     }
+    if (cut != null && p.timestamp < cut) {
+      continue;
+    }
     bpmX.add(p.timestamp - startTs);
     bpm.add(p.bpm);
     bpmSum += p.bpm;
@@ -805,6 +852,9 @@ _Prepared _prepare(SessionData data) {
   double? peakFreq;
   double? peakPower;
   for (final p in data.peakAlphas) {
+    if (cut != null && p.timestamp < cut) {
+      continue;
+    }
     if (peakPower == null || p.power > peakPower) {
       peakPower = p.power;
       peakFreq = p.frequency;
