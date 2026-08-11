@@ -54,8 +54,15 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
-          echo "version=${VERSION%%+*}" >> "$GITHUB_OUTPUT"
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          if [ -n "$TAG" ]; then
+            BASE="${TAG#v}"
+            VERSION="${BASE%%[-_]*}"
+          else
+            VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+            VERSION="${VERSION%%+*}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Build Linux release
         shell: bash

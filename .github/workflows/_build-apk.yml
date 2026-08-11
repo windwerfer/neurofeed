@@ -15,6 +15,14 @@ on:
         description: Base64 of a keystore to use instead of the repo secrets.
         type: string
         required: false
+      version:
+        description: Version name to bake into the APK (--build-name). Empty = pubspec version.
+        type: string
+        required: false
+      build-number:
+        description: Version code for the APK (--build-number). Empty = 1.
+        type: string
+        required: false
     secrets:
       KEYSTORE_BASE64:
         required: false
@@ -137,7 +145,13 @@ jobs:
           printf '\norg.gradle.parallel=false\norg.gradle.caching=false\n' >> android/gradle.properties
           flutter clean
           flutter pub get
-          flutter build apk --release
+          if [ -n "${{ inputs.version }}" ]; then
+            flutter build apk --release \
+              --build-name="${{ inputs.version }}" \
+              --build-number="${{ inputs.build-number || '1' }}"
+          else
+            flutter build apk --release
+          fi
 
       - name: Verify APK signature
         shell: bash

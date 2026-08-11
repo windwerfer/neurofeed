@@ -20,6 +20,25 @@ When a release is **published**, each workflow builds the tag's commit and
 uploads its assets to that release with `gh release upload --clobber`
 (so re-runs overwrite).
 
+## Versioning
+
+Release assets are named after the **release tag**, not `pubspec.yaml`:
+
+- The **base version** is everything before the first `-` or `_` in the tag
+  (a leading `v` is stripped): tag `0.0.11-feedback-01` →
+  `muse_ml-0.0.11.apk`, `muse_ml-0.0.11-linux-x86_64.tar.gz`,
+  `muse_ml-0.0.11-windows-x64.zip`.
+- The **APK version code** (`--build-number`) is the trailing digits of the
+  tag's channel suffix (`-feedback-01` → `1`), and the **version name**
+  (`--build-name`) is the base version — both are baked into the APK by
+  `_build-apk.yml`. No suffix → defaults to `1`; empty tag → the `+<build>`
+  part of `pubspec.yaml`.
+- A `workflow_dispatch` with an **empty** `tag` (build-only test run) falls
+  back to the `pubspec.yaml` version so the zip/tarball names stay sane.
+- Keep the extraction logic identical in `release-{android,windows,linux}.yml`;
+  android resolves it once in a `version` job shared by the build (`_build-apk.yml`)
+  and the attach job.
+
 ## One-time setup: signing keystore
 
 Android release APKs are signed with a keystore you own. The keystore is

@@ -14,17 +14,52 @@ permissions:
   contents: write
 
 jobs:
+  version:
+    name: Resolve version from tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      build: ${{ steps.v.outputs.build }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Get version
+        id: v
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          if [ -n "$TAG" ]; then
+            BASE="${TAG#v}"
+            VERSION="${BASE%%[-_]*}"
+            SUFFIX="${BASE#*-}"
+            [ "$SUFFIX" = "$BASE" ] && SUFFIX="${BASE#*_}"
+            BUILD="$(printf '%s' "$SUFFIX" | grep -oE '[0-9]+$' | head -1)"
+            BUILD="${BUILD:-1}"
+            BUILD=$((10#$BUILD))
+          else
+            PUBVER=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+            VERSION="${PUBVER%%+*}"
+            BUILD="${PUBVER#*+}"
+            [ "$BUILD" = "$PUBVER" ] && BUILD=1
+            BUILD=$((10#$BUILD))
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "build=${BUILD}" >> "$GITHUB_OUTPUT"
+
   apk:
     name: Build signed APK
+    needs: version
     uses: ./.github/workflows/_build-apk.yml
     with:
       artifact-name: muse-apk
       require-signing: ${{ github.event_name == 'release' }}
+      version: ${{ needs.version.outputs.version }}
+      build-number: ${{ needs.version.outputs.build }}
     secrets: inherit
 
   attach:
     name: Attach APK to release
-    needs: apk
+    needs: [apk, version]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -34,13 +69,6 @@ jobs:
           name: muse-apk
           path: apk
 
-      - name: Get version
-        id: version
-        shell: bash
-        run: |
-          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
-          echo "version=${VERSION%%+*}" >> "$GITHUB_OUTPUT"
-
       - name: Upload to release
         if: ${{ github.event.release.tag_name != '' || inputs.tag != '' }}
         shell: bash
@@ -48,5 +76,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ github.event.release.tag_name || inputs.tag }}"
-          cp apk/app-release.apk "muse_ml-${{ steps.version.outputs.version }}.apk"
-          gh release upload "$TAG" "muse_ml-${{ steps.version.outputs.version }}.apk" --clobber
+          cp apk/app-release.apk "muse_ml-${{ needs.version.outputs.version }}.apk"
+          gh release upload "$TAG" "muse_ml-${{ needs.version.outputs.version }}.apk" --clobber
