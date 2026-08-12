@@ -57,9 +57,21 @@ jobs:
       build-number: ${{ needs.version.outputs.build }}
     secrets: inherit
 
+  appbundle:
+    name: Build signed App Bundle (Play Store)
+    needs: version
+    uses: ./.github/workflows/_build-apk.yml
+    with:
+      artifact-name: muse-aab
+      artifact-kind: aab
+      require-signing: ${{ github.event_name == 'release' }}
+      version: ${{ needs.version.outputs.version }}
+      build-number: ${{ needs.version.outputs.build }}
+    secrets: inherit
+
   attach:
-    name: Attach APK to release
-    needs: [apk, version]
+    name: Attach artifacts to release
+    needs: [apk, appbundle, version]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -68,6 +80,11 @@ jobs:
         with:
           name: muse-apk
           path: apk
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: muse-aab
+          path: aab
 
       - name: Upload to release
         if: ${{ github.event.release.tag_name != '' || inputs.tag != '' }}
@@ -78,3 +95,5 @@ jobs:
           TAG="${{ github.event.release.tag_name || inputs.tag }}"
           cp apk/app-release.apk "muse_ml-${{ needs.version.outputs.version }}.apk"
           gh release upload "$TAG" "muse_ml-${{ needs.version.outputs.version }}.apk" --clobber
+          cp aab/app-release.aab "muse_ml-${{ needs.version.outputs.version }}.aab"
+          gh release upload "$TAG" "muse_ml-${{ needs.version.outputs.version }}.aab" --clobber

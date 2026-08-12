@@ -149,7 +149,13 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
     but its content only depends on the built commit, so it is identical for
     same-commit rebuilds and does not block byte-identical output. The
     `vcsInfo { include = false }` DSL only exists in AGP 9+, so it is not used.)
-- The APK is a single fat APK (all ABIs), which F-Droid prefers.
+- The APK is a single **arm64-only** APK: `defaultConfig.ndk.abiFilters = arm64-v8a`
+  in `android/app/build.gradle.kts` plus `--target-platform android-arm64` in the
+  build workflow. A universal APK (all 3 ABIs) would be ~65 MB; arm64-only is
+  ~27 MB. x86/x86_64 emulators and 32-bit (armeabi-v7a) devices are not supported.
+- The same job also produces `muse_ml-<ver>.aab` (arm64-only) for **Play Store**
+  submission — Play serves per-device arm64 splits from it. F-Droid only accepts
+  APKs (it builds from source), so the AAB is never submitted there; the APK is.
 - When you submit to F-Droid you will also need to request an app entry in
   `fdroiddata` (metadata + build recipe). Reproducibility issues they commonly
   hit — timestamps, R8 nondeterminism, native-strip paths — are documented at

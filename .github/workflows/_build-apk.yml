@@ -23,6 +23,11 @@ on:
         description: Version code for the APK (--build-number). Empty = 1.
         type: string
         required: false
+      artifact-kind:
+        description: Build an APK (default) or an Android App Bundle for Play Store (aab).
+        type: string
+        required: false
+        default: apk
     secrets:
       KEYSTORE_BASE64:
         required: false
@@ -64,7 +69,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+          targets: aarch64-linux-android
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
@@ -140,20 +145,37 @@ jobs:
             "$PASS" "$ALIAS" "$PASS" > android/key.properties
 
       - name: Build release APK
+        if: ${{ inputs.artifact-kind != 'aab' }}
         shell: bash
         run: |
           printf '\norg.gradle.parallel=false\norg.gradle.caching=false\n' >> android/gradle.properties
           flutter clean
           flutter pub get
           if [ -n "${{ inputs.version }}" ]; then
-            flutter build apk --release \
+            flutter build apk --release --target-platform android-arm64 \
               --build-name="${{ inputs.version }}" \
               --build-number="${{ inputs.build-number || '1' }}"
           else
-            flutter build apk --release
+            flutter build apk --release --target-platform android-arm64
+          fi
+
+      - name: Build release App Bundle (Play Store)
+        if: ${{ inputs.artifact-kind == 'aab' }}
+        shell: bash
+        run: |
+          printf '\norg.gradle.parallel=false\norg.gradle.caching=false\n' >> android/gradle.properties
+          flutter clean
+          flutter pub get
+          if [ -n "${{ inputs.version }}" ]; then
+            flutter build appbundle --release --target-platform android-arm64 \
+              --build-name="${{ inputs.version }}" \
+              --build-number="${{ inputs.build-number || '1' }}"
+          else
+            flutter build appbundle --release --target-platform android-arm64
           fi
 
       - name: Verify APK signature
+        if: ${{ inputs.artifact-kind != 'aab' }}
         shell: bash
         run: |
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f 2>/dev/null | sort -V | tail -1)
@@ -163,9 +185,9 @@ jobs:
           fi
           "$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Upload APK artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
           name: ${{ inputs.artifact-name }}
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: ${{ inputs.artifact-kind == 'aab' && 'build/app/outputs/bundle/release/app-release.aab' || 'build/app/outputs/flutter-apk/app-release.apk' }}
           if-no-files-found: error
