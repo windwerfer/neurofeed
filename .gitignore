@@ -52,3 +52,4 @@ android/.kotlin/
 /android/app/profile
 /android/app/release
 .zed/
+.local/

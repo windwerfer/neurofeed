@@ -17,22 +17,3 @@
 	path = third_party/luna-rs
 	url = https://github.com/eugenehp/luna-rs
 	ignore = all
-
-# Local-only directories (model weights + abandoned source), NOT submodules:
-# each is its own embedded git repo with no remote, stored under .local/ and
-# never tracked by the main project. `git submodule update --init` fails
-# loudly on the invalid URL instead of silently downloading.
-[submodule "local/reve-base"]
-	path = .local/reve-base
-	url = invalid:local-only-not-distributed
-	ignore = all
-
-[submodule "local/reve-base-dl"]
-	path = .local/reve-base-dl
-	url = invalid:local-only-not-distributed
-	ignore = all
-
-[submodule "local/luna-base-dl"]
-	path = .local/luna-base-dl
-	url = invalid:local-only-not-distributed
-	ignore = all
