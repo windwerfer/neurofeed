@@ -15,5 +15,5 @@
 
 [submodule "third_party/luna-rs"]
 	path = third_party/luna-rs
-	url = https://github.com/eugenehp/luna-rs
+	url = https://github.com/windwerfer/luna-rs
 	ignore = all
