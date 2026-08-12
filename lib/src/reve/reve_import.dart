@@ -34,17 +34,24 @@ class _ModelGateDialogState extends ConsumerState<_ModelGateDialog> {
   bool _busy = false;
   String? _error;
   double? _progress;
+  ProviderSubscription<ModelEngineState>? _readySub;
 
   @override
   void initState() {
     super.initState();
     // Continue into the session as soon as the selected model is ready (the
     // initial probe finishing, or an import/download succeeding).
-    ref.listen(modelEngineNotifierProvider, (prev, next) {
+    _readySub = ref.listenManual(modelEngineNotifierProvider, (prev, next) {
       if (next is ModelEngineReady && mounted) {
         Navigator.of(context).pop(true);
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _readySub?.close();
+    super.dispose();
   }
 
   ModelKind get _selected => modelKindFromSettings(ref.read(settingsProvider));
