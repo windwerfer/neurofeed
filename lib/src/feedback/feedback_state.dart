@@ -11,7 +11,9 @@ import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
+import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:muse_ml/src/rust/api/reve.dart' as frb;
 import 'package:muse_ml/src/settings.dart';
 
 enum FeedbackPhase { idle, calibrating, playing, paused, interrupted, ended }
@@ -44,6 +46,14 @@ const Duration calibrationAudioTimeout = Duration(seconds: 15);
 const int defaultBaselinePercentile = 40;
 const int minRecalibrateSeconds = 60;
 const int minRecalibrateSamples = 30;
+
+/// Classical frontal-delta hard rail for the sleep guardrail (normalized FFT
+/// band power of the AF7/AF8 average). Overridden by the baseline percentile
+/// once real-device data is available — needs tuning.
+const double guardrailDeltaCeiling = 0.25;
+
+/// Minimum gap between guardrail warning chimes while drifting into sleep.
+const Duration warningChimeCooldown = Duration(seconds: 20);
 
 class FeedbackState {
   final FeedbackPhase phase;
@@ -155,6 +165,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   DateTime _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
   int _prevEyeState = 0;
   final List<GestureMarker> _gestureMarkers = [];
+  bool _guardrailEnabled = false;
+  bool _clearCaptured = false;
+  bool _sleepCaptured = false;
+  final List<double> _baselineSleepDir = [];
+  double? _guardrailThreshold;
+  double _lastClarity = 1;
+  double _lastSleepDir = 0;
+  double _lastDelta = 0;
+  bool _warningActive = false;
+  DateTime _lastWarningChimeAt = DateTime.fromMillisecondsSinceEpoch(0);
   int _adaptTick = 0;
   final TargetStateAggregator _target = TargetStateAggregator();
   final FeedbackEngine _atr = AtrEngine();
@@ -285,7 +305,38 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _usedStartAnyway = false;
     _calibration = null;
     await _recorder.startSession();
+    unawaited(_maybeEnableGuardrail());
     await _runCalibration();
+  }
+
+  /// Arm the REVE/LUNA sleep-guardrail scorer for the Pure Jhana protocol
+  /// using the settings-selected foundation model. Scoring starts immediately
+  /// in the forwarder (first embedding lands after ~5 s) so the calibration
+  /// baseline can capture the clear anchor. No-op otherwise.
+  Future<void> _maybeEnableGuardrail() async {
+    _guardrailEnabled = false;
+    _clearCaptured = false;
+    _sleepCaptured = false;
+    _guardrailThreshold = null;
+    _baselineSleepDir.clear();
+    _warningActive = false;
+    if (state.protocol != ProtocolType.drowsiness) {
+      return;
+    }
+    final engine = _ref.read(modelEngineNotifierProvider);
+    if (engine is! ModelEngineReady) {
+      debugPrint('[guardrail] model not ready — guardrail stays off');
+      return;
+    }
+    try {
+      _guardrailEnabled = await frb.guardrailEnable(kind: engine.kind.ffId);
+      if (_guardrailEnabled) {
+        debugPrint('[guardrail] enabled (${engine.kind.ffId})');
+      }
+    } catch (e) {
+      _guardrailEnabled = false;
+      debugPrint('[guardrail] enable failed: $e');
+    }
   }
 
   /// In-flight re-anchoring: rebuilds the baseline from the recent clean
@@ -435,6 +486,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           stddev: _atr.baselineStddev,
         );
     _ref.read(liveStatsProvider).setThreshold(threshold);
+    if (_guardrailEnabled && _clearCaptured) {
+      _finalizeGuardrailBaseline();
+    }
     _recordCalibration();
     state = state.copyWith(baselineSecondsLeft: 0, currentThreshold: threshold);
     unawaited(startPlaying());
@@ -495,6 +549,62 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     unawaited(_playCalibrationAndBaseline());
   }
 
+  /// Locks in the sleep-guardrail threshold from the baseline sleep-direction
+  /// distribution at the configured percentile, then captures the deep-rest
+  /// anchor (deepest sample the Rust scorer tracked since the clear anchor).
+  void _finalizeGuardrailBaseline() {
+    final list = List<double>.of(_baselineSleepDir)..sort();
+    if (list.isNotEmpty) {
+      final pct = warningThresholdPercentile;
+      final idx = ((pct / 100) * (list.length - 1)).round();
+      _guardrailThreshold = list[idx];
+      debugPrint(
+        '[guardrail] baseline n=${_baselineSleepDir.length} '
+        'p$pct threshold=${_guardrailThreshold?.toStringAsFixed(3)}',
+      );
+    }
+    unawaited(
+      frb
+          .guardrailCaptureAnchor(name: 'sleep')
+          .then((msg) {
+            _sleepCaptured = true;
+            debugPrint('[guardrail] $msg');
+          })
+          .catchError((Object e) {
+            _sleepCaptured = false;
+            debugPrint('[guardrail] V_sleep capture failed: $e');
+          }),
+    );
+  }
+
+  /// Captures the clear anchor from the first clean baseline sample once the
+  /// forwarder has produced a live embedding. Best-effort: failures (no live
+  /// embedding yet, model switch) are ignored and retried on the next clean
+  /// sample.
+  Future<void> _tryCaptureClearAnchor() async {
+    if (!_guardrailEnabled || _clearCaptured) {
+      return;
+    }
+    try {
+      await frb.guardrailCaptureAnchor(name: 'clear');
+      _clearCaptured = true;
+      debugPrint('[guardrail] V_clear captured');
+    } catch (_) {}
+  }
+
+  /// Tears down the guardrail scorer and its calibration state at session end.
+  void _teardownGuardrail() {
+    if (_guardrailEnabled) {
+      unawaited(frb.guardrailDisable());
+    }
+    _guardrailEnabled = false;
+    _clearCaptured = false;
+    _sleepCaptured = false;
+    _guardrailThreshold = null;
+    _baselineSleepDir.clear();
+    _warningActive = false;
+  }
+
   /// Start the feedback loop: record the session and begin the background
   /// audio layer.
   Future<void> startPlaying() async {
@@ -536,6 +646,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _interruptTimer = null;
     _baselineTimer?.cancel();
     _baselineTimer = null;
+    _teardownGuardrail();
     state = state.copyWith(phase: FeedbackPhase.ended);
     await _recorder.flushSession();
     await _audio.stop();
@@ -560,6 +671,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _prevEyeState = 0;
     _clenchWasActive = false;
     _gestureMarkers.clear();
+    _teardownGuardrail();
     _audio.stop();
     _recorder.discardSession();
     _atr.reset();
@@ -744,6 +856,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         _onMovement(field0);
       case MuseEventDto_Gestures(:final field0):
         _onGestures(field0);
+      case MuseEventDto_Reve(:final field0):
+        _onReve(field0);
       case MuseEventDto_Connected():
         if (state.phase == FeedbackPhase.interrupted &&
             _interruptKind == FeedbackInterruptKind.disconnect) {
@@ -778,6 +892,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           _atr.addBaselineSample(atr);
         }
       }
+      unawaited(_tryCaptureClearAnchor());
       return;
     }
     if (state.phase != FeedbackPhase.playing) {
@@ -872,6 +987,53 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
+  /// Per-second sleep-guardrail readings from the forwarder. Collects the
+  /// sleep-direction distribution during the calibration baseline (only after
+  /// the clear anchor exists, since readings flow only once V_clear is set),
+  /// then evaluates the drift warning while playing.
+  void _onReve(ReveDto r) {
+    _lastClarity = r.clarity;
+    _lastSleepDir = r.sleepDir;
+    _lastDelta = r.delta;
+    if (!_guardrailEnabled || !_clearCaptured) {
+      return;
+    }
+    if (state.phase == FeedbackPhase.calibrating &&
+        state.baselineSecondsLeft > 0) {
+      _baselineSleepDir.add(r.sleepDir);
+      return;
+    }
+    if (state.phase == FeedbackPhase.playing && _guardrailThreshold != null) {
+      _evaluateGuardrailWarning();
+    }
+  }
+
+  /// Fires the sleep-guardrail warning: sleep-direction above the baseline
+  /// threshold or classical frontal delta over the hard rail. Plays the soft
+  /// warning chime, re-armed every [warningChimeCooldown] while the drift
+  /// persists; the reward loop is never touched.
+  void _evaluateGuardrailWarning() {
+    final threshold = _guardrailThreshold!;
+    final over =
+        _lastSleepDir > threshold || _lastDelta > guardrailDeltaCeiling;
+    if (!over) {
+      _warningActive = false;
+      return;
+    }
+    _warningActive = true;
+    final now = DateTime.now();
+    if (now.difference(_lastWarningChimeAt) >= warningChimeCooldown) {
+      _lastWarningChimeAt = now;
+      unawaited(_audio.playWarningChime());
+      debugPrint(
+        '[guardrail] WARNING sleep_dir=${_lastSleepDir.toStringAsFixed(3)} '
+        'delta=${_lastDelta.toStringAsFixed(3)} '
+        'thr=${threshold.toStringAsFixed(3)} '
+        'delta ceiling=$guardrailDeltaCeiling',
+      );
+    }
+  }
+
   bool _clenchWasActive = false;
 
   /// True when the current ATR sample is clean of both head movement and
@@ -886,6 +1048,26 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   /// Gesture markers accumulated during the current feedback session.
   List<GestureMarker> get gestureMarkers => List.unmodifiable(_gestureMarkers);
+
+  /// Whether the REVE/LUNA sleep guardrail is actively scoring this session.
+  bool get guardrailEnabled => _guardrailEnabled;
+
+  /// Whether the deep-rest (V_sleep) anchor was captured at calibration end.
+  bool get guardrailSleepCaptured => _sleepCaptured;
+
+  /// Whether the sleep-drift warning is currently firing.
+  bool get guardrailWarningActive => _warningActive;
+
+  /// Latest guardrail readings from the 1 Hz forwarder feed.
+  double get guardrailClarity => _lastClarity;
+
+  double get guardrailSleepDir => _lastSleepDir;
+
+  double get guardrailDelta => _lastDelta;
+
+  /// Baseline sleep-direction percentile threshold, or null before calibration
+  /// completes (or when the guardrail is off).
+  double? get guardrailThreshold => _guardrailThreshold;
 
   bool _allGreen(List<double>? quality) {
     if (quality == null || quality.length < 4) {
@@ -905,6 +1087,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   @override
   void dispose() {
+    _teardownGuardrail();
     _ticker?.cancel();
     _interruptTimer?.cancel();
     _baselineTimer?.cancel();

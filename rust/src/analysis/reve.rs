@@ -89,6 +89,38 @@ pub fn encoder_guard() -> MutexGuard<'static, Option<ReveEncoder>> {
     ENCODER.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// Run the loaded REVE encoder over one aligned window and return the pooled
+/// embedding vector (the `[embed_dim]` latent when the checkpoint has no
+/// classifier head, as `reve-base` does). The forwarder calls this from a
+/// blocking thread once per second; returns an error when no model is loaded.
+pub fn score_window(
+    signal: Vec<f32>,
+    positions: Vec<f32>,
+    n_channels: usize,
+    n_times: usize,
+) -> anyhow::Result<Vec<f32>> {
+    let mut guard = encoder_guard();
+    let encoder = guard.as_mut().context("no REVE model loaded")?;
+    let out = encoder.run_one(signal, positions, n_channels, n_times)?;
+    if log_once() {
+        log::info!(
+            "[reve] score_window: embedding len={} shape={:?} (first 4: {:?})",
+            out.output.len(),
+            out.shape,
+            &out.output[..out.output.len().min(4)]
+        );
+    }
+    Ok(out.output)
+}
+
+/// Log the embedding shape exactly once per process (the forwarder emits a
+/// score every second; only the first call is interesting).
+fn log_once() -> bool {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static LOGGED: AtomicBool = AtomicBool::new(false);
+    !LOGGED.swap(true, Ordering::Relaxed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

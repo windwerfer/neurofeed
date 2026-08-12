@@ -8,7 +8,7 @@
 //! vendored `reve-rs` / `luna-rs` crates (RLX CPU backend). Scoring itself runs
 //! in `crate::analysis::{reve,luna}` from the event forwarder, not across FFI.
 
-use crate::analysis::{luna, reve};
+use crate::analysis::{guardrail, luna, reve};
 
 /// Load a model of [kind] (`reve_base` | `luna_base` | `luna_large`) from
 /// [model_dir] (must contain `config.json` and `model.safetensors`) and keep
@@ -43,4 +43,36 @@ pub fn model_config_json(kind: String) -> anyhow::Result<String> {
         luna::KIND_LUNA_BASE | luna::KIND_LUNA_LARGE => luna::config_json(&kind),
         other => anyhow::bail!("unknown model kind: {other}"),
     }
+}
+
+/// Enable the sleep-guardrail scorer for [kind], clearing any prior anchors and
+/// live vector. The forwarder starts scoring the next 1 Hz tick once a model of
+/// that kind is loaded and the headset is streaming. Returns false for an
+/// unknown kind.
+pub fn guardrail_enable(kind: String) -> bool {
+    guardrail::enable(&kind)
+}
+
+/// Disable the sleep-guardrail scorer and drop its anchors/live vector.
+pub fn guardrail_disable() {
+    guardrail::disable();
+}
+
+/// Reset the guardrail anchors (fresh calibration pass on the same model).
+pub fn guardrail_reset_anchors() {
+    guardrail::reset_anchors();
+}
+
+/// Capture the current live embedding as a calibration anchor: `clear` uses the
+/// latest scored vector; `sleep` uses the deepest-rest sample seen since the
+/// guardrail was enabled (or since the last `clear` capture). Errors when no
+/// window has been scored yet, or when the model no longer matches the enabled
+/// kind.
+pub fn guardrail_capture_anchor(name: String) -> anyhow::Result<String> {
+    guardrail::capture_anchor(&name)
+}
+
+/// Dim of the current live embedding, or 0 before the first scored window.
+pub fn guardrail_live_dim() -> u32 {
+    guardrail::live_dim()
 }

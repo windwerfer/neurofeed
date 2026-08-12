@@ -1540,6 +1540,7 @@ mixin _$MuseEventDto {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
@@ -1556,6 +1557,7 @@ mixin _$MuseEventDto {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
@@ -1572,6 +1574,7 @@ mixin _$MuseEventDto {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
@@ -1589,6 +1592,7 @@ mixin _$MuseEventDto {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? mapOrNull<TResult extends Object?>({
@@ -1605,6 +1609,7 @@ mixin _$MuseEventDto {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
@@ -1621,6 +1626,7 @@ mixin _$MuseEventDto {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) => throw _privateConstructorUsedError;
 }
@@ -1734,6 +1740,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return connected(field0);
   }
@@ -1754,6 +1761,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return connected?.call(field0);
   }
@@ -1774,6 +1782,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (connected != null) {
@@ -1798,6 +1807,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return connected(this);
   }
@@ -1818,6 +1828,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return connected?.call(this);
   }
@@ -1838,6 +1849,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (connected != null) {
@@ -1918,6 +1930,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return disconnected();
   }
@@ -1938,6 +1951,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return disconnected?.call();
   }
@@ -1958,6 +1972,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (disconnected != null) {
@@ -1982,6 +1997,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return disconnected(this);
   }
@@ -2002,6 +2018,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return disconnected?.call(this);
   }
@@ -2022,6 +2039,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (disconnected != null) {
@@ -2134,6 +2152,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return eeg(field0);
   }
@@ -2154,6 +2173,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return eeg?.call(field0);
   }
@@ -2174,6 +2194,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (eeg != null) {
@@ -2198,6 +2219,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return eeg(this);
   }
@@ -2218,6 +2240,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return eeg?.call(this);
   }
@@ -2238,6 +2261,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (eeg != null) {
@@ -2358,6 +2382,7 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return bands(field0);
   }
@@ -2378,6 +2403,7 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return bands?.call(field0);
   }
@@ -2398,6 +2424,7 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (bands != null) {
@@ -2422,6 +2449,7 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return bands(this);
   }
@@ -2442,6 +2470,7 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return bands?.call(this);
   }
@@ -2462,6 +2491,7 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (bands != null) {
@@ -2583,6 +2613,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return ppg(field0);
   }
@@ -2603,6 +2634,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return ppg?.call(field0);
   }
@@ -2623,6 +2655,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (ppg != null) {
@@ -2647,6 +2680,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return ppg(this);
   }
@@ -2667,6 +2701,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return ppg?.call(this);
   }
@@ -2687,6 +2722,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (ppg != null) {
@@ -2808,6 +2844,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return telemetry(field0);
   }
@@ -2828,6 +2865,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return telemetry?.call(field0);
   }
@@ -2848,6 +2886,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (telemetry != null) {
@@ -2872,6 +2911,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return telemetry(this);
   }
@@ -2892,6 +2932,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return telemetry?.call(this);
   }
@@ -2912,6 +2953,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (telemetry != null) {
@@ -3033,6 +3075,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return accelerometer(field0);
   }
@@ -3053,6 +3096,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return accelerometer?.call(field0);
   }
@@ -3073,6 +3117,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (accelerometer != null) {
@@ -3097,6 +3142,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return accelerometer(this);
   }
@@ -3117,6 +3163,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return accelerometer?.call(this);
   }
@@ -3137,6 +3184,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (accelerometer != null) {
@@ -3259,6 +3307,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return gyroscope(field0);
   }
@@ -3279,6 +3328,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return gyroscope?.call(field0);
   }
@@ -3299,6 +3349,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (gyroscope != null) {
@@ -3323,6 +3374,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return gyroscope(this);
   }
@@ -3343,6 +3395,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return gyroscope?.call(this);
   }
@@ -3363,6 +3416,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (gyroscope != null) {
@@ -3485,6 +3539,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return control(field0);
   }
@@ -3505,6 +3560,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return control?.call(field0);
   }
@@ -3525,6 +3581,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (control != null) {
@@ -3549,6 +3606,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return control(this);
   }
@@ -3569,6 +3627,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return control?.call(this);
   }
@@ -3589,6 +3648,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (control != null) {
@@ -3710,6 +3770,7 @@ class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return pulse(field0);
   }
@@ -3730,6 +3791,7 @@ class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return pulse?.call(field0);
   }
@@ -3750,6 +3812,7 @@ class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (pulse != null) {
@@ -3774,6 +3837,7 @@ class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return pulse(this);
   }
@@ -3794,6 +3858,7 @@ class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return pulse?.call(this);
   }
@@ -3814,6 +3879,7 @@ class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (pulse != null) {
@@ -3936,6 +4002,7 @@ class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return movement(field0);
   }
@@ -3956,6 +4023,7 @@ class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return movement?.call(field0);
   }
@@ -3976,6 +4044,7 @@ class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (movement != null) {
@@ -4000,6 +4069,7 @@ class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return movement(this);
   }
@@ -4020,6 +4090,7 @@ class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return movement?.call(this);
   }
@@ -4040,6 +4111,7 @@ class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (movement != null) {
@@ -4162,6 +4234,7 @@ class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return peakAlpha(field0);
   }
@@ -4182,6 +4255,7 @@ class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return peakAlpha?.call(field0);
   }
@@ -4202,6 +4276,7 @@ class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (peakAlpha != null) {
@@ -4226,6 +4301,7 @@ class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return peakAlpha(this);
   }
@@ -4246,6 +4322,7 @@ class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return peakAlpha?.call(this);
   }
@@ -4266,6 +4343,7 @@ class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (peakAlpha != null) {
@@ -4388,6 +4466,7 @@ class _$MuseEventDto_GesturesImpl extends MuseEventDto_Gestures {
     required TResult Function(MovementDto field0) movement,
     required TResult Function(PeakAlphaDto field0) peakAlpha,
     required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
   }) {
     return gestures(field0);
   }
@@ -4408,6 +4487,7 @@ class _$MuseEventDto_GesturesImpl extends MuseEventDto_Gestures {
     TResult? Function(MovementDto field0)? movement,
     TResult? Function(PeakAlphaDto field0)? peakAlpha,
     TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
   }) {
     return gestures?.call(field0);
   }
@@ -4428,6 +4508,7 @@ class _$MuseEventDto_GesturesImpl extends MuseEventDto_Gestures {
     TResult Function(MovementDto field0)? movement,
     TResult Function(PeakAlphaDto field0)? peakAlpha,
     TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
     required TResult orElse(),
   }) {
     if (gestures != null) {
@@ -4452,6 +4533,7 @@ class _$MuseEventDto_GesturesImpl extends MuseEventDto_Gestures {
     required TResult Function(MuseEventDto_Movement value) movement,
     required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
     required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
   }) {
     return gestures(this);
   }
@@ -4472,6 +4554,7 @@ class _$MuseEventDto_GesturesImpl extends MuseEventDto_Gestures {
     TResult? Function(MuseEventDto_Movement value)? movement,
     TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
   }) {
     return gestures?.call(this);
   }
@@ -4492,6 +4575,7 @@ class _$MuseEventDto_GesturesImpl extends MuseEventDto_Gestures {
     TResult Function(MuseEventDto_Movement value)? movement,
     TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
     TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
     required TResult orElse(),
   }) {
     if (gestures != null) {
@@ -4513,6 +4597,237 @@ abstract class MuseEventDto_Gestures extends MuseEventDto {
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$MuseEventDto_GesturesImplCopyWith<_$MuseEventDto_GesturesImpl>
   get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$MuseEventDto_ReveImplCopyWith<$Res> {
+  factory _$$MuseEventDto_ReveImplCopyWith(
+    _$MuseEventDto_ReveImpl value,
+    $Res Function(_$MuseEventDto_ReveImpl) then,
+  ) = __$$MuseEventDto_ReveImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({ReveDto field0});
+
+  $ReveDtoCopyWith<$Res> get field0;
+}
+
+/// @nodoc
+class __$$MuseEventDto_ReveImplCopyWithImpl<$Res>
+    extends _$MuseEventDtoCopyWithImpl<$Res, _$MuseEventDto_ReveImpl>
+    implements _$$MuseEventDto_ReveImplCopyWith<$Res> {
+  __$$MuseEventDto_ReveImplCopyWithImpl(
+    _$MuseEventDto_ReveImpl _value,
+    $Res Function(_$MuseEventDto_ReveImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? field0 = null}) {
+    return _then(
+      _$MuseEventDto_ReveImpl(
+        null == field0
+            ? _value.field0
+            : field0 // ignore: cast_nullable_to_non_nullable
+                  as ReveDto,
+      ),
+    );
+  }
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $ReveDtoCopyWith<$Res> get field0 {
+    return $ReveDtoCopyWith<$Res>(_value.field0, (value) {
+      return _then(_value.copyWith(field0: value));
+    });
+  }
+}
+
+/// @nodoc
+
+class _$MuseEventDto_ReveImpl extends MuseEventDto_Reve {
+  const _$MuseEventDto_ReveImpl(this.field0) : super._();
+
+  @override
+  final ReveDto field0;
+
+  @override
+  String toString() {
+    return 'MuseEventDto.reve(field0: $field0)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$MuseEventDto_ReveImpl &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$MuseEventDto_ReveImplCopyWith<_$MuseEventDto_ReveImpl> get copyWith =>
+      __$$MuseEventDto_ReveImplCopyWithImpl<_$MuseEventDto_ReveImpl>(
+        this,
+        _$identity,
+      );
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String field0) connected,
+    required TResult Function() disconnected,
+    required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
+    required TResult Function(PpgDto field0) ppg,
+    required TResult Function(TelemetrySnapshot field0) telemetry,
+    required TResult Function(ImuDto field0) accelerometer,
+    required TResult Function(ImuDto field0) gyroscope,
+    required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
+    required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
+  }) {
+    return reve(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String field0)? connected,
+    TResult? Function()? disconnected,
+    TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
+    TResult? Function(PpgDto field0)? ppg,
+    TResult? Function(TelemetrySnapshot field0)? telemetry,
+    TResult? Function(ImuDto field0)? accelerometer,
+    TResult? Function(ImuDto field0)? gyroscope,
+    TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
+    TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
+  }) {
+    return reve?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String field0)? connected,
+    TResult Function()? disconnected,
+    TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
+    TResult Function(PpgDto field0)? ppg,
+    TResult Function(TelemetrySnapshot field0)? telemetry,
+    TResult Function(ImuDto field0)? accelerometer,
+    TResult Function(ImuDto field0)? gyroscope,
+    TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
+    TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
+    required TResult orElse(),
+  }) {
+    if (reve != null) {
+      return reve(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(MuseEventDto_Connected value) connected,
+    required TResult Function(MuseEventDto_Disconnected value) disconnected,
+    required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
+    required TResult Function(MuseEventDto_Ppg value) ppg,
+    required TResult Function(MuseEventDto_Telemetry value) telemetry,
+    required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
+    required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
+    required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
+    required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
+  }) {
+    return reve(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(MuseEventDto_Connected value)? connected,
+    TResult? Function(MuseEventDto_Disconnected value)? disconnected,
+    TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
+    TResult? Function(MuseEventDto_Ppg value)? ppg,
+    TResult? Function(MuseEventDto_Telemetry value)? telemetry,
+    TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
+    TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
+    TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
+    TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
+  }) {
+    return reve?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(MuseEventDto_Connected value)? connected,
+    TResult Function(MuseEventDto_Disconnected value)? disconnected,
+    TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
+    TResult Function(MuseEventDto_Ppg value)? ppg,
+    TResult Function(MuseEventDto_Telemetry value)? telemetry,
+    TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
+    TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
+    TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
+    TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
+    required TResult orElse(),
+  }) {
+    if (reve != null) {
+      return reve(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class MuseEventDto_Reve extends MuseEventDto {
+  const factory MuseEventDto_Reve(final ReveDto field0) =
+      _$MuseEventDto_ReveImpl;
+  const MuseEventDto_Reve._() : super._();
+
+  ReveDto get field0;
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$MuseEventDto_ReveImplCopyWith<_$MuseEventDto_ReveImpl> get copyWith =>
+      throw _privateConstructorUsedError;
 }
 
 /// @nodoc
@@ -5063,6 +5378,249 @@ abstract class _PulseDto implements PulseDto {
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$PulseDtoImplCopyWith<_$PulseDtoImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+mixin _$ReveDto {
+  double get timestamp => throw _privateConstructorUsedError;
+  String get kind => throw _privateConstructorUsedError;
+  double get clarity => throw _privateConstructorUsedError;
+  double get sleepDir => throw _privateConstructorUsedError;
+  double get delta => throw _privateConstructorUsedError;
+  int get dim => throw _privateConstructorUsedError;
+
+  /// Create a copy of ReveDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $ReveDtoCopyWith<ReveDto> get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ReveDtoCopyWith<$Res> {
+  factory $ReveDtoCopyWith(ReveDto value, $Res Function(ReveDto) then) =
+      _$ReveDtoCopyWithImpl<$Res, ReveDto>;
+  @useResult
+  $Res call({
+    double timestamp,
+    String kind,
+    double clarity,
+    double sleepDir,
+    double delta,
+    int dim,
+  });
+}
+
+/// @nodoc
+class _$ReveDtoCopyWithImpl<$Res, $Val extends ReveDto>
+    implements $ReveDtoCopyWith<$Res> {
+  _$ReveDtoCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ReveDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? timestamp = null,
+    Object? kind = null,
+    Object? clarity = null,
+    Object? sleepDir = null,
+    Object? delta = null,
+    Object? dim = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            timestamp: null == timestamp
+                ? _value.timestamp
+                : timestamp // ignore: cast_nullable_to_non_nullable
+                      as double,
+            kind: null == kind
+                ? _value.kind
+                : kind // ignore: cast_nullable_to_non_nullable
+                      as String,
+            clarity: null == clarity
+                ? _value.clarity
+                : clarity // ignore: cast_nullable_to_non_nullable
+                      as double,
+            sleepDir: null == sleepDir
+                ? _value.sleepDir
+                : sleepDir // ignore: cast_nullable_to_non_nullable
+                      as double,
+            delta: null == delta
+                ? _value.delta
+                : delta // ignore: cast_nullable_to_non_nullable
+                      as double,
+            dim: null == dim
+                ? _value.dim
+                : dim // ignore: cast_nullable_to_non_nullable
+                      as int,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$ReveDtoImplCopyWith<$Res> implements $ReveDtoCopyWith<$Res> {
+  factory _$$ReveDtoImplCopyWith(
+    _$ReveDtoImpl value,
+    $Res Function(_$ReveDtoImpl) then,
+  ) = __$$ReveDtoImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({
+    double timestamp,
+    String kind,
+    double clarity,
+    double sleepDir,
+    double delta,
+    int dim,
+  });
+}
+
+/// @nodoc
+class __$$ReveDtoImplCopyWithImpl<$Res>
+    extends _$ReveDtoCopyWithImpl<$Res, _$ReveDtoImpl>
+    implements _$$ReveDtoImplCopyWith<$Res> {
+  __$$ReveDtoImplCopyWithImpl(
+    _$ReveDtoImpl _value,
+    $Res Function(_$ReveDtoImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of ReveDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? timestamp = null,
+    Object? kind = null,
+    Object? clarity = null,
+    Object? sleepDir = null,
+    Object? delta = null,
+    Object? dim = null,
+  }) {
+    return _then(
+      _$ReveDtoImpl(
+        timestamp: null == timestamp
+            ? _value.timestamp
+            : timestamp // ignore: cast_nullable_to_non_nullable
+                  as double,
+        kind: null == kind
+            ? _value.kind
+            : kind // ignore: cast_nullable_to_non_nullable
+                  as String,
+        clarity: null == clarity
+            ? _value.clarity
+            : clarity // ignore: cast_nullable_to_non_nullable
+                  as double,
+        sleepDir: null == sleepDir
+            ? _value.sleepDir
+            : sleepDir // ignore: cast_nullable_to_non_nullable
+                  as double,
+        delta: null == delta
+            ? _value.delta
+            : delta // ignore: cast_nullable_to_non_nullable
+                  as double,
+        dim: null == dim
+            ? _value.dim
+            : dim // ignore: cast_nullable_to_non_nullable
+                  as int,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$ReveDtoImpl implements _ReveDto {
+  const _$ReveDtoImpl({
+    required this.timestamp,
+    required this.kind,
+    required this.clarity,
+    required this.sleepDir,
+    required this.delta,
+    required this.dim,
+  });
+
+  @override
+  final double timestamp;
+  @override
+  final String kind;
+  @override
+  final double clarity;
+  @override
+  final double sleepDir;
+  @override
+  final double delta;
+  @override
+  final int dim;
+
+  @override
+  String toString() {
+    return 'ReveDto(timestamp: $timestamp, kind: $kind, clarity: $clarity, sleepDir: $sleepDir, delta: $delta, dim: $dim)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ReveDtoImpl &&
+            (identical(other.timestamp, timestamp) ||
+                other.timestamp == timestamp) &&
+            (identical(other.kind, kind) || other.kind == kind) &&
+            (identical(other.clarity, clarity) || other.clarity == clarity) &&
+            (identical(other.sleepDir, sleepDir) ||
+                other.sleepDir == sleepDir) &&
+            (identical(other.delta, delta) || other.delta == delta) &&
+            (identical(other.dim, dim) || other.dim == dim));
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(runtimeType, timestamp, kind, clarity, sleepDir, delta, dim);
+
+  /// Create a copy of ReveDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ReveDtoImplCopyWith<_$ReveDtoImpl> get copyWith =>
+      __$$ReveDtoImplCopyWithImpl<_$ReveDtoImpl>(this, _$identity);
+}
+
+abstract class _ReveDto implements ReveDto {
+  const factory _ReveDto({
+    required final double timestamp,
+    required final String kind,
+    required final double clarity,
+    required final double sleepDir,
+    required final double delta,
+    required final int dim,
+  }) = _$ReveDtoImpl;
+
+  @override
+  double get timestamp;
+  @override
+  String get kind;
+  @override
+  double get clarity;
+  @override
+  double get sleepDir;
+  @override
+  double get delta;
+  @override
+  int get dim;
+
+  /// Create a copy of ReveDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ReveDtoImplCopyWith<_$ReveDtoImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 

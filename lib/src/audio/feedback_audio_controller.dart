@@ -242,6 +242,19 @@ class FeedbackAudioController {
     }
   }
 
+  /// Distinct attention tone from the sleep-guardrail, higher-pitched than the
+  /// recalibrate bowl, at full bell volume.
+  Future<void> playWarningChime() async {
+    try {
+      await _bell.setAsset(bellAsset);
+      await _bell.setLoopMode(LoopMode.off);
+      await _bell.setVolume(_bellVolumeTotal);
+      await _bell.play();
+    } catch (e) {
+      debugPrint('[audio] warning chime playback failed: $e');
+    }
+  }
+
   Future<void> stop() async {
     _resetRewardState();
     await Future.wait([

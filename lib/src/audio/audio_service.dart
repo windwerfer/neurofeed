@@ -61,6 +61,8 @@ class AudioService {
 
   Future<void> playRecalibrateChime() => _controller.playRecalibrateChime();
 
+  Future<void> playWarningChime() => _controller.playWarningChime();
+
   Future<void> pause() => _controller.pauseBackground();
 
   Future<void> resume() => _controller.resumeBackground();

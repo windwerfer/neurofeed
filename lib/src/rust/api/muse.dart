@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'muse.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `map_event`, `map_imu`, `now_ms`, `spawn_event_forwarder`
+// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `frontal_delta_average`, `map_event`, `map_imu`, `now_ms`, `score_window_len`, `spawn_event_forwarder`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ForwarderGuard`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `drop`
 
@@ -162,6 +162,7 @@ sealed class MuseEventDto with _$MuseEventDto {
       MuseEventDto_PeakAlpha;
   const factory MuseEventDto.gestures(GestureDto field0) =
       MuseEventDto_Gestures;
+  const factory MuseEventDto.reve(ReveDto field0) = MuseEventDto_Reve;
 }
 
 /// Peak alpha frequency and power (parabolic interpolation over FFT bins).
@@ -193,6 +194,21 @@ sealed class PulseDto with _$PulseDto {
     required double bpm,
     required double confidence,
   }) = _PulseDto;
+}
+
+/// Per-second sleep-guardrail score from the loaded foundation model (Pure
+/// Jhana protocol). The full pooled latent stays Rust-side; only the reduced
+/// readings cross the bridge.
+@freezed
+sealed class ReveDto with _$ReveDto {
+  const factory ReveDto({
+    required double timestamp,
+    required String kind,
+    required double clarity,
+    required double sleepDir,
+    required double delta,
+    required int dim,
+  }) = _ReveDto;
 }
 
 /// Telemetry snapshot (battery etc.) surfaced in the status bar.

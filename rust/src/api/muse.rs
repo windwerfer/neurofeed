@@ -4,6 +4,7 @@ use crate::frb_generated::StreamSink;
 use muse_rs::prelude::*;
 
 use crate::analysis::gesture::GestureDetector;
+use crate::analysis::{guardrail, luna, reve};
 use crate::connection::{state, ActiveConnection};
 
 fn now_ms() -> f64 {
@@ -12,6 +13,74 @@ fn now_ms() -> f64 {
         .unwrap_or_default()
         .as_secs_f64()
         * 1000.0
+}
+
+// ── Guardrail window helpers ─────────────────────────────────────────────────
+
+/// Max samples kept per electrode in the rolling guardrail window buffer.
+/// 5.5 s @ 256 Hz covers the longer LUNA epoch (1280 = 5 s) with headroom.
+const GUARDRAIL_WINDOW: usize = 1408;
+
+/// App electrode index → model row order (AF7, AF8, TP9, TP10). The forwarder's
+/// electrode numbering is `0=TP9, 1=AF7, 2=AF8, 3=TP10`; the encoders expect
+/// rows in AF7/AF8/TP9/TP10 order to match the fixed position vectors below.
+const ELECTRODE_TO_MODEL_ROW: [i32; 4] = [1, 2, 0, 3];
+
+/// AF7/AF8/TP9/TP10 approximate EEG coordinates (mm), shared by both encoders
+/// (REVE `positions_xyz`, LUNA `chan_pos`).
+const MODEL_POSITIONS: [f32; 12] = [
+    -36.0, 30.0, 90.0,  // AF7
+    36.0, 30.0, 90.0,   // AF8
+    -75.0, -18.0, -15.0, // TP9
+    75.0, -18.0, -15.0,  // TP10
+];
+
+/// Window length for [kind]: LUNA pretrains on 5 s epochs (1280 @ 256 Hz),
+/// REVE on 4 s (1024 @ 256 Hz).
+fn score_window_len(kind: &str) -> Option<usize> {
+    match kind {
+        luna::KIND_LUNA_BASE | luna::KIND_LUNA_LARGE => Some(1280),
+        luna::KIND_REVE_BASE => Some(1024),
+        _ => None,
+    }
+}
+
+/// Build a time-aligned model window from the per-electrode rolling buffers,
+/// arranged in model row order (AF7, AF8, TP9, TP10). Returns
+/// `(signal, positions, n_channels, n_times)` or None when any of the four
+/// electrodes has fewer than [n_times] buffered samples yet.
+fn build_score_window(
+    bufs: &std::collections::HashMap<i32, Vec<f64>>,
+    n_times: usize,
+) -> Option<(Vec<f32>, Vec<f32>, usize, usize)> {
+    let mut signal = Vec::with_capacity(4 * n_times);
+    for app_el in ELECTRODE_TO_MODEL_ROW {
+        let buf = bufs.get(&app_el)?;
+        if buf.len() < n_times {
+            return None;
+        }
+        let start = buf.len() - n_times;
+        signal.extend(buf[start..].iter().map(|s| *s as f32));
+    }
+    Some((signal, MODEL_POSITIONS.to_vec(), 4, n_times))
+}
+
+/// Average of the most recent frontal (AF7/AF8) delta band powers, µV²/Hz.
+/// Used as the permanent hard-rail companion to the embedding.
+fn frontal_delta_average(deltas: &std::collections::HashMap<i32, f64>) -> f64 {
+    let mut sum = 0f64;
+    let mut n = 0u32;
+    for el in [1i32, 2] {
+        if let Some(d) = deltas.get(&el) {
+            sum += d;
+            n += 1;
+        }
+    }
+    if n == 0 {
+        0.0
+    } else {
+        sum / n as f64
+    }
 }
 
 // ── DTOs (serializable across the bridge) ──────────────────────────────────────
@@ -153,6 +222,28 @@ pub struct GestureDto {
     pub eye: u8,
 }
 
+/// Per-second sleep-guardrail score from the loaded foundation model (Pure
+/// Jhana protocol). The full pooled latent stays Rust-side; only the reduced
+/// readings cross the bridge.
+#[frb(dart_metadata = ("freezed",))]
+pub struct ReveDto {
+    pub timestamp: f64,
+    /// Model kind that produced this score (`reve_base` | `luna_base` |
+    /// `luna_large`); matches `ModelKind.ffId`.
+    pub kind: String,
+    /// Cosine of the live pooled embedding against the awake `V_clear` anchor
+    /// captured during calibration (1.0 = exactly the awake reference).
+    pub clarity: f32,
+    /// Sleep-direction index: cosine against `V_sleep` once that anchor exists,
+    /// otherwise `1 - clarity`. Higher = pointing toward sleep.
+    pub sleep_dir: f32,
+    /// Classical frontal (AF7/AF8 average) delta band power, µV²/Hz — the
+    /// permanent hard rail companion to the embedding.
+    pub delta: f64,
+    /// Latent embedding dim (informational, from the loaded model).
+    pub dim: u32,
+}
+
 /// All events streamed from the headset to the UI.
 #[frb(dart_metadata = ("freezed",))]
 pub enum MuseEventDto {
@@ -169,6 +260,7 @@ pub enum MuseEventDto {
     Movement(MovementDto),
     PeakAlpha(PeakAlphaDto),
     Gestures(GestureDto),
+    Reve(ReveDto),
 }
 
 // ── Bridge API ─────────────────────────────────────────────────────────────────
@@ -480,6 +572,14 @@ fn spawn_event_forwarder() {
         let mut accel_mag_buffer: Vec<f64> = Vec::new();
         let mut last_metrics = tokio::time::Instant::now();
 
+        // Guardrail (Pure Jhana): rolling per-electrode EEG window + the most
+        // recent frontal delta, fed to the loaded foundation model once/second.
+        let mut window_bufs: std::collections::HashMap<i32, Vec<f64>> =
+            std::collections::HashMap::new();
+        let mut frontal_delta: std::collections::HashMap<i32, f64> =
+            std::collections::HashMap::new();
+        let mut last_guardrail_attempt = tokio::time::Instant::now();
+
         // Blink / clench / eye-position detector, fed from raw EEG + gamma.
         let mut gesture = GestureDetector::default();
 
@@ -666,6 +766,16 @@ fn spawn_event_forwarder() {
                     break;
                 }
                 if let Some((electrode, timestamp, samples)) = eeg_samples {
+                    // Keep the rolling guardrail window (all electrodes, capped
+                    // at ~5.5 s) fed from the same raw EEG packets.
+                    {
+                        let buf = window_bufs.entry(electrode).or_default();
+                        buf.extend_from_slice(&samples);
+                        if buf.len() > GUARDRAIL_WINDOW {
+                            let drain_to = buf.len() - GUARDRAIL_WINDOW;
+                            buf.drain(..drain_to);
+                        }
+                    }
                     let trimmed = {
                         let buf = accums.entry(electrode).or_default();
                         for s in &samples {
@@ -692,6 +802,7 @@ fn spawn_event_forwarder() {
                         // result: [delta, theta, alpha, beta, gamma, peak_alpha_freq, peak_alpha_power, line_noise_ratio]
                         counts.bands += 1;
                         gesture.feed_gamma(electrode, result[4]);
+                        frontal_delta.insert(electrode, result[0]);
                         let should_stop = {
                             let mut guard = state()
                                 .inner
@@ -798,6 +909,86 @@ fn spawn_event_forwarder() {
                                     guard.sink = None;
                                 }
                             }
+                        }
+
+                        // REVE/LUNA sleep-guardrail scoring. Runs once per second
+                        // while enabled, on a blocking thread so a slow inference
+                        // (LUNA-Large can exceed 1 s) never stalls the event loop.
+                        // Ticks during an in-flight run are coalesced away.
+                        if last_guardrail_attempt.elapsed()
+                            >= std::time::Duration::from_secs(1)
+                            && guardrail::is_enabled()
+                            && guardrail::try_begin_score()
+                        {
+                            last_guardrail_attempt = tokio::time::Instant::now();
+                            let kind = match guardrail::active_kind() {
+                                Some(k) => k,
+                                None => {
+                                    guardrail::finish_score();
+                                    continue;
+                                }
+                            };
+                            let Some(n_times) = score_window_len(&kind) else {
+                                guardrail::finish_score();
+                                continue;
+                            };
+                            let window = build_score_window(&window_bufs, n_times);
+                            let Some((signal, positions, n_channels, n_times)) = window
+                            else {
+                                // Not enough buffered samples yet — first window
+                                // lands after ~5 s of streaming.
+                                guardrail::finish_score();
+                                continue;
+                            };
+                            let ts = now_ms;
+                            let delta = frontal_delta_average(&frontal_delta);
+                            tokio::spawn(async move {
+                                let infer_kind = kind.clone();
+                                let embedding = tokio::task::spawn_blocking(move || {
+                                    if infer_kind == luna::KIND_REVE_BASE {
+                                        reve::score_window(signal, positions, n_channels, n_times)
+                                    } else {
+                                        luna::score_window(signal, positions, n_channels, n_times)
+                                    }
+                                })
+                                .await;
+                                let embedding = match embedding {
+                                    Ok(Ok(v)) => v,
+                                    Ok(Err(e)) => {
+                                        log::warn!("[guardrail] inference failed: {e}");
+                                        guardrail::finish_score();
+                                        return;
+                                    }
+                                    Err(e) => {
+                                        log::warn!("[guardrail] inference task panicked: {e}");
+                                        guardrail::finish_score();
+                                        return;
+                                    }
+                                };
+                                guardrail::set_live_embedding(kind.clone(), embedding);
+                                let dim = guardrail::live_dim();
+                                if let Some((clarity, sd)) = guardrail::clarity_and_sleep_dir() {
+                                    let sleep_dir = sd.unwrap_or(1.0 - clarity);
+                                    let dto = MuseEventDto::Reve(ReveDto {
+                                        timestamp: ts,
+                                        kind,
+                                        clarity,
+                                        sleep_dir,
+                                        delta,
+                                        dim,
+                                    });
+                                    let mut guard = state()
+                                        .inner
+                                        .lock()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    if let Some(sink) = &guard.sink {
+                                        if sink.add(dto).is_err() {
+                                            guard.sink = None;
+                                        }
+                                    }
+                                }
+                                guardrail::finish_score();
+                            });
                         }
                     }
                 }
