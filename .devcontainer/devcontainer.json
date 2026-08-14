@@ -59,6 +59,10 @@
         "-e", "XDG_RUNTIME_DIR=/tmp",
         "-e", "DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/user_bus",
 
+        // fix: if display 1 is not found (is rm after restart)
+        // ln -sf $XDG_RUNTIME_DIR/wayland-1 $XDG_RUNTIME_DIR/wayland-0
+
+
         // Mount host's PulseAudio / PipeWire-Pulse socket into the container
         "-v", "${localEnv:XDG_RUNTIME_DIR}/pulse/native:/tmp/pulse-socket:ro"
 
