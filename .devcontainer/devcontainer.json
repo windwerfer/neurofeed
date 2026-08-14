@@ -53,9 +53,9 @@
 
         // pass wayland into the container
         "--device", "/dev/dri",
-        "-v", "${localEnv:XDG_RUNTIME_DIR}/${localEnv:WAYLAND_DISPLAY}:/tmp/wayland-0",
+        "-v", "${localEnv:XDG_RUNTIME_DIR}/${localEnv:WAYLAND_DISPLAY}:/tmp/${localEnv:WAYLAND_DISPLAY}",
         "-v", "${localEnv:XDG_RUNTIME_DIR}/bus:/tmp/user_bus",
-        "-e", "WAYLAND_DISPLAY=wayland-0",
+        "-e", "WAYLAND_DISPLAY=${localEnv:WAYLAND_DISPLAY}",
         "-e", "XDG_RUNTIME_DIR=/tmp",
         "-e", "DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/user_bus",
 
