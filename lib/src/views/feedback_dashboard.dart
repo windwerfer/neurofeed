@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/charts/band_cache.dart' show bandColors, bandNames;
 import 'package:muse_ml/src/charts/eeg_data_source.dart';
 import 'package:muse_ml/src/charts/session_reader.dart';
+import 'package:muse_ml/src/charts/smooth_path.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
@@ -1533,31 +1534,8 @@ class _ChartPainter extends CustomPainter {
         canvas.drawCircle(pts.first, 1.6, paint);
         continue;
       }
-      _buildSmoothPath(path, pts);
+      buildSmoothPath(path, pts);
       canvas.drawPath(path, paint);
-    }
-  }
-
-  /// Catmull-Rom → cubic Bezier smoothing (same as the live bands graph), so
-  /// the summary curves are rounded instead of spiky.
-  void _buildSmoothPath(Path path, List<Offset> pts) {
-    if (pts.isEmpty) return;
-    path.moveTo(pts[0].dx, pts[0].dy);
-    if (pts.length < 2) return;
-    for (var i = 0; i < pts.length - 1; i++) {
-      final p0 = i > 0 ? pts[i - 1] : pts[i];
-      final p1 = pts[i];
-      final p2 = pts[i + 1];
-      final p3 = i + 2 < pts.length ? pts[i + 2] : pts[i + 1];
-      final cp1 = Offset(
-        p1.dx + (p2.dx - p0.dx) / 6,
-        p1.dy + (p2.dy - p0.dy) / 6,
-      );
-      final cp2 = Offset(
-        p2.dx - (p3.dx - p1.dx) / 6,
-        p2.dy - (p3.dy - p1.dy) / 6,
-      );
-      path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p2.dx, p2.dy);
     }
   }
 
