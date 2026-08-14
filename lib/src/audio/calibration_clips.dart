@@ -1,122 +1,140 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Role of a calibration clip within a program's calibration sequence.
-enum CalibrationPhase {
-  /// Spoken/tone intro played once before the (silent) baseline collection,
-  /// e.g. the ATR "short-clear" intro.
-  intro,
-
-  /// Phase A of the REVE protocol: artifact blink/jaw clip. Collected samples
-  /// are never used as anchors; the recording captures the clip for repro.
-  artifact,
-
-  /// Phase B: eyes-open / counting (the "active" anchor).
-  active,
-
-  /// Phase C: eyes-closed / drifting rest (the "rest" anchor). Also the source
-  /// of the V_clear reference vector for REVE.
-  rest,
-}
-
-/// One entry in [CalibrationManifest]: the clip file + what it is for.
-class CalibrationClip {
-  const CalibrationClip({
+/// One playable clip inside a calibration recipe: an intro variant for a
+/// `single` calibration or a fixed stage for a `staged` one.
+class CalibrationStep {
+  const CalibrationStep({
     required this.id,
     required this.file,
-    required this.protocols,
-    required this.phase,
-    this.eyes,
     this.text = '',
+    this.seconds = 0,
+    this.eyes,
   });
 
   final String id;
   final String file;
 
-  /// Protocol names (ProtocolType.name) this clip participates in.
-  final List<String> protocols;
-
-  final CalibrationPhase phase;
-
-  /// `open`, `closed`, or null when the clip does not instruct an eye state.
-  final String? eyes;
-
-  /// Spoken transcript. Placeholder until real recordings are produced.
+  /// Spoken transcript of the clip (placeholder until real recordings exist).
   final String text;
 
-  factory CalibrationClip.fromJson(Map<String, Object?> json) {
-    final phaseName = json['phase'] as String? ?? '';
-    return CalibrationClip(
-      id: json['id'] as String? ?? '',
-      file: json['file'] as String? ?? '',
-      protocols:
-          (json['protocols'] as List<Object?>?)?.whereType<String>().toList() ??
-          const [],
-      phase:
-          CalibrationPhase.values
-              .where((p) => p.name == phaseName)
-              .firstOrNull ??
-          CalibrationPhase.intro,
-      eyes: json['eyes'] as String?,
-      text: json['text'] as String? ?? '',
-    );
-  }
+  /// Collection seconds associated with this step. 0 for intro variants (the
+  /// single calibration's silent window lives on the recipe); the fixed length
+  /// of each silent window for staged steps.
+  final int seconds;
+
+  /// `open`, `closed`, or null when the step does not instruct an eye state.
+  final String? eyes;
+
+  factory CalibrationStep.fromJson(Map<String, Object?> json) =>
+      CalibrationStep(
+        id: json['id'] as String? ?? '',
+        file: json['file'] as String? ?? '',
+        text: json['text'] as String? ?? '',
+        seconds: (json['seconds'] as num?)?.toInt() ?? 0,
+        eyes: json['eyes'] as String?,
+      );
 }
 
-/// Parsed `assets/audio/calibration/calibration.json`.
+/// How a feedback protocol calibrates. Two kinds today:
+///
+/// * `single` — one random intro variant, then one silent baseline window of
+///   [seconds] with [eyes] in that state.
+/// * `staged` — a fixed ordered list of [stages]; each stage plays a clip then
+///   collects silently for that stage's `seconds`.
+class CalibrationRecipe {
+  const CalibrationRecipe({
+    required this.protocol,
+    required this.kind,
+    this.seconds = 0,
+    this.eyes,
+    this.intros = const [],
+    this.stages = const [],
+  });
+
+  final String protocol;
+
+  /// `single` or `staged` (see [isSingle]/[isStaged]).
+  final String kind;
+
+  /// Silent-baseline length (seconds) for a `single` calibration.
+  final int seconds;
+
+  /// Eye state during the `single` baseline window.
+  final String? eyes;
+
+  /// Randomizable intro variants (only `single`).
+  final List<CalibrationStep> intros;
+
+  /// Fixed ordered steps (only `staged`).
+  final List<CalibrationStep> stages;
+
+  bool get isSingle => kind == 'single';
+
+  bool get isStaged => kind == 'staged';
+
+  /// A random intro variant for this recipe, or null when there are none.
+  CalibrationStep? randomIntro([Random? random]) {
+    if (intros.isEmpty) {
+      return null;
+    }
+    return intros[(random ?? Random()).nextInt(intros.length)];
+  }
+
+  factory CalibrationRecipe.fromJson(Map<String, Object?> json) =>
+      CalibrationRecipe(
+        protocol: json['protocol'] as String? ?? '',
+        kind: json['kind'] as String? ?? 'single',
+        seconds: (json['seconds'] as num?)?.toInt() ?? 0,
+        eyes: json['eyes'] as String?,
+        intros: _steps(json['intros']),
+        stages: _steps(json['stages']),
+      );
+
+  static List<CalibrationStep> _steps(Object? raw) =>
+      (raw as List<Object?>?)
+          ?.whereType<Map<String, Object?>>()
+          .map(CalibrationStep.fromJson)
+          .toList() ??
+      const [];
+}
+
+/// Parsed `assets/audio/calibration/calibration.json` (v2): a version tag plus
+/// one calibration recipe per feedback protocol.
 class CalibrationManifest {
-  const CalibrationManifest({required this.version, required this.clips});
+  const CalibrationManifest({required this.version, required this.recipes});
 
   /// Manifest schema version; persisted in session metadata.
   final int version;
-  final List<CalibrationClip> clips;
+  final List<CalibrationRecipe> recipes;
 
   static const String asset = 'assets/audio/calibration/calibration.json';
-  static const int currentVersion = 1;
+  static const int currentVersion = 2;
 
-  List<CalibrationClip> forProtocol(
-    String protocolName, {
-    CalibrationPhase? phase,
-  }) {
-    return clips.where((c) {
-      if (!c.protocols.contains(protocolName)) {
-        return false;
+  CalibrationRecipe? recipeFor(String protocolName) {
+    for (final recipe in recipes) {
+      if (recipe.protocol == protocolName) {
+        return recipe;
       }
-      return phase == null || c.phase == phase;
-    }).toList();
-  }
-
-  /// Intro clip for [protocolName], defaulting to the first listed variant.
-  CalibrationClip? introFor(String protocolName) {
-    final intros = forProtocol(protocolName, phase: CalibrationPhase.intro);
-    return intros.isEmpty ? null : intros.first;
-  }
-
-  /// Ordered calibration clip sequence for [protocolName] (used by the REVE
-  /// three-phase calibration; ATR sequences are a single intro clip).
-  List<CalibrationClip> sequenceFor(String protocolName) {
-    final order = CalibrationPhase.values;
-    final clips = forProtocol(protocolName);
-    clips.sort(
-      (a, b) => order.indexOf(a.phase).compareTo(order.indexOf(b.phase)),
-    );
-    return clips;
+    }
+    return null;
   }
 
   static CalibrationManifest? fromJson(Object? json) {
     if (json is! Map<String, Object?>) {
       return null;
     }
-    final raw = json['clips'] as List<Object?>? ?? const [];
-    final clips = raw
+    final raw = json['calibrations'] as List<Object?>? ?? const [];
+    final recipes = raw
         .whereType<Map<String, Object?>>()
-        .map(CalibrationClip.fromJson)
+        .map(CalibrationRecipe.fromJson)
         .toList();
     return CalibrationManifest(
       version: (json['version'] as num?)?.toInt() ?? currentVersion,
-      clips: clips,
+      recipes: recipes,
     );
   }
 

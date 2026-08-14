@@ -353,26 +353,38 @@ class _PhaseControls extends ConsumerWidget {
                 _FaultyPadFallback(ref: ref, theme: theme),
                 const SizedBox(height: 8),
               ],
-            ] else if (fb.baselineSecondsLeft > 0) ...[
+            ] else if (fb.calibrationStepName != null) ...[
               Icon(
                 Icons.graphic_eq,
                 color: theme.colorScheme.primary,
                 size: 48,
               ),
               const SizedBox(height: 8),
-              Text('Recording baseline…', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 8),
               Text(
-                'Sit quietly, let your mind wander. ${fb.baselineSecondsLeft}s',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
+                fb.calibrationStepName!,
+                style: theme.textTheme.titleMedium,
               ),
-              const SizedBox(height: 12),
-              LinearProgressIndicator(
-                value:
-                    (calibrationBaselineSeconds - fb.baselineSecondsLeft) /
-                    calibrationBaselineSeconds,
-              ),
+              const SizedBox(height: 8),
+              if (fb.baselineSecondsLeft > 0) ...[
+                Text(
+                  'Sit quietly, let your mind wander. ${fb.baselineSecondsLeft}s',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: (fb.calibrationStepTotal - fb.baselineSecondsLeft) /
+                      fb.calibrationStepTotal,
+                ),
+              ] else ...[
+                Text(
+                  'Playing the calibration cue…',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ],
             ] else ...[
               const LinearProgressIndicator(),
               const SizedBox(height: 8),
