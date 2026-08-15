@@ -13,6 +13,8 @@ class CalibrationStep {
     this.text = '',
     this.seconds = 0,
     this.eyes,
+    this.challengeText = const [],
+    this.challengeTextHint,
   });
 
   final String id;
@@ -29,6 +31,22 @@ class CalibrationStep {
   /// `open`, `closed`, or null when the step does not instruct an eye state.
   final String? eyes;
 
+  /// Mentally-active challenge prompts shown on screen during the stage (e.g.
+  /// "name capital cities"); one is picked at random per calibration run.
+  final List<String> challengeText;
+
+  /// Fixed help line shown above [challengeText] (identical regardless of the
+  /// chosen prompt).
+  final String? challengeTextHint;
+
+  /// Picks a random [challengeText] entry, or null when the step has none.
+  String? randomChallenge([Random? random]) {
+    if (challengeText.isEmpty) {
+      return null;
+    }
+    return challengeText[(random ?? Random()).nextInt(challengeText.length)];
+  }
+
   factory CalibrationStep.fromJson(Map<String, Object?> json) =>
       CalibrationStep(
         id: json['id'] as String? ?? '',
@@ -36,6 +54,11 @@ class CalibrationStep {
         text: json['text'] as String? ?? '',
         seconds: (json['seconds'] as num?)?.toInt() ?? 0,
         eyes: json['eyes'] as String?,
+        challengeText: (json['challengeText'] as List<Object?>?)
+                ?.whereType<String>()
+                .toList() ??
+            const [],
+        challengeTextHint: json['challengeTextHint'] as String?,
       );
 }
 

@@ -64,6 +64,7 @@ class _CalibrationStep {
     this.clip,
     this.seconds = 0,
     this.eyes,
+    this.challengeText,
   });
 
   /// UI label for the step (shown during calibration).
@@ -77,6 +78,10 @@ class _CalibrationStep {
 
   /// Eye state during the collection window (`open`/`closed`/null).
   final String? eyes;
+
+  /// The mentally-active challenge chosen at random for this calibration run,
+  /// or null when the stage has none. Shown on screen during the stage.
+  final String? challengeText;
 }
 
 class FeedbackState {
@@ -96,6 +101,8 @@ class FeedbackState {
   final bool showNerdStats;
   final String? calibrationStepName;
   final int calibrationStepTotal;
+  final String? calibrationChallengeHint;
+  final String? calibrationChallengeText;
 
   const FeedbackState({
     this.phase = FeedbackPhase.idle,
@@ -114,6 +121,8 @@ class FeedbackState {
     this.showNerdStats = false,
     this.calibrationStepName,
     this.calibrationStepTotal = 0,
+    this.calibrationChallengeHint,
+    this.calibrationChallengeText,
   });
 
   static const Object _sentinel = Object();
@@ -135,6 +144,8 @@ class FeedbackState {
     bool? showNerdStats,
     Object? calibrationStepName = _sentinel,
     int? calibrationStepTotal,
+    Object? calibrationChallengeHint = _sentinel,
+    Object? calibrationChallengeText = _sentinel,
   }) => FeedbackState(
     phase: phase ?? this.phase,
     protocol: protocol ?? this.protocol,
@@ -161,6 +172,12 @@ class FeedbackState {
         : calibrationStepName as String?,
     calibrationStepTotal:
         calibrationStepTotal ?? this.calibrationStepTotal,
+    calibrationChallengeHint: identical(calibrationChallengeHint, _sentinel)
+        ? this.calibrationChallengeHint
+        : calibrationChallengeHint as String?,
+    calibrationChallengeText: identical(calibrationChallengeText, _sentinel)
+        ? this.calibrationChallengeText
+        : calibrationChallengeText as String?,
   );
 }
 
@@ -488,7 +505,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// the raw EEG keeps streaming (Option B) — collection gates on the silent
   /// windows only, so the clip audio never contaminates the baseline.
   Future<void> _playCalibrationAndBaseline() async {
-    state = state.copyWith(waitingForSignal: false);
+    state = state.copyWith(
+      waitingForSignal: false,
+      calibrationChallengeHint: null,
+      calibrationChallengeText: null,
+    );
     _steps.clear();
     _stepIndex = 0;
     _clipPhases.clear();
@@ -521,6 +542,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             clip: stage,
             seconds: stage.seconds,
             eyes: stage.eyes,
+            challengeText: stage.randomChallenge(),
           ),
         );
       }
@@ -550,6 +572,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     state = state.copyWith(
       calibrationStepName: step.name,
       calibrationStepTotal: step.seconds,
+      calibrationChallengeHint: step.clip?.challengeTextHint,
+      calibrationChallengeText: step.challengeText,
       baselineSecondsLeft: 0,
     );
     if (step.clip != null) {
@@ -569,6 +593,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             clipFile: step.clip!.file,
             spokenText: step.clip!.text,
             eyes: step.clip!.eyes,
+            challengeText: step.challengeText,
             startSecs: clipStart.difference(sessionStart).inMilliseconds / 1000,
             endSecs: clipEnd.difference(sessionStart).inMilliseconds / 1000,
             kind: _calibrationKind == 'staged' ? 'stage' : 'intro',
@@ -637,7 +662,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _finalizeGuardrailBaseline();
     }
     _recordCalibration();
-    state = state.copyWith(baselineSecondsLeft: 0, currentThreshold: threshold);
+    state = state.copyWith(
+      baselineSecondsLeft: 0,
+      currentThreshold: threshold,
+      calibrationChallengeHint: null,
+      calibrationChallengeText: null,
+    );
     unawaited(startPlaying());
   }
 

@@ -120,6 +120,7 @@ class SessionCalibrationPhase {
     required this.clipFile,
     this.spokenText = '',
     this.eyes,
+    this.challengeText,
     this.startSecs,
     this.endSecs,
     this.kind = 'intro',
@@ -133,6 +134,10 @@ class SessionCalibrationPhase {
 
   /// `open`, `closed`, or null when the clip does not instruct an eye state.
   final String? eyes;
+
+  /// The mentally-active challenge shown on screen during this stage (one
+  /// picked at random per calibration run), or null for stages without one.
+  final String? challengeText;
 
   /// Start/end of the phase, in seconds from session (recording) start.
   /// The guidance clip plays between the two; the raw EEG in that window is
@@ -150,6 +155,7 @@ class SessionCalibrationPhase {
     'clipFile': clipFile,
     if (spokenText.isNotEmpty) 'spokenText': spokenText,
     if (eyes != null) 'eyes': eyes,
+    if (challengeText != null) 'challengeText': challengeText,
     if (startSecs != null) 'startSecs': startSecs,
     if (endSecs != null) 'endSecs': endSecs,
     if (kind != 'intro') 'kind': kind,
@@ -164,6 +170,7 @@ class SessionCalibrationPhase {
       clipFile: json['clipFile'] as String? ?? '',
       spokenText: json['spokenText'] as String? ?? '',
       eyes: json['eyes'] as String?,
+      challengeText: json['challengeText'] as String?,
       startSecs: (json['startSecs'] as num?)?.toDouble(),
       endSecs: (json['endSecs'] as num?)?.toDouble(),
       kind: json['kind'] as String? ?? 'intro',

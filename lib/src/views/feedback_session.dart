@@ -364,7 +364,39 @@ class _PhaseControls extends ConsumerWidget {
                 fb.calibrationStepName!,
                 style: theme.textTheme.titleMedium,
               ),
-              const SizedBox(height: 8),
+              if (fb.calibrationChallengeText != null) ...[
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      if (fb.calibrationChallengeHint case final hint?) ...[
+                        Text(
+                          hint,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      Text(
+                        fb.calibrationChallengeText!,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
               if (fb.baselineSecondsLeft > 0) ...[
                 Text(
                   'Sit quietly, let your mind wander. ${fb.baselineSecondsLeft}s',
