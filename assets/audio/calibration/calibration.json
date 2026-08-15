@@ -9,22 +9,22 @@
       "intros": [
         {
           "id": "atr-short-clear",
-          "file": "assets/audio/calibration/alpha-theta-ratio_short-clear.opus",
+          "file": "assets/audio/calibration/alpha-theta-ratio_short-clear.ogg",
           "text": "Please close your eyes and sit comfortably. For the next ninety seconds, simply rest. Let your mind settle on its own. There is nothing you need to do. We are measuring your natural baseline."
         },
         {
           "id": "atr-soft-reassuring",
-          "file": "assets/audio/calibration/alpha-theta-ratio_soft-reassuring.opus",
+          "file": "assets/audio/calibration/alpha-theta-ratio_soft-reassuring.ogg",
           "text": "Gently close your eyes and relax your jaw. For the next ninety seconds, just sit quietly. You don’t need to focus or control anything. Let your awareness rest inside and allow everything to settle. This short period helps us set your personal baseline."
         },
         {
           "id": "atr-minimal-direct",
-          "file": "assets/audio/calibration/alpha-theta-ratio_minimal-direct.opus",
+          "file": "assets/audio/calibration/alpha-theta-ratio_minimal-direct.ogg",
           "text": "Close your eyes. Sit quietly for ninety seconds. Let everything rest on its own. Recording your baseline now."
         },
         {
           "id": "atr-meditative-tone",
-          "file": "assets/audio/calibration/alpha-theta-ratio_meditative-tone.opus",
+          "file": "assets/audio/calibration/alpha-theta-ratio_meditative-tone.ogg",
           "text": "Close your eyes and find a comfortable position. For the next ninety seconds, allow yourself to simply be here. No effort is needed. Let your mind rest and your awareness turn inward."
         }
       ]
@@ -38,22 +38,22 @@
       "intros": [
         {
           "id": "atr-base-short-clear",
-          "file": "assets/audio/calibration/alpha-theta-ratio_short-clear.opus",
+          "file": "assets/audio/calibration/alpha-theta-ratio_short-clear.ogg",
           "text": "Please close your eyes and sit comfortably. For the next ninety seconds, simply rest. Let your mind settle on its own. There is nothing you need to do. We are measuring your natural baseline."
         },
         {
           "id": "atr-base-soft-reassuring",
-          "file": "assets/audio/calibration/alpha-theta-ratio_soft-reassuring.opus",
+          "file": "assets/audio/calibration/alpha-theta-ratio_soft-reassuring.ogg",
           "text": "Gently close your eyes and relax your jaw. For the next ninety seconds, just sit quietly. You don’t need to focus or control anything. Let your awareness rest inside and allow everything to settle. This short period helps us set your personal baseline."
         },
         {
           "id": "atr-base-minimal-direct",
-          "file": "assets/audio/calibration/alpha-theta-ratio_minimal-direct.opus",
+          "file": "assets/audio/calibration/alpha-theta-ratio_minimal-direct.ogg",
           "text": "Close your eyes. Sit quietly for ninety seconds. Let everything rest on its own. Recording your baseline now."
         },
         {
           "id": "atr-base-meditative-tone",
-          "file": "assets/audio/calibration/alpha-theta-ratio_meditative-tone.opus",
+          "file": "assets/audio/calibration/alpha-theta-ratio_meditative-tone.ogg",
           "text": "Close your eyes and find a comfortable position. For the next ninety seconds, allow yourself to simply be here. No effort is needed. Let your mind rest and your awareness turn inward."
         }
       ]
@@ -65,14 +65,14 @@
       "stages": [
         {
           "id": "reve-artifacts",
-          "file": "assets/audio/calibration/grok-reve-artifacts-01.opus",
+          "file": "assets/audio/calibration/grok-reve-artifacts-01.ogg",
           "text": "For this calibration, first blink 3 times, then clench and relax your jaw.",
           "seconds": 15,
           "eyes": null
         },
         {
           "id": "reve-eyes-open-counting",
-          "file": "assets/audio/calibration/grok-reve-eyes_open-challange-01.opus",
+          "file": "assets/audio/calibration/grok-reve-eyes_open-challange-01.ogg",
           "text": "Now, keep your eyes open, look at the screen, and keep your mind active by solving the challenge in your head.",
           "seconds": 30,
           "eyes": "open",
@@ -91,7 +91,7 @@
         },
         {
           "id": "reve-eyes-closed-drifting",
-          "file": "assets/audio/calibration/grok-reve-eyes_closed-drifting-01.opus",
+          "file": "assets/audio/calibration/grok-reve-eyes_closed-drifting-01.ogg",
           "text": "Now, close your eyes and find a comfortable position. For the next 45 seconds, allow yourself to simply be here. No effort is needed. Let your mind rest and your awareness turn inward.",
           "seconds": 45,
           "eyes": "closed"

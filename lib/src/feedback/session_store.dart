@@ -219,6 +219,175 @@ class SessionDrowsiness {
   }
 }
 
+/// One music track played during a feedback session, stamped with the
+/// session-relative offset it started at.
+class MusicTrackMarker {
+  const MusicTrackMarker({required this.offsetSecs, required this.name});
+
+  final double offsetSecs;
+  final String name;
+
+  Map<String, Object?> toJson() => {'at': offsetSecs, 'name': name};
+
+  static MusicTrackMarker? fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      return null;
+    }
+    return MusicTrackMarker(
+      offsetSecs: (json['at'] as num?)?.toDouble() ?? 0,
+      name: (json['name'] as String?) ?? '',
+    );
+  }
+}
+
+/// Per-second low-pass cutoff value of the music feedback channel.
+class MusicCutoffSample {
+  const MusicCutoffSample({required this.offsetSecs, required this.cutoffHz});
+
+  final double offsetSecs;
+  final double cutoffHz;
+
+  Map<String, Object?> toJson() => {'at': offsetSecs, 'hz': cutoffHz};
+
+  static MusicCutoffSample? fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      return null;
+    }
+    return MusicCutoffSample(
+      offsetSecs: (json['at'] as num?)?.toDouble() ?? 0,
+      cutoffHz: (json['hz'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
+/// Music feedback record of a session: which tracks played (with offsets) and
+/// the low-pass cutoff trace the reward drove. Like [sessionDrowsiness], the
+/// full per-second [series] stays in memory while the head persists only the
+/// decimated [buckets].
+class SessionMusic {
+  const SessionMusic({
+    required this.trackCount,
+    required this.minCutoffHz,
+    required this.maxCutoffHz,
+    required this.invert,
+    required this.shuffle,
+    this.tracks = const [],
+    this.series = const [],
+    this.buckets = const [],
+    this.bucketWidthSecs = 0,
+  });
+
+  final int trackCount;
+  final double minCutoffHz;
+  final double maxCutoffHz;
+  final bool invert;
+  final bool shuffle;
+  final List<MusicTrackMarker> tracks;
+  final List<MusicCutoffSample> series;
+  final List<MusicCutoffSample> buckets;
+  final double bucketWidthSecs;
+
+  /// Build the persisted (≤400-bucket) snapshot from the per-second [series],
+  /// averaged like the bands/drowsiness overview. Returns `(buckets, width)`.
+  static (List<MusicCutoffSample>, double) decimate(
+    List<MusicCutoffSample> series, {
+    double? trainingStartSecs,
+  }) {
+    if (series.isEmpty) {
+      return (const [], 0);
+    }
+    final anchor = trainingStartSecs ?? series.first.offsetSecs;
+    var last = anchor;
+    for (final s in series) {
+      if (s.offsetSecs > last) {
+        last = s.offsetSecs;
+      }
+    }
+    if (last <= anchor) {
+      return (
+        [MusicCutoffSample(offsetSecs: anchor, cutoffHz: series.first.cutoffHz)],
+        0,
+      );
+    }
+    final span = (last - anchor).clamp(1.0, double.infinity);
+    final width = span / SessionOverview.defaultBucketCount;
+    final sum = List<double>.filled(SessionOverview.defaultBucketCount, 0);
+    final cnt = List<int>.filled(SessionOverview.defaultBucketCount, 0);
+    for (final s in series) {
+      final t = s.offsetSecs - anchor;
+      if (t < 0) {
+        continue;
+      }
+      var idx = (t / width).floor();
+      if (idx >= SessionOverview.defaultBucketCount) {
+        idx = SessionOverview.defaultBucketCount - 1;
+      }
+      sum[idx] += s.cutoffHz;
+      cnt[idx]++;
+    }
+    final buckets = <MusicCutoffSample>[];
+    for (var i = 0; i < SessionOverview.defaultBucketCount; i++) {
+      if (cnt[i] == 0) {
+        continue;
+      }
+      buckets.add(
+        MusicCutoffSample(
+          offsetSecs: i * width + width / 2,
+          cutoffHz: sum[i] / cnt[i],
+        ),
+      );
+    }
+    return (buckets, width);
+  }
+
+  Map<String, Object?> toJson() => {
+    'trackCount': trackCount,
+    'minHz': minCutoffHz,
+    'maxHz': maxCutoffHz,
+    'invert': invert,
+    'shuffle': shuffle,
+    if (tracks.isNotEmpty)
+      'tracks': [for (final t in tracks) t.toJson()],
+    if (buckets.isNotEmpty) 'width': bucketWidthSecs,
+    if (buckets.isNotEmpty)
+      'buckets': [for (final b in buckets) b.toJson()]
+    else
+      'series': [for (final s in series) s.toJson()],
+  };
+
+  static SessionMusic? fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      return null;
+    }
+    return SessionMusic(
+      trackCount: (json['trackCount'] as num?)?.toInt() ?? 0,
+      minCutoffHz: (json['minHz'] as num?)?.toDouble() ?? 0,
+      maxCutoffHz: (json['maxHz'] as num?)?.toDouble() ?? 0,
+      invert: json['invert'] as bool? ?? false,
+      shuffle: json['shuffle'] as bool? ?? false,
+      tracks:
+          (json['tracks'] as List<Object?>?)
+              ?.map(MusicTrackMarker.fromJson)
+              .whereType<MusicTrackMarker>()
+              .toList() ??
+          const [],
+      series:
+          (json['series'] as List<Object?>?)
+              ?.map(MusicCutoffSample.fromJson)
+              .whereType<MusicCutoffSample>()
+              .toList() ??
+          const [],
+      buckets:
+          (json['buckets'] as List<Object?>?)
+              ?.map(MusicCutoffSample.fromJson)
+              .whereType<MusicCutoffSample>()
+              .toList() ??
+          const [],
+      bucketWidthSecs: (json['width'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
 class SessionStatsData {
   const SessionStatsData({
     this.peakAlphaFreq,
@@ -476,6 +645,7 @@ class SessionMetadata {
     this.gestures = const [],
     this.calibration,
     this.drowsiness,
+    this.music,
   });
 
   final ProtocolType protocol;
@@ -521,6 +691,10 @@ class SessionMetadata {
   /// session ran with the guardrail enabled. Null otherwise.
   final SessionDrowsiness? drowsiness;
 
+  /// Music feedback record (tracks + cutoff trace), when the session ran in
+  /// music-feedback mode. Null otherwise.
+  final SessionMusic? music;
+
   Map<String, Object?> toJson() => {
     'protocol': protocol.name,
     'durationMinutes': durationMinutes,
@@ -538,6 +712,7 @@ class SessionMetadata {
     if (gestures.isNotEmpty) 'gestures': [for (final g in gestures) g.toJson()],
     if (calibration != null) 'calibration': calibration!.toJson(),
     if (drowsiness != null) 'drowsiness': drowsiness!.toJson(),
+    if (music != null) 'music': music!.toJson(),
   };
 
   static SessionMetadata? fromJson(Object? json) {
@@ -583,6 +758,7 @@ class SessionMetadata {
           const [],
       calibration: SessionCalibration.fromJson(json['calibration']),
       drowsiness: SessionDrowsiness.fromJson(json['drowsiness']),
+      music: SessionMusic.fromJson(json['music']),
     );
   }
 }

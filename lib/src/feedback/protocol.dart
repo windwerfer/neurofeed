@@ -15,6 +15,19 @@ enum ProtocolType { alphaTheta, focus, relaxation, drowsiness }
 /// to it is a data-only change (same ratio engine, flipped criterion).
 enum RewardMetric { alphaOverTheta, thetaOverAlpha }
 
+/// How a protocol's AI sleep guardrail behaves in music-feedback mode. The
+/// guardrail only ever warns on non-music (chime) feedback; with music it can
+/// either stay a pure chime (the filter keeps following the ratio reward) or
+/// additionally muffle the music while the sleep-drift warning is active.
+enum GuardrailFeedback {
+  /// Warning chime only — the music filter is untouched by the guardrail.
+  chimeOnly,
+
+  /// While a warning is active the low-pass filter is forced fully closed
+  /// (deep muffle) and returns to the ratio-driven cutoff after it clears.
+  muffleWhileWarning,
+}
+
 class ProtocolInfo {
   final ProtocolType type;
   final String title;
@@ -30,6 +43,10 @@ class ProtocolInfo {
   /// modulates the reward.
   final bool aiSleepGuardrail;
 
+  /// How the guardrail behaves when music feedback is active (see
+  /// [GuardrailFeedback]). Consulted only when [aiSleepGuardrail] is true.
+  final GuardrailFeedback guardrailFeedback;
+
   const ProtocolInfo({
     required this.type,
     required this.title,
@@ -40,6 +57,7 @@ class ProtocolInfo {
     required this.color,
     required this.rewardMetric,
     required this.aiSleepGuardrail,
+    required this.guardrailFeedback,
   });
 
   static const ProtocolInfo _alphaTheta = ProtocolInfo(
@@ -101,6 +119,7 @@ class ProtocolInfo {
     color: Color(0xFF7C4DFF),
     rewardMetric: RewardMetric.alphaOverTheta,
     aiSleepGuardrail: false,
+    guardrailFeedback: GuardrailFeedback.chimeOnly,
   );
 
   static const ProtocolInfo _drowsiness = ProtocolInfo(
@@ -166,6 +185,7 @@ class ProtocolInfo {
     color: Color(0xFF1E88E5),
     rewardMetric: RewardMetric.alphaOverTheta,
     aiSleepGuardrail: true,
+    guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
   );
 
   static const List<ProtocolInfo> all = [_alphaTheta, _drowsiness];

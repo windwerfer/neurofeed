@@ -316,6 +316,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
             : const [],
         calibration: notifier.calibration,
         drowsiness: notifier.sessionDrowsiness,
+        music: notifier.sessionMusic,
       );
       final id = DateTime.now().millisecondsSinceEpoch.toString();
       try {

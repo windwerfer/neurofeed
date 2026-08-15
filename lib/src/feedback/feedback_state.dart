@@ -244,6 +244,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   SessionCalibration? _calibration;
   String _calibrationKind = 'single';
 
+  /// Music feedback: per-second cutoff trace + track transitions recorded
+  /// while playing. Persisted as [SessionMusic] metadata (decimated buckets).
+  final List<MusicCutoffSample> _musicSeries = [];
+  final List<MusicTrackMarker> _musicTracks = [];
+
   /// Ordered steps of the current calibration recipe (intro/clip then a silent
   /// collection window). Built from the manifest at calibration start.
   final List<_CalibrationStep> _steps = [];
@@ -380,6 +385,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _collectionEyes = null;
     _clipPhases.clear();
     _drowsinessSeries.clear();
+    _musicSeries.clear();
+    _musicTracks.clear();
     await _recorder.startSession();
     await _maybeEnableGuardrail();
     await _runCalibration();
@@ -863,6 +870,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _gestureMarkers.clear();
     _teardownGuardrail();
     _drowsinessSeries.clear();
+    _musicSeries.clear();
+    _musicTracks.clear();
     _audio.stop();
     _recorder.discardSession();
     _engine.reset();
@@ -918,6 +927,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       }
       final stats = _ref.read(liveStatsProvider);
       stats.setSuccessRate(_engine.successRate);
+      if (_audio.musicPlaying) {
+        _recordMusicSample();
+      }
       if (state.elapsedSeconds % 10 == 0) {
         debugPrint(
           '[ratio] t=${state.elapsedSeconds}s '
@@ -1082,6 +1094,71 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     RewardMetric.thetaOverAlpha => target.tar,
   };
 
+  /// True when the active sound is the music-feedback channel and it is
+  /// actually streaming (folder configured + playable).
+  bool get _musicActive =>
+      AudioService.isMusicSound(state.soundName) && _audio.musicPlaying;
+
+  /// Maps the live metric value to a music-filter cutoff: its percentile rank
+  /// within the calibration baseline (0–100) is linearly interpolated between
+  /// the configured low-pass bounds ([Settings.musicMinCutoffHz] →
+  /// [Settings.musicMaxCutoffHz]); [Settings.musicInvertMapping] flips the
+  /// polarity. Higher rank → brighter music by default.
+  void _applyMusicCutoff(double value) {
+    final settings = _ref.read(settingsProvider);
+    final pct = _engine.percentileOf(value) ?? 50.0;
+    final norm = settings.musicInvertMapping ? 100 - pct : pct;
+    final min = settings.musicMinCutoffHz;
+    final max = settings.musicMaxCutoffHz;
+    final cutoff = min + (norm / 100) * (max - min);
+    _audio.setMusicCutoffHz(cutoff);
+  }
+
+  /// Samples the music feedback channel once a second while playing: appends
+  /// the current cutoff to the per-second trace and records a track marker
+  /// whenever playback advances to a new track.
+  void _recordMusicSample() {
+    final sessionStart = _sessionStartAt;
+    if (sessionStart == null) {
+      return;
+    }
+    final offset = DateTime.now().difference(sessionStart).inMilliseconds / 1000;
+    final track = _audio.musicTrackName;
+    if (track != null &&
+        (_musicTracks.isEmpty || _musicTracks.last.name != track)) {
+      _musicTracks.add(MusicTrackMarker(offsetSecs: offset, name: track));
+    }
+    _musicSeries.add(
+      MusicCutoffSample(offsetSecs: offset, cutoffHz: _audio.musicCutoffHz),
+    );
+  }
+
+  /// Whole-session music feedback record (track list + decimated cutoff
+  /// trace), or null when no music feedback ran.
+  SessionMusic? get sessionMusic {
+    final series = _musicSeries;
+    if (series.isEmpty) {
+      return null;
+    }
+    final settings = _ref.read(settingsProvider);
+    final trackCount = _audio.musicTrackCount;
+    final (buckets, width) = SessionMusic.decimate(
+      series,
+      trainingStartSecs: trainingStartOffsetSecs,
+    );
+    return SessionMusic(
+      trackCount: trackCount,
+      tracks: List.of(_musicTracks),
+      minCutoffHz: settings.musicMinCutoffHz,
+      maxCutoffHz: settings.musicMaxCutoffHz,
+      invert: settings.musicInvertMapping,
+      shuffle: settings.musicShuffle,
+      series: List.of(_musicSeries),
+      buckets: buckets,
+      bucketWidthSecs: width,
+    );
+  }
+
   void _onBands(BandsDto bands) {
     _target.update(bands);
     final target = _target.evaluate(_ref.read(appStateProvider).signalQuality);
@@ -1112,7 +1189,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _engine.recordEpoch(value);
     _engine.recordSessionSample(value, clean: _sampleIsClean);
     _ref.read(liveStatsProvider).push(value, _engine.percentileOf);
-    _audio.onStateUpdate(_engine.isInTarget(value));
+    if (_musicActive) {
+      _applyMusicCutoff(value);
+    } else {
+      _audio.onStateUpdate(_engine.isInTarget(value));
+    }
   }
 
   void _onMovement(MovementDto movement) {
@@ -1236,11 +1317,21 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final threshold = _guardrailThreshold!;
     final over =
         _lastSleepDir > threshold || _lastDelta > guardrailDeltaCeiling;
+    final spec = ProtocolInfo.forType(state.protocol);
+    final mufflesMusic =
+        _musicActive &&
+        spec.guardrailFeedback == GuardrailFeedback.muffleWhileWarning;
     if (!over) {
       _warningActive = false;
+      if (mufflesMusic) {
+        _audio.setMusicMuffle(false);
+      }
       return;
     }
     _warningActive = true;
+    if (mufflesMusic) {
+      _audio.setMusicMuffle(true);
+    }
     final now = DateTime.now();
     if (now.difference(_lastWarningChimeAt) >= warningChimeCooldown) {
       _lastWarningChimeAt = now;

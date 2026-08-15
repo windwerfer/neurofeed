@@ -1,9 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:flutter_soloud/flutter_soloud.dart';
+import 'package:muse_ml/src/audio/soloud_engine.dart';
 import 'package:muse_ml/src/settings.dart';
 
+/// Ambient + one-shot feedback sounds on a single SoLoud engine.
+///
+/// Public surface mirrors the pre-migration just_audio controller so
+/// [AudioService] and the feedback notifier stay unchanged for chime/sound
+/// feedback. Music feedback (folder + low-pass filter) lives in
+/// [MusicFeedbackController].
 class FeedbackAudioController {
   static const Duration targetHoldDuration = Duration(milliseconds: 2500);
   static const Duration rewardCooldown = Duration(seconds: 8);
@@ -12,36 +19,36 @@ class FeedbackAudioController {
   static const double droneVolume = 0.5;
 
   static const String calibrationAsset =
-      'assets/audio/calibration/alpha-theta-ratio_short-clear.opus';
+      'assets/audio/calibration/alpha-theta-ratio_short-clear.ogg';
   static const String feedbackDroneAsset =
-      'assets/audio/drone/845842__frame__complex-shifting-ambient-drone-8-1min.opus';
+      'assets/audio/drone/845842__frame__complex-shifting-ambient-drone-8-1min.ogg';
   static const String droneLoopAsset =
-      'assets/audio/drone/859763__kkenny101__drone-loop-ambient-background-texture.opus';
+      'assets/audio/drone/859763__kkenny101__drone-loop-ambient-background-texture.ogg';
   static const String bowlLowAsset =
-      'assets/audio/bowl/bowl_low-531269__asuriya__aud-10-ancient-tibet-bowl-pure-vibrations.opus';
+      'assets/audio/bowl/bowl_low-531269__asuriya__aud-10-ancient-tibet-bowl-pure-vibrations.ogg';
   static const String bellAsset =
-      'assets/audio/bell/864397__valerie-vivegnis__2607.opus';
+      'assets/audio/bell/864397__valerie-vivegnis__2607.ogg';
 
-  final AudioPlayer _ambient = AudioPlayer();
-  final AudioPlayer _calibration = AudioPlayer();
-  final AudioPlayer _bell = AudioPlayer();
-  final List<AudioPlayer> _chimes = List.generate(
-    maxPolyphony,
-    (_) => AudioPlayer(),
-  );
-  final List<StreamSubscription<ProcessingState>> _chimeSubs = [];
+  final Settings _settings;
+
+  /// Cache of loaded [AudioSource]s keyed by asset path, so loops and chimes
+  /// reuse one native sound instead of re-decoding on every trigger.
+  final Map<String, AudioSource> _sources = {};
+
+  SoundHandle? _ambientHandle;
+  SoundHandle? _bellHandle;
+  final List<SoundHandle> _chimeHandles = [];
 
   DateTime? _inTargetSince;
   DateTime _lastRewardAt = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _movingUntil = DateTime.fromMillisecondsSinceEpoch(0);
-  final Set<AudioPlayer> _ramping = {};
-  final Map<AudioPlayer, DateTime> _chimeStartedAt = {};
 
   double _masterVolume = 1.0;
   double _backgroundVolume = droneVolume;
   double _feedbackVolume = 1.0;
   double _introVolume = 1.0;
   double _bellVolume = 1.0;
+  double _guardrailVolume = 1.0;
 
   FeedbackAudioController(Settings settings) : _settings = settings {
     _masterVolume = settings.masterVolume ?? 1.0;
@@ -49,18 +56,8 @@ class FeedbackAudioController {
     _feedbackVolume = settings.feedbackVolume ?? 1.0;
     _introVolume = settings.introVolume ?? 1.0;
     _bellVolume = settings.bellVolume ?? 1.0;
-    for (final chime in _chimes) {
-      _chimeSubs.add(
-        chime.processingStateStream.listen((state) {
-          if (state == ProcessingState.completed && !_ramping.contains(chime)) {
-            _resetChime(chime);
-          }
-        }),
-      );
-    }
+    _guardrailVolume = settings.guardrailVolume ?? 1.0;
   }
-
-  final Settings _settings;
 
   double get masterVolume => _masterVolume;
 
@@ -72,6 +69,8 @@ class FeedbackAudioController {
 
   double get bellVolume => _bellVolume;
 
+  double get guardrailVolume => _guardrailVolume;
+
   double get _ambientVolume => _masterVolume * _backgroundVolume;
 
   double get _feedbackVolumeTotal => _masterVolume * _feedbackVolume;
@@ -79,6 +78,62 @@ class FeedbackAudioController {
   double get _introVolumeTotal => _masterVolume * _introVolume;
 
   double get _bellVolumeTotal => _masterVolume * _bellVolume;
+
+  double get _guardrailVolumeTotal => _masterVolume * _guardrailVolume;
+
+  /// Loads an asset once and caches the [AudioSource]. Streams long/looped
+  /// audio from a temp file ([LoadMode.disk]); decodes short one-shots
+  /// ([LoadMode.memory]) for instant low-latency triggers.
+  Future<AudioSource> _sourceFor(String assetPath, {required bool stream}) {
+    final existing = _sources[assetPath];
+    if (existing != null) {
+      return Future.value(existing);
+    }
+    return SoLoud.instance
+        .loadAsset(
+          assetPath,
+          mode: stream ? LoadMode.disk : LoadMode.memory,
+          autoDispose: false,
+        )
+        .then((source) {
+          _sources[assetPath] = source;
+          return source;
+        });
+  }
+
+  /// Plays a one-shot voice and resolves when that exact voice ends. Used for
+  /// the calibration clip (the notifier awaits it before the baseline starts).
+  Future<void> _playAndAwaitEnd(
+    AudioSource source, {
+    required double volume,
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final handle = SoLoud.instance.play(source, volume: volume);
+    await _awaitHandleEnd(source, handle).timeout(timeout, onTimeout: () {});
+  }
+
+  Future<void> _awaitHandleEnd(AudioSource source, SoundHandle handle) {
+    final completer = Completer<void>();
+    final sub = source.soundEvents.listen((event) {
+      if (event.event == SoundEventType.handleIsNoMoreValid &&
+          event.handle == handle &&
+          !completer.isCompleted) {
+        completer.complete();
+      }
+    });
+    return completer.future.whenComplete(sub.cancel);
+  }
+
+  /// Applies [action] to a possibly-stale handle, dropping it if the voice no
+  /// longer exists (SoLoud throws for vanished handles). Used to keep volume
+  /// changes and prunes cheap.
+  void _safeHandle(SoundHandle handle, void Function(SoundHandle) action) {
+    try {
+      action(handle);
+    } catch (_) {
+      _chimeHandles.remove(handle);
+    }
+  }
 
   void setMasterVolume(double value) {
     _masterVolume = value.clamp(0.0, 1.0);
@@ -89,7 +144,10 @@ class FeedbackAudioController {
   void setBackgroundVolume(double value) {
     _backgroundVolume = value.clamp(0.0, 1.0);
     _settings.setBackgroundVolume(_backgroundVolume);
-    _ambient.setVolume(_ambientVolume);
+    final ambient = _ambientHandle;
+    if (ambient != null) {
+      _safeHandle(ambient, (h) => SoLoud.instance.setVolume(h, _ambientVolume));
+    }
   }
 
   void setFeedbackVolume(double value) {
@@ -101,13 +159,28 @@ class FeedbackAudioController {
   void setIntroVolume(double value) {
     _introVolume = value.clamp(0.0, 1.0);
     _settings.setIntroVolume(_introVolume);
-    _calibration.setVolume(_introVolumeTotal);
+    // Intro clips apply their volume at play time; nothing live to update.
   }
 
   void setBellVolume(double value) {
     _bellVolume = value.clamp(0.0, 1.0);
     _settings.setBellVolume(_bellVolume);
-    _bell.setVolume(_bellVolumeTotal);
+    final bell = _bellHandle;
+    if (bell != null) {
+      _safeHandle(bell, (h) => SoLoud.instance.setVolume(h, _bellVolumeTotal));
+    }
+  }
+
+  void setGuardrailVolume(double value) {
+    _guardrailVolume = value.clamp(0.0, 1.0);
+    _settings.setGuardrailVolume(_guardrailVolume);
+    final bell = _bellHandle;
+    if (bell != null) {
+      _safeHandle(
+        bell,
+        (h) => SoLoud.instance.setVolume(h, _guardrailVolumeTotal),
+      );
+    }
   }
 
   void resetVolumes() {
@@ -116,82 +189,91 @@ class FeedbackAudioController {
     _feedbackVolume = 1.0;
     _introVolume = 1.0;
     _bellVolume = 1.0;
+    _guardrailVolume = 1.0;
     _settings
       ..setMasterVolume(_masterVolume)
       ..setBackgroundVolume(_backgroundVolume)
       ..setFeedbackVolume(_feedbackVolume)
       ..setIntroVolume(_introVolume)
-      ..setBellVolume(_bellVolume);
+      ..setBellVolume(_bellVolume)
+      ..setGuardrailVolume(_guardrailVolume);
     _applyVolumes();
   }
 
   void _applyVolumes() {
-    _ambient.setVolume(_ambientVolume);
+    final ambient = _ambientHandle;
+    if (ambient != null) {
+      _safeHandle(ambient, (h) => SoLoud.instance.setVolume(h, _ambientVolume));
+    }
     _applyFeedbackVolumes();
-    _calibration.setVolume(_introVolumeTotal);
-    _bell.setVolume(_bellVolumeTotal);
+    final bell = _bellHandle;
+    if (bell != null) {
+      _safeHandle(bell, (h) => SoLoud.instance.setVolume(h, _bellVolumeTotal));
+    }
   }
 
   void _applyFeedbackVolumes() {
-    for (final chime in _chimes) {
-      if (!_ramping.contains(chime)) {
-        chime.setVolume(_feedbackVolumeTotal);
-      }
+    for (final handle in List.of(_chimeHandles)) {
+      _safeHandle(
+        handle,
+        (h) => SoLoud.instance.setVolume(h, _feedbackVolumeTotal),
+      );
     }
   }
 
   Future<void> playCalibration([String? assetPath]) async {
     await stop();
-    try {
-      await _calibration.setAsset(assetPath ?? calibrationAsset);
-      await _calibration.setLoopMode(LoopMode.off);
-      await _calibration.setVolume(_introVolumeTotal);
-      final done = _calibration.processingStateStream.firstWhere(
-        (s) => s == ProcessingState.completed,
-      );
-      await _calibration.play();
-      await done.timeout(const Duration(seconds: 15));
-    } catch (e) {
-      debugPrint('[audio] calibration playback failed: $e');
-    }
+    await SoLoudEngine.ensureInit();
+    final source = await _sourceFor(
+      assetPath ?? calibrationAsset,
+      stream: true,
+    );
+    await _playAndAwaitEnd(source, volume: _introVolumeTotal);
   }
 
   Future<void> startBackground(String? assetPath) async {
     _resetRewardState();
+    await SoLoudEngine.ensureInit();
+    _stopAmbient();
     if (assetPath == null) {
-      await _ambient.stop();
       return;
     }
-    try {
-      await _ambient.setAsset(assetPath);
-      await _ambient.setLoopMode(LoopMode.one);
-      await _ambient.setVolume(_ambientVolume);
-      await _ambient.play();
-    } catch (e) {
-      debugPrint('[audio] background playback failed: $e');
+    final source = await _sourceFor(assetPath, stream: true);
+    _ambientHandle = SoLoud.instance.play(
+      source,
+      volume: _ambientVolume,
+      looping: true,
+    );
+  }
+
+  Future<void> pauseBackground() async {
+    final handle = _ambientHandle;
+    if (handle != null) {
+      _safeHandle(handle, (h) => SoLoud.instance.setPause(h, true));
     }
   }
 
-  Future<void> pauseBackground() => _ambient.pause();
-
-  Future<void> resumeBackground() => _ambient.play();
+  Future<void> resumeBackground() async {
+    final handle = _ambientHandle;
+    if (handle != null) {
+      _safeHandle(handle, (h) => SoLoud.instance.setPause(h, false));
+    }
+  }
 
   /// Switches the ambient loop to a different asset mid-session without
-  /// touching the reward state machine. A null asset stops the loop (the
-  /// "No background" option).
+  /// touching the reward state machine. A null asset stops the loop.
   Future<void> switchBackground(String? assetPath) async {
+    await SoLoudEngine.ensureInit();
+    _stopAmbient();
     if (assetPath == null) {
-      await _ambient.stop();
       return;
     }
-    try {
-      await _ambient.setAsset(assetPath);
-      await _ambient.setLoopMode(LoopMode.one);
-      await _ambient.setVolume(_ambientVolume);
-      await _ambient.play();
-    } catch (e) {
-      debugPrint('[audio] background switch failed: $e');
-    }
+    final source = await _sourceFor(assetPath, stream: true);
+    _ambientHandle = SoLoud.instance.play(
+      source,
+      volume: _ambientVolume,
+      looping: true,
+    );
   }
 
   void onStateUpdate(bool inTarget) {
@@ -220,61 +302,58 @@ class FeedbackAudioController {
   }
 
   Future<void> playEndChime() async {
-    try {
-      await _bell.setAsset(bellAsset);
-      await _bell.setLoopMode(LoopMode.off);
-      await _bell.setVolume(_bellVolumeTotal);
-      await _bell.play();
-    } catch (e) {
-      debugPrint('[audio] end chime playback failed: $e');
-    }
+    await _playBell(volume: _bellVolumeTotal);
   }
 
-  /// Soft, low indication that the threshold was re-anchored mid-session.
   Future<void> playRecalibrateChime() async {
-    try {
-      await _bell.setAsset(bowlLowAsset);
-      await _bell.setLoopMode(LoopMode.off);
-      await _bell.setVolume(_bellVolumeTotal * 0.6);
-      await _bell.play();
-    } catch (e) {
-      debugPrint('[audio] recalibrate chime playback failed: $e');
-    }
+    await _playBowl(volume: _bellVolumeTotal * 0.6);
   }
 
-  /// Distinct attention tone from the sleep-guardrail, higher-pitched than the
-  /// recalibrate bowl, at full bell volume.
   Future<void> playWarningChime() async {
-    try {
-      await _bell.setAsset(bellAsset);
-      await _bell.setLoopMode(LoopMode.off);
-      await _bell.setVolume(_bellVolumeTotal);
-      await _bell.play();
-    } catch (e) {
-      debugPrint('[audio] warning chime playback failed: $e');
+    await _playBell(volume: _guardrailVolumeTotal);
+  }
+
+  Future<void> _playBell({required double volume}) async {
+    await SoLoudEngine.ensureInit();
+    final source = await _sourceFor(bellAsset, stream: false);
+    final bell = _bellHandle;
+    if (bell != null) {
+      _safeHandle(bell, SoLoud.instance.stop);
     }
+    _bellHandle = SoLoud.instance.play(source, volume: volume);
+  }
+
+  Future<void> _playBowl({required double volume}) async {
+    await SoLoudEngine.ensureInit();
+    final source = await _sourceFor(bowlLowAsset, stream: false);
+    SoLoud.instance.play(source, volume: volume);
   }
 
   Future<void> stop() async {
     _resetRewardState();
-    await Future.wait([
-      _ambient.stop(),
-      _calibration.stop(),
-      _bell.stop(),
-      for (final chime in _chimes) chime.stop(),
-    ]);
+    _stopAmbient();
+    final bell = _bellHandle;
+    if (bell != null) {
+      _safeHandle(bell, SoLoud.instance.stop);
+      _bellHandle = null;
+    }
+    for (final handle in List.of(_chimeHandles)) {
+      _safeHandle(handle, SoLoud.instance.stop);
+    }
+    _chimeHandles.clear();
   }
 
   void dispose() {
-    for (final sub in _chimeSubs) {
-      sub.cancel();
+    _sources.clear();
+    SoLoudEngine.deinit();
+  }
+
+  void _stopAmbient() {
+    final handle = _ambientHandle;
+    if (handle != null) {
+      _safeHandle(handle, SoLoud.instance.stop);
     }
-    _ambient.dispose();
-    _calibration.dispose();
-    _bell.dispose();
-    for (final chime in _chimes) {
-      chime.dispose();
-    }
+    _ambientHandle = null;
   }
 
   void _resetRewardState() {
@@ -283,59 +362,27 @@ class FeedbackAudioController {
     _movingUntil = DateTime.fromMillisecondsSinceEpoch(0);
   }
 
-  Future<void> _triggerChime() async {
-    AudioPlayer? free;
-    for (final chime in _chimes) {
-      if (_isBusy(chime)) {
-        continue;
-      }
-      free = chime;
-      break;
+  void _triggerChime() {
+    final source = _sources[bowlLowAsset];
+    if (source == null) {
+      debugPrint('[audio] chime skipped: bowl source not loaded');
+      return;
     }
-    free ??= _chimes.reduce((a, b) {
-      final ta = _chimeStartedAt[a];
-      final tb = _chimeStartedAt[b];
-      if (ta == null) return b;
-      if (tb == null) return a;
-      return ta.isBefore(tb) ? a : b;
-    });
-    final idx = _chimes.indexOf(free);
-    debugPrint(
-      '[chime] player $idx ${_ramping.contains(free) ? 'steal' : 'start'} at '
-      '${DateTime.now().toIso8601String()}',
+    // SoLoud has natural polyphony; cap at maxPolyphony by dropping the
+    // oldest voice so a long burst can't pile up.
+    if (_chimeHandles.length >= maxPolyphony) {
+      final oldest = _chimeHandles.removeAt(0);
+      _safeHandle(oldest, SoLoud.instance.stop);
+    }
+    final handle = SoLoud.instance.play(
+      source,
+      volume: _feedbackVolumeTotal,
     );
-    _chimeStartedAt[free] = DateTime.now();
-    _ramping.add(free);
-    try {
-      await free.stop();
-      await free.setAsset(bowlLowAsset);
-      await free.setLoopMode(LoopMode.off);
-      await free.setVolume(_feedbackVolumeTotal);
-      await free.play();
-    } catch (e) {
-      debugPrint('[audio] chime playback failed: $e');
-    } finally {
-      _ramping.remove(free);
-    }
-  }
-
-  /// A chime is free when it is not being loaded, not ramping up, and not
-  /// currently playing. Finished players report `completed` (playing stays
-  /// `false` after we reset them), so they are reused immediately.
-  bool _isBusy(AudioPlayer chime) {
-    if (_ramping.contains(chime)) return true;
-    final state = chime.processingState;
-    if (state == ProcessingState.loading) return true;
-    if (state == ProcessingState.completed) return false;
-    return chime.playing;
-  }
-
-  Future<void> _resetChime(AudioPlayer chime) async {
-    try {
-      await chime.pause();
-      await chime.seek(Duration.zero);
-    } catch (e) {
-      debugPrint('[audio] chime reset failed: $e');
+    _chimeHandles.add(handle);
+    // Prune finished voices so the list stays short.
+    final stale = _chimeHandles.where((h) => !source.handles.contains(h));
+    for (final s in stale) {
+      _chimeHandles.remove(s);
     }
   }
 }

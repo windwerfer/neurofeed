@@ -86,6 +86,13 @@ class Settings {
       'reve_warning_threshold_percentile';
   static const String _modelKindKey = 'model_kind';
   static const String _guardrailKeyPrefix = 'guardrail_';
+  static const String _musicFolderKey = 'music_folder';
+  static const String _musicMinCutoffKey = 'music_min_cutoff_hz';
+  static const String _musicMaxCutoffKey = 'music_max_cutoff_hz';
+  static const String _musicSlewKey = 'music_slew_seconds';
+  static const String _musicInvertKey = 'music_invert_mapping';
+  static const String _musicShuffleKey = 'music_shuffle';
+  static const String _guardrailVolumeKey = 'guardrail_volume';
 
   final SharedPreferences _prefs;
 
@@ -222,6 +229,52 @@ class Settings {
 
   Future<void> setGuardrailEnabled(ProtocolType type, bool value) =>
       _prefs.setBool('$_guardrailKeyPrefix${type.name}', value);
+
+  /// Music-feedback folder. A `content://` value is an Android SAF tree URI
+  /// (any file must be materialized through the SAF channel before playback);
+  /// any other value is a real filesystem path. Null means no music feedback.
+  String? get musicFolder => _prefs.getString(_musicFolderKey);
+
+  Future<void> setMusicFolder(String value) =>
+      _prefs.setString(_musicFolderKey, value);
+
+  Future<void> clearMusicFolder() => _prefs.remove(_musicFolderKey);
+
+  /// Low-pass cutoff range (Hz) the music feedback sweeps between. Below the
+  /// floor the music is deeply muffled; at the ceiling it is full spectrum.
+  double get musicMinCutoffHz => _prefs.getDouble(_musicMinCutoffKey) ?? 200.0;
+
+  Future<void> setMusicMinCutoffHz(double value) =>
+      _prefs.setDouble(_musicMinCutoffKey, value);
+
+  double get musicMaxCutoffHz => _prefs.getDouble(_musicMaxCutoffKey) ?? 8000.0;
+
+  Future<void> setMusicMaxCutoffHz(double value) =>
+      _prefs.setDouble(_musicMaxCutoffKey, value);
+
+  /// Exponential smoothing time constant applied to the live cutoff changes
+  /// (prevents zipper noise from the ~10 Hz percentile updates).
+  double get musicSlewSeconds => _prefs.getDouble(_musicSlewKey) ?? 1.2;
+
+  Future<void> setMusicSlewSeconds(double value) =>
+      _prefs.setDouble(_musicSlewKey, value);
+
+  /// When true, high scores close the filter instead of opening it.
+  bool get musicInvertMapping => _prefs.getBool(_musicInvertKey) ?? false;
+
+  Future<void> setMusicInvertMapping(bool value) =>
+      _prefs.setBool(_musicInvertKey, value);
+
+  /// Randomize the track order on each session start.
+  bool get musicShuffle => _prefs.getBool(_musicShuffleKey) ?? false;
+
+  Future<void> setMusicShuffle(bool value) =>
+      _prefs.setBool(_musicShuffleKey, value);
+
+  double? get guardrailVolume => _prefs.getDouble(_guardrailVolumeKey);
+
+  Future<void> setGuardrailVolume(double value) =>
+      _prefs.setDouble(_guardrailVolumeKey, value);
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and
