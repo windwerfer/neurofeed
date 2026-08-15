@@ -22,7 +22,7 @@ class AudioService {
   static const Map<String, String?> soundAssets = {
     'Ambient Drone': FeedbackAudioController.feedbackDroneAsset,
     'Drone Loop': FeedbackAudioController.droneLoopAsset,
-    'Rain': 'assets/audio/rain/346562__lebaston100__rain-without-thunder.ogg',
+    'Rain': 'assets/audio/rain/346562__lebaston100__rain-without-thunder.opus',
     'No background': null,
   };
 

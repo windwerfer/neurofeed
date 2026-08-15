@@ -19,15 +19,15 @@ class FeedbackAudioController {
   static const double droneVolume = 0.5;
 
   static const String calibrationAsset =
-      'assets/audio/calibration/alpha-theta-ratio_short-clear.ogg';
+      'assets/audio/calibration/alpha-theta-ratio_short-clear.opus';
   static const String feedbackDroneAsset =
-      'assets/audio/drone/845842__frame__complex-shifting-ambient-drone-8-1min.ogg';
+      'assets/audio/drone/845842__frame__complex-shifting-ambient-drone-8-1min.opus';
   static const String droneLoopAsset =
-      'assets/audio/drone/859763__kkenny101__drone-loop-ambient-background-texture.ogg';
+      'assets/audio/drone/859763__kkenny101__drone-loop-ambient-background-texture.opus';
   static const String bowlLowAsset =
-      'assets/audio/bowl/bowl_low-531269__asuriya__aud-10-ancient-tibet-bowl-pure-vibrations.ogg';
+      'assets/audio/bowl/bowl_low-531269__asuriya__aud-10-ancient-tibet-bowl-pure-vibrations.opus';
   static const String bellAsset =
-      'assets/audio/bell/864397__valerie-vivegnis__2607.ogg';
+      'assets/audio/bell/864397__valerie-vivegnis__2607.opus';
 
   final Settings _settings;
 

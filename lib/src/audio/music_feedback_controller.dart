@@ -9,8 +9,14 @@ import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Supported music file extensions (SoLoud decoders: MP3/WAV/OGG/FLAC).
-const Set<String> musicSupportedExtensions = {'.mp3', '.wav', '.ogg', '.flac'};
+/// Supported music file extensions (SoLoud decoders: MP3/WAV/OGG/Opus/FLAC).
+const Set<String> musicSupportedExtensions = {
+  '.mp3',
+  '.wav',
+  '.ogg',
+  '.opus',
+  '.flac',
+};
 
 /// One playable track in the music feedback folder.
 class MusicTrack {
