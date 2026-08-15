@@ -184,7 +184,7 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
 ## Next steps
 0. Fix CI: init the `reve-rs`/`luna-rs` submodules in the release workflows
    (`_build-apk.yml`, `release-linux.yml`, `release-windows.yml`) before `cargo build`.
-1. Wire the model engine into the Pure Jhana guardrail: feed the forwarder's EEG into
+1. Wire the model engine into the sleep guardrail: feed the forwarder's EEG into
    `rust/src/analysis/{reve,luna}.rs` and surface the embedding/drowsiness score in the
    protocol (scoring currently loads models but is not yet driven by live data).
 2. On-device pass: download LUNA Base + LUNA Large, import REVE, verify load/unload,

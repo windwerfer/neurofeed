@@ -222,8 +222,8 @@ pub struct GestureDto {
     pub eye: u8,
 }
 
-/// Per-second sleep-guardrail score from the loaded foundation model (Pure
-/// Jhana protocol). The full pooled latent stays Rust-side; only the reduced
+/// Per-second sleep-guardrail score from the loaded foundation model (Sleep-Edge
+/// Rest protocol). The full pooled latent stays Rust-side; only the reduced
 /// readings cross the bridge.
 #[frb(dart_metadata = ("freezed",))]
 pub struct ReveDto {
@@ -572,8 +572,8 @@ fn spawn_event_forwarder() {
         let mut accel_mag_buffer: Vec<f64> = Vec::new();
         let mut last_metrics = tokio::time::Instant::now();
 
-        // Guardrail (Pure Jhana): rolling per-electrode EEG window + the most
-        // recent frontal delta, fed to the loaded foundation model once/second.
+        // Guardrail (Sleep-Edge Rest): rolling per-electrode EEG window + the
+        // most recent frontal delta, fed to the loaded foundation model once/second.
         let mut window_bufs: std::collections::HashMap<i32, Vec<f64>> =
             std::collections::HashMap::new();
         let mut frontal_delta: std::collections::HashMap<i32, f64> =

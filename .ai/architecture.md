@@ -89,8 +89,9 @@ It remains a good second choice if btleplug ever becomes unmaintainable.
   `markersInFeedbackEnabled` (persist markers, default on).
 
 ## Local model engine (REVE / LUNA guardrail)
-- Purpose: on-device drowsiness/artifact embeddings for the Pure Jhana protocol.
-  **The app ships no weights.**
+- Purpose: on-device drowsiness/artifact embeddings for the Sleep-Edge Rest
+  protocol's guardrail layer (the guardrail composes with the ATR reward engine;
+  see `ProtocolInfo.aiSleepGuardrail`). **The app ships no weights.**
 - Rust: `rust/src/api/reve.rs` is the FFI surface (`model_load`/`model_unload`/
   `model_loaded`/`model_config_json`). `rust/src/analysis/{reve,luna}.rs` wrap the
   `reve-rs`/`luna-rs` crates (RLX CPU backend); scoring runs there from the event

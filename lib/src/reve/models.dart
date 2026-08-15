@@ -1,6 +1,6 @@
 import 'package:muse_ml/src/settings.dart';
 
-/// The selectable EEG foundation models behind the Pure Jhana guardrail.
+/// The selectable EEG foundation models behind the sleep guardrail.
 ///
 /// Two engines, one abstraction: LUNA (`PulpBio/LUNA`, Apache-2.0, un-gated —
 /// the app downloads it directly) and REVE (`brain-bzh/reve-base`, gated by a

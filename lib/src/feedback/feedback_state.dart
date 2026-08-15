@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/audio/calibration_clips.dart';
 import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/feedback/feedback_engine.dart';
 import 'package:muse_ml/src/feedback/feedback_recorder.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
@@ -170,8 +169,7 @@ class FeedbackState {
     calibrationStepName: identical(calibrationStepName, _sentinel)
         ? this.calibrationStepName
         : calibrationStepName as String?,
-    calibrationStepTotal:
-        calibrationStepTotal ?? this.calibrationStepTotal,
+    calibrationStepTotal: calibrationStepTotal ?? this.calibrationStepTotal,
     calibrationChallengeHint: identical(calibrationChallengeHint, _sentinel)
         ? this.calibrationChallengeHint
         : calibrationChallengeHint as String?,
@@ -189,8 +187,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         .listen(_onEvent);
     _appSub = _ref.listen<AppUiState>(appStateProvider, _onAppState);
     final settings = _ref.read(settingsProvider);
-    _atr.setDynamicAdapt(settings.dynamicAdapt ?? true);
-    _atr.setResponsiveness(settings.responsiveness ?? 0.5);
+    _engine.setDynamicAdapt(settings.dynamicAdapt ?? true);
+    _engine.setResponsiveness(settings.responsiveness ?? 0.5);
     _recorder.setRecordStreams(settings.recordStreams);
     state = state.copyWith(
       soundName: settings.soundName ?? state.soundName,
@@ -229,8 +227,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   DateTime _lastWarningChimeAt = DateTime.fromMillisecondsSinceEpoch(0);
   int _adaptTick = 0;
   final TargetStateAggregator _target = TargetStateAggregator();
-  final FeedbackEngine _atr = AtrEngine();
+  final RatioEngine _engine = RatioEngine();
   final FeedbackRecorder _recorder = FeedbackRecorder();
+
+  /// Per-second sleep-guardrail readings captured while playing (only when
+  /// the guardrail is armed). Persisted as [SessionDrowsiness] metadata.
+  final List<DrowsinessSample> _drowsinessSeries = [];
 
   /// Wall-clock anchors for the calibration timeline. [_sessionStartAt] is set
   /// when the recorder starts (calibration start); [_trainingStartAt] when
@@ -263,6 +265,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   AudioService get _audio => _ref.read(audioServiceProvider);
 
   void selectProtocol(ProtocolType type) {
+    _engine.metric = ProtocolInfo.forType(type).rewardMetric;
     state = state.copyWith(protocol: type);
   }
 
@@ -288,20 +291,20 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   void selectPercentile(int percentile) {
-    _atr.setBaselinePercentile(percentile);
+    _engine.setBaselinePercentile(percentile);
     state = state.copyWith(baselinePercentile: percentile);
     final stats = _ref.read(liveStatsProvider);
     stats.setBaseline(
       percentile: percentile,
-      count: _atr.baselineCount,
-      mean: _atr.baselineMean,
-      stddev: _atr.baselineStddev,
+      count: _engine.baselineCount,
+      mean: _engine.baselineMean,
+      stddev: _engine.baselineStddev,
     );
     if (state.phase == FeedbackPhase.playing ||
         state.phase == FeedbackPhase.paused) {
-      _atr.computeThreshold();
-      state = state.copyWith(currentThreshold: _atr.threshold);
-      stats.setThreshold(_atr.threshold);
+      _engine.computeThreshold();
+      state = state.copyWith(currentThreshold: _engine.threshold);
+      stats.setThreshold(_engine.threshold);
     }
   }
 
@@ -309,17 +312,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     state = state.copyWith(showNerdStats: !state.showNerdStats);
   }
 
-  bool get dynamicAdapt => _atr.dynamicAdapt;
+  bool get dynamicAdapt => _engine.dynamicAdapt;
 
-  double get responsiveness => _atr.responsiveness;
+  double get responsiveness => _engine.responsiveness;
 
   void setDynamicAdapt(bool enabled) {
-    _atr.setDynamicAdapt(enabled);
+    _engine.setDynamicAdapt(enabled);
     _ref.read(settingsProvider).setDynamicAdapt(enabled);
   }
 
   void setResponsiveness(double value) {
-    _atr.setResponsiveness(value);
+    _engine.setResponsiveness(value);
     _ref.read(settingsProvider).setResponsiveness(value);
   }
 
@@ -329,7 +332,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   /// REVE sleep-guardrail warning threshold (percentile of the eyes-closed
-  /// sleep-direction distribution). Only consumed by the drowsiness protocol.
+  /// sleep-direction distribution). Only exposed when the selected protocol's
+  /// spec offers the guardrail layer.
   int get warningThresholdPercentile =>
       _ref.read(settingsProvider).warningThresholdPercentile;
 
@@ -375,15 +379,32 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _stepIndex = 0;
     _collectionEyes = null;
     _clipPhases.clear();
+    _drowsinessSeries.clear();
     await _recorder.startSession();
-    unawaited(_maybeEnableGuardrail());
+    await _maybeEnableGuardrail();
     await _runCalibration();
   }
 
-  /// Arm the REVE/LUNA sleep-guardrail scorer for the Pure Jhana protocol
-  /// using the settings-selected foundation model. Scoring starts immediately
-  /// in the forwarder (first embedding lands after ~5 s) so the calibration
-  /// baseline can capture the clear anchor. No-op otherwise.
+  /// True when this session intends to run the guardrail: the protocol spec
+  /// offers the layer, the user has not disabled it for this protocol, and a
+  /// model is ready. Used synchronously for the calibration-recipe lookup;
+  /// the async arm ([_maybeEnableGuardrail]) may still fail, in which case
+  /// the session runs without warnings (the staged recipe still
+  /// calibrates fine — it just has no scorer to feed).
+  bool get _guardrailIntent {
+    final spec = ProtocolInfo.forType(state.protocol);
+    if (!spec.aiSleepGuardrail ||
+        !_ref.read(settingsProvider).guardrailEnabledFor(state.protocol)) {
+      return false;
+    }
+    return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
+  }
+
+  /// Arm the REVE/LUNA sleep-guardrail scorer for protocols whose spec offers
+  /// the layer (currently Sleep-Edge Rest), using the settings-selected
+  /// foundation model. Scoring starts immediately in the forwarder (first
+  /// embedding lands after ~5 s) so the calibration baseline can capture the
+  /// clear anchor. No-op otherwise.
   Future<void> _maybeEnableGuardrail() async {
     _guardrailEnabled = false;
     _clearCaptured = false;
@@ -391,7 +412,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _guardrailThreshold = null;
     _baselineSleepDir.clear();
     _warningActive = false;
-    if (state.protocol != ProtocolType.drowsiness) {
+    if (!_guardrailIntent) {
       return;
     }
     final engine = _ref.read(modelEngineNotifierProvider);
@@ -411,7 +432,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   /// In-flight re-anchoring: rebuilds the baseline from the recent clean
-  /// session ATR samples instead of running another silent calibration. Only
+  /// session ratio samples instead of running another silent calibration. Only
   /// valid during playing/paused; returns false when the session is too young
   /// or there are too few clean samples.
   bool recalibrate() {
@@ -419,7 +440,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         state.phase != FeedbackPhase.paused) {
       return false;
     }
-    final ok = _atr.recalibrateFromRecent(minSamples: minRecalibrateSamples);
+    final ok = _engine.recalibrateFromRecent(minSamples: minRecalibrateSamples);
     if (!ok) {
       debugPrint(
         '[feedback] in-flight recalibrate skipped at t=${state.elapsedSeconds}s: '
@@ -431,20 +452,20 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final stats = _ref.read(liveStatsProvider);
     stats
       ..setBaseline(
-        percentile: _atr.baselinePercentile,
-        count: _atr.baselineCount,
-        mean: _atr.baselineMean,
-        stddev: _atr.baselineStddev,
+        percentile: _engine.baselinePercentile,
+        count: _engine.baselineCount,
+        mean: _engine.baselineMean,
+        stddev: _engine.baselineStddev,
       )
-      ..setThreshold(_atr.threshold);
+      ..setThreshold(_engine.threshold);
     unawaited(_audio.playRecalibrateChime());
     debugPrint(
       '[feedback] in-flight recalibrate at t=${state.elapsedSeconds}s: '
-      'threshold -> ${_atr.threshold} (p${_atr.baselinePercentile}, '
-      'n=${_atr.baselineCount} clean samples, mean=${_atr.baselineMean}, '
-      'sd=${_atr.baselineStddev})',
+      'threshold -> ${_engine.threshold} (p${_engine.baselinePercentile}, '
+      'n=${_engine.baselineCount} clean samples, mean=${_engine.baselineMean}, '
+      'sd=${_engine.baselineStddev})',
     );
-    state = state.copyWith(currentThreshold: _atr.threshold);
+    state = state.copyWith(currentThreshold: _engine.threshold);
     return true;
   }
 
@@ -458,7 +479,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (state.phase != FeedbackPhase.calibrating) {
       return;
     }
-    _atr.reset();
+    _engine.reset();
     _greenSeconds = 0;
     _faultyPadSeconds = 0;
     state = state.copyWith(waitingForSignal: true, startAnywayAvailable: false);
@@ -518,7 +539,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     CalibrationRecipe? recipe;
     try {
       final manifest = await _ref.read(calibrationManifestProvider.future);
-      recipe = manifest.recipeFor(state.protocol.name);
+      recipe = manifest.recipeFor(
+        state.protocol.name,
+        guardrail: _guardrailIntent,
+      );
     } catch (e) {
       debugPrint('[feedback] calibration manifest unavailable: $e');
     }
@@ -644,18 +668,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (state.phase != FeedbackPhase.calibrating) {
       return;
     }
-    final threshold = _atr.computeThreshold();
+    final threshold = _engine.computeThreshold();
     debugPrint(
-      '[feedback] baseline ATR threshold = $threshold '
-      '(${_atr.baselineCount} samples, p${_atr.baselinePercentile})',
+      '[feedback] baseline ratio threshold = $threshold '
+      '(${_engine.baselineCount} samples, p${_engine.baselinePercentile})',
     );
     _ref
         .read(liveStatsProvider)
         .setBaseline(
-          percentile: _atr.baselinePercentile,
-          count: _atr.baselineCount,
-          mean: _atr.baselineMean,
-          stddev: _atr.baselineStddev,
+          percentile: _engine.baselinePercentile,
+          count: _engine.baselineCount,
+          mean: _engine.baselineMean,
+          stddev: _engine.baselineStddev,
         );
     _ref.read(liveStatsProvider).setThreshold(threshold);
     if (_guardrailEnabled && _clearCaptured) {
@@ -691,10 +715,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       greenStableSeconds: greenStableSeconds,
       faultyPadSeconds: faultyPadSeconds,
       baseline: SessionBaselineStats(
-        percentile: _atr.baselinePercentile,
-        count: _atr.baselineCount,
-        mean: _atr.baselineMean,
-        stddev: _atr.baselineStddev,
+        percentile: _engine.baselinePercentile,
+        count: _engine.baselineCount,
+        mean: _engine.baselineMean,
+        stddev: _engine.baselineStddev,
       ),
       phases: List.of(_clipPhases),
     );
@@ -778,7 +802,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     state = state.copyWith(
       phase: FeedbackPhase.playing,
-      currentThreshold: _atr.threshold,
+      currentThreshold: _engine.threshold,
     );
     _target.reset();
     _adaptTick = 0;
@@ -838,9 +862,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _clenchWasActive = false;
     _gestureMarkers.clear();
     _teardownGuardrail();
+    _drowsinessSeries.clear();
     _audio.stop();
     _recorder.discardSession();
-    _atr.reset();
+    _engine.reset();
     _target.reset();
     _sessionStartAt = null;
     _trainingStartAt = null;
@@ -887,20 +912,22 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _adaptTick++;
       if (_adaptTick >= adaptIntervalSeconds) {
         _adaptTick = 0;
-        _atr.adapt();
-        state = state.copyWith(currentThreshold: _atr.threshold);
-        _ref.read(liveStatsProvider).setThreshold(_atr.threshold);
+        _engine.adapt();
+        state = state.copyWith(currentThreshold: _engine.threshold);
+        _ref.read(liveStatsProvider).setThreshold(_engine.threshold);
       }
       final stats = _ref.read(liveStatsProvider);
-      stats.setSuccessRate(_atr.successRate);
+      stats.setSuccessRate(_engine.successRate);
       if (state.elapsedSeconds % 10 == 0) {
         debugPrint(
-          '[atr] t=${state.elapsedSeconds}s atr=${stats.currentAtr?.toStringAsFixed(3)} '
+          '[ratio] t=${state.elapsedSeconds}s '
+          'metric=${_engine.metric.name} '
+          'value=${stats.currentAtr?.toStringAsFixed(3)} '
           'pct=${stats.currentPercentile?.toStringAsFixed(1)} '
-          'thr=${_atr.threshold?.toStringAsFixed(3)} '
-          'success=${_atr.successRate?.toStringAsFixed(2)} '
-          'baseline n=${_atr.baselineCount} mean=${_atr.baselineMean?.toStringAsFixed(3)} '
-          'sd=${_atr.baselineStddev?.toStringAsFixed(3)}',
+          'thr=${_engine.threshold?.toStringAsFixed(3)} '
+          'success=${_engine.successRate?.toStringAsFixed(2)} '
+          'baseline n=${_engine.baselineCount} mean=${_engine.baselineMean?.toStringAsFixed(3)} '
+          'sd=${_engine.baselineStddev?.toStringAsFixed(3)}',
         );
       }
     });
@@ -1047,6 +1074,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
+  /// Live ratio of the session's reward metric from a per-sample target.
+  /// The engine is direction-agnostic; extraction is the only metric-aware
+  /// lane (data-only flip: same adaptive engine, different numerator).
+  double _metricOf(RelativeTarget target) => switch (_engine.metric) {
+    RewardMetric.alphaOverTheta => target.atr,
+    RewardMetric.thetaOverAlpha => target.tar,
+  };
+
   void _onBands(BandsDto bands) {
     _target.update(bands);
     final target = _target.evaluate(_ref.read(appStateProvider).signalQuality);
@@ -1056,9 +1091,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (state.phase == FeedbackPhase.calibrating &&
         state.baselineSecondsLeft > 0) {
       if (_sampleIsClean) {
-        final atr = target.atr;
-        if (atr.isFinite) {
-          _atr.addBaselineSample(atr);
+        final value = _metricOf(target);
+        if (value.isFinite) {
+          _engine.addBaselineSample(value);
         }
       }
       // V_clear anchors only from the eyes-open stage of the recipe.
@@ -1070,14 +1105,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (state.phase != FeedbackPhase.playing) {
       return;
     }
-    final atr = target.atr;
-    if (!atr.isFinite) {
+    final value = _metricOf(target);
+    if (!value.isFinite) {
       return;
     }
-    _atr.recordEpoch(atr);
-    _atr.recordSessionSample(atr, clean: _sampleIsClean);
-    _ref.read(liveStatsProvider).push(atr, _atr.percentileOf);
-    _audio.onStateUpdate(_atr.isInTarget(atr));
+    _engine.recordEpoch(value);
+    _engine.recordSessionSample(value, clean: _sampleIsClean);
+    _ref.read(liveStatsProvider).push(value, _engine.percentileOf);
+    _audio.onStateUpdate(_engine.isInTarget(value));
   }
 
   void _onMovement(MovementDto movement) {
@@ -1178,6 +1213,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     if (state.phase == FeedbackPhase.playing && _guardrailThreshold != null) {
       _evaluateGuardrailWarning();
+      final sessionStart = _sessionStartAt;
+      if (sessionStart != null) {
+        _drowsinessSeries.add(
+          DrowsinessSample(
+            offsetSecs:
+                DateTime.now().difference(sessionStart).inMilliseconds / 1000,
+            sleepDir: r.sleepDir,
+            delta: r.delta,
+            warning: _warningActive,
+          ),
+        );
+      }
     }
   }
 
@@ -1221,6 +1268,30 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   /// Gesture markers accumulated during the current feedback session.
   List<GestureMarker> get gestureMarkers => List.unmodifiable(_gestureMarkers);
+
+  /// Per-second sleep-guardrail trace captured during the session, or an
+  /// empty list when the guardrail was off.
+  List<DrowsinessSample> get drowsinessSamples =>
+      List.unmodifiable(_drowsinessSeries);
+
+  /// Whole-session sleep-guardrail record (drift score + mean sleep
+  /// direction over the trace), or null when the guardrail produced no
+  /// samples. Persisted as session metadata.
+  SessionDrowsiness? get sessionDrowsiness {
+    final series = _drowsinessSeries;
+    if (series.isEmpty) {
+      return null;
+    }
+    final warned = series.where((s) => s.warning).length;
+    final mean =
+        series.fold<double>(0, (a, s) => a + s.sleepDir) / series.length;
+    return SessionDrowsiness(
+      series: series,
+      scoreTotalPct: warned * 100 / series.length,
+      meanSleepDir: mean,
+      threshold: _guardrailThreshold,
+    );
+  }
 
   /// Whether the REVE/LUNA sleep guardrail is actively scoring this session.
   bool get guardrailEnabled => _guardrailEnabled;

@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "calibrations": [
     {
       "protocol": "alphaTheta",
@@ -31,6 +31,36 @@
     },
     {
       "protocol": "drowsiness",
+      "guardrail": false,
+      "kind": "single",
+      "seconds": 90,
+      "eyes": "closed",
+      "intros": [
+        {
+          "id": "atr-base-short-clear",
+          "file": "assets/audio/calibration/alpha-theta-ratio_short-clear.opus",
+          "text": "Please close your eyes and sit comfortably. For the next ninety seconds, simply rest. Let your mind settle on its own. There is nothing you need to do. We are measuring your natural baseline."
+        },
+        {
+          "id": "atr-base-soft-reassuring",
+          "file": "assets/audio/calibration/alpha-theta-ratio_soft-reassuring.opus",
+          "text": "Gently close your eyes and relax your jaw. For the next ninety seconds, just sit quietly. You don’t need to focus or control anything. Let your awareness rest inside and allow everything to settle. This short period helps us set your personal baseline."
+        },
+        {
+          "id": "atr-base-minimal-direct",
+          "file": "assets/audio/calibration/alpha-theta-ratio_minimal-direct.opus",
+          "text": "Close your eyes. Sit quietly for ninety seconds. Let everything rest on its own. Recording your baseline now."
+        },
+        {
+          "id": "atr-base-meditative-tone",
+          "file": "assets/audio/calibration/alpha-theta-ratio_meditative-tone.opus",
+          "text": "Close your eyes and find a comfortable position. For the next ninety seconds, allow yourself to simply be here. No effort is needed. Let your mind rest and your awareness turn inward."
+        }
+      ]
+    },
+    {
+      "protocol": "drowsiness",
+      "guardrail": true,
       "kind": "staged",
       "stages": [
         {

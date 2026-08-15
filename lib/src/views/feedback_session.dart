@@ -43,6 +43,9 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
     final protocol = ProtocolInfo.forType(fb.protocol);
     final connected = ref.watch(appStateProvider).status.connected;
     final theme = Theme.of(context);
+    final guardrailOn =
+        protocol.aiSleepGuardrail &&
+        ref.read(settingsProvider).guardrailEnabledFor(fb.protocol);
 
     return Scaffold(
       appBar: AppBar(
@@ -101,7 +104,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
               ),
               const SizedBox(height: 12),
               _PercentileSelector(),
-              if (fb.protocol == ProtocolType.drowsiness) ...[
+              if (guardrailOn) ...[
                 const SizedBox(height: 12),
                 const _WarningThresholdSelector(),
               ],
@@ -290,10 +293,12 @@ class _PhaseControls extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
     final theme = Theme.of(context);
+    final guardrailIntended =
+        protocol.aiSleepGuardrail &&
+        ref.read(settingsProvider).guardrailEnabledFor(fb.protocol);
     switch (fb.phase) {
       case FeedbackPhase.idle:
-        if (protocol.type == ProtocolType.drowsiness &&
-            !ref.watch(modelEngineAvailabilityProvider)) {
+        if (guardrailIntended && !ref.watch(modelEngineAvailabilityProvider)) {
           return Column(
             children: [
               FilledButton.icon(
@@ -313,7 +318,7 @@ class _PhaseControls extends ConsumerWidget {
               const SizedBox(height: 8),
               Text(
                 'The guardrail AI engine is not ready yet — download or '
-                'import a model to enable Pure Jhana.',
+                'import a model to enable the AI sleep guardrail.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall,
               ),
@@ -360,10 +365,7 @@ class _PhaseControls extends ConsumerWidget {
                 size: 48,
               ),
               const SizedBox(height: 8),
-              Text(
-                fb.calibrationStepName!,
-                style: theme.textTheme.titleMedium,
-              ),
+              Text(fb.calibrationStepName!, style: theme.textTheme.titleMedium),
               if (fb.calibrationChallengeText != null) ...[
                 const SizedBox(height: 24),
                 Container(
@@ -405,7 +407,8 @@ class _PhaseControls extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 LinearProgressIndicator(
-                  value: (fb.calibrationStepTotal - fb.baselineSecondsLeft) /
+                  value:
+                      (fb.calibrationStepTotal - fb.baselineSecondsLeft) /
                       fb.calibrationStepTotal,
                 ),
               ] else ...[
@@ -545,18 +548,24 @@ class _NerdStatsBubble extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(liveStatsProvider);
+    final fb = ref.watch(feedbackStateProvider);
     final theme = Theme.of(context);
     final percentile = stats.currentPercentile;
     final atr = stats.currentAtr;
     final threshold = stats.threshold;
     final baselineMean = stats.baselineMean;
     final baselineStddev = stats.baselineStddev;
+    final metricName =
+        ProtocolInfo.forType(fb.protocol).rewardMetric ==
+            RewardMetric.thetaOverAlpha
+        ? 'TAR'
+        : 'ATR';
     final lines = <String>[];
     if (percentile == null || atr == null) {
       lines.add('Collecting…');
     } else {
       lines.add(
-        'ATR ${atr.toStringAsFixed(2)} · p${percentile.round()} of baseline',
+        '$metricName ${atr.toStringAsFixed(2)} · p${percentile.round()} of baseline',
       );
     }
     lines.add(
@@ -1063,6 +1072,7 @@ class _PercentileSelector extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
+    final metric = ProtocolInfo.forType(fb.protocol).rewardMetric;
     return Card(
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: ListTile(
@@ -1073,7 +1083,12 @@ class _PercentileSelector extends ConsumerWidget {
         onTap: () async {
           final result = await showDialog<int>(
             context: context,
-            builder: (ctx) => _PercentilePicker(current: fb.baselinePercentile),
+            builder: (ctx) => _PercentilePicker(
+              current: fb.baselinePercentile,
+              rewardTypeLabel: metric == RewardMetric.thetaOverAlpha
+                  ? 'Theta/Alpha'
+                  : 'Alpha/Theta',
+            ),
           );
           if (result != null) {
             ref.read(feedbackStateProvider.notifier).selectPercentile(result);
@@ -1086,7 +1101,15 @@ class _PercentileSelector extends ConsumerWidget {
 
 class _PercentilePicker extends StatefulWidget {
   final int current;
-  const _PercentilePicker({required this.current});
+
+  /// Human label of the rewarded ratio (`Alpha/Theta` for ATR, `Theta/Alpha`
+  /// for TAR), shown in the explainer.
+  final String rewardTypeLabel;
+
+  const _PercentilePicker({
+    required this.current,
+    required this.rewardTypeLabel,
+  });
 
   @override
   State<_PercentilePicker> createState() => _PercentilePickerState();
@@ -1141,9 +1164,9 @@ class _PercentilePickerState extends State<_PercentilePicker> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'The feedback chime fires when your Alpha/Theta ratio exceeds '
-            'this percentile of the 90s baseline. A lower percentile makes '
-            'rewards easier; higher makes them harder.',
+            'The feedback chime fires when your ${widget.rewardTypeLabel} '
+            'ratio exceeds this percentile of the calibration baseline. A '
+            'lower percentile makes rewards easier; higher makes them harder.',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 12),

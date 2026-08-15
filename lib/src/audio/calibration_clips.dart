@@ -54,7 +54,8 @@ class CalibrationStep {
         text: json['text'] as String? ?? '',
         seconds: (json['seconds'] as num?)?.toInt() ?? 0,
         eyes: json['eyes'] as String?,
-        challengeText: (json['challengeText'] as List<Object?>?)
+        challengeText:
+            (json['challengeText'] as List<Object?>?)
                 ?.whereType<String>()
                 .toList() ??
             const [],
@@ -72,6 +73,7 @@ class CalibrationRecipe {
   const CalibrationRecipe({
     required this.protocol,
     required this.kind,
+    this.guardrail,
     this.seconds = 0,
     this.eyes,
     this.intros = const [],
@@ -79,6 +81,14 @@ class CalibrationRecipe {
   });
 
   final String protocol;
+
+  /// Which guardrail configuration this recipe serves: `true` — only when the
+  /// AI sleep guardrail is armed; `false` — only when it is off; null — either
+  /// way (legacy v2 entries had no guardrail dimension). Guardrail recipes
+  /// keep the eyes-open challenge + eyes-closed rest stages that build the
+  /// clear anchor and the sleep-direction baseline; plain recipes drop to the
+  /// single silent baseline of the ratio engine.
+  final bool? guardrail;
 
   /// `single` or `staged` (see [isSingle]/[isStaged]).
   final String kind;
@@ -111,6 +121,7 @@ class CalibrationRecipe {
       CalibrationRecipe(
         protocol: json['protocol'] as String? ?? '',
         kind: json['kind'] as String? ?? 'single',
+        guardrail: json['guardrail'] as bool?,
         seconds: (json['seconds'] as num?)?.toInt() ?? 0,
         eyes: json['eyes'] as String?,
         intros: _steps(json['intros']),
@@ -135,15 +146,26 @@ class CalibrationManifest {
   final List<CalibrationRecipe> recipes;
 
   static const String asset = 'assets/audio/calibration/calibration.json';
-  static const int currentVersion = 2;
+  static const int currentVersion = 3;
 
-  CalibrationRecipe? recipeFor(String protocolName) {
+  /// Recipe for [protocolName], preferring the entry that matches the
+  /// requested [guardrail] configuration (or any entry when [guardrail] is
+  /// null), falling back to a kind-agnostic entry so v2 manifests keep
+  /// working unchanged.
+  CalibrationRecipe? recipeFor(String protocolName, {bool? guardrail}) {
+    CalibrationRecipe? exact;
+    CalibrationRecipe? fallback;
     for (final recipe in recipes) {
-      if (recipe.protocol == protocolName) {
-        return recipe;
+      if (recipe.protocol != protocolName) {
+        continue;
+      }
+      if (recipe.guardrail == guardrail) {
+        exact ??= recipe;
+      } else if (recipe.guardrail == null) {
+        fallback ??= recipe;
       }
     }
-    return null;
+    return exact ?? fallback;
   }
 
   static CalibrationManifest? fromJson(Object? json) {

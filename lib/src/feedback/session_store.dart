@@ -39,6 +39,97 @@ class GestureMarker {
   }
 }
 
+/// One per-second sleep-guardrail reading taken during a feedback session
+/// (computed, not raw — the 1 Hz model score is not part of the .muse body).
+class DrowsinessSample {
+  const DrowsinessSample({
+    required this.offsetSecs,
+    required this.sleepDir,
+    required this.delta,
+    required this.warning,
+  });
+
+  /// Seconds from session start (matches [FeedbackState.elapsedSeconds]).
+  final double offsetSecs;
+
+  /// Sleep-direction score from the on-device model (higher = more sleep-like).
+  final double sleepDir;
+
+  /// Frontal delta relative power of the AF7/AF8 average at that second.
+  final double delta;
+
+  /// Whether the guardrail warning was active at that second.
+  final bool warning;
+
+  Map<String, Object?> toJson() => {
+    'at': offsetSecs,
+    'sleepDir': sleepDir,
+    'delta': delta,
+    'warning': warning,
+  };
+
+  static DrowsinessSample? fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      return null;
+    }
+    return DrowsinessSample(
+      offsetSecs: (json['at'] as num?)?.toDouble() ?? 0,
+      sleepDir: (json['sleepDir'] as num?)?.toDouble() ?? 0,
+      delta: (json['delta'] as num?)?.toDouble() ?? 0,
+      warning: json['warning'] as bool? ?? false,
+    );
+  }
+}
+
+/// Sleep-guardrail trace of a feedback session: the per-second [series] plus
+/// a whole-session [scoreTotalPct] (fraction of scored seconds where the
+/// warning was active) and [meanSleepDir]. Persisted in the metadata.
+class SessionDrowsiness {
+  const SessionDrowsiness({
+    required this.series,
+    required this.scoreTotalPct,
+    required this.meanSleepDir,
+    this.threshold,
+  });
+
+  final List<DrowsinessSample> series;
+
+  /// Percentage of scored seconds (guardrail running, playing) in which the
+  /// drift warning was active — 0 = never flagged, 100 = flagged constantly.
+  final double scoreTotalPct;
+
+  /// Mean sleep-direction score over the scored seconds.
+  final double meanSleepDir;
+
+  /// Baseline sleep-direction percentile threshold the warnings fired
+  /// against, for drawing the reference line on the trace.
+  final double? threshold;
+
+  Map<String, Object?> toJson() => {
+    'scoreTotalPct': scoreTotalPct,
+    'meanSleepDir': meanSleepDir,
+    if (threshold != null) 'threshold': threshold,
+    'series': [for (final s in series) s.toJson()],
+  };
+
+  static SessionDrowsiness? fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      return null;
+    }
+    return SessionDrowsiness(
+      scoreTotalPct: (json['scoreTotalPct'] as num?)?.toDouble() ?? 0,
+      meanSleepDir: (json['meanSleepDir'] as num?)?.toDouble() ?? 0,
+      threshold: (json['threshold'] as num?)?.toDouble(),
+      series:
+          (json['series'] as List<Object?>?)
+              ?.map(DrowsinessSample.fromJson)
+              .whereType<DrowsinessSample>()
+              .toList() ??
+          const [],
+    );
+  }
+}
+
 class SessionStatsData {
   const SessionStatsData({
     this.peakAlphaFreq,
@@ -295,6 +386,7 @@ class SessionMetadata {
     this.summary,
     this.gestures = const [],
     this.calibration,
+    this.drowsiness,
   });
 
   final ProtocolType protocol;
@@ -336,6 +428,10 @@ class SessionMetadata {
   /// when recorded. Null on files recorded before calibration recording.
   final SessionCalibration? calibration;
 
+  /// Sleep-guardrail trace (per-second model scores + drift score), when the
+  /// session ran with the guardrail enabled. Null otherwise.
+  final SessionDrowsiness? drowsiness;
+
   Map<String, Object?> toJson() => {
     'protocol': protocol.name,
     'durationMinutes': durationMinutes,
@@ -352,6 +448,7 @@ class SessionMetadata {
     if (summary != null) 'summary': summary!.toJson(),
     if (gestures.isNotEmpty) 'gestures': [for (final g in gestures) g.toJson()],
     if (calibration != null) 'calibration': calibration!.toJson(),
+    if (drowsiness != null) 'drowsiness': drowsiness!.toJson(),
   };
 
   static SessionMetadata? fromJson(Object? json) {
@@ -396,6 +493,7 @@ class SessionMetadata {
               .toList() ??
           const [],
       calibration: SessionCalibration.fromJson(json['calibration']),
+      drowsiness: SessionDrowsiness.fromJson(json['drowsiness']),
     );
   }
 }

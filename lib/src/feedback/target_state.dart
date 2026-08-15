@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/feedback/feedback_engine.dart';
+import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 const int electrodeAf7 = 1;
@@ -38,16 +39,39 @@ class RelativeTarget {
     }
     return alphaRel / thetaRel;
   }
+
+  /// Theta/Alpha power ratio (TAR) — the reciprocal of [atr]. Used by
+  /// protocols whose [RewardMetric] rewards theta dominance (a data-only
+  /// flip of the same ratio engine).
+  double get tar {
+    if (alphaRel <= 0) {
+      return double.infinity;
+    }
+    return thetaRel / alphaRel;
+  }
 }
 
-/// Continuous Alpha/Theta ratio (ATR) uptraining engine.
+/// Continuous band-ratio uptraining engine.
 ///
-/// During calibration it collects clean ATR samples. The session threshold is
+/// The engine is direction-agnostic: it collects samples of a scalar ratio,
+/// derives the session threshold from a configurable percentile of that
+/// baseline distribution, and rewards the user while the live value beats the
+/// threshold. The [metric] tag says which ratio feeds it ([RewardMetric]
+/// lives on the protocol spec — changing a protocol's metric is a data-only
+/// change: same engine, flipped extraction).
+///
+/// During calibration it collects clean ratio samples. The session threshold is
 /// the configurable percentile of that baseline distribution (e.g. 40th),
 /// which gives an initial reward rate of ~60%. During the session it adapts
 /// the threshold based on the recent success rate so the user stays in the
 /// learning zone.
-class AtrEngine implements FeedbackEngine {
+class RatioEngine implements FeedbackEngine {
+  /// Direction-agnostic ratio engine, tagged with the [RewardMetric] the
+  /// caller is currently extracting. Updated on protocol selection; the
+  /// extraction lane ([FeedbackStateNotifier._metricOf]) feeds matching
+  /// values.
+  RewardMetric metric;
+
   /// Success-rate window in feedback epochs (~10 Hz, so this covers ~30 s).
   static const int epochWindow = 300;
   static const double highSuccessRate = 0.8;
@@ -56,20 +80,23 @@ class AtrEngine implements FeedbackEngine {
   /// Ceiling for dynamic adaptation, relative to the baseline stats.
   static const double ceilingStddevs = 1.5;
 
-  /// Rolling window of recent session ATR samples (with a movement/artifact
+  /// Rolling window of recent session ratio samples (with a movement/artifact
   /// flag), used for in-flight recalibration.
   static const Duration recentWindow = Duration(seconds: 90);
 
   int percentile;
   final List<double> _baseline = [];
   final List<bool> _epochs = [];
-  final List<({DateTime time, double atr, bool clean})> _recent = [];
+  final List<({DateTime time, double value, bool clean})> _recent = [];
   double? _threshold;
   double? _initialThreshold;
   bool _dynamicAdapt = true;
   double _responsiveness = 0.5;
 
-  AtrEngine({this.percentile = 40});
+  RatioEngine({
+    this.percentile = 40,
+    this.metric = RewardMetric.alphaOverTheta,
+  });
 
   @override
   bool get hasBaseline => _baseline.isNotEmpty;
@@ -96,7 +123,7 @@ class AtrEngine implements FeedbackEngine {
     return (1.01 + 0.02 * r, 1.0 - (0.03 + 0.07 * r));
   }
 
-  /// Mean of the baseline ATR samples.
+  /// Mean of the baseline ratio samples.
   @override
   double? get baselineMean {
     if (_baseline.isEmpty) {
@@ -105,7 +132,7 @@ class AtrEngine implements FeedbackEngine {
     return _baseline.reduce((a, b) => a + b) / _baseline.length;
   }
 
-  /// Standard deviation of the baseline ATR samples.
+  /// Standard deviation of the baseline ratio samples.
   @override
   double? get baselineStddev {
     if (_baseline.length < 2) {
@@ -157,7 +184,7 @@ class AtrEngine implements FeedbackEngine {
     _baseline.add(atr);
   }
 
-  /// Sorts the baseline ATR samples and picks the configured percentile as the
+  /// Sorts the baseline samples and picks the configured percentile as the
   /// initial threshold. Returns null if there is no baseline data.
   @override
   double? computeThreshold() {
@@ -195,19 +222,19 @@ class AtrEngine implements FeedbackEngine {
   }
 
   @override
-  void recordEpoch(double atr) {
-    _epochs.add(isInTarget(atr));
+  void recordEpoch(double value) {
+    _epochs.add(isInTarget(value));
     if (_epochs.length > epochWindow) {
       _epochs.removeAt(0);
     }
   }
 
-  /// Records a live session ATR sample for in-flight recalibration. Samples
+  /// Records a live session sample for in-flight recalibration. Samples
   /// older than [recentWindow] are pruned.
   @override
-  void recordSessionSample(double atr, {required bool clean}) {
+  void recordSessionSample(double value, {required bool clean}) {
     final now = DateTime.now();
-    _recent.add((time: now, atr: atr, clean: clean));
+    _recent.add((time: now, value: value, clean: clean));
     _recent.removeWhere((s) => now.difference(s.time) > recentWindow);
   }
 
@@ -220,7 +247,7 @@ class AtrEngine implements FeedbackEngine {
     final now = DateTime.now();
     final clean = _recent
         .where((s) => now.difference(s.time) <= recentWindow && s.clean)
-        .map((s) => s.atr)
+        .map((s) => s.value)
         .toList();
     if (clean.length < minSamples) {
       return false;

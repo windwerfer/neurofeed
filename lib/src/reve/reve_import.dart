@@ -7,8 +7,9 @@ import 'package:muse_ml/src/reve/model_selector.dart';
 import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/settings.dart';
 
-/// The gate bubble shown when the user tries to start a Pure Jhana session
-/// without the selected guardrail model being ready.
+/// The gate bubble shown when the user tries to start a session whose
+/// protocol uses the guardrail, without the selected guardrail model being
+/// ready.
 ///
 /// Shows a model dropdown (with sizes + availability), a short explanation of
 /// the chosen model, and the import / Open Hugging Face / download buttons
@@ -107,9 +108,9 @@ class _ModelGateDialogState extends ConsumerState<_ModelGateDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Pure Jhana runs an EEG foundation model that scores your '
-              'brainwaves while you meditate. Pick a model, then download or '
-              'import it.',
+              'The sleep guardrail runs an EEG foundation model that scores '
+              'your brainwaves while you meditate. Pick a model, then '
+              'download or import it.',
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 12),

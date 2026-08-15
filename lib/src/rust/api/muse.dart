@@ -196,8 +196,8 @@ sealed class PulseDto with _$PulseDto {
   }) = _PulseDto;
 }
 
-/// Per-second sleep-guardrail score from the loaded foundation model (Pure
-/// Jhana protocol). The full pooled latent stays Rust-side; only the reduced
+/// Per-second sleep-guardrail score from the loaded foundation model (Sleep-Edge
+/// Rest protocol). The full pooled latent stays Rust-side; only the reduced
 /// readings cross the bridge.
 @freezed
 sealed class ReveDto with _$ReveDto {

@@ -8,7 +8,7 @@
 //! Anchors are tagged with the model kind they were captured under so a LUNA
 //! vector is never compared against a REVE one.
 //!
-//! Score semantics (see `protocol.dart` "Pure Jhana"):
+//! Score semantics (see `lib/src/feedback/protocol.dart`, Sleep-Edge Rest):
 //! * `clarity` = cosine(live, V_clear).
 //! * `sleep_dir` starts as `1 - clarity`, then switches to cosine(live, V_sleep)
 //!   once V_sleep exists.

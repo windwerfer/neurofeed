@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/reve/reve_card.dart';
@@ -183,6 +184,8 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         const SizedBox(height: 16),
         _GesturesCard(settings: settings),
         const SizedBox(height: 16),
+        _GuardrailCard(settings: settings),
+        const SizedBox(height: 16),
         const AiEngineCard(),
       ],
     );
@@ -276,6 +279,86 @@ class _GesturesCardState extends State<_GesturesCard> {
                 await widget.settings.setMarkersInFeedbackEnabled(on);
               },
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Per-protocol AI sleep-guardrail toggle. One switch per protocol whose spec
+/// offers the guardrail layer ([ProtocolInfo.aiSleepGuardrail]); protocols
+/// without the layer run the plain ratio engine regardless.
+class _GuardrailCard extends StatefulWidget {
+  const _GuardrailCard({required this.settings});
+
+  final Settings settings;
+
+  @override
+  State<_GuardrailCard> createState() => _GuardrailCardState();
+}
+
+class _GuardrailCardState extends State<_GuardrailCard> {
+  late final Map<ProtocolType, bool> _enabled = {
+    for (final p in ProtocolInfo.all)
+      if (p.aiSleepGuardrail)
+        p.type: widget.settings.guardrailEnabledFor(p.type),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.bedtime_outlined,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Text('AI sleep guardrail', style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'The on-device layer watches for the EEG signature of actually '
+              'falling asleep and plays a soft warning chime. It is a cue, '
+              'never a reward or a safety device — and it only runs when a '
+              'model is installed (card below).',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const Divider(height: 24),
+            for (final p in ProtocolInfo.all)
+              if (p.aiSleepGuardrail)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: Icon(
+                    Icons.psychology_outlined,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  title: Text(p.title),
+                  subtitle: Text(
+                    'Off: runs the plain Alpha-over-Theta ratio engine without '
+                    'warnings.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  value: _enabled[p.type] ?? true,
+                  onChanged: (on) async {
+                    setState(() => _enabled[p.type] = on);
+                    await widget.settings.setGuardrailEnabled(p.type, on);
+                  },
+                ),
           ],
         ),
       ),

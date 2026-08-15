@@ -67,7 +67,10 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       if (summary != null) {
         // Fast path: render the detail straight from the decimated overview in
         // the metadata head, without reading (or parsing) the .muse body.
-        _prepared = _prepareOverview(summary);
+        final metric = ProtocolInfo.forType(
+          widget.metadata?.protocol ?? ProtocolType.alphaTheta,
+        ).rewardMetric;
+        _prepared = _prepareOverview(summary, metric: metric);
       } else {
         // Legacy session without a summary: fall back to a full-body parse.
         final store = ref.read(sessionStoreProvider.future);
@@ -208,6 +211,10 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         elapsedSeconds: meta?.elapsedSeconds ?? fb.elapsedSeconds,
         soundName: meta?.sound ?? fb.soundName,
         prepared: _prepared!,
+        drowsiness: widget.readOnly
+            ? meta?.drowsiness
+            : ref.read(feedbackStateProvider.notifier).sessionDrowsiness,
+        trainingStartOffsetSecs: _trainingStartOffset,
         readOnly: widget.readOnly,
         thumbKey: _thumbKey,
         notesController: _notes,
@@ -237,7 +244,11 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
           );
         }
         final data = snapshot.data!;
-        _prepared ??= _prepare(data, trainingStartOffset: _trainingStartOffset);
+        _prepared ??= _prepare(
+          data,
+          trainingStartOffset: _trainingStartOffset,
+          metric: protocol.rewardMetric,
+        );
         _sessionData ??= data;
         if (_thumbnail == null && !widget.readOnly) {
           WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
@@ -304,6 +315,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
             ? notifier.gestureMarkers
             : const [],
         calibration: notifier.calibration,
+        drowsiness: notifier.sessionDrowsiness,
       );
       final id = DateTime.now().millisecondsSinceEpoch.toString();
       try {
@@ -388,6 +400,8 @@ class _DashboardBody extends StatefulWidget {
     required this.elapsedSeconds,
     required this.soundName,
     required this.prepared,
+    this.drowsiness,
+    this.trainingStartOffsetSecs,
     required this.readOnly,
     required this.thumbKey,
     required this.notesController,
@@ -404,6 +418,16 @@ class _DashboardBody extends StatefulWidget {
   final int elapsedSeconds;
   final String soundName;
   final _Prepared prepared;
+
+  /// Sleep-guardrail trace of this session (null when the guardrail did not
+  /// run or recorded nothing).
+  final SessionDrowsiness? drowsiness;
+
+  /// Seconds from recording start to the training boundary; drowsiness
+  /// offsets are wall-clock-relative to session start, so subtracting this
+  /// aligns the trace with the training-window chart axis.
+  final double? trainingStartOffsetSecs;
+
   final bool readOnly;
   final GlobalKey thumbKey;
   final TextEditingController notesController;
@@ -433,6 +457,12 @@ class _DashboardBodyState extends State<_DashboardBody> {
     take(p.x);
     take(p.movementX);
     take(p.bpmX);
+    final drowsy = widget.drowsiness;
+    if (drowsy != null && drowsy.series.isNotEmpty) {
+      take([
+        drowsy.series.last.offsetSecs - (widget.trainingStartOffsetSecs ?? 0),
+      ]);
+    }
     _viewport = _ChartViewport(0, math.max(end, 1.0));
   }
 
@@ -469,6 +499,38 @@ class _DashboardBodyState extends State<_DashboardBody> {
     }
 
     final notEnough = _notEnoughData;
+
+    // Sleep-guardrail trace widgets for the current session: the model's
+    // sleep-direction line vs the baseline warning threshold. Empty when the
+    // guardrail produced no samples.
+    List<Widget> drowsinessWidgets() {
+      final drowsy = widget.drowsiness;
+      if (drowsy == null || drowsy.series.isEmpty) {
+        return const [];
+      }
+      final offset = widget.trainingStartOffsetSecs ?? 0;
+      final xs = [
+        for (final s in drowsy.series) (s.offsetSecs - offset).clamp(0.0, 1e9),
+      ];
+      final sleepDir = [for (final s in drowsy.series) s.sleepDir];
+      final threshold = drowsy.threshold ?? double.nan;
+      return [
+        chart('Sleep guardrail (AI model)', 'sleep-dir score', [
+          _Series(
+            label: 'Sleep direction',
+            color: const Color(0xFF1E88E5),
+            values: sleepDir,
+          ),
+          if (threshold.isFinite)
+            _Series(
+              label: 'Warning threshold',
+              color: const Color(0xFFFFA726),
+              values: List.filled(xs.length, threshold),
+            ),
+        ], xs),
+        const SizedBox(height: 16),
+      ];
+    }
 
     return ListView(
       padding: const EdgeInsets.all(20),
@@ -528,6 +590,15 @@ class _DashboardBodyState extends State<_DashboardBody> {
                         icon: Icons.favorite,
                         color: const Color(0xFFEC407A),
                       ),
+                      if (widget.drowsiness != null) ...[
+                        _StatChip(
+                          label: 'Drift time',
+                          value:
+                              '${widget.drowsiness!.scoreTotalPct.toStringAsFixed(0)}%',
+                          icon: Icons.nightlight_outlined,
+                          color: const Color(0xFF1E88E5),
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -699,6 +770,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
           ),
           const SizedBox(height: 16),
         ],
+        ...drowsinessWidgets(),
       ],
     );
   }
@@ -752,7 +824,11 @@ class _SessionStats {
   });
 }
 
-_Prepared _prepare(SessionData data, {double? trainingStartOffset}) {
+_Prepared _prepare(
+  SessionData data, {
+  double? trainingStartOffset,
+  RewardMetric metric = RewardMetric.alphaOverTheta,
+}) {
   // When the session includes calibration, the displayed window and metrics
   // cover the training portion only. The boundary is an offset from the first
   // recorded event, so it works regardless of device-clock drift.
@@ -816,7 +892,7 @@ _Prepared _prepare(SessionData data, {double? trainingStartOffset}) {
     betaRel.add(bRel);
     gammaRel.add(gRel);
     alphaRelSum += aRel;
-    if (aRel > tRel) {
+    if (_inTarget(tRel, aRel, metric)) {
       targetSeconds++;
     }
   }
@@ -887,10 +963,22 @@ _Prepared _prepare(SessionData data, {double? trainingStartOffset}) {
   );
 }
 
+/// Rewarded-band criterion for [metric] on a per-second sample: alpha
+/// dominance for the ATR engine, theta dominance for TAR. Matches the
+/// reward engine's `isInTarget` direction (without baseline percentile).
+bool _inTarget(double thetaRel, double alphaRel, RewardMetric metric) =>
+    switch (metric) {
+      RewardMetric.alphaOverTheta => alphaRel > thetaRel,
+      RewardMetric.thetaOverAlpha => thetaRel > alphaRel,
+    };
+
 /// Build a [_Prepared] from the decimated [SessionOverview] stored in the
 /// metadata head, so the history detail renders without reading the `.muse`
 /// body. Matches the full [SessionData] path bucket-for-bucket.
-_Prepared _prepareOverview(SessionOverview overview) {
+_Prepared _prepareOverview(
+  SessionOverview overview, {
+  RewardMetric metric = RewardMetric.alphaOverTheta,
+}) {
   final n = overview.bucketCount;
   final width = overview.bucketWidthSecs > 0 ? overview.bucketWidthSecs : 1.0;
   final af7 = overview.bands[electrodeAf7];
@@ -922,7 +1010,7 @@ _Prepared _prepareOverview(SessionOverview overview) {
     betaRel.add(bRel);
     gammaRel.add(gRel);
     alphaRelSum += aRel;
-    if (aRel > tRel) {
+    if (_inTarget(tRel, aRel, metric)) {
       targetSeconds++;
     }
   }

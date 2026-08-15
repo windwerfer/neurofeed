@@ -7,7 +7,7 @@ import 'package:muse_ml/src/reve/model_selector.dart';
 import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/settings.dart';
 
-/// AI-engine setup card: pick which foundation model powers the Pure Jhana
+/// AI-engine setup card: pick which foundation model powers the sleep
 /// guardrail, and download/import/uninstall it. LUNA models are downloaded
 /// directly from Hugging Face (un-gated); REVE is imported from a user-picked
 /// `.safetensors` file (verified by SHA-256) after accepting the model's terms.
@@ -94,7 +94,7 @@ class _AiEngineCardState extends ConsumerState<AiEngineCard> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Runs the Pure Jhana sleep guardrail. Pick a foundation model — '
+              'Runs the AI sleep guardrail. Pick a foundation model — '
               'LUNA downloads straight from Hugging Face; REVE needs the '
               'license accepted and the file imported.',
               style: theme.textTheme.bodySmall?.copyWith(

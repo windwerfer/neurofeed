@@ -21,12 +21,16 @@ Global orientation for any AI agent or contributor working in this repo.
 - **`jni = "=0.19"`** — pinned to match btleplug's own `jni` dependency.
   If either side upgrades, both must be upgraded together or you get
   link-time symbol conflicts.
-- **REVE + LUNA local model engine** (Pure Jhana guardrail): `reve-rs` + `luna-rs`
+- **REVE + LUNA local model engine** (AI sleep guardrail, layered): `reve-rs` + `luna-rs`
   (path deps on `third_party/` submodules, RLX CPU backend) score drowsiness on-device
   from raw EEG. **No weights are shipped**: LUNA (Apache-2.0) downloads from HF with
   SHA-256 verification; REVE (gated) is user-imported. FFI: `rust/src/api/reve.rs`
   (`model_load`/`model_unload`/`model_loaded`/`model_config_json`); inference lives in
   `rust/src/analysis/{reve,luna}.rs`; cache + UI in `lib/src/reve/`.
+  Protocols compose a reward engine (`RewardMetric`, ATR today) with the guardrail
+  layer (`ProtocolInfo.aiSleepGuardrail` + `Settings.guardrailEnabledFor`); the
+  guardrail only warns, it never modulates the reward. Calibration recipes are
+  keyed by protocol **and** guardrail configuration (manifest v3, `CalibrationManifest.recipeFor`).
 - **Android**: NDK 27/28, Gradle 8.14, `targetSdkVersion = 36`.
 - **Decision:** using btleplug (forked) for BLE transport — consistent with
   `muse-rs`. `flutter_blue_plus` was the fallback if the JNI fix had failed.
@@ -117,7 +121,7 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - **`.muse` body is format v4 (f32 floats), owned by Rust**: `session_format.rs` writes f32 payloads (EEG/PPG/IMU/bands/movement/peak-alpha) + f64 timestamps. Dart delegates: `SessionRecorder` (`lib/src/charts/session_recorder.dart`) buffers events and calls `encodeSessionEvent`/`sessionFrameBytes` (zstd v3); `SessionReader` (`lib/src/charts/session_reader.dart`) calls `sessionParseBody` and re-exports the generated `SessionData`/`BandsRecord`/… freezed records. Not backward compatible with v2/v3 f64 files (pre-alpha). Raw EEG ~4 KB/s (~15 MB/hr). Channel count is device-driven (`i16` electrode); an 8-ch Crown works with zero layout change.
 - SAF folder picker + MethodChannel (`muse_ml/saf`): `android/app/src/main/kotlin/com/example/muse_ml/MainActivity.kt` (`getDir`/`ensureDir`/`writeFile`/`writeFileAtomic`/`readFile`/`readFilePrefix`/`deleteFile`/`listFiles`).
 - Folder selection UI: `lib/src/views/settings_view.dart` (`file_selector` `getDirectoryPath` on desktop, `SafSessionStorage.pickFolder()` on Android).
-- Local model engine (Pure Jhana guardrail): FFI in `rust/src/api/reve.rs` (`model_load`/`model_unload`/`model_loaded`/`model_config_json`); inference wrappers in `rust/src/analysis/{reve,luna}.rs`; Dart download/import/verify/load in `lib/src/reve/model_engine.dart` (`ModelCache`, `ModelEngineNotifier`), model metadata in `lib/src/reve/models.dart` (`ModelKind`), picker in `lib/src/reve/model_selector.dart`, gated-file import in `lib/src/reve/reve_import.dart`.
+- Local model engine (AI sleep guardrail): FFI in `rust/src/api/reve.rs` (`model_load`/`model_unload`/`model_loaded`/`model_config_json`); inference wrappers in `rust/src/analysis/{reve,luna}.rs`; Dart download/import/verify/load in `lib/src/reve/model_engine.dart` (`ModelCache`, `ModelEngineNotifier`), model metadata in `lib/src/reve/models.dart` (`ModelKind`), picker in `lib/src/reve/model_selector.dart`, gated-file import in `lib/src/reve/reve_import.dart`.
 - Release CI: `.github/workflows/` — see `.ai/release.md` (keystore secrets, F-Droid, reproducibility).
 - Rust toolchain pin: `rust/rust-toolchain.toml` (kept in sync with `FLUTTER_VERSION`/`RUST_VERSION` in the workflows).
 

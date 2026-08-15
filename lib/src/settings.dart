@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Default warning threshold for the REVE sleep guardrail: the percent rank of
@@ -84,6 +85,7 @@ class Settings {
   static const String _warningThresholdPercentileKey =
       'reve_warning_threshold_percentile';
   static const String _modelKindKey = 'model_kind';
+  static const String _guardrailKeyPrefix = 'guardrail_';
 
   final SharedPreferences _prefs;
 
@@ -209,6 +211,17 @@ class Settings {
 
   Future<void> setModelKindName(String value) =>
       _prefs.setString(_modelKindKey, value);
+
+  /// Whether the on-device AI sleep guardrail runs for [type]. Only protocols
+  /// whose spec offers the layer ([ProtocolInfo.aiSleepGuardrail]) consult
+  /// this; a model must additionally be installed and selected. Defaults to
+  /// on — turning it off runs the plain ratio engine (no warnings, no
+  /// lazy-rest calibration stage).
+  bool guardrailEnabledFor(ProtocolType type) =>
+      _prefs.getBool('$_guardrailKeyPrefix${type.name}') ?? true;
+
+  Future<void> setGuardrailEnabled(ProtocolType type, bool value) =>
+      _prefs.setBool('$_guardrailKeyPrefix${type.name}', value);
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and

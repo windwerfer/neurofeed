@@ -450,8 +450,8 @@ final modelEngineNotifierProvider =
       ModelEngineNotifier.new,
     );
 
-/// Whether the selected model is loaded and usable by the drowsiness
-/// protocol.
+/// Whether the selected model is loaded and usable by the sleep-guardrail
+/// protocols.
 final modelEngineAvailabilityProvider = Provider<bool>(
   (ref) => ref.watch(modelEngineNotifierProvider) is ModelEngineReady,
 );
