@@ -1285,11 +1285,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final warned = series.where((s) => s.warning).length;
     final mean =
         series.fold<double>(0, (a, s) => a + s.sleepDir) / series.length;
+    final (buckets, width) = SessionDrowsiness.decimate(
+      series,
+      trainingStartSecs: trainingStartOffsetSecs,
+    );
     return SessionDrowsiness(
       series: series,
       scoreTotalPct: warned * 100 / series.length,
       meanSleepDir: mean,
       threshold: _guardrailThreshold,
+      buckets: buckets,
+      bucketWidthSecs: width,
     );
   }
 

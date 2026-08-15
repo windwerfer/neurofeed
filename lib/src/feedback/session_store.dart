@@ -81,18 +81,22 @@ class DrowsinessSample {
   }
 }
 
-/// Sleep-guardrail trace of a feedback session: the per-second [series] plus
-/// a whole-session [scoreTotalPct] (fraction of scored seconds where the
-/// warning was active) and [meanSleepDir]. Persisted in the metadata.
+/// Sleep-guardrail trace of a feedback session: the decimated [buckets]
+/// (≤ [SessionOverview.defaultBucketCount] rows, aligned to the training
+/// window like the bands summary) plus a whole-session [scoreTotalPct]
+/// (fraction of scored seconds where the warning was active) and
+/// [meanSleepDir]. Persisted in the metadata. The full per-second [series] is
+/// kept in memory for live views but is not written to the head (a 90-minute
+/// session would otherwise add ~5400 rows read on every history listing).
 class SessionDrowsiness {
   const SessionDrowsiness({
-    required this.series,
     required this.scoreTotalPct,
     required this.meanSleepDir,
     this.threshold,
+    this.series = const [],
+    this.buckets = const [],
+    this.bucketWidthSecs = 0,
   });
-
-  final List<DrowsinessSample> series;
 
   /// Percentage of scored seconds (guardrail running, playing) in which the
   /// drift warning was active — 0 = never flagged, 100 = flagged constantly.
@@ -105,11 +109,89 @@ class SessionDrowsiness {
   /// against, for drawing the reference line on the trace.
   final double? threshold;
 
+  /// Full per-second trace (in-memory / live sessions only, not persisted).
+  final List<DrowsinessSample> series;
+
+  /// Decimated trace for the history view. Bucket [i] covers
+  /// `[i*[bucketWidthSecs], (i+1)*[bucketWidthSecs])` seconds since training
+  /// start, matching the bands overview's x-axis. Empty buckets (no scored
+  /// second) are omitted, mirroring how `SessionOverview` leaves nulls.
+  final List<DrowsinessSample> buckets;
+
+  /// Seconds per bucket in [buckets] (0 when [buckets] is empty).
+  final double bucketWidthSecs;
+
+  /// Build the persisted (≤400-row) snapshot from a per-second [series] that
+  /// spans `[trainingStartSecs, last]` of the session. [trainingStartSecs] is
+  /// the calibration→training boundary offset (drowsiness is only sampled
+  /// while playing, i.e. after it).
+  ///
+  /// Returns `(buckets, width)` — empty bucket list when [series] is empty.
+  static (List<DrowsinessSample>, double) decimate(
+    List<DrowsinessSample> series, {
+    double? trainingStartSecs,
+  }) {
+    if (series.isEmpty) {
+      return (const [], 0);
+    }
+    final anchor = trainingStartSecs ?? series.first.offsetSecs;
+    var last = anchor;
+    for (final s in series) {
+      if (s.offsetSecs > last) {
+        last = s.offsetSecs;
+      }
+    }
+    final span = (last - anchor).clamp(1.0, double.infinity);
+    final width = span / SessionOverview.defaultBucketCount;
+    final sumSleep = List<double>.filled(SessionOverview.defaultBucketCount, 0);
+    final sumDelta = List<double>.filled(SessionOverview.defaultBucketCount, 0);
+    final cnt = List<int>.filled(SessionOverview.defaultBucketCount, 0);
+    final warnAny = List<bool>.filled(
+      SessionOverview.defaultBucketCount,
+      false,
+    );
+    for (final s in series) {
+      final t = s.offsetSecs - anchor;
+      if (t < 0) {
+        continue;
+      }
+      var idx = (t / width).floor();
+      if (idx >= SessionOverview.defaultBucketCount) {
+        idx = SessionOverview.defaultBucketCount - 1;
+      }
+      sumSleep[idx] += s.sleepDir;
+      sumDelta[idx] += s.delta;
+      cnt[idx]++;
+      if (s.warning) {
+        warnAny[idx] = true;
+      }
+    }
+    final buckets = <DrowsinessSample>[];
+    for (var i = 0; i < SessionOverview.defaultBucketCount; i++) {
+      if (cnt[i] == 0) {
+        continue;
+      }
+      buckets.add(
+        DrowsinessSample(
+          offsetSecs: i * width + width / 2,
+          sleepDir: sumSleep[i] / cnt[i],
+          delta: sumDelta[i] / cnt[i],
+          warning: warnAny[i],
+        ),
+      );
+    }
+    return (buckets, width);
+  }
+
   Map<String, Object?> toJson() => {
     'scoreTotalPct': scoreTotalPct,
     'meanSleepDir': meanSleepDir,
     if (threshold != null) 'threshold': threshold,
-    'series': [for (final s in series) s.toJson()],
+    if (buckets.isNotEmpty) 'width': bucketWidthSecs,
+    if (buckets.isNotEmpty)
+      'buckets': [for (final b in buckets) b.toJson()]
+    else
+      'series': [for (final s in series) s.toJson()],
   };
 
   static SessionDrowsiness? fromJson(Object? json) {
@@ -120,8 +202,15 @@ class SessionDrowsiness {
       scoreTotalPct: (json['scoreTotalPct'] as num?)?.toDouble() ?? 0,
       meanSleepDir: (json['meanSleepDir'] as num?)?.toDouble() ?? 0,
       threshold: (json['threshold'] as num?)?.toDouble(),
+      bucketWidthSecs: (json['width'] as num?)?.toDouble() ?? 0,
       series:
           (json['series'] as List<Object?>?)
+              ?.map(DrowsinessSample.fromJson)
+              .whereType<DrowsinessSample>()
+              .toList() ??
+          const [],
+      buckets:
+          (json['buckets'] as List<Object?>?)
               ?.map(DrowsinessSample.fromJson)
               .whereType<DrowsinessSample>()
               .toList() ??

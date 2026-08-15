@@ -458,10 +458,14 @@ class _DashboardBodyState extends State<_DashboardBody> {
     take(p.movementX);
     take(p.bpmX);
     final drowsy = widget.drowsiness;
-    if (drowsy != null && drowsy.series.isNotEmpty) {
-      take([
-        drowsy.series.last.offsetSecs - (widget.trainingStartOffsetSecs ?? 0),
-      ]);
+    if (drowsy != null) {
+      if (drowsy.buckets.isNotEmpty) {
+        take([drowsy.buckets.last.offsetSecs + drowsy.bucketWidthSecs]);
+      } else if (drowsy.series.isNotEmpty) {
+        take([
+          drowsy.series.last.offsetSecs - (widget.trainingStartOffsetSecs ?? 0),
+        ]);
+      }
     }
     _viewport = _ChartViewport(0, math.max(end, 1.0));
   }
@@ -505,14 +509,19 @@ class _DashboardBodyState extends State<_DashboardBody> {
     // guardrail produced no samples.
     List<Widget> drowsinessWidgets() {
       final drowsy = widget.drowsiness;
-      if (drowsy == null || drowsy.series.isEmpty) {
+      if (drowsy == null || (drowsy.series.isEmpty && drowsy.buckets.isEmpty)) {
         return const [];
       }
       final offset = widget.trainingStartOffsetSecs ?? 0;
-      final xs = [
-        for (final s in drowsy.series) (s.offsetSecs - offset).clamp(0.0, 1e9),
-      ];
-      final sleepDir = [for (final s in drowsy.series) s.sleepDir];
+      final xs = drowsy.buckets.isNotEmpty
+          ? [for (final b in drowsy.buckets) b.offsetSecs]
+          : [
+              for (final s in drowsy.series)
+                (s.offsetSecs - offset).clamp(0.0, 1e9),
+            ];
+      final sleepDir = drowsy.buckets.isNotEmpty
+          ? [for (final b in drowsy.buckets) b.sleepDir]
+          : [for (final s in drowsy.series) s.sleepDir];
       final threshold = drowsy.threshold ?? double.nan;
       return [
         chart('Sleep guardrail (AI model)', 'sleep-dir score', [
