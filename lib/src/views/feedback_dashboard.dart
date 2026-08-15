@@ -214,6 +214,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         drowsiness: widget.readOnly
             ? meta?.drowsiness
             : ref.read(feedbackStateProvider.notifier).sessionDrowsiness,
+        music: widget.readOnly
+            ? meta?.music
+            : ref.read(feedbackStateProvider.notifier).sessionMusic,
         trainingStartOffsetSecs: _trainingStartOffset,
         readOnly: widget.readOnly,
         thumbKey: _thumbKey,
@@ -402,6 +405,7 @@ class _DashboardBody extends StatefulWidget {
     required this.soundName,
     required this.prepared,
     this.drowsiness,
+    this.music,
     this.trainingStartOffsetSecs,
     required this.readOnly,
     required this.thumbKey,
@@ -423,6 +427,10 @@ class _DashboardBody extends StatefulWidget {
   /// Sleep-guardrail trace of this session (null when the guardrail did not
   /// run or recorded nothing).
   final SessionDrowsiness? drowsiness;
+
+  /// Music-feedback record (track list + cutoff trace) of this session (null
+  /// when music feedback did not run).
+  final SessionMusic? music;
 
   /// Seconds from recording start to the training boundary; drowsiness
   /// offsets are wall-clock-relative to session start, so subtracting this
@@ -465,6 +473,16 @@ class _DashboardBodyState extends State<_DashboardBody> {
       } else if (drowsy.series.isNotEmpty) {
         take([
           drowsy.series.last.offsetSecs - (widget.trainingStartOffsetSecs ?? 0),
+        ]);
+      }
+    }
+    final music = widget.music;
+    if (music != null) {
+      if (music.buckets.isNotEmpty) {
+        take([music.buckets.last.offsetSecs + music.bucketWidthSecs]);
+      } else if (music.series.isNotEmpty) {
+        take([
+          music.series.last.offsetSecs - (widget.trainingStartOffsetSecs ?? 0),
         ]);
       }
     }
@@ -538,6 +556,121 @@ class _DashboardBodyState extends State<_DashboardBody> {
               values: List.filled(xs.length, threshold),
             ),
         ], xs),
+        const SizedBox(height: 16),
+      ];
+    }
+
+    // Music-feedback widgets: the low-pass cutoff the reward drove (bounded by
+    // the configured range) plus the track list with the offsets they started
+    // at. Empty when music feedback produced no samples.
+    String formatOffset(double secs) {
+      if (secs.isNaN || secs < 0) {
+        return '00:00';
+      }
+      final m = secs ~/ 60;
+      final s = (secs % 60).toStringAsFixed(0).padLeft(2, '0');
+      return '$m:$s';
+    }
+
+    List<Widget> musicWidgets() {
+      final music = widget.music;
+      if (music == null ||
+          (music.series.isEmpty && music.buckets.isEmpty)) {
+        return const [];
+      }
+      final offset = widget.trainingStartOffsetSecs ?? 0;
+      final xs = music.buckets.isNotEmpty
+          ? [for (final b in music.buckets) b.offsetSecs]
+          : [
+              for (final s in music.series)
+                (s.offsetSecs - offset).clamp(0.0, 1e9),
+            ];
+      final hz = music.buckets.isNotEmpty
+          ? [for (final b in music.buckets) b.cutoffHz]
+          : [for (final s in music.series) s.cutoffHz];
+      return [
+        Card(
+          color: theme.colorScheme.surface,
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.music_note_outlined),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Music feedback',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const Spacer(),
+                    if (music.trackCount > 0)
+                      Text(
+                        '${music.trackCount} track(s)'
+                        '${music.shuffle ? ' · shuffled' : ''}'
+                        '${music.invert ? ' · inverted' : ''}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                chart('Low-pass cutoff', 'Hz', [
+                  _Series(
+                    label: 'Cutoff',
+                    color: const Color(0xFF8E24AA),
+                    values: hz,
+                  ),
+                  _Series(
+                    label: 'Max',
+                    color: const Color(0xFFBDBDBD),
+                    values: List.filled(xs.length, music.maxCutoffHz),
+                  ),
+                  _Series(
+                    label: 'Min',
+                    color: const Color(0xFFBDBDBD),
+                    values: List.filled(xs.length, music.minCutoffHz),
+                  ),
+                ], xs),
+                if (music.tracks.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text('Tracks', style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 4),
+                  for (final t in music.tracks)
+                    if (t.name.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.skip_next_outlined,
+                              size: 16,
+                              color: Color(0xFF8E24AA),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                t.name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Text(
+                              formatOffset(t.offsetSecs - offset),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                ],
+              ],
+            ),
+          ),
+        ),
         const SizedBox(height: 16),
       ];
     }
@@ -781,6 +914,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
           const SizedBox(height: 16),
         ],
         ...drowsinessWidgets(),
+        ...musicWidgets(),
       ],
     );
   }
