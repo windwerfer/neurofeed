@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libmpv2 \
     pipewire-bin \
     alsa-utils \
+    libasound2-dev \
     pulseaudio-utils \
     && rm -rf /var/lib/apt/lists/*
 
