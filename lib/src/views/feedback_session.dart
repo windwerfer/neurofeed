@@ -45,7 +45,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
     final theme = Theme.of(context);
     final guardrailOn =
         protocol.aiSleepGuardrail &&
-        ref.read(settingsProvider).guardrailEnabledFor(fb.protocol);
+        ref.watch(settingsProvider).guardrailEnabledFor(fb.protocol);
 
     return Scaffold(
       appBar: AppBar(
@@ -295,7 +295,7 @@ class _PhaseControls extends ConsumerWidget {
     final theme = Theme.of(context);
     final guardrailIntended =
         protocol.aiSleepGuardrail &&
-        ref.read(settingsProvider).guardrailEnabledFor(fb.protocol);
+        ref.watch(settingsProvider).guardrailEnabledFor(fb.protocol);
     switch (fb.phase) {
       case FeedbackPhase.idle:
         if (guardrailIntended && !ref.watch(modelEngineAvailabilityProvider)) {
