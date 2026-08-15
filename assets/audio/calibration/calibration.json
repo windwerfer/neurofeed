@@ -10,22 +10,22 @@
         {
           "id": "atr-short-clear",
           "file": "assets/audio/calibration/alpha-theta-ratio_short-clear.opus",
-          "text": ""
+          "text": "Please close your eyes and sit comfortably. For the next ninety seconds, simply rest. Let your mind settle on its own. There is nothing you need to do. We are measuring your natural baseline."
         },
         {
           "id": "atr-soft-reassuring",
           "file": "assets/audio/calibration/alpha-theta-ratio_soft-reassuring.opus",
-          "text": ""
+          "text": "Gently close your eyes and relax your jaw. For the next ninety seconds, just sit quietly. You don’t need to focus or control anything. Let your awareness rest inside and allow everything to settle. This short period helps us set your personal baseline."
         },
         {
           "id": "atr-minimal-direct",
           "file": "assets/audio/calibration/alpha-theta-ratio_minimal-direct.opus",
-          "text": ""
+          "text": "Close your eyes. Sit quietly for ninety seconds. Let everything rest on its own. Recording your baseline now."
         },
         {
           "id": "atr-meditative-tone",
           "file": "assets/audio/calibration/alpha-theta-ratio_meditative-tone.opus",
-          "text": ""
+          "text": "Close your eyes and find a comfortable position. For the next ninety seconds, allow yourself to simply be here. No effort is needed. Let your mind rest and your awareness turn inward."
         }
       ]
     },
@@ -36,21 +36,33 @@
         {
           "id": "reve-artifacts",
           "file": "assets/audio/calibration/grok-reve-artifacts-01.opus",
-          "text": "",
+          "text": "For this calibration, first blink 3 times, then clench and relax your jaw.",
           "seconds": 15,
           "eyes": null
         },
         {
           "id": "reve-eyes-open-counting",
-          "file": "assets/audio/calibration/grok-reve-eyes_open-counting-01.opus",
-          "text": "",
+          "file": "assets/audio/calibration/grok-reve-eyes_open-challange-01.opus",
+          "text": "Now, keep your eyes open, look at the screen, and keep your mind active by solving the challenge in your head.",
           "seconds": 30,
-          "eyes": "open"
+          "eyes": "open",
+          "challengeTextHint": "There is no right or wrong answer here, this is just a challenge to keep your mind active.",
+          "challengeText": [
+            "Countries starting with 'S'",
+            "Name Types of fruit or vegetables starting with 'T' in your head.",
+            "Name things you find in a hardware store in your head.",
+            "Name dog breeds or wild animals in your head.",
+            "Name capital cities in your head.",
+            "Name words that start with 'TR' in your head.",
+            "Count backward from 100 in steps of 7 in your head.",
+            "Recite the months backward starting from September in your head.",
+            "Recite every second letter of the alphabet backward starting from M in your head."
+          ]
         },
         {
           "id": "reve-eyes-closed-drifting",
           "file": "assets/audio/calibration/grok-reve-eyes_closed-drifting-01.opus",
-          "text": "",
+          "text": "Now, close your eyes and find a comfortable position. For the next 45 seconds, allow yourself to simply be here. No effort is needed. Let your mind rest and your awareness turn inward.",
           "seconds": 45,
           "eyes": "closed"
         }
