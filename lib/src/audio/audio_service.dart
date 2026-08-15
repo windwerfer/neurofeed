@@ -96,6 +96,14 @@ class AudioService {
     await _music.start();
   }
 
+  /// Reloads the track list from the current [Settings.musicFolder] without
+  /// starting playback, and returns how many playable tracks were found (0
+  /// when the folder is unset/empty). Lets settings UI preview the folder.
+  Future<int> loadMusic() async {
+    final ok = await _music.load();
+    return ok ? _music.trackCount : 0;
+  }
+
   /// Feeds the live reward percentile (0–100) to the music feedback filter.
   void setMusicCutoffHz(double hz) => _music.setTargetCutoff(hz);
 

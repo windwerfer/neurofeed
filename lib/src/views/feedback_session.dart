@@ -642,6 +642,31 @@ class _SoundSelector extends ConsumerWidget {
                       _SoundPicker(current: fb.soundName, sounds: sounds),
                 );
                 if (result != null) {
+                  if (!context.mounted) {
+                    return;
+                  }
+                  final settings = ref.read(settingsProvider);
+                  if (AudioService.isMusicSound(result) &&
+                      settings.musicFolder == null) {
+                    await showDialog<void>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Music folder not set'),
+                        content: const Text(
+                          'Music feedback plays your own tracks through a '
+                          'reward-driven filter. Pick a music folder in '
+                          'Settings → Music feedback first.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    );
+                    return;
+                  }
                   ref.read(feedbackStateProvider.notifier).selectSound(result);
                 }
               }
