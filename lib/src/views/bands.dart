@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/charts/eeg_data_source.dart';
 import 'package:muse_ml/src/charts/band_cache.dart';
 import 'package:muse_ml/src/charts/chart_controller.dart';
+import 'package:muse_ml/src/charts/smooth_path.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 
 class BandsView extends ConsumerWidget {
@@ -640,7 +641,7 @@ class _EegChartPainter extends CustomPainter {
 
     final path = Path();
     if (smooth) {
-      _buildSmoothPath(path, pts);
+      buildSmoothPath(path, pts);
     } else {
       path.moveTo(pts[0].dx, pts[0].dy);
       for (int i = 1; i < pts.length; i++) {
@@ -648,28 +649,6 @@ class _EegChartPainter extends CustomPainter {
       }
     }
     canvas.drawPath(path, paint);
-  }
-
-  void _buildSmoothPath(Path path, List<Offset> pts) {
-    // Catmull-Rom → Cubic Bezier
-    // CP1 = P[i] + (P[i+1] - P[i-1]) / 6
-    // CP2 = P[i+1] - (P[i+2] - P[i]) / 6
-    path.moveTo(pts[0].dx, pts[0].dy);
-    for (int i = 0; i < pts.length - 1; i++) {
-      final p0 = i > 0 ? pts[i - 1] : pts[i];
-      final p1 = pts[i];
-      final p2 = pts[i + 1];
-      final p3 = i + 2 < pts.length ? pts[i + 2] : pts[i + 1];
-      final cp1 = Offset(
-        p1.dx + (p2.dx - p0.dx) / 6,
-        p1.dy + (p2.dy - p0.dy) / 6,
-      );
-      final cp2 = Offset(
-        p2.dx - (p3.dx - p1.dx) / 6,
-        p2.dy - (p3.dy - p1.dy) / 6,
-      );
-      path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p2.dx, p2.dy);
-    }
   }
 
   void _drawAxisLabels(Canvas canvas) {

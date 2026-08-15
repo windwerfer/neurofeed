@@ -163,7 +163,8 @@ pub fn encode_session_event(event: &MuseEventDto) -> Vec<u8> {
         MuseEventDto::Connected(_) |
         MuseEventDto::Disconnected |
         MuseEventDto::Control(_) |
-        MuseEventDto::Gestures(_) => {}
+        MuseEventDto::Gestures(_) |
+        MuseEventDto::Reve(_) => {}
     }
     out
 }

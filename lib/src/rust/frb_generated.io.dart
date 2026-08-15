@@ -74,6 +74,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PulseDto dco_decode_box_autoadd_pulse_dto(dynamic raw);
 
   @protected
+  ReveDto dco_decode_box_autoadd_reve_dto(dynamic raw);
+
+  @protected
   TelemetrySnapshot dco_decode_box_autoadd_telemetry_snapshot(dynamic raw);
 
   @protected
@@ -182,6 +185,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (String, String) dco_decode_record_string_string(dynamic raw);
 
   @protected
+  ReveDto dco_decode_reve_dto(dynamic raw);
+
+  @protected
   SessionData dco_decode_session_data(dynamic raw);
 
   @protected
@@ -266,6 +272,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PulseDto sse_decode_box_autoadd_pulse_dto(SseDeserializer deserializer);
+
+  @protected
+  ReveDto sse_decode_box_autoadd_reve_dto(SseDeserializer deserializer);
 
   @protected
   TelemetrySnapshot sse_decode_box_autoadd_telemetry_snapshot(
@@ -386,6 +395,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ReveDto sse_decode_reve_dto(SseDeserializer deserializer);
+
+  @protected
   SessionData sse_decode_session_data(SseDeserializer deserializer);
 
   @protected
@@ -492,6 +504,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     PulseDto self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_box_autoadd_reve_dto(ReveDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_telemetry_snapshot(
@@ -642,6 +657,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     (String, String) self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_reve_dto(ReveDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_session_data(SessionData self, SseSerializer serializer);

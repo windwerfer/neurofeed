@@ -11,7 +11,9 @@ import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
+import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:muse_ml/src/rust/api/reve.dart' as frb;
 import 'package:muse_ml/src/settings.dart';
 
 enum FeedbackPhase { idle, calibrating, playing, paused, interrupted, ended }
@@ -45,6 +47,43 @@ const int defaultBaselinePercentile = 40;
 const int minRecalibrateSeconds = 60;
 const int minRecalibrateSamples = 30;
 
+/// Classical frontal-delta hard rail for the sleep guardrail (normalized FFT
+/// band power of the AF7/AF8 average). Overridden by the baseline percentile
+/// once real-device data is available — needs tuning.
+const double guardrailDeltaCeiling = 0.25;
+
+/// Minimum gap between guardrail warning chimes while drifting into sleep.
+const Duration warningChimeCooldown = Duration(seconds: 20);
+
+/// One step of a calibration recipe executed by [FeedbackStateNotifier]: an
+/// optional guidance clip followed by a silent collection window. `seconds == 0`
+/// means no collection (intro-only step).
+class _CalibrationStep {
+  const _CalibrationStep({
+    required this.name,
+    this.clip,
+    this.seconds = 0,
+    this.eyes,
+    this.challengeText,
+  });
+
+  /// UI label for the step (shown during calibration).
+  final String name;
+
+  /// Guidance clip to play before collecting, or null for a silent step.
+  final CalibrationStep? clip;
+
+  /// Silent collection seconds after the clip.
+  final int seconds;
+
+  /// Eye state during the collection window (`open`/`closed`/null).
+  final String? eyes;
+
+  /// The mentally-active challenge chosen at random for this calibration run,
+  /// or null when the stage has none. Shown on screen during the stage.
+  final String? challengeText;
+}
+
 class FeedbackState {
   final FeedbackPhase phase;
   final ProtocolType protocol;
@@ -60,6 +99,10 @@ class FeedbackState {
   final int baselinePercentile;
   final double? currentThreshold;
   final bool showNerdStats;
+  final String? calibrationStepName;
+  final int calibrationStepTotal;
+  final String? calibrationChallengeHint;
+  final String? calibrationChallengeText;
 
   const FeedbackState({
     this.phase = FeedbackPhase.idle,
@@ -76,6 +119,10 @@ class FeedbackState {
     this.baselinePercentile = defaultBaselinePercentile,
     this.currentThreshold,
     this.showNerdStats = false,
+    this.calibrationStepName,
+    this.calibrationStepTotal = 0,
+    this.calibrationChallengeHint,
+    this.calibrationChallengeText,
   });
 
   static const Object _sentinel = Object();
@@ -95,6 +142,10 @@ class FeedbackState {
     int? baselinePercentile,
     Object? currentThreshold = _sentinel,
     bool? showNerdStats,
+    Object? calibrationStepName = _sentinel,
+    int? calibrationStepTotal,
+    Object? calibrationChallengeHint = _sentinel,
+    Object? calibrationChallengeText = _sentinel,
   }) => FeedbackState(
     phase: phase ?? this.phase,
     protocol: protocol ?? this.protocol,
@@ -116,6 +167,17 @@ class FeedbackState {
         ? this.currentThreshold
         : currentThreshold as double?,
     showNerdStats: showNerdStats ?? this.showNerdStats,
+    calibrationStepName: identical(calibrationStepName, _sentinel)
+        ? this.calibrationStepName
+        : calibrationStepName as String?,
+    calibrationStepTotal:
+        calibrationStepTotal ?? this.calibrationStepTotal,
+    calibrationChallengeHint: identical(calibrationChallengeHint, _sentinel)
+        ? this.calibrationChallengeHint
+        : calibrationChallengeHint as String?,
+    calibrationChallengeText: identical(calibrationChallengeText, _sentinel)
+        ? this.calibrationChallengeText
+        : calibrationChallengeText as String?,
   );
 }
 
@@ -155,6 +217,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   DateTime _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
   int _prevEyeState = 0;
   final List<GestureMarker> _gestureMarkers = [];
+  bool _guardrailEnabled = false;
+  bool _clearCaptured = false;
+  bool _sleepCaptured = false;
+  final List<double> _baselineSleepDir = [];
+  double? _guardrailThreshold;
+  double _lastClarity = 1;
+  double _lastSleepDir = 0;
+  double _lastDelta = 0;
+  bool _warningActive = false;
+  DateTime _lastWarningChimeAt = DateTime.fromMillisecondsSinceEpoch(0);
   int _adaptTick = 0;
   final TargetStateAggregator _target = TargetStateAggregator();
   final FeedbackEngine _atr = AtrEngine();
@@ -166,10 +238,27 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// offset used to trim the displayed window.
   DateTime? _sessionStartAt;
   DateTime? _trainingStartAt;
-  CalibrationClip? _introClip;
-  DateTime? _introStartedAt;
   bool _usedStartAnyway = false;
   SessionCalibration? _calibration;
+  String _calibrationKind = 'single';
+
+  /// Ordered steps of the current calibration recipe (intro/clip then a silent
+  /// collection window). Built from the manifest at calibration start.
+  final List<_CalibrationStep> _steps = [];
+  int _stepIndex = 0;
+
+  /// Eye state of the active silent collection window, or null while a
+  /// guidance clip plays. Gates the REVE anchors and the sleep-direction
+  /// baseline collection to the correct stage.
+  String? _collectionEyes;
+
+  /// Completer for the in-flight collection window, so cancellation
+  /// ([reset]) can release the await instead of leaking the chain.
+  Completer<void>? _collectionCompleter;
+
+  /// Clip windows recorded for the calibration (Option B: raw EEG stays in the
+  /// file, start/end mark the guidance clip). Persisted in the metadata.
+  final List<SessionCalibrationPhase> _clipPhases = [];
 
   AudioService get _audio => _ref.read(audioServiceProvider);
 
@@ -280,12 +369,45 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _clenchWasActive = false;
     _sessionStartAt = DateTime.now();
     _trainingStartAt = null;
-    _introClip = null;
-    _introStartedAt = null;
     _usedStartAnyway = false;
     _calibration = null;
+    _steps.clear();
+    _stepIndex = 0;
+    _collectionEyes = null;
+    _clipPhases.clear();
     await _recorder.startSession();
+    unawaited(_maybeEnableGuardrail());
     await _runCalibration();
+  }
+
+  /// Arm the REVE/LUNA sleep-guardrail scorer for the Pure Jhana protocol
+  /// using the settings-selected foundation model. Scoring starts immediately
+  /// in the forwarder (first embedding lands after ~5 s) so the calibration
+  /// baseline can capture the clear anchor. No-op otherwise.
+  Future<void> _maybeEnableGuardrail() async {
+    _guardrailEnabled = false;
+    _clearCaptured = false;
+    _sleepCaptured = false;
+    _guardrailThreshold = null;
+    _baselineSleepDir.clear();
+    _warningActive = false;
+    if (state.protocol != ProtocolType.drowsiness) {
+      return;
+    }
+    final engine = _ref.read(modelEngineNotifierProvider);
+    if (engine is! ModelEngineReady) {
+      debugPrint('[guardrail] model not ready — guardrail stays off');
+      return;
+    }
+    try {
+      _guardrailEnabled = await frb.guardrailEnable(kind: engine.kind.ffId);
+      if (_guardrailEnabled) {
+        debugPrint('[guardrail] enabled (${engine.kind.ffId})');
+      }
+    } catch (e) {
+      _guardrailEnabled = false;
+      debugPrint('[guardrail] enable failed: $e');
+    }
   }
 
   /// In-flight re-anchoring: rebuilds the baseline from the recent clean
@@ -374,45 +496,146 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     });
   }
 
-  /// Plays the calibration voice intro (from the calibration manifest for the
-  /// selected protocol), then starts the silent baseline. Used once the
-  /// pre-calibration gate passes (or the user bypasses it).
+  /// Runs the calibration for the selected protocol from the manifest recipe:
+  /// * `single` — a random intro clip, then one silent baseline window.
+  /// * `staged` — the fixed ordered stages; each plays a guidance clip then
+  ///   collects silently for that stage's seconds.
+  ///
+  /// Guidance-clip windows are recorded as metadata phases (start/end) while
+  /// the raw EEG keeps streaming (Option B) — collection gates on the silent
+  /// windows only, so the clip audio never contaminates the baseline.
   Future<void> _playCalibrationAndBaseline() async {
-    state = state.copyWith(waitingForSignal: false);
-    CalibrationClip? clip;
+    state = state.copyWith(
+      waitingForSignal: false,
+      calibrationChallengeHint: null,
+      calibrationChallengeText: null,
+    );
+    _steps.clear();
+    _stepIndex = 0;
+    _clipPhases.clear();
+    _collectionEyes = null;
+    _calibrationKind = 'single';
+    CalibrationRecipe? recipe;
     try {
       final manifest = await _ref.read(calibrationManifestProvider.future);
-      clip = manifest.introFor(state.protocol.name);
+      recipe = manifest.recipeFor(state.protocol.name);
     } catch (e) {
       debugPrint('[feedback] calibration manifest unavailable: $e');
     }
-    _introClip = clip;
-    _introStartedAt = DateTime.now();
-    await _audio
-        .playCalibration(clip?.file)
-        .timeout(calibrationAudioTimeout, onTimeout: () {});
+    if (recipe == null || recipe.isSingle) {
+      _calibrationKind = 'single';
+      _steps
+        ..add(_CalibrationStep(name: 'Intro', clip: recipe?.randomIntro()))
+        ..add(
+          _CalibrationStep(
+            name: 'Baseline',
+            seconds: recipe?.seconds ?? calibrationBaselineSeconds,
+            eyes: recipe?.eyes,
+          ),
+        );
+    } else {
+      _calibrationKind = 'staged';
+      for (final stage in recipe.stages) {
+        _steps.add(
+          _CalibrationStep(
+            name: _stageName(stage),
+            clip: stage,
+            seconds: stage.seconds,
+            eyes: stage.eyes,
+            challengeText: stage.randomChallenge(),
+          ),
+        );
+      }
+    }
+    await _runNextCalibrationStep();
+  }
+
+  /// Friendly label for a staged guidance clip, derived from its eye state.
+  String _stageName(CalibrationStep step) => switch (step.eyes) {
+    'open' => 'Eyes open',
+    'closed' => 'Eyes closed',
+    _ => 'Artifacts',
+  };
+
+  /// Advances the calibration through the recipe's steps, finishing when the
+  /// list is exhausted. A step with a clip plays it (recording the window as a
+  /// metadata phase), then a step with [seconds]>0 runs its silent collection.
+  Future<void> _runNextCalibrationStep() async {
     if (state.phase != FeedbackPhase.calibrating) {
       return;
     }
-    _startBaseline();
+    if (_stepIndex >= _steps.length) {
+      _finishCalibration();
+      return;
+    }
+    final step = _steps[_stepIndex];
+    state = state.copyWith(
+      calibrationStepName: step.name,
+      calibrationStepTotal: step.seconds,
+      calibrationChallengeHint: step.clip?.challengeTextHint,
+      calibrationChallengeText: step.challengeText,
+      baselineSecondsLeft: 0,
+    );
+    if (step.clip != null) {
+      final sessionStart = _sessionStartAt;
+      final clipStart = DateTime.now();
+      await _audio
+          .playCalibration(step.clip!.file)
+          .timeout(calibrationAudioTimeout, onTimeout: () {});
+      if (state.phase != FeedbackPhase.calibrating) {
+        return;
+      }
+      final clipEnd = DateTime.now();
+      if (sessionStart != null) {
+        _clipPhases.add(
+          SessionCalibrationPhase(
+            clipId: step.clip!.id,
+            clipFile: step.clip!.file,
+            spokenText: step.clip!.text,
+            eyes: step.clip!.eyes,
+            challengeText: step.challengeText,
+            startSecs: clipStart.difference(sessionStart).inMilliseconds / 1000,
+            endSecs: clipEnd.difference(sessionStart).inMilliseconds / 1000,
+            kind: _calibrationKind == 'staged' ? 'stage' : 'intro',
+          ),
+        );
+      }
+    }
+    if (step.seconds > 0) {
+      await _runCollection(step);
+    }
+    _stepIndex++;
+    await _runNextCalibrationStep();
   }
 
-  void _startBaseline() {
-    _gateTimer?.cancel();
-    _baselineTimer?.cancel();
+  /// Silent collection window for [step]: counts [step.seconds] down while the
+  /// ATR/guardrail baselines sample, gated by [step.eyes] in the event
+  /// handlers. Resolves when the window completes or calibration is cancelled.
+  Future<void> _runCollection(_CalibrationStep step) async {
+    _collectionEyes = step.eyes;
     state = state.copyWith(
-      baselineSecondsLeft: calibrationBaselineSeconds,
+      baselineSecondsLeft: step.seconds,
       waitingForSignal: false,
       startAnywayAvailable: false,
     );
+    final completer = Completer<void>();
+    _collectionCompleter = completer;
+    _baselineTimer?.cancel();
     _baselineTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       final left = state.baselineSecondsLeft - 1;
       if (left <= 0) {
-        _finishCalibration();
+        _baselineTimer?.cancel();
+        _baselineTimer = null;
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
       } else {
         state = state.copyWith(baselineSecondsLeft: left);
       }
     });
+    await completer.future;
+    _collectionCompleter = null;
+    _collectionEyes = null;
   }
 
   void _finishCalibration() {
@@ -435,35 +658,30 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           stddev: _atr.baselineStddev,
         );
     _ref.read(liveStatsProvider).setThreshold(threshold);
+    if (_guardrailEnabled && _clearCaptured) {
+      _finalizeGuardrailBaseline();
+    }
     _recordCalibration();
-    state = state.copyWith(baselineSecondsLeft: 0, currentThreshold: threshold);
+    state = state.copyWith(
+      baselineSecondsLeft: 0,
+      currentThreshold: threshold,
+      calibrationChallengeHint: null,
+      calibrationChallengeText: null,
+    );
     unawaited(startPlaying());
   }
 
   /// Records how this calibration ran so a saved session is reproducible:
   /// timeline (calibration start/end, training start), the gate rejection
-  /// criteria, the ATR baseline statistics, and the intro clip that played.
+  /// criteria, the ATR baseline statistics, and every guidance clip that
+  /// played (with its window marked so the raw EEG in those seconds is known).
   void _recordCalibration() {
     final now = DateTime.now();
     _trainingStartAt = now;
     final sessionStart = _sessionStartAt;
-    final intro = _introClip;
-    final introAt = _introStartedAt;
-    final phases = <SessionCalibrationPhase>[];
-    if (intro != null && introAt != null && sessionStart != null) {
-      phases.add(
-        SessionCalibrationPhase(
-          clipId: intro.id,
-          clipFile: intro.file,
-          spokenText: intro.text,
-          eyes: intro.eyes,
-          startSecs: introAt.difference(sessionStart).inMilliseconds / 1000,
-          endSecs: now.difference(sessionStart).inMilliseconds / 1000,
-        ),
-      );
-    }
     _calibration = SessionCalibration(
       version: CalibrationManifest.currentVersion,
+      kind: _calibrationKind,
       calibrationStartSecs: sessionStart == null
           ? null
           : sessionStart.millisecondsSinceEpoch / 1000,
@@ -478,7 +696,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         mean: _atr.baselineMean,
         stddev: _atr.baselineStddev,
       ),
-      phases: phases,
+      phases: List.of(_clipPhases),
     );
   }
 
@@ -493,6 +711,62 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _usedStartAnyway = true;
     _gateTimer?.cancel();
     unawaited(_playCalibrationAndBaseline());
+  }
+
+  /// Locks in the sleep-guardrail threshold from the baseline sleep-direction
+  /// distribution at the configured percentile, then captures the deep-rest
+  /// anchor (deepest sample the Rust scorer tracked since the clear anchor).
+  void _finalizeGuardrailBaseline() {
+    final list = List<double>.of(_baselineSleepDir)..sort();
+    if (list.isNotEmpty) {
+      final pct = warningThresholdPercentile;
+      final idx = ((pct / 100) * (list.length - 1)).round();
+      _guardrailThreshold = list[idx];
+      debugPrint(
+        '[guardrail] baseline n=${_baselineSleepDir.length} '
+        'p$pct threshold=${_guardrailThreshold?.toStringAsFixed(3)}',
+      );
+    }
+    unawaited(
+      frb
+          .guardrailCaptureAnchor(name: 'sleep')
+          .then((msg) {
+            _sleepCaptured = true;
+            debugPrint('[guardrail] $msg');
+          })
+          .catchError((Object e) {
+            _sleepCaptured = false;
+            debugPrint('[guardrail] V_sleep capture failed: $e');
+          }),
+    );
+  }
+
+  /// Captures the clear anchor from the first clean baseline sample once the
+  /// forwarder has produced a live embedding. Best-effort: failures (no live
+  /// embedding yet, model switch) are ignored and retried on the next clean
+  /// sample.
+  Future<void> _tryCaptureClearAnchor() async {
+    if (!_guardrailEnabled || _clearCaptured) {
+      return;
+    }
+    try {
+      await frb.guardrailCaptureAnchor(name: 'clear');
+      _clearCaptured = true;
+      debugPrint('[guardrail] V_clear captured');
+    } catch (_) {}
+  }
+
+  /// Tears down the guardrail scorer and its calibration state at session end.
+  void _teardownGuardrail() {
+    if (_guardrailEnabled) {
+      unawaited(frb.guardrailDisable());
+    }
+    _guardrailEnabled = false;
+    _clearCaptured = false;
+    _sleepCaptured = false;
+    _guardrailThreshold = null;
+    _baselineSleepDir.clear();
+    _warningActive = false;
   }
 
   /// Start the feedback loop: record the session and begin the background
@@ -536,6 +810,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _interruptTimer = null;
     _baselineTimer?.cancel();
     _baselineTimer = null;
+    _teardownGuardrail();
     state = state.copyWith(phase: FeedbackPhase.ended);
     await _recorder.flushSession();
     await _audio.stop();
@@ -548,6 +823,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _interruptTimer = null;
     _baselineTimer?.cancel();
     _baselineTimer = null;
+    _collectionCompleter?.complete();
+    _collectionCompleter = null;
     _gateTimer?.cancel();
     _gateTimer = null;
     _greenSeconds = 0;
@@ -560,16 +837,20 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _prevEyeState = 0;
     _clenchWasActive = false;
     _gestureMarkers.clear();
+    _teardownGuardrail();
     _audio.stop();
     _recorder.discardSession();
     _atr.reset();
     _target.reset();
     _sessionStartAt = null;
     _trainingStartAt = null;
-    _introClip = null;
-    _introStartedAt = null;
     _usedStartAnyway = false;
     _calibration = null;
+    _calibrationKind = 'single';
+    _steps.clear();
+    _stepIndex = 0;
+    _collectionEyes = null;
+    _clipPhases.clear();
     _ref.read(liveStatsProvider).reset();
     state = const FeedbackState();
   }
@@ -744,6 +1025,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         _onMovement(field0);
       case MuseEventDto_Gestures(:final field0):
         _onGestures(field0);
+      case MuseEventDto_Reve(:final field0):
+        _onReve(field0);
       case MuseEventDto_Connected():
         if (state.phase == FeedbackPhase.interrupted &&
             _interruptKind == FeedbackInterruptKind.disconnect) {
@@ -777,6 +1060,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         if (atr.isFinite) {
           _atr.addBaselineSample(atr);
         }
+      }
+      // V_clear anchors only from the eyes-open stage of the recipe.
+      if (_collectionEyes == 'open') {
+        unawaited(_tryCaptureClearAnchor());
       }
       return;
     }
@@ -872,6 +1159,54 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
+  /// Per-second sleep-guardrail readings from the forwarder. Collects the
+  /// sleep-direction distribution during the eyes-closed rest stage of the
+  /// calibration (only after the clear anchor exists, since readings flow only
+  /// once V_clear is set), then evaluates the drift warning while playing.
+  void _onReve(ReveDto r) {
+    _lastClarity = r.clarity;
+    _lastSleepDir = r.sleepDir;
+    _lastDelta = r.delta;
+    if (!_guardrailEnabled || !_clearCaptured) {
+      return;
+    }
+    if (state.phase == FeedbackPhase.calibrating &&
+        state.baselineSecondsLeft > 0 &&
+        _collectionEyes == 'closed') {
+      _baselineSleepDir.add(r.sleepDir);
+      return;
+    }
+    if (state.phase == FeedbackPhase.playing && _guardrailThreshold != null) {
+      _evaluateGuardrailWarning();
+    }
+  }
+
+  /// Fires the sleep-guardrail warning: sleep-direction above the baseline
+  /// threshold or classical frontal delta over the hard rail. Plays the soft
+  /// warning chime, re-armed every [warningChimeCooldown] while the drift
+  /// persists; the reward loop is never touched.
+  void _evaluateGuardrailWarning() {
+    final threshold = _guardrailThreshold!;
+    final over =
+        _lastSleepDir > threshold || _lastDelta > guardrailDeltaCeiling;
+    if (!over) {
+      _warningActive = false;
+      return;
+    }
+    _warningActive = true;
+    final now = DateTime.now();
+    if (now.difference(_lastWarningChimeAt) >= warningChimeCooldown) {
+      _lastWarningChimeAt = now;
+      unawaited(_audio.playWarningChime());
+      debugPrint(
+        '[guardrail] WARNING sleep_dir=${_lastSleepDir.toStringAsFixed(3)} '
+        'delta=${_lastDelta.toStringAsFixed(3)} '
+        'thr=${threshold.toStringAsFixed(3)} '
+        'delta ceiling=$guardrailDeltaCeiling',
+      );
+    }
+  }
+
   bool _clenchWasActive = false;
 
   /// True when the current ATR sample is clean of both head movement and
@@ -886,6 +1221,26 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   /// Gesture markers accumulated during the current feedback session.
   List<GestureMarker> get gestureMarkers => List.unmodifiable(_gestureMarkers);
+
+  /// Whether the REVE/LUNA sleep guardrail is actively scoring this session.
+  bool get guardrailEnabled => _guardrailEnabled;
+
+  /// Whether the deep-rest (V_sleep) anchor was captured at calibration end.
+  bool get guardrailSleepCaptured => _sleepCaptured;
+
+  /// Whether the sleep-drift warning is currently firing.
+  bool get guardrailWarningActive => _warningActive;
+
+  /// Latest guardrail readings from the 1 Hz forwarder feed.
+  double get guardrailClarity => _lastClarity;
+
+  double get guardrailSleepDir => _lastSleepDir;
+
+  double get guardrailDelta => _lastDelta;
+
+  /// Baseline sleep-direction percentile threshold, or null before calibration
+  /// completes (or when the guardrail is off).
+  double? get guardrailThreshold => _guardrailThreshold;
 
   bool _allGreen(List<double>? quality) {
     if (quality == null || quality.length < 4) {
@@ -905,6 +1260,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   @override
   void dispose() {
+    _teardownGuardrail();
     _ticker?.cancel();
     _interruptTimer?.cancel();
     _baselineTimer?.cancel();

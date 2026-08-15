@@ -59,10 +59,12 @@
 - [ ] Watch `[atr]` logs around the 2–4 min mark: threshold must stay ≤ ceiling (mean + 1.5 SD)
 - [ ] Lockout test: if target feels unreachable, threshold should reset via circuit breaker or lower fast (responsive setting)
 - [ ] Mid-session Muse drop (power off / walk away): forwarder watchdog emits Disconnected after ~30 s silence → session pauses with grace countdown, auto-reconnect resumes the stream (watch `[muse] forwarder: newer connection` in logcat)
+- [ ] Staged REVE calibration (drowsiness protocol): artifacts cue (15 s) → eyes-open (30 s) → eyes-closed (45 s); step name + per-step countdown in the calibrating UI; `V_clear` captured during eyes-open, sleep baseline during eyes-closed (`[guardrail]` logs); alphaTheta intro variant heard + version/kind persisted in metadata; eyes-open stage shows a random challenge prompt (hint above, text big) persisted in phase metadata
 
 ## Next (v1.1 backlog)
 - [ ] EEG artifact flag for EMG (jaw clench / blink) into ATR epoch cleaning
 - [ ] Percentile selector persistence + defaults per protocol
 - [ ] Optional continuous (EMA) adaptation instead of discrete 30 s jumps
 - [ ] Multi-protocol presets (alpha/theta targets, band ratios)
-- [ ] Calibration audio variants (already in assets, not wired to UI)
+- [x] Calibration audio variants: manifest-driven recipes (`calibration.json` v2) — alphaTheta = single baseline with randomized intro clips; drowsiness = staged 3-part REVE sequence (artifacts / eyes-open / eyes-closed) with per-stage metadata phases; clips stream alongside raw EEG (Option B) so collection gates on the silent windows only
+- [x] In-stage challenge prompts: eyes-open stage shows a randomly chosen `challengeText` (big) with the fixed `challengeTextHint` above (smaller); the chosen challenge is persisted in the phase metadata of the `.feedback` file; picks fresh per calibration run

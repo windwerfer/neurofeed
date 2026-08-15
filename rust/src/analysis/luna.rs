@@ -91,6 +91,53 @@ pub fn encoder_guard() -> MutexGuard<'static, Option<LunaEncoder>> {
     ENCODER.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// Run the loaded LUNA encoder over one aligned epoch and return the **mean-
+/// pooled latent embedding** — the encoder hidden state `[B, S, Q*D]` pooled
+/// over the sequence dimension `S` into a fixed-size `[Q*D]` vector. The
+/// forwarder calls this from a blocking thread once per second; returns an
+/// error when no model is loaded.
+pub fn score_window(
+    signal: Vec<f32>,
+    chan_pos: Vec<f32>,
+    n_channels: usize,
+    n_times: usize,
+) -> anyhow::Result<Vec<f32>> {
+    let mut guard = encoder_guard();
+    let encoder = guard.as_mut().context("no LUNA model loaded")?;
+    let out = encoder.run_epoch_latent(&signal, &chan_pos, None, n_channels, n_times)?;
+    // out.shape = [B=1, S, Q*D]; output is flattened [S * Q*D].
+    let s = *out.shape.get(1).context("latent shape missing S")?;
+    let dim = *out.shape.get(2).context("latent shape missing Q*D")?;
+    anyhow::ensure!(
+        out.output.len() == s * dim,
+        "latent length {} != S={s} * Q*D={dim}",
+        out.output.len()
+    );
+    let mut pooled = vec![0f32; dim];
+    for (i, v) in out.output.iter().enumerate() {
+        pooled[i % dim] += v;
+    }
+    for v in pooled.iter_mut() {
+        *v /= s as f32;
+    }
+    if log_once() {
+        log::info!(
+            "[luna] score_window: latent shape={:?} pooled [Q*D]={dim} (first 4: {:?})",
+            out.shape,
+            &pooled[..pooled.len().min(4)]
+        );
+    }
+    Ok(pooled)
+}
+
+/// Log the embedding shape exactly once per process (the forwarder emits a
+/// score every second; only the first call is interesting).
+fn log_once() -> bool {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static LOGGED: AtomicBool = AtomicBool::new(false);
+    !LOGGED.swap(true, Ordering::Relaxed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,17 +196,46 @@ mod tests {
         {
             let mut guard = encoder_guard();
             let encoder = guard.as_mut().expect("encoder loaded");
+            let t0 = std::time::Instant::now();
             let out = encoder
                 .run_epoch(&signal, &chan_pos, None, n_channels, n_times)
                 .expect("run_epoch failed");
-            println!(
-                "run_epoch ok: out len={} shape={:?} (first 4: {:?})",
+            eprintln!(
+                "run_epoch ok: out len={} shape={:?} in {:.0} ms",
                 out.output.len(),
                 out.shape,
-                &out.output[..out.output.len().min(4)]
+                t0.elapsed().as_secs_f64() * 1000.0
             );
+            let t1 = std::time::Instant::now();
+            let latent = encoder
+                .run_epoch_latent(&signal, &chan_pos, None, n_channels, n_times)
+                .expect("run_epoch_latent failed");
+            eprintln!(
+                "run_epoch_latent ok: out len={} shape={:?} in {:.0} ms",
+                latent.output.len(),
+                latent.shape,
+                t1.elapsed().as_secs_f64() * 1000.0
+            );
+            // latent is [B, S, Q*D]; verify output length matches the shape.
+            let expected: usize = latent.shape.iter().product();
+            assert_eq!(latent.output.len(), expected, "latent length != shape product");
+            let pooled = pool_latent(&latent.output, latent.shape[1]);
+            eprintln!("latent pooled [Q*D] (mean over S, first 4): {:?}", &pooled[..4]);
         }
 
         println!("luna_smoke: OK");
+    }
+
+    /// Mean-pool a `[B, S, Q*D]` latent over the sequence dim → `[Q*D]`.
+    fn pool_latent(output: &[f32], s: usize) -> Vec<f32> {
+        let dim = output.len() / s;
+        let mut pooled = vec![0f32; dim];
+        for (i, v) in output.iter().enumerate() {
+            pooled[i % dim] += v;
+        }
+        for v in pooled.iter_mut() {
+            *v /= s as f32;
+        }
+        pooled
     }
 }

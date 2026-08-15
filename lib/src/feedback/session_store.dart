@@ -120,8 +120,10 @@ class SessionCalibrationPhase {
     required this.clipFile,
     this.spokenText = '',
     this.eyes,
+    this.challengeText,
     this.startSecs,
     this.endSecs,
+    this.kind = 'intro',
   });
 
   final String clipId;
@@ -133,17 +135,30 @@ class SessionCalibrationPhase {
   /// `open`, `closed`, or null when the clip does not instruct an eye state.
   final String? eyes;
 
+  /// The mentally-active challenge shown on screen during this stage (one
+  /// picked at random per calibration run), or null for stages without one.
+  final String? challengeText;
+
   /// Start/end of the phase, in seconds from session (recording) start.
+  /// The guidance clip plays between the two; the raw EEG in that window is
+  /// intentionally present (metadata marks the window) so the file stays a
+  /// single contiguous recording.
   final double? startSecs;
   final double? endSecs;
+
+  /// `intro` (random intro of a `single` calibration) or `stage` (a staged
+  /// guidance clip). Old files default to `intro`.
+  final String kind;
 
   Map<String, Object?> toJson() => {
     'clipId': clipId,
     'clipFile': clipFile,
     if (spokenText.isNotEmpty) 'spokenText': spokenText,
     if (eyes != null) 'eyes': eyes,
+    if (challengeText != null) 'challengeText': challengeText,
     if (startSecs != null) 'startSecs': startSecs,
     if (endSecs != null) 'endSecs': endSecs,
+    if (kind != 'intro') 'kind': kind,
   };
 
   static SessionCalibrationPhase? fromJson(Object? json) {
@@ -155,8 +170,10 @@ class SessionCalibrationPhase {
       clipFile: json['clipFile'] as String? ?? '',
       spokenText: json['spokenText'] as String? ?? '',
       eyes: json['eyes'] as String?,
+      challengeText: json['challengeText'] as String?,
       startSecs: (json['startSecs'] as num?)?.toDouble(),
       endSecs: (json['endSecs'] as num?)?.toDouble(),
+      kind: json['kind'] as String? ?? 'intro',
     );
   }
 }
@@ -176,10 +193,16 @@ class SessionCalibration {
     this.faultyPadSeconds,
     this.baseline,
     this.phases = const [],
+    this.kind = 'single',
   });
 
   /// Manifest version the calibration sequence was generated from.
   final int version;
+
+  /// Calibration recipe kind that ran: `single` (intro + one silent baseline)
+  /// or `staged` (fixed ordered clip/collect steps). Old files default to
+  /// `single`.
+  final String kind;
 
   /// Wall-clock epoch seconds when calibration began (also recording start).
   final double? calibrationStartSecs;
@@ -228,6 +251,7 @@ class SessionCalibration {
     if (faultyPadSeconds != null) 'faultyPadSeconds': faultyPadSeconds,
     if (baseline != null) 'baseline': baseline!.toJson(),
     if (phases.isNotEmpty) 'phases': [for (final p in phases) p.toJson()],
+    if (kind != 'single') 'kind': kind,
   };
 
   static SessionCalibration? fromJson(Object? json) {
@@ -249,6 +273,7 @@ class SessionCalibration {
               .whereType<SessionCalibrationPhase>()
               .toList() ??
           const [],
+      kind: json['kind'] as String? ?? 'single',
     );
   }
 }

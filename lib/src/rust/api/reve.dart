@@ -24,3 +24,30 @@ Future<bool> modelLoaded() => RustLib.instance.api.crateApiReveModelLoaded();
 /// depending on the Hub's own (sometimes partial) config.
 Future<String> modelConfigJson({required String kind}) =>
     RustLib.instance.api.crateApiReveModelConfigJson(kind: kind);
+
+/// Enable the sleep-guardrail scorer for [kind], clearing any prior anchors and
+/// live vector. The forwarder starts scoring the next 1 Hz tick once a model of
+/// that kind is loaded and the headset is streaming. Returns false for an
+/// unknown kind.
+Future<bool> guardrailEnable({required String kind}) =>
+    RustLib.instance.api.crateApiReveGuardrailEnable(kind: kind);
+
+/// Disable the sleep-guardrail scorer and drop its anchors/live vector.
+Future<void> guardrailDisable() =>
+    RustLib.instance.api.crateApiReveGuardrailDisable();
+
+/// Reset the guardrail anchors (fresh calibration pass on the same model).
+Future<void> guardrailResetAnchors() =>
+    RustLib.instance.api.crateApiReveGuardrailResetAnchors();
+
+/// Capture the current live embedding as a calibration anchor: `clear` uses the
+/// latest scored vector; `sleep` uses the deepest-rest sample seen since the
+/// guardrail was enabled (or since the last `clear` capture). Errors when no
+/// window has been scored yet, or when the model no longer matches the enabled
+/// kind.
+Future<String> guardrailCaptureAnchor({required String name}) =>
+    RustLib.instance.api.crateApiReveGuardrailCaptureAnchor(name: name);
+
+/// Dim of the current live embedding, or 0 before the first scored window.
+Future<int> guardrailLiveDim() =>
+    RustLib.instance.api.crateApiReveGuardrailLiveDim();

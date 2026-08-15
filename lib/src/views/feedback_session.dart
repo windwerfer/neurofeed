@@ -353,26 +353,70 @@ class _PhaseControls extends ConsumerWidget {
                 _FaultyPadFallback(ref: ref, theme: theme),
                 const SizedBox(height: 8),
               ],
-            ] else if (fb.baselineSecondsLeft > 0) ...[
+            ] else if (fb.calibrationStepName != null) ...[
               Icon(
                 Icons.graphic_eq,
                 color: theme.colorScheme.primary,
                 size: 48,
               ),
               const SizedBox(height: 8),
-              Text('Recording baseline…', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 8),
               Text(
-                'Sit quietly, let your mind wander. ${fb.baselineSecondsLeft}s',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
+                fb.calibrationStepName!,
+                style: theme.textTheme.titleMedium,
               ),
-              const SizedBox(height: 12),
-              LinearProgressIndicator(
-                value:
-                    (calibrationBaselineSeconds - fb.baselineSecondsLeft) /
-                    calibrationBaselineSeconds,
-              ),
+              if (fb.calibrationChallengeText != null) ...[
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      if (fb.calibrationChallengeHint case final hint?) ...[
+                        Text(
+                          hint,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      Text(
+                        fb.calibrationChallengeText!,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
+              if (fb.baselineSecondsLeft > 0) ...[
+                Text(
+                  'Sit quietly, let your mind wander. ${fb.baselineSecondsLeft}s',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: (fb.calibrationStepTotal - fb.baselineSecondsLeft) /
+                      fb.calibrationStepTotal,
+                ),
+              ] else ...[
+                Text(
+                  'Playing the calibration cue…',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ],
             ] else ...[
               const LinearProgressIndicator(),
               const SizedBox(height: 8),
