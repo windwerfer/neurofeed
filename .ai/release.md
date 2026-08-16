@@ -187,6 +187,12 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
   runners). The devcontainer Dockerfile and `release-linux.yml` set this
   already; the bundle then has no bundled Xiph `.so`s (system libs are a
   runtime dependency).
+- On a **soundless build host** (devcontainer/CI with no `/dev/snd`), ALSA
+  needs `libasound2-plugins` + an active `/etc/alsa/conf.d/99-pulseaudio-default.conf`
+  (the package ships it as `.example`; the Dockerfile `cp`s it) to route the
+  `default` PCM through PulseAudio. Without it the app plays **silently**.
+  End-user machines with a real sound server need `libasound2-plugins` too if
+  the default ALSA device can't be opened.
 
 ## Windows (optional)
 

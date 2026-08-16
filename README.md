@@ -55,6 +55,23 @@ Scan for nearby Muse headsets by tapping **Rescan**.
 **Supported:** Android 10+ (API 29), 64-bit only (`arm64-v8a` / `x86_64`).
 Older API levels would theoretically work but are untested.
 
+### Linux / dev-container audio
+
+Audio uses **flutter_soloud**, whose Linux backend is ALSA. The dev-container
+has no sound card and plays through the host's PulseAudio/PipeWire socket
+(`PULSE_SERVER=unix:/tmp/pulse-socket`). That requires:
+
+- `libasound2-plugins` + an active `/etc/alsa/conf.d/99-pulseaudio-default.conf`
+  (the package ships it as `.example`; the Dockerfile `cp`s it) so ALSA's
+  `default` PCM routes to PulseAudio.
+- `TRY_SYSTEM_LIBS_FIRST=1` + `libopus-dev libogg-dev libvorbis-dev libflac-dev`
+  when building, so flutter_soloud links the system Xiph codecs instead of its
+  glibc-2.43-precompiled ones.
+
+All of this is already in `.devcontainer/Dockerfile`. Verify playback with
+`aplay -D default /tmp/beep.wav` (silent output usually means the ALSA → Pulse
+routing above is missing, not that the app is broken).
+
 ## Debugging
 
 ```bash

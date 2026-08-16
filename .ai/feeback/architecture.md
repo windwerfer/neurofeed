@@ -9,7 +9,9 @@ graphs + editable history notes merged to main.**
 ## Stack additions
 - **flutter_soloud** (pub, ^4.1.7) — all audio playback via the SoLoud engine
   (bundles the Xiph decoders, so Opus/Vorbis/FLAC decode natively; Linux builds
-  need `libasound2-dev` for the ALSA backend — see `.devcontainer/Dockerfile`).
+  need `libasound2-dev` for the ALSA backend, and the container routes ALSA →
+  PulseAudio via `libasound2-plugins` + `99-pulseaudio-default.conf` — see
+  `.devcontainer/Dockerfile`).
   Replaced the previous just_audio + media_kit/mpv stack.
 - `lib/src/feedback/` — state machine, ATR engine, session models, recorder
 - `lib/src/audio/` — `AudioService` (facade) + `FeedbackAudioController` (chime/

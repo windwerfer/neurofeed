@@ -15,10 +15,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openjdk-21-jdk \
     zstd \
     libpulse0 \
-    libmpv2 \
     pipewire-bin \
     alsa-utils \
     libasound2-dev \
+    libasound2-plugins \
     pulseaudio-utils \
     libopus-dev \
     libogg-dev \
@@ -29,6 +29,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # flutter_soloud ships glibc-2.43-precompiled Xiph libs; link the system ones
 # instead (Debian trixie / CI runners have an older glibc).
 ENV TRY_SYSTEM_LIBS_FIRST=1
+
+# Container has no ALSA card: route ALSA's default PCM through the
+# PulseAudio/PipeWire socket mounted at /tmp/pulse-socket (PULSE_SERVER is set
+# in devcontainer.json). libasound2-plugins ships the config only as a
+# ".example", so activate it here — otherwise flutter_soloud's ALSA backend
+# fails with "Unknown PCM default" and no sound plays.
+RUN cp /etc/alsa/conf.d/99-pulseaudio-default.conf.example \
+      /etc/alsa/conf.d/99-pulseaudio-default.conf
 
 
 
