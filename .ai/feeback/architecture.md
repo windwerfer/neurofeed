@@ -7,10 +7,14 @@ displayed post-session, history browsable. **Status: Phase I + session summary
 graphs + editable history notes merged to main.**
 
 ## Stack additions
-- **just_audio** (pub) — audio playback (media_kit Linux backend; the
-  `Failed to create file cache.` log is a non-fatal mpv disk-cache warning).
+- **flutter_soloud** (pub, ^4.1.7) — all audio playback via the SoLoud engine
+  (bundles the Xiph decoders, so Opus/Vorbis/FLAC decode natively; Linux builds
+  need `libasound2-dev` for the ALSA backend — see `.devcontainer/Dockerfile`).
+  Replaced the previous just_audio + media_kit/mpv stack.
 - `lib/src/feedback/` — state machine, ATR engine, session models, recorder
-- `lib/src/audio/` — `AudioService` (facade) + `FeedbackAudioController` (players)
+- `lib/src/audio/` — `AudioService` (facade) + `FeedbackAudioController` (chime/
+  ambient channels) + `MusicFeedbackController` (folder playback through a
+  reward-driven low-pass filter) + `SoLoudEngine` (single-flight init)
 - `lib/src/views/` — feedback_list, feedback_session, feedback_history,
   feedback_dashboard
 - Rust additions in `muse.rs` — pulse, movement, peak-alpha computation
@@ -46,7 +50,9 @@ Idle → Calibrating → Playing ⇄ Paused → Ended → Dashboard
   samples; resets the success window and re-anchors the ceiling automatically.
 
 ## Audio (dual-layer, 5 volume channels)
-- **Background**: ambient loop (Ambient Drone / Drone Loop / Rain), looped.
+- **Background**: ambient loop (Ambient Drone / Drone Loop / Rain) or **Music
+  feedback** — a user-picked folder streamed through a per-voice biquad low-pass
+  whose cutoff follows the ATR percentile rank (see below), looped.
 - **Reward chimes**: bowl pool (10 players) started at full feedback volume
   (no attack ramp); players reset on completion; movement gating (1 s buffer)
   blocks rewards.
@@ -55,6 +61,23 @@ Idle → Calibrating → Playing ⇄ Paused → Ended → Dashboard
   recalibrate cue.
 - Effective volume = master × channel (background / feedback / intro / end
   bell). All persist via `Settings` (SharedPreferences) and restore on launch.
+
+## Music feedback (reward-driven low-pass filter)
+- Selecting "Music from folder" in the sound picker (a guard explains how if
+  no folder is configured) plays the folder through `MusicFeedbackController`.
+- The notifier feeds the live ATR percentile (~10 Hz) to `setMusicCutoffHz`:
+  percentile 0–100 is linearly interpolated between `Settings.musicMinCutoffHz`
+  and `musicMaxCutoffHz` (`musicInvertMapping` flips the polarity — higher
+  scores close the filter instead of opening it). An EMA slew (slew seconds)
+  glides the filter to avoid zipper noise.
+- Guardrail interplay: on the drowsiness protocol (`muffleWhileWarning`) the
+  filter is forced fully closed while a sleep warning is active.
+- Track order: sequential by filename or `musicShuffle` randomized at start.
+- Session trace: a per-second cutoff sample + track transitions are collected
+  while playing and persisted as `SessionMusic` metadata (tracks + 400-bucket
+  decimated cutoff), rendered in the session dashboard ("Music feedback" card).
+- Folder is picked in Settings → Music feedback (SAF on Android, directory
+  dialog on desktop); track list is loaded via `AudioService.loadMusic()`.
 
 ## Persistence (`Settings`)
 User prefs: 5 volume channels, background sound, session duration,

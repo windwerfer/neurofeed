@@ -7,7 +7,7 @@ import 'package:muse_ml/src/settings.dart';
 
 /// Ambient + one-shot feedback sounds on a single SoLoud engine.
 ///
-/// Public surface mirrors the pre-migration just_audio controller so
+/// Public surface mirrors the pre-SoLoud (just_audio) controller so
 /// [AudioService] and the feedback notifier stay unchanged for chime/sound
 /// feedback. Music feedback (folder + low-pass filter) lives in
 /// [MusicFeedbackController].

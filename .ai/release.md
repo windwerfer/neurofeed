@@ -175,6 +175,10 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
 - The Rust crate compiles the btleplug/dbus stack, so the runner installs
   `libdbus-1-dev` and `libglib2.0-dev` (this is why the build host needs a few
   extra apt packages).
+- flutter_soloud's ALSA backend needs `libasound2-dev` on the Linux build
+  host (`alsa/asoundlib.h`) — install it alongside the other apt deps or the
+  native plugin build fails (same requirement as the devcontainer/podman
+  image).
 
 ## Windows (optional)
 
@@ -183,9 +187,9 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
   in to build it.
 - `muse_ml-<ver>-windows-x64.zip` contains the `Release/` folder — unzip and
   run `muse_ml.exe`.
-- `media_kit_libs_windows_audio` was added to `pubspec.yaml` so the media-kit
-  audio player actually ships `libmpv` on Windows. If you do not care about
-  Windows, delete `release-windows.yml` and the dependency.
+- Audio moved to flutter_soloud; the just_audio/media_kit (`libmpv`) deps were
+  removed from `pubspec.yaml`. If you do not care about Windows, delete
+  `release-windows.yml`.
 
 ## Caching
 

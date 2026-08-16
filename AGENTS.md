@@ -77,7 +77,7 @@ lib/src/feedback/         # feedback session system (merged to main, Phase I)
   session_storage.dart      # SessionStorage abstraction (FS + SAF), scratch dir, storage provider
   session_container.dart    # thin Dart wrapper over the Rust container format ([PNG][jsonLen][json][bodyLen][frames])
   session_summary.dart       # SessionOverview: 400-bucket decimated bands/pulse/motion/peak in metadata
-lib/src/audio/            # just_audio: AudioService + FeedbackAudioController (5 volume channels)
+lib/src/audio/            # flutter_soloud (SoLoud engine): AudioService façade + FeedbackAudioController (chime/ambient) + MusicFeedbackController (folder via reward-driven low-pass) + SoLoudEngine
 lib/src/reve/            # guardrail AI model engine: ModelKind metadata, ModelCache (SHA-256-verified download/import), ModelEngineNotifier, selector + import UI
 rust/src/api/muse.rs    # FFI bridge: scan/connect/subscribe → MuseEvent stream + 1 Hz derived metrics
 rust/src/api/reve.rs    # model FFI: model_load / model_unload / model_loaded / model_config_json
@@ -111,7 +111,7 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - Manifest BLE perms: `android/app/src/main/AndroidManifest.xml` (`BLUETOOTH_SCAN` w/ `neverForLocation`, `BLUETOOTH_CONNECT`, `ACCESS_FINE_LOCATION` capped `maxSdkVersion=30`).
 - Feedback state machine: `lib/src/feedback/feedback_state.dart` (`FeedbackStateNotifier`, phases, interruption recovery).
 - ATR engine (threshold, dynamic adapt, in-flight recalibrate): `lib/src/feedback/target_state.dart` (`AtrEngine`).
-- Audio (dual-layer + 5 volume channels): `lib/src/audio/feedback_audio_controller.dart`, service in `lib/src/audio/audio_service.dart`.
+- Audio (dual-layer + 5 volume channels): `lib/src/audio/feedback_audio_controller.dart`, service in `lib/src/audio/audio_service.dart`; music feedback (user folder through a reward-driven low-pass filter) in `lib/src/audio/music_feedback_controller.dart` (`MusicFeedbackController`, per-voice biquad, EMA slew, guardrail muffle).
 - Gesture detection (blink / jaw clench / eye up-down): `rust/src/analysis/gesture.rs` (`GestureDetector`, auto-adaptive EWMA thresholds, no crates). Fed raw EEG + per-second FFT gamma in the forwarder (`rust/src/api/muse.rs`), emits 1 Hz `MuseEventDto::Gestures(GestureDto)`.
 - Per-pad line-noise (fit/impedance proxy): `BandsDto.line_noise_ratio` (50/60 Hz mains power fraction of the existing per-second FFT), folded into `signalQuality` in `connection_provider.dart` `_maybeComputeSignalQuality`.
 - Gesture markers persist in session **metadata** (`SessionMetadata.gestures`, `GestureMarker`/`GestureType` in `session_store.dart`); captured in `feedback_state.dart` `_onGestures`, written at save in `feedback_dashboard.dart` `_save`.

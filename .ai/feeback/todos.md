@@ -5,13 +5,14 @@
 - [x] Phase 0: Navigation backbone + state machine + stub views
 - [x] Phase 1: Rust derived metrics (pulse, movement, peak alpha)
 - [x] Phase 2: Recording extension + zstd compression
-- [x] Phase 3: Audio playback (just_audio + AudioService)
+- [x] Phase 3: Audio playback (flutter_soloud + AudioService)
 
 ## Phase 3.5: Dual-layer reward audio
 - [x] Target-state predicate: relative band power (alpha_rel > theta_rel), AF7/AF8 average
 - [x] Dual-layer engine: background (drone/rain) + bowl reward chime pool (10 players, full-volume start, completion reset)
 - [x] Movement gating: accel score > 0.05 resets hold timer and gates chimes (1 s buffer)
 - [x] Sound selector (Ambient Drone / Drone Loop / Rain) + on-the-fly switch during feedback
+- [x] **Music feedback**: user folder played through a reward-driven low-pass filter (flutter_soloud + `MusicFeedbackController`) — folder picker + cutoff range / invert / shuffle in Settings; `SessionMusic` trace + track list in the dashboard; Opus supported natively (Xiph decoders bundled)
 - [ ] v1.1: EEG artifact flag for jaw-clench/blink EMG (accel gating only catches head motion)
 
 ## Phase 4: Full session flow
