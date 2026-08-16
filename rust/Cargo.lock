@@ -1021,6 +1021,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 [[package]]
 name = "luna-rs"
 version = "0.1.0"
+source = "git+https://github.com/windwerfer/luna-rs?tag=v0.0.4-latent-embedding-fix#d4e8aa06fcaeb5e4c203cf85d8c6a3329ff61b68"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1389,6 +1390,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 [[package]]
 name = "reve-rs"
 version = "0.1.0"
+source = "git+https://github.com/eugenehp/reve-rs?rev=9c8d8564b8793ce2a2b926f226c09eefb5e46781#9c8d8564b8793ce2a2b926f226c09eefb5e46781"
 dependencies = [
  "anyhow",
  "clap",

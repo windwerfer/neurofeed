@@ -64,9 +64,10 @@ of `_init()` (mark with `// TEMP-TEST`) and revert after.
   and `.local/reve-base-dl/model.safetensors` (untracked embedded repos, not in git).
   The tests rebuild their `target/*-smoke/model.safetensors` symlink each run, so
   stale/dangling links are not an issue.
-- Before running any `cargo build`/`cargo test`, a fresh checkout must have the
-  submodule path deps present: `git submodule update --init third_party/reve-rs
-  third_party/luna-rs` (empty dirs ⇒ cargo fails on the path dependency).
+- `reve-rs`/`luna-rs` are git deps (`rust/Cargo.toml`: reveal-rs from upstream
+  `eugenehp`, luna-rs from the `windwerfer` fork), so a fresh checkout needs
+  network access to GitHub for `cargo build`/`cargo test`; no submodule init is
+  required. (The `third_party/` copies are reference only.)
 
 ## Caveats
 - `flutter analyze lib/src` must stay clean after Dart edits.

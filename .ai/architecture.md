@@ -95,8 +95,9 @@ It remains a good second choice if btleplug ever becomes unmaintainable.
 - Rust: `rust/src/api/reve.rs` is the FFI surface (`model_load`/`model_unload`/
   `model_loaded`/`model_config_json`). `rust/src/analysis/{reve,luna}.rs` wrap the
   `reve-rs`/`luna-rs` crates (RLX CPU backend); scoring runs there from the event
-  forwarder, not across FFI. `reve-rs`/`luna-rs` are **path deps on `third_party/`
-  submodules**; `[patch.crates-io]` points `rlx-cpu` at the vendored `vendor/rlx-cpu`
+  forwarder, not across FFI. `reve-rs`/`luna-rs` are **git deps** (reveal-rs at rev
+  `9c8d856…` from upstream `eugenehp`, luna-rs at tag `v0.0.4-latent-embedding-fix`
+  from the `windwerfer` fork); `[patch.crates-io]` points `rlx-cpu` at the vendored `vendor/rlx-cpu`
   (default `blas` feature cleared).
 - Dart: `lib/src/reve/models.dart` (`ModelKind` — luna_base / luna_large / reve_base,
   each with SHA-256 + Hugging Face URLs + size), `model_engine.dart` (`ModelCache`

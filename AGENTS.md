@@ -22,7 +22,8 @@ Global orientation for any AI agent or contributor working in this repo.
   If either side upgrades, both must be upgraded together or you get
   link-time symbol conflicts.
 - **REVE + LUNA local model engine** (AI sleep guardrail, layered): `reve-rs` + `luna-rs`
-  (path deps on `third_party/` submodules, RLX CPU backend) score drowsiness on-device
+  (git deps — `reve-rs` from upstream `eugenehp` untouched, `luna-rs` from the `windwerfer`
+  fork — RLX CPU backend) score drowsiness on-device
   from raw EEG. **No weights are shipped**: LUNA (Apache-2.0) downloads from HF with
   SHA-256 verification; REVE (gated) is user-imported. FFI: `rust/src/api/reve.rs`
   (`model_load`/`model_unload`/`model_loaded`/`model_config_json`); inference lives in
@@ -46,10 +47,11 @@ Global orientation for any AI agent or contributor working in this repo.
 - When editing Rust under `rust/src/api/`, run `flutter_rust_bridge` codegen if the FFI surface changes (then commit both `rust/src/frb_generated.rs` and the Dart files under `lib/src/rust/`); `cargo check --target aarch64-linux-android` is NOT reliable in this sandbox (see Testing Guide) — rely on `flutter run` for the real compile.
 - `flutter analyze lib/src` must stay clean after edits.
 - Format changes land in `rust/src/api/session_format.rs`; keep `cargo test --lib session_format` green (golden wire-layout tests pin the byte format).
-- `third_party/{reve-rs,luna-rs}` are **path dependencies** (unlike `muse-rs`/`btleplug`,
-  which are git deps): a fresh checkout or CI run has empty dirs until
-  `git submodule update --init third_party/reve-rs third_party/luna-rs` runs before any
-  `cargo build`. All build workflows init them after checkout (see `.ai/release.md`).
+- `reve-rs`/`luna-rs` are **git dependencies** (like `muse-rs`/`btleplug`): `reve-rs` from
+  upstream `eugenehp/reve-rs` at rev `9c8d856…` (unchanged upstream), `luna-rs` from the
+  `windwerfer` fork at tag `v0.0.4-latent-embedding-fix` (latent-embedding fix). `third_party/`
+  keeps reference checkouts of both, but cargo fetches from GitHub directly — no submodule
+  init is needed to build. Bump the tag/rev in `rust/Cargo.toml` when either advances.
 
 ## Docs (`.ai/`)
 | File | Contents |
@@ -93,7 +95,7 @@ android/app/src/main/java/
 scripts/package-linux.sh # deterministic tar.gz + best-effort AppImage packaging for release-linux
 third_party/muse-rs/    # local checkout of muse-rs (tag 0.1.0) — reference for protocol/parse debugging
 third_party/btleplug/   # local checkout of our btleplug fork (tag 0.12.0-muse-3) — reference for JNI/init debugging
-third_party/{reve-rs,luna-rs}/  # submodule path deps for the model engine — must be checked out to build (`git submodule update --init third_party/reve-rs third_party/luna-rs`)
+third_party/{reve-rs,luna-rs}/  # reference checkouts of the model-engine forks — cargo builds from the git deps in rust/Cargo.toml
 vendor/rlx-cpu/         # committed vendored copy of rlx-cpu 0.2.13 (patched: no default `blas`), wired via [patch.crates-io]
 .local/                 # LOCAL-ONLY, never committed: luna-base-dl/, reve-base-dl/ (gated model weights), reve-base/ (abandoned fork). Each is an embedded git repo with no remote — see .gitmodules (`ignore = all`, invalid URL) + smoke-test paths `rust/src/analysis/{luna,reve}.rs`
 muse-rs (dep, GitHub)   # transport (btleplug) + protocol
@@ -134,7 +136,7 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - **Session format is Rust-owned**: never edit the `.muse`/`.muse.feedback` byte layout in Dart. `rust/src/api/session_format.rs` is the single authority — `encode_session_event`, `sessionFrameBytes`, `sessionParseBody`, and the container fns; Dart (`session_recorder.dart`, `session_reader.dart`, `session_container.dart`) are thin FFI delegates. Some container fns are `#[frb(sync)]` so Dart keeps `headReadLimit`/`parseHead`/`extractBody` synchronous. When changing the wire format, extend `cargo test --lib session_format` goldens and regenerate bindings.
 - **Cargo `[patch]` version trap**: If the patched crate's `version` is semver-incompatible with the dependency constraint, Cargo silently ignores the patch. Our fork must stay at `version = "0.11.8"` even though the source is based on 0.12.0.
 - **Vendored `rlx-cpu`** (`vendor/rlx-cpu`): `[patch.crates-io]` replaces crates.io `rlx-cpu` with our copy, which clears the default `blas` feature (its `build.rs` would hard-link OpenBLAS on x86_64 hosts and break Windows/Linux release builds). Keep `version = "0.2.13"` semver-compatible with the `rlx 0.2` constraint or the patch is silently ignored (same trap as btleplug).
-- **Model-engine path deps need submodules**: `reve-rs` + `luna-rs` are path deps on `third_party/` submodules — a fresh clone or CI run has empty dirs until `git submodule update --init third_party/reve-rs third_party/luna-rs`. The release build workflows init them after checkout; a local `cargo build` on a fresh clone needs the same command (see `.ai/release.md`).
+- **Model engine is git deps, not submodules**: `reve-rs`/`luna-rs` are fetched by cargo from GitHub (`rust/Cargo.toml`: luna @ tag `v0.0.4-latent-embedding-fix` on the `windwerfer` fork, reveal @ rev `9c8d856…` on upstream `eugenehp`) — same pattern as `muse-rs`/`btleplug`, so a fresh clone needs no submodule init to build. The workflows still init `third_party/reve-rs`/`luna-rs` after checkout, but that is only for reference copies now.
 - **Gated weights live in `.local/`, never commit them**: LUNA/REVE weights + the abandoned `reve-base` source sit under `.local/` as embedded git repos with no remote (untracked, NOT gitignored so agents can still see them). `.gitmodules` documents them with `ignore = all` + an invalid URL so `git submodule update --init` fails loudly instead of fetching. The `#[ignore]`d smoke tests (`rust/src/analysis/{luna,reve}.rs`) read `../.local/...`; run with `cargo test --lib -- --ignored`.
 - **Android BLE init**: btleplug requires `btleplug::platform::init(&JNIEnv)` from a JNI context BEFORE any scan/connect, or it panics with `"Droidplug has not been initialized"`.
 - **JNI `ThreadDetached`**: BLE ops run on tokio worker threads which aren't attached to the JVM. Our `get_env()` patch auto-attaches them.

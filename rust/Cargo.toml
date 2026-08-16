@@ -18,10 +18,10 @@ env_logger = "0.11"
 android_logger = "0.14"
 zstd = { version = "0.13", default-features = false }
 
-# REVE EEG foundation model (RLX CPU inference) — vendored submodule.
-reve-rs = { path = "../third_party/reve-rs", default-features = false, features = ["rlx-cpu"] }
-# LUNA EEG foundation model (RLX CPU inference) — vendored submodule.
-luna-rs = { path = "../third_party/luna-rs", default-features = false, features = ["rlx-cpu"] }
+# REVE EEG foundation model (RLX CPU inference) — git dep (upstream, untouched).
+reve-rs = { git = "https://github.com/eugenehp/reve-rs", rev = "9c8d8564b8793ce2a2b926f226c09eefb5e46781", default-features = false, features = ["rlx-cpu"] }
+# LUNA EEG foundation model (RLX CPU inference) — git dep (windwerfer fork).
+luna-rs = { git = "https://github.com/windwerfer/luna-rs", tag = "v0.0.4-latent-embedding-fix", default-features = false, features = ["rlx-cpu"] }
 # The direct `rlx` dep is for the public `rlx::Device` type used when loading
 # the encoder; feature `cpu` matches reveal-rs `rlx-cpu` so both unify onto one
 # copy of rlx 0.2.
