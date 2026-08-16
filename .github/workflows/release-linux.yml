@@ -32,7 +32,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             ninja-build cmake clang pkg-config libgtk-3-dev liblzma-dev \
-            libdbus-1-dev libglib2.0-dev libasound2-dev
+            libdbus-1-dev libglib2.0-dev libasound2-dev libopus-dev \
+            libogg-dev libvorbis-dev libflac-dev
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -66,6 +67,10 @@ jobs:
 
       - name: Build Linux release
         shell: bash
+        env:
+          # flutter_soloud bundles glibc-2.43-precompiled Xiph libs; link the
+          # ubuntu-24.04 system ones instead (runners have an older glibc).
+          TRY_SYSTEM_LIBS_FIRST: "1"
         run: |
           flutter pub get
           flutter build linux --release

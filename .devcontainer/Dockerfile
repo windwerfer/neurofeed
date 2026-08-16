@@ -20,7 +20,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     alsa-utils \
     libasound2-dev \
     pulseaudio-utils \
+    libopus-dev \
+    libogg-dev \
+    libvorbis-dev \
+    libflac-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# flutter_soloud ships glibc-2.43-precompiled Xiph libs; link the system ones
+# instead (Debian trixie / CI runners have an older glibc).
+ENV TRY_SYSTEM_LIBS_FIRST=1
 
 
 

@@ -179,6 +179,14 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
   host (`alsa/asoundlib.h`) — install it alongside the other apt deps or the
   native plugin build fails (same requirement as the devcontainer/podman
   image).
+- flutter_soloud bundles precompiled Xiph `libopus.so.0`/`libogg`/`libvorbis`/
+  `libflac` built for **glibc 2.43** (`GLIBC_2.43' not found`, host glibc too
+  old to load `libflutter_soloud_plugin.so`). Set `TRY_SYSTEM_LIBS_FIRST=1`
+  when building and install `libopus-dev libogg-dev libvorbis-dev libflac-dev`
+  to link the system libraries instead (needed on Debian trixie / Ubuntu 24.04
+  runners). The devcontainer Dockerfile and `release-linux.yml` set this
+  already; the bundle then has no bundled Xiph `.so`s (system libs are a
+  runtime dependency).
 
 ## Windows (optional)
 
