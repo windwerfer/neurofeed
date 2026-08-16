@@ -14,6 +14,12 @@ import 'package:muse_ml/src/feedback/session_storage.dart';
 /// Duration of each scan chunk when scanning continuously.
 const _scanChunkSecs = 3;
 
+/// Number of connect attempts before giving up.  The first BLE connect after
+/// a cold start / recent re-connect often times out even when the scan just
+/// saw the device; a fresh attempt (with a re-scan for a new session) almost
+/// always succeeds.
+const _maxConnectAttempts = 3;
+
 /// Holds all connection + UI state for the app.
 class AppStateNotifier extends StateNotifier<AppUiState> {
   AppStateNotifier(this._settings)
@@ -315,25 +321,60 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   Future<void> connectTo(DeviceInfo device) async {
     if (state.connectingTo != null) return;
     _scanEnabled = false;
-    debugPrint('[muse] connecting to ${device.name} (${device.id})');
+    final id = device.id;
+    final name = device.name;
     state = state.copyWith(
       connectWindowOpen: false,
       scanning: false,
-      connectingTo: device.name,
+      connectingTo: name,
       scanMessage: null,
     );
-    try {
-      final status = await connect(deviceId: device.id);
-      debugPrint('[muse] connect returned: connected=${status.connected}');
-      await _settings.setLastDeviceId(device.id);
-      state = state.copyWith(status: status, connectingTo: null);
-    } catch (e) {
-      debugPrint('[muse] connect failed: $e');
+    Object? lastError;
+    for (var attempt = 1; attempt <= _maxConnectAttempts; attempt++) {
+      debugPrint('[muse] connect attempt $attempt/$_maxConnectAttempts — '
+          '$name ($id)');
       state = state.copyWith(
-        connectingTo: null,
-        connectWindowOpen: true,
-        scanMessage: 'Connection failed: $e',
+        scanMessage: 'Connecting… (attempt $attempt)',
       );
+      try {
+        final status = await connect(deviceId: id);
+        debugPrint('[muse] connect returned: connected=${status.connected}');
+        await _settings.setLastDeviceId(id);
+        state = state.copyWith(status: status, connectingTo: null);
+        return;
+      } catch (e) {
+        lastError = e;
+        debugPrint('[muse] connect attempt $attempt failed: $e');
+        if (attempt < _maxConnectAttempts) {
+          // The first BLE connect right after a cold start or a recent
+          // re-connect sometimes times out even though the scan just saw the
+          // device (the headset isn't accepting a new connection yet).
+          // Re-scanning replaces the cached peripheral with a fresh
+          // adapter/session — mirroring the manual "turn it off and on"
+          // flow that reliably works the second time.
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+          await _refreshDevice(id);
+        }
+      }
+    }
+    debugPrint('[muse] connect failed after $_maxConnectAttempts attempts: '
+        '$lastError');
+    state = state.copyWith(
+      connectingTo: null,
+      connectWindowOpen: true,
+      scanMessage: 'Connection failed: $lastError',
+    );
+  }
+
+  /// Run a short scan for [id] so the Rust-side device cache is refreshed with
+  /// a fresh peripheral (new adapter/session).  Best-effort: if the device is
+  /// not advertising the old cached entry is kept and the next connect attempt
+  /// simply reuses it.
+  Future<void> _refreshDevice(String id) async {
+    try {
+      await scan(timeoutSecs: BigInt.from(_scanChunkSecs));
+    } catch (e) {
+      debugPrint('[muse] refresh scan error: $e');
     }
   }
 
