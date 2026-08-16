@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/connection_provider.dart';
@@ -61,11 +63,7 @@ class ConnectWindow extends ConsumerWidget {
                   padding: EdgeInsets.symmetric(vertical: 8),
                   child: Row(
                     children: [
-                      SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
+                      BrailleSpinner(),
                       SizedBox(width: 8),
                       Text('Scanning…'),
                     ],
@@ -77,12 +75,53 @@ class ConnectWindow extends ConsumerWidget {
               Text(
                 state.scanMessage!,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.secondary,
-                    ),
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
               ),
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Low-CPU scanning indicator: a braille-pattern spinner advanced by a
+/// [Timer.periodic] at 5 fps instead of every animation frame, wrapped in a
+/// [RepaintBoundary] so each tick re-rasterizes only this tiny layer — parent
+/// and sibling widgets are painted once and never repainted.
+class BrailleSpinner extends StatefulWidget {
+  const BrailleSpinner({super.key});
+
+  @override
+  State<BrailleSpinner> createState() => _BrailleSpinnerState();
+}
+
+class _BrailleSpinnerState extends State<BrailleSpinner> {
+  static const _frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  int _index = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      setState(() => _index = (_index + 1) % _frames.length);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: Text(
+        _frames[_index],
+        style: const TextStyle(fontSize: 18, fontFamily: 'monospace'),
       ),
     );
   }
