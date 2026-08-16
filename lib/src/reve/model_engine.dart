@@ -214,7 +214,10 @@ class ModelCache {
     );
   }
 
-  /// Move the verified part into place, write config.json, and load.
+  /// Move the verified part into place, write config.json, stamp the
+  /// verification, and load. Only called after [importModel]/[downloadModel]
+  /// have passed `_verifyHash`, so the stamp records that the on-disk file is
+  /// known-good.
   Future<ModelInstallResult> _installLoaded(
     Directory dir,
     File part,
@@ -226,12 +229,37 @@ class ModelCache {
     }
     await part.rename(dest.path);
     await _ensureConfig(dir, kind);
+    await _stampVerified(dir, kind);
     final loadedDesc = await frb.modelLoad(modelDir: dir.path, kind: kind.ffId);
     return ModelInstallResult(
       kind: kind,
       directory: dir.path,
       loadedDesc: loadedDesc,
     );
+  }
+
+  /// Write `<dir>/verified.json` holding the SHA-256 the file was verified
+  /// against. The probe/install path never re-hashes — it trusts this stamp —
+  /// so the stamp is the single durable record of "we checked this file once".
+  Future<void> _stampVerified(Directory dir, ModelKind kind) async {
+    await File('${dir.path}/verified.json').writeAsString(
+      '{"sha256":"${kind.sha256}"}',
+      flush: true,
+    );
+  }
+
+  /// Whether the on-disk model carries the verification stamp for [kind].
+  Future<bool> isVerifiedOnDisk(
+    String? sessionFolder,
+    ModelKind kind,
+  ) async {
+    final dir = await modelDirectory(sessionFolder, kind);
+    try {
+      final contents = await File('${dir.path}/verified.json').readAsString();
+      return contents.contains('"sha256":"${kind.sha256}"');
+    } on FileSystemException {
+      return false;
+    }
   }
 
   /// Write the app-generated `config.json` unless one already exists. The

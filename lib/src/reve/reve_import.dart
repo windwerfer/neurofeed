@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/model_selector.dart';
 import 'package:muse_ml/src/reve/models.dart';
@@ -36,6 +37,7 @@ class _ModelGateDialogState extends ConsumerState<_ModelGateDialog> {
   String? _error;
   double? _progress;
   ProviderSubscription<ModelEngineState>? _readySub;
+  int _closeRetries = 0;
 
   @override
   void initState() {
@@ -44,9 +46,27 @@ class _ModelGateDialogState extends ConsumerState<_ModelGateDialog> {
     // initial probe finishing, or an import/download succeeding).
     _readySub = ref.listenManual(modelEngineNotifierProvider, (prev, next) {
       if (next is ModelEngineReady && mounted) {
-        Navigator.of(context).pop(true);
+        _maybeCloseWhenReady();
       }
     });
+  }
+
+  /// Close the dialog (popping `true`) only when *this* dialog is the current
+  /// route. Readiness can land while the model dropdown's own route is on top
+  /// of the navigator; popping then would hand `true` to the dropdown route and
+  /// crash on the mismatched result type. Retries briefly because that menu may
+  /// be mid-close when readiness arrives.
+  void _maybeCloseWhenReady() {
+    if (!mounted) return;
+    final route = ModalRoute.of(context);
+    if (route != null && route.isCurrent) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+    if (_closeRetries < 20) {
+      _closeRetries++;
+      Future.delayed(const Duration(milliseconds: 100), _maybeCloseWhenReady);
+    }
   }
 
   @override
@@ -100,6 +120,25 @@ class _ModelGateDialogState extends ConsumerState<_ModelGateDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final installed = ref.watch(
+      modelInstalledProvider(_selected),
+    );
+    if (installed.valueOrNull == true) {
+      // Files are on disk but the model is still being probed/loaded — just
+      // show a light "starting" state and let _maybeCloseWhenReady pop.
+      return AlertDialog(
+        title: const Text('Guardrail AI engine'),
+        content: const Row(
+          children: [
+            Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: BrailleSpinner(),
+            ),
+            Expanded(child: Text('Loading model…')),
+          ],
+        ),
+      );
+    }
     return AlertDialog(
       title: const Text('Guardrail AI engine'),
       content: SingleChildScrollView(
