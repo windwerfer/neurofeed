@@ -1212,20 +1212,32 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
             },
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              const SizedBox(width: 12, child: Text('Gentle')),
-              Expanded(
-                child: Slider(
-                  value: _responsiveness,
-                  onChanged: (v) {
-                    setState(() => _responsiveness = v);
-                    notifier.setResponsiveness(v);
-                  },
+          Slider(
+            value: _responsiveness,
+            onChanged: (v) {
+              setState(() => _responsiveness = v);
+              notifier.setResponsiveness(v);
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Gentle',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12, child: Text('Responsive')),
-            ],
+                Text(
+                  'Responsive',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
           Text(
             'How quickly the target adapts to you',
