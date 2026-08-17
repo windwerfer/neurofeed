@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/audio/guardrail_sound.dart';
@@ -91,47 +92,28 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
               const _NerdStatsBubble(),
             ],
             const SizedBox(height: 16),
-            // Sound + threshold (idle and during feedback for on-the-fly changes)
+            // Session settings (idle and during feedback for on-the-fly changes)
             if (fb.phase == FeedbackPhase.idle ||
                 fb.phase == FeedbackPhase.playing ||
                 fb.phase == FeedbackPhase.paused) ...[
+              _SessionSettingsCard(showGuardrail: guardrailOn),
+            ],
+            // Muse-not-connected hint (idle only)
+            if (fb.phase == FeedbackPhase.idle && !connected) ...[
+              const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: _SoundSelector()),
+                  const Icon(Icons.bluetooth_disabled, size: 18),
                   const SizedBox(width: 8),
-                  const _VolumeButton(),
-                  const SizedBox(width: 4),
-                  const _TargetSettingsButton(),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const _FeedbackSelector(),
-              const SizedBox(height: 12),
-              _PercentileSelector(),
-              if (guardrailOn) ...[
-                const SizedBox(height: 12),
-                const _WarningThresholdSelector(),
-              ],
-              if (fb.phase == FeedbackPhase.idle) ...[
-                const SizedBox(height: 12),
-                _TimerSelector(),
-                if (!connected) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Icon(Icons.bluetooth_disabled, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Muse not connected — Start Session will open the '
-                          'connect window.',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                    ],
+                  Expanded(
+                    child: Text(
+                      'Muse not connected — Start Session will open the '
+                      'connect window.',
+                      style: theme.textTheme.bodySmall,
+                    ),
                   ),
                 ],
-              ],
+              ),
             ],
             const SizedBox(height: 16),
             // Phase-specific controls
@@ -655,141 +637,56 @@ class _NerdStatsBubble extends ConsumerWidget {
 
 /// Quick duration chips (10/15/20/30 min) plus a Custom button that opens the
 /// wheel picker; the last custom choice is remembered and shown as a chip.
-class _TimerSelector extends ConsumerWidget {
-  static const List<int> quickDurations = [10, 15, 20, 30];
+/// One card holding all session settings: background sound, feedback sound,
+/// the guardrail, and (before a session starts) the duration chips.
+class _SessionSettingsCard extends ConsumerWidget {
+  const _SessionSettingsCard({required this.showGuardrail});
+
+  final bool showGuardrail;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
-    final settings = ref.read(settingsProvider);
-    final lastCustom = settings.lastCustomMinutes;
-    final selected = fb.durationMinutes;
-    final chips = <int>[...quickDurations, ?lastCustom];
     final theme = Theme.of(context);
-
-    Future<void> pick(WidgetRef ref2, {bool custom = false}) async {
-      final result = await showDialog<int>(
-        context: context,
-        builder: (ctx) => _DurationPicker(current: custom ? (lastCustom ?? 30) : selected),
-      );
-      if (result == null) {
-        return;
-      }
-      await ref2.read(settingsProvider).setLastCustomMinutes(result);
-      ref2.read(feedbackStateProvider.notifier).selectDuration(result);
-    }
-
     return Card(
       color: theme.colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.timer),
-                const SizedBox(width: 8),
-                Text('Session Duration', style: theme.textTheme.titleSmall),
-                const Spacer(),
-                Text(
-                  '$selected min',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final d in chips)
-                  ChoiceChip(
-                    label: Text('$d min'),
-                    selected: d == selected,
-                    onSelected: (_) =>
-                        ref.read(feedbackStateProvider.notifier).selectDuration(d),
-                  ),
-                ChoiceChip(
-                  label: const Text('Custom…'),
-                  avatar: const Icon(Icons.tune, size: 18),
-                  selected: false,
-                  onSelected: (_) => pick(ref, custom: true),
-                ),
-              ],
-            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text('Session Settings', style: theme.textTheme.titleSmall),
+          ),
+          const _SoundTile(),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          const _FeedbackTile(),
+          if (showGuardrail) ...[
+            const Divider(height: 1, indent: 16, endIndent: 16),
+            const _GuardrailTile(),
           ],
-        ),
+          if (fb.phase == FeedbackPhase.idle) ...[
+            const Divider(height: 1, indent: 16, endIndent: 16),
+            const _DurationSection(),
+          ],
+        ],
       ),
     );
   }
 }
 
-class _SoundSelector extends ConsumerWidget {
+class _SoundTile extends ConsumerWidget {
+  const _SoundTile();
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
-    final sounds = ref.read(audioServiceProvider).availableSounds;
-    return Card(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: ListTile(
-        leading: const Icon(Icons.music_note),
-        title: const Text('Background Sound'),
-        subtitle: Text(fb.soundName),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: sounds.length > 1
-            ? () async {
-                final result = await showDialog<String>(
-                  context: context,
-                  builder: (ctx) =>
-                      _SoundPicker(current: fb.soundName, sounds: sounds),
-                );
-                if (result != null) {
-                  if (!context.mounted) {
-                    return;
-                  }
-                  final settings = ref.read(settingsProvider);
-                  if (AudioService.isMusicSound(result) &&
-                      settings.musicFolder == null) {
-                    await showDialog<void>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Music folder not set'),
-                        content: const Text(
-                          'Music feedback plays your own tracks through a '
-                          'reward-driven filter. Pick a music folder in '
-                          'Settings → Music feedback first.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(ctx).pop(),
-                            child: const Text('OK'),
-                          ),
-                        ],
-                      ),
-                    );
-                    return;
-                  }
-                  ref.read(feedbackStateProvider.notifier).selectSound(result);
-                }
-              }
-            : null,
-      ),
-    );
-  }
-}
-
-class _VolumeButton extends ConsumerWidget {
-  const _VolumeButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
     final audio = ref.read(audioServiceProvider);
-    final theme = Theme.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: IconButton(
+    final sounds = audio.availableSounds;
+    return ListTile(
+      leading: const Icon(Icons.music_note),
+      title: const Text('Background Sound'),
+      subtitle: Text(fb.soundName),
+      trailing: IconButton(
         icon: const Icon(Icons.volume_up),
         tooltip: 'Volume',
         onPressed: () => showDialog<void>(
@@ -797,6 +694,334 @@ class _VolumeButton extends ConsumerWidget {
           builder: (_) => _VolumeDialog(audio: audio),
         ),
       ),
+      onTap: sounds.length > 1
+          ? () async {
+              final result = await showDialog<String>(
+                context: context,
+                builder: (ctx) =>
+                    _SoundPicker(current: fb.soundName, sounds: sounds),
+              );
+              if (result != null) {
+                if (!context.mounted) {
+                  return;
+                }
+                final settings = ref.read(settingsProvider);
+                if (AudioService.isMusicSound(result) &&
+                    settings.musicFolder == null) {
+                  await showDialog<void>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Music folder not set'),
+                      content: const Text(
+                        'Music feedback plays your own tracks through a '
+                        'reward-driven filter. Pick a music folder in '
+                        'Settings → Music feedback first.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    ),
+                  );
+                  return;
+                }
+                ref.read(feedbackStateProvider.notifier).selectSound(result);
+              }
+            }
+          : null,
+    );
+  }
+}
+
+class _FeedbackTile extends ConsumerWidget {
+  const _FeedbackTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fb = ref.watch(feedbackStateProvider);
+    return ListTile(
+      leading: const Icon(Icons.headphones),
+      title: const Text('Feedback Sound'),
+      subtitle: Text(
+        '${fb.feedbackMode.label} • ${fb.baselinePercentile}th percentile',
+      ),
+      trailing: IconButton(
+        icon: const Icon(Icons.settings),
+        tooltip: 'Target settings',
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (_) => const _TargetSettingsDialog(),
+        ),
+      ),
+      onTap: () async {
+        final result = await showDialog<FeedbackMode>(
+          context: context,
+          builder: (ctx) => _FeedbackModePicker(current: fb.feedbackMode),
+        );
+        if (result == null || result == fb.feedbackMode) {
+          return;
+        }
+        if (!context.mounted) {
+          return;
+        }
+        if (result == FeedbackMode.music) {
+          final settings = ref.read(settingsProvider);
+          if (settings.musicFolder == null) {
+            await showDialog<void>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Music folder not set'),
+                content: const Text(
+                  'Music feedback plays your own tracks through a '
+                  'reward-driven filter. Pick a music folder in '
+                  'Settings → Music feedback first.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            );
+            return;
+          }
+        }
+        ref.read(feedbackStateProvider.notifier).selectFeedbackMode(result);
+      },
+    );
+  }
+}
+
+class _GuardrailTile extends ConsumerWidget {
+  const _GuardrailTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.read(settingsProvider);
+    final engine = guardrailEngineFromSettings(settings);
+    final sound = GuardrailSound.fromName(settings.warningSoundName);
+    return ListTile(
+      leading: const Icon(Icons.shield_outlined),
+      title: const Text('Guardrail'),
+      subtitle: Text('${engine.label} • ${sound.label}'),
+      trailing: IconButton(
+        icon: const Icon(Icons.settings_outlined),
+        tooltip: 'Guardrail engine, warning sound and threshold',
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (_) => const _GuardrailGearDialog(),
+        ),
+      ),
+      onTap: () => showDialog<void>(
+        context: context,
+        builder: (_) => const _GuardrailGearDialog(),
+      ),
+    );
+  }
+}
+
+/// Quick duration chips plus a Custom button that asks for a number. Nothing
+/// is applied unless the user actively picks something; a confirmed custom
+/// value is remembered and shown as its own chip.
+class _DurationSection extends ConsumerWidget {
+  const _DurationSection();
+
+  static const List<int> quickDurations = [7, 15, 25, 45];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fb = ref.watch(feedbackStateProvider);
+    final settings = ref.read(settingsProvider);
+    final lastCustom = settings.lastCustomMinutes;
+    final selected = fb.durationMinutes;
+    final theme = Theme.of(context);
+    final chips = <int>[
+      ...quickDurations,
+      if (lastCustom != null && !quickDurations.contains(lastCustom)) lastCustom,
+    ];
+
+    Future<void> openCustom() async {
+      final result = await showDialog<int>(
+        context: context,
+        builder: (ctx) => const _DurationInputDialog(),
+      );
+      if (result == null) {
+        return;
+      }
+      await ref.read(settingsProvider).setLastCustomMinutes(result);
+      ref.read(feedbackStateProvider.notifier).selectDuration(result);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Duration', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final d in chips)
+                ChoiceChip(
+                  label: Text('$d min'),
+                  selected: d == selected,
+                  onSelected: (_) =>
+                      ref.read(feedbackStateProvider.notifier).selectDuration(d),
+                ),
+              ChoiceChip(
+                label: const Text('Custom…'),
+                selected: false,
+                onSelected: (_) => openCustom(),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Simple number entry for a custom duration — no wheel. The Apply button
+/// stays disabled until a valid number is typed, so cancel/empty leaves
+/// everything untouched.
+class _DurationInputDialog extends StatefulWidget {
+  const _DurationInputDialog();
+
+  @override
+  State<_DurationInputDialog> createState() => _DurationInputDialogState();
+}
+
+class _DurationInputDialogState extends State<_DurationInputDialog> {
+  final TextEditingController _controller = TextEditingController();
+  int? _parsed;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Custom Duration'),
+      content: SizedBox(
+        width: 220,
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(
+            labelText: 'Minutes',
+            helperText: 'e.g. 30',
+          ),
+          onChanged: (text) {
+            final n = int.tryParse(text);
+            final ok = n != null && n >= 1 && n <= 999;
+            setState(() => _parsed = ok ? n : null);
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _parsed == null
+              ? null
+              : () => Navigator.of(context).pop(_parsed),
+          child: const Text('Apply'),
+        ),
+      ],
+    );
+  }
+}
+
+/// A 5%-step percentile slider with the chosen value shown on the right and
+/// a marker line at the default position.
+class _PercentileSlider extends StatelessWidget {
+  static const int min = 5;
+  static const int max = 95;
+
+  const _PercentileSlider({
+    required this.value,
+    required this.defaultValue,
+    required this.onChanged,
+  });
+
+  final int value;
+  final int defaultValue;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final v = value.clamp(min, max);
+    final divisions = ((max - min) ~/ 5);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Slider(
+          value: v.toDouble(),
+          min: min.toDouble(),
+          max: max.toDouble(),
+          divisions: divisions,
+          label: '$v%',
+          onChanged: (d) => onChanged(d.round()),
+        ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final w = constraints.maxWidth;
+            final frac = (defaultValue - min) / (max - min);
+            const markerWidth = 100.0;
+            final left =
+                (frac * w - markerWidth / 2).clamp(0.0, w - markerWidth);
+            return SizedBox(
+              height: 18,
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: left,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 2,
+                          height: 10,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'default $defaultValue%',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    right: 0,
+                    child: Text(
+                      '$v%',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -928,26 +1153,6 @@ class _VolumeDialogState extends State<_VolumeDialog> {
   }
 }
 
-class _TargetSettingsButton extends ConsumerWidget {
-  const _TargetSettingsButton();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: IconButton(
-        icon: const Icon(Icons.settings),
-        tooltip: 'Target settings',
-        onPressed: () => showDialog<void>(
-          context: context,
-          builder: (_) => const _TargetSettingsDialog(),
-        ),
-      ),
-    );
-  }
-}
 
 class _TargetSettingsDialog extends ConsumerStatefulWidget {
   const _TargetSettingsDialog();
@@ -960,6 +1165,7 @@ class _TargetSettingsDialog extends ConsumerStatefulWidget {
 class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
   late bool _dynamicAdapt;
   late double _responsiveness;
+  late int _percentile;
 
   @override
   void initState() {
@@ -967,6 +1173,7 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
     final engine = ref.read(feedbackStateProvider.notifier);
     _dynamicAdapt = engine.dynamicAdapt;
     _responsiveness = engine.responsiveness;
+    _percentile = ref.read(feedbackStateProvider).baselinePercentile;
   }
 
   void _reset() {
@@ -1029,6 +1236,25 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
             'How quickly the target adapts to you',
             style: theme.textTheme.bodySmall,
           ),
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 8),
+          Text('Reward threshold', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 4),
+          Text(
+            'The baseline percentile that sets your target — how strict it '
+            'is versus your calibration. 40% (default) keeps the target near '
+            'your typical ratio.',
+            style: theme.textTheme.bodySmall,
+          ),
+          _PercentileSlider(
+            value: _percentile,
+            defaultValue: defaultBaselinePercentile,
+            onChanged: (v) {
+              setState(() => _percentile = v);
+              notifier.selectPercentile(v);
+            },
+          ),
         ],
       ),
       actions: [
@@ -1041,6 +1267,7 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
     );
   }
 }
+
 
 class _TargetSettingsInfoDialog extends StatelessWidget {
   const _TargetSettingsInfoDialog();
@@ -1089,6 +1316,7 @@ class _TargetSettingsInfoDialog extends StatelessWidget {
   }
 }
 
+
 class _SoundPicker extends StatelessWidget {
   final String current;
   final List<String> sounds;
@@ -1123,472 +1351,6 @@ class _SoundPicker extends StatelessWidget {
     );
   }
 }
-
-class _DurationPicker extends StatefulWidget {
-  final int current;
-  const _DurationPicker({required this.current});
-
-  @override
-  State<_DurationPicker> createState() => _DurationPickerState();
-}
-
-class _DurationPickerState extends State<_DurationPicker> {
-  late final FixedExtentScrollController _controller;
-  late int _selected;
-
-  @override
-  void initState() {
-    super.initState();
-    _selected = widget.current;
-    _controller = FixedExtentScrollController(initialItem: widget.current - 1);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final values = List.generate(120, (i) => i + 1);
-
-
-    return AlertDialog(
-      title: const Text('Duration (minutes)'),
-      content: SizedBox(
-        width: 120,
-        height: 300,
-        child: ListWheelScrollView(
-          controller: _controller,
-          itemExtent: 40,
-          useMagnifier: true,
-          perspective: 0.005,
-          diameterRatio: 1.5,
-          onSelectedItemChanged: (i) => _selected = values[i],
-          children: values.map((v) {
-            final label = v >= 60 ? '${v ~/ 60}h ${v % 60}m' : '${v}m';
-            final isSel = v == _selected;
-            return Center(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                  color: isSel
-                      ? null
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_selected),
-          child: const Text('Select'),
-        ),
-      ],
-    );
-  }
-}
-
-class _PercentileSelector extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final fb = ref.watch(feedbackStateProvider);
-    final metric = ProtocolInfo.forType(fb.protocol).rewardMetric;
-    return Card(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: ListTile(
-        leading: const Icon(Icons.center_focus_strong),
-        title: const Text('Reward Threshold'),
-        subtitle: Text('Baseline ${fb.baselinePercentile}th percentile'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () async {
-          final result = await showDialog<int>(
-            context: context,
-            builder: (ctx) => _PercentilePicker(
-              current: fb.baselinePercentile,
-              rewardTypeLabel: metric == RewardMetric.thetaOverAlpha
-                  ? 'Theta/Alpha'
-                  : 'Alpha/Theta',
-            ),
-          );
-          if (result != null) {
-            ref.read(feedbackStateProvider.notifier).selectPercentile(result);
-          }
-        },
-      ),
-    );
-  }
-}
-
-class _PercentilePicker extends StatefulWidget {
-  final int current;
-
-  /// Human label of the rewarded ratio (`Alpha/Theta` for ATR, `Theta/Alpha`
-  /// for TAR), shown in the explainer.
-  final String rewardTypeLabel;
-
-  const _PercentilePicker({
-    required this.current,
-    required this.rewardTypeLabel,
-  });
-
-  @override
-  State<_PercentilePicker> createState() => _PercentilePickerState();
-}
-
-class _PercentilePickerState extends State<_PercentilePicker> {
-  static const List<int> _values = [
-    5,
-    10,
-    15,
-    20,
-    25,
-    30,
-    35,
-    40,
-    45,
-    50,
-    55,
-    60,
-    65,
-    70,
-    75,
-    80,
-    85,
-    90,
-    95,
-  ];
-  late final FixedExtentScrollController _controller;
-  late int _selected;
-
-  @override
-  void initState() {
-    super.initState();
-    var index = _values.indexOf(widget.current);
-    if (index < 0) index = _values.indexOf(defaultBaselinePercentile);
-    _selected = _values[index];
-    _controller = FixedExtentScrollController(initialItem: index);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AlertDialog(
-      title: const Text('Reward Threshold'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'The feedback chime fires when your ${widget.rewardTypeLabel} '
-            'ratio exceeds this percentile of the calibration baseline. A '
-            'lower percentile makes rewards easier; higher makes them harder.',
-            style: theme.textTheme.bodySmall,
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: 140,
-            height: 200,
-            child: ListWheelScrollView(
-              controller: _controller,
-              itemExtent: 40,
-              useMagnifier: true,
-              perspective: 0.005,
-              diameterRatio: 1.5,
-              onSelectedItemChanged: (i) => _selected = _values[i],
-              children: _values.map((v) {
-                final isSel = v == _selected;
-                return Center(
-                  child: Text(
-                    '$v',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                      color: isSel ? null : theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${_values.first}–${_values.last}',
-            style: theme.textTheme.bodySmall,
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_selected),
-          child: const Text('Select'),
-        ),
-      ],
-    );
-  }
-}
-
-class _WarningThresholdSelector extends ConsumerWidget {
-  const _WarningThresholdSelector();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final notifier = ref.read(feedbackStateProvider.notifier);
-    final threshold = notifier.warningThresholdPercentile;
-    return Card(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: ListTile(
-        leading: const Icon(Icons.bedtime),
-        title: const Text('Warning Threshold'),
-        subtitle: Text('${threshold}th percentile of eyes-closed rest'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.settings_outlined),
-              tooltip: 'Guardrail engine & warning sound',
-              onPressed: () => showDialog<void>(
-                context: context,
-                builder: (ctx) => _GuardrailGearDialog(),
-              ),
-            ),
-            const Icon(Icons.chevron_right),
-          ],
-        ),
-        onTap: () async {
-          final result = await showDialog<int>(
-            context: context,
-            builder: (ctx) => _WarningThresholdPicker(current: threshold),
-          );
-          if (result != null) {
-            notifier.setWarningThresholdPercentile(result);
-          }
-        },
-      ),
-    );
-  }
-}
-
-class _WarningThresholdPicker extends StatefulWidget {
-  final int current;
-  const _WarningThresholdPicker({required this.current});
-
-  @override
-  State<_WarningThresholdPicker> createState() =>
-      _WarningThresholdPickerState();
-}
-
-class _WarningThresholdPickerState extends State<_WarningThresholdPicker> {
-  static const List<int> _values = [
-    5,
-    10,
-    15,
-    20,
-    25,
-    30,
-    35,
-    40,
-    45,
-    50,
-    55,
-    60,
-    65,
-    70,
-    75,
-    80,
-    85,
-    90,
-    95,
-  ];
-  late final FixedExtentScrollController _controller;
-  late int _selected;
-
-  @override
-  void initState() {
-    super.initState();
-    var index = _values.indexOf(widget.current);
-    if (index < 0) {
-      index = _values.indexOf(defaultWarningThresholdPercentile);
-    }
-    _selected = _values[index];
-    _controller = FixedExtentScrollController(initialItem: index);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AlertDialog(
-      title: const Text('Warning Threshold'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'The soft warning chime fires when your sleep-direction index '
-            'exceeds this percentile of the sleep-direction readings gathered '
-            'during eyes-closed rest calibration. A higher percentile tolerates '
-            'deeper drift before warning.',
-            style: theme.textTheme.bodySmall,
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: 140,
-            height: 200,
-            child: ListWheelScrollView(
-              controller: _controller,
-              itemExtent: 40,
-              useMagnifier: true,
-              perspective: 0.005,
-              diameterRatio: 1.5,
-              onSelectedItemChanged: (i) => _selected = _values[i],
-              children: _values.map((v) {
-                final isSel = v == _selected;
-                return Center(
-                  child: Text(
-                    '$v',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                      color: isSel ? null : theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${_values.first}–${_values.last}',
-            style: theme.textTheme.bodySmall,
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_selected),
-          child: const Text('Select'),
-        ),
-      ],
-    );
-  }
-}
-
-void _showGuide(BuildContext context, ProtocolInfo protocol) {
-  showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text('${protocol.title} — Details'),
-      content: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(protocol.subtitle),
-            const SizedBox(height: 12),
-            Text(protocol.guideText),
-            const SizedBox(height: 12),
-            Text('Algorithm: ${protocol.algorithmDescription}'),
-            const SizedBox(height: 4),
-            Text('Expected delay: ${protocol.expectedDelay}'),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Got it'),
-        ),
-      ],
-    ),
-  );
-}
-
-class _FeedbackSelector extends ConsumerWidget {
-  const _FeedbackSelector();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final fb = ref.watch(feedbackStateProvider);
-    final suppresses = AudioService.suppressesBackground(fb.feedbackMode);
-    return Card(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: ListTile(
-        leading: const Icon(Icons.tune),
-        title: const Text('Feedback Sound'),
-        subtitle: Text(
-          suppresses
-              ? '${fb.feedbackMode.label} · replaces the background sound'
-              : fb.feedbackMode.label,
-        ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () async {
-          final result = await showDialog<FeedbackMode>(
-            context: context,
-            builder: (ctx) => _FeedbackModePicker(current: fb.feedbackMode),
-          );
-          if (result == null || result == fb.feedbackMode) {
-            return;
-          }
-          if (!context.mounted) {
-            return;
-          }
-          if (result == FeedbackMode.music) {
-            final settings = ref.read(settingsProvider);
-            if (settings.musicFolder == null) {
-              await showDialog<void>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Music folder not set'),
-                  content: const Text(
-                    'Music feedback plays your own tracks through a '
-                    'reward-driven filter. Pick a music folder in '
-                    'Settings → Music feedback first.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      child: const Text('OK'),
-                    ),
-                  ],
-                ),
-              );
-              return;
-            }
-          }
-          ref.read(feedbackStateProvider.notifier).selectFeedbackMode(result);
-        },
-      ),
-    );
-  }
-}
-
 class _FeedbackModePicker extends StatelessWidget {
   final FeedbackMode current;
   const _FeedbackModePicker({required this.current});
@@ -1638,21 +1400,35 @@ class _FeedbackModePicker extends StatelessWidget {
   }
 }
 
-/// Guardrail gear dialog: the scorer engine (AI models or band math) and the
-/// warning sound. Engine changes apply from the next session; the warning
-/// sound applies immediately.
-class _GuardrailGearDialog extends ConsumerWidget {
+/// Guardrail gear dialog: scorer engine (AI models or band math), warning
+/// sound, and warning threshold. Engine changes apply from the next session;
+/// the sound and threshold apply immediately.
+class _GuardrailGearDialog extends ConsumerStatefulWidget {
   const _GuardrailGearDialog();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_GuardrailGearDialog> createState() =>
+      _GuardrailGearDialogState();
+}
+
+class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
+  late GuardrailEngine _engine;
+  late GuardrailSound _sound;
+  late int _threshold;
+
+  @override
+  void initState() {
+    super.initState();
+    final settings = ref.read(settingsProvider);
+    _engine = guardrailEngineFromSettings(settings);
+    _sound = GuardrailSound.fromName(settings.warningSoundName);
+    _threshold = settings.warningThresholdPercentile;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final settings = ref.read(settingsProvider);
     final audio = ref.read(audioServiceProvider);
-    // Watch the prefs so the radios follow the selection live.
-    ref.watch(settingsProvider.select((s) => s.guardrailEngineName));
-    ref.watch(settingsProvider.select((s) => s.warningSoundName));
-    final engine = guardrailEngineFromSettings(settings);
-    final sound = GuardrailSound.fromName(settings.warningSoundName);
     final theme = Theme.of(context);
     return AlertDialog(
       title: const Text('Guardrail'),
@@ -1664,8 +1440,14 @@ class _GuardrailGearDialog extends ConsumerWidget {
             Text('Scorer engine', style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
             RadioGroup<GuardrailEngine>(
-              groupValue: engine,
-              onChanged: (v) => settings.setGuardrailEngineName(v!.name),
+              groupValue: _engine,
+              onChanged: (v) {
+                if (v == null) {
+                  return;
+                }
+                setState(() => _engine = v);
+                settings.setGuardrailEngineName(v.name);
+              },
               child: Column(
                 children: [
                   for (final e in GuardrailEngine.values)
@@ -1684,11 +1466,12 @@ class _GuardrailGearDialog extends ConsumerWidget {
             Text('Warning sound', style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
             RadioGroup<GuardrailSound>(
-              groupValue: sound,
+              groupValue: _sound,
               onChanged: (s) {
                 if (s == null) {
                   return;
                 }
+                setState(() => _sound = s);
                 settings.setWarningSoundName(s.name);
                 audio.setWarningSound(s);
               },
@@ -1708,6 +1491,22 @@ class _GuardrailGearDialog extends ConsumerWidget {
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+            Text('Warning threshold', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'Percentile of the eyes-closed rest baseline that triggers a '
+              'warning (75% default). Low = warnings come early and often.',
+              style: theme.textTheme.bodySmall,
+            ),
+            _PercentileSlider(
+              value: _threshold,
+              defaultValue: defaultWarningThresholdPercentile,
+              onChanged: (v) {
+                setState(() => _threshold = v);
+                settings.setWarningThresholdPercentile(v);
+              },
+            ),
           ],
         ),
       ),
@@ -1720,3 +1519,34 @@ class _GuardrailGearDialog extends ConsumerWidget {
     );
   }
 }
+
+void _showGuide(BuildContext context, ProtocolInfo protocol) {
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('${protocol.title} — Details'),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(protocol.subtitle),
+            const SizedBox(height: 12),
+            Text(protocol.guideText),
+            const SizedBox(height: 12),
+            Text('Algorithm: ${protocol.algorithmDescription}'),
+            const SizedBox(height: 4),
+            Text('Expected delay: ${protocol.expectedDelay}'),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Got it'),
+        ),
+      ],
+    ),
+  );
+}
+
