@@ -374,10 +374,7 @@ class FeedbackAudioController {
       final oldest = _chimeHandles.removeAt(0);
       _safeHandle(oldest, SoLoud.instance.stop);
     }
-    final handle = SoLoud.instance.play(
-      source,
-      volume: _feedbackVolumeTotal,
-    );
+    final handle = SoLoud.instance.play(source, volume: _feedbackVolumeTotal);
     _chimeHandles.add(handle);
     // Prune finished voices so the list stays short.
     final stale = _chimeHandles.where((h) => !source.handles.contains(h));

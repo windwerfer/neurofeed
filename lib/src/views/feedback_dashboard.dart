@@ -210,6 +210,11 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         durationMinutes: meta?.durationMinutes ?? fb.durationMinutes,
         elapsedSeconds: meta?.elapsedSeconds ?? fb.elapsedSeconds,
         soundName: meta?.sound ?? fb.soundName,
+        feedbackSoundName: widget.readOnly
+            ? (meta?.feedbackSound == null
+                  ? null
+                  : feedbackModeFromName(meta!.feedbackSound!).label)
+            : fb.feedbackMode.label,
         prepared: _prepared!,
         drowsiness: widget.readOnly
             ? meta?.drowsiness
@@ -291,6 +296,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         durationMinutes: fb.durationMinutes,
         elapsedSeconds: fb.elapsedSeconds,
         sound: fb.soundName,
+        feedbackSound: fb.feedbackMode.name,
         savedAt: DateTime.now(),
         notes: _notes.text,
         stats: stats == null
@@ -403,6 +409,7 @@ class _DashboardBody extends StatefulWidget {
     required this.durationMinutes,
     required this.elapsedSeconds,
     required this.soundName,
+    this.feedbackSoundName,
     required this.prepared,
     this.drowsiness,
     this.music,
@@ -422,6 +429,7 @@ class _DashboardBody extends StatefulWidget {
   final int durationMinutes;
   final int elapsedSeconds;
   final String soundName;
+  final String? feedbackSoundName;
   final _Prepared prepared;
 
   /// Sleep-guardrail trace of this session (null when the guardrail did not
@@ -574,8 +582,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
 
     List<Widget> musicWidgets() {
       final music = widget.music;
-      if (music == null ||
-          (music.series.isEmpty && music.buckets.isEmpty)) {
+      if (music == null || (music.series.isEmpty && music.buckets.isEmpty)) {
         return const [];
       }
       final offset = widget.trainingStartOffsetSecs ?? 0;
@@ -601,10 +608,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
                   children: [
                     const Icon(Icons.music_note_outlined),
                     const SizedBox(width: 8),
-                    Text(
-                      'Music feedback',
-                      style: theme.textTheme.titleMedium,
-                    ),
+                    Text('Music feedback', style: theme.textTheme.titleMedium),
                     const Spacer(),
                     if (music.trackCount > 0)
                       Text(
@@ -699,6 +703,11 @@ class _DashboardBodyState extends State<_DashboardBody> {
                       '${(widget.elapsedSeconds % 60).toString().padLeft(2, '0')}',
                 ),
                 _SummaryRow(label: 'Background sound', value: widget.soundName),
+                if (widget.feedbackSoundName != null)
+                  _SummaryRow(
+                    label: 'Feedback sound',
+                    value: widget.feedbackSoundName!,
+                  ),
                 if (prepared.x.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Wrap(

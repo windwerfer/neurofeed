@@ -88,6 +88,10 @@ class FeedbackState {
   final ProtocolType protocol;
   final int durationMinutes;
   final String soundName;
+
+  /// Feedback layer: what sounds when the reward fires (bowl chimes, rain,
+  /// music, none). Rain/Music suppress the background layer.
+  final FeedbackMode feedbackMode;
   final int elapsedSeconds;
   final bool signalGood;
   final String? interruptMessage;
@@ -108,6 +112,7 @@ class FeedbackState {
     this.protocol = ProtocolType.alphaTheta,
     this.durationMinutes = 15,
     this.soundName = 'Ambient Drone',
+    this.feedbackMode = FeedbackMode.bowlChimes,
     this.elapsedSeconds = 0,
     this.signalGood = false,
     this.interruptMessage,
@@ -131,6 +136,7 @@ class FeedbackState {
     ProtocolType? protocol,
     int? durationMinutes,
     String? soundName,
+    FeedbackMode? feedbackMode,
     int? elapsedSeconds,
     bool? signalGood,
     Object? interruptMessage = _sentinel,
@@ -150,6 +156,7 @@ class FeedbackState {
     protocol: protocol ?? this.protocol,
     durationMinutes: durationMinutes ?? this.durationMinutes,
     soundName: soundName ?? this.soundName,
+    feedbackMode: feedbackMode ?? this.feedbackMode,
     elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
     signalGood: signalGood ?? this.signalGood,
     interruptMessage: identical(interruptMessage, _sentinel)
@@ -192,6 +199,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _recorder.setRecordStreams(settings.recordStreams);
     state = state.copyWith(
       soundName: settings.soundName ?? state.soundName,
+      feedbackMode: settings.feedbackMode,
       durationMinutes: settings.durationMinutes ?? state.durationMinutes,
     );
   }
@@ -284,12 +292,27 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _ref.read(settingsProvider).setSoundName(name);
     if (state.phase == FeedbackPhase.playing ||
         state.phase == FeedbackPhase.paused) {
-      unawaited(_switchSoundWhileKeepingPhase(name));
+      unawaited(_switchChannelsWhileKeepingPhase());
     }
   }
 
-  Future<void> _switchSoundWhileKeepingPhase(String name) async {
-    await _audio.switchSound(name);
+  /// Selects the feedback layer (bowl chimes / rain / music / none).
+  /// Rain and Music suppress the background layer; switching mid-session
+  /// restarts the channels without leaving the current phase.
+  void selectFeedbackMode(FeedbackMode mode) {
+    state = state.copyWith(feedbackMode: mode);
+    _ref.read(settingsProvider).setFeedbackMode(mode);
+    if (state.phase == FeedbackPhase.playing ||
+        state.phase == FeedbackPhase.paused) {
+      unawaited(_switchChannelsWhileKeepingPhase());
+    }
+  }
+
+  Future<void> _switchChannelsWhileKeepingPhase() async {
+    await _audio.switchChannels(
+      sound: state.soundName,
+      feedback: state.feedbackMode,
+    );
     if (state.phase == FeedbackPhase.paused) {
       await _audio.pause();
     }
@@ -815,7 +838,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _adaptTick = 0;
     _trainingStartAt ??= DateTime.now();
     _startTicker();
-    await _audio.playFeedback(sound: state.soundName);
+    await _audio.playChannels(
+      sound: state.soundName,
+      feedback: state.feedbackMode,
+    );
   }
 
   Future<void> pause() async {
@@ -1094,10 +1120,36 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     RewardMetric.thetaOverAlpha => target.tar,
   };
 
-  /// True when the active sound is the music-feedback channel and it is
-  /// actually streaming (folder configured + playable).
-  bool get _musicActive =>
-      AudioService.isMusicSound(state.soundName) && _audio.musicPlaying;
+  /// True when a modulated feedback channel (music or rain) is currently
+  /// streaming — the guardrail ducks these during warnings.
+  bool get _musicActive => switch (state.feedbackMode) {
+    FeedbackMode.music => _audio.musicPlaying,
+    FeedbackMode.rain => _audio.rainPlaying,
+    _ => false,
+  };
+
+  /// Routes the live reward to the selected feedback layer: bowl chimes fire
+  /// on-target, rain maps percentile→intensity stage, music maps
+  /// percentile→cutoff. `none` stays silent.
+  void _applyReward(double value) {
+    switch (state.feedbackMode) {
+      case FeedbackMode.music:
+        if (_audio.musicPlaying) {
+          _applyMusicCutoff(value);
+        }
+        return;
+      case FeedbackMode.rain:
+        if (_audio.rainPlaying) {
+          _applyRainPercentile(value);
+        }
+        return;
+      case FeedbackMode.none:
+        return;
+      case FeedbackMode.bowlChimes:
+        _audio.onStateUpdate(_engine.isInTarget(value));
+        return;
+    }
+  }
 
   /// Maps the live metric value to a music-filter cutoff: its percentile rank
   /// within the calibration baseline (0–100) is linearly interpolated between
@@ -1114,6 +1166,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _audio.setMusicCutoffHz(cutoff);
   }
 
+  /// Maps the live metric value to a rain intensity stage: the percentile
+  /// rank within the calibration baseline (0–100, 100 = best). Close to the
+  /// target → quiet rain (calm), far off → heavy.
+  void _applyRainPercentile(double value) {
+    final pct = _engine.percentileOf(value) ?? 50.0;
+    _audio.setRainPercentile(pct);
+  }
+
   /// Samples the music feedback channel once a second while playing: appends
   /// the current cutoff to the per-second trace and records a track marker
   /// whenever playback advances to a new track.
@@ -1122,7 +1182,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (sessionStart == null) {
       return;
     }
-    final offset = DateTime.now().difference(sessionStart).inMilliseconds / 1000;
+    final offset =
+        DateTime.now().difference(sessionStart).inMilliseconds / 1000;
     final track = _audio.musicTrackName;
     if (track != null &&
         (_musicTracks.isEmpty || _musicTracks.last.name != track)) {
@@ -1189,11 +1250,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _engine.recordEpoch(value);
     _engine.recordSessionSample(value, clean: _sampleIsClean);
     _ref.read(liveStatsProvider).push(value, _engine.percentileOf);
-    if (_musicActive) {
-      _applyMusicCutoff(value);
-    } else {
-      _audio.onStateUpdate(_engine.isInTarget(value));
-    }
+    _applyReward(value);
   }
 
   void _onMovement(MovementDto movement) {

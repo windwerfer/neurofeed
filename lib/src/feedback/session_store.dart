@@ -305,7 +305,12 @@ class SessionMusic {
     }
     if (last <= anchor) {
       return (
-        [MusicCutoffSample(offsetSecs: anchor, cutoffHz: series.first.cutoffHz)],
+        [
+          MusicCutoffSample(
+            offsetSecs: anchor,
+            cutoffHz: series.first.cutoffHz,
+          ),
+        ],
         0,
       );
     }
@@ -346,8 +351,7 @@ class SessionMusic {
     'maxHz': maxCutoffHz,
     'invert': invert,
     'shuffle': shuffle,
-    if (tracks.isNotEmpty)
-      'tracks': [for (final t in tracks) t.toJson()],
+    if (tracks.isNotEmpty) 'tracks': [for (final t in tracks) t.toJson()],
     if (buckets.isNotEmpty) 'width': bucketWidthSecs,
     if (buckets.isNotEmpty)
       'buckets': [for (final b in buckets) b.toJson()]
@@ -646,6 +650,7 @@ class SessionMetadata {
     this.calibration,
     this.drowsiness,
     this.music,
+    this.feedbackSound,
   });
 
   final ProtocolType protocol;
@@ -695,6 +700,10 @@ class SessionMetadata {
   /// music-feedback mode. Null otherwise.
   final SessionMusic? music;
 
+  /// Feedback layer the session ran with (`bowlChimes` / `rain` / `music` /
+  /// `none`), when the file recorded it. Null on legacy files.
+  final String? feedbackSound;
+
   Map<String, Object?> toJson() => {
     'protocol': protocol.name,
     'durationMinutes': durationMinutes,
@@ -713,6 +722,7 @@ class SessionMetadata {
     if (calibration != null) 'calibration': calibration!.toJson(),
     if (drowsiness != null) 'drowsiness': drowsiness!.toJson(),
     if (music != null) 'music': music!.toJson(),
+    if (feedbackSound != null) 'feedbackSound': feedbackSound,
   };
 
   static SessionMetadata? fromJson(Object? json) {
@@ -758,6 +768,7 @@ class SessionMetadata {
           const [],
       calibration: SessionCalibration.fromJson(json['calibration']),
       drowsiness: SessionDrowsiness.fromJson(json['drowsiness']),
+      feedbackSound: json['feedbackSound'] as String?,
       music: SessionMusic.fromJson(json['music']),
     );
   }

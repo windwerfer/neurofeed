@@ -1,22 +1,38 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/feedback_audio_controller.dart';
 import 'package:muse_ml/src/audio/music_feedback_controller.dart';
+import 'package:muse_ml/src/audio/rain_feedback_controller.dart';
 import 'package:muse_ml/src/settings.dart';
 
 /// Sentinel sound name that activates music-feedback mode (user folder played
 /// through the low-pass filter) instead of the ambient loop.
 const String musicSoundName = 'Music from folder';
 
+/// Orchestrates the two audio layers of a feedback session:
+///
+///  * **Background** — a flat, unmodulated loop (ambient drone, drone loop,
+///    rain, static folder music, or nothing). Selected via [Settings.soundName]
+///    and routed through `FeedbackAudioController` (assets) or
+///    `MusicFeedbackController` in static mode (folder).
+///  * **Feedback** — the reward channel: bowl chimes on-target, a rain loop
+///    whose intensity follows the reward ([RainFeedbackController]), the
+///    folder through a reward-driven low-pass filter
+///    ([MusicFeedbackController] modulated), or none.
+///
+/// Selecting Rain or Music as the feedback sound suppresses the background
+/// (the modulated loop becomes the whole soundscape).
 class AudioService {
   final FeedbackAudioController _controller;
   final MusicFeedbackController _music;
+  final RainFeedbackController _rain;
 
   AudioService(Settings settings)
     : _controller = FeedbackAudioController(settings),
-      _music = MusicFeedbackController(settings) {
-    _music
-      ..refreshSettings()
-      ..setVolume(_controller.masterVolume * _controller.feedbackVolume);
+      _music = MusicFeedbackController(settings),
+      _rain = RainFeedbackController() {
+    _music.refreshSettings();
+    _refreshMusicVolume();
+    _refreshRainVolume();
   }
 
   static const Map<String, String?> soundAssets = {
@@ -29,6 +45,10 @@ class AudioService {
   List<String> get availableSounds => [...soundAssets.keys, musicSoundName];
 
   static bool isMusicSound(String sound) => sound == musicSoundName;
+
+  /// True when [feedback] replaces the background layer with a modulated loop.
+  static bool suppressesBackground(FeedbackMode feedback) =>
+      feedback == FeedbackMode.rain || feedback == FeedbackMode.music;
 
   double get masterVolume => _controller.masterVolume;
 
@@ -44,50 +64,94 @@ class AudioService {
 
   void setMasterVolume(double value) {
     _controller.setMasterVolume(value);
-    _music.setVolume(masterVolume * feedbackVolume);
+    _refreshMusicVolume();
+    _refreshRainVolume();
   }
 
-  void setBackgroundVolume(double value) =>
-      _controller.setBackgroundVolume(value);
+  void setBackgroundVolume(double value) {
+    _controller.setBackgroundVolume(value);
+    _refreshMusicVolume();
+  }
 
   void setFeedbackVolume(double value) {
     _controller.setFeedbackVolume(value);
-    _music.setVolume(masterVolume * feedbackVolume);
+    _refreshMusicVolume();
+    _refreshRainVolume();
   }
 
   void setIntroVolume(double value) => _controller.setIntroVolume(value);
 
   void setBellVolume(double value) => _controller.setBellVolume(value);
 
-  void setGuardrailVolume(double value) => _controller.setGuardrailVolume(value);
+  void setGuardrailVolume(double value) =>
+      _controller.setGuardrailVolume(value);
 
   void resetVolumes() {
     _controller.resetVolumes();
-    _music.setVolume(masterVolume * feedbackVolume);
+    _refreshMusicVolume();
+    _refreshRainVolume();
   }
 
-  Future<void> playCalibration([String? assetPath]) =>
-      _controller.playCalibration(assetPath);
-
-  Future<void> playFeedback({String sound = 'Ambient Drone'}) {
-    if (isMusicSound(sound)) {
-      return _music.start();
-    }
-    final path = soundAssets[sound];
-    return _controller.startBackground(path);
+  /// Music in static (background) mode rides the background channel; music
+  /// and rain as the reward channel ride the feedback channel.
+  void _refreshMusicVolume() {
+    final v = _music.staticMode
+        ? _controller.masterVolume * _controller.backgroundVolume
+        : _controller.masterVolume * _controller.feedbackVolume;
+    _music.setVolume(v);
   }
 
-  Future<void> switchSound(String sound) async {
-    if (isMusicSound(sound)) {
-      await _controller.startBackground(null);
+  void _refreshRainVolume() {
+    _rain.setVolume(_controller.masterVolume * _controller.feedbackVolume);
+  }
+
+  /// Starts a session's audio: background loop (unless suppressed) plus the
+  /// reward channel for [feedback].
+  Future<void> playChannels({
+    required String sound,
+    required FeedbackMode feedback,
+  }) async {
+    await _stopChannels();
+    final suppress = suppressesBackground(feedback);
+    if (suppress) {
+      _music.setStaticMode(false);
+    } else if (isMusicSound(sound)) {
+      _music.setStaticMode(true);
       await _music.load();
       await _music.start();
-      return;
+    } else {
+      _music.setStaticMode(false);
+      await _controller.startBackground(soundAssets[sound]);
     }
-    await _music.stop();
-    final path = soundAssets[sound];
-    return _controller.switchBackground(path);
+    if (feedback == FeedbackMode.music) {
+      _music.setStaticMode(false);
+      await _music.load();
+      await _music.start();
+    } else if (feedback == FeedbackMode.rain) {
+      await _rain.start();
+    }
+    _refreshMusicVolume();
+    _refreshRainVolume();
   }
+
+  /// Mid-session sound/feedback change: tears down and restarts both layers
+  /// with the new selection (used by the pre-session keep-phase fast path).
+  Future<void> switchChannels({
+    required String sound,
+    required FeedbackMode feedback,
+  }) async {
+    await _stopChannels();
+    await playChannels(sound: sound, feedback: feedback);
+  }
+
+  /// Legacy alias: plays [sound] as a static background loop with the classic
+  /// bowl-chime feedback (settings test button).
+  Future<void> playFeedback({String sound = 'Ambient Drone'}) =>
+      playChannels(sound: sound, feedback: FeedbackMode.bowlChimes);
+
+  /// Legacy alias: mid-session sound swap with bowl-chime feedback.
+  Future<void> switchSound(String sound) =>
+      switchChannels(sound: sound, feedback: FeedbackMode.bowlChimes);
 
   /// Music feedback channel: reloads the folder from settings and begins
   /// playback. Used when a folder is first chosen mid-session.
@@ -117,11 +181,33 @@ class AudioService {
 
   double get musicCutoffHz => _music.currentCutoffHz;
 
-  void setMusicMuffle(bool on) => _music.setMuffle(on);
+  /// True while music (or rain) plays unmodulated as the background layer —
+  /// shown as "(background)" in the session UI.
+  bool get musicIsStatic => _music.staticMode;
+
+  /// Whether the modulated rain channel is actively playing.
+  bool get rainPlaying => _rain.isPlaying;
+
+  /// Feeds the live reward percentile (0–100) to the rain intensity stage.
+  void setRainPercentile(double pct) => _rain.setTargetPercentile(pct);
+
+  /// Ducks whichever modulated channel is active during a guardrail warning.
+  void setMusicMuffle(bool on) {
+    _music.setMuffle(on);
+    _rain.setMuffle(on);
+  }
+
+  /// Guardrail warning state.
+  bool get mufflesForWarning => _music.muffleActive || _rain.muffleActive;
+
+  set mufflesForWarning(bool on) => setMusicMuffle(on);
 
   void onStateUpdate(bool inTarget) => _controller.onStateUpdate(inTarget);
 
   void onMovement() => _controller.onMovement();
+
+  Future<void> playCalibration([String? assetPath]) =>
+      _controller.playCalibration(assetPath);
 
   Future<void> playEndChime() => _controller.playEndChime();
 
@@ -131,21 +217,31 @@ class AudioService {
 
   Future<void> pause() async {
     await _controller.pauseBackground();
-    await _music.pause();
+    _music.pause();
+    _rain.pause();
   }
 
   Future<void> resume() async {
     await _controller.resumeBackground();
-    await _music.resume();
+    _music.resume();
+    _rain.resume();
   }
 
   Future<void> stop() async {
     await _music.stop();
+    await _rain.stop();
+    await _controller.stop();
+  }
+
+  Future<void> _stopChannels() async {
+    await _music.stop();
+    await _rain.stop();
     await _controller.stop();
   }
 
   void dispose() {
     _music.dispose();
+    _rain.dispose();
     _controller.dispose();
   }
 }

@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
+import 'package:muse_ml/src/audio/modulated_voice.dart';
 import 'package:muse_ml/src/audio/soloud_engine.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/settings.dart';
@@ -32,20 +32,26 @@ class MusicTrack {
 }
 
 /// Continuous music feedback channel: streams a user-picked folder through a
-/// low-pass filter whose cutoff follows the live reward percentile.
+/// low-pass filter whose cutoff follows the live reward percentile. In static
+/// mode (background music) the same playlist plays unmodulated.
 ///
-/// Drives a single SoLoud voice plus a per-voice biquad resonant filter. The
-/// notifier feeds [setTargetCutoff] at ~10 Hz from the ratio engine's
-/// percentile rank; an exponential-moving-average slew in [MusicFeedbackController]
-/// smooths those jumps into a clean cutoff glide (no zipper noise). Volumes and
-/// filter values are clamped to SoLoud's accepted ranges.
+/// Drives a single SoLoud voice (via [ModulatedVoice]) plus a per-voice biquad
+/// resonant filter and a per-voice compressor (tames loud tracks, lifts quiet
+/// ones — cheap normalization). The notifier feeds [setTargetCutoff] at ~10 Hz
+/// from the ratio engine's percentile rank; an exponential-moving-average slew
+/// in [ModulatedVoice] smooths those jumps into a clean cutoff glide (no
+/// zipper noise). Volumes and filter values are clamped to SoLoud's ranges.
 class MusicFeedbackController {
   MusicFeedbackController(this._settings);
 
   final Settings _settings;
 
-  /// How often the cutoff slew is applied to the live filter (100 ms).
-  static const Duration _slewTick = Duration(milliseconds: 100);
+  /// The single voice this channel owns. Filter enabled in modulated mode,
+  /// disabled in static (background) mode.
+  final ModulatedVoice _voice = ModulatedVoice(
+    initialCutoff: 0,
+    muffleCutoff: 10,
+  );
 
   bool _isSaf = false;
   Directory? _cacheDir;
@@ -53,31 +59,22 @@ class MusicFeedbackController {
   final List<int> _order = [];
   int _position = -1;
   bool _shuffle = false;
+  bool _staticMode = false;
 
-  AudioSource? _src;
-  SoundHandle? _handle;
   StreamSubscription? _endSub;
-  Timer? _slewTimer;
-  bool _playing = false;
-  bool _paused = false;
-  double _volume = 1.0;
+
+  /// Emits the new track name whenever playback advances to a new track.
+  final StreamController<String> _trackChanges = StreamController.broadcast();
 
   late double _minCutoff;
   late double _maxCutoff;
-  late double _slewSeconds;
-  bool _muffle = false;
-  double _targetCutoff = 0;
-  double _currentCutoff = 0;
-
-  final StreamController<String> _trackChanges = StreamController.broadcast();
-
-  /// Emits the new track name whenever playback advances to a new track.
-  Stream<String> get trackChanges => _trackChanges.stream;
 
   /// True when a folder is configured and contains audio files.
   bool get hasTracks => _tracks.isNotEmpty;
 
-  bool get isPlaying => _playing && !_paused;
+  bool get isPlaying => _voice.playing && hasTracks;
+
+  bool get muffleActive => _voice.muffleActive;
 
   int get trackCount => _tracks.length;
 
@@ -85,13 +82,15 @@ class MusicFeedbackController {
 
   bool get shuffle => _shuffle;
 
-  String? get currentTrackName =>
-      _position >= 0 && _position < _order.length
+  /// True in static mode: the folder plays unmodulated as background music.
+  bool get staticMode => _staticMode;
+
+  String? get currentTrackName => _position >= 0 && _position < _order.length
       ? _tracks[_order[_position]].name
       : null;
 
   /// Currently applied cutoff in Hz (slewed), for recording the trace.
-  double get currentCutoffHz => _currentCutoff;
+  double get currentCutoffHz => _voice.currentCutoff;
 
   /// Usable cutoff bounds for the session's settings.
   double get minCutoff => _minCutoff;
@@ -105,8 +104,15 @@ class MusicFeedbackController {
     if (_maxCutoff <= _minCutoff) {
       _maxCutoff = _minCutoff + 50;
     }
-    _slewSeconds = _settings.musicSlewSeconds.clamp(0.1, 30.0);
+    _voice.slewSeconds = _settings.musicSlewSeconds.clamp(0.1, 30.0);
+    _voice.muffleCutoff = _minCutoff;
     _shuffle = _settings.musicShuffle;
+  }
+
+  /// Toggles static mode (`true` = play unmodulated as background music;
+  /// `false` = reward-driven filter feedback).
+  void setStaticMode(bool on) {
+    _staticMode = on;
   }
 
   /// Loads the track list for the configured folder. Returns false when the
@@ -142,14 +148,17 @@ class MusicFeedbackController {
         return false;
       }
       final entries = dir.listSync().whereType<File>();
-      final files = entries
-          .where((f) => musicSupportedExtensions.contains(_extensionOf(f.path)))
-          .toList()
-        ..sort((a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()));
+      final files =
+          entries
+              .where(
+                (f) => musicSupportedExtensions.contains(_extensionOf(f.path)),
+              )
+              .toList()
+            ..sort(
+              (a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()),
+            );
       _tracks.addAll(
-        files.map(
-          (f) => MusicTrack(name: _nameOf(f.path), path: f.path),
-        ),
+        files.map((f) => MusicTrack(name: _nameOf(f.path), path: f.path)),
       );
     }
     if (_tracks.isEmpty) {
@@ -195,7 +204,9 @@ class MusicFeedbackController {
       if (!await cache.exists()) {
         await cache.create(recursive: true);
       }
-      final file = File('${cache.path}/music_playlist_$index.${_extensionOf(name)}');
+      final file = File(
+        '${cache.path}/music_playlist_$index.${_extensionOf(name)}',
+      );
       await file.writeAsBytes(bytes, flush: true);
       return file.path;
     } catch (e) {
@@ -206,7 +217,7 @@ class MusicFeedbackController {
 
   /// Starts (or restarts) playback from the first track.
   Future<void> start() async {
-    if (_playing) {
+    if (_voice.playing) {
       return;
     }
     if (!hasTracks) {
@@ -216,66 +227,28 @@ class MusicFeedbackController {
       return;
     }
     await SoLoudEngine.ensureInit();
-    _playing = true;
-    _paused = false;
     _position = 0;
-    _targetCutoff = _minCutoff;
-    _currentCutoff = _minCutoff;
     await _playCurrent();
-    _startSlew();
   }
 
   Future<void> pause() async {
-    if (!_playing || _paused) {
-      return;
-    }
-    _paused = true;
-    final handle = _handle;
-    if (handle != null) {
-      try {
-        SoLoud.instance.setPause(handle, true);
-      } catch (_) {}
-    }
+    _voice.pause();
   }
 
   Future<void> resume() async {
-    if (!_playing || !_paused) {
-      return;
-    }
-    final handle = _handle;
-    if (handle != null) {
-      try {
-        SoLoud.instance.setPause(handle, false);
-      } catch (_) {}
-    }
-    _paused = false;
+    _voice.resume();
   }
 
   Future<void> stop() async {
-    _playing = false;
-    _paused = false;
-    _stopSlew();
     await _endSub?.cancel();
     _endSub = null;
-    final handle = _handle;
-    if (handle != null) {
-      try {
-        SoLoud.instance.stop(handle);
-      } catch (_) {}
-      _handle = null;
-    }
-    final src = _src;
-    if (src != null) {
-      try {
-        await SoLoud.instance.disposeSource(src);
-      } catch (_) {}
-      _src = null;
-    }
+    _voice.stop();
+    await _voice.disposeSource();
     _position = -1;
   }
 
   Future<void> next() async {
-    if (!_playing || _tracks.isEmpty) {
+    if (!_voice.playing || _tracks.isEmpty) {
       return;
     }
     _position = (_position + 1) % _tracks.length;
@@ -283,7 +256,7 @@ class MusicFeedbackController {
   }
 
   Future<void> previous() async {
-    if (!_playing || _tracks.isEmpty) {
+    if (!_voice.playing || _tracks.isEmpty) {
       return;
     }
     _position = (_position - 1 + _tracks.length) % _tracks.length;
@@ -306,45 +279,35 @@ class MusicFeedbackController {
   }
 
   /// Target cutoff for the reward; an EMA slew glides the live filter toward
-  /// it. Values are clamped by the underlying biquad (10–16000 Hz) on apply.
+  /// it. No-op in static mode.
   void setTargetCutoff(double hz) {
-    _targetCutoff = hz.isFinite ? hz.clamp(10.0, 16000.0) : _minCutoff;
+    if (_staticMode) {
+      return;
+    }
+    _voice.setTargetCutoff(hz);
   }
 
   /// Forces the filter fully closed while a guardrail warning is active.
   void setMuffle(bool on) {
-    _muffle = on;
+    if (_staticMode) {
+      return;
+    }
+    _voice.setMuffle(on);
   }
 
-  /// Effective volume (master × feedback channel); applied to the live voice.
+  /// Effective volume (master × channel); applied to the live voice.
   void setVolume(double v) {
-    _volume = v.clamp(0.0, 1.0);
-    final handle = _handle;
-    if (handle != null) {
-      try {
-        SoLoud.instance.setVolume(handle, _volume);
-      } catch (_) {}
-    }
+    _voice.setVolume(v);
   }
 
   Future<void> _playCurrent() async {
-    if (!_playing || _position < 0 || _position >= _tracks.length) {
+    if (_position < 0 || _position >= _tracks.length) {
       return;
     }
     await _endSub?.cancel();
     _endSub = null;
-    final handle = _handle;
-    if (handle != null) {
-      try {
-        SoLoud.instance.stop(handle);
-      } catch (_) {}
-    }
-    final old = _src;
-    if (old != null) {
-      try {
-        await SoLoud.instance.disposeSource(old);
-      } catch (_) {}
-    }
+    _voice.stop();
+    await _voice.disposeSource();
     final track = _tracks[_order[_position]];
     try {
       final src = await SoLoud.instance.loadFile(
@@ -352,25 +315,20 @@ class MusicFeedbackController {
         mode: LoadMode.disk,
         autoDispose: false,
       );
-      src.filters.biquadFilter.activate();
-      final newHandle = SoLoud.instance.play(src, volume: _volume);
-      src.filters.biquadFilter.type(soundHandle: newHandle).value = 0;
-      src.filters.biquadFilter.wet(soundHandle: newHandle).value = 1.0;
-      src.filters.biquadFilter.resonance(soundHandle: newHandle).value = 0.15;
-      _src = src;
-      _handle = newHandle;
-      _applyCutoff();
+      final volume = _voice.voiceVolume;
+      _voice.play(src, volume: volume, activateFilter: !_staticMode);
+      _wireCompressor(src, _voice.handle!);
       _endSub = src.soundEvents.listen((event) {
         if (event.event == SoundEventType.handleIsNoMoreValid &&
-            event.handle == newHandle) {
-          if (_playing && !_paused) {
-            unawaited(next());
-          }
+            event.handle == _voice.handle &&
+            _voice.playing) {
+          unawaited(next());
         }
       });
       debugPrint(
         '[music] playing "${track.name}" (${_position + 1}/${_tracks.length})'
-        '${_shuffle ? ' shuffled' : ''}',
+        '${_shuffle ? ' shuffled' : ''}'
+        '${_staticMode ? ' (background)' : ''}',
       );
       _trackChanges.add(track.name);
     } catch (e) {
@@ -378,47 +336,21 @@ class MusicFeedbackController {
     }
   }
 
-  void _startSlew() {
-    _stopSlew();
-    _slewTimer = Timer.periodic(_slewTick, (_) => _applyCutoff());
-  }
-
-  void _stopSlew() {
-    _slewTimer?.cancel();
-    _slewTimer = null;
-  }
-
-  /// Advances the live cutoff one EMA step toward the current target (the
-  /// reward cutoff, or [minCutoff] while muffled) and writes it to the voice's
-  /// filter.
-  void _applyCutoff() {
-    if (!_playing) {
-      return;
-    }
-    final handle = _handle;
-    final src = _src;
-    if (handle == null || src == null) {
-      return;
-    }
-    final target = _muffle ? _minCutoff : _targetCutoff;
-    final dt = _slewTick.inMilliseconds / 1000.0;
-    final alpha = 1 - exp(-dt / _slewSeconds);
-    _currentCutoff += (target - _currentCutoff) * alpha;
-    if ((target - _currentCutoff).abs() < 1.0) {
-      _currentCutoff = target;
-    }
-    final clamped = _currentCutoff.clamp(10.0, 16000.0);
+  /// Soft per-voice compressor: tames loud tracks and lifts quiet ones (a
+  /// cheap stand-in for true loudness normalization).
+  void _wireCompressor(AudioSource src, SoundHandle h) {
     try {
-      src.filters.biquadFilter
-          .frequency(soundHandle: handle)
-          .value = clamped.toDouble();
+      src.filters.compressorFilter.activate();
+      src.filters.compressorFilter.threshold(soundHandle: h).value = -12;
+      src.filters.compressorFilter.ratio(soundHandle: h).value = 2.5;
+      src.filters.compressorFilter.makeupGain(soundHandle: h).value = 4;
+      src.filters.compressorFilter.wet(soundHandle: h).value = 1.0;
     } catch (e) {
-      debugPrint('[music] cutoff apply failed: $e');
+      debugPrint('[music] compressor wiring failed: $e');
     }
   }
 
   void dispose() {
-    _stopSlew();
     _trackChanges.close();
   }
 }

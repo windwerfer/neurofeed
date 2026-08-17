@@ -102,6 +102,8 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
                   const _TargetSettingsButton(),
                 ],
               ),
+              const SizedBox(height: 8),
+              const _FeedbackSelector(),
               const SizedBox(height: 12),
               _PercentileSelector(),
               if (guardrailOn) ...[
@@ -1410,4 +1412,112 @@ void _showGuide(BuildContext context, ProtocolInfo protocol) {
       ],
     ),
   );
+}
+
+class _FeedbackSelector extends ConsumerWidget {
+  const _FeedbackSelector();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fb = ref.watch(feedbackStateProvider);
+    final suppresses = AudioService.suppressesBackground(fb.feedbackMode);
+    return Card(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: ListTile(
+        leading: const Icon(Icons.tune),
+        title: const Text('Feedback Sound'),
+        subtitle: Text(
+          suppresses
+              ? '${fb.feedbackMode.label} · replaces the background sound'
+              : fb.feedbackMode.label,
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () async {
+          final result = await showDialog<FeedbackMode>(
+            context: context,
+            builder: (ctx) => _FeedbackModePicker(current: fb.feedbackMode),
+          );
+          if (result == null || result == fb.feedbackMode) {
+            return;
+          }
+          if (!context.mounted) {
+            return;
+          }
+          if (result == FeedbackMode.music) {
+            final settings = ref.read(settingsProvider);
+            if (settings.musicFolder == null) {
+              await showDialog<void>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Music folder not set'),
+                  content: const Text(
+                    'Music feedback plays your own tracks through a '
+                    'reward-driven filter. Pick a music folder in '
+                    'Settings → Music feedback first.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+              return;
+            }
+          }
+          ref.read(feedbackStateProvider.notifier).selectFeedbackMode(result);
+        },
+      ),
+    );
+  }
+}
+
+class _FeedbackModePicker extends StatelessWidget {
+  final FeedbackMode current;
+  const _FeedbackModePicker({required this.current});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Choose Feedback Sound'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ...FeedbackMode.values.map((m) {
+            final sel = m == current;
+            return ListTile(
+              leading: Icon(
+                sel ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                color: sel ? theme.colorScheme.primary : null,
+              ),
+              title: Text(m.label),
+              subtitle: m == FeedbackMode.bowlChimes
+                  ? const Text('Warm chimes when you reach the target')
+                  : m == FeedbackMode.rain
+                  ? const Text('Rain that quiets as you get closer')
+                  : m == FeedbackMode.music
+                  ? const Text('Your folder through a reward-driven filter')
+                  : const Text('Silent feedback — no reward sound'),
+              selected: sel,
+              onTap: () => Navigator.of(context).pop(m),
+            );
+          }),
+          const SizedBox(height: 8),
+          const Text(
+            'Rain and Music become the whole soundscape and replace the '
+            'background sound for the session.',
+            style: TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
 }

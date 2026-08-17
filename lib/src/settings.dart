@@ -17,6 +17,29 @@ enum AppView {
   settings,
 }
 
+/// What rewards during a feedback session: bowl chimes on-target (classic),
+/// a rain loop whose intensity follows the reward, the music folder through a
+/// low-pass filter, or nothing. Where [soundName] is the *background* layer,
+/// this is the *feedback* layer — selecting Rain or Music also suppresses the
+/// background (the modulated loop is the whole soundscape).
+enum FeedbackMode {
+  bowlChimes,
+  rain,
+  music,
+  none;
+
+  String get label => switch (this) {
+    FeedbackMode.bowlChimes => 'Bowl chimes',
+    FeedbackMode.rain => 'Rain',
+    FeedbackMode.music => 'Music',
+    FeedbackMode.none => 'None',
+  };
+}
+
+FeedbackMode feedbackModeFromName(String? name) =>
+    FeedbackMode.values.where((m) => m.name == name).firstOrNull ??
+    FeedbackMode.bowlChimes;
+
 /// Data streams that can be persisted into a session file. Each maps to one
 /// (or more) `.muse` event types. Future devices (e.g. an 8-electrode Crown)
 /// add streams here without changing the file container format — the body is
@@ -77,6 +100,7 @@ class Settings {
   static const String _dynamicAdaptKey = 'dynamic_adapt';
   static const String _responsivenessKey = 'responsiveness';
   static const String _soundNameKey = 'sound_name';
+  static const String _feedbackModeKey = 'feedback_mode';
   static const String _durationMinutesKey = 'duration_minutes';
   static const String _sessionFolderKey = 'session_folder';
   static const String _recordStreamsKey = 'record_streams';
@@ -150,6 +174,14 @@ class Settings {
 
   Future<void> setSoundName(String value) =>
       _prefs.setString(_soundNameKey, value);
+
+  /// The feedback layer: what sounds when the reward fires. Defaults to bowl
+  /// chimes (classic behavior); Rain/Music suppress the background layer.
+  FeedbackMode get feedbackMode =>
+      feedbackModeFromName(_prefs.getString(_feedbackModeKey));
+
+  Future<void> setFeedbackMode(FeedbackMode mode) =>
+      _prefs.setString(_feedbackModeKey, mode.name);
 
   int? get durationMinutes => _prefs.getInt(_durationMinutesKey);
 
