@@ -8,6 +8,7 @@ import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
+import 'package:muse_ml/src/reve/model_selector.dart';
 import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/reve/reve_import.dart';
 import 'package:muse_ml/src/settings.dart';
@@ -945,7 +946,7 @@ class _DurationInputDialogState extends State<_DurationInputDialog> {
 }
 
 /// A percentile slider with per-percent resolution; the current value shows
-/// in a drag bubble.
+/// both in a drag bubble and beneath the track.
 class _PercentileSlider extends StatelessWidget {
   static const int min = 5;
   static const int max = 95;
@@ -960,13 +961,25 @@ class _PercentileSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final v = value.clamp(min, max);
-    return Slider(
-      value: v.toDouble(),
-      min: min.toDouble(),
-      max: max.toDouble(),
-      label: '$v%',
-      onChanged: (d) => onChanged(d.round().clamp(min, max)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Slider(
+          value: v.toDouble(),
+          min: min.toDouble(),
+          max: max.toDouble(),
+          label: '$v%',
+          onChanged: (d) => onChanged(d.round().clamp(min, max)),
+        ),
+        Text(
+          '$v%',
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1400,7 +1413,18 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
               isExpanded: true,
               items: [
                 for (final e in GuardrailEngine.values)
-                  DropdownMenuItem(value: e, child: Text(e.label)),
+                  DropdownMenuItem(
+                    value: e,
+                    child: Row(
+                      children: [
+                        Expanded(child: Text(e.label)),
+                        ModelInstalledCheck(
+                          kind: e.modelKind,
+                          alwaysShow: e.isBandMath,
+                        ),
+                      ],
+                    ),
+                  ),
               ],
               onChanged: (v) {
                 if (v == null) {
@@ -1410,13 +1434,28 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
                 settings.setGuardrailEngineName(v.name);
               },
             ),
-            const SizedBox(height: 4),
-            Text(
-              _engine.isBandMath
-                  ? 'Classical frontal-delta math, no AI model'
-                  : 'AI embedding scorer (${_engine.modelKind!.ffId})',
-              style: theme.textTheme.bodySmall,
-            ),
+            const SizedBox(height: 8),
+            if (_engine.isBandMath)
+              Text(
+                'Classical frontal-delta math, no AI model — always available.',
+                style: theme.textTheme.bodySmall,
+              )
+            else if (ref.watch(modelInstalledProvider(_engine.modelKind!))
+                .value ??
+                false)
+              Text(
+                'AI embedding scorer (${_engine.modelKind!.ffId}) — installed',
+                style: theme.textTheme.bodySmall,
+              )
+            else ...[
+              Text(
+                'AI embedding scorer (${_engine.modelKind!.ffId}). Not '
+                'installed yet — download it from here:',
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              ModelInstallBubble(kind: _engine.modelKind!),
+            ],
             const SizedBox(height: 12),
             Text('Warning sound', style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
