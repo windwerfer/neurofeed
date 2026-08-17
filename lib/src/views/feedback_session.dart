@@ -965,6 +965,7 @@ class _PercentileSlider extends StatelessWidget {
     final theme = Theme.of(context);
     final v = value.clamp(min, max);
     final divisions = ((max - min) ~/ 5);
+    final frac = (defaultValue - min) / (max - min);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -976,51 +977,45 @@ class _PercentileSlider extends StatelessWidget {
           label: '$v%',
           onChanged: (d) => onChanged(d.round()),
         ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final w = constraints.maxWidth;
-            final frac = (defaultValue - min) / (max - min);
-            const markerWidth = 100.0;
-            final left =
-                (frac * w - markerWidth / 2).clamp(0.0, w - markerWidth);
-            return SizedBox(
-              height: 18,
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: left,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 2,
-                          height: 10,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'default $defaultValue%',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
+        // AlertDialog measures its content with IntrinsicWidth, so no
+        // LayoutBuilder here — Align positions the marker at the default's
+        // fraction of the track width instead.
+        SizedBox(
+          height: 18,
+          child: Stack(
+            children: [
+              Align(
+                alignment: Alignment(2 * frac - 1, 0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 2,
+                      height: 10,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
-                  ),
-                  Positioned(
-                    right: 0,
-                    child: Text(
-                      '$v%',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: theme.colorScheme.primary,
+                    const SizedBox(width: 4),
+                    Text(
+                      'default $defaultValue%',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            );
-          },
-        ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '$v%',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        )
       ],
     );
   }
