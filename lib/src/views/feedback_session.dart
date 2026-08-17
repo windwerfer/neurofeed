@@ -944,79 +944,29 @@ class _DurationInputDialogState extends State<_DurationInputDialog> {
   }
 }
 
-/// A 5%-step percentile slider with the chosen value shown on the right and
-/// a marker line at the default position.
+/// A percentile slider with per-percent resolution; the current value shows
+/// in a drag bubble.
 class _PercentileSlider extends StatelessWidget {
   static const int min = 5;
   static const int max = 95;
 
   const _PercentileSlider({
     required this.value,
-    required this.defaultValue,
     required this.onChanged,
   });
 
   final int value;
-  final int defaultValue;
   final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final v = value.clamp(min, max);
-    final divisions = ((max - min) ~/ 5);
-    final frac = (defaultValue - min) / (max - min);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Slider(
-          value: v.toDouble(),
-          min: min.toDouble(),
-          max: max.toDouble(),
-          divisions: divisions,
-          label: '$v%',
-          onChanged: (d) => onChanged(d.round()),
-        ),
-        // AlertDialog measures its content with IntrinsicWidth, so no
-        // LayoutBuilder here — Align positions the marker at the default's
-        // fraction of the track width instead.
-        SizedBox(
-          height: 18,
-          child: Stack(
-            children: [
-              Align(
-                alignment: Alignment(2 * frac - 1, 0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 2,
-                      height: 10,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'default $defaultValue%',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  '$v%',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        )
-      ],
+    return Slider(
+      value: v.toDouble(),
+      min: min.toDouble(),
+      max: max.toDouble(),
+      label: '$v%',
+      onChanged: (d) => onChanged(d.round().clamp(min, max)),
     );
   }
 }
@@ -1254,9 +1204,8 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
             'your typical ratio.',
             style: theme.textTheme.bodySmall,
           ),
-          _PercentileSlider(
+_PercentileSlider(
             value: _percentile,
-            defaultValue: defaultBaselinePercentile,
             onChanged: (v) {
               setState(() => _percentile = v);
               notifier.selectPercentile(v);
@@ -1506,7 +1455,6 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
             ),
             _PercentileSlider(
               value: _threshold,
-              defaultValue: defaultWarningThresholdPercentile,
               onChanged: (v) {
                 setState(() => _threshold = v);
                 settings.setWarningThresholdPercentile(v);
