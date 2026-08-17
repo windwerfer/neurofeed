@@ -1446,8 +1446,13 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
           children: [
             Text('Scorer engine', style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
-            RadioGroup<GuardrailEngine>(
-              groupValue: _engine,
+            DropdownButtonFormField<GuardrailEngine>(
+              initialValue: _engine,
+              isExpanded: true,
+              items: [
+                for (final e in GuardrailEngine.values)
+                  DropdownMenuItem(value: e, child: Text(e.label)),
+              ],
               onChanged: (v) {
                 if (v == null) {
                   return;
@@ -1455,25 +1460,24 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
                 setState(() => _engine = v);
                 settings.setGuardrailEngineName(v.name);
               },
-              child: Column(
-                children: [
-                  for (final e in GuardrailEngine.values)
-                    RadioListTile<GuardrailEngine>(
-                      value: e,
-                      title: Text(e.label),
-                      subtitle: e.isBandMath
-                          ? const Text('Classical frontal-delta math, no AI model')
-                          : Text('AI embedding scorer (${e.modelKind!.ffId})'),
-                      dense: true,
-                    ),
-                ],
-              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _engine.isBandMath
+                  ? 'Classical frontal-delta math, no AI model'
+                  : 'AI embedding scorer (${_engine.modelKind!.ffId})',
+              style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
             Text('Warning sound', style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
-            RadioGroup<GuardrailSound>(
-              groupValue: _sound,
+            DropdownButtonFormField<GuardrailSound>(
+              initialValue: _sound,
+              isExpanded: true,
+              items: [
+                for (final snd in GuardrailSound.values)
+                  DropdownMenuItem(value: snd, child: Text(snd.label)),
+              ],
               onChanged: (s) {
                 if (s == null) {
                   return;
@@ -1482,21 +1486,15 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
                 settings.setWarningSoundName(s.name);
                 audio.setWarningSound(s);
               },
-              child: Column(
-                children: [
-                  for (final snd in GuardrailSound.values)
-                    RadioListTile<GuardrailSound>(
-                      value: snd,
-                      title: Text(snd.label),
-                      subtitle: snd.playsContinuously
-                          ? const Text(
-                              'Repeats with a volume ramp while a warning stays active',
-                            )
-                          : null,
-                      dense: true,
-                    ),
-                ],
-              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _sound.playsContinuously
+                  ? 'Repeats with a volume ramp while a warning stays active'
+                  : _sound == GuardrailSound.none
+                      ? 'Warnings stay silent'
+                      : 'Plays once per warning',
+              style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
             Text('Warning threshold', style: theme.textTheme.titleSmall),
