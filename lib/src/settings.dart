@@ -109,6 +109,9 @@ class Settings {
   static const String _warningThresholdPercentileKey =
       'reve_warning_threshold_percentile';
   static const String _modelKindKey = 'model_kind';
+  static const String _guardrailEngineKey = 'guardrail_engine';
+  static const String _warningSoundKey = 'warning_sound';
+  static const String _lastCustomMinutesKey = 'last_custom_minutes';
   static const String _guardrailKeyPrefix = 'guardrail_';
   static const String _musicFolderKey = 'music_folder';
   static const String _musicMinCutoffKey = 'music_min_cutoff_hz';
@@ -250,6 +253,28 @@ class Settings {
 
   Future<void> setModelKindName(String value) =>
       _prefs.setString(_modelKindKey, value);
+
+  /// Guardrail scorer engine: an AI model kind name (`lunaBase`/`lunaLarge`/
+  /// `reveBase`) or `bandMath` (no AI — classical band math on frontal delta).
+  /// Falls back to [modelKindName] when unset (legacy installs).
+  String? get guardrailEngineName => _prefs.getString(_guardrailEngineKey);
+
+  Future<void> setGuardrailEngineName(String value) =>
+      _prefs.setString(_guardrailEngineKey, value);
+
+  /// Warning sound shown in the guardrail gear dialog (`softBowl`/`chime`/
+  /// `cough`/`alarm`/`none`). Placeholder asset names — the files land later.
+  String get warningSoundName => _prefs.getString(_warningSoundKey) ?? 'softBowl';
+
+  Future<void> setWarningSoundName(String value) =>
+      _prefs.setString(_warningSoundKey, value);
+
+  /// Last session duration chosen via the Custom button (minutes), or null
+  /// before the user has ever used it.
+  int? get lastCustomMinutes => _prefs.getInt(_lastCustomMinutesKey);
+
+  Future<void> setLastCustomMinutes(int value) =>
+      _prefs.setInt(_lastCustomMinutesKey, value);
 
   /// Whether the on-device AI sleep guardrail runs for [type]. Only protocols
   /// whose spec offers the layer ([ProtocolInfo.aiSleepGuardrail]) consult

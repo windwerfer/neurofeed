@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/feedback_audio_controller.dart';
+import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/audio/music_feedback_controller.dart';
 import 'package:muse_ml/src/audio/rain_feedback_controller.dart';
 import 'package:muse_ml/src/settings.dart';
@@ -214,6 +215,17 @@ class AudioService {
   Future<void> playRecalibrateChime() => _controller.playRecalibrateChime();
 
   Future<void> playWarningChime() => _controller.playWarningChime();
+
+  /// Selects the guardrail warning sound (bell variants / alarm / none) and
+  /// restarts a running alarm with it.
+  void setWarningSound(GuardrailSound sound) =>
+      _controller.setWarningSound(sound);
+
+  /// Starts the continuous ramping alarm used while a warning stays active.
+  Future<void> startWarningAlarm() => _controller.startWarningAlarm();
+
+  /// Stops the continuous alarm (also stops it in [stop]).
+  void stopWarningAlarm() => _controller.stopWarningAlarm();
 
   Future<void> pause() async {
     await _controller.pauseBackground();

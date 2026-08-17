@@ -71,11 +71,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/audio/bell/
-    - assets/audio/bowl/
-    - assets/audio/calibration/
-    - assets/audio/drone/
-    - assets/audio/rain/
+    - assets/audio/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

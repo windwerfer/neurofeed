@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
+import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/audio/soloud_engine.dart';
 import 'package:muse_ml/src/settings.dart';
 
@@ -43,6 +44,15 @@ class FeedbackAudioController {
   DateTime _lastRewardAt = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _movingUntil = DateTime.fromMillisecondsSinceEpoch(0);
 
+  /// Selected guardrail warning sound (bell variants / alarm / none).
+  GuardrailSound _warningSound = GuardrailSound.softBowl;
+
+  /// Alarm-loop bookkeeping: the ramp grows over the first minute while a
+  /// warning stays active, then holds at full volume.
+  Timer? _alarmTimer;
+  DateTime? _alarmSince;
+  SoundHandle? _alarmHandle;
+
   double _masterVolume = 1.0;
   double _backgroundVolume = droneVolume;
   double _feedbackVolume = 1.0;
@@ -57,6 +67,7 @@ class FeedbackAudioController {
     _introVolume = settings.introVolume ?? 1.0;
     _bellVolume = settings.bellVolume ?? 1.0;
     _guardrailVolume = settings.guardrailVolume ?? 1.0;
+    _warningSound = GuardrailSound.fromName(settings.warningSoundName);
   }
 
   double get masterVolume => _masterVolume;
@@ -309,8 +320,77 @@ class FeedbackAudioController {
     await _playBowl(volume: _bellVolumeTotal * 0.6);
   }
 
+  /// Selects the guardrail warning sound. A running alarm restarts with the
+  /// new sound immediately.
+  void setWarningSound(GuardrailSound sound) {
+    _warningSound = sound;
+    if (sound != GuardrailSound.none && _alarmTimer != null) {
+      stopWarningAlarm();
+      unawaited(startWarningAlarm());
+    }
+  }
+
+  /// One-shot warning sound (bell variants). Silent when the selected sound
+  /// is none or a continuous alarm (that one loops via [startWarningAlarm]).
   Future<void> playWarningChime() async {
-    await _playBell(volume: _guardrailVolumeTotal);
+    final sound = _warningSound;
+    if (sound == GuardrailSound.none || sound.playsContinuously) {
+      return;
+    }
+    final asset = sound.assetPath;
+    if (asset == null) {
+      return;
+    }
+    await SoLoudEngine.ensureInit();
+    final source = await _sourceFor(asset, stream: false);
+    SoLoud.instance.play(source, volume: _guardrailVolumeTotal);
+  }
+
+  /// Starts the continuous alarm: repeats the alarm sound with a volume ramp
+  /// over the first minute (0.12 → full), then holds. Idempotent.
+  Future<void> startWarningAlarm() async {
+    final sound = _warningSound;
+    if (sound != GuardrailSound.alarm || _alarmTimer != null) {
+      return;
+    }
+    await SoLoudEngine.ensureInit();
+    final asset = sound.assetPath;
+    if (asset == null) {
+      return;
+    }
+    AudioSource? source;
+    try {
+      source = await _sourceFor(asset, stream: false);
+    } catch (e) {
+      debugPrint('[guardrail-sound] alarm asset load failed: $e');
+      return;
+    }
+    _alarmSince = DateTime.now();
+    _alarmTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      final elapsed = DateTime.now().difference(_alarmSince!).inSeconds;
+      final ramp = 0.12 + 0.88 * (elapsed / 60.0).clamp(0.0, 1.0);
+      final handle = SoLoud.instance.play(
+        source!,
+        volume: _guardrailVolumeTotal * ramp,
+      );
+      final prev = _alarmHandle;
+      _alarmHandle = handle;
+      if (prev != null) {
+        _safeHandle(prev, SoLoud.instance.stop);
+      }
+    });
+  }
+
+  /// Stops the continuous alarm and its handle.
+  void stopWarningAlarm() {
+    _alarmTimer?.cancel();
+    _alarmTimer = null;
+    _alarmSince = null;
+    final handle = _alarmHandle;
+    _alarmHandle = null;
+    if (handle != null) {
+      _safeHandle(handle, SoLoud.instance.stop);
+    }
   }
 
   Future<void> _playBell({required double volume}) async {
@@ -331,6 +411,7 @@ class FeedbackAudioController {
 
   Future<void> stop() async {
     _resetRewardState();
+    stopWarningAlarm();
     _stopAmbient();
     final bell = _bellHandle;
     if (bell != null) {
@@ -344,6 +425,7 @@ class FeedbackAudioController {
   }
 
   void dispose() {
+    stopWarningAlarm();
     _sources.clear();
     SoLoudEngine.deinit();
   }

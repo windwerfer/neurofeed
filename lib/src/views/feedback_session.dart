@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
+import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
+import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/reve/reve_import.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/status_bar.dart';
@@ -298,16 +300,69 @@ class _PhaseControls extends ConsumerWidget {
     final guardrailIntended =
         protocol.aiSleepGuardrail &&
         ref.watch(settingsProvider).guardrailEnabledFor(fb.protocol);
+    final engineSel = guardrailEngineFromSettings(ref.read(settingsProvider));
+    final needsModel = guardrailIntended && !engineSel.isBandMath;
+
+    // Music feedback needs a music folder AND no AI guardrail model (the
+    // band-math scorer leaves the CPU free for the audio pipeline).
+    Future<void> startSession() async {
+      final settings = ref.read(settingsProvider);
+      if (fb.feedbackMode == FeedbackMode.music) {
+        if (settings.musicFolder == null) {
+          await showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Music folder not set'),
+              content: const Text(
+                'Music feedback plays your own tracks through a reward-driven '
+                'filter. Pick a music folder in Settings → Music feedback '
+                'first.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+        if (guardrailIntended && !engineSel.isBandMath) {
+          await showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Music feedback unavailable'),
+              content: const Text(
+                'Music feedback is off while an AI guardrail model is active '
+                '(the model and the audio pipeline would compete for CPU). '
+                'Switch the guardrail scorer to Band math in the guardrail '
+                'gear, or choose a different feedback sound.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+      }
+      ref.read(feedbackStateProvider.notifier).startCalibration();
+    }
+
     switch (fb.phase) {
       case FeedbackPhase.idle:
-        if (guardrailIntended && !ref.watch(modelEngineAvailabilityProvider)) {
+        if (needsModel && !ref.watch(modelEngineAvailabilityProvider)) {
           return Column(
             children: [
               FilledButton.icon(
                 onPressed: () async {
                   final ready = await showModelGateDialog(context, ref);
                   if (ready && context.mounted) {
-                    ref.read(feedbackStateProvider.notifier).startCalibration();
+                    await startSession();
                   }
                 },
                 icon: const Icon(Icons.play_arrow),
@@ -328,8 +383,7 @@ class _PhaseControls extends ConsumerWidget {
           );
         }
         return FilledButton.icon(
-          onPressed: () =>
-              ref.read(feedbackStateProvider.notifier).startCalibration(),
+          onPressed: startSession,
           icon: const Icon(Icons.play_arrow),
           label: const Text('Start Session'),
           style: FilledButton.styleFrom(
@@ -599,26 +653,73 @@ class _NerdStatsBubble extends ConsumerWidget {
   }
 }
 
+/// Quick duration chips (10/15/20/30 min) plus a Custom button that opens the
+/// wheel picker; the last custom choice is remembered and shown as a chip.
 class _TimerSelector extends ConsumerWidget {
+  static const List<int> quickDurations = [10, 15, 20, 30];
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
+    final settings = ref.read(settingsProvider);
+    final lastCustom = settings.lastCustomMinutes;
+    final selected = fb.durationMinutes;
+    final chips = <int>[...quickDurations, ?lastCustom];
+    final theme = Theme.of(context);
+
+    Future<void> pick(WidgetRef ref2, {bool custom = false}) async {
+      final result = await showDialog<int>(
+        context: context,
+        builder: (ctx) => _DurationPicker(current: custom ? (lastCustom ?? 30) : selected),
+      );
+      if (result == null) {
+        return;
+      }
+      await ref2.read(settingsProvider).setLastCustomMinutes(result);
+      ref2.read(feedbackStateProvider.notifier).selectDuration(result);
+    }
+
     return Card(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: ListTile(
-        leading: const Icon(Icons.timer),
-        title: const Text('Session Duration'),
-        subtitle: Text('${fb.durationMinutes} min'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () async {
-          final result = await showDialog<int>(
-            context: context,
-            builder: (ctx) => _DurationPicker(current: fb.durationMinutes),
-          );
-          if (result != null) {
-            ref.read(feedbackStateProvider.notifier).selectDuration(result);
-          }
-        },
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.timer),
+                const SizedBox(width: 8),
+                Text('Session Duration', style: theme.textTheme.titleSmall),
+                const Spacer(),
+                Text(
+                  '$selected min',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final d in chips)
+                  ChoiceChip(
+                    label: Text('$d min'),
+                    selected: d == selected,
+                    onSelected: (_) =>
+                        ref.read(feedbackStateProvider.notifier).selectDuration(d),
+                  ),
+                ChoiceChip(
+                  label: const Text('Custom…'),
+                  avatar: const Icon(Icons.tune, size: 18),
+                  selected: false,
+                  onSelected: (_) => pick(ref, custom: true),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1051,6 +1152,8 @@ class _DurationPickerState extends State<_DurationPicker> {
   @override
   Widget build(BuildContext context) {
     final values = List.generate(120, (i) => i + 1);
+
+
     return AlertDialog(
       title: const Text('Duration (minutes)'),
       content: SizedBox(
@@ -1256,7 +1359,20 @@ class _WarningThresholdSelector extends ConsumerWidget {
         leading: const Icon(Icons.bedtime),
         title: const Text('Warning Threshold'),
         subtitle: Text('${threshold}th percentile of eyes-closed rest'),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'Guardrail engine & warning sound',
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (ctx) => _GuardrailGearDialog(),
+              ),
+            ),
+            const Icon(Icons.chevron_right),
+          ],
+        ),
         onTap: () async {
           final result = await showDialog<int>(
             context: context,
@@ -1516,6 +1632,89 @@ class _FeedbackModePicker extends StatelessWidget {
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Guardrail gear dialog: the scorer engine (AI models or band math) and the
+/// warning sound. Engine changes apply from the next session; the warning
+/// sound applies immediately.
+class _GuardrailGearDialog extends ConsumerWidget {
+  const _GuardrailGearDialog();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.read(settingsProvider);
+    final audio = ref.read(audioServiceProvider);
+    // Watch the prefs so the radios follow the selection live.
+    ref.watch(settingsProvider.select((s) => s.guardrailEngineName));
+    ref.watch(settingsProvider.select((s) => s.warningSoundName));
+    final engine = guardrailEngineFromSettings(settings);
+    final sound = GuardrailSound.fromName(settings.warningSoundName);
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Guardrail'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Scorer engine', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            RadioGroup<GuardrailEngine>(
+              groupValue: engine,
+              onChanged: (v) => settings.setGuardrailEngineName(v!.name),
+              child: Column(
+                children: [
+                  for (final e in GuardrailEngine.values)
+                    RadioListTile<GuardrailEngine>(
+                      value: e,
+                      title: Text(e.label),
+                      subtitle: e.isBandMath
+                          ? const Text('Classical frontal-delta math, no AI model')
+                          : Text('AI embedding scorer (${e.modelKind!.ffId})'),
+                      dense: true,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text('Warning sound', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            RadioGroup<GuardrailSound>(
+              groupValue: sound,
+              onChanged: (s) {
+                if (s == null) {
+                  return;
+                }
+                settings.setWarningSoundName(s.name);
+                audio.setWarningSound(s);
+              },
+              child: Column(
+                children: [
+                  for (final snd in GuardrailSound.values)
+                    RadioListTile<GuardrailSound>(
+                      value: snd,
+                      title: Text(snd.label),
+                      subtitle: snd.playsContinuously
+                          ? const Text(
+                              'Repeats with a volume ramp while a warning stays active',
+                            )
+                          : null,
+                      dense: true,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
         ),
       ],
     );

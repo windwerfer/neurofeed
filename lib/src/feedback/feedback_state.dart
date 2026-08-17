@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
+import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/audio/calibration_clips.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_recorder.dart';
@@ -11,6 +12,7 @@ import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
+import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/rust/api/reve.dart' as frb;
 import 'package:muse_ml/src/settings.dart';
@@ -227,6 +229,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   bool _clearCaptured = false;
   bool _sleepCaptured = false;
   final List<double> _baselineSleepDir = [];
+
+  /// True when the guardrail runs in band-math mode (no AI model): the
+  /// frontal-delta rail is fed from the per-second band FFT instead of a
+  /// sleep-direction embedding, and there are no V_clear/V_sleep anchors.
+  bool _guardrailBandMath = false;
+  DateTime? _lastBandMathSampleAt;
+
+  /// Latest per-electrode delta band power (µV²/Hz) from the band FFT, used by
+  /// band-math mode as the frontal-delta rail (AF7/AF8 average).
+  final Map<int, double> _frontalDelta = {};
   double? _guardrailThreshold;
   double _lastClarity = 1;
   double _lastSleepDir = 0;
@@ -427,6 +439,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         !_ref.read(settingsProvider).guardrailEnabledFor(state.protocol)) {
       return false;
     }
+    final engine = guardrailEngineFromSettings(_ref.read(settingsProvider));
+    if (engine.isBandMath) {
+      return true;
+    }
     return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
   }
 
@@ -442,7 +458,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _guardrailThreshold = null;
     _baselineSleepDir.clear();
     _warningActive = false;
+    _guardrailBandMath = false;
+    _lastBandMathSampleAt = null;
     if (!_guardrailIntent) {
+      return;
+    }
+    final engineSel = guardrailEngineFromSettings(_ref.read(settingsProvider));
+    if (engineSel.isBandMath) {
+      _guardrailBandMath = true;
+      _guardrailEnabled = true;
+      debugPrint('[guardrail] enabled (band math — no model)');
       return;
     }
     final engine = _ref.read(modelEngineNotifierProvider);
@@ -712,7 +737,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           stddev: _engine.baselineStddev,
         );
     _ref.read(liveStatsProvider).setThreshold(threshold);
-    if (_guardrailEnabled && _clearCaptured) {
+    if (_guardrailEnabled && (_clearCaptured || _guardrailBandMath)) {
       _finalizeGuardrailBaseline();
     }
     _recordCalibration();
@@ -780,6 +805,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         '[guardrail] baseline n=${_baselineSleepDir.length} '
         'p$pct threshold=${_guardrailThreshold?.toStringAsFixed(3)}',
       );
+    }
+    if (_guardrailBandMath) {
+      _sleepCaptured = true;
+      debugPrint('[guardrail] band math — no V_sleep anchor to capture');
+      return;
     }
     unawaited(
       frb
@@ -1221,6 +1251,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   void _onBands(BandsDto bands) {
+    _frontalDelta[bands.electrode] = bands.delta;
     _target.update(bands);
     final target = _target.evaluate(_ref.read(appStateProvider).signalQuality);
     if (target == null) {
@@ -1238,6 +1269,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       if (_collectionEyes == 'open') {
         unawaited(_tryCaptureClearAnchor());
       }
+      // Band-math guardrail: the eyes-closed stage feeds the frontal-delta
+      // baseline instead of a sleep-direction embedding.
+      if (_guardrailBandMath && _collectionEyes == 'closed') {
+        _baselineSleepDir.add(_frontalDeltaAverage());
+      }
       return;
     }
     if (state.phase != FeedbackPhase.playing) {
@@ -1251,6 +1287,39 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _engine.recordSessionSample(value, clean: _sampleIsClean);
     _ref.read(liveStatsProvider).push(value, _engine.percentileOf);
     _applyReward(value);
+    if (_guardrailBandMath) {
+      _onBandMathBand(bands);
+    }
+  }
+
+  /// Band-math guardrail scoring (no AI model): the per-second frontal-delta
+  /// band power replaces the sleep-direction embedding, evaluated at 1 Hz.
+  void _onBandMathBand(BandsDto bands) {
+    _lastDelta = _frontalDeltaAverage();
+    final now = DateTime.now();
+    final last = _lastBandMathSampleAt;
+    if (last != null && now.difference(last) < const Duration(seconds: 1)) {
+      return;
+    }
+    _lastBandMathSampleAt = now;
+    if (_guardrailThreshold != null) {
+      _evaluateGuardrailWarning();
+      _recordDrowsinessSample();
+    }
+  }
+
+  /// AF7/AF8 (electrodes 1/2) delta band power average; a single available
+  /// pad is used on its own (mirrors the ATR autodrop model).
+  double _frontalDeltaAverage() {
+    final d1 = _frontalDelta[1];
+    final d2 = _frontalDelta[2];
+    if (d1 == null) {
+      return d2 ?? _lastDelta;
+    }
+    if (d2 == null) {
+      return d1;
+    }
+    return (d1 + d2) / 2;
   }
 
   void _onMovement(MovementDto movement) {
@@ -1351,19 +1420,24 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     if (state.phase == FeedbackPhase.playing && _guardrailThreshold != null) {
       _evaluateGuardrailWarning();
-      final sessionStart = _sessionStartAt;
-      if (sessionStart != null) {
-        _drowsinessSeries.add(
-          DrowsinessSample(
-            offsetSecs:
-                DateTime.now().difference(sessionStart).inMilliseconds / 1000,
-            sleepDir: r.sleepDir,
-            delta: r.delta,
-            warning: _warningActive,
-          ),
-        );
-      }
+      _recordDrowsinessSample();
     }
+  }
+
+  void _recordDrowsinessSample() {
+    final sessionStart = _sessionStartAt;
+    if (sessionStart == null) {
+      return;
+    }
+    _drowsinessSeries.add(
+      DrowsinessSample(
+        offsetSecs:
+            DateTime.now().difference(sessionStart).inMilliseconds / 1000,
+        sleepDir: _lastSleepDir,
+        delta: _lastDelta,
+        warning: _warningActive,
+      ),
+    );
   }
 
   /// Fires the sleep-guardrail warning: sleep-direction above the baseline
@@ -1372,22 +1446,33 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// persists; the reward loop is never touched.
   void _evaluateGuardrailWarning() {
     final threshold = _guardrailThreshold!;
-    final over =
-        _lastSleepDir > threshold || _lastDelta > guardrailDeltaCeiling;
+    // Band math scores the frontal-delta rail directly; AI mode scores the
+    // sleep-direction embedding (with the delta rail as a hard ceiling).
+    final over = _guardrailBandMath
+        ? _lastDelta > threshold || _lastDelta > guardrailDeltaCeiling
+        : _lastSleepDir > threshold || _lastDelta > guardrailDeltaCeiling;
     final spec = ProtocolInfo.forType(state.protocol);
     final mufflesMusic =
         _musicActive &&
         spec.guardrailFeedback == GuardrailFeedback.muffleWhileWarning;
+    final warningSound =
+        GuardrailSound.fromName(_ref.read(settingsProvider).warningSoundName);
     if (!over) {
       _warningActive = false;
       if (mufflesMusic) {
         _audio.setMusicMuffle(false);
+      }
+      if (warningSound.playsContinuously) {
+        _audio.stopWarningAlarm();
       }
       return;
     }
     _warningActive = true;
     if (mufflesMusic) {
       _audio.setMusicMuffle(true);
+    }
+    if (warningSound.playsContinuously) {
+      unawaited(_audio.startWarningAlarm());
     }
     final now = DateTime.now();
     if (now.difference(_lastWarningChimeAt) >= warningChimeCooldown) {
