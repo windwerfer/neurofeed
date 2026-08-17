@@ -176,33 +176,42 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
 - ✅ Verified: `cargo test --lib` green (25 session-format tests), `cargo test --lib --
   --ignored` passes (`luna_smoke` + `reveal_smoke` run real inference on the `.local/`
   weights), `flutter analyze lib/src` clean.
-- ⚠️ **Known gap**: `reve-rs`/`luna-rs` are path deps on `third_party/` submodules but no
-  CI workflow inits submodules on checkout — release builds will fail until the workflows
-  add `git submodule update --init third_party/reve-rs third_party/luna-rs` (or
-  `submodules: recursive` on `actions/checkout`). See `.ai/release.md`.
+## Status — 2026-08-17 Update (guardrail settings UI + feedback dialogs)
+- ✅ **Guardrail gear dialog** (`feedback_session.dart`): scorer engine now a
+  dropdown with green ✓ for installed models (band math always checked, no
+  install needed) + the shared install bubble appears inline when a not-installed
+  AI model is chosen; warning sound is a dropdown (soft bowl / bell chime /
+  cough / alarm clock incl. continuous volume-ramped alarm / none — `GuardrailSound`),
+  threshold is a 1 %-step percentile slider with live readout.
+- ✅ **Target settings dialog**: dynamic-adapt toggle, gentle↔responsive slider
+  (labels under the track ends), reward-threshold percentile slider (1 % steps,
+  live `NN%` readout restored + drag bubble; default shown in the description text).
+- ✅ **Dedup**: `ModelInstalledCheck` + `ModelInstallBubble` extracted into
+  `lib/src/reve/model_selector.dart`, shared by the settings `AiEngineCard` and
+  the guardrail dialog (card's own busy/progress/buttons deleted).
+- ✅ **Pitfall recorded in AGENTS.md**: never put a `LayoutBuilder` inside
+  dialog content — AlertDialog measures with `IntrinsicWidth` and
+  `LayoutBuilder` can't return intrinsics (crash fixed in `bb51897`).
+- ✅ Model engine is **git deps, not submodules** (`4534f19`) — the old CI
+  submodule gap below is obsolete; no `git submodule update` needed to build.
 
 ## Next steps
-0. Fix CI: init the `reve-rs`/`luna-rs` submodules in the release workflows
-   (`_build-apk.yml`, `release-linux.yml`, `release-windows.yml`) before `cargo build`.
-1. Wire the model engine into the sleep guardrail: feed the forwarder's EEG into
-   `rust/src/analysis/{reve,luna}.rs` and surface the embedding/drowsiness score in the
-   protocol (scoring currently loads models but is not yet driven by live data).
-2. On-device pass: download LUNA Base + LUNA Large, import REVE, verify load/unload,
+0. On-device pass: download LUNA Base + LUNA Large, import REVE, verify load/unload,
    bad-hash rejection, progress UI, and model-switch persistence on the TB336FU.
-3. On-device test pass (checklist in `.ai/feeback/todos.md`): calibration →
+1. On-device test pass (checklist in `.ai/feeback/todos.md`): calibration →
    auto-start, chimes + movement gating, volume dialog, target settings,
    recalibrate, persistence, `[atr]` ceiling/lockout logs, mid-session Muse
    power-off → watchdog → auto-reconnect.
-4. On-device gesture tuning: verify blink/clench double-marker timing and tune
+2. On-device gesture tuning: verify blink/clench double-marker timing and tune
    `BLINK_*`/`CLENCH_*`/`EYE_*` thresholds from logcat until double blinks and
    double clenches fire reliably without false positives; then decide if eye
    up/down becomes a live track.
-5. If the reconnect test passes, remove the temporary `[muse] forwarder` debug
+3. If the reconnect test passes, remove the temporary `[muse] forwarder` debug
    logs or drop them to debug level.
-6. v1.1 backlog: gesture marker log/rendering in history detail, percentile
+4. v1.1 backlog: gesture marker log/rendering in history detail, percentile
    persistence, continuous EMA adaptation, multi-protocol presets, calibration
    audio variants (see `.ai/feeback/todos.md`).
-7. v1.2 meta-block: Neurosity Crown 8-electrode support — channel labels are
+5. v1.2 meta-block: Neurosity Crown 8-electrode support — channel labels are
    already metadata-driven; only the default channel-name list needs
    extending per device.
 

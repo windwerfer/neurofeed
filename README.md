@@ -9,8 +9,11 @@ Muse EEG headset companion app — Flutter + Rust via `flutter_rust_bridge`. Use
   - Dual-layer audio: ambient background loop (drone/rain) + reward bowl chimes
   - Movement-gated rewards, dynamic adaptive target with lockout guards, in-flight recalibration
   - 5-channel volume control (master / background / feedback / intro / end bell)
-  - Target settings: dynamic-target on/off + gentle↔responsive adaptation slider
-- **Session dashboard**: bands/motion/pulse graphs, stats, notes, save/discard
+  - Target settings: dynamic-target on/off, gentle↔responsive adaptation slider, reward-threshold percentile (1 % steps, live reading)
+- **AI sleep guardrail**: on-device drowsiness scoring (REVE/LUNA models) with a configurable warning sound and threshold
+  - Scorer engine picker (green ✓ for installed models, inline download/import in the dialog), band-math fallback without any model
+  - Warning sounds: soft bowl / bell chime / cough / alarm clock (repeats with a volume ramp) / none; per-protocol guardrail toggle
+- **Session dashboard**: bands/motion/pulse graphs, stats, notes, save/discard, sleep-guardrail drowsiness trace
 - **Feedback history**: session list with thumbnails, re-open past sessions
 
 All user preferences (volumes, sound, duration, target settings) persist across restarts.
@@ -41,8 +44,8 @@ into the final `.muse.feedback` on save.
 
 ## Status
 
-Feedback feature — Phase I merged to `main`, **ready for device testing** (see
-`.ai/feeback/todos.md` for the test checklist and what's next).
+Feedback Phase I + the REVE/LUNA AI sleep guardrail are on `main` — **ready for
+device testing** (see `.ai/feeback/todos.md` for the test checklist and what's next).
 
 ## Quick start
 
