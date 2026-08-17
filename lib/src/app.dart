@@ -74,86 +74,100 @@ class _AppShellState extends ConsumerState<AppShell> {
       body: SafeArea(
         child: Column(
           children: [
-          const StatusBar(),
-          Expanded(
-            child: Stack(
-              children: [
-                Row(
-                  children: [
-                    if (state.sidebarOpen)
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 220),
-                        child: Container(
-                          color: Theme.of(context).colorScheme.surfaceContainer,
-                          child: Column(
-                            children: [
-                              _SideBarItem(
-                                label: 'Feedback',
-                                selected: state.currentView == AppView.feedback,
-                                onTap: () => ref
-                                    .read(appStateProvider.notifier)
-                                    .setCurrentView(AppView.feedback),
-                              ),
-                              _SideBarItem(
-                                label: 'Feedback History',
-                                selected: state.currentView == AppView.feedbackHistory,
-                                onTap: () => ref
-                                    .read(appStateProvider.notifier)
-                                    .setCurrentView(AppView.feedbackHistory),
-                              ),
-                              _SideBarItem(
-                                label: 'Bands',
-                                selected: state.currentView == AppView.bands,
-                                onTap: () => ref
-                                    .read(appStateProvider.notifier)
-                                    .setCurrentView(AppView.bands),
-                              ),
-                              _SideBarItem(
-                                label: 'Raw EEG',
-                                selected: state.currentView == AppView.rawEeg,
-                                onTap: () => ref
-                                    .read(appStateProvider.notifier)
-                                    .setCurrentView(AppView.rawEeg),
-                              ),
-                              _SideBarItem(
-                                label: 'Spectrogram',
-                                selected:
-                                    state.currentView == AppView.spectrogram,
-                                onTap: () => ref
-                                    .read(appStateProvider.notifier)
-                                    .setCurrentView(AppView.spectrogram),
-                              ),
-                              _SideBarItem(
-                                label: 'Power Spectral Density (PSD)',
-                                selected: state.currentView == AppView.psd,
-                                onTap: () => ref
-                                    .read(appStateProvider.notifier)
-                                    .setCurrentView(AppView.psd),
-                              ),
-                              _SideBarItem(
-                                label: 'Settings',
-                                selected: state.currentView == AppView.settings,
-                                onTap: () => ref
-                                    .read(appStateProvider.notifier)
-                                    .setCurrentView(AppView.settings),
-                              ),
-                            ],
+            const StatusBar(),
+            Expanded(
+              child: Stack(
+                children: [
+                  Row(
+                    children: [
+                      if (state.sidebarOpen)
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 220),
+                          child: Container(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainer,
+                            child: Column(
+                              children: [
+                                _SideBarItem(
+                                  label: 'Feedback',
+                                  selected:
+                                      state.currentView == AppView.feedback,
+                                  onTap: () => ref
+                                      .read(appStateProvider.notifier)
+                                      .setCurrentView(AppView.feedback),
+                                ),
+                                _SideBarItem(
+                                  label: 'Feedback History',
+                                  selected:
+                                      state.currentView ==
+                                      AppView.feedbackHistory,
+                                  onTap: () => ref
+                                      .read(appStateProvider.notifier)
+                                      .setCurrentView(AppView.feedbackHistory),
+                                ),
+                                _SideBarItem(
+                                  label: 'Bands',
+                                  selected: state.currentView == AppView.bands,
+                                  onTap: () => ref
+                                      .read(appStateProvider.notifier)
+                                      .setCurrentView(AppView.bands),
+                                ),
+                                _SideBarItem(
+                                  label: 'Raw EEG',
+                                  selected: state.currentView == AppView.rawEeg,
+                                  onTap: () => ref
+                                      .read(appStateProvider.notifier)
+                                      .setCurrentView(AppView.rawEeg),
+                                ),
+                                _SideBarItem(
+                                  label: 'Spectrogram',
+                                  selected:
+                                      state.currentView == AppView.spectrogram,
+                                  onTap: () => ref
+                                      .read(appStateProvider.notifier)
+                                      .setCurrentView(AppView.spectrogram),
+                                ),
+                                _SideBarItem(
+                                  label: 'Power Spectral Density (PSD)',
+                                  selected: state.currentView == AppView.psd,
+                                  onTap: () => ref
+                                      .read(appStateProvider.notifier)
+                                      .setCurrentView(AppView.psd),
+                                ),
+                                _SideBarItem(
+                                  label: 'Settings',
+                                  selected:
+                                      state.currentView == AppView.settings,
+                                  onTap: () => ref
+                                      .read(appStateProvider.notifier)
+                                      .setCurrentView(AppView.settings),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            body,
+                            // Connect window lives in the body area so an open
+                            // sidebar is never hidden underneath it.
+                            if (state.connectWindowOpen)
+                              Positioned(
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                child: const ConnectWindow(),
+                              ),
+                          ],
+                        ),
                       ),
-                    Expanded(child: body),
-                  ],
-                ),
-                if (state.connectWindowOpen)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: const ConnectWindow(),
+                    ],
                   ),
-              ],
+                ],
+              ),
             ),
-          ),
           ],
         ),
       ),
@@ -177,11 +191,7 @@ class _SideBarItem extends StatelessWidget {
     return Material(
       type: MaterialType.card,
       color: const Color(0xFF1E212A),
-      child: ListTile(
-        title: Text(label),
-        selected: selected,
-        onTap: onTap,
-      ),
+      child: ListTile(title: Text(label), selected: selected, onTap: onTap),
     );
   }
 }
@@ -240,10 +250,7 @@ Future<bool> requestBlePermissions() async {
   // Android (where BLE requires runtime permissions).
   if (!Platform.isAndroid) return true;
 
-  final permissions = [
-    Permission.bluetoothScan,
-    Permission.bluetoothConnect,
-  ];
+  final permissions = [Permission.bluetoothScan, Permission.bluetoothConnect];
 
   // Location is only needed for BLE scanning on Android 11 (API 30) and below.
   // On API 31+ BLUETOOTH_SCAN is declared `neverForLocation` and the manifest

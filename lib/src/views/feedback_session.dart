@@ -71,7 +71,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
         ],
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(56),
-          child: StatusBar(),
+          child: StatusBar(showMenu: false),
         ),
       ),
       body: SingleChildScrollView(

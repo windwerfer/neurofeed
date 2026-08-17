@@ -12,17 +12,19 @@ Widget _signalQualityRow(List<double>? qualities) {
     final color = score >= 80
         ? const Color(0xFF4CAF50)
         : score >= 40
-            ? const Color(0xFFFF9800)
-            : const Color(0xFFF44336);
-    children.add(Text(
-      _kSignalSymbols[i],
-      style: TextStyle(
-        color: color,
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-        fontFamily: 'monospace',
+        ? const Color(0xFFFF9800)
+        : const Color(0xFFF44336);
+    children.add(
+      Text(
+        _kSignalSymbols[i],
+        style: TextStyle(
+          color: color,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'monospace',
+        ),
       ),
-    ));
+    );
     if (i < 3) children.add(const SizedBox(width: 2));
   }
   return Row(mainAxisSize: MainAxisSize.min, children: children);
@@ -30,8 +32,14 @@ Widget _signalQualityRow(List<double>? qualities) {
 
 /// Top status bar: hamburger menu (left), device/battery/signal (center),
 /// disconnect button (right, only when connected).
+///
+/// [showMenu] hides the hamburger when a pushed route already provides its
+/// own back navigation (feedback session steps) — the user leaves via the
+/// app bar's back button instead.
 class StatusBar extends ConsumerWidget {
-  const StatusBar({super.key});
+  const StatusBar({super.key, this.showMenu = true});
+
+  final bool showMenu;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -49,11 +57,12 @@ class StatusBar extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.menu),
-            tooltip: 'Menu',
-            onPressed: notifier.toggleSidebar,
-          ),
+          if (showMenu)
+            IconButton(
+              icon: const Icon(Icons.menu),
+              tooltip: 'Menu',
+              onPressed: notifier.toggleSidebar,
+            ),
           // Center: device info / tap to open connect window.
           Expanded(
             child: GestureDetector(
@@ -73,36 +82,36 @@ class StatusBar extends ConsumerWidget {
                         ],
                       )
                     : connected
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.bluetooth_connected, size: 18),
-                              const SizedBox(width: 8),
-                              Text(state.status.name),
-                              const SizedBox(width: 16),
-                              const Icon(Icons.battery_full, size: 18),
-                              const SizedBox(width: 4),
-                              Text('${(state.batteryLevel < 1 ? state.batteryLevel * 100 : state.batteryLevel).toInt()}%'),
-                              const SizedBox(width: 16),
-                              _signalQualityRow(state.signalQuality),
-                            ],
-                          )
-                        : state.connectingTo != null
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text('Connecting to ${state.connectingTo}…'),
-                                ],
-                              )
-                            : const Text('Not connected — tap to connect'),
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.bluetooth_connected, size: 18),
+                          const SizedBox(width: 8),
+                          Text(state.status.name),
+                          const SizedBox(width: 16),
+                          const Icon(Icons.battery_full, size: 18),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${(state.batteryLevel < 1 ? state.batteryLevel * 100 : state.batteryLevel).toInt()}%',
+                          ),
+                          const SizedBox(width: 16),
+                          _signalQualityRow(state.signalQuality),
+                        ],
+                      )
+                    : state.connectingTo != null
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 8),
+                          Text('Connecting to ${state.connectingTo}…'),
+                        ],
+                      )
+                    : const Text('Not connected — tap to connect'),
               ),
             ),
           ),
