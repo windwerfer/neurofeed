@@ -110,3 +110,10 @@ BLE transport: [my btleplug fork](https://github.com/windwerfer/btleplug) from t
 | `active-task.md` | Current development focus |
 | `feeback/architecture.md` | Feedback system architecture (state machine, ATR engine, audio) |
 | `feeback/todos.md` | Feedback dev todos + Phase I test checklist |
+
+## Third-party notices
+
+Credits and licenses for every bundled library, the REVE/LUNA model engine,
+and the freesound audio assets live in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) (also visible in-app under
+**Settings → About → Third-party notices**).

@@ -10,6 +10,7 @@ import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/reve/reve_card.dart';
 import 'package:muse_ml/src/settings.dart';
+import 'package:muse_ml/src/views/about_view.dart';
 
 /// Settings view — session storage folder + session recording options.
 class SettingsView extends ConsumerStatefulWidget {
@@ -191,7 +192,59 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         _GuardrailCard(settings: settings),
         const SizedBox(height: 16),
         const AiEngineCard(),
+        const SizedBox(height: 16),
+        const _AboutCard(),
       ],
+    );
+  }
+}
+
+/// App credits — bundled third-party notices opened as a sub-screen.
+class _AboutCard extends StatelessWidget {
+  const _AboutCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Text('About', style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.verified_user_outlined),
+              title: const Text('Third-party notices'),
+              subtitle: Text(
+                'Credits and licenses for the libraries, model engine, and '
+                'bundled audio this app includes.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AboutView(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
