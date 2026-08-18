@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
+import 'package:muse_ml/src/audio/binaural_beat_controller.dart';
 import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
@@ -656,6 +657,9 @@ class _SessionSettingsCard extends ConsumerWidget {
           const _SoundTile(),
           const Divider(height: 1, indent: 16, endIndent: 16),
           const _FeedbackTile(),
+          if (fb.feedbackMode == FeedbackMode.binaural) ...[
+            const _BinauralTile(),
+          ],
           if (showGuardrail) ...[
             const Divider(height: 1, indent: 16, endIndent: 16),
             const _GuardrailTile(),
@@ -791,6 +795,298 @@ class _FeedbackTile extends ConsumerWidget {
   }
 }
 
+/// The binaural-beats sub-tile: an indented, tightly grouped row under the
+/// Feedback Sound tile (visible only while Binaural Beats is the selected
+/// feedback layer), opening the tuning bubble on tap.
+class _BinauralTile extends ConsumerWidget {
+  const _BinauralTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final settings = ref.read(settingsProvider);
+    final preset = BinauralPreset.fromId(settings.binauralPresetId);
+    final beatHz = preset?.beatHz ?? settings.binauralBeatHz;
+    final carrierHz = preset?.carrierHz ?? settings.binauralCarrierHz;
+    final label = preset?.label ?? 'Custom';
+    return Container(
+      margin: const EdgeInsets.fromLTRB(32, 0, 16, 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(
+            color: theme.colorScheme.primary.withValues(alpha: 0.45),
+            width: 3,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Text(
+              'Binaural layer — part of the feedback sound',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.graphic_eq),
+            title: const Text('Binaural Beats'),
+            subtitle: Text(
+              '$label • ${beatHz.toStringAsFixed(1)} Hz beat on '
+              '${carrierHz.round()} Hz carrier • headphones',
+            ),
+            onTap: () => showDialog<void>(
+              context: context,
+              builder: (_) => const _BinauralSettingsDialog(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Binaural tuning bubble: goal-based presets (name + what they are for) and
+/// two advanced sliders (carrier + beat difference). Picking a preset applies
+/// its frequencies to the sliders; touching a slider falls back to Custom so
+/// the user always knows when a preset no longer matches the tuning.
+class _BinauralSettingsDialog extends ConsumerStatefulWidget {
+  const _BinauralSettingsDialog();
+
+  @override
+  ConsumerState<_BinauralSettingsDialog> createState() =>
+      _BinauralSettingsDialogState();
+}
+
+class _BinauralSettingsDialogState
+    extends ConsumerState<_BinauralSettingsDialog> {
+  late String _presetId;
+  late double _carrierHz;
+  late double _beatHz;
+
+  static const double carrierMin = 100;
+  static const double carrierMax = 400;
+  static const double beatMin = 1;
+  static const double beatMax = 40;
+
+  @override
+  void initState() {
+    super.initState();
+    final settings = ref.read(settingsProvider);
+    final preset = BinauralPreset.fromId(settings.binauralPresetId);
+    _presetId = preset?.name ?? binauralCustomPresetId;
+    _carrierHz = preset?.carrierHz ?? settings.binauralCarrierHz;
+    _beatHz = preset?.beatHz ?? settings.binauralBeatHz;
+  }
+
+  BinauralPreset? get _preset => BinauralPreset.fromId(_presetId);
+
+  void _persist() {
+    final settings = ref.read(settingsProvider);
+    settings.setBinauralPresetId(_presetId);
+    settings.setBinauralCarrierHz(_carrierHz);
+    settings.setBinauralBeatHz(_beatHz);
+    ref
+        .read(audioServiceProvider)
+        .setBinauralFrequencies(carrierHz: _carrierHz, beatHz: _beatHz);
+  }
+
+  void _pickPreset(String? id) {
+    if (id == null) {
+      return;
+    }
+    final preset = BinauralPreset.fromId(id);
+    if (preset == null) {
+      return;
+    }
+    setState(() {
+      _presetId = preset.name;
+      _carrierHz = preset.carrierHz;
+      _beatHz = preset.beatHz;
+    });
+    _persist();
+  }
+
+  void _setCarrier(double v) {
+    setState(() {
+      _carrierHz = v;
+      _presetId = binauralCustomPresetId;
+    });
+    _persist();
+  }
+
+  void _setBeat(double v) {
+    setState(() {
+      _beatHz = v;
+      _presetId = binauralCustomPresetId;
+    });
+    _persist();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final explanation =
+        _preset?.explanation ??
+        'Your own carrier and beat tuning (no preset goal).';
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Expanded(child: Text('Binaural Beats Settings')),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'PRESETS',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 4),
+            DropdownButtonFormField<String>(
+              initialValue: _presetId,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              items: [
+                for (final preset in BinauralPreset.values)
+                  DropdownMenuItem(
+                    value: preset.name,
+                    child: Text(preset.label),
+                  ),
+                DropdownMenuItem(
+                  value: binauralCustomPresetId,
+                  child: const Text('Custom'),
+                ),
+              ],
+              onChanged: _pickPreset,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              explanation,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'ADVANCED TUNING',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 4),
+            _TuneSlider(
+              label: 'Carrier Tone',
+              value: _carrierHz,
+              min: carrierMin,
+              max: carrierMax,
+              step: 1,
+              format: (v) => '${v.round()} Hz',
+              onChanged: _setCarrier,
+            ),
+            _TuneSlider(
+              label: 'Beat Difference',
+              value: _beatHz,
+              min: beatMin,
+              max: beatMax,
+              step: 0.5,
+              format: (v) => '${v.toStringAsFixed(1)} Hz',
+              onChanged: _setBeat,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Binaural beats need stereo headphones — on speakers the two '
+              'tones blend in the air and the effect is lost.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Labeled tuning slider row with a live value readout (dialog-safe: no
+/// intrinsic-size-unsafe widgets).
+class _TuneSlider extends StatelessWidget {
+  const _TuneSlider({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.step,
+    required this.format,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final double step;
+  final String Function(double) format;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final divisions = ((max - min) / step).round();
+    return Row(
+      children: [
+        SizedBox(width: 96, child: Text(label)),
+        Expanded(
+          child: Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            divisions: divisions,
+            label: format(value),
+            onChanged: (v) {
+              final stepped =
+                  (v / step).roundToDouble() * step;
+              onChanged(stepped.clamp(min, max));
+            },
+          ),
+        ),
+        SizedBox(
+          width: 56,
+          child: Text(
+            format(value),
+            textAlign: TextAlign.right,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _GuardrailTile extends ConsumerWidget {
   const _GuardrailTile();
 
@@ -803,14 +1099,6 @@ class _GuardrailTile extends ConsumerWidget {
       leading: const Icon(Icons.shield_outlined),
       title: const Text('Guardrail'),
       subtitle: Text('${engine.label} • ${sound.label}'),
-      trailing: IconButton(
-        icon: const Icon(Icons.settings_outlined),
-        tooltip: 'Guardrail engine, warning sound and threshold',
-        onPressed: () => showDialog<void>(
-          context: context,
-          builder: (_) => const _GuardrailGearDialog(),
-        ),
-      ),
       onTap: () => showDialog<void>(
         context: context,
         builder: (_) => const _GuardrailGearDialog(),
@@ -991,6 +1279,7 @@ class _VolumeDialogState extends State<_VolumeDialog> {
   late double _master;
   late double _background;
   late double _feedback;
+  late double _guardrail;
   late double _intro;
   late double _bell;
 
@@ -1000,6 +1289,7 @@ class _VolumeDialogState extends State<_VolumeDialog> {
     _master = widget.audio.masterVolume;
     _background = widget.audio.backgroundVolume;
     _feedback = widget.audio.feedbackVolume;
+    _guardrail = widget.audio.guardrailVolume;
     _intro = widget.audio.introVolume;
     _bell = widget.audio.bellVolume;
   }
@@ -1023,6 +1313,7 @@ class _VolumeDialogState extends State<_VolumeDialog> {
                 if (label == 'Master') _master = v;
                 if (label == 'Background') _background = v;
                 if (label == 'Feedback') _feedback = v;
+                if (label == 'Guardrail') _guardrail = v;
                 if (label == 'Intro') _intro = v;
                 if (label == 'End Bell') _bell = v;
               });
@@ -1044,6 +1335,7 @@ class _VolumeDialogState extends State<_VolumeDialog> {
       _master = widget.audio.masterVolume;
       _background = widget.audio.backgroundVolume;
       _feedback = widget.audio.feedbackVolume;
+      _guardrail = widget.audio.guardrailVolume;
       _intro = widget.audio.introVolume;
       _bell = widget.audio.bellVolume;
     });
@@ -1076,6 +1368,12 @@ class _VolumeDialogState extends State<_VolumeDialog> {
             onChanged: widget.audio.setFeedbackVolume,
           ),
           _slider(
+            icon: Icons.shield_outlined,
+            label: 'Guardrail',
+            value: _guardrail,
+            onChanged: widget.audio.setGuardrailVolume,
+          ),
+          _slider(
             icon: Icons.record_voice_over,
             label: 'Intro',
             value: _intro,
@@ -1089,8 +1387,9 @@ class _VolumeDialogState extends State<_VolumeDialog> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Feedback covers the reward bowl chimes. Changes apply immediately '
-            'and are remembered.',
+            'Feedback covers the reward layer (bowl chimes / rain / binaural '
+            'beats); Guardrail covers the warning chime. Changes apply '
+            'immediately and are remembered.',
             style: theme.textTheme.bodySmall,
           ),
         ],
@@ -1341,6 +1640,11 @@ class _FeedbackModePicker extends StatelessWidget {
                   ? const Text('Rain that quiets as you get closer')
                   : m == FeedbackMode.music
                   ? const Text('Your folder through a reward-driven filter')
+                  : m == FeedbackMode.binaural
+                  ? const Text(
+                      'Synth alpha-flow beats that swell as you reach the '
+                      'target (headphones required)',
+                    )
                   : const Text('Silent feedback — no reward sound'),
               selected: sel,
               onTap: () => Navigator.of(context).pop(m),

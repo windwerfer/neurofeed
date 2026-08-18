@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/audio/binaural_beat_controller.dart';
 import 'package:muse_ml/src/audio/feedback_audio_controller.dart';
 import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/audio/music_feedback_controller.dart';
@@ -18,22 +19,29 @@ const String musicSoundName = 'Music from folder';
 ///  * **Feedback** — the reward channel: bowl chimes on-target, a rain loop
 ///    whose intensity follows the reward ([RainFeedbackController]), the
 ///    folder through a reward-driven low-pass filter
-///    ([MusicFeedbackController] modulated), or none.
+///    ([MusicFeedbackController] modulated), synthesized binaural beats whose
+///    volume follows the reward ([BinauralBeatController]), or none.
 ///
 /// Selecting Rain or Music as the feedback sound suppresses the background
-/// (the modulated loop becomes the whole soundscape).
+/// (the modulated loop becomes the whole soundscape); Binaural Beats layer on
+/// top of it instead (the beats sit *under* the background blend).
 class AudioService {
+  final Settings _settings;
   final FeedbackAudioController _controller;
   final MusicFeedbackController _music;
   final RainFeedbackController _rain;
+  final BinauralBeatController _binaural;
 
   AudioService(Settings settings)
-    : _controller = FeedbackAudioController(settings),
+    : _settings = settings,
+      _controller = FeedbackAudioController(settings),
       _music = MusicFeedbackController(settings),
-      _rain = RainFeedbackController() {
+      _rain = RainFeedbackController(),
+      _binaural = BinauralBeatController() {
     _music.refreshSettings();
     _refreshMusicVolume();
     _refreshRainVolume();
+    _refreshBinauralVolume();
   }
 
   static const Map<String, String?> soundAssets = {
@@ -67,6 +75,7 @@ class AudioService {
     _controller.setMasterVolume(value);
     _refreshMusicVolume();
     _refreshRainVolume();
+    _refreshBinauralVolume();
   }
 
   void setBackgroundVolume(double value) {
@@ -78,6 +87,7 @@ class AudioService {
     _controller.setFeedbackVolume(value);
     _refreshMusicVolume();
     _refreshRainVolume();
+    _refreshBinauralVolume();
   }
 
   void setIntroVolume(double value) => _controller.setIntroVolume(value);
@@ -91,6 +101,7 @@ class AudioService {
     _controller.resetVolumes();
     _refreshMusicVolume();
     _refreshRainVolume();
+    _refreshBinauralVolume();
   }
 
   /// Music in static (background) mode rides the background channel; music
@@ -104,6 +115,10 @@ class AudioService {
 
   void _refreshRainVolume() {
     _rain.setVolume(_controller.masterVolume * _controller.feedbackVolume);
+  }
+
+  void _refreshBinauralVolume() {
+    _binaural.setGain(_controller.masterVolume * _controller.feedbackVolume);
   }
 
   /// Starts a session's audio: background loop (unless suppressed) plus the
@@ -130,10 +145,21 @@ class AudioService {
       await _music.start();
     } else if (feedback == FeedbackMode.rain) {
       await _rain.start();
+    } else if (feedback == FeedbackMode.binaural) {
+      await _binaural.start(
+        carrierHz: _binauralCarrierHz,
+        beatHz: _binauralBeatHz,
+      );
     }
     _refreshMusicVolume();
     _refreshRainVolume();
+    _refreshBinauralVolume();
   }
+
+  /// Current binaural carrier / beat from settings.
+  double get _binauralCarrierHz => _settings.binauralCarrierHz;
+
+  double get _binauralBeatHz => _settings.binauralBeatHz;
 
   /// Mid-session sound/feedback change: tears down and restarts both layers
   /// with the new selection (used by the pre-session keep-phase fast path).
@@ -192,10 +218,25 @@ class AudioService {
   /// Feeds the live reward percentile (0–100) to the rain intensity stage.
   void setRainPercentile(double pct) => _rain.setTargetPercentile(pct);
 
+  /// Whether the binaural-beat layer is actively playing.
+  bool get binauralPlaying => _binaural.isPlaying;
+
+  /// Feeds the live reward percentile (0–100) to the binaural volume — full
+  /// fade at zero (off-target), full channel gain at the 100th percentile.
+  void setBinauralPercentile(double pct) => _binaural.setPercentile(pct);
+
+  /// Retunes the binaural voices (used when a preset or tuning slider
+  /// changes mid-session).
+  void setBinauralFrequencies({
+    required double carrierHz,
+    required double beatHz,
+  }) => _binaural.setFrequencies(carrierHz: carrierHz, beatHz: beatHz);
+
   /// Ducks whichever modulated channel is active during a guardrail warning.
   void setMusicMuffle(bool on) {
     _music.setMuffle(on);
     _rain.setMuffle(on);
+    _binaural.setMuffle(on);
   }
 
   /// Guardrail warning state.
@@ -231,29 +272,34 @@ class AudioService {
     await _controller.pauseBackground();
     _music.pause();
     _rain.pause();
+    _binaural.pause();
   }
 
   Future<void> resume() async {
     await _controller.resumeBackground();
     _music.resume();
     _rain.resume();
+    _binaural.resume();
   }
 
   Future<void> stop() async {
     await _music.stop();
     await _rain.stop();
+    await _binaural.stop();
     await _controller.stop();
   }
 
   Future<void> _stopChannels() async {
     await _music.stop();
     await _rain.stop();
+    await _binaural.stop();
     await _controller.stop();
   }
 
   void dispose() {
     _music.dispose();
     _rain.dispose();
+    _binaural.dispose();
     _controller.dispose();
   }
 }

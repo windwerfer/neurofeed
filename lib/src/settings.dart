@@ -26,12 +26,14 @@ enum FeedbackMode {
   bowlChimes,
   rain,
   music,
+  binaural,
   none;
 
   String get label => switch (this) {
     FeedbackMode.bowlChimes => 'Bowl chimes',
     FeedbackMode.rain => 'Rain',
     FeedbackMode.music => 'Music',
+    FeedbackMode.binaural => 'Binaural Beats',
     FeedbackMode.none => 'None',
   };
 }
@@ -120,6 +122,9 @@ class Settings {
   static const String _musicInvertKey = 'music_invert_mapping';
   static const String _musicShuffleKey = 'music_shuffle';
   static const String _guardrailVolumeKey = 'guardrail_volume';
+  static const String _binauralPresetKey = 'binaural_preset';
+  static const String _binauralCarrierKey = 'binaural_carrier_hz';
+  static const String _binauralBeatKey = 'binaural_beat_hz';
 
   final SharedPreferences _prefs;
 
@@ -334,6 +339,28 @@ class Settings {
 
   Future<void> setGuardrailVolume(double value) =>
       _prefs.setDouble(_guardrailVolumeKey, value);
+
+  /// Selected binaural preset id ([BinauralPreset] name or
+  /// [binauralCustomPresetId]). Presets set both the carrier and the beat
+  /// difference; moving either tuning slider flips this to `custom`.
+  String get binauralPresetId => _prefs.getString(_binauralPresetKey) ?? '';
+
+  Future<void> setBinauralPresetId(String value) =>
+      _prefs.setString(_binauralPresetKey, value);
+
+  /// Carrier tone (Hz) for the binaural layer; used when [binauralPresetId]
+  /// is custom (presets supply their own carrier).
+  double get binauralCarrierHz => _prefs.getDouble(_binauralCarrierKey) ?? 200.0;
+
+  Future<void> setBinauralCarrierHz(double value) =>
+      _prefs.setDouble(_binauralCarrierKey, value);
+
+  /// Beat difference (Hz) between the ears — the perceived entrainment
+  /// frequency; used when [binauralPresetId] is custom.
+  double get binauralBeatHz => _prefs.getDouble(_binauralBeatKey) ?? 10.0;
+
+  Future<void> setBinauralBeatHz(double value) =>
+      _prefs.setDouble(_binauralBeatKey, value);
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and

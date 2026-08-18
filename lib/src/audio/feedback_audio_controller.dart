@@ -58,7 +58,7 @@ class FeedbackAudioController {
   double _feedbackVolume = 1.0;
   double _introVolume = 1.0;
   double _bellVolume = 1.0;
-  double _guardrailVolume = 1.0;
+  double _guardrailVolume = 0.5;
 
   FeedbackAudioController(Settings settings) : _settings = settings {
     _masterVolume = settings.masterVolume ?? 1.0;
@@ -66,7 +66,7 @@ class FeedbackAudioController {
     _feedbackVolume = settings.feedbackVolume ?? 1.0;
     _introVolume = settings.introVolume ?? 1.0;
     _bellVolume = settings.bellVolume ?? 1.0;
-    _guardrailVolume = settings.guardrailVolume ?? 1.0;
+    _guardrailVolume = settings.guardrailVolume ?? 0.5;
     _warningSound = GuardrailSound.fromName(settings.warningSoundName);
   }
 
@@ -200,7 +200,7 @@ class FeedbackAudioController {
     _feedbackVolume = 1.0;
     _introVolume = 1.0;
     _bellVolume = 1.0;
-    _guardrailVolume = 1.0;
+    _guardrailVolume = 0.5;
     _settings
       ..setMasterVolume(_masterVolume)
       ..setBackgroundVolume(_backgroundVolume)

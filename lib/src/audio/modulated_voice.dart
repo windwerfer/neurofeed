@@ -67,14 +67,16 @@ class ModulatedVoice {
   /// new source steps in for the same channel).
   double get voiceVolume => _volume;
 
-  /// Starts (or restarts) playback of [src] at [volume]. When [activateFilter]
-  /// is false the voice plays unprocessed (static background music, no slew).
+  /// Starts (or restarts) playback of [src] at [volume], panned [pan]
+  /// (−1 hard left … +1 hard right). When [activateFilter] is false the voice
+  /// plays unprocessed (static background music, binaural ears — no slew).
   void play(
     AudioSource src, {
     required double volume,
+    double pan = 0,
     bool activateFilter = true,
   }) {
-    final newHandle = SoLoud.instance.play(src, volume: volume);
+    final newHandle = SoLoud.instance.play(src, volume: volume, pan: pan);
     if (activateFilter) {
       src.filters.biquadFilter.activate();
       src.filters.biquadFilter.type(soundHandle: newHandle).value = 0;

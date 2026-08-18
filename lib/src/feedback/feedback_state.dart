@@ -308,15 +308,30 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
-  /// Selects the feedback layer (bowl chimes / rain / music / none).
-  /// Rain and Music suppress the background layer; switching mid-session
-  /// restarts the channels without leaving the current phase.
+  /// Selects the feedback layer (bowl chimes / rain / music / binaural /
+  /// none). Rain and Music suppress the background layer; Binaural Beats
+  /// layer on top of it. Switching mid-session restarts the channels without
+  /// leaving the current phase.
   void selectFeedbackMode(FeedbackMode mode) {
+    if (mode == FeedbackMode.binaural) {
+      _seedBinauralVolumes();
+    }
     state = state.copyWith(feedbackMode: mode);
     _ref.read(settingsProvider).setFeedbackMode(mode);
     if (state.phase == FeedbackPhase.playing ||
         state.phase == FeedbackPhase.paused) {
       unawaited(_switchChannelsWhileKeepingPhase());
+    }
+  }
+
+  /// First time binaural beats are picked, the shared feedback channel still
+  /// sits at its generic 100% default — far too loud for a beat layer meant
+  /// to blend under the background. Seed it to the 15% binaural standard
+  /// unless the user has already tuned volumes.
+  void _seedBinauralVolumes() {
+    final settings = _ref.read(settingsProvider);
+    if (settings.feedbackVolume == null) {
+      _audio.setFeedbackVolume(0.15);
     }
   }
 
@@ -1165,18 +1180,19 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     return true;
   }
 
-  /// True when a modulated feedback channel (music or rain) is currently
-  /// streaming — the guardrail ducks these during warnings.
+  /// True when a modulated feedback channel (music, rain or binaural) is
+  /// currently streaming — the guardrail ducks these during warnings.
   bool get _musicActive => switch (state.feedbackMode) {
     FeedbackMode.music => _audio.musicPlaying,
     FeedbackMode.rain => _audio.rainPlaying,
+    FeedbackMode.binaural => _audio.binauralPlaying,
     _ => false,
   };
 
   /// Routes the live reward to the selected feedback layer: bowl chimes fire
   /// on the full in-target verdict (scalar + conditions), rain maps
-  /// percentile→intensity stage, music maps percentile→cutoff. `none` stays
-  /// silent.
+  /// percentile→intensity stage, music maps percentile→cutoff, binaural maps
+  /// percentile→beat volume (full fade off-target). `none` stays silent.
   void _applyReward(double value, {required bool inTarget}) {
     switch (state.feedbackMode) {
       case FeedbackMode.music:
@@ -1187,6 +1203,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       case FeedbackMode.rain:
         if (_audio.rainPlaying) {
           _applyRainPercentile(value);
+        }
+        return;
+      case FeedbackMode.binaural:
+        if (_audio.binauralPlaying) {
+          _audio.setBinauralPercentile(_engine.percentileOf(value) ?? 0);
         }
         return;
       case FeedbackMode.none:
