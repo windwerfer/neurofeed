@@ -8,11 +8,14 @@ import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/rust/frb_generated.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/status_bar.dart';
+import 'package:muse_ml/src/streaming/streaming_controller.dart';
+import 'package:muse_ml/src/streaming/streaming_indicator.dart';
 import 'package:muse_ml/src/views/bands.dart';
 import 'package:muse_ml/src/views/raw_eeg.dart';
 import 'package:muse_ml/src/views/terminal.dart';
 import 'package:muse_ml/src/views/psd_view.dart';
 import 'package:muse_ml/src/views/settings_view.dart';
+import 'package:muse_ml/src/views/streaming_view.dart';
 import 'package:muse_ml/src/views/feedback_list.dart';
 import 'package:muse_ml/src/views/feedback_history.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -40,6 +43,10 @@ class _AppShellState extends ConsumerState<AppShell> {
         return AppExitResponse.exit;
       },
     );
+    // Construct the streaming controller once so it listens to the Muse
+    // event stream for the whole app lifetime (streaming starts as soon as
+    // a device connects, independent of the visible view).
+    ref.read(streamingControllerProvider.notifier);
   }
 
   @override
@@ -66,6 +73,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         body = const SpectrogramView();
       case AppView.psd:
         body = const PsdView();
+      case AppView.streaming:
+        body = const StreamingView();
       case AppView.settings:
         body = const SettingsView();
     }
@@ -136,6 +145,15 @@ class _AppShellState extends ConsumerState<AppShell> {
                                       .setCurrentView(AppView.psd),
                                 ),
                                 _SideBarItem(
+                                  label: 'Streaming',
+                                  selected:
+                                      state.currentView == AppView.streaming,
+                                  trailing: const StreamDot(),
+                                  onTap: () => ref
+                                      .read(appStateProvider.notifier)
+                                      .setCurrentView(AppView.streaming),
+                                ),
+                                _SideBarItem(
                                   label: 'Settings',
                                   selected:
                                       state.currentView == AppView.settings,
@@ -176,18 +194,25 @@ class _SideBarItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.trailing,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       type: MaterialType.card,
       color: const Color(0xFF1E212A),
-      child: ListTile(title: Text(label), selected: selected, onTap: onTap),
+      child: ListTile(
+        title: Text(label),
+        trailing: trailing,
+        selected: selected,
+        onTap: onTap,
+      ),
     );
   }
 }

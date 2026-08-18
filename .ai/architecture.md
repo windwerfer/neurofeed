@@ -88,10 +88,51 @@ It remains a good second choice if btleplug ever becomes unmaintainable.
 - Settings toggles: `eyeMarkersEnabled` (eye track, default off) and
   `markersInFeedbackEnabled` (persist markers, default on).
 
+## Feedback audio modes (flutter_soloud)
+- One `AudioService` façade over SoLoud; `FeedbackAudioController` owns the
+  volume stack (**5 channels**: master × background / feedback / intro / end
+  bell / guardrail warning), calibration clips, and chimes.
+- Feedback-sound modes (`Settings.feedbackSound`): **bowl chimes** (reward
+  verdicts), **rain**, **music** (`MusicFeedbackController` — user folder
+  played through a per-voice biquad low-pass, cutoff/invert/shuffle from the
+  shared `MusicSettingsPanel` in `lib/src/views/music_settings_panel.dart`),
+  **binaural** (`BinauralBeatController` — two synth voices at a carrier/beat
+  beat-frequency pair), or none. Reward drives swell on music/binaural; the
+  guardrail muffle ducks them when the warning sounds.
+- Connect window: `ConnectOverlay` (`lib/src/connect_window.dart`) is a
+  tap-anywhere barrier + device list/rescan panel; both `AppShell` and
+  `FeedbackSessionView` host their own copy (session screen can reconnect
+  without leaving the session).
+
+## Network streaming (OSC / LSL / BrainFlow)
+- One `StreamingController` (riverpod) subscribes to the Muse event stream,
+  mixes per-group channels through `StreamingMixer` (per-channel queues →
+  lockstep rows), and starts on connect / stops on disconnect. Three wire
+  formats, all built from `StreamingConfig` derived from `Settings`
+  (`osc`/`lsl`/`brainflow` keys):
+  - **OSC** (`streaming_osc.dart`): unicast UDP, batched per-chunk messages via
+    `oscEncodeMessage`; the IP auto-fills from the local subnet when unset.
+  - **LSL** (`streaming_lsl.dart`): `liblsl` pub package, auto-discovered on the
+    network — no IP/port needed.
+  - **BrainFlow** (`streaming_brainflow.dart`): multicast UDP "Streaming Board"
+    datagrams — raw little-endian f64 doubles, no header, one datagram per
+    batch of 3 samples. `eeg` = default preset (7 rows) on the configured port;
+    `imu` = auxiliary preset (9 rows) on port+1 and `ppg` = ancillary preset
+    (6 rows) on port+2, both only when `separateGroups` is on. The receiver
+    drops datagrams that aren't exactly `batch_size × num_rows` doubles.
+    Reference for the wire format: `third_party/brainflow/` (tag 5.9.0), NOT a
+    build dependency.
+- `StreamIndicator`/`StreamDot` show live (green) / armed (amber) status in the
+  sidebar and status bar. End-to-end verified over real loopback sockets in
+  `test/streaming_osc_test.dart` (extend it when touching the wire formats).
+
 ## Local model engine (REVE / LUNA guardrail)
-- Purpose: on-device drowsiness/artifact embeddings for the Sleep-Edge Rest
-  protocol's guardrail layer (the guardrail composes with the ATR reward engine;
-  see `ProtocolInfo.aiSleepGuardrail`). **The app ships no weights.**
+- Purpose: on-device drowsiness/artifact embeddings for the guardrail layer
+  (the guardrail composes with the ATR reward engine but only warns — it never
+  modulates the reward). Per-protocol wiring: `ProtocolInfo.guardrailDefault` /
+  `guardrailAllowed` / `guardrailFeedback` + `Settings.guardrailEnabledFor`; the
+  eyes-open alertness protocol sets `guardrailAllowed: false` so the guardrail
+  gear card is hidden there. **The app ships no weights.**
 - Rust: `rust/src/api/reve.rs` is the FFI surface (`model_load`/`model_unload`/
   `model_loaded`/`model_config_json`). `rust/src/analysis/{reve,luna}.rs` wrap the
   `reve-rs`/`luna-rs` crates (RLX CPU backend); scoring runs there from the event

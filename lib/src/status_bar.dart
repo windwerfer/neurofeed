@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/streaming/streaming_indicator.dart';
 
 const _kSignalSymbols = ['/', '‾', '‾', '\\'];
 
@@ -96,6 +97,8 @@ class StatusBar extends ConsumerWidget {
                           ),
                           const SizedBox(width: 16),
                           _signalQualityRow(state.signalQuality),
+                          const SizedBox(width: 16),
+                          const StreamIndicator(),
                         ],
                       )
                     : state.connectingTo != null
@@ -111,7 +114,14 @@ class StatusBar extends ConsumerWidget {
                           Text('Connecting to ${state.connectingTo}…'),
                         ],
                       )
-                    : const Text('Not connected — tap to connect'),
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Not connected — tap to connect'),
+                          const SizedBox(width: 12),
+                          const StreamIndicator(),
+                        ],
+                      ),
               ),
             ),
           ),

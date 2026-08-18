@@ -14,6 +14,7 @@ enum AppView {
   rawEeg,
   spectrogram,
   psd,
+  streaming,
   settings,
 }
 
@@ -64,6 +65,7 @@ const Map<AppView, String> _viewNames = {
   AppView.rawEeg: 'rawEeg',
   AppView.spectrogram: 'spectrogram',
   AppView.psd: 'psd',
+  AppView.streaming: 'streaming',
   AppView.settings: 'settings',
 };
 
@@ -81,6 +83,8 @@ AppView _viewFromName(String? name) {
       return AppView.spectrogram;
     case 'psd':
       return AppView.psd;
+    case 'streaming':
+      return AppView.streaming;
     case 'settings':
       return AppView.settings;
     default:
@@ -125,6 +129,19 @@ class Settings {
   static const String _binauralPresetKey = 'binaural_preset';
   static const String _binauralCarrierKey = 'binaural_carrier_hz';
   static const String _binauralBeatKey = 'binaural_beat_hz';
+  static const String _streamProtocolKey = 'stream_protocol';
+  static const String _oscEnabledKey = 'stream_osc_enabled';
+  static const String _oscIpKey = 'stream_osc_ip';
+  static const String _oscPortKey = 'stream_osc_port';
+  static const String _oscPrefixKey = 'stream_osc_prefix';
+  static const String _oscSeparateGroupsKey = 'stream_osc_separate_groups';
+  static const String _lslEnabledKey = 'stream_lsl_enabled';
+  static const String _lslPrefixKey = 'stream_lsl_prefix';
+  static const String _lslSeparateGroupsKey = 'stream_lsl_separate_groups';
+  static const String _brainflowEnabledKey = 'stream_bf_enabled';
+  static const String _brainflowIpKey = 'stream_bf_ip';
+  static const String _brainflowPortKey = 'stream_bf_port';
+  static const String _brainflowSeparateGroupsKey = 'stream_bf_separate_groups';
 
   final SharedPreferences _prefs;
 
@@ -365,6 +382,84 @@ class Settings {
 
   Future<void> setBinauralBeatHz(double value) =>
       _prefs.setDouble(_binauralBeatKey, value);
+
+  /// Network streaming protocol selected in the Streaming view
+  /// (`osc` or `lsl`); only one protocol runs at a time.
+  String? get streamProtocolName => _prefs.getString(_streamProtocolKey);
+
+  Future<void> setStreamProtocolName(String value) =>
+      _prefs.setString(_streamProtocolKey, value);
+
+  bool get oscEnabled => _prefs.getBool(_oscEnabledKey) ?? false;
+
+  Future<void> setOscEnabled(bool value) =>
+      _prefs.setBool(_oscEnabledKey, value);
+
+  /// Destination PC for OSC (unicast UDP).
+  String get oscIp => _prefs.getString(_oscIpKey) ?? '192.168.1.100';
+
+  Future<void> setOscIp(String value) => _prefs.setString(_oscIpKey, value);
+
+  int get oscPort => _prefs.getInt(_oscPortKey) ?? 9000;
+
+  Future<void> setOscPort(int value) => _prefs.setInt(_oscPortKey, value);
+
+  /// True once the user has entered an OSC IP at least once; before that the
+  /// streaming view auto-fills the current subnet as the example address.
+  bool get oscIpUserSet => _prefs.containsKey(_oscIpKey) && oscIp.isNotEmpty;
+
+  /// OSC address root, e.g. `/muse` → messages to `/muse/eeg`, `/muse/ppg`.
+  String get oscPrefix => _prefs.getString(_oscPrefixKey) ?? '/muse';
+
+  Future<void> setOscPrefix(String value) =>
+      _prefs.setString(_oscPrefixKey, value);
+
+  /// When true every sensor group gets its own OSC address / LSL stream;
+  /// when false only the EEG group is streamed.
+  bool get oscSeparateGroups => _prefs.getBool(_oscSeparateGroupsKey) ?? true;
+
+  Future<void> setOscSeparateGroups(bool value) =>
+      _prefs.setBool(_oscSeparateGroupsKey, value);
+
+  bool get lslEnabled => _prefs.getBool(_lslEnabledKey) ?? false;
+
+  Future<void> setLslEnabled(bool value) =>
+      _prefs.setBool(_lslEnabledKey, value);
+
+  /// LSL stream-name prefix, e.g. `Muse` → streams `MuseEEG`, `MusePPG`.
+  String get lslPrefix => _prefs.getString(_lslPrefixKey) ?? 'Muse';
+
+  Future<void> setLslPrefix(String value) =>
+      _prefs.setString(_lslPrefixKey, value);
+
+  bool get lslSeparateGroups => _prefs.getBool(_lslSeparateGroupsKey) ?? true;
+
+  Future<void> setLslSeparateGroups(bool value) =>
+      _prefs.setBool(_lslSeparateGroupsKey, value);
+
+  bool get brainflowEnabled => _prefs.getBool(_brainflowEnabledKey) ?? false;
+
+  Future<void> setBrainflowEnabled(bool value) =>
+      _prefs.setBool(_brainflowEnabledKey, value);
+
+  /// Multicast group the BrainFlow Streaming Board format is sent to.
+  String get brainflowIp => _prefs.getString(_brainflowIpKey) ?? '225.1.1.1';
+
+  Future<void> setBrainflowIp(String value) =>
+      _prefs.setString(_brainflowIpKey, value);
+
+  int get brainflowPort => _prefs.getInt(_brainflowPortKey) ?? 6677;
+
+  Future<void> setBrainflowPort(int value) =>
+      _prefs.setInt(_brainflowPortKey, value);
+
+  /// When true BrainFlow streams all presets (EEG on the configured port,
+  /// IMU on port+1, PPG on port+2); when false only the EEG default preset.
+  bool get brainflowSeparateGroups =>
+      _prefs.getBool(_brainflowSeparateGroupsKey) ?? true;
+
+  Future<void> setBrainflowSeparateGroups(bool value) =>
+      _prefs.setBool(_brainflowSeparateGroupsKey, value);
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and
