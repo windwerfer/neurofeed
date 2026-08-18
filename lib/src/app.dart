@@ -8,11 +8,13 @@ import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/rust/frb_generated.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/status_bar.dart';
+import 'package:muse_ml/src/streaming/streaming_controller.dart';
 import 'package:muse_ml/src/views/bands.dart';
 import 'package:muse_ml/src/views/raw_eeg.dart';
 import 'package:muse_ml/src/views/terminal.dart';
 import 'package:muse_ml/src/views/psd_view.dart';
 import 'package:muse_ml/src/views/settings_view.dart';
+import 'package:muse_ml/src/views/streaming_view.dart';
 import 'package:muse_ml/src/views/feedback_list.dart';
 import 'package:muse_ml/src/views/feedback_history.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -40,6 +42,10 @@ class _AppShellState extends ConsumerState<AppShell> {
         return AppExitResponse.exit;
       },
     );
+    // Construct the streaming controller once so it listens to the Muse
+    // event stream for the whole app lifetime (streaming starts as soon as
+    // a device connects, independent of the visible view).
+    ref.read(streamingControllerProvider.notifier);
   }
 
   @override
@@ -66,6 +72,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         body = const SpectrogramView();
       case AppView.psd:
         body = const PsdView();
+      case AppView.streaming:
+        body = const StreamingView();
       case AppView.settings:
         body = const SettingsView();
     }
@@ -134,6 +142,14 @@ class _AppShellState extends ConsumerState<AppShell> {
                                   onTap: () => ref
                                       .read(appStateProvider.notifier)
                                       .setCurrentView(AppView.psd),
+                                ),
+                                _SideBarItem(
+                                  label: 'Streaming',
+                                  selected:
+                                      state.currentView == AppView.streaming,
+                                  onTap: () => ref
+                                      .read(appStateProvider.notifier)
+                                      .setCurrentView(AppView.streaming),
                                 ),
                                 _SideBarItem(
                                   label: 'Settings',
