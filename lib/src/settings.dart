@@ -396,9 +396,13 @@ class Settings {
 
   Future<void> setOscIp(String value) => _prefs.setString(_oscIpKey, value);
 
-  int get oscPort => _prefs.getInt(_oscPortKey) ?? 5555;
+  int get oscPort => _prefs.getInt(_oscPortKey) ?? 9000;
 
   Future<void> setOscPort(int value) => _prefs.setInt(_oscPortKey, value);
+
+  /// True once the user has entered an OSC IP at least once; before that the
+  /// streaming view auto-fills the current subnet as the example address.
+  bool get oscIpUserSet => _prefs.containsKey(_oscIpKey) && oscIp.isNotEmpty;
 
   /// OSC address root, e.g. `/muse` → messages to `/muse/eeg`, `/muse/ppg`.
   String get oscPrefix => _prefs.getString(_oscPrefixKey) ?? '/muse';

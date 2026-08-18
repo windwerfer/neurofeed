@@ -42,6 +42,18 @@ class StreamingUiState {
       streamingSince == null ? null : DateTime.now().difference(streamingSince!);
 }
 
+/// Three-state indicator for the sidebar entry and status bar: no dot when
+/// streaming is off, amber when enabled but no device is connected (armed),
+/// green while data is actually streaming.
+enum StreamBadgeState { off, armed, live }
+
+StreamBadgeState streamBadgeOf(StreamingUiState s) =>
+    s.streaming
+        ? StreamBadgeState.live
+        : s.enabled
+        ? StreamBadgeState.armed
+        : StreamBadgeState.off;
+
 /// Coordinates network streaming: subscribes to the Muse event stream, mixes
 /// per-group channels and pushes rows into the active protocol sender.
 /// Streaming starts when a device connects (and the selected protocol is
@@ -75,17 +87,30 @@ class StreamingController extends Notifier<StreamingUiState> {
     return _snapshot(streaming: false);
   }
 
-  StreamingUiState _snapshot({required bool streaming}) => StreamingUiState(
-        connected: _connected,
-        streaming: streaming,
-        protocol: _config?.protocol ?? StreamProtocol.osc,
-        enabled: _config?.enabled ?? false,
-        groups: streaming ? (_config?.groups ?? const []) : const [],
-        bytesSent: _bytesSent,
-        packetsSent: _packetsSent,
-        streamingSince: streaming ? _streamingSince : null,
-        error: streaming ? null : _lastError,
-      );
+  StreamingUiState _snapshot({required bool streaming}) {
+    // Intent (enabled/protocol) falls back to settings before any device has
+    // connected (no `_config` yet) so the armed indicator shows the on/off
+    // toggle state from the very first frame.
+    final settings = _settings;
+    final protocol =
+        _config?.protocol ?? StreamProtocol.fromName(settings.streamProtocolName);
+    final enabled = _config?.enabled ??
+        switch (protocol) {
+          StreamProtocol.osc => settings.oscEnabled,
+          StreamProtocol.lsl => settings.lslEnabled,
+        };
+    return StreamingUiState(
+      connected: _connected,
+      streaming: streaming,
+      protocol: protocol,
+      enabled: enabled,
+      groups: streaming ? (_config?.groups ?? const []) : const [],
+      bytesSent: _bytesSent,
+      packetsSent: _packetsSent,
+      streamingSince: streaming ? _streamingSince : null,
+      error: streaming ? null : _lastError,
+    );
+  }
 
   void _onEvent(MuseEventDto event) {
     switch (event) {

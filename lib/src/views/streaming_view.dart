@@ -1,9 +1,29 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/streaming/streaming_controller.dart';
 import 'package:muse_ml/src/streaming/streaming_models.dart';
+
+/// '192.168.200.34' → '192.168.200'; null unless the IP is private-ranged and
+/// well-formed (the cases that make sense as a LAN destination hint).
+String? subnetOfPrivateIp(String ip) {
+  final parts = ip.split('.');
+  if (parts.length != 4) return null;
+  final octets = <int>[];
+  for (final p in parts) {
+    final v = int.tryParse(p);
+    if (v == null || v < 0 || v > 255) return null;
+    octets.add(v);
+  }
+  final private = octets[0] == 10 ||
+      (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31) ||
+      (octets[0] == 192 && octets[1] == 168);
+  if (!private) return null;
+  return octets.take(3).join('.');
+}
 
 /// Streams live sensor data to a PC over one of the supported network
 /// protocols. The protocol is chosen here; streaming starts automatically as
@@ -21,10 +41,46 @@ class _StreamingViewState extends ConsumerState<StreamingView> {
   final _oscPrefixCtrl = TextEditingController();
   final _lslPrefixCtrl = TextEditingController();
 
+  /// The device's own LAN IP once detected (used for the helper text).
+  String? _localIp;
+
   @override
   void initState() {
     super.initState();
     _syncFromSettings(ref.read(settingsProvider));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autofillOscIpIfUnset());
+  }
+
+  Future<String?> _detectLocalIp() async {
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          if (subnetOfPrivateIp(addr.address) != null) return addr.address;
+        }
+      }
+    } catch (_) {
+      // Interface enumeration may fail on some platforms; the field keeps its
+      // built-in example then.
+    }
+    return null;
+  }
+
+  /// First run: the OS hasn't handed out a real receiver IP yet, so fill the
+  /// example with a free address on the device's own subnet (e.g. the phone
+  /// is at 192.168.200.34 → default 192.168.200.100).
+  Future<void> _autofillOscIpIfUnset() async {
+    final settings = ref.read(settingsProvider);
+    if (settings.oscIpUserSet) return;
+    final ip = await _detectLocalIp();
+    final subnet = ip == null ? null : subnetOfPrivateIp(ip);
+    if (!mounted || subnet == null) return;
+    setState(() => _localIp = ip);
+    await settings.setOscIp('$subnet.100');
+    if (mounted) _syncFromSettings(ref.read(settingsProvider));
   }
 
   void _syncFromSettings(Settings s) {
@@ -195,9 +251,15 @@ class _StreamingViewState extends ConsumerState<StreamingView> {
                   labelText: 'IP to stream to (the PC)',
                   border: OutlineInputBorder(),
                   isDense: true,
-                  helperText: 'The receiving computer\'s LAN address, '
-                      'e.g. 192.168.1.100',
-                ),
+                )
+                    .copyWith(
+                      helperText: _localIp == null
+                          ? 'The receiving computer\'s LAN address, '
+                              'e.g. 192.168.1.100'
+                          : 'Your subnet is ${subnetOfPrivateIp(_localIp!)}.x '
+                              '— pick a free address on the PC, '
+                              'e.g. ${subnetOfPrivateIp(_localIp!)}.100',
+                    ),
                 onSubmitted: (v) => _persistAndReconfigure(
                   () => settings.setOscIp(v.trim()),
                 ),
