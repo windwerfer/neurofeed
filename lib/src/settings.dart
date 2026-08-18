@@ -141,6 +141,7 @@ class Settings {
   static const String _brainflowEnabledKey = 'stream_bf_enabled';
   static const String _brainflowIpKey = 'stream_bf_ip';
   static const String _brainflowPortKey = 'stream_bf_port';
+  static const String _brainflowSeparateGroupsKey = 'stream_bf_separate_groups';
 
   final SharedPreferences _prefs;
 
@@ -451,6 +452,14 @@ class Settings {
 
   Future<void> setBrainflowPort(int value) =>
       _prefs.setInt(_brainflowPortKey, value);
+
+  /// When true BrainFlow streams all presets (EEG on the configured port,
+  /// IMU on port+1, PPG on port+2); when false only the EEG default preset.
+  bool get brainflowSeparateGroups =>
+      _prefs.getBool(_brainflowSeparateGroupsKey) ?? true;
+
+  Future<void> setBrainflowSeparateGroups(bool value) =>
+      _prefs.setBool(_brainflowSeparateGroupsKey, value);
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and

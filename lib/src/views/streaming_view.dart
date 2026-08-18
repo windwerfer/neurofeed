@@ -211,9 +211,11 @@ class _StreamingViewState extends ConsumerState<StreamingView> {
       StreamProtocol.lsl => settings.lslEnabled,
       StreamProtocol.brainflow => settings.brainflowEnabled,
     };
-    final separate = isOsc
-        ? settings.oscSeparateGroups
-        : settings.lslSeparateGroups;
+    final separate = switch (protocol) {
+      StreamProtocol.osc => settings.oscSeparateGroups,
+      StreamProtocol.lsl => settings.lslSeparateGroups,
+      StreamProtocol.brainflow => settings.brainflowSeparateGroups,
+    };
 
     return Card(
       color: theme.colorScheme.surfaceContainerHighest,
@@ -365,24 +367,31 @@ class _StreamingViewState extends ConsumerState<StreamingView> {
               ),
               const Divider(height: 24),
             ],
-            if (!isBf)
-              SwitchListTile(
+            SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 secondary: const Icon(Icons.view_stream_outlined),
                 title: const Text('Stream each sensor group separately'),
                 subtitle: Text(
-                  'One stream per group (EEG, PPG, IMU, Bands). When off only '
-                  'the EEG stream is sent — the other groups have different '
-                  'sample rates and cannot share one stream.',
+                  isBf
+                      ? 'BrainFlow presets: EEG (default, on the configured '
+                          'port), IMU (auxiliary, port+1) and PPG '
+                          '(ancillary, port+2). Off sends only the EEG preset.'
+                      : 'One stream per group (EEG, PPG, IMU, Bands). When '
+                          'off only the EEG stream is sent — the other '
+                          'groups have different sample rates and cannot '
+                          'share one stream.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
                 value: separate,
                 onChanged: (on) => _persistAndReconfigure(
-                  () => isOsc
-                      ? settings.setOscSeparateGroups(on)
-                      : settings.setLslSeparateGroups(on),
+                  () => switch (protocol) {
+                    StreamProtocol.osc => settings.setOscSeparateGroups(on),
+                    StreamProtocol.lsl => settings.setLslSeparateGroups(on),
+                    StreamProtocol.brainflow =>
+                      settings.setBrainflowSeparateGroups(on),
+                  },
                 ),
               ),
           ],

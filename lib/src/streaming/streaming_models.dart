@@ -16,9 +16,10 @@ enum StreamProtocol {
   ),
   brainflow(
     'BrainFlow',
-    'BrainFlow Streaming Board: the EEG stream in BrainFlow\'s native '
-    'multicast format. Receive on the PC with BoardShim(STREAMING_BOARD) '
-    'using master_board MUSE_2_BOARD / MUSE_S_BOARD.',
+    'BrainFlow Streaming Board format (multicast UDP): EEG default preset, '
+    'plus IMU (auxiliary) and PPG (ancillary) presets when separate groups '
+    'is on. Receive on the PC with BoardShim(STREAMING_BOARD) using '
+    'master_board MUSE_2_BOARD / MUSE_S_BOARD.',
   );
 
   const StreamProtocol(this.label, this.description);
@@ -154,11 +155,11 @@ class StreamingConfig {
         StreamProtocol.brainflow => '',
       },
       separateGroups: switch (protocol) {
-        // BrainFlow only supports the default preset (EEG); there are no
-        // separate per-group streams.
-        StreamProtocol.brainflow => false,
         StreamProtocol.osc => settings.oscSeparateGroups,
         StreamProtocol.lsl => settings.lslSeparateGroups,
+        // When on, BrainFlow streams the IMU (auxiliary preset) and PPG
+        // (ancillary preset) streams in addition to the EEG default preset.
+        StreamProtocol.brainflow => settings.brainflowSeparateGroups,
       },
       brainflowIp: protocol == StreamProtocol.brainflow
           ? settings.brainflowIp
