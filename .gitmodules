@@ -17,3 +17,8 @@
 	path = third_party/luna-rs
 	url = https://github.com/windwerfer/luna-rs
 	ignore = all
+
+[submodule "third_party/neurosity-ble-rs"]
+	path = third_party/neurosity-ble-rs
+	url = https://github.com/windwerfer/neurosity-ble-rs
+	ignore = all
