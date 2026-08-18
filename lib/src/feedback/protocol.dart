@@ -15,6 +15,14 @@ enum ProtocolType {
   mindfulness,
   concentration,
   relaxedConcentration,
+
+  /// Raw recording session: no reward engine, no guardrail. Calibration is
+  /// optional (per-session skip button).
+  recordOnly,
+
+  /// Guardrail-only session: the 3-stage guardrail calibration, then the AI
+  /// sleep guardrail warns without any reward layer.
+  guardrailOnly,
 }
 
 /// Which directional band ratio the reward engine optimizes.
@@ -133,6 +141,16 @@ class ProtocolInfo {
   /// [GuardrailFeedback]). Consulted only while the guardrail runs.
   final GuardrailFeedback guardrailFeedback;
 
+  /// Whether this protocol runs a reward engine at all. False for pure
+  /// recording ([ProtocolType.recordOnly]) and guardrail-only
+  /// ([ProtocolType.guardrailOnly]) sessions — those hide the feedback-sound
+  /// selection and never fire reward chimes/swell.
+  final bool hasReward;
+
+  /// Whether the session start offers a "skip calibration" shortcut next to
+  /// the normal start button. True only for [ProtocolType.recordOnly].
+  final bool calibrationSkippable;
+
   const ProtocolInfo({
     required this.type,
     required this.catchPhrase,
@@ -147,6 +165,8 @@ class ProtocolInfo {
     required this.guardrailDefault,
     this.guardrailAllowed = true,
     required this.guardrailFeedback,
+    this.hasReward = true,
+    this.calibrationSkippable = false,
   });
 
   static const ProtocolInfo _drowsiness = ProtocolInfo(
@@ -596,6 +616,125 @@ class ProtocolInfo {
     guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
   );
 
+  static const ProtocolInfo _recordOnly = ProtocolInfo(
+    type: ProtocolType.recordOnly,
+    catchPhrase: 'Record Only',
+    title: 'Pure EEG Recording',
+    subtitle:
+        'Records the session without any reward engine, guardrail, or '
+        'feedback sounds — a quiet, clean recording of your raw EEG and '
+        'signals. Calibration is optional: start with the usual baseline, or '
+        'skip it and just record.',
+    guideText:
+        'What to Meditate On\n'
+        'Anything you like — this protocol only records. Meditate, rest, '
+        'work, or simply sit; the raw EEG, bands, and signals are saved for '
+        'later review.\n'
+        '\n'
+        'Ultimate Goal\n'
+        'A clean, self-contained recording with no feedback shaping your '
+        'state. Use it to capture practice for review or to collect data '
+        'without any training signal.\n'
+        '\n'
+        'Mind & State Effects\n'
+        'None by design: no reward chimes, no music filter, no guardrail '
+        'warnings. What you do with the time is entirely up to you.\n'
+        '\n'
+        'Scientific Explanation\n'
+        '- No reward metric runs; no threshold is derived.\n'
+        '- Calibration (when kept) only establishes a baseline in the '
+        'metadata — it does not gate any feedback.\n'
+        '- The session still records every enabled stream and produces a '
+        'full history entry with summary charts.\n'
+        '\n'
+        'Target Meditation Styles\n'
+        'Unstructured practice, data collection, recording sessions you want '
+        'to review later.\n'
+        '\n'
+        'Who It Helps\n'
+        '- Anyone who wants the raw data without a training target.\n'
+        '- Testers and reviewers comparing recordings across sessions.\n'
+        '\n'
+        'Who Should Avoid This\n'
+        '- Anyone wanting live feedback or guidance — pick a training '
+        'protocol instead.',
+    algorithmDescription:
+        'Recording only: every enabled stream (EEG, bands, PPG, pulse, IMU, '
+        'movement, peak alpha, telemetry) is written to the session file. No '
+        'reward metric, no ATR baseline evaluation, no guardrail layer, no '
+        'feedback sounds. An optional calibration baseline is recorded in '
+        'the metadata when the normal start is used.',
+    expectedDelay: '—',
+    color: Color(0xFF607D8B),
+    rewardMetric: RewardMetric.alphaOverTheta,
+    guardrailDefault: false,
+    guardrailAllowed: false,
+    guardrailFeedback: GuardrailFeedback.chimeOnly,
+    hasReward: false,
+    calibrationSkippable: true,
+  );
+
+  static const ProtocolInfo _guardrailOnly = ProtocolInfo(
+    type: ProtocolType.guardrailOnly,
+    catchPhrase: 'Sleep Guard',
+    title: 'AI Sleep Guardrail Only',
+    subtitle:
+        'No reward engine — just the on-device AI sleep guardrail. A '
+        '3-stage calibration captures your clear and rest baselines, then '
+        'the LUNA/REVE layer watches for the signature of actually falling '
+        'asleep and warns you back. Rest without any training signal.',
+    guideText:
+        'What to Meditate On\n'
+        'Rest, with the eyes closed. Drift toward sleep as far as you like — '
+        'the guardrail will gently bring you back when the signal looks like '
+        'you have actually fallen asleep.\n'
+        '\n'
+        'Ultimate Goal\n'
+        'Deep, safe rest at the edge of sleep with no reward pressure: the '
+        'guardrail is the only voice in the session, and it only warns.\n'
+        '\n'
+        'Mind & State Effects\n'
+        'Rest and near-sleep exploration without any ratio training. The '
+        'warning chime invites awareness back when sleep signs appear.\n'
+        '\n'
+        'Scientific Explanation\n'
+        '- No reward metric runs — the session is scored only by the '
+        'guardrail layer.\n'
+        '- The 3-stage calibration records artifacts, an eyes-open clear '
+        'anchor, and an eyes-closed rest distribution; the warning threshold '
+        'derives from your own baseline.\n'
+        '- During the session the on-device model (LUNA/REVE, RLX CPU) '
+        'embeds a rolling EEG window each second; a warning fires when the '
+        'sleep direction passes the threshold or frontal delta exceeds the '
+        'ceiling. A statistical estimate, not a medical device.\n'
+        '\n'
+        'Target Meditation Styles\n'
+        'Deep rest, Yoga Nidra, sleep-adjacent practice where only the '
+        'tripwire matters.\n'
+        '\n'
+        'Who It Helps\n'
+        '- People who doze off in rest practice and want a gentle wake note '
+        'without any reward shaping.\n'
+        '\n'
+        'Who Should Avoid This\n'
+        '- Anyone who needs guaranteed wakefulness: the guardrail is an '
+        'approximate cue, not a safety device.',
+    algorithmDescription:
+        'Guardrail only: the 3-stage calibration (artifacts, eyes-open '
+        'clear anchor, eyes-closed rest distribution) feeds the LUNA/REVE '
+        'on-device scorer or the band-math fallback; the ATR reward engine '
+        'and feedback sounds are disabled. A warning chime fires when the '
+        'live sleep direction exceeds the warning threshold (default 75th '
+        'percentile of the rest baseline) or frontal delta exceeds the '
+        'ceiling.',
+    expectedDelay: '~1s (AI model window)',
+    color: Color(0xFF5E35B1),
+    rewardMetric: RewardMetric.alphaOverTheta,
+    guardrailDefault: true,
+    guardrailFeedback: GuardrailFeedback.chimeOnly,
+    hasReward: false,
+  );
+
   static const List<ProtocolInfo> all = [
     _drowsiness,
     _twilight,
@@ -604,6 +743,8 @@ class ProtocolInfo {
     _mindfulness,
     _concentration,
     _relaxedConcentration,
+    _recordOnly,
+    _guardrailOnly,
   ];
 
   /// Legacy sessions stored under the removed placeholder protocols

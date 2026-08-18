@@ -9,6 +9,7 @@ import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/model_selector.dart';
 import 'package:muse_ml/src/reve/models.dart';
@@ -48,6 +49,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
   Widget build(BuildContext context) {
     final fb = ref.watch(feedbackStateProvider);
     final protocol = ProtocolInfo.forType(fb.protocol);
+    final copy = useProtocolCopy(ref, protocol);
     final app = ref.watch(appStateProvider);
     final connected = app.status.connected;
     final theme = Theme.of(context);
@@ -57,7 +59,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          protocol.title,
+          copy.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -73,7 +75,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
           ),
           IconButton(
             icon: const Icon(Icons.info_outline),
-            onPressed: () => _showGuide(context, protocol),
+            onPressed: () => _showGuide(context, protocol, copy),
           ),
         ],
         bottom: const PreferredSize(
@@ -89,7 +91,7 @@ body: Stack(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Guide card
-                _GuideCard(protocol: protocol),
+                _GuideCard(protocol: protocol, copy: copy),
                 // Nerd stats bubble
                 if (fb.showNerdStats &&
                     (fb.phase == FeedbackPhase.playing ||
@@ -148,7 +150,8 @@ body: Stack(
 
 class _GuideCard extends StatelessWidget {
   final ProtocolInfo protocol;
-  const _GuideCard({required this.protocol});
+  final ProtocolCopy copy;
+  const _GuideCard({required this.protocol, required this.copy});
 
   static String _truncate(String text, {int maxParagraphs = 2}) {
     final parts = text
@@ -183,7 +186,7 @@ class _GuideCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final guideText = protocol.guideText;
+    final guideText = copy.guideText;
     final truncated = _truncate(guideText);
     return Card(
       color: theme.colorScheme.surfaceContainerHighest,
@@ -370,6 +373,47 @@ class _PhaseControls extends ConsumerWidget {
                 'import a model to enable the AI sleep guardrail.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall,
+              ),
+            ],
+          );
+        }
+        final skippable = ProtocolInfo.forType(fb.protocol).calibrationSkippable;
+        if (skippable) {
+          return Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: OutlinedButton.icon(
+                  onPressed: () => ref
+                      .read(feedbackStateProvider.notifier)
+                      .startCalibration(skipCalibration: true),
+                  icon: const Icon(Icons.skip_next, size: 20),
+                  label: const Text(
+                    'Start (skip calibration)',
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(56),
+                    backgroundColor: theme.colorScheme.surface,
+                    foregroundColor: theme.colorScheme.primary,
+                    side: BorderSide(color: theme.colorScheme.primary),
+                    textStyle: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 7,
+                child: FilledButton.icon(
+                  onPressed: startSession,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Start Session'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(56),
+                    textStyle: const TextStyle(fontSize: 18),
+                  ),
+                ),
               ),
             ],
           );
@@ -655,6 +699,7 @@ class _SessionSettingsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
     final theme = Theme.of(context);
+    final hasReward = ProtocolInfo.forType(fb.protocol).hasReward;
     return Card(
       color: theme.colorScheme.surfaceContainerHighest,
       child: Column(
@@ -666,12 +711,14 @@ class _SessionSettingsCard extends ConsumerWidget {
           ),
           const _SoundTile(),
           const Divider(height: 1, indent: 16, endIndent: 16),
-          const _FeedbackTile(),
-          if (fb.feedbackMode == FeedbackMode.binaural) ...[
-            const _BinauralTile(),
-          ],
-          if (fb.feedbackMode == FeedbackMode.music) ...[
-            const _MusicTile(),
+          if (hasReward) ...[
+            const _FeedbackTile(),
+            if (fb.feedbackMode == FeedbackMode.binaural) ...[
+              const _BinauralTile(),
+            ],
+            if (fb.feedbackMode == FeedbackMode.music) ...[
+              const _MusicTile(),
+            ],
           ],
           if (showGuardrail) ...[
             const Divider(height: 1, indent: 16, endIndent: 16),
@@ -1939,23 +1986,23 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
   }
 }
 
-void _showGuide(BuildContext context, ProtocolInfo protocol) {
+void _showGuide(BuildContext context, ProtocolInfo protocol, ProtocolCopy copy) {
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text('${protocol.title} — Details'),
+      title: Text('${copy.title} — Details'),
       content: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(protocol.subtitle),
+            Text(copy.subtitle),
             const SizedBox(height: 12),
-            Text(protocol.guideText),
+            Text(copy.guideText),
             const SizedBox(height: 12),
-            Text('Algorithm: ${protocol.algorithmDescription}'),
+            Text('Algorithm: ${copy.algorithmDescription}'),
             const SizedBox(height: 4),
-            Text('Expected delay: ${protocol.expectedDelay}'),
+            Text('Expected delay: ${copy.expectedDelay}'),
           ],
         ),
       ),

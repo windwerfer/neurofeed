@@ -28,6 +28,14 @@
     {
       "name": "relaxedConcentration",
       "calibrations": ["single-closed-90", "staged-guardrail"]
+    },
+    {
+      "name": "recordOnly",
+      "calibrations": ["single-closed-90"]
+    },
+    {
+      "name": "guardrailOnly",
+      "calibrations": ["single-closed-90", "staged-guardrail"]
     }
   ]
 }

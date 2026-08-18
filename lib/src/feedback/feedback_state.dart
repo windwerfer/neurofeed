@@ -290,8 +290,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   AudioService get _audio => _ref.read(audioServiceProvider);
 
   void selectProtocol(ProtocolType type) {
-    _engine.metric = ProtocolInfo.forType(type).rewardMetric;
-    state = state.copyWith(protocol: type);
+    final info = ProtocolInfo.forType(type);
+    _engine.metric = info.rewardMetric;
+    state = state.copyWith(
+      protocol: type,
+      feedbackMode: info.hasReward
+          ? _ref.read(settingsProvider).feedbackMode
+          : FeedbackMode.none,
+    );
   }
 
   void selectDuration(int minutes) {
@@ -403,7 +409,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// baseline. If one pad never turns green for [faultyPadSeconds] while the
   /// needed frontal pads do, it is assumed faulty and a continue-anyway
   /// fallback is shown.
-  Future<void> startCalibration() async {
+  ///
+  /// With [skipCalibration] the signal gate and the baseline are skipped
+  /// entirely: the recorder starts and the session goes straight to playing
+  /// (used by the recordOnly protocol's "Start (skip calibration)" button).
+  /// The ATR engine then has no baseline, which is fine — no-reward protocols
+  /// never evaluate it.
+  Future<void> startCalibration({bool skipCalibration = false}) async {
     if (!_ref.read(appStateProvider).status.connected) {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
       return;
@@ -439,6 +451,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _musicTracks.clear();
     await _recorder.startSession();
     await _maybeEnableGuardrail();
+    if (skipCalibration) {
+      _engine.reset();
+      await startPlaying();
+      return;
+    }
     await _runCalibration();
   }
 
@@ -1316,15 +1333,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (state.phase != FeedbackPhase.playing) {
       return;
     }
-    final value = _metricOf(target);
-    if (!value.isFinite) {
-      return;
+    if (ProtocolInfo.forType(state.protocol).hasReward) {
+      final value = _metricOf(target);
+      if (!value.isFinite) {
+        return;
+      }
+      final inTarget = _inTargetVerdict(target, value);
+      _engine.recordEpoch(inTarget);
+      _engine.recordSessionSample(value, clean: _sampleIsClean);
+      _ref.read(liveStatsProvider).push(value, _engine.percentileOf);
+      _applyReward(value, inTarget: inTarget);
     }
-    final inTarget = _inTargetVerdict(target, value);
-    _engine.recordEpoch(inTarget);
-    _engine.recordSessionSample(value, clean: _sampleIsClean);
-    _ref.read(liveStatsProvider).push(value, _engine.percentileOf);
-    _applyReward(value, inTarget: inTarget);
     if (_guardrailBandMath) {
       _onBandMathBand(bands);
     }

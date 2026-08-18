@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/views/feedback_dashboard.dart';
 
@@ -96,6 +97,7 @@ class _HistoryTile extends ConsumerWidget {
     final theme = Theme.of(context);
     final meta = summary.metadata;
     final protocol = ProtocolInfo.forType(meta.protocol);
+    final copy = useProtocolCopy(ref, protocol);
     final stats = meta.stats;
     final date =
         '${meta.savedAt.year}-${meta.savedAt.month.toString().padLeft(2, '0')}-'
@@ -144,7 +146,7 @@ class _HistoryTile extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${protocol.title} • $date',
+                      '${copy.title} • $date',
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),

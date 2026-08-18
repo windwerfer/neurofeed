@@ -38,7 +38,23 @@ Global orientation for any AI agent or contributor working in this repo.
   split in two (v1): `assets/audio/calibration/calibration.json` holds the shared
   templates (single baseline / staged guardrail), `protocols.json` maps each
   protocol to its preferred templates in order; `CalibrationManifest.recipeFor`
-  joins them (guardrail on → staged, off → single).
+  joins them (guardrail on → staged, off → single). Two protocols are
+  **non-reward**: `recordOnly` (pure recording, calibration skippable via the
+  "Start (skip calibration)" button — `startCalibration(skipCalibration:)`
+  goes straight to playing) and `guardrailOnly` (3-stage guardrail
+  calibration, warnings only, no feedback-sound selection — `hasReward: false`
+  hides the feedback tile and gates the ATR reward path in `_onBands` while
+  the guardrail layer keeps running).
+- **Protocol copy lives in `assets/protocols.json`** (catchPhrase/title/
+  subtitle/guideText/algorithmDescription/expectedDelay) — the editable text
+  source, loaded via `protocolCatalogProvider` (`lib/src/feedback/
+  protocol_catalog.dart`; `useProtocolCopy(ref, info)` falls back to the Dart
+  text). Structure (colors, metrics, conditions, guardrail flags,
+  `hasReward`, `calibrationSkippable`) stays in `ProtocolInfo`. Regenerate the
+  asset after editing Dart copy with
+  `flutter test tool/sync_protocol_catalog_test.dart`. The protocol list's
+  "Recent" tile (3 most recent distinct protocols, catch name only) comes
+  from `sessionListProvider`.
 - **Android**: NDK 27/28, Gradle 8.14, `targetSdkVersion = 36`.
 - **Decision:** using btleplug (forked) for BLE transport — consistent with
   `muse-rs`. `flutter_blue_plus` was the fallback if the JNI fix had failed.

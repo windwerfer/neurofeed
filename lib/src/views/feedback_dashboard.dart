@@ -15,6 +15,7 @@ import 'package:muse_ml/src/charts/smooth_path.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/session_summary.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
@@ -130,6 +131,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     final fb = ref.watch(feedbackStateProvider);
     final meta = widget.metadata;
     final protocol = ProtocolInfo.forType(meta?.protocol ?? fb.protocol);
+    final copy = useProtocolCopy(ref, protocol);
 
     return PopScope(
       // Warn before leaving a history session with unsaved notes edits. The
@@ -143,10 +145,10 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         _confirmUnsavedNotes();
       },
       child: Scaffold(
-        appBar: AppBar(title: Text('${protocol.title} — Session')),
+        appBar: AppBar(title: Text('${copy.title} — Session')),
         body: _busy
             ? const Center(child: CircularProgressIndicator())
-            : _dashboard(meta, fb, protocol),
+            : _dashboard(meta, fb, protocol, copy.title),
       ),
     );
   }
@@ -207,10 +209,12 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     SessionMetadata? meta,
     FeedbackState fb,
     ProtocolInfo protocol,
+    String protocolTitle,
   ) {
     if (_prepared != null) {
       return _DashboardBody(
         protocol: protocol,
+        protocolTitle: protocolTitle,
         durationMinutes: meta?.durationMinutes ?? fb.durationMinutes,
         elapsedSeconds: meta?.elapsedSeconds ?? fb.elapsedSeconds,
         soundName: meta?.sound ?? fb.soundName,
@@ -266,7 +270,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         if (_thumbnail == null && !widget.readOnly) {
           WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
         }
-        return _dashboard(meta, fb, protocol);
+        return _dashboard(meta, fb, protocol, protocolTitle);
       },
     );
   }
@@ -411,6 +415,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
 class _DashboardBody extends StatefulWidget {
   const _DashboardBody({
     required this.protocol,
+    required this.protocolTitle,
     required this.durationMinutes,
     required this.elapsedSeconds,
     required this.soundName,
@@ -431,6 +436,7 @@ class _DashboardBody extends StatefulWidget {
   });
 
   final ProtocolInfo protocol;
+  final String protocolTitle;
   final int durationMinutes;
   final int elapsedSeconds;
   final String soundName;
@@ -696,7 +702,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
               children: [
                 Text('Session summary', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 12),
-                _SummaryRow(label: 'Protocol', value: widget.protocol.title),
+                _SummaryRow(label: 'Protocol', value: widget.protocolTitle),
                 _SummaryRow(
                   label: 'Duration',
                   value: '${widget.durationMinutes} min',
