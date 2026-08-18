@@ -22,3 +22,8 @@
 	path = third_party/neurosity-ble-rs
 	url = https://github.com/windwerfer/neurosity-ble-rs
 	ignore = all
+
+[submodule "third_party/brainflow"]
+	path = third_party/brainflow
+	url = https://github.com/brainflow-dev/brainflow
+	ignore = all
