@@ -812,7 +812,6 @@ class _BinauralTile extends ConsumerWidget {
     return Container(
       margin: const EdgeInsets.fromLTRB(32, 0, 16, 4),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
         border: Border(
           left: BorderSide(
@@ -821,32 +820,37 @@ class _BinauralTile extends ConsumerWidget {
           ),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-            child: Text(
-              'Binaural layer — part of the feedback sound',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Text(
+                'Binaural layer — part of the feedback sound',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
-          ),
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.graphic_eq),
-            title: const Text('Binaural Beats'),
-            subtitle: Text(
-              '$label • ${beatHz.toStringAsFixed(1)} Hz beat on '
-              '${carrierHz.round()} Hz carrier • headphones',
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.graphic_eq),
+              title: const Text('Binaural Beats'),
+              subtitle: Text(
+                '$label • ${beatHz.toStringAsFixed(1)} Hz beat on '
+                '${carrierHz.round()} Hz carrier • headphones',
+              ),
+              onTap: () => showDialog<void>(
+                context: context,
+                builder: (_) => const _BinauralSettingsDialog(),
+              ),
             ),
-            onTap: () => showDialog<void>(
-              context: context,
-              builder: (_) => const _BinauralSettingsDialog(),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
