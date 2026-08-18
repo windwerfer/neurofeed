@@ -152,14 +152,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                           children: [
                             body,
                             // Connect window lives in the body area so an open
-                            // sidebar is never hidden underneath it.
+                            // sidebar is never hidden underneath it. Its tap
+                            // barrier hides it again on any outside click.
                             if (state.connectWindowOpen)
-                              Positioned(
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                child: const ConnectWindow(),
-                              ),
+                              const ConnectOverlay(),
                           ],
                         ),
                       ),

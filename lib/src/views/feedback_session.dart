@@ -5,6 +5,7 @@ import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/audio/binaural_beat_controller.dart';
 import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
@@ -47,7 +48,8 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
   Widget build(BuildContext context) {
     final fb = ref.watch(feedbackStateProvider);
     final protocol = ProtocolInfo.forType(fb.protocol);
-    final connected = ref.watch(appStateProvider).status.connected;
+    final app = ref.watch(appStateProvider);
+    final connected = app.status.connected;
     final theme = Theme.of(context);
     final guardrailOn =
         ref.watch(settingsProvider).guardrailEnabledFor(fb.protocol);
@@ -79,59 +81,66 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
           child: StatusBar(showMenu: false),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Guide card
-            _GuideCard(protocol: protocol),
-            // Nerd stats bubble
-            if (fb.showNerdStats &&
-                (fb.phase == FeedbackPhase.playing ||
-                    fb.phase == FeedbackPhase.paused)) ...[
-              const SizedBox(height: 8),
-              const _NerdStatsBubble(),
-            ],
-            const SizedBox(height: 16),
-            // Session settings (idle and during feedback for on-the-fly changes)
-            if (fb.phase == FeedbackPhase.idle ||
-                fb.phase == FeedbackPhase.playing ||
-                fb.phase == FeedbackPhase.paused) ...[
-              _SessionSettingsCard(showGuardrail: guardrailOn),
-            ],
-            // Muse-not-connected hint (idle only)
-            if (fb.phase == FeedbackPhase.idle && !connected) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Icon(Icons.bluetooth_disabled, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Muse not connected — Start Session will open the '
-                      'connect window.',
-                      style: theme.textTheme.bodySmall,
-                    ),
+body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Guide card
+                _GuideCard(protocol: protocol),
+                // Nerd stats bubble
+                if (fb.showNerdStats &&
+                    (fb.phase == FeedbackPhase.playing ||
+                        fb.phase == FeedbackPhase.paused)) ...[
+                  const SizedBox(height: 8),
+                  const _NerdStatsBubble(),
+                ],
+                const SizedBox(height: 16),
+                // Session settings (idle and during feedback for on-the-fly changes)
+                if (fb.phase == FeedbackPhase.idle ||
+                    fb.phase == FeedbackPhase.playing ||
+                    fb.phase == FeedbackPhase.paused) ...[
+                  _SessionSettingsCard(showGuardrail: guardrailOn),
+                ],
+                // Muse-not-connected hint (idle only)
+                if (fb.phase == FeedbackPhase.idle && !connected) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Icon(Icons.bluetooth_disabled, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Muse not connected — Start Session will open the '
+                          'connect window.',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ],
-            const SizedBox(height: 16),
-            // Phase-specific controls
-            _PhaseControls(protocol: protocol),
-            const SizedBox(height: 8),
-            // Timer display
-            if (fb.phase == FeedbackPhase.playing ||
-                fb.phase == FeedbackPhase.paused)
-              Text(
-                '${fb.elapsedSeconds ~/ 60}:${(fb.elapsedSeconds % 60).toString().padLeft(2, '0')}'
-                ' / ${fb.durationMinutes}:00',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall,
-              ),
-          ],
-        ),
+                const SizedBox(height: 16),
+                // Phase-specific controls
+                _PhaseControls(protocol: protocol),
+                const SizedBox(height: 8),
+                // Timer display
+                if (fb.phase == FeedbackPhase.playing ||
+                    fb.phase == FeedbackPhase.paused)
+                  Text(
+                    '${fb.elapsedSeconds ~/ 60}:${(fb.elapsedSeconds % 60).toString().padLeft(2, '0')}'
+                    ' / ${fb.durationMinutes}:00',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall,
+                  ),
+              ],
+            ),
+          ),
+          // The session's own status bar needs the connect overlay too —
+          // without it, tapping it only flips state and nothing shows.
+          if (app.connectWindowOpen) const ConnectOverlay(),
+        ],
       ),
     );
   }

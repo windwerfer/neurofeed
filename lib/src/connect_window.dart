@@ -4,6 +4,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 
+/// Full-body overlay behind the [ConnectWindow]: the dropdown panel over an
+/// opaque tap barrier. While the window is open, tapping anywhere on the
+/// screen outside the panel hides it again (same effect as the status-bar
+/// toggle).
+class ConnectOverlay extends ConsumerWidget {
+  const ConnectOverlay({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.watch(appStateProvider.notifier);
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: notifier.toggleConnectWindow,
+          ),
+        ),
+        Positioned(top: 0, left: 0, right: 0, child: const ConnectWindow()),
+      ],
+    );
+  }
+}
+
 /// A dropdown panel shown beneath the status bar that lists discovered Muse
 /// devices. Selecting one connects to it.
 class ConnectWindow extends ConsumerWidget {
