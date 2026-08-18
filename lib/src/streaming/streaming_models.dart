@@ -13,6 +13,12 @@ enum StreamProtocol {
     'LSL',
     'Lab Streaming Layer: auto-discovered streams received by LabRecorder, '
     'OpenViBE, EEGLAB and other LSL clients on the local network.',
+  ),
+  brainflow(
+    'BrainFlow',
+    'BrainFlow Streaming Board: the EEG stream in BrainFlow\'s native '
+    'multicast format. Receive on the PC with BoardShim(STREAMING_BOARD) '
+    'using master_board MUSE_2_BOARD / MUSE_S_BOARD.',
   );
 
   const StreamProtocol(this.label, this.description);
@@ -113,6 +119,8 @@ class StreamingConfig {
     required this.oscPort,
     required this.prefix,
     required this.separateGroups,
+    this.brainflowIp,
+    this.brainflowPort,
   });
 
   final StreamProtocol protocol;
@@ -122,6 +130,10 @@ class StreamingConfig {
   final String prefix;
   final bool separateGroups;
 
+  /// Multicast group + port for the BrainFlow Streaming Board streamer.
+  final String? brainflowIp;
+  final int? brainflowPort;
+
   static StreamingConfig fromSettings(Settings settings) {
     final protocol = StreamProtocol.fromName(settings.streamProtocolName);
     final ip = settings.oscIp;
@@ -129,6 +141,7 @@ class StreamingConfig {
     final enabled = switch (protocol) {
       StreamProtocol.osc => settings.oscEnabled,
       StreamProtocol.lsl => settings.lslEnabled,
+      StreamProtocol.brainflow => settings.brainflowEnabled,
     };
     return StreamingConfig(
       protocol: protocol,
@@ -138,11 +151,21 @@ class StreamingConfig {
       prefix: switch (protocol) {
         StreamProtocol.osc => settings.oscPrefix,
         StreamProtocol.lsl => settings.lslPrefix,
+        StreamProtocol.brainflow => '',
       },
       separateGroups: switch (protocol) {
+        // BrainFlow only supports the default preset (EEG); there are no
+        // separate per-group streams.
+        StreamProtocol.brainflow => false,
         StreamProtocol.osc => settings.oscSeparateGroups,
         StreamProtocol.lsl => settings.lslSeparateGroups,
       },
+      brainflowIp: protocol == StreamProtocol.brainflow
+          ? settings.brainflowIp
+          : null,
+      brainflowPort: protocol == StreamProtocol.brainflow
+          ? settings.brainflowPort
+          : null,
     );
   }
 

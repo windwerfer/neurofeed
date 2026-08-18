@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/settings.dart';
+import 'package:muse_ml/src/streaming/streaming_brainflow.dart';
 import 'package:muse_ml/src/streaming/streaming_lsl.dart';
 import 'package:muse_ml/src/streaming/streaming_mixer.dart';
 import 'package:muse_ml/src/streaming/streaming_models.dart';
@@ -98,6 +99,7 @@ class StreamingController extends Notifier<StreamingUiState> {
         switch (protocol) {
           StreamProtocol.osc => settings.oscEnabled,
           StreamProtocol.lsl => settings.lslEnabled,
+          StreamProtocol.brainflow => settings.brainflowEnabled,
         };
     return StreamingUiState(
       connected: _connected,
@@ -204,6 +206,10 @@ class StreamingController extends Notifier<StreamingUiState> {
           final lsl = LslStreamer(config);
           await lsl.start(_deviceName);
           _sender = lsl;
+        case StreamProtocol.brainflow:
+          final bf = BrainflowStreamer(config);
+          await bf.start();
+          _sender = bf;
       }
     } catch (e) {
       _lastError = '${config.protocol.label} start failed: $e';

@@ -138,6 +138,9 @@ class Settings {
   static const String _lslEnabledKey = 'stream_lsl_enabled';
   static const String _lslPrefixKey = 'stream_lsl_prefix';
   static const String _lslSeparateGroupsKey = 'stream_lsl_separate_groups';
+  static const String _brainflowEnabledKey = 'stream_bf_enabled';
+  static const String _brainflowIpKey = 'stream_bf_ip';
+  static const String _brainflowPortKey = 'stream_bf_port';
 
   final SharedPreferences _prefs;
 
@@ -432,6 +435,22 @@ class Settings {
 
   Future<void> setLslSeparateGroups(bool value) =>
       _prefs.setBool(_lslSeparateGroupsKey, value);
+
+  bool get brainflowEnabled => _prefs.getBool(_brainflowEnabledKey) ?? false;
+
+  Future<void> setBrainflowEnabled(bool value) =>
+      _prefs.setBool(_brainflowEnabledKey, value);
+
+  /// Multicast group the BrainFlow Streaming Board format is sent to.
+  String get brainflowIp => _prefs.getString(_brainflowIpKey) ?? '225.1.1.1';
+
+  Future<void> setBrainflowIp(String value) =>
+      _prefs.setString(_brainflowIpKey, value);
+
+  int get brainflowPort => _prefs.getInt(_brainflowPortKey) ?? 6677;
+
+  Future<void> setBrainflowPort(int value) =>
+      _prefs.setInt(_brainflowPortKey, value);
 }
 
 /// Provides the app-wide [Settings] instance. Loaded in `main()` and

@@ -40,6 +40,8 @@ class _StreamingViewState extends ConsumerState<StreamingView> {
   final _oscPortCtrl = TextEditingController();
   final _oscPrefixCtrl = TextEditingController();
   final _lslPrefixCtrl = TextEditingController();
+  final _bfIpCtrl = TextEditingController();
+  final _bfPortCtrl = TextEditingController();
 
   /// The device's own LAN IP once detected (used for the helper text).
   String? _localIp;
@@ -88,6 +90,8 @@ class _StreamingViewState extends ConsumerState<StreamingView> {
     _oscPortCtrl.text = s.oscPort.toString();
     _oscPrefixCtrl.text = s.oscPrefix;
     _lslPrefixCtrl.text = s.lslPrefix;
+    _bfIpCtrl.text = s.brainflowIp;
+    _bfPortCtrl.text = s.brainflowPort.toString();
   }
 
   Future<void> _persistAndReconfigure(Future<void> Function() persist) async {
@@ -201,7 +205,12 @@ class _StreamingViewState extends ConsumerState<StreamingView> {
 
   Widget _settingsCard(
       ThemeData theme, Settings settings, StreamProtocol protocol, bool isOsc) {
-    final enabled = isOsc ? settings.oscEnabled : settings.lslEnabled;
+    final isBf = protocol == StreamProtocol.brainflow;
+    final enabled = switch (protocol) {
+      StreamProtocol.osc => settings.oscEnabled,
+      StreamProtocol.lsl => settings.lslEnabled,
+      StreamProtocol.brainflow => settings.brainflowEnabled,
+    };
     final separate = isOsc
         ? settings.oscSeparateGroups
         : settings.lslSeparateGroups;
@@ -216,7 +225,11 @@ class _StreamingViewState extends ConsumerState<StreamingView> {
             Row(
               children: [
                 Icon(
-                  isOsc ? Icons.wifi_tethering : Icons.dns_outlined,
+                  isBf
+                      ? Icons.psychology_outlined
+                      : isOsc
+                      ? Icons.wifi_tethering
+                      : Icons.dns_outlined,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 8),
@@ -237,13 +250,51 @@ class _StreamingViewState extends ConsumerState<StreamingView> {
               ),
               value: enabled,
               onChanged: (on) => _persistAndReconfigure(
-                () => isOsc
-                    ? settings.setOscEnabled(on)
-                    : settings.setLslEnabled(on),
+                () => switch (protocol) {
+                  StreamProtocol.osc => settings.setOscEnabled(on),
+                  StreamProtocol.lsl => settings.setLslEnabled(on),
+                  StreamProtocol.brainflow => settings.setBrainflowEnabled(on),
+                },
               ),
             ),
             const Divider(height: 24),
-            if (isOsc) ...[
+            if (isBf) ...[
+              TextField(
+                controller: _bfIpCtrl,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  labelText: 'Multicast group',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  helperText: 'Any 224.0.0.0–239.255.255.255 group, e.g. '
+                      '225.1.1.1. The PC joins it with the BrainFlow '
+                      'Streaming Board (master_board: Muse 2 / Muse S).',
+                ),
+                onSubmitted: (v) => _persistAndReconfigure(
+                  () => settings.setBrainflowIp(v.trim()),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _bfPortCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: 'Port',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onSubmitted: (v) {
+                  final port = int.tryParse(v);
+                  if (port != null) {
+                    _persistAndReconfigure(
+                      () => settings.setBrainflowPort(port),
+                    );
+                  }
+                },
+              ),
+              const Divider(height: 24),
+            ] else if (isOsc) ...[
               TextField(
                 controller: _oscIpCtrl,
                 keyboardType: TextInputType.url,
@@ -314,25 +365,26 @@ class _StreamingViewState extends ConsumerState<StreamingView> {
               ),
               const Divider(height: 24),
             ],
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              secondary: const Icon(Icons.view_stream_outlined),
-              title: const Text('Stream each sensor group separately'),
-              subtitle: Text(
-                'One stream per group (EEG, PPG, IMU, Bands). When off only '
-                'the EEG stream is sent — the other groups have different '
-                'sample rates and cannot share one stream.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+            if (!isBf)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.view_stream_outlined),
+                title: const Text('Stream each sensor group separately'),
+                subtitle: Text(
+                  'One stream per group (EEG, PPG, IMU, Bands). When off only '
+                  'the EEG stream is sent — the other groups have different '
+                  'sample rates and cannot share one stream.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                value: separate,
+                onChanged: (on) => _persistAndReconfigure(
+                  () => isOsc
+                      ? settings.setOscSeparateGroups(on)
+                      : settings.setLslSeparateGroups(on),
                 ),
               ),
-              value: separate,
-              onChanged: (on) => _persistAndReconfigure(
-                () => isOsc
-                    ? settings.setOscSeparateGroups(on)
-                    : settings.setLslSeparateGroups(on),
-              ),
-            ),
           ],
         ),
       ),
@@ -341,10 +393,12 @@ class _StreamingViewState extends ConsumerState<StreamingView> {
 
   Widget _statusCard(ThemeData theme, StreamingUiState state,
       Settings settings, StreamProtocol protocol) {
-    final isOsc = protocol == StreamProtocol.osc;
-    final destination = isOsc
-        ? '${settings.oscIp}:${settings.oscPort}'
-        : 'local network (auto-discovery)';
+    final destination = switch (protocol) {
+      StreamProtocol.osc => '${settings.oscIp}:${settings.oscPort}',
+      StreamProtocol.brainflow =>
+        '${settings.brainflowIp}:${settings.brainflowPort} (multicast)',
+      StreamProtocol.lsl => 'local network (auto-discovery)',
+    };
 
     final (Color color, String text) = switch ((state.connected,
         state.enabled, state.streaming)) {
