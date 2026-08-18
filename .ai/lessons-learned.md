@@ -263,3 +263,29 @@ loop. If a wakeup must mean "something happened since I last looked", either
 poll the underlying value directly, or re-sync the clone immediately after
 cloning (`borrow_and_update()`), and prefer the simplest mechanism that cannot
 self-trigger.
+
+## Session 2026-08-18 — Log-space cutoff slider wrote log-domain values to prefs
+
+### The "problem"
+In the music bubble, the cutoff slider's *label* displayed `label.round()`
+(the Hz value) while the underlying slider position moved through log space
+(`2220^(x/120)` mapped to 220–16000 Hz). Commit `8b58229` found the persisted
+value came from the raw log-domain position, so a "700 Hz" label saved ~6.55
+as the cutoff — a nonsense filter frequency for the biquad.
+
+### Root cause
+Two representations of one value (log slider position vs. rounded Hz label)
+drifting apart in the save path: the label was prettified but the save used
+the raw position.
+
+### Fix
+Save exactly what the label shows (`label.round()`), so prefs, label, and
+filter always agree. Also added a Reset button in the music bubble that restores
+the stored defaults.
+
+### Lesson
+When a slider maps a linear position to a non-linear domain, the *displayed*
+value is a projection — decide once which representation is canonical (the
+rounded user-facing value) and use it everywhere (label, save, load, presets).
+Copying a value from the running UI must go through the same projection; see
+the "Range sliders are log-space" hot spot in AGENTS.md.

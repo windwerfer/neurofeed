@@ -195,6 +195,34 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
 - ✅ Model engine is **git deps, not submodules** (`4534f19`) — the old CI
   submodule gap below is obsolete; no `git submodule update` needed to build.
 
+## Status — 2026-08-18 Update (binaural + music feedback, guardrail per-protocol, connect window)
+- ✅ **Binaural beats mode** (`6032e4e`): `BinauralBeatController`
+  (`lib/src/audio/binaural_beat_controller.dart`) — two synth voices at a
+  carrier/beat beat-frequency pair, reward-swelled like music; presets +
+  carrier/beat sliders persisted in `Settings`. Guardrail warning is now a
+  **5th volume channel** (master × channel, incl. the continuous volume-ramped
+  alarm).
+- ✅ **Music feedback sub-tile** (`4fc5169`): folder prompt with validation +
+  shared `MusicSettingsPanel`/`pickMusicFolder`/`musicFolderLabel` bubble in
+  `lib/src/views/music_settings_panel.dart` — same options as the Settings music
+  card (don't fork it). Reset button added in `8b58229`, which also fixed the
+  log-space slider bug (labels now show `label.round()` of the log-domain
+  value; the old code wrote the log-domain number into the prefs — see
+  "Range sliders are log-space" hot spot in AGENTS.md).
+- ✅ **Guardrail per-protocol** (`018c303`): `ProtocolInfo.guardrailDefault`/
+  `guardrailAllowed`/`guardrailFeedback` + `Settings.guardrailEnabledFor`; the
+  eyes-open alertness protocol sets `guardrailAllowed: false` so the whole
+  guardrail card is hidden there. Guardrail still only warns — it never
+  modulates the reward.
+- ✅ **Connect window** (`97d031a`): `ConnectOverlay` is a tap-anywhere barrier
+  + device list/rescan panel; `FeedbackSessionView` hosts its own copy so the
+  session screen can reconnect without leaving the session.
+- ✅ **Binaural sub-tile ink fix** (`54641b3`): opaque `DecoratedBox` around a
+  `ListTile` subtitle broke the Material ink assertion — styling moved onto the
+  tile itself.
+- ⏳ Binaural + music modes unverified on-device (TB336FU); reward-swell
+  audibility and guardrail-muffle behavior need a listening pass.
+
 ## Next steps
 0. On-device pass: download LUNA Base + LUNA Large, import REVE, verify load/unload,
    bad-hash rejection, progress UI, and model-switch persistence on the TB336FU.
@@ -214,6 +242,9 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
 5. v1.2 meta-block: Neurosity Crown 8-electrode support — channel labels are
    already metadata-driven; only the default channel-name list needs
    extending per device.
+6. On-device listening pass for binaural + music modes: reward-swell audibility,
+   guardrail muffle, volume-channel math; tune `BinauralBeatController` voice
+   parameters (carrier/beat mix, swell shape) against the TB336FU speakers.
 
 ## How to verify (see testing-guide.md)
 Run `flutter run`, observe status bar shows correct battery % (from `bp`,
