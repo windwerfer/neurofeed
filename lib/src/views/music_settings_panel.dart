@@ -38,12 +38,14 @@ class MusicSettingsPanel extends ConsumerStatefulWidget {
   final Settings settings;
 
   @override
-  ConsumerState<MusicSettingsPanel> createState() => _MusicSettingsPanelState();
+  MusicSettingsPanelState createState() => MusicSettingsPanelState();
 }
 
-class _MusicSettingsPanelState extends ConsumerState<MusicSettingsPanel> {
+class MusicSettingsPanelState extends ConsumerState<MusicSettingsPanel> {
   static const double _floorHz = 50.0;
   static const double _ceilingHz = 16000.0;
+
+  static const RangeValues _defaultRange = RangeValues(200, 8000);
 
   RangeValues _range = const RangeValues(200, 8000);
   bool _invert = false;
@@ -55,10 +57,14 @@ class _MusicSettingsPanelState extends ConsumerState<MusicSettingsPanel> {
   void initState() {
     super.initState();
     final s = widget.settings;
-    _range = RangeValues(
+    RangeValues range = RangeValues(
       s.musicMinCutoffHz.clamp(_floorHz, _ceilingHz),
       s.musicMaxCutoffHz.clamp(_floorHz, _ceilingHz),
     );
+    if (range.start > range.end) {
+      range = RangeValues(range.end, range.start);
+    }
+    _range = range;
     _invert = s.musicInvertMapping;
     _shuffle = s.musicShuffle;
     _folder = s.musicFolder;
@@ -105,6 +111,20 @@ class _MusicSettingsPanelState extends ConsumerState<MusicSettingsPanel> {
     });
   }
 
+  /// Restores the cutoff range, invert mapping and shuffle to their shipped
+  /// defaults and persists them.
+  void resetToDefaults() {
+    setState(() {
+      _range = _defaultRange;
+      _invert = false;
+      _shuffle = false;
+    });
+    widget.settings.setMusicMinCutoffHz(_defaultRange.start);
+    widget.settings.setMusicMaxCutoffHz(_defaultRange.end);
+    widget.settings.setMusicInvertMapping(false);
+    widget.settings.setMusicShuffle(false);
+  }
+
   String get _folderLabel {
     final folder = _folder;
     if (folder == null) {
@@ -116,10 +136,12 @@ class _MusicSettingsPanelState extends ConsumerState<MusicSettingsPanel> {
   String? get _trackSuffix =>
       _trackCount == null ? null : ' · $_trackCount track(s)';
 
-  double _hzToLog(double hz) =>
-      math.log(hz / _floorHz) / math.log(_ceilingHz / _floorHz);
+  double _hzToLog(double hz) => (math.log(hz / _floorHz) /
+          math.log(_ceilingHz / _floorHz))
+      .clamp(0.0, 1.0);
 
-  double _logToHz(double t) => _floorHz * math.pow(_ceilingHz / _floorHz, t);
+  double _logToHz(double t) => (_floorHz * math.pow(_ceilingHz / _floorHz, t))
+      .clamp(_floorHz, _ceilingHz);
 
   @override
   Widget build(BuildContext context) {
@@ -127,10 +149,14 @@ class _MusicSettingsPanelState extends ConsumerState<MusicSettingsPanel> {
     final low = _range.start;
     final high = _range.end;
 
-    Future<void> setRange(RangeValues values) async {
-      setState(() => _range = values);
-      await widget.settings.setMusicMinCutoffHz(_logToHz(values.start));
-      await widget.settings.setMusicMaxCutoffHz(_logToHz(values.end));
+    Future<void> setRange(RangeValues logValues) async {
+      final hz = RangeValues(
+        _logToHz(logValues.start),
+        _logToHz(logValues.end),
+      );
+      setState(() => _range = hz);
+      await widget.settings.setMusicMinCutoffHz(hz.start);
+      await widget.settings.setMusicMaxCutoffHz(hz.end);
     }
 
     return Column(

@@ -935,19 +935,33 @@ class _MusicTile extends ConsumerWidget {
 }
 
 /// Music-feedback bubble: the same settings as Settings → Music feedback
-/// (folder, cutoff range, invert mapping, shuffle) in one place.
-class _MusicSettingsDialog extends ConsumerWidget {
+/// (folder, cutoff range, invert mapping, shuffle) in one place, plus a reset
+/// that restores the shipped defaults.
+class _MusicSettingsDialog extends ConsumerStatefulWidget {
   const _MusicSettingsDialog();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_MusicSettingsDialog> createState() =>
+      _MusicSettingsDialogState();
+}
+
+class _MusicSettingsDialogState extends ConsumerState<_MusicSettingsDialog> {
+  final GlobalKey<MusicSettingsPanelState> _panelKey =
+      GlobalKey<MusicSettingsPanelState>();
+
+  @override
+  Widget build(BuildContext context) {
     final settings = ref.read(settingsProvider);
     return AlertDialog(
       title: const Text('Music feedback'),
       content: SingleChildScrollView(
-        child: MusicSettingsPanel(settings: settings),
+        child: MusicSettingsPanel(key: _panelKey, settings: settings),
       ),
       actions: [
+        TextButton(
+          onPressed: () => _panelKey.currentState?.resetToDefaults(),
+          child: const Text('Reset'),
+        ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
