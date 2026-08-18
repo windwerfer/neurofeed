@@ -325,6 +325,16 @@ class Settings {
 
   Future<void> clearMusicFolder() => _prefs.remove(_musicFolderKey);
 
+  static const String _musicAiCpuWarningKey = 'music_ai_cpu_warning_shown';
+
+  /// Whether the one-time "music + AI guardrail may stutter" warning has
+  /// already been shown. The combo is allowed — the warning only informs.
+  bool get musicAiCpuWarningShown =>
+      _prefs.getBool(_musicAiCpuWarningKey) ?? false;
+
+  Future<void> markMusicAiCpuWarningShown() =>
+      _prefs.setBool(_musicAiCpuWarningKey, true);
+
   /// Low-pass cutoff range (Hz) the music feedback sweeps between. Below the
   /// floor the music is deeply muffled; at the ceiling it is full spectrum.
   double get musicMinCutoffHz => _prefs.getDouble(_musicMinCutoffKey) ?? 200.0;

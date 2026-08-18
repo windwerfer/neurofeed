@@ -298,8 +298,9 @@ class _PhaseControls extends ConsumerWidget {
     final engineSel = guardrailEngineFromSettings(ref.read(settingsProvider));
     final needsModel = guardrailIntended && !engineSel.isBandMath;
 
-    // Music feedback needs a music folder AND no AI guardrail model (the
-    // band-math scorer leaves the CPU free for the audio pipeline).
+    // Music feedback needs a music folder; an AI guardrail model alongside it
+    // is allowed but gets a one-time stutter warning (the model and the audio
+    // pipeline share the CPU — usually fine on laptops/desktops).
     Future<void> startSession() async {
       final settings = ref.read(settingsProvider);
       if (fb.feedbackMode == FeedbackMode.music) {
@@ -323,26 +324,34 @@ class _PhaseControls extends ConsumerWidget {
           );
           return;
         }
-        if (guardrailIntended && !engineSel.isBandMath) {
+        if (guardrailIntended &&
+            !engineSel.isBandMath &&
+            !settings.musicAiCpuWarningShown) {
+          await settings.markMusicAiCpuWarningShown();
+          if (!context.mounted) {
+            return;
+          }
           await showDialog<void>(
             context: context,
             builder: (ctx) => AlertDialog(
-              title: const Text('Music feedback unavailable'),
+              title: const Text('Music feedback + AI guardrail'),
               content: const Text(
-                'Music feedback is off while an AI guardrail model is active '
-                '(the model and the audio pipeline would compete for CPU). '
-                'Switch the guardrail scorer to Band math in the guardrail '
-                'gear, or choose a different feedback sound.',
+                'The AI sleep guardrail model and the music pipeline share '
+                'the CPU — on slower devices this can make the music stutter '
+                '(most laptops and desktops handle it fine).\n\n'
+                'If you hear dropouts: switch the guardrail scorer to Band '
+                'math in the guardrail gear, or choose chimes, rain, or '
+                'binaural beats as the feedback sound.\n\n'
+                'This warning shows once.',
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('OK'),
+                  child: const Text('Got it'),
                 ),
               ],
             ),
           );
-          return;
         }
       }
       ref.read(feedbackStateProvider.notifier).startCalibration();
