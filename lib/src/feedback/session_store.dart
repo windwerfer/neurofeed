@@ -957,7 +957,7 @@ class SessionStore {
   }
 
   SessionMetadata _fallback(String id) => SessionMetadata(
-    protocol: ProtocolType.alphaTheta,
+    protocol: ProtocolType.drowsiness,
     durationMinutes: 0,
     elapsedSeconds: 0,
     sound: 'Ambient Drone',

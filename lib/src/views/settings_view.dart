@@ -560,9 +560,9 @@ class _MusicCardState extends ConsumerState<_MusicCard> {
   }
 }
 
-/// Per-protocol AI sleep-guardrail toggle. One switch per protocol whose spec
-/// offers the guardrail layer ([ProtocolInfo.aiSleepGuardrail]); protocols
-/// without the layer run the plain ratio engine regardless.
+/// Per-protocol AI sleep-guardrail toggle. One switch per protocol; each
+/// defaults to the protocol's shipping choice ([ProtocolInfo.guardrailDefault])
+/// until the user overrides it.
 class _GuardrailCard extends StatefulWidget {
   const _GuardrailCard({required this.settings});
 
@@ -575,8 +575,7 @@ class _GuardrailCard extends StatefulWidget {
 class _GuardrailCardState extends State<_GuardrailCard> {
   late final Map<ProtocolType, bool> _enabled = {
     for (final p in ProtocolInfo.all)
-      if (p.aiSleepGuardrail)
-        p.type: widget.settings.guardrailEnabledFor(p.type),
+      p.type: widget.settings.guardrailEnabledFor(p.type),
   };
 
   @override
@@ -612,27 +611,25 @@ class _GuardrailCardState extends State<_GuardrailCard> {
             ),
             const Divider(height: 24),
             for (final p in ProtocolInfo.all)
-              if (p.aiSleepGuardrail)
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  secondary: Icon(
-                    Icons.psychology_outlined,
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: Icon(
+                  Icons.psychology_outlined,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                title: Text(p.title),
+                subtitle: Text(
+                  'Off: runs the plain ratio engine without warnings.',
+                  style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
-                  title: Text(p.title),
-                  subtitle: Text(
-                    'Off: runs the plain Alpha-over-Theta ratio engine without '
-                    'warnings.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  value: _enabled[p.type] ?? true,
-                  onChanged: (on) async {
-                    setState(() => _enabled[p.type] = on);
-                    await widget.settings.setGuardrailEnabled(p.type, on);
-                  },
                 ),
+                value: _enabled[p.type] ?? true,
+                onChanged: (on) async {
+                  setState(() => _enabled[p.type] = on);
+                  await widget.settings.setGuardrailEnabled(p.type, on);
+                },
+              ),
           ],
         ),
       ),

@@ -111,7 +111,7 @@ class FeedbackState {
 
   const FeedbackState({
     this.phase = FeedbackPhase.idle,
-    this.protocol = ProtocolType.alphaTheta,
+    this.protocol = ProtocolType.drowsiness,
     this.durationMinutes = 15,
     this.soundName = 'Ambient Drone',
     this.feedbackMode = FeedbackMode.bowlChimes,
@@ -427,16 +427,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     await _runCalibration();
   }
 
-  /// True when this session intends to run the guardrail: the protocol spec
-  /// offers the layer, the user has not disabled it for this protocol, and a
-  /// model is ready. Used synchronously for the calibration-recipe lookup;
-  /// the async arm ([_maybeEnableGuardrail]) may still fail, in which case
-  /// the session runs without warnings (the staged recipe still
-  /// calibrates fine — it just has no scorer to feed).
+  /// True when this session intends to run the guardrail: the user has not
+  /// disabled it for this protocol and a model is ready. Used synchronously
+  /// for the calibration-recipe lookup; the async arm ([_maybeEnableGuardrail])
+  /// may still fail, in which case the session runs without warnings (the
+  /// staged recipe still calibrates fine — it just has no scorer to feed).
   bool get _guardrailIntent {
-    final spec = ProtocolInfo.forType(state.protocol);
-    if (!spec.aiSleepGuardrail ||
-        !_ref.read(settingsProvider).guardrailEnabledFor(state.protocol)) {
+    if (!_ref.read(settingsProvider).guardrailEnabledFor(state.protocol)) {
       return false;
     }
     final engine = guardrailEngineFromSettings(_ref.read(settingsProvider));
@@ -446,11 +443,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
   }
 
-  /// Arm the REVE/LUNA sleep-guardrail scorer for protocols whose spec offers
-  /// the layer (currently Sleep-Edge Rest), using the settings-selected
+  /// Arm the REVE/LUNA sleep-guardrail scorer according to the per-protocol
+  /// setting ([Settings.guardrailEnabledFor]), using the settings-selected
   /// foundation model. Scoring starts immediately in the forwarder (first
   /// embedding lands after ~5 s) so the calibration baseline can capture the
-  /// clear anchor. No-op otherwise.
+  /// clear anchor. No-op when disabled.
   Future<void> _maybeEnableGuardrail() async {
     _guardrailEnabled = false;
     _clearCaptured = false;

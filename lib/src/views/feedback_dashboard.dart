@@ -68,7 +68,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         // Fast path: render the detail straight from the decimated overview in
         // the metadata head, without reading (or parsing) the .muse body.
         final protocol = ProtocolInfo.forType(
-          widget.metadata?.protocol ?? ProtocolType.alphaTheta,
+          widget.metadata?.protocol ?? ProtocolType.drowsiness,
         );
         _prepared = _prepareOverview(
           summary,

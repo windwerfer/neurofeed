@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-/// `focus` and `relaxation` remain in the enum only so sessions recorded under
-/// the old placeholder protocols still parse; they were never backed by a real
-/// engine (everything ran the ATR engine) and are not selectable — see
-/// [ProtocolInfo.forType].
+/// `alphaTheta` (Calm Wakeful Rest) was folded into `drowsiness` (the same ATR
+/// engine, guardrail now optional per protocol). Like `focus`/`relaxation`, it
+/// remains in the enum only so sessions recorded under it still parse; it is
+/// not selectable — see [ProtocolInfo.forType].
 enum ProtocolType {
   alphaTheta,
   focus,
@@ -118,13 +118,14 @@ class ProtocolInfo {
   /// [TargetCondition]). Empty for pure scalar protocols.
   final List<TargetCondition> conditions;
 
-  /// Whether this protocol layers the on-device sleep guardrail (LUNA/REVE)
-  /// on top of the reward engine. The guardrail only warns — it never
-  /// modulates the reward.
-  final bool aiSleepGuardrail;
+  /// Whether the on-device sleep guardrail (LUNA/REVE) is on by default for
+  /// this protocol. Every protocol can run the guardrail — the per-protocol
+  /// setting (`Settings.guardrailEnabledFor`) overrides this default. The
+  /// guardrail only warns — it never modulates the reward.
+  final bool guardrailDefault;
 
   /// How the guardrail behaves when music feedback is active (see
-  /// [GuardrailFeedback]). Consulted only when [aiSleepGuardrail] is true.
+  /// [GuardrailFeedback]). Consulted only while the guardrail runs.
   final GuardrailFeedback guardrailFeedback;
 
   const ProtocolInfo({
@@ -138,87 +139,23 @@ class ProtocolInfo {
     required this.color,
     required this.rewardMetric,
     this.conditions = const [],
-    required this.aiSleepGuardrail,
+    required this.guardrailDefault,
     required this.guardrailFeedback,
   });
-
-  static const ProtocolInfo _alphaTheta = ProtocolInfo(
-    type: ProtocolType.alphaTheta,
-    catchPhrase: 'Calm Wakeful Rest',
-    title: 'Alpha over Theta (ATR uptraining)',
-    subtitle:
-        'Guides you into a calm, wakeful resting state: the reward fires when '
-        'Alpha power stays above Theta on the frontal electrodes — eyes '
-        'closed, body settled, awareness still online.',
-    guideText:
-        'What to Meditate On\n'
-        'Practice non-striving. Close your eyes, let the body and mind settle, '
-        'and stay a quiet observer of whatever thoughts or feelings '
-        'arise — no effort, no control.\n'
-        '\n'
-        'Ultimate Goal\n'
-        'A state of calm, wakeful relaxation: the mind is quiet and the body '
-        'rests, but awareness stays present. The target is resting attention, '
-        'not sleep.\n'
-        '\n'
-        'Mind & State Effects\n'
-        'Shifts the nervous system into parasympathetic recovery: slower, '
-        'calmer mentation and reduced cognitive chatter. The reward '
-        'encourages the relaxed-but-awake pattern — eyes closed and settled, '
-        'without drifting off.\n'
-        '\n'
-        'Scientific Explanation\n'
-        '- Target Bands: Alpha (8–13 Hz) and Theta (4–8 Hz) on the frontal '
-        'electrodes (AF7/AF8).\n'
-        '- The Mechanism: closing the eyes typically raises Alpha power — a '
-        'calm, awake observation rhythm. Theta rises as drowsiness deepens.\n'
-        '- The Reward Criterion: the Alpha/Theta ratio (ATR = alpha ÷ theta) '
-        'is rewarded while it stays above your personal baseline percentile. '
-        'In plain terms the training encourages relaxed-but-alert rather than '
-        'sleepy.\n'
-        '\n'
-        'Target Meditation Styles\n'
-        'Yoga Nidra (staying aware), Open Monitoring, Passive Awareness.\n'
-        '\n'
-        'Who It Helps\n'
-        '- Overactive minds that struggle to "turn off": a concrete target to '
-        'rest into.\n'
-        '- Stress and burnout recovery: regular, restorative rest states.\n'
-        '- Practitioners learning to stay awake and aware during rest.\n'
-        '\n'
-        'Who Should Avoid This\n'
-        '- Habitual meditation sleepers: if you reliably fall asleep the '
-        'moment your eyes close, start with an alertness-building practice — '
-        'this protocol will not keep you awake on its own.\n'
-        '- Anyone who finds the eyes-closed state dissociating.',
-    algorithmDescription:
-        'Computes the Alpha/Theta ratio (ATR = alpha power ÷ theta power) on '
-        'the AF7/AF8 average. The reward fires while ATR is above a threshold '
-        'derived from your personal baseline: a configurable percentile '
-        '(default p40) of the 90-second eyes-closed calibration — about a 60% '
-        'initial reward rate. The threshold adapts during the session to keep '
-        'you in the learning zone.',
-    expectedDelay: '~1s (live band stream)',
-    color: Color(0xFF7C4DFF),
-    rewardMetric: RewardMetric.alphaOverTheta,
-    aiSleepGuardrail: false,
-    guardrailFeedback: GuardrailFeedback.chimeOnly,
-  );
 
   static const ProtocolInfo _drowsiness = ProtocolInfo(
     type: ProtocolType.drowsiness,
     catchPhrase: 'Sleep-Edge Rest',
     title: 'Alpha over Theta with a sleep guardrail',
     subtitle:
-        'The same Alpha-over-Theta reward as the base protocol, plus an '
-        'on-device AI layer (LUNA/REVE) that watches a rolling 4–5 second '
-        'window of raw EEG each second for the signatures of actually falling '
-        'asleep, and plays a soft warning chime when you drift — so the rest '
-        'stays awake.',
+        'An Alpha-over-Theta rest reward, plus an on-device AI layer '
+        '(LUNA/REVE) that watches a rolling 4–5 second window of raw EEG each '
+        'second for the signatures of actually falling asleep, and plays a '
+        'soft warning chime when you drift — so the rest stays awake. The '
+        'guardrail is an option: switch it off to run the plain rest engine.',
     guideText:
         'What to Meditate On\n'
-        'Same as the Alpha-over-Theta protocol: gentle, non-striving '
-        'attention with the eyes closed.\n'
+        'Gentle, non-striving attention with the eyes closed.\n'
         '\n'
         'Ultimate Goal\n'
         'To rest at the edge of sleep and remain aware. The AI guardrail is a '
@@ -227,13 +164,13 @@ class ProtocolInfo {
         'punishes; it informs.\n'
         '\n'
         'Mind & State Effects\n'
-        'The reward drives the same calm-awake training as the base protocol. '
-        'The guardrail tries to catch the moment of falling asleep and sounds '
-        'a gentle wake note so the session stays a rest, not a nap.\n'
+        'The reward drives calm-awake training; the guardrail tries to catch '
+        'the moment of falling asleep and sounds a gentle wake note so the '
+        'session stays a rest, not a nap.\n'
         '\n'
         'Scientific Explanation\n'
-        '- Reward: identical to Alpha-over-Theta — ATR (alpha ÷ theta) on the '
-        'AF7/AF8 average. The guardrail never changes the reward.\n'
+        '- Reward: the ATR rest metric — alpha ÷ theta on the AF7/AF8 average. '
+        'The guardrail never changes the reward.\n'
         '- Guardrail: the on-device model (LUNA or REVE, RLX CPU engine) '
         'embeds a rolling window of raw EEG at 256 Hz, once per second (LUNA '
         'epochs are 5 s / 1280 samples; REVE 4 s / 1024 samples). During '
@@ -258,8 +195,8 @@ class ProtocolInfo {
         '- Anyone who needs guaranteed wakefulness: the guardrail is an '
         'approximate cue, not a safety device.',
     algorithmDescription:
-        'ATR reward exactly as in Alpha-over-Theta, plus the LUNA/REVE AI '
-        'sleep guardrail: a per-second model score over a rolling EEG window '
+        'ATR reward (alpha ÷ theta) plus the LUNA/REVE AI sleep guardrail: a '
+        'per-second model score over a rolling EEG window '
         '(LUNA 5 s / 1280 samples, REVE 4 s / 1024 samples). During '
         'calibration it captures an eyes-open "V_clear" anchor and a rest '
         '(eyes-closed) sleep-direction distribution. During '
@@ -270,7 +207,7 @@ class ProtocolInfo {
     expectedDelay: '~1s (ATR) + ~1s (AI model window)',
     color: Color(0xFF1E88E5),
     rewardMetric: RewardMetric.alphaOverTheta,
-    aiSleepGuardrail: true,
+    guardrailDefault: true,
     guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
   );
 
@@ -342,7 +279,7 @@ class ProtocolInfo {
     expectedDelay: '~1s (TAR) + ~1s (AI model window)',
     color: Color(0xFF8E24AA),
     rewardMetric: RewardMetric.thetaOverAlpha,
-    aiSleepGuardrail: true,
+    guardrailDefault: true,
     guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
   );
 
@@ -403,7 +340,7 @@ class ProtocolInfo {
     expectedDelay: '~1s (live band stream)',
     color: Color(0xFFFB8C00),
     rewardMetric: RewardMetric.betaOverTheta,
-    aiSleepGuardrail: false,
+    guardrailDefault: false,
     guardrailFeedback: GuardrailFeedback.chimeOnly,
   );
 
@@ -461,7 +398,7 @@ class ProtocolInfo {
     expectedDelay: '~1s (live band stream)',
     color: Color(0xFF00897B),
     rewardMetric: RewardMetric.betaOverTheta,
-    aiSleepGuardrail: false,
+    guardrailDefault: false,
     guardrailFeedback: GuardrailFeedback.chimeOnly,
   );
 
@@ -520,7 +457,7 @@ class ProtocolInfo {
     expectedDelay: '~1s (live band stream)',
     color: Color(0xFF43A047),
     rewardMetric: RewardMetric.alphaOnly,
-    aiSleepGuardrail: false,
+    guardrailDefault: false,
     guardrailFeedback: GuardrailFeedback.chimeOnly,
   );
 
@@ -582,7 +519,7 @@ class ProtocolInfo {
     color: Color(0xFFD81B60),
     rewardMetric: RewardMetric.alphaOnly,
     conditions: [BetaCeiling(0.25)],
-    aiSleepGuardrail: false,
+    guardrailDefault: false,
     guardrailFeedback: GuardrailFeedback.chimeOnly,
   );
 
@@ -634,7 +571,7 @@ class ProtocolInfo {
         '\n'
         'Who Should Avoid This\n'
         '- Beginners: the stacked conditions make the target harder to '
-        'reach — start with Calm Wakeful Rest.\n'
+        'reach — start with Sleep-Edge Rest.\n'
         '- Anyone who needs guaranteed wakefulness: the guardrail is an '
         'approximate cue, not a safety device.',
     algorithmDescription:
@@ -648,12 +585,11 @@ class ProtocolInfo {
     color: Color(0xFF6D4C41),
     rewardMetric: RewardMetric.alphaOverTheta,
     conditions: [BetaCeiling(0.25), DeltaCeiling(0.5)],
-    aiSleepGuardrail: true,
+    guardrailDefault: true,
     guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
   );
 
   static const List<ProtocolInfo> all = [
-    _alphaTheta,
     _drowsiness,
     _twilight,
     _alertnessOpen,
@@ -664,8 +600,8 @@ class ProtocolInfo {
   ];
 
   /// Legacy sessions stored under the removed placeholder protocols
-  /// (`focus`/`relaxation`) mapped to the ATR info since that is the engine
-  /// they actually ran under.
+  /// (`focus`/`relaxation`) or the folded-in `alphaTheta` map to the ATR info
+  /// since that is the engine they actually ran under.
   static ProtocolInfo forType(ProtocolType type) =>
-      all.firstWhere((p) => p.type == type, orElse: () => _alphaTheta);
+      all.firstWhere((p) => p.type == type, orElse: () => _drowsiness);
 }

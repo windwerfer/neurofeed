@@ -276,13 +276,15 @@ class Settings {
   Future<void> setLastCustomMinutes(int value) =>
       _prefs.setInt(_lastCustomMinutesKey, value);
 
-  /// Whether the on-device AI sleep guardrail runs for [type]. Only protocols
-  /// whose spec offers the layer ([ProtocolInfo.aiSleepGuardrail]) consult
-  /// this; a model must additionally be installed and selected. Defaults to
-  /// on — turning it off runs the plain ratio engine (no warnings, no
-  /// lazy-rest calibration stage).
+  /// Whether the on-device AI sleep guardrail runs for [type]. Every protocol
+  /// offers the layer; the default follows the protocol's shipping choice
+  /// ([ProtocolInfo.guardrailDefault]), and turning it off runs the plain
+  /// ratio engine (no warnings, no guardrail calibration stages). A model must
+  /// additionally be installed and selected for the AI scorer (the band-math
+  /// fallback works without one).
   bool guardrailEnabledFor(ProtocolType type) =>
-      _prefs.getBool('$_guardrailKeyPrefix${type.name}') ?? true;
+      _prefs.getBool('$_guardrailKeyPrefix${type.name}') ??
+      ProtocolInfo.forType(type).guardrailDefault;
 
   Future<void> setGuardrailEnabled(ProtocolType type, bool value) =>
       _prefs.setBool('$_guardrailKeyPrefix${type.name}', value);

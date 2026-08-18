@@ -48,7 +48,6 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
     final connected = ref.watch(appStateProvider).status.connected;
     final theme = Theme.of(context);
     final guardrailOn =
-        protocol.aiSleepGuardrail &&
         ref.watch(settingsProvider).guardrailEnabledFor(fb.protocol);
 
     return Scaffold(
@@ -281,7 +280,6 @@ class _PhaseControls extends ConsumerWidget {
     final fb = ref.watch(feedbackStateProvider);
     final theme = Theme.of(context);
     final guardrailIntended =
-        protocol.aiSleepGuardrail &&
         ref.watch(settingsProvider).guardrailEnabledFor(fb.protocol);
     final engineSel = guardrailEngineFromSettings(ref.read(settingsProvider));
     final needsModel = guardrailIntended && !engineSel.isBandMath;

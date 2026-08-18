@@ -32,8 +32,11 @@ Global orientation for any AI agent or contributor working in this repo.
   `rust/src/analysis/{reve,luna}.rs`; cache + UI in `lib/src/reve/`.
   Protocols compose a reward engine (`RewardMetric`, ATR today) with the guardrail
   layer (`ProtocolInfo.aiSleepGuardrail` + `Settings.guardrailEnabledFor`); the
-  guardrail only warns, it never modulates the reward. Calibration recipes are
-  keyed by protocol **and** guardrail configuration (manifest v3, `CalibrationManifest.recipeFor`).
+  guardrail only warns, it never modulates the reward. Calibration manifests are
+  split in two (v1): `assets/audio/calibration/calibration.json` holds the shared
+  templates (single baseline / staged guardrail), `protocols.json` maps each
+  protocol to its preferred templates in order; `CalibrationManifest.recipeFor`
+  joins them (guardrail on → staged, off → single).
 - **Android**: NDK 27/28, Gradle 8.14, `targetSdkVersion = 36`.
 - **Decision:** using btleplug (forked) for BLE transport — consistent with
   `muse-rs`. `flutter_blue_plus` was the fallback if the JNI fix had failed.
