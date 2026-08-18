@@ -67,10 +67,14 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       if (summary != null) {
         // Fast path: render the detail straight from the decimated overview in
         // the metadata head, without reading (or parsing) the .muse body.
-        final metric = ProtocolInfo.forType(
+        final protocol = ProtocolInfo.forType(
           widget.metadata?.protocol ?? ProtocolType.alphaTheta,
-        ).rewardMetric;
-        _prepared = _prepareOverview(summary, metric: metric);
+        );
+        _prepared = _prepareOverview(
+          summary,
+          metric: protocol.rewardMetric,
+          conditions: protocol.conditions,
+        );
       } else {
         // Legacy session without a summary: fall back to a full-body parse.
         final store = ref.read(sessionStoreProvider.future);
@@ -256,6 +260,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
           data,
           trainingStartOffset: _trainingStartOffset,
           metric: protocol.rewardMetric,
+          conditions: protocol.conditions,
         );
         _sessionData ??= data;
         if (_thumbnail == null && !widget.readOnly) {
@@ -981,6 +986,7 @@ _Prepared _prepare(
   SessionData data, {
   double? trainingStartOffset,
   RewardMetric metric = RewardMetric.alphaOverTheta,
+  List<TargetCondition> conditions = const [],
 }) {
   // When the session includes calibration, the displayed window and metrics
   // cover the training portion only. The boundary is an offset from the first
@@ -1045,7 +1051,7 @@ _Prepared _prepare(
     betaRel.add(bRel);
     gammaRel.add(gRel);
     alphaRelSum += aRel;
-    if (_inTarget(tRel, aRel, metric)) {
+    if (_inTarget(dRel, tRel, aRel, bRel, metric, conditions)) {
       targetSeconds++;
     }
   }
@@ -1117,13 +1123,35 @@ _Prepared _prepare(
 }
 
 /// Rewarded-band criterion for [metric] on a per-second sample: alpha
-/// dominance for the ATR engine, theta dominance for TAR. Matches the
-/// reward engine's `isInTarget` direction (without baseline percentile).
-bool _inTarget(double thetaRel, double alphaRel, RewardMetric metric) =>
-    switch (metric) {
-      RewardMetric.alphaOverTheta => alphaRel > thetaRel,
-      RewardMetric.thetaOverAlpha => thetaRel > alphaRel,
-    };
+/// dominance for the ATR engine, theta dominance for TAR, beta dominance
+/// for BTR, plain relative alpha for the alpha-only metric. All protocol
+/// [conditions] (e.g. beta/delta ceilings) must pass. Matches the reward
+/// engine's `isInTarget` direction (without baseline percentile).
+bool _inTarget(
+  double deltaRel,
+  double thetaRel,
+  double alphaRel,
+  double betaRel,
+  RewardMetric metric,
+  List<TargetCondition> conditions,
+) {
+  for (final c in conditions) {
+    if (!c.passes(
+      deltaRel: deltaRel,
+      thetaRel: thetaRel,
+      alphaRel: alphaRel,
+      betaRel: betaRel,
+    )) {
+      return false;
+    }
+  }
+  return switch (metric) {
+    RewardMetric.alphaOverTheta => alphaRel > thetaRel,
+    RewardMetric.thetaOverAlpha => thetaRel > alphaRel,
+    RewardMetric.betaOverTheta => betaRel > thetaRel,
+    RewardMetric.alphaOnly => alphaRel > thetaRel && alphaRel > betaRel,
+  };
+}
 
 /// Build a [_Prepared] from the decimated [SessionOverview] stored in the
 /// metadata head, so the history detail renders without reading the `.muse`
@@ -1131,6 +1159,7 @@ bool _inTarget(double thetaRel, double alphaRel, RewardMetric metric) =>
 _Prepared _prepareOverview(
   SessionOverview overview, {
   RewardMetric metric = RewardMetric.alphaOverTheta,
+  List<TargetCondition> conditions = const [],
 }) {
   final n = overview.bucketCount;
   final width = overview.bucketWidthSecs > 0 ? overview.bucketWidthSecs : 1.0;
@@ -1163,7 +1192,7 @@ _Prepared _prepareOverview(
     betaRel.add(bRel);
     gammaRel.add(gRel);
     alphaRelSum += aRel;
-    if (_inTarget(tRel, aRel, metric)) {
+    if (_inTarget(dRel, tRel, aRel, bRel, metric, conditions)) {
       targetSeconds++;
     }
   }

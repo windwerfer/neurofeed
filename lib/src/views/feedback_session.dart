@@ -595,10 +595,7 @@ class _NerdStatsBubble extends ConsumerWidget {
     final baselineMean = stats.baselineMean;
     final baselineStddev = stats.baselineStddev;
     final metricName =
-        ProtocolInfo.forType(fb.protocol).rewardMetric ==
-            RewardMetric.thetaOverAlpha
-        ? 'TAR'
-        : 'ATR';
+        ProtocolInfo.forType(fb.protocol).rewardMetric.shortLabel;
     final lines = <String>[];
     if (percentile == null || atr == null) {
       lines.add('Collecting…');

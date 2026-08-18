@@ -1142,13 +1142,31 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
-  /// Live ratio of the session's reward metric from a per-sample target.
+  /// Live scalar of the session's reward metric from a per-sample target.
   /// The engine is direction-agnostic; extraction is the only metric-aware
   /// lane (data-only flip: same adaptive engine, different numerator).
-  double _metricOf(RelativeTarget target) => switch (_engine.metric) {
-    RewardMetric.alphaOverTheta => target.atr,
-    RewardMetric.thetaOverAlpha => target.tar,
-  };
+  double _metricOf(RelativeTarget target) =>
+      target.scalarFor(_engine.metric);
+
+  /// Full in-target verdict for a sample: the scalar beats the threshold AND
+  /// every protocol condition passes (e.g. beta/delta ceilings).
+  bool _inTargetVerdict(RelativeTarget target, double value) {
+    if (!_engine.isInTarget(value)) {
+      return false;
+    }
+    final spec = ProtocolInfo.forType(state.protocol);
+    for (final c in spec.conditions) {
+      if (!c.passes(
+        deltaRel: target.deltaRel,
+        thetaRel: target.thetaRel,
+        alphaRel: target.alphaRel,
+        betaRel: target.betaRel,
+      )) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   /// True when a modulated feedback channel (music or rain) is currently
   /// streaming — the guardrail ducks these during warnings.
@@ -1159,9 +1177,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   };
 
   /// Routes the live reward to the selected feedback layer: bowl chimes fire
-  /// on-target, rain maps percentile→intensity stage, music maps
-  /// percentile→cutoff. `none` stays silent.
-  void _applyReward(double value) {
+  /// on the full in-target verdict (scalar + conditions), rain maps
+  /// percentile→intensity stage, music maps percentile→cutoff. `none` stays
+  /// silent.
+  void _applyReward(double value, {required bool inTarget}) {
     switch (state.feedbackMode) {
       case FeedbackMode.music:
         if (_audio.musicPlaying) {
@@ -1176,7 +1195,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       case FeedbackMode.none:
         return;
       case FeedbackMode.bowlChimes:
-        _audio.onStateUpdate(_engine.isInTarget(value));
+        _audio.onStateUpdate(inTarget);
         return;
     }
   }
@@ -1283,10 +1302,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (!value.isFinite) {
       return;
     }
-    _engine.recordEpoch(value);
+    final inTarget = _inTargetVerdict(target, value);
+    _engine.recordEpoch(inTarget);
     _engine.recordSessionSample(value, clean: _sampleIsClean);
     _ref.read(liveStatsProvider).push(value, _engine.percentileOf);
-    _applyReward(value);
+    _applyReward(value, inTarget: inTarget);
     if (_guardrailBandMath) {
       _onBandMathBand(bands);
     }

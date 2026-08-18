@@ -75,10 +75,26 @@ class _ProtocolCard extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          protocol.title,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: protocol.catchPhrase,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize:
+                                      (theme.textTheme.titleMedium?.fontSize ??
+                                              16) +
+                                          1,
+                                ),
+                              ),
+                              TextSpan(
+                                text: '  —  ${protocol.title}',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w400,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 2),

@@ -53,8 +53,11 @@ abstract class FeedbackEngine {
   /// no baseline exists yet.
   double? percentileOf(double value);
 
-  /// Record one live epoch for the rolling success-rate window.
-  void recordEpoch(double value);
+  /// Record one live epoch for the rolling success-rate window. [inTarget] is
+  /// the caller's full verdict — the scalar threshold *and* any protocol
+  /// conditions — so the success rate driving adaptation matches the actual
+  /// reward the user experiences.
+  void recordEpoch(bool inTarget);
 
   /// Record a live sample for the in-flight recalibration recent window.
   void recordSessionSample(double value, {required bool clean});

@@ -146,7 +146,7 @@ class CalibrationManifest {
   final List<CalibrationRecipe> recipes;
 
   static const String asset = 'assets/audio/calibration/calibration.json';
-  static const int currentVersion = 3;
+  static const int currentVersion = 4;
 
   /// Recipe for [protocolName], preferring the entry that matches the
   /// requested [guardrail] configuration (or any entry when [guardrail] is

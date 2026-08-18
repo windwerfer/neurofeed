@@ -19,12 +19,14 @@ const double movementGateThreshold = 0.05;
 
 class RelativeTarget {
   const RelativeTarget({
+    required this.deltaRel,
     required this.alphaRel,
     required this.thetaRel,
     required this.betaRel,
     required this.gammaRel,
   });
 
+  final double deltaRel;
   final double alphaRel;
   final double thetaRel;
   final double betaRel;
@@ -49,6 +51,22 @@ class RelativeTarget {
     }
     return thetaRel / alphaRel;
   }
+
+  /// Beta/Theta power ratio (BTR) — the classic alertness ratio.
+  double get betaTheta {
+    if (thetaRel <= 0) {
+      return double.infinity;
+    }
+    return betaRel / thetaRel;
+  }
+
+  /// The scalar feeding the reward engine for [metric].
+  double scalarFor(RewardMetric metric) => switch (metric) {
+    RewardMetric.alphaOverTheta => atr,
+    RewardMetric.thetaOverAlpha => tar,
+    RewardMetric.betaOverTheta => betaTheta,
+    RewardMetric.alphaOnly => alphaRel,
+  };
 }
 
 /// Continuous band-ratio uptraining engine.
@@ -222,8 +240,8 @@ class RatioEngine implements FeedbackEngine {
   }
 
   @override
-  void recordEpoch(double value) {
-    _epochs.add(isInTarget(value));
+  void recordEpoch(bool inTarget) {
+    _epochs.add(inTarget);
     if (_epochs.length > epochWindow) {
       _epochs.removeAt(0);
     }
@@ -355,6 +373,7 @@ class TargetStateAggregator {
       return null;
     }
     return RelativeTarget(
+      deltaRel: _avg(picked.map((r) => r.delta)),
       alphaRel: _avg(picked.map((r) => r.alpha)),
       thetaRel: _avg(picked.map((r) => r.theta)),
       betaRel: _avg(picked.map((r) => r.beta)),
@@ -401,6 +420,7 @@ class _ChannelBands {
       return null;
     }
     return _RelativeBands(
+      delta: delta / total,
       alpha: alpha / total,
       theta: theta / total,
       beta: beta / total,
@@ -411,12 +431,14 @@ class _ChannelBands {
 
 class _RelativeBands {
   const _RelativeBands({
+    required this.delta,
     required this.alpha,
     required this.theta,
     required this.beta,
     required this.gamma,
   });
 
+  final double delta;
   final double alpha;
   final double theta;
   final double beta;
