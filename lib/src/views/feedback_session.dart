@@ -15,6 +15,7 @@ import 'package:muse_ml/src/reve/reve_import.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/status_bar.dart';
 import 'package:muse_ml/src/views/feedback_dashboard.dart';
+import 'package:muse_ml/src/views/music_settings_panel.dart';
 
 class FeedbackSessionView extends ConsumerStatefulWidget {
   const FeedbackSessionView({super.key});
@@ -660,6 +661,9 @@ class _SessionSettingsCard extends ConsumerWidget {
           if (fb.feedbackMode == FeedbackMode.binaural) ...[
             const _BinauralTile(),
           ],
+          if (fb.feedbackMode == FeedbackMode.music) ...[
+            const _MusicTile(),
+          ],
           if (showGuardrail) ...[
             const Divider(height: 1, indent: 16, endIndent: 16),
             const _GuardrailTile(),
@@ -769,25 +773,62 @@ class _FeedbackTile extends ConsumerWidget {
         if (result == FeedbackMode.music) {
           final settings = ref.read(settingsProvider);
           if (settings.musicFolder == null) {
-            await showDialog<void>(
+            final proceed = await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
-                title: const Text('Music folder not set'),
+                title: const Text('Music feedback'),
                 content: const Text(
-                  'Music feedback plays your own tracks through a '
-                  'reward-driven filter. Pick a music folder in '
-                  'Settings → Music feedback first.',
+                  'Please select a folder where the music you want to '
+                  'play is in.',
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('OK'),
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    child: const Text('Select folder'),
                   ),
                 ],
               ),
             );
-            return;
+            if (proceed != true || !context.mounted) {
+              return;
+            }
+            final folder = await pickMusicFolder();
+            if (folder == null) {
+              return;
+            }
+            await settings.setMusicFolder(folder);
+            final count = await ref.read(audioServiceProvider).loadMusic();
+            if (count == 0) {
+              await settings.clearMusicFolder();
+              if (!context.mounted) {
+                return;
+              }
+              await showDialog<void>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('No music found'),
+                  content: const Text(
+                    'No playable music was found in that folder. '
+                    'Nothing was changed — your previous feedback sound '
+                    'stays selected.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+              return;
+            }
           }
+          ref.read(feedbackStateProvider.notifier).selectFeedbackMode(result);
+          return;
         }
         ref.read(feedbackStateProvider.notifier).selectFeedbackMode(result);
       },
@@ -827,15 +868,6 @@ class _BinauralTile extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: Text(
-                'Binaural layer — part of the feedback sound',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
             ListTile(
               dense: true,
               leading: const Icon(Icons.graphic_eq),
@@ -852,6 +884,75 @@ class _BinauralTile extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The music-feedback sub-tile: an indented, tightly grouped row under the
+/// Feedback Sound tile (visible only while Music is the selected feedback
+/// layer), showing the chosen folder and cutoff range, opening the
+/// music-settings bubble on tap.
+class _MusicTile extends ConsumerWidget {
+  const _MusicTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final settings = ref.read(settingsProvider);
+    final folder = settings.musicFolder;
+    final minHz = settings.musicMinCutoffHz.round();
+    final maxHz = settings.musicMaxCutoffHz.round();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(32, 0, 16, 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(
+            color: theme.colorScheme.primary.withValues(alpha: 0.45),
+            width: 3,
+          ),
+        ),
+      ),
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          dense: true,
+          leading: const Icon(Icons.music_note),
+          title: const Text('Music'),
+          subtitle: Text(
+            '${musicFolderLabel(folder)} • low-pass $minHz–$maxHz Hz',
+          ),
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (_) => const _MusicSettingsDialog(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Music-feedback bubble: the same settings as Settings → Music feedback
+/// (folder, cutoff range, invert mapping, shuffle) in one place.
+class _MusicSettingsDialog extends ConsumerWidget {
+  const _MusicSettingsDialog();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.read(settingsProvider);
+    return AlertDialog(
+      title: const Text('Music feedback'),
+      content: SingleChildScrollView(
+        child: MusicSettingsPanel(settings: settings),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
     );
   }
 }
