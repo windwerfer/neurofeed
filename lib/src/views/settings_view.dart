@@ -560,9 +560,11 @@ class _MusicCardState extends ConsumerState<_MusicCard> {
   }
 }
 
-/// Per-protocol AI sleep-guardrail toggle. One switch per protocol; each
-/// defaults to the protocol's shipping choice ([ProtocolInfo.guardrailDefault])
-/// until the user overrides it.
+/// Per-protocol AI sleep-guardrail toggle. One switch per protocol that
+/// offers the guardrail (see [ProtocolInfo.guardrailAllowed] — the eyes-open
+/// protocol has no sleep drift to guard and is not listed); each defaults to
+/// the protocol's shipping choice ([ProtocolInfo.guardrailDefault]) until the
+/// user overrides it.
 class _GuardrailCard extends StatefulWidget {
   const _GuardrailCard({required this.settings});
 
@@ -574,7 +576,7 @@ class _GuardrailCard extends StatefulWidget {
 
 class _GuardrailCardState extends State<_GuardrailCard> {
   late final Map<ProtocolType, bool> _enabled = {
-    for (final p in ProtocolInfo.all)
+    for (final p in ProtocolInfo.all.where((p) => p.guardrailAllowed))
       p.type: widget.settings.guardrailEnabledFor(p.type),
   };
 
@@ -610,7 +612,7 @@ class _GuardrailCardState extends State<_GuardrailCard> {
               ),
             ),
             const Divider(height: 24),
-            for (final p in ProtocolInfo.all)
+            for (final p in ProtocolInfo.all.where((p) => p.guardrailAllowed))
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 secondary: Icon(

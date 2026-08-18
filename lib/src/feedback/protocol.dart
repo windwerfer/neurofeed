@@ -124,6 +124,11 @@ class ProtocolInfo {
   /// guardrail only warns — it never modulates the reward.
   final bool guardrailDefault;
 
+  /// Whether the guardrail is offered at all for this protocol. False only for
+  /// the eyes-open alertness protocol (no sleep drift to guard against); when
+  /// false the guardrail UI is hidden and the layer never runs for it.
+  final bool guardrailAllowed;
+
   /// How the guardrail behaves when music feedback is active (see
   /// [GuardrailFeedback]). Consulted only while the guardrail runs.
   final GuardrailFeedback guardrailFeedback;
@@ -140,6 +145,7 @@ class ProtocolInfo {
     required this.rewardMetric,
     this.conditions = const [],
     required this.guardrailDefault,
+    this.guardrailAllowed = true,
     required this.guardrailFeedback,
   });
 
@@ -341,6 +347,7 @@ class ProtocolInfo {
     color: Color(0xFFFB8C00),
     rewardMetric: RewardMetric.betaOverTheta,
     guardrailDefault: false,
+    guardrailAllowed: false,
     guardrailFeedback: GuardrailFeedback.chimeOnly,
   );
 
