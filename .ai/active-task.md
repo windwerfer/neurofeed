@@ -223,6 +223,31 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
 - ⏳ Binaural + music modes unverified on-device (TB336FU); reward-swell
   audibility and guardrail-muffle behavior need a listening pass.
 
+## Status — 2026-08-18 Update (network streaming: OSC / LSL / BrainFlow)
+- ✅ **Streaming tab** (`b010325`, `79a8ceb`, `bcae326`): one riverpod
+  `StreamingController` subscribes to the Muse event stream, mixes per-group
+  channels through `StreamingMixer` (per-channel queues → lockstep rows), and
+  starts on connect / stops on disconnect. Three wire formats, all built from
+  `StreamingConfig` derived from `Settings` (`osc`/`lsl`/`brainflow` keys):
+  - **OSC**: unicast UDP, batched per-chunk `oscEncodeMessage` messages; IP
+    auto-fills from the local subnet when unset.
+  - **LSL**: `liblsl` pub package — auto-discovered, no IP/port.
+  - **BrainFlow**: multicast UDP "Streaming Board" datagrams — raw LE f64
+    doubles, no header, one datagram per batch of 3 samples. `eeg` = default
+    preset (7 rows) on the configured port; `imu` = auxiliary preset (9 rows,
+    52 Hz) on port+1 and `ppg` = ancillary preset (6 rows, 64 Hz) on port+2,
+    both only when `separateGroups` is on. Wire-format reference:
+    `third_party/brainflow/` (tag 5.9.0, registered in `.gitmodules`), NOT a
+    build dep.
+- ✅ **Indicators**: `StreamIndicator`/`StreamDot` (green live / amber armed)
+  in the sidebar and status bar.
+- ✅ **Tests**: `test/streaming_osc_test.dart` — end-to-end over real loopback
+  UDP sockets (OSC encode/decode + BrainFlow datagram sizing); receiver drops
+  datagrams that aren't exactly `batch_size × num_rows` doubles.
+- ⏳ On-device verification pending (TB336FU): live EEG into real receivers
+  (LSL Viewer, Pure Data/OSC, BrainFlow recorder) incl. IMU/PPG separate
+  streams.
+
 ## Next steps
 0. On-device pass: download LUNA Base + LUNA Large, import REVE, verify load/unload,
    bad-hash rejection, progress UI, and model-switch persistence on the TB336FU.
@@ -245,6 +270,10 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
 6. On-device listening pass for binaural + music modes: reward-swell audibility,
    guardrail muffle, volume-channel math; tune `BinauralBeatController` voice
    parameters (carrier/beat mix, swell shape) against the TB336FU speakers.
+7. On-device streaming verification: point real receivers at the phone (LSL
+   Viewer, an OSC sink, BrainFlow recording) and confirm live EEG/bands/IMU/PPG
+   arrive with sane rates; verify port+1/+2 IMU/PPG only appear when
+   `separateGroups` is on.
 
 ## How to verify (see testing-guide.md)
 Run `flutter run`, observe status bar shows correct battery % (from `bp`,
