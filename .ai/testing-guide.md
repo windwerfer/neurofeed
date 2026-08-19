@@ -93,3 +93,15 @@ Notes:
   and the regenerated `rust/src/frb_generated.rs` plus `lib/src/rust/` must both
   be committed (they are tracked in git — a fresh checkout has no
   `frb_generated.rs` otherwise, which breaks CI's `cargo build` with E0583).
+- **Desktop `flutter run` loads `rust/target/release/`, not the debug bundle**:
+  the generated loader (`kDefaultExternalLibraryLoaderConfig` in
+  `lib/src/rust/frb_generated.dart`, `ioDirectory: 'rust/target/release/'`)
+  makes `flutter run` open that release `.so` from the project root. A stale
+  release lib (built before the last codegen) causes
+  `Bad state: Content hash on Dart side (…) is different from Rust side (…)`
+  at `RustLib.init`, while `./muse_ml` from the bundle dir still works because
+  the relative `rust/target/release/` doesn't resolve there. **Fix**:
+  `cargo build --release --manifest-path rust/Cargo.toml` (or delete the stale
+  release `.so`), then `flutter run`. Re-run it whenever codegen changes the
+  bindings; `flutter clean`/`flutter build linux --debug`/cargokit fingerprint
+  resets don't help because `flutter run` never loads those debug libs.
