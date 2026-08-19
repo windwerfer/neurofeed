@@ -7,10 +7,9 @@ import 'package:muse_ml/src/feedback/protocol.dart';
 
 /// User-facing protocol copy loaded from `assets/protocols.json` — the single
 /// editable place for catch phrase / title / subtitle / guide text /
-/// algorithm description / expected delay. Regenerate the asset from
-/// `ProtocolInfo.all` with:
-/// `flutter test tool/sync_protocol_catalog_test.dart`
-/// Structure (colors, metrics, guardrail flags, conditions) stays in
+/// algorithm description / expected delay / scientific metadata description
+/// (and the structural `calibration` reference read by `CalibrationManifest`).
+/// Structure (colors, metrics, conditions, guardrail flags) stays in
 /// `protocol.dart`.
 class ProtocolCopy {
   const ProtocolCopy({
@@ -20,7 +19,17 @@ class ProtocolCopy {
     required this.guideText,
     required this.algorithmDescription,
     required this.expectedDelay,
+    this.metadataDescription,
   });
+
+  static const ProtocolCopy empty = ProtocolCopy(
+    catchPhrase: '',
+    title: '',
+    subtitle: '',
+    guideText: '',
+    algorithmDescription: '',
+    expectedDelay: '',
+  );
 
   final String catchPhrase;
   final String title;
@@ -29,6 +38,10 @@ class ProtocolCopy {
   final String algorithmDescription;
   final String expectedDelay;
 
+  /// Scientific description of what the protocol trains and how, recorded
+  /// into the `.muse.feedback` session metadata.
+  final String? metadataDescription;
+
   factory ProtocolCopy.fromJson(Map<String, Object?> json) => ProtocolCopy(
     catchPhrase: json['catchPhrase'] as String? ?? '',
     title: json['title'] as String? ?? '',
@@ -36,16 +49,8 @@ class ProtocolCopy {
     guideText: json['guideText'] as String? ?? '',
     algorithmDescription: json['algorithmDescription'] as String? ?? '',
     expectedDelay: json['expectedDelay'] as String? ?? '',
+    metadataDescription: json['metadataDescription'] as String?,
   );
-
-  Map<String, String> toJson() => {
-    'catchPhrase': catchPhrase,
-    'title': title,
-    'subtitle': subtitle,
-    'guideText': guideText,
-    'algorithmDescription': algorithmDescription,
-    'expectedDelay': expectedDelay,
-  };
 }
 
 class ProtocolCatalog {
@@ -80,20 +85,17 @@ final protocolCatalogProvider = FutureProvider<ProtocolCatalog>((ref) async {
   );
 });
 
-/// Resolved copy for [info]: the JSON entry when present, else the Dart
-/// fallback text in `protocol.dart`. Watch this in `build()` so edits to
-/// `assets/protocols.json` take effect without code changes.
+/// Resolved copy for [info] from `assets/protocols.json` — the single source
+/// of protocol text. Every protocol must have an entry; a missing one is a
+/// data error (surfaced by an assert in debug builds).
 ProtocolCopy useProtocolCopy(WidgetRef ref, ProtocolInfo info) {
   final copy = ref
       .watch(protocolCatalogProvider)
       .valueOrNull
       ?.forName(info.type.name);
-  return ProtocolCopy(
-    catchPhrase: copy?.catchPhrase ?? info.catchPhrase,
-    title: copy?.title ?? info.title,
-    subtitle: copy?.subtitle ?? info.subtitle,
-    guideText: copy?.guideText ?? info.guideText,
-    algorithmDescription: copy?.algorithmDescription ?? info.algorithmDescription,
-    expectedDelay: copy?.expectedDelay ?? info.expectedDelay,
+  assert(
+    copy != null,
+    'assets/protocols.json is missing an entry for ${info.type.name}',
   );
+  return copy ?? ProtocolCopy.empty;
 }

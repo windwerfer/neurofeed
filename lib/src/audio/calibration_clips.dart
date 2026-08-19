@@ -61,30 +61,31 @@ class CalibrationStep {
             const [],
         challengeTextHint: json['challengeTextHint'] as String?,
       );
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'file': file,
+    if (text.isNotEmpty) 'text': text,
+    if (seconds > 0) 'seconds': seconds,
+    if (eyes != null) 'eyes': eyes,
+    if (challengeText.isNotEmpty) 'challengeText': challengeText,
+    if (challengeTextHint != null) 'challengeTextHint': challengeTextHint,
+  };
 }
 
-/// A shared calibration template referenced by `protocols.json` (by id).
-/// Two kinds today:
-///
-/// * `single` — one random intro variant, then one silent baseline window of
-///   [seconds] with [eyes] in that state.
-/// * `staged` — the guardrail calibration: a fixed ordered list of [stages];
-///   each stage plays a clip then collects silently for that stage's
-///   `seconds` (the eyes-open challenge stage builds the guardrail's clear
-///   anchor).
+/// One calibration variant inside a [Calibration]: either the `single`
+/// baseline (a random intro variant, then one silent window of [seconds] with
+/// [eyes] in that state) or the `staged` guardrail sequence (a fixed ordered
+/// list of [stages]; each stage plays a clip then collects silently for that
+/// stage's `seconds`).
 class CalibrationRecipe {
-  const CalibrationRecipe({
-    required this.id,
+  const CalibrationRecipe._({
     required this.kind,
     this.seconds = 0,
     this.eyes,
     this.intros = const [],
     this.stages = const [],
   });
-
-  /// Id referenced by `protocols.json` protocol entries, e.g.
-  /// `single-closed-90`.
-  final String id;
 
   /// `single` or `staged` (see [isSingle]/[isStaged]).
   final String kind;
@@ -101,6 +102,18 @@ class CalibrationRecipe {
   /// Fixed ordered steps (only `staged`).
   final List<CalibrationStep> stages;
 
+  factory CalibrationRecipe.single({
+    int seconds = 0,
+    String? eyes,
+    List<CalibrationStep> intros = const [],
+  }) =>
+      CalibrationRecipe._(kind: 'single', seconds: seconds, eyes: eyes, intros: intros);
+
+  factory CalibrationRecipe.staged({
+    List<CalibrationStep> stages = const [],
+  }) =>
+      CalibrationRecipe._(kind: 'staged', stages: stages);
+
   bool get isSingle => kind == 'single';
 
   bool get isStaged => kind == 'staged';
@@ -113,77 +126,123 @@ class CalibrationRecipe {
     return intros[(random ?? Random()).nextInt(intros.length)];
   }
 
-  factory CalibrationRecipe.fromJson(Map<String, Object?> json) =>
-      CalibrationRecipe(
-        id: json['id'] as String? ?? '',
-        kind: json['kind'] as String? ?? 'single',
-        seconds: (json['seconds'] as num?)?.toInt() ?? 0,
-        eyes: json['eyes'] as String?,
-        intros: _steps(json['intros']),
-        stages: _steps(json['stages']),
-      );
+  /// Parses the `single` or `staged` variant JSON from `assets/calibrations.json`.
+  factory CalibrationRecipe.fromJson(String kind, Map<String, Object?> json) {
+    final listKey = kind == 'staged' ? 'stages' : 'intros';
+    final steps = (json[listKey] as List<Object?>?)
+        ?.whereType<Map<String, Object?>>()
+        .map(CalibrationStep.fromJson)
+        .toList() ??
+        const [];
+    return kind == 'staged'
+        ? CalibrationRecipe.staged(stages: steps)
+        : CalibrationRecipe.single(
+            seconds: (json['seconds'] as num?)?.toInt() ?? 0,
+            eyes: json['eyes'] as String?,
+            intros: steps,
+          );
+  }
 
-  static List<CalibrationStep> _steps(Object? raw) =>
-      (raw as List<Object?>?)
-          ?.whereType<Map<String, Object?>>()
-          .map(CalibrationStep.fromJson)
-          .toList() ??
-      const [];
+  Map<String, Object?> toJson() => isSingle
+      ? {
+          'seconds': seconds,
+          if (eyes != null) 'eyes': eyes,
+          if (intros.isNotEmpty) 'intros': [for (final s in intros) s.toJson()],
+        }
+      : {'stages': [for (final s in stages) s.toJson()]};
 }
 
-/// Joins `calibration.json` (the shared calibration templates) with
-/// `protocols.json` (which protocol may use which template, in preference
-/// order) into one lookup surface.
+/// One calibration in `assets/calibrations.json`, keyed by id. A calibration
+/// is an eye-state (eyes open / eyes closed) with both playable variants —
+/// the `single` baseline and the `staged` guardrail sequence. The protocol
+/// decides which variant runs (AI model → staged, band math / no guardrail →
+/// single).
+class Calibration {
+  const Calibration({
+    required this.id,
+    required this.name,
+    required this.single,
+    required this.staged,
+  });
+
+  /// Id referenced by `assets/protocols.json` protocol entries, e.g.
+  /// `eyes-closed-01`.
+  final String id;
+  final String name;
+  final CalibrationRecipe single;
+  final CalibrationRecipe staged;
+
+  /// The recipe that runs for this calibration given the guardrail intent.
+  CalibrationRecipe variant(bool useStaged) => useStaged ? staged : single;
+
+  factory Calibration.fromJson(String id, Map<String, Object?> json) =>
+      Calibration(
+        id: id,
+        name: json['name'] as String? ?? id,
+        single: CalibrationRecipe.fromJson(
+          'single',
+          json['single'] as Map<String, Object?>? ?? const {},
+        ),
+        staged: CalibrationRecipe.fromJson(
+          'staged',
+          json['staged'] as Map<String, Object?>? ?? const {},
+        ),
+      );
+
+  /// Full round-trip of this calibration's definition, used as the immutable
+  /// snapshot recorded in session metadata.
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'single': single.toJson(),
+    'staged': staged.toJson(),
+  };
+}
+
+/// Joins `calibrations.json` (the calibration definitions, keyed by id) with
+/// `protocols.json` (the one-to-one protocol → calibration mapping) into one
+/// lookup surface.
 class CalibrationManifest {
   const CalibrationManifest({
     required this.version,
     required this.calibrations,
-    required this.protocolCalibrations,
+    required this.protocolCalibration,
   });
 
   /// Manifest schema version; persisted in session metadata.
   final int version;
 
-  /// Calibration templates by id.
-  final Map<String, CalibrationRecipe> calibrations;
+  /// Calibration definitions by id.
+  final Map<String, Calibration> calibrations;
 
-  /// Preferred calibration ids per protocol name (protocols.json order).
-  final Map<String, List<String>> protocolCalibrations;
+  /// The calibration id each protocol uses (protocols.json order is a
+  /// one-to-one mapping; every protocol has exactly one calibration).
+  final Map<String, String> protocolCalibration;
 
-  static const String asset = 'assets/audio/calibration/calibration.json';
-  static const String protocolsAsset =
-      'assets/audio/calibration/protocols.json';
-  static const int currentVersion = 1;
+  static const String asset = 'assets/calibrations.json';
+  static const String protocolsAsset = 'assets/protocols.json';
+  static const int currentVersion = 2;
 
-  /// Recipe for [protocolName]: the protocol's preferred entry matching the
-  /// requested [guardrail] state — the staged (guardrail) calibration when the
-  /// guardrail runs, the single baseline else — falling back to the
-  /// protocol's first listed calibration when [guardrail] is null or no
-  /// preference matches.
-  CalibrationRecipe? recipeFor(String protocolName, {bool? guardrail}) {
-    final ids = protocolCalibrations[protocolName];
-    if (ids == null || ids.isEmpty) {
-      return null;
-    }
-    CalibrationRecipe? first;
-    for (final id in ids) {
-      final recipe = calibrations[id];
-      if (recipe == null) {
-        continue;
-      }
-      first ??= recipe;
-      if (guardrail == null) {
-        return first;
-      }
-      if (guardrail && recipe.isStaged) {
-        return recipe;
-      }
-      if (!guardrail && recipe.isSingle) {
-        return recipe;
-      }
-    }
-    return first;
+  /// The calibration id [protocolName] uses, or null when unknown.
+  String? calibrationIdFor(String protocolName) =>
+      protocolCalibration[protocolName];
+
+  /// The calibration definition for [protocolName], or null when the protocol
+  /// or its calibration id is unknown.
+  Calibration? calibrationFor(String protocolName) {
+    final id = protocolCalibration[protocolName];
+    return id == null ? null : calibrations[id];
   }
+
+  /// Recipe for [protocolName]: the `staged` variant when [useStaged] (AI
+  /// sleep guardrail), else the `single` baseline. Null when the protocol or
+  /// its calibration is unknown.
+  CalibrationRecipe? recipeFor(String protocolName, {required bool useStaged}) =>
+      calibrationFor(protocolName)?.variant(useStaged);
+
+  /// Full definition snapshot of [protocolName]'s calibration (id + name +
+  /// both variants), as persisted in session metadata.
+  Map<String, Object?>? calibrationJsonFor(String protocolName) =>
+      calibrationFor(protocolName)?.toJson();
 
   static CalibrationManifest? fromJson(
     Object? calibrationJson, {
@@ -192,31 +251,30 @@ class CalibrationManifest {
     if (calibrationJson is! Map<String, Object?>) {
       return null;
     }
-    final calibrations = {
-      for (final raw in (calibrationJson['calibrations'] as List<Object?>?)
-              ?.whereType<Map<String, Object?>>() ??
-          const <Map<String, Object?>>[])
-        if (raw['id'] is String) raw['id'] as String: CalibrationRecipe.fromJson(raw),
+    final rawCalibrations =
+        calibrationJson['calibrations'] as Map<String, Object?>? ?? const {};
+    final calibrations = <String, Calibration>{
+      for (final entry in rawCalibrations.entries)
+        if (entry.value is Map<String, Object?>)
+          entry.key: Calibration.fromJson(
+            entry.key,
+            entry.value as Map<String, Object?>,
+          ),
     };
     final rawProtocols = protocolsJson is Map<String, Object?>
-        ? (protocolsJson['protocols'] as List<Object?>?) ?? const []
-        : const <Object?>[];
-    final protocolCalibrations = <String, List<String>>{};
-    for (final raw in rawProtocols.whereType<Map<String, Object?>>()) {
-      final name = raw['name'] as String?;
-      if (name == null) {
-        continue;
-      }
-      protocolCalibrations[name] = (raw['calibrations'] as List<Object?>?)
-              ?.whereType<String>()
-              .toList() ??
-          const [];
-    }
+        ? (protocolsJson['protocols'] as Map<String, Object?>?) ?? const {}
+        : const <String, Object?>{};
+    final protocolCalibration = <String, String>{
+      for (final entry in rawProtocols.entries)
+        if (entry.value is Map<String, Object?> &&
+            (entry.value as Map<String, Object?>)['calibration'] is String)
+          entry.key:
+              (entry.value as Map<String, Object?>)['calibration'] as String,
+    };
     return CalibrationManifest(
-      version:
-          (calibrationJson['version'] as num?)?.toInt() ?? currentVersion,
+      version: (calibrationJson['version'] as num?)?.toInt() ?? currentVersion,
       calibrations: calibrations,
-      protocolCalibrations: protocolCalibrations,
+      protocolCalibration: protocolCalibration,
     );
   }
 
@@ -228,7 +286,7 @@ class CalibrationManifest {
       protocolsJson: jsonDecode(protocolsRaw),
     );
     if (parsed == null) {
-      throw FormatException('calibration.json is not a valid manifest');
+      throw FormatException('calibrations.json is not a valid manifest');
     }
     return parsed;
   }

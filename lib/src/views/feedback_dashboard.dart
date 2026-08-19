@@ -19,6 +19,7 @@ import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/session_summary.dart';
+import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/settings.dart';
 
 class FeedbackDashboardView extends ConsumerStatefulWidget {
@@ -335,6 +336,12 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         calibration: notifier.calibration,
         drowsiness: notifier.sessionDrowsiness,
         music: notifier.sessionMusic,
+        metadataDescription: ref
+            .read(protocolCatalogProvider)
+            .valueOrNull
+            ?.forName(fb.protocol.name)
+            ?.metadataDescription,
+        sessionSettings: _captureSessionSettings(notifier, fb),
       );
       final id = DateTime.now().millisecondsSinceEpoch.toString();
       try {
@@ -360,6 +367,36 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       ref.invalidate(sessionListProvider);
       Navigator.of(context).pop();
     }
+  }
+
+  /// Snapshots the session-affecting settings at save time so a saved file
+  /// stays interpretable without the live prefs (recorded as
+  /// [SessionMetadata.sessionSettings]).
+  SessionSettings _captureSessionSettings(
+    FeedbackStateNotifier notifier,
+    FeedbackState fb,
+  ) {
+    final settings = ref.read(settingsProvider);
+    final engine = guardrailEngineFromSettings(settings);
+    return SessionSettings(
+      dynamicAdapt: notifier.dynamicAdapt,
+      responsiveness: notifier.responsiveness,
+      baselinePercentile: fb.baselinePercentile,
+      guardrailEnabled: notifier.guardrailEnabled,
+      guardrailEngine: notifier.guardrailEnabled ? engine.name : 'none',
+      warningThresholdPercentile: settings.warningThresholdPercentile,
+      warningSound: settings.warningSoundName,
+      musicFolder: settings.musicFolder,
+      musicMinCutoffHz: settings.musicMinCutoffHz,
+      musicMaxCutoffHz: settings.musicMaxCutoffHz,
+      musicInvert: settings.musicInvertMapping,
+      musicShuffle: settings.musicShuffle,
+      binauralPresetId: settings.binauralPresetId,
+      binauralCarrierHz: settings.binauralCarrierHz,
+      binauralBeatHz: settings.binauralBeatHz,
+      markersInFeedbackEnabled: settings.markersInFeedbackEnabled,
+      eyeMarkersEnabled: settings.eyeMarkersEnabled,
+    );
   }
 
   Future<void> _discard() async {

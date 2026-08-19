@@ -34,11 +34,17 @@ Global orientation for any AI agent or contributor working in this repo.
   layer (`ProtocolInfo.guardrailDefault`/`guardrailAllowed`/`guardrailFeedback` +
   `Settings.guardrailEnabledFor`); the guardrail only warns, it never modulates
   the reward, and it is offered for every protocol except the eyes-open one
-  (`guardrailAllowed: false`). Calibration manifests are
-  split in two (v1): `assets/audio/calibration/calibration.json` holds the shared
-  templates (single baseline / staged guardrail), `protocols.json` maps each
-  protocol to its preferred templates in order; `CalibrationManifest.recipeFor`
-  joins them (guardrail on → staged, off → single). Two protocols are
+  (`guardrailAllowed: false`). Calibration definitions live in
+  `assets/calibrations.json` (v2): each id (today `eyes-closed-01` /
+  `eyes-open-01`) is an eye-state with **both** playable variants — `single`
+  (one random intro + one silent baseline window) and `staged` (fixed 3-part
+  guardrail sequence: artifacts / eyes-open challenge / eyes-closed rest).
+  `assets/protocols.json` maps each protocol one-to-one to a calibration id
+  (`calibration` field; every closed-eyes protocol uses `eyes-closed-01`,
+  only `alertnessOpen` uses `eyes-open-01`). `CalibrationManifest.recipeFor`
+  picks the variant by guardrail engine: **AI model ready → staged, band math
+  / no guardrail → single** (`_stagedCalibrationIntent` in
+  `feedback_state.dart`). Two protocols are
   **non-reward**: `recordOnly` (pure recording, calibration skippable via the
   "Start (skip calibration)" button — `startCalibration(skipCalibration:)`
   goes straight to playing) and `guardrailOnly` (3-stage guardrail
@@ -46,13 +52,17 @@ Global orientation for any AI agent or contributor working in this repo.
   hides the feedback tile and gates the ATR reward path in `_onBands` while
   the guardrail layer keeps running).
 - **Protocol copy lives in `assets/protocols.json`** (catchPhrase/title/
-  subtitle/guideText/algorithmDescription/expectedDelay) — the editable text
-  source, loaded via `protocolCatalogProvider` (`lib/src/feedback/
-  protocol_catalog.dart`; `useProtocolCopy(ref, info)` falls back to the Dart
-  text). Structure (colors, metrics, conditions, guardrail flags,
-  `hasReward`, `calibrationSkippable`) stays in `ProtocolInfo`. Regenerate the
-  asset after editing Dart copy with
-  `flutter test tool/sync_protocol_catalog_test.dart`. The protocol list's
+  subtitle/guideText/algorithmDescription/expectedDelay/`metadataDescription`
+  — the scientific text recorded into every `.feedback` file's metadata) —
+  the single editable text source, loaded via `protocolCatalogProvider`
+  (`lib/src/feedback/protocol_catalog.dart`; `useProtocolCopy(ref, info)`
+  reads JSON only — there is **no Dart fallback** and no generator/regenerate
+  step; validate the asset with `flutter test test/calibration_assets_test.dart`,
+  which checks every protocol's copy + `metadataDescription` + that its
+  `calibration` id exists in `calibrations.json` with real audio files).
+  Structure (colors, metrics, conditions, guardrail flags,
+  `hasReward`, `calibrationSkippable`) stays in `ProtocolInfo`.
+  The protocol list's
   "Recent" tile (3 most recent distinct protocols, catch name only) comes
   from `sessionListProvider`.
 - **Android**: NDK 27/28, Gradle 8.14, `targetSdkVersion = 36`.
@@ -149,6 +159,7 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - Gesture detection (blink / jaw clench / eye up-down): `rust/src/analysis/gesture.rs` (`GestureDetector`, auto-adaptive EWMA thresholds, no crates). Fed raw EEG + per-second FFT gamma in the forwarder (`rust/src/api/muse.rs`), emits 1 Hz `MuseEventDto::Gestures(GestureDto)`.
 - Per-pad line-noise (fit/impedance proxy): `BandsDto.line_noise_ratio` (50/60 Hz mains power fraction of the existing per-second FFT), folded into `signalQuality` in `connection_provider.dart` `_maybeComputeSignalQuality`.
 - Gesture markers persist in session **metadata** (`SessionMetadata.gestures`, `GestureMarker`/`GestureType` in `session_store.dart`); captured in `feedback_state.dart` `_onGestures`, written at save in `feedback_dashboard.dart` `_save`.
+- Session metadata records the full repro context (`session_store.dart`): `SessionCalibration` (v2) carries the calibration `calibrationId` + the immutable `calibrationJson` snapshot (both variants, from `assets/calibrations.json` at session time), the baseline statistics, the per-phase clip timings, and `recalibrations` (every in-flight recalibrate with its timestamp + new baseline stats — appended in `feedback_state.dart` `recalibrate()`); `SessionMetadata.metadataDescription` is the protocol's scientific text from `assets/protocols.json`; `SessionMetadata.sessionSettings` (`SessionSettings`) snapshots the session-affecting settings (dynamic adapt, responsiveness, baseline percentile, guardrail engine/band-math, warning threshold + sound, music/binaural options, gesture-marker toggles) — captured in `feedback_dashboard.dart` `_captureSessionSettings`.
 - Persisted prefs (volumes, sound, duration, target settings, gesture toggles, music folder/cutoff/invert/shuffle, binaural preset/carrier/beat, audio-stable mode): `lib/src/settings.dart` (`Settings`, SharedPreferences).
 - Session storage abstraction (history in chosen folder; scratch in `.cache`; SAF on Android): `lib/src/feedback/session_storage.dart` (`SessionStorage`, `FileSystemSessionStorage`, `SafSessionStorage`, `resolveSessionStorage`, `sessionStorageProvider`). `SessionStore` is storage-backed; `sessionStoreProvider` is a `FutureProvider` derived from settings.
 - Session file format (`.muse.feedback` = single self-contained file, PNG-first so Linux/macOS file managers thumbnail it; **Rust owns the layout**): `rust/src/api/session_format.rs` (`container_encode_bytes`/`container_parse_head_bytes`/`container_extract_body_bytes`/`container_head_read_limit`). Dart wrapper: `lib/src/feedback/session_container.dart` (`SessionContainer.encode`/`parseHead`/`extractBody`). Read sidecar-free: `SessionStore.list()`/`readPng()`/`readMuse()` read the head via `SessionStorage.readPrefix(name, limit)` and never pull the large body.

@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/reve/reve_card.dart';
@@ -481,16 +482,16 @@ class _AudioCard extends ConsumerWidget {
   }
 }
 
-class _GuardrailCard extends StatefulWidget {
+class _GuardrailCard extends ConsumerStatefulWidget {
   const _GuardrailCard({required this.settings});
 
   final Settings settings;
 
   @override
-  State<_GuardrailCard> createState() => _GuardrailCardState();
+  ConsumerState<_GuardrailCard> createState() => _GuardrailCardState();
 }
 
-class _GuardrailCardState extends State<_GuardrailCard> {
+class _GuardrailCardState extends ConsumerState<_GuardrailCard> {
   late final Map<ProtocolType, bool> _enabled = {
     for (final p in ProtocolInfo.all.where((p) => p.guardrailAllowed))
       p.type: widget.settings.guardrailEnabledFor(p.type),
@@ -535,7 +536,7 @@ class _GuardrailCardState extends State<_GuardrailCard> {
                   Icons.psychology_outlined,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
-                title: Text(p.title),
+                title: Text(useProtocolCopy(ref, p).title),
                 subtitle: Text(
                   'Off: runs the plain ratio engine without warnings.',
                   style: theme.textTheme.bodySmall?.copyWith(

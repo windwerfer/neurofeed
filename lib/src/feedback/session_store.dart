@@ -531,13 +531,52 @@ class SessionCalibrationPhase {
   }
 }
 
-/// Repro record of how a session's calibration ran: its timeline
-/// (calibration start/end, training start) in wall-clock epoch seconds, the
-/// signal-gate rejection criteria, the ATR baseline statistics, and the per-
-/// phase clip timings. Persisted in the metadata JSON, not the `.muse` body.
+/// One in-flight recalibration that replaced the session baseline: when it
+/// happened (seconds from recording start) and the new baseline statistics.
+class SessionRecalibration {
+  const SessionRecalibration({
+    required this.atSecs,
+    required this.baseline,
+  });
+
+  /// Seconds from recording (calibration) start to the recalibration event.
+  final double atSecs;
+
+  /// The baseline statistics the session threshold was re-anchored to.
+  final SessionBaselineStats baseline;
+
+  Map<String, Object?> toJson() => {
+    'atSecs': atSecs,
+    'baseline': baseline.toJson(),
+  };
+
+  static SessionRecalibration? fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      return null;
+    }
+    final baseline = SessionBaselineStats.fromJson(json['baseline']);
+    return SessionRecalibration(
+      atSecs: (json['atSecs'] as num?)?.toDouble() ?? 0,
+      baseline: baseline ?? const SessionBaselineStats(
+        percentile: 0,
+        count: 0,
+      ),
+    );
+  }
+}
+
+/// Repro record of how a session's calibration ran: the calibration id and
+/// its full definition snapshot, the timeline (calibration start/end,
+/// training start) in wall-clock epoch seconds, the signal-gate rejection
+/// criteria, the ATR baseline statistics, the per-phase clip timings, and
+/// every in-flight recalibration. Persisted in the metadata JSON, not the
+/// `.muse` body.
 class SessionCalibration {
   const SessionCalibration({
     required this.version,
+    required this.kind,
+    required this.calibrationId,
+    this.calibrationJson,
     this.calibrationStartSecs,
     this.calibrationEndSecs,
     this.trainingStartSecs,
@@ -546,16 +585,24 @@ class SessionCalibration {
     this.faultyPadSeconds,
     this.baseline,
     this.phases = const [],
-    this.kind = 'single',
+    this.recalibrations = const [],
   });
 
   /// Manifest version the calibration sequence was generated from.
   final int version;
 
   /// Calibration recipe kind that ran: `single` (intro + one silent baseline)
-  /// or `staged` (fixed ordered clip/collect steps). Old files default to
-  /// `single`.
+  /// or `staged` (fixed ordered clip/collect steps).
   final String kind;
+
+  /// Id of the calibration that ran (the `calibrations` key in
+  /// `assets/calibrations.json`, e.g. `eyes-closed-01`).
+  final String calibrationId;
+
+  /// Immutable snapshot of the calibration definition from
+  /// `assets/calibrations.json` (name + both variants) at session time, so
+  /// the file stays reproducible even if the asset changes later.
+  final Map<String, Object?>? calibrationJson;
 
   /// Wall-clock epoch seconds when calibration began (also recording start).
   final double? calibrationStartSecs;
@@ -580,6 +627,9 @@ class SessionCalibration {
 
   final List<SessionCalibrationPhase> phases;
 
+  /// In-flight recalibrations that re-anchored the threshold mid-session.
+  final List<SessionRecalibration> recalibrations;
+
   /// Seconds from recording (calibration) start to the training boundary, in
   /// wall-clock time. Used to trim displayed/metricted data to the training
   /// portion regardless of device-clock drift.
@@ -595,6 +645,9 @@ class SessionCalibration {
 
   Map<String, Object?> toJson() => {
     'version': version,
+    'kind': kind,
+    'calibrationId': calibrationId,
+    if (calibrationJson != null) 'calibrationJson': calibrationJson,
     if (calibrationStartSecs != null)
       'calibrationStartSecs': calibrationStartSecs,
     if (calibrationEndSecs != null) 'calibrationEndSecs': calibrationEndSecs,
@@ -604,7 +657,8 @@ class SessionCalibration {
     if (faultyPadSeconds != null) 'faultyPadSeconds': faultyPadSeconds,
     if (baseline != null) 'baseline': baseline!.toJson(),
     if (phases.isNotEmpty) 'phases': [for (final p in phases) p.toJson()],
-    if (kind != 'single') 'kind': kind,
+    if (recalibrations.isNotEmpty)
+      'recalibrations': [for (final r in recalibrations) r.toJson()],
   };
 
   static SessionCalibration? fromJson(Object? json) {
@@ -613,6 +667,9 @@ class SessionCalibration {
     }
     return SessionCalibration(
       version: (json['version'] as num?)?.toInt() ?? 0,
+      kind: json['kind'] as String? ?? '',
+      calibrationId: json['calibrationId'] as String? ?? '',
+      calibrationJson: json['calibrationJson'] as Map<String, Object?>?,
       calibrationStartSecs: (json['calibrationStartSecs'] as num?)?.toDouble(),
       calibrationEndSecs: (json['calibrationEndSecs'] as num?)?.toDouble(),
       trainingStartSecs: (json['trainingStartSecs'] as num?)?.toDouble(),
@@ -626,7 +683,106 @@ class SessionCalibration {
               .whereType<SessionCalibrationPhase>()
               .toList() ??
           const [],
-      kind: json['kind'] as String? ?? 'single',
+      recalibrations:
+          (json['recalibrations'] as List<Object?>?)
+              ?.map(SessionRecalibration.fromJson)
+              .whereType<SessionRecalibration>()
+              .toList() ??
+          const [],
+    );
+  }
+}
+
+/// Snapshot of the session-affecting settings at save time: target settings,
+/// guardrail engine/method, warning sound, music and binaural options, and
+/// gesture-marker recording. Records how the session was configured so a
+/// saved file stays interpretable without the live prefs.
+class SessionSettings {
+  const SessionSettings({
+    required this.dynamicAdapt,
+    required this.responsiveness,
+    required this.baselinePercentile,
+    required this.guardrailEnabled,
+    required this.guardrailEngine,
+    required this.warningThresholdPercentile,
+    required this.warningSound,
+    required this.musicFolder,
+    required this.musicMinCutoffHz,
+    required this.musicMaxCutoffHz,
+    required this.musicInvert,
+    required this.musicShuffle,
+    required this.binauralPresetId,
+    required this.binauralCarrierHz,
+    required this.binauralBeatHz,
+    required this.markersInFeedbackEnabled,
+    required this.eyeMarkersEnabled,
+  });
+
+  final bool dynamicAdapt;
+  final double responsiveness;
+  final int baselinePercentile;
+  final bool guardrailEnabled;
+
+  /// `bandMath`, a model kind name (`lunaBase`/`lunaLarge`/`reveBase`), or
+  /// `none` when the guardrail did not run.
+  final String guardrailEngine;
+  final int warningThresholdPercentile;
+  final String warningSound;
+  final String? musicFolder;
+  final double musicMinCutoffHz;
+  final double musicMaxCutoffHz;
+  final bool musicInvert;
+  final bool musicShuffle;
+  final String binauralPresetId;
+  final double binauralCarrierHz;
+  final double binauralBeatHz;
+  final bool markersInFeedbackEnabled;
+  final bool eyeMarkersEnabled;
+
+  Map<String, Object?> toJson() => {
+    'dynamicAdapt': dynamicAdapt,
+    'responsiveness': responsiveness,
+    'baselinePercentile': baselinePercentile,
+    'guardrailEnabled': guardrailEnabled,
+    'guardrailEngine': guardrailEngine,
+    'warningThresholdPercentile': warningThresholdPercentile,
+    'warningSound': warningSound,
+    if (musicFolder != null) 'musicFolder': musicFolder,
+    'musicMinCutoffHz': musicMinCutoffHz,
+    'musicMaxCutoffHz': musicMaxCutoffHz,
+    'musicInvert': musicInvert,
+    'musicShuffle': musicShuffle,
+    'binauralPresetId': binauralPresetId,
+    'binauralCarrierHz': binauralCarrierHz,
+    'binauralBeatHz': binauralBeatHz,
+    'markersInFeedbackEnabled': markersInFeedbackEnabled,
+    'eyeMarkersEnabled': eyeMarkersEnabled,
+  };
+
+  static SessionSettings? fromJson(Object? json) {
+    if (json is! Map<String, Object?>) {
+      return null;
+    }
+    return SessionSettings(
+      dynamicAdapt: json['dynamicAdapt'] as bool? ?? false,
+      responsiveness: (json['responsiveness'] as num?)?.toDouble() ?? 0,
+      baselinePercentile: (json['baselinePercentile'] as num?)?.toInt() ?? 0,
+      guardrailEnabled: json['guardrailEnabled'] as bool? ?? false,
+      guardrailEngine: json['guardrailEngine'] as String? ?? 'none',
+      warningThresholdPercentile:
+          (json['warningThresholdPercentile'] as num?)?.toInt() ?? 0,
+      warningSound: json['warningSound'] as String? ?? '',
+      musicFolder: json['musicFolder'] as String?,
+      musicMinCutoffHz: (json['musicMinCutoffHz'] as num?)?.toDouble() ?? 0,
+      musicMaxCutoffHz: (json['musicMaxCutoffHz'] as num?)?.toDouble() ?? 0,
+      musicInvert: json['musicInvert'] as bool? ?? false,
+      musicShuffle: json['musicShuffle'] as bool? ?? false,
+      binauralPresetId: json['binauralPresetId'] as String? ?? '',
+      binauralCarrierHz: (json['binauralCarrierHz'] as num?)?.toDouble() ?? 0,
+      binauralBeatHz: (json['binauralBeatHz'] as num?)?.toDouble() ?? 0,
+      markersInFeedbackEnabled:
+          json['markersInFeedbackEnabled'] as bool? ?? false,
+      eyeMarkersEnabled: json['eyeMarkersEnabled'] as bool? ?? false,
     );
   }
 }
@@ -651,6 +807,8 @@ class SessionMetadata {
     this.drowsiness,
     this.music,
     this.feedbackSound,
+    this.metadataDescription,
+    this.sessionSettings,
   });
 
   final ProtocolType protocol;
@@ -704,6 +862,14 @@ class SessionMetadata {
   /// `none`), when the file recorded it. Null on legacy files.
   final String? feedbackSound;
 
+  /// Scientific description of what the protocol trains and how, copied from
+  /// `assets/protocols.json` (`metadataDescription`) at save time.
+  final String? metadataDescription;
+
+  /// Snapshot of the session-affecting settings (target, guardrail engine,
+  /// music/binaural options) at save time. Null on legacy files.
+  final SessionSettings? sessionSettings;
+
   Map<String, Object?> toJson() => {
     'protocol': protocol.name,
     'durationMinutes': durationMinutes,
@@ -723,6 +889,9 @@ class SessionMetadata {
     if (drowsiness != null) 'drowsiness': drowsiness!.toJson(),
     if (music != null) 'music': music!.toJson(),
     if (feedbackSound != null) 'feedbackSound': feedbackSound,
+    if (metadataDescription != null)
+      'metadataDescription': metadataDescription,
+    if (sessionSettings != null) 'sessionSettings': sessionSettings!.toJson(),
   };
 
   static SessionMetadata? fromJson(Object? json) {
@@ -770,6 +939,8 @@ class SessionMetadata {
       drowsiness: SessionDrowsiness.fromJson(json['drowsiness']),
       feedbackSound: json['feedbackSound'] as String?,
       music: SessionMusic.fromJson(json['music']),
+      metadataDescription: json['metadataDescription'] as String?,
+      sessionSettings: SessionSettings.fromJson(json['sessionSettings']),
     );
   }
 }

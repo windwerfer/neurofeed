@@ -265,6 +265,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   SessionCalibration? _calibration;
   String _calibrationKind = 'single';
 
+  /// Calibration definition used for this session (id + full snapshot from
+  /// `assets/calibrations.json`), recorded in the metadata at save time.
+  String _calibrationId = '';
+  Map<String, Object?>? _calibrationJson;
+
+  /// In-flight recalibrations that re-anchored the threshold mid-session.
+  final List<SessionRecalibration> _recalibrations = [];
+
   /// Music feedback: per-second cutoff trace + track transitions recorded
   /// while playing. Persisted as [SessionMusic] metadata (decimated buckets).
   final List<MusicCutoffSample> _musicSeries = [];
@@ -451,6 +459,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _trainingStartAt = null;
     _usedStartAnyway = false;
     _calibration = null;
+    _calibrationKind = 'single';
+    _calibrationId = '';
+    _calibrationJson = null;
+    _recalibrations.clear();
     _steps.clear();
     _stepIndex = 0;
     _collectionEyes = null;
@@ -480,6 +492,21 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final engine = guardrailEngineFromSettings(_ref.read(settingsProvider));
     if (engine.isBandMath) {
       return true;
+    }
+    return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
+  }
+
+  /// True when the calibration should run the staged (3-part) recipe: the
+  /// guardrail is enabled for this protocol AND a real AI model (LUNA/REVE,
+  /// not band math) is ready. Band-math and no-guardrail sessions use the
+  /// single baseline instead.
+  bool get _stagedCalibrationIntent {
+    if (!_ref.read(settingsProvider).guardrailEnabledFor(state.protocol)) {
+      return false;
+    }
+    final engine = guardrailEngineFromSettings(_ref.read(settingsProvider));
+    if (engine.isBandMath) {
+      return false;
     }
     return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
   }
@@ -542,6 +569,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return false;
     }
     _adaptTick = 0;
+    _recalibrations.add(
+      SessionRecalibration(
+        atSecs: state.elapsedSeconds.toDouble(),
+        baseline: SessionBaselineStats(
+          percentile: _engine.baselinePercentile,
+          count: _engine.baselineCount,
+          mean: _engine.baselineMean,
+          stddev: _engine.baselineStddev,
+        ),
+      ),
+    );
     final stats = _ref.read(liveStatsProvider);
     stats
       ..setBaseline(
@@ -629,13 +667,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _clipPhases.clear();
     _collectionEyes = null;
     _calibrationKind = 'single';
+    _calibrationId = '';
+    _calibrationJson = null;
     CalibrationRecipe? recipe;
     try {
       final manifest = await _ref.read(calibrationManifestProvider.future);
       recipe = manifest.recipeFor(
         state.protocol.name,
-        guardrail: _guardrailIntent,
+        useStaged: _stagedCalibrationIntent,
       );
+      _calibrationId = manifest.calibrationIdFor(state.protocol.name) ?? '';
+      _calibrationJson = manifest.calibrationJsonFor(state.protocol.name);
     } catch (e) {
       debugPrint('[feedback] calibration manifest unavailable: $e');
     }
@@ -799,6 +841,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _calibration = SessionCalibration(
       version: CalibrationManifest.currentVersion,
       kind: _calibrationKind,
+      calibrationId: _calibrationId,
+      calibrationJson: _calibrationJson,
       calibrationStartSecs: sessionStart == null
           ? null
           : sessionStart.millisecondsSinceEpoch / 1000,
@@ -814,6 +858,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         stddev: _engine.baselineStddev,
       ),
       phases: List.of(_clipPhases),
+      recalibrations: List.of(_recalibrations),
     );
   }
 
@@ -975,6 +1020,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _usedStartAnyway = false;
     _calibration = null;
     _calibrationKind = 'single';
+    _calibrationId = '';
+    _calibrationJson = null;
+    _recalibrations.clear();
     _steps.clear();
     _stepIndex = 0;
     _collectionEyes = null;
