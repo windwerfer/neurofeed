@@ -3,6 +3,7 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/edf_export.dart';
 import 'api/muse.dart';
 import 'api/reve.dart';
 import 'api/session_format.dart';
@@ -68,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -712210791;
+  int get rustContentHash => 501010147;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -100,6 +101,12 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<void> crateApiMuseDisconnect();
+
+  Uint8List crateApiEdfExportEncodeEdfExport({
+    required List<int> body,
+    required List<String> channelLabels,
+    required EdfExportParams params,
+  });
 
   Uint8List crateApiSessionFormatEncodeSessionEvent({
     required MuseEventDto event,
@@ -348,6 +355,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "disconnect", argNames: []);
 
   @override
+  Uint8List crateApiEdfExportEncodeEdfExport({
+    required List<int> body,
+    required List<String> channelLabels,
+    required EdfExportParams params,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(body, serializer);
+          sse_encode_list_String(channelLabels, serializer);
+          sse_encode_box_autoadd_edf_export_params(params, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiEdfExportEncodeEdfExportConstMeta,
+        argValues: [body, channelLabels, params],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiEdfExportEncodeEdfExportConstMeta =>
+      const TaskConstMeta(
+        debugName: "encode_edf_export",
+        argNames: ["body", "channelLabels", "params"],
+      );
+
+  @override
   Uint8List crateApiSessionFormatEncodeSessionEvent({
     required MuseEventDto event,
   }) {
@@ -356,7 +395,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_box_autoadd_muse_event_dto(event, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -384,7 +423,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 10,
             port: port_,
           );
         },
@@ -412,7 +451,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 11,
             port: port_,
           );
         },
@@ -442,7 +481,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 12,
             port: port_,
           );
         },
@@ -470,7 +509,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 13,
             port: port_,
           );
         },
@@ -497,7 +536,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 14,
             port: port_,
           );
         },
@@ -524,7 +563,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 15,
             port: port_,
           );
         },
@@ -551,7 +590,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 16,
             port: port_,
           );
         },
@@ -578,7 +617,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 17,
             port: port_,
           );
         },
@@ -606,7 +645,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 18,
             port: port_,
           );
         },
@@ -638,7 +677,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 19,
             port: port_,
           );
         },
@@ -667,7 +706,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 20,
             port: port_,
           );
         },
@@ -694,7 +733,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 21,
             port: port_,
           );
         },
@@ -722,7 +761,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 22,
             port: port_,
           );
         },
@@ -747,7 +786,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(data, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -769,7 +808,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_8_strict,
@@ -797,7 +836,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 25,
             port: port_,
           );
         },
@@ -827,7 +866,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 25,
+              funcId: 26,
               port: port_,
             );
           },
@@ -856,7 +895,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 27,
             port: port_,
           );
         },
@@ -958,6 +997,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ControlDto dco_decode_box_autoadd_control_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_control_dto(raw);
+  }
+
+  @protected
+  EdfExportParams dco_decode_box_autoadd_edf_export_params(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_edf_export_params(raw);
   }
 
   @protected
@@ -1084,6 +1129,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  EdfExportAnnotation dco_decode_edf_export_annotation(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return EdfExportAnnotation(
+      onsetSeconds: dco_decode_f_64(arr[0]),
+      text: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
+  EdfExportParams dco_decode_edf_export_params(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return EdfExportParams(
+      patientId: dco_decode_String(arr[0]),
+      recordingId: dco_decode_String(arr[1]),
+      year: dco_decode_u_16(arr[2]),
+      month: dco_decode_u_16(arr[3]),
+      day: dco_decode_u_16(arr[4]),
+      hour: dco_decode_u_16(arr[5]),
+      minute: dco_decode_u_16(arr[6]),
+      second: dco_decode_u_16(arr[7]),
+      annotations: dco_decode_list_edf_export_annotation(arr[8]),
+    );
+  }
+
+  @protected
   EegDto dco_decode_eeg_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1094,6 +1170,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       electrode: dco_decode_i_32(arr[1]),
       timestamp: dco_decode_f_64(arr[2]),
       samples: dco_decode_list_prim_f_64_strict(arr[3]),
+    );
+  }
+
+  @protected
+  EegSampleRecord dco_decode_eeg_sample_record(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return EegSampleRecord(
+      timestamp: dco_decode_f_64(arr[0]),
+      electrode: dco_decode_i_16(arr[1]),
+      samples: dco_decode_list_prim_f_32_strict(arr[2]),
     );
   }
 
@@ -1148,6 +1237,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<String> dco_decode_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
   List<BandsRecord> dco_decode_list_bands_record(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_bands_record).toList();
@@ -1160,6 +1255,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<EdfExportAnnotation> dco_decode_list_edf_export_annotation(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_edf_export_annotation)
+        .toList();
+  }
+
+  @protected
+  List<EegSampleRecord> dco_decode_list_eeg_sample_record(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_eeg_sample_record).toList();
+  }
+
+  @protected
   List<MovementRecord> dco_decode_list_movement_record(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_movement_record).toList();
@@ -1169,6 +1278,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<PeakAlphaRecord> dco_decode_list_peak_alpha_record(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_peak_alpha_record).toList();
+  }
+
+  @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Float32List;
   }
 
   @protected
@@ -1392,14 +1507,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SessionData dco_decode_session_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return SessionData(
       bands: dco_decode_list_bands_record(arr[0]),
       pulses: dco_decode_list_pulse_record(arr[1]),
       movements: dco_decode_list_movement_record(arr[2]),
       peakAlphas: dco_decode_list_peak_alpha_record(arr[3]),
       eegSamples: dco_decode_u_64(arr[4]),
+      eeg: dco_decode_list_eeg_sample_record(arr[5]),
     );
   }
 
@@ -1559,6 +1675,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  EdfExportParams sse_decode_box_autoadd_edf_export_params(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_edf_export_params(deserializer));
+  }
+
+  @protected
   EegDto sse_decode_box_autoadd_eeg_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_eeg_dto(deserializer));
@@ -1683,6 +1807,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  EdfExportAnnotation sse_decode_edf_export_annotation(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_onsetSeconds = sse_decode_f_64(deserializer);
+    var var_text = sse_decode_String(deserializer);
+    return EdfExportAnnotation(onsetSeconds: var_onsetSeconds, text: var_text);
+  }
+
+  @protected
+  EdfExportParams sse_decode_edf_export_params(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_patientId = sse_decode_String(deserializer);
+    var var_recordingId = sse_decode_String(deserializer);
+    var var_year = sse_decode_u_16(deserializer);
+    var var_month = sse_decode_u_16(deserializer);
+    var var_day = sse_decode_u_16(deserializer);
+    var var_hour = sse_decode_u_16(deserializer);
+    var var_minute = sse_decode_u_16(deserializer);
+    var var_second = sse_decode_u_16(deserializer);
+    var var_annotations = sse_decode_list_edf_export_annotation(deserializer);
+    return EdfExportParams(
+      patientId: var_patientId,
+      recordingId: var_recordingId,
+      year: var_year,
+      month: var_month,
+      day: var_day,
+      hour: var_hour,
+      minute: var_minute,
+      second: var_second,
+      annotations: var_annotations,
+    );
+  }
+
+  @protected
   EegDto sse_decode_eeg_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_index = sse_decode_u_16(deserializer);
@@ -1693,6 +1852,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       index: var_index,
       electrode: var_electrode,
       timestamp: var_timestamp,
+      samples: var_samples,
+    );
+  }
+
+  @protected
+  EegSampleRecord sse_decode_eeg_sample_record(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_timestamp = sse_decode_f_64(deserializer);
+    var var_electrode = sse_decode_i_16(deserializer);
+    var var_samples = sse_decode_list_prim_f_32_strict(deserializer);
+    return EegSampleRecord(
+      timestamp: var_timestamp,
+      electrode: var_electrode,
       samples: var_samples,
     );
   }
@@ -1745,6 +1917,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <String>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<BandsRecord> sse_decode_list_bands_record(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -1764,6 +1948,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <DeviceInfo>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_device_info(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<EdfExportAnnotation> sse_decode_list_edf_export_annotation(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <EdfExportAnnotation>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_edf_export_annotation(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<EegSampleRecord> sse_decode_list_eeg_sample_record(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <EegSampleRecord>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_eeg_sample_record(deserializer));
     }
     return ans_;
   }
@@ -1794,6 +2006,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ans_.add(sse_decode_peak_alpha_record(deserializer));
     }
     return ans_;
+  }
+
+  @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getFloat32List(len_);
   }
 
   @protected
@@ -2062,12 +2281,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_movements = sse_decode_list_movement_record(deserializer);
     var var_peakAlphas = sse_decode_list_peak_alpha_record(deserializer);
     var var_eegSamples = sse_decode_u_64(deserializer);
+    var var_eeg = sse_decode_list_eeg_sample_record(deserializer);
     return SessionData(
       bands: var_bands,
       pulses: var_pulses,
       movements: var_movements,
       peakAlphas: var_peakAlphas,
       eegSamples: var_eegSamples,
+      eeg: var_eeg,
     );
   }
 
@@ -2224,6 +2445,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_edf_export_params(
+    EdfExportParams self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_edf_export_params(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_eeg_dto(EegDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_eeg_dto(self, serializer);
@@ -2348,12 +2578,50 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_edf_export_annotation(
+    EdfExportAnnotation self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.onsetSeconds, serializer);
+    sse_encode_String(self.text, serializer);
+  }
+
+  @protected
+  void sse_encode_edf_export_params(
+    EdfExportParams self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.patientId, serializer);
+    sse_encode_String(self.recordingId, serializer);
+    sse_encode_u_16(self.year, serializer);
+    sse_encode_u_16(self.month, serializer);
+    sse_encode_u_16(self.day, serializer);
+    sse_encode_u_16(self.hour, serializer);
+    sse_encode_u_16(self.minute, serializer);
+    sse_encode_u_16(self.second, serializer);
+    sse_encode_list_edf_export_annotation(self.annotations, serializer);
+  }
+
+  @protected
   void sse_encode_eeg_dto(EegDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_16(self.index, serializer);
     sse_encode_i_32(self.electrode, serializer);
     sse_encode_f_64(self.timestamp, serializer);
     sse_encode_list_prim_f_64_strict(self.samples, serializer);
+  }
+
+  @protected
+  void sse_encode_eeg_sample_record(
+    EegSampleRecord self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.timestamp, serializer);
+    sse_encode_i_16(self.electrode, serializer);
+    sse_encode_list_prim_f_32_strict(self.samples, serializer);
   }
 
   @protected
@@ -2397,6 +2665,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_bands_record(
     List<BandsRecord> self,
     SseSerializer serializer,
@@ -2417,6 +2694,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_device_info(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_edf_export_annotation(
+    List<EdfExportAnnotation> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_edf_export_annotation(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_eeg_sample_record(
+    List<EegSampleRecord> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_eeg_sample_record(item, serializer);
     }
   }
 
@@ -2442,6 +2743,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     for (final item in self) {
       sse_encode_peak_alpha_record(item, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_list_prim_f_32_strict(
+    Float32List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putFloat32List(self);
   }
 
   @protected
@@ -2680,6 +2991,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_movement_record(self.movements, serializer);
     sse_encode_list_peak_alpha_record(self.peakAlphas, serializer);
     sse_encode_u_64(self.eegSamples, serializer);
+    sse_encode_list_eeg_sample_record(self.eeg, serializer);
   }
 
   @protected
