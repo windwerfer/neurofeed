@@ -97,4 +97,37 @@ void main() {
       isTrue,
     );
   });
+
+  test('every audio file is covered by a pubspec asset entry', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final assetsMatch = RegExp(r'^\s+-\s+(\S+)\s*$', multiLine: true)
+        .allMatches(pubspec)
+        .map((m) => m.group(1)!)
+        .toList();
+    expect(assetsMatch, isNotEmpty,
+        reason: 'pubspec.yaml must declare flutter.assets entries');
+    final dirEntries = assetsMatch.where((e) => e.endsWith('/')).toList();
+    final fileEntries = assetsMatch.where((e) => !e.endsWith('/')).toSet();
+    final uncovered = <String>[];
+    for (final entity in Directory('assets/audio')
+        .listSync(recursive: true)
+        .whereType<File>()) {
+      final path = entity.path;
+      if (fileEntries.contains(path)) {
+        continue;
+      }
+      final coveredByDir = dirEntries.any((entry) {
+        final dir = entry.substring(0, entry.length - 1);
+        return path.startsWith('$dir/');
+      });
+      if (!coveredByDir) {
+        uncovered.add(path);
+      }
+    }
+    expect(uncovered, isEmpty,
+        reason: 'audio files not bundled: Flutter directory assets only '
+            'include files directly in the directory — every subdirectory '
+            'needs its own pubspec entry (regression of 469c031):\n'
+            '${uncovered.join('\n')}');
+  });
 }

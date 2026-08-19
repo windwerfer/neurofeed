@@ -302,6 +302,29 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
   folder/SAF location and open the results (PDF in a viewer, EDF+ in an EDF
   reader, CSV in a spreadsheet).
 
+## Status — 2026-08-19 Update (audio asset bundling fixed)
+- ✅ **Staged calibration clips never played on Linux** — `Unable to load
+  asset: "assets/audio/calibration/grok-reve-artifacts-01.opus"` at first
+  playback. Root cause: Flutter directory assets only bundle files **directly
+  in the declared directory** (official docs), so collapsing the explicit
+  subdir list back to a bare `assets/audio/` (regression in `469c031` of the
+  `2f05247` fix) silently dropped `bell/`, `bowl/`, `calibration/`, `drone/`,
+  `rain/` from the bundle — the manifest contained only the top-level
+  `guardrail-*.opus` files. Every audio path in the app was affected, not just
+  the REVE clips.
+- ✅ Fixed: `pubspec.yaml` re-declares each audio subdirectory explicitly
+  (`assets/audio/bell/`, `bowl/`, `calibration/`, `drone/`, `rain/`) alongside
+  `assets/audio/` for the top-level guardrail sounds.
+- ✅ **Regression guard**: `test/calibration_assets_test.dart` gained a test
+  that walks `assets/audio/` and asserts every file is covered by a pubspec
+  asset entry — would have failed at `469c031`.
+- ✅ Verified: `flutter build bundle` regenerates the manifest with all subdir
+  files (bundle tree matches the source tree byte-for-byte in size);
+  `flutter analyze lib/src` clean; calibration test suite green.
+- ⏳ On-device verification pending (TB336FU): staged REVE clips + single
+  intros audible on Android (Android bundles the same manifest, so expect it
+  to work; confirm once).
+
 ## Next steps
 0. On-device pass: download LUNA Base + LUNA Large, import REVE, verify load/unload,
    bad-hash rejection, progress UI, and model-switch persistence on the TB336FU.
