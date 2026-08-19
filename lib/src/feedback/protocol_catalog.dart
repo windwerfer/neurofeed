@@ -86,13 +86,15 @@ final protocolCatalogProvider = FutureProvider<ProtocolCatalog>((ref) async {
 });
 
 /// Resolved copy for [info] from `assets/protocols.json` — the single source
-/// of protocol text. Every protocol must have an entry; a missing one is a
-/// data error (surfaced by an assert in debug builds).
+/// of protocol text. While the catalog is still loading (first frame) an
+/// empty copy is returned so cards render without asserting; once loaded, a
+/// missing entry is a data error (surfaced by an assert in debug builds).
 ProtocolCopy useProtocolCopy(WidgetRef ref, ProtocolInfo info) {
-  final copy = ref
-      .watch(protocolCatalogProvider)
-      .valueOrNull
-      ?.forName(info.type.name);
+  final catalogAsync = ref.watch(protocolCatalogProvider);
+  if (catalogAsync.isLoading || catalogAsync.hasError) {
+    return ProtocolCopy.empty;
+  }
+  final copy = catalogAsync.valueOrNull?.forName(info.type.name);
   assert(
     copy != null,
     'assets/protocols.json is missing an entry for ${info.type.name}',

@@ -362,7 +362,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     state = state.copyWith(
       connectingTo: null,
       connectWindowOpen: true,
-      scanMessage: 'Connection failed: $lastError',
+      scanMessage: 'Could not connect to $name. Check that it is turned on '
+          'and nearby, then try again.',
     );
   }
 
