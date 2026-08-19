@@ -47,6 +47,7 @@ dependencies:
   url_launcher: ^6.3.0
   flutter_soloud: ^4.1.7
   liblsl: ^0.13.2+0
+  pdf: ^3.11.3
 
 dev_dependencies:
   flutter_test:

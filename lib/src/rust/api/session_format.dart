@@ -85,6 +85,18 @@ sealed class ContainerHead with _$ContainerHead {
   }) = _ContainerHead;
 }
 
+/// One raw EEG packet: per-sample values are in µV, `timestamp` is the
+/// wall-clock ms epoch of the FIRST sample, and consecutive samples are
+/// `rate` apart (nominal 256 Hz on Muse headsets).
+@freezed
+sealed class EegSampleRecord with _$EegSampleRecord {
+  const factory EegSampleRecord({
+    required double timestamp,
+    required int electrode,
+    required Float32List samples,
+  }) = _EegSampleRecord;
+}
+
 @freezed
 sealed class MovementRecord with _$MovementRecord {
   const factory MovementRecord({
@@ -120,5 +132,6 @@ sealed class SessionData with _$SessionData {
     required List<MovementRecord> movements,
     required List<PeakAlphaRecord> peakAlphas,
     required BigInt eegSamples,
+    required List<EegSampleRecord> eeg,
   }) = _SessionData;
 }

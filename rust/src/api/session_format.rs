@@ -195,6 +195,17 @@ pub struct SessionData {
     pub movements: Vec<MovementRecord>,
     pub peak_alphas: Vec<PeakAlphaRecord>,
     pub eeg_samples: u64,
+    pub eeg: Vec<EegSampleRecord>,
+}
+
+/// One raw EEG packet: per-sample values are in µV, `timestamp` is the
+/// wall-clock ms epoch of the FIRST sample, and consecutive samples are
+/// `rate` apart (nominal 256 Hz on Muse headsets).
+#[frb(dart_metadata = ("freezed",))]
+pub struct EegSampleRecord {
+    pub timestamp: f64,
+    pub electrode: i16,
+    pub samples: Vec<f32>,
 }
 
 #[frb(dart_metadata = ("freezed",))]
@@ -287,13 +298,23 @@ fn parse_records(records: &[u8], out: &mut SessionData) {
         let Some(tag) = p.u8() else { break };
         match tag {
             FORMAT_TAG_EEG => {
-                let (Some(_ts), Some(_elec), Some(n)) = (p.f64(), p.i16(), p.u16()) else {
+                let (Some(ts), Some(elec), Some(n)) = (p.f64(), p.i16(), p.u16()) else {
                     break
                 };
-                if !p.skip(n as usize * 4) {
+                let mut samples = Vec::with_capacity(n as usize);
+                for _ in 0..n {
+                    let Some(s) = p.f32() else { break };
+                    samples.push(s);
+                }
+                if samples.len() != n as usize {
                     break;
                 }
                 out.eeg_samples += n as u64;
+                out.eeg.push(EegSampleRecord {
+                    timestamp: ts,
+                    electrode: elec,
+                    samples,
+                });
             }
             FORMAT_TAG_TELEMETRY => {
                 if p.f64().is_none()
@@ -387,6 +408,7 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
         movements: Vec::new(),
         peak_alphas: Vec::new(),
         eeg_samples: 0,
+        eeg: Vec::new(),
     };
     let mut off = 12usize;
     while off + 4 <= bytes.len() {
@@ -602,6 +624,11 @@ mod tests {
         // Parser must read that exact layout back.
         let out = session_parse_body(&body(&[dto])).unwrap();
         assert_eq!(out.eeg_samples, 3);
+        assert_eq!(out.eeg.len(), 1);
+        let rec = &out.eeg[0];
+        assert_eq!(rec.timestamp, 1.0);
+        assert_eq!(rec.electrode, -2);
+        assert_eq!(rec.samples, vec![1.5, -2.0, 0.25]);
         assert!(out.bands.is_empty());
         assert!(out.pulses.is_empty());
         assert!(out.movements.is_empty());

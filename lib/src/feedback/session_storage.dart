@@ -82,16 +82,18 @@ abstract class SessionStorage {
 
   Future<void> ensureDir();
 
-  /// Create/overwrite [name] with [bytes].
-  Future<void> writeFile(String name, List<int> bytes);
+  /// Create/overwrite [name] with [bytes]. [dir] is an optional single
+  /// subdirectory (created on demand) under the storage root — used for
+  /// export outputs so they never mix with session history.
+  Future<void> writeFile(String name, List<int> bytes, {String? dir});
 
   /// Overwrite [name] with [bytes] as crash-safely as the backend allows.
   ///
   /// Filesystem storage writes to a sibling temp file and `rename`s it over
   /// the target (atomic on POSIX, so a crash leaves either the old or the new
   /// file, never a corrupt blend). SAF has no atomic swap, so it falls back to
-  /// a single truncate+write call.
-  Future<void> writeFileAtomic(String name, List<int> bytes);
+  /// a single truncate+write call. [dir] behaves as in [writeFile].
+  Future<void> writeFileAtomic(String name, List<int> bytes, {String? dir});
 
   /// Bytes of [name], or null if it does not exist.
   Future<List<int>?> readFile(String name);
@@ -103,6 +105,9 @@ abstract class SessionStorage {
 
   /// File names currently in the folder (does not descend into subdirs).
   Future<List<String>> listFiles();
+
+  /// Whether [name] exists in the storage root.
+  Future<bool> fileExists(String name);
 
   Future<void> deleteFile(String name);
 }
@@ -126,18 +131,21 @@ class FileSystemSessionStorage extends SessionStorage {
   }
 
   @override
-  Future<void> writeFile(String name, List<int> bytes) async {
-    await File('${root.path}/$name').writeAsBytes(bytes, flush: true);
+  Future<void> writeFile(String name, List<int> bytes, {String? dir}) async {
+    final path = _path(name, dir);
+    await File(path).parent.create(recursive: true);
+    await File(path).writeAsBytes(bytes, flush: true);
   }
 
   @override
-  Future<void> writeFileAtomic(String name, List<int> bytes) async {
+  Future<void> writeFileAtomic(String name, List<int> bytes, {String? dir}) async {
     // Write to a sibling temp file in the same directory, fsync, then rename
     // over the target. rename() is atomic on the same filesystem, so a crash
     // anywhere in the sequence leaves either the complete old file or the
     // complete new file on disk — never a truncated blend.
-    final target = File('${root.path}/$name');
-    final tmp = File('${root.path}/.$name.tmp');
+    final target = File(_path(name, dir));
+    final tmp = File(_path('.$name.tmp', dir));
+    await target.parent.create(recursive: true);
     await tmp.writeAsBytes(bytes, flush: true);
     try {
       await tmp.rename(target.path);
@@ -189,11 +197,23 @@ class FileSystemSessionStorage extends SessionStorage {
   }
 
   @override
+  Future<bool> fileExists(String name) async {
+    return File(_path(name)).exists();
+  }
+
+  @override
   Future<void> deleteFile(String name) async {
-    final f = File('${root.path}/$name');
+    final f = File(_path(name));
     if (await f.exists()) {
       await f.delete();
     }
+  }
+
+  String _path(String name, [String? dir]) {
+    final base = dir == null || dir.isEmpty
+        ? root.path
+        : '${root.path}${Platform.pathSeparator}$dir';
+    return '$base${Platform.pathSeparator}$name';
   }
 }
 
@@ -236,12 +256,17 @@ class SafSessionStorage extends SessionStorage {
   }
 
   @override
-  Future<void> writeFile(String name, List<int> bytes) async {
-    await _invoke('writeFile', {'tree': treeUri, 'name': name, 'bytes': bytes});
+  Future<void> writeFile(String name, List<int> bytes, {String? dir}) async {
+    await _invoke('writeFile', {
+      'tree': treeUri,
+      'name': name,
+      'bytes': bytes,
+      if (dir != null && dir.isNotEmpty) 'dir': dir,
+    });
   }
 
   @override
-  Future<void> writeFileAtomic(String name, List<int> bytes) async {
+  Future<void> writeFileAtomic(String name, List<int> bytes, {String? dir}) async {
     // SAF cannot swap URIs atomically, so the native side does the closest
     // safe sequence: write name.mtmp, sync, delete the old target, rename the
     // temp over it. [recoverDoc] on the native side heals an interrupted swap
@@ -250,6 +275,7 @@ class SafSessionStorage extends SessionStorage {
       'tree': treeUri,
       'name': name,
       'bytes': bytes,
+      if (dir != null && dir.isNotEmpty) 'dir': dir,
     });
   }
 
@@ -287,6 +313,11 @@ class SafSessionStorage extends SessionStorage {
       return [];
     }
     return (files as List<dynamic>).cast<String>();
+  }
+
+  @override
+  Future<bool> fileExists(String name) async {
+    return await readPrefix(name, 1) != null;
   }
 }
 

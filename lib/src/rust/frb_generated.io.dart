@@ -3,6 +3,7 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/edf_export.dart';
 import 'api/muse.dart';
 import 'api/reve.dart';
 import 'api/session_format.dart';
@@ -48,6 +49,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ControlDto dco_decode_box_autoadd_control_dto(dynamic raw);
+
+  @protected
+  EdfExportParams dco_decode_box_autoadd_edf_export_params(dynamic raw);
 
   @protected
   EegDto dco_decode_box_autoadd_eeg_dto(dynamic raw);
@@ -98,7 +102,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DeviceInfo dco_decode_device_info(dynamic raw);
 
   @protected
+  EdfExportAnnotation dco_decode_edf_export_annotation(dynamic raw);
+
+  @protected
+  EdfExportParams dco_decode_edf_export_params(dynamic raw);
+
+  @protected
   EegDto dco_decode_eeg_dto(dynamic raw);
+
+  @protected
+  EegSampleRecord dco_decode_eeg_sample_record(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -119,16 +132,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ImuDto dco_decode_imu_dto(dynamic raw);
 
   @protected
+  List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
   List<BandsRecord> dco_decode_list_bands_record(dynamic raw);
 
   @protected
   List<DeviceInfo> dco_decode_list_device_info(dynamic raw);
 
   @protected
+  List<EdfExportAnnotation> dco_decode_list_edf_export_annotation(dynamic raw);
+
+  @protected
+  List<EegSampleRecord> dco_decode_list_eeg_sample_record(dynamic raw);
+
+  @protected
   List<MovementRecord> dco_decode_list_movement_record(dynamic raw);
 
   @protected
   List<PeakAlphaRecord> dco_decode_list_peak_alpha_record(dynamic raw);
+
+  @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
 
   @protected
   Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
@@ -246,6 +271,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ControlDto sse_decode_box_autoadd_control_dto(SseDeserializer deserializer);
 
   @protected
+  EdfExportParams sse_decode_box_autoadd_edf_export_params(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   EegDto sse_decode_box_autoadd_eeg_dto(SseDeserializer deserializer);
 
   @protected
@@ -300,7 +330,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DeviceInfo sse_decode_device_info(SseDeserializer deserializer);
 
   @protected
+  EdfExportAnnotation sse_decode_edf_export_annotation(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  EdfExportParams sse_decode_edf_export_params(SseDeserializer deserializer);
+
+  @protected
   EegDto sse_decode_eeg_dto(SseDeserializer deserializer);
+
+  @protected
+  EegSampleRecord sse_decode_eeg_sample_record(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
@@ -321,10 +362,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ImuDto sse_decode_imu_dto(SseDeserializer deserializer);
 
   @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
   List<BandsRecord> sse_decode_list_bands_record(SseDeserializer deserializer);
 
   @protected
   List<DeviceInfo> sse_decode_list_device_info(SseDeserializer deserializer);
+
+  @protected
+  List<EdfExportAnnotation> sse_decode_list_edf_export_annotation(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<EegSampleRecord> sse_decode_list_eeg_sample_record(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<MovementRecord> sse_decode_list_movement_record(
@@ -335,6 +389,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PeakAlphaRecord> sse_decode_list_peak_alpha_record(
     SseDeserializer deserializer,
   );
+
+  @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
 
   @protected
   Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
@@ -467,6 +524,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_edf_export_params(
+    EdfExportParams self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_eeg_dto(EegDto self, SseSerializer serializer);
 
   @protected
@@ -536,7 +599,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_device_info(DeviceInfo self, SseSerializer serializer);
 
   @protected
+  void sse_encode_edf_export_annotation(
+    EdfExportAnnotation self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_edf_export_params(
+    EdfExportParams self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_eeg_dto(EegDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_eeg_sample_record(
+    EegSampleRecord self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
@@ -557,6 +638,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_imu_dto(ImuDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_bands_record(
     List<BandsRecord> self,
     SseSerializer serializer,
@@ -569,6 +653,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_edf_export_annotation(
+    List<EdfExportAnnotation> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_eeg_sample_record(
+    List<EegSampleRecord> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_movement_record(
     List<MovementRecord> self,
     SseSerializer serializer,
@@ -577,6 +673,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_peak_alpha_record(
     List<PeakAlphaRecord> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_32_strict(
+    Float32List self,
     SseSerializer serializer,
   );
 

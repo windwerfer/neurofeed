@@ -93,16 +93,21 @@ class MainActivity : FlutterActivity() {
         return Uri.parse(tree)
     }
 
-    /// Resolve a child document by its display [name] inside [tree]. Returns
-    /// the document URI, or null if no child with that name exists.
+    /// Document URI of the tree root itself.
+    private fun treeRootDoc(tree: Uri): Uri = DocumentsContract.buildDocumentUriUsingTree(
+        tree, DocumentsContract.getTreeDocumentId(tree)
+    )
+
+    /// Resolve a child document by its display [name] inside [parent].
+    /// Returns the document URI, or null if no child with that name exists.
+    /// [parent] may be the tree root or any subdirectory document.
     ///
     /// `buildDocumentUriUsingTree(tree, name)` cannot be used directly: it
     /// expects the child's *document ID* (e.g. `primary:Med fed/session_x`),
-    /// not the bare display name, so it must be looked up via the tree query.
-    private fun resolveDoc(tree: Uri, name: String): Uri? {
-        val children = DocumentsContract.buildChildDocumentsUriUsingTree(
-            tree, DocumentsContract.getTreeDocumentId(tree)
-        )
+    /// not the bare display name, so it must be looked up via the query.
+    private fun resolveDoc(tree: Uri, parent: Uri, name: String): Uri? {
+        val parentId = DocumentsContract.getDocumentId(parent)
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId)
         contentResolver.query(
             children,
             arrayOf(
@@ -122,21 +127,46 @@ class MainActivity : FlutterActivity() {
         return null
     }
 
+    /// Resolve the (possibly nested) directory path [dir] below the tree
+    /// root, creating missing segments. Returns null only on provider failure.
+    private fun resolveOrCreateDir(tree: Uri, dir: String): Uri? {
+        var parent = treeRootDoc(tree)
+        for (segment in dir.split("/")) {
+            if (segment.isEmpty()) continue
+            val existing = resolveDoc(tree, parent, segment)
+            parent = existing ?: DocumentsContract.createDocument(
+                contentResolver, parent, DocumentsContract.Document.MIME_TYPE_DIR, segment
+            ) ?: return null
+        }
+        return parent
+    }
+
+    /// Parent document for a (possibly nested) write: the tree root, or the
+    /// `export` subdir when [dir] is set.
+    private fun writeParent(tree: Uri, dir: String?): Uri? {
+        if (dir == null || dir.isEmpty()) {
+            return treeRootDoc(tree)
+        }
+        return resolveOrCreateDir(tree, dir)
+    }
+
     private fun writeFile(call: MethodCall, result: Result) {
         val tree = treeUri(call)
         val name = call.argument<String>("name")
         val bytes = call.argument<ByteArray>("bytes")
+        val dir = call.argument<String>("dir")
         if (tree == null || name == null || bytes == null) {
             result.error("bad_args", "tree/name/bytes required", null)
             return
         }
         try {
-            var doc = resolveDoc(tree, name)
+            val parent = writeParent(tree, dir) ?: run {
+                result.error("open_failed", "could not open $dir", null)
+                return
+            }
+            var doc = resolveDoc(tree, parent, name)
             if (doc == null) {
                 // Document doesn't exist yet — create it first, then write.
-                val parent = DocumentsContract.buildDocumentUriUsingTree(
-                    tree, DocumentsContract.getTreeDocumentId(tree)
-                )
                 val created = DocumentsContract.createDocument(
                     contentResolver, parent, "application/octet-stream", name
                 )
@@ -171,18 +201,20 @@ class MainActivity : FlutterActivity() {
         val tree = treeUri(call)
         val name = call.argument<String>("name")
         val bytes = call.argument<ByteArray>("bytes")
+        val dir = call.argument<String>("dir")
         if (tree == null || name == null || bytes == null) {
             result.error("bad_args", "tree/name/bytes required", null)
             return
         }
         try {
+            val parent = writeParent(tree, dir) ?: run {
+                result.error("open_failed", "could not open $dir", null)
+                return
+            }
             val tmpName = "$name.mtmp"
             // 1. Write the full new content to a sibling temp document.
-            var tmpDoc = resolveDoc(tree, tmpName)
+            var tmpDoc = resolveDoc(tree, parent, tmpName)
             if (tmpDoc == null) {
-                val parent = DocumentsContract.buildDocumentUriUsingTree(
-                    tree, DocumentsContract.getTreeDocumentId(tree)
-                )
                 tmpDoc = DocumentsContract.createDocument(
                     contentResolver, parent, "application/octet-stream", tmpName
                 )
@@ -197,7 +229,7 @@ class MainActivity : FlutterActivity() {
                     return
                 }
             // 2. Remove the old target (leaving the temp intact), then swap.
-            val oldDoc = resolveDoc(tree, name)
+            val oldDoc = resolveDoc(tree, parent, name)
             if (oldDoc != null) {
                 DocumentsContract.deleteDocument(contentResolver, oldDoc)
             }
@@ -220,8 +252,9 @@ class MainActivity : FlutterActivity() {
     /// history unreadable.
     private fun recoverDoc(tree: Uri, name: String) {
         try {
-            val mainDoc = resolveDoc(tree, name)
-            val tmpDoc = resolveDoc(tree, "$name.mtmp")
+            val root = treeRootDoc(tree)
+            val mainDoc = resolveDoc(tree, root, name)
+            val tmpDoc = resolveDoc(tree, root, "$name.mtmp")
             if (mainDoc == null && tmpDoc != null) {
                 DocumentsContract.renameDocument(contentResolver, tmpDoc, name)
             } else if (mainDoc != null && tmpDoc != null) {
@@ -241,7 +274,7 @@ class MainActivity : FlutterActivity() {
         }
         try {
             recoverDoc(tree, name)
-            val doc = resolveDoc(tree, name) ?: run {
+            val doc = resolveDoc(tree, treeRootDoc(tree), name) ?: run {
                 result.success(null)
                 return
             }
@@ -264,7 +297,7 @@ class MainActivity : FlutterActivity() {
         }
         try {
             recoverDoc(tree, name)
-            val doc = resolveDoc(tree, name) ?: run {
+            val doc = resolveDoc(tree, treeRootDoc(tree), name) ?: run {
                 result.success(null)
                 return
             }
@@ -296,7 +329,7 @@ class MainActivity : FlutterActivity() {
             return
         }
         try {
-            val doc = resolveDoc(tree, name)
+            val doc = resolveDoc(tree, treeRootDoc(tree), name)
             result.success(
                 doc != null && DocumentsContract.deleteDocument(contentResolver, doc)
             )

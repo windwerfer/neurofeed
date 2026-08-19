@@ -787,6 +787,9 @@ class SessionStore {
 
   final Future<SessionStorage> _storage;
 
+  /// The underlying storage (resolved) — used to place exports.
+  Future<SessionStorage> get storage => _storage;
+
   static Future<SessionStorage> _defaultStorage() async {
     throw UnimplementedError(
       'SessionStore needs an explicit storage; use sessionStoreProvider',
@@ -908,6 +911,17 @@ class SessionStore {
     await storage.writeFileAtomic(name, container);
     debugPrint('[session] updateNotes($id): notes saved ($name)');
     return true;
+  }
+
+  /// Delete one session from history (the `.muse.feedback` file). Returns
+  /// false when the file was already gone.
+  Future<bool> delete(String id) async {
+    final storage = await _storage;
+    final name = _museName(id);
+    final existed = await storage.fileExists(name);
+    await storage.deleteFile(name);
+    debugPrint('[session] delete($id): ${existed ? 'deleted' : 'missing'} ($name)');
+    return existed;
   }
 
   /// Copy every session in the current storage into [target], then delete the

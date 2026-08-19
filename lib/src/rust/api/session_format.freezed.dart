@@ -472,6 +472,192 @@ abstract class _ContainerHead implements ContainerHead {
 }
 
 /// @nodoc
+mixin _$EegSampleRecord {
+  double get timestamp => throw _privateConstructorUsedError;
+  int get electrode => throw _privateConstructorUsedError;
+  Float32List get samples => throw _privateConstructorUsedError;
+
+  /// Create a copy of EegSampleRecord
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $EegSampleRecordCopyWith<EegSampleRecord> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $EegSampleRecordCopyWith<$Res> {
+  factory $EegSampleRecordCopyWith(
+    EegSampleRecord value,
+    $Res Function(EegSampleRecord) then,
+  ) = _$EegSampleRecordCopyWithImpl<$Res, EegSampleRecord>;
+  @useResult
+  $Res call({double timestamp, int electrode, Float32List samples});
+}
+
+/// @nodoc
+class _$EegSampleRecordCopyWithImpl<$Res, $Val extends EegSampleRecord>
+    implements $EegSampleRecordCopyWith<$Res> {
+  _$EegSampleRecordCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of EegSampleRecord
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? timestamp = null,
+    Object? electrode = null,
+    Object? samples = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            timestamp: null == timestamp
+                ? _value.timestamp
+                : timestamp // ignore: cast_nullable_to_non_nullable
+                      as double,
+            electrode: null == electrode
+                ? _value.electrode
+                : electrode // ignore: cast_nullable_to_non_nullable
+                      as int,
+            samples: null == samples
+                ? _value.samples
+                : samples // ignore: cast_nullable_to_non_nullable
+                      as Float32List,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$EegSampleRecordImplCopyWith<$Res>
+    implements $EegSampleRecordCopyWith<$Res> {
+  factory _$$EegSampleRecordImplCopyWith(
+    _$EegSampleRecordImpl value,
+    $Res Function(_$EegSampleRecordImpl) then,
+  ) = __$$EegSampleRecordImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({double timestamp, int electrode, Float32List samples});
+}
+
+/// @nodoc
+class __$$EegSampleRecordImplCopyWithImpl<$Res>
+    extends _$EegSampleRecordCopyWithImpl<$Res, _$EegSampleRecordImpl>
+    implements _$$EegSampleRecordImplCopyWith<$Res> {
+  __$$EegSampleRecordImplCopyWithImpl(
+    _$EegSampleRecordImpl _value,
+    $Res Function(_$EegSampleRecordImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of EegSampleRecord
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? timestamp = null,
+    Object? electrode = null,
+    Object? samples = null,
+  }) {
+    return _then(
+      _$EegSampleRecordImpl(
+        timestamp: null == timestamp
+            ? _value.timestamp
+            : timestamp // ignore: cast_nullable_to_non_nullable
+                  as double,
+        electrode: null == electrode
+            ? _value.electrode
+            : electrode // ignore: cast_nullable_to_non_nullable
+                  as int,
+        samples: null == samples
+            ? _value.samples
+            : samples // ignore: cast_nullable_to_non_nullable
+                  as Float32List,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$EegSampleRecordImpl implements _EegSampleRecord {
+  const _$EegSampleRecordImpl({
+    required this.timestamp,
+    required this.electrode,
+    required this.samples,
+  });
+
+  @override
+  final double timestamp;
+  @override
+  final int electrode;
+  @override
+  final Float32List samples;
+
+  @override
+  String toString() {
+    return 'EegSampleRecord(timestamp: $timestamp, electrode: $electrode, samples: $samples)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$EegSampleRecordImpl &&
+            (identical(other.timestamp, timestamp) ||
+                other.timestamp == timestamp) &&
+            (identical(other.electrode, electrode) ||
+                other.electrode == electrode) &&
+            const DeepCollectionEquality().equals(other.samples, samples));
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    runtimeType,
+    timestamp,
+    electrode,
+    const DeepCollectionEquality().hash(samples),
+  );
+
+  /// Create a copy of EegSampleRecord
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$EegSampleRecordImplCopyWith<_$EegSampleRecordImpl> get copyWith =>
+      __$$EegSampleRecordImplCopyWithImpl<_$EegSampleRecordImpl>(
+        this,
+        _$identity,
+      );
+}
+
+abstract class _EegSampleRecord implements EegSampleRecord {
+  const factory _EegSampleRecord({
+    required final double timestamp,
+    required final int electrode,
+    required final Float32List samples,
+  }) = _$EegSampleRecordImpl;
+
+  @override
+  double get timestamp;
+  @override
+  int get electrode;
+  @override
+  Float32List get samples;
+
+  /// Create a copy of EegSampleRecord
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$EegSampleRecordImplCopyWith<_$EegSampleRecordImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
 mixin _$MovementRecord {
   double get timestamp => throw _privateConstructorUsedError;
   double get score => throw _privateConstructorUsedError;
@@ -990,6 +1176,7 @@ mixin _$SessionData {
   List<MovementRecord> get movements => throw _privateConstructorUsedError;
   List<PeakAlphaRecord> get peakAlphas => throw _privateConstructorUsedError;
   BigInt get eegSamples => throw _privateConstructorUsedError;
+  List<EegSampleRecord> get eeg => throw _privateConstructorUsedError;
 
   /// Create a copy of SessionData
   /// with the given fields replaced by the non-null parameter values.
@@ -1011,6 +1198,7 @@ abstract class $SessionDataCopyWith<$Res> {
     List<MovementRecord> movements,
     List<PeakAlphaRecord> peakAlphas,
     BigInt eegSamples,
+    List<EegSampleRecord> eeg,
   });
 }
 
@@ -1034,6 +1222,7 @@ class _$SessionDataCopyWithImpl<$Res, $Val extends SessionData>
     Object? movements = null,
     Object? peakAlphas = null,
     Object? eegSamples = null,
+    Object? eeg = null,
   }) {
     return _then(
       _value.copyWith(
@@ -1057,6 +1246,10 @@ class _$SessionDataCopyWithImpl<$Res, $Val extends SessionData>
                 ? _value.eegSamples
                 : eegSamples // ignore: cast_nullable_to_non_nullable
                       as BigInt,
+            eeg: null == eeg
+                ? _value.eeg
+                : eeg // ignore: cast_nullable_to_non_nullable
+                      as List<EegSampleRecord>,
           )
           as $Val,
     );
@@ -1078,6 +1271,7 @@ abstract class _$$SessionDataImplCopyWith<$Res>
     List<MovementRecord> movements,
     List<PeakAlphaRecord> peakAlphas,
     BigInt eegSamples,
+    List<EegSampleRecord> eeg,
   });
 }
 
@@ -1100,6 +1294,7 @@ class __$$SessionDataImplCopyWithImpl<$Res>
     Object? movements = null,
     Object? peakAlphas = null,
     Object? eegSamples = null,
+    Object? eeg = null,
   }) {
     return _then(
       _$SessionDataImpl(
@@ -1123,6 +1318,10 @@ class __$$SessionDataImplCopyWithImpl<$Res>
             ? _value.eegSamples
             : eegSamples // ignore: cast_nullable_to_non_nullable
                   as BigInt,
+        eeg: null == eeg
+            ? _value._eeg
+            : eeg // ignore: cast_nullable_to_non_nullable
+                  as List<EegSampleRecord>,
       ),
     );
   }
@@ -1137,10 +1336,12 @@ class _$SessionDataImpl implements _SessionData {
     required final List<MovementRecord> movements,
     required final List<PeakAlphaRecord> peakAlphas,
     required this.eegSamples,
+    required final List<EegSampleRecord> eeg,
   }) : _bands = bands,
        _pulses = pulses,
        _movements = movements,
-       _peakAlphas = peakAlphas;
+       _peakAlphas = peakAlphas,
+       _eeg = eeg;
 
   final List<BandsRecord> _bands;
   @override
@@ -1176,10 +1377,17 @@ class _$SessionDataImpl implements _SessionData {
 
   @override
   final BigInt eegSamples;
+  final List<EegSampleRecord> _eeg;
+  @override
+  List<EegSampleRecord> get eeg {
+    if (_eeg is EqualUnmodifiableListView) return _eeg;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_eeg);
+  }
 
   @override
   String toString() {
-    return 'SessionData(bands: $bands, pulses: $pulses, movements: $movements, peakAlphas: $peakAlphas, eegSamples: $eegSamples)';
+    return 'SessionData(bands: $bands, pulses: $pulses, movements: $movements, peakAlphas: $peakAlphas, eegSamples: $eegSamples, eeg: $eeg)';
   }
 
   @override
@@ -1198,7 +1406,8 @@ class _$SessionDataImpl implements _SessionData {
               _peakAlphas,
             ) &&
             (identical(other.eegSamples, eegSamples) ||
-                other.eegSamples == eegSamples));
+                other.eegSamples == eegSamples) &&
+            const DeepCollectionEquality().equals(other._eeg, _eeg));
   }
 
   @override
@@ -1209,6 +1418,7 @@ class _$SessionDataImpl implements _SessionData {
     const DeepCollectionEquality().hash(_movements),
     const DeepCollectionEquality().hash(_peakAlphas),
     eegSamples,
+    const DeepCollectionEquality().hash(_eeg),
   );
 
   /// Create a copy of SessionData
@@ -1227,6 +1437,7 @@ abstract class _SessionData implements SessionData {
     required final List<MovementRecord> movements,
     required final List<PeakAlphaRecord> peakAlphas,
     required final BigInt eegSamples,
+    required final List<EegSampleRecord> eeg,
   }) = _$SessionDataImpl;
 
   @override
@@ -1239,6 +1450,8 @@ abstract class _SessionData implements SessionData {
   List<PeakAlphaRecord> get peakAlphas;
   @override
   BigInt get eegSamples;
+  @override
+  List<EegSampleRecord> get eeg;
 
   /// Create a copy of SessionData
   /// with the given fields replaced by the non-null parameter values.
