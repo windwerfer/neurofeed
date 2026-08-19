@@ -175,12 +175,12 @@ class _GuideCard extends StatelessWidget {
         content: SingleChildScrollView(
           child: Text(guideText, style: theme.textTheme.bodyMedium),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Got it'),
-          ),
-        ],
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Done'),
+        ),
+      ],
       ),
     );
   }
@@ -1252,11 +1252,26 @@ class _TuneSlider extends StatelessWidget {
   }
 }
 
-class _GuardrailTile extends ConsumerWidget {
+class _GuardrailTile extends ConsumerStatefulWidget {
   const _GuardrailTile();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_GuardrailTile> createState() => _GuardrailTileState();
+}
+
+class _GuardrailTileState extends ConsumerState<_GuardrailTile> {
+  Future<void> _openGear() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => const _GuardrailGearDialog(),
+    );
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final settings = ref.read(settingsProvider);
     final engine = guardrailEngineFromSettings(settings);
     final sound = GuardrailSound.fromName(settings.warningSoundName);
@@ -1264,10 +1279,7 @@ class _GuardrailTile extends ConsumerWidget {
       leading: const Icon(Icons.shield_outlined),
       title: const Text('Guardrail'),
       subtitle: Text('${engine.label} • ${sound.label}'),
-      onTap: () => showDialog<void>(
-        context: context,
-        builder: (_) => const _GuardrailGearDialog(),
-      ),
+      onTap: _openGear,
     );
   }
 }
@@ -1846,6 +1858,7 @@ class _GuardrailGearDialog extends ConsumerStatefulWidget {
 
 class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
   late GuardrailEngine _engine;
+  late GuardrailEngine _lastValidEngine;
   late GuardrailSound _sound;
   late int _threshold;
 
@@ -1854,8 +1867,49 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
     super.initState();
     final settings = ref.read(settingsProvider);
     _engine = guardrailEngineFromSettings(settings);
+    _lastValidEngine = _engine;
     _sound = GuardrailSound.fromName(settings.warningSoundName);
     _threshold = settings.warningThresholdPercentile;
+  }
+
+  /// Band math is always valid; an AI engine is valid only when its model
+  /// files are on disk.
+  bool _engineAvailable(GuardrailEngine engine) =>
+      engine.isBandMath ||
+      (ref.read(modelInstalledProvider(engine.modelKind!)).value ?? false);
+
+  Future<bool> _engineAvailableAsync(GuardrailEngine engine) async {
+    if (engine.isBandMath) {
+      return true;
+    }
+    return ref.read(modelInstalledProvider(engine.modelKind!).future);
+  }
+
+  /// Closing with an AI engine whose model is not installed would persist a
+  /// scorer that can never run. Revert to the last valid engine (or band
+  /// math when even that is unavailable) and say so.
+  Future<void> _onDone() async {
+    final settings = ref.read(settingsProvider);
+    if (!await _engineAvailableAsync(_engine)) {
+      var revert = _lastValidEngine;
+      if (!await _engineAvailableAsync(revert)) {
+        revert = GuardrailEngine.bandMath;
+      }
+      await settings.setGuardrailEngineName(revert.name);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${_engine.label} is not installed — reverted to '
+              '${revert.label}.',
+            ),
+          ),
+        );
+      }
+    }
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -1895,6 +1949,9 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
                   return;
                 }
                 setState(() => _engine = v);
+                if (_engineAvailable(v)) {
+                  _lastValidEngine = v;
+                }
                 settings.setGuardrailEngineName(v.name);
                 if (!v.isBandMath &&
                     ref.read(feedbackStateProvider).feedbackMode ==
@@ -1973,7 +2030,7 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: _onDone,
           child: const Text('Done'),
         ),
       ],
