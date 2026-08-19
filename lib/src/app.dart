@@ -55,6 +55,12 @@ class _AppShellState extends ConsumerState<AppShell> {
     super.dispose();
   }
 
+  void _selectView(AppView view) {
+    final notifier = ref.read(appStateProvider.notifier);
+    notifier.setCurrentView(view);
+    if (MediaQuery.sizeOf(context).width < 700) notifier.setSidebar(false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(appStateProvider);
@@ -85,106 +91,119 @@ class _AppShellState extends ConsumerState<AppShell> {
           children: [
             const StatusBar(),
             Expanded(
-              child: Stack(
-                children: [
-                  Row(
-                    children: [
-                      if (state.sidebarOpen)
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 220),
-                          child: Container(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.surfaceContainer,
-                            child: Column(
-                              children: [
-                                _SideBarItem(
-                                  label: 'Feedback',
-                                  selected:
-                                      state.currentView == AppView.feedback,
-                                  onTap: () => ref
-                                      .read(appStateProvider.notifier)
-                                      .setCurrentView(AppView.feedback),
-                                ),
-                                _SideBarItem(
-                                  label: 'Feedback History',
-                                  selected:
-                                      state.currentView ==
-                                      AppView.feedbackHistory,
-                                  onTap: () => ref
-                                      .read(appStateProvider.notifier)
-                                      .setCurrentView(AppView.feedbackHistory),
-                                ),
-                                _SideBarItem(
-                                  label: 'Bands',
-                                  selected: state.currentView == AppView.bands,
-                                  onTap: () => ref
-                                      .read(appStateProvider.notifier)
-                                      .setCurrentView(AppView.bands),
-                                ),
-                                _SideBarItem(
-                                  label: 'Raw EEG',
-                                  selected: state.currentView == AppView.rawEeg,
-                                  onTap: () => ref
-                                      .read(appStateProvider.notifier)
-                                      .setCurrentView(AppView.rawEeg),
-                                ),
-                                _SideBarItem(
-                                  label: 'Spectrogram',
-                                  selected:
-                                      state.currentView == AppView.spectrogram,
-                                  onTap: () => ref
-                                      .read(appStateProvider.notifier)
-                                      .setCurrentView(AppView.spectrogram),
-                                ),
-                                _SideBarItem(
-                                  label: 'Power Spectral Density (PSD)',
-                                  selected: state.currentView == AppView.psd,
-                                  onTap: () => ref
-                                      .read(appStateProvider.notifier)
-                                      .setCurrentView(AppView.psd),
-                                ),
-                                _SideBarItem(
-                                  label: 'Streaming',
-                                  selected:
-                                      state.currentView == AppView.streaming,
-                                  trailing: const StreamDot(),
-                                  onTap: () => ref
-                                      .read(appStateProvider.notifier)
-                                      .setCurrentView(AppView.streaming),
-                                ),
-                                _SideBarItem(
-                                  label: 'Settings',
-                                  selected:
-                                      state.currentView == AppView.settings,
-                                  onTap: () => ref
-                                      .read(appStateProvider.notifier)
-                                      .setCurrentView(AppView.settings),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            body,
-                            // Connect window lives in the body area so an open
-                            // sidebar is never hidden underneath it. Its tap
-                            // barrier hides it again on any outside click.
-                            if (state.connectWindowOpen)
-                              const ConnectOverlay(),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+              child: _buildContent(context, state, body),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// Sidebar: full-height rail shown either as a squishing Row sibling (wide
+  /// screens) or as an overlay above the body (narrow screens).
+  Widget _buildSidebar(BuildContext context, AppUiState state) {
+    return Container(
+      width: kSidebarWidth,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        border: Border(
+          right: BorderSide(color: Theme.of(context).dividerColor),
+        ),
+      ),
+      child: Column(
+        children: [
+          _SideBarItem(
+            label: 'Feedback',
+            selected: state.currentView == AppView.feedback,
+            onTap: () => _selectView(AppView.feedback),
+          ),
+          _SideBarItem(
+            label: 'Feedback History',
+            selected: state.currentView == AppView.feedbackHistory,
+            onTap: () => _selectView(AppView.feedbackHistory),
+          ),
+          _SideBarItem(
+            label: 'Bands',
+            selected: state.currentView == AppView.bands,
+            onTap: () => _selectView(AppView.bands),
+          ),
+          _SideBarItem(
+            label: 'Raw EEG',
+            selected: state.currentView == AppView.rawEeg,
+            onTap: () => _selectView(AppView.rawEeg),
+          ),
+          _SideBarItem(
+            label: 'Spectrogram',
+            selected: state.currentView == AppView.spectrogram,
+            onTap: () => _selectView(AppView.spectrogram),
+          ),
+          _SideBarItem(
+            label: 'Power Spectral Density (PSD)',
+            selected: state.currentView == AppView.psd,
+            onTap: () => _selectView(AppView.psd),
+          ),
+          _SideBarItem(
+            label: 'Streaming',
+            selected: state.currentView == AppView.streaming,
+            trailing: const StreamDot(),
+            onTap: () => _selectView(AppView.streaming),
+          ),
+          _SideBarItem(
+            label: 'Settings',
+            selected: state.currentView == AppView.settings,
+            onTap: () => _selectView(AppView.settings),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Body area: the current view plus the connect window. On wide screens the
+  /// sidebar is a squishing Row sibling and the body is fully usable while the
+  /// menu is open; on narrow screens the sidebar overlays the full-size body
+  /// behind a dim, tap-away scrim.
+  Widget _buildContent(
+      BuildContext context, AppUiState state, Widget body) {
+    final isWide = MediaQuery.sizeOf(context).width >= 700;
+    final connectOverlay = state.connectWindowOpen
+        ? const ConnectOverlay()
+        : const SizedBox.shrink();
+
+    if (isWide) {
+      return Row(
+        children: [
+          if (state.sidebarOpen) _buildSidebar(context, state),
+          Expanded(
+            child: Stack(children: [body, connectOverlay]),
+          ),
+        ],
+      );
+    }
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Stack(children: [body, connectOverlay]),
+        ),
+        if (state.sidebarOpen)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => ref.read(appStateProvider.notifier).setSidebar(false),
+              child: Container(
+                color: Theme.of(context).colorScheme.scrim.withAlpha(90),
+              ),
+            ),
+          ),
+        if (state.sidebarOpen)
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: kSidebarWidth,
+            child: _buildSidebar(context, state),
+          ),
+      ],
     );
   }
 }

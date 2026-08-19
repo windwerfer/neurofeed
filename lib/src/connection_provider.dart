@@ -444,6 +444,10 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   }
 }
 
+/// Width of the collapsible sidebar (also used as the phone/tablet breakpoint
+/// base: wide screens are `>= 3 * kSidebarWidth`).
+const double kSidebarWidth = 220.0;
+
 /// Immutable UI state snapshot.
 class AppUiState {
   const AppUiState({
