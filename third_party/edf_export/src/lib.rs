@@ -328,8 +328,8 @@ mod tests {
         let signals = two_signals();
         let bytes = encode_edf_plus(&signals, &spec(&[])).unwrap();
         // 1024 header + 2 records; each record = 2 signals * 256 * 2 bytes;
-        // record 0 annotation = timekeeping TAL (4 bytes), record 1 = 2-byte pad.
-        assert_eq!(bytes.len(), 1024 + 512 + 4 + 512 + 2);
+        // record 0 annotation = timekeeping TAL (3 bytes), record 1 = 2-byte pad.
+        assert_eq!(bytes.len(), 1024 + 512 + 512 + 3 + 512 + 512 + 2);
         let header = &bytes[..1024];
         assert_eq!(&header[0..8], b"0       ");
         assert_eq!(&header[8..88], format!("{PATIENT:<80}").as_bytes());
@@ -344,13 +344,13 @@ mod tests {
         assert_eq!(&header[256..272], format!("{:<16}", "TP9").as_bytes());
         assert_eq!(&header[512..528], format!("{:<16}", "AF7").as_bytes());
         assert_eq!(&header[768..784], format!("{:<16}", "EDF Annotations").as_bytes());
-        assert_eq!(&header[512 + 64..512 + 72], format!("{:>8}", "uV").as_bytes());
-        assert_eq!(&header[512 + 72..512 + 80], format!("{:>8}", "-2000").as_bytes());
-        assert_eq!(&header[512 + 80..512 + 88], format!("{:>8}", "2000").as_bytes());
-        assert_eq!(&header[512 + 88..512 + 96], format!("{:>8}", "-32768").as_bytes());
-        assert_eq!(&header[512 + 96..512 + 104], format!("{:>8}", "32767").as_bytes());
-        assert_eq!(&header[512 + 128..512 + 136], format!("{:>8}", "256").as_bytes());
-        assert_eq!(&header[768 + 144..768 + 152], format!("{:>8}", "1").as_bytes());
+        assert_eq!(&header[512 + 96..512 + 104], format!("{:<8}", "uV").as_bytes());
+        assert_eq!(&header[512 + 104..512 + 112], format!("{:>8}", "-2000").as_bytes());
+        assert_eq!(&header[512 + 112..512 + 120], format!("{:>8}", "2000").as_bytes());
+        assert_eq!(&header[512 + 120..512 + 128], format!("{:>8}", "-32768").as_bytes());
+        assert_eq!(&header[512 + 128..512 + 136], format!("{:>8}", "32767").as_bytes());
+        assert_eq!(&header[512 + 216..512 + 224], format!("{:>8}", "256").as_bytes());
+        assert_eq!(&header[768 + 216..768 + 224], format!("{:>8}", "1").as_bytes());
     }
 
     #[test]
@@ -363,10 +363,10 @@ mod tests {
         assert_eq!(read_i16(2), -16);
         assert_eq!(read_i16(4), 32767);
         assert_eq!(read_i16(6), -32768);
-        // Record 1 (after record 0 = 512 data + 4 annotation bytes): all
-        // samples hold the last value (-2000 µV → -32768).
-        assert_eq!(read_i16(512 + 4), -32768);
-        assert_eq!(read_i16(512 + 4 + 2), -32768);
+        // Record 1 (after record 0 = 512 + 512 data + 3 annotation bytes):
+        // all samples hold the last value (-2000 µV → -32768).
+        assert_eq!(read_i16(1027), -32768);
+        assert_eq!(read_i16(1029), -32768);
     }
 
     #[test]
@@ -378,12 +378,14 @@ mod tests {
         let signals = vec![EdfSignal::eeg("TP9", 256, vec![0.0; 400])];
         let bytes = encode_edf_plus(&signals, &spec(&annotations)).unwrap();
         let header_len = 256 + 2 * 256;
-        // Record 0: 512 data bytes, then timekeeping TAL + "+0.5" blink TAL.
-        let rec0 = &bytes[header_len + 512..header_len + 512 + 4 + 19];
+        // Record 0: 512 data bytes, then timekeeping TAL (3) + "+0.5" blink
+        // TAL (20: "+0.5" + \x14 + \x14 + text + \x14 + \x00).
+        let rec0 = &bytes[header_len + 512..header_len + 512 + 3 + 20];
         assert_eq!(rec0, b"0\x14\x00+0.5\x14\x14Double blink\x14\x00");
-        // Record 1: 512 data bytes, then "+0.25" eye TAL.
-        let rec1_start = header_len + 512 + 4 + 19 + 512;
-        let rec1 = &bytes[rec1_start..rec1_start + 16];
+        // Record 1: 512 data bytes, then "+0.25" eye TAL
+        // (5 + \x14 + \x14 + "Eye up" + \x14 + \x00 = 15 bytes).
+        let rec1_start = header_len + 512 + 3 + 20 + 512;
+        let rec1 = &bytes[rec1_start..rec1_start + 15];
         assert_eq!(rec1, b"+0.25\x14\x14Eye up\x14\x00");
     }
 
@@ -397,10 +399,10 @@ mod tests {
         };
         assert_eq!(read_i16(0), 82); // 5.0 * 65535/4000 = 81.92 → 82
         assert_eq!(read_i16(512 - 2), 82); // record 0 last sample
-        // Record 1 starts after record 0 (512 data + 4 annotation bytes);
-        // all samples hold 5.0 µV → 82.
-        assert_eq!(read_i16(516), 82);
-        assert_eq!(read_i16(516 + 512 - 2), 82);
+        // Record 1 starts after record 0 (512 data + 3 annotation bytes);
+        // all samples hold 5.0 µV → 82. Last sample at offset 515 + 510.
+        assert_eq!(read_i16(515), 82);
+        assert_eq!(read_i16(515 + 510), 82);
     }
 
     #[test]
@@ -444,6 +446,6 @@ mod tests {
         let signals = vec![EdfSignal::eeg("TP9", 256, vec![0.0; 256])];
         let bytes = encode_edf_plus(&signals, &spec(&[])).unwrap();
         let header_len = 256 + 2 * 256;
-        assert_eq!(&bytes[header_len + 512..header_len + 512 + 4], b"0\x14\x00");
+        assert_eq!(&bytes[header_len + 512..header_len + 512 + 3], b"0\x14\x00");
     }
 }
