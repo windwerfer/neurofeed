@@ -132,6 +132,33 @@ It remains a good second choice if btleplug ever becomes unmaintainable.
   sidebar and status bar. End-to-end verified over real loopback sockets in
   `test/streaming_osc_test.dart` (extend it when touching the wire formats).
 
+## Session export (PDF / PNG / CSV / EDF+)
+- One `SessionExporter` (`lib/src/feedback/session_export.dart`) turns parsed
+  `SessionData` + `SessionMetadata` into four formats. Charts always go through
+  the shared `prepareChartData` (`session_chart_data.dart`) so PNG/PDF match the
+  dashboard:
+  - **CSV**: Mind Monitor layout — `TimeStamp,Delta..Gamma per channel,RAW per
+    channel`, capitalized band names; band timestamps are ms epochs, so
+    bucketing divides by 1000 before flooring.
+  - **EDF+**: raw EEG via the Rust FFI `encodeEdfExport` (`rust/src/api/
+    edf_export.rs`), backed by the hand-rolled writer crate `third_party/
+    edf_export/` (path dep; golden byte-layout tests; TODO: push to user GitHub
+    and switch to a git+tag dep). Header numeric fields are ASCII
+    right-justified; sample rate is estimated from packet spacing with
+    gap-fill; calibration/gesture annotations are EDF+ annotations.
+  - **PNG**: per-session thumbnail (dashboard PNG) and full charts (band
+    powers + alpha-vs-theta + movement + HR) rasterized offscreen
+    (`rasterizeChart`/`_renderOffscreen` — own `BuildOwner`/`PipelineOwner`/
+    `RenderView`; needs `flushCompositingBits()` between layout and paint).
+  - **PDF**: vector A4 page per session (`session_pdf_export.dart`
+    `buildPdfPage`, `pdf` pkg) using the same chart data/painters.
+- Destination: `<root>/export/` (`<root>/export/<stem>/` for PNG-all); on
+  Android with a non-SAF history folder, `resolveExportStorage` prompts
+  `SafSessionStorage.pickFolder()` for that export only. Selection UI (long
+  press, Select-all/None bar) lives in `lib/src/views/feedback_history.dart`.
+- Tested end-to-end in `test/session_export_test.dart` (needs the host-built
+  Rust lib — see `testing-guide.md`).
+
 ## Local model engine (REVE / LUNA guardrail)
 - Purpose: on-device drowsiness/artifact embeddings for the guardrail layer
   (the guardrail composes with the ATR reward engine but only warns — it never

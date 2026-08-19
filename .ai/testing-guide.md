@@ -69,6 +69,21 @@ of `_init()` (mark with `// TEMP-TEST`) and revert after.
   network access to GitHub for `cargo build`/`cargo test`; no submodule init is
   required. (The `third_party/` copies are reference only.)
 
+## Dart tests that hit the FFI (host build)
+Some Dart tests call Rust over the bridge (e.g. `test/session_export_test.dart`
+— session encode/parse, EDF+, offscreen PNG rasterization). They need the
+**host-built** Rust library, not the Android one:
+```bash
+cargo build --manifest-path rust/Cargo.toml      # → rust/target/debug/librust_lib_muse_ml.so
+flutter test                                      # tests init RustLib.init(externalLibrary: ...)
+```
+Without the .so the FFI never loads and the test fails at the first Rust call.
+Notes:
+- Only needed for tests that touch Rust; pure-Dart tests run without it.
+- The offscreen rasterizer used by the PNG export also requires an initialized
+  `RendererBinding` — the test does `TestWidgetsFlutterBinding.ensureInitialized()`
+  in `setUpAll`.
+
 ## Caveats
 - `flutter analyze lib/src` must stay clean after Dart edits.
 - Local `cargo check --target aarch64-linux-android` is UNRELIABLE in this

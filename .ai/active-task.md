@@ -268,6 +268,40 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
   difference (~0.1 s) and stutter behavior under music + AI guardrail; confirm
   the toggle applies at next session start.
 
+## Status — 2026-08-19 Update (history multi-export, merged to main)
+- ✅ **History multi-select + export** (branch `feature/session-export`, merged
+  into `main` as `dbb611b`): long-press selection with a persistent
+  Select-all/None/Export/Delete bar in `feedback_history.dart`. Export sheet
+  offers 5 kinds per session:
+  - **PDF** — vector A4 page (`session_pdf_export.dart` `buildPdfPage`, `pdf`
+    pkg) reusing the dashboard chart data.
+  - **PNG thumbnail** (the container's embedded PNG) and **PNG all** (bands +
+    alpha-vs-theta + movement + HR charts, offscreen rasterized).
+  - **CSV** — Mind Monitor format (band/EEG timestamps are ms epochs → divide
+    by 1000 before flooring; capitalized band columns).
+  - **EDF+** — raw EEG via new FFI `encodeEdfExport` (`rust/src/api/
+    edf_export.rs`) backed by the hand-rolled writer crate
+    `third_party/edf_export/` (path dep, golden byte-layout tests; TODO: push
+    to user GitHub and switch to a git+tag dep).
+- ✅ Exports land in `<root>/export/` (`<root>/export/<stem>/` for PNG-all);
+  Android non-SAF history prompts a folder picker for that export only
+  (`resolveExportStorage` → `SafSessionStorage.pickFolder()`).
+- ✅ Chart prep extracted to `session_chart_data.dart` (`prepareChartData`),
+  shared by the dashboard and both exporters so PNG/PDF match the screen.
+- ✅ `SessionStore.delete(id)` + `SessionStorage` dir-aware
+  `writeFile`/`writeFileAtomic`/`fileExists`/`delete`; Kotlin
+  `resolveOrCreateDir` walks nested segments (e.g. `export/<stem>/`).
+- ✅ **Bugs caught along the way** (all fixed, covered by tests): CSV bucketing
+  used ms epochs as seconds; offscreen rasterizer missed
+  `flushCompositingBits()`; EDF header fields are ASCII (test asserted binary);
+  hand-typed 1×1 PNG had a wrong IDAT byte breaking container parsing.
+- ✅ Verified: `flutter analyze lib/src` clean; 25 Dart tests green (7 new
+  export E2E tests in `test/session_export_test.dart` — need the host-built
+  Rust lib, see testing-guide.md); `cargo test --lib` 29 passed / 2 ignored.
+- ⏳ On-device verification pending (TB336FU): export each format to a real
+  folder/SAF location and open the results (PDF in a viewer, EDF+ in an EDF
+  reader, CSV in a spreadsheet).
+
 ## Next steps
 0. On-device pass: download LUNA Base + LUNA Large, import REVE, verify load/unload,
    bad-hash rejection, progress UI, and model-switch persistence on the TB336FU.
@@ -298,6 +332,11 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
    audio stutter" and check for audible latency (~0.1 s) / dropout differences
    during music + AI guardrail; confirm the switch applies at the next session
    start (not mid-session).
+9. On-device export pass: record a short session, export PDF/PNG/CSV/EDF+ to a
+   real folder (and a SAF-picked folder) and open each result on the tablet;
+   verify CSV column layout in a spreadsheet and EDF+ in an EDF reader
+   (EEGlab/EDFbrowser). Push `third_party/edf_export` to user GitHub and switch
+   `rust/Cargo.toml` to a git+tag dep once it proves out.
 
 ## How to verify (see testing-guide.md)
 Run `flutter run`, observe status bar shows correct battery % (from `bp`,
