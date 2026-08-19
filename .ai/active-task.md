@@ -248,6 +248,26 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
   (LSL Viewer, Pure Data/OSC, BrainFlow recorder) incl. IMU/PPG separate
   streams.
 
+## Status — 2026-08-19 Update (audio stability setting + choice-time warning)
+- ✅ **"Reduce audio stutter"** (`80a4e61`): `Settings.audioStableMode`
+  (default on, Android-only) maps to SoLoud's `lowLatency` flag. `SoLoudEngine`
+  now tracks the profile and exposes `reinit({required bool stable})`;
+  `startCalibration` syncs the engine at every session start before anything
+  plays. Rationale: flutter_soloud maps `lowLatency` to miniaudio's
+  `ma_performance_profile`, but SoLoud always sets `periodSizeInFrames =
+  bufferSize` (~46 ms), so the profile only matters on Android AAudio
+  (`low_latency` → MMAP, conservative → legacy, ~+30–80 ms). No-op on
+  desktop → the Settings card (`_AudioCard`) is only rendered on Android.
+- ✅ **Music + AI guardrail warning moved to choice time**: the one-time
+  stutter warning now fires via the shared `_maybeWarnMusicAiCpu` helper when
+  the user *picks* the combination — choosing music while an AI scorer is
+  active (`_FeedbackTile`) or choosing an AI scorer while music feedback is
+  selected (`_GuardrailGearDialog`) — instead of at session start. Copy points
+  to Settings → Audio → "Reduce audio stutter".
+- ⏳ On-device verification pending (TB336FU): AAudio MMAP-vs-legacy latency
+  difference (~0.1 s) and stutter behavior under music + AI guardrail; confirm
+  the toggle applies at next session start.
+
 ## Next steps
 0. On-device pass: download LUNA Base + LUNA Large, import REVE, verify load/unload,
    bad-hash rejection, progress UI, and model-switch persistence on the TB336FU.
@@ -274,6 +294,10 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
    Viewer, an OSC sink, BrainFlow recording) and confirm live EEG/bands/IMU/PPG
    arrive with sane rates; verify port+1/+2 IMU/PPG only appear when
    `separateGroups` is on.
+8. On-device audio-profile pass: with the TB336FU speakers, toggle "Reduce
+   audio stutter" and check for audible latency (~0.1 s) / dropout differences
+   during music + AI guardrail; confirm the switch applies at the next session
+   start (not mid-session).
 
 ## How to verify (see testing-guide.md)
 Run `flutter run`, observe status bar shows correct battery % (from `bp`,

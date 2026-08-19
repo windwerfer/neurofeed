@@ -99,6 +99,12 @@ It remains a good second choice if btleplug ever becomes unmaintainable.
   **binaural** (`BinauralBeatController` — two synth voices at a carrier/beat
   beat-frequency pair), or none. Reward drives swell on music/binaural; the
   guardrail muffle ducks them when the warning sounds.
+- `SoLoudEngine` (`lib/src/audio/soloud_engine.dart`) is the single-flight
+  init/reinit point: it tracks the stable (conservative) vs low-latency
+  profile and can switch between sessions via `reinit`. On Android the
+  profile selects AAudio MMAP vs legacy; it is a no-op on other platforms.
+  `startCalibration` syncs it from `Settings.audioStableMode` ("Reduce audio
+  stutter", Android-only Settings card, default on) before anything plays.
 - Connect window: `ConnectOverlay` (`lib/src/connect_window.dart`) is a
   tap-anywhere barrier + device list/rescan panel; both `AppShell` and
   `FeedbackSessionView` host their own copy (session screen can reconnect
