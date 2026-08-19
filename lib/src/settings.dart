@@ -325,6 +325,17 @@ class Settings {
 
   Future<void> clearMusicFolder() => _prefs.remove(_musicFolderKey);
 
+  static const String _audioStableModeKey = 'audio_stable_mode';
+
+  /// Conservative audio profile (Android): gives the audio engine more
+  /// headroom so dropouts are rare when the CPU is busy (e.g. music feedback
+  /// with the AI guardrail), at the cost of ~0.1 s more output latency.
+  /// Default on; only surfaced in Settings on Android (a no-op elsewhere).
+  bool get audioStableMode => _prefs.getBool(_audioStableModeKey) ?? true;
+
+  Future<void> setAudioStableMode(bool value) =>
+      _prefs.setBool(_audioStableModeKey, value);
+
   static const String _musicAiCpuWarningKey = 'music_ai_cpu_warning_shown';
 
   /// Whether the one-time "music + AI guardrail may stutter" warning has

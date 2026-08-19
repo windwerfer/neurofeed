@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -298,9 +300,9 @@ class _PhaseControls extends ConsumerWidget {
     final engineSel = guardrailEngineFromSettings(ref.read(settingsProvider));
     final needsModel = guardrailIntended && !engineSel.isBandMath;
 
-    // Music feedback needs a music folder; an AI guardrail model alongside it
-    // is allowed but gets a one-time stutter warning (the model and the audio
-    // pipeline share the CPU — usually fine on laptops/desktops).
+    // Music feedback needs a music folder. The music + AI guardrail combination
+    // is allowed; the one-time stutter warning fires when the user picks the
+    // combination (see [_maybeWarnMusicAiCpu]).
     Future<void> startSession() async {
       final settings = ref.read(settingsProvider);
       if (fb.feedbackMode == FeedbackMode.music) {
@@ -323,35 +325,6 @@ class _PhaseControls extends ConsumerWidget {
             ),
           );
           return;
-        }
-        if (guardrailIntended &&
-            !engineSel.isBandMath &&
-            !settings.musicAiCpuWarningShown) {
-          await settings.markMusicAiCpuWarningShown();
-          if (!context.mounted) {
-            return;
-          }
-          await showDialog<void>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Music feedback + AI guardrail'),
-              content: const Text(
-                'The AI sleep guardrail model and the music pipeline share '
-                'the CPU — on slower devices this can make the music stutter '
-                '(most laptops and desktops handle it fine).\n\n'
-                'If you hear dropouts: switch the guardrail scorer to Band '
-                'math in the guardrail gear, or choose chimes, rain, or '
-                'binaural beats as the feedback sound.\n\n'
-                'This warning shows once.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('Got it'),
-                ),
-              ],
-            ),
-          );
         }
       }
       ref.read(feedbackStateProvider.notifier).startCalibration();
@@ -891,6 +864,14 @@ class _FeedbackTile extends ConsumerWidget {
               );
               return;
             }
+          }
+          final guardrailIntended = settings.guardrailEnabledFor(fb.protocol);
+          if (!context.mounted) {
+            return;
+          }
+          if (guardrailIntended &&
+              !guardrailEngineFromSettings(settings).isBandMath) {
+            await _maybeWarnMusicAiCpu(context, settings);
           }
           ref.read(feedbackStateProvider.notifier).selectFeedbackMode(result);
           return;
@@ -1915,6 +1896,11 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
                 }
                 setState(() => _engine = v);
                 settings.setGuardrailEngineName(v.name);
+                if (!v.isBandMath &&
+                    ref.read(feedbackStateProvider).feedbackMode ==
+                        FeedbackMode.music) {
+                  unawaited(_maybeWarnMusicAiCpu(context, settings));
+                }
               },
             ),
             const SizedBox(height: 8),
@@ -1993,6 +1979,45 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
       ],
     );
   }
+}
+
+/// One-time warning when the user combines music feedback with an AI
+/// guardrail scorer (the model and the audio pipeline share the CPU). Fired
+/// at the moment the combination is chosen — picking music while an AI scorer
+/// is active, or picking an AI scorer while music feedback is selected.
+Future<void> _maybeWarnMusicAiCpu(
+  BuildContext context,
+  Settings settings,
+) async {
+  if (settings.musicAiCpuWarningShown) {
+    return;
+  }
+  await settings.markMusicAiCpuWarningShown();
+  if (!context.mounted) {
+    return;
+  }
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Music feedback + AI guardrail'),
+      content: const Text(
+        'The AI sleep guardrail model and the music pipeline share the CPU — '
+        'on slower devices this can make the music stutter (most laptops and '
+        'desktops handle it fine).\n\n'
+        'If you hear dropouts: enable "Reduce audio stutter" in '
+        'Settings → Audio, switch the guardrail scorer to Band math in the '
+        'guardrail gear, or choose chimes, rain, or binaural beats as the '
+        'feedback sound.\n\n'
+        'This warning shows once.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: const Text('Got it'),
+        ),
+      ],
+    ),
+  );
 }
 
 void _showGuide(BuildContext context, ProtocolInfo protocol, ProtocolCopy copy) {

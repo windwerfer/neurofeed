@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/audio/calibration_clips.dart';
+import 'package:muse_ml/src/audio/soloud_engine.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_recorder.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
@@ -419,6 +420,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (!_ref.read(appStateProvider).status.connected) {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
       return;
+    }
+    // Sync the audio engine to the "Reduce audio stutter" setting before
+    // anything plays. Only meaningful on Android (AAudio path selection);
+    // a no-op elsewhere.
+    if (Platform.isAndroid) {
+      await SoLoudEngine.reinit(
+        stable: _ref.read(settingsProvider).audioStableMode,
+      );
     }
     if (state.phase == FeedbackPhase.playing ||
         state.phase == FeedbackPhase.paused) {

@@ -191,6 +191,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         _GuardrailCard(settings: settings),
         const SizedBox(height: 16),
         const AiEngineCard(),
+        if (Platform.isAndroid) ...[
+          const SizedBox(height: 16),
+          _AudioCard(settings: settings),
+        ],
         const SizedBox(height: 16),
         const _AboutCard(),
       ],
@@ -395,6 +399,88 @@ class _MusicCard extends ConsumerWidget {
 /// protocol has no sleep drift to guard and is not listed); each defaults to
 /// the protocol's shipping choice ([ProtocolInfo.guardrailDefault]) until the
 /// user overrides it.
+/// Audio engine profile (Android only): conservative mode trades ~0.1 s of
+/// output latency for fewer dropouts when the CPU is busy — e.g. music
+/// feedback while the AI sleep guardrail scores every second. The card is not
+/// shown on other platforms because the profile is a no-op there.
+class _AudioCard extends ConsumerWidget {
+  const _AudioCard({required this.settings});
+
+  final Settings settings;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.volume_down_outlined,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Text('Audio', style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Row(
+                children: [
+                  const Expanded(child: Text('Reduce audio stutter')),
+                  IconButton(
+                    icon: const Icon(Icons.info_outline, size: 20),
+                    tooltip: 'What does this do?',
+                    onPressed: () => _showInfo(context),
+                  ),
+                ],
+              ),
+              subtitle: const Text('Prevents dropouts — adds ~0.1 s sound delay'),
+              trailing: Switch(
+                value: settings.audioStableMode,
+                onChanged: (on) => settings.setAudioStableMode(on),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showInfo(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reduce audio stutter'),
+        content: const Text(
+          'The audio engine normally uses the lowest-latency path (AAudio '
+          'MMAP on Android). When the CPU is busy — e.g. music feedback '
+          'while the AI sleep guardrail scores every second — that tight '
+          'schedule can make the sound stutter.\n\n'
+          'This setting gives the audio engine more headroom so dropouts are '
+          'rare, at the cost of about 0.1 s of sound latency: chimes, music, '
+          'and warnings all sound slightly later.\n\n'
+          'Turn it off if your device is fast and you prefer snappier '
+          'feedback.\n\n'
+          'Applies from the next session.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _GuardrailCard extends StatefulWidget {
   const _GuardrailCard({required this.settings});
 
