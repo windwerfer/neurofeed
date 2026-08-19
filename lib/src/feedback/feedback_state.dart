@@ -589,7 +589,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         stddev: _engine.baselineStddev,
       )
       ..setThreshold(_engine.threshold);
-    unawaited(_audio.playRecalibrateChime());
     debugPrint(
       '[feedback] in-flight recalibrate at t=${state.elapsedSeconds}s: '
       'threshold -> ${_engine.threshold} (p${_engine.baselinePercentile}, '
