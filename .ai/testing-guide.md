@@ -71,8 +71,10 @@ of `_init()` (mark with `// TEMP-TEST`) and revert after.
 
 ## Dart tests that hit the FFI (host build)
 Some Dart tests call Rust over the bridge (e.g. `test/session_export_test.dart`
-— session encode/parse, EDF+, offscreen PNG rasterization). They need the
-**host-built** Rust library, not the Android one:
+— session encode/parse, EDF+, offscreen PNG rasterization; and
+`test/session_cache_test.dart` — SQLite metadata-cache reconciliation, which
+builds real `.muse.feedback` containers via `SessionContainer.encode`). They
+need the **host-built** Rust library, not the Android one:
 ```bash
 cargo build --manifest-path rust/Cargo.toml      # → rust/target/debug/librust_lib_muse_ml.so
 flutter test                                      # tests init RustLib.init(externalLibrary: ...)

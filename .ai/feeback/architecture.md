@@ -151,6 +151,6 @@ The `.muse.feedback` container is single-file and PNG-first:
   `.name.tmp` + atomic `rename()`; SAF (native `writeFileAtomic` in
   `MainActivity.kt`) writes `name.mtmp`, deletes the old target,
   `renameDocument` swap, with `recoverDoc()` healing an interrupted swap on
-  every read *and* during `listFiles` (a first pass heals any orphaned `.mtmp`
+  every read *and* during `listFilesMeta` (a first pass heals any orphaned `.mtmp`
   so a recovered session reappears in listings; surviving `.mtmp` leftovers are
   skipped).

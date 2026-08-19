@@ -325,6 +325,35 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
   intros audible on Android (Android bundles the same manifest, so expect it
   to work; confirm once).
 
+## Status — 2026-08-19 Update (SQLite metadata cache, merged to main)
+- ✅ **History is now fluid on every open** — the per-session SAF prefix read +
+  JSON decode on `list()` (which ran on app launch *and* each history click,
+  and was worst on Android SAF) is replaced by a SQLite metadata cache
+  (`lib/src/feedback/session_cache.dart`, commit `4486db1`).
+- ✅ **Reconcile, not re-read**: `SessionStore.list()` does one
+  `listFilesMeta()` (name + mtime — native `MainActivity.kt` method now
+  returns `[{name, mtime}]`) + one `SELECT … WHERE storage_key=?`; unchanged
+  files render straight from cached `metadata_json`. Changed/new files are
+  backfilled in the background and `SessionListNotifier` (now an
+  `AsyncNotifierProvider`, not a `FutureProvider`) re-reads the list → lazy
+  two-stage emission, so the first history open stays instant even cold.
+- ✅ Cache lives app-private: `<support>/cache/session_cache.sqlite` +
+  thumbnails at `<support>/cache/thumbnails/<id>.png` (works for SAF, never
+  writes into the SAF folder). Rows are namespaced by `storage_key` (sha256 of
+  the folder location); `moveAllTo` re-namespaces them so folder changes keep
+  cached metadata. Write-through on `publishSession`/`updateNotes`/`delete`;
+  `cacheOverview()` folds a computed `SessionOverview` into cached metadata for
+  legacy sessions (dashboard legacy branch).
+- ✅ **Fault tolerance**: `SessionCache.open()` falls back to a no-op on any
+  failure so history always degrades to plain file reads. `SessionStore` takes
+  an injectable cache (tests use the real SQLite one).
+- ✅ Verified: `flutter analyze lib/src` clean; 35 Dart tests green (6 new in
+  `test/session_cache_test.dart` — also need the host-built Rust lib, see
+  testing-guide.md); `cargo build` host lib rebuilt.
+- ⏳ On-device verification pending (TB336FU): SAF history list speed + correct
+  thumbnails/notes after reinstall (cache is app-private, files are the source
+  of truth), and the `listFilesMeta` mtime path on a real folder.
+
 ## Next steps
 0. On-device pass: download LUNA Base + LUNA Large, import REVE, verify load/unload,
    bad-hash rejection, progress UI, and model-switch persistence on the TB336FU.
