@@ -55,8 +55,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
     final app = ref.watch(appStateProvider);
     final connected = app.status.connected;
     final theme = Theme.of(context);
-    final guardrailOn =
-        ref.watch(settingsProvider).guardrailEnabledFor(fb.protocol);
+    final guardrailOn = ProtocolInfo.forType(fb.protocol).guardrailAllowed;
 
     return Scaffold(
       appBar: AppBar(
@@ -1260,6 +1259,19 @@ class _GuardrailTile extends ConsumerStatefulWidget {
 }
 
 class _GuardrailTileState extends ConsumerState<_GuardrailTile> {
+  bool _enabled = true;
+
+  bool _readEnabled() {
+    final fb = ref.read(feedbackStateProvider);
+    return ref.read(settingsProvider).guardrailEnabledFor(fb.protocol);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _enabled = _readEnabled();
+  }
+
   Future<void> _openGear() async {
     await showDialog<void>(
       context: context,
@@ -1272,14 +1284,28 @@ class _GuardrailTileState extends ConsumerState<_GuardrailTile> {
 
   @override
   Widget build(BuildContext context) {
+    final fb = ref.watch(feedbackStateProvider);
+    // Sync with external changes (e.g. the Settings card) and protocol switch.
+    _enabled = _readEnabled();
+    final inSession = fb.phase == FeedbackPhase.playing ||
+        fb.phase == FeedbackPhase.paused;
     final settings = ref.read(settingsProvider);
     final engine = guardrailEngineFromSettings(settings);
     final sound = GuardrailSound.fromName(settings.warningSoundName);
     return ListTile(
       leading: const Icon(Icons.shield_outlined),
       title: const Text('Guardrail'),
-      subtitle: Text('${engine.label} • ${sound.label}'),
-      onTap: _openGear,
+      subtitle: Text(_enabled ? '${engine.label} • ${sound.label}' : 'disabled'),
+      trailing: inSession
+          ? null
+          : Switch(
+              value: _enabled,
+              onChanged: (on) {
+                setState(() => _enabled = on);
+                ref.read(settingsProvider).setGuardrailEnabled(fb.protocol, on);
+              },
+            ),
+      onTap: _enabled ? _openGear : null,
     );
   }
 }
@@ -1914,6 +1940,9 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final fb = ref.watch(feedbackStateProvider);
+    final inSession = fb.phase == FeedbackPhase.playing ||
+        fb.phase == FeedbackPhase.paused;
     final settings = ref.read(settingsProvider);
     final audio = ref.read(audioServiceProvider);
     final theme = Theme.of(context);
@@ -1924,65 +1953,67 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Scorer engine', style: theme.textTheme.titleSmall),
-            const SizedBox(height: 4),
-            DropdownButtonFormField<GuardrailEngine>(
-              initialValue: _engine,
-              isExpanded: true,
-              items: [
-                for (final e in GuardrailEngine.values)
-                  DropdownMenuItem(
-                    value: e,
-                    child: Row(
-                      children: [
-                        Expanded(child: Text(e.label)),
-                        ModelInstalledCheck(
-                          kind: e.modelKind,
-                          alwaysShow: e.isBandMath,
-                        ),
-                      ],
+            if (!inSession) ...[
+              Text('Scorer engine', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              DropdownButtonFormField<GuardrailEngine>(
+                initialValue: _engine,
+                isExpanded: true,
+                items: [
+                  for (final e in GuardrailEngine.values)
+                    DropdownMenuItem(
+                      value: e,
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(e.label)),
+                          ModelInstalledCheck(
+                            kind: e.modelKind,
+                            alwaysShow: e.isBandMath,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-              ],
-              onChanged: (v) {
-                if (v == null) {
-                  return;
-                }
-                setState(() => _engine = v);
-                if (_engineAvailable(v)) {
-                  _lastValidEngine = v;
-                }
-                settings.setGuardrailEngineName(v.name);
-                if (!v.isBandMath &&
-                    ref.read(feedbackStateProvider).feedbackMode ==
-                        FeedbackMode.music) {
-                  unawaited(_maybeWarnMusicAiCpu(context, settings));
-                }
-              },
-            ),
-            const SizedBox(height: 8),
-            if (_engine.isBandMath)
-              Text(
-                'Classical frontal-delta math, no AI model — always available.',
-                style: theme.textTheme.bodySmall,
-              )
-            else if (ref.watch(modelInstalledProvider(_engine.modelKind!))
-                .value ??
-                false)
-              Text(
-                'AI embedding scorer (${_engine.modelKind!.ffId}) — installed',
-                style: theme.textTheme.bodySmall,
-              )
-            else ...[
-              Text(
-                'AI embedding scorer (${_engine.modelKind!.ffId}). Not '
-                'installed yet — download it from here:',
-                style: theme.textTheme.bodySmall,
+                ],
+                onChanged: (v) {
+                  if (v == null) {
+                    return;
+                  }
+                  setState(() => _engine = v);
+                  if (_engineAvailable(v)) {
+                    _lastValidEngine = v;
+                  }
+                  settings.setGuardrailEngineName(v.name);
+                  if (!v.isBandMath &&
+                      ref.read(feedbackStateProvider).feedbackMode ==
+                          FeedbackMode.music) {
+                    unawaited(_maybeWarnMusicAiCpu(context, settings));
+                  }
+                },
               ),
               const SizedBox(height: 8),
-              ModelInstallBubble(kind: _engine.modelKind!),
+              if (_engine.isBandMath)
+                Text(
+                  'Classical frontal-delta math, no AI model — always available.',
+                  style: theme.textTheme.bodySmall,
+                )
+              else if (ref.watch(modelInstalledProvider(_engine.modelKind!))
+                  .value ??
+                  false)
+                Text(
+                  'AI embedding scorer (${_engine.modelKind!.ffId}) — installed',
+                  style: theme.textTheme.bodySmall,
+                )
+              else ...[
+                Text(
+                  'AI embedding scorer (${_engine.modelKind!.ffId}). Not '
+                  'installed yet — download it from here:',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                ModelInstallBubble(kind: _engine.modelKind!),
+              ],
+              const SizedBox(height: 12),
             ],
-            const SizedBox(height: 12),
             Text('Warning sound', style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
             DropdownButtonFormField<GuardrailSound>(
@@ -2011,20 +2042,22 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
-            Text('Warning threshold', style: theme.textTheme.titleSmall),
-            const SizedBox(height: 4),
-            Text(
-              'Percentile of the eyes-closed rest baseline that triggers a '
-              'warning (75% default). Low = warnings come early and often.',
-              style: theme.textTheme.bodySmall,
-            ),
-            _PercentileSlider(
-              value: _threshold,
-              onChanged: (v) {
-                setState(() => _threshold = v);
-                settings.setWarningThresholdPercentile(v);
-              },
-            ),
+            if (!inSession) ...[
+              Text('Warning threshold', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(
+                'Percentile of the eyes-closed rest baseline that triggers a '
+                'warning (75% default). Low = warnings come early and often.',
+                style: theme.textTheme.bodySmall,
+              ),
+              _PercentileSlider(
+                value: _threshold,
+                onChanged: (v) {
+                  setState(() => _threshold = v);
+                  settings.setWarningThresholdPercentile(v);
+                },
+              ),
+            ],
           ],
         ),
       ),
