@@ -385,34 +385,17 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
 
         log::info!("[muse] connected to {name} ({firmware} firmware)");
 
-        // Start streaming — on Android the BLE stack drops rapid-fire
-        // WriteWithoutResponse commands, so we add delays between each
-        // step for the Classic protocol.  Athena's start() already has
-        // built-in delays and is used as-is.
-        let start_result = if handle.is_athena {
-            tokio::time::timeout(
-                std::time::Duration::from_secs(8),
-                handle.start(false, false),
-            )
-            .await
-        } else {
-            tokio::time::timeout(
-                std::time::Duration::from_secs(8),
-                async {
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    handle.send_command("h").await?;
-                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-                    handle.send_command("s").await?;
-                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-                    handle.send_command("p21").await?;
-                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-                    handle.send_command("d").await?;
-                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-                    Ok(())
-                },
-            )
-            .await
-        };
+        // Start streaming via muse-rs's own startup (pause → s → preset →
+        // resume). The previous hand-rolled Classic sequence inserted
+        // inter-command delays because Android was dropping rapid-fire
+        // WriteWithoutResponse; that was actually the JNI notification
+        // death spiral (fixed in the btleplug fork), so the delays are
+        // unnecessary. enable_ppg = true → Classic preset p50 (EEG + PPG).
+        let start_result = tokio::time::timeout(
+            std::time::Duration::from_secs(8),
+            handle.start(true, false),
+        )
+        .await;
         match start_result {
             Ok(Err(e)) => log::warn!("[muse] start commands failed: {e:#}"),
             Err(_) => log::warn!("[muse] start commands timed out after 8 s"),
