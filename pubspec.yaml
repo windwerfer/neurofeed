@@ -48,6 +48,8 @@ dependencies:
   flutter_soloud: ^4.1.7
   liblsl: ^0.13.2+0
   pdf: ^3.11.3
+  sqlite3: ^2.4.0
+  sqlite3_flutter_libs: ^0.5.28
 
 dev_dependencies:
   flutter_test:

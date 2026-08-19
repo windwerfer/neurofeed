@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/session_cache.dart';
 import 'package:muse_ml/src/feedback/session_container.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/session_summary.dart';
@@ -953,10 +956,22 @@ class SessionSummary {
 }
 
 class SessionStore {
-  SessionStore({Future<SessionStorage>? storage})
-    : _storage = storage ?? _defaultStorage();
+  SessionStore({Future<SessionStorage>? storage, SessionCache? cache})
+    : _storage = storage ?? _defaultStorage(),
+      _cache = cache ?? SessionCache.noop();
 
   final Future<SessionStorage> _storage;
+  final SessionCache _cache;
+
+  /// Files (name + id + mtime) discovered by [list] that are missing from the
+  /// cache or have changed since it was written. Backfilled in the background
+  /// so the first history open stays fluid.
+  List<({String name, String id, int mtimeMs})> _pendingBackfill = [];
+
+  bool _backfillRunning = false;
+
+  /// Number of sessions awaiting background backfill after the last [list].
+  int get pendingBackfillCount => _pendingBackfill.length;
 
   /// The underlying storage (resolved) — used to place exports.
   Future<SessionStorage> get storage => _storage;
@@ -969,24 +984,165 @@ class SessionStore {
 
   String _museName(String id) => 'session_$id.muse.feedback';
 
+  /// Namespace for cache rows — a short hash of the storage location so two
+  /// history folders never share metadata rows even when ids collide.
+  static String storageKeyFor(SessionStorage storage) =>
+      sha256.convert(utf8.encode(storage.location)).toString().substring(0, 16);
+
   Future<List<SessionSummary>> list() async {
     final storage = await _storage;
     debugPrint(
       '[session] list(): storage=${storage.displayName} loc=${storage.location}',
     );
-    final names = await storage.listFiles();
-    final summaries = <SessionSummary>[];
-    for (final name in names) {
-      if (!name.startsWith('session_') || !name.endsWith('.muse.feedback')) {
+    final files = await storage.listFilesMeta();
+    final key = storageKeyFor(storage);
+    final ids = <String>[];
+    final mtimeById = <String, int>{};
+    for (final f in files) {
+      if (!f.name.startsWith('session_') || !f.name.endsWith('.muse.feedback')) {
         continue;
       }
-      final id = name.substring(8, name.length - 14);
-      final metadata = await _readMetadata(storage, name, id);
-      summaries.add(SessionSummary(id: id, metadata: metadata));
+      final id = f.name.substring(8, f.name.length - 14);
+      ids.add(id);
+      mtimeById[id] = f.mtimeMs;
     }
+
+    final rows = await _cache.getRows(ids.toSet(), key);
+    final rowById = {for (final r in rows) r.id: r};
+
+    // Deletions apply immediately: drop cache rows whose file is gone.
+    final stale = <String>{
+      for (final r in rows)
+        if (!mtimeById.containsKey(r.id)) r.id,
+    };
+    if (stale.isNotEmpty) {
+      await _cache.remove(stale, key);
+      for (final id in stale) {
+        await _cache.deleteThumbnail(id);
+      }
+    }
+
+    // Changed = brand-new files, or files whose mtime no longer matches the
+    // cache. New files are excluded from this pass (they appear after the
+    // background backfill); mtime-mismatched rows still carry valid metadata
+    // (e.g. a session saved since the last open) so they render immediately.
+    final changed = <({String name, String id, int mtimeMs})>[];
+    final summaries = <SessionSummary>[];
+    for (final f in files) {
+      if (!f.name.startsWith('session_') || !f.name.endsWith('.muse.feedback')) {
+        continue;
+      }
+      final id = f.name.substring(8, f.name.length - 14);
+      final row = rowById[id];
+      if (row == null) {
+        changed.add((name: f.name, id: id, mtimeMs: f.mtimeMs));
+        continue;
+      }
+      if (row.mtimeMs != f.mtimeMs) {
+        changed.add((name: f.name, id: id, mtimeMs: f.mtimeMs));
+      }
+      summaries.add(
+        SessionSummary(id: id, metadata: _metadataFromJson(row.metadataJson, id)),
+      );
+    }
+
+    _pendingBackfill = changed;
     summaries.sort((a, b) => b.metadata.savedAt.compareTo(a.metadata.savedAt));
-    debugPrint('[session] list: found ${summaries.length} session(s)');
+    debugPrint(
+      '[session] list: found ${summaries.length} cached session(s), '
+      '${changed.length} to backfill',
+    );
     return summaries;
+  }
+
+  /// Background-fill the cache for files [list] found missing or changed.
+  /// Clears the pending set; the caller (sessionListProvider) re-reads the
+  /// list once this completes so the new sessions appear.
+  Future<void> backfillPending() async {
+    if (_backfillRunning) {
+      return;
+    }
+    final pending = _pendingBackfill;
+    if (pending.isEmpty) {
+      return;
+    }
+    _backfillRunning = true;
+    _pendingBackfill = [];
+    try {
+      final storage = await _storage;
+      final key = storageKeyFor(storage);
+      await Future.wait(
+        pending.map((f) async {
+          try {
+            final head = await _readHead(storage, f.name);
+            if (head != null) {
+              final decoded = jsonDecode(
+                String.fromCharCodes(head.jsonBytes),
+              ) as Map<String, Object?>;
+              final metadata = SessionMetadata.fromJson(decoded);
+              if (metadata != null) {
+                String? thumbPath;
+                if (head.pngBytes.isNotEmpty) {
+                  await _cache.writeThumbnail(f.id, head.pngBytes);
+                  thumbPath = await _cache.thumbnailPath(f.id);
+                }
+                await _cache.upsert(
+                  CachedSession(
+                    id: f.id,
+                    mtimeMs: f.mtimeMs,
+                    savedAtMs: metadata.savedAt.millisecondsSinceEpoch,
+                    metadataJson: const JsonEncoder().convert(metadata.toJson()),
+                    thumbnailPath: thumbPath,
+                  ),
+                  key,
+                );
+                return;
+              }
+            }
+          } catch (e) {
+            debugPrint('[session] backfill(${f.id}) failed: $e');
+          }
+          // Unreadable/corrupt head: cache the fallback with the real mtime so
+          // the file stops being re-read on every open (matches the old
+          // _fallback behavior for broken files).
+          await _cache.upsert(
+            CachedSession(
+              id: f.id,
+              mtimeMs: f.mtimeMs,
+              savedAtMs: 0,
+              metadataJson: const JsonEncoder().convert(_fallback(f.id).toJson()),
+              thumbnailPath: null,
+            ),
+            key,
+          );
+        }),
+      );
+    } finally {
+      _backfillRunning = false;
+    }
+  }
+
+  /// Read the PNG + metadata head of a session container in one prefix read.
+  /// Returns null when the file is missing or the head cannot be parsed.
+  Future<({Uint8List pngBytes, Uint8List jsonBytes})?> _readHead(
+    SessionStorage storage,
+    String name,
+  ) async {
+    final raw = await storage.readPrefix(name, SessionContainer.headReadLimit);
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    final head = SessionContainer.parseHead(Uint8List.fromList(raw));
+    return (pngBytes: head.pngBytes, jsonBytes: head.jsonBytes);
+  }
+
+  SessionMetadata _metadataFromJson(String json, String id) {
+    try {
+      final decoded = jsonDecode(json) as Map<String, Object?>;
+      return SessionMetadata.fromJson(decoded) ?? _fallback(id);
+    } catch (_) {
+      return _fallback(id);
+    }
   }
 
   /// Read the raw .muse frame body for [id], or null if missing.
@@ -1010,21 +1166,29 @@ class SessionStore {
     return body;
   }
 
-  /// Read the thumbnail PNG bytes for [id], or null when missing.
+  /// Read the thumbnail PNG bytes for [id], or null when missing. Cache-first:
+  /// a cached thumbnail file is returned without touching the (possibly SAF)
+  /// history folder; only a miss reads the container head and fills the cache.
   Future<List<int>?> readPng(String id) async {
+    final cached = await _cache.readThumbnail(id);
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
     final storage = await _storage;
-    final bytes = await storage.readPrefix(
-      _museName(id),
-      SessionContainer.headReadLimit,
-    );
-    if (bytes == null || bytes.isEmpty) {
+    final head = await _readHead(storage, _museName(id));
+    if (head == null || head.pngBytes.isEmpty) {
       return null;
     }
-    try {
-      return SessionContainer.parseHead(Uint8List.fromList(bytes)).pngBytes;
-    } catch (_) {
-      return null;
+    await _cache.writeThumbnail(id, head.pngBytes);
+    final key = storageKeyFor(storage);
+    final rows = await _cache.getRows({id}, key);
+    if (rows.isNotEmpty) {
+      await _cache.upsert(
+        rows.first.copyWith(thumbnailPath: await _cache.thumbnailPath(id)),
+        key,
+      );
     }
+    return head.pngBytes;
   }
 
   /// Persist a finished session into the history folder as a single
@@ -1045,6 +1209,24 @@ class SessionStore {
       bodyBytes: Uint8List.fromList(museBytes),
     );
     await storage.writeFileAtomic(_museName(id), container);
+    final key = storageKeyFor(storage);
+    String? thumbPath;
+    if (pngBytes != null && pngBytes.isNotEmpty) {
+      await _cache.writeThumbnail(id, Uint8List.fromList(pngBytes));
+      thumbPath = await _cache.thumbnailPath(id);
+    }
+    // mtime is 0 ("unknown") on a fresh write: the next reconcile refreshes
+    // it from listFilesMeta without re-reading the metadata we already have.
+    await _cache.upsert(
+      CachedSession(
+        id: id,
+        mtimeMs: 0,
+        savedAtMs: metadata.savedAt.millisecondsSinceEpoch,
+        metadataJson: const JsonEncoder().convert(metadata.toJson()),
+        thumbnailPath: thumbPath,
+      ),
+      key,
+    );
     debugPrint('[session] written ${_museName(id)} to ${storage.location}');
     return SessionSummary(id: id, metadata: metadata);
   }
@@ -1080,8 +1262,40 @@ class SessionStore {
       bodyBytes: body,
     );
     await storage.writeFileAtomic(name, container);
+    await _cache.upsert(
+      CachedSession(
+        id: id,
+        mtimeMs: 0,
+        savedAtMs: _savedAtMs(decoded),
+        metadataJson: const JsonEncoder().convert(decoded),
+        thumbnailPath: await _thumbnailPathForCache(id, storage),
+      ),
+      storageKeyFor(storage),
+    );
     debugPrint('[session] updateNotes($id): notes saved ($name)');
     return true;
+  }
+
+  int _savedAtMs(Map<String, Object?> decoded) {
+    final raw = decoded['savedAt'];
+    if (raw is String) {
+      final t = DateTime.tryParse(raw);
+      if (t != null) {
+        return t.millisecondsSinceEpoch;
+      }
+    }
+    return 0;
+  }
+
+  Future<String?> _thumbnailPathForCache(
+    String id,
+    SessionStorage storage,
+  ) async {
+    final rows = await _cache.getRows({id}, storageKeyFor(storage));
+    if (rows.isNotEmpty && rows.first.thumbnailPath != null) {
+      return rows.first.thumbnailPath;
+    }
+    return _cache.thumbnailPath(id);
   }
 
   /// Delete one session from history (the `.muse.feedback` file). Returns
@@ -1091,6 +1305,8 @@ class SessionStore {
     final name = _museName(id);
     final existed = await storage.fileExists(name);
     await storage.deleteFile(name);
+    await _cache.remove({id}, storageKeyFor(storage));
+    await _cache.deleteThumbnail(id);
     debugPrint('[session] delete($id): ${existed ? 'deleted' : 'missing'} ($name)');
     return existed;
   }
@@ -1115,29 +1331,35 @@ class SessionStore {
       await storage.deleteFile(name);
       moved++;
     }
+    // Ids survive a folder move verbatim, so carry the cached metadata across
+    // to the new storage key. Mtimes will mismatch once and refresh on the
+    // first open of the new folder.
+    await _cache.moveStorageKey(storageKeyFor(storage), storageKeyFor(target));
     debugPrint('[session] moved $moved session(s)');
     return moved;
   }
 
-  Future<SessionMetadata> _readMetadata(
-    SessionStorage storage,
-    String name,
-    String id,
-  ) async {
+  /// Fold a freshly computed [SessionOverview] (from a full-body parse of a
+  /// legacy session without an embedded summary) back into the cached
+  /// metadata so the next detail-view open fast-paths through the overview.
+  /// Cache-only — the container file is never rewritten.
+  Future<void> cacheOverview(String id, SessionOverview overview) async {
+    final storage = await _storage;
+    final key = storageKeyFor(storage);
+    final rows = await _cache.getRows({id}, key);
+    if (rows.isEmpty) {
+      return;
+    }
     try {
-      final raw = await storage.readPrefix(
-        name,
-        SessionContainer.headReadLimit,
-      );
-      if (raw == null || raw.isEmpty) {
-        return _fallback(id);
-      }
-      final head = SessionContainer.parseHead(Uint8List.fromList(raw));
-      final decoded = jsonDecode(String.fromCharCodes(head.jsonBytes));
-      return SessionMetadata.fromJson(decoded as Map<String, Object?>) ??
-          _fallback(id);
-    } catch (_) {
-      return _fallback(id);
+      final decoded =
+          jsonDecode(rows.first.metadataJson) as Map<String, Object?>;
+      decoded['summary'] = overview.toJson();
+      await _cache.upsert(rows.first.copyWith(
+        metadataJson: const JsonEncoder().convert(decoded),
+      ), key);
+      debugPrint('[session] cacheOverview($id): overview cached');
+    } catch (e) {
+      debugPrint('[session] cacheOverview($id) failed: $e');
     }
   }
 
@@ -1153,12 +1375,39 @@ class SessionStore {
 /// Storage-backed store that derives its [SessionStorage] from the active
 /// [Settings]. Reading [sessionStorageProvider] here keeps history and the
 /// recorder on the same folder.
-final sessionStoreProvider = FutureProvider<SessionStore>((ref) {
+final sessionStoreProvider = FutureProvider<SessionStore>((ref) async {
   final settings = ref.watch(settingsProvider);
-  return SessionStore(storage: resolveSessionStorage(settings));
+  final cache = await ref.watch(sessionCacheProvider.future);
+  return SessionStore(storage: resolveSessionStorage(settings), cache: cache);
 });
 
-final sessionListProvider = FutureProvider<List<SessionSummary>>((ref) async {
-  final store = await ref.watch(sessionStoreProvider.future);
-  return store.list();
-});
+/// Background-loads the session list through the metadata cache.
+class SessionListNotifier extends AsyncNotifier<List<SessionSummary>> {
+  bool _disposed = false;
+
+  @override
+  Future<List<SessionSummary>> build() async {
+    ref.onDispose(() => _disposed = true);
+    final store = await ref.watch(sessionStoreProvider.future);
+    final summaries = await store.list();
+    // Lazy loading: the first emission is the already-cached subset (fast).
+    // New or changed files are backfilled in the background; once done the
+    // list is re-read so the newly discovered sessions appear.
+    if (store.pendingBackfillCount > 0) {
+      unawaited(_backfill(store));
+    }
+    return summaries;
+  }
+
+  Future<void> _backfill(SessionStore store) async {
+    await store.backfillPending();
+    if (!_disposed) {
+      ref.invalidateSelf();
+    }
+  }
+}
+
+final sessionListProvider =
+    AsyncNotifierProvider<SessionListNotifier, List<SessionSummary>>(
+  SessionListNotifier.new,
+);

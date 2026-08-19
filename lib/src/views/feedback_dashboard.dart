@@ -268,6 +268,23 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
           conditions: protocol.conditions,
         );
         _sessionData ??= data;
+        // Legacy session without an embedded summary: fold the freshly
+        // computed overview back into the metadata cache so the next open
+        // fast-paths without re-parsing the .muse body.
+        if (widget.readOnly &&
+            widget.sessionId != null &&
+            widget.metadata?.summary == null) {
+          unawaited(() async {
+            final store = await ref.read(sessionStoreProvider.future);
+            await store.cacheOverview(
+              widget.sessionId!,
+              SessionOverview.fromData(
+                data,
+                trainingStartSecs: _trainingStartOffset,
+              ),
+            );
+          }());
+        }
         if (_thumbnail == null && !widget.readOnly) {
           WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
         }

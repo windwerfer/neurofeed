@@ -55,6 +55,18 @@ Directory scratchDirectory(SessionStorage history) {
 
 /// A file handle inside the history folder. [name] is the bare file name
 /// (e.g. `session_123.muse.feedback`).
+class StoredFile {
+  const StoredFile(this.name, this.mtimeMs);
+
+  final String name;
+
+  /// Last-modified time in milliseconds since epoch. Used to detect which
+  /// cached metadata rows are still valid without reading the file again.
+  final int mtimeMs;
+}
+
+/// A file handle inside the history folder. [name] is the bare file name
+/// (e.g. `session_123.muse.feedback`).
 class SessionFile {
   const SessionFile(this.name);
 
@@ -105,6 +117,11 @@ abstract class SessionStorage {
 
   /// File names currently in the folder (does not descend into subdirs).
   Future<List<String>> listFiles();
+
+  /// Files currently in the folder with their last-modified timestamps. This
+  /// is the cheap "pull the file list" call for the metadata cache — it avoids
+  /// re-reading unchanged session heads on every history open.
+  Future<List<StoredFile>> listFilesMeta();
 
   /// Whether [name] exists in the storage root.
   Future<bool> fileExists(String name);
@@ -184,16 +201,28 @@ class FileSystemSessionStorage extends SessionStorage {
 
   @override
   Future<List<String>> listFiles() async {
+    return (await listFilesMeta()).map((f) => f.name).toList();
+  }
+
+  @override
+  Future<List<StoredFile>> listFilesMeta() async {
     if (!await root.exists()) {
       return [];
     }
-    return root
-        .listSync()
-        .whereType<File>()
-        .map((f) => f.uri.pathSegments.last)
-        // Hide stale tmp siblings from an interrupted writeFileAtomic.
-        .where((n) => !n.endsWith('.tmp'))
-        .toList();
+    final files = <StoredFile>[];
+    for (final e in root.listSync()) {
+      if (e is! File) {
+        continue;
+      }
+      // Hide stale tmp siblings from an interrupted writeFileAtomic.
+      if (e.uri.pathSegments.last.endsWith('.tmp')) {
+        continue;
+      }
+      files.add(
+        StoredFile(e.uri.pathSegments.last, e.statSync().modified.millisecondsSinceEpoch),
+      );
+    }
+    return files;
   }
 
   @override
@@ -308,11 +337,25 @@ class SafSessionStorage extends SessionStorage {
 
   @override
   Future<List<String>> listFiles() async {
-    final files = await _invoke('listFiles', {'tree': treeUri});
+    return (await listFilesMeta()).map((f) => f.name).toList();
+  }
+
+  @override
+  Future<List<StoredFile>> listFilesMeta() async {
+    final files = await _invoke('listFilesMeta', {'tree': treeUri});
     if (files == null) {
       return [];
     }
-    return (files as List<dynamic>).cast<String>();
+    return [
+      for (final e in files as List<dynamic>)
+        if (e is Map<Object?, Object?>)
+          StoredFile(
+            e['name'] as String? ?? '',
+            (e['mtime'] as num?)?.toInt() ?? 0,
+          )
+        else
+          const StoredFile('', 0),
+    ]..removeWhere((f) => f.name.isEmpty);
   }
 
   @override

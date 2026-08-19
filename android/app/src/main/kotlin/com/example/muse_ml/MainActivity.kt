@@ -83,7 +83,7 @@ class MainActivity : FlutterActivity() {
             "readFile" -> readFile(call, result)
             "readFilePrefix" -> readFilePrefix(call, result)
             "deleteFile" -> deleteFile(call, result)
-            "listFiles" -> listFiles(call, result)
+            "listFilesMeta" -> listFilesMeta(call, result)
             else -> result.notImplemented()
         }
     }
@@ -339,7 +339,7 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun listFiles(call: MethodCall, result: Result) {
+    private fun listFilesMeta(call: MethodCall, result: Result) {
         val tree = treeUri(call)
         if (tree == null) {
             result.error("bad_args", "tree required", null)
@@ -363,24 +363,33 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             }
-            // Second pass: list the healed set. Any .mtmp still present is a
-            // stale leftover that recoverDoc could not resolve (e.g. the temp
-            // had no valid sibling) and is skipped.
-            val files = mutableListOf<String>()
+            // Second pass: list the healed set with last-modified timestamps
+            // (used by the metadata cache to detect changed files). Any .mtmp
+            // still present is a stale leftover that recoverDoc could not
+            // resolve and is skipped.
+            val files = mutableListOf<Map<String, Any?>>()
             contentResolver.query(
                 children,
-                arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+                ),
                 null, null, null,
             )?.use { cursor ->
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(0) ?: continue
                     if (name.endsWith(".mtmp")) continue
-                    files.add(name)
+                    files.add(
+                        mapOf(
+                            "name" to name,
+                            "mtime" to cursor.getLong(1),
+                        )
+                    )
                 }
             }
             result.success(files)
         } catch (e: Exception) {
-            Log.e(TAG, "listFiles failed", e)
+            Log.e(TAG, "listFilesMeta failed", e)
             result.error("list_failed", e.toString(), null)
         }
     }
