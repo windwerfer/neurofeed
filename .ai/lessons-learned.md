@@ -289,3 +289,39 @@ value is a projection — decide once which representation is canonical (the
 rounded user-facing value) and use it everywhere (label, save, load, presets).
 Copying a value from the running UI must go through the same projection; see
 the "Range sliders are log-space" hot spot in AGENTS.md.
+
+## Session 2026-08-19 — Muse startup: drop the hand-rolled delays, enable PPG
+
+### The "problem"
+The session-summary Heart-rate (PPG) graph was empty on Classic devices. The
+code that computed HR (`compute_pulse` on the PPG IR channel in
+`rust/src/api/muse.rs`) was fine — the problem was upstream: no PPG data ever
+arrived.
+
+### Root cause
+`connect()` sent a hand-rolled Classic startup `h / s / p21 / d` with 150 ms
+inter-command delays (commit `3b6887d`), and hardcoded preset `p21` (EEG only).
+The muse-rs `start()` helper would have sent `p50` (EEG + PPG) when
+`enable_ppg=true`, but the hand-rolled path bypassed it. So the device was never
+asked to stream PPG → no `MuseEvent::Ppg` → `ppg_ir_buffer` never filled →
+`compute_pulse()` always returned 0 → no `Pulse` events → empty summary graph.
+Athena was unaffected (always uses `p1045` which includes PPG).
+
+### The delays were masking a different bug
+The 150 ms delays were added (commit `3b6887d`, 2026-07-25) as a workaround for
+"Android drops rapid-fire WriteWithoutResponse commands". One day later
+(2026-07-26) the JNI notification death spiral — the bug that actually made
+streaming silently die after ~6 s — was fixed in the btleplug fork. The delays
+were working around a problem that no longer existed.
+
+### Fix (commit `217cefe`)
+`connect()` now calls `handle.start(true, false)` — muse-rs's own startup
+(Classic: `pause → s → p50 → resume`; Athena: `v4 → s → h → p1045 → dc001×2 →
+L1` + 2 s settle). `enable_ppg=true` selects preset `p50` so PPG streams.
+
+### Verification
+- muse-rs path with `start(false, false)` (= `p21`, same preset as before):
+  ~2 min on a Classic device, no connection break → delays are not needed.
+- `start(true, false)` (= `p50`): PPG/HR now populate the session summary.
+- Revert if Classic stability ever regresses: `git revert 217cefe` (parent
+  `f82cbaa` has the custom delayed sequence).
