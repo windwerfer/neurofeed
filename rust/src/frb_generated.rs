@@ -1088,11 +1088,9 @@ impl SseDecode for crate::api::muse::DeviceInfo {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_id = <String>::sse_decode(deserializer);
-        let mut var_rssi = <Option<i16>>::sse_decode(deserializer);
         return crate::api::muse::DeviceInfo {
             name: var_name,
             id: var_id,
-            rssi: var_rssi,
         };
     }
 }
@@ -1478,17 +1476,6 @@ impl SseDecode for crate::api::muse::MuseEventDto {
             _ => {
                 unimplemented!("");
             }
-        }
-    }
-}
-
-impl SseDecode for Option<i16> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        if (<bool>::sse_decode(deserializer)) {
-            return Some(<i16>::sse_decode(deserializer));
-        } else {
-            return None;
         }
     }
 }
@@ -1932,7 +1919,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::muse::DeviceInfo {
         [
             self.name.into_into_dart().into_dart(),
             self.id.into_into_dart().into_dart(),
-            self.rssi.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2452,7 +2438,6 @@ impl SseEncode for crate::api::muse::DeviceInfo {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.id, serializer);
-        <Option<i16>>::sse_encode(self.rssi, serializer);
     }
 }
 
@@ -2755,16 +2740,6 @@ impl SseEncode for crate::api::muse::MuseEventDto {
             _ => {
                 unimplemented!("");
             }
-        }
-    }
-}
-
-impl SseEncode for Option<i16> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <i16>::sse_encode(value, serializer);
         }
     }
 }

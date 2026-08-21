@@ -1018,12 +1018,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  int dco_decode_box_autoadd_i_16(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as int;
-  }
-
-  @protected
   ImuDto dco_decode_box_autoadd_imu_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_imu_dto(raw);
@@ -1126,12 +1120,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   DeviceInfo dco_decode_device_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return DeviceInfo(
       name: dco_decode_String(arr[0]),
       id: dco_decode_String(arr[1]),
-      rssi: dco_decode_opt_box_autoadd_i_16(arr[2]),
     );
   }
 
@@ -1398,12 +1391,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       default:
         throw Exception("unreachable");
     }
-  }
-
-  @protected
-  int? dco_decode_opt_box_autoadd_i_16(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_i_16(raw);
   }
 
   @protected
@@ -1708,12 +1695,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  int sse_decode_box_autoadd_i_16(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_i_16(deserializer));
-  }
-
-  @protected
   ImuDto sse_decode_box_autoadd_imu_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_imu_dto(deserializer));
@@ -1822,8 +1803,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
     var var_id = sse_decode_String(deserializer);
-    var var_rssi = sse_decode_opt_box_autoadd_i_16(deserializer);
-    return DeviceInfo(name: var_name, id: var_id, rssi: var_rssi);
+    return DeviceInfo(name: var_name, id: var_id);
   }
 
   @protected
@@ -2165,17 +2145,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  int? sse_decode_opt_box_autoadd_i_16(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_i_16(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2500,12 +2469,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_box_autoadd_i_16(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_16(self, serializer);
-  }
-
-  @protected
   void sse_encode_box_autoadd_imu_dto(ImuDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_imu_dto(self, serializer);
@@ -2612,7 +2575,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.id, serializer);
-    sse_encode_opt_box_autoadd_i_16(self.rssi, serializer);
   }
 
   @protected
@@ -2920,16 +2882,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case MuseEventDto_Reve(field0: final field0):
         sse_encode_i_32(13, serializer);
         sse_encode_box_autoadd_reve_dto(field0, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_opt_box_autoadd_i_16(int? self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_i_16(self, serializer);
     }
   }
 

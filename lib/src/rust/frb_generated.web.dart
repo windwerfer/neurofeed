@@ -62,9 +62,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   GestureDto dco_decode_box_autoadd_gesture_dto(dynamic raw);
 
   @protected
-  int dco_decode_box_autoadd_i_16(dynamic raw);
-
-  @protected
   ImuDto dco_decode_box_autoadd_imu_dto(dynamic raw);
 
   @protected
@@ -188,9 +185,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MuseEventDto dco_decode_muse_event_dto(dynamic raw);
 
   @protected
-  int? dco_decode_opt_box_autoadd_i_16(dynamic raw);
-
-  @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
@@ -288,9 +282,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   GestureDto sse_decode_box_autoadd_gesture_dto(SseDeserializer deserializer);
-
-  @protected
-  int sse_decode_box_autoadd_i_16(SseDeserializer deserializer);
 
   @protected
   ImuDto sse_decode_box_autoadd_imu_dto(SseDeserializer deserializer);
@@ -434,9 +425,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MuseEventDto sse_decode_muse_event_dto(SseDeserializer deserializer);
 
   @protected
-  int? sse_decode_opt_box_autoadd_i_16(SseDeserializer deserializer);
-
-  @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
@@ -551,9 +539,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     GestureDto self,
     SseSerializer serializer,
   );
-
-  @protected
-  void sse_encode_box_autoadd_i_16(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_imu_dto(ImuDto self, SseSerializer serializer);
@@ -740,9 +725,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_muse_event_dto(MuseEventDto self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_i_16(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);

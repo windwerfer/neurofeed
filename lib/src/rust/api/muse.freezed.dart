@@ -675,7 +675,6 @@ abstract class _ControlDto implements ControlDto {
 mixin _$DeviceInfo {
   String get name => throw _privateConstructorUsedError;
   String get id => throw _privateConstructorUsedError;
-  int? get rssi => throw _privateConstructorUsedError;
 
   /// Create a copy of DeviceInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -691,7 +690,7 @@ abstract class $DeviceInfoCopyWith<$Res> {
     $Res Function(DeviceInfo) then,
   ) = _$DeviceInfoCopyWithImpl<$Res, DeviceInfo>;
   @useResult
-  $Res call({String name, String id, int? rssi});
+  $Res call({String name, String id});
 }
 
 /// @nodoc
@@ -708,7 +707,7 @@ class _$DeviceInfoCopyWithImpl<$Res, $Val extends DeviceInfo>
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? name = null, Object? id = null, Object? rssi = freezed}) {
+  $Res call({Object? name = null, Object? id = null}) {
     return _then(
       _value.copyWith(
             name: null == name
@@ -719,10 +718,6 @@ class _$DeviceInfoCopyWithImpl<$Res, $Val extends DeviceInfo>
                 ? _value.id
                 : id // ignore: cast_nullable_to_non_nullable
                       as String,
-            rssi: freezed == rssi
-                ? _value.rssi
-                : rssi // ignore: cast_nullable_to_non_nullable
-                      as int?,
           )
           as $Val,
     );
@@ -738,7 +733,7 @@ abstract class _$$DeviceInfoImplCopyWith<$Res>
   ) = __$$DeviceInfoImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String name, String id, int? rssi});
+  $Res call({String name, String id});
 }
 
 /// @nodoc
@@ -754,7 +749,7 @@ class __$$DeviceInfoImplCopyWithImpl<$Res>
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? name = null, Object? id = null, Object? rssi = freezed}) {
+  $Res call({Object? name = null, Object? id = null}) {
     return _then(
       _$DeviceInfoImpl(
         name: null == name
@@ -765,10 +760,6 @@ class __$$DeviceInfoImplCopyWithImpl<$Res>
             ? _value.id
             : id // ignore: cast_nullable_to_non_nullable
                   as String,
-        rssi: freezed == rssi
-            ? _value.rssi
-            : rssi // ignore: cast_nullable_to_non_nullable
-                  as int?,
       ),
     );
   }
@@ -777,18 +768,16 @@ class __$$DeviceInfoImplCopyWithImpl<$Res>
 /// @nodoc
 
 class _$DeviceInfoImpl implements _DeviceInfo {
-  const _$DeviceInfoImpl({required this.name, required this.id, this.rssi});
+  const _$DeviceInfoImpl({required this.name, required this.id});
 
   @override
   final String name;
   @override
   final String id;
-  @override
-  final int? rssi;
 
   @override
   String toString() {
-    return 'DeviceInfo(name: $name, id: $id, rssi: $rssi)';
+    return 'DeviceInfo(name: $name, id: $id)';
   }
 
   @override
@@ -797,12 +786,11 @@ class _$DeviceInfoImpl implements _DeviceInfo {
         (other.runtimeType == runtimeType &&
             other is _$DeviceInfoImpl &&
             (identical(other.name, name) || other.name == name) &&
-            (identical(other.id, id) || other.id == id) &&
-            (identical(other.rssi, rssi) || other.rssi == rssi));
+            (identical(other.id, id) || other.id == id));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, name, id, rssi);
+  int get hashCode => Object.hash(runtimeType, name, id);
 
   /// Create a copy of DeviceInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -817,15 +805,12 @@ abstract class _DeviceInfo implements DeviceInfo {
   const factory _DeviceInfo({
     required final String name,
     required final String id,
-    final int? rssi,
   }) = _$DeviceInfoImpl;
 
   @override
   String get name;
   @override
   String get id;
-  @override
-  int? get rssi;
 
   /// Create a copy of DeviceInfo
   /// with the given fields replaced by the non-null parameter values.

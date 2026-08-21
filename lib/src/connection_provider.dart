@@ -133,8 +133,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         await ensureBtleplugReady();
         final devices = await scan(timeoutSecs: BigInt.from(_scanChunkSecs));
         final match =
-            devices.where((d) => d.id == lastId && d.rssi != null).firstOrNull ??
-            devices.where((d) => d.name == lastId && d.rssi != null).firstOrNull;
+            devices.where((d) => d.id == lastId).firstOrNull ??
+            devices.where((d) => d.name == lastId).firstOrNull;
         if (match != null) {
           debugPrint('[muse] autoconnect: found ${match.name}, connecting');
           await connectTo(match);

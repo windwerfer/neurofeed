@@ -96,11 +96,8 @@ sealed class ControlDto with _$ControlDto {
 /// A Muse device discovered during a scan.
 @freezed
 sealed class DeviceInfo with _$DeviceInfo {
-  const factory DeviceInfo({
-    required String name,
-    required String id,
-    int? rssi,
-  }) = _DeviceInfo;
+  const factory DeviceInfo({required String name, required String id}) =
+      _DeviceInfo;
 }
 
 /// An EEG sample batch for a single electrode channel.
