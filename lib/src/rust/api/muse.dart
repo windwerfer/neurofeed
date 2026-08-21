@@ -8,16 +8,16 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'muse.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `frontal_delta_average`, `map_event`, `map_imu`, `now_ms`, `score_window_len`, `spawn_event_forwarder`
+            // These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `frontal_delta_average`, `map_event`, `map_imu`, `now_ms`, `score_window_len`, `spawn_event_forwarder`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ForwarderGuard`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `drop`
 
-/// Scan for nearby Muse devices for `timeout_secs` seconds and return what was
+
+            /// Scan for nearby Muse devices for `timeout_secs` seconds and return what was
 /// found. Results are **merged** into the existing device cache so that the UI
 /// can call `scan` repeatedly in short chunks without losing previously
 /// discovered peripherals (which `connect` needs via `MuseDevice`).
-Future<List<DeviceInfo>> scan({BigInt? timeoutSecs}) =>
-    RustLib.instance.api.crateApiMuseScan(timeoutSecs: timeoutSecs);
+Future<List<DeviceInfo>>  scan({BigInt? timeoutSecs }) => RustLib.instance.api.crateApiMuseScan(timeoutSecs: timeoutSecs);
 
 /// Connect to a previously discovered device by its BLE id and begin streaming.
 /// Returns the connection status on success.
@@ -25,8 +25,7 @@ Future<List<DeviceInfo>> scan({BigInt? timeoutSecs}) =>
 /// The entire operation is guarded by an overall timeout so the caller never
 /// waits more than ≈18 s.  Inside, each BLE step already has its own shorter
 /// timeout (10 s connect, 15 s discover services, 8 s startup commands).
-Future<ConnectionStatus> connect({required String deviceId}) =>
-    RustLib.instance.api.crateApiMuseConnect(deviceId: deviceId);
+Future<ConnectionStatus>  connect({required String deviceId }) => RustLib.instance.api.crateApiMuseConnect(deviceId: deviceId);
 
 /// Disconnect from the active device, if any.
 ///
@@ -35,201 +34,191 @@ Future<ConnectionStatus> connect({required String deviceId}) =>
 /// fires `Disconnected` through the Dart sink directly — the UI updates
 /// straight away instead of waiting for the disconnect-watcher event (which
 /// can be delayed on some BLE stacks).
-Future<void> disconnect() => RustLib.instance.api.crateApiMuseDisconnect();
+Future<void>  disconnect() => RustLib.instance.api.crateApiMuseDisconnect();
 
 /// Current connection status (used on app launch to restore UI state).
-Future<ConnectionStatus> getStatus() =>
-    RustLib.instance.api.crateApiMuseGetStatus();
+Future<ConnectionStatus>  getStatus() => RustLib.instance.api.crateApiMuseGetStatus();
 
 /// Returns `true` if a connection is currently active. The Rust side clears
 /// this as soon as muse-rs reports a disconnect, so it tracks the real link
 /// state closely enough for the UI.
-Future<bool> isConnected() => RustLib.instance.api.crateApiMuseIsConnected();
+Future<bool>  isConnected() => RustLib.instance.api.crateApiMuseIsConnected();
 
 /// Subscribe to the live event stream from the connected headset.
 ///
 /// Call this once at startup. It returns a Dart `Stream<MuseEventDto>` that
 /// receives every event emitted by muse-rs for the active (or future)
 /// connection. The Rust side forwards events into the provided `StreamSink`.
-Stream<MuseEventDto> subscribeEvents() =>
-    RustLib.instance.api.crateApiMuseSubscribeEvents();
+Stream<MuseEventDto>  subscribeEvents() => RustLib.instance.api.crateApiMuseSubscribeEvents();
 
-/// Band power estimates for a single electrode.
+            /// Band power estimates for a single electrode.
 /// Bands: [delta, theta, alpha, beta, gamma] in µV²/Hz.
 @freezed
-sealed class BandsDto with _$BandsDto {
-  const factory BandsDto({
-    required int electrode,
-    required double timestamp,
-    required double delta,
-    required double theta,
-    required double alpha,
-    required double beta,
-    required double gamma,
-    required double lineNoiseRatio,
-  }) = _BandsDto;
-}
+sealed class BandsDto with _$BandsDto  {
+                
+                const factory BandsDto({ required  int electrode, required  double timestamp, required  double delta, required  double theta, required  double alpha, required  double beta, required  double gamma, required  double lineNoiseRatio,}) = _BandsDto;
+                
+                
+                
+            }
 
 /// Connection / link status reported to the UI.
 @freezed
-sealed class ConnectionStatus with _$ConnectionStatus {
-  const ConnectionStatus._();
-  const factory ConnectionStatus({
-    required bool connected,
-    required String name,
-    required String id,
-    required String firmware,
-  }) = _ConnectionStatus;
-  static Future<ConnectionStatus> default_() =>
-      RustLib.instance.api.crateApiMuseConnectionStatusDefault();
-}
+sealed class ConnectionStatus with _$ConnectionStatus  {
+                const ConnectionStatus._();
+                const factory ConnectionStatus({ required  bool connected, required  String name, required  String id, required  String firmware,}) = _ConnectionStatus;
+                static Future<ConnectionStatus>  default_()=>RustLib.instance.api.crateApiMuseConnectionStatusDefault();
+
+
+                
+                
+            }
 
 /// A parsed control/status JSON response from the headset.
 @freezed
-sealed class ControlDto with _$ControlDto {
-  const factory ControlDto({
-    required String raw,
-    required Map<String, String> fields,
-  }) = _ControlDto;
-}
+sealed class ControlDto with _$ControlDto  {
+                
+                const factory ControlDto({ required  String raw, required  Map<String, String> fields,}) = _ControlDto;
+                
+                
+                
+            }
 
 /// A Muse device discovered during a scan.
 @freezed
-sealed class DeviceInfo with _$DeviceInfo {
-  const factory DeviceInfo({required String name, required String id}) =
-      _DeviceInfo;
-}
+sealed class DeviceInfo with _$DeviceInfo  {
+                
+                const factory DeviceInfo({ required  String name, required  String id,  int? rssi,}) = _DeviceInfo;
+                
+                
+                
+            }
 
 /// An EEG sample batch for a single electrode channel.
 @freezed
-sealed class EegDto with _$EegDto {
-  const factory EegDto({
-    required int index,
-    required int electrode,
-    required double timestamp,
-    required Float64List samples,
-  }) = _EegDto;
-}
+sealed class EegDto with _$EegDto  {
+                
+                const factory EegDto({ required  int index, required  int electrode, required  double timestamp, required  Float64List samples,}) = _EegDto;
+                
+                
+                
+            }
 
 /// One second of gesture detection (blink / jaw clench / eye position).
 @freezed
-sealed class GestureDto with _$GestureDto {
-  const factory GestureDto({
-    required double timestamp,
-    required int blinkCount,
-    required bool clench,
-    required int eye,
-  }) = _GestureDto;
-}
+sealed class GestureDto with _$GestureDto  {
+                
+                const factory GestureDto({ required  double timestamp, required  int blinkCount, required  bool clench, required  int eye,}) = _GestureDto;
+                
+                
+                
+            }
 
 /// A batch of inertial measurements.
 @freezed
-sealed class ImuDto with _$ImuDto {
-  const factory ImuDto({
-    required int sequenceId,
-    required List<XyzDto> samples,
-  }) = _ImuDto;
-}
+sealed class ImuDto with _$ImuDto  {
+                
+                const factory ImuDto({ required  int sequenceId, required  List<XyzDto> samples,}) = _ImuDto;
+                
+                
+                
+            }
 
 /// Movement score derived from accelerometer magnitude variance.
 @freezed
-sealed class MovementDto with _$MovementDto {
-  const factory MovementDto({
-    required double timestamp,
-    required double score,
-  }) = _MovementDto;
-}
+sealed class MovementDto with _$MovementDto  {
+                
+                const factory MovementDto({ required  double timestamp, required  double score,}) = _MovementDto;
+                
+                
+                
+            }
 
 @freezed
-sealed class MuseEventDto with _$MuseEventDto {
-  const MuseEventDto._();
+                sealed class MuseEventDto with _$MuseEventDto  {
+                    const MuseEventDto._();
 
-  const factory MuseEventDto.connected(String field0) = MuseEventDto_Connected;
-  const factory MuseEventDto.disconnected() = MuseEventDto_Disconnected;
-  const factory MuseEventDto.eeg(EegDto field0) = MuseEventDto_Eeg;
-  const factory MuseEventDto.bands(BandsDto field0) = MuseEventDto_Bands;
-  const factory MuseEventDto.ppg(PpgDto field0) = MuseEventDto_Ppg;
-  const factory MuseEventDto.telemetry(TelemetrySnapshot field0) =
-      MuseEventDto_Telemetry;
-  const factory MuseEventDto.accelerometer(ImuDto field0) =
-      MuseEventDto_Accelerometer;
-  const factory MuseEventDto.gyroscope(ImuDto field0) = MuseEventDto_Gyroscope;
-  const factory MuseEventDto.control(ControlDto field0) = MuseEventDto_Control;
-  const factory MuseEventDto.pulse(PulseDto field0) = MuseEventDto_Pulse;
-  const factory MuseEventDto.movement(MovementDto field0) =
-      MuseEventDto_Movement;
-  const factory MuseEventDto.peakAlpha(PeakAlphaDto field0) =
-      MuseEventDto_PeakAlpha;
-  const factory MuseEventDto.gestures(GestureDto field0) =
-      MuseEventDto_Gestures;
-  const factory MuseEventDto.reve(ReveDto field0) = MuseEventDto_Reve;
-}
+                     const factory MuseEventDto.connected(  String field0,) = MuseEventDto_Connected;
+ const factory MuseEventDto.disconnected() = MuseEventDto_Disconnected;
+ const factory MuseEventDto.eeg(  EegDto field0,) = MuseEventDto_Eeg;
+ const factory MuseEventDto.bands(  BandsDto field0,) = MuseEventDto_Bands;
+ const factory MuseEventDto.ppg(  PpgDto field0,) = MuseEventDto_Ppg;
+ const factory MuseEventDto.telemetry(  TelemetrySnapshot field0,) = MuseEventDto_Telemetry;
+ const factory MuseEventDto.accelerometer(  ImuDto field0,) = MuseEventDto_Accelerometer;
+ const factory MuseEventDto.gyroscope(  ImuDto field0,) = MuseEventDto_Gyroscope;
+ const factory MuseEventDto.control(  ControlDto field0,) = MuseEventDto_Control;
+ const factory MuseEventDto.pulse(  PulseDto field0,) = MuseEventDto_Pulse;
+ const factory MuseEventDto.movement(  MovementDto field0,) = MuseEventDto_Movement;
+ const factory MuseEventDto.peakAlpha(  PeakAlphaDto field0,) = MuseEventDto_PeakAlpha;
+ const factory MuseEventDto.gestures(  GestureDto field0,) = MuseEventDto_Gestures;
+ const factory MuseEventDto.reve(  ReveDto field0,) = MuseEventDto_Reve;
+
+                    
+
+                    
+                }
 
 /// Peak alpha frequency and power (parabolic interpolation over FFT bins).
 @freezed
-sealed class PeakAlphaDto with _$PeakAlphaDto {
-  const factory PeakAlphaDto({
-    required double timestamp,
-    required double frequency,
-    required double power,
-  }) = _PeakAlphaDto;
-}
+sealed class PeakAlphaDto with _$PeakAlphaDto  {
+                
+                const factory PeakAlphaDto({ required  double timestamp, required  double frequency, required  double power,}) = _PeakAlphaDto;
+                
+                
+                
+            }
 
 /// A PPG (optical) reading for one channel.
 @freezed
-sealed class PpgDto with _$PpgDto {
-  const factory PpgDto({
-    required int index,
-    required int channel,
-    required double timestamp,
-    required Float64List samples,
-  }) = _PpgDto;
-}
+sealed class PpgDto with _$PpgDto  {
+                
+                const factory PpgDto({ required  int index, required  int channel, required  double timestamp, required  Float64List samples,}) = _PpgDto;
+                
+                
+                
+            }
 
 /// Heart-rate pulse estimate from PPG infrared channel.
 @freezed
-sealed class PulseDto with _$PulseDto {
-  const factory PulseDto({
-    required double timestamp,
-    required double bpm,
-    required double confidence,
-  }) = _PulseDto;
-}
+sealed class PulseDto with _$PulseDto  {
+                
+                const factory PulseDto({ required  double timestamp, required  double bpm, required  double confidence,}) = _PulseDto;
+                
+                
+                
+            }
 
 /// Per-second sleep-guardrail score from the loaded foundation model (Sleep-Edge
 /// Rest protocol). The full pooled latent stays Rust-side; only the reduced
 /// readings cross the bridge.
 @freezed
-sealed class ReveDto with _$ReveDto {
-  const factory ReveDto({
-    required double timestamp,
-    required String kind,
-    required double clarity,
-    required double sleepDir,
-    required double delta,
-    required int dim,
-  }) = _ReveDto;
-}
+sealed class ReveDto with _$ReveDto  {
+                
+                const factory ReveDto({ required  double timestamp, required  String kind, required  double clarity, required  double sleepDir, required  double delta, required  int dim,}) = _ReveDto;
+                
+                
+                
+            }
 
 /// Telemetry snapshot (battery etc.) surfaced in the status bar.
 @freezed
-sealed class TelemetrySnapshot with _$TelemetrySnapshot {
-  const TelemetrySnapshot._();
-  const factory TelemetrySnapshot({
-    required double batteryLevel,
-    required double fuelGaugeVoltage,
-    required int temperature,
-  }) = _TelemetrySnapshot;
-  static Future<TelemetrySnapshot> default_() =>
-      RustLib.instance.api.crateApiMuseTelemetrySnapshotDefault();
-}
+sealed class TelemetrySnapshot with _$TelemetrySnapshot  {
+                const TelemetrySnapshot._();
+                const factory TelemetrySnapshot({ required  double batteryLevel, required  double fuelGaugeVoltage, required  int temperature,}) = _TelemetrySnapshot;
+                static Future<TelemetrySnapshot>  default_()=>RustLib.instance.api.crateApiMuseTelemetrySnapshotDefault();
+
+
+                
+                
+            }
 
 /// A 3-axis inertial measurement.
 @freezed
-sealed class XyzDto with _$XyzDto {
-  const factory XyzDto({
-    required double x,
-    required double y,
-    required double z,
-  }) = _XyzDto;
-}
+sealed class XyzDto with _$XyzDto  {
+                
+                const factory XyzDto({ required  double x, required  double y, required  double z,}) = _XyzDto;
+                
+                
+                
+            }
+            

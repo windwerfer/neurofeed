@@ -36,6 +36,9 @@ rlx = { version = "0.2", default-features = false, features = ["cpu"] }
 [patch.'https://github.com/eugenehp/btleplug.git']
 btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-3" }
 
+[patch.'https://github.com/eugenehp/muse-rs.git']
+muse-rs = { path = "../third_party/muse-rs" }
+
 # rlx-cpu's default `blas` feature hard-links OpenBLAS on x86_64 hosts
 # (build.rs), which would break Windows/Linux release builds. Our vendored
 # copy clears the default so the crate uses its portable SIMD/scalar gemm

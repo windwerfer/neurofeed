@@ -90,6 +90,7 @@ fn frontal_delta_average(deltas: &std::collections::HashMap<i32, f64>) -> f64 {
 pub struct DeviceInfo {
     pub name: String,
     pub id: String,
+    pub rssi: Option<i16>,
 }
 
 /// Connection / link status reported to the UI.
@@ -331,6 +332,7 @@ pub async fn scan(timeout_secs: Option<u64>) -> anyhow::Result<Vec<DeviceInfo>> 
         .map(|d| DeviceInfo {
             name: d.name.clone(),
             id: d.id.clone(),
+            rssi: d.rssi,
         })
         .collect();
 
