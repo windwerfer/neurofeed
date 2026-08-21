@@ -1,3 +1,9 @@
 # Hide auto-generated FRB files from GitHub PR diffs by default
 lib/src/rust/frb_generated* linguist-generated=true
 rust/src/frb_generated*     linguist-generated=true
+
+
+# Mark generated files so GitHub/GitLab collapses them in PR diffs
+*.freezed.dart linguist-generated=true
+*.g.dart linguist-generated=true
+*.frb.dart linguist-generated=true

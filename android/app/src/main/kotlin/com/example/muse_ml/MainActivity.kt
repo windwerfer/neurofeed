@@ -383,73 +383,10 @@ class MainActivity : FlutterActivity() {
                     val name = cursor.getString(0) ?: continue
                     if (name.endsWith(".mtmp")) {
                         recoverDoc(tree, name.removeSuffix(".mtmp"))
-    private fun copyUriToCache(call: MethodCall, result: Result) {
-        val uriString = call.argument<String>("uri")
-        val destName = call.argument<String>("destName")
-        if (uriString == null || destName == null) {
-            result.error("bad_args", "uri/destName required", null)
-            return
-        }
-
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val uri = Uri.parse(uriString)
-                val cacheFile = File(cacheDir, destName)
-                
-                contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(cacheFile).use { output ->
-                        input.copyTo(output, bufferSize = 64 * 1024)
                     }
-                } ?: run {
-                    withContext(Dispatchers.Main) { result.error("open_failed", "could not open $uriString", null) }
-                    return@launch
-                }
-                
-                withContext(Dispatchers.Main) { result.success(cacheFile.absolutePath) }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { result.error("copy_failed", e.toString(), null) }
-            }
-        }
-    }
-
-    private fun copySafFileToCache(call: MethodCall, result: Result) {
-        val tree = treeUri(call)
-        val name = call.argument<String>("name")
-        val destName = call.argument<String>("destName")
-        if (tree == null || name == null || destName == null) {
-            result.error("bad_args", "tree/name/destName required", null)
-            return
-        }
-
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val doc = resolveDoc(tree, treeRootDoc(tree), name)
-                if (doc == null) {
-                    withContext(Dispatchers.Main) { result.error("not_found", "could not resolve $name", null) }
-                    return@launch
-                }
-                
-                val cacheFile = File(cacheDir, destName)
-                
-                contentResolver.openInputStream(doc)?.use { input ->
-                    FileOutputStream(cacheFile).use { output ->
-                        input.copyTo(output, bufferSize = 64 * 1024)
-                    }
-                } ?: run {
-                    withContext(Dispatchers.Main) { result.error("open_failed", "could not open $name", null) }
-                    return@launch
-                }
-                
-                withContext(Dispatchers.Main) { result.success(cacheFile.absolutePath) }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { result.error("copy_failed", e.toString(), null) }
-            }
-        }
-    }
-}
-
                 }
             }
+
             // Second pass: list the healed set with last-modified timestamps
             // (used by the metadata cache to detect changed files). Any .mtmp
             // still present is a stale leftover that recoverDoc could not
@@ -478,6 +415,70 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "listFilesMeta failed", e)
             result.error("list_failed", e.toString(), null)
+        }
+    }
+
+    private fun copyUriToCache(call: MethodCall, result: Result) {
+        val uriString = call.argument<String>("uri")
+        val destName = call.argument<String>("destName")
+        if (uriString == null || destName == null) {
+            result.error("bad_args", "uri/destName required", null)
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val uri = Uri.parse(uriString)
+                val cacheFile = File(cacheDir, destName)
+
+                contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(cacheFile).use { output ->
+                        input.copyTo(output, bufferSize = 64 * 1024)
+                    }
+                } ?: run {
+                    withContext(Dispatchers.Main) { result.error("open_failed", "could not open $uriString", null) }
+                    return@launch
+                }
+
+                withContext(Dispatchers.Main) { result.success(cacheFile.absolutePath) }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { result.error("copy_failed", e.toString(), null) }
+            }
+        }
+    }
+
+    private fun copySafFileToCache(call: MethodCall, result: Result) {
+        val tree = treeUri(call)
+        val name = call.argument<String>("name")
+        val destName = call.argument<String>("destName")
+        if (tree == null || name == null || destName == null) {
+            result.error("bad_args", "tree/name/destName required", null)
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val doc = resolveDoc(tree, treeRootDoc(tree), name)
+                if (doc == null) {
+                    withContext(Dispatchers.Main) { result.error("not_found", "could not resolve $name", null) }
+                    return@launch
+                }
+
+                val cacheFile = File(cacheDir, destName)
+
+                contentResolver.openInputStream(doc)?.use { input ->
+                    FileOutputStream(cacheFile).use { output ->
+                        input.copyTo(output, bufferSize = 64 * 1024)
+                    }
+                } ?: run {
+                    withContext(Dispatchers.Main) { result.error("open_failed", "could not open $name", null) }
+                    return@launch
+                }
+
+                withContext(Dispatchers.Main) { result.success(cacheFile.absolutePath) }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { result.error("copy_failed", e.toString(), null) }
+            }
         }
     }
 }
