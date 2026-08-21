@@ -264,7 +264,11 @@ class SafSessionStorage extends SessionStorage {
 
   Future<dynamic> _invoke(String method, [Map<String, dynamic>? args]) async {
     final result = await _channel.invokeMethod(method, args);
-    debugPrint('[saf] $method -> $result');
+    if (method == 'readFile' || method == 'readFilePrefix') {
+      debugPrint('[saf] $method -> ${(result as List?)?.length ?? 0} bytes');
+    } else {
+      debugPrint('[saf] $method -> $result');
+    }
     return result;
   }
 
@@ -277,6 +281,37 @@ class SafSessionStorage extends SessionStorage {
       return result;
     }
     return null;
+  }
+
+  /// Launch the native SAF file picker for a single file. Returns the
+  /// content:// URI string, or null if cancelled.
+  static Future<String?> pickFile() async {
+    final result = await _channel.invokeMethod<dynamic>('pickFile');
+    debugPrint('[saf] pickFile -> $result');
+    if (result is String) {
+      return result;
+    }
+    return null;
+  }
+
+  /// Copy a URI to the app's cache directory natively, returning the path.
+  static Future<String> copyUriToCache(String uri, String destName) async {
+    final result = await _channel.invokeMethod<dynamic>('copyUriToCache', {
+      'uri': uri,
+      'destName': destName,
+    });
+    return result as String;
+  }
+
+  /// Copy a SAF-backed file (child of [treeUri]) to the app's cache directory
+  /// natively, returning the path.
+  Future<String> copySafFileToCache(String name, String destName) async {
+    final result = await _invoke('copySafFileToCache', {
+      'tree': treeUri,
+      'name': name,
+      'destName': destName,
+    });
+    return result as String;
   }
 
   @override

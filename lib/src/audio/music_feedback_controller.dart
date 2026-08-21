@@ -196,19 +196,9 @@ class MusicFeedbackController {
     int index,
   ) async {
     try {
-      final bytes = await safe.readFile(name);
-      if (bytes == null) {
-        return null;
-      }
-      final cache = _cacheDir!;
-      if (!await cache.exists()) {
-        await cache.create(recursive: true);
-      }
-      final file = File(
-        '${cache.path}/music_playlist_$index.${_extensionOf(name)}',
-      );
-      await file.writeAsBytes(bytes, flush: true);
-      return file.path;
+      final destName = 'music_playlist_$index.${_extensionOf(name)}';
+      final path = await safe.copySafFileToCache(name, destName);
+      return path;
     } catch (e) {
       debugPrint('[music] could not materialize $name: $e');
       return null;

@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/settings.dart';
@@ -18,13 +21,26 @@ Future<ModelEngineState> pickAndImportModel(
   WidgetRef ref,
   ModelKind kind,
 ) async {
-  final file = await openFile(acceptedTypeGroups: [_safetensorsType]);
-  if (file == null) {
-    return ref.read(modelEngineNotifierProvider);
+  Stream<List<int>>? src;
+
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    final uri = await SafSessionStorage.pickFile();
+    if (uri == null) {
+      return ref.read(modelEngineNotifierProvider);
+    }
+    final path = await SafSessionStorage.copyUriToCache(uri, 'import_${kind.name}.safetensors');
+    src = File(path).openRead();
+  } else {
+    final file = await openFile(acceptedTypeGroups: [_safetensorsType]);
+    if (file == null) {
+      return ref.read(modelEngineNotifierProvider);
+    }
+    src = file.openRead();
   }
+
   return ref
       .read(modelEngineNotifierProvider.notifier)
-      .import(kind, file.openRead());
+      .import(kind, src);
 }
 
 /// Green check shown next to a model's name when its files are on disk.

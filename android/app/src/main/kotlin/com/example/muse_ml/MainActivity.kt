@@ -6,17 +6,24 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel.Result
 import android.util.Log
+import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "muse_ml/saf"
         private const val REQ_PICK_DIR = 7401
+        private const val REQ_PICK_FILE = 7402
         private const val TAG = "muse_saf"
 
         // Defined in Rust (rust/src/api/muse.rs) — initializes btleplug's
@@ -44,7 +51,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQ_PICK_DIR) {
+        if (requestCode == REQ_PICK_DIR || requestCode == REQ_PICK_FILE) {
             val pending = pendingResult ?: return
             pendingResult = null
             if (resultCode != Activity.RESULT_OK || data?.data == null) {
@@ -52,16 +59,20 @@ class MainActivity : FlutterActivity() {
                 return
             }
             val uri = data.data!!
-            val takeFlags = (Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-            try {
-                contentResolver.takePersistableUriPermission(uri, takeFlags)
-            } catch (e: Exception) {
-                Log.w(TAG, "could not persist URI permission: $e")
+            if (requestCode == REQ_PICK_DIR) {
+                val takeFlags = (Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                try {
+                    contentResolver.takePersistableUriPermission(uri, takeFlags)
+                } catch (e: Exception) {
+                    Log.w(TAG, "could not persist URI permission: $e")
+                }
+                val tree = uri.toString()
+                lastTreeUri = tree
+                pending.success(tree)
+            } else {
+                pending.success(uri.toString())
             }
-            val tree = uri.toString()
-            lastTreeUri = tree
-            pending.success(tree)
         }
     }
 
@@ -77,6 +88,18 @@ class MainActivity : FlutterActivity() {
                 }
                 startActivityForResult(intent, REQ_PICK_DIR)
             }
+            "pickFile" -> {
+                pendingResult = result
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "*/*"
+                    putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/octet-stream"))
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivityForResult(intent, REQ_PICK_FILE)
+            }
+            "copyUriToCache" -> copyUriToCache(call, result)
+            "copySafFileToCache" -> copySafFileToCache(call, result)
             "ensureDir" -> { result.success(null); }
             "writeFile" -> writeFile(call, result)
             "writeFileAtomic" -> writeFileAtomic(call, result)
@@ -360,7 +383,71 @@ class MainActivity : FlutterActivity() {
                     val name = cursor.getString(0) ?: continue
                     if (name.endsWith(".mtmp")) {
                         recoverDoc(tree, name.removeSuffix(".mtmp"))
+    private fun copyUriToCache(call: MethodCall, result: Result) {
+        val uriString = call.argument<String>("uri")
+        val destName = call.argument<String>("destName")
+        if (uriString == null || destName == null) {
+            result.error("bad_args", "uri/destName required", null)
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val uri = Uri.parse(uriString)
+                val cacheFile = File(cacheDir, destName)
+                
+                contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(cacheFile).use { output ->
+                        input.copyTo(output, bufferSize = 64 * 1024)
                     }
+                } ?: run {
+                    withContext(Dispatchers.Main) { result.error("open_failed", "could not open $uriString", null) }
+                    return@launch
+                }
+                
+                withContext(Dispatchers.Main) { result.success(cacheFile.absolutePath) }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { result.error("copy_failed", e.toString(), null) }
+            }
+        }
+    }
+
+    private fun copySafFileToCache(call: MethodCall, result: Result) {
+        val tree = treeUri(call)
+        val name = call.argument<String>("name")
+        val destName = call.argument<String>("destName")
+        if (tree == null || name == null || destName == null) {
+            result.error("bad_args", "tree/name/destName required", null)
+            return
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val doc = resolveDoc(tree, treeRootDoc(tree), name)
+                if (doc == null) {
+                    withContext(Dispatchers.Main) { result.error("not_found", "could not resolve $name", null) }
+                    return@launch
+                }
+                
+                val cacheFile = File(cacheDir, destName)
+                
+                contentResolver.openInputStream(doc)?.use { input ->
+                    FileOutputStream(cacheFile).use { output ->
+                        input.copyTo(output, bufferSize = 64 * 1024)
+                    }
+                } ?: run {
+                    withContext(Dispatchers.Main) { result.error("open_failed", "could not open $name", null) }
+                    return@launch
+                }
+                
+                withContext(Dispatchers.Main) { result.success(cacheFile.absolutePath) }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { result.error("copy_failed", e.toString(), null) }
+            }
+        }
+    }
+}
+
                 }
             }
             // Second pass: list the healed set with last-modified timestamps
