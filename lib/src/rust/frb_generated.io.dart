@@ -13,482 +13,816 @@ import 'dart:ffi' as ffi;
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
 
+abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
+  RustLibApiImplPlatform({
+    required super.handler,
+    required super.wire,
+    required super.generalizedFrbRustBinding,
+    required super.portManager,
+  });
 
+  @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw);
 
+  @protected
+  Map<String, String> dco_decode_Map_String_String_None(dynamic raw);
 
-                abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
-                  RustLibApiImplPlatform({
-                    required super.handler,
-                    required super.wire,
-                    required super.generalizedFrbRustBinding,
-                    required super.portManager,
-                  });
+  @protected
+  RustStreamSink<MuseEventDto> dco_decode_StreamSink_muse_event_dto_Sse(
+    dynamic raw,
+  );
 
-                  
+  @protected
+  String dco_decode_String(dynamic raw);
 
-                  @protected AnyhowException dco_decode_AnyhowException(dynamic raw);
+  @protected
+  BandsDto dco_decode_bands_dto(dynamic raw);
 
-@protected Map<String, String> dco_decode_Map_String_String_None(dynamic raw);
+  @protected
+  BandsRecord dco_decode_bands_record(dynamic raw);
 
-@protected RustStreamSink<MuseEventDto> dco_decode_StreamSink_muse_event_dto_Sse(dynamic raw);
+  @protected
+  bool dco_decode_bool(dynamic raw);
 
-@protected String dco_decode_String(dynamic raw);
+  @protected
+  BandsDto dco_decode_box_autoadd_bands_dto(dynamic raw);
 
-@protected BandsDto dco_decode_bands_dto(dynamic raw);
+  @protected
+  ControlDto dco_decode_box_autoadd_control_dto(dynamic raw);
 
-@protected BandsRecord dco_decode_bands_record(dynamic raw);
+  @protected
+  EdfExportParams dco_decode_box_autoadd_edf_export_params(dynamic raw);
 
-@protected bool dco_decode_bool(dynamic raw);
+  @protected
+  EegDto dco_decode_box_autoadd_eeg_dto(dynamic raw);
 
-@protected BandsDto dco_decode_box_autoadd_bands_dto(dynamic raw);
+  @protected
+  GestureDto dco_decode_box_autoadd_gesture_dto(dynamic raw);
 
-@protected ControlDto dco_decode_box_autoadd_control_dto(dynamic raw);
+  @protected
+  int dco_decode_box_autoadd_i_16(dynamic raw);
 
-@protected EdfExportParams dco_decode_box_autoadd_edf_export_params(dynamic raw);
+  @protected
+  ImuDto dco_decode_box_autoadd_imu_dto(dynamic raw);
 
-@protected EegDto dco_decode_box_autoadd_eeg_dto(dynamic raw);
+  @protected
+  MovementDto dco_decode_box_autoadd_movement_dto(dynamic raw);
 
-@protected GestureDto dco_decode_box_autoadd_gesture_dto(dynamic raw);
+  @protected
+  MuseEventDto dco_decode_box_autoadd_muse_event_dto(dynamic raw);
 
-@protected int dco_decode_box_autoadd_i_16(dynamic raw);
+  @protected
+  PeakAlphaDto dco_decode_box_autoadd_peak_alpha_dto(dynamic raw);
 
-@protected ImuDto dco_decode_box_autoadd_imu_dto(dynamic raw);
+  @protected
+  PpgDto dco_decode_box_autoadd_ppg_dto(dynamic raw);
 
-@protected MovementDto dco_decode_box_autoadd_movement_dto(dynamic raw);
+  @protected
+  PulseDto dco_decode_box_autoadd_pulse_dto(dynamic raw);
 
-@protected MuseEventDto dco_decode_box_autoadd_muse_event_dto(dynamic raw);
+  @protected
+  ReveDto dco_decode_box_autoadd_reve_dto(dynamic raw);
 
-@protected PeakAlphaDto dco_decode_box_autoadd_peak_alpha_dto(dynamic raw);
+  @protected
+  TelemetrySnapshot dco_decode_box_autoadd_telemetry_snapshot(dynamic raw);
 
-@protected PpgDto dco_decode_box_autoadd_ppg_dto(dynamic raw);
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw);
 
-@protected PulseDto dco_decode_box_autoadd_pulse_dto(dynamic raw);
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
-@protected ReveDto dco_decode_box_autoadd_reve_dto(dynamic raw);
+  @protected
+  ConnectionStatus dco_decode_connection_status(dynamic raw);
 
-@protected TelemetrySnapshot dco_decode_box_autoadd_telemetry_snapshot(dynamic raw);
+  @protected
+  ContainerHead dco_decode_container_head(dynamic raw);
 
-@protected int dco_decode_box_autoadd_u_32(dynamic raw);
+  @protected
+  ControlDto dco_decode_control_dto(dynamic raw);
 
-@protected BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+  @protected
+  DeviceInfo dco_decode_device_info(dynamic raw);
 
-@protected ConnectionStatus dco_decode_connection_status(dynamic raw);
+  @protected
+  EdfExportAnnotation dco_decode_edf_export_annotation(dynamic raw);
 
-@protected ContainerHead dco_decode_container_head(dynamic raw);
+  @protected
+  EdfExportParams dco_decode_edf_export_params(dynamic raw);
 
-@protected ControlDto dco_decode_control_dto(dynamic raw);
+  @protected
+  EegDto dco_decode_eeg_dto(dynamic raw);
 
-@protected DeviceInfo dco_decode_device_info(dynamic raw);
+  @protected
+  EegSampleRecord dco_decode_eeg_sample_record(dynamic raw);
 
-@protected EdfExportAnnotation dco_decode_edf_export_annotation(dynamic raw);
+  @protected
+  double dco_decode_f_32(dynamic raw);
 
-@protected EdfExportParams dco_decode_edf_export_params(dynamic raw);
+  @protected
+  double dco_decode_f_64(dynamic raw);
 
-@protected EegDto dco_decode_eeg_dto(dynamic raw);
+  @protected
+  GestureDto dco_decode_gesture_dto(dynamic raw);
 
-@protected EegSampleRecord dco_decode_eeg_sample_record(dynamic raw);
+  @protected
+  int dco_decode_i_16(dynamic raw);
 
-@protected double dco_decode_f_32(dynamic raw);
+  @protected
+  int dco_decode_i_32(dynamic raw);
 
-@protected double dco_decode_f_64(dynamic raw);
+  @protected
+  ImuDto dco_decode_imu_dto(dynamic raw);
 
-@protected GestureDto dco_decode_gesture_dto(dynamic raw);
+  @protected
+  List<String> dco_decode_list_String(dynamic raw);
 
-@protected int dco_decode_i_16(dynamic raw);
+  @protected
+  List<BandsRecord> dco_decode_list_bands_record(dynamic raw);
 
-@protected int dco_decode_i_32(dynamic raw);
+  @protected
+  List<DeviceInfo> dco_decode_list_device_info(dynamic raw);
 
-@protected ImuDto dco_decode_imu_dto(dynamic raw);
+  @protected
+  List<EdfExportAnnotation> dco_decode_list_edf_export_annotation(dynamic raw);
 
-@protected List<String> dco_decode_list_String(dynamic raw);
+  @protected
+  List<EegSampleRecord> dco_decode_list_eeg_sample_record(dynamic raw);
 
-@protected List<BandsRecord> dco_decode_list_bands_record(dynamic raw);
+  @protected
+  List<MovementRecord> dco_decode_list_movement_record(dynamic raw);
 
-@protected List<DeviceInfo> dco_decode_list_device_info(dynamic raw);
+  @protected
+  List<PeakAlphaRecord> dco_decode_list_peak_alpha_record(dynamic raw);
 
-@protected List<EdfExportAnnotation> dco_decode_list_edf_export_annotation(dynamic raw);
+  @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
 
-@protected List<EegSampleRecord> dco_decode_list_eeg_sample_record(dynamic raw);
+  @protected
+  Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
 
-@protected List<MovementRecord> dco_decode_list_movement_record(dynamic raw);
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
 
-@protected List<PeakAlphaRecord> dco_decode_list_peak_alpha_record(dynamic raw);
+  @protected
+  Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
-@protected Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
+  @protected
+  List<PulseRecord> dco_decode_list_pulse_record(dynamic raw);
 
-@protected Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
+  @protected
+  List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
 
-@protected List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
+  @protected
+  List<XyzDto> dco_decode_list_xyz_dto(dynamic raw);
 
-@protected Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+  @protected
+  MovementDto dco_decode_movement_dto(dynamic raw);
 
-@protected List<PulseRecord> dco_decode_list_pulse_record(dynamic raw);
+  @protected
+  MovementRecord dco_decode_movement_record(dynamic raw);
 
-@protected List<(String,String)> dco_decode_list_record_string_string(dynamic raw);
+  @protected
+  MuseEventDto dco_decode_muse_event_dto(dynamic raw);
 
-@protected List<XyzDto> dco_decode_list_xyz_dto(dynamic raw);
+  @protected
+  int? dco_decode_opt_box_autoadd_i_16(dynamic raw);
 
-@protected MovementDto dco_decode_movement_dto(dynamic raw);
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
-@protected MovementRecord dco_decode_movement_record(dynamic raw);
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
-@protected MuseEventDto dco_decode_muse_event_dto(dynamic raw);
+  @protected
+  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
 
-@protected int? dco_decode_opt_box_autoadd_i_16(dynamic raw);
+  @protected
+  PeakAlphaDto dco_decode_peak_alpha_dto(dynamic raw);
 
-@protected int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+  @protected
+  PeakAlphaRecord dco_decode_peak_alpha_record(dynamic raw);
 
-@protected BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+  @protected
+  PpgDto dco_decode_ppg_dto(dynamic raw);
 
-@protected Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+  @protected
+  PulseDto dco_decode_pulse_dto(dynamic raw);
 
-@protected PeakAlphaDto dco_decode_peak_alpha_dto(dynamic raw);
+  @protected
+  PulseRecord dco_decode_pulse_record(dynamic raw);
 
-@protected PeakAlphaRecord dco_decode_peak_alpha_record(dynamic raw);
+  @protected
+  (String, String) dco_decode_record_string_string(dynamic raw);
 
-@protected PpgDto dco_decode_ppg_dto(dynamic raw);
+  @protected
+  ReveDto dco_decode_reve_dto(dynamic raw);
 
-@protected PulseDto dco_decode_pulse_dto(dynamic raw);
+  @protected
+  SessionData dco_decode_session_data(dynamic raw);
 
-@protected PulseRecord dco_decode_pulse_record(dynamic raw);
+  @protected
+  TelemetrySnapshot dco_decode_telemetry_snapshot(dynamic raw);
 
-@protected (String,String) dco_decode_record_string_string(dynamic raw);
+  @protected
+  int dco_decode_u_16(dynamic raw);
 
-@protected ReveDto dco_decode_reve_dto(dynamic raw);
+  @protected
+  int dco_decode_u_32(dynamic raw);
 
-@protected SessionData dco_decode_session_data(dynamic raw);
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
 
-@protected TelemetrySnapshot dco_decode_telemetry_snapshot(dynamic raw);
+  @protected
+  int dco_decode_u_8(dynamic raw);
 
-@protected int dco_decode_u_16(dynamic raw);
+  @protected
+  void dco_decode_unit(dynamic raw);
 
-@protected int dco_decode_u_32(dynamic raw);
+  @protected
+  BigInt dco_decode_usize(dynamic raw);
 
-@protected BigInt dco_decode_u_64(dynamic raw);
+  @protected
+  XyzDto dco_decode_xyz_dto(dynamic raw);
 
-@protected int dco_decode_u_8(dynamic raw);
+  @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
-@protected void dco_decode_unit(dynamic raw);
+  @protected
+  Map<String, String> sse_decode_Map_String_String_None(
+    SseDeserializer deserializer,
+  );
 
-@protected BigInt dco_decode_usize(dynamic raw);
+  @protected
+  RustStreamSink<MuseEventDto> sse_decode_StreamSink_muse_event_dto_Sse(
+    SseDeserializer deserializer,
+  );
 
-@protected XyzDto dco_decode_xyz_dto(dynamic raw);
+  @protected
+  String sse_decode_String(SseDeserializer deserializer);
 
-@protected AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+  @protected
+  BandsDto sse_decode_bands_dto(SseDeserializer deserializer);
 
-@protected Map<String, String> sse_decode_Map_String_String_None(SseDeserializer deserializer);
+  @protected
+  BandsRecord sse_decode_bands_record(SseDeserializer deserializer);
 
-@protected RustStreamSink<MuseEventDto> sse_decode_StreamSink_muse_event_dto_Sse(SseDeserializer deserializer);
+  @protected
+  bool sse_decode_bool(SseDeserializer deserializer);
 
-@protected String sse_decode_String(SseDeserializer deserializer);
+  @protected
+  BandsDto sse_decode_box_autoadd_bands_dto(SseDeserializer deserializer);
 
-@protected BandsDto sse_decode_bands_dto(SseDeserializer deserializer);
+  @protected
+  ControlDto sse_decode_box_autoadd_control_dto(SseDeserializer deserializer);
 
-@protected BandsRecord sse_decode_bands_record(SseDeserializer deserializer);
+  @protected
+  EdfExportParams sse_decode_box_autoadd_edf_export_params(
+    SseDeserializer deserializer,
+  );
 
-@protected bool sse_decode_bool(SseDeserializer deserializer);
+  @protected
+  EegDto sse_decode_box_autoadd_eeg_dto(SseDeserializer deserializer);
 
-@protected BandsDto sse_decode_box_autoadd_bands_dto(SseDeserializer deserializer);
+  @protected
+  GestureDto sse_decode_box_autoadd_gesture_dto(SseDeserializer deserializer);
 
-@protected ControlDto sse_decode_box_autoadd_control_dto(SseDeserializer deserializer);
+  @protected
+  int sse_decode_box_autoadd_i_16(SseDeserializer deserializer);
 
-@protected EdfExportParams sse_decode_box_autoadd_edf_export_params(SseDeserializer deserializer);
+  @protected
+  ImuDto sse_decode_box_autoadd_imu_dto(SseDeserializer deserializer);
 
-@protected EegDto sse_decode_box_autoadd_eeg_dto(SseDeserializer deserializer);
+  @protected
+  MovementDto sse_decode_box_autoadd_movement_dto(SseDeserializer deserializer);
 
-@protected GestureDto sse_decode_box_autoadd_gesture_dto(SseDeserializer deserializer);
+  @protected
+  MuseEventDto sse_decode_box_autoadd_muse_event_dto(
+    SseDeserializer deserializer,
+  );
 
-@protected int sse_decode_box_autoadd_i_16(SseDeserializer deserializer);
+  @protected
+  PeakAlphaDto sse_decode_box_autoadd_peak_alpha_dto(
+    SseDeserializer deserializer,
+  );
 
-@protected ImuDto sse_decode_box_autoadd_imu_dto(SseDeserializer deserializer);
+  @protected
+  PpgDto sse_decode_box_autoadd_ppg_dto(SseDeserializer deserializer);
 
-@protected MovementDto sse_decode_box_autoadd_movement_dto(SseDeserializer deserializer);
+  @protected
+  PulseDto sse_decode_box_autoadd_pulse_dto(SseDeserializer deserializer);
 
-@protected MuseEventDto sse_decode_box_autoadd_muse_event_dto(SseDeserializer deserializer);
+  @protected
+  ReveDto sse_decode_box_autoadd_reve_dto(SseDeserializer deserializer);
 
-@protected PeakAlphaDto sse_decode_box_autoadd_peak_alpha_dto(SseDeserializer deserializer);
+  @protected
+  TelemetrySnapshot sse_decode_box_autoadd_telemetry_snapshot(
+    SseDeserializer deserializer,
+  );
 
-@protected PpgDto sse_decode_box_autoadd_ppg_dto(SseDeserializer deserializer);
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
 
-@protected PulseDto sse_decode_box_autoadd_pulse_dto(SseDeserializer deserializer);
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
-@protected ReveDto sse_decode_box_autoadd_reve_dto(SseDeserializer deserializer);
+  @protected
+  ConnectionStatus sse_decode_connection_status(SseDeserializer deserializer);
 
-@protected TelemetrySnapshot sse_decode_box_autoadd_telemetry_snapshot(SseDeserializer deserializer);
+  @protected
+  ContainerHead sse_decode_container_head(SseDeserializer deserializer);
 
-@protected int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+  @protected
+  ControlDto sse_decode_control_dto(SseDeserializer deserializer);
 
-@protected BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+  @protected
+  DeviceInfo sse_decode_device_info(SseDeserializer deserializer);
 
-@protected ConnectionStatus sse_decode_connection_status(SseDeserializer deserializer);
+  @protected
+  EdfExportAnnotation sse_decode_edf_export_annotation(
+    SseDeserializer deserializer,
+  );
 
-@protected ContainerHead sse_decode_container_head(SseDeserializer deserializer);
+  @protected
+  EdfExportParams sse_decode_edf_export_params(SseDeserializer deserializer);
 
-@protected ControlDto sse_decode_control_dto(SseDeserializer deserializer);
+  @protected
+  EegDto sse_decode_eeg_dto(SseDeserializer deserializer);
 
-@protected DeviceInfo sse_decode_device_info(SseDeserializer deserializer);
+  @protected
+  EegSampleRecord sse_decode_eeg_sample_record(SseDeserializer deserializer);
 
-@protected EdfExportAnnotation sse_decode_edf_export_annotation(SseDeserializer deserializer);
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer);
 
-@protected EdfExportParams sse_decode_edf_export_params(SseDeserializer deserializer);
+  @protected
+  double sse_decode_f_64(SseDeserializer deserializer);
 
-@protected EegDto sse_decode_eeg_dto(SseDeserializer deserializer);
+  @protected
+  GestureDto sse_decode_gesture_dto(SseDeserializer deserializer);
 
-@protected EegSampleRecord sse_decode_eeg_sample_record(SseDeserializer deserializer);
+  @protected
+  int sse_decode_i_16(SseDeserializer deserializer);
 
-@protected double sse_decode_f_32(SseDeserializer deserializer);
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
 
-@protected double sse_decode_f_64(SseDeserializer deserializer);
+  @protected
+  ImuDto sse_decode_imu_dto(SseDeserializer deserializer);
 
-@protected GestureDto sse_decode_gesture_dto(SseDeserializer deserializer);
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
 
-@protected int sse_decode_i_16(SseDeserializer deserializer);
+  @protected
+  List<BandsRecord> sse_decode_list_bands_record(SseDeserializer deserializer);
 
-@protected int sse_decode_i_32(SseDeserializer deserializer);
+  @protected
+  List<DeviceInfo> sse_decode_list_device_info(SseDeserializer deserializer);
 
-@protected ImuDto sse_decode_imu_dto(SseDeserializer deserializer);
+  @protected
+  List<EdfExportAnnotation> sse_decode_list_edf_export_annotation(
+    SseDeserializer deserializer,
+  );
 
-@protected List<String> sse_decode_list_String(SseDeserializer deserializer);
+  @protected
+  List<EegSampleRecord> sse_decode_list_eeg_sample_record(
+    SseDeserializer deserializer,
+  );
 
-@protected List<BandsRecord> sse_decode_list_bands_record(SseDeserializer deserializer);
+  @protected
+  List<MovementRecord> sse_decode_list_movement_record(
+    SseDeserializer deserializer,
+  );
 
-@protected List<DeviceInfo> sse_decode_list_device_info(SseDeserializer deserializer);
+  @protected
+  List<PeakAlphaRecord> sse_decode_list_peak_alpha_record(
+    SseDeserializer deserializer,
+  );
 
-@protected List<EdfExportAnnotation> sse_decode_list_edf_export_annotation(SseDeserializer deserializer);
+  @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
 
-@protected List<EegSampleRecord> sse_decode_list_eeg_sample_record(SseDeserializer deserializer);
+  @protected
+  Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
 
-@protected List<MovementRecord> sse_decode_list_movement_record(SseDeserializer deserializer);
+  @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
 
-@protected List<PeakAlphaRecord> sse_decode_list_peak_alpha_record(SseDeserializer deserializer);
+  @protected
+  Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
-@protected Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
+  @protected
+  List<PulseRecord> sse_decode_list_pulse_record(SseDeserializer deserializer);
 
-@protected Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
+  @protected
+  List<(String, String)> sse_decode_list_record_string_string(
+    SseDeserializer deserializer,
+  );
 
-@protected List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
+  @protected
+  List<XyzDto> sse_decode_list_xyz_dto(SseDeserializer deserializer);
 
-@protected Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+  @protected
+  MovementDto sse_decode_movement_dto(SseDeserializer deserializer);
 
-@protected List<PulseRecord> sse_decode_list_pulse_record(SseDeserializer deserializer);
+  @protected
+  MovementRecord sse_decode_movement_record(SseDeserializer deserializer);
 
-@protected List<(String,String)> sse_decode_list_record_string_string(SseDeserializer deserializer);
+  @protected
+  MuseEventDto sse_decode_muse_event_dto(SseDeserializer deserializer);
 
-@protected List<XyzDto> sse_decode_list_xyz_dto(SseDeserializer deserializer);
+  @protected
+  int? sse_decode_opt_box_autoadd_i_16(SseDeserializer deserializer);
 
-@protected MovementDto sse_decode_movement_dto(SseDeserializer deserializer);
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
-@protected MovementRecord sse_decode_movement_record(SseDeserializer deserializer);
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
-@protected MuseEventDto sse_decode_muse_event_dto(SseDeserializer deserializer);
+  @protected
+  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
 
-@protected int? sse_decode_opt_box_autoadd_i_16(SseDeserializer deserializer);
+  @protected
+  PeakAlphaDto sse_decode_peak_alpha_dto(SseDeserializer deserializer);
 
-@protected int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+  @protected
+  PeakAlphaRecord sse_decode_peak_alpha_record(SseDeserializer deserializer);
 
-@protected BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+  @protected
+  PpgDto sse_decode_ppg_dto(SseDeserializer deserializer);
 
-@protected Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+  @protected
+  PulseDto sse_decode_pulse_dto(SseDeserializer deserializer);
 
-@protected PeakAlphaDto sse_decode_peak_alpha_dto(SseDeserializer deserializer);
+  @protected
+  PulseRecord sse_decode_pulse_record(SseDeserializer deserializer);
 
-@protected PeakAlphaRecord sse_decode_peak_alpha_record(SseDeserializer deserializer);
+  @protected
+  (String, String) sse_decode_record_string_string(
+    SseDeserializer deserializer,
+  );
 
-@protected PpgDto sse_decode_ppg_dto(SseDeserializer deserializer);
+  @protected
+  ReveDto sse_decode_reve_dto(SseDeserializer deserializer);
 
-@protected PulseDto sse_decode_pulse_dto(SseDeserializer deserializer);
+  @protected
+  SessionData sse_decode_session_data(SseDeserializer deserializer);
 
-@protected PulseRecord sse_decode_pulse_record(SseDeserializer deserializer);
+  @protected
+  TelemetrySnapshot sse_decode_telemetry_snapshot(SseDeserializer deserializer);
 
-@protected (String,String) sse_decode_record_string_string(SseDeserializer deserializer);
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer);
 
-@protected ReveDto sse_decode_reve_dto(SseDeserializer deserializer);
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer);
 
-@protected SessionData sse_decode_session_data(SseDeserializer deserializer);
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
 
-@protected TelemetrySnapshot sse_decode_telemetry_snapshot(SseDeserializer deserializer);
+  @protected
+  int sse_decode_u_8(SseDeserializer deserializer);
 
-@protected int sse_decode_u_16(SseDeserializer deserializer);
+  @protected
+  void sse_decode_unit(SseDeserializer deserializer);
 
-@protected int sse_decode_u_32(SseDeserializer deserializer);
+  @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer);
 
-@protected BigInt sse_decode_u_64(SseDeserializer deserializer);
+  @protected
+  XyzDto sse_decode_xyz_dto(SseDeserializer deserializer);
 
-@protected int sse_decode_u_8(SseDeserializer deserializer);
+  @protected
+  void sse_encode_AnyhowException(
+    AnyhowException self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_decode_unit(SseDeserializer deserializer);
+  @protected
+  void sse_encode_Map_String_String_None(
+    Map<String, String> self,
+    SseSerializer serializer,
+  );
 
-@protected BigInt sse_decode_usize(SseDeserializer deserializer);
+  @protected
+  void sse_encode_StreamSink_muse_event_dto_Sse(
+    RustStreamSink<MuseEventDto> self,
+    SseSerializer serializer,
+  );
 
-@protected XyzDto sse_decode_xyz_dto(SseDeserializer deserializer);
+  @protected
+  void sse_encode_String(String self, SseSerializer serializer);
 
-@protected void sse_encode_AnyhowException(AnyhowException self, SseSerializer serializer);
+  @protected
+  void sse_encode_bands_dto(BandsDto self, SseSerializer serializer);
 
-@protected void sse_encode_Map_String_String_None(Map<String, String> self, SseSerializer serializer);
+  @protected
+  void sse_encode_bands_record(BandsRecord self, SseSerializer serializer);
 
-@protected void sse_encode_StreamSink_muse_event_dto_Sse(RustStreamSink<MuseEventDto> self, SseSerializer serializer);
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer);
 
-@protected void sse_encode_String(String self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_bands_dto(
+    BandsDto self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_bands_dto(BandsDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_control_dto(
+    ControlDto self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_bands_record(BandsRecord self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_edf_export_params(
+    EdfExportParams self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_bool(bool self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_eeg_dto(EegDto self, SseSerializer serializer);
 
-@protected void sse_encode_box_autoadd_bands_dto(BandsDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_gesture_dto(
+    GestureDto self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_box_autoadd_control_dto(ControlDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_i_16(int self, SseSerializer serializer);
 
-@protected void sse_encode_box_autoadd_edf_export_params(EdfExportParams self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_imu_dto(ImuDto self, SseSerializer serializer);
 
-@protected void sse_encode_box_autoadd_eeg_dto(EegDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_movement_dto(
+    MovementDto self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_box_autoadd_gesture_dto(GestureDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_muse_event_dto(
+    MuseEventDto self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_box_autoadd_i_16(int self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_peak_alpha_dto(
+    PeakAlphaDto self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_box_autoadd_imu_dto(ImuDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_ppg_dto(PpgDto self, SseSerializer serializer);
 
-@protected void sse_encode_box_autoadd_movement_dto(MovementDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_pulse_dto(
+    PulseDto self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_box_autoadd_muse_event_dto(MuseEventDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_reve_dto(ReveDto self, SseSerializer serializer);
 
-@protected void sse_encode_box_autoadd_peak_alpha_dto(PeakAlphaDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_telemetry_snapshot(
+    TelemetrySnapshot self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_box_autoadd_ppg_dto(PpgDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
-@protected void sse_encode_box_autoadd_pulse_dto(PulseDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
-@protected void sse_encode_box_autoadd_reve_dto(ReveDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_connection_status(
+    ConnectionStatus self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_box_autoadd_telemetry_snapshot(TelemetrySnapshot self, SseSerializer serializer);
+  @protected
+  void sse_encode_container_head(ContainerHead self, SseSerializer serializer);
 
-@protected void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+  @protected
+  void sse_encode_control_dto(ControlDto self, SseSerializer serializer);
 
-@protected void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+  @protected
+  void sse_encode_device_info(DeviceInfo self, SseSerializer serializer);
 
-@protected void sse_encode_connection_status(ConnectionStatus self, SseSerializer serializer);
+  @protected
+  void sse_encode_edf_export_annotation(
+    EdfExportAnnotation self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_container_head(ContainerHead self, SseSerializer serializer);
+  @protected
+  void sse_encode_edf_export_params(
+    EdfExportParams self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_control_dto(ControlDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_eeg_dto(EegDto self, SseSerializer serializer);
 
-@protected void sse_encode_device_info(DeviceInfo self, SseSerializer serializer);
+  @protected
+  void sse_encode_eeg_sample_record(
+    EegSampleRecord self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_edf_export_annotation(EdfExportAnnotation self, SseSerializer serializer);
+  @protected
+  void sse_encode_f_32(double self, SseSerializer serializer);
 
-@protected void sse_encode_edf_export_params(EdfExportParams self, SseSerializer serializer);
+  @protected
+  void sse_encode_f_64(double self, SseSerializer serializer);
 
-@protected void sse_encode_eeg_dto(EegDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_gesture_dto(GestureDto self, SseSerializer serializer);
 
-@protected void sse_encode_eeg_sample_record(EegSampleRecord self, SseSerializer serializer);
+  @protected
+  void sse_encode_i_16(int self, SseSerializer serializer);
 
-@protected void sse_encode_f_32(double self, SseSerializer serializer);
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
 
-@protected void sse_encode_f_64(double self, SseSerializer serializer);
+  @protected
+  void sse_encode_imu_dto(ImuDto self, SseSerializer serializer);
 
-@protected void sse_encode_gesture_dto(GestureDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
-@protected void sse_encode_i_16(int self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_bands_record(
+    List<BandsRecord> self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_i_32(int self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_device_info(
+    List<DeviceInfo> self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_imu_dto(ImuDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_edf_export_annotation(
+    List<EdfExportAnnotation> self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_list_String(List<String> self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_eeg_sample_record(
+    List<EegSampleRecord> self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_list_bands_record(List<BandsRecord> self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_movement_record(
+    List<MovementRecord> self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_list_device_info(List<DeviceInfo> self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_peak_alpha_record(
+    List<PeakAlphaRecord> self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_list_edf_export_annotation(List<EdfExportAnnotation> self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_prim_f_32_strict(
+    Float32List self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_list_eeg_sample_record(List<EegSampleRecord> self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_prim_f_64_strict(
+    Float64List self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_list_movement_record(List<MovementRecord> self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
 
-@protected void sse_encode_list_peak_alpha_record(List<PeakAlphaRecord> self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_prim_u_8_strict(
+    Uint8List self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_list_prim_f_32_strict(Float32List self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_pulse_record(
+    List<PulseRecord> self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_list_prim_f_64_strict(Float64List self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_record_string_string(
+    List<(String, String)> self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
+  @protected
+  void sse_encode_list_xyz_dto(List<XyzDto> self, SseSerializer serializer);
 
-@protected void sse_encode_list_prim_u_8_strict(Uint8List self, SseSerializer serializer);
+  @protected
+  void sse_encode_movement_dto(MovementDto self, SseSerializer serializer);
 
-@protected void sse_encode_list_pulse_record(List<PulseRecord> self, SseSerializer serializer);
+  @protected
+  void sse_encode_movement_record(
+    MovementRecord self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_list_record_string_string(List<(String,String)> self, SseSerializer serializer);
+  @protected
+  void sse_encode_muse_event_dto(MuseEventDto self, SseSerializer serializer);
 
-@protected void sse_encode_list_xyz_dto(List<XyzDto> self, SseSerializer serializer);
+  @protected
+  void sse_encode_opt_box_autoadd_i_16(int? self, SseSerializer serializer);
 
-@protected void sse_encode_movement_dto(MovementDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
-@protected void sse_encode_movement_record(MovementRecord self, SseSerializer serializer);
+  @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
-@protected void sse_encode_muse_event_dto(MuseEventDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_opt_list_prim_u_8_strict(
+    Uint8List? self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_opt_box_autoadd_i_16(int? self, SseSerializer serializer);
+  @protected
+  void sse_encode_peak_alpha_dto(PeakAlphaDto self, SseSerializer serializer);
 
-@protected void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+  @protected
+  void sse_encode_peak_alpha_record(
+    PeakAlphaRecord self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+  @protected
+  void sse_encode_ppg_dto(PpgDto self, SseSerializer serializer);
 
-@protected void sse_encode_opt_list_prim_u_8_strict(Uint8List? self, SseSerializer serializer);
+  @protected
+  void sse_encode_pulse_dto(PulseDto self, SseSerializer serializer);
 
-@protected void sse_encode_peak_alpha_dto(PeakAlphaDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_pulse_record(PulseRecord self, SseSerializer serializer);
 
-@protected void sse_encode_peak_alpha_record(PeakAlphaRecord self, SseSerializer serializer);
+  @protected
+  void sse_encode_record_string_string(
+    (String, String) self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_ppg_dto(PpgDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_reve_dto(ReveDto self, SseSerializer serializer);
 
-@protected void sse_encode_pulse_dto(PulseDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_session_data(SessionData self, SseSerializer serializer);
 
-@protected void sse_encode_pulse_record(PulseRecord self, SseSerializer serializer);
+  @protected
+  void sse_encode_telemetry_snapshot(
+    TelemetrySnapshot self,
+    SseSerializer serializer,
+  );
 
-@protected void sse_encode_record_string_string((String,String) self, SseSerializer serializer);
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer);
 
-@protected void sse_encode_reve_dto(ReveDto self, SseSerializer serializer);
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer);
 
-@protected void sse_encode_session_data(SessionData self, SseSerializer serializer);
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
-@protected void sse_encode_telemetry_snapshot(TelemetrySnapshot self, SseSerializer serializer);
+  @protected
+  void sse_encode_u_8(int self, SseSerializer serializer);
 
-@protected void sse_encode_u_16(int self, SseSerializer serializer);
+  @protected
+  void sse_encode_unit(void self, SseSerializer serializer);
 
-@protected void sse_encode_u_32(int self, SseSerializer serializer);
+  @protected
+  void sse_encode_usize(BigInt self, SseSerializer serializer);
 
-@protected void sse_encode_u_64(BigInt self, SseSerializer serializer);
-
-@protected void sse_encode_u_8(int self, SseSerializer serializer);
-
-@protected void sse_encode_unit(void self, SseSerializer serializer);
-
-@protected void sse_encode_usize(BigInt self, SseSerializer serializer);
-
-@protected void sse_encode_xyz_dto(XyzDto self, SseSerializer serializer);
-                }
-                
-
+  @protected
+  void sse_encode_xyz_dto(XyzDto self, SseSerializer serializer);
+}
 
 // Section: wire_class
 
+class RustLibWire implements BaseWire {
+  factory RustLibWire.fromExternalLibrary(ExternalLibrary lib) =>
+      RustLibWire(lib.ffiDynamicLibrary);
 
-        class RustLibWire implements BaseWire {
+  /// Holds the symbol lookup function.
+  final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName)
+  _lookup;
 
-            factory RustLibWire.fromExternalLibrary(ExternalLibrary lib) =>
-              RustLibWire(lib.ffiDynamicLibrary);
-        
-            /// Holds the symbol lookup function.
-            final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName)
-                _lookup;
-  
-            /// The symbols are looked up in [dynamicLibrary].
-            RustLibWire(ffi.DynamicLibrary dynamicLibrary)
-                : _lookup = dynamicLibrary.lookup;
-
-            
-        }
-        
+  /// The symbols are looked up in [dynamicLibrary].
+  RustLibWire(ffi.DynamicLibrary dynamicLibrary)
+    : _lookup = dynamicLibrary.lookup;
+}

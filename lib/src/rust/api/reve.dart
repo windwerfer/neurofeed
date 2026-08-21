@@ -6,47 +6,48 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-
-            
-
-            /// Load a model of [kind] (`reve_base` | `luna_base` | `luna_large`) from
+/// Load a model of [kind] (`reve_base` | `luna_base` | `luna_large`) from
 /// [model_dir] (must contain `config.json` and `model.safetensors`) and keep
 /// it ready for scoring. Returns a description of the loaded model (inference
 /// runs on CPU). Re-loads replace any prior model.
-Future<String>  modelLoad({required String modelDir , required String kind }) => RustLib.instance.api.crateApiReveModelLoad(modelDir: modelDir, kind: kind);
+Future<String> modelLoad({required String modelDir, required String kind}) =>
+    RustLib.instance.api.crateApiReveModelLoad(modelDir: modelDir, kind: kind);
 
 /// Drop the loaded model and free its memory.
-Future<void>  modelUnload() => RustLib.instance.api.crateApiReveModelUnload();
+Future<void> modelUnload() => RustLib.instance.api.crateApiReveModelUnload();
 
 /// Whether a model is currently loaded.
-Future<bool>  modelLoaded() => RustLib.instance.api.crateApiReveModelLoaded();
+Future<bool> modelLoaded() => RustLib.instance.api.crateApiReveModelLoaded();
 
 /// JSON content of the app-generated `config.json` for [kind]. The app writes
 /// this file next to the weights so the loader can describe the graph without
 /// depending on the Hub's own (sometimes partial) config.
-Future<String>  modelConfigJson({required String kind }) => RustLib.instance.api.crateApiReveModelConfigJson(kind: kind);
+Future<String> modelConfigJson({required String kind}) =>
+    RustLib.instance.api.crateApiReveModelConfigJson(kind: kind);
 
 /// Enable the sleep-guardrail scorer for [kind], clearing any prior anchors and
 /// live vector. The forwarder starts scoring the next 1 Hz tick once a model of
 /// that kind is loaded and the headset is streaming. Returns false for an
 /// unknown kind.
-Future<bool>  guardrailEnable({required String kind }) => RustLib.instance.api.crateApiReveGuardrailEnable(kind: kind);
+Future<bool> guardrailEnable({required String kind}) =>
+    RustLib.instance.api.crateApiReveGuardrailEnable(kind: kind);
 
 /// Disable the sleep-guardrail scorer and drop its anchors/live vector.
-Future<void>  guardrailDisable() => RustLib.instance.api.crateApiReveGuardrailDisable();
+Future<void> guardrailDisable() =>
+    RustLib.instance.api.crateApiReveGuardrailDisable();
 
 /// Reset the guardrail anchors (fresh calibration pass on the same model).
-Future<void>  guardrailResetAnchors() => RustLib.instance.api.crateApiReveGuardrailResetAnchors();
+Future<void> guardrailResetAnchors() =>
+    RustLib.instance.api.crateApiReveGuardrailResetAnchors();
 
 /// Capture the current live embedding as a calibration anchor: `clear` uses the
 /// latest scored vector; `sleep` uses the deepest-rest sample seen since the
 /// guardrail was enabled (or since the last `clear` capture). Errors when no
 /// window has been scored yet, or when the model no longer matches the enabled
 /// kind.
-Future<String>  guardrailCaptureAnchor({required String name }) => RustLib.instance.api.crateApiReveGuardrailCaptureAnchor(name: name);
+Future<String> guardrailCaptureAnchor({required String name}) =>
+    RustLib.instance.api.crateApiReveGuardrailCaptureAnchor(name: name);
 
 /// Dim of the current live embedding, or 0 before the first scored window.
-Future<int>  guardrailLiveDim() => RustLib.instance.api.crateApiReveGuardrailLiveDim();
-
-            
-            
+Future<int> guardrailLiveDim() =>
+    RustLib.instance.api.crateApiReveGuardrailLiveDim();
