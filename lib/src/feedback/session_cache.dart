@@ -64,6 +64,7 @@ class SessionCache {
 
   final Database? _db;
   final Directory? _cacheDir;
+  final Map<String, Uint8List> _thumbnailMemCache = {};
 
   /// Opens (or creates) the cache DB under `<support>/cache`. [inDirectory]
   /// overrides the support directory (used by tests); otherwise the app's
@@ -215,22 +216,26 @@ class SessionCache {
 
   /// Persist a session thumbnail PNG into the thumbnail cache.
   Future<void> writeThumbnail(String id, Uint8List bytes) async {
+    _thumbnailMemCache[id] = bytes;
     if (_cacheDir == null || bytes.isEmpty) {
       return;
     }
     try {
       final dir = Directory(
-        '${_cacheDir.path}${Platform.pathSeparator}thumbnails',
+        "${_cacheDir.path}${Platform.pathSeparator}thumbnails",
       );
       await dir.create(recursive: true);
       await File((await _thumbnailPathFor(id))!).writeAsBytes(bytes);
     } catch (e) {
-      debugPrint('[cache] writeThumbnail($id) failed: $e');
+      debugPrint("[cache] writeThumbnail($id) failed: $e");
     }
   }
 
   /// Bytes of the cached thumbnail for [id], or null when not cached.
   Future<List<int>?> readThumbnail(String id) async {
+    if (_thumbnailMemCache.containsKey(id)) {
+      return _thumbnailMemCache[id];
+    }
     if (_cacheDir == null) {
       return null;
     }
@@ -239,9 +244,11 @@ class SessionCache {
       if (!await f.exists()) {
         return null;
       }
-      return await f.readAsBytes();
+      final bytes = await f.readAsBytes();
+      _thumbnailMemCache[id] = Uint8List.fromList(bytes);
+      return bytes;
     } catch (e) {
-      debugPrint('[cache] readThumbnail($id) failed: $e');
+      debugPrint("[cache] readThumbnail($id) failed: $e");
       return null;
     }
   }
@@ -251,6 +258,7 @@ class SessionCache {
   Future<String?> thumbnailPath(String id) => _thumbnailPathFor(id);
 
   Future<void> deleteThumbnail(String id) async {
+    _thumbnailMemCache.remove(id);
     if (_cacheDir == null) {
       return;
     }
@@ -260,7 +268,7 @@ class SessionCache {
         await f.delete();
       }
     } catch (e) {
-      debugPrint('[cache] deleteThumbnail($id) failed: $e');
+      debugPrint("[cache] deleteThumbnail($id) failed: $e");
     }
   }
 

@@ -410,7 +410,7 @@ class _ExportOption extends StatelessWidget {
   }
 }
 
-class _HistoryTile extends ConsumerWidget {
+class _HistoryTile extends ConsumerStatefulWidget {
   const _HistoryTile({
     required this.summary,
     required this.selected,
@@ -424,9 +424,19 @@ class _HistoryTile extends ConsumerWidget {
   final VoidCallback onLongPress;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_HistoryTile> createState() => _HistoryTileState();
+}
+
+class _HistoryTileState extends ConsumerState<_HistoryTile>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
     final theme = Theme.of(context);
-    final meta = summary.metadata;
+    final meta = widget.summary.metadata;
     final protocol = ProtocolInfo.forType(meta.protocol);
     final copy = useProtocolCopy(ref, protocol);
     final stats = meta.stats;
@@ -451,19 +461,19 @@ class _HistoryTile extends ConsumerWidget {
     ];
 
     return Card(
-      color: selected
+      color: widget.selected
           ? theme.colorScheme.primaryContainer.withAlpha(120)
           : theme.colorScheme.surfaceContainerHighest,
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        onLongPress: onLongPress,
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              _Thumbnail(id: summary.id),
+              _Thumbnail(id: widget.summary.id),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -477,31 +487,20 @@ class _HistoryTile extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      detailParts.join('  •  '),
+                      detailParts.join(' • '),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    if (meta.notes.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        meta.notes,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
                   ],
                 ),
               ),
-              if (selected)
+              if (meta.notes.isNotEmpty)
                 Icon(
-                  Icons.check_circle,
-                  color: theme.colorScheme.primary,
-                )
-              else
-                Icon(
-                  Icons.chevron_right,
+                  Icons.edit_note,
+                  size: 16,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
             ],
