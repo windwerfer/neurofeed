@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/app.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
@@ -19,6 +20,25 @@ const _scanChunkSecs = 3;
 /// saw the device; a fresh attempt (with a re-scan for a new session) almost
 /// always succeeds.
 const _maxConnectAttempts = 3;
+
+/// Global completer for btleplug initialization on Android.
+/// Completes once the native btleplug context is guaranteed ready.
+final _btleplugReady = Completer<void>();
+
+/// Ensures btleplug is initialized on Android before any BLE operation.
+/// On non-Android platforms, completes immediately.
+Future<void> ensureBtleplugReady() async {
+  if (_btleplugReady.isCompleted) return;
+
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    const channel = MethodChannel('muse_ml/init');
+    await channel.invokeMethod('ensureInitialized');
+  }
+
+  if (!_btleplugReady.isCompleted) {
+    _btleplugReady.complete();
+  }
+}
 
 /// Holds all connection + UI state for the app.
 class AppStateNotifier extends StateNotifier<AppUiState> {
@@ -110,6 +130,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         return false;
       }
       for (var i = 0; i < 5; i++) {
+        await ensureBtleplugReady();
         final devices = await scan(timeoutSecs: BigInt.from(_scanChunkSecs));
         final match =
             devices.where((d) => d.id == lastId && d.rssi != null).firstOrNull ??
@@ -160,6 +181,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       var allDevices = <DeviceInfo>[];
 
       while (_scanEnabled && !state.status.connected) {
+        await ensureBtleplugReady();
         final devices = await scan(timeoutSecs: BigInt.from(_scanChunkSecs));
         if (!_scanEnabled || state.status.connected) break;
 
@@ -373,6 +395,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   /// simply reuses it.
   Future<void> _refreshDevice(String id) async {
     try {
+      await ensureBtleplugReady();
       await scan(timeoutSecs: BigInt.from(_scanChunkSecs));
     } catch (e) {
       debugPrint('[muse] refresh scan error: $e');

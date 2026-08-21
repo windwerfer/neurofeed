@@ -22,13 +22,14 @@ import java.io.FileOutputStream
 class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "muse_ml/saf"
+        private const val INIT_CHANNEL = "muse_ml/init"
         private const val REQ_PICK_DIR = 7401
         private const val REQ_PICK_FILE = 7402
         private const val TAG = "muse_saf"
 
         // Defined in Rust (rust/src/api/muse.rs) — initializes btleplug's
         // global Android adapter before any BLE operation.
-        @JvmStatic external fun museAndroidInit()
+        @JvmStatic external fun museAndroidInit(context: Context)
 
         init {
             System.loadLibrary("rust_lib_muse_ml")
@@ -37,15 +38,52 @@ class MainActivity : FlutterActivity() {
 
     private var pendingResult: Result? = null
     private var lastTreeUri: String? = null
+    private var isBtleplugInitialized = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // Initialize btleplug early, before Dart UI mounts.
+        try {
+            museAndroidInit(applicationContext)
+            isBtleplugInitialized = true
+        } catch (e: Exception) {
+            Log.e(TAG, "Early btleplug init failed, will retry on demand", e)
+        }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result -> handle(call, result) }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INIT_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "ensureInitialized") {
+                    if (!isBtleplugInitialized) {
+                        try {
+                            museAndroidInit(applicationContext)
+                            isBtleplugInitialized = true
+                        } catch (e: Exception) {
+                            Log.e(TAG, "btleplug init on demand failed", e)
+                            result.error("init_failed", e.toString(), null)
+                            return@setMethodCallHandler
+                        }
+                    }
+                    result.success(true)
+                } else {
+                    result.notImplemented()
+                }
+            }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        museAndroidInit()
+        // Fallback initialization if early init didn't run.
+        if (!isBtleplugInitialized) {
+            try {
+                museAndroidInit(applicationContext)
+                isBtleplugInitialized = true
+            } catch (e: Exception) {
+                Log.e(TAG, "onCreate btleplug init failed", e)
+            }
+        }
         super.onCreate(savedInstanceState)
     }
 
