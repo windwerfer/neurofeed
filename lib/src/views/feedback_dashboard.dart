@@ -1385,18 +1385,24 @@ class _ChartPainter extends CustomPainter {
     var minY = yMin ?? double.infinity;
     var maxY = yMax ?? double.negativeInfinity;
     if (yMin == null || yMax == null) {
+      final visibleValues = <double>[];
       for (final s in series) {
-        if (s.values.length != x.length) {
-          continue;
-        }
+        if (s.values.length != x.length) continue;
         for (var i = 0; i < s.values.length; i++) {
-          if (x[i] < viewStart || x[i] > viewEnd) {
-            continue;
+          if (x[i] >= viewStart && x[i] <= viewEnd) {
+            visibleValues.add(s.values[i]);
           }
-          final v = s.values[i];
-          if (v < minY) minY = v;
-          if (v > maxY) maxY = v;
         }
+      }
+
+      if (visibleValues.isNotEmpty) {
+        visibleValues.sort();
+        final p5 = visibleValues[(visibleValues.length * 0.05).floor()];
+        final p95 = visibleValues[(visibleValues.length * 0.95).floor()];
+        final range = math.max(p95 - p5, 1e-6);
+
+        if (yMin == null) minY = p5 - range * 0.1;
+        if (yMax == null) maxY = p95 + range * 0.1;
       }
     }
     if (minY == double.infinity) {
