@@ -65,6 +65,14 @@ class SessionCache {
   final Database? _db;
   final Directory? _cacheDir;
   final Map<String, Uint8List> _thumbnailMemCache = {};
+  static const int _maxMemCache = 400;
+
+  void _addToMemCache(String id, Uint8List bytes) {
+    if (_thumbnailMemCache.length >= _maxMemCache) {
+      _thumbnailMemCache.remove(_thumbnailMemCache.keys.first);
+    }
+    _thumbnailMemCache[id] = bytes;
+  }
 
   /// Opens (or creates) the cache DB under `<support>/cache`. [inDirectory]
   /// overrides the support directory (used by tests); otherwise the app's
@@ -216,7 +224,7 @@ class SessionCache {
 
   /// Persist a session thumbnail PNG into the thumbnail cache.
   Future<void> writeThumbnail(String id, Uint8List bytes) async {
-    _thumbnailMemCache[id] = bytes;
+    _addToMemCache(id, bytes);
     if (_cacheDir == null || bytes.isEmpty) {
       return;
     }
@@ -245,7 +253,7 @@ class SessionCache {
         return null;
       }
       final bytes = await f.readAsBytes();
-      _thumbnailMemCache[id] = Uint8List.fromList(bytes);
+      _addToMemCache(id, Uint8List.fromList(bytes));
       return bytes;
     } catch (e) {
       debugPrint("[cache] readThumbnail($id) failed: $e");
