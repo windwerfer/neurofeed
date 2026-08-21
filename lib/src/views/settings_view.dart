@@ -351,13 +351,26 @@ class _GesturesCardState extends State<_GesturesCard> {
 /// low-pass filter, the cutoff range it sweeps, and the mapping polarity.
 /// The options themselves live in the shared [MusicSettingsPanel] (also used
 /// by the feedback-session music bubble).
-class _MusicCard extends ConsumerWidget {
+class _MusicCard extends ConsumerStatefulWidget {
   const _MusicCard({required this.settings});
 
   final Settings settings;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_MusicCard> createState() => _MusicCardState();
+}
+
+class _MusicCardState extends ConsumerState<_MusicCard> {
+  late final MusicSettingsPanel _panel;
+
+  @override
+  void initState() {
+    super.initState();
+    _panel = MusicSettingsPanel(settings: widget.settings);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Card(
@@ -387,7 +400,7 @@ class _MusicCard extends ConsumerWidget {
               ),
             ),
             const Divider(height: 24),
-            MusicSettingsPanel(settings: settings),
+            _panel,
           ],
         ),
       ),
