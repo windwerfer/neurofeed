@@ -582,6 +582,8 @@ class _DashboardBodyState extends State<_DashboardBody> {
       List<double> xs, {
       double? fixedYMin,
       double? fixedYMax,
+      double? fixedYMinRight,
+      double? fixedYMaxRight,
     }) {
       return _ZoomableChart(
         title: title,
@@ -591,6 +593,8 @@ class _DashboardBodyState extends State<_DashboardBody> {
         viewport: vp,
         fixedYMin: fixedYMin,
         fixedYMax: fixedYMax,
+        fixedYMinRight: fixedYMinRight,
+        fixedYMaxRight: fixedYMaxRight,
       );
     }
 
@@ -971,35 +975,48 @@ class _DashboardBodyState extends State<_DashboardBody> {
           ),
           const SizedBox(height: 16),
         ],
-        if (prepared.bpm.isNotEmpty) ...[
-          chart('Heart rate', 'bpm', [
-            _Series(
-              label: 'Pulse',
-              color: const Color(0xFFEC407A),
-              values: prepared.bpm,
-            ),
-          ], prepared.bpmX),
-          const SizedBox(height: 16),
-        ] else ...[
-          notEnough(
-            'Heart rate',
-            'No reliable heart-rate data was captured for this session.',
+        if (prepared.bpm.isNotEmpty || prepared.spo2.isNotEmpty) ...[
+          chart(
+            'Heart rate / SpO₂',
+            'bpm / %',
+            [
+              if (prepared.bpm.isNotEmpty)
+                _Series(
+                  label: 'Pulse (bpm)',
+                  color: const Color(0xFFEC407A),
+                  values: prepared.bpm,
+                  axis: _AxisSide.left,
+                  avgLineValue: stats.avgBpm,
+                  avgLineStyle: const _AvgLineStyle(
+                    dashPattern: [8, 4],
+                    strokeWidth: 0.8,
+                  ),
+                ),
+              if (prepared.spo2.isNotEmpty)
+                _Series(
+                  label: 'SpO₂ (%)',
+                  color: const Color(0xFF26C6DA),
+                  values: prepared.spo2,
+                  axis: _AxisSide.right,
+                  avgLineValue: stats.avgSpo2,
+                  avgLineStyle: const _AvgLineStyle(
+                    dashPattern: [3, 3],
+                    strokeWidth: 0.8,
+                  ),
+                ),
+            ],
+            // Use bpmX for X-axis (both series share time base)
+            prepared.bpm.isNotEmpty ? prepared.bpmX : prepared.spo2X,
+            fixedYMin: 40,
+            fixedYMax: 200,
+            fixedYMinRight: 50,
+            fixedYMaxRight: 100,
           ),
           const SizedBox(height: 16),
-        ],
-        if (prepared.spo2.isNotEmpty) ...[
-          chart('Blood oxygen (SpO₂)', '%', [
-            _Series(
-              label: 'SpO₂',
-              color: const Color(0xFF26C6DA),
-              values: prepared.spo2,
-            ),
-          ], prepared.spo2X),
-          const SizedBox(height: 16),
         ] else ...[
           notEnough(
-            'Blood oxygen (SpO₂)',
-            'No reliable SpO₂ data was captured for this session.',
+            'Heart rate / SpO₂',
+            'No reliable heart-rate or SpO₂ data was captured for this session.',
           ),
           const SizedBox(height: 16),
         ],
@@ -1013,16 +1030,38 @@ class _DashboardBodyState extends State<_DashboardBody> {
 _NotEnoughData _notEnoughData(String title, String detail) =>
     _NotEnoughData(title: title, detail: detail);
 
+enum _AxisSide { left, right }
+
 class _Series {
   const _Series({
     required this.label,
     required this.color,
     required this.values,
+    this.axis = _AxisSide.left,
+    this.avgLineValue,
+    this.avgLineStyle,
   });
 
   final String label;
   final Color color;
   final List<double> values;
+  final _AxisSide axis;
+
+  /// Optional horizontal average line value
+  final double? avgLineValue;
+  /// Style for the average line (dashed/dotted, color defaults to series color)
+  final _AvgLineStyle? avgLineStyle;
+}
+
+class _AvgLineStyle {
+  const _AvgLineStyle({
+    required this.dashPattern,
+    this.strokeWidth = 0.8,
+  });
+
+  /// Dash pattern: [dash, gap] in pixels
+  final List<double> dashPattern;
+  final double strokeWidth;
 }
 
 /// Shared time-window state for all summary graphs. Every chart renders the
@@ -1089,6 +1128,8 @@ class _ZoomableChart extends StatefulWidget {
     required this.viewport,
     this.fixedYMin,
     this.fixedYMax,
+    this.fixedYMinRight,
+    this.fixedYMaxRight,
   });
 
   final String title;
@@ -1097,10 +1138,13 @@ class _ZoomableChart extends StatefulWidget {
   final List<double> x;
   final _ChartViewport viewport;
 
-  /// Optional fixed y bounds (e.g. 0..1 relative power) so the scale matches
-  /// across sessions.
+  /// Optional fixed y bounds for left axis (e.g. 0..1 relative power) so the scale
+  /// matches across sessions.
   final double? fixedYMin;
   final double? fixedYMax;
+  /// Optional fixed y bounds for right axis (e.g. SpO2 50..100).
+  final double? fixedYMinRight;
+  final double? fixedYMaxRight;
 
   @override
   State<_ZoomableChart> createState() => _ZoomableChartState();
@@ -1288,8 +1332,10 @@ class _ZoomableChartState extends State<_ZoomableChart> {
                                         x: widget.x,
                                         viewStart: vp.viewStart,
                                         viewEnd: vp.viewEnd,
-                                        yMin: widget.fixedYMin,
-                                        yMax: widget.fixedYMax,
+                                        yMinLeft: widget.fixedYMin,
+                                        yMaxLeft: widget.fixedYMax,
+                                        yMinRight: widget.fixedYMinRight,
+                                        yMaxRight: widget.fixedYMaxRight,
                                       ),
                                     ),
                                     if (visible.isEmpty)
@@ -1375,8 +1421,10 @@ class _ChartPainter extends CustomPainter {
     required this.x,
     required this.viewStart,
     required this.viewEnd,
-    this.yMin,
-    this.yMax,
+    this.yMinLeft,
+    this.yMaxLeft,
+    this.yMinRight,
+    this.yMaxRight,
   });
 
   final List<_Series> series;
@@ -1384,13 +1432,15 @@ class _ChartPainter extends CustomPainter {
   final double viewStart;
   final double viewEnd;
 
-  /// Optional fixed y bounds. When null the y-range is auto-fit to the visible
-  /// data; when set (e.g. 0..1 relative power) the scale stays constant across
-  /// sessions for direct comparison.
-  final double? yMin;
-  final double? yMax;
+  /// Left Y-axis fixed bounds (e.g. for HR: bpm). When null, auto-fit.
+  final double? yMinLeft;
+  final double? yMaxLeft;
+  /// Right Y-axis fixed bounds (e.g. for SpO2: %). When null, auto-fit.
+  final double? yMinRight;
+  final double? yMaxRight;
 
   static const double _yGutter = 34;
+  static const double _rightGutter = 34;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1398,47 +1448,37 @@ class _ChartPainter extends CustomPainter {
       return;
     }
 
-    var minY = yMin ?? double.infinity;
-    var maxY = yMax ?? double.negativeInfinity;
-    if (yMin == null || yMax == null) {
-      final visibleValues = <double>[];
-      for (final s in series) {
-        if (s.values.length != x.length) continue;
-        for (var i = 0; i < s.values.length; i++) {
-          if (x[i] >= viewStart && x[i] <= viewEnd) {
-            visibleValues.add(s.values[i]);
-          }
-        }
-      }
+    // Separate series by axis side
+    final leftSeries = series.where((s) => s.axis == _AxisSide.left).toList();
+    final rightSeries = series.where((s) => s.axis == _AxisSide.right).toList();
 
-      if (visibleValues.isNotEmpty) {
-        visibleValues.sort();
-        final p5 = visibleValues[(visibleValues.length * 0.05).floor()];
-        final p95 = visibleValues[(visibleValues.length * 0.95).floor()];
-        final range = math.max(p95 - p5, 1e-6);
+    // Compute Y ranges for each axis
+    final leftRange = _computeRange(leftSeries, yMinLeft, yMaxLeft);
+    final rightRange = _computeRange(rightSeries, yMinRight, yMaxRight);
 
-        if (yMin == null) minY = p5 - range * 0.1;
-        if (yMax == null) maxY = p95 + range * 0.1;
-      }
-    }
-    if (minY == double.infinity) {
-      return;
-    }
-    if (minY == maxY) {
-      minY -= 1;
-      maxY += 1;
-    }
+    if (leftRange == null && rightRange == null) return;
 
     const pad = 8.0;
-    final w = size.width - _yGutter - pad;
+    final w = size.width - _yGutter - _rightGutter - pad;
     final h = size.height - pad * 2;
     final x0 = pad + _yGutter;
-    double px(double v) => x0 + (v - viewStart) / (viewEnd - viewStart) * w;
-    double py(double v) => pad + h - (v - minY) / (maxY - minY) * h;
 
+    // X projection (shared)
+    double px(double v) => x0 + (v - viewStart) / (viewEnd - viewStart) * w;
+    // Left Y projection
+    double pyLeft(double v) => leftRange != null
+        ? pad + h - (v - leftRange.$1) / (leftRange.$2 - leftRange.$1) * h
+        : size.height / 2;
+    // Right Y projection
+    double pyRight(double v) => rightRange != null
+        ? pad + h - (v - rightRange.$1) / (rightRange.$2 - rightRange.$1) * h
+        : size.height / 2;
+
+    // Grid paint
     final grid = Paint()
       ..color = const Color(0x222A2D37)
       ..strokeWidth = 1;
+
     const ticks = 4;
     for (var i = 0; i <= ticks; i++) {
       final y = pad + h * i / ticks;
@@ -1446,16 +1486,16 @@ class _ChartPainter extends CustomPainter {
       canvas.drawLine(Offset(x0, y), Offset(x0 + w, y), grid);
     }
 
-    // Y tick labels (only drawn for a fixed scale, where comparing matters).
-    if (yMin != null && yMax != null) {
+    // Left Y tick labels (fixed scale only)
+    if (yMinLeft != null && yMaxLeft != null && leftRange != null) {
       final tp = TextPainter(
         text: const TextSpan(),
         textDirection: TextDirection.ltr,
       );
       for (var i = 0; i <= ticks; i++) {
-        final t = maxY - (maxY - minY) * i / ticks;
+        final t = leftRange.$2 - (leftRange.$2 - leftRange.$1) * i / ticks;
         tp.text = TextSpan(
-          text: t.toStringAsFixed(2),
+          text: t.toStringAsFixed(0),
           style: const TextStyle(color: Color(0xFF9AA0AE), fontSize: 9),
         );
         tp.layout();
@@ -1464,10 +1504,54 @@ class _ChartPainter extends CustomPainter {
       }
     }
 
-    for (final s in series) {
-      if (s.values.length != x.length) {
-        continue;
+    // Right Y tick labels (fixed scale only)
+    if (yMinRight != null && yMaxRight != null && rightRange != null) {
+      final tp = TextPainter(
+        text: const TextSpan(),
+        textDirection: TextDirection.ltr,
+      );
+      for (var i = 0; i <= ticks; i++) {
+        final t = rightRange.$2 - (rightRange.$2 - rightRange.$1) * i / ticks;
+        tp.text = TextSpan(
+          text: t.toStringAsFixed(0),
+          style: const TextStyle(color: Color(0xFF9AA0AE), fontSize: 9),
+        );
+        tp.layout();
+        final y = pad + h * i / ticks;
+        tp.paint(canvas, Offset(x0 + w + 4, y - tp.height / 2));
       }
+    }
+
+    // Draw average lines first (behind series)
+    for (final s in series) {
+      if (s.avgLineValue != null) {
+        final isLeft = s.axis == _AxisSide.left;
+        final range = isLeft ? leftRange : rightRange;
+        if (range == null) continue;
+        final py = isLeft ? pyLeft : pyRight;
+        final lineY = py(s.avgLineValue!);
+        if (lineY < pad || lineY > pad + h) continue;
+
+        final style = s.avgLineStyle ?? _AvgLineStyle(dashPattern: [4, 4]);
+        final paint = Paint()
+          ..color = s.color.withValues(alpha: 0.6)
+          ..strokeWidth = style.strokeWidth
+          ..style = PaintingStyle.stroke
+          ..isAntiAlias = true;
+        // Draw dashed/dotted line
+        _drawDashedLine(canvas, paint, Offset(x0, lineY), Offset(x0 + w, lineY),
+            style.dashPattern);
+      }
+    }
+
+    // Draw series lines
+    for (final s in series) {
+      if (s.values.length != x.length) continue;
+      final isLeft = s.axis == _AxisSide.left;
+      final range = isLeft ? leftRange : rightRange;
+      if (range == null) continue;
+      final py = isLeft ? pyLeft : pyRight;
+
       final paint = Paint()
         ..color = s.color
         ..strokeWidth = 1.6
@@ -1476,13 +1560,10 @@ class _ChartPainter extends CustomPainter {
       final path = Path();
       final pts = <Offset>[];
       for (var i = 0; i < s.values.length; i++) {
-        if (x[i] < viewStart || x[i] > viewEnd) {
-          continue;
-        }
+        if (x[i] < viewStart || x[i] > viewEnd) continue;
         pts.add(Offset(px(x[i]), py(s.values[i])));
       }
       if (pts.isNotEmpty && pts.length < 2) {
-        // A single visible sample shouldn't collapse to a dot.
         canvas.drawCircle(pts.first, 1.6, paint);
         continue;
       }
@@ -1491,12 +1572,81 @@ class _ChartPainter extends CustomPainter {
     }
   }
 
+  static (double, double)? _computeRange(
+    List<_Series> series,
+    double? fixedMin,
+    double? fixedMax,
+  ) {
+    if (series.isEmpty) return null;
+    if (fixedMin != null && fixedMax != null) return (fixedMin, fixedMax);
+
+    final visibleValues = <double>[];
+    for (final s in series) {
+      for (final v in s.values) {
+        visibleValues.add(v);
+      }
+    }
+
+    if (visibleValues.isEmpty) return null;
+    visibleValues.sort();
+    final p5 = visibleValues[(visibleValues.length * 0.05).floor()];
+    final p95 = visibleValues[(visibleValues.length * 0.95).floor()];
+    final range = math.max(p95 - p5, 1e-6);
+
+    final minY = fixedMin ?? p5 - range * 0.1;
+    final maxY = fixedMax ?? p95 + range * 0.1;
+    if (minY == maxY) return (minY - 1, maxY + 1);
+    return (minY, maxY);
+  }
+
+  static void _drawDashedLine(
+    Canvas canvas,
+    Paint paint,
+    Offset p1,
+    Offset p2,
+    List<double> dashPattern,
+  ) {
+    final dx = p2.dx - p1.dx;
+    final dy = p2.dy - p1.dy;
+    final dist = math.sqrt(dx * dx + dy * dy);
+    if (dist == 0) return;
+
+    var drawn = 0.0;
+    var dashOn = true;
+    var patternIndex = 0;
+    var curX = p1.dx;
+    var curY = p1.dy;
+    final stepX = dx / dist;
+    final stepY = dy / dist;
+
+    while (drawn < dist) {
+      final segment = dashPattern[patternIndex % dashPattern.length];
+      patternIndex++;
+      if (dashOn) {
+        final endX = curX + stepX * segment;
+        final endY = curY + stepY * segment;
+        canvas.drawLine(Offset(curX, curY), Offset(endX, endY), paint);
+        curX = endX;
+        curY = endY;
+      } else {
+        curX += stepX * segment;
+        curY += stepY * segment;
+      }
+      drawn += segment;
+      dashOn = !dashOn;
+    }
+  }
+
   @override
   bool shouldRepaint(_ChartPainter oldDelegate) =>
       oldDelegate.series != series ||
       oldDelegate.x != x ||
       oldDelegate.viewStart != viewStart ||
-      oldDelegate.viewEnd != viewEnd;
+      oldDelegate.viewEnd != viewEnd ||
+      oldDelegate.yMinLeft != yMinLeft ||
+      oldDelegate.yMaxLeft != yMaxLeft ||
+      oldDelegate.yMinRight != yMinRight ||
+      oldDelegate.yMaxRight != yMaxRight;
 }
 
 class _SummaryRow extends StatelessWidget {
