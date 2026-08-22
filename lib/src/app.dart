@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/connect_window.dart';
@@ -241,6 +242,11 @@ class _SideBarItem extends StatelessWidget {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await RustLib.init();
+  // Initialize btleplug on Android (must happen after RustLib.init loads the library)
+  if (Platform.isAndroid) {
+    const channel = MethodChannel('muse_ml/init');
+    await channel.invokeMethod('ensureInitialized');
+  }
   await requestBlePermissions();
   final settings = await Settings.load();
   runApp(

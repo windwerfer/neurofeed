@@ -86,6 +86,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
   Future<void> _init() async {
     try {
+      await ensureBtleplugReady();
       final stream = subscribeEvents();
       _eventSub = stream.listen((event) {
         _eventController.add(event);

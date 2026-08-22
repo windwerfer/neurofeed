@@ -38,18 +38,9 @@ class MainActivity : FlutterActivity() {
 
     private var pendingResult: Result? = null
     private var lastTreeUri: String? = null
-    private var isBtleplugInitialized = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-
-        // Initialize btleplug early, before Dart UI mounts.
-        try {
-            museAndroidInit(applicationContext)
-            isBtleplugInitialized = true
-        } catch (e: Exception) {
-            Log.e(TAG, "Early btleplug init failed, will retry on demand", e)
-        }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result -> handle(call, result) }
@@ -57,17 +48,13 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INIT_CHANNEL)
             .setMethodCallHandler { call, result ->
                 if (call.method == "ensureInitialized") {
-                    if (!isBtleplugInitialized) {
-                        try {
-                            museAndroidInit(applicationContext)
-                            isBtleplugInitialized = true
-                        } catch (e: Exception) {
-                            Log.e(TAG, "btleplug init on demand failed", e)
-                            result.error("init_failed", e.toString(), null)
-                            return@setMethodCallHandler
-                        }
+                    try {
+                        museAndroidInit(applicationContext)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "btleplug init failed", e)
+                        result.error("init_failed", e.toString(), null)
                     }
-                    result.success(true)
                 } else {
                     result.notImplemented()
                 }
@@ -75,15 +62,6 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Fallback initialization if early init didn't run.
-        if (!isBtleplugInitialized) {
-            try {
-                museAndroidInit(applicationContext)
-                isBtleplugInitialized = true
-            } catch (e: Exception) {
-                Log.e(TAG, "onCreate btleplug init failed", e)
-            }
-        }
         super.onCreate(savedInstanceState)
     }
 

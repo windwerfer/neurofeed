@@ -9,7 +9,7 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 flutter_rust_bridge = "=2.11.1"
 muse-rs = { git = "https://github.com/eugenehp/muse-rs.git", tag = "0.1.0", default-features = false }
-btleplug = { git = "https://github.com/eugenehp/btleplug.git", branch = "imrpoved_mac_version", version = "0.11.8" }
+btleplug = "0.11.8"
 jni = "=0.19"
 tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time"] }
 anyhow = "1"
@@ -30,22 +30,15 @@ luna-rs = { git = "https://github.com/windwerfer/luna-rs", tag = "v0.0.4-latent-
 rlx = { version = "0.2", default-features = false, features = ["cpu"] }
 
 # Both rust_lib_muse_ml and muse-rs depend on btleplug from
-# eugenehp/btleplug.git. The [patch] below replaces ALL occurrences
+# crates.io. The [patch.crates-io] below replaces ALL occurrences
 # with our JNI-fixed fork, so there is only ONE copy of btleplug
 # (and its GLOBAL_JVM / GLOBAL_ADAPTER statics) linked.
-[patch.'https://github.com/eugenehp/btleplug.git']
+[patch.crates-io]
 btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-3" }
+rlx-cpu = { path = "../vendor/rlx-cpu" }
 
 [patch.'https://github.com/eugenehp/muse-rs.git']
 muse-rs = { path = "../third_party/muse-rs" }
-
-# rlx-cpu's default `blas` feature hard-links OpenBLAS on x86_64 hosts
-# (build.rs), which would break Windows/Linux release builds. Our vendored
-# copy clears the default so the crate uses its portable SIMD/scalar gemm
-# everywhere (the same fallback it already uses on aarch64 Linux). No system
-# BLAS dependency anywhere; feature `splat` stays enabled via rlx-runtime.
-[patch.crates-io]
-rlx-cpu = { path = "../vendor/rlx-cpu" }
 
 
 
