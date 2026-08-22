@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/charts/session_recorder.dart';
+import 'package:muse_ml/src/feedback/computed_frame.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/settings.dart';
@@ -15,7 +16,7 @@ import 'package:muse_ml/src/settings.dart';
 /// go to the fast scratch directory — SAF is only touched on Save.
 class FeedbackRecorder {
   FeedbackRecorder({SessionStorage? storage})
-    : _storage = storage == null ? _defaultStorage() : Future.value(storage);
+      : _storage = storage == null ? _defaultStorage() : Future.value(storage);
 
   final Future<SessionStorage> _storage;
   final SessionRecorder _recorder = SessionRecorder();
@@ -60,6 +61,11 @@ class FeedbackRecorder {
     _recorder.writeEvent(event);
   }
 
+  /// Add a computed frame (1 Hz) to the session recording.
+  void appendComputed(ComputedFrame frame) {
+    _recorder.appendComputed(frame);
+  }
+
   /// Flush pending data to disk without finalizing the temp file.
   Future<void> flushSession() => _recorder.flush();
 
@@ -71,4 +77,10 @@ class FeedbackRecorder {
   Future<void> discardSession() async {
     await _recorder.stop();
   }
+
+  /// Get collected computed frames for v5 format assembly.
+  List<ComputedFrame> get computedFrames => _recorder.computedFrames;
+
+  /// Clear computed frames after v5 assembly.
+  void clearComputedFrames() => _recorder.clearComputedFrames();
 }

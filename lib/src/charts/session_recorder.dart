@@ -4,8 +4,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart';
+import 'package:muse_ml/src/rust/api/session_format.dart' hide ComputedFrame;
 import 'package:muse_ml/src/settings.dart';
+import 'package:muse_ml/src/feedback/computed_frame.dart';
 
 class SessionRecorder {
   static const _flushInterval = Duration(seconds: 30);
@@ -15,6 +16,9 @@ class SessionRecorder {
   Timer? _flushTimer;
   final _pending = BytesBuilder();
   int _events = 0;
+
+  // Temporary storage for computed frames (v5 format will use separate zstd stream)
+  final List<ComputedFrame> _computedFrames = [];
 
   /// Streams to persist. Defaults to all — callers that want a subset (e.g.
   /// the user turned off raw EEG in settings) assign `recordStreams` before
@@ -128,5 +132,19 @@ class SessionRecorder {
       debugPrint('[session] flush FAILED, re-queueing ($e)');
       _pending.add(raw);
     }
+  }
+
+  /// Add a computed frame (1 Hz) to the session.
+  /// In v5 format, these will be written to a separate zstd stream.
+  void appendComputed(ComputedFrame frame) {
+    _computedFrames.add(frame);
+  }
+
+  /// Get the collected computed frames (for v5 format assembly).
+  List<ComputedFrame> get computedFrames => List.unmodifiable(_computedFrames);
+
+  /// Clear computed frames (call after session assembly).
+  void clearComputedFrames() {
+    _computedFrames.clear();
   }
 }

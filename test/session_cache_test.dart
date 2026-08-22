@@ -177,6 +177,7 @@ void main() {
         ),
       },
       pulse: const [60.0],
+      spo2: const [98.0],
       movement: const [0.1],
       peakAlphaFreq: const [10.0],
       peakAlphaPower: const [0.5],
