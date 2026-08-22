@@ -145,9 +145,7 @@ abstract class RustLibApi extends BaseApi {
 
   Uint8List crateApiSessionFormatSessionHeaderBytes();
 
-  Future<SessionData> crateApiSessionFormatSessionParseBody({
-    required List<int> bytes,
-  });
+  SessionData crateApiSessionFormatSessionParseBody({required List<int> bytes});
 
   Stream<MuseEventDto> crateApiMuseSubscribeEvents();
 
@@ -825,20 +823,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "session_header_bytes", argNames: []);
 
   @override
-  Future<SessionData> crateApiSessionFormatSessionParseBody({
+  SessionData crateApiSessionFormatSessionParseBody({
     required List<int> bytes,
   }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_list_prim_u_8_loose(bytes, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 25,
-            port: port_,
-          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_session_data,

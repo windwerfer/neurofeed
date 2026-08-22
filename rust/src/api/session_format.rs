@@ -416,6 +416,7 @@ fn parse_records(records: &[u8], out: &mut SessionData) {
 }
 
 /// Decode a full `.muse` body (header + frames) into structured records.
+#[frb(sync)]
 pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
     if bytes.len() < 12 {
         return Err("Truncated .muse header".to_string());

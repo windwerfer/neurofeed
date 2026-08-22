@@ -30,7 +30,7 @@ Uint8List sessionFrameBytes({required List<int> data}) =>
     RustLib.instance.api.crateApiSessionFormatSessionFrameBytes(data: data);
 
 /// Decode a full `.muse` body (header + frames) into structured records.
-Future<SessionData> sessionParseBody({required List<int> bytes}) =>
+SessionData sessionParseBody({required List<int> bytes}) =>
     RustLib.instance.api.crateApiSessionFormatSessionParseBody(bytes: bytes);
 
 /// FFI getter for [CONTAINER_HEAD_READ_LIMIT] so Dart never hardcodes it.

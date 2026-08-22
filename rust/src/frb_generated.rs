@@ -848,16 +848,15 @@ fn wire__crate__api__session_format__session_header_bytes_impl(
     )
 }
 fn wire__crate__api__session_format__session_parse_body_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "session_parse_body",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
         move || {
             let message = unsafe {
@@ -871,12 +870,10 @@ fn wire__crate__api__session_format__session_parse_body_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
             deserializer.end();
-            move |context| {
-                transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::session_format::session_parse_body(&api_bytes)?;
-                    Ok(output_ok)
-                })())
-            }
+            transform_result_sse::<_, String>((move || {
+                let output_ok = crate::api::session_format::session_parse_body(&api_bytes)?;
+                Ok(output_ok)
+            })())
         },
     )
 }
@@ -1789,12 +1786,6 @@ fn pde_ffi_dispatcher_primary_impl(
         20 => wire__crate__api__reve__model_loaded_impl(port, ptr, rust_vec_len, data_len),
         21 => wire__crate__api__reve__model_unload_impl(port, ptr, rust_vec_len, data_len),
         22 => wire__crate__api__muse__scan_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__session_format__session_parse_body_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
         26 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
         27 => wire__crate__api__muse__telemetry_snapshot_default_impl(
             port,
@@ -1843,6 +1834,9 @@ fn pde_ffi_dispatcher_sync_impl(
         }
         24 => {
             wire__crate__api__session_format__session_header_bytes_impl(ptr, rust_vec_len, data_len)
+        }
+        25 => {
+            wire__crate__api__session_format__session_parse_body_impl(ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
     }

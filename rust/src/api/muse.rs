@@ -1197,18 +1197,19 @@ fn compute_spo2(ir_samples: &[f64], red_samples: &[f64]) -> (f64, f64) {
     let ir_dc = ir_window.iter().copied().sum::<f64>() / ir_window.len() as f64;
     let red_dc = red_window.iter().copied().sum::<f64>() / red_window.len() as f64;
 
-    let ir_ac: f64 = ir_window
+    // AC = standard deviation (RMS of AC component)
+    let ir_ac = (ir_window
         .iter()
         .map(|s| (s - ir_dc).powi(2))
         .sum::<f64>()
-        .sqrt()
-        / ir_window.len() as f64;
-    let red_ac: f64 = red_window
+        / ir_window.len() as f64)
+        .sqrt();
+    let red_ac = (red_window
         .iter()
         .map(|s| (s - red_dc).powi(2))
         .sum::<f64>()
-        .sqrt()
-        / red_window.len() as f64;
+        / red_window.len() as f64)
+        .sqrt();
 
     // Gating: require sufficient AC amplitude on both channels
     if ir_dc < 100.0 || red_dc < 100.0 || ir_ac < 1.0 || red_ac < 1.0 {
@@ -1230,8 +1231,9 @@ fn compute_spo2(ir_samples: &[f64], red_samples: &[f64]) -> (f64, f64) {
     }
 
     // Confidence based on AC signal quality (higher AC/DC ratio = more confidence)
-    let ir_quality = (ir_ac / ir_dc).min(1.0);
-    let red_quality = (red_ac / red_dc).min(1.0);
+    // Typical PPG AC/DC is 1-5%, scale to 0-1 range
+    let ir_quality = (ir_ac / ir_dc * 20.0).min(1.0);
+    let red_quality = (red_ac / red_dc * 20.0).min(1.0);
     let confidence = (ir_quality * red_quality).sqrt().clamp(0.0, 1.0);
 
     (spo2.clamp(0.0, 100.0), confidence)
