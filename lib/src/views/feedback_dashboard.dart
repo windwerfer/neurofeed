@@ -966,7 +966,9 @@ class _DashboardBodyState extends State<_DashboardBody> {
               color: const Color(0xFFFFA726),
               values: prepared.movement,
             ),
-          ], prepared.movementX),
+          ], prepared.movementX,
+          fixedYMin: 0,
+          fixedYMax: 1.5),
           const SizedBox(height: 16),
         ] else ...[
           notEnough(
