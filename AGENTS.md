@@ -15,9 +15,10 @@ Global orientation for any AI agent or contributor working in this repo.
     CLI, Rust crate, and Dart package pinned to the same `2.11.1`.
 - **muse-rs** (`github.com/eugenehp/muse-rs.git` tag `0.1.0`, `default-features = false`) — Muse BLE protocol + transport.
 - **btleplug** — forked at `github.com/windwerfer/btleplug` (tag `0.12.0-muse-3`), patched with `get_env()` → `attach_current_thread_permanently()` fallback for tokio JNI threads + notification death spiral fix. **Source base is upstream 0.12.0 but `Cargo.toml` version is pinned to `0.11.8`** — required for semver matching (see `.ai/btleplug.md`).
-  - Referenced via `[patch]` on `eugenehp/btleplug.git` so that BOTH
-    `rust_lib_muse_ml` and `muse-rs` use the same patched copy (single
-    `GLOBAL_JVM` static). Swap `[patch]` to local path for debugging.
+  - Referenced via `[patch.crates-io]` so that **ALL** btleplug dependencies
+    (both `rust_lib_muse_ml` and `muse-rs`'s crates.io dep) use the same
+    patched fork — single `GLOBAL_JVM`/`GLOBAL_ADAPTER` static. Swap to
+    local path for debugging.
 - **`jni = "=0.19"`** — pinned to match btleplug's own `jni` dependency.
   If either side upgrades, both must be upgraded together or you get
   link-time symbol conflicts.
@@ -70,7 +71,7 @@ Global orientation for any AI agent or contributor working in this repo.
 - **Android**: NDK 27/28, Gradle 8.14, `targetSdkVersion = 36`.
 - **Decision:** using btleplug (forked) for BLE transport — consistent with
   `muse-rs`. `flutter_blue_plus` was the fallback if the JNI fix had failed.
-- **JNI glue**: Kotlin `MainActivity.museAndroidInit()` → Rust `extern "C"` → `btleplug::platform::init()`. btleplug Java sources under `android/app/src/main/java/com/nonpolynomial/btleplug/`. jni-utils Java at `io/github/gedgygedgy/rust/`.
+- **JNI glue**: btleplug initialized from Dart **after** `RustLib.init()` loads the library. Kotlin `MainActivity` provides `ensureInitialized` MethodChannel; Dart calls it in `main()` then `connection_provider` calls `ensureBtleplugReady()` before any scan/connect. btleplug Java sources under `android/app/src/main/java/com/nonpolynomial/btleplug/`. jni-utils Java at `io/github/gedgygedgy/rust/`.
 - **iOS/macOS**: not the current target; BLE transport uses btleplug's CoreBluetooth path.
 - **Windows**: not a current dev target; built only by `release-windows.yml` CI. `windows/CMakeLists.txt` is committed (carries an MSVC workaround), but the rest of `windows/` is generated in CI via `flutter create --platforms=windows .`.
 
@@ -151,7 +152,11 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - JNI thread-attach patch: `../../btleplug/src/droidplug/jni/mod.rs` `get_env()`,
   plus callers in `adapter.rs` and `peripheral.rs`.
 - btleplug Java init: `android/app/src/main/java/com/nonpolynomial/btleplug/android/impl/`.
-- Kotlin init entry: `android/app/src/main/kotlin/com/example/muse_ml/MainActivity.kt`.
+- Kotlin init entry: `android/app/src/main/kotlin/com/example/muse_ml/MainActivity.kt` (MethodChannel `ensureInitialized` only; no early init).
+- **Android btleplug init sequence**: `main()` → `RustLib.init()` → `MethodChannel('muse_ml/init').invokeMethod('ensureInitialized')` → `museAndroidInit()` JNI → `btleplug::platform::init(&env)`.
+- **RSSI filtering**: `third_party/muse-rs/src/muse_client.rs` `scan_all()` keeps only `props.rssi.is_some()`; `rust/src/api/muse.rs` `scan()` mirrors this (no `rssi` field in `DeviceInfo` DTO — wire format stable).
+- Classic Muse startup delays: `third_party/muse-rs/src/muse_client.rs` `MuseHandle::start()` (h/s/preset/d with 150/300ms delays).
+- Connect timeout cleanup: `third_party/muse-rs/src/muse_client.rs` `setup_peripheral()` disconnects + 500ms sleep on timeout to avoid "In Progress" on retry.
 - Protocol decoders (pure, no BLE): inside muse-rs `parse.rs` / `protocol.rs` / `types.rs`.
 - Permissions: `lib/src/app.dart` `requestBlePermissions()` (uses `permission_handler` + `device_info_plus` for sdk gating).
 - Manifest BLE perms: `android/app/src/main/AndroidManifest.xml` (`BLUETOOTH_SCAN` w/ `neverForLocation`, `BLUETOOTH_CONNECT`, `ACCESS_FINE_LOCATION` capped `maxSdkVersion=30`).
@@ -190,7 +195,7 @@ btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in
 - **Android ships arm64-only**: `defaultConfig.ndk.abiFilters = ["arm64-v8a"]` in `android/app/build.gradle.kts` restricts every Android build (debug/release, APK and AAB) to arm64; release workflows also pass `--target-platform android-arm64` and only install the `aarch64-linux-android` Rust target. Keeps the F-Droid/Play artifact ~27 MB instead of a ~65 MB universal. Consequence: x86/x86_64 emulators and 32-bit (armeabi-v7a) devices cannot install it. The AAB (`muse_ml-<ver>.aab`) is for Play Store only — F-Droid never receives AABs, only the APK.
 - **Release version is tag-derived**: asset names and the APK's `--build-name`/`--build-number` come from the release tag, not `pubspec.yaml`. Base version = everything before the first `-`/`_` (tag `0.0.11-feedback-01` → `0.0.11`); APK build number = trailing digits of the channel suffix (→ `1`); an empty tag (build-only dispatch) falls back to pubspec. Logic lives in the "Get version" step of `release-{android,windows,linux}.yml` (android resolves it once in a `version` job feeding `_build-apk.yml`). Keep the copies in sync.
 - **Session format is Rust-owned**: never edit the `.muse`/`.muse.feedback` byte layout in Dart. `rust/src/api/session_format.rs` is the single authority — `encode_session_event`, `sessionFrameBytes`, `sessionParseBody`, and the container fns; Dart (`session_recorder.dart`, `session_reader.dart`, `session_container.dart`) are thin FFI delegates. Some container fns are `#[frb(sync)]` so Dart keeps `headReadLimit`/`parseHead`/`extractBody` synchronous. When changing the wire format, extend `cargo test --lib session_format` goldens and regenerate bindings.
-- **Cargo `[patch]` version trap**: If the patched crate's `version` is semver-incompatible with the dependency constraint, Cargo silently ignores the patch. Our fork must stay at `version = "0.11.8"` even though the source is based on 0.12.0.
+- **Cargo `[patch]` version trap**: If the patched crate's `version` is semver-incompatible with the dependency constraint, Cargo silently ignores the patch. Our fork must stay at `version = "0.11.8"` even though the source is based on 0.12.0. **The patch must target `crates-io`, not a git URL** — `[patch.crates-io]` replaces ALL registry dependencies (including transitive ones like `muse-rs`'s), while `[patch.'https://github.com/...']` only matches that exact git source.
 - **Vendored `rlx-cpu`** (`vendor/rlx-cpu`): `[patch.crates-io]` replaces crates.io `rlx-cpu` with our copy, which clears the default `blas` feature (its `build.rs` would hard-link OpenBLAS on x86_64 hosts and break Windows/Linux release builds). Keep `version = "0.2.13"` semver-compatible with the `rlx 0.2` constraint or the patch is silently ignored (same trap as btleplug).
 - **Model engine is git deps, not submodules**: `reve-rs`/`luna-rs` are fetched by cargo from GitHub (`rust/Cargo.toml`: luna @ tag `v0.0.4-latent-embedding-fix` on the `windwerfer` fork, reveal @ rev `9c8d856…` on upstream `eugenehp`) — same pattern as `muse-rs`/`btleplug`, so a fresh clone needs no submodule init to build. The workflows still init `third_party/reve-rs`/`luna-rs` after checkout, but that is only for reference copies now.
 - **Gated weights live in `.local/`, never commit them**: LUNA/REVE weights + the abandoned `reve-base` source sit under `.local/` as embedded git repos with no remote (untracked, NOT gitignored so agents can still see them). `.gitmodules` documents them with `ignore = all` + an invalid URL so `git submodule update --init` fails loudly instead of fetching. The `#[ignore]`d smoke tests (`rust/src/analysis/{luna,reve}.rs`) read `../.local/...`; run with `cargo test --lib -- --ignored`.

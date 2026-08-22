@@ -13,21 +13,21 @@ JVM-attached Dart/UI thread. Without this patch, every BLE scan fails with
 **Published:** `github.com/windwerfer/btleplug` tag `0.12.0-muse-3`
 **Local copy:** `../../btleplug/` (sibling of `muse_ml/`) — for development.
 
-Referenced from `muse_ml/rust/Cargo.toml` via `[patch]` on `eugenehp/btleplug.git`.
-Both `rust_lib_muse_ml` and `muse-rs` depend on `eugenehp/btleplug.git`; the
-`[patch]` replaces ALL occurrences with our fork so there is only one copy
+Referenced from `muse_ml/rust/Cargo.toml` via `[patch.crates-io]`.
+Both `rust_lib_muse_ml` and `muse-rs` depend on `btleplug = "0.11.8"` from crates.io; the
+`[patch.crates-io]` replaces ALL occurrences with our fork so there is only one copy
 of btleplug (and its `GLOBAL_JVM`/`GLOBAL_ADAPTER` statics) linked:
 
 ```toml
-btleplug = { git = "https://github.com/eugenehp/btleplug.git", branch = "imrpoved_mac_version", version = "0.11.8" }
+btleplug = "0.11.8"
 
-[patch.'https://github.com/eugenehp/btleplug.git']
+[patch.crates-io]
 btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-3" }
 ```
 
 **For local development,** swap the patch to a local path:
 ```toml
-[patch.'https://github.com/eugenehp/btleplug.git']
+[patch.crates-io]
 btleplug = { path = "../../btleplug" }
 ```
 
@@ -50,17 +50,19 @@ cargo tree -p btleplug --depth 0
 
 ## Local vs remote development
 
-The `Cargo.toml` in `muse_ml/rust/` points to the **remote git tag** by default:
+The `Cargo.toml` in `muse_ml/rust/` points to the **crates.io version** by default:
 
 ```toml
-btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-3", version = "0.11.8" }
+btleplug = "0.11.8"
+
+[patch.crates-io]
+btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-3" }
 ```
 
-When debugging or modifying the btleplug fork, swap to the **local path**:
+When debugging or modifying the btleplug fork, swap the patch to a **local path**:
 
 ```toml
-# Comment out the git line above, and uncomment this:
-[patch.'https://github.com/windwerfer/btleplug.git']
+[patch.crates-io]
 btleplug = { path = "../../btleplug" }
 ```
 
