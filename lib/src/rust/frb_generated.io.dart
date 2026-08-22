@@ -48,6 +48,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BandsDto dco_decode_box_autoadd_bands_dto(dynamic raw);
 
   @protected
+  ComputedFrame dco_decode_box_autoadd_computed_frame(dynamic raw);
+
+  @protected
   ControlDto dco_decode_box_autoadd_control_dto(dynamic raw);
 
   @protected
@@ -55,6 +58,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   EegDto dco_decode_box_autoadd_eeg_dto(dynamic raw);
+
+  @protected
+  double dco_decode_box_autoadd_f_32(dynamic raw);
 
   @protected
   GestureDto dco_decode_box_autoadd_gesture_dto(dynamic raw);
@@ -70,6 +76,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PeakAlphaDto dco_decode_box_autoadd_peak_alpha_dto(dynamic raw);
+
+  @protected
+  PeakAlphaInfo dco_decode_box_autoadd_peak_alpha_info(dynamic raw);
 
   @protected
   PpgDto dco_decode_box_autoadd_ppg_dto(dynamic raw);
@@ -91,6 +100,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  ComputedFrame dco_decode_computed_frame(dynamic raw);
 
   @protected
   ConnectionStatus dco_decode_connection_status(dynamic raw);
@@ -123,7 +135,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  FeedbackInfo dco_decode_feedback_info(dynamic raw);
+
+  @protected
   GestureDto dco_decode_gesture_dto(dynamic raw);
+
+  @protected
+  GuardrailInfo dco_decode_guardrail_info(dynamic raw);
 
   @protected
   int dco_decode_i_16(dynamic raw);
@@ -141,6 +159,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<BandsRecord> dco_decode_list_bands_record(dynamic raw);
 
   @protected
+  List<ComputedFrame> dco_decode_list_computed_frame(dynamic raw);
+
+  @protected
   List<DeviceInfo> dco_decode_list_device_info(dynamic raw);
 
   @protected
@@ -148,6 +169,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<EegSampleRecord> dco_decode_list_eeg_sample_record(dynamic raw);
+
+  @protected
+  List<Float32List> dco_decode_list_list_prim_f_32_strict(dynamic raw);
 
   @protected
   List<MovementRecord> dco_decode_list_movement_record(dynamic raw);
@@ -189,6 +213,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MuseEventDto dco_decode_muse_event_dto(dynamic raw);
 
   @protected
+  ComputedFrame? dco_decode_opt_box_autoadd_computed_frame(dynamic raw);
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_32(dynamic raw);
+
+  @protected
+  PeakAlphaInfo? dco_decode_opt_box_autoadd_peak_alpha_info(dynamic raw);
+
+  @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
@@ -199,6 +232,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PeakAlphaDto dco_decode_peak_alpha_dto(dynamic raw);
+
+  @protected
+  PeakAlphaInfo dco_decode_peak_alpha_info(dynamic raw);
 
   @protected
   PeakAlphaRecord dco_decode_peak_alpha_record(dynamic raw);
@@ -249,6 +285,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_usize(dynamic raw);
 
   @protected
+  V5Header dco_decode_v_5_header(dynamic raw);
+
+  @protected
+  V5ParsedHead dco_decode_v_5_parsed_head(dynamic raw);
+
+  @protected
   XyzDto dco_decode_xyz_dto(dynamic raw);
 
   @protected
@@ -280,6 +322,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BandsDto sse_decode_box_autoadd_bands_dto(SseDeserializer deserializer);
 
   @protected
+  ComputedFrame sse_decode_box_autoadd_computed_frame(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ControlDto sse_decode_box_autoadd_control_dto(SseDeserializer deserializer);
 
   @protected
@@ -289,6 +336,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   EegDto sse_decode_box_autoadd_eeg_dto(SseDeserializer deserializer);
+
+  @protected
+  double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
 
   @protected
   GestureDto sse_decode_box_autoadd_gesture_dto(SseDeserializer deserializer);
@@ -306,6 +356,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PeakAlphaDto sse_decode_box_autoadd_peak_alpha_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PeakAlphaInfo sse_decode_box_autoadd_peak_alpha_info(
     SseDeserializer deserializer,
   );
 
@@ -331,6 +386,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  ComputedFrame sse_decode_computed_frame(SseDeserializer deserializer);
 
   @protected
   ConnectionStatus sse_decode_connection_status(SseDeserializer deserializer);
@@ -365,7 +423,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
+  FeedbackInfo sse_decode_feedback_info(SseDeserializer deserializer);
+
+  @protected
   GestureDto sse_decode_gesture_dto(SseDeserializer deserializer);
+
+  @protected
+  GuardrailInfo sse_decode_guardrail_info(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_16(SseDeserializer deserializer);
@@ -383,6 +447,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<BandsRecord> sse_decode_list_bands_record(SseDeserializer deserializer);
 
   @protected
+  List<ComputedFrame> sse_decode_list_computed_frame(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<DeviceInfo> sse_decode_list_device_info(SseDeserializer deserializer);
 
   @protected
@@ -392,6 +461,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<EegSampleRecord> sse_decode_list_eeg_sample_record(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<Float32List> sse_decode_list_list_prim_f_32_strict(
     SseDeserializer deserializer,
   );
 
@@ -441,6 +515,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MuseEventDto sse_decode_muse_event_dto(SseDeserializer deserializer);
 
   @protected
+  ComputedFrame? sse_decode_opt_box_autoadd_computed_frame(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer);
+
+  @protected
+  PeakAlphaInfo? sse_decode_opt_box_autoadd_peak_alpha_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
@@ -451,6 +538,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PeakAlphaDto sse_decode_peak_alpha_dto(SseDeserializer deserializer);
+
+  @protected
+  PeakAlphaInfo sse_decode_peak_alpha_info(SseDeserializer deserializer);
 
   @protected
   PeakAlphaRecord sse_decode_peak_alpha_record(SseDeserializer deserializer);
@@ -503,6 +593,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
+  V5Header sse_decode_v_5_header(SseDeserializer deserializer);
+
+  @protected
+  V5ParsedHead sse_decode_v_5_parsed_head(SseDeserializer deserializer);
+
+  @protected
   XyzDto sse_decode_xyz_dto(SseDeserializer deserializer);
 
   @protected
@@ -542,6 +638,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_computed_frame(
+    ComputedFrame self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_control_dto(
     ControlDto self,
     SseSerializer serializer,
@@ -555,6 +657,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_eeg_dto(EegDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_gesture_dto(
@@ -580,6 +685,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_peak_alpha_dto(
     PeakAlphaDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_peak_alpha_info(
+    PeakAlphaInfo self,
     SseSerializer serializer,
   );
 
@@ -612,6 +723,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_computed_frame(ComputedFrame self, SseSerializer serializer);
 
   @protected
   void sse_encode_connection_status(
@@ -656,7 +770,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_feedback_info(FeedbackInfo self, SseSerializer serializer);
+
+  @protected
   void sse_encode_gesture_dto(GestureDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_guardrail_info(GuardrailInfo self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_16(int self, SseSerializer serializer);
@@ -677,6 +797,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_computed_frame(
+    List<ComputedFrame> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_device_info(
     List<DeviceInfo> self,
     SseSerializer serializer,
@@ -691,6 +817,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_eeg_sample_record(
     List<EegSampleRecord> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_list_prim_f_32_strict(
+    List<Float32List> self,
     SseSerializer serializer,
   );
 
@@ -761,6 +893,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_muse_event_dto(MuseEventDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_computed_frame(
+    ComputedFrame? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_peak_alpha_info(
+    PeakAlphaInfo? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
@@ -774,6 +921,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_peak_alpha_dto(PeakAlphaDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_peak_alpha_info(PeakAlphaInfo self, SseSerializer serializer);
 
   @protected
   void sse_encode_peak_alpha_record(
@@ -831,6 +981,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_v_5_header(V5Header self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_v_5_parsed_head(V5ParsedHead self, SseSerializer serializer);
 
   @protected
   void sse_encode_xyz_dto(XyzDto self, SseSerializer serializer);
