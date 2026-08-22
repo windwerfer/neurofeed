@@ -302,7 +302,22 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
   folder/SAF location and open the results (PDF in a viewer, EDF+ in an EDF
   reader, CSV in a spreadsheet).
 
-## Status — 2026-08-19 Update (audio asset bundling fixed)
+## Status — 2026-08-22 Update (SpO₂ blood oxygen + combined HR/SpO₂ chart)
+- ✅ **SpO₂ from PPG IR+Red** (commit `4bc0300`): `compute_spo2()` in
+  `rust/src/api/muse.rs` runs every 1 s on a 30 s window (1920 samples @ 64 Hz)
+  using ratio-of-ratios (A=110, B=25 best-guess). Red channel (ch 2) buffered
+  alongside IR (ch 1). Fixes: AC = proper std dev (`sqrt(sum/n)`), confidence
+  scaled 20× so typical PPG AC/DC (1-5%) yields 0.2-1.0. HR window 8s → 30s.
+  Emits `SpO2Dto` (confidence ≥ 0.3) → recorded as `RecordingStream.spo2` →
+  decimated into `SessionOverview.spo2` (400 buckets).
+- ✅ **Combined HR/SpO₂ chart** in session summary: dual Y-axis (left HR 40–200
+  bpm, right SpO₂ 50–100%), avg lines (HR dashed deep red, SpO₂ dotted blue),
+  legend toggles for both series. Settings toggle: `RecordingStream.spo2`.
+  Export: SpO₂ chart (yMin=50, yMax=100).
+- ✅ **Movement graph fixed bounds**: 0–1.5g (`fixedYMin: 0, fixedYMax: 1.5`).
+- ✅ All tests pass: `cargo test --lib session_format` (30), `flutter analyze lib/src`.
+
+## Next steps
 - ✅ **Staged calibration clips never played on Linux** — `Unable to load
   asset: "assets/audio/calibration/grok-reve-artifacts-01.opus"` at first
   playback. Root cause: Flutter directory assets only bundle files **directly

@@ -325,3 +325,37 @@ L1` + 2 s settle). `enable_ppg=true` selects preset `p50` so PPG streams.
 - `start(true, false)` (= `p50`): PPG/HR now populate the session summary.
 - Revert if Classic stability ever regresses: `git revert 217cefe` (parent
   `f82cbaa` has the custom delayed sequence).
+
+## Session 2026-08-22 — SpO₂ (blood oxygen) from PPG IR+Red
+
+### The "problem"
+The session-summary Heart-rate graph existed but the SpO₂ (blood oxygen) graph
+was missing entirely — no SpO₂ data was being computed or recorded.
+
+### Root cause
+Two bugs in `compute_spo2()` (`rust/src/api/muse.rs`):
+
+1. **AC std dev formula wrong**: computed `sqrt(sum_of_squared_diffs) / n` instead
+   of `sqrt(sum_of_squared_diffs / n)` — the former gives tiny values (divides
+   by n twice), making `ir_ac < 1.0` gate always fail.
+
+2. **Confidence unscaled**: `AC/DC` ratio for PPG is ~1-5%, but confidence was
+   just `AC/DC`, yielding 0.01-0.05. Summary filter `confidence >= 0.3`
+   dropped everything.
+
+Also: HR window was 8s but SpO₂ needs 30s for stable ratio-of-ratios.
+
+### Fix (commit `4bc0300`)
+- AC = proper std dev: `sqrt(sum((x - mean)²) / n)` → `ir_ac`/`red_ac` now ~1% of DC
+- Confidence: `AC/DC * 20` → typical 1-5% PPG gives 0.2-1.0, passes `>= 0.3` filter
+- HR window: 8s → 30s (matching SpO₂)
+- Dual-axis chart in dashboard: HR (left, 40-200 bpm) + SpO₂ (right, 50-100%),
+  avg lines (HR dashed deep red, SpO₂ dotted blue), legend toggles
+- Movement graph fixed bounds: 0–1.5g
+
+### Verification
+- SpO₂ now populates session summary + combined chart on Classic devices
+- HR/SpO₂ avg lines render with correct styles (dashed/dotted, thin)
+- Movement graph clips at 1.5g
+- `cargo test --lib session_format` + `flutter analyze` pass
+- Revert if needed: `git revert 4bc0300` (parent `217cefe`)
