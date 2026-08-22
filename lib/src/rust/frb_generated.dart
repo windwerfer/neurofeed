@@ -1060,6 +1060,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  SpO2Dto dco_decode_box_autoadd_sp_o_2_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_sp_o_2_dto(raw);
+  }
+
+  @protected
   TelemetrySnapshot dco_decode_box_autoadd_telemetry_snapshot(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_telemetry_snapshot(raw);
@@ -1317,6 +1323,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<SpO2Record> dco_decode_list_sp_o_2_record(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_sp_o_2_record).toList();
+  }
+
+  @protected
   List<XyzDto> dco_decode_list_xyz_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_xyz_dto).toList();
@@ -1375,18 +1387,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case 9:
         return MuseEventDto_Pulse(dco_decode_box_autoadd_pulse_dto(raw[1]));
       case 10:
+        return MuseEventDto_SpO2(dco_decode_box_autoadd_sp_o_2_dto(raw[1]));
+      case 11:
         return MuseEventDto_Movement(
           dco_decode_box_autoadd_movement_dto(raw[1]),
         );
-      case 11:
+      case 12:
         return MuseEventDto_PeakAlpha(
           dco_decode_box_autoadd_peak_alpha_dto(raw[1]),
         );
-      case 12:
+      case 13:
         return MuseEventDto_Gestures(
           dco_decode_box_autoadd_gesture_dto(raw[1]),
         );
-      case 13:
+      case 14:
         return MuseEventDto_Reve(dco_decode_box_autoadd_reve_dto(raw[1]));
       default:
         throw Exception("unreachable");
@@ -1507,15 +1521,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SessionData dco_decode_session_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return SessionData(
       bands: dco_decode_list_bands_record(arr[0]),
       pulses: dco_decode_list_pulse_record(arr[1]),
-      movements: dco_decode_list_movement_record(arr[2]),
-      peakAlphas: dco_decode_list_peak_alpha_record(arr[3]),
-      eegSamples: dco_decode_u_64(arr[4]),
-      eeg: dco_decode_list_eeg_sample_record(arr[5]),
+      spo2S: dco_decode_list_sp_o_2_record(arr[2]),
+      movements: dco_decode_list_movement_record(arr[3]),
+      peakAlphas: dco_decode_list_peak_alpha_record(arr[4]),
+      eegSamples: dco_decode_u_64(arr[5]),
+      eeg: dco_decode_list_eeg_sample_record(arr[6]),
+    );
+  }
+
+  @protected
+  SpO2Dto dco_decode_sp_o_2_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return SpO2Dto(
+      timestamp: dco_decode_f_64(arr[0]),
+      spo2: dco_decode_f_64(arr[1]),
+      confidence: dco_decode_f_64(arr[2]),
+    );
+  }
+
+  @protected
+  SpO2Record dco_decode_sp_o_2_record(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return SpO2Record(
+      timestamp: dco_decode_f_64(arr[0]),
+      spo2: dco_decode_f_64(arr[1]),
+      confidence: dco_decode_f_64(arr[2]),
     );
   }
 
@@ -1740,6 +1781,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ReveDto sse_decode_box_autoadd_reve_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_reve_dto(deserializer));
+  }
+
+  @protected
+  SpO2Dto sse_decode_box_autoadd_sp_o_2_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_sp_o_2_dto(deserializer));
   }
 
   @protected
@@ -2063,6 +2110,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<SpO2Record> sse_decode_list_sp_o_2_record(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <SpO2Record>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_sp_o_2_record(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<XyzDto> sse_decode_list_xyz_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2128,15 +2187,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         var var_field0 = sse_decode_box_autoadd_pulse_dto(deserializer);
         return MuseEventDto_Pulse(var_field0);
       case 10:
+        var var_field0 = sse_decode_box_autoadd_sp_o_2_dto(deserializer);
+        return MuseEventDto_SpO2(var_field0);
+      case 11:
         var var_field0 = sse_decode_box_autoadd_movement_dto(deserializer);
         return MuseEventDto_Movement(var_field0);
-      case 11:
+      case 12:
         var var_field0 = sse_decode_box_autoadd_peak_alpha_dto(deserializer);
         return MuseEventDto_PeakAlpha(var_field0);
-      case 12:
+      case 13:
         var var_field0 = sse_decode_box_autoadd_gesture_dto(deserializer);
         return MuseEventDto_Gestures(var_field0);
-      case 13:
+      case 14:
         var var_field0 = sse_decode_box_autoadd_reve_dto(deserializer);
         return MuseEventDto_Reve(var_field0);
       default:
@@ -2278,6 +2340,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_bands = sse_decode_list_bands_record(deserializer);
     var var_pulses = sse_decode_list_pulse_record(deserializer);
+    var var_spo2S = sse_decode_list_sp_o_2_record(deserializer);
     var var_movements = sse_decode_list_movement_record(deserializer);
     var var_peakAlphas = sse_decode_list_peak_alpha_record(deserializer);
     var var_eegSamples = sse_decode_u_64(deserializer);
@@ -2285,10 +2348,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return SessionData(
       bands: var_bands,
       pulses: var_pulses,
+      spo2S: var_spo2S,
       movements: var_movements,
       peakAlphas: var_peakAlphas,
       eegSamples: var_eegSamples,
       eeg: var_eeg,
+    );
+  }
+
+  @protected
+  SpO2Dto sse_decode_sp_o_2_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_timestamp = sse_decode_f_64(deserializer);
+    var var_spo2 = sse_decode_f_64(deserializer);
+    var var_confidence = sse_decode_f_64(deserializer);
+    return SpO2Dto(
+      timestamp: var_timestamp,
+      spo2: var_spo2,
+      confidence: var_confidence,
+    );
+  }
+
+  @protected
+  SpO2Record sse_decode_sp_o_2_record(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_timestamp = sse_decode_f_64(deserializer);
+    var var_spo2 = sse_decode_f_64(deserializer);
+    var var_confidence = sse_decode_f_64(deserializer);
+    return SpO2Record(
+      timestamp: var_timestamp,
+      spo2: var_spo2,
+      confidence: var_confidence,
     );
   }
 
@@ -2520,6 +2610,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_reve_dto(ReveDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_reve_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_sp_o_2_dto(
+    SpO2Dto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_sp_o_2_dto(self, serializer);
   }
 
   @protected
@@ -2812,6 +2911,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_sp_o_2_record(
+    List<SpO2Record> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_sp_o_2_record(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_xyz_dto(List<XyzDto> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
@@ -2870,17 +2981,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       case MuseEventDto_Pulse(field0: final field0):
         sse_encode_i_32(9, serializer);
         sse_encode_box_autoadd_pulse_dto(field0, serializer);
-      case MuseEventDto_Movement(field0: final field0):
+      case MuseEventDto_SpO2(field0: final field0):
         sse_encode_i_32(10, serializer);
+        sse_encode_box_autoadd_sp_o_2_dto(field0, serializer);
+      case MuseEventDto_Movement(field0: final field0):
+        sse_encode_i_32(11, serializer);
         sse_encode_box_autoadd_movement_dto(field0, serializer);
       case MuseEventDto_PeakAlpha(field0: final field0):
-        sse_encode_i_32(11, serializer);
+        sse_encode_i_32(12, serializer);
         sse_encode_box_autoadd_peak_alpha_dto(field0, serializer);
       case MuseEventDto_Gestures(field0: final field0):
-        sse_encode_i_32(12, serializer);
+        sse_encode_i_32(13, serializer);
         sse_encode_box_autoadd_gesture_dto(field0, serializer);
       case MuseEventDto_Reve(field0: final field0):
-        sse_encode_i_32(13, serializer);
+        sse_encode_i_32(14, serializer);
         sse_encode_box_autoadd_reve_dto(field0, serializer);
     }
   }
@@ -2988,10 +3102,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_bands_record(self.bands, serializer);
     sse_encode_list_pulse_record(self.pulses, serializer);
+    sse_encode_list_sp_o_2_record(self.spo2S, serializer);
     sse_encode_list_movement_record(self.movements, serializer);
     sse_encode_list_peak_alpha_record(self.peakAlphas, serializer);
     sse_encode_u_64(self.eegSamples, serializer);
     sse_encode_list_eeg_sample_record(self.eeg, serializer);
+  }
+
+  @protected
+  void sse_encode_sp_o_2_dto(SpO2Dto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.timestamp, serializer);
+    sse_encode_f_64(self.spo2, serializer);
+    sse_encode_f_64(self.confidence, serializer);
+  }
+
+  @protected
+  void sse_encode_sp_o_2_record(SpO2Record self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.timestamp, serializer);
+    sse_encode_f_64(self.spo2, serializer);
+    sse_encode_f_64(self.confidence, serializer);
   }
 
   @protected

@@ -1173,6 +1173,7 @@ abstract class _PulseRecord implements PulseRecord {
 mixin _$SessionData {
   List<BandsRecord> get bands => throw _privateConstructorUsedError;
   List<PulseRecord> get pulses => throw _privateConstructorUsedError;
+  List<SpO2Record> get spo2S => throw _privateConstructorUsedError;
   List<MovementRecord> get movements => throw _privateConstructorUsedError;
   List<PeakAlphaRecord> get peakAlphas => throw _privateConstructorUsedError;
   BigInt get eegSamples => throw _privateConstructorUsedError;
@@ -1195,6 +1196,7 @@ abstract class $SessionDataCopyWith<$Res> {
   $Res call({
     List<BandsRecord> bands,
     List<PulseRecord> pulses,
+    List<SpO2Record> spo2S,
     List<MovementRecord> movements,
     List<PeakAlphaRecord> peakAlphas,
     BigInt eegSamples,
@@ -1219,6 +1221,7 @@ class _$SessionDataCopyWithImpl<$Res, $Val extends SessionData>
   $Res call({
     Object? bands = null,
     Object? pulses = null,
+    Object? spo2S = null,
     Object? movements = null,
     Object? peakAlphas = null,
     Object? eegSamples = null,
@@ -1234,6 +1237,10 @@ class _$SessionDataCopyWithImpl<$Res, $Val extends SessionData>
                 ? _value.pulses
                 : pulses // ignore: cast_nullable_to_non_nullable
                       as List<PulseRecord>,
+            spo2S: null == spo2S
+                ? _value.spo2S
+                : spo2S // ignore: cast_nullable_to_non_nullable
+                      as List<SpO2Record>,
             movements: null == movements
                 ? _value.movements
                 : movements // ignore: cast_nullable_to_non_nullable
@@ -1268,6 +1275,7 @@ abstract class _$$SessionDataImplCopyWith<$Res>
   $Res call({
     List<BandsRecord> bands,
     List<PulseRecord> pulses,
+    List<SpO2Record> spo2S,
     List<MovementRecord> movements,
     List<PeakAlphaRecord> peakAlphas,
     BigInt eegSamples,
@@ -1291,6 +1299,7 @@ class __$$SessionDataImplCopyWithImpl<$Res>
   $Res call({
     Object? bands = null,
     Object? pulses = null,
+    Object? spo2S = null,
     Object? movements = null,
     Object? peakAlphas = null,
     Object? eegSamples = null,
@@ -1306,6 +1315,10 @@ class __$$SessionDataImplCopyWithImpl<$Res>
             ? _value._pulses
             : pulses // ignore: cast_nullable_to_non_nullable
                   as List<PulseRecord>,
+        spo2S: null == spo2S
+            ? _value._spo2S
+            : spo2S // ignore: cast_nullable_to_non_nullable
+                  as List<SpO2Record>,
         movements: null == movements
             ? _value._movements
             : movements // ignore: cast_nullable_to_non_nullable
@@ -1333,12 +1346,14 @@ class _$SessionDataImpl implements _SessionData {
   const _$SessionDataImpl({
     required final List<BandsRecord> bands,
     required final List<PulseRecord> pulses,
+    required final List<SpO2Record> spo2S,
     required final List<MovementRecord> movements,
     required final List<PeakAlphaRecord> peakAlphas,
     required this.eegSamples,
     required final List<EegSampleRecord> eeg,
   }) : _bands = bands,
        _pulses = pulses,
+       _spo2S = spo2S,
        _movements = movements,
        _peakAlphas = peakAlphas,
        _eeg = eeg;
@@ -1357,6 +1372,14 @@ class _$SessionDataImpl implements _SessionData {
     if (_pulses is EqualUnmodifiableListView) return _pulses;
     // ignore: implicit_dynamic_type
     return EqualUnmodifiableListView(_pulses);
+  }
+
+  final List<SpO2Record> _spo2S;
+  @override
+  List<SpO2Record> get spo2S {
+    if (_spo2S is EqualUnmodifiableListView) return _spo2S;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_spo2S);
   }
 
   final List<MovementRecord> _movements;
@@ -1387,7 +1410,7 @@ class _$SessionDataImpl implements _SessionData {
 
   @override
   String toString() {
-    return 'SessionData(bands: $bands, pulses: $pulses, movements: $movements, peakAlphas: $peakAlphas, eegSamples: $eegSamples, eeg: $eeg)';
+    return 'SessionData(bands: $bands, pulses: $pulses, spo2S: $spo2S, movements: $movements, peakAlphas: $peakAlphas, eegSamples: $eegSamples, eeg: $eeg)';
   }
 
   @override
@@ -1397,6 +1420,7 @@ class _$SessionDataImpl implements _SessionData {
             other is _$SessionDataImpl &&
             const DeepCollectionEquality().equals(other._bands, _bands) &&
             const DeepCollectionEquality().equals(other._pulses, _pulses) &&
+            const DeepCollectionEquality().equals(other._spo2S, _spo2S) &&
             const DeepCollectionEquality().equals(
               other._movements,
               _movements,
@@ -1415,6 +1439,7 @@ class _$SessionDataImpl implements _SessionData {
     runtimeType,
     const DeepCollectionEquality().hash(_bands),
     const DeepCollectionEquality().hash(_pulses),
+    const DeepCollectionEquality().hash(_spo2S),
     const DeepCollectionEquality().hash(_movements),
     const DeepCollectionEquality().hash(_peakAlphas),
     eegSamples,
@@ -1434,6 +1459,7 @@ abstract class _SessionData implements SessionData {
   const factory _SessionData({
     required final List<BandsRecord> bands,
     required final List<PulseRecord> pulses,
+    required final List<SpO2Record> spo2S,
     required final List<MovementRecord> movements,
     required final List<PeakAlphaRecord> peakAlphas,
     required final BigInt eegSamples,
@@ -1444,6 +1470,8 @@ abstract class _SessionData implements SessionData {
   List<BandsRecord> get bands;
   @override
   List<PulseRecord> get pulses;
+  @override
+  List<SpO2Record> get spo2S;
   @override
   List<MovementRecord> get movements;
   @override
@@ -1458,5 +1486,183 @@ abstract class _SessionData implements SessionData {
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$SessionDataImplCopyWith<_$SessionDataImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+mixin _$SpO2Record {
+  double get timestamp => throw _privateConstructorUsedError;
+  double get spo2 => throw _privateConstructorUsedError;
+  double get confidence => throw _privateConstructorUsedError;
+
+  /// Create a copy of SpO2Record
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $SpO2RecordCopyWith<SpO2Record> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $SpO2RecordCopyWith<$Res> {
+  factory $SpO2RecordCopyWith(
+    SpO2Record value,
+    $Res Function(SpO2Record) then,
+  ) = _$SpO2RecordCopyWithImpl<$Res, SpO2Record>;
+  @useResult
+  $Res call({double timestamp, double spo2, double confidence});
+}
+
+/// @nodoc
+class _$SpO2RecordCopyWithImpl<$Res, $Val extends SpO2Record>
+    implements $SpO2RecordCopyWith<$Res> {
+  _$SpO2RecordCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of SpO2Record
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? timestamp = null,
+    Object? spo2 = null,
+    Object? confidence = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            timestamp: null == timestamp
+                ? _value.timestamp
+                : timestamp // ignore: cast_nullable_to_non_nullable
+                      as double,
+            spo2: null == spo2
+                ? _value.spo2
+                : spo2 // ignore: cast_nullable_to_non_nullable
+                      as double,
+            confidence: null == confidence
+                ? _value.confidence
+                : confidence // ignore: cast_nullable_to_non_nullable
+                      as double,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$SpO2RecordImplCopyWith<$Res>
+    implements $SpO2RecordCopyWith<$Res> {
+  factory _$$SpO2RecordImplCopyWith(
+    _$SpO2RecordImpl value,
+    $Res Function(_$SpO2RecordImpl) then,
+  ) = __$$SpO2RecordImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({double timestamp, double spo2, double confidence});
+}
+
+/// @nodoc
+class __$$SpO2RecordImplCopyWithImpl<$Res>
+    extends _$SpO2RecordCopyWithImpl<$Res, _$SpO2RecordImpl>
+    implements _$$SpO2RecordImplCopyWith<$Res> {
+  __$$SpO2RecordImplCopyWithImpl(
+    _$SpO2RecordImpl _value,
+    $Res Function(_$SpO2RecordImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of SpO2Record
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? timestamp = null,
+    Object? spo2 = null,
+    Object? confidence = null,
+  }) {
+    return _then(
+      _$SpO2RecordImpl(
+        timestamp: null == timestamp
+            ? _value.timestamp
+            : timestamp // ignore: cast_nullable_to_non_nullable
+                  as double,
+        spo2: null == spo2
+            ? _value.spo2
+            : spo2 // ignore: cast_nullable_to_non_nullable
+                  as double,
+        confidence: null == confidence
+            ? _value.confidence
+            : confidence // ignore: cast_nullable_to_non_nullable
+                  as double,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$SpO2RecordImpl implements _SpO2Record {
+  const _$SpO2RecordImpl({
+    required this.timestamp,
+    required this.spo2,
+    required this.confidence,
+  });
+
+  @override
+  final double timestamp;
+  @override
+  final double spo2;
+  @override
+  final double confidence;
+
+  @override
+  String toString() {
+    return 'SpO2Record(timestamp: $timestamp, spo2: $spo2, confidence: $confidence)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$SpO2RecordImpl &&
+            (identical(other.timestamp, timestamp) ||
+                other.timestamp == timestamp) &&
+            (identical(other.spo2, spo2) || other.spo2 == spo2) &&
+            (identical(other.confidence, confidence) ||
+                other.confidence == confidence));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, timestamp, spo2, confidence);
+
+  /// Create a copy of SpO2Record
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$SpO2RecordImplCopyWith<_$SpO2RecordImpl> get copyWith =>
+      __$$SpO2RecordImplCopyWithImpl<_$SpO2RecordImpl>(this, _$identity);
+}
+
+abstract class _SpO2Record implements SpO2Record {
+  const factory _SpO2Record({
+    required final double timestamp,
+    required final double spo2,
+    required final double confidence,
+  }) = _$SpO2RecordImpl;
+
+  @override
+  double get timestamp;
+  @override
+  double get spo2;
+  @override
+  double get confidence;
+
+  /// Create a copy of SpO2Record
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$SpO2RecordImplCopyWith<_$SpO2RecordImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

@@ -517,6 +517,15 @@ class SessionExporter {
           ExportChartLine('bpm', const Color(0xFFEC407A), prepared.bpm),
         ],
       ),
+      ExportChart(
+        title: 'Blood oxygen (SpO₂)',
+        subtitle: 'PPG IR+Red ratio-of-ratios',
+        lines: [
+          ExportChartLine('spo2', const Color(0xFF26C6DA), prepared.spo2),
+        ],
+        yMin: 50,
+        yMax: 100,
+      ),
     ];
     final drowsiness = meta.drowsiness;
     if (drowsiness != null && drowsiness.buckets.isNotEmpty) {

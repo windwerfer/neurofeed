@@ -57,6 +57,7 @@ class SessionRecorder {
       MuseEventDto_Ppg() => _enabled(RecordingStream.ppg),
       MuseEventDto_Bands() => _enabled(RecordingStream.bands),
       MuseEventDto_Pulse() => _enabled(RecordingStream.pulse),
+      MuseEventDto_SpO2() => _enabled(RecordingStream.spo2),
       MuseEventDto_Movement() => _enabled(RecordingStream.movement),
       MuseEventDto_PeakAlpha() => _enabled(RecordingStream.peakAlpha),
       _ => false,

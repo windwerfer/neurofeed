@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:muse_ml/src/charts/session_reader.dart';
 
 /// Decimated per-second view of a session, stored in the metadata JSON so the
-/// history detail can render bands / heart rate / movement / peak alpha
+/// history detail can render bands / heart rate / SpO2 / movement / peak alpha
 /// without reading the (potentially large) `.muse` body or replaying every raw
 /// frame. The frame body stays the authoritative source for export/full analysis.
 class SessionOverview {
@@ -14,6 +14,7 @@ class SessionOverview {
     required this.endSecs,
     required this.bands,
     required this.pulse,
+    required this.spo2,
     required this.movement,
     required this.peakAlphaFreq,
     required this.peakAlphaPower,
@@ -38,6 +39,9 @@ class SessionOverview {
 
   /// One bpm per bucket (null when no pulse data in that bucket).
   final List<double?> pulse;
+
+  /// One SpO2 % per bucket (null when no SpO2 data in that bucket).
+  final List<double?> spo2;
 
   /// Movement score per bucket.
   final List<double?> movement;
@@ -67,6 +71,7 @@ class SessionOverview {
       if (trainingStartSecs != null) 'trainingStart': trainingStartSecs,
       'bands': b,
       'pulse': pulse,
+      'spo2': spo2,
       'movement': movement,
       'peakAlphaFreq': peakAlphaFreq,
       'peakAlphaPower': peakAlphaPower,
@@ -100,6 +105,7 @@ class SessionOverview {
       endSecs: (json['end'] as num?)?.toDouble() ?? 0,
       bands: bands,
       pulse: _numList(json['pulse']) ?? const [],
+      spo2: _numList(json['spo2']) ?? const [],
       movement: _numList(json['movement']) ?? const [],
       peakAlphaFreq: _numList(json['peakAlphaFreq']) ?? const [],
       peakAlphaPower: _numList(json['peakAlphaPower']) ?? const [],
@@ -132,6 +138,7 @@ class SessionOverview {
         endSecs: 0,
         bands: {},
         pulse: [],
+        spo2: [],
         movement: [],
         peakAlphaFreq: [],
         peakAlphaPower: [],
@@ -147,6 +154,10 @@ class SessionOverview {
     for (final p in data.pulses) {
       minTs = min(minTs, p.timestamp);
       maxTs = max(maxTs, p.timestamp);
+    }
+    for (final s in data.spo2S) {
+      minTs = min(minTs, s.timestamp);
+      maxTs = max(maxTs, s.timestamp);
     }
     for (final m in data.movements) {
       minTs = min(minTs, m.timestamp);
@@ -215,6 +226,14 @@ class SessionOverview {
       startTs,
       width,
     );
+    final spo2 = _bucketAvg(
+      data.spo2S
+          .where((s) => s.confidence >= 0.3)
+          .map((s) => (s.timestamp, s.spo2))
+          .toList(),
+      startTs,
+      width,
+    );
     final movement = _bucketAvg(
       data.movements.map((m) => (m.timestamp, m.score)).toList(),
       startTs,
@@ -243,6 +262,7 @@ class SessionOverview {
       endSecs: maxTs,
       bands: bands,
       pulse: pulse,
+      spo2: spo2,
       movement: movement,
       peakAlphaFreq: freq,
       peakAlphaPower: power,

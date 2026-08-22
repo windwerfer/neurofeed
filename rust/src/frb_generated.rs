@@ -1376,6 +1376,20 @@ impl SseDecode for Vec<(String, String)> {
     }
 }
 
+impl SseDecode for Vec<crate::api::session_format::SpO2Record> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::session_format::SpO2Record>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::muse::XyzDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1458,18 +1472,22 @@ impl SseDecode for crate::api::muse::MuseEventDto {
                 return crate::api::muse::MuseEventDto::Pulse(var_field0);
             }
             10 => {
+                let mut var_field0 = <crate::api::muse::SpO2Dto>::sse_decode(deserializer);
+                return crate::api::muse::MuseEventDto::SpO2(var_field0);
+            }
+            11 => {
                 let mut var_field0 = <crate::api::muse::MovementDto>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::Movement(var_field0);
             }
-            11 => {
+            12 => {
                 let mut var_field0 = <crate::api::muse::PeakAlphaDto>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::PeakAlpha(var_field0);
             }
-            12 => {
+            13 => {
                 let mut var_field0 = <crate::api::muse::GestureDto>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::Gestures(var_field0);
             }
-            13 => {
+            14 => {
                 let mut var_field0 = <crate::api::muse::ReveDto>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::Reve(var_field0);
             }
@@ -1621,6 +1639,7 @@ impl SseDecode for crate::api::session_format::SessionData {
             <Vec<crate::api::session_format::BandsRecord>>::sse_decode(deserializer);
         let mut var_pulses =
             <Vec<crate::api::session_format::PulseRecord>>::sse_decode(deserializer);
+        let mut var_spo2S = <Vec<crate::api::session_format::SpO2Record>>::sse_decode(deserializer);
         let mut var_movements =
             <Vec<crate::api::session_format::MovementRecord>>::sse_decode(deserializer);
         let mut var_peakAlphas =
@@ -1631,10 +1650,39 @@ impl SseDecode for crate::api::session_format::SessionData {
         return crate::api::session_format::SessionData {
             bands: var_bands,
             pulses: var_pulses,
+            spo2s: var_spo2S,
             movements: var_movements,
             peak_alphas: var_peakAlphas,
             eeg_samples: var_eegSamples,
             eeg: var_eeg,
+        };
+    }
+}
+
+impl SseDecode for crate::api::muse::SpO2Dto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_timestamp = <f64>::sse_decode(deserializer);
+        let mut var_spo2 = <f64>::sse_decode(deserializer);
+        let mut var_confidence = <f64>::sse_decode(deserializer);
+        return crate::api::muse::SpO2Dto {
+            timestamp: var_timestamp,
+            spo2: var_spo2,
+            confidence: var_confidence,
+        };
+    }
+}
+
+impl SseDecode for crate::api::session_format::SpO2Record {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_timestamp = <f64>::sse_decode(deserializer);
+        let mut var_spo2 = <f64>::sse_decode(deserializer);
+        let mut var_confidence = <f64>::sse_decode(deserializer);
+        return crate::api::session_format::SpO2Record {
+            timestamp: var_timestamp,
+            spo2: var_spo2,
+            confidence: var_confidence,
         };
     }
 }
@@ -2127,17 +2175,20 @@ impl flutter_rust_bridge::IntoDart for crate::api::muse::MuseEventDto {
             crate::api::muse::MuseEventDto::Pulse(field0) => {
                 [9.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
-            crate::api::muse::MuseEventDto::Movement(field0) => {
+            crate::api::muse::MuseEventDto::SpO2(field0) => {
                 [10.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
-            crate::api::muse::MuseEventDto::PeakAlpha(field0) => {
+            crate::api::muse::MuseEventDto::Movement(field0) => {
                 [11.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
-            crate::api::muse::MuseEventDto::Gestures(field0) => {
+            crate::api::muse::MuseEventDto::PeakAlpha(field0) => {
                 [12.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
-            crate::api::muse::MuseEventDto::Reve(field0) => {
+            crate::api::muse::MuseEventDto::Gestures(field0) => {
                 [13.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::muse::MuseEventDto::Reve(field0) => {
+                [14.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
             _ => {
                 unimplemented!("");
@@ -2283,6 +2334,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::session_format::SessionData {
         [
             self.bands.into_into_dart().into_dart(),
             self.pulses.into_into_dart().into_dart(),
+            self.spo2s.into_into_dart().into_dart(),
             self.movements.into_into_dart().into_dart(),
             self.peak_alphas.into_into_dart().into_dart(),
             self.eeg_samples.into_into_dart().into_dart(),
@@ -2299,6 +2351,45 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::session_format::SessionData>
     for crate::api::session_format::SessionData
 {
     fn into_into_dart(self) -> crate::api::session_format::SessionData {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::muse::SpO2Dto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.timestamp.into_into_dart().into_dart(),
+            self.spo2.into_into_dart().into_dart(),
+            self.confidence.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::muse::SpO2Dto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::SpO2Dto> for crate::api::muse::SpO2Dto {
+    fn into_into_dart(self) -> crate::api::muse::SpO2Dto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::session_format::SpO2Record {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.timestamp.into_into_dart().into_dart(),
+            self.spo2.into_into_dart().into_dart(),
+            self.confidence.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::session_format::SpO2Record
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::session_format::SpO2Record>
+    for crate::api::session_format::SpO2Record
+{
+    fn into_into_dart(self) -> crate::api::session_format::SpO2Record {
         self
     }
 }
@@ -2652,6 +2743,16 @@ impl SseEncode for Vec<(String, String)> {
     }
 }
 
+impl SseEncode for Vec<crate::api::session_format::SpO2Record> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::session_format::SpO2Record>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::muse::XyzDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2721,20 +2822,24 @@ impl SseEncode for crate::api::muse::MuseEventDto {
                 <i32>::sse_encode(9, serializer);
                 <crate::api::muse::PulseDto>::sse_encode(field0, serializer);
             }
-            crate::api::muse::MuseEventDto::Movement(field0) => {
+            crate::api::muse::MuseEventDto::SpO2(field0) => {
                 <i32>::sse_encode(10, serializer);
+                <crate::api::muse::SpO2Dto>::sse_encode(field0, serializer);
+            }
+            crate::api::muse::MuseEventDto::Movement(field0) => {
+                <i32>::sse_encode(11, serializer);
                 <crate::api::muse::MovementDto>::sse_encode(field0, serializer);
             }
             crate::api::muse::MuseEventDto::PeakAlpha(field0) => {
-                <i32>::sse_encode(11, serializer);
+                <i32>::sse_encode(12, serializer);
                 <crate::api::muse::PeakAlphaDto>::sse_encode(field0, serializer);
             }
             crate::api::muse::MuseEventDto::Gestures(field0) => {
-                <i32>::sse_encode(12, serializer);
+                <i32>::sse_encode(13, serializer);
                 <crate::api::muse::GestureDto>::sse_encode(field0, serializer);
             }
             crate::api::muse::MuseEventDto::Reve(field0) => {
-                <i32>::sse_encode(13, serializer);
+                <i32>::sse_encode(14, serializer);
                 <crate::api::muse::ReveDto>::sse_encode(field0, serializer);
             }
             _ => {
@@ -2845,6 +2950,7 @@ impl SseEncode for crate::api::session_format::SessionData {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<crate::api::session_format::BandsRecord>>::sse_encode(self.bands, serializer);
         <Vec<crate::api::session_format::PulseRecord>>::sse_encode(self.pulses, serializer);
+        <Vec<crate::api::session_format::SpO2Record>>::sse_encode(self.spo2s, serializer);
         <Vec<crate::api::session_format::MovementRecord>>::sse_encode(self.movements, serializer);
         <Vec<crate::api::session_format::PeakAlphaRecord>>::sse_encode(
             self.peak_alphas,
@@ -2852,6 +2958,24 @@ impl SseEncode for crate::api::session_format::SessionData {
         );
         <u64>::sse_encode(self.eeg_samples, serializer);
         <Vec<crate::api::session_format::EegSampleRecord>>::sse_encode(self.eeg, serializer);
+    }
+}
+
+impl SseEncode for crate::api::muse::SpO2Dto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.timestamp, serializer);
+        <f64>::sse_encode(self.spo2, serializer);
+        <f64>::sse_encode(self.confidence, serializer);
+    }
+}
+
+impl SseEncode for crate::api::session_format::SpO2Record {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.timestamp, serializer);
+        <f64>::sse_encode(self.spo2, serializer);
+        <f64>::sse_encode(self.confidence, serializer);
     }
 }
 

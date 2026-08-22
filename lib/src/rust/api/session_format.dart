@@ -129,9 +129,19 @@ sealed class SessionData with _$SessionData {
   const factory SessionData({
     required List<BandsRecord> bands,
     required List<PulseRecord> pulses,
+    required List<SpO2Record> spo2S,
     required List<MovementRecord> movements,
     required List<PeakAlphaRecord> peakAlphas,
     required BigInt eegSamples,
     required List<EegSampleRecord> eeg,
   }) = _SessionData;
+}
+
+@freezed
+sealed class SpO2Record with _$SpO2Record {
+  const factory SpO2Record({
+    required double timestamp,
+    required double spo2,
+    required double confidence,
+  }) = _SpO2Record;
 }

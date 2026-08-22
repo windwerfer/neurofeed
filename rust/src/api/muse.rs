@@ -195,6 +195,14 @@ pub struct PulseDto {
     pub confidence: f64,
 }
 
+/// Blood oxygen saturation estimate from PPG IR + Red channels.
+#[frb(dart_metadata = ("freezed",))]
+pub struct SpO2Dto {
+    pub timestamp: f64,
+    pub spo2: f64,
+    pub confidence: f64,
+}
+
 /// Movement score derived from accelerometer magnitude variance.
 #[frb(dart_metadata = ("freezed",))]
 pub struct MovementDto {
@@ -257,6 +265,7 @@ pub enum MuseEventDto {
     Gyroscope(ImuDto),
     Control(ControlDto),
     Pulse(PulseDto),
+    SpO2(SpO2Dto),
     Movement(MovementDto),
     PeakAlpha(PeakAlphaDto),
     Gestures(GestureDto),
@@ -555,6 +564,7 @@ fn spawn_event_forwarder() {
 
         // PPG and accelerometer buffers for derived metrics
         let mut ppg_ir_buffer: Vec<f64> = Vec::new();
+        let mut ppg_red_buffer: Vec<f64> = Vec::new();
         let mut accel_mag_buffer: Vec<f64> = Vec::new();
         let mut last_metrics = tokio::time::Instant::now();
 
@@ -702,14 +712,24 @@ fn spawn_event_forwarder() {
                     }
                 }
 
-                // Extract PPG IR samples for pulse detection
+                // Extract PPG IR (channel 1) and Red (channel 2) samples for pulse / SpO2
                 if let MuseEventDto::Ppg(ref ppg) = dto {
-                    if ppg.channel == 1 {
-                        ppg_ir_buffer.extend(ppg.samples.iter().copied());
-                        if ppg_ir_buffer.len() > 1280 {
-                            let drain_to = ppg_ir_buffer.len() - 1280;
-                            ppg_ir_buffer.drain(..drain_to);
+                    match ppg.channel {
+                        1 => {
+                            ppg_ir_buffer.extend(ppg.samples.iter().copied());
+                            if ppg_ir_buffer.len() > 1920 {
+                                let drain_to = ppg_ir_buffer.len() - 1920;
+                                ppg_ir_buffer.drain(..drain_to);
+                            }
                         }
+                        2 => {
+                            ppg_red_buffer.extend(ppg.samples.iter().copied());
+                            if ppg_red_buffer.len() > 1920 {
+                                let drain_to = ppg_red_buffer.len() - 1920;
+                                ppg_red_buffer.drain(..drain_to);
+                            }
+                        }
+                        _ => {}
                     }
                 }
 
@@ -849,6 +869,27 @@ fn spawn_event_forwarder() {
                                         timestamp: now_ms,
                                         bpm,
                                         confidence,
+                                    }))
+                                    .is_err()
+                                {
+                                    guard.sink = None;
+                                }
+                            }
+                        }
+
+                        // SpO2 from IR + Red (30 s window)
+                        let (spo2, spo2_conf) = compute_spo2(&ppg_ir_buffer, &ppg_red_buffer);
+                        if spo2 > 0.0 {
+                            let mut guard = state()
+                                .inner
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            if let Some(sink) = &guard.sink {
+                                if sink
+                                    .add(MuseEventDto::SpO2(SpO2Dto {
+                                        timestamp: now_ms,
+                                        spo2,
+                                        confidence: spo2_conf,
                                     }))
                                     .is_err()
                                 {
@@ -1095,7 +1136,7 @@ fn compute_pulse(ir_samples: &[f64]) -> (f64, f64) {
         return (0.0, 0.0);
     }
     // Use the last 8 seconds of data
-    let window_size = (8.0 * 64.0) as usize;
+    let window_size = (30.0 * 64.0) as usize;
     let start = ir_samples.len().saturating_sub(window_size);
     let window = &ir_samples[start..];
 
@@ -1135,6 +1176,65 @@ fn compute_pulse(ir_samples: &[f64]) -> (f64, f64) {
     let cv = variance.sqrt() / avg_ibi;
     let confidence = (1.0 - cv).max(0.0);
     (bpm, confidence)
+}
+
+/// SpO2 estimation from PPG IR + Red channels using ratio-of-ratios.
+/// Returns (spo2_percent, confidence).
+/// Standard coefficients (A=110, B=25) are a best-guess; not Muse-calibrated.
+fn compute_spo2(ir_samples: &[f64], red_samples: &[f64]) -> (f64, f64) {
+    const MIN_SAMPLES: usize = 1920; // 30 s @ 64 Hz
+    if ir_samples.len() < MIN_SAMPLES || red_samples.len() < MIN_SAMPLES {
+        return (0.0, 0.0);
+    }
+    // Use the last 30 seconds of data
+    let window_size = MIN_SAMPLES;
+    let ir_start = ir_samples.len().saturating_sub(window_size);
+    let red_start = red_samples.len().saturating_sub(window_size);
+    let ir_window = &ir_samples[ir_start..];
+    let red_window = &red_samples[red_start..];
+
+    // DC = mean, AC = std dev of the AC component (after removing DC)
+    let ir_dc = ir_window.iter().copied().sum::<f64>() / ir_window.len() as f64;
+    let red_dc = red_window.iter().copied().sum::<f64>() / red_window.len() as f64;
+
+    let ir_ac: f64 = ir_window
+        .iter()
+        .map(|s| (s - ir_dc).powi(2))
+        .sum::<f64>()
+        .sqrt()
+        / ir_window.len() as f64;
+    let red_ac: f64 = red_window
+        .iter()
+        .map(|s| (s - red_dc).powi(2))
+        .sum::<f64>()
+        .sqrt()
+        / red_window.len() as f64;
+
+    // Gating: require sufficient AC amplitude on both channels
+    if ir_dc < 100.0 || red_dc < 100.0 || ir_ac < 1.0 || red_ac < 1.0 {
+        return (0.0, 0.0);
+    }
+
+    // Ratio-of-ratios R = (Red_AC / Red_DC) / (IR_AC / IR_DC)
+    let r = (red_ac / red_dc) / (ir_ac / ir_dc);
+
+    // Standard empirical formula: SpO2 = A - B * R
+    // A=110, B=25 are common defaults for forehead PPG; not Muse-calibrated.
+    const A: f64 = 110.0;
+    const B: f64 = 25.0;
+    let spo2 = A - B * r;
+
+    // Physiological range + R plausibility gate (typical R ~0.4..1.0 for 70-100% SpO2)
+    if !(0.4..=1.2).contains(&r) || !(50.0..=100.0).contains(&spo2) {
+        return (0.0, 0.0);
+    }
+
+    // Confidence based on AC signal quality (higher AC/DC ratio = more confidence)
+    let ir_quality = (ir_ac / ir_dc).min(1.0);
+    let red_quality = (red_ac / red_dc).min(1.0);
+    let confidence = (ir_quality * red_quality).sqrt().clamp(0.0, 1.0);
+
+    (spo2.clamp(0.0, 100.0), confidence)
 }
 
 /// Movement score from accelerometer magnitude variance.

@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'muse.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `frontal_delta_average`, `map_event`, `map_imu`, `now_ms`, `score_window_len`, `spawn_event_forwarder`
+// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `compute_spo2`, `frontal_delta_average`, `map_event`, `map_imu`, `now_ms`, `score_window_len`, `spawn_event_forwarder`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ForwarderGuard`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `drop`
 
@@ -156,6 +156,7 @@ sealed class MuseEventDto with _$MuseEventDto {
   const factory MuseEventDto.gyroscope(ImuDto field0) = MuseEventDto_Gyroscope;
   const factory MuseEventDto.control(ControlDto field0) = MuseEventDto_Control;
   const factory MuseEventDto.pulse(PulseDto field0) = MuseEventDto_Pulse;
+  const factory MuseEventDto.spO2(SpO2Dto field0) = MuseEventDto_SpO2;
   const factory MuseEventDto.movement(MovementDto field0) =
       MuseEventDto_Movement;
   const factory MuseEventDto.peakAlpha(PeakAlphaDto field0) =
@@ -209,6 +210,16 @@ sealed class ReveDto with _$ReveDto {
     required double delta,
     required int dim,
   }) = _ReveDto;
+}
+
+/// Blood oxygen saturation estimate from PPG IR + Red channels.
+@freezed
+sealed class SpO2Dto with _$SpO2Dto {
+  const factory SpO2Dto({
+    required double timestamp,
+    required double spo2,
+    required double confidence,
+  }) = _SpO2Dto;
 }
 
 /// Telemetry snapshot (battery etc.) surfaced in the status bar.

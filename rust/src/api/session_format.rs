@@ -39,6 +39,7 @@ pub const FORMAT_TAG_BANDS: u8 = 6;
 pub const FORMAT_TAG_PULSE: u8 = 7;
 pub const FORMAT_TAG_MOVEMENT: u8 = 8;
 pub const FORMAT_TAG_PEAK_ALPHA: u8 = 9;
+pub const FORMAT_TAG_SPO2: u8 = 10;
 
 /// The 64-bit header sentinel. The legacy Dart writer stored it as a
 /// little-endian u64 (`setUint64(.. Endian.little)`), so the on-disk bytes are
@@ -149,6 +150,12 @@ pub fn encode_session_event(event: &MuseEventDto) -> Vec<u8> {
             push_f32(&mut out, d.bpm as f32);
             push_f32(&mut out, d.confidence as f32);
         }
+        MuseEventDto::SpO2(d) => {
+            out.push(FORMAT_TAG_SPO2);
+            push_f64(&mut out, d.timestamp);
+            push_f32(&mut out, d.spo2 as f32);
+            push_f32(&mut out, d.confidence as f32);
+        }
         MuseEventDto::Movement(d) => {
             out.push(FORMAT_TAG_MOVEMENT);
             push_f64(&mut out, d.timestamp);
@@ -192,6 +199,7 @@ pub fn session_frame_bytes(data: &[u8]) -> Vec<u8> {
 pub struct SessionData {
     pub bands: Vec<BandsRecord>,
     pub pulses: Vec<PulseRecord>,
+    pub spo2s: Vec<SpO2Record>,
     pub movements: Vec<MovementRecord>,
     pub peak_alphas: Vec<PeakAlphaRecord>,
     pub eeg_samples: u64,
@@ -223,6 +231,13 @@ pub struct BandsRecord {
 pub struct PulseRecord {
     pub timestamp: f64,
     pub bpm: f64,
+    pub confidence: f64,
+}
+
+#[frb(dart_metadata = ("freezed",))]
+pub struct SpO2Record {
+    pub timestamp: f64,
+    pub spo2: f64,
     pub confidence: f64,
 }
 
@@ -368,6 +383,16 @@ fn parse_records(records: &[u8], out: &mut SessionData) {
                     confidence: conf as f64,
                 });
             }
+            FORMAT_TAG_SPO2 => {
+                let (Some(ts), Some(spo2), Some(conf)) = (p.f64(), p.f32(), p.f32()) else {
+                    break
+                };
+                out.spo2s.push(SpO2Record {
+                    timestamp: ts,
+                    spo2: spo2 as f64,
+                    confidence: conf as f64,
+                });
+            }
             FORMAT_TAG_MOVEMENT => {
                 let (Some(ts), Some(score)) = (p.f64(), p.f32()) else { break };
                 out.movements.push(MovementRecord {
@@ -405,6 +430,7 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
     let mut out = SessionData {
         bands: Vec::new(),
         pulses: Vec::new(),
+        spo2s: Vec::new(),
         movements: Vec::new(),
         peak_alphas: Vec::new(),
         eeg_samples: 0,
@@ -538,7 +564,7 @@ mod tests {
     use super::*;
     use crate::api::muse::{
         BandsDto, EegDto, ImuDto, MovementDto, PeakAlphaDto, PpgDto, PulseDto,
-        TelemetrySnapshot, XyzDto,
+        SpO2Dto, TelemetrySnapshot, XyzDto,
     };
 
     // ── Wire-builder helpers (independent of the production encoder) ──────────
@@ -688,6 +714,27 @@ mod tests {
         assert_eq!(out.pulses[0].timestamp, 1.0);
         assert_eq!(out.pulses[0].bpm, 72.5);
         assert_eq!(out.pulses[0].confidence, 0.5);
+    }
+
+    #[test]
+    fn spo2_record_wire_layout() {
+        let dto = MuseEventDto::SpO2(SpO2Dto {
+            timestamp: 1.0,
+            spo2: 98.5,
+            confidence: 0.8,
+        });
+        let mut expected = Vec::new();
+        expected.push(FORMAT_TAG_SPO2);
+        expected.extend(lef64(1.0));
+        expected.extend(lef32(98.5));
+        expected.extend(lef32(0.8));
+        assert_eq!(encode_session_event(&dto), expected);
+
+        let out = session_parse_body(&body(&[dto])).unwrap();
+        assert_eq!(out.spo2s.len(), 1);
+        assert_eq!(out.spo2s[0].timestamp, 1.0);
+        assert_eq!(out.spo2s[0].spo2, 98.5);
+        assert!((out.spo2s[0].confidence - 0.8).abs() < 1e-6);
     }
 
     #[test]

@@ -52,6 +52,7 @@ enum RecordingStream {
   bands,
   ppg,
   pulse,
+  spo2,
   imu,
   movement,
   peakAlpha,

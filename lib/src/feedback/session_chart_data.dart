@@ -5,7 +5,7 @@ import 'package:muse_ml/src/feedback/target_state.dart';
 
 /// Decimated, display-ready chart series for one session: the per-second
 /// (or per-bucket) band-relative powers of the frontal AF7/AF8 average, the
-/// movement trace, the heart-rate trace, and the derived stats.
+/// movement trace, the heart-rate trace, the SpO2 trace, and the derived stats.
 ///
 /// Built by [prepareChartData] (full `.muse` body) or
 /// [prepareChartDataFromOverview] (decimated metadata head). Consumed by the
@@ -21,6 +21,8 @@ class SessionChartData {
   final List<double> movementX;
   final List<double> bpm;
   final List<double> bpmX;
+  final List<double> spo2;
+  final List<double> spo2X;
   final SessionChartStats stats;
   final int bandsCount;
 
@@ -35,6 +37,8 @@ class SessionChartData {
     required this.movementX,
     required this.bpm,
     required this.bpmX,
+    required this.spo2,
+    required this.spo2X,
     required this.stats,
     required this.bandsCount,
   });
@@ -48,6 +52,7 @@ class SessionChartStats {
   final double targetPct;
   final double stillnessPct;
   final double? avgBpm;
+  final double? avgSpo2;
   final double avgAlphaRel;
 
   const SessionChartStats({
@@ -56,6 +61,7 @@ class SessionChartStats {
     required this.targetPct,
     required this.stillnessPct,
     this.avgBpm,
+    this.avgSpo2,
     required this.avgAlphaRel,
   });
 }
@@ -164,6 +170,21 @@ SessionChartData prepareChartData(
     bpmSum += p.bpm;
   }
 
+  final spo2X = <double>[];
+  final spo2 = <double>[];
+  var spo2Sum = 0.0;
+  for (final s in data.spo2S) {
+    if (s.confidence < 0.3) {
+      continue;
+    }
+    if (cut != null && s.timestamp < cut) {
+      continue;
+    }
+    spo2X.add(s.timestamp - startTs);
+    spo2.add(s.spo2);
+    spo2Sum += s.spo2;
+  }
+
   double? peakFreq;
   double? peakPower;
   for (final p in data.peakAlphas) {
@@ -187,6 +208,8 @@ SessionChartData prepareChartData(
     movementX: movementX,
     bpm: bpm,
     bpmX: bpmX,
+    spo2: spo2,
+    spo2X: spo2X,
     bandsCount: data.bands.length,
     stats: SessionChartStats(
       peakAlphaFreq: peakFreq,
@@ -196,6 +219,7 @@ SessionChartData prepareChartData(
           ? 0
           : still / data.movements.length * 100,
       avgBpm: bpm.isEmpty ? null : bpmSum / bpm.length,
+      avgSpo2: spo2.isEmpty ? null : spo2Sum / spo2.length,
       avgAlphaRel: alphaRel.isEmpty ? 0 : alphaRelSum / alphaRel.length,
     ),
   );
@@ -273,6 +297,19 @@ SessionChartData prepareChartDataFromOverview(
     bpmSum += b;
   }
 
+  final spo2X = <double>[];
+  final spo2 = <double>[];
+  var spo2Sum = 0.0;
+  for (var i = 0; i < n; i++) {
+    if (i >= overview.spo2.length || overview.spo2[i] == null) {
+      continue;
+    }
+    final s = overview.spo2[i]!;
+    spo2X.add(i * width);
+    spo2.add(s);
+    spo2Sum += s;
+  }
+
   double? peakFreq;
   double? peakPower;
   for (var i = 0; i < overview.peakAlphaPower.length; i++) {
@@ -299,6 +336,8 @@ SessionChartData prepareChartDataFromOverview(
     movementX: movementX,
     bpm: bpm,
     bpmX: bpmX,
+    spo2: spo2,
+    spo2X: spo2X,
     bandsCount: overview.bands.length,
     stats: SessionChartStats(
       peakAlphaFreq: peakFreq,
@@ -306,6 +345,7 @@ SessionChartData prepareChartDataFromOverview(
       targetPct: x.isEmpty ? 0 : targetSeconds / x.length * 100,
       stillnessPct: movement.isEmpty ? 0 : still / movement.length * 100,
       avgBpm: bpm.isEmpty ? null : bpmSum / bpm.length,
+      avgSpo2: spo2.isEmpty ? null : spo2Sum / spo2.length,
       avgAlphaRel: alphaRel.isEmpty ? 0 : alphaRelSum / alphaRel.length,
     ),
   );

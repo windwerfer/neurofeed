@@ -987,6 +987,22 @@ class _DashboardBodyState extends State<_DashboardBody> {
           ),
           const SizedBox(height: 16),
         ],
+        if (prepared.spo2.isNotEmpty) ...[
+          chart('Blood oxygen (SpO₂)', '%', [
+            _Series(
+              label: 'SpO₂',
+              color: const Color(0xFF26C6DA),
+              values: prepared.spo2,
+            ),
+          ], prepared.spo2X),
+          const SizedBox(height: 16),
+        ] else ...[
+          notEnough(
+            'Blood oxygen (SpO₂)',
+            'No reliable SpO₂ data was captured for this session.',
+          ),
+          const SizedBox(height: 16),
+        ],
         ...drowsinessWidgets(),
         ...musicWidgets(),
       ],

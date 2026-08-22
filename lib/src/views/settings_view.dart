@@ -593,6 +593,10 @@ class _RecordingCard extends StatelessWidget {
       'Pulse / heart rate',
       'BPM estimate derived from PPG',
     ),
+    RecordingStream.spo2: (
+      'Blood oxygen (SpO2)',
+      'Estimated SpO2 % from PPG IR + Red channels',
+    ),
     RecordingStream.imu: (
       'Accelerometer + gyroscope',
       'Raw 3-axis motion and gyro samples',
