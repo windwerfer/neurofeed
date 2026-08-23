@@ -18,7 +18,7 @@ import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
-import 'package:muse_ml/src/feedback/session_summary.dart';
+import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/settings.dart';
 

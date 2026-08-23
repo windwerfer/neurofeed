@@ -8,8 +8,12 @@ import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_cache.dart';
 import 'package:muse_ml/src/feedback/session_container.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/feedback/session_summary.dart';
+import 'package:muse_ml/src/feedback/session_metadata.dart';
+import 'package:muse_ml/src/feedback/session_v5_models.dart';
 import 'package:muse_ml/src/settings.dart';
+import 'package:muse_ml/src/feedback/session_store_core.dart';
+
+export 'session_store_core.dart' show SessionStore;
 
 /// Gesture types detected during a feedback session and persisted (computed,
 /// not raw) in the session metadata.
@@ -350,8 +354,8 @@ class SessionMusic {
 
   Map<String, Object?> toJson() => {
     'trackCount': trackCount,
-    'minHz': minCutoffHz,
-    'maxHz': maxCutoffHz,
+    'minCutoffHz': minCutoffHz,
+    'maxCutoffHz': maxCutoffHz,
     'invert': invert,
     'shuffle': shuffle,
     if (tracks.isNotEmpty) 'tracks': [for (final t in tracks) t.toJson()],
@@ -368,8 +372,8 @@ class SessionMusic {
     }
     return SessionMusic(
       trackCount: (json['trackCount'] as num?)?.toInt() ?? 0,
-      minCutoffHz: (json['minHz'] as num?)?.toDouble() ?? 0,
-      maxCutoffHz: (json['maxHz'] as num?)?.toDouble() ?? 0,
+      minCutoffHz: (json['minCutoffHz'] as num?)?.toDouble() ?? 0,
+      maxCutoffHz: (json['maxCutoffHz'] as num?)?.toDouble() ?? 0,
       invert: json['invert'] as bool? ?? false,
       shuffle: json['shuffle'] as bool? ?? false,
       tracks:
@@ -395,46 +399,7 @@ class SessionMusic {
   }
 }
 
-class SessionStatsData {
-  const SessionStatsData({
-    this.peakAlphaFreq,
-    this.peakAlphaPower,
-    required this.targetPct,
-    required this.stillnessPct,
-    this.avgBpm,
-    required this.avgAlphaRel,
-  });
-  final double? peakAlphaFreq;
-  final double? peakAlphaPower;
-  final double targetPct;
-  final double stillnessPct;
-  final double? avgBpm;
-  final double avgAlphaRel;
-
-  Map<String, Object?> toJson() => {
-    'peakAlphaFreq': peakAlphaFreq,
-    'peakAlphaPower': peakAlphaPower,
-    'targetPct': targetPct,
-    'stillnessPct': stillnessPct,
-    'avgBpm': avgBpm,
-    'avgAlphaRel': avgAlphaRel,
-  };
-
-  static SessionStatsData? fromJson(Object? json) {
-    if (json is! Map<String, Object?>) {
-      return null;
-    }
-    return SessionStatsData(
-      peakAlphaFreq: (json['peakAlphaFreq'] as num?)?.toDouble(),
-      peakAlphaPower: (json['peakAlphaPower'] as num?)?.toDouble(),
-      targetPct: (json['targetPct'] as num?)?.toDouble() ?? 0,
-      stillnessPct: (json['stillnessPct'] as num?)?.toDouble() ?? 0,
-      avgBpm: (json['avgBpm'] as num?)?.toDouble(),
-      avgAlphaRel: (json['avgAlphaRel'] as num?)?.toDouble() ?? 0,
-    );
-  }
-}
-
+/// Mean ± stddev of the ATR baseline used for calibration.
 class SessionBaselineStats {
   const SessionBaselineStats({
     required this.percentile,
@@ -537,7 +502,10 @@ class SessionCalibrationPhase {
 /// One in-flight recalibration that replaced the session baseline: when it
 /// happened (seconds from recording start) and the new baseline statistics.
 class SessionRecalibration {
-  const SessionRecalibration({required this.atSecs, required this.baseline});
+  const SessionRecalibration({
+    required this.atSecs,
+    required this.baseline,
+  });
 
   /// Seconds from recording (calibration) start to the recalibration event.
   final double atSecs;
@@ -557,7 +525,10 @@ class SessionRecalibration {
     final baseline = SessionBaselineStats.fromJson(json['baseline']);
     return SessionRecalibration(
       atSecs: (json['atSecs'] as num?)?.toDouble() ?? 0,
-      baseline: baseline ?? const SessionBaselineStats(percentile: 0, count: 0),
+      baseline: baseline ?? const SessionBaselineStats(
+        percentile: 0,
+        count: 0,
+      ),
     );
   }
 }
@@ -690,10 +661,6 @@ class SessionCalibration {
   }
 }
 
-/// Snapshot of the session-affecting settings at save time: target settings,
-/// guardrail engine/method, warning sound, music and binaural options, and
-/// gesture-marker recording. Records how the session was configured so a
-/// saved file stays interpretable without the live prefs.
 class SessionSettings {
   const SessionSettings({
     required this.dynamicAdapt,
@@ -713,6 +680,7 @@ class SessionSettings {
     required this.binauralBeatHz,
     required this.markersInFeedbackEnabled,
     required this.eyeMarkersEnabled,
+    this.modelSnapshot,
   });
 
   final bool dynamicAdapt;
@@ -736,6 +704,9 @@ class SessionSettings {
   final bool markersInFeedbackEnabled;
   final bool eyeMarkersEnabled;
 
+  /// Snapshot of the guardrail AI model at session time (v5).
+  final ModelSnapshot? modelSnapshot;
+
   Map<String, Object?> toJson() => {
     'dynamicAdapt': dynamicAdapt,
     'responsiveness': responsiveness,
@@ -754,6 +725,7 @@ class SessionSettings {
     'binauralBeatHz': binauralBeatHz,
     'markersInFeedbackEnabled': markersInFeedbackEnabled,
     'eyeMarkersEnabled': eyeMarkersEnabled,
+    if (modelSnapshot != null) 'modelSnapshot': modelSnapshot!.toJson(),
   };
 
   static SessionSettings? fromJson(Object? json) {
@@ -780,603 +752,10 @@ class SessionSettings {
       markersInFeedbackEnabled:
           json['markersInFeedbackEnabled'] as bool? ?? false,
       eyeMarkersEnabled: json['eyeMarkersEnabled'] as bool? ?? false,
+      modelSnapshot: ModelSnapshot.fromJson(json['modelSnapshot']),
     );
   }
 }
-
-class SessionMetadata {
-  const SessionMetadata({
-    required this.protocol,
-    required this.durationMinutes,
-    required this.elapsedSeconds,
-    required this.sound,
-    required this.savedAt,
-    this.notes = '',
-    this.stats,
-    this.deviceName,
-    this.deviceModel,
-    this.deviceId,
-    this.recordedChannels = const [],
-    this.recordedData = const [],
-    this.summary,
-    this.gestures = const [],
-    this.calibration,
-    this.drowsiness,
-    this.music,
-    this.feedbackSound,
-    this.metadataDescription,
-    this.sessionSettings,
-  });
-
-  final ProtocolType protocol;
-  final int durationMinutes;
-  final int elapsedSeconds;
-  final String sound;
-  final DateTime savedAt;
-  final String notes;
-  final SessionStatsData? stats;
-
-  /// Device display name (e.g. the BLE name) the session was recorded with.
-  final String? deviceName;
-
-  /// Device model/firmware tag (e.g. "Classic" or "Athena").
-  final String? deviceModel;
-
-  /// Stable device identifier.
-  final String? deviceId;
-
-  /// Electrode labels present in the file (e.g. `['TP9','AF7','AF8','TP10']`).
-  /// A future 8-electrode device records 8 labels here; the format is
-  /// channel-agnostic so older readers still parse the frame body.
-  final List<String> recordedChannels;
-
-  /// Streams persisted in this file (subset of [RecordingStream] names),
-  /// e.g. `['eeg','bands','pps','pulse','imu']`. Empty/absent on old files
-  /// means "all".
-  final List<String> recordedData;
-
-  /// Decimated overview (bands/pulse/movement/peak) for fast history browsing.
-  /// Null on old files.
-  final SessionOverview? summary;
-
-  /// Gesture markers (double blink / double clench / eye) recorded during the
-  /// session. Computed data — stored in metadata, not the frame body.
-  final List<GestureMarker> gestures;
-
-  /// How the session calibrated (timeline, gate, baseline stats, clips)
-  /// when recorded. Null on files recorded before calibration recording.
-  final SessionCalibration? calibration;
-
-  /// Sleep-guardrail trace (per-second model scores + drift score), when the
-  /// session ran with the guardrail enabled. Null otherwise.
-  final SessionDrowsiness? drowsiness;
-
-  /// Music feedback record (tracks + cutoff trace), when the session ran in
-  /// music-feedback mode. Null otherwise.
-  final SessionMusic? music;
-
-  /// Feedback layer the session ran with (`bowlChimes` / `rain` / `music` /
-  /// `none`), when the file recorded it. Null on legacy files.
-  final String? feedbackSound;
-
-  /// Scientific description of what the protocol trains and how, copied from
-  /// `assets/protocols.json` (`metadataDescription`) at save time.
-  final String? metadataDescription;
-
-  /// Snapshot of the session-affecting settings (target, guardrail engine,
-  /// music/binaural options) at save time. Null on legacy files.
-  final SessionSettings? sessionSettings;
-
-  Map<String, Object?> toJson() => {
-    'protocol': protocol.name,
-    'durationMinutes': durationMinutes,
-    'elapsedSeconds': elapsedSeconds,
-    'sound': sound,
-    'savedAt': savedAt.toIso8601String(),
-    'notes': notes,
-    if (stats != null) 'stats': stats!.toJson(),
-    if (deviceName != null) 'deviceName': deviceName,
-    if (deviceModel != null) 'deviceModel': deviceModel,
-    if (deviceId != null) 'deviceId': deviceId,
-    if (recordedChannels.isNotEmpty) 'recordedChannels': recordedChannels,
-    if (recordedData.isNotEmpty) 'recordedData': recordedData,
-    if (summary != null) 'summary': summary!.toJson(),
-    if (gestures.isNotEmpty) 'gestures': [for (final g in gestures) g.toJson()],
-    if (calibration != null) 'calibration': calibration!.toJson(),
-    if (drowsiness != null) 'drowsiness': drowsiness!.toJson(),
-    if (music != null) 'music': music!.toJson(),
-    if (feedbackSound != null) 'feedbackSound': feedbackSound,
-    if (metadataDescription != null) 'metadataDescription': metadataDescription,
-    if (sessionSettings != null) 'sessionSettings': sessionSettings!.toJson(),
-  };
-
-  static SessionMetadata? fromJson(Object? json) {
-    if (json is! Map<String, Object?>) {
-      return null;
-    }
-    final protocolName = json['protocol'] as String?;
-    final protocol = ProtocolType.values
-        .where((p) => p.name == protocolName)
-        .firstOrNull;
-    if (protocol == null) {
-      return null;
-    }
-    return SessionMetadata(
-      protocol: protocol,
-      durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
-      elapsedSeconds: (json['elapsedSeconds'] as num?)?.toInt() ?? 0,
-      sound: (json['sound'] as String?) ?? 'Ambient Drone',
-      savedAt:
-          DateTime.tryParse((json['savedAt'] as String?) ?? '') ??
-          DateTime.fromMillisecondsSinceEpoch(0),
-      notes: (json['notes'] as String?) ?? '',
-      stats: SessionStatsData.fromJson(json['stats']),
-      deviceName: json['deviceName'] as String?,
-      deviceModel: json['deviceModel'] as String?,
-      deviceId: json['deviceId'] as String?,
-      recordedChannels:
-          (json['recordedChannels'] as List<Object?>?)
-              ?.whereType<String>()
-              .toList() ??
-          const [],
-      recordedData:
-          (json['recordedData'] as List<Object?>?)
-              ?.whereType<String>()
-              .toList() ??
-          const [],
-      summary: SessionOverview.fromJson(json['summary']),
-      gestures:
-          (json['gestures'] as List<Object?>?)
-              ?.map(GestureMarker.fromJson)
-              .whereType<GestureMarker>()
-              .toList() ??
-          const [],
-      calibration: SessionCalibration.fromJson(json['calibration']),
-      drowsiness: SessionDrowsiness.fromJson(json['drowsiness']),
-      feedbackSound: json['feedbackSound'] as String?,
-      music: SessionMusic.fromJson(json['music']),
-      metadataDescription: json['metadataDescription'] as String?,
-      sessionSettings: SessionSettings.fromJson(json['sessionSettings']),
-    );
-  }
-}
-
-class SessionSummary {
-  const SessionSummary({required this.id, required this.metadata});
-
-  final String id;
-  final SessionMetadata metadata;
-}
-
-class SessionStore {
-  SessionStore({Future<SessionStorage>? storage, SessionCache? cache})
-    : _storage = storage ?? _defaultStorage(),
-      _cache = cache ?? SessionCache.noop();
-
-  final Future<SessionStorage> _storage;
-  final SessionCache _cache;
-
-  /// Files (name + id + mtime) discovered by [list] that are missing from the
-  /// cache or have changed since it was written. Backfilled in the background
-  /// so the first history open stays fluid.
-  List<({String name, String id, int mtimeMs})> _pendingBackfill = [];
-
-  bool _backfillRunning = false;
-
-  /// Number of sessions awaiting background backfill after the last [list].
-  int get pendingBackfillCount => _pendingBackfill.length;
-
-  /// The underlying storage (resolved) — used to place exports.
-  Future<SessionStorage> get storage => _storage;
-
-  static Future<SessionStorage> _defaultStorage() async {
-    throw UnimplementedError(
-      'SessionStore needs an explicit storage; use sessionStoreProvider',
-    );
-  }
-
-  String _museName(String id) => 'session_$id.muse.feedback';
-
-  /// Namespace for cache rows — a short hash of the storage location so two
-  /// history folders never share metadata rows even when ids collide.
-  static String storageKeyFor(SessionStorage storage) =>
-      sha256.convert(utf8.encode(storage.location)).toString().substring(0, 16);
-
-  Future<List<SessionSummary>> list() async {
-    final storage = await _storage;
-    debugPrint(
-      '[session] list(): storage=${storage.displayName} loc=${storage.location}',
-    );
-    final files = await storage.listFilesMeta();
-    final key = storageKeyFor(storage);
-    final ids = <String>[];
-    final mtimeById = <String, int>{};
-    for (final f in files) {
-      if (!f.name.startsWith('session_') ||
-          !f.name.endsWith('.muse.feedback')) {
-        continue;
-      }
-      final id = f.name.substring(8, f.name.length - 14);
-      ids.add(id);
-      mtimeById[id] = f.mtimeMs;
-    }
-
-    final rows = await _cache.getRows(ids.toSet(), key);
-    final rowById = {for (final r in rows) r.id: r};
-
-    // Deletions apply immediately: drop cache rows whose file is gone.
-    final stale = <String>{
-      for (final r in rows)
-        if (!mtimeById.containsKey(r.id)) r.id,
-    };
-    if (stale.isNotEmpty) {
-      await _cache.remove(stale, key);
-      for (final id in stale) {
-        await _cache.deleteThumbnail(id);
-      }
-    }
-
-    // Changed = brand-new files, or files whose mtime no longer matches the
-    // cache. New files are excluded from this pass (they appear after the
-    // background backfill); mtime-mismatched rows still carry valid metadata
-    // (e.g. a session saved since the last open) so they render immediately.
-    final changed = <({String name, String id, int mtimeMs})>[];
-    final summaries = <SessionSummary>[];
-    for (final f in files) {
-      if (!f.name.startsWith('session_') ||
-          !f.name.endsWith('.muse.feedback')) {
-        continue;
-      }
-      final id = f.name.substring(8, f.name.length - 14);
-      final row = rowById[id];
-      if (row == null) {
-        changed.add((name: f.name, id: id, mtimeMs: f.mtimeMs));
-        continue;
-      }
-      if (row.mtimeMs != f.mtimeMs) {
-        changed.add((name: f.name, id: id, mtimeMs: f.mtimeMs));
-      }
-      summaries.add(
-        SessionSummary(
-          id: id,
-          metadata: _metadataFromJson(row.metadataJson, id),
-        ),
-      );
-    }
-
-    _pendingBackfill = changed;
-    summaries.sort((a, b) => b.metadata.savedAt.compareTo(a.metadata.savedAt));
-    debugPrint(
-      '[session] list: found ${summaries.length} cached session(s), '
-      '${changed.length} to backfill',
-    );
-    return summaries;
-  }
-
-  /// Background-fill the cache for files [list] found missing or changed.
-  /// Clears the pending set; the caller (sessionListProvider) re-reads the
-  /// list once this completes so the new sessions appear.
-  Future<void> backfillPending() async {
-    if (_backfillRunning) {
-      return;
-    }
-    final pending = _pendingBackfill;
-    if (pending.isEmpty) {
-      return;
-    }
-    _backfillRunning = true;
-    _pendingBackfill = [];
-    try {
-      final storage = await _storage;
-      final key = storageKeyFor(storage);
-      await Future.wait(
-        pending.map((f) async {
-          try {
-            final head = await _readHead(storage, f.name);
-            if (head != null) {
-              final decoded =
-                  jsonDecode(String.fromCharCodes(head.jsonBytes))
-                      as Map<String, Object?>;
-              final metadata = SessionMetadata.fromJson(decoded);
-              if (metadata != null) {
-                String? thumbPath;
-                if (head.pngBytes.isNotEmpty) {
-                  await _cache.writeThumbnail(f.id, head.pngBytes);
-                  thumbPath = await _cache.thumbnailPath(f.id);
-                }
-                await _cache.upsert(
-                  CachedSession(
-                    id: f.id,
-                    mtimeMs: f.mtimeMs,
-                    savedAtMs: metadata.savedAt.millisecondsSinceEpoch,
-                    metadataJson: const JsonEncoder().convert(
-                      metadata.toJson(),
-                    ),
-                    thumbnailPath: thumbPath,
-                  ),
-                  key,
-                );
-                return;
-              }
-            }
-          } catch (e) {
-            debugPrint('[session] backfill(${f.id}) failed: $e');
-          }
-          // Unreadable/corrupt head: cache the fallback with the real mtime so
-          // the file stops being re-read on every open (matches the old
-          // _fallback behavior for broken files).
-          await _cache.upsert(
-            CachedSession(
-              id: f.id,
-              mtimeMs: f.mtimeMs,
-              savedAtMs: 0,
-              metadataJson: const JsonEncoder().convert(
-                _fallback(f.id).toJson(),
-              ),
-              thumbnailPath: null,
-            ),
-            key,
-          );
-        }),
-      );
-    } finally {
-      _backfillRunning = false;
-    }
-  }
-
-  /// Read the PNG + metadata head of a session container in one prefix read.
-  /// Returns null when the file is missing or the head cannot be parsed.
-  Future<({Uint8List pngBytes, Uint8List jsonBytes})?> _readHead(
-    SessionStorage storage,
-    String name,
-  ) async {
-    final raw = await storage.readPrefix(name, SessionContainer.headReadLimit);
-    if (raw == null || raw.isEmpty) {
-      return null;
-    }
-    final head = SessionContainer.parseHead(Uint8List.fromList(raw));
-    return (pngBytes: head.pngBytes, jsonBytes: head.jsonBytes);
-  }
-
-  SessionMetadata _metadataFromJson(String json, String id) {
-    try {
-      final decoded = jsonDecode(json) as Map<String, Object?>;
-      return SessionMetadata.fromJson(decoded) ?? _fallback(id);
-    } catch (_) {
-      return _fallback(id);
-    }
-  }
-
-  /// Read the raw .muse frame body for [id], or null if missing.
-  Future<List<int>?> readMuse(String id) async {
-    final storage = await _storage;
-    final name = _museName(id);
-    final bytes = await storage.readFile(name);
-    debugPrint(
-      '[session] readMuse($id): file="$name" '
-      'read=${bytes == null ? 'null' : '${bytes.length}B'} '
-      'storage=${storage.displayName} loc=${storage.location}',
-    );
-    if (bytes == null) {
-      return null;
-    }
-    final body = SessionContainer.extractBody(Uint8List.fromList(bytes));
-    debugPrint(
-      '[session] readMuse($id): extractBody='
-      '${body == null ? 'null' : '${body.length}B'}',
-    );
-    return body;
-  }
-
-  /// Read the thumbnail PNG bytes for [id], or null when missing. Cache-first:
-  /// a cached thumbnail file is returned without touching the (possibly SAF)
-  /// history folder; only a miss reads the container head and fills the cache.
-  Future<List<int>?> readPng(String id) async {
-    final cached = await _cache.readThumbnail(id);
-    if (cached != null && cached.isNotEmpty) {
-      return cached;
-    }
-    final storage = await _storage;
-    final head = await _readHead(storage, _museName(id));
-    if (head == null || head.pngBytes.isEmpty) {
-      return null;
-    }
-    await _cache.writeThumbnail(id, head.pngBytes);
-    final key = storageKeyFor(storage);
-    final rows = await _cache.getRows({id}, key);
-    if (rows.isNotEmpty) {
-      await _cache.upsert(
-        rows.first.copyWith(thumbnailPath: await _cache.thumbnailPath(id)),
-        key,
-      );
-    }
-    return head.pngBytes;
-  }
-
-  /// Persist a finished session into the history folder as a single
-  /// `.muse.feedback` container: leading PNG thumbnail, then metadata json,
-  /// then the raw frame body.
-  Future<SessionSummary> publishSession(
-    String id,
-    List<int> museBytes,
-    SessionMetadata metadata, {
-    List<int>? pngBytes,
-  }) async {
-    final storage = await _storage;
-    await storage.ensureDir();
-    final jsonBytes = const JsonEncoder().convert(metadata.toJson()).codeUnits;
-    final container = SessionContainer.encode(
-      pngBytes: pngBytes == null ? Uint8List(0) : Uint8List.fromList(pngBytes),
-      jsonBytes: Uint8List.fromList(jsonBytes),
-      bodyBytes: Uint8List.fromList(museBytes),
-    );
-    await storage.writeFileAtomic(_museName(id), container);
-    final key = storageKeyFor(storage);
-    String? thumbPath;
-    if (pngBytes != null && pngBytes.isNotEmpty) {
-      await _cache.writeThumbnail(id, Uint8List.fromList(pngBytes));
-      thumbPath = await _cache.thumbnailPath(id);
-    }
-    // mtime is 0 ("unknown") on a fresh write: the next reconcile refreshes
-    // it from listFilesMeta without re-reading the metadata we already have.
-    await _cache.upsert(
-      CachedSession(
-        id: id,
-        mtimeMs: 0,
-        savedAtMs: metadata.savedAt.millisecondsSinceEpoch,
-        metadataJson: const JsonEncoder().convert(metadata.toJson()),
-        thumbnailPath: thumbPath,
-      ),
-      key,
-    );
-    debugPrint('[session] written ${_museName(id)} to ${storage.location}');
-    return SessionSummary(id: id, metadata: metadata);
-  }
-
-  /// Replace the free-text notes of an existing session and rewrite the
-  /// container head in place, preserving the thumbnail and the .muse body.
-  /// Returns false when the session file is missing or unreadable.
-  Future<bool> updateNotes(String id, String notes) async {
-    final storage = await _storage;
-    final name = _museName(id);
-    final bytes = await storage.readFile(name);
-    if (bytes == null || bytes.isEmpty) {
-      debugPrint('[session] updateNotes($id): file not found ($name)');
-      return false;
-    }
-    final full = Uint8List.fromList(bytes);
-    final head = SessionContainer.parseHead(full);
-    final decoded =
-        jsonDecode(String.fromCharCodes(head.jsonBytes))
-            as Map<String, Object?>;
-    decoded['notes'] = notes;
-    final jsonBytes = Uint8List.fromList(
-      const JsonEncoder().convert(decoded).codeUnits,
-    );
-    final body = SessionContainer.extractBody(full);
-    if (body == null) {
-      debugPrint('[session] updateNotes($id): body missing ($name)');
-      return false;
-    }
-    final container = SessionContainer.encode(
-      pngBytes: head.pngBytes,
-      jsonBytes: jsonBytes,
-      bodyBytes: body,
-    );
-    await storage.writeFileAtomic(name, container);
-    await _cache.upsert(
-      CachedSession(
-        id: id,
-        mtimeMs: 0,
-        savedAtMs: _savedAtMs(decoded),
-        metadataJson: const JsonEncoder().convert(decoded),
-        thumbnailPath: await _thumbnailPathForCache(id, storage),
-      ),
-      storageKeyFor(storage),
-    );
-    debugPrint('[session] updateNotes($id): notes saved ($name)');
-    return true;
-  }
-
-  int _savedAtMs(Map<String, Object?> decoded) {
-    final raw = decoded['savedAt'];
-    if (raw is String) {
-      final t = DateTime.tryParse(raw);
-      if (t != null) {
-        return t.millisecondsSinceEpoch;
-      }
-    }
-    return 0;
-  }
-
-  Future<String?> _thumbnailPathForCache(
-    String id,
-    SessionStorage storage,
-  ) async {
-    final rows = await _cache.getRows({id}, storageKeyFor(storage));
-    if (rows.isNotEmpty && rows.first.thumbnailPath != null) {
-      return rows.first.thumbnailPath;
-    }
-    return _cache.thumbnailPath(id);
-  }
-
-  /// Delete one session from history (the `.muse.feedback` file). Returns
-  /// false when the file was already gone.
-  Future<bool> delete(String id) async {
-    final storage = await _storage;
-    final name = _museName(id);
-    final existed = await storage.fileExists(name);
-    await storage.deleteFile(name);
-    await _cache.remove({id}, storageKeyFor(storage));
-    await _cache.deleteThumbnail(id);
-    debugPrint(
-      '[session] delete($id): ${existed ? 'deleted' : 'missing'} ($name)',
-    );
-    return existed;
-  }
-
-  /// Copy every session in the current storage into [target], then delete the
-  /// source copies so the folder change does not duplicate history. Returns the
-  /// number of sessions moved (used for folder-change migration).
-  Future<int> moveAllTo(SessionStorage target) async {
-    final storage = await _storage;
-    final names = await storage.listFiles();
-    var moved = 0;
-    for (final name in names) {
-      if (!name.startsWith('session_') || !name.endsWith('.muse.feedback')) {
-        continue;
-      }
-      final bytes = await storage.readFile(name);
-      if (bytes == null) {
-        continue;
-      }
-      await target.ensureDir();
-      await target.writeFileAtomic(name, bytes);
-      await storage.deleteFile(name);
-      moved++;
-    }
-    // Ids survive a folder move verbatim, so carry the cached metadata across
-    // to the new storage key. Mtimes will mismatch once and refresh on the
-    // first open of the new folder.
-    await _cache.moveStorageKey(storageKeyFor(storage), storageKeyFor(target));
-    debugPrint('[session] moved $moved session(s)');
-    return moved;
-  }
-
-  /// Fold a freshly computed [SessionOverview] (from a full-body parse of a
-  /// legacy session without an embedded summary) back into the cached
-  /// metadata so the next detail-view open fast-paths through the overview.
-  /// Cache-only — the container file is never rewritten.
-  Future<void> cacheOverview(String id, SessionOverview overview) async {
-    final storage = await _storage;
-    final key = storageKeyFor(storage);
-    final rows = await _cache.getRows({id}, key);
-    if (rows.isEmpty) {
-      return;
-    }
-    try {
-      final decoded =
-          jsonDecode(rows.first.metadataJson) as Map<String, Object?>;
-      decoded['summary'] = overview.toJson();
-      await _cache.upsert(
-        rows.first.copyWith(metadataJson: const JsonEncoder().convert(decoded)),
-        key,
-      );
-      debugPrint('[session] cacheOverview($id): overview cached');
-    } catch (e) {
-      debugPrint('[session] cacheOverview($id) failed: $e');
-    }
-  }
-
-  SessionMetadata _fallback(String id) => SessionMetadata(
-    protocol: ProtocolType.drowsiness,
-    durationMinutes: 0,
-    elapsedSeconds: 0,
-    sound: 'Ambient Drone',
-    savedAt: DateTime.fromMillisecondsSinceEpoch(int.tryParse(id) ?? 0),
-  );
-}
-
 /// Storage-backed store that derives its [SessionStorage] from the active
 /// [Settings]. Reading [sessionStorageProvider] here keeps history and the
 /// recorder on the same folder.
@@ -1397,7 +776,7 @@ class SessionListNotifier extends AsyncNotifier<List<SessionSummary>> {
     final summaries = await store.list();
     // Lazy loading: the first emission is the already-cached subset (fast).
     // New or changed files are backfilled in the background; once done the
-    // list is re-read so the newly discovered sessions appear.
+    /// list is re-read so the newly discovered sessions appear.
     if (store.pendingBackfillCount > 0) {
       unawaited(_backfill(store));
     }
