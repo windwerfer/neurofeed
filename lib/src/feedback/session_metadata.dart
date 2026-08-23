@@ -1,191 +1,194 @@
-/// Session metadata classes for v5 format.
-/// Uses manual JSON serialization to avoid freezed nested class limitations.
-
 import 'session_v5_models.dart';
 
-/// Snapshot of the guardrail AI model at session time (v5).
-/// Critical for reproducibility when fine-tuning foundation models.
-class ModelSnapshot {
-  const ModelSnapshot({
-    required this.engine,
-    this.weightsSha256,
-    this.configJson,
-    this.repoRevision,
-    required this.loadedAt,
+/// Decimated per-second view of a session, stored in the metadata JSON so the
+/// history detail can render bands / heart rate / SpO2 / movement / peak alpha
+/// without reading the (potentially large) `.muse` body or replaying every raw
+/// frame. The frame body stays the authoritative source for export/full analysis.
+class SessionOverview {
+  const SessionOverview({
+    required this.bucketCount,
+    required this.bucketWidthSecs,
+    required this.startSecs,
+    required this.endSecs,
+    this.trainingStartSecs,
+    this.bands = const {},
+    this.pulse = const [],
+    this.spo2 = const [],
+    this.movement = const [],
+    this.peakAlphaFreq = const [],
+    this.peakAlphaPower = const [],
   });
 
-  /// Engine name: `bandMath`, `lunaBase`, `lunaLarge`, `reveBase`, or `none`.
-  final String engine;
+  /// Fixed number of buckets regardless of session duration.
+  static const int defaultBucketCount = 400;
 
-  /// SHA-256 of the model.safetensors weights file.
-  final String? weightsSha256.
+  final int bucketCount;
+  final double bucketWidthSecs;
+  final double startSecs;
+  final double endSecs;
 
-  /// Full model config JSON (from model_config_json() FFI).
-  final Map<String, Object?>? configJson.
+  /// Seconds from the recording (calibration) start to the training boundary.
+  /// Null on full-window overviews, including all files recorded before
+  /// calibration recording existed — those render as they always did.
+  final double? trainingStartSecs;
 
-  /// Git tag/rev of the model repo (e.g., `v0.0.4-latent-embedding-fix`).
-  final String? repoRevision.
+  /// Per-electrode band series keyed by electrode index.
+  final Map<int, BandPowerSeries> bands;
 
-  /// ISO8601 timestamp when model was loaded for this session.
-  final DateTime loadedAt.
+  /// One bpm per bucket (null when no pulse data in that bucket).
+  final List<double?> pulse;
 
-  Map<String, Object?> toJson() => {
-    'engine': engine,
-    if (weightsSha256 != null) 'weightsSha256': weightsSha256,
-    if (configJson != null) 'configJson': configJson,
-    if (repoRevision != null) 'repoRevision': repoRevision,
-    'loadedAt': loadedAt.toIso8601String(),
+  /// One SpO2 % per bucket (null when no SpO2 data in that bucket).
+  final List<double?> spo2;
+
+  /// Movement score per bucket.
+  final List<double?> movement;
+
+  /// Peak-alpha frequency per bucket (from the most powerful peak in the bucket).
+  final List<double?> peakAlphaFreq;
+
+  /// Power of that peak per bucket.
+  final List<double?> peakAlphaPower;
+
+  /// Builds a [SessionOverview] from pre-computed columnar series (for v5 files).
+  static SessionOverview fromColumns({
+    required int bucketCount,
+    required double bucketWidthSecs,
+    required double startSecs,
+    required double endSecs,
+    double? trainingStartSecs,
+    required Map<int, BandPowerSeries> bands,
+    required List<double?> pulse,
+    required List<double?> spo2,
+    required List<double?> movement,
+    required List<double?> peakAlphaFreq,
+    required List<double?> peakAlphaPower,
+  }) {
+    return SessionOverview(
+      bucketCount: bucketCount,
+      bucketWidthSecs: bucketWidthSecs,
+      startSecs: startSecs,
+      endSecs: endSecs,
+      trainingStartSecs: trainingStartSecs,
+      bands: bands,
+      pulse: pulse,
+      spo2: spo2,
+      movement: movement,
+      peakAlphaFreq: peakAlphaFreq,
+      peakAlphaPower: peakAlphaPower,
+    );
   }
 
-  static ModelSnapshot? fromJson(Map<String, dynamic>? json) {
-    if (json == null) return null
-    final engine = json['engine'] as String?;
-    if (engine == null) return null
-    return ModelSnapshot(
-      engine: engine,
-      weightsSha256: json['weightsSha256'] as String?,
-      configJson: json['configJson'] as Map<String, Object?>?,
-      repoRevision: json['repoRevision'] as String?,
-      loadedAt: DateTime.tryParse(json['loadedAt'] as String?) ??
-          DateTime.fromMillisecondsSinceEpoch(0),
-    )
+  Map<String, Object?> toJson() {
+    final b = <String, Object?>{};
+    for (final e in bands.entries) {
+      b[e.key.toString()] = {
+        'delta': e.value.delta,
+        'theta': e.value.theta,
+        'alpha': e.value.alpha,
+        'beta': e.value.beta,
+        'gamma': e.value.gamma,
+      };
+    }
+    return {
+      'bucketCount': bucketCount,
+      'bucketWidthSecs': bucketWidthSecs,
+      'startSecs': startSecs,
+      'endSecs': endSecs,
+      if (trainingStartSecs != null) 'trainingStartSecs': trainingStartSecs,
+      'bands': b,
+      'pulse': pulse,
+      'spo2': spo2,
+      'movement': movement,
+      'peakAlphaFreq': peakAlphaFreq,
+      'peakAlphaPower': peakAlphaPower,
+    };
+  }
+
+  static SessionOverview? fromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    final bands = <int, BandPowerSeries>{};
+    if (json['bands'] is Map) {
+      for (final e in (json['bands'] as Map).entries) {
+        final k = int.tryParse(e.key);
+        if (k != null) {
+          bands[k] = BandPowerSeries.fromJson(e.value as Map<String, dynamic>?)!;
+        }
+      }
+    }
+    return SessionOverview(
+      bucketCount: (json['bucketCount'] as num?)?.toInt() ?? 0,
+      bucketWidthSecs: (json['bucketWidthSecs'] as num?)?.toDouble() ?? 0,
+      startSecs: (json['startSecs'] as num?)?.toDouble() ?? 0,
+      endSecs: (json['endSecs'] as num?)?.toDouble() ?? 0,
+      trainingStartSecs: (json['trainingStartSecs'] as num?)?.toDouble(),
+      bands: bands,
+      pulse:
+          (json['pulse'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
+      spo2: (json['spo2'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
+      movement: (json['movement'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
+      peakAlphaFreq: (json['peakAlphaFreq'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
+      peakAlphaPower: (json['peakAlphaPower'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
+    );
   }
 }
 
-/// Full device information (v5). Supersedes deviceName/deviceModel/deviceId.
-class DeviceInfoV5 {
-  const DeviceInfoV5({
-    required this.name,
+/// Per-electrode band power series for one bucket.
+class BandPowerSeries {
+  const BandPowerSeries({
+    required this.delta,
+    required this.theta,
+    required this.alpha,
+    required this.beta,
+    required this.gamma,
+  });
+
+  final List<double?> delta;
+  final List<double?> theta;
+  final List<double?> alpha;
+  final List<double?> beta;
+  final List<double?> gamma;
+
+  Map<String, Object?> toJson() => {
+    'delta': delta,
+    'theta': theta,
+    'alpha': alpha,
+    'beta': beta,
+    'gamma': gamma,
+  };
+
+  static BandPowerSeries? fromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    return BandPowerSeries(
+      delta: (json['delta'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
+      theta: (json['theta'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
+      alpha: (json['alpha'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
+      beta: (json['beta'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
+      gamma: (json['gamma'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
+    );
+  }
+}
+
+/// Summary of a session for the history list.
+class SessionSummary {
+  const SessionSummary({
     required this.id,
-    required this.firmware,
-    required this.model,
-    required this.sensors,
-    required this.channelCount,
-    required this.channelLabels,
-  })
+    required this.metadata,
+  });
 
-  final String name
-  final String id
-  final String firmware
-  final String model
-  final List<String> sensors
-  final int channelCount
-  final List<String> channelLabels
+  final String id;
+  final SessionMetadata metadata;
 
   Map<String, Object?> toJson() => {
-    'name': name,
     'id': id,
-    'firmware': firmware,
-    'model': model,
-    'sensors': sensors,
-    'channelCount': channelCount,
-    'channelLabels': channelLabels,
-  }
+    'metadata': metadata.toJson(),
+  };
 
-  static DeviceInfoV5? fromJson(Map<String, dynamic>? json) {
-    if (json == null) return null
-    return DeviceInfoV5(
-      name: json['name'] as String? ?? '',
+  static SessionSummary? fromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+    return SessionSummary(
       id: json['id'] as String? ?? '',
-      firmware: json['firmware'] as String? ?? '',
-      model: json['model'] as String? ?? '',
-      sensors: (json['sensors'] as List?)?.map((e) => e as String).toList() ?? [],
-      channelCount: (json['channelCount'] as num?)?.toInt() ?? 4,
-      channelLabels: (json['channelLabels'] as List?)?.map((e) => e as String).toList() ?? [],
-    )
-  }
-}
-
-/// Individual stream info: enabled + rate.
-/// Uses manual JSON serialization to avoid freezed nested class limitations.
-class StreamInfo {
-  const StreamInfo({
-    required this.enabled,
-    required this.rateHz,
-    this.electrodes,
-    this.channels,
-    this.sensors,
-  })
-
-  final bool enabled
-  final int rateHz
-  final List<int>? electrodes
-  final List<String>? channels
-  final List<String>? sensors
-
-  Map<String, dynamic> toJson() => {
-    'enabled': enabled,
-    'rateHz': rateHz,
-    if (electrodes != null) 'electrodes': electrodes,
-    if (channels != null) 'channels': channels,
-    if (sensors != null) 'sensors': sensors,
-  }
-
-  static StreamInfo? fromJson(Map<String, dynamic>? json) {
-    if (json == null) return null
-    return StreamInfo(
-      enabled: json['enabled'] as bool? ?? false,
-      rateHz: (json['rateHz'] as num?)?.toInt() ?? 0,
-      electrodes: (json['electrodes'] as List?)?.map((e) => e as int).toList(),
-      channels: (json['channels'] as List?)?.map((e) => e as String).toList(),
-      sensors: (json['sensors'] as List?)?.map((e) => e as String).toList(),
-    )
-  }
-}
-
-/// Stream configuration: what was recorded and at what rate (v5).
-/// Uses manual JSON serialization to avoid freezed nested class limitations.
-class StreamsConfig {
-  const StreamsConfig({
-    required this.eeg,
-    required this.bands,
-    required this.pulse,
-    required this.spo2,
-    required this.movement,
-    required this.peakAlpha,
-    required this.imu,
-    required this.ppg,
-    required this.telemetry,
-    required this.gestures,
-  })
-
-  final StreamInfo eeg
-  final StreamInfo bands
-  final StreamInfo pulse
-  final StreamInfo spo2
-  final StreamInfo movement
-  final StreamInfo peakAlpha
-  final StreamInfo imu
-  final StreamInfo ppg
-  final StreamInfo telemetry
-  final StreamInfo gestures
-
-  Map<String, dynamic> toJson() => {
-    'eeg': eeg.toJson(),
-    'bands': bands.toJson(),
-    'pulse': pulse.toJson(),
-    'spo2': spo2.toJson(),
-    'movement': movement.toJson(),
-    'peakAlpha': peakAlpha.toJson(),
-    'imu': imu.toJson(),
-    'ppg': ppg.toJson(),
-    'telemetry': telemetry.toJson(),
-    'gestures': gestures.toJson(),
-  }
-
-  static StreamsConfig? fromJson(Map<String, dynamic>? json) {
-    if (json == null) return null
-    return StreamsConfig(
-      eeg: StreamInfo.fromJson(json['eeg'] as Map<String, dynamic>?)!,
-      bands: StreamInfo.fromJson(json['bands'] as Map<String, dynamic>?)!,
-      pulse: StreamInfo.fromJson(json['pulse'] as Map<String, dynamic>?)!,
-      spo2: StreamInfo.fromJson(json['spo2'] as Map<String, dynamic>?)!,
-      movement: StreamInfo.fromJson(json['movement'] as Map<String, dynamic>?)!,
-      peakAlpha: StreamInfo.fromJson(json['peakAlpha'] as Map<String, dynamic>?)!,
-      imu: StreamInfo.fromJson(json['imu'] as Map<String, dynamic>?)!,
-      ppg: StreamInfo.fromJson(json['ppg'] as Map<String, dynamic>?)!,
-      telemetry: StreamInfo.fromJson(json['telemetry'] as Map<String, dynamic>?)!,
-      gestures: StreamInfo.fromJson(json['gestures'] as Map<String, dynamic>?)!,
-    )
+      metadata: SessionMetadata.fromJson(json['metadata'] as Map<String, dynamic>?)!,
+    );
   }
 }
