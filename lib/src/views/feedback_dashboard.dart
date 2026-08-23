@@ -311,73 +311,64 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     final notifier = ref.read(feedbackStateProvider.notifier);
     final fb = ref.read(feedbackStateProvider);
     debugPrint('[dashboard] save: sessionFilePath=${notifier.sessionFilePath}');
-    final saved = await notifier.saveSession();
+
+    final stats = _prepared?.stats;
+    final app = ref.read(appStateProvider);
+    final channels = notifier.recordedChannels.map(channelName).toList()
+      ..sort();
+    final metadata = SessionMetadata(
+      protocol: fb.protocol,
+      durationMinutes: fb.durationMinutes,
+      elapsedSeconds: fb.elapsedSeconds,
+      sound: fb.soundName,
+      feedbackSound: fb.feedbackMode.name,
+      savedAt: DateTime.now(),
+      notes: _notes.text,
+      stats: stats == null
+          ? null
+          : SessionStatsData(
+              peakAlphaFreq: stats.peakAlphaFreq,
+              peakAlphaPower: stats.peakAlphaPower,
+              targetPct: stats.targetPct,
+              stillnessPct: stats.stillnessPct,
+              avgBpm: stats.avgBpm,
+              avgAlphaRel: stats.avgAlphaRel,
+            ),
+      deviceName: app.status.connected ? app.status.name : null,
+      deviceModel: app.status.connected ? app.status.firmware : null,
+      deviceId: app.status.connected ? app.status.id : null,
+      recordedChannels: channels,
+      recordedData: notifier.recordStreams.map((s) => s.name).toList(),
+      summary: _sessionData == null
+          ? null
+          : SessionOverview.fromData(
+              _sessionData!,
+              trainingStartSecs: notifier.trainingStartOffsetSecs,
+            ),
+      gestures: ref.read(settingsProvider).markersInFeedbackEnabled
+          ? notifier.gestureMarkers
+          : const [],
+      calibration: notifier.calibration,
+      drowsiness: notifier.sessionDrowsiness,
+      music: notifier.sessionMusic,
+      metadataDescription: ref
+          .read(protocolCatalogProvider)
+          .valueOrNull
+          ?.forName(fb.protocol.name)
+          ?.metadataDescription,
+      sessionSettings: _captureSessionSettings(notifier, fb),
+    );
+
+    final saved = await notifier.finalizeSession(
+      thumbnailPng: _thumbnail ?? Uint8List(0),
+      metadataJson: metadata.toJson(),
+    );
+
     if (saved != null) {
       debugPrint('[dashboard] save: finalized ${saved.path}');
-      final stats = _prepared?.stats;
-      final app = ref.read(appStateProvider);
-      final channels = notifier.recordedChannels.map(channelName).toList()
-        ..sort();
-      final metadata = SessionMetadata(
-        protocol: fb.protocol,
-        durationMinutes: fb.durationMinutes,
-        elapsedSeconds: fb.elapsedSeconds,
-        sound: fb.soundName,
-        feedbackSound: fb.feedbackMode.name,
-        savedAt: DateTime.now(),
-        notes: _notes.text,
-        stats: stats == null
-            ? null
-            : SessionStatsData(
-                peakAlphaFreq: stats.peakAlphaFreq,
-                peakAlphaPower: stats.peakAlphaPower,
-                targetPct: stats.targetPct,
-                stillnessPct: stats.stillnessPct,
-                avgBpm: stats.avgBpm,
-                avgAlphaRel: stats.avgAlphaRel,
-              ),
-        deviceName: app.status.connected ? app.status.name : null,
-        deviceModel: app.status.connected ? app.status.firmware : null,
-        deviceId: app.status.connected ? app.status.id : null,
-        recordedChannels: channels,
-        recordedData: notifier.recordStreams.map((s) => s.name).toList(),
-        summary: _sessionData == null
-            ? null
-            : SessionOverview.fromData(
-                _sessionData!,
-                trainingStartSecs: notifier.trainingStartOffsetSecs,
-              ),
-        gestures: ref.read(settingsProvider).markersInFeedbackEnabled
-            ? notifier.gestureMarkers
-            : const [],
-        calibration: notifier.calibration,
-        drowsiness: notifier.sessionDrowsiness,
-        music: notifier.sessionMusic,
-        metadataDescription: ref
-            .read(protocolCatalogProvider)
-            .valueOrNull
-            ?.forName(fb.protocol.name)
-            ?.metadataDescription,
-        sessionSettings: _captureSessionSettings(notifier, fb),
-      );
-      final id = DateTime.now().millisecondsSinceEpoch.toString();
-      try {
-        debugPrint('[session] publish: reading bytes ${saved.path}');
-        final museBytes = await saved.readAsBytes();
-        final store = await ref.read(sessionStoreProvider.future);
-        await store.publishSession(
-          id,
-          museBytes,
-          metadata,
-          pngBytes: _thumbnail,
-        );
-        debugPrint('[session] publish: complete ($id)');
-      } catch (e) {
-        debugPrint('[session] publish FAILED ($e)');
-      }
     } else {
       debugPrint(
-        '[dashboard] save: saveSession returned null (nothing to save)',
+        '[dashboard] save: finalizeSession returned null (nothing to save)',
       );
     }
     if (mounted) {

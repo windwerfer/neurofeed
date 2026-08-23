@@ -69,11 +69,17 @@ class FeedbackRecorder {
   /// Flush pending data to disk without finalizing the temp file.
   Future<void> flushSession() => _recorder.flush();
 
-  /// Mark the session as saved (rename temp file to final name). Returns the
-  /// finalized scratch file on disk.
-  Future<File?> saveSession() => _recorder.markSaved();
+  /// Finalize the session: assemble v5 container with thumbnail and metadata.
+  /// Returns the final session file on disk.
+  Future<File?> finalizeSession({
+    required Uint8List thumbnailPng,
+    required Map<String, dynamic> metadataJson,
+  }) => _recorder.finalize(
+        thumbnailPng: thumbnailPng,
+        metadataJson: metadataJson,
+      );
 
-  /// Discard the session (delete temp file).
+  /// Discard the session (delete temp files).
   Future<void> discardSession() async {
     await _recorder.stop();
   }

@@ -537,10 +537,7 @@ class SessionCalibrationPhase {
 /// One in-flight recalibration that replaced the session baseline: when it
 /// happened (seconds from recording start) and the new baseline statistics.
 class SessionRecalibration {
-  const SessionRecalibration({
-    required this.atSecs,
-    required this.baseline,
-  });
+  const SessionRecalibration({required this.atSecs, required this.baseline});
 
   /// Seconds from recording (calibration) start to the recalibration event.
   final double atSecs;
@@ -560,10 +557,7 @@ class SessionRecalibration {
     final baseline = SessionBaselineStats.fromJson(json['baseline']);
     return SessionRecalibration(
       atSecs: (json['atSecs'] as num?)?.toDouble() ?? 0,
-      baseline: baseline ?? const SessionBaselineStats(
-        percentile: 0,
-        count: 0,
-      ),
+      baseline: baseline ?? const SessionBaselineStats(percentile: 0, count: 0),
     );
   }
 }
@@ -892,8 +886,7 @@ class SessionMetadata {
     if (drowsiness != null) 'drowsiness': drowsiness!.toJson(),
     if (music != null) 'music': music!.toJson(),
     if (feedbackSound != null) 'feedbackSound': feedbackSound,
-    if (metadataDescription != null)
-      'metadataDescription': metadataDescription,
+    if (metadataDescription != null) 'metadataDescription': metadataDescription,
     if (sessionSettings != null) 'sessionSettings': sessionSettings!.toJson(),
   };
 
@@ -999,7 +992,8 @@ class SessionStore {
     final ids = <String>[];
     final mtimeById = <String, int>{};
     for (final f in files) {
-      if (!f.name.startsWith('session_') || !f.name.endsWith('.muse.feedback')) {
+      if (!f.name.startsWith('session_') ||
+          !f.name.endsWith('.muse.feedback')) {
         continue;
       }
       final id = f.name.substring(8, f.name.length - 14);
@@ -1029,7 +1023,8 @@ class SessionStore {
     final changed = <({String name, String id, int mtimeMs})>[];
     final summaries = <SessionSummary>[];
     for (final f in files) {
-      if (!f.name.startsWith('session_') || !f.name.endsWith('.muse.feedback')) {
+      if (!f.name.startsWith('session_') ||
+          !f.name.endsWith('.muse.feedback')) {
         continue;
       }
       final id = f.name.substring(8, f.name.length - 14);
@@ -1042,7 +1037,10 @@ class SessionStore {
         changed.add((name: f.name, id: id, mtimeMs: f.mtimeMs));
       }
       summaries.add(
-        SessionSummary(id: id, metadata: _metadataFromJson(row.metadataJson, id)),
+        SessionSummary(
+          id: id,
+          metadata: _metadataFromJson(row.metadataJson, id),
+        ),
       );
     }
 
@@ -1076,9 +1074,9 @@ class SessionStore {
           try {
             final head = await _readHead(storage, f.name);
             if (head != null) {
-              final decoded = jsonDecode(
-                String.fromCharCodes(head.jsonBytes),
-              ) as Map<String, Object?>;
+              final decoded =
+                  jsonDecode(String.fromCharCodes(head.jsonBytes))
+                      as Map<String, Object?>;
               final metadata = SessionMetadata.fromJson(decoded);
               if (metadata != null) {
                 String? thumbPath;
@@ -1091,7 +1089,9 @@ class SessionStore {
                     id: f.id,
                     mtimeMs: f.mtimeMs,
                     savedAtMs: metadata.savedAt.millisecondsSinceEpoch,
-                    metadataJson: const JsonEncoder().convert(metadata.toJson()),
+                    metadataJson: const JsonEncoder().convert(
+                      metadata.toJson(),
+                    ),
                     thumbnailPath: thumbPath,
                   ),
                   key,
@@ -1110,7 +1110,9 @@ class SessionStore {
               id: f.id,
               mtimeMs: f.mtimeMs,
               savedAtMs: 0,
-              metadataJson: const JsonEncoder().convert(_fallback(f.id).toJson()),
+              metadataJson: const JsonEncoder().convert(
+                _fallback(f.id).toJson(),
+              ),
               thumbnailPath: null,
             ),
             key,
@@ -1307,7 +1309,9 @@ class SessionStore {
     await storage.deleteFile(name);
     await _cache.remove({id}, storageKeyFor(storage));
     await _cache.deleteThumbnail(id);
-    debugPrint('[session] delete($id): ${existed ? 'deleted' : 'missing'} ($name)');
+    debugPrint(
+      '[session] delete($id): ${existed ? 'deleted' : 'missing'} ($name)',
+    );
     return existed;
   }
 
@@ -1354,9 +1358,10 @@ class SessionStore {
       final decoded =
           jsonDecode(rows.first.metadataJson) as Map<String, Object?>;
       decoded['summary'] = overview.toJson();
-      await _cache.upsert(rows.first.copyWith(
-        metadataJson: const JsonEncoder().convert(decoded),
-      ), key);
+      await _cache.upsert(
+        rows.first.copyWith(metadataJson: const JsonEncoder().convert(decoded)),
+        key,
+      );
       debugPrint('[session] cacheOverview($id): overview cached');
     } catch (e) {
       debugPrint('[session] cacheOverview($id) failed: $e');
@@ -1409,5 +1414,5 @@ class SessionListNotifier extends AsyncNotifier<List<SessionSummary>> {
 
 final sessionListProvider =
     AsyncNotifierProvider<SessionListNotifier, List<SessionSummary>>(
-  SessionListNotifier.new,
-);
+      SessionListNotifier.new,
+    );

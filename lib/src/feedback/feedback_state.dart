@@ -1056,7 +1056,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// Streams enabled for this session's recording.
   Set<RecordingStream> get recordStreams => _recorder.streams;
 
-  Future<File?> saveSession() => _recorder.saveSession();
+  /// Finalize the session: assemble v5 container with thumbnail and metadata.
+  /// Returns the final session file on disk.
+  Future<File?> finalizeSession({
+    required Uint8List thumbnailPng,
+    required Map<String, dynamic> metadataJson,
+  }) => _recorder.finalizeSession(
+        thumbnailPng: thumbnailPng,
+        metadataJson: metadataJson,
+      );
 
   Future<void> discardSession() => _recorder.discardSession();
 

@@ -46,6 +46,8 @@ abstract class ComputedFrame with _$ComputedFrame {
     required FeedbackInfo feedback,
     required List<String> gestures,
   }) = _ComputedFrame;
+
+  static ComputedFrame fromJson(Map<String, dynamic> json) => _computedFrameFromJson(json);
 }
 
 extension ComputedFrameJson on ComputedFrame {
