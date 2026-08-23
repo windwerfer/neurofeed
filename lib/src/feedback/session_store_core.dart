@@ -29,15 +29,69 @@ class SessionStore {
     return cache.thumbnailPath(id);
   }
 
-  /// Files (name + id + mtime) discovered by [list] that are missing from the
-  /// cache or have changed since it was written. Backfilled in the background
-  /// so the first history open stays fluid.
-  List<({String name, String id, int mtimeMs})> _pendingBackfill = [];
-
-  bool _backfillRunning = false;
-
   /// Number of sessions awaiting background backfill after the last [list].
-  int get pendingBackfillCount => _pendingBackfill.length;
+  int get pendingBackfillCount => 0;
+
+  Future<List<SessionSummary>> list() async {
+    final sqlite = await _sqlite;
+    final rows = await sqlite.listSessions();
+    return [
+      for (final r in rows)
+        SessionSummary(
+          id: r.id,
+          metadata: SessionMetadata(
+            protocol: ProtocolType.values.where((p) => p.name == r.protocol).firstOrNull ?? ProtocolType.drowsiness,
+            durationMinutes: r.durationS ~/ 60,
+            elapsedSeconds: r.durationS,
+            sound: 'Ambient Drone',
+            savedAt: r.savedAt.toIso8601String(),
+            deviceName: r.deviceName,
+            deviceModel: r.deviceModel,
+            deviceId: r.deviceId,
+            durationS: r.durationS,
+            startedAt: r.startedAt.toIso8601String(),
+            protocolVersion: r.protocolVersion,
+            calibrationProfile: r.calibrationProfile,
+            avgSpo2: r.avgSpo2,
+            peakAlphaHz: r.peakAlphaHz,
+            peakAlphaPower: r.peakAlphaPower,
+            pctInTarget: r.pctInTarget,
+            avgMovement: r.avgMovement,
+            guardrailWarnCount: r.guardrailWarnCount,
+            avgSleepDir: r.avgSleepDir,
+            signalQualityMean: r.signalQualityMean,
+            pctQcOk: r.pctQcOk,
+            guardrailEngine: r.guardrailEngine,
+            modelKind: r.modelKind,
+            modelSha256: r.modelSha256,
+            feedbackEngine: r.feedbackEngine,
+            userId: r.userId,
+            sessionId: r.sessionId,
+          ),
+        ),
+    ];
+  }
+
+  Future<void> backfillPending() async {}
+
+  Future<List<int>?> readMuse(String id) async {
+    final storage = await _storage;
+    final bytes = await storage.readFile(_museName(id));
+    if (bytes == null) return null;
+    return v5_extract_raw(Uint8List.fromList(bytes));
+  }
+
+  Future<List<int>?> readPng(String id) async {
+    final storage = await _storage;
+    final bytes = await storage.readFile(_museName(id));
+    if (bytes == null) return null;
+    try {
+      final head = v5_parse_head(Uint8List.fromList(bytes));
+      return head.pngBytes;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// The underlying storage (resolved) — used to place exports.
   Future<SessionStorage> get storage => _storage;
