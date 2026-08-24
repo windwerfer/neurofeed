@@ -416,6 +416,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   void setWarningThresholdPercentile(int percentile) {
     _ref.read(settingsProvider).setWarningThresholdPercentile(percentile);
+    // Recompute threshold during active session if baseline exists
+    if (_baselineSleepDir.isNotEmpty &&
+        (state.phase == FeedbackPhase.playing ||
+            state.phase == FeedbackPhase.paused ||
+            state.phase == FeedbackPhase.interrupted)) {
+      final list = List<double>.of(_baselineSleepDir)..sort();
+      final idx = ((percentile / 100) * (list.length - 1)).round();
+      _guardrailThreshold = list[idx];
+      debugPrint(
+        '[guardrail] threshold recomputed p$percentile = ${_guardrailThreshold?.toStringAsFixed(3)}',
+      );
+    }
   }
 
   /// Begin calibration: play the voice intro, require all electrodes green

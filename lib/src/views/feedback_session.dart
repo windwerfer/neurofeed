@@ -2042,22 +2042,23 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
-            if (!inSession) ...[
-              Text('Warning threshold', style: theme.textTheme.titleSmall),
-              const SizedBox(height: 4),
-              Text(
-                'Percentile of the eyes-closed rest baseline that triggers a '
-                'warning (75% default). Low = warnings come early and often.',
-                style: theme.textTheme.bodySmall,
-              ),
-              _PercentileSlider(
-                value: _threshold,
-                onChanged: (v) {
-                  setState(() => _threshold = v);
-                  settings.setWarningThresholdPercentile(v);
-                },
-              ),
-            ],
+            Text('Warning threshold', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'Percentile of the eyes-closed rest baseline that triggers a '
+              'warning (75% default). Low = warnings come early and often.',
+              style: theme.textTheme.bodySmall,
+            ),
+            _PercentileSlider(
+              value: _threshold,
+              onChanged: (v) {
+                setState(() => _threshold = v);
+                settings.setWarningThresholdPercentile(v);
+                ref
+                    .read(feedbackStateProvider.notifier)
+                    .setWarningThresholdPercentile(v);
+              },
+            ),
           ],
         ),
       ),
