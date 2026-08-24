@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/app.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:muse_ml/src/rust/api/device_config.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/charts/live_cache.dart';
 import 'package:muse_ml/src/charts/band_cache.dart';
@@ -63,6 +64,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
             fuelGaugeVoltage: 0,
             temperature: 0,
           ),
+          connectDeviceKind: DeviceKind.muse,
+          connectSimulate: false,
         ),
       ) {
     _init();
@@ -346,6 +349,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     _scanEnabled = false;
     final id = device.id;
     final name = device.name;
+    final kind = state.connectDeviceKind;
+    final simulate = state.connectSimulate;
     state = state.copyWith(
       connectWindowOpen: false,
       scanning: false,
@@ -355,12 +360,12 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     Object? lastError;
     for (var attempt = 1; attempt <= _maxConnectAttempts; attempt++) {
       debugPrint('[muse] connect attempt $attempt/$_maxConnectAttempts — '
-          '$name ($id)');
+          '$name ($id) kind=$kind simulate=$simulate');
       state = state.copyWith(
         scanMessage: 'Connecting… (attempt $attempt)',
       );
       try {
-        final status = await connect(deviceId: id);
+        final status = await connectWithOptions(deviceId: id, kind: kind, simulate: simulate);
         debugPrint('[muse] connect returned: connected=${status.connected}');
         await _settings.setLastDeviceId(id);
         state = state.copyWith(status: status, connectingTo: null);
@@ -369,12 +374,6 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         lastError = e;
         debugPrint('[muse] connect attempt $attempt failed: $e');
         if (attempt < _maxConnectAttempts) {
-          // The first BLE connect right after a cold start or a recent
-          // re-connect sometimes times out even though the scan just saw the
-          // device (the headset isn't accepting a new connection yet).
-          // Re-scanning replaces the cached peripheral with a fresh
-          // adapter/session — mirroring the manual "turn it off and on"
-          // flow that reliably works the second time.
           await Future<void>.delayed(const Duration(milliseconds: 800));
           await _refreshDevice(id);
         }
@@ -446,6 +445,14 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     _settings.setLastView(view);
   }
 
+  void setConnectDeviceKind(DeviceKind kind) {
+    state = state.copyWith(connectDeviceKind: kind);
+  }
+
+  void setConnectSimulate(bool simulate) {
+    state = state.copyWith(connectSimulate: simulate);
+  }
+
   void toggleConnectWindow() {
     if (state.connectWindowOpen) {
       _scanEnabled = false;
@@ -488,6 +495,8 @@ class AppUiState {
     this.scanMessage,
     this.connectingTo,
     this.disconnecting = false,
+    this.connectDeviceKind = DeviceKind.muse,
+    this.connectSimulate = false,
   });
 
   final ConnectionStatus status;
@@ -505,6 +514,11 @@ class AppUiState {
   final String? scanMessage;
   final String? connectingTo;
   final bool disconnecting;
+  
+  /// Selected device kind in connect dialog (Muse / Neurosity)
+  final DeviceKind connectDeviceKind;
+  /// Whether to use simulator instead of real hardware
+  final bool connectSimulate;
 
   static const _sentinel = Object();
 
@@ -522,6 +536,8 @@ class AppUiState {
     Object? scanMessage = _sentinel,
     Object? connectingTo = _sentinel,
     bool? disconnecting,
+    DeviceKind? connectDeviceKind,
+    bool? connectSimulate,
   }) => AppUiState(
     status: status ?? this.status,
     currentView: currentView ?? this.currentView,
@@ -546,6 +562,8 @@ class AppUiState {
       _ => connectingTo as String?,
     },
     disconnecting: disconnecting ?? this.disconnecting,
+    connectDeviceKind: connectDeviceKind ?? this.connectDeviceKind,
+    connectSimulate: connectSimulate ?? this.connectSimulate,
   );
 }
 

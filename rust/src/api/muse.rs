@@ -1,11 +1,13 @@
 use flutter_rust_bridge::frb;
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::api::device_config::DeviceKind;
 use crate::frb_generated::StreamSink;
 use muse_rs::prelude::*;
 
 use crate::analysis::gesture::GestureDetector;
 use crate::analysis::{guardrail, luna, reve};
-use crate::connection::{state, ActiveConnection};
+use crate::api::simulator::DeviceSimulator;
+use crate::connection::{state, ActiveConnection, ConnectionHandle};
 
 fn now_ms() -> f64 {
     SystemTime::now()
@@ -90,6 +92,7 @@ fn frontal_delta_average(deltas: &std::collections::HashMap<i32, f64>) -> f64 {
 pub struct DeviceInfo {
     pub name: String,
     pub id: String,
+    pub kind: DeviceKind,
 }
 
 /// Connection / link status reported to the UI.
@@ -343,6 +346,11 @@ pub async fn scan(timeout_secs: Option<u64>) -> anyhow::Result<Vec<DeviceInfo>> 
         .map(|d| DeviceInfo {
             name: d.name.clone(),
             id: d.id.clone(),
+            kind: if d.name.contains("Crown") || d.name.contains("Notion") {
+                DeviceKind::Neurosity
+            } else {
+                DeviceKind::Muse
+            },
         })
         .collect();
 
@@ -414,23 +422,38 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
             _ => {}
         }
 
-        // Request device info once so the control JSON with bp (battery
+// Request device info once so the control JSON with bp (battery
         // percentage) arrives.  The forwarder extracts bp from Control events
         // and emits a Telemetry event with the correct 0-100 value.
         let _ = handle.send_command("v1").await;
 
+        // Create unified MuseEventDto channel for the forwarder
+        let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
+        
+        // Converter task: MuseEvent -> MuseEventDto
+        let conv_tx = dto_tx.clone();
+        tokio::spawn(async move {
+            let mut rx = rx;
+            while let Some(ev) = rx.recv().await {
+                let dto = map_event(ev);
+                if conv_tx.send(dto).await.is_err() {
+                    break;
+                }
+            }
+        });
+        
         {
             let mut guard = state().inner.lock().unwrap();
             guard.connection_epoch += 1;
             guard.active = Some(ActiveConnection {
-                handle,
+                handle: ConnectionHandle::Muse(handle),
                 name: name.clone(),
                 id: device_id.clone(),
                 firmware: firmware.clone(),
             });
-            guard.events = Some(rx);
+            guard.events = Some(dto_rx);
         }
-
+        
         spawn_event_forwarder();
 
         Ok(ConnectionStatus {
@@ -485,6 +508,168 @@ pub fn get_status() -> ConnectionStatus {
         },
         None => ConnectionStatus::default(),
     }
+}
+
+/// Connect to a device with explicit kind and simulation flag.
+/// - `kind`: DeviceKind::Muse or DeviceKind::Neurosity (determines electrode layout, features)
+/// - `simulate`: if true, runs the built-in simulator instead of real BLE
+#[frb]
+pub async fn connect_with_options(
+    device_id: String,
+    kind: DeviceKind,
+    simulate: bool,
+) -> anyhow::Result<ConnectionStatus> {
+    // Tear down any existing connection first
+    {
+        let old = state().inner.lock().unwrap().active.take();
+        if let Some(old) = old {
+            let _ = old.handle.disconnect().await;
+        }
+    }
+
+    // If simulating, we don't need a real device from cache
+    let (name, firmware) = if simulate {
+        match kind {
+            DeviceKind::SimulatedMuse | DeviceKind::Muse => {
+                ("Muse S (Simulated)".to_string(), "MuseS_sim_v1.0".to_string())
+            }
+            DeviceKind::SimulatedNeurosity | DeviceKind::Neurosity => {
+                ("Crown (Simulated)".to_string(), "Crown_sim_v1.0".to_string())
+            }
+        }
+    } else {
+        // Real device - look up from cache
+        let device = {
+            let guard = state().inner.lock().unwrap();
+            guard.devices.get(&device_id).cloned().ok_or_else(|| {
+                anyhow::anyhow!("Device {device_id} not found; scan first")
+            })?
+        };
+        (device.name.clone(), String::new()) // firmware filled after connect
+    };
+
+if simulate {
+        // Start simulator
+        let config = crate::api::device_config::DeviceConfig::for_kind(kind);
+        let (sim_tx, sim_rx) = std::sync::mpsc::channel();
+        let simulator = crate::api::simulator::DeviceSimulator::new(config, sim_tx);
+        
+        // Create unified MuseEventDto channel for the forwarder (tokio)
+        let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
+        
+        // Bridge task: read from std channel (blocking) and forward to tokio channel
+        let bridge_tx = dto_tx.clone();
+        std::thread::spawn(move || {
+            while let Ok(event) = sim_rx.recv() {
+                if bridge_tx.blocking_send(event).is_err() {
+                    break;
+                }
+            }
+        });
+        
+        {
+            let mut guard = state().inner.lock().unwrap();
+            guard.connection_epoch += 1;
+            guard.active = Some(ActiveConnection {
+                handle: ConnectionHandle::Simulator(simulator),
+                name: name.clone(),
+                id: device_id.clone(),
+                firmware: firmware.clone(),
+            });
+            guard.events = Some(dto_rx);
+        }
+        
+        spawn_event_forwarder();
+        
+        return Ok(ConnectionStatus {
+            connected: true,
+            name,
+            id: device_id,
+            firmware,
+        });
+    }
+
+    // Real Neurosity (Crown/Notion) - delegate to neurosity-ble-rs
+    if kind.is_neurosity() {
+        return crown_connect(device_id).await;
+    }
+
+    // Real Muse - existing logic
+    let device = {
+        let guard = state().inner.lock().unwrap();
+        guard.devices.get(&device_id).cloned().ok_or_else(|| {
+            anyhow::anyhow!("Device {device_id} not found; scan first")
+        })?
+    };
+
+    let name = device.name.clone();
+    let client = MuseClient::new(MuseClientConfig {
+        enable_ppg: true,
+        ..Default::default()
+    });
+
+    tokio::time::timeout(std::time::Duration::from_secs(18), async {
+        let (rx, handle) = client.connect_to(device).await?;
+        let firmware = if handle.is_athena {
+            "Athena"
+        } else {
+            "Classic"
+        }
+        .to_string();
+
+        log::info!("[muse] connected to {name} ({firmware} firmware)");
+
+        let start_result = tokio::time::timeout(
+            std::time::Duration::from_secs(8),
+            handle.start(true, false),
+        )
+        .await;
+match start_result {
+            Ok(Err(e)) => log::warn!("[muse] start commands failed: {e:#}"),
+            Err(_) => log::warn!("[muse] start commands timed out after 8 s"),
+            _ => {}
+        }
+
+        let _ = handle.send_command("v1").await;
+
+        // Create unified MuseEventDto channel for the forwarder
+        let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
+        
+        // Converter task: MuseEvent -> MuseEventDto
+        let conv_tx = dto_tx.clone();
+        tokio::spawn(async move {
+            let mut rx = rx;
+            while let Some(ev) = rx.recv().await {
+                let dto = map_event(ev);
+                if conv_tx.send(dto).await.is_err() {
+                    break;
+                }
+            }
+        });
+        
+        {
+            let mut guard = state().inner.lock().unwrap();
+            guard.connection_epoch += 1;
+            guard.active = Some(ActiveConnection {
+                handle: ConnectionHandle::Muse(handle),
+                name: name.clone(),
+                id: device_id.clone(),
+                firmware: firmware.clone(),
+            });
+            guard.events = Some(dto_rx);
+        }
+        
+        spawn_event_forwarder();
+
+        Ok(ConnectionStatus {
+            connected: true,
+            name,
+            id: device_id,
+            firmware,
+        })
+    })
+    .await
+    .map_err(|_| anyhow::anyhow!("connect timed out after 18 s"))?
 }
 
 /// Returns `true` if a connection is currently active. The Rust side clears
@@ -664,13 +849,14 @@ fn spawn_event_forwarder() {
                     }
                 };
                 match &ev {
-                    MuseEvent::Eeg(_) => counts.eeg += 1,
-                    MuseEvent::Ppg(_) => counts.ppg += 1,
-                    MuseEvent::Telemetry(_) => counts.telemetry += 1,
-                    MuseEvent::Accelerometer(_) => counts.accelerometer += 1,
-                    MuseEvent::Gyroscope(_) => counts.gyroscope += 1,
-                    MuseEvent::Control(_) => counts.control += 1,
-                    MuseEvent::Connected(_) => counts.connected += 1,
+                    MuseEventDto::Eeg(_) => counts.eeg += 1,
+                    MuseEventDto::Bands(_) => counts.bands += 1,
+                    MuseEventDto::Ppg(_) => counts.ppg += 1,
+                    MuseEventDto::Telemetry(_) => counts.telemetry += 1,
+                    MuseEventDto::Accelerometer(_) => counts.accelerometer += 1,
+                    MuseEventDto::Gyroscope(_) => counts.gyroscope += 1,
+                    MuseEventDto::Control(_) => counts.control += 1,
+                    MuseEventDto::Connected(_) => counts.connected += 1,
                     _ => counts.other += 1,
                 }
                 if last_print.elapsed() >= std::time::Duration::from_secs(1) {
@@ -683,7 +869,8 @@ fn spawn_event_forwarder() {
                     counts = PktCounts::default();
                     last_print = tokio::time::Instant::now();
                 }
-                let mut dto = map_event(ev);
+                // ev is already MuseEventDto
+                let mut dto = ev;
                 // Patch Athena EEG timestamps (0.0) with virtual wall-clock
                 // timestamps derived from total sample count @ 256 Hz.
                 if let MuseEventDto::Eeg(ref mut e) = dto {
@@ -1347,4 +1534,53 @@ fn map_imu(imu: ImuData) -> ImuDto {
             })
             .collect(),
     }
+}
+
+/// Connect to a Neurosity Crown/Notion device via BLE.
+/// Uses the neurosity-ble-rs crate. (Phase D: not yet implemented - returns placeholder)
+pub async fn crown_connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
+    // Tear down any existing connection first
+    {
+        let old = state().inner.lock().unwrap().active.take();
+        if let Some(old) = old {
+            old.handle.disconnect().await;
+        }
+    }
+
+    // Look up device from cache
+    let device = {
+        let guard = state().inner.lock().unwrap();
+        guard.devices.get(&device_id).cloned().ok_or_else(|| {
+            anyhow::anyhow!("Device {device_id} not found; scan first")
+        })?
+    };
+
+    let name = device.name.clone();
+    
+    // Create a placeholder event channel (Phase D: real Crown events will come here)
+    let (_tx, rx) = tokio::sync::mpsc::channel(256);
+    
+    // For Phase A, just log that Crown is not yet implemented
+    log::warn!("[crown] Crown BLE not yet implemented (Phase D) - returning placeholder connection");
+
+    {
+        let mut guard = state().inner.lock().unwrap();
+        guard.connection_epoch += 1;
+        guard.active = Some(ActiveConnection {
+            handle: ConnectionHandle::Crown,
+            name: name.clone(),
+            id: device_id.clone(),
+            firmware: "Crown".to_string(),
+        });
+        guard.events = Some(rx);
+    }
+
+    spawn_event_forwarder();
+
+    Ok(ConnectionStatus {
+        connected: true,
+        name,
+        id: device_id,
+        firmware: "Crown".to_string(),
+    })
 }

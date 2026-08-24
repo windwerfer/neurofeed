@@ -15,6 +15,7 @@ tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", 
 anyhow = "1"
 log = "0.4"
 env_logger = "0.11"
+rand = "0.8"
 android_logger = "0.14"
 zstd = { version = "0.13", default-features = false }
 serde = { version = "1", features = ["derive"] }
@@ -22,6 +23,9 @@ serde_json = "1"
 crc32fast = "1.3"
 # EDF+ writer (own crate, third_party/edf_export) — raw-EEG history export.
 edf_export = { path = "../third_party/edf_export" }
+
+# Neurosity Crown/Notion BLE client (local crate, to be published later)
+neurosity-ble-rs = { path = "../third_party/neurosity-ble-rs" }
 
 # REVE EEG foundation model (RLX CPU inference) — git dep (upstream, untouched).
 reve-rs = { git = "https://github.com/eugenehp/reve-rs", rev = "9c8d8564b8793ce2a2b926f226c09eefb5e46781", default-features = false, features = ["rlx-cpu"] }

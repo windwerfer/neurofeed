@@ -1,4 +1,6 @@
+pub mod device_config;
 pub mod edf_export;
 pub mod muse;
 pub mod reve;
 pub mod session_format;
+pub mod simulator;

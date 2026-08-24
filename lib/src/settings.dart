@@ -412,6 +412,18 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
+  static const String _enableSimulatedDevicesKey = 'enable_simulated_devices';
+
+  /// When true, the "Simulate" toggle appears in the connect dialog for
+  /// testing without real hardware. Debug only — defaults to false.
+  bool get enableSimulatedDevices =>
+      _prefs.getBool(_enableSimulatedDevicesKey) ?? false;
+
+  Future<void> setEnableSimulatedDevices(bool value) async {
+    await _prefs.setBool(_enableSimulatedDevicesKey, value);
+    notifyListeners();
+  }
+
   static const String _musicAiCpuWarningKey = 'music_ai_cpu_warning_shown';
 
   /// Whether the one-time "music + AI guardrail may stutter" warning has
