@@ -200,11 +200,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final settings = _ref.read(settingsProvider);
     _engine.setDynamicAdapt(settings.dynamicAdapt ?? true);
     _engine.setResponsiveness(settings.responsiveness ?? 0.5);
+    _engine.setBaselinePercentile(settings.baselinePercentile);
     _recorder.setRecordStreams(settings.recordStreams);
     state = state.copyWith(
       soundName: settings.soundName ?? state.soundName,
       feedbackMode: settings.feedbackMode,
       durationMinutes: settings.durationMinutes ?? state.durationMinutes,
+      baselinePercentile: settings.baselinePercentile,
     );
   }
 
@@ -366,6 +368,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   void selectPercentile(int percentile) {
     _engine.setBaselinePercentile(percentile);
+    _ref.read(settingsProvider).setBaselinePercentile(percentile);
     state = state.copyWith(baselinePercentile: percentile);
     final stats = _ref.read(liveStatsProvider);
     stats.setBaseline(
@@ -1419,6 +1422,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       final inTarget = _inTargetVerdict(target, value);
       _engine.recordEpoch(inTarget);
       _engine.recordSessionSample(value, clean: _sampleIsClean);
+      // Continuous EMA adaptation on each clean sample.
+      if (_sampleIsClean && _engine.useEmaAdapt) {
+        _engine.adaptEma(value);
+        state = state.copyWith(currentThreshold: _engine.threshold);
+      }
       _ref.read(liveStatsProvider).push(value, _engine.percentileOf);
       _applyReward(value, inTarget: inTarget);
       // Update computed sampler with feedback data.

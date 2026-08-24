@@ -369,6 +369,17 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
   thumbnails/notes after reinstall (cache is app-private, files are the source
   of truth), and the `listFilesMeta` mtime path on a real folder.
 
+## Status — 2026-08-24 Update (Phase 8 cleanup & polish complete)
+- ✅ **Gesture marker log/rendering in history detail**: `feedback_dashboard.dart` now renders `gestureWidgets()` — summary counts by type + timeline with timestamps/icons.
+- ✅ **Percentile persistence**: `Settings.baselinePercentile` stored in SharedPreferences; restored on new session start via `FeedbackStateNotifier` constructor; written to `SessionSettings.baselinePercentile` in metadata.
+- ✅ **Continuous EMA adaptation**: `RatioEngine` gains `useEmaAdapt`/`emaAlpha`/`_emaThreshold`; `adaptEma(value)` called on each clean sample in `_onBands()`; smoother threshold updates vs window-based step adaptation.
+- ✅ **Calibration audio variants & multi-protocol presets**: verified working (both `single`/`staged` variants in `calibrations.json`, protocol→calibration mapping in `protocols.json`).
+- ✅ **Extended session export tests**: `session_export_test.dart` re-enabled with v5 container format; added calibration trim + gesture marker assertions.
+- ✅ **Golden round-trip test**: `test/session_metadata_roundtrip_test.dart` covers full `SessionMetadata` + `GestureMarker` + `SessionCalibration` JSON serialization.
+- ✅ **AGENTS.md updated**: format v5, new recorder, sampler, markers documented in "Where things live" + "Known hot spots".
+- ✅ All 36 tests pass; `flutter analyze lib/src` clean (only minor info/warnings).
+- ✅ Committed as Phase 8 complete.
+
 ## Next steps
 0. On-device pass: download LUNA Base + LUNA Large, import REVE, verify load/unload,
    bad-hash rejection, progress UI, and model-switch persistence on the TB336FU.
@@ -382,24 +393,21 @@ library + second FFI bridge. See `architecture.md` for the fallback plan.
    up/down becomes a live track.
 3. If the reconnect test passes, remove the temporary `[muse] forwarder` debug
    logs or drop them to debug level.
-4. v1.1 backlog: gesture marker log/rendering in history detail, percentile
-   persistence, continuous EMA adaptation, multi-protocol presets, calibration
-   audio variants (see `.ai/feeback/todos.md`).
-5. v1.2 meta-block: Neurosity Crown 8-electrode support — channel labels are
+4. v1.2 meta-block: Neurosity Crown 8-electrode support — channel labels are
    already metadata-driven; only the default channel-name list needs
    extending per device.
-6. On-device listening pass for binaural + music modes: reward-swell audibility,
+5. On-device listening pass for binaural + music modes: reward-swell audibility,
    guardrail muffle, volume-channel math; tune `BinauralBeatController` voice
    parameters (carrier/beat mix, swell shape) against the TB336FU speakers.
-7. On-device streaming verification: point real receivers at the phone (LSL
+6. On-device streaming verification: point real receivers at the phone (LSL
    Viewer, an OSC sink, BrainFlow recording) and confirm live EEG/bands/IMU/PPG
    arrive with sane rates; verify port+1/+2 IMU/PPG only appear when
    `separateGroups` is on.
-8. On-device audio-profile pass: with the TB336FU speakers, toggle "Reduce
+7. On-device audio-profile pass: with the TB336FU speakers, toggle "Reduce
    audio stutter" and check for audible latency (~0.1 s) / dropout differences
    during music + AI guardrail; confirm the switch applies at the next session
    start (not mid-session).
-9. On-device export pass: record a short session, export PDF/PNG/CSV/EDF+ to a
+8. On-device export pass: record a short session, export PDF/PNG/CSV/EDF+ to a
    real folder (and a SAF-picked folder) and open each result on the tablet;
    verify CSV column layout in a spreadsheet and EDF+ in an EDF reader
    (EEGlab/EDFbrowser). Push `third_party/edf_export` to user GitHub and switch

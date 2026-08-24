@@ -231,6 +231,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         music: widget.readOnly
             ? meta?.music
             : ref.read(feedbackStateProvider.notifier).sessionMusic,
+        gestures: widget.readOnly
+            ? meta?.gestures
+            : ref.read(feedbackStateProvider.notifier).gestureMarkers,
         trainingStartOffsetSecs: _trainingStartOffset,
         readOnly: widget.readOnly,
         thumbKey: _thumbKey,
@@ -486,6 +489,7 @@ class _DashboardBody extends StatefulWidget {
     required this.prepared,
     this.drowsiness,
     this.music,
+    this.gestures,
     this.trainingStartOffsetSecs,
     required this.readOnly,
     required this.thumbKey,
@@ -513,6 +517,9 @@ class _DashboardBody extends StatefulWidget {
   /// Music-feedback record (track list + cutoff trace) of this session (null
   /// when music feedback did not run).
   final SessionMusic? music;
+
+  /// Gesture markers recorded during the session.
+  final List<GestureMarker>? gestures;
 
   /// Seconds from recording start to the training boundary; drowsiness
   /// offsets are wall-clock-relative to session start, so subtracting this
@@ -749,6 +756,116 @@ class _DashboardBodyState extends State<_DashboardBody> {
                         ),
                       ),
                 ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ];
+    }
+
+    // Gesture marker widgets: shows markers for double-blink, double-clench,
+    // and eye up/down transitions recorded during the session.
+    List<Widget> gestureWidgets() {
+      final gestures = widget.gestures;
+      if (gestures == null || gestures.isEmpty) {
+        return const [];
+      }
+      final offset = widget.trainingStartOffsetSecs ?? 0;
+      final theme = Theme.of(context);
+
+      // Group by type for summary counts
+      final counts = <GestureType, int>{};
+      for (final g in gestures) {
+        counts[g.type] = (counts[g.type] ?? 0) + 1;
+      }
+
+      String formatOffset(double secs) {
+        if (secs.isNaN || secs < 0) return '00:00';
+        final m = secs ~/ 60;
+        final s = (secs % 60).toStringAsFixed(0).padLeft(2, '0');
+        return '$m:$s';
+      }
+
+      IconData iconForType(GestureType t) => switch (t) {
+        GestureType.doubleBlink => Icons.remove_red_eye_outlined,
+        GestureType.doubleClench => Icons.pan_tool_outlined,
+        GestureType.eyeUp => Icons.keyboard_arrow_up,
+        GestureType.eyeDown => Icons.keyboard_arrow_down,
+      };
+
+      Color colorForType(GestureType t) => switch (t) {
+        GestureType.doubleBlink => const Color(0xFF1E88E5),
+        GestureType.doubleClench => const Color(0xFFFFA726),
+        GestureType.eyeUp => const Color(0xFF66BB6A),
+        GestureType.eyeDown => const Color(0xFFAB47BC),
+      };
+
+      return [
+        Card(
+          color: theme.colorScheme.surface,
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.gesture_outlined),
+                    const SizedBox(width: 8),
+                    Text('Gesture markers', style: theme.textTheme.titleMedium),
+                    const Spacer(),
+                    Text(
+                      '${gestures.length} marker(s)',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 8,
+                  children: [
+                    for (final entry in counts.entries)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(iconForType(entry.key),
+                              size: 16, color: colorForType(entry.key)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${entry.key.name}: ${entry.value}',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text('Timeline', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                for (final g in gestures)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Icon(iconForType(g.type), size: 16, color: colorForType(g.type)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(g.type.name, overflow: TextOverflow.ellipsis),
+                        ),
+                        Text(
+                          formatOffset(g.offsetSeconds - offset),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1033,6 +1150,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
         ],
         ...drowsinessWidgets(),
         ...musicWidgets(),
+        ...gestureWidgets(),
       ],
     );
   }
