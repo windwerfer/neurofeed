@@ -228,7 +228,8 @@ class SessionExporter {
     for (final sec in eegLastPerSec.keys) {
       if (sec > maxSec) maxSec = sec;
     }
-    final anchor = meta.savedAt.subtract(Duration(seconds: meta.elapsedSeconds));
+    final savedDt = DateTime.tryParse(meta.savedAt) ?? DateTime.now();
+    final anchor = savedDt.subtract(Duration(seconds: meta.elapsedSeconds));
     for (var sec = 0; sec <= maxSec; sec++) {
       final ts = anchor.add(Duration(seconds: sec));
       buf.write(
@@ -329,13 +330,13 @@ class SessionExporter {
         params: EdfExportParams(
           patientId: 'Muse ML',
           recordingId:
-              '${meta.protocol.name} ${meta.savedAt.toIso8601String()}',
-          year: meta.savedAt.year,
-          month: meta.savedAt.month,
-          day: meta.savedAt.day,
-          hour: meta.savedAt.hour,
-          minute: meta.savedAt.minute,
-          second: meta.savedAt.second,
+              '${meta.protocol.name} ${meta.savedAt}',
+          year: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).year,
+          month: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).month,
+          day: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).day,
+          hour: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).hour,
+          minute: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).minute,
+          second: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).second,
           annotations: annotations,
         ),
       );
@@ -454,7 +455,7 @@ class SessionExporter {
 
   /// File stem for one session: `yyyyMMdd_HHmmss_protocol_id8`.
   static String _stem(SessionMetadata meta, String id) {
-    final t = meta.savedAt;
+    final t = DateTime.tryParse(meta.savedAt) ?? DateTime.now();
     final date = '${t.year.toString().padLeft(4, '0')}'
         '${t.month.toString().padLeft(2, '0')}'
         '${t.day.toString().padLeft(2, '0')}';

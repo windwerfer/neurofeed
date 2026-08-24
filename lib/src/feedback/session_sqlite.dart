@@ -15,17 +15,15 @@ import 'package:path_provider/path_provider.dart';
 import 'session_metadata.dart';
 import 'session_v5_models.dart';
 
-typedef Row = ResultSetRow;
-
 /// Singleton SQLite database for session metadata.
 class SessionSqlite {
   SessionSqlite._(this._db);
 
-  static Future<SessionSqlite> open() async {
+  static Future<SessionSqlite> open({Directory? inDirectory}) async {
     // Initialize native sqlite3 for Flutter (workaround for old Android versions)
     await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
 
-    final dir = await getApplicationDocumentsDirectory();
+    final dir = inDirectory ?? await getApplicationDocumentsDirectory();
     final dbPath = p.join(dir.path, 'session_metadata.db');
     final db = sqlite3.open(dbPath);
 
@@ -136,13 +134,13 @@ class SessionSqlite {
         protocol, protocol_version, device_name, device_model, device_id,
         calibration_profile, recorded_channels, recorded_streams,
         off_meta, len_meta, off_computed, len_computed, off_raw, len_raw,
-        duration_s, avg_hr, avg_spo2, peak_alpha_hz, peak_alpha_power,
+        avg_hr, avg_spo2, peak_alpha_hz, peak_alpha_power,
         pct_in_target, avg_movement, guardrail_warn_count, avg_sleep_dir,
         signal_quality_mean, pct_qc_ok, marker_count,
         guardrail_engine, model_kind, model_sha256, feedback_engine,
-        calibration_profile, user_id, session_id, notes_preview,
+        user_id, session_id, notes_preview,
         file_size, mtime, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         path = excluded.path,
         format_version = excluded.format_version,
@@ -164,7 +162,6 @@ class SessionSqlite {
         len_computed = excluded.len_computed,
         off_raw = excluded.off_raw,
         len_raw = excluded.len_raw,
-        duration_s = excluded.duration_s,
         avg_hr = excluded.avg_hr,
         avg_spo2 = excluded.avg_spo2,
         peak_alpha_hz = excluded.peak_alpha_hz,
@@ -180,7 +177,6 @@ class SessionSqlite {
         model_kind = excluded.model_kind,
         model_sha256 = excluded.model_sha256,
         feedback_engine = excluded.feedback_engine,
-        calibration_profile = excluded.calibration_profile,
         user_id = excluded.user_id,
         session_id = excluded.session_id,
         notes_preview = excluded.notes_preview,
@@ -287,7 +283,6 @@ class SessionRow {
   final String? modelKind;
   final String? modelSha256;
   final String? feedbackEngine;
-  final String? calibrationProfile;
   final String? userId;
   final String? sessionId;
   final String? notesPreview;
@@ -352,7 +347,7 @@ class SessionRow {
     pctInTarget, avgMovement, guardrailWarnCount, avgSleepDir,
     signalQualityMean, pctQcOk, markerCount,
     guardrailEngine, modelKind, modelSha256, feedbackEngine,
-    calibrationProfile, userId, sessionId, notesPreview,
+    userId, sessionId, notesPreview,
     fileSize, mtime,
     createdAt.millisecondsSinceEpoch, updatedAt.millisecondsSinceEpoch,
   ];

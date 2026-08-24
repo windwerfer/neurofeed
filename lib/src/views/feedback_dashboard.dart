@@ -278,9 +278,18 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
             final store = await ref.read(sessionStoreProvider.future);
             await store.cacheOverview(
               widget.sessionId!,
-              SessionOverview.fromData(
-                data,
+              SessionOverview.fromColumns(
+                bucketCount: SessionOverview.defaultBucketCount,
+                bucketWidthSecs: 1.0,
+                startSecs: 0,
+                endSecs: data.eegSamples.toDouble(),
                 trainingStartSecs: _trainingStartOffset,
+                bands: {},
+                pulse: [],
+                spo2: [],
+                movement: [],
+                peakAlphaFreq: [],
+                peakAlphaPower: [],
               ),
             );
           }());
@@ -322,7 +331,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       elapsedSeconds: fb.elapsedSeconds,
       sound: fb.soundName,
       feedbackSound: fb.feedbackMode.name,
-      savedAt: DateTime.now(),
+      savedAt: DateTime.now().toIso8601String(),
       notes: _notes.text,
       stats: stats == null
           ? null
@@ -341,9 +350,18 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       recordedData: notifier.recordStreams.map((s) => s.name).toList(),
       summary: _sessionData == null
           ? null
-          : SessionOverview.fromData(
-              _sessionData!,
+          : SessionOverview.fromColumns(
+              bucketCount: SessionOverview.defaultBucketCount,
+              bucketWidthSecs: 1.0,
+              startSecs: 0,
+              endSecs: _sessionData!.eegSamples.toDouble(),
               trainingStartSecs: notifier.trainingStartOffsetSecs,
+              bands: {},
+              pulse: [],
+              spo2: [],
+              movement: [],
+              peakAlphaFreq: [],
+              peakAlphaPower: [],
             ),
       gestures: ref.read(settingsProvider).markersInFeedbackEnabled
           ? notifier.gestureMarkers

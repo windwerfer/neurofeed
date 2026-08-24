@@ -17,11 +17,21 @@ import 'package:muse_ml/src/settings.dart';
 class SessionStore {
   SessionStore({Future<SessionStorage>? storage})
     : _storage = storage ?? _defaultStorage(),
-      _sqlite = SessionSqlite.open();
+      _sqlite = _initSqlite(storage);
 
   final Future<SessionStorage> _storage;
   final Future<SessionSqlite> _sqlite;
   final SessionCache _cache = SessionCache.noop();
+
+  static Future<SessionSqlite> _initSqlite(Future<SessionStorage>? storage) async {
+    if (storage != null) {
+      final s = await storage;
+      if (s is FileSystemSessionStorage) {
+        return SessionSqlite.open(inDirectory: s.root);
+      }
+    }
+    return SessionSqlite.open();
+  }
 
   Future<String?> _writeThumbnail(String id, List<int> pngBytes) async {
     final cache = await SessionCache.open();
@@ -78,7 +88,7 @@ class SessionStore {
     final storage = await _storage;
     final bytes = await storage.readFile(_museName(id));
     if (bytes == null) return null;
-    return v5_extract_raw(Uint8List.fromList(bytes));
+    return v5ExtractRaw(bytes: Uint8List.fromList(bytes));
   }
 
   Future<List<int>?> readPng(String id) async {
@@ -86,8 +96,8 @@ class SessionStore {
     final bytes = await storage.readFile(_museName(id));
     if (bytes == null) return null;
     try {
-      final head = v5_parse_head(Uint8List.fromList(bytes));
-      return head.pngBytes;
+      final head = v5ParseHead(bytes: Uint8List.fromList(bytes));
+      return head.thumbnail;
     } catch (_) {
       return null;
     }
@@ -110,21 +120,23 @@ class SessionStore {
       sha256.convert(utf8.encode(storage.location)).toString().substring(0, 16);
 
   /// Persist a finished session into the history folder as a single
-  /// `.muse.feedback` container: leading PNG thumbnail, then metadata json,
-  /// then the raw frame body.
+  /// `.muse.feedback` container (v5 format): header + WebP thumbnail + zstd-compressed
+  /// metadata JSON + zstd-computed frames + zstd-compressed raw body.
   Future<SessionSummary> publishSession(
     String id,
     List<int> museBytes,
     SessionMetadata metadata, {
     List<int>? pngBytes,
+    List<ComputedFrame>? computedFrames,
   }) async {
     final storage = await _storage;
     await storage.ensureDir();
     final jsonBytes = const JsonEncoder().convert(metadata.toJson()).codeUnits;
-    final container = SessionContainer.encode(
-      pngBytes: pngBytes == null ? Uint8List(0) : Uint8List.fromList(pngBytes),
-      jsonBytes: Uint8List.fromList(jsonBytes),
-      bodyBytes: Uint8List.fromList(museBytes),
+    final container = containerEncodeV5(
+      thumbnail: pngBytes == null ? Uint8List(0) : Uint8List.fromList(pngBytes),
+      metadataJson: jsonBytes,
+      computedFrames: computedFrames ?? const <ComputedFrame>[],
+      rawBody: Uint8List.fromList(museBytes),
     );
     await storage.writeFileAtomic(_museName(id), container);
     final sqlite = await _sqlite;
@@ -133,28 +145,27 @@ class SessionStore {
         : null;
     await sqlite.upsertSession(SessionRow(
       id: id,
-      path: '',
+      path: _museName(id),
       formatVersion: 5,
       appVersion: '1.0.0+1',
-      savedAt: metadata.savedAt,
-      startedAt: metadata.startedAt ?? metadata.savedAt,
+      savedAt: DateTime.tryParse(metadata.savedAt) ?? DateTime.now(),
+      startedAt: DateTime.tryParse(metadata.startedAt ?? metadata.savedAt) ?? DateTime.now(),
       durationS: metadata.durationS,
-      protocol: metadata.protocol,
+      protocol: metadata.protocol.name,
       protocolVersion: metadata.protocolVersion,
       deviceName: metadata.deviceName,
       deviceModel: metadata.deviceModel,
       deviceId: metadata.deviceId,
       calibrationProfile: metadata.calibrationProfile,
-      recordedChannels: metadata.recordedChannels,
-      recordedStreams: metadata.recordedStreams,
-      offMeta: 0, // Will be filled from container
+      recordedChannels: metadata.recordedChannels.join(','),
+      recordedStreams: '',
+      offMeta: 0,
       lenMeta: 0,
       offComputed: 0,
       lenComputed: 0,
       offRaw: 0,
       lenRaw: 0,
-      durationS: metadata.durationS,
-      avgHr: metadata.summary?.avgHr,
+      avgHr: null,
       avgSpo2: metadata.avgSpo2,
       peakAlphaHz: metadata.peakAlphaHz,
       peakAlphaPower: metadata.peakAlphaPower,
@@ -164,15 +175,14 @@ class SessionStore {
       avgSleepDir: metadata.avgSleepDir,
       signalQualityMean: metadata.signalQualityMean,
       pctQcOk: metadata.pctQcOk,
-      markerCount: metadata.markerCount,
+      markerCount: metadata.gestures.length,
       guardrailEngine: metadata.guardrailEngine,
       modelKind: metadata.modelKind,
       modelSha256: metadata.modelSha256,
       feedbackEngine: metadata.feedbackEngine,
-      calibrationProfile: metadata.calibrationProfile,
       userId: metadata.userId,
       sessionId: metadata.sessionId,
-      notesPreview: metadata.notesPreview,
+      notesPreview: metadata.notes.isNotEmpty ? (metadata.notes.length > 50 ? metadata.notes.substring(0, 50) : metadata.notes) : null,
       fileSize: 0,
       mtime: 0,
       createdAt: DateTime.now(),
@@ -215,13 +225,13 @@ class SessionStore {
     final sqlite = await _sqlite;
     await sqlite.upsertSession(SessionRow(
       id: id,
-      path: '',
+      path: name,
       formatVersion: 5,
       appVersion: '1.0.0+1',
       savedAt: DateTime.now(),
       startedAt: DateTime.now(),
       durationS: 0,
-      protocol: 'drowsiness',
+      protocol: ProtocolType.drowsiness.name,
       recordedChannels: '[]',
       recordedStreams: '[]',
       offMeta: 0,
@@ -230,7 +240,6 @@ class SessionStore {
       lenComputed: 0,
       offRaw: 0,
       lenRaw: 0,
-      durationS: 0,
       markerCount: 0,
       fileSize: 0,
       mtime: 0,
@@ -256,11 +265,6 @@ class SessionStore {
     String id,
     SessionStorage storage,
   ) async {
-    final sqlite = await _sqlite;
-    final rows = await sqlite.getMarkers(id);
-    if (rows.isNotEmpty && rows.first.thumbnailPath != null) {
-      return rows.first.thumbnailPath;
-    }
     return _cache.thumbnailPath(id);
   }
 
@@ -329,7 +333,7 @@ class SessionStore {
   }
 
   SessionMetadata _fallback(String id) => SessionMetadata(
-    protocol: 'drowsiness',
+    protocol: ProtocolType.drowsiness,
     durationMinutes: 0,
     elapsedSeconds: 0,
     sound: 'Ambient Drone',

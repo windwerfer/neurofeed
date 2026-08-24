@@ -278,6 +278,35 @@ class SessionDrowsiness {
           const [],
     );
   }
+
+  static (List<DrowsinessSample> buckets, double width) decimate(
+    List<DrowsinessSample> series, {
+    double? trainingStartSecs,
+    int bucketCount = 400,
+  }) {
+    if (series.isEmpty) {
+      return (const [], 1.0);
+    }
+    final start = trainingStartSecs ?? series.first.offsetSecs;
+    final end = series.last.offsetSecs;
+    final duration = end > start ? end - start : 1.0;
+    final width = duration / bucketCount;
+    final buckets = <DrowsinessSample>[];
+    for (var i = 0; i < bucketCount; i++) {
+      final bStart = start + i * width;
+      final bEnd = bStart + width;
+      final matching = series.where((s) => s.offsetSecs >= bStart && (i == bucketCount - 1 ? s.offsetSecs <= bEnd : s.offsetSecs < bEnd)).toList();
+      if (matching.isNotEmpty) {
+        final meanSleep = matching.fold<double>(0, (a, s) => a + s.sleepDir) / matching.length;
+        final meanDelta = matching.fold<double>(0, (a, s) => a + s.delta) / matching.length;
+        final warning = matching.any((s) => s.warning);
+        buckets.add(DrowsinessSample(offsetSecs: bStart, sleepDir: meanSleep, delta: meanDelta, warning: warning));
+      } else {
+        buckets.add(DrowsinessSample(offsetSecs: bStart, sleepDir: 0, delta: 0, warning: false));
+      }
+    }
+    return (buckets, width);
+  }
 }
 
 class MusicTrackMarker {
@@ -386,6 +415,33 @@ class SessionMusic {
           const [],
     );
   }
+
+  static (List<MusicCutoffSample> buckets, double width) decimate(
+    List<MusicCutoffSample> series, {
+    double? trainingStartSecs,
+    int bucketCount = 400,
+  }) {
+    if (series.isEmpty) {
+      return (const [], 1.0);
+    }
+    final start = trainingStartSecs ?? series.first.offsetSecs;
+    final end = series.last.offsetSecs;
+    final duration = end > start ? end - start : 1.0;
+    final width = duration / bucketCount;
+    final buckets = <MusicCutoffSample>[];
+    for (var i = 0; i < bucketCount; i++) {
+      final bStart = start + i * width;
+      final bEnd = bStart + width;
+      final matching = series.where((s) => s.offsetSecs >= bStart && (i == bucketCount - 1 ? s.offsetSecs <= bEnd : s.offsetSecs < bEnd)).toList();
+      if (matching.isNotEmpty) {
+        final meanHz = matching.fold<double>(0, (a, s) => a + s.cutoffHz) / matching.length;
+        buckets.add(MusicCutoffSample(offsetSecs: bStart, cutoffHz: meanHz));
+      } else {
+        buckets.add(MusicCutoffSample(offsetSecs: bStart, cutoffHz: 0));
+      }
+    }
+    return (buckets, width);
+  }
 }
 
 class SessionBaselineStats {
@@ -434,16 +490,37 @@ class SessionCalibrationPhase {
     required this.name,
     required this.durationSecs,
     required this.sampleCount,
+    this.clipFile,
+    this.spokenText,
+    this.eyes,
+    this.challengeText,
+    this.startSecs,
+    this.endSecs,
+    this.kind,
   });
 
   final String name;
   final double durationSecs;
   final int sampleCount;
+  final String? clipFile;
+  final String? spokenText;
+  final String? eyes;
+  final String? challengeText;
+  final double? startSecs;
+  final double? endSecs;
+  final String? kind;
 
   Map<String, Object?> toJson() => {
     'name': name,
     'durationSecs': durationSecs,
     'sampleCount': sampleCount,
+    if (clipFile != null) 'clipFile': clipFile,
+    if (spokenText != null) 'spokenText': spokenText,
+    if (eyes != null) 'eyes': eyes,
+    if (challengeText != null) 'challengeText': challengeText,
+    if (startSecs != null) 'startSecs': startSecs,
+    if (endSecs != null) 'endSecs': endSecs,
+    if (kind != null) 'kind': kind,
   };
 
   static SessionCalibrationPhase? fromJson(Object? json) {
@@ -454,6 +531,13 @@ class SessionCalibrationPhase {
       name: json['name'] as String? ?? '',
       durationSecs: (json['durationSecs'] as num?)?.toDouble() ?? 0,
       sampleCount: (json['sampleCount'] as num?)?.toInt() ?? 0,
+      clipFile: json['clipFile'] as String?,
+      spokenText: json['spokenText'] as String?,
+      eyes: json['eyes'] as String?,
+      challengeText: json['challengeText'] as String?,
+      startSecs: (json['startSecs'] as num?)?.toDouble(),
+      endSecs: (json['endSecs'] as num?)?.toDouble(),
+      kind: json['kind'] as String?,
     );
   }
 }
@@ -664,7 +748,7 @@ class SessionSettings {
       markersInFeedbackEnabled:
           json['markersInFeedbackEnabled'] as bool? ?? false,
       eyeMarkersEnabled: json['eyeMarkersEnabled'] as bool? ?? false,
-      modelSnapshot: ModelSnapshot.fromJson(json['modelSnapshot']),
+      modelSnapshot: ModelSnapshot.fromJson(json['modelSnapshot'] as Map<String, dynamic>?),
     );
   }
 }

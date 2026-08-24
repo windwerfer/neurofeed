@@ -581,7 +581,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       SessionRecalibration(
         atSecs: state.elapsedSeconds.toDouble(),
         baseline: SessionBaselineStats(
-          percentile: _engine.baselinePercentile,
+          percentile: _engine.baselinePercentile.toDouble(),
           count: _engine.baselineCount,
           mean: _engine.baselineMean,
           stddev: _engine.baselineStddev,
@@ -755,7 +755,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       if (sessionStart != null) {
         _clipPhases.add(
           SessionCalibrationPhase(
-            clipId: step.clip!.id,
+            name: step.clip!.id,
+            durationSecs: clipEnd.difference(clipStart).inMilliseconds / 1000,
+            sampleCount: 0,
             clipFile: step.clip!.file,
             spokenText: step.clip!.text,
             eyes: step.clip!.eyes,
@@ -859,7 +861,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       greenStableSeconds: greenStableSeconds,
       faultyPadSeconds: faultyPadSeconds,
       baseline: SessionBaselineStats(
-        percentile: _engine.baselinePercentile,
+        percentile: _engine.baselinePercentile.toDouble(),
         count: _engine.baselineCount,
         mean: _engine.baselineMean,
         stddev: _engine.baselineStddev,

@@ -80,7 +80,7 @@ Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) asyn
 }
 
 List<String> _infoLines(SessionMetadata meta) {
-  final t = meta.savedAt.toLocal();
+  final t = DateTime.tryParse(meta.savedAt)?.toLocal() ?? DateTime.now();
   String two(int v) => v.toString().padLeft(2, '0');
   final when = '${t.year}-${two(t.month)}-${two(t.day)} '
       '${two(t.hour)}:${two(t.minute)}';
