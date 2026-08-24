@@ -1,18 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/session_cache.dart';
-import 'package:muse_ml/src/feedback/session_container.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/session_sqlite.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/rust/api/session_format.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:muse_ml/src/version.dart';
 
 class SessionStore {
   SessionStore({Future<SessionStorage>? storage})
@@ -21,7 +17,6 @@ class SessionStore {
 
   final Future<SessionStorage> _storage;
   final Future<SessionSqlite> _sqlite;
-  final SessionCache _cache = SessionCache.noop();
 
   static Future<SessionSqlite> _initSqlite(Future<SessionStorage>? storage) async {
     if (storage != null) {
@@ -33,10 +28,58 @@ class SessionStore {
     return SessionSqlite.open();
   }
 
-  Future<String?> _writeThumbnail(String id, List<int> pngBytes) async {
-    final cache = await SessionCache.open();
-    await cache.writeThumbnail(id, Uint8List.fromList(pngBytes));
-    return cache.thumbnailPath(id);
+  /// Write thumbnail to SQLite cache
+  Future<void> _writeThumbnail(String id, List<int> pngBytes) async {
+    final sqlite = await _sqlite;
+    final session = await sqlite.getSession(id);
+    if (session != null) {
+      await sqlite.upsertSession(SessionRow(
+        id: session.id,
+        path: session.path,
+        formatVersion: session.formatVersion,
+        appVersion: session.appVersion,
+        savedAt: session.savedAt,
+        startedAt: session.startedAt,
+        durationS: session.durationS,
+        protocol: session.protocol,
+        protocolVersion: session.protocolVersion,
+        deviceName: session.deviceName,
+        deviceModel: session.deviceModel,
+        deviceId: session.deviceId,
+        calibrationProfile: session.calibrationProfile,
+        recordedChannels: session.recordedChannels,
+        recordedStreams: session.recordedStreams,
+        offMeta: session.offMeta,
+        lenMeta: session.lenMeta,
+        offComputed: session.offComputed,
+        lenComputed: session.lenComputed,
+        offRaw: session.offRaw,
+        lenRaw: session.lenRaw,
+        avgHr: session.avgHr,
+        avgSpo2: session.avgSpo2,
+        peakAlphaHz: session.peakAlphaHz,
+        peakAlphaPower: session.peakAlphaPower,
+        pctInTarget: session.pctInTarget,
+        avgMovement: session.avgMovement,
+        guardrailWarnCount: session.guardrailWarnCount,
+        avgSleepDir: session.avgSleepDir,
+        signalQualityMean: session.signalQualityMean,
+        pctQcOk: session.pctQcOk,
+        markerCount: session.markerCount,
+        guardrailEngine: session.guardrailEngine,
+        modelKind: session.modelKind,
+        modelSha256: session.modelSha256,
+        feedbackEngine: session.feedbackEngine,
+        userId: session.userId,
+        sessionId: session.sessionId,
+        notesPreview: session.notesPreview,
+        fileSize: session.fileSize,
+        mtime: session.mtime,
+        thumbnail: Uint8List.fromList(pngBytes),
+        createdAt: session.createdAt,
+        updatedAt: DateTime.now(),
+      ));
+    }
   }
 
   /// Number of sessions awaiting background backfill after the last [list].
@@ -92,6 +135,12 @@ class SessionStore {
   }
 
   Future<List<int>?> readPng(String id) async {
+    final sqlite = await _sqlite;
+    final session = await sqlite.getSession(id);
+    if (session != null && session.thumbnail != null && session.thumbnail!.isNotEmpty) {
+      return session.thumbnail;
+    }
+    // Fallback: parse from container file if not in cache
     final storage = await _storage;
     final bytes = await storage.readFile(_museName(id));
     if (bytes == null) return null;
@@ -140,14 +189,14 @@ class SessionStore {
     );
     await storage.writeFileAtomic(_museName(id), container);
     final sqlite = await _sqlite;
-    final thumbPath = pngBytes != null && pngBytes.isNotEmpty
-        ? await _writeThumbnail(id, pngBytes)
-        : null;
+    if (pngBytes != null && pngBytes.isNotEmpty) {
+      await _writeThumbnail(id, pngBytes);
+    }
     await sqlite.upsertSession(SessionRow(
       id: id,
       path: _museName(id),
       formatVersion: 5,
-      appVersion: '1.0.0+1',
+      appVersion: appVersion,
       savedAt: DateTime.tryParse(metadata.savedAt) ?? DateTime.now(),
       startedAt: DateTime.tryParse(metadata.startedAt ?? metadata.savedAt) ?? DateTime.now(),
       durationS: metadata.durationS,
@@ -183,8 +232,9 @@ class SessionStore {
       userId: metadata.userId,
       sessionId: metadata.sessionId,
       notesPreview: metadata.notes.isNotEmpty ? (metadata.notes.length > 50 ? metadata.notes.substring(0, 50) : metadata.notes) : null,
-      fileSize: 0,
-      mtime: 0,
+      fileSize: container.length,
+      mtime: DateTime.now().millisecondsSinceEpoch,
+      thumbnail: pngBytes != null && pngBytes.isNotEmpty ? Uint8List.fromList(pngBytes) : null,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     ));
@@ -193,8 +243,9 @@ class SessionStore {
   }
 
   /// Replace the free-text notes of an existing session and rewrite the
-  /// container head in place, preserving the thumbnail and the .muse body.
-  /// Returns false when the session file is missing or unreadable.
+  /// v5 container head in place, preserving the thumbnail, computed frames,
+  /// and the raw .muse body. Returns false when the session file is missing
+  /// or unreadable.
   Future<bool> updateNotes(String id, String notes) async {
     final storage = await _storage;
     final name = _museName(id);
@@ -204,68 +255,73 @@ class SessionStore {
       return false;
     }
     final full = Uint8List.fromList(bytes);
-    final head = SessionContainer.parseHead(full);
+    final head = v5ParseHead(bytes: full);
     final decoded =
-        jsonDecode(String.fromCharCodes(head.jsonBytes)) as Map<String, Object?>;
+        jsonDecode(String.fromCharCodes(head.metadataJson)) as Map<String, Object?>;
     decoded['notes'] = notes;
     final jsonBytes = Uint8List.fromList(
       const JsonEncoder().convert(decoded).codeUnits,
     );
-    final body = SessionContainer.extractBody(full);
-    if (body == null) {
-      debugPrint('[session] updateNotes($id): body missing ($name)');
-      return false;
-    }
-    final container = SessionContainer.encode(
-      pngBytes: head.pngBytes,
-      jsonBytes: jsonBytes,
-      bodyBytes: body,
+    final rawBody = v5ExtractRaw(bytes: full);
+    final computedFrames = v5ExtractComputed(bytes: full);
+    final container = containerEncodeV5(
+      thumbnail: head.thumbnail,
+      metadataJson: jsonBytes,
+      computedFrames: computedFrames,
+      rawBody: rawBody,
     );
     await storage.writeFileAtomic(name, container);
     final sqlite = await _sqlite;
-    await sqlite.upsertSession(SessionRow(
-      id: id,
-      path: name,
-      formatVersion: 5,
-      appVersion: '1.0.0+1',
-      savedAt: DateTime.now(),
-      startedAt: DateTime.now(),
-      durationS: 0,
-      protocol: ProtocolType.drowsiness.name,
-      recordedChannels: '[]',
-      recordedStreams: '[]',
-      offMeta: 0,
-      lenMeta: 0,
-      offComputed: 0,
-      lenComputed: 0,
-      offRaw: 0,
-      lenRaw: 0,
-      markerCount: 0,
-      fileSize: 0,
-      mtime: 0,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    ));
+    final existing = await sqlite.getSession(id);
+    if (existing != null) {
+      await sqlite.upsertSession(SessionRow(
+        id: existing.id,
+        path: existing.path,
+        formatVersion: existing.formatVersion,
+        appVersion: existing.appVersion,
+        savedAt: existing.savedAt,
+        startedAt: existing.startedAt,
+        durationS: existing.durationS,
+        protocol: existing.protocol,
+        protocolVersion: existing.protocolVersion,
+        deviceName: existing.deviceName,
+        deviceModel: existing.deviceModel,
+        deviceId: existing.deviceId,
+        calibrationProfile: existing.calibrationProfile,
+        recordedChannels: existing.recordedChannels,
+        recordedStreams: existing.recordedStreams,
+        offMeta: existing.offMeta,
+        lenMeta: existing.lenMeta,
+        offComputed: existing.offComputed,
+        lenComputed: existing.lenComputed,
+        offRaw: existing.offRaw,
+        lenRaw: existing.lenRaw,
+        avgHr: existing.avgHr,
+        avgSpo2: existing.avgSpo2,
+        peakAlphaHz: existing.peakAlphaHz,
+        peakAlphaPower: existing.peakAlphaPower,
+        pctInTarget: existing.pctInTarget,
+        avgMovement: existing.avgMovement,
+        guardrailWarnCount: existing.guardrailWarnCount,
+        avgSleepDir: existing.avgSleepDir,
+        signalQualityMean: existing.signalQualityMean,
+        pctQcOk: existing.pctQcOk,
+        markerCount: existing.markerCount,
+        guardrailEngine: existing.guardrailEngine,
+        modelKind: existing.modelKind,
+        modelSha256: existing.modelSha256,
+        feedbackEngine: existing.feedbackEngine,
+        userId: existing.userId,
+        sessionId: existing.sessionId,
+        notesPreview: notes.length > 50 ? notes.substring(0, 50) : notes,
+        fileSize: existing.fileSize,
+        mtime: DateTime.now().millisecondsSinceEpoch,
+        createdAt: existing.createdAt,
+        updatedAt: DateTime.now(),
+      ));
+    }
     debugPrint('[session] updateNotes($id): notes saved ($name)');
     return true;
-  }
-
-  int _savedAtMs(Map<String, Object?> decoded) {
-    final raw = decoded['savedAt'];
-    if (raw is String) {
-      final t = DateTime.tryParse(raw);
-      if (t != null) {
-        return t.millisecondsSinceEpoch;
-      }
-    }
-    return 0;
-  }
-
-  Future<String?> _thumbnailPathForCache(
-    String id,
-    SessionStorage storage,
-  ) async {
-    return _cache.thumbnailPath(id);
   }
 
   /// Delete one session from history (the `.muse.feedback` file). Returns
@@ -313,8 +369,8 @@ class SessionStore {
   }
 
   /// Fold a freshly computed [SessionOverview] (from a full-body parse of a
-  /// legacy session without an embedded summary) back into the cached
-  /// metadata so the next detail-view open fast-paths through the overview.
+  /// legacy session without an embedded summary) back into the SQLite metadata
+  /// so the next detail-view open fast-paths through the overview.
   /// Cache-only — the container file is never rewritten.
   Future<void> cacheOverview(String id, SessionOverview overview) async {
     final sqlite = await _sqlite;
@@ -323,20 +379,65 @@ class SessionStore {
       if (session == null) {
         return;
       }
-      // Update the session with new overview
-      // This would require updating the session with new summary data
-      // For now, just log
-      debugPrint('[session] cacheOverview($id): overview cached');
+      // Update the session with overview data
+      await sqlite.upsertSession(SessionRow(
+        id: session.id,
+        path: session.path,
+        formatVersion: session.formatVersion,
+        appVersion: session.appVersion,
+        savedAt: session.savedAt,
+        startedAt: session.startedAt,
+        durationS: session.durationS,
+        protocol: session.protocol,
+        protocolVersion: session.protocolVersion,
+        deviceName: session.deviceName,
+        deviceModel: session.deviceModel,
+        deviceId: session.deviceId,
+        calibrationProfile: session.calibrationProfile,
+        recordedChannels: session.recordedChannels,
+        recordedStreams: session.recordedStreams,
+        offMeta: session.offMeta,
+        lenMeta: session.lenMeta,
+        offComputed: session.offComputed,
+        lenComputed: session.lenComputed,
+        offRaw: session.offRaw,
+        lenRaw: session.lenRaw,
+        avgHr: overview.pulse.isNotEmpty
+            ? overview.pulse.whereType<double>().fold<double>(0, (a, b) => a + b) / overview.pulse.whereType<double>().length
+            : null,
+        avgSpo2: overview.spo2.isNotEmpty
+            ? overview.spo2.whereType<double>().fold<double>(0, (a, b) => a + b) / overview.spo2.whereType<double>().length
+            : null,
+        peakAlphaHz: overview.peakAlphaFreq.isNotEmpty
+            ? overview.peakAlphaFreq.whereType<double>().fold<double>(0, (a, b) => a + b) / overview.peakAlphaFreq.whereType<double>().length
+            : null,
+        peakAlphaPower: overview.peakAlphaPower.isNotEmpty
+            ? overview.peakAlphaPower.whereType<double>().fold<double>(0, (a, b) => a + b) / overview.peakAlphaPower.whereType<double>().length
+            : null,
+        pctInTarget: overview.bands.isNotEmpty ? 0.0 : null, // placeholder
+        avgMovement: overview.movement.isNotEmpty
+            ? overview.movement.whereType<double>().fold<double>(0, (a, b) => a + b) / overview.movement.whereType<double>().length
+            : null,
+        guardrailWarnCount: session.guardrailWarnCount,
+        avgSleepDir: session.avgSleepDir,
+        signalQualityMean: session.signalQualityMean,
+        pctQcOk: session.pctQcOk,
+        markerCount: session.markerCount,
+        guardrailEngine: session.guardrailEngine,
+        modelKind: session.modelKind,
+        modelSha256: session.modelSha256,
+        feedbackEngine: session.feedbackEngine,
+        userId: session.userId,
+        sessionId: session.sessionId,
+        notesPreview: session.notesPreview,
+        fileSize: session.fileSize,
+        mtime: session.mtime,
+        createdAt: session.createdAt,
+        updatedAt: DateTime.now(),
+      ));
+      debugPrint('[session] cacheOverview($id): overview cached (avgHR=${overview.pulse.isNotEmpty ? overview.pulse.whereType<double>().fold<double>(0, (a, b) => a + b) / overview.pulse.whereType<double>().length : "N/A"})');
     } catch (e) {
       debugPrint('[session] cacheOverview($id) failed: $e');
     }
   }
-
-  SessionMetadata _fallback(String id) => SessionMetadata(
-    protocol: ProtocolType.drowsiness,
-    durationMinutes: 0,
-    elapsedSeconds: 0,
-    sound: 'Ambient Drone',
-    savedAt: DateTime.fromMillisecondsSinceEpoch(int.tryParse(id) ?? 0).toIso8601String(),
-  );
 }

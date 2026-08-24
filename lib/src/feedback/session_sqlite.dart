@@ -7,13 +7,11 @@ library;
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 import 'package:path_provider/path_provider.dart';
-
-import 'session_metadata.dart';
-import 'session_v5_models.dart';
 
 /// Singleton SQLite database for session metadata.
 class SessionSqlite {
@@ -80,6 +78,7 @@ class SessionSqlite {
         notes_preview TEXT,
         file_size INTEGER NOT NULL,
         mtime INTEGER NOT NULL,
+        thumbnail BLOB,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
         updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
       )
@@ -126,7 +125,7 @@ class SessionSqlite {
     ''');
   }
 
-  /// Insert or replace a session row.
+/// Insert or replace a session row.
   Future<void> upsertSession(SessionRow row) async {
     _db.execute('''
       INSERT INTO sessions (
@@ -139,8 +138,8 @@ class SessionSqlite {
         signal_quality_mean, pct_qc_ok, marker_count,
         guardrail_engine, model_kind, model_sha256, feedback_engine,
         user_id, session_id, notes_preview,
-        file_size, mtime, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        file_size, mtime, thumbnail, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         path = excluded.path,
         format_version = excluded.format_version,
@@ -182,6 +181,7 @@ class SessionSqlite {
         notes_preview = excluded.notes_preview,
         file_size = excluded.file_size,
         mtime = excluded.mtime,
+        thumbnail = excluded.thumbnail,
         updated_at = excluded.updated_at
     ''', row.toList());
   }
@@ -288,6 +288,7 @@ class SessionRow {
   final String? notesPreview;
   final int fileSize;
   final int mtime;
+  final Uint8List? thumbnail;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -333,6 +334,7 @@ class SessionRow {
     this.notesPreview,
     required this.fileSize,
     required this.mtime,
+    this.thumbnail,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -348,12 +350,12 @@ class SessionRow {
     signalQualityMean, pctQcOk, markerCount,
     guardrailEngine, modelKind, modelSha256, feedbackEngine,
     userId, sessionId, notesPreview,
-    fileSize, mtime,
+    fileSize, mtime, thumbnail,
     createdAt.millisecondsSinceEpoch, updatedAt.millisecondsSinceEpoch,
   ];
 
   static SessionRow fromRow(Row row) {
-    DateTime _dt(dynamic v) => v is int
+    DateTime parseDt(dynamic v) => v is int
         ? DateTime.fromMillisecondsSinceEpoch(v)
         : DateTime.parse(v as String);
 
@@ -362,8 +364,8 @@ class SessionRow {
       path: row['path'] as String,
       formatVersion: row['format_version'] as int,
       appVersion: row['app_version'] as String,
-      savedAt: _dt(row['saved_at']),
-      startedAt: _dt(row['started_at']),
+      savedAt: parseDt(row['saved_at']),
+      startedAt: parseDt(row['started_at']),
       durationS: row['duration_s'] as int,
       protocol: row['protocol'] as String,
       protocolVersion: row['protocol_version'] as String?,
@@ -378,8 +380,8 @@ class SessionRow {
       offComputed: row['off_computed'] as int,
       lenComputed: row['len_computed'] as int,
       offRaw: row['off_raw'] as int,
-       lenRaw: row['len_raw'] as int,
-       avgHr: (row['avg_hr'] as num?)?.toDouble(),
+      lenRaw: row['len_raw'] as int,
+      avgHr: (row['avg_hr'] as num?)?.toDouble(),
       avgSpo2: (row['avg_spo2'] as num?)?.toDouble(),
       peakAlphaHz: (row['peak_alpha_hz'] as num?)?.toDouble(),
       peakAlphaPower: (row['peak_alpha_power'] as num?)?.toDouble(),
@@ -399,8 +401,9 @@ class SessionRow {
       notesPreview: row['notes_preview'] as String?,
       fileSize: row['file_size'] as int,
       mtime: row['mtime'] as int,
-      createdAt: _dt(row['created_at']),
-      updatedAt: _dt(row['updated_at']),
+      thumbnail: row['thumbnail'] as Uint8List?,
+      createdAt: parseDt(row['created_at']),
+      updatedAt: parseDt(row['updated_at']),
     );
   }
 }

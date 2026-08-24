@@ -9,6 +9,7 @@ import 'package:muse_ml/src/feedback/computed_frame.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/rust/api/session_format.dart' as ffi;
 import 'package:path_provider/path_provider.dart';
+import 'package:muse_ml/src/version.dart';
 
 /// Represents an incomplete session found in the cache directory.
 class IncompleteSession {
@@ -88,7 +89,7 @@ class IncompleteSession {
   Map<String, dynamic> _buildMetadataJson() {
     return {
       'formatVersion': 5,
-      'appVersion': '1.0.0+1',
+      'appVersion': appVersion,
       'savedAt': DateTime.now().toIso8601String(),
       'notes': '',
       'protocol': protocol,

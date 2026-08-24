@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 /// Snapshot of the guardrail AI model at session time (v5).
 class ModelSnapshot {
   const ModelSnapshot({
