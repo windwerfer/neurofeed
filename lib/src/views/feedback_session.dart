@@ -294,7 +294,7 @@ class _PhaseControls extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
     final theme = Theme.of(context);
-    final settings = ref.read(settingsProvider);
+    final settings = ref.watch(settingsProvider);
     final guardrailIntended = settings.guardrailEnabledFor(fb.protocol);
     final mode = settings.guardrailModeForProtocol[fb.protocol]!;
     final needsModel = guardrailIntended && mode.isAi;
@@ -303,7 +303,7 @@ class _PhaseControls extends ConsumerWidget {
     // is allowed; the one-time stutter warning fires when the user picks the
     // combination (see [_maybeWarnMusicAiCpu]).
     Future<void> startSession() async {
-      final settings = ref.read(settingsProvider);
+      final settings = ref.watch(settingsProvider);
       if (fb.feedbackMode == FeedbackMode.music) {
         if (settings.musicFolder == null) {
           await showDialog<void>(
@@ -749,7 +749,7 @@ class _SoundTile extends ConsumerWidget {
                 if (!context.mounted) {
                   return;
                 }
-                final settings = ref.read(settingsProvider);
+                final settings = ref.watch(settingsProvider);
                 if (AudioService.isMusicSound(result) &&
                     settings.musicFolder == null) {
                   await showDialog<void>(
@@ -811,7 +811,7 @@ class _FeedbackTile extends ConsumerWidget {
           return;
         }
         if (result == FeedbackMode.music) {
-          final settings = ref.read(settingsProvider);
+          final settings = ref.watch(settingsProvider);
           if (settings.musicFolder == null) {
             final proceed = await showDialog<bool>(
               context: context,
@@ -893,7 +893,7 @@ class _BinauralTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final settings = ref.read(settingsProvider);
+    final settings = ref.watch(settingsProvider);
     final preset = BinauralPreset.fromId(settings.binauralPresetId);
     final beatHz = preset?.beatHz ?? settings.binauralBeatHz;
     final carrierHz = preset?.carrierHz ?? settings.binauralCarrierHz;
@@ -945,7 +945,7 @@ class _BackgroundBinauralTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final settings = ref.read(settingsProvider);
+    final settings = ref.watch(settingsProvider);
     final preset = BinauralPreset.fromId(settings.backgroundBinauralPresetId);
     final beatHz = preset?.beatHz ?? settings.backgroundBinauralBeatHz;
     final carrierHz = preset?.carrierHz ?? settings.backgroundBinauralCarrierHz;
@@ -999,7 +999,7 @@ class _MusicTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final settings = ref.read(settingsProvider);
+    final settings = ref.watch(settingsProvider);
     final folder = settings.musicFolder;
     final minHz = settings.musicMinCutoffHz.round();
     final maxHz = settings.musicMaxCutoffHz.round();
@@ -1052,7 +1052,7 @@ class _MusicSettingsDialogState extends ConsumerState<_MusicSettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final settings = ref.read(settingsProvider);
+    final settings = ref.watch(settingsProvider);
     return AlertDialog(
       title: const Text('Music feedback'),
       content: SingleChildScrollView(
@@ -1119,7 +1119,7 @@ class _BinauralSettingsDialogState
   BinauralPreset? get _preset => BinauralPreset.fromId(_presetId);
 
   void _persist() {
-    final settings = ref.read(settingsProvider);
+    final settings = ref.watch(settingsProvider);
     if (widget.isBackground) {
       settings.setBackgroundBinauralPresetId(_presetId);
       settings.setBackgroundBinauralCarrierHz(_carrierHz);
@@ -1367,7 +1367,7 @@ class _GuardrailTileState extends ConsumerState<_GuardrailTile> {
     _enabled = _readEnabled();
     final inSession = fb.phase == FeedbackPhase.playing ||
         fb.phase == FeedbackPhase.paused;
-    final settings = ref.read(settingsProvider);
+    final settings = ref.watch(settingsProvider);
     final mode = settings.guardrailModeForProtocol[fb.protocol]!;
     final sound = GuardrailSound.fromName(settings.warningSoundName);
     return ListTile(
@@ -1380,7 +1380,7 @@ class _GuardrailTileState extends ConsumerState<_GuardrailTile> {
               value: _enabled,
               onChanged: (on) {
                 setState(() => _enabled = on);
-                final settings = ref.read(settingsProvider);
+                final settings = ref.watch(settingsProvider);
                 if (on) {
                   // Enable: set to default guardrail mode (drowsinessMath)
                   settings.setGuardrailMode(fb.protocol, GuardrailMode.drowsinessMath);
@@ -1406,7 +1406,7 @@ class _DurationSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
-    final settings = ref.read(settingsProvider);
+    final settings = ref.watch(settingsProvider);
     final lastCustom = settings.lastCustomMinutes;
     final selected = fb.durationMinutes;
     final theme = Theme.of(context);
@@ -2003,7 +2003,7 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
   /// scorer that can never run. Revert to the last valid mode (or band
   /// math when even that is unavailable) and say so.
   Future<void> _onDone() async {
-    final settings = ref.read(settingsProvider);
+    final settings = ref.watch(settingsProvider);
     final fb = ref.read(feedbackStateProvider);
     if (!await _modeAvailableAsync(_mode)) {
       var revert = _lastValidMode;
@@ -2032,7 +2032,7 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
     final fb = ref.watch(feedbackStateProvider);
     final inSession = fb.phase == FeedbackPhase.playing ||
         fb.phase == FeedbackPhase.paused;
-    final settings = ref.read(settingsProvider);
+    final settings = ref.watch(settingsProvider);
     final audio = ref.read(audioServiceProvider);
     final theme = Theme.of(context);
 
