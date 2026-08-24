@@ -223,11 +223,11 @@ All session-affecting settings at save time.
 ```
 
 ---
-
-## 5. Decimated Summary (SessionOverview)
-
-400-bucket decimated view for fast history rendering (matches chart x-axis).
-
+ 
+## 5. Decimated Summary (SessionOverview) — Metadata JSON
+ 
+400-bucket decimated view for **fast history rendering** without reading the computed stream. Stored in the metadata JSON (`summary` key). Matches the chart x-axis (fixed 400 buckets regardless of session length).
+ 
 ```json
 "summary": {
   "bucketCount": 400,
@@ -248,7 +248,7 @@ All session-affecting settings at save time.
   "peakAlphaPower": [4.2, 4.5, 4.3, ...]
 }
 ```
-
+ 
 | Field | Type | Description |
 |-------|------|-------------|
 | `bucketCount` | int | Always 400 |
@@ -262,9 +262,11 @@ All session-affecting settings at save time.
 | `movement` | float?[] | Movement score per bucket |
 | `peakAlphaFreq` | float?[] | Hz per bucket |
 | `peakAlphaPower` | float?[] | Absolute power per bucket |
-
+ 
+> **Note:** This decimated summary is for **instant history UI rendering** (charts, stats cards). The **full-resolution 1 Hz data** lives in the separate zstd-compressed *computed section* as JSON Lines (see Section 10). The summary is computed at save time from the full computed frames and decimated to exactly 400 buckets.
+ 
 ---
-
+ 
 ## 6. Gesture Markers
 
 Timestamped gesture events during the session.
