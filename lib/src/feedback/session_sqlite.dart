@@ -12,17 +12,38 @@ import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:muse_ml/src/feedback/session_storage.dart';
+
+/// Resolves the cache directory for the session metadata SQLite database.
+/// - Linux/Windows/macOS: `.cache` subfolder of the history folder
+/// - Android: `getApplicationCacheDirectory()` (app cache folder)
+/// - iOS: `getApplicationCacheDirectory()` (app cache folder)
+Future<Directory> resolveSessionCacheDir(SessionStorage history) async {
+  if (Platform.isAndroid || Platform.isIOS) {
+    return await getApplicationCacheDirectory();
+  }
+  // Linux/Windows/macOS: use .cache subfolder of history folder
+  if (history is FileSystemSessionStorage) {
+    return Directory('${history.location}${Platform.pathSeparator}.cache');
+  }
+  // SAF on non-Android (unlikely) - fallback to app cache
+  return await getApplicationCacheDirectory();
+}
 
 /// Singleton SQLite database for session metadata.
 class SessionSqlite {
   SessionSqlite._(this._db);
 
-  static Future<SessionSqlite> open({Directory? inDirectory}) async {
+  static Future<SessionSqlite> open({required Directory cacheDirectory}) async {
     // Initialize native sqlite3 for Flutter (workaround for old Android versions)
     await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
 
-    final dir = inDirectory ?? await getApplicationDocumentsDirectory();
-    final dbPath = p.join(dir.path, 'session_metadata.db');
+    // Ensure cache directory exists
+    if (!await cacheDirectory.exists()) {
+      await cacheDirectory.create(recursive: true);
+    }
+
+    final dbPath = p.join(cacheDirectory.path, 'session_metadata.db');
     final db = sqlite3.open(dbPath);
 
     final instance = SessionSqlite._(db);

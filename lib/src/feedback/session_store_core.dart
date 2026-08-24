@@ -21,11 +21,13 @@ class SessionStore {
   static Future<SessionSqlite> _initSqlite(Future<SessionStorage>? storage) async {
     if (storage != null) {
       final s = await storage;
-      if (s is FileSystemSessionStorage) {
-        return SessionSqlite.open(inDirectory: s.root);
-      }
+      final cacheDir = await resolveSessionCacheDir(s);
+      return SessionSqlite.open(cacheDirectory: cacheDir);
     }
-    return SessionSqlite.open();
+    // Fallback - shouldn't happen in practice
+    final defaultStorage = await _defaultStorage();
+    final cacheDir = await resolveSessionCacheDir(defaultStorage);
+    return SessionSqlite.open(cacheDirectory: cacheDir);
   }
 
   /// Write thumbnail to SQLite cache
