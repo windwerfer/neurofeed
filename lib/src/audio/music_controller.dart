@@ -9,7 +9,6 @@ import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Supported music file extensions (SoLoud decoders: MP3/WAV/OGG/Opus/FLAC).
 const Set<String> musicSupportedExtensions = {
   '.mp3',
   '.wav',
@@ -18,36 +17,28 @@ const Set<String> musicSupportedExtensions = {
   '.flac',
 };
 
-/// One playable track in the music feedback folder.
+enum MusicPlaybackMode { background, feedback }
+
+enum MusicModulation { none, filterCutoff, volumeSlew }
+
 class MusicTrack {
   const MusicTrack({required this.name, required this.path});
 
-  /// Display name (file name without extension) shown in the player UI and
-  /// persisted in session metadata.
   final String name;
-
-  /// Filesystem path SoLoud can stream from (real path on desktop; a
-  /// materialized temp-file copy of a SAF-backed track on Android).
   final String path;
 }
 
-/// Continuous music feedback channel: streams a user-picked folder through a
-/// low-pass filter whose cutoff follows the live reward percentile. In static
-/// mode (background music) the same playlist plays unmodulated.
-///
-/// Drives a single SoLoud voice (via [ModulatedVoice]) plus a per-voice biquad
-/// resonant filter and a per-voice compressor (tames loud tracks, lifts quiet
-/// ones — cheap normalization). The notifier feeds [setTargetCutoff] at ~10 Hz
-/// from the ratio engine's percentile rank; an exponential-moving-average slew
-/// in [ModulatedVoice] smooths those jumps into a clean cutoff glide (no
-/// zipper noise). Volumes and filter values are clamped to SoLoud's ranges.
-class MusicFeedbackController {
-  MusicFeedbackController(this._settings);
+class MusicController {
+  MusicController(
+    this._settings, {
+    required this.mode,
+    required this.modulation,
+  });
 
   final Settings _settings;
+  final MusicPlaybackMode mode;
+  final MusicModulation modulation;
 
-  /// The single voice this channel owns. Filter enabled in modulated mode,
-  /// disabled in static (background) mode.
   final ModulatedVoice _voice = ModulatedVoice(
     initialCutoff: 0,
     muffleCutoff: 10,
@@ -59,17 +50,14 @@ class MusicFeedbackController {
   final List<int> _order = [];
   int _position = -1;
   bool _shuffle = false;
-  bool _staticMode = false;
 
   StreamSubscription? _endSub;
 
-  /// Emits the new track name whenever playback advances to a new track.
   final StreamController<String> _trackChanges = StreamController.broadcast();
 
   late double _minCutoff;
   late double _maxCutoff;
 
-  /// True when a folder is configured and contains audio files.
   bool get hasTracks => _tracks.isNotEmpty;
 
   bool get isPlaying => _voice.playing && hasTracks;
@@ -80,24 +68,16 @@ class MusicFeedbackController {
 
   int get position => _position;
 
-  bool get shuffle => _shuffle;
-
-  /// True in static mode: the folder plays unmodulated as background music.
-  bool get staticMode => _staticMode;
-
   String? get currentTrackName => _position >= 0 && _position < _order.length
       ? _tracks[_order[_position]].name
       : null;
 
-  /// Currently applied cutoff in Hz (slewed), for recording the trace.
   double get currentCutoffHz => _voice.currentCutoff;
 
-  /// Usable cutoff bounds for the session's settings.
   double get minCutoff => _minCutoff;
 
   double get maxCutoff => _maxCutoff;
 
-  /// Reloads settings from [_settings] (folder, filter params, shuffle).
   void refreshSettings() {
     _minCutoff = _settings.musicMinCutoffHz.clamp(50.0, 8000.0);
     _maxCutoff = _settings.musicMaxCutoffHz.clamp(200.0, 16000.0);
@@ -109,14 +89,6 @@ class MusicFeedbackController {
     _shuffle = _settings.musicShuffle;
   }
 
-  /// Toggles static mode (`true` = play unmodulated as background music;
-  /// `false` = reward-driven filter feedback).
-  void setStaticMode(bool on) {
-    _staticMode = on;
-  }
-
-  /// Loads the track list for the configured folder. Returns false when the
-  /// folder is unset or contains no supported audio files.
   Future<bool> load() async {
     refreshSettings();
     final folder = _settings.musicFolder;
@@ -148,15 +120,14 @@ class MusicFeedbackController {
         return false;
       }
       final entries = dir.listSync().whereType<File>();
-      final files =
-          entries
-              .where(
-                (f) => musicSupportedExtensions.contains(_extensionOf(f.path)),
-              )
-              .toList()
-            ..sort(
-              (a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()),
-            );
+      final files = entries
+          .where(
+            (f) => musicSupportedExtensions.contains(_extensionOf(f.path)),
+          )
+          .toList()
+        ..sort(
+          (a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()),
+        );
       _tracks.addAll(
         files.map((f) => MusicTrack(name: _nameOf(f.path), path: f.path)),
       );
@@ -188,8 +159,6 @@ class MusicFeedbackController {
     return name;
   }
 
-  /// Copies a SAF-backed file into the cache so SoLoud can stream from a real
-  /// path. Returns null on failure.
   Future<String?> _materialize(
     SafSessionStorage safe,
     String name,
@@ -205,7 +174,6 @@ class MusicFeedbackController {
     }
   }
 
-  /// Starts (or restarts) playback from the first track.
   Future<void> start() async {
     if (_voice.playing) {
       return;
@@ -268,24 +236,20 @@ class MusicFeedbackController {
     }
   }
 
-  /// Target cutoff for the reward; an EMA slew glides the live filter toward
-  /// it. No-op in static mode.
   void setTargetCutoff(double hz) {
-    if (_staticMode) {
+    if (modulation != MusicModulation.filterCutoff) {
       return;
     }
     _voice.setTargetCutoff(hz);
   }
 
-  /// Forces the filter fully closed while a guardrail warning is active.
   void setMuffle(bool on) {
-    if (_staticMode) {
+    if (modulation == MusicModulation.none) {
       return;
     }
     _voice.setMuffle(on);
   }
 
-  /// Effective volume (master × channel); applied to the live voice.
   void setVolume(double v) {
     _voice.setVolume(v);
   }
@@ -306,7 +270,8 @@ class MusicFeedbackController {
         autoDispose: false,
       );
       final volume = _voice.voiceVolume;
-      _voice.play(src, volume: volume, activateFilter: !_staticMode);
+      final activateFilter = modulation == MusicModulation.filterCutoff;
+      _voice.play(src, volume: volume, activateFilter: activateFilter);
       _wireCompressor(src, _voice.handle!);
       _endSub = src.soundEvents.listen((event) {
         if (event.event == SoundEventType.handleIsNoMoreValid &&
@@ -318,7 +283,7 @@ class MusicFeedbackController {
       debugPrint(
         '[music] playing "${track.name}" (${_position + 1}/${_tracks.length})'
         '${_shuffle ? ' shuffled' : ''}'
-        '${_staticMode ? ' (background)' : ''}',
+        '${mode == MusicPlaybackMode.background ? ' (background)' : ''}',
       );
       _trackChanges.add(track.name);
     } catch (e) {
@@ -326,8 +291,6 @@ class MusicFeedbackController {
     }
   }
 
-  /// Soft per-voice compressor: tames loud tracks and lifts quiet ones (a
-  /// cheap stand-in for true loudness normalization).
   void _wireCompressor(AudioSource src, SoundHandle h) {
     try {
       src.filters.compressorFilter.activate();

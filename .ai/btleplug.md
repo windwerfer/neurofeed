@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Patch btleplug 0.11.8 (Rust) to survive the **JNI `ThreadDetached` error**
+Patch btleplug 0.12.0 (Rust) to survive the **JNI `ThreadDetached` error**
 that occurs when BLE operations run on tokio worker threads instead of the
 JVM-attached Dart/UI thread. Without this patch, every BLE scan fails with
 `"JNI call failed"` — a silent, opaque error that bubbles up as an
@@ -10,64 +10,26 @@ JVM-attached Dart/UI thread. Without this patch, every BLE scan fails with
 
 ## Where is the fork
 
-**Published:** `github.com/windwerfer/btleplug` tag `0.12.0-muse-3`
-**Local copy:** `../../btleplug/` (sibling of `muse_ml/`) — for development.
+**Published:** `github.com/windwerfer/btleplug` tag `0.12.0-muse-5`
+**Local copy:** `../third_party/btleplug/` — for development.
 
 Referenced from `muse_ml/rust/Cargo.toml` via `[patch.crates-io]`.
-Both `rust_lib_muse_ml` and `muse-rs` depend on `btleplug = "0.11.8"` from crates.io; the
+Both `rust_lib_muse_ml` and `muse-rs` depend on `btleplug = "0.12.0"` from crates.io; the
 `[patch.crates-io]` replaces ALL occurrences with our fork so there is only one copy
 of btleplug (and its `GLOBAL_JVM`/`GLOBAL_ADAPTER` statics) linked:
 
 ```toml
-btleplug = "0.11.8"
+btleplug = "0.12.0"
 
 [patch.crates-io]
-btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-3" }
+btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-5" }
 ```
 
 **For local development,** swap the patch to a local path:
 ```toml
 [patch.crates-io]
-btleplug = { path = "../../btleplug" }
+btleplug = { path = "../third_party/btleplug" }
 ```
-
-## Critical pitfall — Cargo `[patch]` semver check
-
-**Cargo silently ignores `[patch]` if the patched crate's `version` field is
-semver-incompatible with the dependency constraint.** Our fork was originally
-`version = "0.12.0"`, but the project depends on `^0.11.8`. The patch was
-silently skipped — the unpatched upstream 0.11.8 was used instead.
-
-**Fix:** set `version = "0.11.8"` in the fork's `Cargo.toml`. Even though the
-source code is based on upstream 0.12.0 (with our patches), the version must
-match `^0.11.8` for Cargo to apply the `[patch]`.
-
-Verify the patch is actually applied:
-```bash
-cargo tree -p btleplug --depth 0
-# Should show: btleplug v0.11.8 (/path/to/btleplug)
-```
-
-## Local vs remote development
-
-The `Cargo.toml` in `muse_ml/rust/` points to the **crates.io version** by default:
-
-```toml
-btleplug = "0.11.8"
-
-[patch.crates-io]
-btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-3" }
-```
-
-When debugging or modifying the btleplug fork, swap the patch to a **local path**:
-
-```toml
-[patch.crates-io]
-btleplug = { path = "../../btleplug" }
-```
-
-**Important:** the local fork's `Cargo.toml` must have `version = "0.11.8"` or
-the patch will be silently ignored (see critical pitfall below).
 
 ## Changes made
 

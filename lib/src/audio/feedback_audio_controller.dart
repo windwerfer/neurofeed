@@ -17,7 +17,7 @@ class FeedbackAudioController {
   static const Duration rewardCooldown = Duration(seconds: 8);
   static const Duration movementBuffer = Duration(seconds: 1);
   static const int maxPolyphony = 18;
-  static const double droneVolume = 0.5;
+  static const double backgroundVolumeDefault = 0.5;
 
   static const String calibrationAsset =
       'assets/audio/calibration/alpha-theta-ratio_short-clear.opus';
@@ -36,7 +36,7 @@ class FeedbackAudioController {
   /// reuse one native sound instead of re-decoding on every trigger.
   final Map<String, AudioSource> _sources = {};
 
-  SoundHandle? _ambientHandle;
+  SoundHandle? _backgroundHandle;
   SoundHandle? _bellHandle;
   final List<SoundHandle> _chimeHandles = [];
 
@@ -54,7 +54,7 @@ class FeedbackAudioController {
   SoundHandle? _alarmHandle;
 
   double _masterVolume = 1.0;
-  double _backgroundVolume = droneVolume;
+  double _backgroundVolume = backgroundVolumeDefault;
   double _feedbackVolume = 1.0;
   double _introVolume = 1.0;
   double _bellVolume = 1.0;
@@ -62,7 +62,7 @@ class FeedbackAudioController {
 
   FeedbackAudioController(Settings settings) : _settings = settings {
     _masterVolume = settings.masterVolume ?? 1.0;
-    _backgroundVolume = settings.backgroundVolume ?? droneVolume;
+    _backgroundVolume = settings.backgroundVolume ?? backgroundVolumeDefault;
     _feedbackVolume = settings.feedbackVolume ?? 1.0;
     _introVolume = settings.introVolume ?? 1.0;
     _bellVolume = settings.bellVolume ?? 1.0;
@@ -82,7 +82,7 @@ class FeedbackAudioController {
 
   double get guardrailVolume => _guardrailVolume;
 
-  double get _ambientVolume => _masterVolume * _backgroundVolume;
+  double get _backgroundVolumeTotal => _masterVolume * _backgroundVolume;
 
   double get _feedbackVolumeTotal => _masterVolume * _feedbackVolume;
 
@@ -155,9 +155,9 @@ class FeedbackAudioController {
   void setBackgroundVolume(double value) {
     _backgroundVolume = value.clamp(0.0, 1.0);
     _settings.setBackgroundVolume(_backgroundVolume);
-    final ambient = _ambientHandle;
-    if (ambient != null) {
-      _safeHandle(ambient, (h) => SoLoud.instance.setVolume(h, _ambientVolume));
+    final background = _backgroundHandle;
+    if (background != null) {
+      _safeHandle(background, (h) => SoLoud.instance.setVolume(h, _backgroundVolumeTotal));
     }
   }
 
@@ -196,7 +196,7 @@ class FeedbackAudioController {
 
   void resetVolumes() {
     _masterVolume = 1.0;
-    _backgroundVolume = droneVolume;
+    _backgroundVolume = backgroundVolumeDefault;
     _feedbackVolume = 1.0;
     _introVolume = 1.0;
     _bellVolume = 1.0;
@@ -212,9 +212,9 @@ class FeedbackAudioController {
   }
 
   void _applyVolumes() {
-    final ambient = _ambientHandle;
-    if (ambient != null) {
-      _safeHandle(ambient, (h) => SoLoud.instance.setVolume(h, _ambientVolume));
+    final background = _backgroundHandle;
+    if (background != null) {
+      _safeHandle(background, (h) => SoLoud.instance.setVolume(h, _backgroundVolumeTotal));
     }
     _applyFeedbackVolumes();
     final bell = _bellHandle;
@@ -245,44 +245,44 @@ class FeedbackAudioController {
   Future<void> startBackground(String? assetPath) async {
     _resetRewardState();
     await SoLoudEngine.ensureInit();
-    _stopAmbient();
+    _stopBackground();
     if (assetPath == null) {
       return;
     }
     final source = await _sourceFor(assetPath, stream: true);
-    _ambientHandle = SoLoud.instance.play(
+    _backgroundHandle = SoLoud.instance.play(
       source,
-      volume: _ambientVolume,
+      volume: _backgroundVolumeTotal,
       looping: true,
     );
   }
 
   Future<void> pauseBackground() async {
-    final handle = _ambientHandle;
+    final handle = _backgroundHandle;
     if (handle != null) {
       _safeHandle(handle, (h) => SoLoud.instance.setPause(h, true));
     }
   }
 
   Future<void> resumeBackground() async {
-    final handle = _ambientHandle;
+    final handle = _backgroundHandle;
     if (handle != null) {
       _safeHandle(handle, (h) => SoLoud.instance.setPause(h, false));
     }
   }
 
-  /// Switches the ambient loop to a different asset mid-session without
+  /// Switches the background loop to a different asset mid-session without
   /// touching the reward state machine. A null asset stops the loop.
   Future<void> switchBackground(String? assetPath) async {
     await SoLoudEngine.ensureInit();
-    _stopAmbient();
+    _stopBackground();
     if (assetPath == null) {
       return;
     }
     final source = await _sourceFor(assetPath, stream: true);
-    _ambientHandle = SoLoud.instance.play(
+    _backgroundHandle = SoLoud.instance.play(
       source,
-      volume: _ambientVolume,
+      volume: _backgroundVolumeTotal,
       looping: true,
     );
   }
@@ -412,7 +412,7 @@ class FeedbackAudioController {
   Future<void> stop() async {
     _resetRewardState();
     stopWarningAlarm();
-    _stopAmbient();
+    _stopBackground();
     final bell = _bellHandle;
     if (bell != null) {
       _safeHandle(bell, SoLoud.instance.stop);
@@ -430,12 +430,12 @@ class FeedbackAudioController {
     SoLoudEngine.deinit();
   }
 
-  void _stopAmbient() {
-    final handle = _ambientHandle;
+  void _stopBackground() {
+    final handle = _backgroundHandle;
     if (handle != null) {
       _safeHandle(handle, SoLoud.instance.stop);
     }
-    _ambientHandle = null;
+    _backgroundHandle = null;
   }
 
   void _resetRewardState() {

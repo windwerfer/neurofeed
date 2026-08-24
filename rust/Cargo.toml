@@ -9,7 +9,7 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 flutter_rust_bridge = "=2.11.1"
 muse-rs = { git = "https://github.com/eugenehp/muse-rs.git", tag = "0.1.0", default-features = false }
-btleplug = "0.11.8"
+btleplug = "0.12.0"
 jni = "=0.19"
 tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time"] }
 anyhow = "1"
@@ -37,7 +37,7 @@ rlx = { version = "0.2", default-features = false, features = ["cpu"] }
 # with our JNI-fixed fork, so there is only ONE copy of btleplug
 # (and its GLOBAL_JVM / GLOBAL_ADAPTER statics) linked.
 [patch.crates-io]
-btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-3" }
+btleplug = { path = "../third_party/btleplug" }
 rlx-cpu = { path = "../vendor/rlx-cpu" }
 
 [patch.'https://github.com/eugenehp/muse-rs.git']

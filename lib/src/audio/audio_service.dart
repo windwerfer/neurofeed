@@ -2,25 +2,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/binaural_beat_controller.dart';
 import 'package:muse_ml/src/audio/feedback_audio_controller.dart';
 import 'package:muse_ml/src/audio/guardrail_sound.dart';
-import 'package:muse_ml/src/audio/music_feedback_controller.dart';
+import 'package:muse_ml/src/audio/music_controller.dart';
 import 'package:muse_ml/src/audio/rain_feedback_controller.dart';
 import 'package:muse_ml/src/settings.dart';
 
 /// Sentinel sound name that activates music-feedback mode (user folder played
-/// through the low-pass filter) instead of the ambient loop.
+/// through the low-pass filter) instead of the background loop.
 const String musicSoundName = 'Music from folder';
 
-/// Orchestrates the two audio layers of a feedback session:
+/// Orchestrates the three audio layers of a feedback session:
 ///
 ///  * **Background** — a flat, unmodulated loop (ambient drone, drone loop,
 ///    rain, static folder music, or nothing). Selected via [Settings.soundName]
 ///    and routed through `FeedbackAudioController` (assets) or
-///    `MusicFeedbackController` in static mode (folder).
+///    `MusicController` in background mode (folder).
 ///  * **Feedback** — the reward channel: bowl chimes on-target, a rain loop
 ///    whose intensity follows the reward ([RainFeedbackController]), the
 ///    folder through a reward-driven low-pass filter
-///    ([MusicFeedbackController] modulated), synthesized binaural beats whose
+///    ([MusicController] modulated), synthesized binaural beats whose
 ///    volume follows the reward ([BinauralBeatController]), or none.
+///  * **Guardrail** — warning sounds (chime/alarm) that can optionally mute
+///    the feedback channel during sleep-drift warnings.
 ///
 /// Selecting Rain or Music as the feedback sound suppresses the background
 /// (the modulated loop becomes the whole soundscape); Binaural Beats layer on
@@ -28,17 +30,28 @@ const String musicSoundName = 'Music from folder';
 class AudioService {
   final Settings _settings;
   final FeedbackAudioController _controller;
-  final MusicFeedbackController _music;
+  final MusicController _backgroundMusic;
+  final MusicController _feedbackMusic;
   final RainFeedbackController _rain;
   final BinauralBeatController _binaural;
 
   AudioService(Settings settings)
     : _settings = settings,
       _controller = FeedbackAudioController(settings),
-      _music = MusicFeedbackController(settings),
+      _backgroundMusic = MusicController(
+        settings,
+        mode: MusicPlaybackMode.background,
+        modulation: MusicModulation.none,
+      ),
+      _feedbackMusic = MusicController(
+        settings,
+        mode: MusicPlaybackMode.feedback,
+        modulation: MusicModulation.filterCutoff,
+      ),
       _rain = RainFeedbackController(),
       _binaural = BinauralBeatController() {
-    _music.refreshSettings();
+    _backgroundMusic.refreshSettings();
+    _feedbackMusic.refreshSettings();
     _refreshMusicVolume();
     _refreshRainVolume();
     _refreshBinauralVolume();
@@ -104,13 +117,12 @@ class AudioService {
     _refreshBinauralVolume();
   }
 
-  /// Music in static (background) mode rides the background channel; music
-  /// and rain as the reward channel ride the feedback channel.
+  /// Background music rides the background channel; feedback music rides the feedback channel.
   void _refreshMusicVolume() {
-    final v = _music.staticMode
-        ? _controller.masterVolume * _controller.backgroundVolume
-        : _controller.masterVolume * _controller.feedbackVolume;
-    _music.setVolume(v);
+    final bgVolume = _controller.masterVolume * _controller.backgroundVolume;
+    final fbVolume = _controller.masterVolume * _controller.feedbackVolume;
+    _backgroundMusic.setVolume(bgVolume);
+    _feedbackMusic.setVolume(fbVolume);
   }
 
   void _refreshRainVolume() {
@@ -130,19 +142,16 @@ class AudioService {
     await _stopChannels();
     final suppress = suppressesBackground(feedback);
     if (suppress) {
-      _music.setStaticMode(false);
+      // Background suppressed — no background music
     } else if (isMusicSound(sound)) {
-      _music.setStaticMode(true);
-      await _music.load();
-      await _music.start();
+      await _backgroundMusic.load();
+      await _backgroundMusic.start();
     } else {
-      _music.setStaticMode(false);
       await _controller.startBackground(soundAssets[sound]);
     }
     if (feedback == FeedbackMode.music) {
-      _music.setStaticMode(false);
-      await _music.load();
-      await _music.start();
+      await _feedbackMusic.load();
+      await _feedbackMusic.start();
     } else if (feedback == FeedbackMode.rain) {
       await _rain.start();
     } else if (feedback == FeedbackMode.binaural) {
@@ -183,34 +192,34 @@ class AudioService {
   /// Music feedback channel: reloads the folder from settings and begins
   /// playback. Used when a folder is first chosen mid-session.
   Future<void> startMusic() async {
-    await _music.load();
-    await _music.start();
+    await _feedbackMusic.load();
+    await _feedbackMusic.start();
   }
 
   /// Reloads the track list from the current [Settings.musicFolder] without
   /// starting playback, and returns how many playable tracks were found (0
   /// when the folder is unset/empty). Lets settings UI preview the folder.
   Future<int> loadMusic() async {
-    final ok = await _music.load();
-    return ok ? _music.trackCount : 0;
+    final ok = await _feedbackMusic.load();
+    return ok ? _feedbackMusic.trackCount : 0;
   }
 
   /// Feeds the live reward percentile (0–100) to the music feedback filter.
-  void setMusicCutoffHz(double hz) => _music.setTargetCutoff(hz);
+  void setMusicCutoffHz(double hz) => _feedbackMusic.setTargetCutoff(hz);
 
   /// Whether the music feedback channel is actively playing.
-  bool get musicPlaying => _music.isPlaying;
+  bool get musicPlaying => _feedbackMusic.isPlaying;
 
   /// Current music track / cutoff, for the session UI and metadata.
-  String? get musicTrackName => _music.currentTrackName;
+  String? get musicTrackName => _feedbackMusic.currentTrackName;
 
-  int get musicTrackCount => _music.trackCount;
+  int get musicTrackCount => _feedbackMusic.trackCount;
 
-  double get musicCutoffHz => _music.currentCutoffHz;
+  double get musicCutoffHz => _feedbackMusic.currentCutoffHz;
 
-  /// True while music (or rain) plays unmodulated as the background layer —
+  /// True while music plays unmodulated as the background layer —
   /// shown as "(background)" in the session UI.
-  bool get musicIsStatic => _music.staticMode;
+  bool get musicIsStatic => _backgroundMusic.isPlaying && _backgroundMusic.mode == MusicPlaybackMode.background;
 
   /// Whether the modulated rain channel is actively playing.
   bool get rainPlaying => _rain.isPlaying;
@@ -234,13 +243,13 @@ class AudioService {
 
   /// Ducks whichever modulated channel is active during a guardrail warning.
   void setMusicMuffle(bool on) {
-    _music.setMuffle(on);
+    _feedbackMusic.setMuffle(on);
     _rain.setMuffle(on);
     _binaural.setMuffle(on);
   }
 
   /// Guardrail warning state.
-  bool get mufflesForWarning => _music.muffleActive || _rain.muffleActive;
+  bool get mufflesForWarning => _feedbackMusic.muffleActive || _rain.muffleActive;
 
   set mufflesForWarning(bool on) => setMusicMuffle(on);
 
@@ -270,34 +279,39 @@ class AudioService {
 
   Future<void> pause() async {
     await _controller.pauseBackground();
-    _music.pause();
+    _backgroundMusic.pause();
+    _feedbackMusic.pause();
     _rain.pause();
     _binaural.pause();
   }
 
   Future<void> resume() async {
     await _controller.resumeBackground();
-    _music.resume();
+    _backgroundMusic.resume();
+    _feedbackMusic.resume();
     _rain.resume();
     _binaural.resume();
   }
 
   Future<void> stop() async {
-    await _music.stop();
+    await _backgroundMusic.stop();
+    await _feedbackMusic.stop();
     await _rain.stop();
     await _binaural.stop();
     await _controller.stop();
   }
 
   Future<void> _stopChannels() async {
-    await _music.stop();
+    await _backgroundMusic.stop();
+    await _feedbackMusic.stop();
     await _rain.stop();
     await _binaural.stop();
     await _controller.stop();
   }
 
   void dispose() {
-    _music.dispose();
+    _backgroundMusic.dispose();
+    _feedbackMusic.dispose();
     _rain.dispose();
     _binaural.dispose();
     _controller.dispose();
