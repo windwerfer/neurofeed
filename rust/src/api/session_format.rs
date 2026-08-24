@@ -5,11 +5,12 @@ use flutter_rust_bridge::frb;
 
 use crate::api::muse::{ImuDto, MuseEventDto};
 
-// ── .muse body format (v4) ──────────────────────────────────────────────────────
+// ── .muse body format (raw body section of v5 container) ─────────────────────────
 //
-// The session body is a zstd-compressed stream:
+// The raw frame body stored in the v5 container's "raw" section is a
+// zstd-compressed stream:
 //
-//   [ u64 BE "MUSEBIN\n" ][ u32 LE version ][ frames ]
+//   [ u64 LE "MUSEBIN\n" (reversed) ][ u32 LE version=5 ][ frames ]
 //
 //   frame   := [ u32 LE frame_size ][ zstd frame payload ]
 //   payload := record*                    (record := [ u8 tag ][ fields … ])
@@ -24,6 +25,7 @@ use crate::api::muse::{ImuDto, MuseEventDto};
 //   tag 7  Pulse        : [ts f64][bpm f32][conf f32]
 //   tag 8  Movement     : [ts f64][score f32]
 //   tag 9  PeakAlpha    : [ts f64][freq f32][power f32]
+//   tag 10 SpO2         : [ts f64][spo2 f32][conf f32]
 //
 // This module is the single authority for the on-disk format. The Dart writer
 // and reader both delegate here so the layout can never drift between the two
