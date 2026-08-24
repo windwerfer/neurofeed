@@ -421,6 +421,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       binauralPresetId: settings.binauralPresetId,
       binauralCarrierHz: settings.binauralCarrierHz,
       binauralBeatHz: settings.binauralBeatHz,
+      backgroundBinauralPresetId: settings.backgroundBinauralPresetId,
+      backgroundBinauralCarrierHz: settings.backgroundBinauralCarrierHz,
+      backgroundBinauralBeatHz: settings.backgroundBinauralBeatHz,
       markersInFeedbackEnabled: settings.markersInFeedbackEnabled,
       eyeMarkersEnabled: settings.eyeMarkersEnabled,
     );

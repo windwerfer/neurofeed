@@ -679,6 +679,9 @@ class SessionSettings {
     required this.binauralPresetId,
     required this.binauralCarrierHz,
     required this.binauralBeatHz,
+    required this.backgroundBinauralPresetId,
+    required this.backgroundBinauralCarrierHz,
+    required this.backgroundBinauralBeatHz,
     required this.markersInFeedbackEnabled,
     required this.eyeMarkersEnabled,
     this.modelSnapshot,
@@ -699,6 +702,9 @@ class SessionSettings {
   final String binauralPresetId;
   final double binauralCarrierHz;
   final double binauralBeatHz;
+  final String backgroundBinauralPresetId;
+  final double backgroundBinauralCarrierHz;
+  final double backgroundBinauralBeatHz;
   final bool markersInFeedbackEnabled;
   final bool eyeMarkersEnabled;
   final ModelSnapshot? modelSnapshot;
@@ -719,6 +725,9 @@ class SessionSettings {
     'binauralPresetId': binauralPresetId,
     'binauralCarrierHz': binauralCarrierHz,
     'binauralBeatHz': binauralBeatHz,
+    'backgroundBinauralPresetId': backgroundBinauralPresetId,
+    'backgroundBinauralCarrierHz': backgroundBinauralCarrierHz,
+    'backgroundBinauralBeatHz': backgroundBinauralBeatHz,
     'markersInFeedbackEnabled': markersInFeedbackEnabled,
     'eyeMarkersEnabled': eyeMarkersEnabled,
     if (modelSnapshot != null) 'modelSnapshot': modelSnapshot!.toJson(),
@@ -745,6 +754,12 @@ class SessionSettings {
       binauralPresetId: json['binauralPresetId'] as String? ?? '',
       binauralCarrierHz: (json['binauralCarrierHz'] as num?)?.toDouble() ?? 0,
       binauralBeatHz: (json['binauralBeatHz'] as num?)?.toDouble() ?? 0,
+      backgroundBinauralPresetId:
+          json['backgroundBinauralPresetId'] as String? ?? '',
+      backgroundBinauralCarrierHz:
+          (json['backgroundBinauralCarrierHz'] as num?)?.toDouble() ?? 0,
+      backgroundBinauralBeatHz:
+          (json['backgroundBinauralBeatHz'] as num?)?.toDouble() ?? 0,
       markersInFeedbackEnabled:
           json['markersInFeedbackEnabled'] as bool? ?? false,
       eyeMarkersEnabled: json['eyeMarkersEnabled'] as bool? ?? false,

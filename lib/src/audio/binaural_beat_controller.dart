@@ -90,6 +90,8 @@ class BinauralBeatController {
 
   bool get isPlaying => _left.playing || _right.playing;
 
+  bool get muffleActive => _muffle;
+
   double get percentile => _percentile;
 
   Future<void> start({

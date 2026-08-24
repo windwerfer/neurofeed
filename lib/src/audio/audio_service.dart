@@ -10,6 +10,9 @@ import 'package:muse_ml/src/settings.dart';
 /// through the low-pass filter) instead of the background loop.
 const String musicSoundName = 'Music from folder';
 
+/// Sentinel sound name that activates binaural beats as the background layer.
+const String binauralSoundName = 'Binaural Beats';
+
 /// Orchestrates the three audio layers of a feedback session:
 ///
 ///  * **Background** — a flat, unmodulated loop (ambient drone, drone loop,
@@ -33,6 +36,7 @@ class AudioService {
   final MusicController _backgroundMusic;
   final MusicController _feedbackMusic;
   final RainFeedbackController _rain;
+  final BinauralBeatController _backgroundBinaural;
   final BinauralBeatController _binaural;
 
   AudioService(Settings settings)
@@ -49,11 +53,13 @@ class AudioService {
         modulation: MusicModulation.filterCutoff,
       ),
       _rain = RainFeedbackController(),
+      _backgroundBinaural = BinauralBeatController(),
       _binaural = BinauralBeatController() {
     _backgroundMusic.refreshSettings();
     _feedbackMusic.refreshSettings();
     _refreshMusicVolume();
     _refreshRainVolume();
+    _refreshBackgroundBinauralVolume();
     _refreshBinauralVolume();
   }
 
@@ -64,9 +70,14 @@ class AudioService {
     'No background': null,
   };
 
-  List<String> get availableSounds => [...soundAssets.keys, musicSoundName];
+  List<String> get availableSounds => [
+        ...soundAssets.keys,
+        musicSoundName,
+        binauralSoundName,
+      ];
 
   static bool isMusicSound(String sound) => sound == musicSoundName;
+  static bool isBinauralSound(String sound) => sound == binauralSoundName;
 
   /// True when [feedback] replaces the background layer with a modulated loop.
   static bool suppressesBackground(FeedbackMode feedback) =>
@@ -88,12 +99,14 @@ class AudioService {
     _controller.setMasterVolume(value);
     _refreshMusicVolume();
     _refreshRainVolume();
+    _refreshBackgroundBinauralVolume();
     _refreshBinauralVolume();
   }
 
   void setBackgroundVolume(double value) {
     _controller.setBackgroundVolume(value);
     _refreshMusicVolume();
+    _refreshBackgroundBinauralVolume();
   }
 
   void setFeedbackVolume(double value) {
@@ -114,6 +127,7 @@ class AudioService {
     _controller.resetVolumes();
     _refreshMusicVolume();
     _refreshRainVolume();
+    _refreshBackgroundBinauralVolume();
     _refreshBinauralVolume();
   }
 
@@ -129,6 +143,12 @@ class AudioService {
     _rain.setVolume(_controller.masterVolume * _controller.feedbackVolume);
   }
 
+  void _refreshBackgroundBinauralVolume() {
+    _backgroundBinaural.setGain(
+      _controller.masterVolume * _controller.backgroundVolume,
+    );
+  }
+
   void _refreshBinauralVolume() {
     _binaural.setGain(_controller.masterVolume * _controller.feedbackVolume);
   }
@@ -142,10 +162,16 @@ class AudioService {
     await _stopChannels();
     final suppress = suppressesBackground(feedback);
     if (suppress) {
-      // Background suppressed — no background music
+      // Background suppressed — no background music/binaural
     } else if (isMusicSound(sound)) {
       await _backgroundMusic.load();
       await _backgroundMusic.start();
+    } else if (isBinauralSound(sound)) {
+      await _backgroundBinaural.start(
+        carrierHz: _backgroundBinauralCarrierHz,
+        beatHz: _backgroundBinauralBeatHz,
+      );
+      _backgroundBinaural.setPercentile(100);
     } else {
       await _controller.startBackground(soundAssets[sound]);
     }
@@ -162,6 +188,7 @@ class AudioService {
     }
     _refreshMusicVolume();
     _refreshRainVolume();
+    _refreshBackgroundBinauralVolume();
     _refreshBinauralVolume();
   }
 
@@ -169,6 +196,11 @@ class AudioService {
   double get _binauralCarrierHz => _settings.binauralCarrierHz;
 
   double get _binauralBeatHz => _settings.binauralBeatHz;
+
+  double get _backgroundBinauralCarrierHz =>
+      _settings.backgroundBinauralCarrierHz;
+
+  double get _backgroundBinauralBeatHz => _settings.backgroundBinauralBeatHz;
 
   /// Mid-session sound/feedback change: tears down and restarts both layers
   /// with the new selection (used by the pre-session keep-phase fast path).
@@ -227,8 +259,20 @@ class AudioService {
   /// Feeds the live reward percentile (0–100) to the rain intensity stage.
   void setRainPercentile(double pct) => _rain.setTargetPercentile(pct);
 
-  /// Whether the binaural-beat layer is actively playing.
+  /// Whether the binaural background layer is actively playing.
+  bool get backgroundBinauralPlaying => _backgroundBinaural.isPlaying;
+
+  /// Whether the binaural feedback layer is actively playing.
   bool get binauralPlaying => _binaural.isPlaying;
+
+  /// Retunes the background binaural voices.
+  void setBackgroundBinauralFrequencies({
+    required double carrierHz,
+    required double beatHz,
+  }) => _backgroundBinaural.setFrequencies(
+        carrierHz: carrierHz,
+        beatHz: beatHz,
+      );
 
   /// Feeds the live reward percentile (0–100) to the binaural volume — full
   /// fade at zero (off-target), full channel gain at the 100th percentile.
@@ -243,13 +287,18 @@ class AudioService {
 
   /// Ducks whichever modulated channel is active during a guardrail warning.
   void setMusicMuffle(bool on) {
+    _backgroundBinaural.setMuffle(on);
     _feedbackMusic.setMuffle(on);
     _rain.setMuffle(on);
     _binaural.setMuffle(on);
   }
 
   /// Guardrail warning state.
-  bool get mufflesForWarning => _feedbackMusic.muffleActive || _rain.muffleActive;
+  bool get mufflesForWarning =>
+      _backgroundBinaural.muffleActive ||
+      _feedbackMusic.muffleActive ||
+      _rain.muffleActive ||
+      _binaural.muffleActive;
 
   set mufflesForWarning(bool on) => setMusicMuffle(on);
 
@@ -282,6 +331,7 @@ class AudioService {
     _backgroundMusic.pause();
     _feedbackMusic.pause();
     _rain.pause();
+    _backgroundBinaural.pause();
     _binaural.pause();
   }
 
@@ -290,6 +340,7 @@ class AudioService {
     _backgroundMusic.resume();
     _feedbackMusic.resume();
     _rain.resume();
+    _backgroundBinaural.resume();
     _binaural.resume();
   }
 
@@ -297,6 +348,7 @@ class AudioService {
     await _backgroundMusic.stop();
     await _feedbackMusic.stop();
     await _rain.stop();
+    await _backgroundBinaural.stop();
     await _binaural.stop();
     await _controller.stop();
   }
@@ -305,6 +357,7 @@ class AudioService {
     await _backgroundMusic.stop();
     await _feedbackMusic.stop();
     await _rain.stop();
+    await _backgroundBinaural.stop();
     await _binaural.stop();
     await _controller.stop();
   }
@@ -313,6 +366,7 @@ class AudioService {
     _backgroundMusic.dispose();
     _feedbackMusic.dispose();
     _rain.dispose();
+    _backgroundBinaural.dispose();
     _binaural.dispose();
     _controller.dispose();
   }

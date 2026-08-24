@@ -133,6 +133,9 @@ class Settings {
   static const String _binauralPresetKey = 'binaural_preset';
   static const String _binauralCarrierKey = 'binaural_carrier_hz';
   static const String _binauralBeatKey = 'binaural_beat_hz';
+  static const String _backgroundBinauralPresetKey = 'background_binaural_preset';
+  static const String _backgroundBinauralCarrierKey = 'background_binaural_carrier_hz';
+  static const String _backgroundBinauralBeatKey = 'background_binaural_beat_hz';
   static const String _streamProtocolKey = 'stream_protocol';
   static const String _oscEnabledKey = 'stream_osc_enabled';
   static const String _oscIpKey = 'stream_osc_ip';
@@ -424,6 +427,24 @@ class Settings {
 
   Future<void> setBinauralBeatHz(double value) =>
       _prefs.setDouble(_binauralBeatKey, value);
+
+  String get backgroundBinauralPresetId =>
+      _prefs.getString(_backgroundBinauralPresetKey) ?? '';
+
+  Future<void> setBackgroundBinauralPresetId(String value) =>
+      _prefs.setString(_backgroundBinauralPresetKey, value);
+
+  double get backgroundBinauralCarrierHz =>
+      _prefs.getDouble(_backgroundBinauralCarrierKey) ?? 200.0;
+
+  Future<void> setBackgroundBinauralCarrierHz(double value) =>
+      _prefs.setDouble(_backgroundBinauralCarrierKey, value);
+
+  double get backgroundBinauralBeatHz =>
+      _prefs.getDouble(_backgroundBinauralBeatKey) ?? 10.0;
+
+  Future<void> setBackgroundBinauralBeatHz(double value) =>
+      _prefs.setDouble(_backgroundBinauralBeatKey, value);
 
   /// Network streaming protocol selected in the Streaming view
   /// (`osc` or `lsl`); only one protocol runs at a time.

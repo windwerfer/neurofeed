@@ -691,6 +691,9 @@ class _SessionSettingsCard extends ConsumerWidget {
             child: Text('Session Settings', style: theme.textTheme.titleSmall),
           ),
           const _SoundTile(),
+          if (fb.soundName == binauralSoundName) ...[
+            const _BackgroundBinauralTile(),
+          ],
           const Divider(height: 1, indent: 16, endIndent: 16),
           if (hasReward) ...[
             const _FeedbackTile(),
@@ -933,6 +936,59 @@ class _BinauralTile extends ConsumerWidget {
   }
 }
 
+/// The binaural-beats background sub-tile: an indented, tightly grouped row
+/// under the Background Sound tile (visible only while Binaural Beats is the
+/// selected background layer), opening the tuning bubble on tap.
+class _BackgroundBinauralTile extends ConsumerWidget {
+  const _BackgroundBinauralTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final settings = ref.read(settingsProvider);
+    final preset = BinauralPreset.fromId(settings.backgroundBinauralPresetId);
+    final beatHz = preset?.beatHz ?? settings.backgroundBinauralBeatHz;
+    final carrierHz = preset?.carrierHz ?? settings.backgroundBinauralCarrierHz;
+    final label = preset?.label ?? 'Custom';
+    return Container(
+      margin: const EdgeInsets.fromLTRB(32, 0, 16, 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(
+            color: theme.colorScheme.primary.withValues(alpha: 0.45),
+            width: 3,
+          ),
+        ),
+      ),
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.graphic_eq),
+              title: const Text('Binaural Beats (Background)'),
+              subtitle: Text(
+                '$label • ${beatHz.toStringAsFixed(1)} Hz beat on '
+                '${carrierHz.round()} Hz carrier • headphones',
+              ),
+              onTap: () => showDialog<void>(
+                context: context,
+                builder: (_) =>
+                    const _BinauralSettingsDialog(isBackground: true),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// The music-feedback sub-tile: an indented, tightly grouped row under the
 /// Feedback Sound tile (visible only while Music is the selected feedback
 /// layer), showing the chosen folder and cutoff range, opening the
@@ -1021,7 +1077,9 @@ class _MusicSettingsDialogState extends ConsumerState<_MusicSettingsDialog> {
 /// its frequencies to the sliders; touching a slider falls back to Custom so
 /// the user always knows when a preset no longer matches the tuning.
 class _BinauralSettingsDialog extends ConsumerStatefulWidget {
-  const _BinauralSettingsDialog();
+  const _BinauralSettingsDialog({this.isBackground = false});
+
+  final bool isBackground;
 
   @override
   ConsumerState<_BinauralSettingsDialog> createState() =>
@@ -1043,22 +1101,42 @@ class _BinauralSettingsDialogState
   void initState() {
     super.initState();
     final settings = ref.read(settingsProvider);
-    final preset = BinauralPreset.fromId(settings.binauralPresetId);
+    final presetId = widget.isBackground
+        ? settings.backgroundBinauralPresetId
+        : settings.binauralPresetId;
+    final carrierHz = widget.isBackground
+        ? settings.backgroundBinauralCarrierHz
+        : settings.binauralCarrierHz;
+    final beatHz = widget.isBackground
+        ? settings.backgroundBinauralBeatHz
+        : settings.binauralBeatHz;
+    final preset = BinauralPreset.fromId(presetId);
     _presetId = preset?.name ?? binauralCustomPresetId;
-    _carrierHz = preset?.carrierHz ?? settings.binauralCarrierHz;
-    _beatHz = preset?.beatHz ?? settings.binauralBeatHz;
+    _carrierHz = preset?.carrierHz ?? carrierHz;
+    _beatHz = preset?.beatHz ?? beatHz;
   }
 
   BinauralPreset? get _preset => BinauralPreset.fromId(_presetId);
 
   void _persist() {
     final settings = ref.read(settingsProvider);
-    settings.setBinauralPresetId(_presetId);
-    settings.setBinauralCarrierHz(_carrierHz);
-    settings.setBinauralBeatHz(_beatHz);
-    ref
-        .read(audioServiceProvider)
-        .setBinauralFrequencies(carrierHz: _carrierHz, beatHz: _beatHz);
+    if (widget.isBackground) {
+      settings.setBackgroundBinauralPresetId(_presetId);
+      settings.setBackgroundBinauralCarrierHz(_carrierHz);
+      settings.setBackgroundBinauralBeatHz(_beatHz);
+      ref.read(audioServiceProvider).setBackgroundBinauralFrequencies(
+            carrierHz: _carrierHz,
+            beatHz: _beatHz,
+          );
+    } else {
+      settings.setBinauralPresetId(_presetId);
+      settings.setBinauralCarrierHz(_carrierHz);
+      settings.setBinauralBeatHz(_beatHz);
+      ref.read(audioServiceProvider).setBinauralFrequencies(
+            carrierHz: _carrierHz,
+            beatHz: _beatHz,
+          );
+    }
   }
 
   void _pickPreset(String? id) {
