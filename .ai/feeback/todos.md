@@ -78,8 +78,8 @@
 - [x] Calibration audio variants & multi-protocol presets (verified working)
 - [x] Extended session export tests: `session_export_test.dart` re-enabled with v5 containers + calibration/gesture assertions
 - [x] Golden round-trip test: `test/session_metadata_roundtrip_test.dart` (SessionMetadata + GestureMarker + SessionCalibration)
-- [x] SQLite metadata cache docs: `readme_history_cache.md`
-- [x] Feedback format docs updated: `readme_feedback_format.md` (v5 container, metadata, computed 1 Hz, raw)
+- [x] SQLite metadata cache docs: `README_history_cache.md`
+- [x] Feedback format docs updated: `README_feedback_format.md` (v5 container, metadata, computed 1 Hz, raw)
 - [x] AGENTS.md updated with Phase 8 changes
 - [x] .ai/ docs updated: `active-task.md`, `lessons-learned.md`
 

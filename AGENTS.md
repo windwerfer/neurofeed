@@ -149,8 +149,8 @@ vendor/rlx-cpu/         # committed vendored copy of rlx-cpu 0.2.13 (patched: no
 .local/                 # LOCAL-ONLY, never committed: luna-base-dl/, reve-base-dl/ (gated model weights), reve-base/ (abandoned fork). Each is an embedded git repo with no remote — see .gitmodules (`ignore = all`, invalid URL) + smoke-test paths `rust/src/analysis/{luna,reve}.rs`
 muse-rs (dep, GitHub)   # transport (btleplug) + protocol
 btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in third_party/btleplug/
-readme_history_cache.md  # SQLite metadata cache documentation (schema, reconciliation, fault tolerance)
-readme_feedback_format.md  # v5 session format documentation (container, metadata, computed 1 Hz, raw)
+README_history_cache.md  # SQLite metadata cache documentation (schema, reconciliation, fault tolerance)
+README_feedback_format.md  # v5 session format documentation (container, metadata, computed 1 Hz, raw)
 ```
 
 ## Where things live (for navigation)
@@ -236,8 +236,8 @@ readme_feedback_format.md  # v5 session format documentation (container, metadat
 - **Baseline percentile persistence**: `Settings.baselinePercentile` (SharedPreferences) + `SessionSettings.baselinePercentile` in metadata; restored on new session start.
 - **Continuous EMA adaptation**: `RatioEngine.adaptEma(value)` called per clean sample in `_onBands()`; smoother than window-based step adaptation.
 - **Golden round-trip test**: `test/session_metadata_roundtrip_test.dart` validates full `SessionMetadata` + `GestureMarker` + `SessionCalibration` JSON serialization.
-- **SQLite metadata cache docs**: `readme_history_cache.md` — schema, reconciliation, fault tolerance.
-- **Feedback format docs**: `readme_feedback_format.md` — v5 container, metadata, computed 1 Hz, raw.
+- **SQLite metadata cache docs**: `README_history_cache.md` — schema, reconciliation, fault tolerance.
+- **Feedback format docs**: `README_feedback_format.md` — v5 container, metadata, computed 1 Hz, raw.
 - **Re-enabled export tests**: `test/session_export_test.dart` with v5 containers + calibration/gesture assertions.
 - **Blink/clench gate ATR cleanliness**: `_onGestures` stamps `_lastGestureAt`; `_sampleIsClean` (`feedback_state.dart`) requires BOTH the movement buffer and the gesture buffer to be ≥ `movementBuffer` (1 s) old — used for the calibration baseline samples and the rolling clean ATR window.
 - **Network streaming wire formats** (`lib/src/streaming/`): OSC is unicast UDP with batched per-chunk `oscEncodeMessage` messages (per-channel groups in lockstep via `StreamingMixer`); LSL runs through the `liblsl` pub package (auto-discovered, no IP/port); BrainFlow speaks the "Streaming Board" format — **raw little-endian IEEE-754 doubles, no header, one datagram per batch of 3 samples** (`BrainflowStreamer.batchSize`). Presets are separate multicast streams on their own ports: `eeg` = default preset 7 rows (package_num, 4×EEG, UNIX-seconds timestamp, marker) on the configured port; `imu` = auxiliary preset 9 rows (package_num, accel/gyro xyz, timestamp, marker) on port+1 and `ppg` = ancillary preset 6 rows (package_num, ambient/infrared/red, timestamp, marker) on port+2 — the latter two only when `separateGroups` is on. The receiver **drops datagrams that aren't exactly `batch_size × num_rows` doubles**, so batch size must match the preset or the stream dies silently — extend `test/streaming_osc_test.dart`-style loopback E2E tests when touching it.
