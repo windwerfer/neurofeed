@@ -96,9 +96,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TelemetrySnapshot dco_decode_box_autoadd_telemetry_snapshot(dynamic raw);
 
   @protected
-  int dco_decode_box_autoadd_u_32(dynamic raw);
-
-  @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
@@ -106,9 +103,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ConnectionStatus dco_decode_connection_status(dynamic raw);
-
-  @protected
-  ContainerHead dco_decode_container_head(dynamic raw);
 
   @protected
   ControlDto dco_decode_control_dto(dynamic raw);
@@ -222,13 +216,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PeakAlphaInfo? dco_decode_opt_box_autoadd_peak_alpha_info(dynamic raw);
 
   @protected
-  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
-
-  @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
-
-  @protected
-  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
 
   @protected
   PeakAlphaDto dco_decode_peak_alpha_dto(dynamic raw);
@@ -280,9 +268,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void dco_decode_unit(dynamic raw);
-
-  @protected
-  BigInt dco_decode_usize(dynamic raw);
 
   @protected
   V5Header dco_decode_v_5_header(dynamic raw);
@@ -382,9 +367,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
-
-  @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
@@ -392,9 +374,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ConnectionStatus sse_decode_connection_status(SseDeserializer deserializer);
-
-  @protected
-  ContainerHead sse_decode_container_head(SseDeserializer deserializer);
 
   @protected
   ControlDto sse_decode_control_dto(SseDeserializer deserializer);
@@ -528,13 +507,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
-
-  @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
-
-  @protected
-  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
   PeakAlphaDto sse_decode_peak_alpha_dto(SseDeserializer deserializer);
@@ -588,9 +561,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_decode_unit(SseDeserializer deserializer);
-
-  @protected
-  BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
   V5Header sse_decode_v_5_header(SseDeserializer deserializer);
@@ -719,9 +689,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
-
-  @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
@@ -732,9 +699,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     ConnectionStatus self,
     SseSerializer serializer,
   );
-
-  @protected
-  void sse_encode_container_head(ContainerHead self, SseSerializer serializer);
 
   @protected
   void sse_encode_control_dto(ControlDto self, SseSerializer serializer);
@@ -908,16 +872,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
-
-  @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_list_prim_u_8_strict(
-    Uint8List? self,
-    SseSerializer serializer,
-  );
 
   @protected
   void sse_encode_peak_alpha_dto(PeakAlphaDto self, SseSerializer serializer);
@@ -978,9 +933,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_usize(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_v_5_header(V5Header self, SseSerializer serializer);

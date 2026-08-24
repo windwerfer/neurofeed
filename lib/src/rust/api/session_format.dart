@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'session_format.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `crc32`, `encode_imu`, `f32`, `f64`, `finished`, `i16`, `local_image_length`, `new`, `now_secs`, `parse_records`, `push_f32`, `push_f64`, `push_i16`, `push_u16`, `push_u32`, `skip`, `u16`, `u8`
+// These functions are ignored because they are not marked as `pub`: `crc32`, `encode_imu`, `f32`, `f64`, `finished`, `i16`, `new`, `now_secs`, `parse_records`, `push_f32`, `push_f64`, `push_i16`, `push_u16`, `push_u32`, `skip`, `u16`, `u8`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `RecordParser`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
@@ -33,35 +33,6 @@ Uint8List sessionFrameBytes({required List<int> data}) =>
 /// Decode a full `.muse` body (header + frames) into structured records.
 SessionData sessionParseBody({required List<int> bytes}) =>
     RustLib.instance.api.crateApiSessionFormatSessionParseBody(bytes: bytes);
-
-/// FFI getter for [CONTAINER_HEAD_READ_LIMIT] so Dart never hardcodes it.
-BigInt containerHeadReadLimit() =>
-    RustLib.instance.api.crateApiSessionFormatContainerHeadReadLimit();
-
-/// Assemble a single `.muse.feedback` file: PNG first, then json, then body.
-Uint8List containerEncodeBytes({
-  required List<int> png,
-  required List<int> json,
-  required List<int> body,
-}) => RustLib.instance.api.crateApiSessionFormatContainerEncodeBytes(
-  png: png,
-  json: json,
-  body: body,
-);
-
-/// Parse the head of a container (PNG + json). `body_len` is resolved only when
-/// the full body is present in [bytes]; a partial (prefix) read leaves it None.
-ContainerHead containerParseHeadBytes({required List<int> bytes}) => RustLib
-    .instance
-    .api
-    .crateApiSessionFormatContainerParseHeadBytes(bytes: bytes);
-
-/// Extract the full frame body from a complete container [bytes], or None when
-/// the body length is absent (head-only read).
-Uint8List? containerExtractBodyBytes({required List<int> bytes}) => RustLib
-    .instance
-    .api
-    .crateApiSessionFormatContainerExtractBodyBytes(bytes: bytes);
 
 /// Encode a v5 container: header + thumbnail + metadata(zstd) + computed(zstd) + raw(zstd).
 Uint8List containerEncodeV5({
@@ -133,16 +104,6 @@ sealed class ComputedFrame with _$ComputedFrame {
   /// Encode to JSON bytes (for zstd compression).
   Future<Uint8List> toJsonBytes() => RustLib.instance.api
       .crateApiSessionFormatComputedFrameToJsonBytes(that: this);
-}
-
-/// Decoded head fields of a container.
-@freezed
-sealed class ContainerHead with _$ContainerHead {
-  const factory ContainerHead({
-    required Uint8List pngBytes,
-    required Uint8List jsonBytes,
-    int? bodyLen,
-  }) = _ContainerHead;
 }
 
 /// One raw EEG packet: per-sample values are in µV, `timestamp` is the

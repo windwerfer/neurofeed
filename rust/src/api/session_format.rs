@@ -459,107 +459,6 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
     Ok(out)
 }
 
-// ── .muse.feedback container format ─────────────────────────────────────────────
-//
-//   [ PNG bytes ][ jsonLen u32 BE ][ json UTF-8 ][ bodyLen u32 BE ][ body ]
-//
-// PNG-first so file managers can thumbnail the leading PNG and ignore the
-// trailing data. The body is the raw `.muse` frame stream. History reads only
-// pull `head_read_limit` bytes and decode PNG+json without the large body.
-
-/// Max bytes read from the file when only the head (PNG + json) is needed.
-pub const CONTAINER_HEAD_READ_LIMIT: usize = 262_144;
-
-/// FFI getter for [CONTAINER_HEAD_READ_LIMIT] so Dart never hardcodes it.
-#[frb(sync)]
-pub fn container_head_read_limit() -> usize {
-    CONTAINER_HEAD_READ_LIMIT
-}
-
-/// Length of the leading PNG in [bytes], or None when no complete PNG is
-/// present. Walks the PNG chunk chain until IEND.
-fn local_image_length(bytes: &[u8]) -> Option<usize> {
-    const SIG: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-    if bytes.len() < 8 || &bytes[..8] != &SIG {
-        return None;
-    }
-    let mut offset = 8usize;
-    while offset + 8 <= bytes.len() {
-        let length =
-            u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap_or_default()) as usize;
-        let end = offset + 12 + length;
-        if end > bytes.len() {
-            return None;
-        }
-        if &bytes[offset + 4..offset + 8] == b"IEND" {
-            return Some(end);
-        }
-        offset = end;
-    }
-    None
-}
-
-/// Assemble a single `.muse.feedback` file: PNG first, then json, then body.
-#[frb(sync)]
-pub fn container_encode_bytes(png: &[u8], json: &[u8], body: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(png.len() + json.len() + body.len() + 8);
-    out.extend_from_slice(png);
-    out.extend_from_slice(&(json.len() as u32).to_be_bytes());
-    out.extend_from_slice(json);
-    out.extend_from_slice(&(body.len() as u32).to_be_bytes());
-    out.extend_from_slice(body);
-    out
-}
-
-/// Decoded head fields of a container.
-#[frb(dart_metadata = ("freezed",))]
-pub struct ContainerHead {
-    pub png_bytes: Vec<u8>,
-    pub json_bytes: Vec<u8>,
-    pub body_len: Option<u32>,
-}
-
-/// Parse the head of a container (PNG + json). `body_len` is resolved only when
-/// the full body is present in [bytes]; a partial (prefix) read leaves it None.
-#[frb(sync)]
-pub fn container_parse_head_bytes(bytes: &[u8]) -> Result<ContainerHead, String> {
-    let png_end = local_image_length(bytes).unwrap_or(0);
-    if bytes.len() < png_end + 4 {
-        return Err("Missing session json length".to_string());
-    }
-    let json_len = u32::from_be_bytes(bytes[png_end..png_end + 4].try_into().unwrap()) as usize;
-    let json_start = png_end + 4;
-    if bytes.len() < json_start + json_len {
-        return Err("Missing session json".to_string());
-    }
-    let json_bytes = bytes[json_start..json_start + json_len].to_vec();
-
-    let mut body_len = None;
-    let body_start = json_start + json_len;
-    if bytes.len() >= body_start + 4 {
-        body_len = Some(u32::from_be_bytes(
-            bytes[body_start..body_start + 4].try_into().unwrap_or_default(),
-        ));
-    }
-    Ok(ContainerHead {
-        png_bytes: bytes[..png_end].to_vec(),
-        json_bytes,
-        body_len,
-    })
-}
-
-/// Extract the full frame body from a complete container [bytes], or None when
-/// the body length is absent (head-only read).
-#[frb(sync)]
-pub fn container_extract_body_bytes(bytes: &[u8]) -> Option<Vec<u8>> {
-    let head = container_parse_head_bytes(bytes).ok()?;
-    let body_len = head.body_len? as usize;
-    if body_len > bytes.len() {
-        return None;
-    }
-    Some(bytes[bytes.len() - body_len..].to_vec())
-}
-
 // ── v5 Session Format ──────────────────────────────────────────────────────────
 //
 //   [68-byte fixed header][WebP thumbnail][metadata JSON (zstd)][computed 1Hz (zstd)][raw (zstd)]
@@ -1320,56 +1219,6 @@ MuseEventDto::Bands(BandsDto {
         assert_eq!(out.eeg_samples, 6);
     }
 
-    // ── 6. container format ────────────────────────────────────────────────────
-
-    #[test]
-    fn container_wire_layout_is_png_json_len_json_body_len_body() {
-        let png = min_png();
-        let json: &[u8] = b"ab";
-        let body_bytes: &[u8] = b"xyz";
-        let file = container_encode_bytes(&png, json, body_bytes);
-        let mut expected = png.to_vec();
-        expected.extend_from_slice(&2u32.to_be_bytes());
-        expected.extend_from_slice(json);
-        expected.extend_from_slice(&3u32.to_be_bytes());
-        expected.extend_from_slice(body_bytes);
-        assert_eq!(file, expected);
-
-        let head = container_parse_head_bytes(&file).unwrap();
-        assert_eq!(head.png_bytes, png);
-        assert_eq!(head.json_bytes, json);
-        assert_eq!(head.body_len, Some(3));
-        assert_eq!(container_extract_body_bytes(&file).unwrap(), body_bytes);
-    }
-
-    #[test]
-    fn container_head_prefix_read() {
-        let png = min_png();
-        let json = br#"{"a":2}"#.to_vec();
-        let file = container_encode_bytes(&png, &json, &[]);
-        // Truncate right after the json so bodyLen is outside the prefix.
-        let json_len = json.len() as usize;
-        let prefix = file[..png.len() + 4 + json_len].to_vec();
-        let head = container_parse_head_bytes(&prefix).unwrap();
-        assert_eq!(head.body_len, None);
-        assert_eq!(container_extract_body_bytes(&prefix), None);
-    }
-
-    #[test]
-    fn container_json_truncated_is_error() {
-        let png = min_png();
-        let file = container_encode_bytes(&png, b"hay", &[]);
-        // Cut into the json payload: parse must fail, not panic.
-        let prefix = file[..png.len() + 4 + 1].to_vec();
-        assert!(container_parse_head_bytes(&prefix).is_err());
-        assert!(container_extract_body_bytes(&prefix).is_none());
-    }
-
-    #[test]
-    fn container_head_read_limit_value() {
-        assert_eq!(container_head_read_limit(), 262_144);
-    }
-
     /// A minimal but structurally valid PNG (sig + IHDR + IEND), so the
     /// container parser can locate the end of the image.
     fn min_png() -> Vec<u8> {
@@ -1397,7 +1246,7 @@ MuseEventDto::Bands(BandsDto {
         }
     }
 
-    // ── 7. v5 container format ──────────────────────────────────────────────────
+    // ── 6. v5 container format ──────────────────────────────────────────────────
 
     #[test]
     fn v5_container_encode_decode_roundtrip() {
