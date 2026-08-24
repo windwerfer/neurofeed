@@ -1,3 +1,4 @@
+import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/settings.dart';
 
 /// The selectable EEG foundation models behind the sleep guardrail.
@@ -107,61 +108,20 @@ enum ModelKind {
 
   /// Folder used in session files / labels when a REVE-style name is needed.
   String get engineName => label;
+
+  /// Returns the corresponding GuardrailMode for this ModelKind.
+  GuardrailMode get guardrailMode => switch (this) {
+    ModelKind.lunaLarge => GuardrailMode.drowsinessLunaLarge,
+    ModelKind.lunaBase => GuardrailMode.drowsinessLunaBase,
+    ModelKind.reveBase => GuardrailMode.drowsinessReveBase,
+  };
 }
 
 /// Default guardrail model — LUNA Large (best quality/effort balance).
 const ModelKind defaultModelKind = ModelKind.lunaLarge;
 
-/// The guardrail scorer engines: the three AI foundation models plus "band
-/// math" (no AI — classical frontal-delta band math, a testing option).
-enum GuardrailEngine {
-  lunaBase(label: 'LUNA Base'),
-  lunaLarge(label: 'LUNA Large'),
-  reveBase(label: 'REVE Base'),
-  bandMath(label: 'Band math');
-
-  const GuardrailEngine({required this.label});
-
-  final String label;
-
-  /// The AI model this engine loads, or null for band math.
-  ModelKind? get modelKind => switch (this) {
-    GuardrailEngine.lunaBase => ModelKind.lunaBase,
-    GuardrailEngine.lunaLarge => ModelKind.lunaLarge,
-    GuardrailEngine.reveBase => ModelKind.reveBase,
-    GuardrailEngine.bandMath => null,
-  };
-
-  /// Stored preference name (enum `.name`); legacy installs fall back to the
-  /// selected model's kind name.
-  String get prefName => name;
-
-  /// True for the no-AI classical scorer (frontal-delta band math).
-  bool get isBandMath => this == GuardrailEngine.bandMath;
-}
-
-/// The guardrail engine currently selected in [Settings]: the explicit
-/// `guardrail_engine` pref when present, otherwise derived from the selected
-/// AI model (so existing users keep their choice).
-GuardrailEngine guardrailEngineFromSettings(Settings settings) {
-  final name = settings.guardrailEngineName ?? settings.modelKindName;
-  for (final engine in GuardrailEngine.values) {
-    if (engine.name == name) {
-      return engine;
-    }
-  }
-  return switch (modelKindFromSettings(settings)) {
-    ModelKind.lunaBase => GuardrailEngine.lunaBase,
-    ModelKind.lunaLarge => GuardrailEngine.lunaLarge,
-    ModelKind.reveBase => GuardrailEngine.reveBase,
-  };
-}
-
-/// The model currently selected in [Settings].
-ModelKind modelKindFromSettings(Settings settings) {
-  final name = settings.modelKindName;
-  for (final kind in ModelKind.values) {
-    if (kind.name == name) return kind;
-  }
-  return defaultModelKind;
+/// The model currently selected in [Settings] for a specific protocol.
+/// Returns the ModelKind associated with the guardrail mode, or defaultModelKind if none.
+ModelKind modelKindFromGuardrailMode(GuardrailMode mode) {
+  return mode.modelKind ?? defaultModelKind;
 }

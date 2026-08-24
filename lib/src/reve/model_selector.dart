@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:muse_ml/src/feedback/feedback_state.dart';
+import 'package:muse_ml/src/feedback/guardrail_mode.dart';
+import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/models.dart';
@@ -195,46 +198,57 @@ class _ModelInstallBubbleState extends ConsumerState<ModelInstallBubble> {
 
 /// The model dropdown used in the settings card and the session gate bubble.
 ///
-/// Shows every model with its size, a check when its files are already on
+/// Shows every guardrail mode with its size, a check when its files are already on
 /// disk, and persists the selection to [Settings].
 class ModelSelectorDropdown extends ConsumerWidget {
   const ModelSelectorDropdown({super.key, this.onChanged});
 
-  final ValueChanged<ModelKind>? onChanged;
+  final ValueChanged<GuardrailMode>? onChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selected = modelKindFromSettings(ref.watch(settingsProvider));
+    final settings = ref.watch(settingsProvider);
+    final fb = ref.watch(feedbackStateProvider);
+    final mode = settings.guardrailModeForProtocol[fb.protocol]!;
 
-    return DropdownButtonFormField<ModelKind>(
-      initialValue: selected,
+    // Modes available for this protocol
+    final allowedModes = GuardrailMode.values.where((m) {
+      if (!ProtocolInfo.forType(fb.protocol).guardrailAllowed) {
+        return m == GuardrailMode.none;
+      }
+      return true;
+    }).toList();
+
+    return DropdownButtonFormField<GuardrailMode>(
+      initialValue: mode,
       isExpanded: true,
       decoration: const InputDecoration(
         border: OutlineInputBorder(),
         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
       items: [
-        for (final kind in ModelKind.values)
+        for (final m in allowedModes)
           DropdownMenuItem(
-            value: kind,
+            value: m,
             child: Row(
               children: [
-                Expanded(child: Text(kind.folderLabel)),
-                ModelInstalledCheck(kind: kind),
+                Expanded(child: Text(m.label)),
+                if (m.isAi) ModelInstalledCheck(kind: m.modelKind!),
+                if (m.isBandMath) ModelInstalledCheck(alwaysShow: true),
               ],
             ),
           ),
       ],
-      onChanged: (kind) {
-        if (kind == null) return;
-        ref.read(modelEngineNotifierProvider.notifier).select(kind);
-        onChanged?.call(kind);
+      onChanged: (m) {
+        if (m == null) return;
+        settings.setGuardrailMode(fb.protocol, m);
+        onChanged?.call(m);
       },
     );
   }
 }
 
-/// Short description + "how to get it" text for the currently selected model,
+/// Short description + "how to get it" text for the currently selected guardrail mode,
 /// plus its install status.
 class ModelInfoBlock extends ConsumerWidget {
   const ModelInfoBlock({super.key});
@@ -242,41 +256,62 @@ class ModelInfoBlock extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final selected = modelKindFromSettings(ref.watch(settingsProvider));
+    final settings = ref.watch(settingsProvider);
+    final fb = ref.watch(feedbackStateProvider);
+    final mode = settings.guardrailModeForProtocol[fb.protocol]!;
     final engineState = ref.watch(modelEngineNotifierProvider);
-    final installed = ref.watch(modelInstalledProvider(selected)).value;
+    final installed = mode.modelKind != null
+        ? ref.watch(modelInstalledProvider(mode.modelKind!)).value
+        : mode.isBandMath;
 
-    final statusText = switch (engineState) {
-      ModelEngineReady(:final description) => description,
-      ModelEngineLoading() => 'Loading…',
-      _ when installed == true => 'Installed — will load on use.',
-      _ => 'Not installed yet.',
-    };
+    String statusText;
+    if (mode.isBandMath) {
+      statusText = 'Classical frontal-delta math — always available.';
+    } else if (engineState is ModelEngineReady) {
+      statusText = engineState.description;
+    } else if (engineState is ModelEngineLoading) {
+      statusText = 'Loading…';
+    } else if (installed == true) {
+      statusText = 'Installed — will load on use.';
+    } else {
+      statusText = 'Not installed yet.';
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 12),
-        Text(selected.shortDescription, style: theme.textTheme.bodyMedium),
+        if (mode.isBandMath)
+          Text(
+            'Classical frontal-delta math, no AI model required. '
+            'Uses the per-second frontal delta band power as the sleep-drift signal.',
+            style: theme.textTheme.bodyMedium,
+          )
+        else if (mode.modelKind != null)
+          Text(
+            mode.modelKind!.shortDescription,
+            style: theme.textTheme.bodyMedium,
+          ),
         const SizedBox(height: 6),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(top: 2),
-              child: Icon(Icons.info_outline, size: 14),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                selected.getGuide,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+        if (mode.modelKind != null)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(Icons.info_outline, size: 14),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  mode.modelKind!.getGuide,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         const SizedBox(height: 6),
         Text(
           statusText,

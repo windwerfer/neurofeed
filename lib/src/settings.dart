@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
+import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -117,11 +120,9 @@ class Settings {
   static const String _markersInFeedbackKey = 'gesture_markers_in_feedback';
   static const String _warningThresholdPercentileKey =
       'reve_warning_threshold_percentile';
-  static const String _modelKindKey = 'model_kind';
-  static const String _guardrailEngineKey = 'guardrail_engine';
+  static const String _guardrailModeKey = 'guardrail_mode';
   static const String _warningSoundKey = 'warning_sound';
   static const String _lastCustomMinutesKey = 'last_custom_minutes';
-  static const String _guardrailKeyPrefix = 'guardrail_';
   static const String _musicFolderKey = 'music_folder';
   static const String _musicMinCutoffKey = 'music_min_cutoff_hz';
   static const String _musicMaxCutoffKey = 'music_max_cutoff_hz';
@@ -279,21 +280,47 @@ class Settings {
   Future<void> setWarningThresholdPercentile(int value) =>
       _prefs.setInt(_warningThresholdPercentileKey, value);
 
-  /// Which guardrail foundation model is selected (see `ModelKind` in
-  /// `lib/src/reve/models.dart`). Stored as the enum name; null means "use the
-  /// default (LUNA Large)".
-  String? get modelKindName => _prefs.getString(_modelKindKey);
+  /// Per-protocol guardrail mode setting. Persisted as a JSON map of
+  /// ProtocolType.name -> GuardrailMode.name.
+  /// Defaults to drowsinessMath for all protocols (from assets/protocols.json).
+  Map<ProtocolType, GuardrailMode> get guardrailModeForProtocol {
+    final stored = _prefs.getString(_guardrailModeKey);
+    if (stored != null) {
+      final map = jsonDecode(stored) as Map<String, dynamic>;
+      return map.map((k, v) => MapEntry(
+        ProtocolType.values.byName(k),
+        GuardrailMode.values.byName(v),
+      ));
+    }
+    // Default: drowsinessMath for all protocols
+    return Map.fromEntries(ProtocolType.values.map((t) => MapEntry(t, GuardrailMode.drowsinessMath)));
+  }
 
-  Future<void> setModelKindName(String value) =>
-      _prefs.setString(_modelKindKey, value);
+  Future<void> setGuardrailMode(ProtocolType type, GuardrailMode mode) {
+    final current = guardrailModeForProtocol;
+    current[type] = mode;
+    return _prefs.setString(_guardrailModeKey, jsonEncode(
+      current.map((k, v) => MapEntry(k.name, v.name)),
+    ));
+  }
 
-  /// Guardrail scorer engine: an AI model kind name (`lunaBase`/`lunaLarge`/
-  /// `reveBase`) or `bandMath` (no AI — classical band math on frontal delta).
-  /// Falls back to [modelKindName] when unset (legacy installs).
-  String? get guardrailEngineName => _prefs.getString(_guardrailEngineKey);
+  /// Whether the guardrail is enabled for [type]. Returns false if the
+  /// protocol doesn't allow the guardrail, or if the mode is 'none'.
+  bool guardrailEnabledFor(ProtocolType type) {
+    if (!ProtocolInfo.forType(type).guardrailAllowed) return false;
+    return guardrailModeForProtocol[type] != GuardrailMode.none;
+  }
 
-  Future<void> setGuardrailEngineName(String value) =>
-      _prefs.setString(_guardrailEngineKey, value);
+  /// Whether the guardrail runs in band-math mode (no AI model) for [type].
+  bool guardrailIsBandMathFor(ProtocolType type) {
+    return guardrailModeForProtocol[type] == GuardrailMode.drowsinessMath;
+  }
+
+  /// Whether the guardrail runs an AI model for [type].
+  bool guardrailIsAiFor(ProtocolType type) {
+    final mode = guardrailModeForProtocol[type];
+    return mode != null && mode.isAi;
+  }
 
   /// Warning sound shown in the guardrail gear dialog (`softBowl`/`chime`/
   /// `cough`/`alarm`/`none`). Placeholder asset names — the files land later.
@@ -308,23 +335,6 @@ class Settings {
 
   Future<void> setLastCustomMinutes(int value) =>
       _prefs.setInt(_lastCustomMinutesKey, value);
-
-  /// Whether the on-device AI sleep guardrail runs for [type]. Every protocol
-  /// except the eyes-open one offers the layer (see
-  /// [ProtocolInfo.guardrailAllowed] — a protocol without it never runs the
-  /// guardrail and returns false here); the default follows the protocol's
-  /// shipping choice ([ProtocolInfo.guardrailDefault]), and turning it off
-  /// runs the plain ratio engine (no warnings, no guardrail calibration
-  /// stages). A model must additionally be installed and selected for the AI
-  /// scorer (the band-math fallback works without one).
-  bool guardrailEnabledFor(ProtocolType type) {
-    if (!ProtocolInfo.forType(type).guardrailAllowed) return false;
-    return _prefs.getBool('$_guardrailKeyPrefix${type.name}') ??
-        ProtocolInfo.forType(type).guardrailDefault;
-  }
-
-  Future<void> setGuardrailEnabled(ProtocolType type, bool value) =>
-      _prefs.setBool('$_guardrailKeyPrefix${type.name}', value);
 
   /// Music-feedback folder. A `content://` value is an Android SAF tree URI
   /// (any file must be materialized through the SAF channel before playback);

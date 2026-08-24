@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:muse_ml/src/feedback/feedback_state.dart';
+import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/model_selector.dart';
-import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/settings.dart';
 
 /// AI-engine setup card: pick which foundation model powers the sleep
@@ -18,11 +19,12 @@ class AiEngineCard extends ConsumerStatefulWidget {
 }
 
 class _AiEngineCardState extends ConsumerState<AiEngineCard> {
-  ModelKind get _selected => modelKindFromSettings(ref.read(settingsProvider));
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final settings = ref.watch(settingsProvider);
+    final fb = ref.watch(feedbackStateProvider);
+    final mode = settings.guardrailModeForProtocol[fb.protocol]!;
     final state = ref.watch(modelEngineNotifierProvider);
 
     return Card(
@@ -54,17 +56,45 @@ class _AiEngineCardState extends ConsumerState<AiEngineCard> {
               ),
             ),
             const Divider(height: 24),
-            const ModelSelectorDropdown(),
-            const ModelInfoBlock(),
+            ModelSelectorDropdown(),
             const Divider(height: 24),
-            ..._buildBody(theme, state),
+            ..._buildBody(theme, state, mode),
           ],
         ),
       ),
     );
   }
 
-  List<Widget> _buildBody(ThemeData theme, ModelEngineState state) {
+  List<Widget> _buildBody(ThemeData theme, ModelEngineState state, GuardrailMode mode) {
+    if (mode.isBandMath) {
+      return [
+        Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green.shade600),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Band math mode — no model needed',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
+      ];
+    }
+
+    if (mode.modelKind == null) {
+      return [
+        Text(
+          'Unknown guardrail mode',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.error,
+          ),
+        ),
+      ];
+    }
+
+    final modelKind = mode.modelKind!;
     switch (state) {
       case ModelEngineReady():
         return [
@@ -88,7 +118,7 @@ class _AiEngineCardState extends ConsumerState<AiEngineCard> {
       case ModelEngineLoading():
         return [
           const SizedBox(height: 8),
-          ModelInstallBubble(kind: _selected),
+          ModelInstallBubble(kind: modelKind),
         ];
       case ModelEngineError(:final message):
         return [
@@ -101,12 +131,12 @@ class _AiEngineCardState extends ConsumerState<AiEngineCard> {
             ],
           ),
           const SizedBox(height: 12),
-          ModelInstallBubble(kind: _selected),
+          ModelInstallBubble(kind: modelKind),
         ];
       case ModelEngineNotInstalled():
         final modelDir = ref.watch(modelFolderProvider);
         return [
-          ModelInstallBubble(kind: _selected),
+          ModelInstallBubble(kind: modelKind),
           const SizedBox(height: 8),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,7 +149,7 @@ class _AiEngineCardState extends ConsumerState<AiEngineCard> {
               Expanded(
                 child: Text(
                   'Model files live here (dropped files are picked up by '
-                  '“Check for model”):\n${modelDir.value ?? 'resolving…'}',
+                  '"Check for model"):\n${modelDir.value ?? 'resolving…'}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

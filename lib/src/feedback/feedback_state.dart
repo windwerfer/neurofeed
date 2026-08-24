@@ -14,7 +14,6 @@ import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
-import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/rust/api/reve.dart' as frb;
 import 'package:muse_ml/src/settings.dart';
@@ -509,11 +508,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// may still fail, in which case the session runs without warnings (the
   /// staged recipe still calibrates fine — it just has no scorer to feed).
   bool get _guardrailIntent {
-    if (!_ref.read(settingsProvider).guardrailEnabledFor(state.protocol)) {
+    final settings = _ref.read(settingsProvider);
+    if (!settings.guardrailEnabledFor(state.protocol)) {
       return false;
     }
-    final engine = guardrailEngineFromSettings(_ref.read(settingsProvider));
-    if (engine.isBandMath) {
+    final mode = settings.guardrailModeForProtocol[state.protocol]!;
+    if (mode.isBandMath) {
       return true;
     }
     return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
@@ -524,11 +524,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// not band math) is ready. Band-math and no-guardrail sessions use the
   /// single baseline instead.
   bool get _stagedCalibrationIntent {
-    if (!_ref.read(settingsProvider).guardrailEnabledFor(state.protocol)) {
+    final settings = _ref.read(settingsProvider);
+    if (!settings.guardrailEnabledFor(state.protocol)) {
       return false;
     }
-    final engine = guardrailEngineFromSettings(_ref.read(settingsProvider));
-    if (engine.isBandMath) {
+    final mode = settings.guardrailModeForProtocol[state.protocol]!;
+    if (mode.isBandMath) {
       return false;
     }
     return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
@@ -551,8 +552,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (!_guardrailIntent) {
       return;
     }
-    final engineSel = guardrailEngineFromSettings(_ref.read(settingsProvider));
-    if (engineSel.isBandMath) {
+    final settings = _ref.read(settingsProvider);
+    final mode = settings.guardrailModeForProtocol[state.protocol]!;
+    if (mode.isBandMath) {
       _guardrailBandMath = true;
       _guardrailEnabled = true;
       debugPrint('[guardrail] enabled (band math — no model)');
@@ -564,9 +566,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     try {
-      _guardrailEnabled = await frb.guardrailEnable(kind: engine.kind.ffId);
+      _guardrailEnabled = await frb.guardrailEnable(kind: mode.ffId);
       if (_guardrailEnabled) {
-        debugPrint('[guardrail] enabled (${engine.kind.ffId})');
+        debugPrint('[guardrail] enabled (${mode.ffId})');
       }
     } catch (e) {
       _guardrailEnabled = false;

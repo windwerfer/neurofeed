@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
@@ -559,7 +560,11 @@ class _GuardrailCardState extends ConsumerState<_GuardrailCard> {
                 value: _enabled[p.type] ?? true,
                 onChanged: (on) async {
                   setState(() => _enabled[p.type] = on);
-                  await widget.settings.setGuardrailEnabled(p.type, on);
+                  if (on) {
+                    await widget.settings.setGuardrailMode(p.type, GuardrailMode.drowsinessMath);
+                  } else {
+                    await widget.settings.setGuardrailMode(p.type, GuardrailMode.none);
+                  }
                 },
               ),
           ],

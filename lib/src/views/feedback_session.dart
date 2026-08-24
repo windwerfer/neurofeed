@@ -9,12 +9,12 @@ import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
+import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/model_selector.dart';
-import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/reve/reve_import.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/status_bar.dart';
@@ -294,10 +294,10 @@ class _PhaseControls extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
     final theme = Theme.of(context);
-    final guardrailIntended =
-        ref.watch(settingsProvider).guardrailEnabledFor(fb.protocol);
-    final engineSel = guardrailEngineFromSettings(ref.read(settingsProvider));
-    final needsModel = guardrailIntended && !engineSel.isBandMath;
+    final settings = ref.read(settingsProvider);
+    final guardrailIntended = settings.guardrailEnabledFor(fb.protocol);
+    final mode = settings.guardrailModeForProtocol[fb.protocol]!;
+    final needsModel = guardrailIntended && mode.isAi;
 
     // Music feedback needs a music folder. The music + AI guardrail combination
     // is allowed; the one-time stutter warning fires when the user picks the
@@ -336,7 +336,7 @@ class _PhaseControls extends ConsumerWidget {
             children: [
               FilledButton.icon(
                 onPressed: () async {
-                  final ready = await showModelGateDialog(context, ref);
+                  final ready = await showModelGateDialog(context, ref, fb.protocol);
                   if (ready && context.mounted) {
                     await startSession();
                   }
@@ -868,8 +868,8 @@ class _FeedbackTile extends ConsumerWidget {
           if (!context.mounted) {
             return;
           }
-          if (guardrailIntended &&
-              !guardrailEngineFromSettings(settings).isBandMath) {
+          final mode = settings.guardrailModeForProtocol[fb.protocol]!;
+          if (guardrailIntended && mode.isAi) {
             await _maybeWarnMusicAiCpu(context, settings);
           }
           ref.read(feedbackStateProvider.notifier).selectFeedbackMode(result);
@@ -1290,19 +1290,26 @@ class _GuardrailTileState extends ConsumerState<_GuardrailTile> {
     final inSession = fb.phase == FeedbackPhase.playing ||
         fb.phase == FeedbackPhase.paused;
     final settings = ref.read(settingsProvider);
-    final engine = guardrailEngineFromSettings(settings);
+    final mode = settings.guardrailModeForProtocol[fb.protocol]!;
     final sound = GuardrailSound.fromName(settings.warningSoundName);
     return ListTile(
       leading: const Icon(Icons.shield_outlined),
       title: const Text('Guardrail'),
-      subtitle: Text(_enabled ? '${engine.label} • ${sound.label}' : 'disabled'),
+      subtitle: Text(_enabled ? '${mode.label} • ${sound.label}' : 'disabled'),
       trailing: inSession
           ? null
           : Switch(
               value: _enabled,
               onChanged: (on) {
                 setState(() => _enabled = on);
-                ref.read(settingsProvider).setGuardrailEnabled(fb.protocol, on);
+                final settings = ref.read(settingsProvider);
+                if (on) {
+                  // Enable: set to default guardrail mode (drowsinessMath)
+                  settings.setGuardrailMode(fb.protocol, GuardrailMode.drowsinessMath);
+                } else {
+                  // Disable: set to none
+                  settings.setGuardrailMode(fb.protocol, GuardrailMode.none);
+                }
               },
             ),
       onTap: _enabled ? _openGear : null,
@@ -1883,8 +1890,8 @@ class _GuardrailGearDialog extends ConsumerStatefulWidget {
 }
 
 class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
-  late GuardrailEngine _engine;
-  late GuardrailEngine _lastValidEngine;
+  late GuardrailMode _mode;
+  late GuardrailMode _lastValidMode;
   late GuardrailSound _sound;
   late int _threshold;
 
@@ -1892,41 +1899,45 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
   void initState() {
     super.initState();
     final settings = ref.read(settingsProvider);
-    _engine = guardrailEngineFromSettings(settings);
-    _lastValidEngine = _engine;
+    final fb = ref.read(feedbackStateProvider);
+    _mode = settings.guardrailModeForProtocol[fb.protocol]!;
+    _lastValidMode = _mode;
     _sound = GuardrailSound.fromName(settings.warningSoundName);
     _threshold = settings.warningThresholdPercentile;
   }
 
-  /// Band math is always valid; an AI engine is valid only when its model
+  /// Band math is always valid; an AI mode is valid only when its model
   /// files are on disk.
-  bool _engineAvailable(GuardrailEngine engine) =>
-      engine.isBandMath ||
-      (ref.read(modelInstalledProvider(engine.modelKind!)).value ?? false);
+  bool _modeAvailable(GuardrailMode mode) =>
+      mode.isBandMath ||
+      (mode.modelKind != null &&
+          (ref.read(modelInstalledProvider(mode.modelKind!)).value ?? false));
 
-  Future<bool> _engineAvailableAsync(GuardrailEngine engine) async {
-    if (engine.isBandMath) {
+  Future<bool> _modeAvailableAsync(GuardrailMode mode) async {
+    if (mode.isBandMath) {
       return true;
     }
-    return ref.read(modelInstalledProvider(engine.modelKind!).future);
+    if (mode.modelKind == null) return false;
+    return ref.read(modelInstalledProvider(mode.modelKind!).future);
   }
 
-  /// Closing with an AI engine whose model is not installed would persist a
-  /// scorer that can never run. Revert to the last valid engine (or band
+  /// Closing with an AI mode whose model is not installed would persist a
+  /// scorer that can never run. Revert to the last valid mode (or band
   /// math when even that is unavailable) and say so.
   Future<void> _onDone() async {
     final settings = ref.read(settingsProvider);
-    if (!await _engineAvailableAsync(_engine)) {
-      var revert = _lastValidEngine;
-      if (!await _engineAvailableAsync(revert)) {
-        revert = GuardrailEngine.bandMath;
+    final fb = ref.read(feedbackStateProvider);
+    if (!await _modeAvailableAsync(_mode)) {
+      var revert = _lastValidMode;
+      if (!await _modeAvailableAsync(revert)) {
+        revert = GuardrailMode.drowsinessMath;
       }
-      await settings.setGuardrailEngineName(revert.name);
+      await settings.setGuardrailMode(fb.protocol, revert);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '${_engine.label} is not installed — reverted to '
+              '${_mode.label} is not installed — reverted to '
               '${revert.label}.',
             ),
           ),
@@ -1946,6 +1957,15 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
     final settings = ref.read(settingsProvider);
     final audio = ref.read(audioServiceProvider);
     final theme = Theme.of(context);
+
+    // Modes available for this protocol (all except those not allowed)
+    final allowedModes = GuardrailMode.values.where((m) {
+      if (!ProtocolInfo.forType(fb.protocol).guardrailAllowed) {
+        return m == GuardrailMode.none;
+      }
+      return true;
+    }).toList();
+
     return AlertDialog(
       title: const Text('Guardrail'),
       content: SingleChildScrollView(
@@ -1956,61 +1976,56 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
             if (!inSession) ...[
               Text('Scorer engine', style: theme.textTheme.titleSmall),
               const SizedBox(height: 4),
-              DropdownButtonFormField<GuardrailEngine>(
-                initialValue: _engine,
+              DropdownButtonFormField<GuardrailMode>(
+                initialValue: _mode,
                 isExpanded: true,
                 items: [
-                  for (final e in GuardrailEngine.values)
+                  for (final m in allowedModes)
                     DropdownMenuItem(
-                      value: e,
+                      value: m,
                       child: Row(
                         children: [
-                          Expanded(child: Text(e.label)),
-                          ModelInstalledCheck(
-                            kind: e.modelKind,
-                            alwaysShow: e.isBandMath,
-                          ),
+                          Expanded(child: Text(m.label)),
+                          if (m.isAi) ModelInstalledCheck(kind: m.modelKind!),
+                          if (m.isBandMath)
+                            ModelInstalledCheck(alwaysShow: true),
                         ],
                       ),
                     ),
                 ],
                 onChanged: (v) {
-                  if (v == null) {
-                    return;
+                  if (v == null) return;
+                  setState(() => _mode = v);
+                  if (_modeAvailable(v)) {
+                    _lastValidMode = v;
                   }
-                  setState(() => _engine = v);
-                  if (_engineAvailable(v)) {
-                    _lastValidEngine = v;
-                  }
-                  settings.setGuardrailEngineName(v.name);
-                  if (!v.isBandMath &&
-                      ref.read(feedbackStateProvider).feedbackMode ==
-                          FeedbackMode.music) {
+                  settings.setGuardrailMode(fb.protocol, v);
+                  if (v.isAi && fb.feedbackMode == FeedbackMode.music) {
                     unawaited(_maybeWarnMusicAiCpu(context, settings));
                   }
                 },
               ),
               const SizedBox(height: 8),
-              if (_engine.isBandMath)
+              if (_mode.isBandMath)
                 Text(
                   'Classical frontal-delta math, no AI model — always available.',
                   style: theme.textTheme.bodySmall,
                 )
-              else if (ref.watch(modelInstalledProvider(_engine.modelKind!))
-                  .value ??
-                  false)
+              else if (_mode.modelKind != null &&
+                  (ref.watch(modelInstalledProvider(_mode.modelKind!)).value ??
+                      false))
                 Text(
-                  'AI embedding scorer (${_engine.modelKind!.ffId}) — installed',
+                  'AI embedding scorer (${_mode.ffId}) — installed',
                   style: theme.textTheme.bodySmall,
                 )
-              else ...[
+              else if (_mode.modelKind != null) ...[
                 Text(
-                  'AI embedding scorer (${_engine.modelKind!.ffId}). Not '
+                  'AI embedding scorer (${_mode.ffId}). Not '
                   'installed yet — download it from here:',
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(height: 8),
-                ModelInstallBubble(kind: _engine.modelKind!),
+                ModelInstallBubble(kind: _mode.modelKind!),
               ],
               const SizedBox(height: 12),
             ],
@@ -2024,9 +2039,7 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
                   DropdownMenuItem(value: snd, child: Text(snd.label)),
               ],
               onChanged: (s) {
-                if (s == null) {
-                  return;
-                }
+                if (s == null) return;
                 setState(() => _sound = s);
                 settings.setWarningSoundName(s.name);
                 audio.setWarningSound(s);

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:muse_ml/src/connect_window.dart';
+import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/model_selector.dart';
 import 'package:muse_ml/src/reve/models.dart';
@@ -17,16 +18,22 @@ import 'package:muse_ml/src/settings.dart';
 /// (download is greyed out for gated models like REVE). Returns true as soon
 /// as a model becomes ready, so the caller can continue straight into the
 /// session.
-Future<bool> showModelGateDialog(BuildContext context, WidgetRef ref) async {
+Future<bool> showModelGateDialog(
+  BuildContext context,
+  WidgetRef ref,
+  ProtocolType protocol,
+) async {
   final ready = await showDialog<bool>(
     context: context,
-    builder: (_) => const _ModelGateDialog(),
+    builder: (_) => _ModelGateDialog(protocol: protocol),
   );
   return ready ?? false;
 }
 
 class _ModelGateDialog extends ConsumerStatefulWidget {
-  const _ModelGateDialog();
+  const _ModelGateDialog({required this.protocol});
+
+  final ProtocolType protocol;
 
   @override
   ConsumerState<_ModelGateDialog> createState() => _ModelGateDialogState();
@@ -75,7 +82,11 @@ class _ModelGateDialogState extends ConsumerState<_ModelGateDialog> {
     super.dispose();
   }
 
-  ModelKind get _selected => modelKindFromSettings(ref.read(settingsProvider));
+  ModelKind get _selected {
+    final settings = ref.read(settingsProvider);
+    final mode = settings.guardrailModeForProtocol[widget.protocol]!;
+    return mode.modelKind ?? defaultModelKind;
+  }
 
   Future<void> _import() async {
     setState(() {

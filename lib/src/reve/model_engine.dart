@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/rust/api/reve.dart' as frb;
 import 'package:muse_ml/src/settings.dart';
@@ -366,8 +367,13 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
 
   String? get _sessionFolder => ref.read(settingsProvider).sessionFolder;
 
-  ModelKind get _selectedKind =>
-      _kind ?? modelKindFromSettings(ref.read(settingsProvider));
+  ModelKind get _selectedKind {
+    if (_kind != null) return _kind!;
+    final settings = ref.read(settingsProvider);
+    // Default to drowsiness protocol for the global model engine state
+    final mode = settings.guardrailModeForProtocol[ProtocolType.drowsiness]!;
+    return mode.modelKind ?? defaultModelKind;
+  }
 
   @override
   ModelEngineState build() {
@@ -399,7 +405,7 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
       return;
     }
     _kind = kind;
-    await ref.read(settingsProvider).setModelKindName(kind.name);
+    await ref.read(settingsProvider).setGuardrailMode(ProtocolType.drowsiness, kind.guardrailMode);
     state = await _probe(kind);
     await _recheckBadges();
   }
@@ -407,7 +413,7 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
   /// Import a user-picked model file (verified against the model's SHA-256).
   Future<ModelEngineState> import(ModelKind kind, Stream<List<int>> src) async {
     _kind = kind;
-    await ref.read(settingsProvider).setModelKindName(kind.name);
+    await ref.read(settingsProvider).setGuardrailMode(ProtocolType.drowsiness, kind.guardrailMode);
     state = const ModelEngineLoading();
     try {
       final result = await _cache.importModel(_sessionFolder, kind, src);
@@ -427,7 +433,7 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
     void Function(int received, int total)? onProgress,
   }) async {
     _kind = kind;
-    await ref.read(settingsProvider).setModelKindName(kind.name);
+    await ref.read(settingsProvider).setGuardrailMode(ProtocolType.drowsiness, kind.guardrailMode);
     state = const ModelEngineLoading();
     try {
       final result = await _cache.downloadModel(
@@ -490,7 +496,8 @@ final modelEngineAvailabilityProvider = Provider<bool>(
 final modelFolderProvider = FutureProvider<String>(
   (ref) async => (await ModelCache.modelDirectory(
     ref.watch(settingsProvider).sessionFolder,
-    modelKindFromSettings(ref.watch(settingsProvider)),
+    // Default to drowsiness protocol for the global model engine state
+    ref.watch(settingsProvider).guardrailModeForProtocol[ProtocolType.drowsiness]!.modelKind ?? defaultModelKind,
   )).path,
 );
 

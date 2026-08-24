@@ -18,8 +18,6 @@ import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
-import 'package:muse_ml/src/feedback/session_metadata.dart';
-import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/settings.dart';
 
 class FeedbackDashboardView extends ConsumerStatefulWidget {
@@ -406,13 +404,13 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     FeedbackState fb,
   ) {
     final settings = ref.read(settingsProvider);
-    final engine = guardrailEngineFromSettings(settings);
+    final mode = settings.guardrailModeForProtocol[fb.protocol]!;
     return SessionSettings(
       dynamicAdapt: notifier.dynamicAdapt,
       responsiveness: notifier.responsiveness,
       baselinePercentile: fb.baselinePercentile,
       guardrailEnabled: notifier.guardrailEnabled,
-      guardrailEngine: notifier.guardrailEnabled ? engine.name : 'none',
+      guardrailEngine: notifier.guardrailEnabled ? mode.name : 'none',
       warningThresholdPercentile: settings.warningThresholdPercentile,
       warningSound: settings.warningSoundName,
       musicFolder: settings.musicFolder,
