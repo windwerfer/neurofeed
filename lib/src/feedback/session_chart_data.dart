@@ -1,6 +1,6 @@
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/session_summary.dart';
+import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 
 /// Decimated, display-ready chart series for one session: the per-second

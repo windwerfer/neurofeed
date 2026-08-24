@@ -440,11 +440,12 @@ class _HistoryTileState extends ConsumerState<_HistoryTile>
     final protocol = ProtocolInfo.forType(meta.protocol);
     final copy = useProtocolCopy(ref, protocol);
     final stats = meta.stats;
+    final dateTime = DateTime.tryParse(meta.savedAt);
     final date =
-        '${meta.savedAt.year}-${meta.savedAt.month.toString().padLeft(2, '0')}-'
-        '${meta.savedAt.day.toString().padLeft(2, '0')} '
-        '${meta.savedAt.hour.toString().padLeft(2, '0')}:'
-        '${meta.savedAt.minute.toString().padLeft(2, '0')}';
+        '${dateTime?.year ?? 0}-${dateTime?.month.toString().padLeft(2, '0') ?? '00'}-'
+        '${dateTime?.day.toString().padLeft(2, '0') ?? '00'} '
+        '${dateTime?.hour.toString().padLeft(2, '0') ?? '00'}:'
+        '${dateTime?.minute.toString().padLeft(2, '0') ?? '00'}';
 
     final detailParts = <String>[
       if (meta.deviceModel != null && meta.deviceModel!.isNotEmpty)

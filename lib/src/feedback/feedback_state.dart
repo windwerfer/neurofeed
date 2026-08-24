@@ -7,6 +7,7 @@ import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/audio/calibration_clips.dart';
 import 'package:muse_ml/src/audio/soloud_engine.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/feedback/computed_sampler.dart';
 import 'package:muse_ml/src/feedback/feedback_recorder.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
@@ -199,11 +200,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final settings = _ref.read(settingsProvider);
     _engine.setDynamicAdapt(settings.dynamicAdapt ?? true);
     _engine.setResponsiveness(settings.responsiveness ?? 0.5);
+    _engine.setBaselinePercentile(settings.baselinePercentile);
     _recorder.setRecordStreams(settings.recordStreams);
     state = state.copyWith(
       soundName: settings.soundName ?? state.soundName,
       feedbackMode: settings.feedbackMode,
       durationMinutes: settings.durationMinutes ?? state.durationMinutes,
+      baselinePercentile: settings.baselinePercentile,
     );
   }
 
@@ -254,6 +257,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// Per-second sleep-guardrail readings captured while playing (only when
   /// the guardrail is armed). Persisted as [SessionDrowsiness] metadata.
   final List<DrowsinessSample> _drowsinessSeries = [];
+
+  /// Computed frame sampler (1 Hz) for v5 session format.
+  ComputedSampler? _computedSampler;
 
   /// Wall-clock anchors for the calibration timeline. [_sessionStartAt] is set
   /// when the recorder starts (calibration start); [_trainingStartAt] when
@@ -362,6 +368,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   void selectPercentile(int percentile) {
     _engine.setBaselinePercentile(percentile);
+    _ref.read(settingsProvider).setBaselinePercentile(percentile);
     state = state.copyWith(baselinePercentile: percentile);
     final stats = _ref.read(liveStatsProvider);
     stats.setBaseline(
@@ -471,6 +478,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _musicSeries.clear();
     _musicTracks.clear();
     await _recorder.startSession();
+    _computedSampler = ComputedSampler(
+      onFrame: (frame) => _recorder.appendComputed(frame),
+    );
+    _computedSampler!.start();
     await _maybeEnableGuardrail();
     if (skipCalibration) {
       _engine.reset();
@@ -573,7 +584,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       SessionRecalibration(
         atSecs: state.elapsedSeconds.toDouble(),
         baseline: SessionBaselineStats(
-          percentile: _engine.baselinePercentile,
+          percentile: _engine.baselinePercentile.toDouble(),
           count: _engine.baselineCount,
           mean: _engine.baselineMean,
           stddev: _engine.baselineStddev,
@@ -747,7 +758,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       if (sessionStart != null) {
         _clipPhases.add(
           SessionCalibrationPhase(
-            clipId: step.clip!.id,
+            name: step.clip!.id,
+            durationSecs: clipEnd.difference(clipStart).inMilliseconds / 1000,
+            sampleCount: 0,
             clipFile: step.clip!.file,
             spokenText: step.clip!.text,
             eyes: step.clip!.eyes,
@@ -851,7 +864,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       greenStableSeconds: greenStableSeconds,
       faultyPadSeconds: faultyPadSeconds,
       baseline: SessionBaselineStats(
-        percentile: _engine.baselinePercentile,
+        percentile: _engine.baselinePercentile.toDouble(),
         count: _engine.baselineCount,
         mean: _engine.baselineMean,
         stddev: _engine.baselineStddev,
@@ -979,6 +992,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _interruptTimer = null;
     _baselineTimer?.cancel();
     _baselineTimer = null;
+    _computedSampler?.stop();
     _teardownGuardrail();
     state = state.copyWith(phase: FeedbackPhase.ended);
     await _recorder.flushSession();
@@ -992,6 +1006,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _interruptTimer = null;
     _baselineTimer?.cancel();
     _baselineTimer = null;
+    _computedSampler?.stop();
     _collectionCompleter?.complete();
     _collectionCompleter = null;
     _gateTimer?.cancel();
@@ -1046,7 +1061,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// Streams enabled for this session's recording.
   Set<RecordingStream> get recordStreams => _recorder.streams;
 
-  Future<File?> saveSession() => _recorder.saveSession();
+  /// Finalize the session: assemble v5 container with thumbnail and metadata.
+  /// Returns the final session file on disk.
+  Future<File?> finalizeSession({
+    required Uint8List thumbnailPng,
+    required Map<String, dynamic> metadataJson,
+  }) => _recorder.finalizeSession(
+        thumbnailPng: thumbnailPng,
+        metadataJson: metadataJson,
+      );
 
   Future<void> discardSession() => _recorder.discardSession();
 
@@ -1384,6 +1407,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       if (_guardrailBandMath && _collectionEyes == 'closed') {
         _baselineSleepDir.add(_frontalDeltaAverage());
       }
+      // Update computed sampler with bands data.
+      _computedSampler?.updateBands(bands.electrode, bands);
       return;
     }
     if (state.phase != FeedbackPhase.playing) {
@@ -1397,11 +1422,32 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       final inTarget = _inTargetVerdict(target, value);
       _engine.recordEpoch(inTarget);
       _engine.recordSessionSample(value, clean: _sampleIsClean);
+      // Continuous EMA adaptation on each clean sample.
+      if (_sampleIsClean && _engine.useEmaAdapt) {
+        _engine.adaptEma(value);
+        state = state.copyWith(currentThreshold: _engine.threshold);
+      }
       _ref.read(liveStatsProvider).push(value, _engine.percentileOf);
       _applyReward(value, inTarget: inTarget);
+      // Update computed sampler with feedback data.
+      _computedSampler?.updateFeedback(
+        ratio: value,
+        threshold: _engine.threshold,
+        inTarget: inTarget,
+        inTargetPct: _engine.successRate ?? 0.0,
+      );
     }
     if (_guardrailBandMath) {
       _onBandMathBand(bands);
+    }
+    // Update computed sampler with bands data.
+    _computedSampler?.updateBands(bands.electrode, bands);
+    // Update signal quality (0-100 per pad).
+    final signalQuality = _ref.read(appStateProvider).signalQuality;
+    if (signalQuality != null) {
+      for (int i = 0; i < signalQuality.length && i < 4; i++) {
+        _computedSampler?.updateSignalQuality(i, signalQuality[i].round());
+      }
     }
   }
 
@@ -1445,6 +1491,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (movement.score > movementGateThreshold) {
       _audio.onMovement();
     }
+    _computedSampler?.updateMovement(movement);
   }
 
   /// Gesture events arrive at 1 Hz from the Rust forwarder. Blink/clench
@@ -1463,6 +1510,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (!_ref.read(settingsProvider).markersInFeedbackEnabled) {
       return;
     }
+    final gestures = <String>[];
     // Double blink: >=2 blinks in one report, or two blink reports <=2 s apart.
     if (g.blinkCount >= 2) {
       _gestureMarkers.add(
@@ -1472,6 +1520,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         ),
       );
       _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
+      gestures.add('blink');
     } else if (g.blinkCount > 0) {
       if (now.difference(_lastBlinkAt) <= const Duration(seconds: 2)) {
         _gestureMarkers.add(
@@ -1481,8 +1530,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           ),
         );
         _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
+        gestures.add('blink');
       } else {
         _lastBlinkAt = now;
+        gestures.add('blink');
       }
     }
     // Double clench: two clench onsets <=2 s apart.
@@ -1495,8 +1546,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           ),
         );
         _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
+        gestures.add('clench');
       } else {
         _lastClenchAt = now;
+        gestures.add('clench');
       }
     }
     _clenchWasActive = g.clench;
@@ -1509,8 +1562,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             offsetSeconds: state.elapsedSeconds,
           ),
         );
+        gestures.add(g.eye == 1 ? 'eyeUp' : 'eyeDown');
       }
       _prevEyeState = g.eye;
+    }
+    if (gestures.isNotEmpty) {
+      _computedSampler?.updateGestures(gestures);
     }
   }
 
@@ -1522,6 +1579,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _lastClarity = r.clarity;
     _lastSleepDir = r.sleepDir;
     _lastDelta = r.delta;
+    _computedSampler?.updateGuardrail(
+      sleepDir: r.sleepDir,
+      clarity: r.clarity,
+      delta: r.delta,
+      warning: _warningActive,
+      threshold: _guardrailThreshold,
+    );
     if (!_guardrailEnabled || !_clearCaptured) {
       return;
     }

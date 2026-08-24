@@ -26,7 +26,7 @@ class SessionReader {
     String label = '<memory>',
   }) async {
     final bytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
-    final session = await sessionParseBody(bytes: bytes);
+    final session = sessionParseBody(bytes: bytes);
     debugPrint(
         '[reader] $label: ${bytes.length}B bands=${session.bands.length} '
         'pulses=${session.pulses.length} mov=${session.movements.length} '

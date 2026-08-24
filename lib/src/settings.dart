@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -106,6 +107,7 @@ class Settings {
   static const String _bellVolumeKey = 'bell_volume';
   static const String _dynamicAdaptKey = 'dynamic_adapt';
   static const String _responsivenessKey = 'responsiveness';
+  static const String _baselinePercentileKey = 'baseline_percentile';
   static const String _soundNameKey = 'sound_name';
   static const String _feedbackModeKey = 'feedback_mode';
   static const String _durationMinutesKey = 'duration_minutes';
@@ -195,6 +197,14 @@ class Settings {
 
   Future<void> setResponsiveness(double value) =>
       _prefs.setDouble(_responsivenessKey, value);
+
+  /// Baseline percentile for the ATR threshold (default 40). Persisted so the
+  /// last used value becomes the default for new sessions.
+  int get baselinePercentile =>
+      _prefs.getInt(_baselinePercentileKey) ?? defaultBaselinePercentile;
+
+  Future<void> setBaselinePercentile(int value) =>
+      _prefs.setInt(_baselinePercentileKey, value);
 
   String? get soundName => _prefs.getString(_soundNameKey);
 

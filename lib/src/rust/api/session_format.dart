@@ -9,8 +9,9 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'session_format.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `encode_imu`, `f32`, `f64`, `finished`, `i16`, `local_image_length`, `new`, `now_secs`, `parse_records`, `push_f32`, `push_f64`, `push_i16`, `push_u16`, `push_u32`, `skip`, `u16`, `u8`
+// These functions are ignored because they are not marked as `pub`: `crc32`, `encode_imu`, `f32`, `f64`, `finished`, `i16`, `new`, `now_secs`, `parse_records`, `push_f32`, `push_f64`, `push_i16`, `push_u16`, `push_u32`, `skip`, `u16`, `u8`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `RecordParser`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// The 12-byte header that prefixes a `.muse` body.
 Uint8List sessionHeaderBytes() =>
@@ -33,34 +34,34 @@ Uint8List sessionFrameBytes({required List<int> data}) =>
 SessionData sessionParseBody({required List<int> bytes}) =>
     RustLib.instance.api.crateApiSessionFormatSessionParseBody(bytes: bytes);
 
-/// FFI getter for [CONTAINER_HEAD_READ_LIMIT] so Dart never hardcodes it.
-BigInt containerHeadReadLimit() =>
-    RustLib.instance.api.crateApiSessionFormatContainerHeadReadLimit();
-
-/// Assemble a single `.muse.feedback` file: PNG first, then json, then body.
-Uint8List containerEncodeBytes({
-  required List<int> png,
-  required List<int> json,
-  required List<int> body,
-}) => RustLib.instance.api.crateApiSessionFormatContainerEncodeBytes(
-  png: png,
-  json: json,
-  body: body,
+/// Encode a v5 container: header + thumbnail + metadata(zstd) + computed(zstd) + raw(zstd).
+Uint8List containerEncodeV5({
+  required List<int> thumbnail,
+  required List<int> metadataJson,
+  required List<ComputedFrame> computedFrames,
+  required List<int> rawBody,
+}) => RustLib.instance.api.crateApiSessionFormatContainerEncodeV5(
+  thumbnail: thumbnail,
+  metadataJson: metadataJson,
+  computedFrames: computedFrames,
+  rawBody: rawBody,
 );
 
-/// Parse the head of a container (PNG + json). `body_len` is resolved only when
-/// the full body is present in [bytes]; a partial (prefix) read leaves it None.
-ContainerHead containerParseHeadBytes({required List<int> bytes}) => RustLib
-    .instance
-    .api
-    .crateApiSessionFormatContainerParseHeadBytes(bytes: bytes);
+/// Parse v5 header (first 68 bytes).
+V5Header v5ParseHeader({required List<int> bytes}) =>
+    RustLib.instance.api.crateApiSessionFormatV5ParseHeader(bytes: bytes);
 
-/// Extract the full frame body from a complete container [bytes], or None when
-/// the body length is absent (head-only read).
-Uint8List? containerExtractBodyBytes({required List<int> bytes}) => RustLib
-    .instance
-    .api
-    .crateApiSessionFormatContainerExtractBodyBytes(bytes: bytes);
+/// Parse v5 head (header + thumbnail + metadata).
+V5ParsedHead v5ParseHead({required List<int> bytes}) =>
+    RustLib.instance.api.crateApiSessionFormatV5ParseHead(bytes: bytes);
+
+/// Extract computed section (decompressed JSON lines).
+List<ComputedFrame> v5ExtractComputed({required List<int> bytes}) =>
+    RustLib.instance.api.crateApiSessionFormatV5ExtractComputed(bytes: bytes);
+
+/// Extract raw section (decompressed body).
+Uint8List v5ExtractRaw({required List<int> bytes}) =>
+    RustLib.instance.api.crateApiSessionFormatV5ExtractRaw(bytes: bytes);
 
 @freezed
 sealed class BandsRecord with _$BandsRecord {
@@ -75,14 +76,34 @@ sealed class BandsRecord with _$BandsRecord {
   }) = _BandsRecord;
 }
 
-/// Decoded head fields of a container.
+/// Computed frame at 1 Hz for training/export.
+/// All bands are absolute power (not relative).
 @freezed
-sealed class ContainerHead with _$ContainerHead {
-  const factory ContainerHead({
-    required Uint8List pngBytes,
-    required Uint8List jsonBytes,
-    int? bodyLen,
-  }) = _ContainerHead;
+sealed class ComputedFrame with _$ComputedFrame {
+  const ComputedFrame._();
+  const factory ComputedFrame({
+    required double t,
+    required List<Float32List> bands,
+    double? pulse,
+    double? movement,
+    PeakAlphaInfo? peakAlpha,
+    double? spo2,
+    required Float32List lineNoise,
+    required Uint8List signalQuality,
+    required GuardrailInfo guardrail,
+    required FeedbackInfo feedback,
+    required List<String> gestures,
+  }) = _ComputedFrame;
+
+  /// Decode from JSON bytes.
+  static Future<ComputedFrame?> fromJsonBytes({required List<int> bytes}) =>
+      RustLib.instance.api.crateApiSessionFormatComputedFrameFromJsonBytes(
+        bytes: bytes,
+      );
+
+  /// Encode to JSON bytes (for zstd compression).
+  Future<Uint8List> toJsonBytes() => RustLib.instance.api
+      .crateApiSessionFormatComputedFrameToJsonBytes(that: this);
 }
 
 /// One raw EEG packet: per-sample values are in µV, `timestamp` is the
@@ -97,12 +118,41 @@ sealed class EegSampleRecord with _$EegSampleRecord {
   }) = _EegSampleRecord;
 }
 
+/// Feedback (ATR) info.
+@freezed
+sealed class FeedbackInfo with _$FeedbackInfo {
+  const factory FeedbackInfo({
+    required double ratio,
+    required double threshold,
+    required bool inTarget,
+    required double pct,
+  }) = _FeedbackInfo;
+}
+
+/// Guardrail (AI drowsiness) info.
+@freezed
+sealed class GuardrailInfo with _$GuardrailInfo {
+  const factory GuardrailInfo({
+    required double sleepDir,
+    required double clarity,
+    required bool warning,
+    required double delta,
+  }) = _GuardrailInfo;
+}
+
 @freezed
 sealed class MovementRecord with _$MovementRecord {
   const factory MovementRecord({
     required double timestamp,
     required double score,
   }) = _MovementRecord;
+}
+
+/// Peak alpha frequency and power.
+@freezed
+sealed class PeakAlphaInfo with _$PeakAlphaInfo {
+  const factory PeakAlphaInfo({required double freq, required double power}) =
+      _PeakAlphaInfo;
 }
 
 @freezed
@@ -144,4 +194,29 @@ sealed class SpO2Record with _$SpO2Record {
     required double spo2,
     required double confidence,
   }) = _SpO2Record;
+}
+
+/// v5 container header with fixed 68-byte layout.
+/// raw_length is not stored; compute as file_size - raw_offset.
+@freezed
+sealed class V5Header with _$V5Header {
+  const factory V5Header({
+    required BigInt thumbnailOffset,
+    required BigInt thumbnailLength,
+    required BigInt metadataOffset,
+    required BigInt metadataLength,
+    required BigInt computedOffset,
+    required BigInt computedLength,
+    required BigInt rawOffset,
+  }) = _V5Header;
+}
+
+/// Parsed v5 head - header + thumbnail + metadata (decompressed).
+@freezed
+sealed class V5ParsedHead with _$V5ParsedHead {
+  const factory V5ParsedHead({
+    required V5Header header,
+    required Uint8List thumbnail,
+    required Uint8List metadataJson,
+  }) = _V5ParsedHead;
 }

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/connect_window.dart';
+import 'package:muse_ml/src/feedback/crash_recovery.dart';
 import 'package:muse_ml/src/rust/frb_generated.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/status_bar.dart';
@@ -272,7 +273,7 @@ Future<void> main() async {
             brightness: Brightness.dark,
           ),
         ),
-        home: const AppShell(),
+        home: const _CrashRecoveryWrapper(child: AppShell()),
       ),
     ),
   );
@@ -317,4 +318,38 @@ Future<bool> requestBlePermissions() async {
     await openAppSettings();
   }
   return false;
+}
+
+/// Wrapper that checks for incomplete sessions on first build and shows
+/// the crash recovery dialog if needed.
+class _CrashRecoveryWrapper extends ConsumerStatefulWidget {
+  const _CrashRecoveryWrapper({required this.child});
+
+  final Widget child;
+
+  @override
+  ConsumerState<_CrashRecoveryWrapper> createState() => _CrashRecoveryWrapperState();
+}
+
+class _CrashRecoveryWrapperState extends ConsumerState<_CrashRecoveryWrapper> {
+  bool _checked = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_checked) {
+      _checked = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          // ignore: unawaited_futures
+          showCrashRecoveryDialog(context, ref);
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.child;
+  }
 }

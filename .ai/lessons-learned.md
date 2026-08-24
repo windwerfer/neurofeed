@@ -359,3 +359,38 @@ Also: HR window was 8s but SpO₂ needs 30s for stable ratio-of-ratios.
 - Movement graph clips at 1.5g
 - `cargo test --lib session_format` + `flutter analyze` pass
 - Revert if needed: `git revert 4bc0300` (parent `217cefe`)
+
+## Session 2026-08-24 — Phase 8: EMA adaptation, percentile persistence, gesture marker rendering
+
+### EMA adaptation in RatioEngine
+**Problem:** The window-based step adaptation (`adapt()`) only fires every 30 s (300 epochs at ~10 Hz). Users wanted smoother, continuous threshold updates.
+
+**Solution:** Added `useEmaAdapt`/`emaAlpha` to `RatioEngine` with `adaptEma(value)` called on each clean sample in `_onBands()`. EMA pulls threshold toward the live value (alpha=0.1 default, ~10-sample time constant), clamped by baseline percentile floor and mean+1.5σ ceiling. Continuous and smoother than step adaptation.
+
+**Lesson:** For neurofeedback where thresholds adapt to user performance, per-sample EMA provides better UX than window-based steps — but window-based `successRate` still needed for circuit-breaker logic (zero-success reset).
+
+### Percentile persistence across sessions
+**Problem:** Users had to re-select their baseline percentile (e.g., 40th) every session.
+
+**Solution:** Added `Settings.baselinePercentile` (SharedPreferences) with getter/setter. `FeedbackStateNotifier` constructor restores it; `selectPercentile()` persists it. Written to `SessionSettings.baselinePercentile` in metadata for reproducibility.
+
+**Lesson:** Simple SharedPreferences persistence is sufficient for per-user prefs that should survive app restarts — no need for a separate settings file or migration.
+
+### Gesture marker rendering in history detail
+**Problem:** Gesture markers (double blink, double clench, eye up/down) were persisted in metadata but never shown in the history detail view.
+
+**Solution:** Added `gestureWidgets()` in `feedback_dashboard.dart` — renders summary counts + timeline with timestamps/icons. Passes through `_DashboardBody` from both live session (`gestureMarkers`) and history (`metadata.gestures`).
+
+**Lesson:** When adding metadata fields, always consider both the live recording path AND the history read path — they diverge (live = notifier fields, history = metadata JSON).
+
+### v5 container format test re-enablement
+**Problem:** `session_export_test.dart` was disabled (`@Tags(['disabled'])`) because it used v4 body format wrapped in old container, but export code expects v5.
+
+**Solution:** Rewrote test to build proper v5 containers using `containerEncodeV5()` with `ComputedFrame` FFI format. Uses minimal WebP thumbnail and raw body + computed frames + metadata JSON. All 9 tests pass.
+
+**Lesson:** When file format changes (v4→v5), tests using hand-built byte arrays become fragile. Build test files via the same FFI path the production code uses (`publishSession` → `containerEncodeV5`).
+
+### Golden round-trip test for SessionMetadata
+**Added:** `test/session_metadata_roundtrip_test.dart` covers full `SessionMetadata` (all 40+ fields) + `GestureMarker` + `SessionCalibration` JSON serialization. Catches any drift between `toJson`/`fromJson` as fields are added.
+
+**Lesson:** One comprehensive round-trip test is more valuable than many field-specific tests — it validates the entire serialization surface at once.

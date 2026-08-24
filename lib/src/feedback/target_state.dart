@@ -102,6 +102,10 @@ class RatioEngine implements FeedbackEngine {
   /// flag), used for in-flight recalibration.
   static const Duration recentWindow = Duration(seconds: 90);
 
+  /// EMA smoothing factor for continuous adaptation (0.0-1.0). Higher values
+  /// adapt faster. Default 0.1 gives a time constant of ~10 samples.
+  static const double defaultEmaAlpha = 0.1;
+
   int percentile;
   final List<double> _baseline = [];
   final List<bool> _epochs = [];
@@ -110,6 +114,9 @@ class RatioEngine implements FeedbackEngine {
   double? _initialThreshold;
   bool _dynamicAdapt = true;
   double _responsiveness = 0.5;
+  bool _useEmaAdapt = false;
+  double _emaAlpha = defaultEmaAlpha;
+  double? _emaThreshold;
 
   RatioEngine({
     this.percentile = 40,
@@ -133,6 +140,25 @@ class RatioEngine implements FeedbackEngine {
 
   @override
   double get responsiveness => _responsiveness;
+
+  /// Whether continuous EMA adaptation is enabled. When true, the threshold
+  /// is updated on every clean sample using an exponential moving average
+  /// toward the target percentile, providing smoother continuous adaptation
+  /// compared to the window-based step adaptation.
+  bool get useEmaAdapt => _useEmaAdapt;
+
+  /// Sets whether to use continuous EMA adaptation.
+  void setUseEmaAdapt(bool enabled) {
+    _useEmaAdapt = enabled;
+  }
+
+  /// EMA smoothing factor (alpha). Higher values = faster adaptation.
+  double get emaAlpha => _emaAlpha;
+
+  /// Sets the EMA smoothing factor.
+  void setEmaAlpha(double alpha) {
+    _emaAlpha = alpha.clamp(0.0, 1.0).toDouble();
+  }
 
   /// Raise/lower step derived from the responsiveness setting (gentle →
   /// responsive: raise 1.01–1.03, lower 0.97–0.90).
@@ -180,6 +206,7 @@ class RatioEngine implements FeedbackEngine {
     _recent.clear();
     _threshold = null;
     _initialThreshold = null;
+    _emaThreshold = null;
   }
 
   @override
@@ -305,6 +332,7 @@ class RatioEngine implements FeedbackEngine {
     final success = _epochs.where((b) => b).length / _epochs.length;
     if (success == 0.0) {
       _threshold = initial;
+      _emaThreshold = initial;
       debugPrint(
         '[atr] adapt: success=0.0 — circuit breaker, '
         'threshold $t -> $initial',
@@ -312,6 +340,7 @@ class RatioEngine implements FeedbackEngine {
     } else if (success > highSuccessRate) {
       final next = (t * raise).clamp(initial, maxAllowed).toDouble();
       _threshold = next;
+      _emaThreshold = next;
       debugPrint(
         '[atr] adapt: success=$success > $highSuccessRate '
         'threshold $t -> $next (ceiling $maxAllowed)',
@@ -319,6 +348,7 @@ class RatioEngine implements FeedbackEngine {
     } else if (success < lowSuccessRate) {
       final next = (t * lower).clamp(initial, maxAllowed).toDouble();
       _threshold = next;
+      _emaThreshold = next;
       debugPrint(
         '[atr] adapt: success=$success < $lowSuccessRate '
         'threshold $t -> $next (floor $initial)',
@@ -329,6 +359,48 @@ class RatioEngine implements FeedbackEngine {
         'threshold stays $t',
       );
     }
+  }
+
+  /// Continuous EMA adaptation: updates the threshold toward the target
+  /// percentile on each clean sample. This provides smoother, continuous
+  /// adaptation compared to the window-based step adaptation.
+  /// [value] is the current ratio sample (e.g., ATR value).
+  /// Returns the updated threshold, or null if EMA adaptation is not enabled
+  /// or no threshold exists yet.
+  double? adaptEma(double value) {
+    if (!_useEmaAdapt || !_dynamicAdapt) {
+      return null;
+    }
+    final t = _threshold;
+    final initial = _initialThreshold;
+    if (t == null || initial == null) {
+      return null;
+    }
+    final mean = baselineMean;
+    final sd = baselineStddev;
+    final maxAllowed = mean == null || sd == null
+        ? t * (1.0 + _responsiveness * 0.02)
+        : mean + ceilingStddevs * sd;
+
+    // Initialize EMA threshold if not set
+    _emaThreshold ??= t;
+
+    // EMA update: threshold = threshold + alpha * (value - threshold)
+    // This pulls the threshold toward the live value, bounded by the
+    // initial threshold (floor) and maxAllowed (ceiling).
+    final alpha = _emaAlpha;
+    var next = _emaThreshold! + alpha * (value - _emaThreshold!);
+    next = next.clamp(initial, maxAllowed);
+    _emaThreshold = next;
+
+    // Also update the main threshold (used by isInTarget)
+    _threshold = next;
+
+    debugPrint(
+      '[atr] ema: value=${value.toStringAsFixed(3)} '
+      'thr=${_threshold!.toStringAsFixed(3)} (alpha=$alpha)',
+    );
+    return _threshold;
   }
 }
 

@@ -64,9 +64,28 @@
 
 ## Next (v1.1 backlog)
 - [ ] EEG artifact flag for EMG (jaw clench / blink) into ATR epoch cleaning
-- [ ] Percentile selector persistence + defaults per protocol
-- [ ] Optional continuous (EMA) adaptation instead of discrete 30 s jumps
+- [x] Percentile selector persistence + defaults per protocol (Phase 8)
+- [x] Optional continuous (EMA) adaptation instead of discrete 30 s jumps (Phase 8)
 - [ ] Multi-protocol presets (alpha/theta targets, band ratios)
 - [x] Calibration audio variants: manifest-driven recipes (`assets/calibrations.json` v2) — each calibration id (`eyes-closed-01`/`eyes-open-01`) carries both a `single` variant (randomized intro clips + silent baseline) and a `staged` 3-part REVE sequence (artifacts / eyes-open / eyes-closed) with per-stage metadata phases; `assets/protocols.json` maps each protocol one-to-one to a calibration id, and `CalibrationManifest.recipeFor` picks the variant by guardrail engine (AI model ready → staged, band math / no guardrail → single). Copy + `metadataDescription` are JSON-only (no Dart fallback, sync test removed); clips stream alongside raw EEG (Option B) so collection gates on the silent windows only
 - [x] In-stage challenge prompts: eyes-open stage shows a randomly chosen `challengeText` (big) with the fixed `challengeTextHint` above (smaller); the chosen challenge is persisted in the phase metadata of the `.feedback` file; picks fresh per calibration run
 - [x] Repro metadata v2: `SessionCalibration` records `calibrationId` + immutable `calibrationJson` snapshot (both variants from `assets/calibrations.json`), baseline stats, per-phase clip timings, and `recalibrations` (every in-flight recalibrate: timestamp + new baseline); `SessionMetadata` records the protocol's `metadataDescription` (from `assets/protocols.json`) and a `sessionSettings` snapshot (dynamic adapt, responsiveness, baseline percentile, guardrail engine/method + warning threshold/sound, music/binaural options, marker toggles). Back-compat parsing deliberately dropped (pre-alpha)
+
+## Phase 8 (cleanup & polish) — COMPLETED
+- [x] Gesture marker log/rendering in history detail (`feedback_dashboard.dart` `gestureWidgets()`)
+- [x] Percentile persistence: `Settings.baselinePercentile` + `SessionSettings.baselinePercentile`
+- [x] Continuous EMA adaptation: `RatioEngine.adaptEma(value)` per clean sample
+- [x] Calibration audio variants & multi-protocol presets (verified working)
+- [x] Extended session export tests: `session_export_test.dart` re-enabled with v5 containers + calibration/gesture assertions
+- [x] Golden round-trip test: `test/session_metadata_roundtrip_test.dart` (SessionMetadata + GestureMarker + SessionCalibration)
+- [x] SQLite metadata cache docs: `README_history_cache.md`
+- [x] Feedback format docs updated: `README_feedback_format.md` (v5 container, metadata, computed 1 Hz, raw)
+- [x] AGENTS.md updated with Phase 8 changes
+- [x] .ai/ docs updated: `active-task.md`, `lessons-learned.md`
+
+## v1.2 meta-block
+- [ ] Neurosity Crown 8-electrode support — channel labels are already metadata-driven; only the default channel-name list needs extending per device.
+- [ ] On-device listening pass for binaural + music modes: reward-swell audibility, guardrail muffle, volume-channel math; tune `BinauralBeatController` voice parameters (carrier/beat mix, swell shape) against the TB336FU speakers.
+- [ ] On-device streaming verification: point real receivers at the phone (LSL Viewer, an OSC sink, BrainFlow recording) and confirm live EEG/bands/IMU/PPG arrive with sane rates; verify port+1/+2 IMU/PPG only appear when `separateGroups` is on.
+- [ ] On-device audio-profile pass: with the TB336FU speakers, toggle "Reduce audio stutter" and check for audible latency (~0.1 s) / dropout differences during music + AI guardrail; confirm the switch applies at the next session start (not mid-session).
+- [ ] On-device export pass: record a short session, export PDF/PNG/CSV/EDF+ to a real folder (and a SAF-picked folder) and open each result on the tablet; verify CSV column layout in a spreadsheet and EDF+ in an EDF reader (EEGlab/EDFbrowser). Push `third_party/edf_export` to user GitHub and switch `rust/Cargo.toml` to a git+tag dep once it proves out.

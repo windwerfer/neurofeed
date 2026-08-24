@@ -5,11 +5,12 @@ use flutter_rust_bridge::frb;
 
 use crate::api::muse::{ImuDto, MuseEventDto};
 
-// ── .muse body format (v4) ──────────────────────────────────────────────────────
+// ── .muse body format (raw body section of v5 container) ─────────────────────────
 //
-// The session body is a zstd-compressed stream:
+// The raw frame body stored in the v5 container's "raw" section is a
+// zstd-compressed stream:
 //
-//   [ u64 BE "MUSEBIN\n" ][ u32 LE version ][ frames ]
+//   [ u64 LE "MUSEBIN\n" (reversed) ][ u32 LE version=5 ][ frames ]
 //
 //   frame   := [ u32 LE frame_size ][ zstd frame payload ]
 //   payload := record*                    (record := [ u8 tag ][ fields … ])
@@ -24,6 +25,7 @@ use crate::api::muse::{ImuDto, MuseEventDto};
 //   tag 7  Pulse        : [ts f64][bpm f32][conf f32]
 //   tag 8  Movement     : [ts f64][score f32]
 //   tag 9  PeakAlpha    : [ts f64][freq f32][power f32]
+//   tag 10 SpO2         : [ts f64][spo2 f32][conf f32]
 //
 // This module is the single authority for the on-disk format. The Dart writer
 // and reader both delegate here so the layout can never drift between the two
@@ -47,7 +49,7 @@ pub const FORMAT_TAG_SPO2: u8 = 10;
 /// as little-endian so byte-for-byte compatibility with existing files is
 /// preserved.
 pub const HEADER_MAGIC: u64 = 0x4D55_5345_4249_4E0A; // as u64 LE → "MUSEBIN\n" reversed on disk
-pub const FORMAT_VERSION: u32 = 4;
+pub const FORMAT_VERSION: u32 = 5;
 
 /// The plaintext on-disk bytes of the sentinel (LE u64 of [HEADER_MAGIC]).
 pub const HEADER_MAGIC_BYTES: [u8; 8] = HEADER_MAGIC.to_le_bytes();
@@ -459,105 +461,280 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
     Ok(out)
 }
 
-// ── .muse.feedback container format ─────────────────────────────────────────────
+// ── v5 Session Format ──────────────────────────────────────────────────────────
 //
-//   [ PNG bytes ][ jsonLen u32 BE ][ json UTF-8 ][ bodyLen u32 BE ][ body ]
+//   [68-byte fixed header][WebP thumbnail][metadata JSON (zstd)][computed 1Hz (zstd)][raw (zstd)]
 //
-// PNG-first so file managers can thumbnail the leading PNG and ignore the
-// trailing data. The body is the raw `.muse` frame stream. History reads only
-// pull `head_read_limit` bytes and decode PNG+json without the large body.
+// Header layout (68 bytes):
+//   [0..6]   magic: b"MUSE5\0"
+//   [6]      version: u8 = 5
+//   [7]      flags: u8 (reserved)
+//   [8..15]  thumbnail_offset: u64
+//   [16..23] thumbnail_length: u64
+//   [24..31] metadata_offset: u64
+//   [32..39] metadata_length: u64
+//   [40..47] computed_offset: u64
+//   [48..55] computed_length: u64
+//   [56..63] raw_offset: u64
+//   [64..67] crc32(header[0..63])
 
-/// Max bytes read from the file when only the head (PNG + json) is needed.
-pub const CONTAINER_HEAD_READ_LIMIT: usize = 262_144;
+pub const V5_MAGIC: [u8; 6] = *b"MUSE5\0";
+pub const V5_VERSION: u8 = 5;
+pub const V5_HEADER_SIZE: usize = 68;
 
-/// FFI getter for [CONTAINER_HEAD_READ_LIMIT] so Dart never hardcodes it.
-#[frb(sync)]
-pub fn container_head_read_limit() -> usize {
-    CONTAINER_HEAD_READ_LIMIT
+/// v5 container header with fixed 68-byte layout.
+/// raw_length is not stored; compute as file_size - raw_offset.
+#[frb(dart_metadata = ("freezed",))]
+#[derive(Debug, Clone, PartialEq)]
+pub struct V5Header {
+    pub thumbnail_offset: u64,
+    pub thumbnail_length: u64,
+    pub metadata_offset: u64,
+    pub metadata_length: u64,
+    pub computed_offset: u64,
+    pub computed_length: u64,
+    pub raw_offset: u64,
 }
 
-/// Length of the leading PNG in [bytes], or None when no complete PNG is
-/// present. Walks the PNG chunk chain until IEND.
-fn local_image_length(bytes: &[u8]) -> Option<usize> {
-    const SIG: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-    if bytes.len() < 8 || &bytes[..8] != &SIG {
-        return None;
-    }
-    let mut offset = 8usize;
-    while offset + 8 <= bytes.len() {
-        let length =
-            u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap_or_default()) as usize;
-        let end = offset + 12 + length;
-        if end > bytes.len() {
-            return None;
-        }
-        if &bytes[offset + 4..offset + 8] == b"IEND" {
-            return Some(end);
-        }
-        offset = end;
-    }
-    None
+/// Parsed v5 head - header + thumbnail + metadata (decompressed).
+#[frb(dart_metadata = ("freezed",))]
+#[derive(Debug, Clone)]
+pub struct V5ParsedHead {
+    pub header: V5Header,
+    pub thumbnail: Vec<u8>,
+    pub metadata_json: Vec<u8>,
 }
 
-/// Assemble a single `.muse.feedback` file: PNG first, then json, then body.
+/// Computed frame at 1 Hz for training/export.
+/// All bands are absolute power (not relative).
+#[frb(dart_metadata = ("freezed",))]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ComputedFrame {
+    /// Seconds from recording start (0, 1, 2, ...).
+    pub t: f64,
+    /// 4 electrodes × 5 bands [delta, theta, alpha, beta, gamma] (absolute power).
+    pub bands: Vec<Vec<f32>>,
+    /// Pulse BPM.
+    pub pulse: Option<f32>,
+    /// Movement score (0.0-1.0).
+    pub movement: Option<f32>,
+    /// Peak alpha frequency (Hz) and power (absolute).
+    pub peak_alpha: Option<PeakAlphaInfo>,
+    /// SpO2 percentage (0-100).
+    pub spo2: Option<f32>,
+    /// Line noise ratio per electrode (0.0-1.0).
+    pub line_noise: Vec<f32>,
+    /// Signal quality per electrode (0-100).
+    pub signal_quality: Vec<u8>,
+    /// Guardrail (drowsiness) state.
+    pub guardrail: GuardrailInfo,
+    /// Feedback (ATR) state.
+    pub feedback: FeedbackInfo,
+    /// Gestures detected in this second.
+    pub gestures: Vec<String>,
+}
+
+/// Peak alpha frequency and power.
+#[frb(dart_metadata = ("freezed",))]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PeakAlphaInfo {
+    pub freq: f32,
+    pub power: f32,
+}
+
+/// Guardrail (AI drowsiness) info.
+#[frb(dart_metadata = ("freezed",))]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GuardrailInfo {
+    pub sleep_dir: f32,
+    pub clarity: f32,
+    pub warning: bool,
+    pub delta: f32,
+}
+
+/// Feedback (ATR) info.
+#[frb(dart_metadata = ("freezed",))]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FeedbackInfo {
+    pub ratio: f32,
+    pub threshold: f32,
+    pub in_target: bool,
+    pub pct: f32,
+}
+
+impl ComputedFrame {
+    /// Encode to JSON bytes (for zstd compression).
+    pub fn to_json_bytes(&self) -> Vec<u8> {
+        serde_json::to_vec(self).unwrap_or_default()
+    }
+
+    /// Decode from JSON bytes.
+    pub fn from_json_bytes(bytes: &[u8]) -> Option<Self> {
+        serde_json::from_slice(bytes).ok()
+    }
+}
+
+fn crc32(data: &[u8]) -> u32 {
+    crc32fast::hash(data)
+}
+
+/// Encode a v5 container: header + thumbnail + metadata(zstd) + computed(zstd) + raw(zstd).
 #[frb(sync)]
-pub fn container_encode_bytes(png: &[u8], json: &[u8], body: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(png.len() + json.len() + body.len() + 8);
-    out.extend_from_slice(png);
-    out.extend_from_slice(&(json.len() as u32).to_be_bytes());
-    out.extend_from_slice(json);
-    out.extend_from_slice(&(body.len() as u32).to_be_bytes());
-    out.extend_from_slice(body);
+pub fn container_encode_v5(
+    thumbnail: &[u8],
+    metadata_json: &[u8],
+    computed_frames: &[ComputedFrame],
+    raw_body: &[u8],
+) -> Vec<u8> {
+    // Compress metadata, computed, raw separately with zstd level 3.
+    let metadata_compressed = zstd::encode_all(std::io::Cursor::new(metadata_json), 3).unwrap_or_default();
+    let mut computed_json = Vec::new();
+    for f in computed_frames {
+        computed_json.extend_from_slice(&f.to_json_bytes());
+        computed_json.push(b'\n');
+    }
+    let computed_compressed = zstd::encode_all(std::io::Cursor::new(computed_json), 3).unwrap_or_default();
+    let raw_compressed = zstd::encode_all(std::io::Cursor::new(raw_body), 3).unwrap_or_default();
+
+    // Build header with offsets.
+    let mut offset = V5_HEADER_SIZE as u64 + thumbnail.len() as u64;
+    let thumbnail_offset = V5_HEADER_SIZE as u64;
+    let thumbnail_length = thumbnail.len() as u64;
+    let metadata_offset = offset;
+    let metadata_length = metadata_compressed.len() as u64;
+    offset += metadata_length;
+    let computed_offset = offset;
+    let computed_length = computed_compressed.len() as u64;
+    offset += computed_length;
+    let raw_offset = offset;
+    // raw_length not stored; compute from file size.
+
+    // Build header bytes (60 bytes).
+    let mut header = Vec::with_capacity(V5_HEADER_SIZE);
+    header.extend_from_slice(&V5_MAGIC);
+    header.push(V5_VERSION);
+    header.push(0); // flags
+    header.extend_from_slice(&thumbnail_offset.to_le_bytes());
+    header.extend_from_slice(&thumbnail_length.to_le_bytes());
+    header.extend_from_slice(&metadata_offset.to_le_bytes());
+    header.extend_from_slice(&metadata_length.to_le_bytes());
+    header.extend_from_slice(&computed_offset.to_le_bytes());
+    header.extend_from_slice(&computed_length.to_le_bytes());
+    header.extend_from_slice(&raw_offset.to_le_bytes());
+    // CRC32 of first 56 bytes (header without CRC).
+    let crc = crc32(&header);
+    header.extend_from_slice(&crc.to_le_bytes());
+    assert_eq!(header.len(), V5_HEADER_SIZE);
+
+    // Assemble final file.
+    let mut out = Vec::with_capacity(header.len() + thumbnail.len() + metadata_compressed.len() + computed_compressed.len() + raw_compressed.len());
+    out.extend_from_slice(&header);
+    out.extend_from_slice(thumbnail);
+    out.extend_from_slice(&metadata_compressed);
+    out.extend_from_slice(&computed_compressed);
+    out.extend_from_slice(&raw_compressed);
     out
 }
 
-/// Decoded head fields of a container.
-#[frb(dart_metadata = ("freezed",))]
-pub struct ContainerHead {
-    pub png_bytes: Vec<u8>,
-    pub json_bytes: Vec<u8>,
-    pub body_len: Option<u32>,
-}
-
-/// Parse the head of a container (PNG + json). `body_len` is resolved only when
-/// the full body is present in [bytes]; a partial (prefix) read leaves it None.
+/// Parse v5 header (first 68 bytes).
 #[frb(sync)]
-pub fn container_parse_head_bytes(bytes: &[u8]) -> Result<ContainerHead, String> {
-    let png_end = local_image_length(bytes).unwrap_or(0);
-    if bytes.len() < png_end + 4 {
-        return Err("Missing session json length".to_string());
+pub fn v5_parse_header(bytes: &[u8]) -> Result<V5Header, String> {
+    if bytes.len() < V5_HEADER_SIZE {
+        return Err("Truncated v5 header".to_string());
     }
-    let json_len = u32::from_be_bytes(bytes[png_end..png_end + 4].try_into().unwrap()) as usize;
-    let json_start = png_end + 4;
-    if bytes.len() < json_start + json_len {
-        return Err("Missing session json".to_string());
+    if &bytes[0..6] != &V5_MAGIC {
+        return Err("Not a v5 file (bad magic)".to_string());
     }
-    let json_bytes = bytes[json_start..json_start + json_len].to_vec();
+    let version = bytes[6];
+    if version != V5_VERSION {
+        return Err(format!("Unsupported v5 format version {version}"));
+    }
+    // Verify CRC32 of first 64 bytes.
+    let expected_crc = u32::from_le_bytes(bytes[64..68].try_into().unwrap());
+    let actual_crc = crc32(&bytes[..64]);
+    if expected_crc != actual_crc {
+        return Err("v5 header CRC32 mismatch".to_string());
+    }
 
-    let mut body_len = None;
-    let body_start = json_start + json_len;
-    if bytes.len() >= body_start + 4 {
-        body_len = Some(u32::from_be_bytes(
-            bytes[body_start..body_start + 4].try_into().unwrap_or_default(),
-        ));
-    }
-    Ok(ContainerHead {
-        png_bytes: bytes[..png_end].to_vec(),
-        json_bytes,
-        body_len,
+    Ok(V5Header {
+        thumbnail_offset: u64::from_le_bytes(bytes[8..16].try_into().unwrap()),
+        thumbnail_length: u64::from_le_bytes(bytes[16..24].try_into().unwrap()),
+        metadata_offset: u64::from_le_bytes(bytes[24..32].try_into().unwrap()),
+        metadata_length: u64::from_le_bytes(bytes[32..40].try_into().unwrap()),
+        computed_offset: u64::from_le_bytes(bytes[40..48].try_into().unwrap()),
+        computed_length: u64::from_le_bytes(bytes[48..56].try_into().unwrap()),
+        raw_offset: u64::from_le_bytes(bytes[56..64].try_into().unwrap()),
     })
 }
 
-/// Extract the full frame body from a complete container [bytes], or None when
-/// the body length is absent (head-only read).
+/// Parse v5 head (header + thumbnail + metadata).
 #[frb(sync)]
-pub fn container_extract_body_bytes(bytes: &[u8]) -> Option<Vec<u8>> {
-    let head = container_parse_head_bytes(bytes).ok()?;
-    let body_len = head.body_len? as usize;
-    if body_len > bytes.len() {
-        return None;
+pub fn v5_parse_head(bytes: &[u8]) -> Result<V5ParsedHead, String> {
+    let header = v5_parse_header(bytes)?;
+    let total_len = bytes.len() as u64;
+
+    // Extract thumbnail.
+    let thumb_end = header.thumbnail_offset + header.thumbnail_length;
+    if thumb_end > total_len {
+        return Err("Truncated thumbnail".to_string());
     }
-    Some(bytes[bytes.len() - body_len..].to_vec())
+    let thumbnail = bytes[header.thumbnail_offset as usize..thumb_end as usize].to_vec();
+
+    // Extract and decompress metadata.
+    let meta_end = header.metadata_offset + header.metadata_length;
+    if meta_end > total_len {
+        return Err("Truncated metadata".to_string());
+    }
+    let metadata_compressed = &bytes[header.metadata_offset as usize..meta_end as usize];
+    let metadata_json = zstd::decode_all(std::io::Cursor::new(metadata_compressed))
+        .map_err(|e| format!("Metadata zstd decode failed: {e}"))?;
+
+    Ok(V5ParsedHead {
+        header,
+        thumbnail,
+        metadata_json,
+    })
+}
+
+/// Extract computed section (decompressed JSON lines).
+#[frb(sync)]
+pub fn v5_extract_computed(bytes: &[u8]) -> Result<Vec<ComputedFrame>, String> {
+    let header = v5_parse_header(bytes)?;
+    let total_len = bytes.len() as u64;
+    let comp_end = header.computed_offset + header.computed_length;
+    if comp_end > total_len {
+        return Err("Truncated computed section".to_string());
+    }
+    let computed_compressed = &bytes[header.computed_offset as usize..comp_end as usize];
+    let computed_json = zstd::decode_all(std::io::Cursor::new(computed_compressed))
+        .map_err(|e| format!("Computed zstd decode failed: {e}"))?;
+
+    // Parse JSON lines (each frame is a JSON object, one per line).
+    let mut frames = Vec::new();
+    for line in computed_json.split(|&b| b == b'\n') {
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(frame) = ComputedFrame::from_json_bytes(line) {
+            frames.push(frame);
+        }
+    }
+    Ok(frames)
+}
+
+/// Extract raw section (decompressed body).
+#[frb(sync)]
+pub fn v5_extract_raw(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let header = v5_parse_header(bytes)?;
+    let total_len = bytes.len() as u64;
+    let raw_start = header.raw_offset;
+    if raw_start > total_len {
+        return Err("Truncated raw section".to_string());
+    }
+    let raw_compressed = &bytes[raw_start as usize..];
+    let raw = zstd::decode_all(std::io::Cursor::new(raw_compressed))
+        .map_err(|e| format!("Raw zstd decode failed: {e}"))?;
+    Ok(raw)
 }
 
 #[cfg(test)]
@@ -625,12 +802,12 @@ mod tests {
     #[test]
     fn header_bytes_are_exact() {
         // "MUSEBIN\n" stored as an LE u64 reads back as the byte-reversed
-        // string: LC-newline N I B E S U M, then v4 LE.
+        // string: LC-newline N I B E S U M, then v5 LE.
         assert_eq!(
             session_header_bytes(),
             vec![
                 0x0A, 0x4E, 0x49, 0x42, 0x45, 0x53, 0x55, 0x4D, // magic (LE u64)
-                0x04, 0x00, 0x00, 0x00, // FORMAT_VERSION = 4 (LE u32)
+                0x05, 0x00, 0x00, 0x00, // FORMAT_VERSION = 5 (LE u32)
             ]
         );
     }
@@ -1044,56 +1221,6 @@ MuseEventDto::Bands(BandsDto {
         assert_eq!(out.eeg_samples, 6);
     }
 
-    // ── 6. container format ────────────────────────────────────────────────────
-
-    #[test]
-    fn container_wire_layout_is_png_json_len_json_body_len_body() {
-        let png = min_png();
-        let json: &[u8] = b"ab";
-        let body_bytes: &[u8] = b"xyz";
-        let file = container_encode_bytes(&png, json, body_bytes);
-        let mut expected = png.to_vec();
-        expected.extend_from_slice(&2u32.to_be_bytes());
-        expected.extend_from_slice(json);
-        expected.extend_from_slice(&3u32.to_be_bytes());
-        expected.extend_from_slice(body_bytes);
-        assert_eq!(file, expected);
-
-        let head = container_parse_head_bytes(&file).unwrap();
-        assert_eq!(head.png_bytes, png);
-        assert_eq!(head.json_bytes, json);
-        assert_eq!(head.body_len, Some(3));
-        assert_eq!(container_extract_body_bytes(&file).unwrap(), body_bytes);
-    }
-
-    #[test]
-    fn container_head_prefix_read() {
-        let png = min_png();
-        let json = br#"{"a":2}"#.to_vec();
-        let file = container_encode_bytes(&png, &json, &[]);
-        // Truncate right after the json so bodyLen is outside the prefix.
-        let json_len = json.len() as usize;
-        let prefix = file[..png.len() + 4 + json_len].to_vec();
-        let head = container_parse_head_bytes(&prefix).unwrap();
-        assert_eq!(head.body_len, None);
-        assert_eq!(container_extract_body_bytes(&prefix), None);
-    }
-
-    #[test]
-    fn container_json_truncated_is_error() {
-        let png = min_png();
-        let file = container_encode_bytes(&png, b"hay", &[]);
-        // Cut into the json payload: parse must fail, not panic.
-        let prefix = file[..png.len() + 4 + 1].to_vec();
-        assert!(container_parse_head_bytes(&prefix).is_err());
-        assert!(container_extract_body_bytes(&prefix).is_none());
-    }
-
-    #[test]
-    fn container_head_read_limit_value() {
-        assert_eq!(container_head_read_limit(), 262_144);
-    }
-
     /// A minimal but structurally valid PNG (sig + IHDR + IEND), so the
     /// container parser can locate the end of the image.
     fn min_png() -> Vec<u8> {
@@ -1119,5 +1246,135 @@ MuseEventDto::Bands(BandsDto {
             }
             out
         }
+    }
+
+    // ── 6. v5 container format ──────────────────────────────────────────────────
+
+    #[test]
+    fn v5_container_encode_decode_roundtrip() {
+        let thumbnail = min_png();
+        let metadata = br#"{"protocol":"drowsiness","duration":3600}"#;
+        let computed = vec![
+            ComputedFrame {
+                t: 0.0,
+                bands: vec![vec![1.0, 2.0, 3.0, 4.0, 5.0]; 4],
+                pulse: Some(60.0),
+                movement: Some(0.1),
+                peak_alpha: Some(PeakAlphaInfo { freq: 10.0, power: 5.0 }),
+                spo2: Some(98.0),
+                line_noise: vec![0.01; 4],
+                signal_quality: vec![90; 4],
+                guardrail: GuardrailInfo { sleep_dir: 0.1, clarity: 0.9, warning: false, delta: 0.0 },
+                feedback: FeedbackInfo { ratio: 1.5, threshold: 1.0, in_target: true, pct: 0.6 },
+                gestures: vec!["blink".to_string()],
+            },
+            ComputedFrame {
+                t: 1.0,
+                bands: vec![vec![1.1, 2.1, 3.1, 4.1, 5.1]; 4],
+                pulse: Some(61.0),
+                movement: Some(0.2),
+                peak_alpha: Some(PeakAlphaInfo { freq: 10.2, power: 5.1 }),
+                spo2: Some(97.0),
+                line_noise: vec![0.02; 4],
+                signal_quality: vec![85; 4],
+                guardrail: GuardrailInfo { sleep_dir: 0.2, clarity: 0.8, warning: true, delta: 0.1 },
+                feedback: FeedbackInfo { ratio: 1.4, threshold: 1.1, in_target: false, pct: 0.4 },
+                gestures: vec![],
+            },
+        ];
+        let raw = b"raw body data";
+
+        let file = container_encode_v5(&thumbnail, metadata, &computed, raw);
+        assert!(!file.is_empty());
+
+        // Parse header.
+        let head = v5_parse_head(&file).unwrap();
+        assert_eq!(head.thumbnail, thumbnail);
+        assert_eq!(head.metadata_json, metadata);
+
+        // Extract computed.
+        let frames = v5_extract_computed(&file).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].t, 0.0);
+        assert_eq!(frames[1].t, 1.0);
+        assert_eq!(frames[0].bands[0][0], 1.0);
+        assert_eq!(frames[1].bands[0][0], 1.1);
+        assert!(frames[0].guardrail.warning == false);
+        assert!(frames[1].guardrail.warning == true);
+
+        // Extract raw.
+        let raw_out = v5_extract_raw(&file).unwrap();
+        assert_eq!(raw_out, raw);
+    }
+
+    #[test]
+    fn v5_header_crc32_validation() {
+        let thumbnail = min_png();
+        let metadata = b"{}";
+        let computed = vec![];
+        let raw = b"x";
+
+        let mut file = container_encode_v5(&thumbnail, metadata, &computed, raw);
+
+        // Corrupt the CRC32 (last 4 bytes of header).
+        file[56] ^= 0xFF;
+
+        // Should fail to parse.
+        assert!(v5_parse_header(&file).is_err());
+    }
+
+    #[test]
+    fn v5_header_magic_validation() {
+        let thumbnail = min_png();
+        let metadata = b"{}";
+        let computed = vec![];
+        let raw = b"x";
+
+        let mut file = container_encode_v5(&thumbnail, metadata, &computed, raw);
+
+        // Corrupt magic.
+        file[0] = 0xFF;
+
+        assert!(v5_parse_header(&file).is_err());
+    }
+
+    #[test]
+    fn v5_header_version_validation() {
+        let thumbnail = min_png();
+        let metadata = b"{}";
+        let computed = vec![];
+        let raw = b"x";
+
+        let mut file = container_encode_v5(&thumbnail, metadata, &computed, raw);
+
+        // Corrupt version.
+        file[6] = 99;
+
+        assert!(v5_parse_header(&file).is_err());
+    }
+
+    #[test]
+    fn v5_computed_frame_json_roundtrip() {
+        let frame = ComputedFrame {
+            t: 123.0,
+            bands: vec![vec![1.0, 2.0, 3.0, 4.0, 5.0]; 4],
+            pulse: Some(72.0),
+            movement: Some(0.05),
+            peak_alpha: Some(PeakAlphaInfo { freq: 10.1, power: 4.5 }),
+            spo2: Some(98.5),
+            line_noise: vec![0.01, 0.02, 0.01, 0.03],
+            signal_quality: vec![80, 85, 90, 95],
+            guardrail: GuardrailInfo { sleep_dir: 0.2, clarity: 0.8, warning: false, delta: 0.05 },
+            feedback: FeedbackInfo { ratio: 1.8, threshold: 1.3, in_target: true, pct: 0.65 },
+            gestures: vec!["blink".to_string(), "clench".to_string()],
+        };
+
+        let json = frame.to_json_bytes();
+        let decoded = ComputedFrame::from_json_bytes(&json).unwrap();
+
+        assert_eq!(decoded.t, frame.t);
+        assert_eq!(decoded.bands, frame.bands);
+        assert_eq!(decoded.pulse, frame.pulse);
+        assert_eq!(decoded.gestures, frame.gestures);
     }
 }
