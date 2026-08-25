@@ -2,9 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Default warning threshold for the REVE sleep guardrail: the percent rank of
@@ -102,6 +104,21 @@ AppView _viewFromName(String? name) {
 class Settings extends ChangeNotifier {
   Settings._(this._prefs);
 
+  /// Cached guardrailAllowed values from protocols.json.
+  static Map<ProtocolType, bool>? _guardrailAllowedCache;
+
+  /// Loads and caches the guardrailAllowed values from protocols.json.
+  static Future<void> _ensureGuardrailAllowedCache() async {
+    if (_guardrailAllowedCache != null) return;
+    final raw = await rootBundle.loadString(ProtocolCatalog.asset);
+    final json = jsonDecode(raw) as Map<String, Object?>;
+    final catalog = ProtocolCatalog.fromJson(json);
+    _guardrailAllowedCache = {
+      for (final type in ProtocolType.values)
+        type: catalog.forName(type.name)?.guardrailAllowed ?? true,
+    };
+  }
+
   static const String _lastViewKey = 'last_view';
   static const String _lastDeviceKey = 'last_device_id';
   static const String _masterVolumeKey = 'master_volume';
@@ -155,6 +172,7 @@ class Settings extends ChangeNotifier {
 
   static Future<Settings> load() async {
     final prefs = await SharedPreferences.getInstance();
+    await _ensureGuardrailAllowedCache();
     return Settings._(prefs);
   }
 
@@ -351,7 +369,8 @@ class Settings extends ChangeNotifier {
   /// Whether the guardrail is enabled for [type]. Returns false if the
   /// protocol doesn't allow the guardrail, or if the mode is 'none'.
   bool guardrailEnabledFor(ProtocolType type) {
-    if (!ProtocolInfo.forType(type).guardrailAllowed) return false;
+    final guardrailAllowed = _guardrailAllowedCache?[type] ?? true;
+    if (!guardrailAllowed) return false;
     return guardrailModeForProtocol[type] != GuardrailMode.none;
   }
 
@@ -409,6 +428,18 @@ class Settings extends ChangeNotifier {
 
   Future<void> setAudioStableMode(bool value) async {
     await _prefs.setBool(_audioStableModeKey, value);
+    notifyListeners();
+  }
+
+  static const String _enableSimulatedDevicesKey = 'enable_simulated_devices';
+
+  /// When true, the "Simulate" toggle appears in the connect dialog for
+  /// testing without real hardware. Debug only — defaults to false.
+  bool get enableSimulatedDevices =>
+      _prefs.getBool(_enableSimulatedDevicesKey) ?? false;
+
+  Future<void> setEnableSimulatedDevices(bool value) async {
+    await _prefs.setBool(_enableSimulatedDevicesKey, value);
     notifyListeners();
   }
 

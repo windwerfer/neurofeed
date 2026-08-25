@@ -11,6 +11,7 @@ import 'package:muse_ml/src/feedback/computed_sampler.dart';
 import 'package:muse_ml/src/feedback/feedback_recorder.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
@@ -304,7 +305,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   AudioService get _audio => _ref.read(audioServiceProvider);
 
   void selectProtocol(ProtocolType type) {
-    final info = ProtocolInfo.forType(type);
+    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
+    final info = catalog?.forName(type.name);
+    if (info == null) {
+      // Fallback: should not happen if catalog is loaded
+      _engine.metric = RewardMetric.alphaOverTheta;
+      state = state.copyWith(
+        protocol: type,
+        feedbackMode: FeedbackMode.none,
+      );
+      return;
+    }
     _engine.metric = info.rewardMetric;
     state = state.copyWith(
       protocol: type,
@@ -1276,7 +1287,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (!_engine.isInTarget(value)) {
       return false;
     }
-    final spec = ProtocolInfo.forType(state.protocol);
+    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
+    final spec = catalog?.forName(state.protocol.name);
+    if (spec == null) {
+      return false;
+    }
     for (final c in spec.conditions) {
       if (!c.passes(
         deltaRel: target.deltaRel,
@@ -1428,7 +1443,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (state.phase != FeedbackPhase.playing) {
       return;
     }
-    if (ProtocolInfo.forType(state.protocol).hasReward) {
+    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
+      final spec = catalog?.forName(state.protocol.name);
+      if (spec?.hasReward ?? false) {
       final value = _metricOf(target);
       if (!value.isFinite) {
         return;
@@ -1642,10 +1659,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final over = _guardrailBandMath
         ? _lastDelta > threshold || _lastDelta > guardrailDeltaCeiling
         : _lastSleepDir > threshold || _lastDelta > guardrailDeltaCeiling;
-    final spec = ProtocolInfo.forType(state.protocol);
+    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
+    final spec = catalog?.forName(state.protocol.name);
     final mufflesMusic =
         _musicActive &&
-        spec.guardrailFeedback == GuardrailFeedback.muffleWhileWarning;
+        (spec?.guardrailFeedback == GuardrailFeedback.muffleWhileWarning);
     final warningSound =
         GuardrailSound.fromName(_ref.read(settingsProvider).warningSoundName);
     if (!over) {

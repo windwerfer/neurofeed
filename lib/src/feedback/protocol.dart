@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:muse_ml/src/rust/api/device_config.dart';
 
 enum ProtocolType {
   drowsiness,
@@ -102,10 +103,8 @@ enum GuardrailFeedback {
 }
 
 /// Structural protocol definition (colors, reward metric, conditions,
-/// guardrail flags). All user-facing copy — catch phrase, title, subtitle,
-/// guide text, algorithm description, expected delay, calibration id and the
-/// scientific metadata description — lives in `assets/protocols.json`, the
-/// single editable text source loaded by `ProtocolCatalog`.
+/// guardrail flags) and user-facing copy — all loaded from
+/// `assets/protocols.json`, the single editable text source.
 class ProtocolInfo {
   final ProtocolType type;
 
@@ -142,6 +141,26 @@ class ProtocolInfo {
   /// the normal start button. True only for [ProtocolType.recordOnly].
   final bool calibrationSkippable;
 
+  /// Electrode names required for this protocol. Must be a subset of
+  /// `DeviceConfig.electrodeNames` for the device to be compatible.
+  final List<String> requiredElectrodes;
+
+  /// Device kinds this protocol is allowed on. Null means all devices.
+  /// Values are `DeviceKind.name` strings: "muse", "neurosity",
+  /// "simulatedMuse", "simulatedNeurosity".
+  final List<String>? allowedDevices;
+
+  /// User-facing copy fields from JSON.
+  final String catchPhrase;
+  final String title;
+  final String subtitle;
+  final String guideText;
+  final String algorithmDescription;
+  final String expectedDelay;
+  final String calibration;
+  final String? metadataDescription;
+  final String guardrailDefaultMode;
+
   const ProtocolInfo({
     required this.type,
     required this.color,
@@ -152,99 +171,103 @@ class ProtocolInfo {
     required this.guardrailFeedback,
     this.hasReward = true,
     this.calibrationSkippable = false,
+    required this.requiredElectrodes,
+    this.allowedDevices,
+    required this.catchPhrase,
+    required this.title,
+    required this.subtitle,
+    required this.guideText,
+    required this.algorithmDescription,
+    required this.expectedDelay,
+    required this.calibration,
+    this.metadataDescription,
+    required this.guardrailDefaultMode,
   });
 
-  static const ProtocolInfo _drowsiness = ProtocolInfo(
-    type: ProtocolType.drowsiness,
-    color: Color(0xFF1E88E5),
-    rewardMetric: RewardMetric.alphaOverTheta,
-    guardrailDefault: true,
-    guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
-  );
+  factory ProtocolInfo.fromJson(Map<String, Object?> json, String typeName) {
+    final type = ProtocolType.values.firstWhere(
+      (e) => e.name == typeName,
+      orElse: () => throw ArgumentError('Unknown ProtocolType: $typeName'),
+    );
 
-  static const ProtocolInfo _twilight = ProtocolInfo(
-    type: ProtocolType.twilight,
-    color: Color(0xFF8E24AA),
-    rewardMetric: RewardMetric.thetaOverAlpha,
-    guardrailDefault: true,
-    guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
-  );
+    final colorValue = json['color'] as int? ?? 0xFF000000;
+    final rewardMetricName = json['rewardMetric'] as String? ?? 'alphaOverTheta';
+    final rewardMetric = RewardMetric.values.firstWhere(
+      (e) => e.name == rewardMetricName,
+      orElse: () => RewardMetric.alphaOverTheta,
+    );
 
-  static const ProtocolInfo _alertnessOpen = ProtocolInfo(
-    type: ProtocolType.alertnessOpen,
-    color: Color(0xFFFB8C00),
-    rewardMetric: RewardMetric.betaOverTheta,
-    guardrailDefault: false,
-    guardrailAllowed: false,
-    guardrailFeedback: GuardrailFeedback.chimeOnly,
-  );
+    final conditions = <TargetCondition>[];
+    final conditionsJson = json['conditions'] as List?;
+    if (conditionsJson != null) {
+      for (final c in conditionsJson) {
+        if (c is Map<String, Object?>) {
+          conditions.add(_parseCondition(c));
+        }
+      }
+    }
 
-  static const ProtocolInfo _alertnessClosed = ProtocolInfo(
-    type: ProtocolType.alertnessClosed,
-    color: Color(0xFF00897B),
-    rewardMetric: RewardMetric.betaOverTheta,
-    guardrailDefault: false,
-    guardrailFeedback: GuardrailFeedback.chimeOnly,
-  );
+    final guardrailFeedbackName = json['guardrailFeedback'] as String? ?? 'chimeOnly';
+    final guardrailFeedback = GuardrailFeedback.values.firstWhere(
+      (e) => e.name == guardrailFeedbackName,
+      orElse: () => GuardrailFeedback.chimeOnly,
+    );
 
-  static const ProtocolInfo _mindfulness = ProtocolInfo(
-    type: ProtocolType.mindfulness,
-    color: Color(0xFF43A047),
-    rewardMetric: RewardMetric.alphaOnly,
-    guardrailDefault: false,
-    guardrailFeedback: GuardrailFeedback.chimeOnly,
-  );
+    final requiredElectrodes = (json['requiredElectrodes'] as List?)?.cast<String>() ?? <String>[];
+    final allowedDevices = (json['allowedDevices'] as List?)?.cast<String>();
 
-  static const ProtocolInfo _concentration = ProtocolInfo(
-    type: ProtocolType.concentration,
-    color: Color(0xFFD81B60),
-    rewardMetric: RewardMetric.alphaOnly,
-    conditions: [BetaCeiling(0.25)],
-    guardrailDefault: false,
-    guardrailFeedback: GuardrailFeedback.chimeOnly,
-  );
+    return ProtocolInfo(
+      type: type,
+      color: Color(colorValue),
+      rewardMetric: rewardMetric,
+      conditions: conditions,
+      guardrailDefault: json['guardrailDefault'] as bool? ?? false,
+      guardrailAllowed: json['guardrailAllowed'] as bool? ?? true,
+      guardrailFeedback: guardrailFeedback,
+      hasReward: json['hasReward'] as bool? ?? true,
+      calibrationSkippable: json['calibrationSkippable'] as bool? ?? false,
+      requiredElectrodes: requiredElectrodes,
+      allowedDevices: allowedDevices,
+      catchPhrase: json['catchPhrase'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      subtitle: json['subtitle'] as String? ?? '',
+      guideText: json['guideText'] as String? ?? '',
+      algorithmDescription: json['algorithmDescription'] as String? ?? '',
+      expectedDelay: json['expectedDelay'] as String? ?? '',
+      calibration: json['calibration'] as String? ?? '',
+      metadataDescription: json['metadataDescription'] as String?,
+      guardrailDefaultMode: json['guardrailDefaultMode'] as String? ?? 'drowsinessMath',
+    );
+  }
 
-  static const ProtocolInfo _relaxedConcentration = ProtocolInfo(
-    type: ProtocolType.relaxedConcentration,
-    color: Color(0xFF6D4C41),
-    rewardMetric: RewardMetric.alphaOverTheta,
-    conditions: [BetaCeiling(0.25), DeltaCeiling(0.5)],
-    guardrailDefault: true,
-    guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
-  );
+  static TargetCondition _parseCondition(Map<String, Object?> c) {
+    switch (c['type']) {
+      case 'betaCeiling':
+        return BetaCeiling((c['maxBetaRel'] as num).toDouble());
+      case 'deltaCeiling':
+        return DeltaCeiling((c['maxDeltaRel'] as num).toDouble());
+      default:
+        throw ArgumentError('Unknown condition type: ${c['type']}');
+    }
+  }
 
-  static const ProtocolInfo _recordOnly = ProtocolInfo(
-    type: ProtocolType.recordOnly,
-    color: Color(0xFF607D8B),
-    rewardMetric: RewardMetric.alphaOverTheta,
-    guardrailDefault: false,
-    guardrailAllowed: false,
-    guardrailFeedback: GuardrailFeedback.chimeOnly,
-    hasReward: false,
-    calibrationSkippable: true,
-  );
+  /// Whether this protocol is compatible with the given device config.
+  bool isCompatibleWith(DeviceConfig config) {
+    // Check required electrodes
+    for (final electrode in requiredElectrodes) {
+      if (!config.electrodeNames.contains(electrode)) {
+        return false;
+      }
+    }
 
-  static const ProtocolInfo _guardrailOnly = ProtocolInfo(
-    type: ProtocolType.guardrailOnly,
-    color: Color(0xFF5E35B1),
-    rewardMetric: RewardMetric.alphaOverTheta,
-    guardrailDefault: true,
-    guardrailFeedback: GuardrailFeedback.chimeOnly,
-    hasReward: false,
-  );
+    // Check allowed devices
+    if (allowedDevices != null) {
+      final kindName = config.kind.name;
+      if (!allowedDevices!.contains(kindName)) {
+        return false;
+      }
+    }
 
-  static const List<ProtocolInfo> all = [
-    _drowsiness,
-    _twilight,
-    _alertnessOpen,
-    _alertnessClosed,
-    _mindfulness,
-    _concentration,
-    _relaxedConcentration,
-    _recordOnly,
-    _guardrailOnly,
-  ];
-
-  static ProtocolInfo forType(ProtocolType type) =>
-      all.firstWhere((p) => p.type == type);
+    return true;
+  }
 }

@@ -13,7 +13,8 @@ class FeedbackListView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final sessions = ref.watch(sessionListProvider).valueOrNull ?? const [];
-    final recent = _recentProtocols(sessions);
+    final catalog = ref.watch(protocolCatalogProvider).valueOrNull ?? const ProtocolCatalog(version: 1, byName: {});
+    final recent = _recentProtocols(sessions, catalog);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -28,7 +29,7 @@ class FeedbackListView extends ConsumerWidget {
           _RecentTile(protocols: recent),
           const SizedBox(height: 12),
         ],
-        for (final protocol in ProtocolInfo.all)
+        for (final protocol in catalog.all)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: _ProtocolCard(protocol: protocol),
@@ -37,23 +38,26 @@ class FeedbackListView extends ConsumerWidget {
     );
   }
 
-  /// The 3 most recent distinct protocols from session history, oldest of the
-  /// three first (leftmost slot). Legacy placeholder protocols map to the ATR
-  /// info they ran under and dedupe against it.
-  static List<ProtocolInfo> _recentProtocols(List<SessionSummary> sessions) {
-    final seen = <ProtocolType>{};
-    final recent = <ProtocolInfo>[];
-    for (final s in sessions) {
-      final info = ProtocolInfo.forType(s.metadata.protocol);
-      if (seen.add(info.type)) {
-        recent.add(info);
-        if (recent.length == 3) {
-          break;
-        }
+/// The 3 most recent distinct protocols from session history, oldest of the
+/// three first (leftmost slot). Legacy placeholder protocols map to the ATR
+/// info they ran under and dedupe against it.
+static List<ProtocolInfo> _recentProtocols(
+  List<SessionSummary> sessions,
+  ProtocolCatalog catalog,
+) {
+  final seen = <ProtocolType>{};
+  final recent = <ProtocolInfo>[];
+  for (final s in sessions) {
+    final info = catalog.forName(s.metadata.protocol.name);
+    if (info != null && seen.add(info.type)) {
+      recent.add(info);
+      if (recent.length == 3) {
+        break;
       }
     }
-    return recent.reversed.toList();
   }
+  return recent.reversed.toList();
+}
 }
 
 /// A row of up to 3 quick-start slots showing the most recent protocols by

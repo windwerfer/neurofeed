@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'device_config.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'muse.freezed.dart';
@@ -41,6 +42,19 @@ Future<void> disconnect() => RustLib.instance.api.crateApiMuseDisconnect();
 Future<ConnectionStatus> getStatus() =>
     RustLib.instance.api.crateApiMuseGetStatus();
 
+/// Connect to a device with explicit kind and simulation flag.
+/// - `kind`: DeviceKind::Muse or DeviceKind::Neurosity (determines electrode layout, features)
+/// - `simulate`: if true, runs the built-in simulator instead of real BLE
+Future<ConnectionStatus> connectWithOptions({
+  required String deviceId,
+  required DeviceKind kind,
+  required bool simulate,
+}) => RustLib.instance.api.crateApiMuseConnectWithOptions(
+  deviceId: deviceId,
+  kind: kind,
+  simulate: simulate,
+);
+
 /// Returns `true` if a connection is currently active. The Rust side clears
 /// this as soon as muse-rs reports a disconnect, so it tracks the real link
 /// state closely enough for the UI.
@@ -53,6 +67,11 @@ Future<bool> isConnected() => RustLib.instance.api.crateApiMuseIsConnected();
 /// connection. The Rust side forwards events into the provided `StreamSink`.
 Stream<MuseEventDto> subscribeEvents() =>
     RustLib.instance.api.crateApiMuseSubscribeEvents();
+
+/// Connect to a Neurosity Crown/Notion device via BLE.
+/// Uses the neurosity-ble-rs crate. (Phase D: not yet implemented - returns placeholder)
+Future<ConnectionStatus> crownConnect({required String deviceId}) =>
+    RustLib.instance.api.crateApiMuseCrownConnect(deviceId: deviceId);
 
 /// Band power estimates for a single electrode.
 /// Bands: [delta, theta, alpha, beta, gamma] in µV²/Hz.
@@ -96,8 +115,11 @@ sealed class ControlDto with _$ControlDto {
 /// A Muse device discovered during a scan.
 @freezed
 sealed class DeviceInfo with _$DeviceInfo {
-  const factory DeviceInfo({required String name, required String id}) =
-      _DeviceInfo;
+  const factory DeviceInfo({
+    required String name,
+    required String id,
+    required DeviceKind kind,
+  }) = _DeviceInfo;
 }
 
 /// An EEG sample batch for a single electrode channel.

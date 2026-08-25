@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/models.dart';
@@ -210,10 +210,12 @@ class ModelSelectorDropdown extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final fb = ref.watch(feedbackStateProvider);
     final mode = settings.guardrailModeForProtocol[fb.protocol]!;
+    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
+    final protocolInfo = catalog?.forName(fb.protocol.name);
 
     // Modes available for this protocol
     final allowedModes = GuardrailMode.values.where((m) {
-      if (!ProtocolInfo.forType(fb.protocol).guardrailAllowed) {
+      if (protocolInfo?.guardrailAllowed == false) {
         return m == GuardrailMode.none;
       }
       return true;

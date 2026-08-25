@@ -675,6 +675,7 @@ abstract class _ControlDto implements ControlDto {
 mixin _$DeviceInfo {
   String get name => throw _privateConstructorUsedError;
   String get id => throw _privateConstructorUsedError;
+  DeviceKind get kind => throw _privateConstructorUsedError;
 
   /// Create a copy of DeviceInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -690,7 +691,7 @@ abstract class $DeviceInfoCopyWith<$Res> {
     $Res Function(DeviceInfo) then,
   ) = _$DeviceInfoCopyWithImpl<$Res, DeviceInfo>;
   @useResult
-  $Res call({String name, String id});
+  $Res call({String name, String id, DeviceKind kind});
 }
 
 /// @nodoc
@@ -707,7 +708,7 @@ class _$DeviceInfoCopyWithImpl<$Res, $Val extends DeviceInfo>
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? name = null, Object? id = null}) {
+  $Res call({Object? name = null, Object? id = null, Object? kind = null}) {
     return _then(
       _value.copyWith(
             name: null == name
@@ -718,6 +719,10 @@ class _$DeviceInfoCopyWithImpl<$Res, $Val extends DeviceInfo>
                 ? _value.id
                 : id // ignore: cast_nullable_to_non_nullable
                       as String,
+            kind: null == kind
+                ? _value.kind
+                : kind // ignore: cast_nullable_to_non_nullable
+                      as DeviceKind,
           )
           as $Val,
     );
@@ -733,7 +738,7 @@ abstract class _$$DeviceInfoImplCopyWith<$Res>
   ) = __$$DeviceInfoImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String name, String id});
+  $Res call({String name, String id, DeviceKind kind});
 }
 
 /// @nodoc
@@ -749,7 +754,7 @@ class __$$DeviceInfoImplCopyWithImpl<$Res>
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? name = null, Object? id = null}) {
+  $Res call({Object? name = null, Object? id = null, Object? kind = null}) {
     return _then(
       _$DeviceInfoImpl(
         name: null == name
@@ -760,6 +765,10 @@ class __$$DeviceInfoImplCopyWithImpl<$Res>
             ? _value.id
             : id // ignore: cast_nullable_to_non_nullable
                   as String,
+        kind: null == kind
+            ? _value.kind
+            : kind // ignore: cast_nullable_to_non_nullable
+                  as DeviceKind,
       ),
     );
   }
@@ -768,16 +777,22 @@ class __$$DeviceInfoImplCopyWithImpl<$Res>
 /// @nodoc
 
 class _$DeviceInfoImpl implements _DeviceInfo {
-  const _$DeviceInfoImpl({required this.name, required this.id});
+  const _$DeviceInfoImpl({
+    required this.name,
+    required this.id,
+    required this.kind,
+  });
 
   @override
   final String name;
   @override
   final String id;
+  @override
+  final DeviceKind kind;
 
   @override
   String toString() {
-    return 'DeviceInfo(name: $name, id: $id)';
+    return 'DeviceInfo(name: $name, id: $id, kind: $kind)';
   }
 
   @override
@@ -786,11 +801,12 @@ class _$DeviceInfoImpl implements _DeviceInfo {
         (other.runtimeType == runtimeType &&
             other is _$DeviceInfoImpl &&
             (identical(other.name, name) || other.name == name) &&
-            (identical(other.id, id) || other.id == id));
+            (identical(other.id, id) || other.id == id) &&
+            (identical(other.kind, kind) || other.kind == kind));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, name, id);
+  int get hashCode => Object.hash(runtimeType, name, id, kind);
 
   /// Create a copy of DeviceInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -805,12 +821,15 @@ abstract class _DeviceInfo implements DeviceInfo {
   const factory _DeviceInfo({
     required final String name,
     required final String id,
+    required final DeviceKind kind,
   }) = _$DeviceInfoImpl;
 
   @override
   String get name;
   @override
   String get id;
+  @override
+  DeviceKind get kind;
 
   /// Create a copy of DeviceInfo
   /// with the given fields replaced by the non-null parameter values.

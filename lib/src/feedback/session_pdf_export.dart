@@ -1,13 +1,24 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_export.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+
+/// Load protocol info from the JSON asset.
+Future<ProtocolInfo?> _loadProtocolInfo(ProtocolType type) async {
+  final raw = await rootBundle.loadString(ProtocolCatalog.asset);
+  final json = jsonDecode(raw) as Map<String, Object?>;
+  final catalog = ProtocolCatalog.fromJson(json);
+  return catalog.forName(type.name);
+}
 
 /// Builds the vector PDF report page for one session, or null when the
 /// session file cannot be read. All charts share [SessionExporter.chartsFor]
@@ -19,7 +30,10 @@ Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) asyn
   }
   final data = await SessionReader.readRaw(body);
   final meta = session.metadata;
-  final protocol = ProtocolInfo.forType(meta.protocol);
+  final protocol = await _loadProtocolInfo(meta.protocol);
+  if (protocol == null) {
+    return null;
+  }
   final prepared = prepareChartData(
     data,
     trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
