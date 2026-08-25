@@ -22,3 +22,8 @@
 	path = third_party/brainflow
 	url = https://github.com/brainflow-dev/brainflow
 	ignore = all
+
+[submodule "third_party/neuroboard-rs"]
+	path = third_party/neuroboard-rs
+	url = https://github.com/windwerfer/neuroboard-rs
+	ignore = all
