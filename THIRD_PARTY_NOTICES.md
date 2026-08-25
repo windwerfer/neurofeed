@@ -57,7 +57,7 @@ See `Third-party → Rust → rlx / rlx-cpu` below.
 | reveal-rs | (git rev 9c8d856…) | Apache-2.0 | https://github.com/eugenehp/reve-rs |
 | luna-rs | v0.0.4-latent-embedding-fix | Apache-2.0 | https://github.com/windwerfer/luna-rs |
 | rlx | 0.2.13 | GPL-3.0-only | https://crates.io/crates/rlx |
-| **rlx-cpu** | 0.2.13 (vendored, patched) | **GPL-3.0-only** | https://crates.io/crates/rlx-cpu; local copy at `vendor/rlx-cpu` |
+| **rlx-cpu** | 0.2.14 (vendored, patched) | **GPL-3.0-only** | https://crates.io/crates/rlx-cpu; local copy at `vendor/rlx-cpu-0.2.14` |
 
 Model weights are **not** shipped with the app. LUNA (Apache-2.0) downloads
 from Hugging Face with SHA-256 verification; REVE (gated) is user-imported.
