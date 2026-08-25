@@ -592,9 +592,38 @@ if simulate {
         });
     }
 
-    // Real Neurosity (Crown/Notion) - delegate to neurosity-ble-rs
+    // Real Neurosity (Crown/Notion) - use OSC over Wi-Fi
     if kind.is_neurosity() {
-        return crown_connect(device_id).await;
+        // For OSC, we don't strictly need the device in cache. The device_id is the Crown's serial number.
+        // Verify it exists if it was discovered via scan.
+        {
+            let guard = state().inner.lock().unwrap();
+            if !guard.devices.contains_key(&device_id) {
+                log::warn!("[crown_osc] Device {device_id} not in cache; connecting anyway (OSC uses serial)");
+            }
+        }
+        
+        // Create unified MuseEventDto channel for the forwarder
+        let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
+        
+        // Start OSC receiver (creates its own tokio task)
+        let status = crate::api::neurosity_osc::connect_crown_osc(device_id.clone(), dto_tx).await?;
+        
+        {
+            let mut guard = state().inner.lock().unwrap();
+            guard.connection_epoch += 1;
+            guard.active = Some(ActiveConnection {
+                handle: ConnectionHandle::Crown, // CrownOscHandle would be better but kept simple
+                name: status.name.clone(),
+                id: device_id.clone(),
+                firmware: status.firmware.clone(),
+            });
+            guard.events = Some(dto_rx);
+        }
+        
+        spawn_event_forwarder();
+        
+        return Ok(status);
     }
 
     // Real Muse - existing logic
