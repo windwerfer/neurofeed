@@ -33,7 +33,7 @@ luna-rs = { git = "https://github.com/windwerfer/luna-rs", tag = "v0.0.4-latent-
 # The direct `rlx` dep is for the public `rlx::Device` type used when loading
 # the encoder; feature `cpu` matches reveal-rs `rlx-cpu` so both unify onto one
 # copy of rlx 0.2.
-rlx = { version = "0.2", default-features = false, features = ["cpu"] }
+rlx = { version = "=0.2.13", default-features = false, features = ["cpu"] }
 
 # Both rust_lib_muse_ml and muse-rs depend on btleplug from
 # crates.io. The [patch.crates-io] below replaces ALL occurrences
@@ -41,7 +41,7 @@ rlx = { version = "0.2", default-features = false, features = ["cpu"] }
 # (and its GLOBAL_JVM / GLOBAL_ADAPTER statics) linked.
 [patch.crates-io]
 btleplug = { path = "../third_party/btleplug" }
-rlx-cpu = { path = "../vendor/rlx-cpu" }
+rlx-cpu = { path = "../vendor/rlx-cpu-0.2.14" }
 
 [patch.'https://github.com/eugenehp/muse-rs.git']
 muse-rs = { path = "../third_party/muse-rs" }

@@ -1,0 +1,31 @@
+// RLX — versatile ML compiler + runtime.
+// Copyright (C) 2026 Eugene Hauptmann, Nataliya Kosmyna.
+// SPDX-License-Identifier: MIT OR Apache-2.0
+mod attention;
+pub use attention::*;
+mod conv;
+pub use conv::*;
+mod custom;
+pub(crate) use custom::*;
+mod elementwise;
+pub use elementwise::*;
+pub(crate) mod helpers;
+pub(crate) use helpers::*;
+mod linalg;
+pub(crate) use linalg::*;
+mod matmul;
+pub(crate) use matmul::*;
+mod norm;
+pub use norm::*;
+mod quant;
+pub use quant::*;
+mod reduce;
+pub use reduce::*;
+mod rnn;
+pub use rnn::*;
+mod signal;
+pub use signal::*;
+mod splat;
+pub(crate) use splat::*;
+mod spline;
+pub(crate) use spline::*;

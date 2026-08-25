@@ -1801,9 +1801,9 @@ dependencies = [
 
 [[package]]
 name = "rlx"
-version = "0.2.14"
+version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d724708e5b556e9be305901da07bf82629b99b91fa00927e75e1e4fd0c3ece5"
+checksum = "132859ca1a79c4c0e45c5ad5b65bc5c408c0dd144cf4b22f3854d410b2236f72"
 dependencies = [
  "anyhow",
  "rlx-driver",
@@ -1839,8 +1839,6 @@ dependencies = [
 [[package]]
 name = "rlx-cpu"
 version = "0.2.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "966c3a44a300e4fa71411a3cde2ee3397497a31310ff9ab6cf3182d106a54b55"
 dependencies = [
  "half",
  "rayon",
@@ -2841,7 +2839,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "rlx-cpu"
-version = "0.2.13"
