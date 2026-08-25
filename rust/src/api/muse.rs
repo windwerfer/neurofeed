@@ -1,4 +1,5 @@
 use flutter_rust_bridge::frb;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::api::device_config::DeviceKind;
 use crate::frb_generated::StreamSink;
@@ -6,7 +7,6 @@ use muse_rs::prelude::*;
 
 use crate::analysis::gesture::GestureDetector;
 use crate::analysis::{guardrail, luna, reve};
-use crate::api::simulator::DeviceSimulator;
 use crate::connection::{state, ActiveConnection, ConnectionHandle};
 
 fn now_ms() -> f64 {
@@ -552,14 +552,17 @@ if simulate {
         // Start simulator
         let config = crate::api::device_config::DeviceConfig::for_kind(kind);
         let (sim_tx, sim_rx) = std::sync::mpsc::channel();
-        let simulator = crate::api::simulator::DeviceSimulator::new(config, sim_tx);
+        let simulator = Arc::new(crate::api::simulator::DeviceSimulator::new(config, sim_tx));
         
         // Create unified MuseEventDto channel for the forwarder (tokio)
         let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
         
         // Bridge task: read from std channel (blocking) and forward to tokio channel
         let bridge_tx = dto_tx.clone();
+        let sim_clone = simulator.clone();
         std::thread::spawn(move || {
+            // Run the simulator (blocks until stopped)
+            let _ = sim_clone.start();
             while let Ok(event) = sim_rx.recv() {
                 if bridge_tx.blocking_send(event).is_err() {
                     break;

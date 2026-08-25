@@ -98,16 +98,95 @@ class ConnectWindow extends ConsumerWidget {
                 }
               },
             ),
+            // Experimental banner for Neurosity (Crown/Notion)
+            if (state.connectDeviceKind == DeviceKind.neurosity &&
+                !state.connectSimulate) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.tertiaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.tertiary,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Theme.of(context).colorScheme.onTertiaryContainer,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Experimental: Neurosity Crown/Notion support is untested on real hardware. '
+                        'Please report bugs on GitHub.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onTertiaryContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             // Simulate toggle (only visible when enabled in settings)
             if (showSimulate) ...[
-              SwitchListTile(
-                title: const Text('Simulate (debug)'),
-                subtitle: const Text('Use built-in simulator instead of real hardware'),
-                value: state.connectSimulate,
-                onChanged: (value) {
-                  notifier.setConnectSimulate(value);
-                },
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.science_outlined,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Simulator (Debug)',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Use built-in simulator instead of real hardware. '
+                      'Produces realistic EEG, bands, IMU, and SpO₂ data.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      title: const Text('Enable Simulator'),
+                      subtitle: Text(
+                        state.connectSimulate
+                            ? 'Simulating ${state.connectDeviceKind.displayName}'
+                            : 'Real hardware will be used',
+                      ),
+                      value: state.connectSimulate,
+                      onChanged: (value) {
+                        notifier.setConnectSimulate(value);
+                      },
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
             ],

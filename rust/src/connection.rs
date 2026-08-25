@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use muse_rs::prelude::*;
 use tokio::sync::mpsc;
@@ -12,7 +12,7 @@ use crate::frb_generated::StreamSink;
 pub enum ConnectionHandle {
     Muse(MuseHandle),
     Crown, // Placeholder - Phase D will implement proper Crown handle
-    Simulator(DeviceSimulator),
+    Simulator(Arc<DeviceSimulator>),
 }
 
 impl ConnectionHandle {

@@ -235,32 +235,6 @@ dependencies = [
 
 [[package]]
 name = "btleplug"
-version = "0.11.8"
-source = "git+https://github.com/windwerfer/btleplug.git?tag=0.12.0-muse-3#bc20eced773ce18e200acf37bcfcf80679b17b6f"
-dependencies = [
- "async-trait",
- "bitflags 2.13.1",
- "bluez-async",
- "dashmap 6.2.1",
- "dbus",
- "futures",
- "jni",
- "log",
- "objc2",
- "objc2-core-bluetooth",
- "objc2-foundation",
- "once_cell",
- "static_assertions",
- "thiserror 2.0.19",
- "tokio",
- "tokio-stream",
- "uuid",
- "windows",
- "windows-future",
-]
-
-[[package]]
-name = "btleplug"
 version = "0.12.0"
 dependencies = [
  "async-trait",
@@ -1148,7 +1122,7 @@ name = "muse-rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "btleplug 0.12.0",
+ "btleplug",
  "env_logger",
  "futures",
  "log",
@@ -1172,22 +1146,6 @@ dependencies = [
  "portable-atomic-util",
  "rawpointer",
  "rayon",
-]
-
-[[package]]
-name = "neurosity-ble-rs"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "btleplug 0.11.8",
- "futures",
- "log",
- "rand",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "uuid",
 ]
 
 [[package]]
@@ -1655,7 +1613,7 @@ version = "0.1.0"
 dependencies = [
  "android_logger 0.14.1",
  "anyhow",
- "btleplug 0.12.0",
+ "btleplug",
  "crc32fast",
  "edf_export",
  "env_logger",
@@ -1664,7 +1622,6 @@ dependencies = [
  "log",
  "luna-rs",
  "muse-rs",
- "neurosity-ble-rs",
  "rand",
  "reve-rs",
  "rlx",
