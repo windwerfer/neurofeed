@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "protocols": {
     "drowsiness": {
       "catchPhrase": "Sleep-Edge Rest",
@@ -10,18 +10,38 @@
       "expectedDelay": "~1s (ATR) + ~1s (AI model window)",
       "calibration": "eyes-closed-01",
       "metadataDescription": "Trains the calm-awake rest state. The reward is the Alpha-over-Theta ratio (ATR = alpha ÷ theta) on the frontal electrodes (AF7/AF8), scored once per second and rewarded while it stays above a personal baseline percentile of the eyes-closed calibration distribution; the threshold adapts during the session (dynamic adapt) to remain in the learning zone. The AI sleep guardrail (LUNA or REVE, RLX CPU engine) embeds a rolling window of raw EEG once per second (LUNA 5 s / 1280 samples, REVE 4 s / 1024 samples) and warns when the live sleep-direction score exceeds the session warning threshold (default 75th percentile of the eyes-closed rest baseline) or the frontal delta exceeds a ceiling. The guardrail only warns - it never modulates the reward.",
-      "guardrailDefaultMode": "drowsinessMath"
+      "guardrailDefaultMode": "drowsinessMath",
+      "color": 16738533,
+      "rewardMetric": "alphaOverTheta",
+      "conditions": [],
+      "guardrailDefault": true,
+      "guardrailAllowed": true,
+      "guardrailFeedback": "muffleWhileWarning",
+      "hasReward": true,
+      "calibrationSkippable": false,
+      "requiredElectrodes": ["AF7", "AF8"],
+      "allowedDevices": ["muse", "simulatedMuse"]
     },
     "twilight": {
       "catchPhrase": "Sleep's Doorway",
       "title": "Theta over Alpha (TAR, hypnagogic rest)",
       "subtitle": "Rewards rising Theta relative to Alpha on the frontal electrodes - training the twilight state between waking calm and sleep, the zone used for hypnagogic imagery and WILD-style lucid dreaming entry. The AI sleep guardrail keeps you from crossing into actual sleep.",
-      "guideText": "What to Meditate On\nLie down or sit comfortably, close your eyes, and let the mind sink toward the threshold of sleep - heavy, dreamy, drifting. Keep just enough awareness to stay present; the reward encourages the theta-dominant borderland, not unconsciousness.\n\nUltimate Goal\nA mind-awake, body-asleep state: deep hypnagogic relaxation where imagery and dreamlike thought arise while a thread of awareness stays online. This is the entry zone for WILD-style lucid dreaming and deeply restorative rest.\n\nMind & State Effects\nTheta dominance is associated with drowsiness, hypnagogic imagery and the transition into sleep. Training it deliberately builds familiarity with the borderland - the reward rises as Theta overtakes Alpha on the frontal electrodes, while the guardrail warns when the signal moves toward actual sleep.\n\nScientific Explanation\n- Target Bands: Theta (4–8 Hz) and Alpha (8–13 Hz) on the frontal electrodes (AF7/AF8).\n- The Mechanism: as relaxation deepens toward sleep, Theta power grows relative to Alpha. The ratio trains that direction.\n- The Reward Criterion: the Theta/Alpha ratio (TAR = theta ÷ alpha) is rewarded while it stays above your personal baseline percentile. In plain terms the training encourages the twilight state, not sleep.\n- Guardrail: the on-device AI layer (LUNA/REVE) and the frontal-delta ceiling warn when the state crosses into actual sleep - statistical estimates, not a medical device.\n\nTarget Meditation Styles\nHypnagogic exploration, Yoga Nidra, WILD-style lucid dreaming preparation, deep rest.\n\nWho It Helps\n- Practitioners working with lucid dreaming entry and hypnagogic imagery.\n- People who want the deep rest of the sleep border while keeping awareness.\n\nWho Should Avoid This\n- Anyone who needs guaranteed wakefulness: the guardrail is an approximate cue, not a safety device.\n- Those who find the hypnagogic state disorienting or who simply want to stay asleep - use a rest protocol without the sleep edge.",
+      "guideText": "What to Meditate On\nLie down or sit comfortably, close your eyes, and let the mind sink toward the threshold of sleep - heavy, dreamy, drifting. Keep just enough awareness to stay present; the reward encourages the theta-dominant borderland, not unconsciousness.\n\nUltimate Goal\nA mind-awake, body-asleep state: deep hypnagogic relaxation where imagery and dreamlike thought arise while a thread of awareness stays online. This is the entry zone for WILD-style lucid dreaming and deeply restorative rest.\n\nMind & State Effects\nTheta dominance is associated with drowsiness, hypnagogic imagery and the transition into sleep. Training it deliberately builds familiarity with the borderland - the reward rises as Theta overtakes Alpha on the frontal electrodes, while the guardrail warns when the signal moves toward actual sleep.\n\nScientific Explanation\n- Target Bands: Theta (4–8 Hz) and Alpha (8–13 Hz) on the frontal electrodes (AF7/AF8).\n- The Mechanism: as relaxation deepens toward sleep, Theta power grows relative to Alpha. The ratio trains that direction.\n- The Reward Criterion: the Theta/Alpha ratio (TAR = theta ÷ alpha) is rewarded while it stays above your personal baseline percentile. In plain terms the training encourages the twilight state, not sleep.\n- Guardrail: the on-device AI layer (LUNA/REVE) and the frontal-delta ceiling warn when the state crosses into actual sleep - statistical estimates, not a medical device.\n\nTarget Meditation Styles\nHypnagogic exploration, Yoga Nidra, WILD-style lucid dreaming preparation, deep rest.\n\nWho It Helps\n- Practitioners working with lucid dreaming entry and hypnagogic imagery.\n- People who want the deep rest of the sleep border while keeping awareness.\n\nWho Should Avoid This\n- Anyone who needs guaranteed wakefulness: the guardrail is an approximate cue, not a safety device.\n- Those who find the hypnagogic state disorienting or who simply want to stay asleep - use a rest protocol without t... (line truncated to 2000 chars)",
       "algorithmDescription": "Computes the Theta/Alpha ratio (TAR = theta power ÷ alpha power) on the AF7/AF8 average. The reward fires while TAR is above a threshold derived from your personal baseline: a configurable percentile of the calibration distribution. The threshold adapts during the session to keep you in the learning zone. The LUNA/REVE AI sleep guardrail warns (chime, plus music muffle) when the live sleep direction or frontal delta crosses into actual sleep.",
       "expectedDelay": "~1s (TAR) + ~1s (AI model window)",
       "calibration": "eyes-closed-01",
       "metadataDescription": "Trains the hypnagogic twilight state at the border of sleep. The reward is the Theta-over-Alpha ratio (TAR = theta ÷ alpha) on the frontal electrodes (AF7/AF8), scored once per second and rewarded while it stays above a personal baseline percentile of the eyes-closed calibration distribution; the threshold adapts during the session. The AI sleep guardrail warns when the live sleep-direction score crosses the warning threshold or the frontal delta exceeds a ceiling, keeping the practice at the sleep border rather than in sleep.",
-      "guardrailDefaultMode": "drowsinessMath"
+      "guardrailDefaultMode": "drowsinessMath",
+      "color": 16743594,
+      "rewardMetric": "thetaOverAlpha",
+      "conditions": [],
+      "guardrailDefault": true,
+      "guardrailAllowed": true,
+      "guardrailFeedback": "muffleWhileWarning",
+      "hasReward": true,
+      "calibrationSkippable": false,
+      "requiredElectrodes": ["AF7", "AF8"],
+      "allowedDevices": ["muse", "simulatedMuse"]
     },
     "alertnessOpen": {
       "catchPhrase": "Eyes-Open Alertness",
@@ -32,7 +52,17 @@
       "expectedDelay": "~1s (live band stream)",
       "calibration": "eyes-open-01",
       "metadataDescription": "Trains alertness with the eyes open. The reward is the Beta-over-Theta ratio (BTR = beta ÷ theta) on the frontal electrodes (AF7/AF8), scored once per second and rewarded while it stays above a personal baseline percentile of the eyes-open calibration distribution. Movement- and artifact-contaminated samples are gated out. No sleep guardrail runs for this protocol (eyes-open practice has no sleep drift to guard against).",
-      "guardrailDefaultMode": "drowsinessMath"
+      "guardrailDefaultMode": "drowsinessMath",
+      "color": 16764672,
+      "rewardMetric": "betaOverTheta",
+      "conditions": [],
+      "guardrailDefault": false,
+      "guardrailAllowed": false,
+      "guardrailFeedback": "chimeOnly",
+      "hasReward": true,
+      "calibrationSkippable": false,
+      "requiredElectrodes": ["AF7", "AF8"],
+      "allowedDevices": ["muse", "simulatedMuse"]
     },
     "alertnessClosed": {
       "catchPhrase": "Eyes-Closed Alertness",
@@ -43,7 +73,17 @@
       "expectedDelay": "~1s (live band stream)",
       "calibration": "eyes-closed-01",
       "metadataDescription": "Trains alertness with the eyes closed. The reward is the Beta-over-Theta ratio (BTR = beta ÷ theta) on the frontal electrodes (AF7/AF8), scored once per second and rewarded while it stays above a personal baseline percentile of the eyes-closed calibration distribution. Movement- and artifact-contaminated samples are gated out.",
-      "guardrailDefaultMode": "drowsinessMath"
+      "guardrailDefaultMode": "drowsinessMath",
+      "color": 16757115,
+      "rewardMetric": "betaOverTheta",
+      "conditions": [],
+      "guardrailDefault": false,
+      "guardrailAllowed": true,
+      "guardrailFeedback": "chimeOnly",
+      "hasReward": true,
+      "calibrationSkippable": false,
+      "requiredElectrodes": ["AF7", "AF8"],
+      "allowedDevices": ["muse", "simulatedMuse"]
     },
     "mindfulness": {
       "catchPhrase": "Calm Awareness",
@@ -54,7 +94,17 @@
       "expectedDelay": "~1s (live band stream)",
       "calibration": "eyes-closed-01",
       "metadataDescription": "Trains calm, wakeful open-monitoring attention. The reward is the relative Alpha power (alpha ÷ total band power) on the frontal electrodes (AF7/AF8), scored once per second and rewarded while it stays above a personal baseline percentile of the eyes-closed calibration distribution; the threshold adapts during the session. A single-band target - no ratio.",
-      "guardrailDefaultMode": "drowsinessMath"
+      "guardrailDefaultMode": "drowsinessMath",
+      "color": 16744519,
+      "rewardMetric": "alphaOnly",
+      "conditions": [],
+      "guardrailDefault": false,
+      "guardrailAllowed": true,
+      "guardrailFeedback": "chimeOnly",
+      "hasReward": true,
+      "calibrationSkippable": false,
+      "requiredElectrodes": ["AF7", "AF8"],
+      "allowedDevices": ["muse", "simulatedMuse"]
     },
     "concentration": {
       "catchPhrase": "Quiet Focus",
@@ -65,7 +115,19 @@
       "expectedDelay": "~1s (live band stream)",
       "calibration": "eyes-closed-01",
       "metadataDescription": "Trains stable, focused attention. The reward is the relative Alpha power (alpha ÷ total band power) on the frontal electrodes (AF7/AF8) rewarded while it stays above a personal baseline percentile of the eyes-closed calibration distribution AND relative Beta stays ≤ 0.25 (beta-inhibit - quieted high-frequency activity). Both conditions gate the reward; the Alpha threshold adapts during the session.",
-      "guardrailDefaultMode": "drowsinessMath"
+      "guardrailDefaultMode": "drowsinessMath",
+      "color": 16741088,
+      "rewardMetric": "alphaOnly",
+      "conditions": [
+        {"type": "betaCeiling", "maxBetaRel": 0.25}
+      ],
+      "guardrailDefault": false,
+      "guardrailAllowed": true,
+      "guardrailFeedback": "chimeOnly",
+      "hasReward": true,
+      "calibrationSkippable": false,
+      "requiredElectrodes": ["AF7", "AF8"],
+      "allowedDevices": ["muse", "simulatedMuse"]
     },
     "relaxedConcentration": {
       "catchPhrase": "Deep Stillness",
@@ -76,7 +138,20 @@
       "expectedDelay": "~1s (ATR) + ~1s (AI model window)",
       "calibration": "eyes-closed-01",
       "metadataDescription": "Trains deep stillness as a proxy for access concentration. The reward is the Alpha-over-Theta ratio (ATR = alpha ÷ theta) on the frontal electrodes (AF7/AF8), rewarded while it stays above a personal baseline percentile of the eyes-closed calibration distribution AND relative Beta ≤ 0.25 AND relative Delta ≤ 0.5 - a calm, quiet, non-sleeping state. The AI sleep guardrail additionally warns on sleep-direction drift. The ATR threshold adapts during the session.",
-      "guardrailDefaultMode": "drowsinessMath"
+      "guardrailDefaultMode": "drowsinessMath",
+      "color": 16746561,
+      "rewardMetric": "alphaOverTheta",
+      "conditions": [
+        {"type": "betaCeiling", "maxBetaRel": 0.25},
+        {"type": "deltaCeiling", "maxDeltaRel": 0.5}
+      ],
+      "guardrailDefault": true,
+      "guardrailAllowed": true,
+      "guardrailFeedback": "muffleWhileWarning",
+      "hasReward": true,
+      "calibrationSkippable": false,
+      "requiredElectrodes": ["AF7", "AF8"],
+      "allowedDevices": ["muse", "simulatedMuse"]
     },
     "recordOnly": {
       "catchPhrase": "Record Only",
@@ -87,7 +162,17 @@
       "expectedDelay": "-",
       "calibration": "eyes-closed-01",
       "metadataDescription": "Recording only: no reward metric, no guardrail, no feedback sounds. Every enabled stream (EEG, bands, PPG, pulse, IMU, movement, peak alpha, telemetry) is written to the session file. When calibration is not skipped, an eyes-closed baseline is captured and recorded in the metadata - it does not gate any feedback.",
-      "guardrailDefaultMode": "drowsinessMath"
+      "guardrailDefaultMode": "drowsinessMath",
+      "color": 16745547,
+      "rewardMetric": "alphaOverTheta",
+      "conditions": [],
+      "guardrailDefault": false,
+      "guardrailAllowed": false,
+      "guardrailFeedback": "chimeOnly",
+      "hasReward": false,
+      "calibrationSkippable": true,
+      "requiredElectrodes": ["AF7", "AF8"],
+      "allowedDevices": ["muse", "simulatedMuse"]
     },
     "guardrailOnly": {
       "catchPhrase": "Sleep Guard",
@@ -98,7 +183,17 @@
       "expectedDelay": "~1s (AI model window)",
       "calibration": "eyes-closed-01",
       "metadataDescription": "Guardrail-only rest practice: no reward engine runs - the session is scored only by the sleep guardrail. The 3-stage calibration (artifact blinks/clenches, an eyes-open clear anchor, an eyes-closed rest distribution) feeds the on-device AI scorer (LUNA/REVE, RLX CPU) or, when no model is installed, the band-math fallback on frontal delta. A warning fires when the live sleep direction exceeds the warning threshold (default 75th percentile of the eyes-closed rest baseline) or frontal delta exceeds a ceiling.",
-      "guardrailDefaultMode": "drowsinessMath"
+      "guardrailDefaultMode": "drowsinessMath",
+      "color": 16745905,
+      "rewardMetric": "alphaOverTheta",
+      "conditions": [],
+      "guardrailDefault": true,
+      "guardrailAllowed": true,
+      "guardrailFeedback": "chimeOnly",
+      "hasReward": false,
+      "calibrationSkippable": false,
+      "requiredElectrodes": ["AF7", "AF8"],
+      "allowedDevices": ["muse", "simulatedMuse"]
     }
   }
 }

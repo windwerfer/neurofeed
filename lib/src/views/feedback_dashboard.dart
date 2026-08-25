@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -67,14 +68,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       if (summary != null) {
         // Fast path: render the detail straight from the decimated overview in
         // the metadata head, without reading (or parsing) the .muse body.
-        final protocol = ProtocolInfo.forType(
-          widget.metadata?.protocol ?? ProtocolType.drowsiness,
-        );
-        _prepared = prepareChartDataFromOverview(
-          summary,
-          metric: protocol.rewardMetric,
-          conditions: protocol.conditions,
-        );
+        _loadProtocolAndPrepareChart(summary);
       } else {
         // Legacy session without a summary: fall back to a full-body parse.
         final store = ref.read(sessionStoreProvider.future);
@@ -125,11 +119,43 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     super.dispose();
   }
 
+  Future<void> _loadProtocolAndPrepareChart(SessionOverview summary) async {
+    final protocolType = widget.metadata?.protocol ?? ProtocolType.drowsiness;
+    final raw = await rootBundle.loadString(ProtocolCatalog.asset);
+    final json = jsonDecode(raw) as Map<String, Object?>;
+    final catalog = ProtocolCatalog.fromJson(json);
+    final protocol = catalog.forName(protocolType.name);
+    if (protocol != null) {
+      _prepared = prepareChartDataFromOverview(
+        summary,
+        metric: protocol.rewardMetric,
+        conditions: protocol.conditions,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final fb = ref.watch(feedbackStateProvider);
     final meta = widget.metadata;
-    final protocol = ProtocolInfo.forType(meta?.protocol ?? fb.protocol);
+    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
+    final protocol = catalog?.forName((meta?.protocol ?? fb.protocol).name) ??
+        const ProtocolInfo(
+          type: ProtocolType.drowsiness,
+          color: Color(0xFF1E88E5),
+          rewardMetric: RewardMetric.alphaOverTheta,
+          guardrailDefault: true,
+          guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
+          requiredElectrodes: ['AF7', 'AF8'],
+          catchPhrase: '',
+          title: '',
+          subtitle: '',
+          guideText: '',
+          algorithmDescription: '',
+          expectedDelay: '',
+          calibration: '',
+          guardrailDefaultMode: 'drowsinessMath',
+        );
     final copy = useProtocolCopy(ref, protocol);
 
     return PopScope(

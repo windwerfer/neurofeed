@@ -9,8 +9,6 @@ import 'package:muse_ml/src/feedback/protocol.dart';
 /// editable place for catch phrase / title / subtitle / guide text /
 /// algorithm description / expected delay / scientific metadata description
 /// (and the structural `calibration` reference read by `CalibrationManifest`).
-/// Structure (colors, metrics, conditions, guardrail flags) stays in
-/// `protocol.dart`.
 class ProtocolCopy {
   const ProtocolCopy({
     required this.catchPhrase,
@@ -42,14 +40,14 @@ class ProtocolCopy {
   /// into the `.muse.feedback` session metadata.
   final String? metadataDescription;
 
-  factory ProtocolCopy.fromJson(Map<String, Object?> json) => ProtocolCopy(
-    catchPhrase: json['catchPhrase'] as String? ?? '',
-    title: json['title'] as String? ?? '',
-    subtitle: json['subtitle'] as String? ?? '',
-    guideText: json['guideText'] as String? ?? '',
-    algorithmDescription: json['algorithmDescription'] as String? ?? '',
-    expectedDelay: json['expectedDelay'] as String? ?? '',
-    metadataDescription: json['metadataDescription'] as String?,
+  factory ProtocolCopy.fromProtocolInfo(ProtocolInfo info) => ProtocolCopy(
+    catchPhrase: info.catchPhrase,
+    title: info.title,
+    subtitle: info.subtitle,
+    guideText: info.guideText,
+    algorithmDescription: info.algorithmDescription,
+    expectedDelay: info.expectedDelay,
+    metadataDescription: info.metadataDescription,
   );
 }
 
@@ -57,9 +55,11 @@ class ProtocolCatalog {
   const ProtocolCatalog({required this.version, required this.byName});
 
   final int version;
-  final Map<String, ProtocolCopy> byName;
+  final Map<String, ProtocolInfo> byName;
 
-  ProtocolCopy? forName(String protocolName) => byName[protocolName];
+  ProtocolInfo? forName(String protocolName) => byName[protocolName];
+
+  List<ProtocolInfo> get all => byName.values.toList();
 
   factory ProtocolCatalog.fromJson(Map<String, Object?> json) {
     final raw = json['protocols'] as Map<String, Object?>? ?? const {};
@@ -68,8 +68,9 @@ class ProtocolCatalog {
       byName: {
         for (final entry in raw.entries)
           if (entry.value is Map<String, Object?>)
-            entry.key: ProtocolCopy.fromJson(
+            entry.key: ProtocolInfo.fromJson(
               entry.value as Map<String, Object?>,
+              entry.key,
             ),
       },
     );
@@ -94,10 +95,17 @@ ProtocolCopy useProtocolCopy(WidgetRef ref, ProtocolInfo info) {
   if (catalogAsync.isLoading || catalogAsync.hasError) {
     return ProtocolCopy.empty;
   }
-  final copy = catalogAsync.valueOrNull?.forName(info.type.name);
+  final catalog = catalogAsync.valueOrNull;
   assert(
-    copy != null,
+    catalog != null,
+    'Protocol catalog not loaded',
+  );
+  final protocolInfo = catalog?.forName(info.type.name);
+  assert(
+    protocolInfo != null,
     'assets/protocols.json is missing an entry for ${info.type.name}',
   );
-  return copy ?? ProtocolCopy.empty;
+  return protocolInfo != null
+      ? ProtocolCopy.fromProtocolInfo(protocolInfo)
+      : ProtocolCopy.empty;
 }

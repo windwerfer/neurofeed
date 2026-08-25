@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -5,9 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:muse_ml/src/charts/band_cache.dart';
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_pdf_export.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
@@ -133,6 +136,14 @@ class SessionExporter {
   final SessionStorage _storage;
 
   static const exportDirName = 'export';
+
+  /// Load protocol info from the JSON asset.
+  static Future<ProtocolInfo?> _loadProtocolInfo(ProtocolType type) async {
+    final raw = await rootBundle.loadString(ProtocolCatalog.asset);
+    final json = jsonDecode(raw) as Map<String, Object?>;
+    final catalog = ProtocolCatalog.fromJson(json);
+    return catalog.forName(type.name);
+  }
 
   Future<SessionExportResult> exportSessions({
     required List<SessionSummary> sessions,
@@ -391,7 +402,11 @@ class SessionExporter {
     }
 
     final meta = s.metadata;
-    final protocol = ProtocolInfo.forType(meta.protocol);
+    final protocol = await _loadProtocolInfo(meta.protocol);
+    if (protocol == null) {
+      warnings.add(ExportWarning(s.id, 'protocol not found in catalog'));
+      return 0;
+    }
     final prepared = prepareChartData(
       data,
       trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,

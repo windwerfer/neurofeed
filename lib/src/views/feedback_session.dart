@@ -50,12 +50,29 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
   @override
   Widget build(BuildContext context) {
     final fb = ref.watch(feedbackStateProvider);
-    final protocol = ProtocolInfo.forType(fb.protocol);
+    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
+    final protocol = catalog?.forName(fb.protocol.name) ??
+        const ProtocolInfo(
+          type: ProtocolType.drowsiness,
+          color: Color(0xFF1E88E5),
+          rewardMetric: RewardMetric.alphaOverTheta,
+          guardrailDefault: true,
+          guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
+          requiredElectrodes: ['AF7', 'AF8'],
+          catchPhrase: '',
+          title: '',
+          subtitle: '',
+          guideText: '',
+          algorithmDescription: '',
+          expectedDelay: '',
+          calibration: '',
+          guardrailDefaultMode: 'drowsinessMath',
+        );
     final copy = useProtocolCopy(ref, protocol);
     final app = ref.watch(appStateProvider);
     final connected = app.status.connected;
     final theme = Theme.of(context);
-    final guardrailOn = ProtocolInfo.forType(fb.protocol).guardrailAllowed;
+    final guardrailOn = protocol.guardrailAllowed;
 
     return Scaffold(
       appBar: AppBar(
@@ -358,7 +375,7 @@ class _PhaseControls extends ConsumerWidget {
             ],
           );
         }
-        final skippable = ProtocolInfo.forType(fb.protocol).calibrationSkippable;
+        final skippable = protocol.calibrationSkippable;
         if (skippable) {
           return Row(
             children: [
@@ -623,13 +640,31 @@ class _NerdStatsBubble extends ConsumerWidget {
     final stats = ref.watch(liveStatsProvider);
     final fb = ref.watch(feedbackStateProvider);
     final theme = Theme.of(context);
+    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
+    final protocol = catalog?.forName(fb.protocol.name) ??
+        const ProtocolInfo(
+          type: ProtocolType.drowsiness,
+          color: Color(0xFF1E88E5),
+          rewardMetric: RewardMetric.alphaOverTheta,
+          guardrailDefault: true,
+          guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
+          requiredElectrodes: ['AF7', 'AF8'],
+          catchPhrase: '',
+          title: '',
+          subtitle: '',
+          guideText: '',
+          algorithmDescription: '',
+          expectedDelay: '',
+          calibration: '',
+          guardrailDefaultMode: 'drowsinessMath',
+        );
     final percentile = stats.currentPercentile;
     final atr = stats.currentAtr;
     final threshold = stats.threshold;
     final baselineMean = stats.baselineMean;
     final baselineStddev = stats.baselineStddev;
     final metricName =
-        ProtocolInfo.forType(fb.protocol).rewardMetric.shortLabel;
+        protocol.rewardMetric.shortLabel;
     final lines = <String>[];
     if (percentile == null || atr == null) {
       lines.add('Collecting…');
@@ -680,7 +715,25 @@ class _SessionSettingsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
     final theme = Theme.of(context);
-    final hasReward = ProtocolInfo.forType(fb.protocol).hasReward;
+    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
+    final protocol = catalog?.forName(fb.protocol.name) ??
+        const ProtocolInfo(
+          type: ProtocolType.drowsiness,
+          color: Color(0xFF1E88E5),
+          rewardMetric: RewardMetric.alphaOverTheta,
+          guardrailDefault: true,
+          guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
+          requiredElectrodes: ['AF7', 'AF8'],
+          catchPhrase: '',
+          title: '',
+          subtitle: '',
+          guideText: '',
+          algorithmDescription: '',
+          expectedDelay: '',
+          calibration: '',
+          guardrailDefaultMode: 'drowsinessMath',
+        );
+    final hasReward = protocol.hasReward;
     return Card(
       color: theme.colorScheme.surfaceContainerHighest,
       child: Column(
@@ -2035,10 +2088,12 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
     final settings = ref.watch(settingsProvider);
     final audio = ref.read(audioServiceProvider);
     final theme = Theme.of(context);
+    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
+    final protocol = catalog?.forName(fb.protocol.name);
 
     // Modes available for this protocol (all except those not allowed)
     final allowedModes = GuardrailMode.values.where((m) {
-      if (!ProtocolInfo.forType(fb.protocol).guardrailAllowed) {
+      if (protocol?.guardrailAllowed == false) {
         return m == GuardrailMode.none;
       }
       return true;

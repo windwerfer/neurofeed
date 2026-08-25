@@ -437,7 +437,24 @@ class _HistoryTileState extends ConsumerState<_HistoryTile>
     super.build(context);
     final theme = Theme.of(context);
     final meta = widget.summary.metadata;
-    final protocol = ProtocolInfo.forType(meta.protocol);
+    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
+    final protocol = catalog?.forName(meta.protocol.name) ??
+        const ProtocolInfo(
+          type: ProtocolType.drowsiness,
+          color: Color(0xFF1E88E5),
+          rewardMetric: RewardMetric.alphaOverTheta,
+          guardrailDefault: true,
+          guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
+          requiredElectrodes: ['AF7', 'AF8'],
+          catchPhrase: '',
+          title: '',
+          subtitle: '',
+          guideText: '',
+          algorithmDescription: '',
+          expectedDelay: '',
+          calibration: '',
+          guardrailDefaultMode: 'drowsinessMath',
+        );
     final copy = useProtocolCopy(ref, protocol);
     final stats = meta.stats;
     final dateTime = DateTime.tryParse(meta.savedAt);

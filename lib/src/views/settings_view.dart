@@ -507,8 +507,8 @@ class _GuardrailCard extends ConsumerStatefulWidget {
 
 class _GuardrailCardState extends ConsumerState<_GuardrailCard> {
   late final Map<ProtocolType, bool> _enabled = {
-    for (final p in ProtocolInfo.all.where((p) => p.guardrailAllowed))
-      p.type: widget.settings.guardrailEnabledFor(p.type),
+    for (final p in ref.read(protocolCatalogProvider).valueOrNull?.all ?? <ProtocolInfo>[])
+      if (p.guardrailAllowed) p.type: widget.settings.guardrailEnabledFor(p.type),
   };
 
   @override
@@ -543,7 +543,7 @@ class _GuardrailCardState extends ConsumerState<_GuardrailCard> {
               ),
             ),
             const Divider(height: 24),
-            for (final p in ProtocolInfo.all.where((p) => p.guardrailAllowed))
+            for (final p in ref.watch(protocolCatalogProvider).valueOrNull?.all.where((p) => p.guardrailAllowed) ?? <ProtocolInfo>[])
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 secondary: Icon(

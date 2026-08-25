@@ -56,7 +56,7 @@ void main() {
       jsonDecode(manifestRaw),
       protocolsJson: jsonDecode(raw),
     )!;
-    for (final info in ProtocolInfo.all) {
+    for (final info in catalog.all) {
       final copy = catalog.forName(info.type.name);
       expect(copy, isNotNull,
           reason: 'assets/protocols.json missing entry for ${info.type.name}');
