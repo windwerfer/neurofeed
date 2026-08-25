@@ -66,7 +66,7 @@ void main() {
           calibrationId: 'eyes-closed-01',
           calibrationJson: {'name': 'Eyes Closed', 'staged': {'stages': []}},
           calibrationStartSecs: 0,
-          calibrationEndSecs: 90,
+          calibrationEndSecs: 50,
           trainingStartSecs: 95,
           usedStartAnyway: false,
           greenStableSeconds: 3,

@@ -4,28 +4,28 @@
     "eyes-closed-01": {
       "name": "Eyes Closed",
       "single": {
-        "seconds": 90,
+        "seconds": 50,
         "eyes": "closed",
         "intros": [
           {
             "id": "atr-short-clear",
             "file": "assets/audio/calibration/alpha-theta-ratio_short-clear.opus",
-            "text": "Please close your eyes and sit comfortably. For the next ninety seconds, simply rest. Let your mind settle on its own. There is nothing you need to do. We are measuring your natural baseline."
+            "text": "Please close your eyes and sit comfortably. For the next fifty seconds, simply rest. Let your mind settle on its own. There is nothing you need to do. We are measuring your natural baseline."
           },
           {
             "id": "atr-soft-reassuring",
             "file": "assets/audio/calibration/alpha-theta-ratio_soft-reassuring.opus",
-            "text": "Gently close your eyes and relax your jaw. For the next ninety seconds, just sit quietly. You don’t need to focus or control anything. Let your awareness rest inside and allow everything to settle. This short period helps us set your personal baseline."
+            "text": "Gently close your eyes and relax your jaw. For the next fifty seconds, just sit quietly. You don’t need to focus or control anything. Let your awareness rest inside and allow everything to settle. This short period helps us set your personal baseline."
           },
           {
             "id": "atr-minimal-direct",
             "file": "assets/audio/calibration/alpha-theta-ratio_minimal-direct.opus",
-            "text": "Close your eyes. Sit quietly for ninety seconds. Let everything rest on its own. Recording your baseline now."
+            "text": "Close your eyes. Sit quietly for fifty seconds. Let everything rest on its own. Recording your baseline now."
           },
           {
             "id": "atr-meditative-tone",
             "file": "assets/audio/calibration/alpha-theta-ratio_meditative-tone.opus",
-            "text": "Close your eyes and find a comfortable position. For the next ninety seconds, allow yourself to simply be here. No effort is needed. Let your mind rest and your awareness turn inward."
+            "text": "Close your eyes and find a comfortable position. For the next fifty seconds, allow yourself to simply be here. No effort is needed. Let your mind rest and your awareness turn inward."
           }
         ]
       },
@@ -70,13 +70,13 @@
     "eyes-open-01": {
       "name": "Eyes Open",
       "single": {
-        "seconds": 90,
+        "seconds": 50,
         "eyes": "open",
         "intros": [
           {
             "id": "alertness-open-intro",
             "file": "assets/audio/calibration/eyes-open-baseline-01.opus",
-            "text": "For the next ninety seconds, keep your eyes open. Look softly ahead, and simply pay attention to whatever you see. Stay alert and engaged. We are measuring your eyes-open baseline."
+            "text": "For the next fifty seconds, keep your eyes open. Look softly ahead, and simply pay attention to whatever you see. Stay alert and engaged. We are measuring your eyes-open baseline."
           }
         ]
       },

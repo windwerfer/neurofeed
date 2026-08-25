@@ -170,7 +170,7 @@ SessionMetadata _metadata({
               ),
               SessionCalibrationPhase(
                 name: 'Baseline',
-                durationSecs: 90,
+                durationSecs: 50,
                 sampleCount: 900,
                 eyes: 'closed',
                 startSecs: 5,

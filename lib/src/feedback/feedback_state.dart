@@ -42,7 +42,7 @@ const int faultyPadSeconds = 20;
 /// future feedback options are added they should reuse this same "enough pads
 /// for this program" model rather than requiring all four pads.
 const List<int> neededElectrodes = [1, 2];
-const int calibrationBaselineSeconds = 90;
+const int calibrationBaselineSeconds = 50;
 const int adaptIntervalSeconds = 30;
 const Duration movementBuffer = Duration(seconds: 1);
 const Duration calibrationAudioTimeout = Duration(seconds: 15);
