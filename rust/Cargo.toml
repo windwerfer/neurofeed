@@ -40,11 +40,12 @@ rlx = { version = "=0.2.13", default-features = false, features = ["cpu"] }
 # with our JNI-fixed fork, so there is only ONE copy of btleplug
 # (and its GLOBAL_JVM / GLOBAL_ADAPTER statics) linked.
 [patch.crates-io]
-btleplug = { path = "../third_party/btleplug" }
+btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-5" }
 rlx-cpu = { path = "../vendor/rlx-cpu-0.2.14" }
 
 [patch.'https://github.com/eugenehp/muse-rs.git']
-muse-rs = { path = "../third_party/muse-rs" }
+muse-rs = { git = "https://github.com/windwerfer/muse-rs.git", tag = "0.1.1" }
+
 
 
 [target.'cfg(target_os = "linux")'.dependencies]
