@@ -13,6 +13,7 @@ import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
+import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
@@ -192,6 +193,9 @@ class FeedbackState {
 
 class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   FeedbackStateNotifier(this._ref) : super(const FeedbackState()) {
+    final storageFuture = _ref.read(sessionStorageProvider.future);
+    _recorder = FeedbackRecorder(storage: storageFuture);
+    
     _eventSub = _ref
         .read(appStateProvider.notifier)
         .eventStream
@@ -252,7 +256,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   int _adaptTick = 0;
   final TargetStateAggregator _target = TargetStateAggregator();
   final RatioEngine _engine = RatioEngine();
-  final FeedbackRecorder _recorder = FeedbackRecorder();
+  late final FeedbackRecorder _recorder;
 
   /// Per-second sleep-guardrail readings captured while playing (only when
   /// the guardrail is armed). Persisted as [SessionDrowsiness] metadata.
@@ -616,6 +620,19 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         ),
       ),
     );
+    // Write in-flight recalibration metadata
+    if (_sessionStartAt != null) {
+      _recorder.writeMetadata({
+        'type': 'recalibration',
+        'atSecs': state.elapsedSeconds.toDouble(),
+        'threshold': _engine.threshold,
+        'baselineCount': _engine.baselineCount,
+        'baselinePercentile': _engine.baselinePercentile,
+        'baselineMean': _engine.baselineMean,
+        'baselineStddev': _engine.baselineStddev,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+    }
     final stats = _ref.read(liveStatsProvider);
     stats
       ..setBaseline(
@@ -741,6 +758,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         );
       }
     }
+    // Write calibration start metadata
+    _recorder.writeMetadata({
+      'type': 'calibration_start',
+      'kind': _calibrationKind,
+      'calibrationId': _calibrationId,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
     await _runNextCalibrationStep();
   }
 
@@ -795,6 +819,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             kind: _calibrationKind == 'staged' ? 'stage' : 'intro',
           ),
         );
+        // Write calibration phase metadata
+        _recorder.writeMetadata({
+          'type': 'calibration_phase',
+          'clipId': step.clip!.id,
+          'eyes': step.clip!.eyes,
+          'startSecs': clipStart.difference(sessionStart).inMilliseconds / 1000,
+          'endSecs': clipEnd.difference(sessionStart).inMilliseconds / 1000,
+          'kind': _calibrationKind == 'staged' ? 'stage' : 'intro',
+          'timestamp': DateTime.now().toIso8601String(),
+        });
       }
     }
     if (step.seconds > 0) {
@@ -856,6 +890,19 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _ref.read(liveStatsProvider).setThreshold(threshold);
     if (_guardrailEnabled && (_clearCaptured || _guardrailBandMath)) {
       _finalizeGuardrailBaseline();
+    }
+    // Write calibration complete metadata
+    if (_sessionStartAt != null) {
+      _recorder.writeMetadata({
+        'type': 'calibration_complete',
+        'threshold': threshold,
+        'baselineCount': _engine.baselineCount,
+        'baselinePercentile': _engine.baselinePercentile,
+        'baselineMean': _engine.baselineMean,
+        'baselineStddev': _engine.baselineStddev,
+        'timestamp': DateTime.now().toIso8601String(),
+        'elapsedSecs': DateTime.now().difference(_sessionStartAt!).inMilliseconds / 1000,
+      });
     }
     _recordCalibration();
     state = state.copyWith(
@@ -1687,6 +1734,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (now.difference(_lastWarningChimeAt) >= warningChimeCooldown) {
       _lastWarningChimeAt = now;
       unawaited(_audio.playWarningChime());
+      // Write guardrail warning metadata
+      if (_sessionStartAt != null) {
+        _recorder.writeMetadata({
+          'type': 'guardrail_warning',
+          'sleepDir': _lastSleepDir,
+          'delta': _lastDelta,
+          'threshold': threshold,
+          'mode': _guardrailBandMath ? 'band_math' : 'ai',
+          'timestamp': now.toIso8601String(),
+          'elapsedSecs': now.difference(_sessionStartAt!).inMilliseconds / 1000,
+        });
+      }
       debugPrint(
         '[guardrail] WARNING sleep_dir=${_lastSleepDir.toStringAsFixed(3)} '
         'delta=${_lastDelta.toStringAsFixed(3)} '

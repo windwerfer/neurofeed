@@ -15,8 +15,8 @@ import 'package:muse_ml/src/settings.dart';
 /// peak alpha) plus the raw EEG for the session duration. Live writes always
 /// go to the fast scratch directory — SAF is only touched on Save.
 class FeedbackRecorder {
-  FeedbackRecorder({SessionStorage? storage})
-      : _storage = storage == null ? _defaultStorage() : Future.value(storage);
+  FeedbackRecorder({Future<SessionStorage>? storage})
+      : _storage = storage ?? _defaultStorage();
 
   final Future<SessionStorage> _storage;
   final SessionRecorder _recorder = SessionRecorder();
@@ -64,6 +64,11 @@ class FeedbackRecorder {
   /// Add a computed frame (1 Hz) to the session recording.
   void appendComputed(ComputedFrame frame) {
     _recorder.appendComputed(frame);
+  }
+
+  /// Write a metadata event (calibration step, guardrail event, etc.) as JSON line.
+  void writeMetadata(Map<String, dynamic> meta) {
+    _recorder.writeMetadata(meta);
   }
 
   /// Flush pending data to disk without finalizing the temp file.
