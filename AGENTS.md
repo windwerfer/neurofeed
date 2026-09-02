@@ -1,259 +1,216 @@
 # AGENTS.md — Muse ML (Flutter + Rust BLE headset app)
 
-Global orientation for any AI agent or contributor working in this repo.
+Global orientation. Maps and history live in [`.ai/README.md`](.ai/README.md).
+Current work: [`.ai/active-task.md`](.ai/active-task.md).
 
 ## Stack
-- **Flutter 3.41.7** (stable), Dart (bundled). UI layer.
-- **Rust** via `flutter_rust_bridge` **2.11.1** (pinned `=`, both Rust crate and Dart package).
-  - Rust lib: `rust/` (crate `rust_lib_muse_ml`).
-  - Generated bindings: `rust/src/frb_generated.rs` and the Dart files under
-    `lib/src/rust/` are **both tracked in git** (the Rust glue was re-tracked in
-    commit `7543478`: nothing in CI runs `flutter_rust_bridge_codegen generate`,
-    so a fresh checkout had no `frb_generated.rs` and cargokit's `cargo build`
-    failed with `E0583`). Regenerate with `flutter_rust_bridge_codegen generate`
-    whenever the FFI surface changes and commit **both** sides. Keep the codegen
-    CLI, Rust crate, and Dart package pinned to the same `2.11.1`.
-- **muse-rs** (`github.com/eugenehp/muse-rs.git` tag `0.1.0`, `default-features = false`) — Muse BLE protocol + transport.
-- **btleplug** — forked at `github.com/windwerfer/btleplug` (tag `0.12.0-muse-3`), patched with `get_env()` → `attach_current_thread_permanently()` fallback for tokio JNI threads + notification death spiral fix. **Source base is upstream 0.12.0 but `Cargo.toml` version is pinned to `0.11.8`** — required for semver matching (see `.ai/btleplug.md`).
-  - Referenced via `[patch.crates-io]` so that **ALL** btleplug dependencies
-    (both `rust_lib_muse_ml` and `muse-rs`'s crates.io dep) use the same
-    patched fork — single `GLOBAL_JVM`/`GLOBAL_ADAPTER` static. Swap to
-    local path for debugging.
-- **`jni = "=0.19"`** — pinned to match btleplug's own `jni` dependency.
-  If either side upgrades, both must be upgraded together or you get
-  link-time symbol conflicts.
-- **REVE + LUNA local model engine** (AI sleep guardrail, layered): `reve-rs` + `luna-rs`
-  (git deps — `reve-rs` from upstream `eugenehp` untouched, `luna-rs` from the `windwerfer`
-  fork — RLX CPU backend) score drowsiness on-device
-  from raw EEG. **No weights are shipped**: LUNA (Apache-2.0) downloads from HF with
-  SHA-256 verification; REVE (gated) is user-imported. FFI: `rust/src/api/reve.rs`
-  (`model_load`/`model_unload`/`model_loaded`/`model_config_json` +
-  `guardrail_enable`/`guardrail_disable`/`guardrail_reset_anchors`/`guardrail_capture_anchor`/
-  `guardrail_live_dim`); inference lives in
-  `rust/src/analysis/{reve,luna}.rs`; cache + UI in `lib/src/reve/`.
-  Protocols compose a reward engine (`RewardMetric`, ATR today) with the guardrail
-  layer (`ProtocolInfo.guardrailDefault`/`guardrailAllowed`/`guardrailFeedback` +
-  `Settings.guardrailModeForProtocol` → `GuardrailMode` enum); the guardrail only warns, it never modulates
-  the reward, and it is offered for every protocol except the eyes-open one
-  (`guardrailAllowed: false`). Calibration definitions live in
-  `assets/calibrations.json` (v2): each id (today `eyes-closed-01` /
-  `eyes-open-01`) is an eye-state with **both** playable variants — `single`
-  (one random intro + one silent baseline window) and `staged` (fixed 3-part
-  guardrail sequence: artifacts / eyes-open challenge / eyes-closed rest).
-  `assets/protocols.json` maps each protocol one-to-one to a calibration id
-  (`calibration` field; every closed-eyes protocol uses `eyes-closed-01`,
-  only `alertnessOpen` uses `eyes-open-01`) and includes `guardrailDefaultMode`
-  (default: `drowsinessMath`). `CalibrationManifest.recipeFor`
-  picks the variant by guardrail engine: **AI model ready → staged, band math
-  / no guardrail → single** (`_stagedCalibrationIntent` in
-  `feedback_state.dart`). Two protocols are
-  **non-reward**: `recordOnly` (pure recording, calibration skippable via the
-  "Start (skip calibration)" button — `startCalibration(skipCalibration:)`
-  goes straight to playing) and `guardrailOnly` (3-stage guardrail
-  calibration, warnings only, no feedback-sound selection — `hasReward: false`
-  hides the feedback tile and gates the ATR reward path in `_onBands` while
-  the guardrail layer keeps running).
-- **Protocol copy lives in `assets/protocols.json`** (catchPhrase/title/
-  subtitle/guideText/algorithmDescription/expectedDelay/`metadataDescription`
-  — the scientific text recorded into every `.feedback` file's metadata) —
-  the single editable text source, loaded via `protocolCatalogProvider`
-  (`lib/src/feedback/protocol_catalog.dart`; `useProtocolCopy(ref, info)`
-  reads JSON only — there is **no Dart fallback** and no generator/regenerate
-  step; validate the asset with `flutter test test/calibration_assets_test.dart`,
-  which checks every protocol's copy + `metadataDescription` + that its
-  `calibration` id exists in `calibrations.json` with real audio files, and
-  that every audio file under `assets/audio/` is covered by a pubspec asset
-  entry (the bundling guard — see the hot spot below).
-  Structure (colors, metrics, conditions, guardrail flags,
-  `hasReward`, `calibrationSkippable`) stays in `ProtocolInfo`.
-  The protocol list's
-  "Recent" tile (3 most recent distinct protocols, catch name only) comes
-  from `sessionListProvider`.
-- **Android**: NDK 27/28, Gradle 8.14, `targetSdkVersion = 36`.
-- **Decision:** using btleplug (forked) for BLE transport — consistent with
-  `muse-rs`. `flutter_blue_plus` was the fallback if the JNI fix had failed.
-- **JNI glue**: btleplug initialized from Dart **after** `RustLib.init()` loads the library. Kotlin `MainActivity` provides `ensureInitialized` MethodChannel; Dart calls it in `main()` then `connection_provider` calls `ensureBtleplugReady()` before any scan/connect. btleplug Java sources under `android/app/src/main/java/com/nonpolynomial/btleplug/`. jni-utils Java at `io/github/gedgygedgy/rust/`.
-- **iOS/macOS**: not the current target; BLE transport uses btleplug's CoreBluetooth path.
-- **Windows**: not a current dev target; built only by `release-windows.yml` CI. `windows/CMakeLists.txt` is committed (carries an MSVC workaround), but the rest of `windows/` is generated in CI via `flutter create --platforms=windows .`.
+- **Flutter 3.41.7** in CI (`.github/workflows/` `FLUTTER_VERSION`). The
+  sandbox image may be newer (currently 3.44.8) — do not bump the workflow
+  pin without intending a release-toolchain change. Dart is bundled.
+- **Rust** via `flutter_rust_bridge` **2.11.1** (pinned `=`, crate + Dart
+  package + codegen CLI). Lib: `rust/` (`rust_lib_muse_ml`). Generated
+  bindings `rust/src/frb_generated.rs` and `lib/src/rust/` are **both tracked**
+  (commit `7543478`: CI never runs codegen; a missing `frb_generated.rs`
+  breaks cargokit with `E0583`). Regenerate with
+  `flutter_rust_bridge_codegen generate` when the FFI surface changes and
+  commit both sides.
+- **muse-rs** — depend on `eugenehp/muse-rs` tag `0.1.0`, **patched** to
+  `windwerfer/muse-rs` tag `0.1.1` via
+  `[patch.'https://github.com/eugenehp/muse-rs.git']`. See `.ai/muse-rs.md`.
+- **btleplug** — `github.com/windwerfer/btleplug` tag **`0.12.0-muse-5`**,
+  crate version **`0.12.0`** (must match `btleplug = "0.12.0"` or Cargo
+  silently skips the patch). JNI `get_env()` auto-attach + notification death
+  spiral fix. `[patch.crates-io]` so muse-rs's dep shares one
+  `GLOBAL_JVM`/`GLOBAL_ADAPTER`. See `.ai/btleplug.md`.
+- **`jni = "=0.19"`** — must match btleplug's `jni` or you get link-time
+  symbol conflicts.
+- **REVE + LUNA** (on-device drowsiness): git deps — `reve-rs` from upstream
+  `eugenehp` rev `9c8d856…`, `luna-rs` from `windwerfer` tag
+  `v0.0.4-latent-embedding-fix`. No weights shipped. FFI
+  `rust/src/api/reve.rs`; inference `rust/src/analysis/{reve,luna}.rs`;
+  Dart `lib/src/reve/`.
+- **Feature pipeline** (implemented): Rust registry produces
+  `MuseEventDto::Feature`; Dart `FeatureBus` → `RewardLane` / `GuardLane`.
+  Copy in `assets/features.json`; electrodes in `rust/src/api/features.rs`.
+  Guard **only warns**, never modulates reward. Frozen:
+  `.ai/feedback/pipeline-contract.md`. **Crown Start is refused.**
+- **Protocols** are JSON documents (`origin: catalog | user`). Catalog:
+  `assets/protocols.json`. User: `user_protocol_store.dart` +
+  `lib/src/views/protocol_builder.dart`. `ProtocolType` / `GuardrailMode`
+  enums are gone — ids are strings; guard is a feature id (`band.delta` /
+  `ai.drowsiness` / `none`).
+- **Calibration** (`assets/calibrations.json` v2): `eyes-closed-01` /
+  `eyes-open-01`, each with `single` (**50 s** silent baseline) and `staged`
+  (artifacts / eyes-open / eyes-closed). AI model ready → staged; else single.
+- **Android**: NDK 27/28, Gradle 8.14, `targetSdk` from Flutter, arm64-only
+  (`abiFilters = ["arm64-v8a"]`).
+- **JNI glue**: btleplug init from Dart **after** `RustLib.init()`. Kotlin
+  `MainActivity` `ensureInitialized`; `connection_provider` calls
+  `ensureBtleplugReady()` before scan/connect. Java under
+  `android/app/src/main/java/com/nonpolynomial/btleplug/` and
+  `io/github/gedgygedgy/rust/`.
+- **iOS/macOS**: not the current target.
+- **Windows**: CI-only (`release-windows.yml`). Committed
+  `windows/CMakeLists.txt` (MSVC workaround); the rest is generated in CI.
 
 ## Core rules (do / don't)
 - **NEVER** assume a library is available — check `Cargo.toml` / `pubspec.yaml` first.
 - **NEVER** commit secrets/keys.
 - **NEVER** add code comments unless explicitly asked.
 - Do not run `git` commit/push/PR unless explicitly requested.
-- When editing Rust under `rust/src/api/`, run `flutter_rust_bridge` codegen if the FFI surface changes (then commit both `rust/src/frb_generated.rs` and the Dart files under `lib/src/rust/`); `cargo check --target aarch64-linux-android` is NOT reliable in this sandbox (see Testing Guide) — rely on `flutter run` for the real compile.
+- When editing Rust under `rust/src/api/`, run `flutter_rust_bridge` codegen
+  if the FFI surface changes (commit both generated sides).
+  `cargo check --target aarch64-linux-android` is NOT reliable here — use
+  `flutter run`. See `.ai/testing-guide.md`.
 - `flutter analyze lib/src` must stay clean after edits.
-- Format changes land in `rust/src/api/session_format.rs`; keep `cargo test --lib session_format` green (golden wire-layout tests pin the byte format).
-- `reve-rs`/`luna-rs` are **git dependencies** (like `muse-rs`/`btleplug`): `reve-rs` from
-  upstream `eugenehp/reve-rs` at rev `9c8d856…` (unchanged upstream), `luna-rs` from the
-  `windwerfer` fork at tag `v0.0.4-latent-embedding-fix` (latent-embedding fix). `third_party/`
-  keeps reference checkouts of both, but cargo fetches from GitHub directly — no submodule
-  init is needed to build. Bump the tag/rev in `rust/Cargo.toml` when either advances.
+- Format changes land in `rust/src/api/session_format.rs`; keep
+  `cargo test --lib session_format` green.
+- Do not reopen pipeline-contract Key Decisions. Do not unlock Crown sessions
+  in the current series. Session-chart work has its own frozen spec
+  (`.ai/feedback/session-computed-charts.md`) — do not mix it with other PRs.
 
-## Docs (`.ai/`)
-| File | Contents |
-|------|----------|
-| `btleplug.md` | btleplug fork changes — what, why, pitfalls (version, Java alignment) |
-| `bugreport.md` | Structured bug report for upstream btleplug (3 sections + suggestions) |
-| `btleplug_bugreport_2.md` | Bug report #2: BLE notification stream silently dies (JNI death spiral) — fixed in `0.12.0-muse-3` |
-| `architecture.md` | Current and target architecture, module map |
-| `lessons-learned.md` | Full history of JNI attempts, what worked/failed |
-| `testing-guide.md` | Build/test loop for the device |
-| `release.md` | Release CI: per-platform workflows, keystore/secrets setup, F-Droid + reproducibility |
-| `active-task.md` | Current development focus |
+## Docs
+Index: [`.ai/README.md`](.ai/README.md). Format/cache:
+`README_feedback_format.md`, `README_history_cache.md`.
 
 ## Project layout
 ```
-lib/src/                 # Flutter UI + Riverpod state
-  connection_provider.dart  # AppStateNotifier: scan/connect state machine
-  app.dart                 # main(), permission request
-  connect_window.dart      # ConnectOverlay: tap-anywhere barrier + device list / rescan UI
-  status_bar.dart, views/  # UI
-    views/music_settings_panel.dart  # shared music-feedback options (folder / cutoff / invert / shuffle) — used by Settings music card AND session bubble, don't fork it
-lib/src/feedback/         # feedback session system (merged to main, Phase I)
-  feedback_state.dart       # FeedbackStateNotifier: idle→calibrating→playing⇄paused→ended
-  target_state.dart         # AtrEngine (threshold, dynamic adapt, in-flight recalibrate, EMA adaptation) + band aggregator
-  live_stats.dart, protocol.dart, session_store.dart, feedback_recorder.dart
-  session_storage.dart      # SessionStorage abstraction (FS + SAF), scratch dir, storage provider
-  session_sqlite.dart       # SQLite metadata + thumbnail cache (single source of truth): typed columns for fast sort/filter, thumbnails as BLOB, mtime tracking; NOT the format authority
-  session_container.dart    # thin Dart wrapper over the Rust container format ([PNG][jsonLen][json][bodyLen][frames])
-  session_summary.dart       # SessionOverview: 400-bucket decimated bands/pulse/motion/peak in metadata
-  session_chart_data.dart   # shared chart preparation (SessionChartData/Stats) — used by the dashboard AND the exporters so PNG/PDF match the screen
-  session_export.dart       # history multi-export: SessionExporter (CSV Mind Monitor / EDF+ / PNG thumbnail+charts via offscreen rasterizer), ExportChart painter, resolveExportStorage (Android non-SAF → pickFolder), writes under <root>/export/
-  session_pdf_export.dart   # vector PDF per session (pdf pkg, pw.CustomPaint charts, buildPdfPage)
-  session_metadata.dart     # SessionMetadata, GestureMarker, GestureType, SessionCalibration, SessionDrowsiness, SessionMusic, SessionSettings
-  computed_frame.dart       # ComputedFrame model for v5 session format (1 Hz decimated data)
-  computed_sampler.dart     # ComputedSampler for 1 Hz computed frame sampling
-  crash_recovery.dart       # blocking crash recovery modal for temp file recovery
-  version.dart              # build-time version from --dart-define=APP_VERSION
-lib/src/audio/            # flutter_soloud (SoLoud engine): AudioService façade + FeedbackAudioController (chime/ambient) + MusicFeedbackController (folder via reward-driven low-pass) + GuardrailSound (warning-sound set incl. continuous volume-ramped alarm) + BinauralBeatController (two synth voices, carrier/beat beat-frequency pair, reward-swelled) + 3-stage calibration clips + SoLoudEngine (single-flight init, stable/low-latency profile, reinit for the "Reduce audio stutter" setting)
-lib/src/reve/            # guardrail AI model engine: GuardrailMode enum, ModelKind metadata, ModelCache (SHA-256-verified download/import), ModelEngineNotifier, shared UI (ModelSelectorDropdown / ModelInstalledCheck / ModelInstallBubble — reused by the guardrail dialog) + settings AiEngineCard + gated-file import
-lib/src/streaming/      # network streaming tab: StreamingController (riverpod, subscribes to the Muse event stream, mixes per-group channels, starts on connect / stops on disconnect), StreamingMixer (per-channel queues → lockstep rows), OscStreamer (unicast UDP, batched per-chunk messages, `oscEncodeMessage`), LslStreamer (via the `liblsl` pub package — auto-discovered, no IP/port), BrainflowStreamer (multicast UDP "Streaming Board" datagrams, default + auxiliary IMU + ancillary PPG presets; separate-groups mode streams IMU/PPG on port+1/+2), StreamingConfig built from Settings (osc/lsl/brainflow keys; OSC IP auto-filled from the local subnet), StreamIndicator/StreamDot (green live / amber armed badge in sidebar + status bar); tested end-to-end over real loopback sockets in test/streaming_osc_test.dart
-rust/src/api/muse.rs    # FFI bridge: scan/connect/subscribe → MuseEvent stream + 1 Hz derived metrics
-rust/src/api/reve.rs    # model FFI: model_load / model_unload / model_loaded / model_config_json + guardrail_enable/disable/reset_anchors/capture_anchor/live_dim
-rust/src/api/session_format.rs  # SINGLE authority for .muse v4 + .muse.feedback byte layout (encode/parse/frames/container)
-rust/src/api/edf_export.rs  # EDF+ FFI wrapper: encode_edf_export (parsed SessionData → EDF+ bytes, sample-rate estimate, gap-fill, calibration/gesture annotations)
-rust/src/analysis/gesture.rs  # GestureDetector (blink/clench/eye), auto-adaptive thresholds, no DSP crates
-rust/src/analysis/{reve,luna}.rs  # RLX CPU inference wrappers over reveal-rs/luna-rs; #[ignore]d smoke tests need .local/ weights
-rust/src/connection.rs  # in-Rust state (active connection, device cache, sink)
-android/app/src/main/java/
-  com/nonpolynomial/btleplug/android/impl/  # btleplug Java classes
-  io/github/gedgygedgy/rust/                # jni-utils Java sources
-.ai/                     # project docs (feedback docs under .ai/feeback/)
-.github/workflows/       # release CI per platform: release-android/linux/windows, repro-android, _build-apk (reusable)
-scripts/package-linux.sh # deterministic tar.gz + best-effort AppImage packaging for release-linux
-third_party/muse-rs/    # local checkout of muse-rs (tag 0.1.0) — reference for protocol/parse debugging
-third_party/btleplug/   # local checkout of our btleplug fork (tag 0.12.0-muse-3) — reference for JNI/init debugging
-third_party/{reve-rs,luna-rs}/  # reference checkouts of the model-engine forks — cargo builds from the git deps in rust/Cargo.toml
-third_party/brainflow/  # reference checkout of brainflow (tag 5.9.0) — NOT a build dep; only for the Muse "Streaming Board" wire format (exact datagram size, f64 LE doubles, no header, batch=3 samples/packet)
-third_party/edf_export/ # local EDF+ writer crate (path dep in rust/Cargo.toml) — hand-rolled EDF+ writer with golden byte-layout tests; TODO: push to user GitHub and switch to a git+tag dep
-vendor/rlx-cpu-0.2.14/         # committed vendored copy of rlx-cpu 0.2.14 (patched: no default `blas`), wired via [patch.crates-io]
-.local/                 # LOCAL-ONLY, never committed: luna-base-dl/, reve-base-dl/ (gated model weights), reve-base/ (abandoned fork). Each is an embedded git repo with no remote — see .gitmodules (`ignore = all`, invalid URL) + smoke-test paths `rust/src/analysis/{luna,reve}.rs`
-muse-rs (dep, GitHub)   # transport (btleplug) + protocol
-btleplug (via [patch], git tag 0.12.0-muse-3)  # patched fork; reference copy in third_party/btleplug/
-README_history_cache.md  # SQLite metadata cache documentation (schema, reconciliation, fault tolerance)
-README_feedback_format.md  # v5 session format documentation (container, metadata, computed 1 Hz, raw)
+lib/src/                    Flutter UI + Riverpod
+  connection_provider.dart  AppStateNotifier: scan/connect
+  app.dart                  main(), permissions
+  connect_window.dart       ConnectOverlay (every view with a status bar)
+  settings.dart, status_bar.dart, version.dart
+  views/                    session, history, dashboard, protocol_builder, streaming, …
+    music_settings_panel.dart  shared music options — don't fork
+lib/src/feedback/           session orchestrator + lanes
+  feedback_state.dart       orchestrator (idle→calibrating→playing⇄paused→ended)
+  reward_lane.dart / guard_lane.dart / feature_bus.dart / calibration_runner.dart
+  target_state.dart         RatioEngine (FeedbackEngine): threshold, EMA, recalibrate
+  protocol.dart / protocol_catalog.dart / user_protocol_store.dart
+  feature_catalog.dart      assets/features.json copy
+  session_store*.dart / session_sqlite.dart / session_metadata.dart
+  session_export.dart / session_pdf_export.dart / session_chart_data.dart
+lib/src/audio/              SoLoud: AudioService, reward/guard/background outputs
+lib/src/reve/               model download/import/load UI
+lib/src/streaming/          OSC / LSL / BrainFlow
+lib/src/charts/             live EEG + SessionRecorder / SessionReader
+rust/src/api/
+  muse.rs, features.rs, device_config.rs, neurosity_osc.rs, simulator.rs
+  reve.rs, session_format.rs, edf_export.rs
+rust/src/analysis/          gesture, reve, luna, guardrail
+assets/                     protocols.json, calibrations.json, features.json, audio/
+.ai/                        project docs (see .ai/README.md)
 ```
 
-## Where things live (for navigation)
-- BLE scan/connect entry: `rust/src/api/muse.rs` (`scan`, `connect`, `subscribe_events`).
-- JNI thread-attach patch: `../../btleplug/src/droidplug/jni/mod.rs` `get_env()`,
-  plus callers in `adapter.rs` and `peripheral.rs`.
-- btleplug Java init: `android/app/src/main/java/com/nonpolynomial/btleplug/android/impl/`.
-- Kotlin init entry: `android/app/src/main/kotlin/com/example/muse_ml/MainActivity.kt` (MethodChannel `ensureInitialized` only; no early init).
-- **Android btleplug init sequence**: `main()` → `RustLib.init()` → `MethodChannel('muse_ml/init').invokeMethod('ensureInitialized')` → `museAndroidInit()` JNI → `btleplug::platform::init(&env)`.
-- **RSSI filtering**: `third_party/muse-rs/src/muse_client.rs` `scan_all()` keeps only `props.rssi.is_some()`; `rust/src/api/muse.rs` `scan()` mirrors this (no `rssi` field in `DeviceInfo` DTO — wire format stable).
-- Classic Muse startup delays: `third_party/muse-rs/src/muse_client.rs` `MuseHandle::start()` (h/s/preset/d with 150/300ms delays).
-- Connect timeout cleanup: `third_party/muse-rs/src/muse_client.rs` `setup_peripheral()` disconnects + 500ms sleep on timeout to avoid "In Progress" on retry.
-- Protocol decoders (pure, no BLE): inside muse-rs `parse.rs` / `protocol.rs` / `types.rs`.
-- Permissions: `lib/src/app.dart` `requestBlePermissions()` (uses `permission_handler` + `device_info_plus` for sdk gating).
-- Manifest BLE perms: `android/app/src/main/AndroidManifest.xml` (`BLUETOOTH_SCAN` w/ `neverForLocation`, `BLUETOOTH_CONNECT`, `ACCESS_FINE_LOCATION` capped `maxSdkVersion=30`).
-- Connect window: `ConnectOverlay` (`lib/src/connect_window.dart`) is a tap-anywhere barrier + device list/rescan panel; both `AppShell` (main view) and `FeedbackSessionView` (session route) host their own copy so the session screen can reconnect without leaving the session.
-- Feedback state machine: `lib/src/feedback/feedback_state.dart` (`FeedbackStateNotifier`, phases, interruption recovery).
-- ATR engine (threshold, dynamic adapt, in-flight recalibrate, **EMA adaptation**): `lib/src/feedback/target_state.dart` (`RatioEngine`).
-- Audio (dual-layer + 5 volume channels incl. guardrail warning): `lib/src/audio/feedback_audio_controller.dart`, service in `lib/src/audio/audio_service.dart`; music feedback (user folder through a reward-driven low-pass filter) in `lib/src/audio/music_feedback_controller.dart` (`MusicFeedbackController`, per-voice biquad, EMA slew, guardrail muffle); binaural option in `lib/src/audio/binaural_beat_controller.dart` (`BinauralBeatController`, two synth voices, carrier/beat beat-frequency pair, reward-swelled). Engine profile + reinit in `lib/src/audio/soloud_engine.dart` (`SoLoudEngine.ensureInit`/`reinit`/`deinit`): conservative ("Reduce audio stutter") vs low-latency, synced from `Settings.audioStableMode` at every session start (Android only).
-- Gesture detection (blink / jaw clench / eye up-down): `rust/src/analysis/gesture.rs` (`GestureDetector`, auto-adaptive EWMA thresholds, no crates). Fed raw EEG + per-second FFT gamma in the forwarder (`rust/src/api/muse.rs`), emits 1 Hz `MuseEventDto::Gestures(GestureDto)`.
-- Per-pad line-noise (fit/impedance proxy): `BandsDto.line_noise_ratio` (50/60 Hz mains power fraction of the existing per-second FFT), folded into `signalQuality` in `connection_provider.dart` `_maybeComputeSignalQuality`.
-- Gesture markers persist in session **metadata** (`SessionMetadata.gestures`, `GestureMarker`/`GestureType` in `session_store.dart`); captured in `feedback_state.dart` `_onGestures`, written at save in `feedback_dashboard.dart` `_save`; **rendered in history detail** (`feedback_dashboard.dart` `gestureWidgets()`).
-- Session metadata records the full repro context (`session_store.dart`): `SessionCalibration` (v2) carries the calibration `calibrationId` + the immutable `calibrationJson` snapshot (both variants, from `assets/calibrations.json` at session time), the baseline statistics, the per-phase clip timings, and `recalibrations` (every in-flight recalibrate with its timestamp + new baseline stats — appended in `feedback_state.dart` `recalibrate()`); `SessionMetadata.metadataDescription` is the protocol's scientific text from `assets/protocols.json`; `SessionMetadata.sessionSettings` (`SessionSettings`) snapshots the session-affecting settings (dynamic adapt, responsiveness, **baseline percentile**, guardrail engine/band-math, warning threshold + sound, music/binaural options, gesture-marker toggles) — captured in `feedback_dashboard.dart` `_captureSessionSettings`.
-- **Baseline percentile persistence**: stored in `Settings.baselinePercentile` (SharedPreferences) and `SessionSettings.baselinePercentile`; restored on new session start via `FeedbackStateNotifier` constructor.
-- Persisted prefs (volumes, sound, duration, target settings, gesture toggles, music folder/cutoff/invert/shuffle, binaural preset/carrier/beat, audio-stable mode): `lib/src/settings.dart` (`Settings`, SharedPreferences).
-- Session storage abstraction (history in chosen folder; scratch in `.cache`; SAF on Android): `lib/src/feedback/session_storage.dart` (`SessionStorage`, `FileSystemSessionStorage`, `SafSessionStorage`, `resolveSessionStorage`, `sessionStorageProvider`). `SessionStore` is storage-backed; `sessionStoreProvider` is a `FutureProvider` derived from settings.
-- **History metadata cache** (`lib/src/feedback/session_sqlite.dart`): SQLite at `<support>/cache/session_cache.sqlite` + thumbnails stored as BLOB in sessions table (app-private, works for SAF too). `SessionStore.list()` is a **reconcile**: one `listFilesMeta()` (name + mtime) + one `SELECT … ORDER BY saved_at DESC`; unchanged files render straight from cached typed columns, changed/missing rows are backfilled in the background and `SessionListNotifier.invalidateSelf()` re-reads the list (lazy two-stage emission). Write-through on `publishSession`/`updateNotes`/`delete`; `moveAllTo` re-namespaces rows by `storage_key` (sha256 of the folder location). A freshly published row stores `mtime = 0` ("unknown") so the next open re-reads that one head once. `SessionStore.cacheOverview(id, …)` folds a computed `SessionOverview` into the cached metadata for legacy sessions. `SessionSqlite.open()` falls back to a no-op on any failure so history always degrades to file reads. Native SAF mtime comes from `listFilesMeta` (`MainActivity.kt`, replaces `listFiles`, returns `[{name, mtime}]`). **Single metadata system** — `SessionCache` (file-based JSON cache) was removed; only `SessionSqlite` (typed columns + BLOB thumbnail) remains.
-- Session file format (`.muse.feedback` = self-contained v5 container: 68-byte fixed header, WebP thumbnail, zstd-compressed metadata json, zstd-compressed computed 1 Hz columnar section, zstd-compressed raw frame body; **Rust owns the layout**): `rust/src/api/session_format.rs` (`container_encode_v5`, `v5_parse_header`, `v5_parse_head`, `v5_extract_computed`, `v5_extract_raw`). Dart wrapper: `lib/src/feedback/session_container.dart`. SQLite-backed metadata cache (`lib/src/feedback/session_sqlite.dart`, `session_cache.dart`) provides fast queries without JSON parsing on listing. Three-temp-file recording during sessions (`lib/src/charts/session_recorder.dart`) with blocking crash recovery modal (`lib/src/feedback/crash_recovery.dart`).
-- **`.muse` body is format v4 (f32 floats), owned by Rust**: `session_format.rs` writes f32 payloads (EEG/PPG/IMU/bands/movement/peak-alpha) + f64 timestamps. Dart delegates: `SessionRecorder` (`lib/src/charts/session_recorder.dart`) buffers events and calls `encodeSessionEvent`/`sessionFrameBytes` (zstd v3) — filtered per-stream by `Settings.recordStreams`; `SessionReader` (`lib/src/charts/session_reader.dart`) calls `sessionParseBody` and re-exports the generated `SessionData`/`BandsRecord`/… freezed records. Not backward compatible with v2/v3 f64 files (pre-alpha). Raw EEG ~4 KB/s (~15 MB/hr). Channel count is device-driven (`i16` electrode); an 8-ch Crown works with zero layout change.
-- History multi-export (PDF / PNG / CSV / EDF+): `lib/src/feedback/session_export.dart` (`SessionExporter` — CSV Mind Monitor / EDF+ via `encodeEdfExport` / PNG thumbnail+charts via the offscreen rasterizer / PDF delegation; `resolveExportStorage` → Android non-SAF prompts `SafSessionStorage.pickFolder()` for that export only), `lib/src/feedback/session_pdf_export.dart` (`buildPdfPage`, `pdf` pkg), shared chart prep in `session_chart_data.dart`; EDF+ writer crate at `third_party/edf_export/` (path dep) + FFI wrapper `rust/src/api/edf_export.rs`.
-- SAF folder picker + MethodChannel (`muse_ml/saf`): `android/app/src/main/kotlin/com/example/muse_ml/MainActivity.kt` (`getDir`/`ensureDir`/`writeFile`/`writeFileAtomic`/`readFile`/`readFilePrefix`/`deleteFile`/`listFilesMeta`).
-- Folder selection UI: `lib/src/views/settings_view.dart` (`file_selector` `getDirectoryPath` on desktop, `SafSessionStorage.pickFolder()` on Android).
-- Local model engine (AI sleep guardrail): FFI in `rust/src/api/reve.rs` (`model_load`/`model_unload`/`model_loaded`/`model_config_json` + `guardrail_*`); inference wrappers in `rust/src/analysis/{reve,luna}.rs`; Dart download/import/verify/load in `lib/src/reve/model_engine.dart` (`ModelCache`, `ModelEngineNotifier`), model metadata in `lib/src/reve/models.dart` (`ModelKind`), guardrail mode enum in `lib/src/feedback/guardrail_mode.dart` (`GuardrailMode`), shared UI in `lib/src/reve/model_selector.dart` (`ModelSelectorDropdown` with green installed-checks, `ModelInfoBlock`, `ModelInstallBubble` download/import bubble), settings card in `lib/src/reve/reve_card.dart` (`AiEngineCard`), gated-file import in `lib/src/reve/reve_import.dart`.
-- Per-protocol guardrail mode setting: `Settings.guardrailModeForProtocol` (Map<ProtocolType, GuardrailMode>) persisted as JSON; `Settings.guardrailEnabledFor()`, `guardrailIsBandMathFor()`, `guardrailIsAiFor()`. Defaults from `assets/protocols.json` `guardrailDefaultMode` (default: `drowsinessMath`).
-- Feedback session dialogs (`lib/src/views/feedback_session.dart`): target settings (dynamic adapt toggle, gentle↔responsive slider, reward-threshold percentile slider), guardrail gear (scorer-engine dropdown w/ installed checks + inline download bubble, warning-sound dropdown, warning-threshold slider), music sub-tile + bubble (drop-in `MusicSettingsPanel`/`pickMusicFolder`/`musicFolderLabel` from `lib/src/views/music_settings_panel.dart` — same options as the Settings music card), binaural sub-tile, volume + duration dialogs. The guardrail gear is per-protocol: `ProtocolInfo.guardrailAllowed` off (eyes-open) hides the whole card. Music + AI guardrail is allowed with a one-time stutter warning that fires **at choice time** via the shared `_maybeWarnMusicAiCpu` helper (picking music while an AI scorer is active, or an AI scorer while music is selected) — pointing at Settings → Audio → "Reduce audio stutter".
-- Release CI: `.github/workflows/` — see `.ai/release.md` (keystore secrets, F-Droid, reproducibility).
-- Rust toolchain pin: `rust/rust-toolchain.toml` (kept in sync with `FLUTTER_VERSION`/`RUST_VERSION` in the workflows).
+## Where things live
+- BLE: `rust/src/api/muse.rs` (`scan`, `connect`, `subscribe_events`).
+- JNI attach: `third_party/btleplug/src/droidplug/jni/mod.rs` `get_env()`.
+- Devices: `rust/src/api/device_config.rs`; Crown OSC
+  `neurosity_osc.rs`; simulators `simulator.rs`.
+- Feature registry: `rust/src/api/features.rs`. Dart bus/lanes as above.
+- Session byte layout: `rust/src/api/session_format.rs` only. Dart is FFI.
+- History cache: `lib/src/feedback/session_sqlite.dart`
+  (`session_metadata.db`, thumbnail BLOB). Reconcile in `session_store_core.dart`.
+- SAF: MethodChannel `muse_ml/saf` in `MainActivity.kt`.
+- Guard feature ids: `lib/src/feedback/guardrail_mode.dart` (string helpers,
+  not an enum). Per-protocol prefs migrate from old `GuardrailMode.name`.
+- Audio outputs: `lib/src/audio/output_ids.dart`.
+- Protocol builder: `lib/src/views/protocol_builder.dart`.
+- Release CI: `.ai/release.md`. Toolchain: `rust/rust-toolchain.toml` (1.97.1)
+  kept in sync with workflow `RUST_VERSION`.
 
 ## Known hot spots
-- **Never put a `LayoutBuilder` inside dialog content**: AlertDialog sizes its content via `IntrinsicWidth`, and `LayoutBuilder` cannot return intrinsic dimensions — every such widget throws `LayoutBuilder does not support returning intrinsic dimensions` when the dialog opens (commit `bb51897` fixed this in the percentile sliders). Position against a fraction of the width with `Align`/`FractionallySizedBox` instead.
-- **Model install UI is shared, don't fork it**: the guardrail gear dialog and the settings `AiEngineCard` use the same `ModelInstalledCheck`/`ModelInstallBubble` widgets (`lib/src/reve/model_selector.dart`) — one owns the download/import/progress state, the other renders it. The guardrail-mode dropdown shows green checks for installed AI models and always-checks band math (the no-AI fallback engine).
-- **Range sliders are log-space for cutoffs, but the label shows a rounded value**: `_MusicSettingsDialog` maps the 220–16000 Hz slider range to log space (`2220^(x/120)`), so dragging feels proportional and the cutoff label is `label.round()`. When copying a cutoff into the code (e.g. tests or hardcoded presets), compute it via the same formula or copy the `label.round()` from the running UI — never copy a raw slider position or a log-domain value directly.
-- **Don't wrap a bounded `DecoratedBox` around a `ListTile`'s `subtitle` (Material ink assertion)**: commit `54641b3` fixed `feedback_session.dart`'s `_MusicTile` — an opaque `DecoratedBox` inside the tile's `subtitle` broke the subtitle text style and could trigger the `No Material widget found` ink assertion on hover. Put the styling on the tile itself (e.g. `ListTile(shape: ...)`) and wrap custom tiles in `Material` if they take a `thumbColor`.
-- **The connect overlay must exist in every view with a status bar**: `ConnectOverlay` provides both the indicator and the tap-to-interrupt barrier — `AppShell` (main view) and `FeedbackSessionView` (session route) each host their own copy. Forgetting it in a new view leaves the session screen unable to reconnect mid-session.
-- **flutter_soloud Linux Xiph libs are glibc-2.43-built**: the plugin bundles precompiled `libopus.so.0`/`libogg`/`libvorbis`/`libflac` that fail to load on Debian trixie/Ubuntu 24.04 (`version GLIBC_2.43 not found` when opening `libflutter_soloud_plugin.so`). Build with `TRY_SYSTEM_LIBS_FIRST=1` and `libopus-dev libogg-dev libvorbis-dev libflac-dev` installed (devcontainer + `release-linux.yml` already do this) so CMake links the system Xiph libs instead. On a fresh checkout remember the env var, or the sound engine crashes at first play.
-- **Container has no ALSA card — route ALSA default → PulseAudio**: flutter_soloud's Linux backend is ALSA, but the devcontainer has no `/dev/snd` and plays through the host PipeWire socket (`PULSE_SERVER=unix:/tmp/pulse-socket`, mounted in `devcontainer.json`). That only works if (1) `libasound2-plugins` is installed (provides the `pulse` ALSA device) and (2) `/etc/alsa/conf.d/99-pulseaudio-default.conf` exists — the package ships it as `.example` only, so the Dockerfile `cp`s it. Without these you get `ALSA lib ... Unknown PCM default` and **silent playback** (the engine falls back to the NULL backend). Verify with `aplay -D default /tmp/beep.wav`.
-- **The audio latency profile only matters on Android**: flutter_soloud maps `lowLatency` to miniaudio's `ma_performance_profile`, but SoLoud always sets `periodSizeInFrames = bufferSize` (2048 ≈ 46 ms), so the profile is a no-op on desktop (WASAPI/CoreAudio consult it only when periodSize==0). Only Android AAudio differs: `low_latency` → MMAP, conservative → legacy path (~+30–80 ms latency, not 200 ms). That's why the "Reduce audio stutter" switch (`Settings.audioStableMode`, default on) is rendered only on Android (`settings_view.dart` `_AudioCard`) and synced via `SoLoudEngine.reinit` at session start in `startCalibration` — safe because controllers keep file paths, not engine handles, and nothing is playing yet.
-- **Flutter directory assets only bundle files directly in the directory** — subdirectories need their own pubspec entry (official docs: "Only files located directly in the directory are included"). `pubspec.yaml` therefore lists every audio subdir explicitly (`assets/audio/bell/`, `bowl/`, `calibration/`, `drone/`, `rain/`) plus `assets/audio/` for the top-level guardrail sounds. Collapsing them back to `assets/audio/` silently drops ALL subdir audio from the bundle — the app runs, then `Unable to load asset: "assets/audio/calibration/…opus"` at first playback (files exist on disk, referenced correctly by `assets/calibrations.json`, just never bundled). This bug was fixed in `2f05247`, regressed in `469c031`, fixed again in `…`; `test/calibration_assets_test.dart` now guards it (walks `assets/audio/` and asserts every file is covered by a pubspec entry). Verify a fresh bundle with `flutter build bundle` + `strings build/flutter_assets/AssetManifest.bin | grep <clip>`.
-- **Windows build / MSVC coroutine**: only `windows/CMakeLists.txt` is committed for the Windows build — the rest of `windows/` is generated each CI run by `flutter create --platforms=windows .` (release-windows.yml), which *preserves* existing files. That file carries `add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)`: MSVC 14.50+/VS 2026 turns `<experimental/coroutine>` into a hard error (`C2338`/`STL1011`), and `permission_handler_windows` 0.2.1 still pulls it in via `/await` under C++17 (Baseflow#1534). Keep the file in sync with Flutter's `windows.tmpl/CMakeLists.txt.tmpl` when bumping the pinned Flutter version; drop the define once permission_handler ships a C++20 build.
-- **Android ships arm64-only**: `defaultConfig.ndk.abiFilters = ["arm64-v8a"]` in `android/app/build.gradle.kts` restricts every Android build (debug/release, APK and AAB) to arm64; release workflows also pass `--target-platform android-arm64` and only install the `aarch64-linux-android` Rust target. Keeps the F-Droid/Play artifact ~27 MB instead of a ~65 MB universal. Consequence: x86/x86_64 emulators and 32-bit (armeabi-v7a) devices cannot install it. The AAB (`muse_ml-<ver>.aab`) is for Play Store only — F-Droid never receives AABs, only the APK.
-- **Release version is tag-derived**: asset names and the APK's `--build-name`/`--build-number` come from the release tag, not `pubspec.yaml`. Base version = everything before the first `-`/`_` (tag `0.0.11-feedback-01` → `0.0.11`); APK build number = trailing digits of the channel suffix (→ `1`); an empty tag (build-only dispatch) falls back to pubspec. Logic lives in the "Get version" step of `release-{android,windows,linux}.yml` (android resolves it once in a `version` job feeding `_build-apk.yml`). Keep the copies in sync.
-- **Session format is Rust-owned**: never edit the `.muse`/`.muse.feedback` byte layout in Dart. `rust/src/api/session_format.rs` is the single authority — `encode_session_event`, `sessionFrameBytes`, `sessionParseBody`, and the container fns; Dart (`session_recorder.dart`, `session_reader.dart`, `session_container.dart`) are thin FFI delegates. Some container fns are `#[frb(sync)]` so Dart keeps `headReadLimit`/`parseHead`/`extractBody` synchronous. When changing the wire format, extend `cargo test --lib session_format` goldens and regenerate bindings.
-- **Cargo `[patch]` version trap**: If the patched crate's `version` is semver-incompatible with the dependency constraint, Cargo silently ignores the patch. Our fork must stay at `version = "0.11.8"` even though the source is based on 0.12.0. **The patch must target `crates-io`, not a git URL** — `[patch.crates-io]` replaces ALL registry dependencies (including transitive ones like `muse-rs`'s), while `[patch.'https://github.com/...']` only matches that exact git source.
-- **Vendored `rlx-cpu`** (`vendor/rlx-cpu-0.2.14`): `[patch.crates-io]` replaces crates.io `rlx-cpu` with our copy, which clears the default `blas` feature (its `build.rs` would hard-link OpenBLAS on x86_64 hosts and break Windows/Linux release builds). Keep `version = "0.2.14"` semver-compatible with the `rlx-runtime 0.2.14` constraint or the patch is silently ignored (same trap as btleplug).
-- **Model engine is git deps, not submodules**: `reve-rs`/`luna-rs` are fetched by cargo from GitHub (`rust/Cargo.toml`: luna @ tag `v0.0.4-latent-embedding-fix` on the `windwerfer` fork, reveal @ rev `9c8d856…` on upstream `eugenehp`) — same pattern as `muse-rs`/`btleplug`, so a fresh clone needs no submodule init to build. The workflows still init `third_party/reve-rs`/`luna-rs` after checkout, but that is only for reference copies now.
-- **Gated weights live in `.local/`, never commit them**: LUNA/REVE weights + the abandoned `reve-base` source sit under `.local/` as embedded git repos with no remote (untracked, NOT gitignored so agents can still see them). `.gitmodules` documents them with `ignore = all` + an invalid URL so `git submodule update --init` fails loudly instead of fetching. The `#[ignore]`d smoke tests (`rust/src/analysis/{luna,reve}.rs`) read `../.local/...`; run with `cargo test --lib -- --ignored`.
-- **Android BLE init**: btleplug requires `btleplug::platform::init(&JNIEnv)` from a JNI context BEFORE any scan/connect, or it panics with `"Droidplug has not been initialized"`.
-- **JNI `ThreadDetached`**: BLE ops run on tokio worker threads which aren't attached to the JVM. Our `get_env()` patch auto-attaches them.
-- **Java/Rust API alignment**: The Rust code expects Java method signatures from btleplug 0.12.0. If upgrading either side, check `jni/objects.rs` vs the Java source files.
-- **Muse startup uses muse-rs's own sequence (commit `217cefe`)**: `connect()` in `rust/src/api/muse.rs` calls `handle.start(true, false)` instead of the old hand-rolled Classic `h/s/p21/d` sequence with 150 ms inter-command delays. Two things changed at once: (1) `enable_ppg=true` → Classic preset `p50` (EEG + PPG), which is what makes the session-summary Heart-rate (PPG) graph populate; (2) the delays were dropped — they were added (commit `3b6887d`) as a workaround for "Android drops rapid-fire WriteWithoutResponse", but that was actually the JNI notification death spiral later fixed in the btleplug fork, so the delays are unnecessary (verified ~2 min stable on device). **If connection stability ever regresses on Classic devices**, the old delayed sequence is one `git revert 217cefe` away (its parent `f82cbaa` has the custom code; also archived in `third_party/btleplug`-independent form in the `3b6887d` diff). Athena is unaffected (ignores the flag, always `p1045`).
-- **SpO₂ (blood oxygen) from PPG IR+Red (commit `4bc0300`)**: `compute_spo2()` in `rust/src/api/muse.rs` runs every 1 s on a 30 s rolling window (1920 samples @ 64 Hz) using ratio-of-ratios (A=110, B=25 best-guess). Red channel (ch 2) buffered alongside IR (ch 1). AC = proper std dev (`sqrt(sum/n)`), confidence scaled 20× so typical PPG AC/DC (1-5%) yields 0.2-1.0. Emits `SpO2Dto` (confidence ≥ 0.3) → recorded as `RecordingStream.spo2` → decimated into `SessionOverview.spo2` (400 buckets). **Dashboard**: combined HR/SpO₂ chart with dual Y-axis (left HR 40–200 bpm, right SpO₂ 50–100%), avg lines (HR dashed deep red, SpO₂ dotted blue), legend toggles. **Export**: SpO₂ chart (yMin=50, yMax=100). Settings toggle: `RecordingStream.spo2`. **Revert if needed**: `git revert 4bc0300` (parent `217cefe`).
-- **Event forwarder reconnect + watchdog**: the forwarder (`rust/src/api/muse.rs`) polls `guard.events` every 1 s — a reconnect stores a fresh channel there, so it switches within ~1 s even if the old channel lingers. If a live connection produces no events for 30 s it emits `Disconnected` so the app reconnects (a dead BLE link often never delivers a disconnect event). **Never use `tokio::sync::watch::changed()` on a receiver cloned from an unpolled primary**: the clone inherits the primary's stale last-seen version and fires spuriously — commit `3078904` broke all streaming this way; fixed in `53e3e8f` by reverting to the 1 s poll.
-- **Auto-scan only on saved device**: on fresh launch with no `lastDeviceId`, `_init()` opens the connect window but does NOT scan. Scan only fires on Rescan button or autoconnect to a known device.
-- **JNI trace spam**: The `jni` crate logs `trace!()` for every JNI call. `android_logger` filters at `Debug` level, but if it's initialized after another logger (e.g. flutter_rust_bridge), `init_once` fails silently and the filter doesn't apply. The fix: always call `log::set_max_level(log::LevelFilter::Debug)` after `init_once` as a fallback. See `rust/src/api/muse.rs:init_app()`.
-- **QueueStream race condition**: `QueueStream.java:pollNext()` returned a lambda that called `this.result.remove()` **outside** the `synchronized` block. Two tokio workers could both poll the same stream, both see a non-empty queue, both get removal lambdas, and one would crash with `NoSuchElementException` when the other had already drained it. **Fix**: remove the value from the queue inside the synchronized block and return a closure over the already-removed value. See `android/app/src/main/java/io/github/gedgygedgy/rust/stream/QueueStream.java:31`.
-- **Epoch window is events, not seconds**: band events arrive ~10 Hz, so `AtrEngine.epochWindow = 300` ≈ 30 s of feedback. `successRate` stays null until the window fills (first adapt ~30 s in). A `success == 0.0` window triggers the circuit breaker → threshold resets to the baseline percentile.
-- **Adaptive lockout guards**: ceiling = `baselineMean + 1.5·baselineStddev`, floor = baseline percentile; steps are responsiveness-derived (raise 1.01–1.03, lower 0.97–0.90). After an in-flight recalibrate the baseline is replaced, so the ceiling re-anchors automatically. Turn dynamic adapt off via the target-settings dialog for a fully static threshold.
-- **In-flight recalibrate** (refresh icon during playing/paused): needs ≥ `minRecalibrateSeconds` (60) session time and ≥ `minRecalibrateSamples` (30) clean samples from the 90 s rolling buffer; replaces the baseline, resets the success window, plays a soft low bowl chime. Full silent recalibration is still available by starting a new session (Start Session → calibrating).
-- **5 volume channels**: effective = master × channel (background / feedback / intro / end bell). Chimes start at full volume (no attack ramp); in-flight chime players skip `setVolume` re-apply (`_ramping` set). Values persist via `Settings`.
-- **Persistence**: all user prefs flow through `Settings` (SharedPreferences); `settingsProvider` is overridden in `main()`. Sound + duration are restored into `FeedbackState` at notifier construction.
-- **Storage resolution is async**: `sessionStorageProvider` (FutureProvider) derives from `settings.sessionFolder`. A `content://` value → `SafSessionStorage`; any other non-empty string → filesystem path; null/empty → default (`Documents/meditation feedback` on desktop, app documents on Android). `sessionStoreProvider` is also a `FutureProvider`; `sessionListProvider` is an `AsyncNotifierProvider` (`SessionListNotifier`) — always use `ref.read(sessionStoreProvider.future)`.
-- **SAF is history-only, never live**: live EEG streaming (88 pkt/s, 30 s flushes) always goes to scratch — `scratchDirectory()` is `root/.cache` for filesystem, app-private cache for SAF. SAF is only touched on Save via `SafSessionStorage` (one ContentResolver write per call). The recorder (FeedbackRecorder → SessionRecorder) always writes to scratch and the dashboard publishes the finished session into history on Save.
-- **`.muse.feedback` is single-file, head-read on history**: `SessionStore.list()`/`readPng()` normally render from the metadata cache (`session_cache.dart`) and only fall back to `readPrefix(name, SessionContainer.headReadLimit)` + `parseHead` on a cache miss — never `readFile` (it pulls the whole body). The history detail (`feedback_dashboard.dart`) renders from `SessionMetadata.summary` (`SessionOverview`, 400 buckets) when present — it only falls back to `readMuse()` (full body parse) for legacy sessions lacking a summary. When adding a summary field, put it in the metadata json, not a sidecar. The summary charts (Bands + Alpha-vs-Theta + Movement + HR/SpO₂) share one zoom viewport (`_ChartViewport`): drag to pan, pinch on touch, **ctrl/⌘+scroll on desktop** (plain wheel scrolls the page — gated via `HardwareKeyboard` in `_onSignal`), double-tap resets. Legend rows toggle each series (`_hidden` set). Bands/Alpha-vs-Theta use fixedY 0–1 (relative power) with numeric ticks — comparable across sessions; Movement fixedY 0–1.5g; HR/SpO₂ dual-axis (left HR 40–200 bpm, right SpO₂ 50–100%) with avg lines (HR dashed deep red, SpO₂ dotted blue) and legend toggles.
-- **Desktop default dir**: when `getApplicationDocumentsDirectory()` (Linux shells to `xdg-user-dir DOCUMENTS`) fails, fall back to `$HOME/Documents`, creating the folder chain on first recording — **never** fall back to `/tmp` or users won't find their files. Changing the save folder **moves** sessions (`SessionStore.moveAllTo`), it does not copy.
-- **Signal gate + autodrop model** (`lib/src/feedback/`): the "how good the headband fit is" concept is a *list of 4 per-pad quality scores* (`AppUiState.signalQuality`, 0–100, from EEG std + `BandsDto.line_noise_ratio`), separate from the *bands data* actually used to compute ATR. Intention (reused by future feedback options):
-  - **Before calibration**: all 4 pads must be green (`≥ signalGoodThreshold`) for `greenStableSeconds` (3) continuously, tracked by a 1 s `_gateTimer` in the notifier. Only the frontal program pads `neededElectrodes=[1,2]` (AF7/AF8) really matter; a pad stuck non-green for `faultyPadSeconds` (20) while AF7/AF8 are green ⇒ it's assumed faulty → show an inline "Continue anyway" bubble (tier A = both AF7+AF8 green "enough electrodes"; tier B = ≥1 "reduced accuracy").
-  - **No gate after calibration**: `_finishCalibration` always calls `startPlaying()` — a finished baseline never re-locks on signal. There is no longer any signal check between "baseline done" and "feedback starts".
-  - **Playing bad signal**: pauses (interrupted) only when all needed [1,2] pads go below `signalCriticalThreshold` (40) for `badSignalPauseSeconds` (10); a *rear* pad (0/3) going bad does NOT pause. A signal loss **never auto-ends** (no countdown); it resumes automatically once any needed pad is green again (`_hasNeededElectrode`).
-  - **Autodrop in ATR**: `TargetStateAggregator.evaluate(quality)` (`lib/src/feedback/target_state.dart`) averages only the AF7/AF8 pads whose quality `≥ atrUsableSignalThreshold` (=80, kept in sync with `signalGoodThreshold`); a bad pad is dropped per-sample rather than corrupting the average. If BOTH AF7/AF8 are bad, `evaluate()` returns null → no feedback that sample.
-- **Line-noise fit metric**: `BandsDto.line_noise_ratio` = fraction of total spectral power in the 50/60 Hz mains bins (each averaged over a ±1 bin window) of the per-second 256-point FFT (`compute_fft_bands` in `rust/src/api/muse.rs`; `hz_per_bin` = 1.0 so bins 50/60 are exact). Folded into `signalQuality` in `connection_provider.dart` `_maybeComputeSignalQuality`: ratios above ~0.2 start to penalize a pad, ~0.5 is severe (capped −60% of the std-derived score). `_lineNoise` uses a `-1.0` sentinel for "no Bands yet" (no penalty) and resets on disconnect.
-- **Gesture detector** (`rust/src/analysis/gesture.rs`): all thresholds are auto-adaptive EWMA baselines — no per-user calibration. Blink = frontal pad (1,2) rectified-diff bin energy (125 ms bins) above `max(baseline×5, 100 µV)` with ~500 ms refractory; jaw clench = posterior pad (0,3) gamma bursts > `baseline×3` (gamma fed from the FFT once per second); eye up/down = frontal−posterior mean deviation > `max(scale×2, 20 µV)` — **experimental, off by default**. Baselines only adapt while quiet so a sustained clench/gaze doesn't become the new "normal". Tune `BLINK_*` / `CLENCH_*` / `EYE_*` constants once real-device data is available.
-- **Gesture markers are metadata-only**: `MuseEventDto::Gestures` is never written to the `.muse` body (`encode_session_event` → empty record) and `GestureDto` is not a `RecordingStream`. `GestureMarker`s (type + session-offset seconds) accumulate in `FeedbackStateNotifier` only while `playing`, and persist under the top-level metadata `gestures` key (gated by `Settings.markersInFeedbackEnabled`; eye transitions additionally gated by `Settings.eyeMarkersEnabled`). `doubleBlink` = ≥2 blinks in one 1 Hz report or two blink-seconds ≤2 s apart; `doubleClench` = two clench onsets ≤2 s apart.
-- **Gesture markers rendered in history detail**: `feedback_dashboard.dart` `gestureWidgets()` renders summary counts + timeline with timestamps/icons for double blink, double clench, eye up/down.
-- **Baseline percentile persistence**: `Settings.baselinePercentile` (SharedPreferences) + `SessionSettings.baselinePercentile` in metadata; restored on new session start.
-- **Continuous EMA adaptation**: `RatioEngine.adaptEma(value)` called per clean sample in `_onBands()`; smoother than window-based step adaptation.
-- **Golden round-trip test**: `test/session_metadata_roundtrip_test.dart` validates full `SessionMetadata` + `GestureMarker` + `SessionCalibration` JSON serialization.
-- **SQLite metadata cache docs**: `README_history_cache.md` — schema, reconciliation, fault tolerance.
-- **Feedback format docs**: `README_feedback_format.md` — v5 container, metadata, computed 1 Hz, raw.
-- **Re-enabled export tests**: `test/session_export_test.dart` with v5 containers + calibration/gesture assertions.
-- **Blink/clench gate ATR cleanliness**: `_onGestures` stamps `_lastGestureAt`; `_sampleIsClean` (`feedback_state.dart`) requires BOTH the movement buffer and the gesture buffer to be ≥ `movementBuffer` (1 s) old — used for the calibration baseline samples and the rolling clean ATR window.
-- **Network streaming wire formats** (`lib/src/streaming/`): OSC is unicast UDP with batched per-chunk `oscEncodeMessage` messages (per-channel groups in lockstep via `StreamingMixer`); LSL runs through the `liblsl` pub package (auto-discovered, no IP/port); BrainFlow speaks the "Streaming Board" format — **raw little-endian IEEE-754 doubles, no header, one datagram per batch of 3 samples** (`BrainflowStreamer.batchSize`). Presets are separate multicast streams on their own ports: `eeg` = default preset 7 rows (package_num, 4×EEG, UNIX-seconds timestamp, marker) on the configured port; `imu` = auxiliary preset 9 rows (package_num, accel/gyro xyz, timestamp, marker) on port+1 and `ppg` = ancillary preset 6 rows (package_num, ambient/infrared/red, timestamp, marker) on port+2 — the latter two only when `separateGroups` is on. The receiver **drops datagrams that aren't exactly `batch_size × num_rows` doubles**, so batch size must match the preset or the stream dies silently — extend `test/streaming_osc_test.dart`-style loopback E2E tests when touching it.
-- **All session writes are crash-safe**: `SessionStore.publishSession`/`updateNotes`/`moveAllTo`/`delete` (`session_store.dart`) all write via `SessionStorage.writeFileAtomic` (`session_storage.dart`). Filesystem = `.name.tmp` sibling + `rename()` (atomic on POSIX); SAF = native `writeFileAtomic` (`MainActivity.kt`) writes `name.mtmp`, deletes old, `renameDocument`, and `recoverDoc()` heals an interrupted swap — it runs on every read *and* during `listFilesMeta` (a first pass heals any orphaned `.mtmp` so a recovered session reappears in listings; surviving `.mtmp` leftovers are skipped). The dashboard (`feedback_dashboard.dart`) shows a corner save chevron only when notes are dirty, a spinner while saving, and a brief check flash after; a `PopScope` intercepts back with an "Unsaved notes" Save/Stay/Discard dialog in the read-only history view.
-- **Export writers share the dashboard charts**: `SessionExporter.chartsFor` (`session_export.dart`) feeds `prepareChartData` (`session_chart_data.dart`) to both the PNG rasterizer and the PDF (`session_pdf_export.dart`) so exported charts match the screen. Exports always land in `<root>/export/` (`<root>/export/<stem>/` for PNG-all); Android non-SAF history prompts `SafSessionStorage.pickFolder()` for that export only (`resolveExportStorage`). The offscreen rasterizer (`rasterizeChart`/`_renderOffscreen`) builds its own `BuildOwner`/`PipelineOwner`/`RenderView` — it requires an initialized `RendererBinding` (`runApp`, or `TestWidgetsFlutterBinding.ensureInitialized()` in tests), a `flushCompositingBits()` between layout and paint, and `pipelineOwner.rootNode = null` before `dispose()`.
-- **Band/EEG timestamps in the `.muse` body are ms epochs**: CSV bucketing must divide by 1000 before flooring (`(b.timestamp / 1000).floor()`); EEG packets use the same ms convention (`EegSampleRecord.timestamp`). Mind Monitor CSV column order is `TimeStamp, Delta..Gamma per channel, RAW per channel` with capitalized band names; the header row has 5 band columns per channel — tests index `lines[1]` = second 0.
-- **FFI-backed `flutter test` needs the host Rust lib**: `test/session_export_test.dart` (and any future Dart test that calls Rust) initializes `RustLib.init(externalLibrary: ExternalLibrary.open('${Directory.current.path}/rust/target/debug/librust_lib_muse_ml.so'))`. Build it first with `cargo build --manifest-path rust/Cargo.toml` (host target), then `flutter test`. Without the .so the FFI never loads and the test fails at the first call.
-- **Stale `rust/target/release/` lib breaks `flutter run` (content-hash mismatch)**: the generated loader default (`kDefaultExternalLibraryLoaderConfig` in `lib/src/rust/frb_generated.dart`, `ioDirectory: 'rust/target/release/'`) makes **desktop `flutter run` load `rust/target/release/librust_lib_muse_ml.so` from the project root** — NOT the debug bundle lib. A stale release `.so` (e.g. built before the last codegen) embeds an old content hash and produces `Bad state: Content hash on Dart side (…) is different from Rust side (…)` at `RustLib.init`, even though `flutter build`/`./muse_ml` from the bundle dir work fine (that relative path doesn't resolve there, so the loader falls back to the fresh bundle lib). **Fix**: `cargo build --release --manifest-path rust/Cargo.toml` (or delete the stale release `.so`), then `flutter run`. Because the loader always prefers `rust/target/release/`, re-run the release build whenever `flutter_rust_bridge_codegen generate` changes the bindings. Rebuilding debug targets (cargokit fingerprint, `flutter clean`, `flutter build linux --debug`) does **not** fix it — they're never loaded by `flutter run`.
-
-- **Single metadata system (SessionSqlite only)**: `SessionCache` (file-based JSON cache under `<support>/cache/`) was removed. `SessionSqlite` (`lib/src/feedback/session_sqlite.dart`) is now the **only** metadata cache — typed columns for fast sort/filter, thumbnails as BLOB in sessions table, mtime tracking. No more dual systems, no more `SessionCache.noop()`.
-
-- **App version from build-time**: `lib/src/version.dart` reads `APP_VERSION` via `--dart-define=APP_VERSION=<version>` (injected by CI). Used in `SessionStore.publishSession`, `updateNotes`, and crash recovery metadata. No hardcoded versions.
-
-- **`updateNotes` uses v5 container**: Rewrites the full v5 container (header + WebP thumbnail + zstd metadata + zstd computed + zstd raw) via `containerEncodeV5` FFI. Preserves thumbnail, computed frames, and raw body. Old v4 `SessionContainer.encode` path removed.
-
-- **`cacheOverview` actually updates SQLite**: When a legacy session (no embedded summary) is opened, the computed `SessionOverview` is folded back into the SQLite row via upsert so the next open fast-paths without re-parsing the body.
+- **Cargo `[patch]` version trap**: patched crate `version` must be
+  semver-compatible with the dep. btleplug fork is `0.12.0` matching
+  `btleplug = "0.12.0"`. **Do not pin the fork back to `0.11.8`.** Patch
+  target is `crates-io` for btleplug; muse-rs patch target is the eugenehp
+  git URL. See `.ai/btleplug.md`.
+- **Vendored `rlx-cpu`** (`vendor/rlx-cpu-0.2.14`): `[patch.crates-io]`,
+  default `blas` cleared. Keep `version = "0.2.14"` compatible with
+  `rlx-runtime 0.2.14`.
+- **Model engine is git deps, not submodules.** Workflows still init
+  `third_party/reve-rs`/`luna-rs` as reference copies only.
+- **Gated weights live in `.local/`**, never commit them. `#[ignore]`d smoke
+  tests in `rust/src/analysis/{luna,reve}.rs`.
+- **Session format is Rust-owned.** Never edit `.muse` / `.muse.feedback`
+  layout in Dart. Some container fns are `#[frb(sync)]`.
+- **Never put a `LayoutBuilder` inside dialog content** (AlertDialog +
+  IntrinsicWidth). Use `Align` / `FractionallySizedBox`.
+- **Model install UI is shared** (`lib/src/reve/model_selector.dart`) —
+  don't fork it between settings and the guardrail dialog.
+- **Range sliders for cutoffs are log-space**; the label is `label.round()`.
+  Never copy a raw slider position into prefs or tests.
+- **Don't wrap a bounded `DecoratedBox` around a `ListTile` subtitle**
+  (Material ink assertion).
+- **Connect overlay must exist in every view with a status bar**
+  (`AppShell` and `FeedbackSessionView` each host one).
+- **flutter_soloud Linux Xiph libs are glibc-2.43-built** unless
+  `TRY_SYSTEM_LIBS_FIRST=1` + system `libopus-dev` etc. (devcontainer and
+  `release-linux.yml` already do this).
+- **Container has no ALSA card** — `libasound2-plugins` +
+  `/etc/alsa/conf.d/99-pulseaudio-default.conf` (copied from `.example` in
+  the Dockerfile) or playback is silent.
+- **Audio latency profile only matters on Android.** "Reduce audio stutter"
+  (`Settings.audioStableMode`) is Android-only; `SoLoudEngine.reinit` at
+  session start.
+- **Flutter directory assets** only bundle files directly in the declared
+  directory. `pubspec.yaml` lists every `assets/audio/` subdir. Guard:
+  `test/calibration_assets_test.dart`.
+- **Windows MSVC coroutine**: `windows/CMakeLists.txt` defines
+  `_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS` for
+  `permission_handler_windows`.
+- **Android ships arm64-only.** No x86 emulator / armeabi-v7a.
+- **Release version is tag-derived**, not `pubspec.yaml`. Logic in
+  `release-{android,windows,linux}.yml`.
+- **Android BLE init** must happen from JNI before scan or
+  `"Droidplug has not been initialized"`.
+- **Muse startup** uses `handle.start(true, false)` (commit `217cefe`).
+  Classic `p50` enables PPG. Revert that commit if Classic stability
+  regresses.
+- **SpO₂** from PPG IR+Red in `compute_spo2()` (`muse.rs`, commit `4bc0300`).
+- **Event forwarder** polls `guard.events` every 1 s; 30 s silence →
+  `Disconnected`. Never `watch::changed()` on a clone of an unpolled primary
+  (commit `3078904` / fix `53e3e8f`).
+- **Auto-scan only on saved device.** Fresh launch with no `lastDeviceId`
+  opens the connect window but does not scan.
+- **JNI trace spam**: call `log::set_max_level(Debug)` after
+  `android_logger::init_once` (`muse.rs` `init_app()`).
+- **QueueStream race**: `QueueStream.java:pollNext()` must remove inside
+  `synchronized`.
+- **Epoch window is wall-clock 75 s** (`RatioEngine.epochWindowSeconds`),
+  not 300 events. `successRate` is null until the window fills. Zero-success
+  window → circuit breaker resets to the baseline percentile.
+- **In-flight recalibrate**: ≥ 60 s elapsed and ≥ 30 clean samples from the
+  90 s rolling buffer.
+- **Storage resolution is async** (`sessionStorageProvider` FutureProvider).
+  Always `ref.read(sessionStoreProvider.future)`.
+- **SAF is history-only.** Live recording always goes to scratch
+  (`scratchDirectory()`).
+- **Desktop default dir**: fall back to `$HOME/Documents`, never `/tmp`.
+  Changing the save folder **moves** sessions (`moveAllTo`).
+- **Signal gate**: before calibration, gate pads green for 3 s; after
+  baseline, no re-lock. Playing pauses only when all gate pads are critical
+  for 10 s; never auto-ends. Names in `gate_electrodes.dart`, default Muse
+  AF7/AF8.
+- **Line-noise**: `BandsDto.line_noise_ratio` from the 256-point FFT
+  (50/60 Hz ±1 bin). Folded into Dart UI dots and Rust autodrop.
+- **Gesture markers are metadata-only** (not a `RecordingStream`). Gated by
+  `Settings.markersInFeedbackEnabled` / `eyeMarkersEnabled`.
+- **Blink/clench gate cleanliness**: `_sampleIsClean` needs movement and
+  gesture buffers ≥ 1 s old.
+- **BrainFlow datagrams** that are not exactly `batch_size × num_rows`
+  doubles are dropped by the receiver. Extend loopback tests when touching
+  the wire format.
+- **All session writes are crash-safe** (`writeFileAtomic`).
+- **Band/EEG timestamps in the `.muse` body are ms epochs.** CSV bucketing
+  divides by 1000 before flooring.
+- **FFI-backed `flutter test` needs the host Rust lib**
+  (`cargo build --manifest-path rust/Cargo.toml` first).
+- **Stale `rust/target/release/` lib breaks `flutter run`** (content-hash
+  mismatch). Rebuild release after codegen; debug/cargokit rebuilds are not
+  loaded. See `.ai/testing-guide.md`.
+- **`updateNotes` uses v5** (`containerEncodeV5`). There is no
+  `SessionContainer` Dart wrapper anymore.
+- **Next charts spec** will drop `SessionOverview` / 400-bucket metadata
+  and plot computed 1 Hz. Until that lands, do not "fix" blank dashboard
+  graphs in isolation — follow `.ai/feedback/session-computed-charts.md`.

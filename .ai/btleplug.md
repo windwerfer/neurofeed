@@ -31,6 +31,14 @@ btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-m
 btleplug = { path = "../third_party/btleplug" }
 ```
 
+**Version matching:** the fork crate `version` is `"0.12.0"`, matching
+`btleplug = "0.12.0"` in `rust/Cargo.toml`. If those diverge by semver, Cargo
+**silently ignores** `[patch.crates-io]` and you link unpatched crates.io
+btleplug (two `GLOBAL_JVM` statics, JNI panics). An older note said to pin
+the fork at `0.11.8` — that was for when the dep was `0.11.x`. Do not revert
+the fork to `0.11.8` while the dep is `0.12.0`. The patch target must be
+`crates-io`, not a git URL, so muse-rs's transitive dep is replaced too.
+
 ## Changes made
 
 ### Batch 1 (Bug 1: ThreadDetached + QueueStream race)

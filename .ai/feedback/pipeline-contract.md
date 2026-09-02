@@ -2,14 +2,14 @@
 
 | Field | Value |
 |---|---|
-| Status | Draft |
+| Status | Implemented (PRs 1–7 on `refactor/eeg_feature_implementation`) |
 | Date | 2026-08-26 |
-| Revised | 2026-08-26 (review round 1) |
+| Revised | 2026-09-02 (status only; Key Decisions unchanged) |
 | Author | — |
 | Scope | Freeze the feedback pipeline so later PRs (feature bus, protocol-as-document, notifier split, output methods, calibration recipes, custom builder) do not relitigate architecture |
-| Not this doc | Rewrite of `.ai/architecture.md` or `.ai/feeback/architecture.md`; product pitch; implementation |
+| Not this doc | Rewrite of `.ai/architecture.md` or `.ai/feedback/architecture.md`; product pitch; session charts (`.ai/feedback/session-computed-charts.md`) |
 
-This is **Step 1 of the agreed refactor**. It is the spec an engineer implements against: IDs, ownership, JSON shape, FFI sketches, catalog migration, and a PR plan. Decisions in [Key Decisions](#key-decisions) are frozen. Do not reopen them in implementation PRs.
+PRs 1–7 implemented this contract. Decisions in [Key Decisions](#key-decisions) stay frozen. Do not reopen them. **Crown Start stays refused.** Session-chart work is a separate frozen spec — do not mix it in here.
 
 ---
 
@@ -1215,7 +1215,7 @@ Each step is independently mergeable **as scoped below**. Step 2 does **not** ki
 ### PR 1 — This contract
 
 - **Title:** `docs: freeze feedback pipeline contract`
-- **Files:** `.ai/feeback/pipeline-contract.md` (this document)
+- **Files:** `.ai/feedback/pipeline-contract.md` (this document)
 - **Deps:** none
 - **Description:** Architecture freeze only. No code.
 
@@ -1300,4 +1300,4 @@ Keep **one PR** with an internal 3a/3b checklist (too coupled for two merges: Se
 - `lib/src/audio/audio_service.dart` — three-layer comment vs `FeedbackMode`
 - `lib/src/audio/guardrail_sound.dart` — `softBowl` / `chime` / `cough` / `alarm` / `none`
 - `lib/src/views/feedback_list.dart`, `feedback_session.dart` — UI coupling
-- `.ai/feeback/architecture.md`, `AGENTS.md` feedback hot spots
+- `.ai/feedback/architecture.md`, `AGENTS.md` feedback hot spots

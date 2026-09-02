@@ -1,230 +1,127 @@
 # Architecture
 
-## Current architecture (as built)
-```
-Flutter UI (lib/src)
-   │  Riverpod: AppStateNotifier (connection_provider.dart)
-   ▼
-flutter_rust_bridge 2.11.1  ── FFI ──►  Rust crate rust_lib_muse_ml (rust/src/api/muse.rs)
-                                            │
-                                            ▼
-                                       muse-rs 0.1.0 (dep)
-                                         ├─ transport: btleplug fork 0.11.8 (Android BLE)
-                                         └─ protocol:  parse.rs / protocol.rs / types.rs
-                                            (decode raw GATT bytes → MuseEvent)
-```
-- `scan()` / `connect()` / `subscribe_events()` are the Rust FFI entry points.
-- `subscribe_events()` returns a `Stream<MuseEventDto>` that drives all UI.
-- Session persistence runs through `rust/src/api/session_format.rs` (single
-  authority for the `.muse` v4 body + `.muse.feedback` container byte layout).
-  Dart `SessionRecorder`/`SessionReader`/`SessionContainer` are thin FFI
-  delegates (`encodeSessionEvent`/`sessionFrameBytes`/`sessionParseBody` and
-  the sync `container*` fns). See AGENTS.md "Known hot spots".
-- Permissions: `requestBlePermissions()` in `app.dart` (permission_handler +
-  device_info_plus, SDK-gated).
-
-## Decision: keep btleplug (2026-07-21)
-
-The btleplug JNI thread-attach fix succeeded — scan works end-to-end without
-crashes. We are **keeping btleplug** as the BLE transport for consistency with
-`muse-rs` (which uses btleplug natively). No migration to `flutter_blue_plus`.
-
-### Fallback option (if btleplug hadn't worked)
-If the JNI fix had failed, the plan was to replace the btleplug transport with
-`flutter_blue_plus` (Dart) and keep only muse-rs's **protocol core** in Rust,
-fed raw bytes over the FFI bridge:
+## Stack
 
 ```
-Flutter UI (lib/src)
-   │
-   ├─ flutter_blue_plus (Dart)  ◄── scan / connect / discover / subscribe
-   │        │  raw List<int> per characteristic notification
-   │        ▼  (frb call: handle_notification(uuid, bytes))
-   │
-   └─ flutter_rust_bridge ──►  stripped muse-rs core (Rust)
-                                  parse.rs / protocol.rs / types.rs
-                                  handle_notification(uuid, bytes) -> Vec<MuseEvent>
-                                  encode_command(cmd) -> Vec<u8>
-                                             │
-                                             ▼
-                                  MuseEvent stream → UI (unchanged)
+Flutter UI (lib/src)  — Riverpod
+        │
+flutter_rust_bridge 2.11.1
+        ▼
+rust_lib_muse_ml
+  muse.rs            BLE scan/connect/subscribe, 1 Hz derived metrics, forwarder
+  features.rs        feature registry → MuseEventDto::Feature
+  device_config.rs   DeviceKind + electrode montage
+  neurosity_osc.rs   Crown/Notion OSC
+  simulator.rs       SimulatedMuse / SimulatedNeurosity
+  reve.rs            model + guardrail FFI
+  session_format.rs  .muse v4 body + .muse.feedback v5 container
+  analysis/{gesture,reve,luna,guardrail}.rs
+        │
+        ├─ muse-rs 0.1.1 (patched fork of eugenehp 0.1.0)
+        │     transport: btleplug 0.12.0-muse-5
+        │     protocol:  parse.rs / protocol.rs / types.rs
+        └─ reve-rs / luna-rs (git deps, RLX CPU)
 ```
 
-`flutter_blue_plus` handles Android BLE init natively and would have avoided
-the Kotlin glue, bundled Java classes, JVM-attach patch, and patched fork.
-It remains a good second choice if btleplug ever becomes unmaintainable.
+`scan()` / `connect()` / `subscribe_events()` are the BLE FFI entry points.
+`subscribe_events()` returns `Stream<MuseEventDto>` that drives UI, recording,
+streaming, and the feedback orchestrator.
 
-## Signal quality, calibration gate, and ATR autodrop (feedback)
-- Per-pad `signalQuality` (0–100, from EEG std over a 1 s window **plus a
-  line-noise term**, `connection_provider.dart`) is the "fit" score — separate
-  from the bands used for ATR. Line noise comes from `BandsDto.line_noise_ratio`
-  (50/60 Hz mains power fraction of the existing per-second FFT); ratios above
-  ~0.2 start to penalize a pad, ~0.5 is severe (up to −60%). `_lineNoise` keeps
-  a `-1.0` sentinel until the first Bands event.
-- Calibration gate: all 4 pads ≥ `signalGoodThreshold` for `greenStableSeconds`
-  (3) continuous (1 s `_gateTimer`), then baseline. After baseline there is no
-  signal gate → feedback always starts.
-- Faulty pad (non-green for `faultyPadSeconds`=20 while frontal pads green) →
-  inline "Continue anyway" fallback (tier A: both AF7/AF8; tier B: ≥1).
-- Playing: pauses only when both needed pads < `signalCriticalThreshold` for
-  `badSignalPauseSeconds`; never auto-ends; auto-resumes when a needed pad
-  recovers.
-- ATR autodrop: `TargetStateAggregator.evaluate(quality)` averages only pads
-  ≥ `atrUsableSignalThreshold`; null if both frontal pads are bad.
+Permissions: `requestBlePermissions()` in `app.dart`. BLE init:
+`main()` → `RustLib.init()` → MethodChannel `muse_ml/init` `ensureInitialized`
+→ `museAndroidInit()` JNI → `btleplug::platform::init(&env)`. Details:
+[btleplug.md](btleplug.md), [muse-rs.md](muse-rs.md).
 
-## Gesture detection (blink / jaw clench / eye)
-- `rust/src/analysis/gesture.rs` `GestureDetector` — no DSP crates, all
-  thresholds auto-adaptive EWMA baselines. Fed raw EEG per packet + per-second
-  FFT gamma in the forwarder (`rust/src/api/muse.rs`); drains 1 Hz into the new
-  `MuseEventDto::Gestures` variant.
-- Blink: frontal pads (1,2), 125 ms rectified-diff bin energy > `max(baseline×5,
-  100 µV)`, ~500 ms refractory. Jaw clench: posterior pads (0,3) gamma bursts >
-  `baseline×3`. Eye up/down: frontal−posterior mean shift > `max(scale×2,
-  20 µV)` — experimental, off by default.
-- In Dart: `_onGestures` gates the ATR clean-sample window (like the movement
-  gate) and accumulates `GestureMarker`s (`doubleBlink`, `doubleClench`,
-  `eyeUp`/`eyeDown`) only while `playing`. Markers persist in `SessionMetadata`.
-  `gestures` (top-level metadata key), never in the `.muse` body.
-- Settings toggles: `eyeMarkersEnabled` (eye track, default off) and
-  `markersInFeedbackEnabled` (persist markers, default on).
+## Devices
 
-## Feedback audio modes (flutter_soloud)
-- One `AudioService` façade over SoLoud; `FeedbackAudioController` owns the
-  volume stack (**5 channels**: master × background / feedback / intro / end
-  bell / guardrail warning), calibration clips, and chimes.
-- Feedback-sound modes (`Settings.feedbackSound`): **bowl chimes** (reward
-  verdicts), **rain**, **music** (`MusicFeedbackController` — user folder
-  played through a per-voice biquad low-pass, cutoff/invert/shuffle from the
-  shared `MusicSettingsPanel` in `lib/src/views/music_settings_panel.dart`),
-  **binaural** (`BinauralBeatController` — two synth voices at a carrier/beat
-  beat-frequency pair), or none. Reward drives swell on music/binaural; the
-  guardrail muffle ducks them when the warning sounds.
-- `SoLoudEngine` (`lib/src/audio/soloud_engine.dart`) is the single-flight
-  init/reinit point: it tracks the stable (conservative) vs low-latency
-  profile and can switch between sessions via `reinit`. On Android the
-  profile selects AAudio MMAP vs legacy; it is a no-op on other platforms.
-  `startCalibration` syncs it from `Settings.audioStableMode` ("Reduce audio
-  stutter", Android-only Settings card, default on) before anything plays.
-- Connect window: `ConnectOverlay` (`lib/src/connect_window.dart`) is a
-  tap-anywhere barrier + device list/rescan panel; both `AppShell` and
-  `FeedbackSessionView` host their own copy (session screen can reconnect
-  without leaving the session).
+`DeviceKind`: `Muse`, `Neurosity`, `SimulatedMuse`, `SimulatedNeurosity`.
+`DeviceConfig` owns channel count, electrode **names**, gate electrodes,
+sampling rate, PPG/IMU flags.
 
-## Network streaming (OSC / LSL / BrainFlow)
-- One `StreamingController` (riverpod) subscribes to the Muse event stream,
-  mixes per-group channels through `StreamingMixer` (per-channel queues →
-  lockstep rows), and starts on connect / stops on disconnect. Three wire
-  formats, all built from `StreamingConfig` derived from `Settings`
-  (`osc`/`lsl`/`brainflow` keys):
-  - **OSC** (`streaming_osc.dart`): unicast UDP, batched per-chunk messages via
-    `oscEncodeMessage`; the IP auto-fills from the local subnet when unset.
-  - **LSL** (`streaming_lsl.dart`): `liblsl` pub package, auto-discovered on the
-    network — no IP/port needed.
-  - **BrainFlow** (`streaming_brainflow.dart`): multicast UDP "Streaming Board"
-    datagrams — raw little-endian f64 doubles, no header, one datagram per
-    batch of 3 samples. `eeg` = default preset (7 rows) on the configured port;
-    `imu` = auxiliary preset (9 rows) on port+1 and `ppg` = ancillary preset
-    (6 rows) on port+2, both only when `separateGroups` is on. The receiver
-    drops datagrams that aren't exactly `batch_size × num_rows` doubles.
-    Reference for the wire format: `third_party/brainflow/` (tag 5.9.0), NOT a
-    build dependency.
-- `StreamIndicator`/`StreamDot` show live (green) / armed (amber) status in the
-  sidebar and status bar. End-to-end verified over real loopback sockets in
-  `test/streaming_osc_test.dart` (extend it when touching the wire formats).
+| Kind | Transport | Notes |
+|------|-----------|--------|
+| Muse | btleplug via muse-rs | 4 pads TP9/AF7/AF8/TP10 @ 256 Hz |
+| Neurosity (Crown/Notion) | OSC (`neurosity_osc.rs`) | 8 ch; `/focus` `/calm` as `device.*` features |
+| Simulated* | `simulator.rs` | No headset; for UI/pipeline without BLE |
 
-## Session export (PDF / PNG / CSV / EDF+)
-- One `SessionExporter` (`lib/src/feedback/session_export.dart`) turns parsed
-  `SessionData` + `SessionMetadata` into four formats. Charts always go through
-  the shared `prepareChartData` (`session_chart_data.dart`) so PNG/PDF match the
-  dashboard:
-  - **CSV**: Mind Monitor layout — `TimeStamp,Delta..Gamma per channel,RAW per
-    channel`, capitalized band names; band timestamps are ms epochs, so
-    bucketing divides by 1000 before flooring.
-  - **EDF+**: raw EEG via the Rust FFI `encodeEdfExport` (`rust/src/api/
-    edf_export.rs`), backed by the hand-rolled writer crate `third_party/
-    edf_export/` (path dep; golden byte-layout tests; TODO: push to user GitHub
-    and switch to a git+tag dep). Header numeric fields are ASCII
-    right-justified; sample rate is estimated from packet spacing with
-    gap-fill; calibration/gesture annotations are EDF+ annotations.
-  - **PNG**: per-session thumbnail (dashboard PNG) and full charts (band
-    powers + alpha-vs-theta + movement + HR) rasterized offscreen
-    (`rasterizeChart`/`_renderOffscreen` — own `BuildOwner`/`PipelineOwner`/
-    `RenderView`; needs `flushCompositingBits()` between layout and paint).
-  - **PDF**: vector A4 page per session (`session_pdf_export.dart`
-    `buildPdfPage`, `pdf` pkg) using the same chart data/painters.
-- Destination: `<root>/export/` (`<root>/export/<stem>/` for PNG-all); on
-  Android with a non-SAF history folder, `resolveExportStorage` prompts
-  `SafSessionStorage.pickFolder()` for that export only. Selection UI (long
-  press, Select-all/None bar) lives in `lib/src/views/feedback_history.dart`.
-- Tested end-to-end in `test/session_export_test.dart` (needs the host-built
-  Rust lib — see `testing-guide.md`).
+**Crown Start is refused** (`crownSessionUnsupportedMessage` in
+`lib/src/feedback/protocol.dart`). The registry can *produce* Crown
+`device.focus` / `device.calm` and `band.*`; running a catalog session on
+Crown is out of scope until quality vectors, computed frames, and charts are
+device-aware. Connect UI still lists Crown.
 
-## Local model engine (REVE / LUNA guardrail)
-- Purpose: on-device drowsiness/artifact embeddings for the guardrail layer
-  (the guardrail composes with the ATR reward engine but only warns — it never
-  modulates the reward). Per-protocol wiring: `ProtocolInfo.guardrailDefault` /
-  `guardrailAllowed` / `guardrailFeedback` + `Settings.guardrailEnabledFor`; the
-  eyes-open alertness protocol sets `guardrailAllowed: false` so the guardrail
-  gear card is hidden there. **The app ships no weights.**
-- Rust: `rust/src/api/reve.rs` is the FFI surface (`model_load`/`model_unload`/
-  `model_loaded`/`model_config_json`). `rust/src/analysis/{reve,luna}.rs` wrap the
-  `reve-rs`/`luna-rs` crates (RLX CPU backend); scoring runs there from the event
-  forwarder, not across FFI. `reve-rs`/`luna-rs` are **git deps** (reveal-rs at rev
-  `9c8d856…` from upstream `eugenehp`, luna-rs at tag `v0.0.4-latent-embedding-fix`
-  from the `windwerfer` fork); `[patch.crates-io]` points `rlx-cpu` at the vendored `vendor/rlx-cpu`
-  (default `blas` feature cleared).
-- Dart: `lib/src/reve/models.dart` (`ModelKind` — luna_base / luna_large / reve_base,
-  each with SHA-256 + Hugging Face URLs + size), `model_engine.dart` (`ModelCache`
-  downloads LUNA or imports REVE with SHA-256 verification, atomic `.part`+rename
-  install, then `modelLoad`; `ModelEngineNotifier` drives the `ModelEngineState`),
-  `model_selector.dart` (settings-backed picker with per-model availability badges),
-  `reve_import.dart` (gated-file import), `reve_card.dart`.
-- Files land in `<sessionFolder>/ai_models/<kind>/` as `config.json` (app-generated via
-  `modelConfigJson`) + `model.safetensors`.
-- Local dev only: `.local/{luna-base-dl,reve-base-dl}` hold the real weights used by the
-  `#[ignore]`d smoke tests; `.local/reve-base` is an abandoned source fork. None are in
-  git (embedded repos, documented in `.gitmodules` with `ignore = all` + invalid URL).
+## Feature pipeline
 
-## muse-rs module map (for the fork)
-| File | Role | Keep in fork? |
-|------|------|---------------|
-| `parse.rs` | byte decoders (pure) | ✅ keep |
-| `protocol.rs` | UUIDs, command encode/decode (pure) | ✅ keep |
-| `types.rs` | `MuseEvent`, `Eeg`, `Ppg`, `Imu`, `Telemetry` | ✅ keep |
-| `lib.rs` | re-exports | ✅ keep (trim) |
-| `muse_client.rs` | btleplug transport (scan/connect/subscribe) | ❌ delete |
-| `bin/` | CLI using btleplug | ❌ delete |
+JSON names IDs; Rust owns `(device, feature)` electrodes and autodrop.
+Dart owns the session. Frozen decisions:
+[feedback/pipeline-contract.md](feedback/pipeline-contract.md).
+Implemented map: [feedback/architecture.md](feedback/architecture.md).
 
-## Key data types (crossing the bridge)
-- `MuseEventDto` (freezed DTO) variants: `Connected`, `Disconnected`, `Eeg`,
-  `Ppg`, `Telemetry`, `Accelerometer`, `Gyroscope`, `Control`, `Pulse`,
-  `Movement`, `PeakAlpha`, `Gestures`.
-- `BandsDto { electrode, timestamp, delta…gamma, line_noise_ratio }` — also the
-  1 Hz carrier that feeds `AppStateNotifier._lineNoise`.
-- `GestureDto { timestamp, blink_count, clench, eye }` — 1 Hz gesture report.
-- `DeviceInfo { name, id }` — produced by scan, consumed by connect.
-- `ConnectionStatus`, `TelemetrySnapshot` — UI state.
+```
+Headset / simulator
+  → always-on Bands / Movement / Gestures
+  → feature registry (subscribed ids only)
+  → MuseEventDto stream
+       ├─ FeatureDto → FeatureBus → RewardLane / GuardLane
+       ├─ always-on bands → inhibit (beta/delta ceiling) + pad quality UI
+       └─ SessionRecorder (v5 temps)
+```
 
-## Android specifics
-- Manifest BLE perms: `BLUETOOTH_SCAN` (neverForLocation), `BLUETOOTH_CONNECT`,
-  `ACCESS_FINE_LOCATION` (maxSdkVersion=30).
-- `targetSdkVersion = 36`, NDK 27/28, Gradle 8.14.
-- `flutter_rust_bridge` generated `rust/src/frb_generated.rs` and the Dart
-  files under `lib/src/rust/` are both tracked in git (re-tracked in `7543478`:
-  CI never runs codegen, so a fresh checkout must already contain
-  `frb_generated.rs` or cargokit's `cargo build` fails with E0583). Regenerate
-  with `flutter_rust_bridge_codegen generate` when the FFI surface changes.
+Copy for features: `assets/features.json` (`usableFor`: `reward` / `guard`).
+`band.atr` is never a guard. Inhibit ≠ guard. Background ≠ reward output.
 
-## JNI thread-attach workaround (btleplug fork)
+## Session files
 
-**Fixed 2026-07-21.** The btleplug fork at `github.com/windwerfer/btleplug`
-(tag `0.12.0-muse-3`) includes a `get_env()` wrapper that auto-attaches
-tokio worker threads to the JVM and fixes the BLE notification death spiral. Without this, every BLE JNI call from a
-worker thread fails with `"JNI call failed"`.
+`.muse.feedback` v5, Rust-owned (`rust/src/api/session_format.rs`):
 
-Key insight: the `jni` crate's `JavaVM::get_env()` returns
-`Err(JniCall(ThreadDetached))` for unattached threads and does not
-auto-attach. The fix is a single function with a fallback to
-`attach_current_thread_permanently()`.
+```
+[68-byte header][WebP thumb][metadata zstd][computed 1 Hz zstd][raw zstd]
+```
 
-See `.ai/btleplug.md` for the full patch documentation.
+Raw body is format v4 (f32 payloads, f64 timestamps), framed zstd. Dart
+delegates: `encodeSessionEvent` / `sessionFrameBytes` / `sessionParseBody` /
+`containerEncodeV5` / `v5ParseHead` / `v5ExtractComputed`.
+
+History list: SQLite `session_metadata.db` (typed columns + thumbnail BLOB).
+Detail today still has a 400-bucket `SessionOverview` path — **that is the
+next frozen spec to remove**, see
+[feedback/session-computed-charts.md](feedback/session-computed-charts.md).
+
+## Audio
+
+`AudioService` over flutter_soloud. Five volume channels: master ×
+background / feedback / intro / end bell / guardrail warning.
+
+Reward outputs (`RewardOutputId`): `chime`, `musicFilter`, `rainStage`,
+`binauralSwell`, `none`. Background (`BackgroundKind`) is unmapped to a
+feature. Guard outputs warn only — they never change `inTarget`.
+
+`SoLoudEngine` tracks stable vs low-latency; the profile only matters on
+Android AAudio. Synced from `Settings.audioStableMode` at session start.
+
+## Network streaming
+
+`StreamingController` mixes per-group channels (`StreamingMixer`) on connect.
+
+- **OSC** — unicast UDP, batched `oscEncodeMessage`
+- **LSL** — `liblsl`, auto-discovered
+- **BrainFlow** — multicast "Streaming Board": raw LE f64, no header, 3
+  samples/datagram. IMU/PPG on port+1/+2 only when `separateGroups` is on.
+
+Wire-format reference: `third_party/brainflow/` (tag 5.9.0), not a build dep.
+
+## Export
+
+`SessionExporter`: PDF, PNG (thumb + charts), Mind Monitor CSV, EDF+
+(`encodeEdfExport` → `third_party/edf_export`). Charts share
+`prepareChartData` with the dashboard (that builder is in scope of the
+computed-charts spec). Destination `<root>/export/`.
+
+## Signal quality + gate
+
+Pad quality 0–100: EEG std + `BandsDto.line_noise_ratio` (Dart UI dots) and
+the same formula in Rust for autodrop (`pad_quality_from_std_and_noise`).
+Before calibration: gate electrodes green for 3 s. After baseline: no re-lock.
+Playing pauses only when **all** gate pads are critical for 10 s; never
+auto-ends. Band features skip pads below 80; no usable pad → no `FeatureDto`
+that tick (never emit `0.0`).

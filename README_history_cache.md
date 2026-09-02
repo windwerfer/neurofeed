@@ -2,7 +2,7 @@
 
 ## Overview
 
-The history cache uses **SQLite** (`session_metadata.db`) to avoid re-reading and JSON-parsing every `.muse.feedback` file on every history list/open. The cache is **app-private** (stored in the app's documents directory) and works for both filesystem and SAF (Storage Access Framework) history locations.
+The history cache uses **SQLite** (`session_metadata.db`) to avoid re-reading and JSON-parsing every `.muse.feedback` file on every history list/open. It is **not** written into the SAF history folder. Thumbnails live as a **BLOB** on the `sessions` row.
 
 The cache is a **read-through + write-through** layer:
 - **Read path**: `SessionStore.list()` does one `listFilesMeta()` (name + mtime) + one `SELECT` against SQLite. Unchanged files render from cached columns; changed/new files are backfilled in the background and the list refreshes.
@@ -13,14 +13,14 @@ The cache is a **read-through + write-through** layer:
 ## Database Location
 
 ```
-<app-documents-dir>/session_metadata.db
+<cache-dir>/session_metadata.db
 ```
 
-On Android with SAF, this is in the app-private directory (not the SAF folder). Thumbnails are stored as separate files:
+Resolved by `resolveSessionCacheDir` in `session_sqlite.dart`:
+- Linux/Windows/macOS: `<history-folder>/.cache/`
+- Android/iOS: `getApplicationCacheDirectory()`
 
-```
-<app-documents-dir>/thumbnails/<session_id>.png
-```
+Thumbnails are a `BLOB` column on `sessions`, not sidecar PNG files.
 
 ---
 
@@ -107,41 +107,28 @@ User-added or auto-detected markers for self-labeling and retrospective analysis
 
 ## Reconciliation Algorithm
 
-`SessionStore.list()` performs a **single-pass reconciliation**:
+`SessionStore.list()` reads typed columns from SQLite (`listSessions()` ordered
+by `saved_at DESC`). There is **no `storage_key` column** — the database file
+itself lives in the cache dir for that history location (desktop:
+`<history>/.cache/`; Android: app cache), so two folders do not share rows.
 
-1. **`listFilesMeta()`** → returns `[{name, mtime}]` for all `.muse.feedback` files in the history folder (one syscall per file, but batched on Android via `MainActivity.kt`).
-2. **Single `SELECT`** → `SELECT * FROM sessions WHERE storage_key=? ORDER BY saved_at_ms DESC`
-3. For each file:
-   - **Unchanged** (`mtime` matches): render from cached columns (instant, no I/O).
-   - **Changed / new**: backfill asynchronously:
-     - Read container head (`v5_parse_head`) → metadata JSON + thumbnail
-     - Decode metadata JSON → extract scalar summary fields
-     - `upsertSession()` with new values
-     - `SessionListNotifier.invalidateSelf()` → triggers re-read (lazy two-stage emission)
-4. **Deleted files**: rows with `mtime=0` and missing from `listFilesMeta()` are deleted from SQLite.
+Write-through on `publishSession` / `updateNotes` / `delete`. `moveAllTo`
+opens the destination cache dir. A freshly published row can store
+`mtime = 0` so the next open re-reads that head once.
 
 ---
 
-## Storage Key Namespace
+## Namespace
 
-Sessions are namespaced by **storage location** so two history folders never share rows even if IDs collide:
-
-```
-storage_key = sha256(folder_location).substring(0, 16)
-```
-
-- Filesystem path → `sha256("/home/user/Documents/meditation feedback")`
-- SAF tree URI → `sha256("content://com.android.externalstorage.documents/tree/...")`
-
-`moveAllTo(newFolder)` re-namespaces all rows by computing the new `storage_key` and updating the `storage_key` column (or re-inserting with new key).
+Isolation is the **database path**, not a column. Changing the save folder
+moves files and uses the destination's `session_metadata.db`.
 
 ---
 
 ## Fault Tolerance
 
-- `SessionSqlite.open()` catches **any** error (corrupt DB, missing native lib, permission denied) and falls back to a **no-op implementation** that returns empty lists. History degrades gracefully to file reads.
-- `SessionStore` takes an injectable `SessionCache` (tests inject a real SQLite instance; production uses the fallback on failure).
-- Thumbnail cache is separate (`<app-documents-dir>/thumbnails/<id>.png`) — never written to SAF folders.
+- `SessionSqlite.open()` catches **any** error (corrupt DB, missing native lib, permission denied) and falls back to a **no-op** so history degrades to file reads.
+- Thumbnails are a BLOB on the session row — never written to SAF folders.
 
 ---
 
@@ -160,8 +147,7 @@ Next history open re-imports all v5 files (reads metadata + computed from each f
 
 | File | Purpose |
 |------|---------|
-| `lib/src/feedback/session_sqlite.dart` | SQLite schema, CRUD, reconciliation |
-| `lib/src/feedback/session_cache.dart` | `SessionCache` interface + no-op fallback |
+| `lib/src/feedback/session_sqlite.dart` | SQLite schema, CRUD, thumbnail BLOB |
 | `lib/src/feedback/session_store_core.dart` | `SessionStore.list()` reconciliation logic |
 | `android/app/src/main/kotlin/.../MainActivity.kt` | `listFilesMeta()` native implementation |
 

@@ -225,8 +225,10 @@ All session-affecting settings at save time.
 ---
  
 ## 5. Decimated Summary (SessionOverview) — Metadata JSON
- 
-400-bucket decimated view for **fast history rendering** without reading the computed stream. Stored in the metadata JSON (`summary` key). Matches the chart x-axis (fixed 400 buckets regardless of session length).
+
+**Current files may still contain this.** A frozen spec will drop `metadata.summary` / `SessionOverview` and plot computed 1 Hz instead — see `.ai/feedback/session-computed-charts.md`. Do not add new fields here.
+
+400-bucket decimated view used today for **fast history rendering** without reading the computed stream. Stored in the metadata JSON (`summary` key).
  
 ```json
 "summary": {
