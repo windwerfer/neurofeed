@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:muse_ml/src/audio/calibration_clips.dart';
 import 'package:muse_ml/src/audio/guard_output.dart';
 import 'package:muse_ml/src/audio/reward_output.dart';
 import 'package:muse_ml/src/feedback/feature_bus.dart';
@@ -464,6 +465,56 @@ void main() {
           threshold: 0.50,
         ),
         isFalse,
+      );
+    });
+  });
+
+  group('CalibrationPlan', () {
+    test('empty S is baseline only (recordOnly)', () {
+      expect(
+        CalibrationPlan.fromEnabledFeatures([]),
+        CalibrationPlan.baselineOnly,
+      );
+    });
+
+    test('band reward and/or band.delta is baseline only', () {
+      expect(
+        CalibrationPlan.fromEnabledFeatures(['band.atr']),
+        CalibrationPlan.baselineOnly,
+      );
+      expect(
+        CalibrationPlan.fromEnabledFeatures(['band.delta']),
+        CalibrationPlan.baselineOnly,
+      );
+      expect(
+        CalibrationPlan.fromEnabledFeatures(['band.atr', 'band.delta']),
+        CalibrationPlan.baselineOnly,
+      );
+    });
+
+    test('any ai.* in S is artifact + challenge + baseline', () {
+      final plan = CalibrationPlan.fromEnabledFeatures(['ai.drowsiness']);
+      expect(plan.artifact, isTrue);
+      expect(plan.challenge, isTrue);
+      expect(plan.baseline, isTrue);
+      expect(plan.adaptiveBaselineSeconds, isNull);
+    });
+
+    test('AI + reward extends staged rest to 60s', () {
+      final plan = CalibrationPlan.fromEnabledFeatures([
+        'band.atr',
+        'ai.drowsiness',
+      ]);
+      expect(plan.artifact, isTrue);
+      expect(plan.challenge, isTrue);
+      expect(plan.baseline, isTrue);
+      expect(plan.adaptiveBaselineSeconds, calibrationAdaptiveBaselineSeconds);
+    });
+
+    test('disabled AI guard is not in S so not staged', () {
+      expect(
+        CalibrationPlan.fromEnabledFeatures(['band.atr']),
+        CalibrationPlan.baselineOnly,
       );
     });
   });

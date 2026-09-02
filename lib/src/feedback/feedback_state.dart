@@ -172,10 +172,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         state = state.copyWith(currentThreshold: _engine.threshold);
       },
     );
-    _guard = GuardLane(
-      guardOutput: _guardOutput,
-      rewardOutput: _rewardOutput,
-    );
+    _guard = GuardLane(guardOutput: _guardOutput, rewardOutput: _rewardOutput);
     _calibration = CalibrationRunner(
       loadManifest: () => _ref.read(calibrationManifestProvider.future),
       playClip: (file) => _audio.playCalibration(file),
@@ -264,6 +261,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// Eye state of the active silent collection window, or null while a
   /// guidance clip plays.
   String? _collectionEyes;
+
+  /// Features actually enabled for this session (`S`). Same set sent to
+  /// [setEnabledFeatures]. Calibration compose reads this, not a model-ready
+  /// boolean.
+  List<String> _enabledFeatureIds = const [];
 
   List<int> _gateElectrodes = List.of(defaultGateElectrodes);
   bool _clenchWasActive = false;
@@ -490,10 +492,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   /// True when this session intends to run the guardrail: the user has not
-  /// disabled it for this protocol and a model is ready. Used synchronously
-  /// for the calibration-recipe lookup; the async arm ([_maybeEnableGuardrail])
-  /// may still fail, in which case the session runs without warnings (the
-  /// staged recipe still calibrates fine — it just has no scorer to feed).
+  /// disabled it for this protocol and a model is ready (or band-math).
+  /// Feeds the enabled feature set `S` and [_maybeEnableGuardrail]. The
+  /// async arm may still fail, in which case the session runs without
+  /// warnings (a staged recipe still calibrates — it just has no scorer).
   bool get _guardrailIntent {
     final settings = _ref.read(settingsProvider);
     if (!settings.guardrailEnabledFor(state.protocol)) {
@@ -505,20 +507,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
   }
 
-  /// True when the calibration should run the staged (3-part) recipe: the
-  /// guardrail is enabled for this protocol AND a real AI model (LUNA/REVE,
-  /// not band math) is ready. Band-math and no-guardrail sessions use the
-  /// single baseline instead.
-  bool get _stagedCalibrationIntent {
-    final settings = _ref.read(settingsProvider);
-    if (!settings.guardrailEnabledFor(state.protocol)) {
-      return false;
-    }
-    if (settings.guardrailIsBandMathFor(state.protocol)) {
-      return false;
-    }
-    return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
-  }
+  CalibrationPlan get _calibrationPlan =>
+      CalibrationPlan.fromEnabledFeatures(_enabledFeatureIds);
 
   Future<void> _enableSessionFeatures() async {
     final app = _ref.read(appStateProvider);
@@ -603,6 +593,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         unique.add(id);
       }
     }
+    _enabledFeatureIds = unique;
     try {
       await setEnabledFeatures(ids: unique);
       debugPrint('[feature] set_enabled_features $unique');
@@ -634,6 +625,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   Future<void> _clearEnabledFeatures() async {
+    _enabledFeatureIds = const [];
     try {
       await setEnabledFeatures(ids: []);
       debugPrint('[feature] set_enabled_features []');
@@ -779,9 +771,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         _greenSeconds++;
         if (_greenSeconds >= greenStableSeconds) {
           _gateTimer?.cancel();
-          unawaited(
-            _calibration.playAndBaseline(useStaged: _stagedCalibrationIntent),
-          );
+          unawaited(_calibration.playAndBaseline(plan: _calibrationPlan));
         }
         return;
       }
@@ -901,9 +891,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     _usedStartAnyway = true;
     _gateTimer?.cancel();
-    unawaited(
-      _calibration.playAndBaseline(useStaged: _stagedCalibrationIntent),
-    );
+    unawaited(_calibration.playAndBaseline(plan: _calibrationPlan));
   }
 
   /// Start the feedback loop: record the session and begin the background

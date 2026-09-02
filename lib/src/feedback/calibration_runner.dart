@@ -45,8 +45,8 @@ class CalibrationUi {
   final bool clearChallenges;
 }
 
-/// Playback of today's `single` / `staged` clips. Compose-from-subscribed
-/// features is PR 6 — [useStaged] stays "any `ai.*` enabled".
+/// Playback of today's `single` / `staged` clips, composed from a
+/// [CalibrationPlan] derived from the session's enabled feature set.
 class CalibrationRunner {
   CalibrationRunner({
     required this.loadManifest,
@@ -100,11 +100,12 @@ class CalibrationRunner {
     collectionCompleter = null;
   }
 
-  /// Runs the calibration for the selected protocol from the manifest recipe:
-  /// * `single` — a random intro clip, then one silent baseline window.
-  /// * `staged` — the fixed ordered stages; each plays a guidance clip then
-  ///   collects silently for that stage's seconds.
-  Future<void> playAndBaseline({required bool useStaged}) async {
+  /// Runs the calibration for the selected protocol from the manifest recipe
+  /// composed by [plan]:
+  /// * baseline-only — a random intro clip, then one silent baseline window.
+  /// * staged — the requested artifact / challenge / rest clips; each plays
+  ///   a guidance clip then collects silently for that stage's seconds.
+  Future<void> playAndBaseline({required CalibrationPlan plan}) async {
     updateUi(
       const CalibrationUi(waitingForSignal: false, clearChallenges: true),
     );
@@ -118,9 +119,11 @@ class CalibrationRunner {
     CalibrationRecipe? recipe;
     try {
       final manifest = await loadManifest();
-      recipe = manifest.recipeFor(protocolOf(), useStaged: useStaged);
       calibrationId = manifest.calibrationIdFor(protocolOf()) ?? '';
       calibrationJson = manifest.calibrationJsonFor(protocolOf());
+      if (calibrationId.isNotEmpty) {
+        recipe = manifest.recipeFor(calibrationId, plan: plan);
+      }
     } catch (e) {
       debugPrint('[feedback] calibration manifest unavailable: $e');
     }

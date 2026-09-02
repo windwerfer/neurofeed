@@ -4,6 +4,81 @@ import 'dart:math';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// Rest-window length when a reward feature shares the AI rest stage
+/// (V_sleep + reward baseline). Clip JSON stays 45 s; this is a recipe
+/// detail, not a calibrations.json field.
+const int calibrationAdaptiveBaselineSeconds = 60;
+
+/// Which stages to run, composed from the session's enabled feature set `S`.
+///
+/// Frozen table:
+/// * `S` empty (`recordOnly`) → baseline only (skippable at Start)
+/// * any `ai.*` in `S` → artifact + challenge + baseline
+/// * else any lane (band reward and/or `band.delta` guard) → baseline only
+class CalibrationPlan {
+  const CalibrationPlan({
+    required this.artifact,
+    required this.challenge,
+    required this.baseline,
+    this.adaptiveBaselineSeconds,
+  });
+
+  static const baselineOnly = CalibrationPlan(
+    artifact: false,
+    challenge: false,
+    baseline: true,
+  );
+
+  static const stagedAi = CalibrationPlan(
+    artifact: true,
+    challenge: true,
+    baseline: true,
+  );
+
+  final bool artifact;
+  final bool challenge;
+  final bool baseline;
+
+  /// When set, overrides the staged rest clip's seconds (AI + reward).
+  final int? adaptiveBaselineSeconds;
+
+  /// `S` = features actually enabled this session (reward.feature if the
+  /// reward lane is present; guard.feature only when the guard is on).
+  factory CalibrationPlan.fromEnabledFeatures(Iterable<String> enabled) {
+    final ids = [
+      for (final id in enabled)
+        if (id.isNotEmpty && id != 'none') id,
+    ];
+    final hasAi = ids.any((id) => id.startsWith('ai.'));
+    if (!hasAi) {
+      return baselineOnly;
+    }
+    final hasNonAi = ids.any((id) => !id.startsWith('ai.'));
+    return CalibrationPlan(
+      artifact: true,
+      challenge: true,
+      baseline: true,
+      adaptiveBaselineSeconds: hasNonAi
+          ? calibrationAdaptiveBaselineSeconds
+          : null,
+    );
+  }
+
+  bool get usesStagedClips => artifact || challenge;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CalibrationPlan &&
+      artifact == other.artifact &&
+      challenge == other.challenge &&
+      baseline == other.baseline &&
+      adaptiveBaselineSeconds == other.adaptiveBaselineSeconds;
+
+  @override
+  int get hashCode =>
+      Object.hash(artifact, challenge, baseline, adaptiveBaselineSeconds);
+}
+
 /// One playable clip inside a calibration recipe: an intro variant for a
 /// `single` calibration or a fixed stage for a `staged` one.
 class CalibrationStep {
@@ -39,6 +114,15 @@ class CalibrationStep {
   /// chosen prompt).
   final String? challengeTextHint;
 
+  /// Artifact / blink-clench stage (no eye instruction, no challenge prompts).
+  bool get isArtifactStage => eyes == null && challengeText.isEmpty;
+
+  /// Eyes-open mentally-active challenge (clear-anchor stage).
+  bool get isChallengeStage => challengeText.isNotEmpty;
+
+  /// Silent rest / V_sleep / reward baseline (eye state, no challenge).
+  bool get isRestStage => eyes != null && challengeText.isEmpty;
+
   /// Picks a random [challengeText] entry, or null when the step has none.
   String? randomChallenge([Random? random]) {
     if (challengeText.isEmpty) {
@@ -46,6 +130,16 @@ class CalibrationStep {
     }
     return challengeText[(random ?? Random()).nextInt(challengeText.length)];
   }
+
+  CalibrationStep withSeconds(int seconds) => CalibrationStep(
+    id: id,
+    file: file,
+    text: text,
+    seconds: seconds,
+    eyes: eyes,
+    challengeText: challengeText,
+    challengeTextHint: challengeTextHint,
+  );
 
   factory CalibrationStep.fromJson(Map<String, Object?> json) =>
       CalibrationStep(
@@ -106,12 +200,14 @@ class CalibrationRecipe {
     int seconds = 0,
     String? eyes,
     List<CalibrationStep> intros = const [],
-  }) =>
-      CalibrationRecipe._(kind: 'single', seconds: seconds, eyes: eyes, intros: intros);
+  }) => CalibrationRecipe._(
+    kind: 'single',
+    seconds: seconds,
+    eyes: eyes,
+    intros: intros,
+  );
 
-  factory CalibrationRecipe.staged({
-    List<CalibrationStep> stages = const [],
-  }) =>
+  factory CalibrationRecipe.staged({List<CalibrationStep> stages = const []}) =>
       CalibrationRecipe._(kind: 'staged', stages: stages);
 
   bool get isSingle => kind == 'single';
@@ -129,10 +225,11 @@ class CalibrationRecipe {
   /// Parses the `single` or `staged` variant JSON from `assets/calibrations.json`.
   factory CalibrationRecipe.fromJson(String kind, Map<String, Object?> json) {
     final listKey = kind == 'staged' ? 'stages' : 'intros';
-    final steps = (json[listKey] as List<Object?>?)
-        ?.whereType<Map<String, Object?>>()
-        .map(CalibrationStep.fromJson)
-        .toList() ??
+    final steps =
+        (json[listKey] as List<Object?>?)
+            ?.whereType<Map<String, Object?>>()
+            .map(CalibrationStep.fromJson)
+            .toList() ??
         const [];
     return kind == 'staged'
         ? CalibrationRecipe.staged(stages: steps)
@@ -149,14 +246,15 @@ class CalibrationRecipe {
           if (eyes != null) 'eyes': eyes,
           if (intros.isNotEmpty) 'intros': [for (final s in intros) s.toJson()],
         }
-      : {'stages': [for (final s in stages) s.toJson()]};
+      : {
+          'stages': [for (final s in stages) s.toJson()],
+        };
 }
 
 /// One calibration in `assets/calibrations.json`, keyed by id. A calibration
 /// is an eye-state (eyes open / eyes closed) with both playable variants —
-/// the `single` baseline and the `staged` guardrail sequence. The protocol
-/// decides which variant runs (AI model → staged, band math / no guardrail →
-/// single).
+/// the `single` baseline and the `staged` guardrail sequence. Which stages
+/// run is composed from the session's enabled features ([CalibrationPlan]).
 class Calibration {
   const Calibration({
     required this.id,
@@ -172,8 +270,37 @@ class Calibration {
   final CalibrationRecipe single;
   final CalibrationRecipe staged;
 
-  /// The recipe that runs for this calibration given the guardrail intent.
-  CalibrationRecipe variant(bool useStaged) => useStaged ? staged : single;
+  /// Compose a playable recipe from [plan]. Baseline-only uses the `single`
+  /// variant (eye state comes from this calibration id). Any artifact or
+  /// challenge flag uses the `staged` clips, filtered to the requested
+  /// stages. Adaptive rest length lives on the plan, not in JSON.
+  CalibrationRecipe compose(CalibrationPlan plan) {
+    if (!plan.usesStagedClips) {
+      return single;
+    }
+    final stages = <CalibrationStep>[];
+    for (final stage in staged.stages) {
+      if (stage.isArtifactStage) {
+        if (plan.artifact) {
+          stages.add(stage);
+        }
+      } else if (stage.isChallengeStage) {
+        if (plan.challenge) {
+          stages.add(stage);
+        }
+      } else if (stage.isRestStage) {
+        if (plan.baseline) {
+          final override = plan.adaptiveBaselineSeconds;
+          stages.add(
+            override != null && override > stage.seconds
+                ? stage.withSeconds(override)
+                : stage,
+          );
+        }
+      }
+    }
+    return CalibrationRecipe.staged(stages: stages);
+  }
 
   factory Calibration.fromJson(String id, Map<String, Object?> json) =>
       Calibration(
@@ -233,11 +360,14 @@ class CalibrationManifest {
     return id == null ? null : calibrations[id];
   }
 
-  /// Recipe for [protocolName]: the `staged` variant when [useStaged] (AI
-  /// sleep guardrail), else the `single` baseline. Null when the protocol or
-  /// its calibration is unknown.
-  CalibrationRecipe? recipeFor(String protocolName, {required bool useStaged}) =>
-      calibrationFor(protocolName)?.variant(useStaged);
+  /// Recipe for [calibrationId] composed from [plan]. Null when the
+  /// calibration id is unknown. Eyes-open vs closed for a baseline-only
+  /// recipe comes from the calibration definition (`eyes-open-01` vs
+  /// `eyes-closed-01`).
+  CalibrationRecipe? recipeFor(
+    String calibrationId, {
+    required CalibrationPlan plan,
+  }) => calibrations[calibrationId]?.compose(plan);
 
   /// Full definition snapshot of [protocolName]'s calibration (id + name +
   /// both variants), as persisted in session metadata.
