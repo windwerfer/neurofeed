@@ -2,7 +2,6 @@ import 'dart:io';
  
  import 'package:flutter_test/flutter_test.dart';
  import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
- import 'package:muse_ml/src/feedback/protocol.dart';
  import 'package:muse_ml/src/feedback/session_storage.dart';
  import 'package:muse_ml/src/feedback/session_store.dart';
  import 'package:muse_ml/src/rust/api/session_format.dart';
@@ -24,7 +23,7 @@ import 'dart:io';
      final store = SessionStore(storage: Future.value(storage));
  
      final metadata = SessionMetadata(
-       protocol: ProtocolType.drowsiness,
+       protocol: 'drowsiness',
        durationMinutes: 5,
        elapsedSeconds: 300,
        sound: 'Ambient Drone',
@@ -36,7 +35,7 @@ import 'dart:io';
      final list = await store.list();
      expect(list.length, 1);
      expect(list.first.id, 'test1234');
-     expect(list.first.metadata.protocol, ProtocolType.drowsiness);
+     expect(list.first.metadata.protocol, 'drowsiness');
  
      await tmp.delete(recursive: true);
    });

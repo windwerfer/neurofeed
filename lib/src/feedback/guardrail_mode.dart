@@ -1,38 +1,78 @@
 import 'package:muse_ml/src/reve/models.dart';
 
-enum GuardrailMode {
-  drowsinessMath,
-  drowsinessLunaLarge,
-  drowsinessLunaBase,
-  drowsinessReveBase,
-  none;
+const String guardFeatureBandDelta = 'band.delta';
+const String guardFeatureAiDrowsiness = 'ai.drowsiness';
+const String guardFeatureNone = 'none';
 
-  bool get isAi => this != drowsinessMath && this != none;
-  bool get isBandMath => this == drowsinessMath;
+bool guardFeatureIsAi(String feature) => feature == guardFeatureAiDrowsiness;
 
-  String get ffId => switch (this) {
-    GuardrailMode.drowsinessMath => 'bandMath',
-    GuardrailMode.drowsinessLunaLarge => 'luna_large',
-    GuardrailMode.drowsinessLunaBase => 'luna_base',
-    GuardrailMode.drowsinessReveBase => 'reve_base',
-    GuardrailMode.none => 'none',
+bool guardFeatureIsBandMath(String feature) => feature == guardFeatureBandDelta;
+
+/// Writes today's historical `GuardrailMode.name` into session metadata
+/// (`drowsinessMath`, `drowsinessLunaLarge`, …). Do not write `bandMath` /
+/// `luna_base` here.
+String guardrailEngineName({
+  required String feature,
+  String? model,
+}) {
+  if (feature == guardFeatureNone) return 'none';
+  if (feature == guardFeatureBandDelta) return 'drowsinessMath';
+  return switch (model) {
+    'luna_large' => 'drowsinessLunaLarge',
+    'luna_base' => 'drowsinessLunaBase',
+    'reve_base' => 'drowsinessReveBase',
+    _ => 'drowsinessLunaLarge',
   };
-
-  String get label => switch (this) {
-    GuardrailMode.drowsinessMath => 'Band math',
-    GuardrailMode.drowsinessLunaLarge => 'LUNA Large',
-    GuardrailMode.drowsinessLunaBase => 'LUNA Base',
-    GuardrailMode.drowsinessReveBase => 'REVE Base',
-    GuardrailMode.none => 'Disabled',
-  };
-
-  ModelKind? get modelKind => switch (this) {
-    GuardrailMode.drowsinessLunaLarge => ModelKind.lunaLarge,
-    GuardrailMode.drowsinessLunaBase => ModelKind.lunaBase,
-    GuardrailMode.drowsinessReveBase => ModelKind.reveBase,
-    _ => null,
-  };
-
-  static GuardrailMode fromName(String name) =>
-      GuardrailMode.values.byName(name);
 }
+
+String? ffIdFromOldGuardrailModeName(String name) => switch (name) {
+  'drowsinessLunaLarge' => 'luna_large',
+  'drowsinessLunaBase' => 'luna_base',
+  'drowsinessReveBase' => 'reve_base',
+  _ => null,
+};
+
+bool oldGuardrailModeNameIsAi(String name) =>
+    ffIdFromOldGuardrailModeName(name) != null;
+
+/// Parse a stored per-protocol value: old `GuardrailMode.name` string or new
+/// `{feature: ...}` object. Unknown values return null (caller applies
+/// document defaults).
+String? parseGuardFeatureValue(Object? value) {
+  if (value is String) {
+    return switch (value) {
+      'drowsinessMath' || 'band.delta' => guardFeatureBandDelta,
+      'drowsinessLunaLarge' ||
+      'drowsinessLunaBase' ||
+      'drowsinessReveBase' ||
+      'ai.drowsiness' =>
+        guardFeatureAiDrowsiness,
+      'none' => guardFeatureNone,
+      _ => null,
+    };
+  }
+  if (value is Map) {
+    final feature = value['feature'];
+    if (feature == guardFeatureBandDelta ||
+        feature == guardFeatureAiDrowsiness ||
+        feature == guardFeatureNone) {
+      return feature as String;
+    }
+  }
+  return null;
+}
+
+ModelKind? modelKindFromFfId(String? ffId) {
+  if (ffId == null) return null;
+  for (final kind in ModelKind.values) {
+    if (kind.ffId == ffId) return kind;
+  }
+  return null;
+}
+
+String guardFeatureLabel(String feature) => switch (feature) {
+  guardFeatureNone => 'Off',
+  guardFeatureBandDelta => 'Band math (delta)',
+  guardFeatureAiDrowsiness => 'AI drowsiness',
+  _ => feature,
+};

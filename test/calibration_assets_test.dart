@@ -5,7 +5,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:muse_ml/src/audio/calibration_clips.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/feature_catalog.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 
 /// Validates the two hand-edited asset files against each other and against
@@ -48,29 +48,47 @@ void main() {
   test('protocols.json: every protocol has copy, calibration and description',
       () async {
     final raw = await rootBundle.loadString(ProtocolCatalog.asset);
-    final json = jsonDecode(raw) as Map<String, Object?>;
-    expect(json['version'], ProtocolCatalog.fromJson(json).version);
-    final catalog = ProtocolCatalog.fromJson(json);
+    final json = jsonDecode(raw) as Map;
+    expect(json['version'], 4);
+    final featuresRaw = await rootBundle.loadString(FeatureCatalog.asset);
+    final features = FeatureCatalog.fromJson(jsonDecode(featuresRaw) as Map);
+    expect(features.byId.length, 8);
+    final catalog = ProtocolCatalog.fromJson(json, features: features);
+    expect(catalog.version, 4);
     final manifestRaw = await rootBundle.loadString(CalibrationManifest.asset);
     final manifest = CalibrationManifest.fromJson(
       jsonDecode(manifestRaw),
       protocolsJson: jsonDecode(raw),
     )!;
     for (final info in catalog.all) {
-      final copy = catalog.forName(info.type.name);
+      final copy = catalog.forName(info.id);
       expect(copy, isNotNull,
-          reason: 'assets/protocols.json missing entry for ${info.type.name}');
+          reason: 'assets/protocols.json missing entry for ${info.id}');
       expect(copy!.catchPhrase, isNotEmpty);
       expect(copy.title, isNotEmpty);
       expect(copy.subtitle, isNotEmpty);
       expect(copy.guideText, isNotEmpty);
       expect(copy.algorithmDescription, isNotEmpty);
       expect(copy.metadataDescription, isNotEmpty,
-          reason: '${info.type.name} needs a metadataDescription');
-      expect(manifest.calibrationFor(info.type.name), isNotNull,
+          reason: '${info.id} needs a metadataDescription');
+      expect(manifest.calibrationFor(info.id), isNotNull,
           reason:
-              '${info.type.name} references an unknown calibration id '
-              '(got ${manifest.calibrationIdFor(info.type.name)})');
+              '${info.id} references an unknown calibration id '
+              '(got ${manifest.calibrationIdFor(info.id)})');
+      if (info.reward != null) {
+        final feature = features[info.reward!.feature];
+        expect(feature, isNotNull,
+            reason: 'reward.feature ${info.reward!.feature} missing from features.json');
+        expect(feature!.usableAsReward(), isTrue,
+            reason: '${info.reward!.feature} must be usableFor reward');
+      }
+      if (info.guard != null) {
+        final feature = features[info.guard!.feature];
+        expect(feature, isNotNull,
+            reason: 'guard.feature ${info.guard!.feature} missing from features.json');
+        expect(feature!.usableAsGuard(), isTrue,
+            reason: '${info.guard!.feature} must be usableFor guard');
+      }
     }
   });
 

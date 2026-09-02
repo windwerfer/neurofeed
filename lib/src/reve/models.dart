@@ -1,6 +1,3 @@
-import 'package:muse_ml/src/feedback/guardrail_mode.dart';
-import 'package:muse_ml/src/settings.dart';
-
 /// The selectable EEG foundation models behind the sleep guardrail.
 ///
 /// Two engines, one abstraction: LUNA (`PulpBio/LUNA`, Apache-2.0, un-gated —
@@ -108,20 +105,7 @@ enum ModelKind {
 
   /// Folder used in session files / labels when a REVE-style name is needed.
   String get engineName => label;
-
-  /// Returns the corresponding GuardrailMode for this ModelKind.
-  GuardrailMode get guardrailMode => switch (this) {
-    ModelKind.lunaLarge => GuardrailMode.drowsinessLunaLarge,
-    ModelKind.lunaBase => GuardrailMode.drowsinessLunaBase,
-    ModelKind.reveBase => GuardrailMode.drowsinessReveBase,
-  };
 }
 
 /// Default guardrail model — LUNA Large (best quality/effort balance).
 const ModelKind defaultModelKind = ModelKind.lunaLarge;
-
-/// The model currently selected in [Settings] for a specific protocol.
-/// Returns the ModelKind associated with the guardrail mode, or defaultModelKind if none.
-ModelKind modelKindFromGuardrailMode(GuardrailMode mode) {
-  return mode.modelKind ?? defaultModelKind;
-}

@@ -1,44 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:muse_ml/src/feedback/feature_catalog.dart';
 import 'package:muse_ml/src/rust/api/device_config.dart';
+import 'package:muse_ml/src/rust/api/features.dart';
 
-enum ProtocolType {
-  drowsiness,
-  twilight,
-  alertnessOpen,
-  alertnessClosed,
-  mindfulness,
-  concentration,
-  relaxedConcentration,
+/// Frozen catalog protocol ids (on-disk `protocol` string in `.muse.feedback`).
+const List<String> catalogProtocolIds = [
+  'drowsiness',
+  'twilight',
+  'alertnessOpen',
+  'alertnessClosed',
+  'mindfulness',
+  'concentration',
+  'relaxedConcentration',
+  'recordOnly',
+  'guardrailOnly',
+];
 
-  /// Raw recording session: no reward engine, no guardrail. Calibration is
-  /// optional (per-session skip button).
-  recordOnly,
+final RegExp userProtocolIdPattern = RegExp(r'^user\.[a-z0-9-]{3,64}$');
 
-  /// Guardrail-only session: the 3-stage guardrail calibration, then the AI
-  /// sleep guardrail warns without any reward layer.
-  guardrailOnly,
-}
+Map<String, Object?> jsonObject(Object? value) =>
+    value is Map ? Map<String, Object?>.from(value) : const <String, Object?>{};
 
-/// Which directional band ratio the reward engine optimizes.
-///
-/// `alphaOverTheta` (ATR = alpha ÷ theta) is what the engine runs today for
-/// both protocols — the reward fires when ATR stays above the baseline
-/// percentile, i.e. the brain is coached to keep alpha dominant over theta
-/// (calm but awake). `thetaOverAlpha` (TAR) is reserved: switching a protocol
-/// to it is a data-only change (same ratio engine, flipped criterion).
-/// `betaOverTheta` (BTR) is the classic alertness ratio; `alphaOnly` rewards
-/// plain relative alpha without a ratio.
-enum RewardMetric { alphaOverTheta, thetaOverAlpha, betaOverTheta, alphaOnly }
-
-extension RewardMetricLabel on RewardMetric {
-  /// Short display name used in the nerd-stats bubble and stats labels.
-  String get shortLabel => switch (this) {
-    RewardMetric.alphaOverTheta => 'ATR',
-    RewardMetric.thetaOverAlpha => 'TAR',
-    RewardMetric.betaOverTheta => 'BTR',
-    RewardMetric.alphaOnly => 'α',
-  };
-}
+/// Clear error when Start is refused on Crown / SimulatedNeurosity.
+const String crownSessionUnsupportedMessage =
+    'Crown sessions are not available yet. You can browse band protocols, '
+    'but running a session on Crown is a later update. Connect a Muse to start.';
 
 /// A per-sample condition a composite protocol applies on top of the scalar
 /// reward metric. The scalar must beat the baseline threshold AND every
@@ -54,6 +40,8 @@ sealed class TargetCondition {
     required double alphaRel,
     required double betaRel,
   });
+
+  Map<String, Object?> toJson();
 }
 
 /// Rewards only while relative beta stays at or below [maxBetaRel] — the
@@ -71,6 +59,9 @@ class BetaCeiling extends TargetCondition {
     required double betaRel,
   }) =>
       betaRel <= maxBetaRel;
+
+  @override
+  Map<String, Object?> toJson() => {'type': 'betaCeiling', 'max': maxBetaRel};
 }
 
 /// Rewards only while relative delta stays at or below [maxDeltaRel] — keeps
@@ -87,187 +78,394 @@ class DeltaCeiling extends TargetCondition {
     required double betaRel,
   }) =>
       deltaRel <= maxDeltaRel;
+
+  @override
+  Map<String, Object?> toJson() => {'type': 'deltaCeiling', 'max': maxDeltaRel};
 }
 
-/// How a protocol's AI sleep guardrail behaves in music-feedback mode. The
-/// guardrail only ever warns on non-music (chime) feedback; with music it can
-/// either stay a pure chime (the filter keeps following the ratio reward) or
-/// additionally muffle the music while the sleep-drift warning is active.
-enum GuardrailFeedback {
-  /// Warning chime only — the music filter is untouched by the guardrail.
-  chimeOnly,
-
-  /// While a warning is active the low-pass filter is forced fully closed
-  /// (deep muffle) and returns to the ratio-driven cutoff after it clears.
-  muffleWhileWarning,
+TargetCondition parseInhibit(Map<String, Object?> json) {
+  switch (json['type']) {
+    case 'betaCeiling':
+      final max = json['max'] ?? json['maxBetaRel'];
+      return BetaCeiling((max as num).toDouble());
+    case 'deltaCeiling':
+      final max = json['max'] ?? json['maxDeltaRel'];
+      return DeltaCeiling((max as num).toDouble());
+    default:
+      throw ArgumentError('Unknown inhibit type: ${json['type']}');
+  }
 }
 
-/// Structural protocol definition (colors, reward metric, conditions,
-/// guardrail flags) and user-facing copy — all loaded from
-/// `assets/protocols.json`, the single editable text source.
-class ProtocolInfo {
-  final ProtocolType type;
-
-  /// Accent color shown in the protocol list.
-  final Color color;
-  final RewardMetric rewardMetric;
-
-  /// Per-sample conditions applied on top of [rewardMetric] (see
-  /// [TargetCondition]). Empty for pure scalar protocols.
-  final List<TargetCondition> conditions;
-
-  /// Whether the on-device sleep guardrail (LUNA/REVE) is on by default for
-  /// this protocol. Every protocol can run the guardrail — the per-protocol
-  /// setting (`Settings.guardrailEnabledFor`) overrides this default. The
-  /// guardrail only warns — it never modulates the reward.
-  final bool guardrailDefault;
-
-  /// Whether the guardrail is offered at all for this protocol. False only for
-  /// the eyes-open alertness protocol (no sleep drift to guard against); when
-  /// false the guardrail UI is hidden and the layer never runs for it.
-  final bool guardrailAllowed;
-
-  /// How the guardrail behaves when music feedback is active (see
-  /// [GuardrailFeedback]). Consulted only while the guardrail runs.
-  final GuardrailFeedback guardrailFeedback;
-
-  /// Whether this protocol runs a reward engine at all. False for pure
-  /// recording ([ProtocolType.recordOnly]) and guardrail-only
-  /// ([ProtocolType.guardrailOnly]) sessions — those hide the feedback-sound
-  /// selection and never fire reward chimes/swell.
-  final bool hasReward;
-
-  /// Whether the session start offers a "skip calibration" shortcut next to
-  /// the normal start button. True only for [ProtocolType.recordOnly].
-  final bool calibrationSkippable;
-
-  /// Electrode names required for this protocol. Must be a subset of
-  /// `DeviceConfig.electrodeNames` for the device to be compatible.
-  final List<String> requiredElectrodes;
-
-  /// Device kinds this protocol is allowed on. Null means all devices.
-  /// Values are `DeviceKind.name` strings: "muse", "neurosity",
-  /// "simulatedMuse", "simulatedNeurosity".
-  final List<String>? allowedDevices;
-
-  /// User-facing copy fields from JSON.
-  final String catchPhrase;
-  final String title;
-  final String subtitle;
-  final String guideText;
-  final String algorithmDescription;
-  final String expectedDelay;
-  final String calibration;
-  final String? metadataDescription;
-  final String guardrailDefaultMode;
-
-  const ProtocolInfo({
-    required this.type,
-    required this.color,
-    required this.rewardMetric,
-    this.conditions = const [],
-    required this.guardrailDefault,
-    this.guardrailAllowed = true,
-    required this.guardrailFeedback,
-    this.hasReward = true,
-    this.calibrationSkippable = false,
-    required this.requiredElectrodes,
-    this.allowedDevices,
+/// User-facing copy for a protocol document.
+class ProtocolCopy {
+  const ProtocolCopy({
     required this.catchPhrase,
     required this.title,
     required this.subtitle,
     required this.guideText,
     required this.algorithmDescription,
     required this.expectedDelay,
-    required this.calibration,
     this.metadataDescription,
-    required this.guardrailDefaultMode,
   });
 
-  factory ProtocolInfo.fromJson(Map<String, Object?> json, String typeName) {
-    final type = ProtocolType.values.firstWhere(
-      (e) => e.name == typeName,
-      orElse: () => throw ArgumentError('Unknown ProtocolType: $typeName'),
-    );
+  static const ProtocolCopy empty = ProtocolCopy(
+    catchPhrase: '',
+    title: '',
+    subtitle: '',
+    guideText: '',
+    algorithmDescription: '',
+    expectedDelay: '',
+  );
 
-    final colorValue = json['color'] as int? ?? 0xFF000000;
-    final rewardMetricName = json['rewardMetric'] as String? ?? 'alphaOverTheta';
-    final rewardMetric = RewardMetric.values.firstWhere(
-      (e) => e.name == rewardMetricName,
-      orElse: () => RewardMetric.alphaOverTheta,
-    );
+  final String catchPhrase;
+  final String title;
+  final String subtitle;
+  final String guideText;
+  final String algorithmDescription;
+  final String expectedDelay;
 
-    final conditions = <TargetCondition>[];
-    final conditionsJson = json['conditions'] as List?;
-    if (conditionsJson != null) {
-      for (final c in conditionsJson) {
-        if (c is Map<String, Object?>) {
-          conditions.add(_parseCondition(c));
+  /// Scientific description of what the protocol trains and how, recorded
+  /// into the `.muse.feedback` session metadata.
+  final String? metadataDescription;
+
+  factory ProtocolCopy.fromJson(Map<String, Object?> json) => ProtocolCopy(
+    catchPhrase: json['catchPhrase'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    subtitle: json['subtitle'] as String? ?? '',
+    guideText: json['guideText'] as String? ?? '',
+    algorithmDescription: json['algorithmDescription'] as String? ?? '',
+    expectedDelay: json['expectedDelay'] as String? ?? '',
+    metadataDescription: json['metadataDescription'] as String?,
+  );
+
+  Map<String, Object?> toJson() => {
+    'catchPhrase': catchPhrase,
+    'title': title,
+    'subtitle': subtitle,
+    'guideText': guideText,
+    'algorithmDescription': algorithmDescription,
+    'expectedDelay': expectedDelay,
+    if (metadataDescription != null) 'metadataDescription': metadataDescription,
+  };
+}
+
+class ProtocolBackground {
+  const ProtocolBackground({this.kind = 'drone'});
+
+  final String kind;
+
+  factory ProtocolBackground.fromJson(Object? json) {
+    if (json is Map) {
+      return ProtocolBackground(
+        kind: jsonObject(json)['kind'] as String? ?? 'drone',
+      );
+    }
+    return const ProtocolBackground();
+  }
+
+  Map<String, Object?> toJson() => {'kind': kind};
+}
+
+class ProtocolReward {
+  const ProtocolReward({
+    required this.feature,
+    this.output = 'chime',
+    this.policy = 'percentileUptrain',
+    this.inhibit = const [],
+    this.electrodes,
+    this.locked = const [],
+  });
+
+  final String feature;
+  final String output;
+  final String policy;
+  final List<TargetCondition> inhibit;
+  final List<String>? electrodes;
+  final List<String> locked;
+
+  factory ProtocolReward.fromJson(
+    Map<String, Object?> json, {
+    required FeatureCatalog features,
+  }) {
+    final feature = json['feature'] as String?;
+    if (feature == null || feature.isEmpty) {
+      throw ArgumentError('reward.feature is required');
+    }
+    final entry = features[feature];
+    if (entry == null || !entry.usableAsReward()) {
+      throw ArgumentError(
+        'reward.feature "$feature" is not listed for the reward lane',
+      );
+    }
+    final inhibitJson = json['inhibit'] as List? ?? const [];
+    return ProtocolReward(
+      feature: feature,
+      output: json['output'] as String? ?? 'chime',
+      policy: json['policy'] as String? ?? 'percentileUptrain',
+      inhibit: [
+        for (final c in inhibitJson)
+          if (c is Map) parseInhibit(jsonObject(c)),
+      ],
+      electrodes: json['electrodes'] is List
+          ? (json['electrodes'] as List).whereType<String>().toList()
+          : null,
+      locked: json['locked'] is List
+          ? (json['locked'] as List).whereType<String>().toList()
+          : const [],
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'feature': feature,
+    'output': output,
+    'policy': policy,
+    'inhibit': [for (final c in inhibit) c.toJson()],
+    if (electrodes != null) 'electrodes': electrodes,
+    'locked': locked,
+  };
+
+  ProtocolReward copyWith({String? feature}) => ProtocolReward(
+    feature: feature ?? this.feature,
+    output: output,
+    policy: policy,
+    inhibit: inhibit,
+    electrodes: electrodes,
+    locked: locked,
+  );
+}
+
+class ProtocolGuard {
+  const ProtocolGuard({
+    required this.feature,
+    this.output = 'softBowl',
+    this.policy = 'percentileWarn',
+    this.muffleReward = false,
+    this.defaultEnabled = true,
+    this.electrodes,
+    this.copy,
+    this.locked = const [],
+  });
+
+  final String feature;
+  final String output;
+  final String policy;
+  final bool muffleReward;
+  final bool defaultEnabled;
+  final List<String>? electrodes;
+  final String? copy;
+  final List<String> locked;
+
+  factory ProtocolGuard.fromJson(
+    Map<String, Object?> json, {
+    required FeatureCatalog features,
+  }) {
+    final feature = json['feature'] as String?;
+    if (feature == null || feature.isEmpty) {
+      throw ArgumentError('guard.feature is required');
+    }
+    final entry = features[feature];
+    if (entry == null || !entry.usableAsGuard()) {
+      throw ArgumentError(
+        'guard.feature "$feature" is not listed for the guard lane',
+      );
+    }
+    return ProtocolGuard(
+      feature: feature,
+      output: json['output'] as String? ?? 'softBowl',
+      policy: json['policy'] as String? ?? 'percentileWarn',
+      muffleReward: json['muffleReward'] as bool? ?? false,
+      defaultEnabled: json['defaultEnabled'] as bool? ?? true,
+      electrodes: json['electrodes'] is List
+          ? (json['electrodes'] as List).whereType<String>().toList()
+          : null,
+      copy: json['copy'] as String?,
+      locked: json['locked'] is List
+          ? (json['locked'] as List).whereType<String>().toList()
+          : const [],
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'feature': feature,
+    'output': output,
+    'policy': policy,
+    'muffleReward': muffleReward,
+    'defaultEnabled': defaultEnabled,
+    if (electrodes != null) 'electrodes': electrodes,
+    if (copy != null) 'copy': copy,
+    'locked': locked,
+  };
+
+  ProtocolGuard copyWith({String? feature}) => ProtocolGuard(
+    feature: feature ?? this.feature,
+    output: output,
+    policy: policy,
+    muffleReward: muffleReward,
+    defaultEnabled: defaultEnabled,
+    electrodes: electrodes,
+    copy: copy,
+    locked: locked,
+  );
+}
+
+/// Wiring document for a catalog or user protocol. Identity is the string [id]
+/// — there is no Dart enum.
+class ProtocolDocument {
+  const ProtocolDocument({
+    required this.id,
+    required this.origin,
+    required this.schemaVersion,
+    required this.copy,
+    required this.colorValue,
+    required this.calibration,
+    this.calibrationSkippable = false,
+    this.background = const ProtocolBackground(),
+    this.reward,
+    this.guard,
+  });
+
+  final String id;
+  final String origin;
+  final int schemaVersion;
+  final ProtocolCopy copy;
+  final int colorValue;
+  Color get color => Color(colorValue);
+  final String calibration;
+  final bool calibrationSkippable;
+  final ProtocolBackground background;
+  final ProtocolReward? reward;
+  final ProtocolGuard? guard;
+
+  bool get hasReward => reward != null;
+  bool get guardrailAllowed => guard != null;
+  List<TargetCondition> get conditions => reward?.inhibit ?? const [];
+
+  String get catchPhrase => copy.catchPhrase;
+  String get title => copy.title;
+  String get subtitle => copy.subtitle;
+  String get guideText => copy.guideText;
+  String get algorithmDescription => copy.algorithmDescription;
+  String get expectedDelay => copy.expectedDelay;
+  String? get metadataDescription => copy.metadataDescription;
+
+  factory ProtocolDocument.fromJson(
+    Map<String, Object?> json, {
+    required String id,
+    required FeatureCatalog features,
+    String defaultOrigin = 'catalog',
+  }) {
+    final origin = json['origin'] as String? ?? defaultOrigin;
+    final copyJson = json['copy'];
+    final ProtocolCopy copy = copyJson is Map
+        ? ProtocolCopy.fromJson(jsonObject(copyJson))
+        : ProtocolCopy.fromJson(json);
+    final parsedColor = json['color'] as int? ?? 0xFF000000;
+    final rewardJson = json['reward'];
+    final guardJson = json['guard'];
+    return ProtocolDocument(
+      id: json['id'] as String? ?? id,
+      origin: origin,
+      schemaVersion: json['schemaVersion'] as int? ?? 1,
+      copy: copy,
+      colorValue: parsedColor,
+      calibration: json['calibration'] as String? ?? '',
+      calibrationSkippable: json['calibrationSkippable'] as bool? ?? false,
+      background: ProtocolBackground.fromJson(json['background']),
+      reward: rewardJson is Map
+          ? ProtocolReward.fromJson(jsonObject(rewardJson), features: features)
+          : null,
+      guard: guardJson is Map
+          ? ProtocolGuard.fromJson(jsonObject(guardJson), features: features)
+          : null,
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'origin': origin,
+    'schemaVersion': schemaVersion,
+    'copy': copy.toJson(),
+    'color': colorValue,
+    'calibration': calibration,
+    'calibrationSkippable': calibrationSkippable,
+    'background': background.toJson(),
+    if (reward != null) 'reward': reward!.toJson(),
+    if (guard != null) 'guard': guard!.toJson(),
+  };
+
+  ProtocolDocument copyWith({
+    ProtocolGuard? guard,
+    bool clearGuard = false,
+  }) => ProtocolDocument(
+    id: id,
+    origin: origin,
+    schemaVersion: schemaVersion,
+    copy: copy,
+    colorValue: colorValue,
+    calibration: calibration,
+    calibrationSkippable: calibrationSkippable,
+    background: background,
+    reward: reward,
+    guard: clearGuard ? null : (guard ?? this.guard),
+  );
+
+  factory ProtocolDocument.placeholder({String id = ''}) => ProtocolDocument(
+    id: id,
+    origin: 'catalog',
+    schemaVersion: 1,
+    copy: ProtocolCopy.empty,
+    colorValue: 0xFF1E88E5,
+    calibration: '',
+  );
+
+  /// Snapshot with the session's chosen guard feature applied. A disabled
+  /// guard (`none`) is omitted so the snapshot matches what actually ran.
+  ProtocolDocument resolved({String? guardFeature}) {
+    if (guard == null) return this;
+    if (guardFeature == null || guardFeature == 'none') {
+      return copyWith(clearGuard: true);
+    }
+    return copyWith(guard: guard!.copyWith(feature: guardFeature));
+  }
+
+  /// Whether some legal configuration of this document's lanes is available
+  /// on [kind] given [available] feature infos.
+  bool isListedOn({
+    required DeviceKind kind,
+    required List<FeatureInfo> available,
+    required bool anyModelInstalled,
+  }) {
+    final byId = {for (final f in available) f.id: f};
+
+    bool featureAvailable(String id) {
+      final info = byId[id];
+      return info != null && info.available;
+    }
+
+    bool laneOk(String id, {required bool rewardLane}) {
+      if (!featureAvailable(id)) return false;
+      if (id.startsWith('ai.') && !anyModelInstalled) return false;
+      return true;
+    }
+
+    if (reward != null) {
+      if (!laneOk(reward!.feature, rewardLane: true)) return false;
+    }
+    if (guard != null) {
+      final locked = guard!.locked.contains('feature');
+      if (locked) {
+        if (!laneOk(guard!.feature, rewardLane: false)) return false;
+      } else {
+        // Catalog does not lock guard.feature: band.delta or ai.drowsiness.
+        final options = <String>{guard!.feature, 'band.delta', 'ai.drowsiness'};
+        if (!options.any((id) => laneOk(id, rewardLane: false))) {
+          return false;
         }
       }
     }
-
-    final guardrailFeedbackName = json['guardrailFeedback'] as String? ?? 'chimeOnly';
-    final guardrailFeedback = GuardrailFeedback.values.firstWhere(
-      (e) => e.name == guardrailFeedbackName,
-      orElse: () => GuardrailFeedback.chimeOnly,
-    );
-
-    final requiredElectrodes = (json['requiredElectrodes'] as List?)?.cast<String>() ?? <String>[];
-    final allowedDevices = (json['allowedDevices'] as List?)?.cast<String>();
-
-    return ProtocolInfo(
-      type: type,
-      color: Color(colorValue),
-      rewardMetric: rewardMetric,
-      conditions: conditions,
-      guardrailDefault: json['guardrailDefault'] as bool? ?? false,
-      guardrailAllowed: json['guardrailAllowed'] as bool? ?? true,
-      guardrailFeedback: guardrailFeedback,
-      hasReward: json['hasReward'] as bool? ?? true,
-      calibrationSkippable: json['calibrationSkippable'] as bool? ?? false,
-      requiredElectrodes: requiredElectrodes,
-      allowedDevices: allowedDevices,
-      catchPhrase: json['catchPhrase'] as String? ?? '',
-      title: json['title'] as String? ?? '',
-      subtitle: json['subtitle'] as String? ?? '',
-      guideText: json['guideText'] as String? ?? '',
-      algorithmDescription: json['algorithmDescription'] as String? ?? '',
-      expectedDelay: json['expectedDelay'] as String? ?? '',
-      calibration: json['calibration'] as String? ?? '',
-      metadataDescription: json['metadataDescription'] as String?,
-      guardrailDefaultMode: json['guardrailDefaultMode'] as String? ?? 'drowsinessMath',
-    );
-  }
-
-  static TargetCondition _parseCondition(Map<String, Object?> c) {
-    switch (c['type']) {
-      case 'betaCeiling':
-        return BetaCeiling((c['maxBetaRel'] as num).toDouble());
-      case 'deltaCeiling':
-        return DeltaCeiling((c['maxDeltaRel'] as num).toDouble());
-      default:
-        throw ArgumentError('Unknown condition type: ${c['type']}');
-    }
-  }
-
-  /// Whether this protocol is compatible with the given device config.
-  bool isCompatibleWith(DeviceConfig config) {
-    // Check required electrodes
-    for (final electrode in requiredElectrodes) {
-      if (!config.electrodeNames.contains(electrode)) {
-        return false;
-      }
-    }
-
-    // Check allowed devices
-    if (allowedDevices != null) {
-      final kindName = config.kind.name;
-      if (!allowedDevices!.contains(kindName)) {
-        return false;
-      }
-    }
-
     return true;
   }
 }
+
+bool deviceKindIsCrown(DeviceKind kind) =>
+    kind == DeviceKind.neurosity || kind == DeviceKind.simulatedNeurosity;

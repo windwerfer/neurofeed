@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
@@ -13,11 +11,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 /// Load protocol info from the JSON asset.
-Future<ProtocolInfo?> _loadProtocolInfo(ProtocolType type) async {
-  final raw = await rootBundle.loadString(ProtocolCatalog.asset);
-  final json = jsonDecode(raw) as Map<String, Object?>;
-  final catalog = ProtocolCatalog.fromJson(json);
-  return catalog.forName(type.name);
+Future<ProtocolDocument?> _loadProtocolInfo(String id) async {
+  final catalog = await ProtocolCatalog.load();
+  return catalog.forName(id);
 }
 
 /// Builds the vector PDF report page for one session, or null when the
@@ -37,7 +33,7 @@ Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) asyn
   final prepared = prepareChartData(
     data,
     trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
-    metric: protocol.rewardMetric,
+    metric: protocol.reward?.feature ?? 'band.atr',
     conditions: protocol.conditions,
   );
   final charts = SessionExporter.chartsFor(prepared, meta);
@@ -51,7 +47,7 @@ Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) asyn
       margin: const pw.EdgeInsets.all(40),
       build: (context) => [
         pw.Text(
-          '${meta.protocol.name} — session report',
+          '${meta.protocol} — session report',
           style: const pw.TextStyle(
             fontSize: 20,
             fontWeight: pw.FontWeight.bold,

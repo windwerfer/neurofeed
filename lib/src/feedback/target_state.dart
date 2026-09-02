@@ -2,7 +2,6 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/feedback/feedback_engine.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 const int electrodeAf7 = 1;
@@ -43,8 +42,8 @@ class RelativeTarget {
   }
 
   /// Theta/Alpha power ratio (TAR) — the reciprocal of [atr]. Used by
-  /// protocols whose [RewardMetric] rewards theta dominance (a data-only
-  /// flip of the same ratio engine).
+  /// protocols whose reward feature is `band.tar` (a data-only flip of the
+  /// same ratio engine).
   double get tar {
     if (alphaRel <= 0) {
       return double.infinity;
@@ -60,23 +59,25 @@ class RelativeTarget {
     return betaRel / thetaRel;
   }
 
-  /// The scalar feeding the reward engine for [metric].
-  double scalarFor(RewardMetric metric) => switch (metric) {
-    RewardMetric.alphaOverTheta => atr,
-    RewardMetric.thetaOverAlpha => tar,
-    RewardMetric.betaOverTheta => betaTheta,
-    RewardMetric.alphaOnly => alphaRel,
-  };
 }
+
+/// PR 3 temporary extractor — deleted in PR 4 when RewardLane reads FeatureDto.
+double? scalarForFeature(String id, RelativeTarget t) => switch (id) {
+  'band.atr' => t.atr,
+  'band.tar' => t.tar,
+  'band.btr' => t.betaTheta,
+  'band.alpha' => t.alphaRel,
+  _ => null,
+};
 
 /// Continuous band-ratio uptraining engine.
 ///
 /// The engine is direction-agnostic: it collects samples of a scalar ratio,
 /// derives the session threshold from a configurable percentile of that
 /// baseline distribution, and rewards the user while the live value beats the
-/// threshold. The [metric] tag says which ratio feeds it ([RewardMetric]
-/// lives on the protocol spec — changing a protocol's metric is a data-only
-/// change: same engine, flipped extraction).
+/// threshold. The [featureId] tag says which ratio feeds it (`band.atr`
+/// etc. — changing a protocol's feature is a data-only change: same engine,
+/// flipped extraction).
 ///
 /// During calibration it collects clean ratio samples. The session threshold is
 /// the configurable percentile of that baseline distribution (e.g. 40th),
@@ -84,11 +85,11 @@ class RelativeTarget {
 /// the threshold based on the recent success rate so the user stays in the
 /// learning zone.
 class RatioEngine implements FeedbackEngine {
-  /// Direction-agnostic ratio engine, tagged with the [RewardMetric] the
+  /// Direction-agnostic ratio engine, tagged with the reward feature id the
   /// caller is currently extracting. Updated on protocol selection; the
   /// extraction lane ([FeedbackStateNotifier._metricOf]) feeds matching
   /// values.
-  RewardMetric metric;
+  String featureId;
 
   /// Success-rate window in feedback epochs (~10 Hz, so this covers ~30 s).
   static const int epochWindow = 300;
@@ -120,7 +121,7 @@ class RatioEngine implements FeedbackEngine {
 
   RatioEngine({
     this.percentile = 40,
-    this.metric = RewardMetric.alphaOverTheta,
+    this.featureId = 'band.atr',
   });
 
   @override

@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_export.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
@@ -107,7 +106,7 @@ SessionMetadata _metadata({
 }) {
   final now = DateTime.utc(2026, 8, 19, 10, 30);
   final meta = SessionMetadata(
-    protocol: ProtocolType.drowsiness,
+    protocol: 'drowsiness',
     durationMinutes: 15,
     elapsedSeconds: 3,
     sound: 'Bowl Chimes',

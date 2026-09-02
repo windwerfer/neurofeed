@@ -409,11 +409,6 @@ class _MusicCardState extends ConsumerState<_MusicCard> {
   }
 }
 
-/// Per-protocol AI sleep-guardrail toggle. One switch per protocol that
-/// offers the guardrail (see [ProtocolInfo.guardrailAllowed] — the eyes-open
-/// protocol has no sleep drift to guard and is not listed); each defaults to
-/// the protocol's shipping choice ([ProtocolInfo.guardrailDefault]) until the
-/// user overrides it.
 /// Audio engine profile (Android only): conservative mode trades ~0.1 s of
 /// output latency for fewer dropouts when the CPU is busy — e.g. music
 /// feedback while the AI sleep guardrail scores every second. The card is not
@@ -506,14 +501,12 @@ class _GuardrailCard extends ConsumerStatefulWidget {
 }
 
 class _GuardrailCardState extends ConsumerState<_GuardrailCard> {
-  late final Map<ProtocolType, bool> _enabled = {
-    for (final p in ref.read(protocolCatalogProvider).valueOrNull?.all ?? <ProtocolInfo>[])
-      if (p.guardrailAllowed) p.type: widget.settings.guardrailEnabledFor(p.type),
-  };
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
+    final withGuard = catalog?.all.where((p) => p.guard != null).toList() ??
+        const <ProtocolDocument>[];
 
     return Card(
       color: theme.colorScheme.surfaceContainerHighest,
@@ -543,7 +536,7 @@ class _GuardrailCardState extends ConsumerState<_GuardrailCard> {
               ),
             ),
             const Divider(height: 24),
-            for (final p in ref.watch(protocolCatalogProvider).valueOrNull?.all.where((p) => p.guardrailAllowed) ?? <ProtocolInfo>[])
+            for (final p in withGuard)
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 secondary: Icon(
@@ -557,14 +550,13 @@ class _GuardrailCardState extends ConsumerState<_GuardrailCard> {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                value: _enabled[p.type] ?? true,
+                value: widget.settings.guardrailEnabledFor(p.id),
                 onChanged: (on) async {
-                  setState(() => _enabled[p.type] = on);
-                  if (on) {
-                    await widget.settings.setGuardrailMode(p.type, GuardrailMode.drowsinessMath);
-                  } else {
-                    await widget.settings.setGuardrailMode(p.type, GuardrailMode.none);
-                  }
+                  await widget.settings.setGuardFeature(
+                    p.id,
+                    on ? guardFeatureBandDelta : guardFeatureNone,
+                  );
+                  setState(() {});
                 },
               ),
           ],

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/model_selector.dart';
+import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/settings.dart';
 
 /// AI-engine setup card: pick which foundation model powers the sleep
@@ -23,8 +23,7 @@ class _AiEngineCardState extends ConsumerState<AiEngineCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final settings = ref.watch(settingsProvider);
-    final fb = ref.watch(feedbackStateProvider);
-    final mode = settings.guardrailModeForProtocol[fb.protocol]!;
+    final kind = modelKindFromFfId(settings.guardModel) ?? defaultModelKind;
     final state = ref.watch(modelEngineNotifierProvider);
 
     return Card(
@@ -58,43 +57,18 @@ class _AiEngineCardState extends ConsumerState<AiEngineCard> {
             const Divider(height: 24),
             ModelSelectorDropdown(),
             const Divider(height: 24),
-            ..._buildBody(theme, state, mode),
+            ..._buildBody(theme, state, kind),
           ],
         ),
       ),
     );
   }
 
-  List<Widget> _buildBody(ThemeData theme, ModelEngineState state, GuardrailMode mode) {
-    if (mode.isBandMath) {
-      return [
-        Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green.shade600),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Band math mode — no model needed',
-                style: theme.textTheme.bodySmall,
-              ),
-            ),
-          ],
-        ),
-      ];
-    }
-
-    if (mode.modelKind == null) {
-      return [
-        Text(
-          'Unknown guardrail mode',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.error,
-          ),
-        ),
-      ];
-    }
-
-    final modelKind = mode.modelKind!;
+  List<Widget> _buildBody(
+    ThemeData theme,
+    ModelEngineState state,
+    ModelKind modelKind,
+  ) {
     switch (state) {
       case ModelEngineReady():
         return [

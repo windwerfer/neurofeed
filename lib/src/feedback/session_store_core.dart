@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/session_sqlite.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
@@ -95,7 +94,7 @@ class SessionStore {
         SessionSummary(
           id: r.id,
           metadata: SessionMetadata(
-            protocol: ProtocolType.values.where((p) => p.name == r.protocol).firstOrNull ?? ProtocolType.drowsiness,
+            protocol: r.protocol,
             durationMinutes: r.durationS ~/ 60,
             elapsedSeconds: r.durationS,
             sound: 'Ambient Drone',
@@ -202,7 +201,7 @@ class SessionStore {
       savedAt: DateTime.tryParse(metadata.savedAt) ?? DateTime.now(),
       startedAt: DateTime.tryParse(metadata.startedAt ?? metadata.savedAt) ?? DateTime.now(),
       durationS: metadata.durationS,
-      protocol: metadata.protocol.name,
+      protocol: metadata.protocol,
       protocolVersion: metadata.protocolVersion,
       deviceName: metadata.deviceName,
       deviceModel: metadata.deviceModel,

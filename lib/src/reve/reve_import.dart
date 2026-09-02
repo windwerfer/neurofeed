@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:muse_ml/src/connect_window.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/model_selector.dart';
 import 'package:muse_ml/src/reve/models.dart';
@@ -21,19 +21,17 @@ import 'package:muse_ml/src/settings.dart';
 Future<bool> showModelGateDialog(
   BuildContext context,
   WidgetRef ref,
-  ProtocolType protocol,
+  String protocolId,
 ) async {
   final ready = await showDialog<bool>(
     context: context,
-    builder: (_) => _ModelGateDialog(protocol: protocol),
+    builder: (_) => const _ModelGateDialog(),
   );
   return ready ?? false;
 }
 
 class _ModelGateDialog extends ConsumerStatefulWidget {
-  const _ModelGateDialog({required this.protocol});
-
-  final ProtocolType protocol;
+  const _ModelGateDialog();
 
   @override
   ConsumerState<_ModelGateDialog> createState() => _ModelGateDialogState();
@@ -84,8 +82,7 @@ class _ModelGateDialogState extends ConsumerState<_ModelGateDialog> {
 
   ModelKind get _selected {
     final settings = ref.read(settingsProvider);
-    final mode = settings.guardrailModeForProtocol[widget.protocol]!;
-    return mode.modelKind ?? defaultModelKind;
+    return modelKindFromFfId(settings.guardModel) ?? defaultModelKind;
   }
 
   Future<void> _import() async {

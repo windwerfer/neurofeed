@@ -1,13 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
 
 void main() {
   group('SessionMetadata round-trip', () {
     test('full metadata serializes and deserializes correctly', () {
       final now = DateTime.utc(2026, 8, 19, 10, 30);
       final original = SessionMetadata(
-        protocol: ProtocolType.drowsiness,
+        protocol: 'drowsiness',
         durationMinutes: 15,
         elapsedSeconds: 900,
         sound: 'Bowl Chimes',
@@ -311,7 +310,7 @@ void main() {
 
     test('minimal metadata round-trip', () {
       final original = SessionMetadata(
-        protocol: ProtocolType.alertnessOpen,
+        protocol: 'alertnessOpen',
         durationMinutes: 10,
         elapsedSeconds: 600,
         sound: 'Ambient Drone',
@@ -321,7 +320,7 @@ void main() {
       final json = original.toJson();
       final restored = SessionMetadata.fromJson(json)!;
 
-      expect(restored.protocol, equals(ProtocolType.alertnessOpen));
+      expect(restored.protocol, equals('alertnessOpen'));
       expect(restored.durationMinutes, equals(10));
       expect(restored.elapsedSeconds, equals(600));
       expect(restored.sound, equals('Ambient Drone'));

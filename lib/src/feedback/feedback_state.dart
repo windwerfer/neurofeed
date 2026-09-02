@@ -16,6 +16,7 @@ import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
+import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/rust/api/reve.dart' as frb;
 import 'package:muse_ml/src/settings.dart';
@@ -90,7 +91,7 @@ class _CalibrationStep {
 
 class FeedbackState {
   final FeedbackPhase phase;
-  final ProtocolType protocol;
+  final String protocol;
   final int durationMinutes;
   final String soundName;
 
@@ -114,7 +115,7 @@ class FeedbackState {
 
   const FeedbackState({
     this.phase = FeedbackPhase.idle,
-    this.protocol = ProtocolType.drowsiness,
+    this.protocol = 'drowsiness',
     this.durationMinutes = 15,
     this.soundName = 'Ambient Drone',
     this.feedbackMode = FeedbackMode.bowlChimes,
@@ -138,7 +139,7 @@ class FeedbackState {
 
   FeedbackState copyWith({
     FeedbackPhase? phase,
-    ProtocolType? protocol,
+    String? protocol,
     int? durationMinutes,
     String? soundName,
     FeedbackMode? feedbackMode,
@@ -308,22 +309,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   AudioService get _audio => _ref.read(audioServiceProvider);
 
-  void selectProtocol(ProtocolType type) {
+  void selectProtocol(String protocolId) {
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
-    final info = catalog?.forName(type.name);
-    if (info == null) {
-      // Fallback: should not happen if catalog is loaded
-      _engine.metric = RewardMetric.alphaOverTheta;
-      state = state.copyWith(
-        protocol: type,
-        feedbackMode: FeedbackMode.none,
-      );
-      return;
-    }
-    _engine.metric = info.rewardMetric;
+    final info = catalog?.forName(protocolId);
+    _engine.featureId = info?.reward?.feature ?? 'band.atr';
     state = state.copyWith(
-      protocol: type,
-      feedbackMode: info.hasReward
+      protocol: protocolId,
+      feedbackMode: (info?.hasReward ?? false)
           ? _ref.read(settingsProvider).feedbackMode
           : FeedbackMode.none,
     );
@@ -458,8 +450,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// The ATR engine then has no baseline, which is fine — no-reward protocols
   /// never evaluate it.
   Future<void> startCalibration({bool skipCalibration = false}) async {
-    if (!_ref.read(appStateProvider).status.connected) {
+    final app = _ref.read(appStateProvider);
+    if (!app.status.connected) {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
+      return;
+    }
+    if (deviceKindIsCrown(app.connectDeviceKind)) {
+      debugPrint('[feedback] refusing Start on Crown');
       return;
     }
     // Sync the audio engine to the "Reduce audio stutter" setting before
@@ -527,8 +524,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (!settings.guardrailEnabledFor(state.protocol)) {
       return false;
     }
-    final mode = settings.guardrailModeForProtocol[state.protocol]!;
-    if (mode.isBandMath) {
+    if (settings.guardrailIsBandMathFor(state.protocol)) {
       return true;
     }
     return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
@@ -543,8 +539,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (!settings.guardrailEnabledFor(state.protocol)) {
       return false;
     }
-    final mode = settings.guardrailModeForProtocol[state.protocol]!;
-    if (mode.isBandMath) {
+    if (settings.guardrailIsBandMathFor(state.protocol)) {
       return false;
     }
     return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
@@ -568,8 +563,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     final settings = _ref.read(settingsProvider);
-    final mode = settings.guardrailModeForProtocol[state.protocol]!;
-    if (mode.isBandMath) {
+    if (settings.guardrailIsBandMathFor(state.protocol)) {
       _guardrailBandMath = true;
       _guardrailEnabled = true;
       debugPrint('[guardrail] enabled (band math — no model)');
@@ -580,10 +574,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       debugPrint('[guardrail] model not ready — guardrail stays off');
       return;
     }
+    final ffId = settings.guardModel ?? defaultModelKind.ffId;
     try {
-      _guardrailEnabled = await frb.guardrailEnable(kind: mode.ffId);
+      _guardrailEnabled = await frb.guardrailEnable(kind: ffId);
       if (_guardrailEnabled) {
-        debugPrint('[guardrail] enabled (${mode.ffId})');
+        debugPrint('[guardrail] enabled ($ffId)');
       }
     } catch (e) {
       _guardrailEnabled = false;
@@ -725,11 +720,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     try {
       final manifest = await _ref.read(calibrationManifestProvider.future);
       recipe = manifest.recipeFor(
-        state.protocol.name,
+        state.protocol,
         useStaged: _stagedCalibrationIntent,
       );
-      _calibrationId = manifest.calibrationIdFor(state.protocol.name) ?? '';
-      _calibrationJson = manifest.calibrationJsonFor(state.protocol.name);
+      _calibrationId = manifest.calibrationIdFor(state.protocol) ?? '';
+      _calibrationJson = manifest.calibrationJsonFor(state.protocol);
     } catch (e) {
       debugPrint('[feedback] calibration manifest unavailable: $e');
     }
@@ -1169,7 +1164,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       if (state.elapsedSeconds % 10 == 0) {
         debugPrint(
           '[ratio] t=${state.elapsedSeconds}s '
-          'metric=${_engine.metric.name} '
+          'metric=${_engine.featureId} '
           'value=${stats.currentAtr?.toStringAsFixed(3)} '
           'pct=${stats.currentPercentile?.toStringAsFixed(1)} '
           'thr=${_engine.threshold?.toStringAsFixed(3)} '
@@ -1326,7 +1321,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// The engine is direction-agnostic; extraction is the only metric-aware
   /// lane (data-only flip: same adaptive engine, different numerator).
   double _metricOf(RelativeTarget target) =>
-      target.scalarFor(_engine.metric);
+      scalarForFeature(_engine.featureId, target) ?? target.atr;
 
   /// Full in-target verdict for a sample: the scalar beats the threshold AND
   /// every protocol condition passes (e.g. beta/delta ceilings).
@@ -1335,7 +1330,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return false;
     }
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
-    final spec = catalog?.forName(state.protocol.name);
+    final spec = catalog?.forName(state.protocol);
     if (spec == null) {
       return false;
     }
@@ -1491,7 +1486,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
-      final spec = catalog?.forName(state.protocol.name);
+      final spec = catalog?.forName(state.protocol);
       if (spec?.hasReward ?? false) {
       final value = _metricOf(target);
       if (!value.isFinite) {
@@ -1707,10 +1702,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         ? _lastDelta > threshold || _lastDelta > guardrailDeltaCeiling
         : _lastSleepDir > threshold || _lastDelta > guardrailDeltaCeiling;
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
-    final spec = catalog?.forName(state.protocol.name);
+    final spec = catalog?.forName(state.protocol);
     final mufflesMusic =
         _musicActive &&
-        (spec?.guardrailFeedback == GuardrailFeedback.muffleWhileWarning);
+        (spec?.guard?.muffleReward ?? false);
     final warningSound =
         GuardrailSound.fromName(_ref.read(settingsProvider).warningSoundName);
     if (!over) {

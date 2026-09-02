@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
@@ -102,22 +101,10 @@ AppView _viewFromName(String? name) {
 
 /// Persistent app settings backed by SharedPreferences.
 class Settings extends ChangeNotifier {
-  Settings._(this._prefs);
+  Settings._(this._prefs, this._catalog);
 
-  /// Cached guardrailAllowed values from protocols.json.
-  static Map<ProtocolType, bool>? _guardrailAllowedCache;
-
-  /// Loads and caches the guardrailAllowed values from protocols.json.
-  static Future<void> _ensureGuardrailAllowedCache() async {
-    if (_guardrailAllowedCache != null) return;
-    final raw = await rootBundle.loadString(ProtocolCatalog.asset);
-    final json = jsonDecode(raw) as Map<String, Object?>;
-    final catalog = ProtocolCatalog.fromJson(json);
-    _guardrailAllowedCache = {
-      for (final type in ProtocolType.values)
-        type: catalog.forName(type.name)?.guardrailAllowed ?? true,
-    };
-  }
+  /// Catalog used to decide whether a protocol document has a guard lane.
+  final ProtocolCatalog _catalog;
 
   static const String _lastViewKey = 'last_view';
   static const String _lastDeviceKey = 'last_device_id';
@@ -139,6 +126,7 @@ class Settings extends ChangeNotifier {
   static const String _warningThresholdPercentileKey =
       'reve_warning_threshold_percentile';
   static const String _guardrailModeKey = 'guardrail_mode';
+  static const String _guardModelKey = 'guard_model';
   static const String _warningSoundKey = 'warning_sound';
   static const String _lastCustomMinutesKey = 'last_custom_minutes';
   static const String _musicFolderKey = 'music_folder';
@@ -172,8 +160,79 @@ class Settings extends ChangeNotifier {
 
   static Future<Settings> load() async {
     final prefs = await SharedPreferences.getInstance();
-    await _ensureGuardrailAllowedCache();
-    return Settings._(prefs);
+    final catalog = await ProtocolCatalog.load();
+    await _migrateGuardrailPrefs(prefs, catalog);
+    return Settings._(prefs, catalog);
+  }
+
+  /// Eager rewrite of `guardrail_mode` from old `ProtocolType.name →
+  /// GuardrailMode.name` strings into `{feature: ...}` objects, and fill
+  /// [guardModel] from the first freeze-order AI value. Runs before any
+  /// getter. Unknown keys are ignored, not thrown.
+  static Future<void> _migrateGuardrailPrefs(
+    SharedPreferences prefs,
+    ProtocolCatalog catalog,
+  ) async {
+    Map<String, dynamic> raw = {};
+    final stored = prefs.getString(_guardrailModeKey);
+    if (stored != null && stored.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(stored);
+        if (decoded is Map) {
+          raw = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {
+        raw = {};
+      }
+    }
+
+    var guardModel = prefs.getString(_guardModelKey);
+    if (guardModel == null || guardModel.isEmpty) {
+      for (final id in catalogProtocolIds) {
+        final v = raw[id];
+        if (v is String && oldGuardrailModeNameIsAi(v)) {
+          guardModel = ffIdFromOldGuardrailModeName(v);
+          break;
+        }
+      }
+      if (guardModel != null) {
+        await prefs.setString(_guardModelKey, guardModel);
+      }
+    }
+
+    final out = <String, Map<String, String>>{};
+    final ids = <String>{...catalogProtocolIds, ...raw.keys};
+    for (final id in ids) {
+      final doc = catalog.forName(id);
+      if (doc == null && !catalogProtocolIds.contains(id)) {
+        continue;
+      }
+      if (doc != null && doc.guard == null) {
+        out[id] = {'feature': guardFeatureNone};
+        continue;
+      }
+      final parsed = parseGuardFeatureValue(raw[id]);
+      if (parsed != null) {
+        out[id] = {'feature': parsed};
+      } else if (doc?.guard != null || catalogProtocolIds.contains(id)) {
+        // Catalog rows with a guard object default ON (band.delta). Ids in
+        // the freeze list that have no document yet still must not throw.
+        if (doc == null || doc.guard != null) {
+          out[id] = {'feature': guardFeatureBandDelta};
+        }
+      }
+    }
+    await prefs.setString(_guardrailModeKey, jsonEncode(out));
+  }
+
+  Map<String, dynamic> _readGuardMap() {
+    final stored = _prefs.getString(_guardrailModeKey);
+    if (stored == null || stored.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(stored);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return {};
   }
 
   AppView get lastView => _viewFromName(_prefs.getString(_lastViewKey));
@@ -341,49 +400,53 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Per-protocol guardrail mode setting. Persisted as a JSON map of
-  /// ProtocolType.name -> GuardrailMode.name.
-  /// Defaults to drowsinessMath for all protocols (from assets/protocols.json).
-  Map<ProtocolType, GuardrailMode> get guardrailModeForProtocol {
-    final stored = _prefs.getString(_guardrailModeKey);
-    if (stored != null) {
-      final map = jsonDecode(stored) as Map<String, dynamic>;
-      return map.map((k, v) => MapEntry(
-        ProtocolType.values.byName(k),
-        GuardrailMode.values.byName(v),
-      ));
-    }
-    // Default: drowsinessMath for all protocols
-    return Map.fromEntries(ProtocolType.values.map((t) => MapEntry(t, GuardrailMode.drowsinessMath)));
+  /// Per-protocol guard feature: `band.delta` / `ai.drowsiness` / `none`.
+  /// Documents without a guard lane always return `none`.
+  String guardFeatureFor(String protocolId) {
+    final doc = _catalog.forName(protocolId);
+    if (doc != null && doc.guard == null) return guardFeatureNone;
+    final parsed = parseGuardFeatureValue(_readGuardMap()[protocolId]);
+    if (parsed != null) return parsed;
+    if (doc?.guard != null) return guardFeatureBandDelta;
+    return guardFeatureNone;
   }
 
-  Future<void> setGuardrailMode(ProtocolType type, GuardrailMode mode) async {
-    final current = guardrailModeForProtocol;
-    current[type] = mode;
-    await _prefs.setString(_guardrailModeKey, jsonEncode(
-      current.map((k, v) => MapEntry(k.name, v.name)),
-    ));
+  Future<void> setGuardFeature(String protocolId, String feature) async {
+    final map = Map<String, dynamic>.from(_readGuardMap());
+    map[protocolId] = {'feature': feature};
+    await _prefs.setString(_guardrailModeKey, jsonEncode(map));
     notifyListeners();
   }
 
-  /// Whether the guardrail is enabled for [type]. Returns false if the
-  /// protocol doesn't allow the guardrail, or if the mode is 'none'.
-  bool guardrailEnabledFor(ProtocolType type) {
-    final guardrailAllowed = _guardrailAllowedCache?[type] ?? true;
-    if (!guardrailAllowed) return false;
-    return guardrailModeForProtocol[type] != GuardrailMode.none;
+  /// Global installed-model id (`luna_large` / `luna_base` / `reve_base`),
+  /// or null when unset (band-math).
+  String? get guardModel {
+    final v = _prefs.getString(_guardModelKey);
+    if (v == null || v.isEmpty) return null;
+    return v;
   }
 
-  /// Whether the guardrail runs in band-math mode (no AI model) for [type].
-  bool guardrailIsBandMathFor(ProtocolType type) {
-    return guardrailModeForProtocol[type] == GuardrailMode.drowsinessMath;
+  Future<void> setGuardModel(String? ffId) async {
+    if (ffId == null || ffId.isEmpty) {
+      await _prefs.remove(_guardModelKey);
+    } else {
+      await _prefs.setString(_guardModelKey, ffId);
+    }
+    notifyListeners();
   }
 
-  /// Whether the guardrail runs an AI model for [type].
-  bool guardrailIsAiFor(ProtocolType type) {
-    final mode = guardrailModeForProtocol[type];
-    return mode != null && mode.isAi;
-  }
+  /// Whether the guardrail is enabled for [protocolId]. False when the
+  /// document has no guard lane, or the stored feature is `none`.
+  bool guardrailEnabledFor(String protocolId) =>
+      guardFeatureFor(protocolId) != guardFeatureNone;
+
+  /// Whether the guardrail runs in band-math mode (no AI model).
+  bool guardrailIsBandMathFor(String protocolId) =>
+      guardFeatureFor(protocolId) == guardFeatureBandDelta;
+
+  /// Whether the guardrail runs an AI model for [protocolId].
+  bool guardrailIsAiFor(String protocolId) =>
+      guardFeatureFor(protocolId) == guardFeatureAiDrowsiness;
 
   /// Warning sound shown in the guardrail gear dialog (`softBowl`/`chime`/
   /// `cough`/`alarm`/`none`). Placeholder asset names — the files land later.

@@ -1,4 +1,3 @@
-import 'package:muse_ml/src/feedback/protocol.dart';
 import 'session_v5_models.dart';
 
 /// Decimated per-second view of a session, stored in the metadata JSON so the
@@ -685,6 +684,8 @@ class SessionSettings {
     required this.markersInFeedbackEnabled,
     required this.eyeMarkersEnabled,
     this.modelSnapshot,
+    this.guardFeature,
+    this.guardModel,
   });
 
   final bool dynamicAdapt;
@@ -709,6 +710,13 @@ class SessionSettings {
   final bool eyeMarkersEnabled;
   final ModelSnapshot? modelSnapshot;
 
+  /// `band.delta` / `ai.drowsiness` / `none`. Preferred over parsing
+  /// [guardrailEngine] when present.
+  final String? guardFeature;
+
+  /// `luna_large` / `luna_base` / `reve_base`.
+  final String? guardModel;
+
   Map<String, Object?> toJson() => {
     'dynamicAdapt': dynamicAdapt,
     'responsiveness': responsiveness,
@@ -731,6 +739,8 @@ class SessionSettings {
     'markersInFeedbackEnabled': markersInFeedbackEnabled,
     'eyeMarkersEnabled': eyeMarkersEnabled,
     if (modelSnapshot != null) 'modelSnapshot': modelSnapshot!.toJson(),
+    if (guardFeature != null) 'guardFeature': guardFeature,
+    if (guardModel != null) 'guardModel': guardModel,
   };
 
   static SessionSettings? fromJson(Object? json) {
@@ -764,6 +774,8 @@ class SessionSettings {
           json['markersInFeedbackEnabled'] as bool? ?? false,
       eyeMarkersEnabled: json['eyeMarkersEnabled'] as bool? ?? false,
       modelSnapshot: ModelSnapshot.fromJson(json['modelSnapshot'] as Map<String, dynamic>?),
+      guardFeature: json['guardFeature'] as String?,
+      guardModel: json['guardModel'] as String?,
     );
   }
 }
@@ -850,9 +862,10 @@ class SessionMetadata {
     this.feedbackEngine,
     this.userId,
     this.sessionId,
+    this.protocolJson,
   });
 
-  final ProtocolType protocol;
+  final String protocol;
   final int durationMinutes;
   final int elapsedSeconds;
   final String sound;
@@ -892,8 +905,11 @@ class SessionMetadata {
   final String? userId;
   final String? sessionId;
 
+  /// Snapshot of the resolved protocol document at save time.
+  final Map<String, Object?>? protocolJson;
+
   Map<String, Object?> toJson() => {
-    'protocol': protocol.name,
+    'protocol': protocol,
     'durationMinutes': durationMinutes,
     'elapsedSeconds': elapsedSeconds,
     'sound': sound,
@@ -932,16 +948,14 @@ class SessionMetadata {
     if (feedbackEngine != null) 'feedbackEngine': feedbackEngine,
     if (userId != null) 'userId': userId,
     if (sessionId != null) 'sessionId': sessionId,
+    if (protocolJson != null) 'protocolJson': protocolJson,
   };
 
   static SessionMetadata? fromJson(Object? json) {
     if (json is! Map<String, Object?>) {
       return null;
     }
-    final protocolName = json['protocol'] as String?;
-    final protocol = ProtocolType.values
-        .where((p) => p.name == protocolName)
-        .firstOrNull ?? ProtocolType.drowsiness;
+    final protocol = json['protocol'] as String? ?? '';
     return SessionMetadata(
       protocol: protocol,
       durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
@@ -978,7 +992,7 @@ class SessionMetadata {
       sessionSettings: SessionSettings.fromJson(json['sessionSettings']),
       durationS: (json['durationS'] as num?)?.toInt() ?? 0,
       startedAt: json['startedAt'] as String?,
-      protocolVersion: json['protocolVersion'] as String?,
+      protocolVersion: _protocolVersionFromJson(json['protocolVersion']),
       calibrationProfile: json['calibrationProfile'] as String?,
       avgSpo2: (json['avgSpo2'] as num?)?.toDouble(),
       peakAlphaHz: (json['peakAlphaHz'] as num?)?.toDouble(),
@@ -995,8 +1009,17 @@ class SessionMetadata {
       feedbackEngine: json['feedbackEngine'] as String?,
       userId: json['userId'] as String?,
       sessionId: json['sessionId'] as String?,
+      protocolJson: json['protocolJson'] is Map
+          ? Map<String, Object?>.from(json['protocolJson'] as Map)
+          : null,
     );
   }
+}
+
+String? _protocolVersionFromJson(Object? value) {
+  if (value is String) return value;
+  if (value is num) return value.toString();
+  return null;
 }
 
 /// Summary of a session for the history list.

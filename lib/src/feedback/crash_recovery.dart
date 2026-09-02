@@ -223,7 +223,7 @@ Future<List<IncompleteSession>> scanIncompleteSessions() async {
           await metadataFile.exists()) {
         // Parse metadata file to get session info
         final metaLines = await metadataFile.readAsLines();
-        String protocol = 'drowsiness';
+        String protocol = '';
         String calibrationKind = 'single';
         List<String> calibrationPhases = [];
         int artifactCount = 0;
@@ -235,7 +235,7 @@ Future<List<IncompleteSession>> scanIncompleteSessions() async {
           try {
             final meta = jsonDecode(line);
             if (meta['type'] == 'protocol') {
-              protocol = meta['protocol'] ?? 'drowsiness';
+              protocol = meta['protocol'] as String? ?? protocol;
             } else if (meta['type'] == 'calibration_start') {
               calibrationKind = meta['kind'] ?? 'single';
             } else if (meta['type'] == 'calibration_phase') {

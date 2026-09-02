@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_export.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
@@ -438,24 +437,6 @@ class _HistoryTileState extends ConsumerState<_HistoryTile>
     final theme = Theme.of(context);
     final meta = widget.summary.metadata;
     final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
-    final protocol = catalog?.forName(meta.protocol.name) ??
-        const ProtocolInfo(
-          type: ProtocolType.drowsiness,
-          color: Color(0xFF1E88E5),
-          rewardMetric: RewardMetric.alphaOverTheta,
-          guardrailDefault: true,
-          guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
-          requiredElectrodes: ['AF7', 'AF8'],
-          catchPhrase: '',
-          title: '',
-          subtitle: '',
-          guideText: '',
-          algorithmDescription: '',
-          expectedDelay: '',
-          calibration: '',
-          guardrailDefaultMode: 'drowsinessMath',
-        );
-    final copy = useProtocolCopy(ref, protocol);
     final stats = meta.stats;
     final dateTime = DateTime.tryParse(meta.savedAt);
     final date =
@@ -498,7 +479,7 @@ class _HistoryTileState extends ConsumerState<_HistoryTile>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${copy.title} • $date',
+                      '${protocolListTitle(catalog, meta.protocol)} • $date',
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),

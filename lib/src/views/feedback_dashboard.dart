@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -15,6 +14,7 @@ import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/charts/smooth_path.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
+import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
@@ -120,15 +120,13 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   }
 
   Future<void> _loadProtocolAndPrepareChart(SessionOverview summary) async {
-    final protocolType = widget.metadata?.protocol ?? ProtocolType.drowsiness;
-    final raw = await rootBundle.loadString(ProtocolCatalog.asset);
-    final json = jsonDecode(raw) as Map<String, Object?>;
-    final catalog = ProtocolCatalog.fromJson(json);
-    final protocol = catalog.forName(protocolType.name);
+    final protocolId = widget.metadata?.protocol ?? '';
+    final catalog = await ProtocolCatalog.load();
+    final protocol = catalog.forName(protocolId);
     if (protocol != null) {
       _prepared = prepareChartDataFromOverview(
         summary,
-        metric: protocol.rewardMetric,
+        metric: protocol.reward?.feature ?? 'band.atr',
         conditions: protocol.conditions,
       );
     }
@@ -139,23 +137,10 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     final fb = ref.watch(feedbackStateProvider);
     final meta = widget.metadata;
     final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
-    final protocol = catalog?.forName((meta?.protocol ?? fb.protocol).name) ??
-        const ProtocolInfo(
-          type: ProtocolType.drowsiness,
-          color: Color(0xFF1E88E5),
-          rewardMetric: RewardMetric.alphaOverTheta,
-          guardrailDefault: true,
-          guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
-          requiredElectrodes: ['AF7', 'AF8'],
-          catchPhrase: '',
-          title: '',
-          subtitle: '',
-          guideText: '',
-          algorithmDescription: '',
-          expectedDelay: '',
-          calibration: '',
-          guardrailDefaultMode: 'drowsinessMath',
-        );
+    final protocol = protocolOrPlaceholder(
+      catalog,
+      meta?.protocol ?? fb.protocol,
+    );
     final copy = useProtocolCopy(ref, protocol);
 
     return PopScope(
@@ -233,7 +218,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   Widget _dashboard(
     SessionMetadata? meta,
     FeedbackState fb,
-    ProtocolInfo protocol,
+    ProtocolDocument protocol,
     String protocolTitle,
   ) {
     if (_prepared != null) {
@@ -291,7 +276,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         _prepared ??= prepareChartData(
           data,
           trainingStartOffset: _trainingStartOffset,
-          metric: protocol.rewardMetric,
+          metric: protocol.reward?.feature ?? 'band.atr',
           conditions: protocol.conditions,
         );
         _sessionData ??= data;
@@ -399,8 +384,19 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       metadataDescription: ref
           .read(protocolCatalogProvider)
           .valueOrNull
-          ?.forName(fb.protocol.name)
+          ?.forName(fb.protocol)
           ?.metadataDescription,
+      protocolJson: ref
+          .read(protocolCatalogProvider)
+          .valueOrNull
+          ?.forName(fb.protocol)
+          ?.resolved(
+            guardFeature: ref
+                .read(settingsProvider)
+                .guardFeatureFor(fb.protocol),
+          )
+          .toJson(),
+      protocolVersion: '1',
       sessionSettings: _captureSessionSettings(notifier, fb),
     );
 
@@ -430,13 +426,18 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     FeedbackState fb,
   ) {
     final settings = ref.read(settingsProvider);
-    final mode = settings.guardrailModeForProtocol[fb.protocol]!;
+    final feature = settings.guardFeatureFor(fb.protocol);
+    final model = settings.guardModel;
     return SessionSettings(
       dynamicAdapt: notifier.dynamicAdapt,
       responsiveness: notifier.responsiveness,
       baselinePercentile: fb.baselinePercentile,
       guardrailEnabled: notifier.guardrailEnabled,
-      guardrailEngine: notifier.guardrailEnabled ? mode.name : 'none',
+      guardrailEngine: notifier.guardrailEnabled
+          ? guardrailEngineName(feature: feature, model: model)
+          : 'none',
+      guardFeature: feature,
+      guardModel: model,
       warningThresholdPercentile: settings.warningThresholdPercentile,
       warningSound: settings.warningSoundName,
       musicFolder: settings.musicFolder,
@@ -529,7 +530,7 @@ class _DashboardBody extends StatefulWidget {
     this.notesSavedFlash = false,
   });
 
-  final ProtocolInfo protocol;
+  final ProtocolDocument protocol;
   final String protocolTitle;
   final int durationMinutes;
   final int elapsedSeconds;

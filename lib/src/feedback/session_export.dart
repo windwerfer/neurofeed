@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -6,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:muse_ml/src/charts/band_cache.dart';
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
@@ -138,11 +136,9 @@ class SessionExporter {
   static const exportDirName = 'export';
 
   /// Load protocol info from the JSON asset.
-  static Future<ProtocolInfo?> _loadProtocolInfo(ProtocolType type) async {
-    final raw = await rootBundle.loadString(ProtocolCatalog.asset);
-    final json = jsonDecode(raw) as Map<String, Object?>;
-    final catalog = ProtocolCatalog.fromJson(json);
-    return catalog.forName(type.name);
+  static Future<ProtocolDocument?> _loadProtocolInfo(String id) async {
+    final catalog = await ProtocolCatalog.load();
+    return catalog.forName(id);
   }
 
   Future<SessionExportResult> exportSessions({
@@ -341,7 +337,7 @@ class SessionExporter {
         params: EdfExportParams(
           patientId: 'Muse ML',
           recordingId:
-              '${meta.protocol.name} ${meta.savedAt}',
+              '${meta.protocol} ${meta.savedAt}',
           year: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).year,
           month: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).month,
           day: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).day,
@@ -410,7 +406,7 @@ class SessionExporter {
     final prepared = prepareChartData(
       data,
       trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
-      metric: protocol.rewardMetric,
+      metric: protocol.reward?.feature ?? 'band.atr',
       conditions: protocol.conditions,
     );
     final charts = chartsFor(prepared, meta);
@@ -478,7 +474,7 @@ class SessionExporter {
         '${t.minute.toString().padLeft(2, '0')}'
         '${t.second.toString().padLeft(2, '0')}';
     final shortId = id.length > 8 ? id.substring(id.length - 8) : id;
-    return '${date}_${time}_${meta.protocol.name}_$shortId';
+    return '${date}_${time}_${meta.protocol}_$shortId';
   }
 
   /// The same charts the detail view shows: bands, alpha-vs-theta, movement,

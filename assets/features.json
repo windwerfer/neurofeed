@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "features": {
+    "band.atr": {
+      "label": "Alpha over Theta",
+      "shortLabel": "ATR",
+      "source": "band",
+      "usableFor": ["reward"],
+      "rewardCopy": "Rewards alpha ÷ theta on the feature electrodes.",
+      "guardCopy": null
+    },
+    "band.tar": {
+      "label": "Theta over Alpha",
+      "shortLabel": "TAR",
+      "source": "band",
+      "usableFor": ["reward"],
+      "rewardCopy": "Rewards theta ÷ alpha on the feature electrodes.",
+      "guardCopy": null
+    },
+    "band.btr": {
+      "label": "Beta over Theta",
+      "shortLabel": "BTR",
+      "source": "band",
+      "usableFor": ["reward"],
+      "rewardCopy": "Rewards beta ÷ theta on the feature electrodes.",
+      "guardCopy": null
+    },
+    "band.alpha": {
+      "label": "Relative alpha",
+      "shortLabel": "α",
+      "source": "band",
+      "usableFor": ["reward"],
+      "rewardCopy": "Rewards relative alpha on the feature electrodes.",
+      "guardCopy": null
+    },
+    "band.delta": {
+      "label": "Delta (band math)",
+      "shortLabel": "δ",
+      "source": "band",
+      "usableFor": ["guard"],
+      "rewardCopy": null,
+      "guardCopy": "Warns when frontal delta rises relative to your rest baseline."
+    },
+    "ai.drowsiness": {
+      "label": "AI drowsiness",
+      "shortLabel": "AI sleep",
+      "source": "ai",
+      "usableFor": ["guard"],
+      "rewardCopy": null,
+      "guardCopy": "Warns when the live embedding points toward sleep."
+    },
+    "device.focus": {
+      "label": "Crown focus",
+      "shortLabel": "Focus",
+      "source": "device",
+      "usableFor": ["reward", "guard"],
+      "rewardCopy": "Crown-native focus score (0–1).",
+      "guardCopy": "Warns from the Crown-native focus score."
+    },
+    "device.calm": {
+      "label": "Crown calm",
+      "shortLabel": "Calm",
+      "source": "device",
+      "usableFor": ["reward", "guard"],
+      "rewardCopy": "Crown-native calm score (0–1).",
+      "guardCopy": "Warns from the Crown-native calm score."
+    }
+  }
+}

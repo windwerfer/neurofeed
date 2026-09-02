@@ -73,7 +73,7 @@ class SessionChartStats {
 SessionChartData prepareChartData(
   SessionData data, {
   double? trainingStartOffset,
-  RewardMetric metric = RewardMetric.alphaOverTheta,
+  String metric = 'band.atr',
   List<TargetCondition> conditions = const [],
 }) {
   double? cut;
@@ -230,7 +230,7 @@ SessionChartData prepareChartData(
 /// body. Matches the full [SessionData] path bucket-for-bucket.
 SessionChartData prepareChartDataFromOverview(
   SessionOverview overview, {
-  RewardMetric metric = RewardMetric.alphaOverTheta,
+  String metric = 'band.atr',
   List<TargetCondition> conditions = const [],
 }) {
   final n = overview.bucketCount;
@@ -429,7 +429,7 @@ bool _inTarget(
   double thetaRel,
   double alphaRel,
   double betaRel,
-  RewardMetric metric,
+  String metric,
   List<TargetCondition> conditions,
 ) {
   for (final c in conditions) {
@@ -443,9 +443,10 @@ bool _inTarget(
     }
   }
   return switch (metric) {
-    RewardMetric.alphaOverTheta => alphaRel > thetaRel,
-    RewardMetric.thetaOverAlpha => thetaRel > alphaRel,
-    RewardMetric.betaOverTheta => betaRel > thetaRel,
-    RewardMetric.alphaOnly => alphaRel > thetaRel && alphaRel > betaRel,
+    'band.atr' => alphaRel > thetaRel,
+    'band.tar' => thetaRel > alphaRel,
+    'band.btr' => betaRel > thetaRel,
+    'band.alpha' => alphaRel > thetaRel && alphaRel > betaRel,
+    _ => alphaRel > thetaRel,
   };
 }

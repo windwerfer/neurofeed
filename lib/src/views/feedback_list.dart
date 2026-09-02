@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
+import 'package:muse_ml/src/reve/model_engine.dart';
+import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/views/feedback_session.dart';
 
 class FeedbackListView extends ConsumerWidget {
@@ -13,7 +16,9 @@ class FeedbackListView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final sessions = ref.watch(sessionListProvider).valueOrNull ?? const [];
-    final catalog = ref.watch(protocolCatalogProvider).valueOrNull ?? const ProtocolCatalog(version: 1, byName: {});
+    final catalog =
+        ref.watch(protocolCatalogProvider).valueOrNull ?? ProtocolCatalog.empty;
+    final listed = _listedProtocols(ref, catalog);
     final recent = _recentProtocols(sessions, catalog);
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -29,7 +34,7 @@ class FeedbackListView extends ConsumerWidget {
           _RecentTile(protocols: recent),
           const SizedBox(height: 12),
         ],
-        for (final protocol in catalog.all)
+        for (final protocol in listed)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: _ProtocolCard(protocol: protocol),
@@ -37,19 +42,40 @@ class FeedbackListView extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// Last-connected / currently connected kind filters the list. No device
+/// this process → show all catalog rows.
+List<ProtocolDocument> _listedProtocols(
+  WidgetRef ref,
+  ProtocolCatalog catalog,
+) {
+  final app = ref.watch(appStateProvider);
+  final kind = app.listingDeviceKind;
+  if (kind == null) return catalog.all;
+  final available = ref.watch(availableFeaturesProvider(kind)).valueOrNull;
+  if (available == null) return catalog.all;
+  final anyModel = ModelKind.values.any(
+    (k) => ref.watch(modelInstalledProvider(k)).valueOrNull == true,
+  );
+  return catalog.listedFor(
+    kind: kind,
+    available: available,
+    anyModelInstalled: anyModel,
+  );
+}
 
 /// The 3 most recent distinct protocols from session history, oldest of the
-/// three first (leftmost slot). Legacy placeholder protocols map to the ATR
-/// info they ran under and dedupe against it.
-static List<ProtocolInfo> _recentProtocols(
+/// three first (leftmost slot). Unknown ids are skipped (not startable).
+List<ProtocolDocument> _recentProtocols(
   List<SessionSummary> sessions,
   ProtocolCatalog catalog,
 ) {
-  final seen = <ProtocolType>{};
-  final recent = <ProtocolInfo>[];
+  final seen = <String>{};
+  final recent = <ProtocolDocument>[];
   for (final s in sessions) {
-    final info = catalog.forName(s.metadata.protocol.name);
-    if (info != null && seen.add(info.type)) {
+    final info = catalog.forName(s.metadata.protocol);
+    if (info != null && seen.add(info.id)) {
       recent.add(info);
       if (recent.length == 3) {
         break;
@@ -58,12 +84,11 @@ static List<ProtocolInfo> _recentProtocols(
   }
   return recent.reversed.toList();
 }
-}
 
 /// A row of up to 3 quick-start slots showing the most recent protocols by
 /// short catch name only: [3rd most recent] [2nd most recent] [most recent].
 class _RecentTile extends ConsumerWidget {
-  final List<ProtocolInfo> protocols;
+  final List<ProtocolDocument> protocols;
   const _RecentTile({required this.protocols});
 
   @override
@@ -93,7 +118,7 @@ class _RecentTile extends ConsumerWidget {
 }
 
 class _RecentSlot extends ConsumerWidget {
-  final ProtocolInfo protocol;
+  final ProtocolDocument protocol;
   const _RecentSlot({required this.protocol});
 
   @override
@@ -110,7 +135,7 @@ class _RecentSlot extends ConsumerWidget {
           if (ref.read(feedbackStateProvider).phase == FeedbackPhase.ended) {
             notifier.reset();
           }
-          notifier.selectProtocol(protocol.type);
+          notifier.selectProtocol(protocol.id);
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => const FeedbackSessionView(),
@@ -136,7 +161,7 @@ class _RecentSlot extends ConsumerWidget {
 }
 
 class _ProtocolCard extends ConsumerWidget {
-  final ProtocolInfo protocol;
+  final ProtocolDocument protocol;
 
   const _ProtocolCard({required this.protocol});
 
@@ -153,7 +178,7 @@ class _ProtocolCard extends ConsumerWidget {
           if (ref.read(feedbackStateProvider).phase == FeedbackPhase.ended) {
             notifier.reset();
           }
-          notifier.selectProtocol(protocol.type);
+          notifier.selectProtocol(protocol.id);
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => const FeedbackSessionView(),
@@ -227,7 +252,7 @@ class _ProtocolCard extends ConsumerWidget {
   }
 }
 
-void _showInfo(BuildContext context, ProtocolInfo protocol, ProtocolCopy copy) {
+void _showInfo(BuildContext context, ProtocolDocument protocol, ProtocolCopy copy) {
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
