@@ -8,15 +8,16 @@ those Key Decisions. **Crown Start stays refused.**
 
 ## In progress — session charts from v5 computed 1 Hz
 
-**Frozen.** Steps 1–4 landed (`da4e119`). Resume at step 5 (delete 400-bucket
-code, crash recovery, leftover tests).
-
-- Spec: [feedback/session-computed-charts.md](feedback/session-computed-charts.md)
-- Resume: [feedback/handoff-session-computed-charts-resume.md](feedback/handoff-session-computed-charts-resume.md)
+**Frozen.** Steps 1–7 implemented on this branch. Spec:
+[feedback/session-computed-charts.md](feedback/session-computed-charts.md).
+Resume notes: [feedback/handoff-session-computed-charts-resume.md](feedback/handoff-session-computed-charts-resume.md).
 
 Computed 1 Hz is the only summary waveform. Scratch v5 is assembled at
-`end()`. No 400-bucket `SessionOverview` in new files; delete the leftover
-types next.
+`end()`. No `SessionOverview` / 400-bucket metadata. Crash recovery scans
+`scratchDirectory` and reuses `assembleV5Container` / `writeScratchV5`.
+
+Still not verified on device/desktop: `flutter run -d linux` session-end
+graphs + Save to history (not `.cache`).
 
 ## Not this thread
 

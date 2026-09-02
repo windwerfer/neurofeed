@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -96,6 +97,31 @@ Uint8List assembleV5Container({
     computedFrames: computedFrames,
     rawBody: Uint8List.fromList(rawBody),
   );
+}
+
+/// Write `session_<id>.muse.feedback` into [dir] via [assembleV5Container].
+Future<File> writeScratchV5({
+  required Directory dir,
+  required String id,
+  required Map<String, Object?> metadataJson,
+  required List<int> rawBody,
+  required List<int> computedJsonl,
+}) async {
+  final computed = computedJsonl is Uint8List
+      ? computedJsonl
+      : Uint8List.fromList(computedJsonl);
+  final v5 = assembleV5Container(
+    thumbnail: placeholderWebP,
+    metadataJson: metadataJson,
+    computedFrames: parseComputedJsonl(computed),
+    rawBody: rawBody,
+  );
+  if (!await dir.exists()) {
+    await dir.create(recursive: true);
+  }
+  final file = File('${dir.path}/session_$id.muse.feedback');
+  await file.writeAsBytes(v5, flush: true);
+  return file;
 }
 
 class ComputedScalars {

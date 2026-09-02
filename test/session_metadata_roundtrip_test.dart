@@ -207,7 +207,6 @@ void main() {
       expect(restored.recordedChannels, equals(original.recordedChannels));
       expect(restored.recordedData, equals(original.recordedData));
       expect(json.containsKey('summary'), isFalse);
-      expect(restored.summary, isNull);
       expect(restored.gestures.length, equals(original.gestures.length));
       for (var i = 0; i < original.gestures.length; i++) {
         expect(restored.gestures[i].type, equals(original.gestures[i].type));
@@ -253,6 +252,45 @@ void main() {
       expect(restored.feedbackEngine, equals(original.feedbackEngine));
       expect(restored.userId, equals(original.userId));
       expect(restored.sessionId, equals(original.sessionId));
+    });
+
+    test('fromJson ignores leftover summary and 400-bucket keys', () {
+      final json = <String, Object?>{
+        'protocol': 'drowsiness',
+        'durationMinutes': 1,
+        'elapsedSeconds': 3,
+        'sound': 'Ambient Drone',
+        'savedAt': '2026-09-02T00:00:00.000Z',
+        'summary': {'bucketCount': 400, 'bucketWidthSecs': 1},
+        'drowsiness': <String, Object?>{
+          'scoreTotalPct': 10.0,
+          'meanSleepDir': 0.2,
+          'threshold': 0.5,
+          'series': <Object?>[],
+          'buckets': <Object?>[],
+          'width': 2.25,
+        },
+        'music': <String, Object?>{
+          'trackCount': 1,
+          'minCutoffHz': 200.0,
+          'maxCutoffHz': 8000.0,
+          'invert': false,
+          'shuffle': false,
+          'series': <Object?>[
+            <String, Object?>{'at': 0, 'hz': 400},
+          ],
+          'buckets': <Object?>[
+            <String, Object?>{'at': 0, 'hz': 400},
+          ],
+        },
+      };
+      final restored = SessionMetadata.fromJson(json)!;
+      expect(restored.toJson().containsKey('summary'), isFalse);
+      expect(restored.drowsiness?.scoreTotalPct, 10.0);
+      expect(restored.drowsiness!.toJson().containsKey('buckets'), isFalse);
+      expect(restored.drowsiness!.toJson().containsKey('series'), isFalse);
+      expect(restored.music?.series, isNotEmpty);
+      expect(restored.music!.toJson().containsKey('buckets'), isFalse);
     });
 
     test('minimal metadata round-trip', () {

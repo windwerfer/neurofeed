@@ -507,14 +507,10 @@ class _DashboardBodyState extends State<_DashboardBody> {
     take(p.guardrailX);
     take(p.spo2X);
     final music = widget.music;
-    if (music != null) {
-      if (music.buckets.isNotEmpty) {
-        take([music.buckets.last.offsetSecs + music.bucketWidthSecs]);
-      } else if (music.series.isNotEmpty) {
-        take([
-          music.series.last.offsetSecs - (widget.trainingStartOffsetSecs ?? 0),
-        ]);
-      }
+    if (music != null && music.series.isNotEmpty) {
+      take([
+        music.series.last.offsetSecs - (widget.trainingStartOffsetSecs ?? 0),
+      ]);
     }
     _viewport = _ChartViewport(0, math.max(end, 1.0));
   }
@@ -599,19 +595,15 @@ class _DashboardBodyState extends State<_DashboardBody> {
 
     List<Widget> musicWidgets() {
       final music = widget.music;
-      if (music == null || (music.series.isEmpty && music.buckets.isEmpty)) {
+      if (music == null || music.series.isEmpty) {
         return const [];
       }
       final offset = widget.trainingStartOffsetSecs ?? 0;
-      final xs = music.buckets.isNotEmpty
-          ? [for (final b in music.buckets) b.offsetSecs]
-          : [
-              for (final s in music.series)
-                (s.offsetSecs - offset).clamp(0.0, 1e9),
-            ];
-      final hz = music.buckets.isNotEmpty
-          ? [for (final b in music.buckets) b.cutoffHz]
-          : [for (final s in music.series) s.cutoffHz];
+      final xs = [
+        for (final s in music.series)
+          (s.offsetSecs - offset).clamp(0.0, 1e9),
+      ];
+      final hz = [for (final s in music.series) s.cutoffHz];
       return [
         Card(
           color: theme.colorScheme.surface,

@@ -1,309 +1,290 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/feedback/computed_frame.dart';
+import 'package:muse_ml/src/feedback/session_assembler.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
+import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/rust/api/session_format.dart' as ffi;
-import 'package:path_provider/path_provider.dart';
-import 'package:muse_ml/src/version.dart';
 
-/// Represents an incomplete session found in the cache directory.
-class IncompleteSession {
-  IncompleteSession({
+/// An assembled scratch v5 left over from a crash or an interrupted save.
+class RecoverableSession {
+  RecoverableSession({
     required this.id,
-    required this.rawFile,
-    required this.computedFile,
-    required this.metadataFile,
-    required this.durationMinutes,
+    required this.scratchV5,
     required this.protocol,
+    required this.elapsedSeconds,
     required this.calibrationKind,
-    required this.calibrationPhases,
-    required this.artifactCount,
-    required this.guardrailWarningCount,
   });
 
   final String id;
-  final File rawFile;
-  final File computedFile;
-  final File metadataFile;
-  final int durationMinutes;
+  final File scratchV5;
   final String protocol;
+  final int elapsedSeconds;
   final String calibrationKind;
-  final List<String> calibrationPhases;
-  final int artifactCount;
-  final int guardrailWarningCount;
 
-  /// Assemble the v5 session file from temp files and publish to history.
-  Future<File?> saveSession(SessionStorage storage) async {
-    final metadataJson = _buildMetadataJson();
-    final thumbnailPng = await _generateThumbnail();
-
-    // Read the three temp files
-    final rawBytes = await rawFile.readAsBytes();
-    final computedBytes = await computedFile.readAsBytes();
-
-    // Parse computed frames
-    final computedFrames = _parseComputedFrames(computedBytes);
-
-    // Convert to FFI frames
-    final ffiFrames = _toFfiFrames(computedFrames);
-
-    // Assemble v5 container
-    final v5Bytes = ffi.containerEncodeV5(
-      thumbnail: thumbnailPng,
-      metadataJson: utf8.encode(jsonEncode(metadataJson)),
-      computedFrames: ffiFrames,
-      rawBody: rawBytes,
-    );
-
-    // Write final file to history
-    await storage.ensureDir();
-    final historyDir = Directory(storage.location);
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    final finalPath = '${historyDir.path}/session_$ts.muse.feedback';
-    final finalFile = File(finalPath);
-    await finalFile.writeAsBytes(v5Bytes);
-
-    // Clean up temp files
-    await _cleanupTempFiles();
-
-    return finalFile;
-  }
-
-  Future<void> discard() async {
-    await _cleanupTempFiles();
-  }
-
-  Future<void> _cleanupTempFiles() async {
-    for (final f in [rawFile, computedFile, metadataFile]) {
-      if (await f.exists()) {
-        await f.delete();
-      }
-    }
-  }
-
-  Map<String, dynamic> _buildMetadataJson() {
-    return {
-      'formatVersion': 5,
-      'appVersion': appVersion,
-      'savedAt': DateTime.now().toIso8601String(),
-      'notes': '',
-      'protocol': protocol,
-      'durationMinutes': durationMinutes,
-      'elapsedSeconds': durationMinutes * 60,
-      'feedbackSound': 'chime',
-      'metadataDescription': '',
-      'device': {
-        'name': 'Unknown',
-        'id': 'Unknown',
-        'firmware': 'Unknown',
-        'model': 'Unknown',
-        'sensors': ['EEG'],
-        'channelCount': 4,
-        'channelLabels': ['TP9', 'AF7', 'AF8', 'TP10'],
-      },
-      'calibration': {
-        'version': 2,
-        'kind': calibrationKind,
-        'calibrationId': 'unknown',
-        'calibrationStartSecs': null,
-        'calibrationEndSecs': null,
-        'trainingStartSecs': null,
-        'usedStartAnyway': false,
-        'greenStableSeconds': 3,
-        'faultyPadSeconds': 20,
-        'baseline': null,
-        'phases': calibrationPhases.map((p) => {'clipId': p}).toList(),
-        'recalibrations': [],
-        'trainingStartOffsetSecs': null,
-      },
-      'streams': {
-        'eeg': {'enabled': true, 'rateHz': 256},
-        'bands': {'enabled': true, 'rateHz': 10},
-        'pulse': {'enabled': true, 'rateHz': 1},
-        'spo2': {'enabled': true, 'rateHz': 1},
-        'movement': {'enabled': true, 'rateHz': 1},
-        'peakAlpha': {'enabled': true, 'rateHz': 10},
-        'imu': {'enabled': false, 'rateHz': 52},
-        'ppg': {'enabled': false, 'rateHz': 64},
-        'telemetry': {'enabled': false, 'rateHz': 1},
-        'gestures': {'enabled': false, 'rateHz': 1},
-      },
-      'sessionSettings': {},
-      'summary': null,
-      'gestures': [],
-      'drowsiness': {
-        'scoreTotalPct': guardrailWarningCount > 0 ? 100.0 : 0.0,
-        'meanSleepDir': 0.0,
-        'threshold': null,
-        'bucketWidthSecs': 0,
-        'buckets': [],
-      },
-      'music': null,
-      'modelSnapshot': null,
-    };
-  }
-
-  List<ComputedFrame> _parseComputedFrames(Uint8List bytes) {
-    if (bytes.isEmpty) return [];
-    try {
-      final frames = <ComputedFrame>[];
-      for (final line in utf8.decode(bytes).split('\n')) {
-        if (line.trim().isEmpty) continue;
-        frames.add(ComputedFrame.fromJson(jsonDecode(line)));
-      }
-      return frames;
-    } catch (e) {
-      return [];
-    }
-  }
-
-  List<ffi.ComputedFrame> _toFfiFrames(List<ComputedFrame> frames) {
-    return frames.map(_toFfiFrame).toList();
-  }
-
-  ffi.ComputedFrame _toFfiFrame(ComputedFrame frame) {
-    return ffi.ComputedFrame(
-      t: frame.t,
-      bands: frame.bands.map((b) => Float32List.fromList(b)).toList(),
-      pulse: frame.pulse,
-      movement: frame.movement,
-      peakAlpha: frame.peakAlpha != null
-          ? ffi.PeakAlphaInfo(freq: frame.peakAlpha!.freq, power: frame.peakAlpha!.power)
-          : null,
-      spo2: frame.spo2,
-      lineNoise: Float32List.fromList(frame.lineNoise),
-      signalQuality: Uint8List.fromList(frame.signalQuality),
-      guardrail: ffi.GuardrailInfo(
-        sleepDir: frame.guardrail.sleepDir,
-        clarity: frame.guardrail.clarity,
-        warning: frame.guardrail.warning,
-        delta: frame.guardrail.delta,
-      ),
-      feedback: ffi.FeedbackInfo(
-        ratio: frame.feedback.ratio,
-        threshold: frame.feedback.threshold,
-        inTarget: frame.feedback.inTarget,
-        pct: frame.feedback.pct,
-      ),
-      gestures: frame.gestures,
-    );
-  }
-
-  Future<Uint8List> _generateThumbnail() async {
-    // Generate a simple placeholder thumbnail
-    return Uint8List(0);
-  }
-}
-
-/// Scans the cache directory for incomplete sessions (interrupted recordings).
-Future<List<IncompleteSession>> scanIncompleteSessions() async {
-  final cacheDir = Directory((await getTemporaryDirectory()).path);
-  final sessionsDir = Directory('${cacheDir.path}/sessions');
-
-  if (!await sessionsDir.exists()) {
-    return [];
-  }
-
-  final sessions = <IncompleteSession>[];
-
-  await for (final entity in sessionsDir.list()) {
-    if (entity is Directory) {
-      final dir = entity;
-      final rawFile = File('${dir.path}/session_${dir.path.split('/').last}.raw');
-      final computedFile = File('${dir.path}/session_${dir.path.split('/').last}.computed');
-      final metadataFile = File('${dir.path}/session_${dir.path.split('/').last}.metadata');
-
-      if (await rawFile.exists() &&
-          await computedFile.exists() &&
-          await metadataFile.exists()) {
-        // Parse metadata file to get session info
-        final metaLines = await metadataFile.readAsLines();
-        String protocol = '';
-        String calibrationKind = 'single';
-        List<String> calibrationPhases = [];
-        int artifactCount = 0;
-        int guardrailWarningCount = 0;
-        int durationMinutes = 0;
-
-        for (final line in metaLines) {
-          if (line.trim().isEmpty) continue;
-          try {
-            final meta = jsonDecode(line);
-            if (meta['type'] == 'protocol') {
-              protocol = meta['protocol'] as String? ?? protocol;
-            } else if (meta['type'] == 'calibration_start') {
-              calibrationKind = meta['kind'] ?? 'single';
-            } else if (meta['type'] == 'calibration_phase') {
-              calibrationPhases.add(meta['clipId'] ?? '');
-            } else if (meta['type'] == 'artifact') {
-              artifactCount++;
-            } else if (meta['type'] == 'guardrail_warning') {
-              guardrailWarningCount++;
-            } else if (meta['type'] == 'session_duration') {
-              durationMinutes = (meta['minutes'] ?? 0) as int;
-            }
-          } catch (_) {}
-        }
-
-        final id = dir.path.split('/').last;
-        sessions.add(IncompleteSession(
-          id: id,
-          rawFile: rawFile,
-          computedFile: computedFile,
-          metadataFile: metadataFile,
-          durationMinutes: durationMinutes,
+  /// Publish the scratch v5 into history, then delete it.
+  Future<void> save(SessionStore store) async {
+    final bytes = Uint8List.fromList(await scratchV5.readAsBytes());
+    final head = ffi.v5ParseHead(bytes: bytes);
+    final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ??
+        SessionMetadata(
           protocol: protocol,
-          calibrationKind: calibrationKind,
-          calibrationPhases: calibrationPhases,
-          artifactCount: artifactCount,
-          guardrailWarningCount: guardrailWarningCount,
-        ));
+          durationMinutes: elapsedSeconds <= 0 ? 0 : (elapsedSeconds / 60).ceil(),
+          elapsedSeconds: elapsedSeconds,
+          sound: '',
+          savedAt: DateTime.now().toIso8601String(),
+          sessionId: id,
+        );
+    await store.publishSession(id, meta, encodedV5: bytes);
+    await discard();
+  }
+
+  /// Delete the scratch v5. Temps are already gone after assemble.
+  Future<void> discard() async {
+    if (await scratchV5.exists()) {
+      await scratchV5.delete();
+    }
+  }
+}
+
+class _ScratchFiles {
+  File? v5;
+  File? raw;
+  File? computed;
+  File? metadata;
+}
+
+String? _idFrom(String name, String suffix) {
+  const prefix = 'session_';
+  if (!name.startsWith(prefix) || !name.endsWith(suffix)) return null;
+  final id = name.substring(prefix.length, name.length - suffix.length);
+  return id.isEmpty ? null : id;
+}
+
+Future<void> _deleteTemps(_ScratchFiles files) async {
+  for (final f in [files.raw, files.computed, files.metadata]) {
+    if (f != null && await f.exists()) {
+      try {
+        await f.delete();
+      } catch (e) {
+        debugPrint('[crash] failed to delete ${f.path}: $e');
       }
     }
   }
-
-  return sessions;
 }
 
-/// Shows a blocking modal dialog for incomplete sessions found at startup.
-/// User MUST choose Save or Discard before continuing.
-Future<void> showCrashRecoveryDialog(BuildContext context, WidgetRef ref) async {
-  final incompleteSessions = await scanIncompleteSessions();
+SessionMetadata _metadataFromTemps({
+  required String id,
+  required Uint8List jsonl,
+  required List<ffi.ComputedFrame> frames,
+}) {
+  var protocol = '';
+  var calibrationKind = '';
+  String? calibrationId;
+  if (jsonl.isNotEmpty) {
+    for (final line in utf8.decode(jsonl, allowMalformed: true).split('\n')) {
+      if (line.trim().isEmpty) continue;
+      try {
+        final meta = jsonDecode(line);
+        if (meta is! Map) continue;
+        final type = meta['type'];
+        if (type == 'protocol') {
+          protocol = meta['protocol'] as String? ?? protocol;
+        } else if (type == 'calibration_start') {
+          calibrationKind = meta['kind'] as String? ?? calibrationKind;
+          calibrationId = meta['calibrationId'] as String? ?? calibrationId;
+        }
+      } catch (_) {}
+    }
+  }
+  final elapsed = frames.isEmpty ? 0 : frames.last.t.round();
+  final scalars = extractComputedScalars(frames);
+  return SessionMetadata(
+    protocol: protocol,
+    durationMinutes: elapsed <= 0 ? 0 : (elapsed / 60).ceil(),
+    elapsedSeconds: elapsed,
+    durationS: elapsed,
+    sound: '',
+    savedAt: DateTime.now().toIso8601String(),
+    sessionId: id,
+    calibration: calibrationId == null && calibrationKind.isEmpty
+        ? null
+        : SessionCalibration(
+            version: 2,
+            kind: calibrationKind.isEmpty ? 'single' : calibrationKind,
+            calibrationId: calibrationId ?? '',
+          ),
+    drowsiness: frames.isEmpty
+        ? null
+        : SessionDrowsiness(
+            scoreTotalPct:
+                (scalars.guardrailWarnCount ?? 0) * 100 / frames.length,
+            meanSleepDir: scalars.avgSleepDir ?? 0,
+          ),
+    avgSpo2: scalars.avgSpo2,
+    peakAlphaHz: scalars.peakAlphaHz,
+    peakAlphaPower: scalars.peakAlphaPower,
+    pctInTarget: scalars.pctInTarget,
+    avgMovement: scalars.avgMovement,
+    guardrailWarnCount: scalars.guardrailWarnCount,
+    avgSleepDir: scalars.avgSleepDir,
+  );
+}
 
-  if (incompleteSessions.isEmpty) return;
+Future<RecoverableSession?> _fromV5(File file, String id) async {
+  var protocol = '';
+  var elapsed = 0;
+  var calibrationKind = '';
+  try {
+    final bytes = Uint8List.fromList(await file.readAsBytes());
+    final head = ffi.v5ParseHead(bytes: bytes);
+    final meta = SessionMetadata.fromJsonBytes(head.metadataJson);
+    if (meta != null) {
+      protocol = meta.protocol;
+      elapsed = meta.elapsedSeconds;
+      calibrationKind = meta.calibration?.kind ?? '';
+    }
+  } catch (e) {
+    debugPrint('[crash] failed to parse ${file.path}: $e');
+  }
+  return RecoverableSession(
+    id: id,
+    scratchV5: file,
+    protocol: protocol,
+    elapsedSeconds: elapsed,
+    calibrationKind: calibrationKind,
+  );
+}
 
-  for (final session in incompleteSessions) {
-    if (!context.mounted) return;
-
-    await showDialog<bool>(
-      context: context,
-      barrierDismissible: false, // BLOCKING - cannot dismiss
-      builder: (context) => _CrashRecoveryDialog(session: session),
-    ).then((shouldSave) async {
-      if (shouldSave == true) {
-        final storage = await ref.read(sessionStorageProvider.future);
-        await session.saveSession(storage);
-      } else {
-        await session.discard();
-      }
-    });
+Future<RecoverableSession?> _assembleTemps({
+  required Directory scratch,
+  required String id,
+  required _ScratchFiles files,
+}) async {
+  try {
+    final raw = files.raw != null && await files.raw!.exists()
+        ? await files.raw!.readAsBytes()
+        : Uint8List(0);
+    final computed = files.computed != null && await files.computed!.exists()
+        ? await files.computed!.readAsBytes()
+        : Uint8List(0);
+    final metadataBytes =
+        files.metadata != null && await files.metadata!.exists()
+            ? await files.metadata!.readAsBytes()
+            : Uint8List(0);
+    final frames = parseComputedJsonl(computed);
+    final meta = _metadataFromTemps(
+      id: id,
+      jsonl: metadataBytes,
+      frames: frames,
+    );
+    final file = await writeScratchV5(
+      dir: scratch,
+      id: id,
+      metadataJson: meta.toJson(),
+      rawBody: raw,
+      computedJsonl: computed,
+    );
+    await _deleteTemps(files);
+    return RecoverableSession(
+      id: id,
+      scratchV5: file,
+      protocol: meta.protocol,
+      elapsedSeconds: meta.elapsedSeconds,
+      calibrationKind: meta.calibration?.kind ?? '',
+    );
+  } catch (e, st) {
+    debugPrint('[crash] assemble temps for $id failed: $e\n$st');
+    return null;
   }
 }
 
-class _CrashRecoveryDialog extends ConsumerWidget {
+/// Scan [scratchDirectory] for leftover `session_*.muse.feedback` and orphan
+/// three-temps. Temps are assembled with [writeScratchV5] before return.
+/// Does not scan `getTemporaryDirectory()/sessions`.
+Future<List<RecoverableSession>> scanRecoverableSessions(
+  SessionStorage storage,
+) async {
+  final scratch = scratchDirectory(storage);
+  if (!await scratch.exists()) return const [];
+
+  final byId = <String, _ScratchFiles>{};
+  await for (final entity in scratch.list()) {
+    if (entity is! File) continue;
+    final name = entity.uri.pathSegments.last;
+    void take(String? id, void Function(_ScratchFiles f) set) {
+      if (id == null) return;
+      set(byId.putIfAbsent(id, _ScratchFiles.new));
+    }
+
+    take(_idFrom(name, '.muse.feedback'), (f) => f.v5 = entity);
+    take(_idFrom(name, '.raw'), (f) => f.raw = entity);
+    take(_idFrom(name, '.computed'), (f) => f.computed = entity);
+    take(_idFrom(name, '.metadata'), (f) => f.metadata = entity);
+  }
+
+  final recovered = <RecoverableSession>[];
+  for (final entry in byId.entries) {
+    final id = entry.key;
+    final files = entry.value;
+    if (files.v5 != null) {
+      await _deleteTemps(files);
+      final session = await _fromV5(files.v5!, id);
+      if (session != null) recovered.add(session);
+      continue;
+    }
+    if (files.raw == null && files.computed == null) {
+      await _deleteTemps(files);
+      continue;
+    }
+    final session = await _assembleTemps(
+      scratch: scratch,
+      id: id,
+      files: files,
+    );
+    if (session != null) recovered.add(session);
+  }
+  return recovered;
+}
+
+/// Blocking Save / Discard modal for leftover scratch sessions at startup.
+Future<void> showCrashRecoveryDialog(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final storage = await ref.read(sessionStorageProvider.future);
+  final sessions = await scanRecoverableSessions(storage);
+  if (sessions.isEmpty) return;
+
+  for (final session in sessions) {
+    if (!context.mounted) return;
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _CrashRecoveryDialog(session: session),
+    );
+    if (shouldSave == true) {
+      final store = await ref.read(sessionStoreProvider.future);
+      await session.save(store);
+      ref.invalidate(sessionListProvider);
+    } else {
+      await session.discard();
+    }
+  }
+}
+
+class _CrashRecoveryDialog extends StatelessWidget {
   const _CrashRecoveryDialog({required this.session});
 
-  final IncompleteSession session;
+  final RecoverableSession session;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return PopScope(
-      canPop: false, // Prevent back button dismiss
+      canPop: false,
       child: AlertDialog(
         title: const Text('Incomplete Session Detected'),
         content: SingleChildScrollView(
@@ -314,21 +295,16 @@ class _CrashRecoveryDialog extends ConsumerWidget {
               const Text(
                 'The app crashed or was closed during a recording session. '
                 'You have an incomplete session that can be recovered.',
-                style: TextStyle(fontSize: 16),
               ),
               const SizedBox(height: 16),
               _InfoRow(label: 'Session', value: session.id),
-              _InfoRow(label: 'Protocol', value: session.protocol),
-              _InfoRow(label: 'Duration', value: '${session.durationMinutes} min'),
-              _InfoRow(label: 'Calibration', value: session.calibrationKind),
-              _InfoRow(label: 'Phases', value: session.calibrationPhases.join(', ')),
-              _InfoRow(label: 'Artifacts detected', value: session.artifactCount.toString()),
-              _InfoRow(label: 'Guardrail warnings', value: session.guardrailWarningCount.toString()),
-              const SizedBox(height: 16),
-              const Text(
-                'Choose what to do:',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              _InfoRow(
+                label: 'Protocol',
+                value: session.protocol.isEmpty ? 'Unknown' : session.protocol,
               ),
+              _InfoRow(label: 'Duration', value: '${session.elapsedSeconds}s'),
+              if (session.calibrationKind.isNotEmpty)
+                _InfoRow(label: 'Calibration', value: session.calibrationKind),
             ],
           ),
         ),

@@ -23,7 +23,6 @@
   "calibration": { ... },
   "streams": { ... },
   "sessionSettings": { ... },
-  "summary": { ... },
   "gestures": [ ... ],
   "drowsiness": { ... },
   "music": { ... },
@@ -224,48 +223,15 @@ All session-affecting settings at save time.
 
 ---
  
-## 5. Decimated Summary (SessionOverview) — Metadata JSON
+## 5. Charts (computed 1 Hz)
 
-**Current files may still contain this.** A frozen spec will drop `metadata.summary` / `SessionOverview` and plot computed 1 Hz instead — see `.ai/feedback/session-computed-charts.md`. Do not add new fields here.
+There is no `metadata.summary` / `SessionOverview` and no 400-bucket series in the file. Dashboard, history, PDF, and PNG charts all plot the v5 computed 1 Hz stream:
 
-400-bucket decimated view used today for **fast history rendering** without reading the computed stream. Stored in the metadata JSON (`summary` key).
- 
-```json
-"summary": {
-  "bucketCount": 400,
-  "bucketWidthSecs": 2.25,
-  "startSecs": 1724327400.123,
-  "endSecs": 1724328300.456,
-  "trainingStartSecs": 150.333,
-  "bands": {
-    "0": { "delta": [...], "theta": [...], "alpha": [...], "beta": [...], "gamma": [...] },
-    "1": { ... },
-    "2": { ... },
-    "3": { ... }
-  },
-  "pulse": [62.1, 61.8, 62.3, null, ...],
-  "spo2": [98.0, 97.5, 98.2, ...],
-  "movement": [0.02, 0.01, 0.03, ...],
-  "peakAlphaFreq": [9.8, 10.1, 10.0, ...],
-  "peakAlphaPower": [4.2, 4.5, 4.3, ...]
-}
-```
- 
-| Field | Type | Description |
-|-------|------|-------------|
-| `bucketCount` | int | Always 400 |
-| `bucketWidthSecs` | float | Session duration / 400 |
-| `startSecs` | float | Wall-clock epoch of first bucket |
-| `endSecs` | float | Wall-clock epoch of last bucket |
-| `trainingStartSecs` | float? | Seconds from recording start to training boundary |
-| `bands` | object | Per-electrode band power arrays (absolute µV²) |
-| `pulse` | float?[] | BPM per bucket |
-| `spo2` | float?[] | SpO₂ % per bucket |
-| `movement` | float?[] | Movement score per bucket |
-| `peakAlphaFreq` | float?[] | Hz per bucket |
-| `peakAlphaPower` | float?[] | Absolute power per bucket |
- 
-> **Note:** This decimated summary is for **instant history UI rendering** (charts, stats cards). The **full-resolution 1 Hz data** lives in the separate zstd-compressed *computed section* as JSON Lines (see Section 10). The summary is computed at save time from the full computed frames and decimated to exactly 400 buckets.
+`v5ExtractComputed` → `prepareChartDataFromComputed`
+
+X-axis is elapsed seconds from recording start (`ComputedFrame.t`). Paint-time decimation only if a series has more points than pixels; do not bake N=400 into the file. The history list sparkline is the WebP thumbnail, not a stored series.
+
+Full-resolution 1 Hz data lives in the zstd-compressed computed section (see Section 10).
  
 ---
  
@@ -288,21 +254,15 @@ Timestamped gesture events during the session.
 
 ---
 
-## 7. Guardrail (Drowsiness) Trace
+## 7. Guardrail (Drowsiness) Scalars
 
-Per-second guardrail scores (decimated to 400 buckets in metadata; full series in computed stream).
+Metadata keeps scalars only. The waveform is plotted from `ComputedFrame.guardrail` in the computed 1 Hz stream.
 
 ```json
 "drowsiness": {
   "scoreTotalPct": 12.5,
   "meanSleepDir": 0.34,
-  "threshold": 0.62,
-  "bucketWidthSecs": 2.25,
-  "buckets": [
-    { "offsetSecs": 1.125, "sleepDir": 0.21, "delta": 0.15, "warning": false },
-    { "offsetSecs": 3.375, "sleepDir": 0.68, "delta": 0.22, "warning": true },
-    ...
-  ]
+  "threshold": 0.62
 }
 ```
 
@@ -311,8 +271,6 @@ Per-second guardrail scores (decimated to 400 buckets in metadata; full series i
 | `scoreTotalPct` | float | % of scored seconds with warning active |
 | `meanSleepDir` | float | Mean sleep-direction over scored seconds |
 | `threshold` | float? | Baseline percentile threshold used for warnings |
-| `bucketWidthSecs` | float | Seconds per bucket (matches `summary.bucketWidthSecs`) |
-| `buckets` | array | Decimated buckets with mean sleepDir, delta, warning flag |
 
 ---
 
@@ -329,13 +287,14 @@ Per-second guardrail scores (decimated to 400 buckets in metadata; full series i
     { "offsetSecs": 150.0, "name": "track01.opus" },
     { "offsetSecs": 198.3, "name": "track02.opus" }
   ],
-  "bucketWidthSecs": 2.25,
-  "buckets": [
-    { "offsetSecs": 1.125, "hz": 2450.0 },
-    { "offsetSecs": 3.375, "hz": 2380.0 }
+  "series": [
+    { "at": 150.0, "hz": 2450.0 },
+    { "at": 151.0, "hz": 2380.0 }
   ]
 }
 ```
+
+Sparse `tracks` plus 1 Hz `series`. No 400-bucket `buckets`.
 
 ---
 

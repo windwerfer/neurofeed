@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/target_state.dart'
     show movementGateThreshold;
 import 'package:muse_ml/src/rust/api/session_format.dart' as ffi;
@@ -12,13 +11,10 @@ import 'package:muse_ml/src/rust/api/session_format.dart' as ffi;
 const int electrodeAf7 = 1;
 const int electrodeAf8 = 2;
 
-/// Decimated, display-ready chart series for one session: the per-second
-/// (or per-bucket) band-relative powers of the frontal AF7/AF8 average, the
-/// movement trace, the heart-rate trace, the SpO2 trace, and the derived stats.
-///
-/// Built by [prepareChartDataFromComputed] (v5 computed 1 Hz) or
-/// [prepareChartData] (raw `.muse` body, CSV/EDF only). Consumed by the
-/// history dashboard, the PDF export, and the PNG chart renders.
+/// Display-ready chart series for one session: per-second band-relative powers
+/// of the frontal AF7/AF8 average, movement, heart rate, SpO2, and derived
+/// stats. Built by [prepareChartDataFromComputed] (v5 computed 1 Hz) or
+/// [prepareChartData] (raw `.muse` body, CSV/EDF only).
 class SessionChartData {
   final List<double> x;
   final List<double> alphaRel;
@@ -391,153 +387,6 @@ SessionChartData prepareChartDataFromComputed(
     b[2].toDouble(),
     b[3].toDouble(),
     b[4].toDouble(),
-  );
-}
-
-/// Build chart data from the decimated [SessionOverview] stored in the
-/// metadata head, so the history detail renders without reading the `.muse`
-/// body. Matches the full [SessionData] path bucket-for-bucket.
-SessionChartData prepareChartDataFromOverview(
-  SessionOverview overview, {
-  String metric = 'band.atr',
-  List<TargetCondition> conditions = const [],
-}) {
-  final n = overview.bucketCount;
-  final width = overview.bucketWidthSecs > 0 ? overview.bucketWidthSecs : 1.0;
-  final af7 = overview.bands[electrodeAf7];
-  final af8 = overview.bands[electrodeAf8];
-
-  final x = <double>[];
-  final alphaRel = <double>[];
-  final thetaRel = <double>[];
-  final deltaRel = <double>[];
-  final betaRel = <double>[];
-  final gammaRel = <double>[];
-  var targetSeconds = 0;
-  var alphaRelSum = 0.0;
-
-  for (var i = 0; i < n; i++) {
-    final all = _relativeAll(_bandAt(af7, i), _bandAt(af8, i));
-    if (all == null) {
-      continue;
-    }
-    final aRel = all.$3;
-    final tRel = all.$2;
-    final dRel = all.$1;
-    final bRel = all.$4;
-    final gRel = all.$5;
-    x.add(i * width);
-    alphaRel.add(aRel);
-    thetaRel.add(tRel);
-    deltaRel.add(dRel);
-    betaRel.add(bRel);
-    gammaRel.add(gRel);
-    alphaRelSum += aRel;
-    if (_inTarget(dRel, tRel, aRel, bRel, metric, conditions)) {
-      targetSeconds++;
-    }
-  }
-
-  final movementX = <double>[];
-  final movement = <double>[];
-  var still = 0;
-  for (var i = 0; i < n; i++) {
-    if (i >= overview.movement.length || overview.movement[i] == null) {
-      continue;
-    }
-    final m = overview.movement[i]!;
-    movementX.add(i * width);
-    movement.add(m);
-    if (m <= movementGateThreshold) {
-      still++;
-    }
-  }
-
-  final bpmX = <double>[];
-  final bpm = <double>[];
-  var bpmSum = 0.0;
-  for (var i = 0; i < n; i++) {
-    if (i >= overview.pulse.length || overview.pulse[i] == null) {
-      continue;
-    }
-    final b = overview.pulse[i]!;
-    bpmX.add(i * width);
-    bpm.add(b);
-    bpmSum += b;
-  }
-
-  final spo2X = <double>[];
-  final spo2 = <double>[];
-  var spo2Sum = 0.0;
-  for (var i = 0; i < n; i++) {
-    if (i >= overview.spo2.length || overview.spo2[i] == null) {
-      continue;
-    }
-    final s = overview.spo2[i]!;
-    spo2X.add(i * width);
-    spo2.add(s);
-    spo2Sum += s;
-  }
-
-  double? peakFreq;
-  double? peakPower;
-  for (var i = 0; i < overview.peakAlphaPower.length; i++) {
-    final p = overview.peakAlphaPower[i];
-    if (p == null) {
-      continue;
-    }
-    if (peakPower == null || p > peakPower) {
-      peakPower = p;
-      peakFreq = i < overview.peakAlphaFreq.length
-          ? overview.peakAlphaFreq[i]
-          : null;
-    }
-  }
-
-  return SessionChartData(
-    x: x,
-    alphaRel: alphaRel,
-    thetaRel: thetaRel,
-    deltaRel: deltaRel,
-    betaRel: betaRel,
-    gammaRel: gammaRel,
-    movement: movement,
-    movementX: movementX,
-    bpm: bpm,
-    bpmX: bpmX,
-    spo2: spo2,
-    spo2X: spo2X,
-    bandsCount: overview.bands.length,
-    stats: SessionChartStats(
-      peakAlphaFreq: peakFreq,
-      peakAlphaPower: peakPower,
-      targetPct: x.isEmpty ? 0 : targetSeconds / x.length * 100,
-      stillnessPct: movement.isEmpty ? 0 : still / movement.length * 100,
-      avgBpm: bpm.isEmpty ? null : bpmSum / bpm.length,
-      avgSpo2: spo2.isEmpty ? null : spo2Sum / spo2.length,
-      avgAlphaRel: alphaRel.isEmpty ? 0 : alphaRelSum / alphaRel.length,
-    ),
-  );
-}
-
-/// Per-electrode band powers for bucket [i] from a summary series: `(delta,
-/// theta, alpha, beta, gamma)` or null when that electrode/bucket has no data.
-(double, double, double, double, double)? _bandAt(BandPowerSeries? series, int i) {
-  if (series == null ||
-      i >= series.delta.length ||
-      series.delta[i] == null ||
-      series.theta[i] == null ||
-      series.alpha[i] == null ||
-      series.beta[i] == null ||
-      series.gamma[i] == null) {
-    return null;
-  }
-  return (
-    series.delta[i]!,
-    series.theta[i]!,
-    series.alpha[i]!,
-    series.beta[i]!,
-    series.gamma[i]!,
   );
 }
 

@@ -180,21 +180,10 @@ SessionMetadata _metadata({
           )
         : null,
     drowsiness: withDrowsiness
-        ? SessionDrowsiness(
+        ? const SessionDrowsiness(
             scoreTotalPct: 15.0,
             meanSleepDir: 0.3,
             threshold: 0.5,
-            series: [
-              for (var i = 0; i < 3; i++)
-                DrowsinessSample(
-                  offsetSecs: i.toDouble(),
-                  sleepDir: 0.2 + i * 0.1,
-                  delta: 100 + i * 10,
-                  warning: i == 2,
-                ),
-            ],
-            buckets: [],
-            bucketWidthSecs: 0,
           )
         : null,
     music: withMusic
@@ -212,8 +201,6 @@ SessionMetadata _metadata({
               for (var i = 0; i < 3; i++)
                 MusicCutoffSample(offsetSecs: i.toDouble(), cutoffHz: 200 + i * 100),
             ],
-            buckets: [],
-            bucketWidthSecs: 0,
           )
         : null,
     gestures: withGestures

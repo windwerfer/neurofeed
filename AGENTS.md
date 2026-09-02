@@ -211,6 +211,6 @@ assets/                     protocols.json, calibrations.json, features.json, au
   loaded. See `.ai/testing-guide.md`.
 - **`updateNotes` uses v5** (`containerEncodeV5`). There is no
   `SessionContainer` Dart wrapper anymore.
-- **Next charts spec** will drop `SessionOverview` / 400-bucket metadata
-  and plot computed 1 Hz. Until that lands, do not "fix" blank dashboard
-  graphs in isolation — follow `.ai/feedback/session-computed-charts.md`.
+- **Charts** plot computed 1 Hz (`v5ExtractComputed` →
+  `prepareChartDataFromComputed`). There is no `SessionOverview` /
+  400-bucket `metadata.summary`. The list sparkline is the WebP thumbnail.

@@ -6,6 +6,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:muse_ml/src/charts/session_recorder.dart';
 import 'package:muse_ml/src/feedback/computed_frame.dart' as dart;
 import 'package:muse_ml/src/feedback/computed_sampler.dart';
+import 'package:muse_ml/src/feedback/crash_recovery.dart';
 import 'package:muse_ml/src/feedback/session_assembler.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
@@ -177,6 +178,108 @@ void main() {
       expect(decoded.toJson().containsKey('summary'), isFalse);
       expect(decoded.music?.series, isNotEmpty);
       expect(decoded.music?.toJson().containsKey('buckets'), isFalse);
+    });
+
+    test('crash recovery scans scratch; temps assemble; discard deletes',
+        () async {
+      final tmp = await Directory.systemTemp.createTemp('muse_crash_');
+      addTearDown(() => tmp.delete(recursive: true));
+      final storage = FileSystemSessionStorage(tmp);
+      final scratch = scratchDirectory(storage);
+      await scratch.create(recursive: true);
+
+      const id = '111';
+      await File('${scratch.path}/session_$id.raw')
+          .writeAsBytes(sessionHeaderBytes());
+      final line = _dartFrame(2).toJsonBytes();
+      await File('${scratch.path}/session_$id.computed').writeAsBytes([
+        ...line,
+        0x0A,
+      ]);
+      await File('${scratch.path}/session_$id.metadata').writeAsString(
+        '{"type":"calibration_start","kind":"staged","calibrationId":"eyes-closed-01"}\n',
+      );
+
+      final recovered = await scanRecoverableSessions(storage);
+      expect(recovered, hasLength(1));
+      expect(recovered.first.id, id);
+      expect(recovered.first.elapsedSeconds, 2);
+      expect(recovered.first.calibrationKind, 'staged');
+      expect(
+        await File('${scratch.path}/session_$id.muse.feedback').exists(),
+        isTrue,
+      );
+      expect(await File('${scratch.path}/session_$id.raw').exists(), isFalse);
+      expect(
+        await File('${scratch.path}/session_$id.computed').exists(),
+        isFalse,
+      );
+      expect(
+        await File('${scratch.path}/session_$id.metadata').exists(),
+        isFalse,
+      );
+
+      await recovered.first.discard();
+      expect(
+        await File('${scratch.path}/session_$id.muse.feedback').exists(),
+        isFalse,
+      );
+    });
+
+    test('crash recovery leftover v5 save publishes to history not scratch',
+        () async {
+      final tmp = await Directory.systemTemp.createTemp('muse_crash2_');
+      addTearDown(() => tmp.delete(recursive: true));
+      final storage = FileSystemSessionStorage(tmp);
+      final scratch = scratchDirectory(storage);
+      await scratch.create(recursive: true);
+
+      const id = '222';
+      final v5 = assembleV5Container(
+        thumbnail: placeholderWebP,
+        metadataJson: {
+          'protocol': 'drowsiness',
+          'durationMinutes': 1,
+          'elapsedSeconds': 3,
+          'sound': 'Ambient Drone',
+          'savedAt': '2026-09-02T00:00:00.000Z',
+        },
+        computedFrames: [toFfiFrame(_dartFrame(0))],
+        rawBody: sessionHeaderBytes(),
+      );
+      await File('${scratch.path}/session_$id.muse.feedback').writeAsBytes(v5);
+      await File('${scratch.path}/session_$id.raw').writeAsBytes([1, 2, 3]);
+
+      final recovered = await scanRecoverableSessions(storage);
+      expect(recovered, hasLength(1));
+      expect(recovered.first.protocol, 'drowsiness');
+      expect(await File('${scratch.path}/session_$id.raw').exists(), isFalse);
+
+      final store = SessionStore(storage: Future.value(storage));
+      await recovered.first.save(store);
+      expect(await storage.fileExists('session_$id.muse.feedback'), isTrue);
+      expect(
+        await File('${scratch.path}/session_$id.muse.feedback').exists(),
+        isFalse,
+      );
+      expect(tmp.path.contains('.cache'), isFalse);
+    });
+
+    test('crash recovery does not scan history/sessions leftover temps',
+        () async {
+      final tmp = await Directory.systemTemp.createTemp('muse_crash3_');
+      addTearDown(() => tmp.delete(recursive: true));
+      final storage = FileSystemSessionStorage(tmp);
+      await scratchDirectory(storage).create(recursive: true);
+      final wrong = Directory('${tmp.path}/sessions');
+      await wrong.create(recursive: true);
+      await File('${wrong.path}/session_999.raw')
+          .writeAsBytes(sessionHeaderBytes());
+      await File('${wrong.path}/session_999.computed').writeAsString('\n');
+      await File('${wrong.path}/session_999.metadata').writeAsString('\n');
+
+      final recovered = await scanRecoverableSessions(storage);
+      expect(recovered, isEmpty);
     });
   });
 }

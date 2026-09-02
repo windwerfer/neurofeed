@@ -93,20 +93,17 @@ class FeedbackRecorder {
       return null;
     }
     try {
-      final frames = parseComputedJsonl(temps.computed);
-      final v5 = assembleV5Container(
-        thumbnail: placeholderWebP,
+      final file = await writeScratchV5(
+        dir: dir,
+        id: id,
         metadataJson: metadataJson,
-        computedFrames: frames,
         rawBody: temps.raw,
+        computedJsonl: temps.computed,
       );
-      final file = File('${dir.path}/session_$id.muse.feedback');
-      await file.writeAsBytes(v5, flush: true);
       await _recorder.cleanupTempFiles();
       _scratchV5Path = file.path;
       debugPrint(
-        '[feedback] assembleScratchV5: ${file.path} (${v5.length}B, '
-        'frames=${frames.length})',
+        '[feedback] assembleScratchV5: ${file.path} (${file.lengthSync()}B)',
       );
       return file.path;
     } catch (e, st) {

@@ -6,7 +6,7 @@
 | Spec | [`.ai/feedback/session-computed-charts.md`](session-computed-charts.md) — **frozen**. Do not reopen Key Decisions. |
 | Branch | `feat/session-computed-charts` (off `refactor/eeg_feature_implementation`) |
 | Last commit | `da4e119` `feat(session): assemble scratch v5 at end; charts from computed 1 Hz` |
-| Status | **Steps 1–4 landed.** Next thread starts at **step 5**. |
+| Status | **Steps 1–7 implemented.** Device/desktop `flutter run` still not done. |
 | Do not mix | Crown Start, v5 byte layout, FRB regen, pipeline-contract Key Decisions |
 
 Read the spec first. Then this file. Then implement remaining steps in order.
@@ -64,24 +64,26 @@ Handoff originally asked to stop after step 3 and check `flutter run -d linux` (
 | `assembleScratchV5` / `scratchV5Path` / `deleteScratchV5` | `lib/src/feedback/feedback_recorder.dart` |
 | `end()` assemble **then** `phase = ended` | `lib/src/feedback/feedback_state.dart` |
 | Sampler `t` | `lib/src/feedback/computed_sampler.dart` |
-| `prepareChartDataFromComputed` (+ leftover `prepareChartDataFromOverview`) | `lib/src/feedback/session_chart_data.dart` |
+| `prepareChartDataFromComputed` (overview builder deleted) | `lib/src/feedback/session_chart_data.dart` |
 | Live + history load from v5; Save publishes | `lib/src/views/feedback_dashboard.dart` |
 | `publishSession(id, metadata, {encodedV5, rawBody, thumbnail, computedFrames})` | `lib/src/feedback/session_store_core.dart` |
 | `readContainer` | same |
 | PNG/PDF computed; CSV/EDF raw | `session_export.dart` / `session_pdf_export.dart` |
-| Drowsiness `toJson` scalars only; music `series` not `buckets` | `session_metadata.dart` |
-| **Still exists (delete in step 5)** | `SessionOverview`, `prepareChartDataFromOverview`, `SessionDrowsiness.decimate` / `buckets`, `SessionMusic.decimate` / `buckets` |
-| **Still wrong dir (fix in step 6)** | `crash_recovery.dart` scans `getTemporaryDirectory()/sessions`; still has its own `_toFfiFrame` / empty thumb |
-| Format doc still specifies 400-bucket summary | `README_feedback_format.md` §5 |
-| AGENTS.md still says next charts spec will drop overview | `AGENTS.md` hot spots |
+| Drowsiness scalars only; music `tracks` + `series` | `session_metadata.dart` |
+| Crash recovery (scratch dir, `writeScratchV5`, placeholder WebP) | `lib/src/feedback/crash_recovery.dart` |
+| Charts from computed 1 Hz | `README_feedback_format.md` §5 |
+| Charts hot spot | `AGENTS.md` |
 
 `sessionParseBody` / framed goldens: `rust/src/api/session_format.rs`. Do not change the wire layout. Do not run FRB codegen.
 
 ---
 
-## Remaining work (start at step 5)
+## Remaining work
 
-### Step 5 — Delete 400-bucket code + docs
+Steps 5–7 are implemented. Still open: device/desktop `flutter run -d linux`
+— session-end graphs + Save to history folder, not `.cache`.
+
+### Step 5 — Delete 400-bucket code + docs (done)
 
 - Remove `SessionOverview`, `BandPowerSeries`, `prepareChartDataFromOverview`, dashboard leftover overview types if any, `fromColumns`.
 - Remove `SessionDrowsiness.decimate` / `buckets` / `bucketWidthSecs` (and `series` if unused). Keep scalars. `fromJson` may ignore leftover keys.
@@ -90,7 +92,7 @@ Handoff originally asked to stop after step 3 and check `flutter run -d linux` (
 - `README_feedback_format.md` §5: replace with “charts from computed 1 Hz; no decimated summary”.
 - `AGENTS.md`: drop the “Next charts spec will drop SessionOverview…” bullet; state computed 1 Hz is how charts work.
 
-### Step 6 — Crash recovery
+### Step 6 — Crash recovery (done)
 
 - Scan `scratchDirectory(storage)` for leftover `session_*.muse.feedback` **and** orphan three-temps (`.raw` / `.computed` / `.metadata`).
 - Temps → same `assembleScratchV5` / `assembleV5Container` as `end()`.
@@ -98,7 +100,7 @@ Handoff originally asked to stop after step 3 and check `flutter run -d linux` (
 - Use `placeholderWebP`, never empty bytes. Reuse `toFfiFrame` from the assembler; delete the copy in `crash_recovery.dart`.
 - Do **not** scan `getTemporaryDirectory()/sessions`.
 
-### Step 7 — Tests leftover
+### Step 7 — Tests leftover (done; device run still open)
 
 Most of the table in the original handoff already has coverage in `test/session_computed_charts_test.dart`. Still add/adjust as you delete 400-bucket code:
 
