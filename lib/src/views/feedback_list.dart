@@ -5,9 +5,11 @@ import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
+import 'package:muse_ml/src/feedback/user_protocol_store.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/views/feedback_session.dart';
+import 'package:muse_ml/src/views/protocol_builder.dart';
 
 class FeedbackListView extends ConsumerWidget {
   const FeedbackListView({super.key});
@@ -20,6 +22,14 @@ class FeedbackListView extends ConsumerWidget {
         ref.watch(protocolCatalogProvider).valueOrNull ?? ProtocolCatalog.empty;
     final listed = _listedProtocols(ref, catalog);
     final recent = _recentProtocols(sessions, catalog);
+    final userDocs = [
+      for (final p in listed)
+        if (p.isUserDocument) p,
+    ];
+    final catalogDocs = [
+      for (final p in listed)
+        if (!p.isUserDocument) p,
+    ];
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -34,7 +44,35 @@ class FeedbackListView extends ConsumerWidget {
           _RecentTile(protocols: recent),
           const SizedBox(height: 12),
         ],
-        for (final protocol in listed)
+        _sectionLabel(theme, 'Saved programs'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: OutlinedButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ProtocolBuilderView()),
+              );
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Create program'),
+          ),
+        ),
+        for (final protocol in userDocs)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _ProtocolCard(
+              protocol: protocol,
+              onEdit: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ProtocolBuilderView(existing: protocol),
+                  ),
+                );
+              },
+              onDelete: () => _confirmDelete(context, ref, protocol),
+            ),
+          ),
+        for (final protocol in catalogDocs)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: _ProtocolCard(protocol: protocol),
@@ -137,9 +175,7 @@ class _RecentSlot extends ConsumerWidget {
           }
           notifier.selectProtocol(protocol.id);
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const FeedbackSessionView(),
-            ),
+            MaterialPageRoute(builder: (_) => const FeedbackSessionView()),
           );
         },
         child: Padding(
@@ -160,10 +196,64 @@ class _RecentSlot extends ConsumerWidget {
   }
 }
 
+Widget _sectionLabel(ThemeData theme, String text) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: theme.textTheme.titleSmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    ),
+  );
+}
+
+Future<void> _confirmDelete(
+  BuildContext context,
+  WidgetRef ref,
+  ProtocolDocument protocol,
+) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete program?'),
+      content: Text(
+        'Remove ${protocol.copy.catchPhrase.isEmpty ? protocol.id : protocol.copy.catchPhrase}? '
+        'This does not delete past sessions.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  final catalog =
+      ref.read(protocolCatalogProvider).valueOrNull ?? ProtocolCatalog.empty;
+  try {
+    final store = await UserProtocolStore.open(catalog.features);
+    await store.delete(protocol.id);
+    ref.invalidate(protocolCatalogProvider);
+  } on UserProtocolException catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(e.message)));
+  }
+}
+
 class _ProtocolCard extends ConsumerWidget {
   final ProtocolDocument protocol;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
-  const _ProtocolCard({required this.protocol});
+  const _ProtocolCard({required this.protocol, this.onEdit, this.onDelete});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -171,88 +261,120 @@ class _ProtocolCard extends ConsumerWidget {
     final copy = useProtocolCopy(ref, protocol);
     return Card(
       color: theme.colorScheme.surfaceContainerHighest,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          final notifier = ref.read(feedbackStateProvider.notifier);
-          if (ref.read(feedbackStateProvider).phase == FeedbackPhase.ended) {
-            notifier.reset();
-          }
-          notifier.selectProtocol(protocol.id);
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const FeedbackSessionView(),
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: protocol.color.withAlpha(60),
-                      borderRadius: BorderRadius.circular(12),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                final notifier = ref.read(feedbackStateProvider.notifier);
+                if (ref.read(feedbackStateProvider).phase ==
+                    FeedbackPhase.ended) {
+                  notifier.reset();
+                }
+                notifier.selectProtocol(protocol.id);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const FeedbackSessionView(),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: protocol.color.withAlpha(60),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.psychology,
+                        color: protocol.color,
+                        size: 28,
+                      ),
                     ),
-                    child: Icon(Icons.psychology, color: protocol.color, size: 28),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: copy.catchPhrase,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize:
-                                      (theme.textTheme.titleMedium?.fontSize ??
-                                              16) +
-                                          1,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: copy.catchPhrase,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize:
+                                        (theme
+                                                .textTheme
+                                                .titleMedium
+                                                ?.fontSize ??
+                                            16) +
+                                        1,
+                                  ),
                                 ),
-                              ),
-                              TextSpan(
-                                text: '  —  ${copy.title}',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w400,
+                                TextSpan(
+                                  text: '  —  ${copy.title}',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w400,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          copy.subtitle,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                          const SizedBox(height: 2),
+                          Text(
+                            copy.subtitle,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.info_outline, color: theme.colorScheme.onSurfaceVariant),
-                    onPressed: () => _showInfo(context, protocol, copy),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
+          IconButton(
+            icon: Icon(
+              Icons.info_outline,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            onPressed: () => _showInfo(context, protocol, copy),
+          ),
+          if (onEdit != null)
+            IconButton(
+              icon: Icon(
+                Icons.edit_outlined,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              onPressed: onEdit,
+            ),
+          if (onDelete != null)
+            IconButton(
+              icon: Icon(
+                Icons.delete_outline,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              onPressed: onDelete,
+            ),
+        ],
       ),
     );
   }
 }
 
-void _showInfo(BuildContext context, ProtocolDocument protocol, ProtocolCopy copy) {
+void _showInfo(
+  BuildContext context,
+  ProtocolDocument protocol,
+  ProtocolCopy copy,
+) {
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(

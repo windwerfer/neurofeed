@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:path_provider/path_provider.dart';
 
 import 'package:muse_ml/src/feedback/feature_catalog.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/user_protocol_store.dart';
 import 'package:muse_ml/src/rust/api/device_config.dart';
 import 'package:muse_ml/src/rust/api/features.dart';
 
@@ -77,15 +77,9 @@ class ProtocolCatalog {
     return catalog;
   }
 
-  Future<ProtocolCatalog> mergeUserProtocols() async {
-    Directory dir;
-    try {
-      final support = await getApplicationSupportDirectory();
-      dir = Directory('${support.path}/protocols');
-    } catch (_) {
-      return this;
-    }
-    if (!await dir.exists()) return this;
+  Future<ProtocolCatalog> mergeUserProtocols({Directory? directory}) async {
+    final dir = directory ?? await UserProtocolStore.resolveDirectory();
+    if (dir == null || !await dir.exists()) return this;
     final extra = Map<String, ProtocolDocument>.from(byName);
     await for (final entity in dir.list()) {
       if (entity is! File || !entity.path.endsWith('.json')) continue;

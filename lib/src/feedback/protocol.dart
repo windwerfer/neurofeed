@@ -57,8 +57,7 @@ class BetaCeiling extends TargetCondition {
     required double thetaRel,
     required double alphaRel,
     required double betaRel,
-  }) =>
-      betaRel <= maxBetaRel;
+  }) => betaRel <= maxBetaRel;
 
   @override
   Map<String, Object?> toJson() => {'type': 'betaCeiling', 'max': maxBetaRel};
@@ -76,8 +75,7 @@ class DeltaCeiling extends TargetCondition {
     required double thetaRel,
     required double alphaRel,
     required double betaRel,
-  }) =>
-      deltaRel <= maxDeltaRel;
+  }) => deltaRel <= maxDeltaRel;
 
   @override
   Map<String, Object?> toJson() => {'type': 'deltaCeiling', 'max': maxDeltaRel};
@@ -338,6 +336,8 @@ class ProtocolDocument {
 
   bool get hasReward => reward != null;
   bool get guardrailAllowed => guard != null;
+  bool get isUserDocument =>
+      origin == 'user' || userProtocolIdPattern.hasMatch(id);
   List<TargetCondition> get conditions => reward?.inhibit ?? const [];
 
   String get catchPhrase => copy.catchPhrase;
@@ -393,21 +393,19 @@ class ProtocolDocument {
     if (guard != null) 'guard': guard!.toJson(),
   };
 
-  ProtocolDocument copyWith({
-    ProtocolGuard? guard,
-    bool clearGuard = false,
-  }) => ProtocolDocument(
-    id: id,
-    origin: origin,
-    schemaVersion: schemaVersion,
-    copy: copy,
-    colorValue: colorValue,
-    calibration: calibration,
-    calibrationSkippable: calibrationSkippable,
-    background: background,
-    reward: reward,
-    guard: clearGuard ? null : (guard ?? this.guard),
-  );
+  ProtocolDocument copyWith({ProtocolGuard? guard, bool clearGuard = false}) =>
+      ProtocolDocument(
+        id: id,
+        origin: origin,
+        schemaVersion: schemaVersion,
+        copy: copy,
+        colorValue: colorValue,
+        calibration: calibration,
+        calibrationSkippable: calibrationSkippable,
+        background: background,
+        reward: reward,
+        guard: clearGuard ? null : (guard ?? this.guard),
+      );
 
   factory ProtocolDocument.placeholder({String id = ''}) => ProtocolDocument(
     id: id,

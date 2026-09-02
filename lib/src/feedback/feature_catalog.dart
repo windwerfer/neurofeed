@@ -49,6 +49,24 @@ class FeatureCatalog {
 
   FeatureCatalogEntry? operator [](String id) => byId[id];
 
+  /// Reward-lane picker: `usableAsReward()` intersected with [availableIds]
+  /// when a device kind is known. Null [availableIds] → all reward features.
+  List<FeatureCatalogEntry> rewardChoices({Set<String>? availableIds}) => [
+    for (final e in byId.values)
+      if (e.usableAsReward() &&
+          (availableIds == null || availableIds.contains(e.id)))
+        e,
+  ];
+
+  /// Guard-lane picker: `usableAsGuard()` only (never `band.atr`). Intersect
+  /// with [availableIds] when a device kind is known.
+  List<FeatureCatalogEntry> guardChoices({Set<String>? availableIds}) => [
+    for (final e in byId.values)
+      if (e.usableAsGuard() &&
+          (availableIds == null || availableIds.contains(e.id)))
+        e,
+  ];
+
   static const String asset = 'assets/features.json';
 
   static const FeatureCatalog empty = FeatureCatalog(version: 1, byId: {});
@@ -56,7 +74,9 @@ class FeatureCatalog {
   factory FeatureCatalog.fromJson(Map json) {
     final mapJson = Map<String, Object?>.from(json);
     final raw = mapJson['features'];
-    final map = raw is Map ? Map<String, Object?>.from(raw) : const <String, Object?>{};
+    final map = raw is Map
+        ? Map<String, Object?>.from(raw)
+        : const <String, Object?>{};
     return FeatureCatalog(
       version: mapJson['version'] as int? ?? 1,
       byId: {
