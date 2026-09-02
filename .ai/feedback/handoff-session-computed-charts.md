@@ -6,7 +6,7 @@
 | Spec | [`.ai/feeback/session-computed-charts.md`](session-computed-charts.md) — **frozen** |
 | Branch | New topic branch off whatever is checked out. Do not push unless asked. |
 | Do not mix | Custom protocol builder (handoff-pr7), Crown Start, v5 byte layout, FRB regen |
-| Status | **Start here. Spec is the law. Do not reopen Key Decisions.** |
+| Status | **Steps 1–4 landed on `feat/session-computed-charts` (`da4e119`). Resume: [handoff-session-computed-charts-resume.md](handoff-session-computed-charts-resume.md).** Spec is the law. Do not reopen Key Decisions. |
 
 Read the spec first. Then this file. Then implement in the order below.
 

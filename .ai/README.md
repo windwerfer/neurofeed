@@ -21,7 +21,8 @@ do/don't, then this folder for maps.
 | [feedback/pipeline-contract.md](feedback/pipeline-contract.md) | Frozen pipeline spec (PRs 1–7 implemented). Do not reopen Key Decisions. |
 | [feedback/architecture.md](feedback/architecture.md) | Lanes, protocol documents, calibration as implemented |
 | [feedback/session-computed-charts.md](feedback/session-computed-charts.md) | **Frozen** next spec: charts from v5 computed 1 Hz |
-| [feedback/handoff-session-computed-charts.md](feedback/handoff-session-computed-charts.md) | Implementer handoff for that spec |
+| [feedback/handoff-session-computed-charts.md](feedback/handoff-session-computed-charts.md) | Original implementer handoff (steps 1–4 done) |
+| [feedback/handoff-session-computed-charts-resume.md](feedback/handoff-session-computed-charts-resume.md) | **Start here** — remaining steps 5–7 |
 | [feedback/todos.md](feedback/todos.md) | Checklist + frozen-charts note |
 
 Format / cache byte-level docs (repo root, not here):

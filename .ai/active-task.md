@@ -1,21 +1,22 @@
 # Active Task
 
-**Branch:** `refactor/eeg_feature_implementation`
+**Branch:** `feat/session-computed-charts`
 
-Pipeline PRs 1–7 (feature registry through the custom protocol builder) are
-committed. Frozen spec: [feedback/pipeline-contract.md](feedback/pipeline-contract.md).
-Do not reopen those Key Decisions. **Crown Start stays refused.**
+Pipeline PRs 1–7 are committed. Frozen spec:
+[feedback/pipeline-contract.md](feedback/pipeline-contract.md). Do not reopen
+those Key Decisions. **Crown Start stays refused.**
 
-## Next — session charts from v5 computed 1 Hz
+## In progress — session charts from v5 computed 1 Hz
 
-**Frozen.** Implement from a new topic branch. Do not mix with the protocol
-builder.
+**Frozen.** Steps 1–4 landed (`da4e119`). Resume at step 5 (delete 400-bucket
+code, crash recovery, leftover tests).
 
 - Spec: [feedback/session-computed-charts.md](feedback/session-computed-charts.md)
-- Handoff: [feedback/handoff-session-computed-charts.md](feedback/handoff-session-computed-charts.md)
+- Resume: [feedback/handoff-session-computed-charts-resume.md](feedback/handoff-session-computed-charts-resume.md)
 
-Computed 1 Hz is the only summary waveform. Assemble a real v5 file in scratch
-at session end. No 400-bucket `SessionOverview`.
+Computed 1 Hz is the only summary waveform. Scratch v5 is assembled at
+`end()`. No 400-bucket `SessionOverview` in new files; delete the leftover
+types next.
 
 ## Not this thread
 
