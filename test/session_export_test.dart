@@ -231,14 +231,18 @@ SessionMetadata _metadata({
 List<ComputedFrame> _buildComputedFrames() {
   final frames = <ComputedFrame>[];
   for (var s = 0; s < 3; s++) {
-    // Bands: 4 electrodes x 5 bands each = 20 floats per frame
-    final bands = Float32List(20);
-    for (var i = 0; i < 20; i++) {
-      bands[i] = 100.0 + i * 10.0 + s;
-    }
     frames.add(ComputedFrame(
-      t: (s * 1000 + 500).toDouble(),
-      bands: [bands],
+      t: s.toDouble(),
+      bands: [
+        for (var e = 0; e < 4; e++)
+          Float32List.fromList([
+            100.0 + e + s,
+            80.0 + e + s,
+            200.0 + e + s,
+            60.0 + e + s,
+            40.0 + e + s,
+          ]),
+      ],
       pulse: 70.0 + s,
       movement: 0.1,
       peakAlpha: PeakAlphaInfo(freq: 10.0, power: 100.0),
@@ -333,9 +337,9 @@ void main() {
     final computedFrames = _buildComputedFrames();
     await store.publishSession(
       id,
-      rawBody,
       meta,
-      pngBytes: _webp1x1,
+      rawBody: rawBody,
+      thumbnail: _webp1x1,
       computedFrames: computedFrames,
     );
   });
@@ -496,9 +500,9 @@ void main() {
     final otherId = 'noeeg${DateTime.now().millisecondsSinceEpoch}';
     await store.publishSession(
       otherId,
-      rawBody,
       metadata,
-      pngBytes: _webp1x1,
+      rawBody: rawBody,
+      thumbnail: _webp1x1,
       computedFrames: computedFrames,
     );
     final result = await SessionExporter(store, storage).exportSessions(
@@ -568,9 +572,9 @@ void main() {
     const calId = 'cal_test';
     await store.publishSession(
       calId,
-      rawBody,
       metaWithCal,
-      pngBytes: _webp1x1,
+      rawBody: rawBody,
+      thumbnail: _webp1x1,
       computedFrames: computedFrames,
     );
 
@@ -643,9 +647,9 @@ void main() {
     const gestId = 'gest_test';
     await store.publishSession(
       gestId,
-      rawBody,
       metaWithGestures,
-      pngBytes: _webp1x1,
+      rawBody: rawBody,
+      thumbnail: _webp1x1,
       computedFrames: computedFrames,
     );
 

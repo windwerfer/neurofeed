@@ -31,7 +31,12 @@ import 'dart:io';
      );
  
      // Use v5 format with empty computed frames (dummy body [1,2,3,4] is valid v4 raw body)
-     await store.publishSession('test1234', [1, 2, 3, 4], metadata, computedFrames: const <ComputedFrame>[]);
+     await store.publishSession(
+       'test1234',
+       metadata,
+       rawBody: [1, 2, 3, 4],
+       computedFrames: const <ComputedFrame>[],
+     );
      final list = await store.list();
      expect(list.length, 1);
      expect(list.first.id, 'test1234');

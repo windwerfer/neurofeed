@@ -22,6 +22,8 @@ import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/reward_lane.dart';
+import 'package:muse_ml/src/charts/eeg_data_source.dart';
+import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
@@ -254,7 +256,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   final List<SessionRecalibration> _recalibrations = [];
 
   /// Music feedback: per-second cutoff trace + track transitions recorded
-  /// while playing. Persisted as [SessionMusic] metadata (decimated buckets).
+  /// while playing. Persisted as [SessionMusic] metadata (tracks + 1 Hz series).
   final List<MusicCutoffSample> _musicSeries = [];
   final List<MusicTrackMarker> _musicTracks = [];
 
@@ -479,6 +481,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     await _recorder.startSession();
     _computedSampler = ComputedSampler(
       onFrame: (frame) => _recorder.appendComputed(frame),
+      recordingStart: _sessionStartAt!,
     );
     _computedSampler!.start();
     await _enableSessionFeatures();
@@ -929,8 +932,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _startTicker();
   }
 
-  /// End the session: flush the recording, stop audio, play the end chime.
-  /// The temp recording stays on disk until the dashboard saves or discards it.
+  /// End the session: assemble a scratch v5 **before** `phase = ended` (the
+  /// session view navigates on that transition), then stop audio.
   Future<void> end() async {
     if (state.phase == FeedbackPhase.ended) {
       return;
@@ -942,8 +945,20 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _computedSampler?.stop();
     _guard.teardown();
     unawaited(_clearEnabledFeatures());
-    state = state.copyWith(phase: FeedbackPhase.ended);
     await _recorder.flushSession();
+    try {
+      final path = await _recorder.assembleScratchV5(
+        buildSessionMetadata().toJson(),
+      );
+      if (path == null) {
+        debugPrint(
+          '[feedback] end: scratch v5 assemble failed; temps kept',
+        );
+      }
+    } catch (e, st) {
+      debugPrint('[feedback] end: scratch v5 assemble failed: $e\n$st');
+    }
+    state = state.copyWith(phase: FeedbackPhase.ended);
     await _audio.stop();
     await _audio.playEndChime();
   }
@@ -986,7 +1001,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     state = const FeedbackState();
   }
 
-  String? get sessionFilePath => _recorder.currentFilePath;
+  String? get sessionFilePath => _recorder.scratchV5Path;
+
+  String? get scratchV5Path => _recorder.scratchV5Path;
+
+  String? get sessionId => _recorder.sessionId;
 
   /// Recorded calibration record for the current session (timeline, gate,
   /// baseline stats, intro clip). Null until calibration completes.
@@ -1003,17 +1022,95 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// Streams enabled for this session's recording.
   Set<RecordingStream> get recordStreams => _recorder.streams;
 
-  /// Finalize the session: assemble v5 container with thumbnail and metadata.
-  /// Returns the final session file on disk.
-  Future<File?> finalizeSession({
-    required Uint8List thumbnailPng,
-    required Map<String, dynamic> metadataJson,
-  }) => _recorder.finalizeSession(
-    thumbnailPng: thumbnailPng,
-    metadataJson: metadataJson,
-  );
-
   Future<void> discardSession() => _recorder.discardSession();
+
+  Future<void> deleteScratchV5() => _recorder.deleteScratchV5();
+
+  /// Snapshot metadata for the scratch v5 at end() and the rewritten file
+  /// on Save. No `summary` / 400-bucket fields. Drowsiness is scalars only.
+  SessionMetadata buildSessionMetadata({
+    String notes = '',
+    SessionChartStats? stats,
+  }) {
+    final fb = state;
+    final app = _ref.read(appStateProvider);
+    final settings = _ref.read(settingsProvider);
+    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
+    final protocol = catalog?.forName(fb.protocol);
+    final feature = settings.guardFeatureFor(fb.protocol);
+    final model = settings.guardModel;
+    final channels = recordedChannels.map(channelName).toList()..sort();
+    final drowsy = sessionDrowsiness;
+    return SessionMetadata(
+      protocol: fb.protocol,
+      durationMinutes: fb.durationMinutes,
+      elapsedSeconds: fb.elapsedSeconds,
+      durationS: fb.elapsedSeconds,
+      sound: fb.soundName,
+      feedbackSound: fb.rewardOutput.name,
+      savedAt: DateTime.now().toIso8601String(),
+      startedAt: _sessionStartAt?.toIso8601String(),
+      notes: notes,
+      sessionId: sessionId,
+      stats: stats == null
+          ? null
+          : SessionStatsData(
+              peakAlphaFreq: stats.peakAlphaFreq,
+              peakAlphaPower: stats.peakAlphaPower,
+              targetPct: stats.targetPct,
+              stillnessPct: stats.stillnessPct,
+              avgBpm: stats.avgBpm,
+              avgAlphaRel: stats.avgAlphaRel,
+            ),
+      deviceName: app.status.connected ? app.status.name : null,
+      deviceModel: app.status.connected ? app.status.firmware : null,
+      deviceId: app.status.connected ? app.status.id : null,
+      recordedChannels: channels,
+      recordedData: recordStreams.map((s) => s.name).toList(),
+      gestures: settings.markersInFeedbackEnabled
+          ? gestureMarkers
+          : const [],
+      calibration: calibration,
+      drowsiness: drowsy,
+      music: sessionMusic,
+      metadataDescription: protocol?.metadataDescription,
+      protocolJson: protocol
+          ?.resolved(guardFeature: feature)
+          .toJson(),
+      protocolVersion: '1',
+      sessionSettings: SessionSettings(
+        dynamicAdapt: dynamicAdapt,
+        responsiveness: responsiveness,
+        baselinePercentile: fb.baselinePercentile,
+        guardrailEnabled: guardrailEnabled,
+        guardrailEngine: guardrailEnabled
+            ? guardrailEngineName(feature: feature, model: model)
+            : 'none',
+        guardFeature: feature,
+        guardModel: model,
+        warningThresholdPercentile: settings.warningThresholdPercentile,
+        warningSound: settings.warningSoundName,
+        musicFolder: settings.musicFolder,
+        musicMinCutoffHz: settings.musicMinCutoffHz,
+        musicMaxCutoffHz: settings.musicMaxCutoffHz,
+        musicInvert: settings.musicInvertMapping,
+        musicShuffle: settings.musicShuffle,
+        binauralPresetId: settings.binauralPresetId,
+        binauralCarrierHz: settings.binauralCarrierHz,
+        binauralBeatHz: settings.binauralBeatHz,
+        backgroundBinauralPresetId: settings.backgroundBinauralPresetId,
+        backgroundBinauralCarrierHz: settings.backgroundBinauralCarrierHz,
+        backgroundBinauralBeatHz: settings.backgroundBinauralBeatHz,
+        markersInFeedbackEnabled: settings.markersInFeedbackEnabled,
+        eyeMarkersEnabled: settings.eyeMarkersEnabled,
+      ),
+      avgSpo2: stats?.avgSpo2,
+      peakAlphaHz: stats?.peakAlphaFreq,
+      peakAlphaPower: stats?.peakAlphaPower,
+      pctInTarget: stats?.targetPct,
+      avgSleepDir: drowsy?.meanSleepDir,
+    );
+  }
 
   void _startTicker() {
     _ticker?.cancel();
@@ -1215,8 +1312,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     );
   }
 
-  /// Whole-session music feedback record (track list + decimated cutoff
-  /// trace), or null when no music feedback ran.
+  /// Whole-session music feedback record (track list + 1 Hz cutoff series),
+  /// or null when no music feedback ran.
   SessionMusic? get sessionMusic {
     final series = _musicSeries;
     if (series.isEmpty) {
@@ -1224,10 +1321,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     final settings = _ref.read(settingsProvider);
     final trackCount = _audio.musicTrackCount;
-    final (buckets, width) = SessionMusic.decimate(
-      series,
-      trainingStartSecs: trainingStartOffsetSecs,
-    );
     return SessionMusic(
       trackCount: trackCount,
       tracks: List.of(_musicTracks),
@@ -1236,8 +1329,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       invert: settings.musicInvertMapping,
       shuffle: settings.musicShuffle,
       series: List.of(_musicSeries),
-      buckets: buckets,
-      bucketWidthSecs: width,
     );
   }
 
@@ -1452,17 +1543,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final warned = series.where((s) => s.warning).length;
     final mean =
         series.fold<double>(0, (a, s) => a + s.sleepDir) / series.length;
-    final (buckets, width) = SessionDrowsiness.decimate(
-      series,
-      trainingStartSecs: trainingStartOffsetSecs,
-    );
     return SessionDrowsiness(
-      series: series,
       scoreTotalPct: warned * 100 / series.length,
       meanSleepDir: mean,
       threshold: _guard.threshold,
-      buckets: buckets,
-      bucketWidthSecs: width,
     );
   }
 

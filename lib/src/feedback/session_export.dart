@@ -14,6 +14,7 @@ import 'package:muse_ml/src/feedback/session_pdf_export.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/rust/api/edf_export.dart';
+import 'package:muse_ml/src/rust/api/session_format.dart';
 
 /// What an export produces.
 enum ExportKind { pdf, pngThumbnail, pngAll, csv, edf }
@@ -384,8 +385,8 @@ class SessionExporter {
     SessionSummary s,
     List<ExportWarning> warnings,
   ) async {
-    final data = await _readBody(s, warnings);
-    if (data == null) {
+    final prepared = await _prepareComputed(s, warnings);
+    if (prepared == null) {
       return 0;
     }
     final images = <ExportedImage>[];
@@ -397,19 +398,8 @@ class SessionExporter {
       images.add(ExportedImage('thumbnail.png', Uint8List.fromList(thumbnail)));
     }
 
-    final meta = s.metadata;
-    final protocol = await _loadProtocolInfo(meta.protocol);
-    if (protocol == null) {
-      warnings.add(ExportWarning(s.id, 'protocol not found in catalog'));
-      return 0;
-    }
-    final prepared = prepareChartData(
-      data,
-      trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
-      metric: protocol.reward?.feature ?? 'band.atr',
-      conditions: protocol.conditions,
-    );
-    final charts = chartsFor(prepared, meta);
+    final meta = prepared.meta;
+    final charts = chartsFor(prepared.data, meta);
 
     for (final chart in charts) {
       final bytes = await rasterizeChart(chart);
@@ -460,6 +450,34 @@ class SessionExporter {
       return null;
     }
     return SessionReader.readRaw(body);
+  }
+
+  Future<({SessionChartData data, SessionMetadata meta})?> _prepareComputed(
+    SessionSummary s,
+    List<ExportWarning> warnings,
+  ) async {
+    final container = await _store.readContainer(s.id);
+    if (container == null) {
+      warnings.add(ExportWarning(s.id, 'could not read session file'));
+      return null;
+    }
+    final head = v5ParseHead(bytes: container);
+    final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ?? s.metadata;
+    final protocol = await _loadProtocolInfo(meta.protocol);
+    if (protocol == null) {
+      warnings.add(ExportWarning(s.id, 'protocol not found in catalog'));
+      return null;
+    }
+    final frames = v5ExtractComputed(bytes: container);
+    return (
+      data: prepareChartDataFromComputed(
+        frames,
+        trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
+        metric: protocol.reward?.feature ?? 'band.atr',
+        conditions: protocol.conditions,
+      ),
+      meta: meta,
+    );
   }
 
   static String _num(double v) => v.toStringAsPrecision(6);
@@ -539,8 +557,7 @@ class SessionExporter {
         yMax: 100,
       ),
     ];
-    final drowsiness = meta.drowsiness;
-    if (drowsiness != null && drowsiness.buckets.isNotEmpty) {
+    if (prepared.guardrailSleepDir.isNotEmpty) {
       charts.add(
         ExportChart(
           title: 'Sleep guardrail',
@@ -549,15 +566,15 @@ class SessionExporter {
             ExportChartLine(
               'sleep-dir',
               const Color(0xFFAB47BC),
-              [for (final b in drowsiness.buckets) b.sleepDir],
-              threshold: drowsiness.threshold,
+              prepared.guardrailSleepDir,
+              threshold: meta.drowsiness?.threshold,
             ),
           ],
         ),
       );
     }
     final music = meta.music;
-    if (music != null && music.buckets.isNotEmpty) {
+    if (music != null && music.series.isNotEmpty) {
       charts.add(
         ExportChart(
           title: 'Music cutoff',
@@ -566,7 +583,7 @@ class SessionExporter {
             ExportChartLine(
               'cutoff',
               const Color(0xFF66BB6A),
-              [for (final b in music.buckets) b.cutoffHz],
+              [for (final s in music.series) s.cutoffHz],
             ),
           ],
         ),

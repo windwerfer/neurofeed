@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/target_state.dart'
     show movementGateThreshold;
+import 'package:muse_ml/src/rust/api/session_format.dart' as ffi;
 
 /// Charts stay Muse-4-ch this series (non-goal). Local copies; do not import
 /// from the reward path.
@@ -13,8 +16,8 @@ const int electrodeAf8 = 2;
 /// (or per-bucket) band-relative powers of the frontal AF7/AF8 average, the
 /// movement trace, the heart-rate trace, the SpO2 trace, and the derived stats.
 ///
-/// Built by [prepareChartData] (full `.muse` body) or
-/// [prepareChartDataFromOverview] (decimated metadata head). Consumed by the
+/// Built by [prepareChartDataFromComputed] (v5 computed 1 Hz) or
+/// [prepareChartData] (raw `.muse` body, CSV/EDF only). Consumed by the
 /// history dashboard, the PDF export, and the PNG chart renders.
 class SessionChartData {
   final List<double> x;
@@ -29,6 +32,8 @@ class SessionChartData {
   final List<double> bpmX;
   final List<double> spo2;
   final List<double> spo2X;
+  final List<double> guardrailX;
+  final List<double> guardrailSleepDir;
   final SessionChartStats stats;
   final int bandsCount;
 
@@ -45,6 +50,8 @@ class SessionChartData {
     required this.bpmX,
     required this.spo2,
     required this.spo2X,
+    this.guardrailX = const [],
+    this.guardrailSleepDir = const [],
     required this.stats,
     required this.bandsCount,
   });
@@ -228,6 +235,162 @@ SessionChartData prepareChartData(
       avgSpo2: spo2.isEmpty ? null : spo2Sum / spo2.length,
       avgAlphaRel: alphaRel.isEmpty ? 0 : alphaRelSum / alphaRel.length,
     ),
+  );
+}
+
+/// Build chart data from v5 computed 1 Hz frames. X is elapsed seconds from
+/// the displayed window start. Pads with `total <= 0` are autodropped.
+SessionChartData prepareChartDataFromComputed(
+  List<ffi.ComputedFrame> frames, {
+  double? trainingStartOffset,
+  String metric = 'band.atr',
+  List<TargetCondition> conditions = const [],
+}) {
+  final cut =
+      (trainingStartOffset != null && trainingStartOffset > 0)
+          ? trainingStartOffset
+          : null;
+
+  final kept = [
+    for (final f in frames)
+      if (cut == null || f.t >= cut) f,
+  ];
+
+  var startTs = kept.isEmpty ? 0.0 : kept.first.t;
+  if (cut != null && cut > startTs) {
+    startTs = cut;
+  }
+
+  final x = <double>[];
+  final alphaRel = <double>[];
+  final thetaRel = <double>[];
+  final deltaRel = <double>[];
+  final betaRel = <double>[];
+  final gammaRel = <double>[];
+  var targetSeconds = 0;
+  var alphaRelSum = 0.0;
+  var bandsCount = 0;
+
+  for (final f in kept) {
+    final all = _relativeAll(
+      _ffiBandTuple(f.bands, electrodeAf7),
+      _ffiBandTuple(f.bands, electrodeAf8),
+    );
+    if (all == null) {
+      continue;
+    }
+    bandsCount++;
+    final aRel = all.$3;
+    final tRel = all.$2;
+    final dRel = all.$1;
+    final bRel = all.$4;
+    final gRel = all.$5;
+    x.add(f.t - startTs);
+    alphaRel.add(aRel);
+    thetaRel.add(tRel);
+    deltaRel.add(dRel);
+    betaRel.add(bRel);
+    gammaRel.add(gRel);
+    alphaRelSum += aRel;
+    if (_inTarget(dRel, tRel, aRel, bRel, metric, conditions)) {
+      targetSeconds++;
+    }
+  }
+
+  final movementX = <double>[];
+  final movement = <double>[];
+  var still = 0;
+  for (final f in kept) {
+    final m = f.movement;
+    if (m == null) continue;
+    movementX.add(f.t - startTs);
+    movement.add(m);
+    if (m <= movementGateThreshold) {
+      still++;
+    }
+  }
+
+  final bpmX = <double>[];
+  final bpm = <double>[];
+  var bpmSum = 0.0;
+  for (final f in kept) {
+    final p = f.pulse;
+    if (p == null) continue;
+    bpmX.add(f.t - startTs);
+    bpm.add(p);
+    bpmSum += p;
+  }
+
+  final spo2X = <double>[];
+  final spo2 = <double>[];
+  var spo2Sum = 0.0;
+  for (final f in kept) {
+    final s = f.spo2;
+    if (s == null) continue;
+    spo2X.add(f.t - startTs);
+    spo2.add(s);
+    spo2Sum += s;
+  }
+
+  double? peakFreq;
+  double? peakPower;
+  for (final f in kept) {
+    final pa = f.peakAlpha;
+    if (pa == null) continue;
+    if (peakPower == null || pa.power > peakPower) {
+      peakPower = pa.power;
+      peakFreq = pa.freq;
+    }
+  }
+
+  final guardrailX = <double>[];
+  final guardrailSleepDir = <double>[];
+  for (final f in kept) {
+    guardrailX.add(f.t - startTs);
+    guardrailSleepDir.add(f.guardrail.sleepDir);
+  }
+
+  return SessionChartData(
+    x: x,
+    alphaRel: alphaRel,
+    thetaRel: thetaRel,
+    deltaRel: deltaRel,
+    betaRel: betaRel,
+    gammaRel: gammaRel,
+    movement: movement,
+    movementX: movementX,
+    bpm: bpm,
+    bpmX: bpmX,
+    spo2: spo2,
+    spo2X: spo2X,
+    guardrailX: guardrailX,
+    guardrailSleepDir: guardrailSleepDir,
+    bandsCount: bandsCount,
+    stats: SessionChartStats(
+      peakAlphaFreq: peakFreq,
+      peakAlphaPower: peakPower,
+      targetPct: x.isEmpty ? 0 : targetSeconds / x.length * 100,
+      stillnessPct: movement.isEmpty ? 0 : still / movement.length * 100,
+      avgBpm: bpm.isEmpty ? null : bpmSum / bpm.length,
+      avgSpo2: spo2.isEmpty ? null : spo2Sum / spo2.length,
+      avgAlphaRel: alphaRel.isEmpty ? 0 : alphaRelSum / alphaRel.length,
+    ),
+  );
+}
+
+(double, double, double, double, double)? _ffiBandTuple(
+  List<Float32List> bands,
+  int electrode,
+) {
+  if (electrode < 0 || electrode >= bands.length) return null;
+  final b = bands[electrode];
+  if (b.length < 5) return null;
+  return (
+    b[0].toDouble(),
+    b[1].toDouble(),
+    b[2].toDouble(),
+    b[3].toDouble(),
+    b[4].toDouble(),
   );
 }
 

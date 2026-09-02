@@ -25,34 +25,6 @@ void main() {
         deviceId: '00:11:22:33:44:55',
         recordedChannels: ['TP9', 'AF7', 'AF8', 'TP10'],
         recordedData: ['eeg', 'bands', 'pulse', 'movement', 'spo2'],
-        summary: SessionOverview(
-          bucketCount: 400,
-          bucketWidthSecs: 2.25,
-          startSecs: 0,
-          endSecs: 900,
-          trainingStartSecs: 95.0,
-          bands: {
-            1: BandPowerSeries(
-              delta: List.filled(400, 0.25),
-              theta: List.filled(400, 0.20),
-              alpha: List.filled(400, 0.35),
-              beta: List.filled(400, 0.15),
-              gamma: List.filled(400, 0.05),
-            ),
-            2: BandPowerSeries(
-              delta: List.filled(400, 0.26),
-              theta: List.filled(400, 0.19),
-              alpha: List.filled(400, 0.36),
-              beta: List.filled(400, 0.14),
-              gamma: List.filled(400, 0.05),
-            ),
-          },
-          pulse: List.generate(400, (i) => 70.0 + (i % 10) * 0.5),
-          spo2: List.generate(400, (i) => 98.0 - (i % 5) * 0.2),
-          movement: List.generate(400, (i) => 0.1 + (i % 20) * 0.01),
-          peakAlphaFreq: List.generate(400, (i) => 10.0 + (i % 4) * 0.1),
-          peakAlphaPower: List.generate(400, (i) => 100.0 + (i % 10) * 5.0),
-        ),
         gestures: [
           GestureMarker(type: GestureType.doubleBlink, offsetSeconds: 100),
           GestureMarker(type: GestureType.doubleClench, offsetSeconds: 250),
@@ -145,25 +117,6 @@ void main() {
           scoreTotalPct: 12.5,
           meanSleepDir: 0.35,
           threshold: 0.6,
-          series: [
-            for (var i = 0; i < 10; i++)
-              DrowsinessSample(
-                offsetSecs: i * 90.0,
-                sleepDir: 0.2 + i * 0.03,
-                delta: 80.0 + i * 5.0,
-                warning: i > 7,
-              ),
-          ],
-          buckets: [
-            for (var i = 0; i < 400; i++)
-              DrowsinessSample(
-                offsetSecs: i * 2.25,
-                sleepDir: 0.3,
-                delta: 100.0,
-                warning: false,
-              ),
-          ],
-          bucketWidthSecs: 2.25,
         ),
         music: SessionMusic(
           trackCount: 3,
@@ -183,14 +136,6 @@ void main() {
                 cutoffHz: 2000.0 + i * 500.0,
               ),
           ],
-          buckets: [
-            for (var i = 0; i < 400; i++)
-              MusicCutoffSample(
-                offsetSecs: i * 2.25,
-                cutoffHz: 4500.0,
-              ),
-          ],
-          bucketWidthSecs: 2.25,
         ),
         feedbackSound: 'Bowl chimes',
         metadataDescription: 'Trains the calm-awake rest state...',
@@ -261,11 +206,8 @@ void main() {
       expect(restored.deviceId, equals(original.deviceId));
       expect(restored.recordedChannels, equals(original.recordedChannels));
       expect(restored.recordedData, equals(original.recordedData));
-      expect(restored.summary?.bucketCount, equals(original.summary?.bucketCount));
-      expect(restored.summary?.bucketWidthSecs, equals(original.summary?.bucketWidthSecs));
-      expect(restored.summary?.startSecs, equals(original.summary?.startSecs));
-      expect(restored.summary?.endSecs, equals(original.summary?.endSecs));
-      expect(restored.summary?.trainingStartSecs, equals(original.summary?.trainingStartSecs));
+      expect(json.containsKey('summary'), isFalse);
+      expect(restored.summary, isNull);
       expect(restored.gestures.length, equals(original.gestures.length));
       for (var i = 0; i < original.gestures.length; i++) {
         expect(restored.gestures[i].type, equals(original.gestures[i].type));
@@ -282,6 +224,11 @@ void main() {
       expect(restored.drowsiness?.threshold, equals(original.drowsiness?.threshold));
       expect(restored.music?.trackCount, equals(original.music?.trackCount));
       expect(restored.music?.tracks.length, equals(original.music?.tracks.length));
+      expect(restored.music?.series.length, equals(original.music?.series.length));
+      expect((json['music'] as Map)['series'], isNotNull);
+      expect((json['music'] as Map).containsKey('buckets'), isFalse);
+      expect((json['drowsiness'] as Map).containsKey('buckets'), isFalse);
+      expect((json['drowsiness'] as Map).containsKey('series'), isFalse);
       expect(restored.feedbackSound, equals(original.feedbackSound));
       expect(restored.metadataDescription, equals(original.metadataDescription));
       expect(restored.sessionSettings?.dynamicAdapt, equals(original.sessionSettings?.dynamicAdapt));

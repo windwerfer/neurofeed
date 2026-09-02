@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'session_v5_models.dart';
 
 /// Decimated per-second view of a session, stored in the metadata JSON so the
@@ -247,11 +249,6 @@ class SessionDrowsiness {
     'scoreTotalPct': scoreTotalPct,
     'meanSleepDir': meanSleepDir,
     if (threshold != null) 'threshold': threshold,
-    if (buckets.isNotEmpty) 'width': bucketWidthSecs,
-    if (buckets.isNotEmpty)
-      'buckets': [for (final b in buckets) b.toJson()]
-    else
-      'series': [for (final s in series) s.toJson()],
   };
 
   static SessionDrowsiness? fromJson(Object? json) {
@@ -376,11 +373,7 @@ class SessionMusic {
     'invert': invert,
     'shuffle': shuffle,
     if (tracks.isNotEmpty) 'tracks': [for (final t in tracks) t.toJson()],
-    if (buckets.isNotEmpty) 'width': bucketWidthSecs,
-    if (buckets.isNotEmpty)
-      'buckets': [for (final b in buckets) b.toJson()]
-    else
-      'series': [for (final s in series) s.toJson()],
+    if (series.isNotEmpty) 'series': [for (final s in series) s.toJson()],
   };
 
   static SessionMusic? fromJson(Object? json) {
@@ -1014,12 +1007,36 @@ class SessionMetadata {
           : null,
     );
   }
+
+  /// Parse metadata JSON bytes from a v5 head (`jsonDecode` maps are
+  /// `Map<String, dynamic>`; [fromJson] expects `Map<String, Object?>`).
+  static SessionMetadata? fromJsonBytes(List<int> bytes) {
+    if (bytes.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(utf8.decode(bytes));
+      return fromJson(_coerceJson(decoded));
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 String? _protocolVersionFromJson(Object? value) {
   if (value is String) return value;
   if (value is num) return value.toString();
   return null;
+}
+
+Object? _coerceJson(Object? value) {
+  if (value is Map) {
+    return <String, Object?>{
+      for (final e in value.entries) e.key.toString(): _coerceJson(e.value),
+    };
+  }
+  if (value is List) {
+    return [for (final v in value) _coerceJson(v)];
+  }
+  return value;
 }
 
 /// Summary of a session for the history list.

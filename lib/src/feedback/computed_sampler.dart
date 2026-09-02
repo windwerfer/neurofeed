@@ -1,16 +1,22 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/feedback/computed_frame.dart';
 
 class ComputedSampler {
   ComputedSampler({
     required this.onFrame,
+    required DateTime recordingStart,
     this.interval = const Duration(seconds: 1),
-  });
+    DateTime Function()? now,
+  })  : _recordingStart = recordingStart,
+        _now = now ?? DateTime.now;
 
   final void Function(ComputedFrame) onFrame;
   final Duration interval;
+  final DateTime _recordingStart;
+  final DateTime Function() _now;
 
   Timer? _timer;
 
@@ -27,7 +33,6 @@ class ComputedSampler {
   double _lastClarity = 0.0;
   double _lastDelta = 0.0;
   bool _warningActive = false;
-  double? _guardrailThreshold;
   double _lastRatio = 0.0;
   double? _feedbackThreshold;
   bool _lastInTarget = false;
@@ -74,7 +79,6 @@ class ComputedSampler {
     _lastClarity = clarity;
     _lastDelta = delta;
     _warningActive = warning;
-    if (threshold != null) _guardrailThreshold = threshold;
   }
 
   void updateFeedback({
@@ -104,11 +108,15 @@ class ComputedSampler {
     _timer = null;
   }
 
+  /// Seconds from [recordingStart] using the injected clock.
+  @visibleForTesting
+  void emitFrame() => _emitFrame();
+
   void _emitFrame() {
-    final now = DateTime.now().millisecondsSinceEpoch / 1000.0;
+    final t = _now().difference(_recordingStart).inMilliseconds / 1000.0;
 
     final frame = ComputedFrame(
-      t: now,
+      t: t,
       bands: List.from(_latestBands),
       pulse: _latestPulse,
       movement: _latestMovement,

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:muse_ml/src/feedback/session_assembler.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/session_sqlite.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
@@ -27,60 +28,6 @@ class SessionStore {
     final defaultStorage = await _defaultStorage();
     final cacheDir = await resolveSessionCacheDir(defaultStorage);
     return SessionSqlite.open(cacheDirectory: cacheDir);
-  }
-
-  /// Write thumbnail to SQLite cache
-  Future<void> _writeThumbnail(String id, List<int> pngBytes) async {
-    final sqlite = await _sqlite;
-    final session = await sqlite.getSession(id);
-    if (session != null) {
-      await sqlite.upsertSession(SessionRow(
-        id: session.id,
-        path: session.path,
-        formatVersion: session.formatVersion,
-        appVersion: session.appVersion,
-        savedAt: session.savedAt,
-        startedAt: session.startedAt,
-        durationS: session.durationS,
-        protocol: session.protocol,
-        protocolVersion: session.protocolVersion,
-        deviceName: session.deviceName,
-        deviceModel: session.deviceModel,
-        deviceId: session.deviceId,
-        calibrationProfile: session.calibrationProfile,
-        recordedChannels: session.recordedChannels,
-        recordedStreams: session.recordedStreams,
-        offMeta: session.offMeta,
-        lenMeta: session.lenMeta,
-        offComputed: session.offComputed,
-        lenComputed: session.lenComputed,
-        offRaw: session.offRaw,
-        lenRaw: session.lenRaw,
-        avgHr: session.avgHr,
-        avgSpo2: session.avgSpo2,
-        peakAlphaHz: session.peakAlphaHz,
-        peakAlphaPower: session.peakAlphaPower,
-        pctInTarget: session.pctInTarget,
-        avgMovement: session.avgMovement,
-        guardrailWarnCount: session.guardrailWarnCount,
-        avgSleepDir: session.avgSleepDir,
-        signalQualityMean: session.signalQualityMean,
-        pctQcOk: session.pctQcOk,
-        markerCount: session.markerCount,
-        guardrailEngine: session.guardrailEngine,
-        modelKind: session.modelKind,
-        modelSha256: session.modelSha256,
-        feedbackEngine: session.feedbackEngine,
-        userId: session.userId,
-        sessionId: session.sessionId,
-        notesPreview: session.notesPreview,
-        fileSize: session.fileSize,
-        mtime: session.mtime,
-        thumbnail: Uint8List.fromList(pngBytes),
-        createdAt: session.createdAt,
-        updatedAt: DateTime.now(),
-      ));
-    }
   }
 
   /// Number of sessions awaiting background backfill after the last [list].
@@ -135,6 +82,14 @@ class SessionStore {
     return v5ExtractRaw(bytes: Uint8List.fromList(bytes));
   }
 
+  /// Full v5 container bytes from the history folder.
+  Future<Uint8List?> readContainer(String id) async {
+    final storage = await _storage;
+    final bytes = await storage.readFile(_museName(id));
+    if (bytes == null) return null;
+    return Uint8List.fromList(bytes);
+  }
+
   Future<List<int>?> readPng(String id) async {
     final sqlite = await _sqlite;
     final session = await sqlite.getSession(id);
@@ -170,29 +125,45 @@ class SessionStore {
       sha256.convert(utf8.encode(storage.location)).toString().substring(0, 16);
 
   /// Persist a finished session into the history folder as a single
-  /// `.muse.feedback` container (v5 format): header + WebP thumbnail + zstd-compressed
-  /// metadata JSON + zstd-computed frames + zstd-compressed raw body.
+  /// `.muse.feedback` container. Pass already-encoded [encodedV5] **or**
+  /// the (thumbnail, computed, raw) parts — both go through [assembleV5Container].
   Future<SessionSummary> publishSession(
     String id,
-    List<int> museBytes,
     SessionMetadata metadata, {
-    List<int>? pngBytes,
+    Uint8List? encodedV5,
+    List<int>? rawBody,
+    List<int>? thumbnail,
     List<ComputedFrame>? computedFrames,
   }) async {
     final storage = await _storage;
     await storage.ensureDir();
-    final jsonBytes = const JsonEncoder().convert(metadata.toJson()).codeUnits;
-    final container = containerEncodeV5(
-      thumbnail: pngBytes == null ? Uint8List(0) : Uint8List.fromList(pngBytes),
-      metadataJson: jsonBytes,
-      computedFrames: computedFrames ?? const <ComputedFrame>[],
-      rawBody: Uint8List.fromList(museBytes),
-    );
-    await storage.writeFileAtomic(_museName(id), container);
-    final sqlite = await _sqlite;
-    if (pngBytes != null && pngBytes.isNotEmpty) {
-      await _writeThumbnail(id, pngBytes);
+    late final Uint8List container;
+    late final Uint8List thumb;
+    late final List<ComputedFrame> frames;
+    if (encodedV5 != null) {
+      container = encodedV5;
+      final head = v5ParseHead(bytes: container);
+      thumb = head.thumbnail;
+      frames = v5ExtractComputed(bytes: container);
+    } else {
+      frames = computedFrames ?? const <ComputedFrame>[];
+      thumb = Uint8List.fromList(
+        (thumbnail != null && thumbnail.isNotEmpty)
+            ? thumbnail
+            : placeholderWebP,
+      );
+      container = assembleV5Container(
+        thumbnail: thumb,
+        metadataJson: metadata.toJson(),
+        computedFrames: frames,
+        rawBody: Uint8List.fromList(rawBody ?? const []),
+      );
     }
+    await storage.writeFileAtomic(_museName(id), container);
+    final scalars = extractComputedScalars(frames);
+    final durationS =
+        metadata.durationS != 0 ? metadata.durationS : metadata.elapsedSeconds;
+    final sqlite = await _sqlite;
     await sqlite.upsertSession(SessionRow(
       id: id,
       path: _museName(id),
@@ -200,7 +171,7 @@ class SessionStore {
       appVersion: appVersion,
       savedAt: DateTime.tryParse(metadata.savedAt) ?? DateTime.now(),
       startedAt: DateTime.tryParse(metadata.startedAt ?? metadata.savedAt) ?? DateTime.now(),
-      durationS: metadata.durationS,
+      durationS: durationS,
       protocol: metadata.protocol,
       protocolVersion: metadata.protocolVersion,
       deviceName: metadata.deviceName,
@@ -215,14 +186,14 @@ class SessionStore {
       lenComputed: 0,
       offRaw: 0,
       lenRaw: 0,
-      avgHr: null,
-      avgSpo2: metadata.avgSpo2,
-      peakAlphaHz: metadata.peakAlphaHz,
-      peakAlphaPower: metadata.peakAlphaPower,
-      pctInTarget: metadata.pctInTarget,
-      avgMovement: metadata.avgMovement,
-      guardrailWarnCount: metadata.guardrailWarnCount,
-      avgSleepDir: metadata.avgSleepDir,
+      avgHr: scalars.avgHr ?? metadata.stats?.avgBpm,
+      avgSpo2: scalars.avgSpo2 ?? metadata.avgSpo2,
+      peakAlphaHz: scalars.peakAlphaHz ?? metadata.peakAlphaHz,
+      peakAlphaPower: scalars.peakAlphaPower ?? metadata.peakAlphaPower,
+      pctInTarget: scalars.pctInTarget ?? metadata.pctInTarget,
+      avgMovement: scalars.avgMovement ?? metadata.avgMovement,
+      guardrailWarnCount: scalars.guardrailWarnCount ?? metadata.guardrailWarnCount,
+      avgSleepDir: scalars.avgSleepDir ?? metadata.avgSleepDir,
       signalQualityMean: metadata.signalQualityMean,
       pctQcOk: metadata.pctQcOk,
       markerCount: metadata.gestures.length,
@@ -235,7 +206,7 @@ class SessionStore {
       notesPreview: metadata.notes.isNotEmpty ? (metadata.notes.length > 50 ? metadata.notes.substring(0, 50) : metadata.notes) : null,
       fileSize: container.length,
       mtime: DateTime.now().millisecondsSinceEpoch,
-      thumbnail: pngBytes != null && pngBytes.isNotEmpty ? Uint8List.fromList(pngBytes) : null,
+      thumbnail: thumb.isNotEmpty ? thumb : null,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     ));
@@ -369,76 +340,4 @@ class SessionStore {
     return moved;
   }
 
-  /// Fold a freshly computed [SessionOverview] (from a full-body parse of a
-  /// legacy session without an embedded summary) back into the SQLite metadata
-  /// so the next detail-view open fast-paths through the overview.
-  /// Cache-only — the container file is never rewritten.
-  Future<void> cacheOverview(String id, SessionOverview overview) async {
-    final sqlite = await _sqlite;
-    try {
-      final session = await sqlite.getSession(id);
-      if (session == null) {
-        return;
-      }
-      // Update the session with overview data
-      await sqlite.upsertSession(SessionRow(
-        id: session.id,
-        path: session.path,
-        formatVersion: session.formatVersion,
-        appVersion: session.appVersion,
-        savedAt: session.savedAt,
-        startedAt: session.startedAt,
-        durationS: session.durationS,
-        protocol: session.protocol,
-        protocolVersion: session.protocolVersion,
-        deviceName: session.deviceName,
-        deviceModel: session.deviceModel,
-        deviceId: session.deviceId,
-        calibrationProfile: session.calibrationProfile,
-        recordedChannels: session.recordedChannels,
-        recordedStreams: session.recordedStreams,
-        offMeta: session.offMeta,
-        lenMeta: session.lenMeta,
-        offComputed: session.offComputed,
-        lenComputed: session.lenComputed,
-        offRaw: session.offRaw,
-        lenRaw: session.lenRaw,
-        avgHr: overview.pulse.isNotEmpty
-            ? overview.pulse.whereType<double>().fold<double>(0, (a, b) => a + b) / overview.pulse.whereType<double>().length
-            : null,
-        avgSpo2: overview.spo2.isNotEmpty
-            ? overview.spo2.whereType<double>().fold<double>(0, (a, b) => a + b) / overview.spo2.whereType<double>().length
-            : null,
-        peakAlphaHz: overview.peakAlphaFreq.isNotEmpty
-            ? overview.peakAlphaFreq.whereType<double>().fold<double>(0, (a, b) => a + b) / overview.peakAlphaFreq.whereType<double>().length
-            : null,
-        peakAlphaPower: overview.peakAlphaPower.isNotEmpty
-            ? overview.peakAlphaPower.whereType<double>().fold<double>(0, (a, b) => a + b) / overview.peakAlphaPower.whereType<double>().length
-            : null,
-        pctInTarget: overview.bands.isNotEmpty ? 0.0 : null, // placeholder
-        avgMovement: overview.movement.isNotEmpty
-            ? overview.movement.whereType<double>().fold<double>(0, (a, b) => a + b) / overview.movement.whereType<double>().length
-            : null,
-        guardrailWarnCount: session.guardrailWarnCount,
-        avgSleepDir: session.avgSleepDir,
-        signalQualityMean: session.signalQualityMean,
-        pctQcOk: session.pctQcOk,
-        markerCount: session.markerCount,
-        guardrailEngine: session.guardrailEngine,
-        modelKind: session.modelKind,
-        modelSha256: session.modelSha256,
-        feedbackEngine: session.feedbackEngine,
-        userId: session.userId,
-        sessionId: session.sessionId,
-        notesPreview: session.notesPreview,
-        fileSize: session.fileSize,
-        mtime: session.mtime,
-        createdAt: session.createdAt,
-        updatedAt: DateTime.now(),
-      ));
-      debugPrint('[session] cacheOverview($id): overview cached (avgHR=${overview.pulse.isNotEmpty ? overview.pulse.whereType<double>().fold<double>(0, (a, b) => a + b) / overview.pulse.whereType<double>().length : "N/A"})');
-    } catch (e) {
-      debugPrint('[session] cacheOverview($id) failed: $e');
-    }
-  }
 }
