@@ -173,7 +173,8 @@ pub fn encode_session_event(event: &MuseEventDto) -> Vec<u8> {
         MuseEventDto::Disconnected |
         MuseEventDto::Control(_) |
         MuseEventDto::Gestures(_) |
-        MuseEventDto::Reve(_) => {}
+        MuseEventDto::Reve(_) |
+        MuseEventDto::Feature(_) => {}
     }
     out
 }
@@ -1024,6 +1025,14 @@ mod tests {
             raw: String::new(),
             fields: Default::default(),
         }))
+        .is_empty());
+        assert!(encode_session_event(&MuseEventDto::Feature(
+            crate::api::features::FeatureDto {
+                id: "band.atr".into(),
+                timestamp: 1.0,
+                value: 1.2,
+            }
+        ))
         .is_empty());
     }
 

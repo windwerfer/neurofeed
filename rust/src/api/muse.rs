@@ -2,6 +2,7 @@ use flutter_rust_bridge::frb;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::api::device_config::DeviceKind;
+use crate::api::features::{self, FeatureDto};
 use crate::frb_generated::StreamSink;
 use muse_rs::prelude::*;
 
@@ -273,6 +274,7 @@ pub enum MuseEventDto {
     PeakAlpha(PeakAlphaDto),
     Gestures(GestureDto),
     Reve(ReveDto),
+    Feature(FeatureDto),
 }
 
 // ── Bridge API ─────────────────────────────────────────────────────────────────
@@ -453,7 +455,8 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
             });
             guard.events = Some(dto_rx);
         }
-        
+        features::set_active_kind(DeviceKind::Muse);
+
         spawn_event_forwarder();
 
         Ok(ConnectionStatus {
@@ -493,6 +496,7 @@ pub async fn disconnect() -> anyhow::Result<()> {
             let _ = sink.add(MuseEventDto::Disconnected);
         }
     }
+    features::clear_active_kind();
     Ok(())
 }
 
@@ -581,7 +585,8 @@ if simulate {
             });
             guard.events = Some(dto_rx);
         }
-        
+        features::set_active_kind(kind);
+
         spawn_event_forwarder();
         
         return Ok(ConnectionStatus {
@@ -620,7 +625,8 @@ if simulate {
             });
             guard.events = Some(dto_rx);
         }
-        
+        features::set_active_kind(kind);
+
         spawn_event_forwarder();
         
         return Ok(status);
@@ -690,7 +696,8 @@ match start_result {
             });
             guard.events = Some(dto_rx);
         }
-        
+        features::set_active_kind(kind);
+
         spawn_event_forwarder();
 
         Ok(ConnectionStatus {
@@ -738,6 +745,7 @@ impl Drop for ForwarderGuard {
                 if let Some(sink) = &guard.sink {
                     let _ = sink.add(MuseEventDto::Disconnected);
                 }
+                features::clear_active_kind();
             }
             guard.forwarder_running = false;
         }
@@ -802,6 +810,11 @@ fn spawn_event_forwarder() {
         // by anchoring to the first packet arrival and advancing at 256 Hz.
         let mut eeg_ts_base: std::collections::HashMap<i32, f64> = std::collections::HashMap::new(); // ms epoch
         let mut eeg_ts_count: std::collections::HashMap<i32, u64> = std::collections::HashMap::new(); // total samples
+
+        let mut quality_rings: std::collections::HashMap<i32, features::EegRing> =
+            std::collections::HashMap::new();
+        let mut latest_bands: std::collections::HashMap<i32, features::ChannelBands> =
+            std::collections::HashMap::new();
 
         const FFT_N: usize = 256;
         loop {
@@ -964,6 +977,25 @@ fn spawn_event_forwarder() {
                     }
                 }
 
+                if let MuseEventDto::Eeg(ref e) = dto {
+                    quality_rings
+                        .entry(e.electrode)
+                        .or_default()
+                        .extend(&e.samples);
+                }
+                if let MuseEventDto::Bands(ref b) = dto {
+                    latest_bands.insert(
+                        b.electrode,
+                        features::ChannelBands {
+                            delta: b.delta,
+                            theta: b.theta,
+                            alpha: b.alpha,
+                            beta: b.beta,
+                            gamma: b.gamma,
+                            line_noise_ratio: b.line_noise_ratio,
+                        },
+                    );
+                }
                 let eeg_samples = if let MuseEventDto::Eeg(ref e) = dto {
                     Some((e.electrode, e.timestamp, e.samples.clone()))
                 } else {
@@ -1028,6 +1060,17 @@ fn spawn_event_forwarder() {
                         counts.bands += 1;
                         gesture.feed_gamma(electrode, result[4]);
                         frontal_delta.insert(electrode, result[0]);
+                        latest_bands.insert(
+                            electrode,
+                            features::ChannelBands {
+                                delta: result[0],
+                                theta: result[1],
+                                alpha: result[2],
+                                beta: result[3],
+                                gamma: result[4],
+                                line_noise_ratio: result[7],
+                            },
+                        );
                         let should_stop = {
                             let mut guard = state()
                                 .inner
@@ -1075,6 +1118,7 @@ fn spawn_event_forwarder() {
                     if last_metrics.elapsed() >= std::time::Duration::from_secs(1) {
                         let now_ms = now_ms();
                         last_metrics = tokio::time::Instant::now();
+                        emit_enabled_band_features(now_ms, &latest_bands, &quality_rings);
 
                         let (bpm, confidence) = compute_pulse(&ppg_ir_buffer);
                         if bpm > 0.0 {
@@ -1230,6 +1274,17 @@ fn spawn_event_forwarder() {
                                     if let Some(sink) = &guard.sink {
                                         if sink.add(dto).is_err() {
                                             guard.sink = None;
+                                        } else if features::is_enabled(features::ID_DROWSINESS) {
+                                            if sink
+                                                .add(MuseEventDto::Feature(FeatureDto {
+                                                    id: features::ID_DROWSINESS.to_string(),
+                                                    timestamp: ts,
+                                                    value: sleep_dir as f64,
+                                                }))
+                                                .is_err()
+                                            {
+                                                guard.sink = None;
+                                            }
                                         }
                                     }
                                 }
@@ -1513,6 +1568,41 @@ fn compute_peak_alpha(re: &[f64], im: &[f64], hz_per_bin: f64) -> (f64, f64) {
     (frequency, max_power)
 }
 
+fn emit_enabled_band_features(
+    timestamp: f64,
+    latest_bands: &std::collections::HashMap<i32, features::ChannelBands>,
+    rings: &std::collections::HashMap<i32, features::EegRing>,
+) {
+    let Some(kind) = features::active_kind() else {
+        return;
+    };
+    for id in features::enabled_ids() {
+        if !id.starts_with("band.") {
+            continue;
+        }
+        let Ok(indices) = features::resolved_electrode_indices(kind, &id) else {
+            continue;
+        };
+        let pads = features::collect_usable_pads(kind, &indices, latest_bands, rings);
+        let Some(value) = features::aggregate_band_feature(&id, &pads) else {
+            continue;
+        };
+        let mut guard = state().inner.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(sink) = &guard.sink {
+            if sink
+                .add(MuseEventDto::Feature(FeatureDto {
+                    id,
+                    timestamp,
+                    value,
+                }))
+                .is_err()
+            {
+                guard.sink = None;
+            }
+        }
+    }
+}
+
 fn map_event(ev: MuseEvent) -> MuseEventDto {
     match ev {
         MuseEvent::Connected(name) => MuseEventDto::Connected(name),
@@ -1606,6 +1696,7 @@ pub async fn crown_connect(device_id: String) -> anyhow::Result<ConnectionStatus
         });
         guard.events = Some(rx);
     }
+    features::set_active_kind(DeviceKind::Neurosity);
 
     spawn_event_forwarder();
 

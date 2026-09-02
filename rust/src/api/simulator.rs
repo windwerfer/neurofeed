@@ -1,6 +1,7 @@
 use crate::api::device_config::{DeviceConfig, DeviceKind};
 use crate::api::muse::{MuseEventDto, EegDto, BandsDto, ImuDto, XyzDto, TelemetrySnapshot, PulseDto, MovementDto, PeakAlphaDto, GestureDto, SpO2Dto};
 use anyhow::Result;
+use flutter_rust_bridge::frb;
 use rand::Rng;
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -150,6 +151,7 @@ impl DeviceSimulator {
         Self::with_config(config, event_tx, SimulatorConfig::default())
     }
     
+    #[frb(ignore)]
     pub fn with_config(config: DeviceConfig, event_tx: mpsc::Sender<MuseEventDto>, sim_config: SimulatorConfig) -> Self {
         let seed = match config.kind {
             DeviceKind::SimulatedMuse => 0x4D555345,
@@ -478,6 +480,7 @@ impl DeviceSimulator {
 }
 
 /// Spawn a simulator task and return the handle + stop signal
+#[frb(ignore)]
 pub async fn spawn_simulator(
     config: DeviceConfig,
     tx: mpsc::Sender<MuseEventDto>,

@@ -292,6 +292,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     }
   }
 
+  /// Keep in sync with Rust `features::pad_quality_from_std_and_noise` until
+  /// the Crown-run series deletes this Dart copy.
   void _maybeComputeSignalQuality() {
     final now = liveCache.latestTimestamp;
     if (now - _lastQualityCheck < 0.9) return;

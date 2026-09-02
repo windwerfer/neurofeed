@@ -1,6 +1,8 @@
 use crate::api::device_config::DeviceConfig;
+use crate::api::features::{self, FeatureDto};
 use crate::api::muse::{MuseEventDto, EegDto, BandsDto, TelemetrySnapshot};
 use anyhow::Result;
+use flutter_rust_bridge::frb;
 use rosc::{OscPacket, OscMessage, OscType};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -16,24 +18,26 @@ fn now_ms() -> f64 {
         .as_secs_f64() * 1000.0
 }
 
-/// Crown/Notion electrode mapping (from Neurosity SDK):
-/// 0=PO3, 1=PO4, 2=Fp1, 3=Fp2, 4=Fz, 5=Cz, 6=Pz, 7=Oz
-/// Our DeviceConfig for Neurosity uses this same order.
+/// Crown electrode order matches `DeviceConfig::neurosity_crown()`:
+/// 0=CP3, 1=C3, 2=F5, 3=PO3, 4=PO4, 5=F6, 6=C4, 7=CP4.
+/// OSC `/raw` and `/brainwaves/*` packs 8 floats in this index order.
 const CROWN_ELECTRODE_COUNT: usize = 8;
 
 /// Per-electrode band power accumulator for merging /brainwaves/{band} messages
+#[frb(ignore)]
 #[derive(Default)]
 struct BandAccumulator {
     timestamp: f64,
-    delta: [f32; CROWN_ELECTRODE_COUNT],
-    theta: [f32; CROWN_ELECTRODE_COUNT],
-    alpha: [f32; CROWN_ELECTRODE_COUNT],
-    beta: [f32; CROWN_ELECTRODE_COUNT],
-    gamma: [f32; CROWN_ELECTRODE_COUNT],
-    received: [bool; 5], // one per band
+    delta: [f32; 8],
+    theta: [f32; 8],
+    alpha: [f32; 8],
+    beta: [f32; 8],
+    gamma: [f32; 8],
+    received: [bool; 5],
 }
 
 /// Crown OSC connection handle for the connection manager
+#[frb(ignore)]
 pub struct CrownOscHandle {
     stop_tx: tokio::sync::oneshot::Sender<()>,
     task_handle: tokio::task::JoinHandle<()>,
@@ -48,6 +52,7 @@ impl CrownOscHandle {
 
 /// Start the Crown/Notion OSC receiver.
 /// Returns a handle that can be used to stop the receiver.
+#[frb(ignore)]
 pub async fn start_crown_osc_receiver(
     device_id: String,
     tx: mpsc::Sender<MuseEventDto>,
@@ -233,14 +238,30 @@ async fn handle_osc_message(
     } else if addr.ends_with("/battery") {
         handle_battery(msg, battery_level).await?;
     } else if addr.ends_with("/focus") {
-        // Focus score (0-1) - could emit as custom event or log
         if let Some(OscType::Float(f)) = msg.args.first() {
-            log::trace!("[crown_osc] Focus: {f:.3}");
+            if features::is_enabled(features::ID_FOCUS) {
+                let event = MuseEventDto::Feature(FeatureDto {
+                    id: features::ID_FOCUS.to_string(),
+                    timestamp: now_ms(),
+                    value: *f as f64,
+                });
+                if tx.send(event).await.is_err() {
+                    return Err(anyhow::anyhow!("Channel closed"));
+                }
+            }
         }
     } else if addr.ends_with("/calm") {
-        // Calm score (0-1)
         if let Some(OscType::Float(f)) = msg.args.first() {
-            log::trace!("[crown_osc] Calm: {f:.3}");
+            if features::is_enabled(features::ID_CALM) {
+                let event = MuseEventDto::Feature(FeatureDto {
+                    id: features::ID_CALM.to_string(),
+                    timestamp: now_ms(),
+                    value: *f as f64,
+                });
+                if tx.send(event).await.is_err() {
+                    return Err(anyhow::anyhow!("Channel closed"));
+                }
+            }
         }
     } else {
         log::trace!("[crown_osc] Unhandled OSC address: {addr}");
@@ -371,6 +392,7 @@ async fn handle_signal_quality(
     let mut sq = signal_quality.lock().await;
     for ch in 0..CROWN_ELECTRODE_COUNT {
         sq[ch] = float_args[ch].clamp(0.0, 1.0);
+        features::set_crown_quality(ch, sq[ch]);
     }
     
     Ok(())
@@ -393,6 +415,7 @@ async fn handle_battery(
 
 /// Connect to a Crown/Notion device via OSC.
 /// This is called from `connect_with_options` when kind=Neurosity and simulate=false.
+#[frb(ignore)]
 pub async fn connect_crown_osc(
     device_id: String,
     tx: mpsc::Sender<MuseEventDto>,

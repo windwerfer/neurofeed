@@ -8,6 +8,7 @@
 
 import 'api/device_config.dart';
 import 'api/edf_export.dart';
+import 'api/features.dart';
 import 'api/muse.dart';
 import 'api/reve.dart';
 import 'api/session_format.dart';
@@ -111,6 +112,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_box_autoadd_f_32(dynamic raw);
 
   @protected
+  FeatureDto dco_decode_box_autoadd_feature_dto(dynamic raw);
+
+  @protected
   GestureDto dco_decode_box_autoadd_gesture_dto(dynamic raw);
 
   @protected
@@ -189,6 +193,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  FeatureDto dco_decode_feature_dto(dynamic raw);
+
+  @protected
+  FeatureInfo dco_decode_feature_info(dynamic raw);
+
+  @protected
+  FeatureLane dco_decode_feature_lane(dynamic raw);
+
+  @protected
+  FeatureSource dco_decode_feature_source(dynamic raw);
+
+  @protected
   FeedbackInfo dco_decode_feedback_info(dynamic raw);
 
   @protected
@@ -223,6 +239,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<EegSampleRecord> dco_decode_list_eeg_sample_record(dynamic raw);
+
+  @protected
+  List<FeatureInfo> dco_decode_list_feature_info(dynamic raw);
+
+  @protected
+  List<FeatureLane> dco_decode_list_feature_lane(dynamic raw);
 
   @protected
   List<Float32List> dco_decode_list_list_prim_f_32_strict(dynamic raw);
@@ -276,6 +298,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MuseEventDto dco_decode_muse_event_dto(dynamic raw);
 
   @protected
+  String? dco_decode_opt_String(dynamic raw);
+
+  @protected
   ComputedFrame? dco_decode_opt_box_autoadd_computed_frame(dynamic raw);
 
   @protected
@@ -309,6 +334,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PulseRecord dco_decode_pulse_record(dynamic raw);
 
   @protected
+  (double, double) dco_decode_record_f_64_f_64(dynamic raw);
+
+  @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
 
   @protected
@@ -319,6 +347,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SessionData dco_decode_session_data(dynamic raw);
+
+  @protected
+  SimulatorConfig dco_decode_simulator_config(dynamic raw);
 
   @protected
   SpO2Dto dco_decode_sp_o_2_dto(dynamic raw);
@@ -444,6 +475,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
 
   @protected
+  FeatureDto sse_decode_box_autoadd_feature_dto(SseDeserializer deserializer);
+
+  @protected
   GestureDto sse_decode_box_autoadd_gesture_dto(SseDeserializer deserializer);
 
   @protected
@@ -532,6 +566,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
+  FeatureDto sse_decode_feature_dto(SseDeserializer deserializer);
+
+  @protected
+  FeatureInfo sse_decode_feature_info(SseDeserializer deserializer);
+
+  @protected
+  FeatureLane sse_decode_feature_lane(SseDeserializer deserializer);
+
+  @protected
+  FeatureSource sse_decode_feature_source(SseDeserializer deserializer);
+
+  @protected
   FeedbackInfo sse_decode_feedback_info(SseDeserializer deserializer);
 
   @protected
@@ -572,6 +618,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<EegSampleRecord> sse_decode_list_eeg_sample_record(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<FeatureInfo> sse_decode_list_feature_info(SseDeserializer deserializer);
+
+  @protected
+  List<FeatureLane> sse_decode_list_feature_lane(SseDeserializer deserializer);
 
   @protected
   List<Float32List> sse_decode_list_list_prim_f_32_strict(
@@ -635,6 +687,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MuseEventDto sse_decode_muse_event_dto(SseDeserializer deserializer);
 
   @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
   ComputedFrame? sse_decode_opt_box_autoadd_computed_frame(
     SseDeserializer deserializer,
   );
@@ -672,6 +727,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PulseRecord sse_decode_pulse_record(SseDeserializer deserializer);
 
   @protected
+  (double, double) sse_decode_record_f_64_f_64(SseDeserializer deserializer);
+
+  @protected
   (String, String) sse_decode_record_string_string(
     SseDeserializer deserializer,
   );
@@ -684,6 +742,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SessionData sse_decode_session_data(SseDeserializer deserializer);
+
+  @protected
+  SimulatorConfig sse_decode_simulator_config(SseDeserializer deserializer);
 
   @protected
   SpO2Dto sse_decode_sp_o_2_dto(SseDeserializer deserializer);
@@ -829,6 +890,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_feature_dto(
+    FeatureDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_gesture_dto(
     GestureDto self,
     SseSerializer serializer,
@@ -946,6 +1013,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_feature_dto(FeatureDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_feature_info(FeatureInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_feature_lane(FeatureLane self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_feature_source(FeatureSource self, SseSerializer serializer);
+
+  @protected
   void sse_encode_feedback_info(FeedbackInfo self, SseSerializer serializer);
 
   @protected
@@ -993,6 +1072,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_eeg_sample_record(
     List<EegSampleRecord> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_feature_info(
+    List<FeatureInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_feature_lane(
+    List<FeatureLane> self,
     SseSerializer serializer,
   );
 
@@ -1087,6 +1178,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_muse_event_dto(MuseEventDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_computed_frame(
     ComputedFrame? self,
     SseSerializer serializer,
@@ -1129,6 +1223,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_pulse_record(PulseRecord self, SseSerializer serializer);
 
   @protected
+  void sse_encode_record_f_64_f_64(
+    (double, double) self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_record_string_string(
     (String, String) self,
     SseSerializer serializer,
@@ -1145,6 +1245,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_session_data(SessionData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_simulator_config(
+    SimulatorConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_sp_o_2_dto(SpO2Dto self, SseSerializer serializer);
