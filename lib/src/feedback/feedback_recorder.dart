@@ -1,25 +1,26 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/charts/session_recorder.dart';
 import 'package:muse_ml/src/feedback/computed_frame.dart';
+import 'package:muse_ml/src/feedback/session_assembler.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/settings.dart';
 
 /// Wraps [SessionRecorder] with session-aware lifecycle.
 ///
-/// The continuous recorder runs during the entire connection and captures raw
-/// EEG/PPG/IMU. The [FeedbackRecorder] starts/stops in sync with feedback
-/// sessions and records only the 1Hz derived metrics (bands, pulse, movement,
-/// peak alpha) plus the raw EEG for the session duration. Live writes always
-/// go to the fast scratch directory — SAF is only touched on Save.
+/// Live writes always go to the fast scratch directory — SAF is only touched
+/// on Save. At session end, [assembleScratchV5] writes a real v5 container
+/// next to the temps, then deletes the temps on success.
 class FeedbackRecorder {
   FeedbackRecorder({Future<SessionStorage>? storage})
       : _storage = storage ?? _defaultStorage();
 
   final Future<SessionStorage> _storage;
   final SessionRecorder _recorder = SessionRecorder();
+  String? _scratchV5Path;
 
   static Future<SessionStorage> _defaultStorage() async {
     return FileSystemSessionStorage(await defaultSessionDir());
@@ -27,7 +28,11 @@ class FeedbackRecorder {
 
   bool get isRecording => _recorder.isRecording;
 
-  String? get currentFilePath => _recorder.currentFilePath;
+  String? get currentFilePath => _scratchV5Path ?? _recorder.currentFilePath;
+
+  String? get scratchV5Path => _scratchV5Path;
+
+  String? get sessionId => _recorder.sessionId;
 
   /// Electrode indices that produced data in the current session recording.
   Set<int> get recordedChannels => Set.unmodifiable(_recorder.channels);
@@ -44,7 +49,7 @@ class FeedbackRecorder {
   /// Begin a session recording in the scratch directory. If one is already
   /// active, it is ended first.
   Future<void> startSession() async {
-    await _recorder.stop();
+    await discardSession();
     final storage = await _storage;
     await storage.ensureDir();
     final dir = scratchDirectory(storage);
@@ -71,22 +76,61 @@ class FeedbackRecorder {
     _recorder.writeMetadata(meta);
   }
 
-  /// Flush pending data to disk without finalizing the temp file.
+  /// Flush pending data to disk without assembling the container.
   Future<void> flushSession() => _recorder.flush();
 
-  /// Finalize the session: assemble v5 container with thumbnail and metadata.
-  /// Returns the final session file on disk.
-  Future<File?> finalizeSession({
-    required Uint8List thumbnailPng,
-    required Map<String, dynamic> metadataJson,
-  }) => _recorder.finalize(
-        thumbnailPng: thumbnailPng,
+  /// Flush temps, encode a v5 container into scratch, delete temps on success.
+  /// Returns the scratch path, or null if there was nothing to assemble or
+  /// encoding failed (temps are kept so crash recovery can retry).
+  Future<String?> assembleScratchV5(Map<String, Object?> metadataJson) async {
+    await _recorder.flush();
+    _recorder.stopPeriodicFlush();
+    final temps = await _recorder.readTemps();
+    final id = _recorder.sessionId;
+    final dir = _recorder.tempDir;
+    if (temps == null || id == null || dir == null) {
+      debugPrint('[feedback] assembleScratchV5: no active recording');
+      return null;
+    }
+    try {
+      final file = await writeScratchV5(
+        dir: dir,
+        id: id,
         metadataJson: metadataJson,
+        rawBody: temps.raw,
+        computedJsonl: temps.computed,
       );
+      await _recorder.cleanupTempFiles();
+      _scratchV5Path = file.path;
+      debugPrint(
+        '[feedback] assembleScratchV5: ${file.path} (${file.lengthSync()}B)',
+      );
+      return file.path;
+    } catch (e, st) {
+      debugPrint('[feedback] assembleScratchV5 failed: $e\n$st');
+      return null;
+    }
+  }
 
-  /// Discard the session (delete temp files).
+  /// Delete the scratch v5 (after a successful publish, or on discard).
+  Future<void> deleteScratchV5() async {
+    final path = _scratchV5Path;
+    _scratchV5Path = null;
+    if (path == null) return;
+    final file = File(path);
+    if (await file.exists()) {
+      try {
+        await file.delete();
+      } catch (e) {
+        debugPrint('[feedback] deleteScratchV5 failed: $e');
+      }
+    }
+  }
+
+  /// Discard the session (delete temps and any scratch v5).
   Future<void> discardSession() async {
     await _recorder.stop();
+    await deleteScratchV5();
   }
 
   /// Get collected computed frames for v5 format assembly.

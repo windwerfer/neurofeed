@@ -1,15 +1,20 @@
+import 'dart:typed_data';
+
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/session_metadata.dart';
-import 'package:muse_ml/src/feedback/target_state.dart';
+import 'package:muse_ml/src/feedback/target_state.dart'
+    show movementGateThreshold;
+import 'package:muse_ml/src/rust/api/session_format.dart' as ffi;
 
-/// Decimated, display-ready chart series for one session: the per-second
-/// (or per-bucket) band-relative powers of the frontal AF7/AF8 average, the
-/// movement trace, the heart-rate trace, the SpO2 trace, and the derived stats.
-///
-/// Built by [prepareChartData] (full `.muse` body) or
-/// [prepareChartDataFromOverview] (decimated metadata head). Consumed by the
-/// history dashboard, the PDF export, and the PNG chart renders.
+/// Charts stay Muse-4-ch this series (non-goal). Local copies; do not import
+/// from the reward path.
+const int electrodeAf7 = 1;
+const int electrodeAf8 = 2;
+
+/// Display-ready chart series for one session: per-second band-relative powers
+/// of the frontal AF7/AF8 average, movement, heart rate, SpO2, and derived
+/// stats. Built by [prepareChartDataFromComputed] (v5 computed 1 Hz) or
+/// [prepareChartData] (raw `.muse` body, CSV/EDF only).
 class SessionChartData {
   final List<double> x;
   final List<double> alphaRel;
@@ -23,6 +28,8 @@ class SessionChartData {
   final List<double> bpmX;
   final List<double> spo2;
   final List<double> spo2X;
+  final List<double> guardrailX;
+  final List<double> guardrailSleepDir;
   final SessionChartStats stats;
   final int bandsCount;
 
@@ -39,6 +46,8 @@ class SessionChartData {
     required this.bpmX,
     required this.spo2,
     required this.spo2X,
+    this.guardrailX = const [],
+    this.guardrailSleepDir = const [],
     required this.stats,
     required this.bandsCount,
   });
@@ -73,7 +82,7 @@ class SessionChartStats {
 SessionChartData prepareChartData(
   SessionData data, {
   double? trainingStartOffset,
-  RewardMetric metric = RewardMetric.alphaOverTheta,
+  String metric = 'band.atr',
   List<TargetCondition> conditions = const [],
 }) {
   double? cut;
@@ -225,18 +234,28 @@ SessionChartData prepareChartData(
   );
 }
 
-/// Build chart data from the decimated [SessionOverview] stored in the
-/// metadata head, so the history detail renders without reading the `.muse`
-/// body. Matches the full [SessionData] path bucket-for-bucket.
-SessionChartData prepareChartDataFromOverview(
-  SessionOverview overview, {
-  RewardMetric metric = RewardMetric.alphaOverTheta,
+/// Build chart data from v5 computed 1 Hz frames. X is elapsed seconds from
+/// the displayed window start. Pads with `total <= 0` are autodropped.
+SessionChartData prepareChartDataFromComputed(
+  List<ffi.ComputedFrame> frames, {
+  double? trainingStartOffset,
+  String metric = 'band.atr',
   List<TargetCondition> conditions = const [],
 }) {
-  final n = overview.bucketCount;
-  final width = overview.bucketWidthSecs > 0 ? overview.bucketWidthSecs : 1.0;
-  final af7 = overview.bands[electrodeAf7];
-  final af8 = overview.bands[electrodeAf8];
+  final cut =
+      (trainingStartOffset != null && trainingStartOffset > 0)
+          ? trainingStartOffset
+          : null;
+
+  final kept = [
+    for (final f in frames)
+      if (cut == null || f.t >= cut) f,
+  ];
+
+  var startTs = kept.isEmpty ? 0.0 : kept.first.t;
+  if (cut != null && cut > startTs) {
+    startTs = cut;
+  }
 
   final x = <double>[];
   final alphaRel = <double>[];
@@ -246,18 +265,23 @@ SessionChartData prepareChartDataFromOverview(
   final gammaRel = <double>[];
   var targetSeconds = 0;
   var alphaRelSum = 0.0;
+  var bandsCount = 0;
 
-  for (var i = 0; i < n; i++) {
-    final all = _relativeAll(_bandAt(af7, i), _bandAt(af8, i));
+  for (final f in kept) {
+    final all = _relativeAll(
+      _ffiBandTuple(f.bands, electrodeAf7),
+      _ffiBandTuple(f.bands, electrodeAf8),
+    );
     if (all == null) {
       continue;
     }
+    bandsCount++;
     final aRel = all.$3;
     final tRel = all.$2;
     final dRel = all.$1;
     final bRel = all.$4;
     final gRel = all.$5;
-    x.add(i * width);
+    x.add(f.t - startTs);
     alphaRel.add(aRel);
     thetaRel.add(tRel);
     deltaRel.add(dRel);
@@ -272,12 +296,10 @@ SessionChartData prepareChartDataFromOverview(
   final movementX = <double>[];
   final movement = <double>[];
   var still = 0;
-  for (var i = 0; i < n; i++) {
-    if (i >= overview.movement.length || overview.movement[i] == null) {
-      continue;
-    }
-    final m = overview.movement[i]!;
-    movementX.add(i * width);
+  for (final f in kept) {
+    final m = f.movement;
+    if (m == null) continue;
+    movementX.add(f.t - startTs);
     movement.add(m);
     if (m <= movementGateThreshold) {
       still++;
@@ -287,42 +309,41 @@ SessionChartData prepareChartDataFromOverview(
   final bpmX = <double>[];
   final bpm = <double>[];
   var bpmSum = 0.0;
-  for (var i = 0; i < n; i++) {
-    if (i >= overview.pulse.length || overview.pulse[i] == null) {
-      continue;
-    }
-    final b = overview.pulse[i]!;
-    bpmX.add(i * width);
-    bpm.add(b);
-    bpmSum += b;
+  for (final f in kept) {
+    final p = f.pulse;
+    if (p == null) continue;
+    bpmX.add(f.t - startTs);
+    bpm.add(p);
+    bpmSum += p;
   }
 
   final spo2X = <double>[];
   final spo2 = <double>[];
   var spo2Sum = 0.0;
-  for (var i = 0; i < n; i++) {
-    if (i >= overview.spo2.length || overview.spo2[i] == null) {
-      continue;
-    }
-    final s = overview.spo2[i]!;
-    spo2X.add(i * width);
+  for (final f in kept) {
+    final s = f.spo2;
+    if (s == null) continue;
+    spo2X.add(f.t - startTs);
     spo2.add(s);
     spo2Sum += s;
   }
 
   double? peakFreq;
   double? peakPower;
-  for (var i = 0; i < overview.peakAlphaPower.length; i++) {
-    final p = overview.peakAlphaPower[i];
-    if (p == null) {
-      continue;
+  for (final f in kept) {
+    final pa = f.peakAlpha;
+    if (pa == null) continue;
+    if (peakPower == null || pa.power > peakPower) {
+      peakPower = pa.power;
+      peakFreq = pa.freq;
     }
-    if (peakPower == null || p > peakPower) {
-      peakPower = p;
-      peakFreq = i < overview.peakAlphaFreq.length
-          ? overview.peakAlphaFreq[i]
-          : null;
-    }
+  }
+
+  final guardrailX = <double>[];
+  final guardrailSleepDir = <double>[];
+  for (final f in kept) {
+    guardrailX.add(f.t - startTs);
+    guardrailSleepDir.add(f.guardrail.sleepDir);
   }
 
   return SessionChartData(
@@ -338,7 +359,9 @@ SessionChartData prepareChartDataFromOverview(
     bpmX: bpmX,
     spo2: spo2,
     spo2X: spo2X,
-    bandsCount: overview.bands.length,
+    guardrailX: guardrailX,
+    guardrailSleepDir: guardrailSleepDir,
+    bandsCount: bandsCount,
     stats: SessionChartStats(
       peakAlphaFreq: peakFreq,
       peakAlphaPower: peakPower,
@@ -351,24 +374,19 @@ SessionChartData prepareChartDataFromOverview(
   );
 }
 
-/// Per-electrode band powers for bucket [i] from a summary series: `(delta,
-/// theta, alpha, beta, gamma)` or null when that electrode/bucket has no data.
-(double, double, double, double, double)? _bandAt(BandPowerSeries? series, int i) {
-  if (series == null ||
-      i >= series.delta.length ||
-      series.delta[i] == null ||
-      series.theta[i] == null ||
-      series.alpha[i] == null ||
-      series.beta[i] == null ||
-      series.gamma[i] == null) {
-    return null;
-  }
+(double, double, double, double, double)? _ffiBandTuple(
+  List<Float32List> bands,
+  int electrode,
+) {
+  if (electrode < 0 || electrode >= bands.length) return null;
+  final b = bands[electrode];
+  if (b.length < 5) return null;
   return (
-    series.delta[i]!,
-    series.theta[i]!,
-    series.alpha[i]!,
-    series.beta[i]!,
-    series.gamma[i]!,
+    b[0].toDouble(),
+    b[1].toDouble(),
+    b[2].toDouble(),
+    b[3].toDouble(),
+    b[4].toDouble(),
   );
 }
 
@@ -429,7 +447,7 @@ bool _inTarget(
   double thetaRel,
   double alphaRel,
   double betaRel,
-  RewardMetric metric,
+  String metric,
   List<TargetCondition> conditions,
 ) {
   for (final c in conditions) {
@@ -443,9 +461,10 @@ bool _inTarget(
     }
   }
   return switch (metric) {
-    RewardMetric.alphaOverTheta => alphaRel > thetaRel,
-    RewardMetric.thetaOverAlpha => thetaRel > alphaRel,
-    RewardMetric.betaOverTheta => betaRel > thetaRel,
-    RewardMetric.alphaOnly => alphaRel > thetaRel && alphaRel > betaRel,
+    'band.atr' => alphaRel > thetaRel,
+    'band.tar' => thetaRel > alphaRel,
+    'band.btr' => betaRel > thetaRel,
+    'band.alpha' => alphaRel > thetaRel && alphaRel > betaRel,
+    _ => alphaRel > thetaRel,
   };
 }

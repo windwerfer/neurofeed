@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -10,16 +9,15 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/charts/band_cache.dart' show bandColors, bandNames;
-import 'package:muse_ml/src/charts/eeg_data_source.dart';
-import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/charts/smooth_path.dart';
-import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
+import 'package:muse_ml/src/feedback/session_assembler.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
+import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:muse_ml/src/rust/api/session_format.dart';
 
 class FeedbackDashboardView extends ConsumerStatefulWidget {
   const FeedbackDashboardView({
@@ -44,13 +42,24 @@ class FeedbackDashboardView extends ConsumerStatefulWidget {
       _FeedbackDashboardViewState();
 }
 
+class _DashboardLoad {
+  const _DashboardLoad({
+    required this.prepared,
+    required this.metadata,
+  });
+
+  final SessionChartData prepared;
+  final SessionMetadata metadata;
+}
+
 class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   final TextEditingController _notes = TextEditingController();
   final GlobalKey _thumbKey = GlobalKey();
-  Future<SessionData>? _dataFuture;
+  Future<_DashboardLoad>? _loadFuture;
   SessionChartData? _prepared;
+  SessionMetadata? _fileMeta;
+  Object? _loadError;
   Uint8List? _thumbnail;
-  SessionData? _sessionData;
   bool _busy = false;
 
   /// Notes value that is persisted on disk (used to detect unsaved edits).
@@ -62,34 +71,77 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   @override
   void initState() {
     super.initState();
-    final readOnly = widget.readOnly;
-    if (readOnly && widget.sessionId != null) {
-      final summary = widget.metadata?.summary;
-      if (summary != null) {
-        // Fast path: render the detail straight from the decimated overview in
-        // the metadata head, without reading (or parsing) the .muse body.
-        _loadProtocolAndPrepareChart(summary);
-      } else {
-        // Legacy session without a summary: fall back to a full-body parse.
-        final store = ref.read(sessionStoreProvider.future);
-        _dataFuture = SessionReader.readBytes(
-          store.then((s) => s.readMuse(widget.sessionId!)),
-        );
+    _loadFuture = _loadSession();
+    _loadFuture!.then((loaded) {
+      if (!mounted) return;
+      setState(() {
+        _prepared = loaded.prepared;
+        _fileMeta = loaded.metadata;
+        _loadError = null;
+        if (loaded.metadata.notes.isNotEmpty && _notes.text.isEmpty) {
+          _notes.text = loaded.metadata.notes;
+          _savedNotes = _notes.text;
+        }
+      });
+      if (!widget.readOnly) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
       }
-    } else {
-      final path =
-          widget.sessionPath ??
-          ref.read(feedbackStateProvider.notifier).sessionFilePath;
-      if (path != null) {
-        _dataFuture = SessionReader.read(File(path));
-      }
-    }
+    }).catchError((Object e) {
+      if (!mounted) return;
+      setState(() => _loadError = e);
+    });
     final notes = widget.metadata?.notes;
     if (notes != null && notes.isNotEmpty) {
       _notes.text = notes;
     }
     _savedNotes = _notes.text;
     _notes.addListener(_onNotesChanged);
+  }
+
+  Future<_DashboardLoad> _loadSession() async {
+    late final Uint8List bytes;
+    if (widget.readOnly && widget.sessionId != null) {
+      final store = await ref.read(sessionStoreProvider.future);
+      final container = await store.readContainer(widget.sessionId!);
+      if (container == null) {
+        throw StateError('session file missing');
+      }
+      bytes = container;
+    } else {
+      final path = widget.sessionPath ??
+          ref.read(feedbackStateProvider.notifier).scratchV5Path;
+      if (path == null) {
+        throw StateError('scratch v5 not assembled');
+      }
+      final file = File(path);
+      if (!await file.exists()) {
+        throw StateError('scratch v5 missing');
+      }
+      bytes = await file.readAsBytes();
+    }
+    final frames = v5ExtractComputed(bytes: bytes);
+    final head = v5ParseHead(bytes: bytes);
+    final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ??
+        widget.metadata ??
+        SessionMetadata(
+          protocol: '',
+          durationMinutes: 0,
+          elapsedSeconds: 0,
+          sound: '',
+          savedAt: DateTime.now().toIso8601String(),
+        );
+    final catalog = await ProtocolCatalog.load();
+    final protocol = catalog.forName(meta.protocol);
+    final prepared = prepareChartDataFromComputed(
+      frames,
+      trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
+      metric: protocol?.reward?.feature ?? 'band.atr',
+      conditions: protocol?.conditions ?? const [],
+    );
+    return _DashboardLoad(
+      prepared: prepared,
+      metadata: meta,
+    );
   }
 
   bool get _notesDirty => _notes.text != _savedNotes;
@@ -99,10 +151,11 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   /// it from the notifier; history sessions from the stored calibration record
   /// (null on old files → full-window rendering, as before).
   double? get _trainingStartOffset {
-    if (widget.readOnly) {
-      return widget.metadata?.calibration?.trainingStartOffsetSecs;
-    }
-    return ref.read(feedbackStateProvider.notifier).trainingStartOffsetSecs;
+    return _fileMeta?.calibration?.trainingStartOffsetSecs ??
+        widget.metadata?.calibration?.trainingStartOffsetSecs ??
+        (widget.readOnly
+            ? null
+            : ref.read(feedbackStateProvider.notifier).trainingStartOffsetSecs);
   }
 
   void _onNotesChanged() {
@@ -119,43 +172,15 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     super.dispose();
   }
 
-  Future<void> _loadProtocolAndPrepareChart(SessionOverview summary) async {
-    final protocolType = widget.metadata?.protocol ?? ProtocolType.drowsiness;
-    final raw = await rootBundle.loadString(ProtocolCatalog.asset);
-    final json = jsonDecode(raw) as Map<String, Object?>;
-    final catalog = ProtocolCatalog.fromJson(json);
-    final protocol = catalog.forName(protocolType.name);
-    if (protocol != null) {
-      _prepared = prepareChartDataFromOverview(
-        summary,
-        metric: protocol.rewardMetric,
-        conditions: protocol.conditions,
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final fb = ref.watch(feedbackStateProvider);
-    final meta = widget.metadata;
+    final meta = _fileMeta ?? widget.metadata;
     final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
-    final protocol = catalog?.forName((meta?.protocol ?? fb.protocol).name) ??
-        const ProtocolInfo(
-          type: ProtocolType.drowsiness,
-          color: Color(0xFF1E88E5),
-          rewardMetric: RewardMetric.alphaOverTheta,
-          guardrailDefault: true,
-          guardrailFeedback: GuardrailFeedback.muffleWhileWarning,
-          requiredElectrodes: ['AF7', 'AF8'],
-          catchPhrase: '',
-          title: '',
-          subtitle: '',
-          guideText: '',
-          algorithmDescription: '',
-          expectedDelay: '',
-          calibration: '',
-          guardrailDefaultMode: 'drowsinessMath',
-        );
+    final protocol = protocolOrPlaceholder(
+      catalog,
+      meta?.protocol ?? fb.protocol,
+    );
     final copy = useProtocolCopy(ref, protocol);
 
     return PopScope(
@@ -233,7 +258,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   Widget _dashboard(
     SessionMetadata? meta,
     FeedbackState fb,
-    ProtocolInfo protocol,
+    ProtocolDocument protocol,
     String protocolTitle,
   ) {
     if (_prepared != null) {
@@ -246,18 +271,15 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         feedbackSoundName: widget.readOnly
             ? (meta?.feedbackSound == null
                   ? null
-                  : feedbackModeFromName(meta!.feedbackSound!).label)
-            : fb.feedbackMode.label,
+                  : feedbackSoundLabel(meta!.feedbackSound))
+            : fb.rewardOutput.label,
         prepared: _prepared!,
-        drowsiness: widget.readOnly
-            ? meta?.drowsiness
-            : ref.read(feedbackStateProvider.notifier).sessionDrowsiness,
-        music: widget.readOnly
-            ? meta?.music
-            : ref.read(feedbackStateProvider.notifier).sessionMusic,
-        gestures: widget.readOnly
-            ? meta?.gestures
-            : ref.read(feedbackStateProvider.notifier).gestureMarkers,
+        drowsiness: meta?.drowsiness,
+        music: meta?.music,
+        gestures: meta?.gestures ??
+            (widget.readOnly
+                ? null
+                : ref.read(feedbackStateProvider.notifier).gestureMarkers),
         trainingStartOffsetSecs: _trainingStartOffset,
         readOnly: widget.readOnly,
         thumbKey: _thumbKey,
@@ -270,63 +292,17 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         notesSavedFlash: _notesSavedFlash,
       );
     }
-    final future = _dataFuture;
-    if (future == null) {
-      return _NoData(theme: Theme.of(context));
+    if (_loadError != null) {
+      return _LoadError(
+        theme: Theme.of(context),
+        error: _loadError!,
+        onDiscard: widget.readOnly ? null : _discard,
+      );
     }
-    return FutureBuilder<SessionData>(
-      future: future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return _LoadError(
-            theme: Theme.of(context),
-            error: snapshot.error!,
-            onDiscard: widget.readOnly ? null : _discard,
-          );
-        }
-        final data = snapshot.data!;
-        _prepared ??= prepareChartData(
-          data,
-          trainingStartOffset: _trainingStartOffset,
-          metric: protocol.rewardMetric,
-          conditions: protocol.conditions,
-        );
-        _sessionData ??= data;
-        // Legacy session without an embedded summary: fold the freshly
-        // computed overview back into the metadata cache so the next open
-        // fast-paths without re-parsing the .muse body.
-        if (widget.readOnly &&
-            widget.sessionId != null &&
-            widget.metadata?.summary == null) {
-          unawaited(() async {
-            final store = await ref.read(sessionStoreProvider.future);
-            await store.cacheOverview(
-              widget.sessionId!,
-              SessionOverview.fromColumns(
-                bucketCount: SessionOverview.defaultBucketCount,
-                bucketWidthSecs: 1.0,
-                startSecs: 0,
-                endSecs: data.eegSamples.toDouble(),
-                trainingStartSecs: _trainingStartOffset,
-                bands: {},
-                pulse: [],
-                spo2: [],
-                movement: [],
-                peakAlphaFreq: [],
-                peakAlphaPower: [],
-              ),
-            );
-          }());
-        }
-        if (_thumbnail == null && !widget.readOnly) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
-        }
-        return _dashboard(meta, fb, protocol, protocolTitle);
-      },
-    );
+    if (_loadFuture != null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return _NoData(theme: Theme.of(context));
   }
 
   Future<void> _capture() async {
@@ -345,121 +321,67 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   Future<void> _save() async {
     setState(() => _busy = true);
     final notifier = ref.read(feedbackStateProvider.notifier);
-    final fb = ref.read(feedbackStateProvider);
-    debugPrint('[dashboard] save: sessionFilePath=${notifier.sessionFilePath}');
-
-    final stats = _prepared?.stats;
-    final app = ref.read(appStateProvider);
-    final channels = notifier.recordedChannels.map(channelName).toList()
-      ..sort();
-    final metadata = SessionMetadata(
-      protocol: fb.protocol,
-      durationMinutes: fb.durationMinutes,
-      elapsedSeconds: fb.elapsedSeconds,
-      sound: fb.soundName,
-      feedbackSound: fb.feedbackMode.name,
-      savedAt: DateTime.now().toIso8601String(),
-      notes: _notes.text,
-      stats: stats == null
-          ? null
-          : SessionStatsData(
-              peakAlphaFreq: stats.peakAlphaFreq,
-              peakAlphaPower: stats.peakAlphaPower,
-              targetPct: stats.targetPct,
-              stillnessPct: stats.stillnessPct,
-              avgBpm: stats.avgBpm,
-              avgAlphaRel: stats.avgAlphaRel,
-            ),
-      deviceName: app.status.connected ? app.status.name : null,
-      deviceModel: app.status.connected ? app.status.firmware : null,
-      deviceId: app.status.connected ? app.status.id : null,
-      recordedChannels: channels,
-      recordedData: notifier.recordStreams.map((s) => s.name).toList(),
-      summary: _sessionData == null
-          ? null
-          : SessionOverview.fromColumns(
-              bucketCount: SessionOverview.defaultBucketCount,
-              bucketWidthSecs: 1.0,
-              startSecs: 0,
-              endSecs: _sessionData!.eegSamples.toDouble(),
-              trainingStartSecs: notifier.trainingStartOffsetSecs,
-              bands: {},
-              pulse: [],
-              spo2: [],
-              movement: [],
-              peakAlphaFreq: [],
-              peakAlphaPower: [],
-            ),
-      gestures: ref.read(settingsProvider).markersInFeedbackEnabled
-          ? notifier.gestureMarkers
-          : const [],
-      calibration: notifier.calibration,
-      drowsiness: notifier.sessionDrowsiness,
-      music: notifier.sessionMusic,
-      metadataDescription: ref
-          .read(protocolCatalogProvider)
-          .valueOrNull
-          ?.forName(fb.protocol.name)
-          ?.metadataDescription,
-      sessionSettings: _captureSessionSettings(notifier, fb),
-    );
-
-    final saved = await notifier.finalizeSession(
-      thumbnailPng: _thumbnail ?? Uint8List(0),
-      metadataJson: metadata.toJson(),
-    );
-
-    if (saved != null) {
-      debugPrint('[dashboard] save: finalized ${saved.path}');
-    } else {
-      debugPrint(
-        '[dashboard] save: finalizeSession returned null (nothing to save)',
+    try {
+      final path = notifier.scratchV5Path;
+      final id = notifier.sessionId;
+      debugPrint('[dashboard] save: scratchV5Path=$path id=$id');
+      if (path == null || id == null) {
+        debugPrint('[dashboard] save: no scratch v5 to publish');
+        return;
+      }
+      final bytes = await File(path).readAsBytes();
+      final frames = v5ExtractComputed(bytes: bytes);
+      final raw = v5ExtractRaw(bytes: bytes);
+      final thumb = encodeThumbnailWebP(_thumbnail ?? Uint8List(0));
+      final metadata = notifier.buildSessionMetadata(
+        notes: _notes.text,
+        stats: _prepared?.stats,
       );
+      final v5 = assembleV5Container(
+        thumbnail: thumb,
+        metadataJson: metadata.toJson(),
+        computedFrames: frames,
+        rawBody: raw,
+      );
+      final store = await ref.read(sessionStoreProvider.future);
+      await store.publishSession(id, metadata, encodedV5: v5);
+      await notifier.deleteScratchV5();
+      debugPrint('[dashboard] save: published session_$id.muse.feedback');
+      if (mounted) {
+        ref.invalidate(sessionListProvider);
+        Navigator.of(context).pop();
+      }
+    } catch (e, st) {
+      debugPrint('[dashboard] save failed: $e\n$st');
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text('Could not save session: $e'),
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
-    if (mounted) {
-      ref.invalidate(sessionListProvider);
-      Navigator.of(context).pop();
-    }
-  }
-
-  /// Snapshots the session-affecting settings at save time so a saved file
-  /// stays interpretable without the live prefs (recorded as
-  /// [SessionMetadata.sessionSettings]).
-  SessionSettings _captureSessionSettings(
-    FeedbackStateNotifier notifier,
-    FeedbackState fb,
-  ) {
-    final settings = ref.read(settingsProvider);
-    final mode = settings.guardrailModeForProtocol[fb.protocol]!;
-    return SessionSettings(
-      dynamicAdapt: notifier.dynamicAdapt,
-      responsiveness: notifier.responsiveness,
-      baselinePercentile: fb.baselinePercentile,
-      guardrailEnabled: notifier.guardrailEnabled,
-      guardrailEngine: notifier.guardrailEnabled ? mode.name : 'none',
-      warningThresholdPercentile: settings.warningThresholdPercentile,
-      warningSound: settings.warningSoundName,
-      musicFolder: settings.musicFolder,
-      musicMinCutoffHz: settings.musicMinCutoffHz,
-      musicMaxCutoffHz: settings.musicMaxCutoffHz,
-      musicInvert: settings.musicInvertMapping,
-      musicShuffle: settings.musicShuffle,
-      binauralPresetId: settings.binauralPresetId,
-      binauralCarrierHz: settings.binauralCarrierHz,
-      binauralBeatHz: settings.binauralBeatHz,
-      backgroundBinauralPresetId: settings.backgroundBinauralPresetId,
-      backgroundBinauralCarrierHz: settings.backgroundBinauralCarrierHz,
-      backgroundBinauralBeatHz: settings.backgroundBinauralBeatHz,
-      markersInFeedbackEnabled: settings.markersInFeedbackEnabled,
-      eyeMarkersEnabled: settings.eyeMarkersEnabled,
-    );
   }
 
   Future<void> _discard() async {
     setState(() => _busy = true);
-    await ref.read(feedbackStateProvider.notifier).discardSession();
-    if (mounted) {
-      Navigator.of(context).pop();
+    try {
+      await ref.read(feedbackStateProvider.notifier).discardSession();
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -529,7 +451,7 @@ class _DashboardBody extends StatefulWidget {
     this.notesSavedFlash = false,
   });
 
-  final ProtocolInfo protocol;
+  final ProtocolDocument protocol;
   final String protocolTitle;
   final int durationMinutes;
   final int elapsedSeconds;
@@ -582,25 +504,13 @@ class _DashboardBodyState extends State<_DashboardBody> {
     take(p.x);
     take(p.movementX);
     take(p.bpmX);
-    final drowsy = widget.drowsiness;
-    if (drowsy != null) {
-      if (drowsy.buckets.isNotEmpty) {
-        take([drowsy.buckets.last.offsetSecs + drowsy.bucketWidthSecs]);
-      } else if (drowsy.series.isNotEmpty) {
-        take([
-          drowsy.series.last.offsetSecs - (widget.trainingStartOffsetSecs ?? 0),
-        ]);
-      }
-    }
+    take(p.guardrailX);
+    take(p.spo2X);
     final music = widget.music;
-    if (music != null) {
-      if (music.buckets.isNotEmpty) {
-        take([music.buckets.last.offsetSecs + music.bucketWidthSecs]);
-      } else if (music.series.isNotEmpty) {
-        take([
-          music.series.last.offsetSecs - (widget.trainingStartOffsetSecs ?? 0),
-        ]);
-      }
+    if (music != null && music.series.isNotEmpty) {
+      take([
+        music.series.last.offsetSecs - (widget.trainingStartOffsetSecs ?? 0),
+      ]);
     }
     _viewport = _ChartViewport(0, math.max(end, 1.0));
   }
@@ -647,21 +557,12 @@ class _DashboardBodyState extends State<_DashboardBody> {
     // sleep-direction line vs the baseline warning threshold. Empty when the
     // guardrail produced no samples.
     List<Widget> drowsinessWidgets() {
-      final drowsy = widget.drowsiness;
-      if (drowsy == null || (drowsy.series.isEmpty && drowsy.buckets.isEmpty)) {
+      final xs = prepared.guardrailX;
+      final sleepDir = prepared.guardrailSleepDir;
+      if (xs.isEmpty || sleepDir.isEmpty) {
         return const [];
       }
-      final offset = widget.trainingStartOffsetSecs ?? 0;
-      final xs = drowsy.buckets.isNotEmpty
-          ? [for (final b in drowsy.buckets) b.offsetSecs]
-          : [
-              for (final s in drowsy.series)
-                (s.offsetSecs - offset).clamp(0.0, 1e9),
-            ];
-      final sleepDir = drowsy.buckets.isNotEmpty
-          ? [for (final b in drowsy.buckets) b.sleepDir]
-          : [for (final s in drowsy.series) s.sleepDir];
-      final threshold = drowsy.threshold ?? double.nan;
+      final threshold = widget.drowsiness?.threshold ?? double.nan;
       return [
         chart('Sleep guardrail (AI model)', 'sleep-dir score', [
           _Series(
@@ -694,19 +595,15 @@ class _DashboardBodyState extends State<_DashboardBody> {
 
     List<Widget> musicWidgets() {
       final music = widget.music;
-      if (music == null || (music.series.isEmpty && music.buckets.isEmpty)) {
+      if (music == null || music.series.isEmpty) {
         return const [];
       }
       final offset = widget.trainingStartOffsetSecs ?? 0;
-      final xs = music.buckets.isNotEmpty
-          ? [for (final b in music.buckets) b.offsetSecs]
-          : [
-              for (final s in music.series)
-                (s.offsetSecs - offset).clamp(0.0, 1e9),
-            ];
-      final hz = music.buckets.isNotEmpty
-          ? [for (final b in music.buckets) b.cutoffHz]
-          : [for (final s in music.series) s.cutoffHz];
+      final xs = [
+        for (final s in music.series)
+          (s.offsetSecs - offset).clamp(0.0, 1e9),
+      ];
+      final hz = [for (final s in music.series) s.cutoffHz];
       return [
         Card(
           color: theme.colorScheme.surface,
@@ -904,7 +801,9 @@ class _DashboardBodyState extends State<_DashboardBody> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Card(
+        RepaintBoundary(
+          key: widget.thumbKey,
+          child: Card(
           color: theme.colorScheme.surfaceContainerHighest,
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -980,11 +879,10 @@ class _DashboardBodyState extends State<_DashboardBody> {
             ),
           ),
         ),
+        ),
         const SizedBox(height: 16),
         if (prepared.x.isNotEmpty) ...[
-          RepaintBoundary(
-            key: widget.thumbKey,
-            child: chart(
+          chart(
               'Alpha vs Theta (relative power, AF7/AF8 avg)',
               'rel. power',
               [
@@ -1003,7 +901,6 @@ class _DashboardBodyState extends State<_DashboardBody> {
               fixedYMin: 0,
               fixedYMax: 1,
             ),
-          ),
           const SizedBox(height: 16),
         ] else ...[
           notEnough(

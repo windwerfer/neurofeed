@@ -5,11 +5,12 @@
 
 import '../frb_generated.dart';
 import 'device_config.dart';
+import 'features.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'muse.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `compute_spo2`, `frontal_delta_average`, `map_event`, `map_imu`, `now_ms`, `score_window_len`, `spawn_event_forwarder`
+// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `compute_spo2`, `emit_enabled_band_features`, `frontal_delta_average`, `map_event`, `map_imu`, `now_ms`, `score_window_len`, `spawn_event_forwarder`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ForwarderGuard`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `drop`
 
@@ -186,6 +187,7 @@ sealed class MuseEventDto with _$MuseEventDto {
   const factory MuseEventDto.gestures(GestureDto field0) =
       MuseEventDto_Gestures;
   const factory MuseEventDto.reve(ReveDto field0) = MuseEventDto_Reve;
+  const factory MuseEventDto.feature(FeatureDto field0) = MuseEventDto_Feature;
 }
 
 /// Peak alpha frequency and power (parabolic interpolation over FFT bins).

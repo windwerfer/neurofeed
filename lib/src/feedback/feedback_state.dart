@@ -3,100 +3,53 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
-import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/audio/calibration_clips.dart';
+import 'package:muse_ml/src/audio/guard_output.dart';
+import 'package:muse_ml/src/audio/guardrail_sound.dart';
+import 'package:muse_ml/src/audio/output_ids.dart';
+import 'package:muse_ml/src/audio/reward_output.dart';
 import 'package:muse_ml/src/audio/soloud_engine.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/feedback/calibration_runner.dart';
 import 'package:muse_ml/src/feedback/computed_sampler.dart';
+import 'package:muse_ml/src/feedback/feature_bus.dart';
+import 'package:muse_ml/src/feedback/feedback_phase.dart';
 import 'package:muse_ml/src/feedback/feedback_recorder.dart';
+import 'package:muse_ml/src/feedback/gate_electrodes.dart';
+import 'package:muse_ml/src/feedback/guard_lane.dart';
+import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
+import 'package:muse_ml/src/feedback/reward_lane.dart';
+import 'package:muse_ml/src/charts/eeg_data_source.dart';
+import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
+import 'package:muse_ml/src/reve/models.dart';
+import 'package:muse_ml/src/rust/api/device_config.dart';
+import 'package:muse_ml/src/rust/api/features.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/rust/api/reve.dart' as frb;
 import 'package:muse_ml/src/settings.dart';
 
-enum FeedbackPhase { idle, calibrating, playing, paused, interrupted, ended }
-
-enum FeedbackInterruptKind { disconnect, badSignal }
-
-const double signalGoodThreshold = 80.0;
-const double signalCriticalThreshold = 40.0;
-const int badSignalPauseSeconds = 10;
-const int interruptionGraceSeconds = 10;
-
-/// The calibration gate requires all pads green for this long before the
-/// baseline starts (guards against a transient blink/loose contact).
-const int greenStableSeconds = 3;
-
-/// If one pad has not gone green for this long while the others are green, we
-/// assume that pad is faulty and surface the continue-anyway fallback.
-const int faultyPadSeconds = 20;
-
-/// The program's frontal electrodes (AF7/AF8). These are the only pads whose
-/// quality gates calibration (via the fallback bubble) and whose quality gates
-/// the playing-phase bad-signal pause; rear pads never block feedback. When
-/// future feedback options are added they should reuse this same "enough pads
-/// for this program" model rather than requiring all four pads.
-const List<int> neededElectrodes = [1, 2];
-const int calibrationBaselineSeconds = 50;
-const int adaptIntervalSeconds = 30;
-const Duration movementBuffer = Duration(seconds: 1);
-const Duration calibrationAudioTimeout = Duration(seconds: 15);
-const int defaultBaselinePercentile = 40;
-const int minRecalibrateSeconds = 60;
-const int minRecalibrateSamples = 30;
-
-/// Classical frontal-delta hard rail for the sleep guardrail (normalized FFT
-/// band power of the AF7/AF8 average). Overridden by the baseline percentile
-/// once real-device data is available — needs tuning.
-const double guardrailDeltaCeiling = 0.25;
-
-/// Minimum gap between guardrail warning chimes while drifting into sleep.
-const Duration warningChimeCooldown = Duration(seconds: 20);
-
-/// One step of a calibration recipe executed by [FeedbackStateNotifier]: an
-/// optional guidance clip followed by a silent collection window. `seconds == 0`
-/// means no collection (intro-only step).
-class _CalibrationStep {
-  const _CalibrationStep({
-    required this.name,
-    this.clip,
-    this.seconds = 0,
-    this.eyes,
-    this.challengeText,
-  });
-
-  /// UI label for the step (shown during calibration).
-  final String name;
-
-  /// Guidance clip to play before collecting, or null for a silent step.
-  final CalibrationStep? clip;
-
-  /// Silent collection seconds after the clip.
-  final int seconds;
-
-  /// Eye state during the collection window (`open`/`closed`/null).
-  final String? eyes;
-
-  /// The mentally-active challenge chosen at random for this calibration run,
-  /// or null when the stage has none. Shown on screen during the stage.
-  final String? challengeText;
-}
+export 'package:muse_ml/src/feedback/feedback_phase.dart';
+export 'package:muse_ml/src/feedback/gate_electrodes.dart'
+    show defaultGateElectrodes;
+export 'package:muse_ml/src/feedback/guard_lane.dart'
+    show guardrailDeltaCeiling, warningChimeCooldown;
 
 class FeedbackState {
   final FeedbackPhase phase;
-  final ProtocolType protocol;
+  final String protocol;
   final int durationMinutes;
   final String soundName;
 
-  /// Feedback layer: what sounds when the reward fires (bowl chimes, rain,
-  /// music, none). Rain/Music suppress the background layer.
-  final FeedbackMode feedbackMode;
+  /// Reward output id (`chime` / `musicFilter` / `rainStage` /
+  /// `binauralSwell` / `none`). Rain/music suppress the background layer.
+  final RewardOutputId rewardOutput;
   final int elapsedSeconds;
   final bool signalGood;
   final String? interruptMessage;
@@ -114,10 +67,10 @@ class FeedbackState {
 
   const FeedbackState({
     this.phase = FeedbackPhase.idle,
-    this.protocol = ProtocolType.drowsiness,
+    this.protocol = 'drowsiness',
     this.durationMinutes = 15,
     this.soundName = 'Ambient Drone',
-    this.feedbackMode = FeedbackMode.bowlChimes,
+    this.rewardOutput = RewardOutputId.chime,
     this.elapsedSeconds = 0,
     this.signalGood = false,
     this.interruptMessage,
@@ -138,10 +91,10 @@ class FeedbackState {
 
   FeedbackState copyWith({
     FeedbackPhase? phase,
-    ProtocolType? protocol,
+    String? protocol,
     int? durationMinutes,
     String? soundName,
-    FeedbackMode? feedbackMode,
+    RewardOutputId? rewardOutput,
     int? elapsedSeconds,
     bool? signalGood,
     Object? interruptMessage = _sentinel,
@@ -161,7 +114,7 @@ class FeedbackState {
     protocol: protocol ?? this.protocol,
     durationMinutes: durationMinutes ?? this.durationMinutes,
     soundName: soundName ?? this.soundName,
-    feedbackMode: feedbackMode ?? this.feedbackMode,
+    rewardOutput: rewardOutput ?? this.rewardOutput,
     elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
     signalGood: signalGood ?? this.signalGood,
     interruptMessage: identical(interruptMessage, _sentinel)
@@ -195,7 +148,45 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   FeedbackStateNotifier(this._ref) : super(const FeedbackState()) {
     final storageFuture = _ref.read(sessionStorageProvider.future);
     _recorder = FeedbackRecorder(storage: storageFuture);
-    
+
+    _rewardOutput = const NoneRewardOutput();
+    _guardOutput = const NoneGuardOutput();
+    _reward = RewardLane(
+      engine: RatioEngine(),
+      output: _rewardOutput,
+      onStats: (value) =>
+          _ref.read(liveStatsProvider).push(value, _engine.percentileOf),
+      onComputedFeedback:
+          ({
+            required ratio,
+            required threshold,
+            required inTarget,
+            required inTargetPct,
+          }) {
+            _computedSampler?.updateFeedback(
+              ratio: ratio,
+              threshold: threshold,
+              inTarget: inTarget,
+              inTargetPct: inTargetPct,
+            );
+          },
+      onThresholdChanged: () {
+        state = state.copyWith(currentThreshold: _engine.threshold);
+      },
+    );
+    _guard = GuardLane(guardOutput: _guardOutput, rewardOutput: _rewardOutput);
+    _calibration = CalibrationRunner(
+      loadManifest: () => _ref.read(calibrationManifestProvider.future),
+      playClip: (file) => _audio.playCalibration(file),
+      writeMetadata: (meta) => _recorder.writeMetadata(meta),
+      updateUi: _onCalibrationUi,
+      phaseOf: () => state.phase,
+      protocolOf: () => state.protocol,
+      sessionStartAt: () => _sessionStartAt,
+      onCollectionEyes: (eyes) => _collectionEyes = eyes,
+      onFinished: _finishCalibration,
+    );
+
     _eventSub = _ref
         .read(appStateProvider.notifier)
         .eventStream
@@ -208,10 +199,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _recorder.setRecordStreams(settings.recordStreams);
     state = state.copyWith(
       soundName: settings.soundName ?? state.soundName,
-      feedbackMode: settings.feedbackMode,
+      rewardOutput: settings.rewardOutput,
       durationMinutes: settings.durationMinutes ?? state.durationMinutes,
       baselinePercentile: settings.baselinePercentile,
     );
+    _syncOutputs();
+    unawaited(_clearEnabledFeatures());
   }
 
   final Ref _ref;
@@ -219,7 +212,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   ProviderSubscription<AppUiState>? _appSub;
   Timer? _ticker;
   Timer? _interruptTimer;
-  Timer? _baselineTimer;
   Timer? _gateTimer;
   FeedbackInterruptKind? _interruptKind;
   bool _interruptWasPlaying = false;
@@ -233,30 +225,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   DateTime _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
   int _prevEyeState = 0;
   final List<GestureMarker> _gestureMarkers = [];
-  bool _guardrailEnabled = false;
-  bool _clearCaptured = false;
-  bool _sleepCaptured = false;
-  final List<double> _baselineSleepDir = [];
-
-  /// True when the guardrail runs in band-math mode (no AI model): the
-  /// frontal-delta rail is fed from the per-second band FFT instead of a
-  /// sleep-direction embedding, and there are no V_clear/V_sleep anchors.
-  bool _guardrailBandMath = false;
-  DateTime? _lastBandMathSampleAt;
-
-  /// Latest per-electrode delta band power (µV²/Hz) from the band FFT, used by
-  /// band-math mode as the frontal-delta rail (AF7/AF8 average).
-  final Map<int, double> _frontalDelta = {};
-  double? _guardrailThreshold;
-  double _lastClarity = 1;
-  double _lastSleepDir = 0;
-  double _lastDelta = 0;
-  bool _warningActive = false;
-  DateTime _lastWarningChimeAt = DateTime.fromMillisecondsSinceEpoch(0);
   int _adaptTick = 0;
-  final TargetStateAggregator _target = TargetStateAggregator();
-  final RatioEngine _engine = RatioEngine();
+  late final RewardLane _reward;
+  late final GuardLane _guard;
+  late RewardOutput _rewardOutput;
+  late GuardOutput _guardOutput;
+  late final CalibrationRunner _calibration;
+  final FeatureBus _bus = FeatureBus();
   late final FeedbackRecorder _recorder;
+
+  RatioEngine get _engine => _reward.engine;
 
   /// Per-second sleep-guardrail readings captured while playing (only when
   /// the guardrail is armed). Persisted as [SessionDrowsiness] metadata.
@@ -272,61 +250,46 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   DateTime? _sessionStartAt;
   DateTime? _trainingStartAt;
   bool _usedStartAnyway = false;
-  SessionCalibration? _calibration;
-  String _calibrationKind = 'single';
-
-  /// Calibration definition used for this session (id + full snapshot from
-  /// `assets/calibrations.json`), recorded in the metadata at save time.
-  String _calibrationId = '';
-  Map<String, Object?>? _calibrationJson;
+  SessionCalibration? _calibrationRecord;
 
   /// In-flight recalibrations that re-anchored the threshold mid-session.
   final List<SessionRecalibration> _recalibrations = [];
 
   /// Music feedback: per-second cutoff trace + track transitions recorded
-  /// while playing. Persisted as [SessionMusic] metadata (decimated buckets).
+  /// while playing. Persisted as [SessionMusic] metadata (tracks + 1 Hz series).
   final List<MusicCutoffSample> _musicSeries = [];
   final List<MusicTrackMarker> _musicTracks = [];
 
-  /// Ordered steps of the current calibration recipe (intro/clip then a silent
-  /// collection window). Built from the manifest at calibration start.
-  final List<_CalibrationStep> _steps = [];
-  int _stepIndex = 0;
-
   /// Eye state of the active silent collection window, or null while a
-  /// guidance clip plays. Gates the REVE anchors and the sleep-direction
-  /// baseline collection to the correct stage.
+  /// guidance clip plays.
   String? _collectionEyes;
 
-  /// Completer for the in-flight collection window, so cancellation
-  /// ([reset]) can release the await instead of leaking the chain.
-  Completer<void>? _collectionCompleter;
+  /// Features actually enabled for this session (`S`). Same set sent to
+  /// [setEnabledFeatures]. Calibration compose reads this, not a model-ready
+  /// boolean.
+  List<String> _enabledFeatureIds = const [];
 
-  /// Clip windows recorded for the calibration (Option B: raw EEG stays in the
-  /// file, start/end mark the guidance clip). Persisted in the metadata.
-  final List<SessionCalibrationPhase> _clipPhases = [];
+  List<int> _gateElectrodes = List.of(defaultGateElectrodes);
+  bool _clenchWasActive = false;
 
   AudioService get _audio => _ref.read(audioServiceProvider);
 
-  void selectProtocol(ProtocolType type) {
+  /// Gate electrodes for continue-anyway + playing-phase pause (Muse AF7/AF8
+  /// until session start resolves names). AI window does not add TP9/TP10.
+  List<int> get gateElectrodes => List.unmodifiable(_gateElectrodes);
+
+  void selectProtocol(String protocolId) {
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
-    final info = catalog?.forName(type.name);
-    if (info == null) {
-      // Fallback: should not happen if catalog is loaded
-      _engine.metric = RewardMetric.alphaOverTheta;
-      state = state.copyWith(
-        protocol: type,
-        feedbackMode: FeedbackMode.none,
-      );
-      return;
-    }
-    _engine.metric = info.rewardMetric;
-    state = state.copyWith(
-      protocol: type,
-      feedbackMode: info.hasReward
-          ? _ref.read(settingsProvider).feedbackMode
-          : FeedbackMode.none,
+    final info = catalog?.forName(protocolId);
+    _engine.featureId = info?.reward?.feature ?? 'band.atr';
+    final settings = _ref.read(settingsProvider);
+    final output = resolveRewardOutputId(
+      hasReward: info?.hasReward ?? false,
+      storedPref: settings.rewardOutputPref,
+      catalogOutput: info?.reward?.output,
     );
+    state = state.copyWith(protocol: protocolId, rewardOutput: output);
+    _syncOutputs();
   }
 
   void selectDuration(int minutes) {
@@ -343,16 +306,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
-  /// Selects the feedback layer (bowl chimes / rain / music / binaural /
-  /// none). Rain and Music suppress the background layer; Binaural Beats
-  /// layer on top of it. Switching mid-session restarts the channels without
-  /// leaving the current phase.
-  void selectFeedbackMode(FeedbackMode mode) {
-    if (mode == FeedbackMode.binaural) {
+  /// Selects the reward output (chime / rainStage / musicFilter /
+  /// binauralSwell / none). Rain and Music suppress the background layer;
+  /// Binaural Beats layer on top of it. Switching mid-session restarts the
+  /// channels without leaving the current phase.
+  void selectRewardOutput(RewardOutputId id) {
+    if (id == RewardOutputId.binauralSwell) {
       _seedBinauralVolumes();
     }
-    state = state.copyWith(feedbackMode: mode);
-    _ref.read(settingsProvider).setFeedbackMode(mode);
+    state = state.copyWith(rewardOutput: id);
+    _ref.read(settingsProvider).setRewardOutput(id);
+    _syncOutputs();
     if (state.phase == FeedbackPhase.playing ||
         state.phase == FeedbackPhase.paused) {
       unawaited(_switchChannelsWhileKeepingPhase());
@@ -370,10 +334,27 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
+  void _syncOutputs() {
+    _rewardOutput = _audio.rewardOutput(state.rewardOutput);
+    _guardOutput = _audio.guardOutput();
+    _reward.output = _rewardOutput;
+    _guard.rewardOutput = _rewardOutput;
+    _guard.guardOutput = _guardOutput;
+    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
+    final spec = catalog?.forName(state.protocol);
+    final settings = _ref.read(settingsProvider);
+    final guardId = resolveGuardOutputId(
+      storedPref: settings.warningSoundPref,
+      catalogOutput: spec?.guard?.output,
+    );
+    _audio.setWarningSound(GuardrailSound.fromName(guardId));
+  }
+
   Future<void> _switchChannelsWhileKeepingPhase() async {
     await _audio.switchChannels(
       sound: state.soundName,
-      feedback: state.feedbackMode,
+      reward: state.rewardOutput,
+      output: _rewardOutput,
     );
     if (state.phase == FeedbackPhase.paused) {
       await _audio.pause();
@@ -430,17 +411,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   void setWarningThresholdPercentile(int percentile) {
     _ref.read(settingsProvider).setWarningThresholdPercentile(percentile);
-    // Recompute threshold during active session if baseline exists
-    if (_baselineSleepDir.isNotEmpty &&
+    if (_guard.baselineSleepDir.isNotEmpty &&
         (state.phase == FeedbackPhase.playing ||
             state.phase == FeedbackPhase.paused ||
             state.phase == FeedbackPhase.interrupted)) {
-      final list = List<double>.of(_baselineSleepDir)..sort();
-      final idx = ((percentile / 100) * (list.length - 1)).round();
-      _guardrailThreshold = list[idx];
-      debugPrint(
-        '[guardrail] threshold recomputed p$percentile = ${_guardrailThreshold?.toStringAsFixed(3)}',
-      );
+      _guard.recomputeThreshold(percentile);
     }
   }
 
@@ -458,8 +433,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// The ATR engine then has no baseline, which is fine — no-reward protocols
   /// never evaluate it.
   Future<void> startCalibration({bool skipCalibration = false}) async {
-    if (!_ref.read(appStateProvider).status.connected) {
+    final app = _ref.read(appStateProvider);
+    if (!app.status.connected) {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
+      return;
+    }
+    if (deviceKindIsCrown(app.connectDeviceKind)) {
+      debugPrint('[feedback] refusing Start on Crown');
       return;
     }
     // Sync the audio engine to the "Reduce audio stutter" setting before
@@ -491,23 +471,20 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _sessionStartAt = DateTime.now();
     _trainingStartAt = null;
     _usedStartAnyway = false;
-    _calibration = null;
-    _calibrationKind = 'single';
-    _calibrationId = '';
-    _calibrationJson = null;
+    _calibrationRecord = null;
     _recalibrations.clear();
-    _steps.clear();
-    _stepIndex = 0;
+    _calibration.reset();
     _collectionEyes = null;
-    _clipPhases.clear();
     _drowsinessSeries.clear();
     _musicSeries.clear();
     _musicTracks.clear();
     await _recorder.startSession();
     _computedSampler = ComputedSampler(
       onFrame: (frame) => _recorder.appendComputed(frame),
+      recordingStart: _sessionStartAt!,
     );
     _computedSampler!.start();
+    await _enableSessionFeatures();
     await _maybeEnableGuardrail();
     if (skipCalibration) {
       _engine.reset();
@@ -518,36 +495,146 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   /// True when this session intends to run the guardrail: the user has not
-  /// disabled it for this protocol and a model is ready. Used synchronously
-  /// for the calibration-recipe lookup; the async arm ([_maybeEnableGuardrail])
-  /// may still fail, in which case the session runs without warnings (the
-  /// staged recipe still calibrates fine — it just has no scorer to feed).
+  /// disabled it for this protocol and a model is ready (or band-math).
+  /// Feeds the enabled feature set `S` and [_maybeEnableGuardrail]. The
+  /// async arm may still fail, in which case the session runs without
+  /// warnings (a staged recipe still calibrates — it just has no scorer).
   bool get _guardrailIntent {
     final settings = _ref.read(settingsProvider);
     if (!settings.guardrailEnabledFor(state.protocol)) {
       return false;
     }
-    final mode = settings.guardrailModeForProtocol[state.protocol]!;
-    if (mode.isBandMath) {
+    if (settings.guardrailIsBandMathFor(state.protocol)) {
       return true;
     }
     return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
   }
 
-  /// True when the calibration should run the staged (3-part) recipe: the
-  /// guardrail is enabled for this protocol AND a real AI model (LUNA/REVE,
-  /// not band math) is ready. Band-math and no-guardrail sessions use the
-  /// single baseline instead.
-  bool get _stagedCalibrationIntent {
+  CalibrationPlan get _calibrationPlan =>
+      CalibrationPlan.fromEnabledFeatures(_enabledFeatureIds);
+
+  Future<void> _enableSessionFeatures() async {
+    final app = _ref.read(appStateProvider);
+    final kind = app.connectDeviceKind;
+    var montage = museMontageNames;
+    try {
+      final config = await DeviceConfig.forKind(kind: kind);
+      montage = config.electrodeNames;
+    } catch (e) {
+      debugPrint('[feature] DeviceConfig.forKind failed: $e');
+    }
+
+    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
+    final spec = catalog?.forName(state.protocol);
     final settings = _ref.read(settingsProvider);
-    if (!settings.guardrailEnabledFor(state.protocol)) {
-      return false;
+    final guardOn = _guardrailIntent;
+    final guardFeature = settings.guardFeatureFor(state.protocol);
+
+    List<FeatureInfo> infos = const [];
+    try {
+      infos = await availableFeatures(kind: kind);
+      debugPrint(
+        '[feature] available_features ${[for (final f in infos) '${f.id} available=${f.available} reason=${f.unavailableReason} electrodes=${f.defaultElectrodes}']}',
+      );
+    } catch (e) {
+      debugPrint('[feature] available_features failed: $e');
     }
-    final mode = settings.guardrailModeForProtocol[state.protocol]!;
-    if (mode.isBandMath) {
-      return false;
+    final byId = {for (final f in infos) f.id: f};
+
+    final rewardDefault = spec?.reward == null
+        ? null
+        : byId[spec!.reward!.feature]?.defaultElectrodes;
+    final guardDefault = guardOn && guardFeature != guardFeatureNone
+        ? byId[guardFeature]?.defaultElectrodes
+        : null;
+
+    final gateNames = gateElectrodeNames(
+      hasReward: spec?.hasReward ?? false,
+      guardOn: guardOn,
+      guardFeature: guardFeature,
+      rewardElectrodes: spec?.reward?.electrodes ?? rewardDefault,
+      guardElectrodes: spec?.guard?.electrodes ?? guardDefault,
+    );
+    final resolved = electrodeIndicesFor(gateNames, montageNames: montage);
+    _gateElectrodes = resolved.isEmpty
+        ? List.of(defaultGateElectrodes)
+        : resolved;
+
+    final ids = <String>[];
+    if (spec?.reward != null) {
+      final id = spec!.reward!.feature;
+      final override = spec.reward!.electrodes;
+      if (override != null) {
+        try {
+          await setFeatureElectrodes(id: id, names: override);
+          debugPrint('[feature] set_feature_electrodes $id $override');
+        } catch (e) {
+          debugPrint('[feature] set_feature_electrodes $id failed: $e');
+        }
+      }
+      ids.add(id);
     }
-    return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
+    if (guardOn && guardFeature != guardFeatureNone) {
+      final override = spec?.guard?.electrodes;
+      if (override != null) {
+        try {
+          await setFeatureElectrodes(id: guardFeature, names: override);
+          debugPrint(
+            '[feature] set_feature_electrodes $guardFeature $override',
+          );
+        } catch (e) {
+          debugPrint(
+            '[feature] set_feature_electrodes $guardFeature failed: $e',
+          );
+        }
+      }
+      ids.add(guardFeature);
+    }
+    final unique = <String>[];
+    for (final id in ids) {
+      if (!unique.contains(id)) {
+        unique.add(id);
+      }
+    }
+    _enabledFeatureIds = unique;
+    try {
+      await setEnabledFeatures(ids: unique);
+      debugPrint('[feature] set_enabled_features $unique');
+    } catch (e) {
+      debugPrint('[feature] set_enabled_features failed: $e');
+    }
+
+    final rewardNames =
+        spec?.reward?.electrodes ?? rewardDefault ?? museGateElectrodeNames;
+    _reward.configure(
+      hasReward: spec?.hasReward ?? false,
+      featureId: spec?.reward?.feature,
+      inhibit: spec?.conditions ?? const [],
+      electrodeNames: rewardNames,
+      montageNames: montage,
+    );
+    final deltaIdx = electrodeIndicesFor(
+      museGateElectrodeNames,
+      montageNames: montage,
+    );
+    _guard.configure(
+      enabled: false,
+      bandMath: settings.guardrailIsBandMathFor(state.protocol),
+      featureId: guardFeature == guardFeatureNone
+          ? guardFeatureBandDelta
+          : guardFeature,
+      deltaElectrodes: deltaIdx.isEmpty ? defaultGateElectrodes : deltaIdx,
+    );
+  }
+
+  Future<void> _clearEnabledFeatures() async {
+    _enabledFeatureIds = const [];
+    try {
+      await setEnabledFeatures(ids: []);
+      debugPrint('[feature] set_enabled_features []');
+    } catch (e) {
+      debugPrint('[feature] set_enabled_features [] failed: $e');
+    }
   }
 
   /// Arm the REVE/LUNA sleep-guardrail scorer according to the per-protocol
@@ -556,22 +643,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// embedding lands after ~5 s) so the calibration baseline can capture the
   /// clear anchor. No-op when disabled.
   Future<void> _maybeEnableGuardrail() async {
-    _guardrailEnabled = false;
-    _clearCaptured = false;
-    _sleepCaptured = false;
-    _guardrailThreshold = null;
-    _baselineSleepDir.clear();
-    _warningActive = false;
-    _guardrailBandMath = false;
-    _lastBandMathSampleAt = null;
+    _guard.resetSession();
     if (!_guardrailIntent) {
       return;
     }
     final settings = _ref.read(settingsProvider);
-    final mode = settings.guardrailModeForProtocol[state.protocol]!;
-    if (mode.isBandMath) {
-      _guardrailBandMath = true;
-      _guardrailEnabled = true;
+    if (settings.guardrailIsBandMathFor(state.protocol)) {
+      _guard.configure(
+        enabled: true,
+        bandMath: true,
+        featureId: guardFeatureBandDelta,
+        deltaElectrodes: _guard.deltaElectrodes,
+      );
       debugPrint('[guardrail] enabled (band math — no model)');
       return;
     }
@@ -580,13 +663,25 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       debugPrint('[guardrail] model not ready — guardrail stays off');
       return;
     }
+    final ffId = settings.guardModel ?? defaultModelKind.ffId;
     try {
-      _guardrailEnabled = await frb.guardrailEnable(kind: mode.ffId);
-      if (_guardrailEnabled) {
-        debugPrint('[guardrail] enabled (${mode.ffId})');
+      final ok = await frb.guardrailEnable(kind: ffId);
+      _guard.configure(
+        enabled: ok,
+        bandMath: false,
+        featureId: guardFeatureAiDrowsiness,
+        deltaElectrodes: _guard.deltaElectrodes,
+      );
+      if (ok) {
+        debugPrint('[guardrail] enabled ($ffId)');
       }
     } catch (e) {
-      _guardrailEnabled = false;
+      _guard.configure(
+        enabled: false,
+        bandMath: false,
+        featureId: guardFeatureAiDrowsiness,
+        deltaElectrodes: _guard.deltaElectrodes,
+      );
       debugPrint('[guardrail] enable failed: $e');
     }
   }
@@ -620,7 +715,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         ),
       ),
     );
-    // Write in-flight recalibration metadata
     if (_sessionStartAt != null) {
       _recorder.writeMetadata({
         'type': 'recalibration',
@@ -652,12 +746,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     return true;
   }
 
-  /// Start calibration: wait for all pads to be green for [greenStableSeconds]
-  /// before playing the voice intro and starting the silent baseline, then
-  /// begin feedback automatically. No post-baseline gate: once the baseline is
-  /// captured feedback always starts. If one pad never reaches green while the
-  /// needed frontal pads do, it is assumed faulty and the start-anyway
-  /// fallback is surfaced after [faultyPadSeconds].
   Future<void> _runCalibration() async {
     if (state.phase != FeedbackPhase.calibrating) {
       return;
@@ -686,7 +774,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         _greenSeconds++;
         if (_greenSeconds >= greenStableSeconds) {
           _gateTimer?.cancel();
-          unawaited(_playCalibrationAndBaseline());
+          unawaited(_calibration.playAndBaseline(plan: _calibrationPlan));
         }
         return;
       }
@@ -700,177 +788,25 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     });
   }
 
-  /// Runs the calibration for the selected protocol from the manifest recipe:
-  /// * `single` — a random intro clip, then one silent baseline window.
-  /// * `staged` — the fixed ordered stages; each plays a guidance clip then
-  ///   collects silently for that stage's seconds.
-  ///
-  /// Guidance-clip windows are recorded as metadata phases (start/end) while
-  /// the raw EEG keeps streaming (Option B) — collection gates on the silent
-  /// windows only, so the clip audio never contaminates the baseline.
-  Future<void> _playCalibrationAndBaseline() async {
+  void _onCalibrationUi(CalibrationUi ui) {
     state = state.copyWith(
-      waitingForSignal: false,
-      calibrationChallengeHint: null,
-      calibrationChallengeText: null,
+      waitingForSignal: ui.waitingForSignal ?? state.waitingForSignal,
+      startAnywayAvailable:
+          ui.startAnywayAvailable ?? state.startAnywayAvailable,
+      baselineSecondsLeft: ui.baselineSecondsLeft ?? state.baselineSecondsLeft,
+      calibrationStepName: ui.stepName ?? state.calibrationStepName,
+      calibrationStepTotal: ui.stepTotal ?? state.calibrationStepTotal,
+      calibrationChallengeHint: ui.clearChallenges
+          ? null
+          : (ui.challengeHint ?? state.calibrationChallengeHint),
+      calibrationChallengeText: ui.clearChallenges
+          ? null
+          : (ui.challengeText ?? state.calibrationChallengeText),
     );
-    _steps.clear();
-    _stepIndex = 0;
-    _clipPhases.clear();
-    _collectionEyes = null;
-    _calibrationKind = 'single';
-    _calibrationId = '';
-    _calibrationJson = null;
-    CalibrationRecipe? recipe;
-    try {
-      final manifest = await _ref.read(calibrationManifestProvider.future);
-      recipe = manifest.recipeFor(
-        state.protocol.name,
-        useStaged: _stagedCalibrationIntent,
-      );
-      _calibrationId = manifest.calibrationIdFor(state.protocol.name) ?? '';
-      _calibrationJson = manifest.calibrationJsonFor(state.protocol.name);
-    } catch (e) {
-      debugPrint('[feedback] calibration manifest unavailable: $e');
-    }
-    if (recipe == null || recipe.isSingle) {
-      _calibrationKind = 'single';
-      _steps
-        ..add(_CalibrationStep(name: 'Intro', clip: recipe?.randomIntro()))
-        ..add(
-          _CalibrationStep(
-            name: 'Baseline',
-            seconds: recipe?.seconds ?? calibrationBaselineSeconds,
-            eyes: recipe?.eyes,
-          ),
-        );
-    } else {
-      _calibrationKind = 'staged';
-      for (final stage in recipe.stages) {
-        _steps.add(
-          _CalibrationStep(
-            name: _stageName(stage),
-            clip: stage,
-            seconds: stage.seconds,
-            eyes: stage.eyes,
-            challengeText: stage.randomChallenge(),
-          ),
-        );
-      }
-    }
-    // Write calibration start metadata
-    _recorder.writeMetadata({
-      'type': 'calibration_start',
-      'kind': _calibrationKind,
-      'calibrationId': _calibrationId,
-      'timestamp': DateTime.now().toIso8601String(),
-    });
-    await _runNextCalibrationStep();
-  }
-
-  /// Friendly label for a staged guidance clip, derived from its eye state.
-  String _stageName(CalibrationStep step) => switch (step.eyes) {
-    'open' => 'Eyes open',
-    'closed' => 'Eyes closed',
-    _ => 'Artifacts',
-  };
-
-  /// Advances the calibration through the recipe's steps, finishing when the
-  /// list is exhausted. A step with a clip plays it (recording the window as a
-  /// metadata phase), then a step with [seconds]>0 runs its silent collection.
-  Future<void> _runNextCalibrationStep() async {
-    if (state.phase != FeedbackPhase.calibrating) {
-      return;
-    }
-    if (_stepIndex >= _steps.length) {
-      _finishCalibration();
-      return;
-    }
-    final step = _steps[_stepIndex];
-    state = state.copyWith(
-      calibrationStepName: step.name,
-      calibrationStepTotal: step.seconds,
-      calibrationChallengeHint: step.clip?.challengeTextHint,
-      calibrationChallengeText: step.challengeText,
-      baselineSecondsLeft: 0,
-    );
-    if (step.clip != null) {
-      final sessionStart = _sessionStartAt;
-      final clipStart = DateTime.now();
-      await _audio
-          .playCalibration(step.clip!.file)
-          .timeout(calibrationAudioTimeout, onTimeout: () {});
-      if (state.phase != FeedbackPhase.calibrating) {
-        return;
-      }
-      final clipEnd = DateTime.now();
-      if (sessionStart != null) {
-        _clipPhases.add(
-          SessionCalibrationPhase(
-            name: step.clip!.id,
-            durationSecs: clipEnd.difference(clipStart).inMilliseconds / 1000,
-            sampleCount: 0,
-            clipFile: step.clip!.file,
-            spokenText: step.clip!.text,
-            eyes: step.clip!.eyes,
-            challengeText: step.challengeText,
-            startSecs: clipStart.difference(sessionStart).inMilliseconds / 1000,
-            endSecs: clipEnd.difference(sessionStart).inMilliseconds / 1000,
-            kind: _calibrationKind == 'staged' ? 'stage' : 'intro',
-          ),
-        );
-        // Write calibration phase metadata
-        _recorder.writeMetadata({
-          'type': 'calibration_phase',
-          'clipId': step.clip!.id,
-          'eyes': step.clip!.eyes,
-          'startSecs': clipStart.difference(sessionStart).inMilliseconds / 1000,
-          'endSecs': clipEnd.difference(sessionStart).inMilliseconds / 1000,
-          'kind': _calibrationKind == 'staged' ? 'stage' : 'intro',
-          'timestamp': DateTime.now().toIso8601String(),
-        });
-      }
-    }
-    if (step.seconds > 0) {
-      await _runCollection(step);
-    }
-    _stepIndex++;
-    await _runNextCalibrationStep();
-  }
-
-  /// Silent collection window for [step]: counts [step.seconds] down while the
-  /// ATR/guardrail baselines sample, gated by [step.eyes] in the event
-  /// handlers. Resolves when the window completes or calibration is cancelled.
-  Future<void> _runCollection(_CalibrationStep step) async {
-    _collectionEyes = step.eyes;
-    state = state.copyWith(
-      baselineSecondsLeft: step.seconds,
-      waitingForSignal: false,
-      startAnywayAvailable: false,
-    );
-    final completer = Completer<void>();
-    _collectionCompleter = completer;
-    _baselineTimer?.cancel();
-    _baselineTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      final left = state.baselineSecondsLeft - 1;
-      if (left <= 0) {
-        _baselineTimer?.cancel();
-        _baselineTimer = null;
-        if (!completer.isCompleted) {
-          completer.complete();
-        }
-      } else {
-        state = state.copyWith(baselineSecondsLeft: left);
-      }
-    });
-    await completer.future;
-    _collectionCompleter = null;
-    _collectionEyes = null;
   }
 
   void _finishCalibration() {
-    _baselineTimer?.cancel();
-    _baselineTimer = null;
+    _calibration.cancelTimers();
     if (state.phase != FeedbackPhase.calibrating) {
       return;
     }
@@ -888,10 +824,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           stddev: _engine.baselineStddev,
         );
     _ref.read(liveStatsProvider).setThreshold(threshold);
-    if (_guardrailEnabled && (_clearCaptured || _guardrailBandMath)) {
-      _finalizeGuardrailBaseline();
+    if (_guard.enabled && (_guard.clearCaptured || _guard.bandMath)) {
+      _guard.finalizeBaseline(
+        warningThresholdPercentile: warningThresholdPercentile,
+      );
     }
-    // Write calibration complete metadata
     if (_sessionStartAt != null) {
       _recorder.writeMetadata({
         'type': 'calibration_complete',
@@ -901,7 +838,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         'baselineMean': _engine.baselineMean,
         'baselineStddev': _engine.baselineStddev,
         'timestamp': DateTime.now().toIso8601String(),
-        'elapsedSecs': DateTime.now().difference(_sessionStartAt!).inMilliseconds / 1000,
+        'elapsedSecs':
+            DateTime.now().difference(_sessionStartAt!).inMilliseconds / 1000,
       });
     }
     _recordCalibration();
@@ -922,11 +860,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final now = DateTime.now();
     _trainingStartAt = now;
     final sessionStart = _sessionStartAt;
-    _calibration = SessionCalibration(
+    _calibrationRecord = SessionCalibration(
       version: CalibrationManifest.currentVersion,
-      kind: _calibrationKind,
-      calibrationId: _calibrationId,
-      calibrationJson: _calibrationJson,
+      kind: _calibration.kind,
+      calibrationId: _calibration.calibrationId,
+      calibrationJson: _calibration.calibrationJson,
       calibrationStartSecs: sessionStart == null
           ? null
           : sessionStart.millisecondsSinceEpoch / 1000,
@@ -941,7 +879,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         mean: _engine.baselineMean,
         stddev: _engine.baselineStddev,
       ),
-      phases: List.of(_clipPhases),
+      phases: List.of(_calibration.clipPhases),
       recalibrations: List.of(_recalibrations),
     );
   }
@@ -956,68 +894,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     _usedStartAnyway = true;
     _gateTimer?.cancel();
-    unawaited(_playCalibrationAndBaseline());
-  }
-
-  /// Locks in the sleep-guardrail threshold from the baseline sleep-direction
-  /// distribution at the configured percentile, then captures the deep-rest
-  /// anchor (deepest sample the Rust scorer tracked since the clear anchor).
-  void _finalizeGuardrailBaseline() {
-    final list = List<double>.of(_baselineSleepDir)..sort();
-    if (list.isNotEmpty) {
-      final pct = warningThresholdPercentile;
-      final idx = ((pct / 100) * (list.length - 1)).round();
-      _guardrailThreshold = list[idx];
-      debugPrint(
-        '[guardrail] baseline n=${_baselineSleepDir.length} '
-        'p$pct threshold=${_guardrailThreshold?.toStringAsFixed(3)}',
-      );
-    }
-    if (_guardrailBandMath) {
-      _sleepCaptured = true;
-      debugPrint('[guardrail] band math — no V_sleep anchor to capture');
-      return;
-    }
-    unawaited(
-      frb
-          .guardrailCaptureAnchor(name: 'sleep')
-          .then((msg) {
-            _sleepCaptured = true;
-            debugPrint('[guardrail] $msg');
-          })
-          .catchError((Object e) {
-            _sleepCaptured = false;
-            debugPrint('[guardrail] V_sleep capture failed: $e');
-          }),
-    );
-  }
-
-  /// Captures the clear anchor from the first clean baseline sample once the
-  /// forwarder has produced a live embedding. Best-effort: failures (no live
-  /// embedding yet, model switch) are ignored and retried on the next clean
-  /// sample.
-  Future<void> _tryCaptureClearAnchor() async {
-    if (!_guardrailEnabled || _clearCaptured) {
-      return;
-    }
-    try {
-      await frb.guardrailCaptureAnchor(name: 'clear');
-      _clearCaptured = true;
-      debugPrint('[guardrail] V_clear captured');
-    } catch (_) {}
-  }
-
-  /// Tears down the guardrail scorer and its calibration state at session end.
-  void _teardownGuardrail() {
-    if (_guardrailEnabled) {
-      unawaited(frb.guardrailDisable());
-    }
-    _guardrailEnabled = false;
-    _clearCaptured = false;
-    _sleepCaptured = false;
-    _guardrailThreshold = null;
-    _baselineSleepDir.clear();
-    _warningActive = false;
+    unawaited(_calibration.playAndBaseline(plan: _calibrationPlan));
   }
 
   /// Start the feedback loop: record the session and begin the background
@@ -1031,13 +908,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       phase: FeedbackPhase.playing,
       currentThreshold: _engine.threshold,
     );
-    _target.reset();
+    _reward.resetBands();
     _adaptTick = 0;
     _trainingStartAt ??= DateTime.now();
     _startTicker();
+    _syncOutputs();
     await _audio.playChannels(
       sound: state.soundName,
-      feedback: state.feedbackMode,
+      reward: state.rewardOutput,
+      output: _rewardOutput,
     );
   }
 
@@ -1053,8 +932,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _startTicker();
   }
 
-  /// End the session: flush the recording, stop audio, play the end chime.
-  /// The temp recording stays on disk until the dashboard saves or discards it.
+  /// End the session: assemble a scratch v5 **before** `phase = ended` (the
+  /// session view navigates on that transition), then stop audio.
   Future<void> end() async {
     if (state.phase == FeedbackPhase.ended) {
       return;
@@ -1062,12 +941,24 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _ticker?.cancel();
     _interruptTimer?.cancel();
     _interruptTimer = null;
-    _baselineTimer?.cancel();
-    _baselineTimer = null;
+    _calibration.cancelTimers();
     _computedSampler?.stop();
-    _teardownGuardrail();
-    state = state.copyWith(phase: FeedbackPhase.ended);
+    _guard.teardown();
+    unawaited(_clearEnabledFeatures());
     await _recorder.flushSession();
+    try {
+      final path = await _recorder.assembleScratchV5(
+        buildSessionMetadata().toJson(),
+      );
+      if (path == null) {
+        debugPrint(
+          '[feedback] end: scratch v5 assemble failed; temps kept',
+        );
+      }
+    } catch (e, st) {
+      debugPrint('[feedback] end: scratch v5 assemble failed: $e\n$st');
+    }
+    state = state.copyWith(phase: FeedbackPhase.ended);
     await _audio.stop();
     await _audio.playEndChime();
   }
@@ -1076,11 +967,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _ticker?.cancel();
     _interruptTimer?.cancel();
     _interruptTimer = null;
-    _baselineTimer?.cancel();
-    _baselineTimer = null;
+    _calibration.reset();
     _computedSampler?.stop();
-    _collectionCompleter?.complete();
-    _collectionCompleter = null;
     _gateTimer?.cancel();
     _gateTimer = null;
     _greenSeconds = 0;
@@ -1093,39 +981,40 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _prevEyeState = 0;
     _clenchWasActive = false;
     _gestureMarkers.clear();
-    _teardownGuardrail();
+    _guard.teardown();
+    unawaited(_clearEnabledFeatures());
     _drowsinessSeries.clear();
     _musicSeries.clear();
     _musicTracks.clear();
     _audio.stop();
     _recorder.discardSession();
-    _engine.reset();
-    _target.reset();
+    _reward.reset();
+    _bus.reset();
     _sessionStartAt = null;
     _trainingStartAt = null;
     _usedStartAnyway = false;
-    _calibration = null;
-    _calibrationKind = 'single';
-    _calibrationId = '';
-    _calibrationJson = null;
+    _calibrationRecord = null;
     _recalibrations.clear();
-    _steps.clear();
-    _stepIndex = 0;
     _collectionEyes = null;
-    _clipPhases.clear();
+    _gateElectrodes = List.of(defaultGateElectrodes);
     _ref.read(liveStatsProvider).reset();
     state = const FeedbackState();
   }
 
-  String? get sessionFilePath => _recorder.currentFilePath;
+  String? get sessionFilePath => _recorder.scratchV5Path;
+
+  String? get scratchV5Path => _recorder.scratchV5Path;
+
+  String? get sessionId => _recorder.sessionId;
 
   /// Recorded calibration record for the current session (timeline, gate,
   /// baseline stats, intro clip). Null until calibration completes.
-  SessionCalibration? get calibration => _calibration;
+  SessionCalibration? get calibration => _calibrationRecord;
 
   /// Seconds from recording start to the training boundary, or null when no
   /// calibration was recorded (e.g. legacy/unknown-session previews).
-  double? get trainingStartOffsetSecs => _calibration?.trainingStartOffsetSecs;
+  double? get trainingStartOffsetSecs =>
+      _calibrationRecord?.trainingStartOffsetSecs;
 
   /// Electrode indices that produced data in the current recording.
   Set<int> get recordedChannels => _recorder.recordedChannels;
@@ -1133,17 +1022,95 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// Streams enabled for this session's recording.
   Set<RecordingStream> get recordStreams => _recorder.streams;
 
-  /// Finalize the session: assemble v5 container with thumbnail and metadata.
-  /// Returns the final session file on disk.
-  Future<File?> finalizeSession({
-    required Uint8List thumbnailPng,
-    required Map<String, dynamic> metadataJson,
-  }) => _recorder.finalizeSession(
-        thumbnailPng: thumbnailPng,
-        metadataJson: metadataJson,
-      );
-
   Future<void> discardSession() => _recorder.discardSession();
+
+  Future<void> deleteScratchV5() => _recorder.deleteScratchV5();
+
+  /// Snapshot metadata for the scratch v5 at end() and the rewritten file
+  /// on Save. No `summary` / 400-bucket fields. Drowsiness is scalars only.
+  SessionMetadata buildSessionMetadata({
+    String notes = '',
+    SessionChartStats? stats,
+  }) {
+    final fb = state;
+    final app = _ref.read(appStateProvider);
+    final settings = _ref.read(settingsProvider);
+    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
+    final protocol = catalog?.forName(fb.protocol);
+    final feature = settings.guardFeatureFor(fb.protocol);
+    final model = settings.guardModel;
+    final channels = recordedChannels.map(channelName).toList()..sort();
+    final drowsy = sessionDrowsiness;
+    return SessionMetadata(
+      protocol: fb.protocol,
+      durationMinutes: fb.durationMinutes,
+      elapsedSeconds: fb.elapsedSeconds,
+      durationS: fb.elapsedSeconds,
+      sound: fb.soundName,
+      feedbackSound: fb.rewardOutput.name,
+      savedAt: DateTime.now().toIso8601String(),
+      startedAt: _sessionStartAt?.toIso8601String(),
+      notes: notes,
+      sessionId: sessionId,
+      stats: stats == null
+          ? null
+          : SessionStatsData(
+              peakAlphaFreq: stats.peakAlphaFreq,
+              peakAlphaPower: stats.peakAlphaPower,
+              targetPct: stats.targetPct,
+              stillnessPct: stats.stillnessPct,
+              avgBpm: stats.avgBpm,
+              avgAlphaRel: stats.avgAlphaRel,
+            ),
+      deviceName: app.status.connected ? app.status.name : null,
+      deviceModel: app.status.connected ? app.status.firmware : null,
+      deviceId: app.status.connected ? app.status.id : null,
+      recordedChannels: channels,
+      recordedData: recordStreams.map((s) => s.name).toList(),
+      gestures: settings.markersInFeedbackEnabled
+          ? gestureMarkers
+          : const [],
+      calibration: calibration,
+      drowsiness: drowsy,
+      music: sessionMusic,
+      metadataDescription: protocol?.metadataDescription,
+      protocolJson: protocol
+          ?.resolved(guardFeature: feature)
+          .toJson(),
+      protocolVersion: '1',
+      sessionSettings: SessionSettings(
+        dynamicAdapt: dynamicAdapt,
+        responsiveness: responsiveness,
+        baselinePercentile: fb.baselinePercentile,
+        guardrailEnabled: guardrailEnabled,
+        guardrailEngine: guardrailEnabled
+            ? guardrailEngineName(feature: feature, model: model)
+            : 'none',
+        guardFeature: feature,
+        guardModel: model,
+        warningThresholdPercentile: settings.warningThresholdPercentile,
+        warningSound: settings.warningSoundName,
+        musicFolder: settings.musicFolder,
+        musicMinCutoffHz: settings.musicMinCutoffHz,
+        musicMaxCutoffHz: settings.musicMaxCutoffHz,
+        musicInvert: settings.musicInvertMapping,
+        musicShuffle: settings.musicShuffle,
+        binauralPresetId: settings.binauralPresetId,
+        binauralCarrierHz: settings.binauralCarrierHz,
+        binauralBeatHz: settings.binauralBeatHz,
+        backgroundBinauralPresetId: settings.backgroundBinauralPresetId,
+        backgroundBinauralCarrierHz: settings.backgroundBinauralCarrierHz,
+        backgroundBinauralBeatHz: settings.backgroundBinauralBeatHz,
+        markersInFeedbackEnabled: settings.markersInFeedbackEnabled,
+        eyeMarkersEnabled: settings.eyeMarkersEnabled,
+      ),
+      avgSpo2: stats?.avgSpo2,
+      peakAlphaHz: stats?.peakAlphaFreq,
+      peakAlphaPower: stats?.peakAlphaPower,
+      pctInTarget: stats?.targetPct,
+      avgSleepDir: drowsy?.meanSleepDir,
+    );
+  }
 
   void _startTicker() {
     _ticker?.cancel();
@@ -1169,7 +1136,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       if (state.elapsedSeconds % 10 == 0) {
         debugPrint(
           '[ratio] t=${state.elapsedSeconds}s '
-          'metric=${_engine.metric.name} '
+          'metric=${_engine.featureId} '
           'value=${stats.currentAtr?.toStringAsFixed(3)} '
           'pct=${stats.currentPercentile?.toStringAsFixed(1)} '
           'thr=${_engine.threshold?.toStringAsFixed(3)} '
@@ -1263,7 +1230,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (state.phase == FeedbackPhase.playing) {
       final critical =
           quality == null ||
-          neededElectrodes
+          _gateElectrodes
               .where((i) => i < quality.length)
               .every((i) => quality[i] < signalCriticalThreshold);
       if (!critical) {
@@ -1293,15 +1260,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (_recorder.isRecording) {
       _recorder.writeEvent(event);
     }
+    _bus.publish(event);
     switch (event) {
       case MuseEventDto_Bands(:final field0):
         _onBands(field0);
+      case MuseEventDto_Feature(:final field0):
+        _onFeature(field0);
       case MuseEventDto_Movement(:final field0):
         _onMovement(field0);
       case MuseEventDto_Gestures(:final field0):
         _onGestures(field0);
       case MuseEventDto_Reve(:final field0):
-        _onReve(field0);
+        _guard.onReveExtras(field0, _guardTick());
       case MuseEventDto_Connected():
         if (state.phase == FeedbackPhase.interrupted &&
             _interruptKind == FeedbackInterruptKind.disconnect) {
@@ -1320,97 +1290,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       default:
         break;
     }
-  }
-
-  /// Live scalar of the session's reward metric from a per-sample target.
-  /// The engine is direction-agnostic; extraction is the only metric-aware
-  /// lane (data-only flip: same adaptive engine, different numerator).
-  double _metricOf(RelativeTarget target) =>
-      target.scalarFor(_engine.metric);
-
-  /// Full in-target verdict for a sample: the scalar beats the threshold AND
-  /// every protocol condition passes (e.g. beta/delta ceilings).
-  bool _inTargetVerdict(RelativeTarget target, double value) {
-    if (!_engine.isInTarget(value)) {
-      return false;
-    }
-    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
-    final spec = catalog?.forName(state.protocol.name);
-    if (spec == null) {
-      return false;
-    }
-    for (final c in spec.conditions) {
-      if (!c.passes(
-        deltaRel: target.deltaRel,
-        thetaRel: target.thetaRel,
-        alphaRel: target.alphaRel,
-        betaRel: target.betaRel,
-      )) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /// True when a modulated feedback channel (music, rain or binaural) is
-  /// currently streaming — the guardrail ducks these during warnings.
-  bool get _musicActive => switch (state.feedbackMode) {
-    FeedbackMode.music => _audio.musicPlaying,
-    FeedbackMode.rain => _audio.rainPlaying,
-    FeedbackMode.binaural => _audio.binauralPlaying,
-    _ => false,
-  };
-
-  /// Routes the live reward to the selected feedback layer: bowl chimes fire
-  /// on the full in-target verdict (scalar + conditions), rain maps
-  /// percentile→intensity stage, music maps percentile→cutoff, binaural maps
-  /// percentile→beat volume (full fade off-target). `none` stays silent.
-  void _applyReward(double value, {required bool inTarget}) {
-    switch (state.feedbackMode) {
-      case FeedbackMode.music:
-        if (_audio.musicPlaying) {
-          _applyMusicCutoff(value);
-        }
-        return;
-      case FeedbackMode.rain:
-        if (_audio.rainPlaying) {
-          _applyRainPercentile(value);
-        }
-        return;
-      case FeedbackMode.binaural:
-        if (_audio.binauralPlaying) {
-          _audio.setBinauralPercentile(_engine.percentileOf(value) ?? 0);
-        }
-        return;
-      case FeedbackMode.none:
-        return;
-      case FeedbackMode.bowlChimes:
-        _audio.onStateUpdate(inTarget);
-        return;
-    }
-  }
-
-  /// Maps the live metric value to a music-filter cutoff: its percentile rank
-  /// within the calibration baseline (0–100) is linearly interpolated between
-  /// the configured low-pass bounds ([Settings.musicMinCutoffHz] →
-  /// [Settings.musicMaxCutoffHz]); [Settings.musicInvertMapping] flips the
-  /// polarity. Higher rank → brighter music by default.
-  void _applyMusicCutoff(double value) {
-    final settings = _ref.read(settingsProvider);
-    final pct = _engine.percentileOf(value) ?? 50.0;
-    final norm = settings.musicInvertMapping ? 100 - pct : pct;
-    final min = settings.musicMinCutoffHz;
-    final max = settings.musicMaxCutoffHz;
-    final cutoff = min + (norm / 100) * (max - min);
-    _audio.setMusicCutoffHz(cutoff);
-  }
-
-  /// Maps the live metric value to a rain intensity stage: the percentile
-  /// rank within the calibration baseline (0–100, 100 = best). Close to the
-  /// target → quiet rain (calm), far off → heavy.
-  void _applyRainPercentile(double value) {
-    final pct = _engine.percentileOf(value) ?? 50.0;
-    _audio.setRainPercentile(pct);
   }
 
   /// Samples the music feedback channel once a second while playing: appends
@@ -1433,8 +1312,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     );
   }
 
-  /// Whole-session music feedback record (track list + decimated cutoff
-  /// trace), or null when no music feedback ran.
+  /// Whole-session music feedback record (track list + 1 Hz cutoff series),
+  /// or null when no music feedback ran.
   SessionMusic? get sessionMusic {
     final series = _musicSeries;
     if (series.isEmpty) {
@@ -1442,10 +1321,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     final settings = _ref.read(settingsProvider);
     final trackCount = _audio.musicTrackCount;
-    final (buckets, width) = SessionMusic.decimate(
-      series,
-      trainingStartSecs: trainingStartOffsetSecs,
-    );
     return SessionMusic(
       trackCount: trackCount,
       tracks: List.of(_musicTracks),
@@ -1454,109 +1329,102 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       invert: settings.musicInvertMapping,
       shuffle: settings.musicShuffle,
       series: List.of(_musicSeries),
-      buckets: buckets,
-      bucketWidthSecs: width,
     );
   }
 
-  void _onBands(BandsDto bands) {
-    _frontalDelta[bands.electrode] = bands.delta;
-    _target.update(bands);
-    final target = _target.evaluate(_ref.read(appStateProvider).signalQuality);
-    if (target == null) {
+  RewardTick _rewardTick() => RewardTick(
+    phase: state.phase,
+    collectingBaseline:
+        state.phase == FeedbackPhase.calibrating &&
+        state.baselineSecondsLeft > 0,
+    sampleIsClean: _sampleIsClean,
+    quality: _ref.read(appStateProvider).signalQuality,
+  );
+
+  GuardTick _guardTick() {
+    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
+    final spec = catalog?.forName(state.protocol);
+    return GuardTick(
+      phase: state.phase,
+      collectingBaseline:
+          state.phase == FeedbackPhase.calibrating &&
+          state.baselineSecondsLeft > 0,
+      collectionEyes: _collectionEyes,
+      muffleReward: spec?.guard?.muffleReward ?? false,
+      sessionStartAt: _sessionStartAt,
+      writeWarningMetadata:
+          ({
+            required sleepDir,
+            required delta,
+            required threshold,
+            required bandMath,
+          }) {
+            if (_sessionStartAt == null) {
+              return;
+            }
+            final now = DateTime.now();
+            _recorder.writeMetadata({
+              'type': 'guardrail_warning',
+              'sleepDir': sleepDir,
+              'delta': delta,
+              'threshold': threshold,
+              'mode': bandMath ? 'band_math' : 'ai',
+              'timestamp': now.toIso8601String(),
+              'elapsedSecs':
+                  now.difference(_sessionStartAt!).inMilliseconds / 1000,
+            });
+          },
+      updateComputed:
+          ({
+            required sleepDir,
+            required clarity,
+            required delta,
+            required warning,
+            threshold,
+          }) {
+            _computedSampler?.updateGuardrail(
+              sleepDir: sleepDir,
+              clarity: clarity,
+              delta: delta,
+              warning: warning,
+              threshold: threshold,
+            );
+          },
+    );
+  }
+
+  void _onFeature(FeatureDto dto) {
+    final sample = _bus.latest(dto.id);
+    if (sample == null) {
       return;
     }
+    _reward.onFeature(sample, _rewardTick());
+    if (_guard.onFeature(sample, _guardTick())) {
+      final start = _sessionStartAt;
+      if (start != null) {
+        _guard.recordSample(_drowsinessSeries, start);
+      }
+    }
+  }
+
+  void _onBands(BandsDto bands) {
+    _reward.onBands(bands);
+    _guard.onBands(bands, _guardTick());
     if (state.phase == FeedbackPhase.calibrating &&
         state.baselineSecondsLeft > 0) {
-      if (_sampleIsClean) {
-        final value = _metricOf(target);
-        if (value.isFinite) {
-          _engine.addBaselineSample(value);
-        }
-      }
-      // V_clear anchors only from the eyes-open stage of the recipe.
-      if (_collectionEyes == 'open') {
-        unawaited(_tryCaptureClearAnchor());
-      }
-      // Band-math guardrail: the eyes-closed stage feeds the frontal-delta
-      // baseline instead of a sleep-direction embedding.
-      if (_guardrailBandMath && _collectionEyes == 'closed') {
-        _baselineSleepDir.add(_frontalDeltaAverage());
-      }
-      // Update computed sampler with bands data.
       _computedSampler?.updateBands(bands.electrode, bands);
       return;
     }
     if (state.phase != FeedbackPhase.playing) {
       return;
     }
-    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
-      final spec = catalog?.forName(state.protocol.name);
-      if (spec?.hasReward ?? false) {
-      final value = _metricOf(target);
-      if (!value.isFinite) {
-        return;
-      }
-      final inTarget = _inTargetVerdict(target, value);
-      _engine.recordEpoch(inTarget);
-      _engine.recordSessionSample(value, clean: _sampleIsClean);
-      // Continuous EMA adaptation on each clean sample.
-      if (_sampleIsClean && _engine.useEmaAdapt) {
-        _engine.adaptEma(value);
-        state = state.copyWith(currentThreshold: _engine.threshold);
-      }
-      _ref.read(liveStatsProvider).push(value, _engine.percentileOf);
-      _applyReward(value, inTarget: inTarget);
-      // Update computed sampler with feedback data.
-      _computedSampler?.updateFeedback(
-        ratio: value,
-        threshold: _engine.threshold,
-        inTarget: inTarget,
-        inTargetPct: _engine.successRate ?? 0.0,
-      );
-    }
-    if (_guardrailBandMath) {
-      _onBandMathBand(bands);
-    }
-    // Update computed sampler with bands data.
     _computedSampler?.updateBands(bands.electrode, bands);
-    // Update signal quality (0-100 per pad).
     final signalQuality = _ref.read(appStateProvider).signalQuality;
     if (signalQuality != null) {
       for (int i = 0; i < signalQuality.length && i < 4; i++) {
         _computedSampler?.updateSignalQuality(i, signalQuality[i].round());
       }
     }
-  }
-
-  /// Band-math guardrail scoring (no AI model): the per-second frontal-delta
-  /// band power replaces the sleep-direction embedding, evaluated at 1 Hz.
-  void _onBandMathBand(BandsDto bands) {
-    _lastDelta = _frontalDeltaAverage();
-    final now = DateTime.now();
-    final last = _lastBandMathSampleAt;
-    if (last != null && now.difference(last) < const Duration(seconds: 1)) {
-      return;
-    }
-    _lastBandMathSampleAt = now;
-    if (_guardrailThreshold != null) {
-      _evaluateGuardrailWarning();
-      _recordDrowsinessSample();
-    }
-  }
-
-  /// AF7/AF8 (electrodes 1/2) delta band power average; a single available
-  /// pad is used on its own (mirrors the ATR autodrop model).
-  double _frontalDeltaAverage() {
-    final d1 = _frontalDelta[1];
-    final d2 = _frontalDelta[2];
-    if (d1 == null) {
-      return d2 ?? _lastDelta;
-    }
-    if (d2 == null) {
-      return d1;
-    }
-    return (d1 + d2) / 2;
   }
 
   void _onMovement(MovementDto movement) {
@@ -1589,7 +1457,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     final gestures = <String>[];
-    // Double blink: >=2 blinks in one report, or two blink reports <=2 s apart.
     if (g.blinkCount >= 2) {
       _gestureMarkers.add(
         GestureMarker(
@@ -1614,7 +1481,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         gestures.add('blink');
       }
     }
-    // Double clench: two clench onsets <=2 s apart.
     if (g.clench && !_clenchWasActive) {
       if (now.difference(_lastClenchAt) <= const Duration(seconds: 2)) {
         _gestureMarkers.add(
@@ -1631,7 +1497,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       }
     }
     _clenchWasActive = g.clench;
-    // Eye up/down transitions (experimental, off by default).
     if (_ref.read(settingsProvider).eyeMarkersEnabled) {
       if (g.eye != _prevEyeState && g.eye != 0) {
         _gestureMarkers.add(
@@ -1648,114 +1513,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _computedSampler?.updateGestures(gestures);
     }
   }
-
-  /// Per-second sleep-guardrail readings from the forwarder. Collects the
-  /// sleep-direction distribution during the eyes-closed rest stage of the
-  /// calibration (only after the clear anchor exists, since readings flow only
-  /// once V_clear is set), then evaluates the drift warning while playing.
-  void _onReve(ReveDto r) {
-    _lastClarity = r.clarity;
-    _lastSleepDir = r.sleepDir;
-    _lastDelta = r.delta;
-    _computedSampler?.updateGuardrail(
-      sleepDir: r.sleepDir,
-      clarity: r.clarity,
-      delta: r.delta,
-      warning: _warningActive,
-      threshold: _guardrailThreshold,
-    );
-    if (!_guardrailEnabled || !_clearCaptured) {
-      return;
-    }
-    if (state.phase == FeedbackPhase.calibrating &&
-        state.baselineSecondsLeft > 0 &&
-        _collectionEyes == 'closed') {
-      _baselineSleepDir.add(r.sleepDir);
-      return;
-    }
-    if (state.phase == FeedbackPhase.playing && _guardrailThreshold != null) {
-      _evaluateGuardrailWarning();
-      _recordDrowsinessSample();
-    }
-  }
-
-  void _recordDrowsinessSample() {
-    final sessionStart = _sessionStartAt;
-    if (sessionStart == null) {
-      return;
-    }
-    _drowsinessSeries.add(
-      DrowsinessSample(
-        offsetSecs:
-            DateTime.now().difference(sessionStart).inMilliseconds / 1000,
-        sleepDir: _lastSleepDir,
-        delta: _lastDelta,
-        warning: _warningActive,
-      ),
-    );
-  }
-
-  /// Fires the sleep-guardrail warning: sleep-direction above the baseline
-  /// threshold or classical frontal delta over the hard rail. Plays the soft
-  /// warning chime, re-armed every [warningChimeCooldown] while the drift
-  /// persists; the reward loop is never touched.
-  void _evaluateGuardrailWarning() {
-    final threshold = _guardrailThreshold!;
-    // Band math scores the frontal-delta rail directly; AI mode scores the
-    // sleep-direction embedding (with the delta rail as a hard ceiling).
-    final over = _guardrailBandMath
-        ? _lastDelta > threshold || _lastDelta > guardrailDeltaCeiling
-        : _lastSleepDir > threshold || _lastDelta > guardrailDeltaCeiling;
-    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
-    final spec = catalog?.forName(state.protocol.name);
-    final mufflesMusic =
-        _musicActive &&
-        (spec?.guardrailFeedback == GuardrailFeedback.muffleWhileWarning);
-    final warningSound =
-        GuardrailSound.fromName(_ref.read(settingsProvider).warningSoundName);
-    if (!over) {
-      _warningActive = false;
-      if (mufflesMusic) {
-        _audio.setMusicMuffle(false);
-      }
-      if (warningSound.playsContinuously) {
-        _audio.stopWarningAlarm();
-      }
-      return;
-    }
-    _warningActive = true;
-    if (mufflesMusic) {
-      _audio.setMusicMuffle(true);
-    }
-    if (warningSound.playsContinuously) {
-      unawaited(_audio.startWarningAlarm());
-    }
-    final now = DateTime.now();
-    if (now.difference(_lastWarningChimeAt) >= warningChimeCooldown) {
-      _lastWarningChimeAt = now;
-      unawaited(_audio.playWarningChime());
-      // Write guardrail warning metadata
-      if (_sessionStartAt != null) {
-        _recorder.writeMetadata({
-          'type': 'guardrail_warning',
-          'sleepDir': _lastSleepDir,
-          'delta': _lastDelta,
-          'threshold': threshold,
-          'mode': _guardrailBandMath ? 'band_math' : 'ai',
-          'timestamp': now.toIso8601String(),
-          'elapsedSecs': now.difference(_sessionStartAt!).inMilliseconds / 1000,
-        });
-      }
-      debugPrint(
-        '[guardrail] WARNING sleep_dir=${_lastSleepDir.toStringAsFixed(3)} '
-        'delta=${_lastDelta.toStringAsFixed(3)} '
-        'thr=${threshold.toStringAsFixed(3)} '
-        'delta ceiling=$guardrailDeltaCeiling',
-      );
-    }
-  }
-
-  bool _clenchWasActive = false;
 
   /// True when the current ATR sample is clean of both head movement and
   /// blink/clench muscle artifacts (within [movementBuffer] of the last
@@ -1786,39 +1543,32 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final warned = series.where((s) => s.warning).length;
     final mean =
         series.fold<double>(0, (a, s) => a + s.sleepDir) / series.length;
-    final (buckets, width) = SessionDrowsiness.decimate(
-      series,
-      trainingStartSecs: trainingStartOffsetSecs,
-    );
     return SessionDrowsiness(
-      series: series,
       scoreTotalPct: warned * 100 / series.length,
       meanSleepDir: mean,
-      threshold: _guardrailThreshold,
-      buckets: buckets,
-      bucketWidthSecs: width,
+      threshold: _guard.threshold,
     );
   }
 
   /// Whether the REVE/LUNA sleep guardrail is actively scoring this session.
-  bool get guardrailEnabled => _guardrailEnabled;
+  bool get guardrailEnabled => _guard.enabled;
 
   /// Whether the deep-rest (V_sleep) anchor was captured at calibration end.
-  bool get guardrailSleepCaptured => _sleepCaptured;
+  bool get guardrailSleepCaptured => _guard.sleepCaptured;
 
   /// Whether the sleep-drift warning is currently firing.
-  bool get guardrailWarningActive => _warningActive;
+  bool get guardrailWarningActive => _guard.warningActive;
 
   /// Latest guardrail readings from the 1 Hz forwarder feed.
-  double get guardrailClarity => _lastClarity;
+  double get guardrailClarity => _guard.lastClarity;
 
-  double get guardrailSleepDir => _lastSleepDir;
+  double get guardrailSleepDir => _guard.lastSleepDir;
 
-  double get guardrailDelta => _lastDelta;
+  double get guardrailDelta => _guard.lastDelta;
 
   /// Baseline sleep-direction percentile threshold, or null before calibration
   /// completes (or when the guardrail is off).
-  double? get guardrailThreshold => _guardrailThreshold;
+  double? get guardrailThreshold => _guard.threshold;
 
   bool _allGreen(List<double>? quality) {
     if (quality == null || quality.length < 4) {
@@ -1831,20 +1581,22 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (quality == null) {
       return false;
     }
-    return neededElectrodes.any(
+    return _gateElectrodes.any(
       (i) => i < quality.length && quality[i] >= signalGoodThreshold,
     );
   }
 
   @override
   void dispose() {
-    _teardownGuardrail();
+    _guard.teardown();
+    unawaited(_clearEnabledFeatures());
     _ticker?.cancel();
     _interruptTimer?.cancel();
-    _baselineTimer?.cancel();
+    _calibration.cancelTimers();
     _gateTimer?.cancel();
     _eventSub?.cancel();
     _appSub?.close();
+    _bus.dispose();
     super.dispose();
   }
 }

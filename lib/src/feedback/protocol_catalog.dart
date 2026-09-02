@@ -1,111 +1,157 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
+import 'package:muse_ml/src/feedback/feature_catalog.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:muse_ml/src/feedback/user_protocol_store.dart';
+import 'package:muse_ml/src/rust/api/device_config.dart';
+import 'package:muse_ml/src/rust/api/features.dart';
 
-/// User-facing protocol copy loaded from `assets/protocols.json` — the single
-/// editable place for catch phrase / title / subtitle / guide text /
-/// algorithm description / expected delay / scientific metadata description
-/// (and the structural `calibration` reference read by `CalibrationManifest`).
-class ProtocolCopy {
-  const ProtocolCopy({
-    required this.catchPhrase,
-    required this.title,
-    required this.subtitle,
-    required this.guideText,
-    required this.algorithmDescription,
-    required this.expectedDelay,
-    this.metadataDescription,
-  });
-
-  static const ProtocolCopy empty = ProtocolCopy(
-    catchPhrase: '',
-    title: '',
-    subtitle: '',
-    guideText: '',
-    algorithmDescription: '',
-    expectedDelay: '',
-  );
-
-  final String catchPhrase;
-  final String title;
-  final String subtitle;
-  final String guideText;
-  final String algorithmDescription;
-  final String expectedDelay;
-
-  /// Scientific description of what the protocol trains and how, recorded
-  /// into the `.muse.feedback` session metadata.
-  final String? metadataDescription;
-
-  factory ProtocolCopy.fromProtocolInfo(ProtocolInfo info) => ProtocolCopy(
-    catchPhrase: info.catchPhrase,
-    title: info.title,
-    subtitle: info.subtitle,
-    guideText: info.guideText,
-    algorithmDescription: info.algorithmDescription,
-    expectedDelay: info.expectedDelay,
-    metadataDescription: info.metadataDescription,
-  );
-}
+export 'package:muse_ml/src/feedback/protocol.dart' show ProtocolCopy;
 
 class ProtocolCatalog {
-  const ProtocolCatalog({required this.version, required this.byName});
+  const ProtocolCatalog({
+    required this.version,
+    required this.byName,
+    required this.features,
+  });
+
+  static const empty = ProtocolCatalog(
+    version: 4,
+    byName: {},
+    features: FeatureCatalog.empty,
+  );
 
   final int version;
-  final Map<String, ProtocolInfo> byName;
+  final Map<String, ProtocolDocument> byName;
+  final FeatureCatalog features;
 
-  ProtocolInfo? forName(String protocolName) => byName[protocolName];
+  ProtocolDocument? forName(String protocolId) => byName[protocolId];
 
-  List<ProtocolInfo> get all => byName.values.toList();
+  List<ProtocolDocument> get all => byName.values.toList();
 
-  factory ProtocolCatalog.fromJson(Map<String, Object?> json) {
-    final raw = json['protocols'] as Map<String, Object?>? ?? const {};
+  factory ProtocolCatalog.fromJson(
+    Map json, {
+    required FeatureCatalog features,
+  }) {
+    final mapJson = Map<String, Object?>.from(json);
+    final version = mapJson['version'] as int? ?? 0;
+    if (version != 4) {
+      throw FormatException(
+        'ProtocolCatalog.fromJson reads v4 only (got $version)',
+      );
+    }
+    final raw = mapJson['protocols'];
+    final map = raw is Map
+        ? Map<String, Object?>.from(raw)
+        : const <String, Object?>{};
     return ProtocolCatalog(
-      version: json['version'] as int? ?? 1,
+      version: version,
+      features: features,
       byName: {
-        for (final entry in raw.entries)
-          if (entry.value is Map<String, Object?>)
-            entry.key: ProtocolInfo.fromJson(
-              entry.value as Map<String, Object?>,
-              entry.key,
+        for (final entry in map.entries)
+          if (entry.value is Map)
+            entry.key: ProtocolDocument.fromJson(
+              jsonObject(entry.value),
+              id: entry.key,
+              features: features,
             ),
       },
     );
   }
 
   static const String asset = 'assets/protocols.json';
+
+  /// Asset catalog plus any `protocols/*.json` under the app-support dir.
+  static Future<ProtocolCatalog> load() async {
+    final features = await FeatureCatalog.load();
+    final raw = await rootBundle.loadString(asset);
+    var catalog = ProtocolCatalog.fromJson(
+      jsonDecode(raw) as Map,
+      features: features,
+    );
+    catalog = await catalog.mergeUserProtocols();
+    return catalog;
+  }
+
+  Future<ProtocolCatalog> mergeUserProtocols({Directory? directory}) async {
+    final dir = directory ?? await UserProtocolStore.resolveDirectory();
+    if (dir == null || !await dir.exists()) return this;
+    final extra = Map<String, ProtocolDocument>.from(byName);
+    await for (final entity in dir.list()) {
+      if (entity is! File || !entity.path.endsWith('.json')) continue;
+      try {
+        final decoded = jsonDecode(await entity.readAsString());
+        if (decoded is! Map) continue;
+        final json = Map<String, Object?>.from(decoded);
+        final fallbackId = entity.uri.pathSegments.isEmpty
+            ? ''
+            : entity.uri.pathSegments.last.replaceAll('.json', '');
+        final id = json['id'] as String? ?? fallbackId;
+        if (id.isEmpty) continue;
+        if (extra.containsKey(id) || catalogProtocolIds.contains(id)) {
+          continue;
+        }
+        if (!userProtocolIdPattern.hasMatch(id)) continue;
+        extra[id] = ProtocolDocument.fromJson(
+          jsonObject(json),
+          id: id,
+          features: features,
+          defaultOrigin: 'user',
+        );
+      } catch (_) {
+        continue;
+      }
+    }
+    return ProtocolCatalog(version: version, byName: extra, features: features);
+  }
+
+  List<ProtocolDocument> listedFor({
+    required DeviceKind kind,
+    required List<FeatureInfo> available,
+    required bool anyModelInstalled,
+  }) {
+    return [
+      for (final doc in all)
+        if (doc.isListedOn(
+          kind: kind,
+          available: available,
+          anyModelInstalled: anyModelInstalled,
+        ))
+          doc,
+    ];
+  }
 }
 
 final protocolCatalogProvider = FutureProvider<ProtocolCatalog>((ref) async {
-  final raw = await rootBundle.loadString(ProtocolCatalog.asset);
-  return ProtocolCatalog.fromJson(
-    (jsonDecode(raw) as Map<String, Object?>),
-  );
+  return ProtocolCatalog.load();
 });
 
-/// Resolved copy for [info] from `assets/protocols.json` — the single source
-/// of protocol text. While the catalog is still loading (first frame) an
-/// empty copy is returned so cards render without asserting; once loaded, a
-/// missing entry is a data error (surfaced by an assert in debug builds).
-ProtocolCopy useProtocolCopy(WidgetRef ref, ProtocolInfo info) {
+final availableFeaturesProvider =
+    FutureProvider.family<List<FeatureInfo>, DeviceKind>((ref, kind) {
+      return availableFeatures(kind: kind);
+    });
+
+ProtocolDocument protocolOrPlaceholder(ProtocolCatalog? catalog, String id) =>
+    catalog?.forName(id) ?? ProtocolDocument.placeholder(id: id);
+
+String protocolListTitle(ProtocolCatalog? catalog, String id) {
+  final copy = catalog?.forName(id)?.copy;
+  if (copy == null || copy.title.isEmpty) return id;
+  return copy.title;
+}
+
+/// Resolved copy for [info] from the catalog. While the catalog is still
+/// loading an empty copy is returned so cards render without asserting.
+ProtocolCopy useProtocolCopy(WidgetRef ref, ProtocolDocument info) {
   final catalogAsync = ref.watch(protocolCatalogProvider);
   if (catalogAsync.isLoading || catalogAsync.hasError) {
     return ProtocolCopy.empty;
   }
   final catalog = catalogAsync.valueOrNull;
-  assert(
-    catalog != null,
-    'Protocol catalog not loaded',
-  );
-  final protocolInfo = catalog?.forName(info.type.name);
-  assert(
-    protocolInfo != null,
-    'assets/protocols.json is missing an entry for ${info.type.name}',
-  );
-  return protocolInfo != null
-      ? ProtocolCopy.fromProtocolInfo(protocolInfo)
-      : ProtocolCopy.empty;
+  final protocolInfo = catalog?.forName(info.id);
+  return protocolInfo?.copy ?? info.copy;
 }

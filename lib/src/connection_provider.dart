@@ -66,6 +66,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           ),
           connectDeviceKind: DeviceKind.muse,
           connectSimulate: false,
+          lastConnectedKind: null,
         ),
       ) {
     _init();
@@ -292,6 +293,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     }
   }
 
+  /// Keep in sync with Rust `features::pad_quality_from_std_and_noise` until
+  /// the Crown-run series deletes this Dart copy.
   void _maybeComputeSignalQuality() {
     final now = liveCache.latestTimestamp;
     if (now - _lastQualityCheck < 0.9) return;
@@ -368,7 +371,11 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         final status = await connectWithOptions(deviceId: id, kind: kind, simulate: simulate);
         debugPrint('[muse] connect returned: connected=${status.connected}');
         await _settings.setLastDeviceId(id);
-        state = state.copyWith(status: status, connectingTo: null);
+        state = state.copyWith(
+          status: status,
+          connectingTo: null,
+          lastConnectedKind: kind,
+        );
         return;
       } catch (e) {
         lastError = e;
@@ -497,6 +504,7 @@ class AppUiState {
     this.disconnecting = false,
     this.connectDeviceKind = DeviceKind.muse,
     this.connectSimulate = false,
+    this.lastConnectedKind,
   });
 
   final ConnectionStatus status;
@@ -520,6 +528,16 @@ class AppUiState {
   /// Whether to use simulator instead of real hardware
   final bool connectSimulate;
 
+  /// Kind of the last successful connect this process. Null until a device
+  /// has been connected. Distinct from [connectDeviceKind], which defaults
+  /// to Muse even when nothing has been connected.
+  final DeviceKind? lastConnectedKind;
+
+  /// Kind used to filter the protocol list: currently connected, else last
+  /// connected this process. Null when no device has been connected.
+  DeviceKind? get listingDeviceKind =>
+      status.connected ? connectDeviceKind : lastConnectedKind;
+
   static const _sentinel = Object();
 
   AppUiState copyWith({
@@ -538,6 +556,7 @@ class AppUiState {
     bool? disconnecting,
     DeviceKind? connectDeviceKind,
     bool? connectSimulate,
+    Object? lastConnectedKind = _sentinel,
   }) => AppUiState(
     status: status ?? this.status,
     currentView: currentView ?? this.currentView,
@@ -564,6 +583,9 @@ class AppUiState {
     disconnecting: disconnecting ?? this.disconnecting,
     connectDeviceKind: connectDeviceKind ?? this.connectDeviceKind,
     connectSimulate: connectSimulate ?? this.connectSimulate,
+    lastConnectedKind: identical(lastConnectedKind, _sentinel)
+        ? this.lastConnectedKind
+        : lastConnectedKind as DeviceKind?,
   );
 }
 

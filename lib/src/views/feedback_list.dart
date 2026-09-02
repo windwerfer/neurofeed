@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
+import 'package:muse_ml/src/feedback/user_protocol_store.dart';
+import 'package:muse_ml/src/reve/model_engine.dart';
+import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/views/feedback_session.dart';
+import 'package:muse_ml/src/views/protocol_builder.dart';
 
 class FeedbackListView extends ConsumerWidget {
   const FeedbackListView({super.key});
@@ -13,8 +18,18 @@ class FeedbackListView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final sessions = ref.watch(sessionListProvider).valueOrNull ?? const [];
-    final catalog = ref.watch(protocolCatalogProvider).valueOrNull ?? const ProtocolCatalog(version: 1, byName: {});
+    final catalog =
+        ref.watch(protocolCatalogProvider).valueOrNull ?? ProtocolCatalog.empty;
+    final listed = _listedProtocols(ref, catalog);
     final recent = _recentProtocols(sessions, catalog);
+    final userDocs = [
+      for (final p in listed)
+        if (p.isUserDocument) p,
+    ];
+    final catalogDocs = [
+      for (final p in listed)
+        if (!p.isUserDocument) p,
+    ];
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -29,7 +44,35 @@ class FeedbackListView extends ConsumerWidget {
           _RecentTile(protocols: recent),
           const SizedBox(height: 12),
         ],
-        for (final protocol in catalog.all)
+        _sectionLabel(theme, 'Saved programs'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: OutlinedButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ProtocolBuilderView()),
+              );
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Create program'),
+          ),
+        ),
+        for (final protocol in userDocs)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _ProtocolCard(
+              protocol: protocol,
+              onEdit: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ProtocolBuilderView(existing: protocol),
+                  ),
+                );
+              },
+              onDelete: () => _confirmDelete(context, ref, protocol),
+            ),
+          ),
+        for (final protocol in catalogDocs)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: _ProtocolCard(protocol: protocol),
@@ -37,19 +80,40 @@ class FeedbackListView extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// Last-connected / currently connected kind filters the list. No device
+/// this process → show all catalog rows.
+List<ProtocolDocument> _listedProtocols(
+  WidgetRef ref,
+  ProtocolCatalog catalog,
+) {
+  final app = ref.watch(appStateProvider);
+  final kind = app.listingDeviceKind;
+  if (kind == null) return catalog.all;
+  final available = ref.watch(availableFeaturesProvider(kind)).valueOrNull;
+  if (available == null) return catalog.all;
+  final anyModel = ModelKind.values.any(
+    (k) => ref.watch(modelInstalledProvider(k)).valueOrNull == true,
+  );
+  return catalog.listedFor(
+    kind: kind,
+    available: available,
+    anyModelInstalled: anyModel,
+  );
+}
 
 /// The 3 most recent distinct protocols from session history, oldest of the
-/// three first (leftmost slot). Legacy placeholder protocols map to the ATR
-/// info they ran under and dedupe against it.
-static List<ProtocolInfo> _recentProtocols(
+/// three first (leftmost slot). Unknown ids are skipped (not startable).
+List<ProtocolDocument> _recentProtocols(
   List<SessionSummary> sessions,
   ProtocolCatalog catalog,
 ) {
-  final seen = <ProtocolType>{};
-  final recent = <ProtocolInfo>[];
+  final seen = <String>{};
+  final recent = <ProtocolDocument>[];
   for (final s in sessions) {
-    final info = catalog.forName(s.metadata.protocol.name);
-    if (info != null && seen.add(info.type)) {
+    final info = catalog.forName(s.metadata.protocol);
+    if (info != null && seen.add(info.id)) {
       recent.add(info);
       if (recent.length == 3) {
         break;
@@ -58,12 +122,11 @@ static List<ProtocolInfo> _recentProtocols(
   }
   return recent.reversed.toList();
 }
-}
 
 /// A row of up to 3 quick-start slots showing the most recent protocols by
 /// short catch name only: [3rd most recent] [2nd most recent] [most recent].
 class _RecentTile extends ConsumerWidget {
-  final List<ProtocolInfo> protocols;
+  final List<ProtocolDocument> protocols;
   const _RecentTile({required this.protocols});
 
   @override
@@ -93,7 +156,7 @@ class _RecentTile extends ConsumerWidget {
 }
 
 class _RecentSlot extends ConsumerWidget {
-  final ProtocolInfo protocol;
+  final ProtocolDocument protocol;
   const _RecentSlot({required this.protocol});
 
   @override
@@ -110,11 +173,9 @@ class _RecentSlot extends ConsumerWidget {
           if (ref.read(feedbackStateProvider).phase == FeedbackPhase.ended) {
             notifier.reset();
           }
-          notifier.selectProtocol(protocol.type);
+          notifier.selectProtocol(protocol.id);
           Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const FeedbackSessionView(),
-            ),
+            MaterialPageRoute(builder: (_) => const FeedbackSessionView()),
           );
         },
         child: Padding(
@@ -135,10 +196,64 @@ class _RecentSlot extends ConsumerWidget {
   }
 }
 
-class _ProtocolCard extends ConsumerWidget {
-  final ProtocolInfo protocol;
+Widget _sectionLabel(ThemeData theme, String text) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: theme.textTheme.titleSmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    ),
+  );
+}
 
-  const _ProtocolCard({required this.protocol});
+Future<void> _confirmDelete(
+  BuildContext context,
+  WidgetRef ref,
+  ProtocolDocument protocol,
+) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Delete program?'),
+      content: Text(
+        'Remove ${protocol.copy.catchPhrase.isEmpty ? protocol.id : protocol.copy.catchPhrase}? '
+        'This does not delete past sessions.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  final catalog =
+      ref.read(protocolCatalogProvider).valueOrNull ?? ProtocolCatalog.empty;
+  try {
+    final store = await UserProtocolStore.open(catalog.features);
+    await store.delete(protocol.id);
+    ref.invalidate(protocolCatalogProvider);
+  } on UserProtocolException catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(e.message)));
+  }
+}
+
+class _ProtocolCard extends ConsumerWidget {
+  final ProtocolDocument protocol;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  const _ProtocolCard({required this.protocol, this.onEdit, this.onDelete});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -146,88 +261,120 @@ class _ProtocolCard extends ConsumerWidget {
     final copy = useProtocolCopy(ref, protocol);
     return Card(
       color: theme.colorScheme.surfaceContainerHighest,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          final notifier = ref.read(feedbackStateProvider.notifier);
-          if (ref.read(feedbackStateProvider).phase == FeedbackPhase.ended) {
-            notifier.reset();
-          }
-          notifier.selectProtocol(protocol.type);
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const FeedbackSessionView(),
-            ),
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: protocol.color.withAlpha(60),
-                      borderRadius: BorderRadius.circular(12),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                final notifier = ref.read(feedbackStateProvider.notifier);
+                if (ref.read(feedbackStateProvider).phase ==
+                    FeedbackPhase.ended) {
+                  notifier.reset();
+                }
+                notifier.selectProtocol(protocol.id);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const FeedbackSessionView(),
+                  ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: protocol.color.withAlpha(60),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.psychology,
+                        color: protocol.color,
+                        size: 28,
+                      ),
                     ),
-                    child: Icon(Icons.psychology, color: protocol.color, size: 28),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: copy.catchPhrase,
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize:
-                                      (theme.textTheme.titleMedium?.fontSize ??
-                                              16) +
-                                          1,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: copy.catchPhrase,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize:
+                                        (theme
+                                                .textTheme
+                                                .titleMedium
+                                                ?.fontSize ??
+                                            16) +
+                                        1,
+                                  ),
                                 ),
-                              ),
-                              TextSpan(
-                                text: '  —  ${copy.title}',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w400,
+                                TextSpan(
+                                  text: '  —  ${copy.title}',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w400,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          copy.subtitle,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                          const SizedBox(height: 2),
+                          Text(
+                            copy.subtitle,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.info_outline, color: theme.colorScheme.onSurfaceVariant),
-                    onPressed: () => _showInfo(context, protocol, copy),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
+          IconButton(
+            icon: Icon(
+              Icons.info_outline,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            onPressed: () => _showInfo(context, protocol, copy),
+          ),
+          if (onEdit != null)
+            IconButton(
+              icon: Icon(
+                Icons.edit_outlined,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              onPressed: onEdit,
+            ),
+          if (onDelete != null)
+            IconButton(
+              icon: Icon(
+                Icons.delete_outline,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              onPressed: onDelete,
+            ),
+        ],
       ),
     );
   }
 }
 
-void _showInfo(BuildContext context, ProtocolInfo protocol, ProtocolCopy copy) {
+void _showInfo(
+  BuildContext context,
+  ProtocolDocument protocol,
+  ProtocolCopy copy,
+) {
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(

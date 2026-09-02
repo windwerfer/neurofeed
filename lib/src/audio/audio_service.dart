@@ -1,35 +1,31 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/binaural_beat_controller.dart';
 import 'package:muse_ml/src/audio/feedback_audio_controller.dart';
+import 'package:muse_ml/src/audio/guard_output.dart';
 import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/audio/music_controller.dart';
+import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/audio/rain_feedback_controller.dart';
+import 'package:muse_ml/src/audio/reward_output.dart';
 import 'package:muse_ml/src/settings.dart';
 
-/// Sentinel sound name that activates music-feedback mode (user folder played
-/// through the low-pass filter) instead of the background loop.
-const String musicSoundName = 'Music from folder';
-
-/// Sentinel sound name that activates binaural beats as the background layer.
-const String binauralSoundName = 'Binaural Beats';
+export 'package:muse_ml/src/audio/output_ids.dart'
+    show binauralSoundName, musicSoundName, RewardOutputId;
 
 /// Orchestrates the three audio layers of a feedback session:
 ///
 ///  * **Background** — a flat, unmodulated loop (ambient drone, drone loop,
 ///    rain, static folder music, or nothing). Selected via [Settings.soundName]
 ///    and routed through `FeedbackAudioController` (assets) or
-///    `MusicController` in background mode (folder).
-///  * **Feedback** — the reward channel: bowl chimes on-target, a rain loop
-///    whose intensity follows the reward ([RainFeedbackController]), the
-///    folder through a reward-driven low-pass filter
-///    ([MusicController] modulated), synthesized binaural beats whose
-///    volume follows the reward ([BinauralBeatController]), or none.
-///  * **Guardrail** — warning sounds (chime/alarm) that can optionally mute
-///    the feedback channel during sleep-drift warnings.
+///    `MusicController` in background mode (folder). Not an output method.
+///  * **Reward** — [RewardOutput]: chime / rainStage / musicFilter /
+///    binauralSwell / none.
+///  * **Guard** — [GuardOutput]: existing [GuardrailSound] ids. Muffle is
+///    [RewardOutput.setMuffle], not a guard output.
 ///
-/// Selecting Rain or Music as the feedback sound suppresses the background
-/// (the modulated loop becomes the whole soundscape); Binaural Beats layer on
-/// top of it instead (the beats sit *under* the background blend).
+/// `rainStage` and `musicFilter` suppress the background (the modulated loop
+/// becomes the whole soundscape); `binauralSwell` layers under it; `chime` /
+/// `none` keep background.
 class AudioService {
   final Settings _settings;
   final FeedbackAudioController _controller;
@@ -79,9 +75,9 @@ class AudioService {
   static bool isMusicSound(String sound) => sound == musicSoundName;
   static bool isBinauralSound(String sound) => sound == binauralSoundName;
 
-  /// True when [feedback] replaces the background layer with a modulated loop.
-  static bool suppressesBackground(FeedbackMode feedback) =>
-      feedback == FeedbackMode.rain || feedback == FeedbackMode.music;
+  /// True when [reward] replaces the background layer with a modulated loop.
+  static bool suppressesBackground(RewardOutputId reward) =>
+      reward.suppressesBackground;
 
   double get masterVolume => _controller.masterVolume;
 
@@ -153,17 +149,21 @@ class AudioService {
     _binaural.setGain(_controller.masterVolume * _controller.feedbackVolume);
   }
 
-  /// Starts a session's audio: background loop (unless suppressed) plus the
-  /// reward channel for [feedback].
-  Future<void> playChannels({
-    required String sound,
-    required FeedbackMode feedback,
-  }) async {
-    await _stopChannels();
-    final suppress = suppressesBackground(feedback);
-    if (suppress) {
-      // Background suppressed — no background music/binaural
-    } else if (isMusicSound(sound)) {
+  RewardOutput rewardOutput(RewardOutputId id) => rewardOutputFor(
+    id,
+    chime: _controller,
+    music: _feedbackMusic,
+    rain: _rain,
+    binaural: _binaural,
+    settings: _settings,
+    onMuffleExtras: _backgroundBinaural.setMuffle,
+  );
+
+  GuardOutput guardOutput() => guardOutputFor(controller: _controller);
+
+  /// Starts the unmapped background layer from a picker [sound] name.
+  Future<void> startBackground(String sound) async {
+    if (isMusicSound(sound)) {
       await _backgroundMusic.load();
       await _backgroundMusic.start();
     } else if (isBinauralSound(sound)) {
@@ -175,27 +175,32 @@ class AudioService {
     } else {
       await _controller.startBackground(soundAssets[sound]);
     }
-    if (feedback == FeedbackMode.music) {
-      await _feedbackMusic.load();
-      await _feedbackMusic.start();
-    } else if (feedback == FeedbackMode.rain) {
-      await _rain.start();
-    } else if (feedback == FeedbackMode.binaural) {
-      await _binaural.start(
-        carrierHz: _binauralCarrierHz,
-        beatHz: _binauralBeatHz,
-      );
+    _refreshMusicVolume();
+    _refreshBackgroundBinauralVolume();
+  }
+
+  Future<void> stopBackground() async {
+    await _backgroundMusic.stop();
+    await _backgroundBinaural.stop();
+    await _controller.pauseBackground();
+  }
+
+  /// Starts a session's audio: background loop (unless suppressed) plus [output].
+  Future<void> playChannels({
+    required String sound,
+    required RewardOutputId reward,
+    RewardOutput? output,
+  }) async {
+    await _stopChannels();
+    if (!suppressesBackground(reward)) {
+      await startBackground(sound);
     }
+    await (output ?? rewardOutput(reward)).start();
     _refreshMusicVolume();
     _refreshRainVolume();
     _refreshBackgroundBinauralVolume();
     _refreshBinauralVolume();
   }
-
-  /// Current binaural carrier / beat from settings.
-  double get _binauralCarrierHz => _settings.binauralCarrierHz;
-
-  double get _binauralBeatHz => _settings.binauralBeatHz;
 
   double get _backgroundBinauralCarrierHz =>
       _settings.backgroundBinauralCarrierHz;
@@ -206,20 +211,20 @@ class AudioService {
   /// with the new selection (used by the pre-session keep-phase fast path).
   Future<void> switchChannels({
     required String sound,
-    required FeedbackMode feedback,
+    required RewardOutputId reward,
+    RewardOutput? output,
   }) async {
-    await _stopChannels();
-    await playChannels(sound: sound, feedback: feedback);
+    await playChannels(sound: sound, reward: reward, output: output);
   }
 
   /// Legacy alias: plays [sound] as a static background loop with the classic
   /// bowl-chime feedback (settings test button).
   Future<void> playFeedback({String sound = 'Ambient Drone'}) =>
-      playChannels(sound: sound, feedback: FeedbackMode.bowlChimes);
+      playChannels(sound: sound, reward: RewardOutputId.chime);
 
   /// Legacy alias: mid-session sound swap with bowl-chime feedback.
   Future<void> switchSound(String sound) =>
-      switchChannels(sound: sound, feedback: FeedbackMode.bowlChimes);
+      switchChannels(sound: sound, reward: RewardOutputId.chime);
 
   /// Music feedback channel: reloads the folder from settings and begins
   /// playback. Used when a folder is first chosen mid-session.

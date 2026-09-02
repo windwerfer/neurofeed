@@ -84,6 +84,7 @@ flutter:
     - assets/audio/drone/
     - assets/audio/rain/
     - assets/protocols.json
+    - assets/features.json
     - assets/calibrations.json
     - THIRD_PARTY_NOTICES.md
 

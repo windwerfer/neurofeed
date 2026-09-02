@@ -1,10 +1,11 @@
 # Testing Guide
 
 ## Environment
-- Device attached: `adb devices` → `HA2A7MWP  device` (Lenovo/ZUI ROM, Mediatek).
 - `adb`: `$HOME/android-sdk/platform-tools/adb`. SDK at `$HOME/android-sdk`.
-- `flutter`: `$HOME/flutter/bin/flutter`. Rust Android targets + `cargo-ndk` installed.
+- `flutter`: `$HOME/flutter/bin/flutter`. Rust Android targets + `cargo-ndk`.
 - App package: `com.example.muse_ml`.
+- Pick a device with `adb devices` / `flutter devices`. Do not hardcode a
+  serial. CI Flutter pin is **3.41.7**; the sandbox image may be newer.
 
 ## The build/test loop (self-contained, no back-and-forth)
 The agent runs this itself. Steps:
@@ -18,7 +19,8 @@ The agent runs this itself. Steps:
    ```bash
    adb logcat -c
    cd /workspaces/flutter_muse_ml
-   setsid flutter run --device-id HA2A7MWP > /tmp/opencode/flutter_run.log 2>&1 < /dev/null & disown
+   DEVICE=$(adb devices | awk 'NR==2 {print $1}')
+   setsid flutter run --device-id "$DEVICE" > /tmp/opencode/flutter_run.log 2>&1 < /dev/null & disown
    ```
    App builds + launches in ~90–120s. Wait ~110s.
 3. **Stop the run** (killing flutter frees the logcat stream):
@@ -33,7 +35,7 @@ The agent runs this itself. Steps:
    ```
 
 ## What to look for
-- `[muse] main entered` — confirms app launched and `debugPrint` reaches logcat.
+- `[muse] main entered` — app launched and `debugPrint` reaches logcat.
 - `[muse] requestBlePermissions: result = granted, granted` — permission flow OK.
 - `[muse] starting scan (manual rescan)` — Dart called Rust `scan()`.
 - After a successful scan: `[muse] scan returned N device(s)` and the connect
@@ -46,64 +48,58 @@ The agent runs this itself. Steps:
 
 ## Triggering a scan without a saved device
 On fresh install there is no `lastDeviceId`, so `_init()` opens the connect
-window but does NOT auto-scan. To exercise the scan path, **tap "Rescan"** in
-the connect window, OR temporarily add `openConnectWindowAndScan();` at the end
-of `_init()` (mark with `// TEMP-TEST`) and revert after.
+window but does NOT auto-scan. Tap **Rescan**, or (temporarily) call
+`openConnectWindowAndScan();` at the end of `_init()` (`// TEMP-TEST`) and
+revert after.
 
 ## On-screen diagnostics (no logcat needed)
-`AppUiState.scanMessage` is shown in `connect_window.dart`. It transitions:
+`AppUiState.scanMessage` in `connect_window.dart`:
 `Requesting BLE permissions…` → `Scanning…` → `Found N device(s)` (or
-`Scan error: …`). Use this to verify the scan result even if logcat is awkward.
+`Scan error: …`).
 
 ## Rust unit tests + model smoke tests (run in `rust/`)
-- Session-format goldens (must stay green — pins the `.muse` byte layout):
-  `cargo test --lib session_format` (full suite: `cargo test --lib`).
-- Model smoke tests (`#[ignore]`d — load real weights and run inference):
-  `cargo test --lib -- --ignored`
-  Needs the local-only weights present: `.local/luna-base-dl/LUNA_base.safetensors`
-  and `.local/reve-base-dl/model.safetensors` (untracked embedded repos, not in git).
-  The tests rebuild their `target/*-smoke/model.safetensors` symlink each run, so
-  stale/dangling links are not an issue.
-- `reve-rs`/`luna-rs` are git deps (`rust/Cargo.toml`: reveal-rs from upstream
-  `eugenehp`, luna-rs from the `windwerfer` fork), so a fresh checkout needs
-  network access to GitHub for `cargo build`/`cargo test`; no submodule init is
-  required. (The `third_party/` copies are reference only.)
+- Session-format goldens: `cargo test --lib session_format`
+  (full suite: `cargo test --lib`).
+- Model smoke tests (`#[ignore]`d): `cargo test --lib -- --ignored`
+  Needs `.local/luna-base-dl/LUNA_base.safetensors` and
+  `.local/reve-base-dl/model.safetensors`. Tests rebuild
+  `target/*-smoke/model.safetensors` each run.
+- `reve-rs` / `luna-rs` / muse-rs / btleplug are git deps — `cargo build`
+  needs GitHub. No submodule init required for the build
+  (`third_party/` copies are reference only).
 
 ## Dart tests that hit the FFI (host build)
-Some Dart tests call Rust over the bridge (e.g. `test/session_export_test.dart`
-— session encode/parse, EDF+, offscreen PNG rasterization; and
-`test/session_cache_test.dart` — SQLite metadata-cache reconciliation, which
-builds real `.muse.feedback` containers via `SessionContainer.encode`). They
-need the **host-built** Rust library, not the Android one:
+Tests that call Rust (e.g. `test/session_export_test.dart`,
+`test/session_store_test.dart`) need the **host-built** library:
+
 ```bash
 cargo build --manifest-path rust/Cargo.toml      # → rust/target/debug/librust_lib_muse_ml.so
 flutter test                                      # tests init RustLib.init(externalLibrary: ...)
 ```
-Without the .so the FFI never loads and the test fails at the first Rust call.
-Notes:
-- Only needed for tests that touch Rust; pure-Dart tests run without it.
-- The offscreen rasterizer used by the PNG export also requires an initialized
-  `RendererBinding` — the test does `TestWidgetsFlutterBinding.ensureInitialized()`
-  in `setUpAll`.
+
+Without the `.so` the FFI never loads. Pure-Dart tests
+(`feedback_pipeline_test.dart`, `user_protocol_builder_test.dart`,
+`output_ids_test.dart`, `calibration_assets_test.dart`, streaming `*_test.dart`)
+do not need it.
+
+The PNG export rasterizer needs `TestWidgetsFlutterBinding.ensureInitialized()`
+in `setUpAll`.
 
 ## Caveats
 - `flutter analyze lib/src` must stay clean after Dart edits.
 - Local `cargo check --target aarch64-linux-android` is UNRELIABLE in this
-  sandbox (NDK clang permission denied). Trust `flutter run` for the real Rust
-  compile.
-- `flutter_rust_bridge` codegen must be re-run if the Rust FFI surface changes,
-  and the regenerated `rust/src/frb_generated.rs` plus `lib/src/rust/` must both
-  be committed (they are tracked in git — a fresh checkout has no
-  `frb_generated.rs` otherwise, which breaks CI's `cargo build` with E0583).
-- **Desktop `flutter run` loads `rust/target/release/`, not the debug bundle**:
-  the generated loader (`kDefaultExternalLibraryLoaderConfig` in
+  sandbox (NDK clang permission denied). Trust `flutter run` for the real
+  Rust compile.
+- `flutter_rust_bridge` codegen must be re-run if the Rust FFI surface
+  changes; commit `rust/src/frb_generated.rs` **and** `lib/src/rust/`.
+- **Desktop `flutter run` loads `rust/target/release/`, not the debug
+  bundle.** The generated loader
+  (`kDefaultExternalLibraryLoaderConfig` in
   `lib/src/rust/frb_generated.dart`, `ioDirectory: 'rust/target/release/'`)
-  makes `flutter run` open that release `.so` from the project root. A stale
-  release lib (built before the last codegen) causes
+  opens that release `.so` from the project root. A stale release lib
+  (built before the last codegen) causes
   `Bad state: Content hash on Dart side (…) is different from Rust side (…)`
-  at `RustLib.init`, while `./muse_ml` from the bundle dir still works because
-  the relative `rust/target/release/` doesn't resolve there. **Fix**:
-  `cargo build --release --manifest-path rust/Cargo.toml` (or delete the stale
-  release `.so`), then `flutter run`. Re-run it whenever codegen changes the
-  bindings; `flutter clean`/`flutter build linux --debug`/cargokit fingerprint
-  resets don't help because `flutter run` never loads those debug libs.
+  at `RustLib.init`, while `./muse_ml` from the bundle dir still works.
+  **Fix:** `cargo build --release --manifest-path rust/Cargo.toml` (or
+  delete the stale `.so`), then `flutter run`. Re-run after codegen;
+  `flutter clean` / debug builds do not help.

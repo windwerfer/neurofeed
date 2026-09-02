@@ -1,43 +1,40 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_export.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
+import 'package:muse_ml/src/rust/api/session_format.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 /// Load protocol info from the JSON asset.
-Future<ProtocolInfo?> _loadProtocolInfo(ProtocolType type) async {
-  final raw = await rootBundle.loadString(ProtocolCatalog.asset);
-  final json = jsonDecode(raw) as Map<String, Object?>;
-  final catalog = ProtocolCatalog.fromJson(json);
-  return catalog.forName(type.name);
+Future<ProtocolDocument?> _loadProtocolInfo(String id) async {
+  final catalog = await ProtocolCatalog.load();
+  return catalog.forName(id);
 }
 
 /// Builds the vector PDF report page for one session, or null when the
 /// session file cannot be read. All charts share [SessionExporter.chartsFor]
 /// so the PDF matches the PNG export and the on-screen dashboard.
 Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) async {
-  final body = await store.readMuse(session.id);
-  if (body == null) {
+  final container = await store.readContainer(session.id);
+  if (container == null) {
     return null;
   }
-  final data = await SessionReader.readRaw(body);
-  final meta = session.metadata;
+  final head = v5ParseHead(bytes: container);
+  final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ?? session.metadata;
   final protocol = await _loadProtocolInfo(meta.protocol);
   if (protocol == null) {
     return null;
   }
-  final prepared = prepareChartData(
-    data,
+  final frames = v5ExtractComputed(bytes: container);
+  final prepared = prepareChartDataFromComputed(
+    frames,
     trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
-    metric: protocol.rewardMetric,
+    metric: protocol.reward?.feature ?? 'band.atr',
     conditions: protocol.conditions,
   );
   final charts = SessionExporter.chartsFor(prepared, meta);
@@ -51,7 +48,7 @@ Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) asyn
       margin: const pw.EdgeInsets.all(40),
       build: (context) => [
         pw.Text(
-          '${meta.protocol.name} — session report',
+          '${meta.protocol} — session report',
           style: const pw.TextStyle(
             fontSize: 20,
             fontWeight: pw.FontWeight.bold,

@@ -1,22 +1,30 @@
 # muse_ml
 
-Muse EEG headset companion app — Flutter + Rust via `flutter_rust_bridge`. Uses the [Rust Muse package eugenehp/muse-rs](https://github.com/eugenehp/muse-rs)
+Muse EEG headset companion app — Flutter + Rust via `flutter_rust_bridge`.
+Protocol/transport: [muse-rs](https://github.com/eugenehp/muse-rs) patched to
+[windwerfer/muse-rs](https://github.com/windwerfer/muse-rs) tag `0.1.1`.
 
 ## Features
 
-- **BLE scan + connect** to Muse S (Android), autoconnect to last device
-- **Biofeedback sessions**: 90 s silent calibration → personalized ATR threshold → real-time audio feedback
-  - Dual-layer audio: ambient background loop (drone/rain) + reward bowl chimes
-  - Movement-gated rewards, dynamic adaptive target with lockout guards, in-flight recalibration
-  - 5-channel volume control (master / background / feedback / intro / end bell)
-  - Target settings: dynamic-target on/off, gentle↔responsive adaptation slider, reward-threshold percentile (1 % steps, live reading)
-- **AI sleep guardrail**: on-device drowsiness scoring (REVE/LUNA models) with a configurable warning sound and threshold
-  - Scorer engine picker (green ✓ for installed models, inline download/import in the dialog), band-math fallback without any model
-  - Warning sounds: soft bowl / bell chime / cough / alarm clock (repeats with a volume ramp) / none; per-protocol guardrail toggle
-- **Session dashboard**: bands/motion/pulse graphs, stats, notes, save/discard, sleep-guardrail drowsiness trace
-- **Feedback history**: session list with thumbnails, re-open past sessions
+- **BLE scan + connect** to Muse S (Android), autoconnect to last device;
+  Neurosity Crown/Notion over OSC (connect UI only — sessions refused);
+  Muse/Crown simulators
+- **Biofeedback sessions**: 50 s silent calibration (or staged AI sequence) →
+  personalized threshold on a chosen feature (ATR and other band ratios) →
+  real-time audio feedback
+  - Reward / guard / background as separate outputs (chimes, rain, music
+    filter, binaural, warning sounds)
+  - Movement-gated rewards, dynamic adaptive target with lockout guards,
+    in-flight recalibration
+  - 5 volume channels (master × background / feedback / intro / end bell /
+    guardrail)
+  - Custom programs via the protocol builder (same JSON type as the catalog)
+- **AI sleep guardrail**: on-device drowsiness (REVE/LUNA) or band-math
+  delta; warning only, never modulates the reward
+- **Session dashboard + history**: graphs, stats, notes, save/discard,
+  SQLite-backed list
 
-All user preferences (volumes, sound, duration, target settings) persist across restarts.
+All user preferences persist across restarts.
 
 ## Session file format
 
@@ -31,7 +39,8 @@ Each finished session is a **single self-contained `.muse.feedback`** file:
 - Computed 1Hz frames provide decimated telemetry for fast charting and export.
 - The raw section contains the compressed frame stream parsed by `SessionReader`
   (see `lib/src/charts/session_reader.dart`).
-- **History view is fast**: listing and thumbnails load via SQLite metadata cache and head reads (`SessionContainer`).
+- **History view is fast**: listing and thumbnails load via SQLite
+  (`session_metadata.db`, thumbnail BLOB) and v5 head reads.
 
 Sessions live in the chosen save folder (see Settings → *Save feedback to
 folder*). Changing the folder **moves** (not copies) existing sessions.
@@ -40,8 +49,8 @@ into the final `.muse.feedback` on save.
 
 ## Status
 
-Feedback Phase I + the REVE/LUNA AI sleep guardrail are on `main` — **ready for
-device testing** (see `.ai/feeback/todos.md` for the test checklist and what's next).
+See [`.ai/active-task.md`](.ai/active-task.md). On-device checklist:
+[`.ai/feedback/todos.md`](.ai/feedback/todos.md).
 
 ## Quick start
 
@@ -51,8 +60,8 @@ flutter run
 
 Scan for nearby Muse headsets by tapping **Rescan**.
 
-**Supported:** Android 10+ (API 29), 64-bit only (`arm64-v8a` / `x86_64`).
-Older API levels would theoretically work but are untested.
+**Supported:** Android 10+ (API 29), **arm64-v8a only** (no x86 emulator,
+no 32-bit). Older API levels would theoretically work but are untested.
 
 ### Linux / dev-container audio
 
@@ -88,27 +97,15 @@ adb logcat | grep -E "\[atr\]|\[feedback\]|\[chime\]"
 
 ```
 Flutter UI (lib/src/) ←─ FFI ──→ Rust (rust/src/api/muse.rs)
-                                    ↕ muse-rs 0.1.0
-                                    ↕ btleplug 0.11.8 (patched)
+                                    ↕ muse-rs 0.1.1 (patched fork)
+                                    ↕ btleplug 0.12.0-muse-5
                                     ↕ Android BLE (JNI)
 ```
 
-BLE transport: [my btleplug fork](https://github.com/windwerfer/btleplug) from the original [deviceplug/btleplug](https://github.com/deviceplug/btleplug) (tag
-`0.12.0-muse-3`). JNI thread-attach patch for tokio worker threads + BLE notification death spiral fix; see
-`.ai/btleplug.md` for details.
-
-## Project docs (`.ai/`)
-
-| File | Contents |
-|------|----------|
-| `btleplug.md` | btleplug fork changes and pitfalls |
-| `bugreport.md` | Bug report for upstream btleplug |
-| `architecture.md` | Current and target architecture |
-| `lessons-learned.md` | Full debug history |
-| `testing-guide.md` | Build/test loop |
-| `active-task.md` | Current development focus |
-| `feeback/architecture.md` | Feedback system architecture (state machine, ATR engine, audio) |
-| `feeback/todos.md` | Feedback dev todos + Phase I test checklist |
+BLE transport: [btleplug fork](https://github.com/windwerfer/btleplug) tag
+`0.12.0-muse-5`. See [`.ai/btleplug.md`](.ai/btleplug.md) and
+[`.ai/muse-rs.md`](.ai/muse-rs.md). Full map:
+[`.ai/README.md`](.ai/README.md).
 
 ## Third-party notices
 

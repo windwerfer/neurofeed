@@ -1,172 +1,6 @@
-import 'package:muse_ml/src/feedback/protocol.dart';
+import 'dart:convert';
+
 import 'session_v5_models.dart';
-
-/// Decimated per-second view of a session, stored in the metadata JSON so the
-/// history detail can render bands / heart rate / SpO2 / movement / peak alpha
-/// without reading the (potentially large) `.muse` body or replaying every raw
-/// frame. The frame body stays the authoritative source for export/full analysis.
-class SessionOverview {
-  const SessionOverview({
-    required this.bucketCount,
-    required this.bucketWidthSecs,
-    required this.startSecs,
-    required this.endSecs,
-    this.trainingStartSecs,
-    this.bands = const {},
-    this.pulse = const [],
-    this.spo2 = const [],
-    this.movement = const [],
-    this.peakAlphaFreq = const [],
-    this.peakAlphaPower = const [],
-  });
-
-  /// Fixed number of buckets regardless of session duration.
-  static const int defaultBucketCount = 400;
-
-  final int bucketCount;
-  final double bucketWidthSecs;
-  final double startSecs;
-  final double endSecs;
-
-  /// Seconds from the recording (calibration) start to the training boundary.
-  final double? trainingStartSecs;
-
-  /// Per-electrode band series keyed by electrode index.
-  final Map<int, BandPowerSeries> bands;
-
-  /// One bpm per bucket (null when no pulse data in that bucket).
-  final List<double?> pulse;
-
-  /// One SpO2 % per bucket (null when no SpO2 data in that bucket).
-  final List<double?> spo2;
-
-  /// Movement score per bucket.
-  final List<double?> movement;
-
-  /// Peak-alpha frequency per bucket.
-  final List<double?> peakAlphaFreq;
-
-  /// Power of that peak per bucket.
-  final List<double?> peakAlphaPower;
-
-  static SessionOverview fromColumns({
-    required int bucketCount,
-    required double bucketWidthSecs,
-    required double startSecs,
-    required double endSecs,
-    double? trainingStartSecs,
-    required Map<int, BandPowerSeries> bands,
-    required List<double?> pulse,
-    required List<double?> spo2,
-    required List<double?> movement,
-    required List<double?> peakAlphaFreq,
-    required List<double?> peakAlphaPower,
-  }) {
-    return SessionOverview(
-      bucketCount: bucketCount,
-      bucketWidthSecs: bucketWidthSecs,
-      startSecs: startSecs,
-      endSecs: endSecs,
-      trainingStartSecs: trainingStartSecs,
-      bands: bands,
-      pulse: pulse,
-      spo2: spo2,
-      movement: movement,
-      peakAlphaFreq: peakAlphaFreq,
-      peakAlphaPower: peakAlphaPower,
-    );
-  }
-
-  Map<String, Object?> toJson() {
-    final b = <String, Object?>{};
-    for (final e in bands.entries) {
-      b[e.key.toString()] = {
-        'delta': e.value.delta,
-        'theta': e.value.theta,
-        'alpha': e.value.alpha,
-        'beta': e.value.beta,
-        'gamma': e.value.gamma,
-      };
-    }
-    return {
-      'bucketCount': bucketCount,
-      'bucketWidthSecs': bucketWidthSecs,
-      'startSecs': startSecs,
-      'endSecs': endSecs,
-      if (trainingStartSecs != null) 'trainingStartSecs': trainingStartSecs,
-      'bands': b,
-      'pulse': pulse,
-      'spo2': spo2,
-      'movement': movement,
-      'peakAlphaFreq': peakAlphaFreq,
-      'peakAlphaPower': peakAlphaPower,
-    };
-  }
-
-  static SessionOverview? fromJson(Object? json) {
-    if (json is! Map<String, Object?>) {
-      return null;
-    }
-    final bands = <int, BandPowerSeries>{};
-    if (json['bands'] is Map) {
-      for (final e in (json['bands'] as Map).entries) {
-        final k = int.tryParse(e.key);
-        if (k != null) {
-          bands[k] = BandPowerSeries.fromJson(e.value as Map<String, dynamic>?)!;
-        }
-      }
-    }
-    return SessionOverview(
-      bucketCount: (json['bucketCount'] as num?)?.toInt() ?? (json['buckets'] as num?)?.toInt() ?? 0,
-      bucketWidthSecs: (json['bucketWidthSecs'] as num?)?.toDouble() ?? (json['width'] as num?)?.toDouble() ?? 0,
-      startSecs: (json['startSecs'] as num?)?.toDouble() ?? (json['start'] as num?)?.toDouble() ?? 0,
-      endSecs: (json['endSecs'] as num?)?.toDouble() ?? (json['end'] as num?)?.toDouble() ?? 0,
-      trainingStartSecs: (json['trainingStartSecs'] as num?)?.toDouble() ?? (json['trainingStart'] as num?)?.toDouble(),
-      bands: bands,
-      pulse: (json['pulse'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
-      spo2: (json['spo2'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
-      movement: (json['movement'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
-      peakAlphaFreq: (json['peakAlphaFreq'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
-      peakAlphaPower: (json['peakAlphaPower'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
-    );
-  }
-}
-
-/// Per-electrode band power series for one bucket.
-class BandPowerSeries {
-  const BandPowerSeries({
-    required this.delta,
-    required this.theta,
-    required this.alpha,
-    required this.beta,
-    required this.gamma,
-  });
-
-  final List<double?> delta;
-  final List<double?> theta;
-  final List<double?> alpha;
-  final List<double?> beta;
-  final List<double?> gamma;
-
-  Map<String, Object?> toJson() => {
-    'delta': delta,
-    'theta': theta,
-    'alpha': alpha,
-    'beta': beta,
-    'gamma': gamma,
-  };
-
-  static BandPowerSeries? fromJson(Map<String, dynamic>? json) {
-    if (json == null) return null;
-    return BandPowerSeries(
-      delta: (json['delta'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
-      theta: (json['theta'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
-      alpha: (json['alpha'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
-      beta: (json['beta'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
-      gamma: (json['gamma'] as List?)?.map((e) => (e as num?)?.toDouble()).toList() ?? [],
-    );
-  }
-}
 
 enum GestureType { doubleBlink, doubleClench, eyeUp, eyeDown }
 
@@ -232,27 +66,16 @@ class SessionDrowsiness {
     required this.scoreTotalPct,
     required this.meanSleepDir,
     this.threshold,
-    this.series = const [],
-    this.buckets = const [],
-    this.bucketWidthSecs = 0,
   });
 
   final double scoreTotalPct;
   final double meanSleepDir;
   final double? threshold;
-  final List<DrowsinessSample> series;
-  final List<DrowsinessSample> buckets;
-  final double bucketWidthSecs;
 
   Map<String, Object?> toJson() => {
     'scoreTotalPct': scoreTotalPct,
     'meanSleepDir': meanSleepDir,
     if (threshold != null) 'threshold': threshold,
-    if (buckets.isNotEmpty) 'width': bucketWidthSecs,
-    if (buckets.isNotEmpty)
-      'buckets': [for (final b in buckets) b.toJson()]
-    else
-      'series': [for (final s in series) s.toJson()],
   };
 
   static SessionDrowsiness? fromJson(Object? json) {
@@ -263,49 +86,7 @@ class SessionDrowsiness {
       scoreTotalPct: (json['scoreTotalPct'] as num?)?.toDouble() ?? 0,
       meanSleepDir: (json['meanSleepDir'] as num?)?.toDouble() ?? 0,
       threshold: (json['threshold'] as num?)?.toDouble(),
-      bucketWidthSecs: (json['width'] as num?)?.toDouble() ?? 0,
-      series:
-          (json['series'] as List<Object?>?)
-              ?.map(DrowsinessSample.fromJson)
-              .whereType<DrowsinessSample>()
-              .toList() ??
-          const [],
-      buckets:
-          (json['buckets'] as List<Object?>?)
-              ?.map(DrowsinessSample.fromJson)
-              .whereType<DrowsinessSample>()
-              .toList() ??
-          const [],
     );
-  }
-
-  static (List<DrowsinessSample> buckets, double width) decimate(
-    List<DrowsinessSample> series, {
-    double? trainingStartSecs,
-    int bucketCount = 400,
-  }) {
-    if (series.isEmpty) {
-      return (const [], 1.0);
-    }
-    final start = trainingStartSecs ?? series.first.offsetSecs;
-    final end = series.last.offsetSecs;
-    final duration = end > start ? end - start : 1.0;
-    final width = duration / bucketCount;
-    final buckets = <DrowsinessSample>[];
-    for (var i = 0; i < bucketCount; i++) {
-      final bStart = start + i * width;
-      final bEnd = bStart + width;
-      final matching = series.where((s) => s.offsetSecs >= bStart && (i == bucketCount - 1 ? s.offsetSecs <= bEnd : s.offsetSecs < bEnd)).toList();
-      if (matching.isNotEmpty) {
-        final meanSleep = matching.fold<double>(0, (a, s) => a + s.sleepDir) / matching.length;
-        final meanDelta = matching.fold<double>(0, (a, s) => a + s.delta) / matching.length;
-        final warning = matching.any((s) => s.warning);
-        buckets.add(DrowsinessSample(offsetSecs: bStart, sleepDir: meanSleep, delta: meanDelta, warning: warning));
-      } else {
-        buckets.add(DrowsinessSample(offsetSecs: bStart, sleepDir: 0, delta: 0, warning: false));
-      }
-    }
-    return (buckets, width);
   }
 }
 
@@ -356,8 +137,6 @@ class SessionMusic {
     required this.shuffle,
     this.tracks = const [],
     this.series = const [],
-    this.buckets = const [],
-    this.bucketWidthSecs = 0,
   });
 
   final int trackCount;
@@ -367,8 +146,6 @@ class SessionMusic {
   final bool shuffle;
   final List<MusicTrackMarker> tracks;
   final List<MusicCutoffSample> series;
-  final List<MusicCutoffSample> buckets;
-  final double bucketWidthSecs;
 
   Map<String, Object?> toJson() => {
     'trackCount': trackCount,
@@ -377,11 +154,7 @@ class SessionMusic {
     'invert': invert,
     'shuffle': shuffle,
     if (tracks.isNotEmpty) 'tracks': [for (final t in tracks) t.toJson()],
-    if (buckets.isNotEmpty) 'width': bucketWidthSecs,
-    if (buckets.isNotEmpty)
-      'buckets': [for (final b in buckets) b.toJson()]
-    else
-      'series': [for (final s in series) s.toJson()],
+    if (series.isNotEmpty) 'series': [for (final s in series) s.toJson()],
   };
 
   static SessionMusic? fromJson(Object? json) {
@@ -400,47 +173,13 @@ class SessionMusic {
               .whereType<MusicTrackMarker>()
               .toList() ??
           const [],
-      bucketWidthSecs: (json['width'] as num?)?.toDouble() ?? 0,
       series:
           (json['series'] as List<Object?>?)
               ?.map(MusicCutoffSample.fromJson)
               .whereType<MusicCutoffSample>()
               .toList() ??
           const [],
-      buckets:
-          (json['buckets'] as List<Object?>?)
-              ?.map(MusicCutoffSample.fromJson)
-              .whereType<MusicCutoffSample>()
-              .toList() ??
-          const [],
     );
-  }
-
-  static (List<MusicCutoffSample> buckets, double width) decimate(
-    List<MusicCutoffSample> series, {
-    double? trainingStartSecs,
-    int bucketCount = 400,
-  }) {
-    if (series.isEmpty) {
-      return (const [], 1.0);
-    }
-    final start = trainingStartSecs ?? series.first.offsetSecs;
-    final end = series.last.offsetSecs;
-    final duration = end > start ? end - start : 1.0;
-    final width = duration / bucketCount;
-    final buckets = <MusicCutoffSample>[];
-    for (var i = 0; i < bucketCount; i++) {
-      final bStart = start + i * width;
-      final bEnd = bStart + width;
-      final matching = series.where((s) => s.offsetSecs >= bStart && (i == bucketCount - 1 ? s.offsetSecs <= bEnd : s.offsetSecs < bEnd)).toList();
-      if (matching.isNotEmpty) {
-        final meanHz = matching.fold<double>(0, (a, s) => a + s.cutoffHz) / matching.length;
-        buckets.add(MusicCutoffSample(offsetSecs: bStart, cutoffHz: meanHz));
-      } else {
-        buckets.add(MusicCutoffSample(offsetSecs: bStart, cutoffHz: 0));
-      }
-    }
-    return (buckets, width);
   }
 }
 
@@ -685,6 +424,8 @@ class SessionSettings {
     required this.markersInFeedbackEnabled,
     required this.eyeMarkersEnabled,
     this.modelSnapshot,
+    this.guardFeature,
+    this.guardModel,
   });
 
   final bool dynamicAdapt;
@@ -709,6 +450,13 @@ class SessionSettings {
   final bool eyeMarkersEnabled;
   final ModelSnapshot? modelSnapshot;
 
+  /// `band.delta` / `ai.drowsiness` / `none`. Preferred over parsing
+  /// [guardrailEngine] when present.
+  final String? guardFeature;
+
+  /// `luna_large` / `luna_base` / `reve_base`.
+  final String? guardModel;
+
   Map<String, Object?> toJson() => {
     'dynamicAdapt': dynamicAdapt,
     'responsiveness': responsiveness,
@@ -731,6 +479,8 @@ class SessionSettings {
     'markersInFeedbackEnabled': markersInFeedbackEnabled,
     'eyeMarkersEnabled': eyeMarkersEnabled,
     if (modelSnapshot != null) 'modelSnapshot': modelSnapshot!.toJson(),
+    if (guardFeature != null) 'guardFeature': guardFeature,
+    if (guardModel != null) 'guardModel': guardModel,
   };
 
   static SessionSettings? fromJson(Object? json) {
@@ -764,6 +514,8 @@ class SessionSettings {
           json['markersInFeedbackEnabled'] as bool? ?? false,
       eyeMarkersEnabled: json['eyeMarkersEnabled'] as bool? ?? false,
       modelSnapshot: ModelSnapshot.fromJson(json['modelSnapshot'] as Map<String, dynamic>?),
+      guardFeature: json['guardFeature'] as String?,
+      guardModel: json['guardModel'] as String?,
     );
   }
 }
@@ -823,7 +575,6 @@ class SessionMetadata {
     this.deviceId,
     this.recordedChannels = const [],
     this.recordedData = const [],
-    this.summary,
     this.gestures = const [],
     this.calibration,
     this.drowsiness,
@@ -850,9 +601,10 @@ class SessionMetadata {
     this.feedbackEngine,
     this.userId,
     this.sessionId,
+    this.protocolJson,
   });
 
-  final ProtocolType protocol;
+  final String protocol;
   final int durationMinutes;
   final int elapsedSeconds;
   final String sound;
@@ -864,7 +616,6 @@ class SessionMetadata {
   final String? deviceId;
   final List<String> recordedChannels;
   final List<String> recordedData;
-  final SessionOverview? summary;
   final List<GestureMarker> gestures;
   final SessionCalibration? calibration;
   final SessionDrowsiness? drowsiness;
@@ -892,8 +643,11 @@ class SessionMetadata {
   final String? userId;
   final String? sessionId;
 
+  /// Snapshot of the resolved protocol document at save time.
+  final Map<String, Object?>? protocolJson;
+
   Map<String, Object?> toJson() => {
-    'protocol': protocol.name,
+    'protocol': protocol,
     'durationMinutes': durationMinutes,
     'elapsedSeconds': elapsedSeconds,
     'sound': sound,
@@ -905,7 +659,6 @@ class SessionMetadata {
     if (deviceId != null) 'deviceId': deviceId,
     if (recordedChannels.isNotEmpty) 'recordedChannels': recordedChannels,
     if (recordedData.isNotEmpty) 'recordedData': recordedData,
-    if (summary != null) 'summary': summary!.toJson(),
     if (gestures.isNotEmpty) 'gestures': [for (final g in gestures) g.toJson()],
     if (calibration != null) 'calibration': calibration!.toJson(),
     if (drowsiness != null) 'drowsiness': drowsiness!.toJson(),
@@ -932,16 +685,14 @@ class SessionMetadata {
     if (feedbackEngine != null) 'feedbackEngine': feedbackEngine,
     if (userId != null) 'userId': userId,
     if (sessionId != null) 'sessionId': sessionId,
+    if (protocolJson != null) 'protocolJson': protocolJson,
   };
 
   static SessionMetadata? fromJson(Object? json) {
     if (json is! Map<String, Object?>) {
       return null;
     }
-    final protocolName = json['protocol'] as String?;
-    final protocol = ProtocolType.values
-        .where((p) => p.name == protocolName)
-        .firstOrNull ?? ProtocolType.drowsiness;
+    final protocol = json['protocol'] as String? ?? '';
     return SessionMetadata(
       protocol: protocol,
       durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
@@ -963,7 +714,6 @@ class SessionMetadata {
               ?.whereType<String>()
               .toList() ??
           const [],
-      summary: SessionOverview.fromJson(json['summary']),
       gestures:
           (json['gestures'] as List<Object?>?)
               ?.map(GestureMarker.fromJson)
@@ -978,7 +728,7 @@ class SessionMetadata {
       sessionSettings: SessionSettings.fromJson(json['sessionSettings']),
       durationS: (json['durationS'] as num?)?.toInt() ?? 0,
       startedAt: json['startedAt'] as String?,
-      protocolVersion: json['protocolVersion'] as String?,
+      protocolVersion: _protocolVersionFromJson(json['protocolVersion']),
       calibrationProfile: json['calibrationProfile'] as String?,
       avgSpo2: (json['avgSpo2'] as num?)?.toDouble(),
       peakAlphaHz: (json['peakAlphaHz'] as num?)?.toDouble(),
@@ -995,8 +745,41 @@ class SessionMetadata {
       feedbackEngine: json['feedbackEngine'] as String?,
       userId: json['userId'] as String?,
       sessionId: json['sessionId'] as String?,
+      protocolJson: json['protocolJson'] is Map
+          ? Map<String, Object?>.from(json['protocolJson'] as Map)
+          : null,
     );
   }
+
+  /// Parse metadata JSON bytes from a v5 head (`jsonDecode` maps are
+  /// `Map<String, dynamic>`; [fromJson] expects `Map<String, Object?>`).
+  static SessionMetadata? fromJsonBytes(List<int> bytes) {
+    if (bytes.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(utf8.decode(bytes));
+      return fromJson(_coerceJson(decoded));
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+String? _protocolVersionFromJson(Object? value) {
+  if (value is String) return value;
+  if (value is num) return value.toString();
+  return null;
+}
+
+Object? _coerceJson(Object? value) {
+  if (value is Map) {
+    return <String, Object?>{
+      for (final e in value.entries) e.key.toString(): _coerceJson(e.value),
+    };
+  }
+  if (value is List) {
+    return [for (final v in value) _coerceJson(v)];
+  }
+  return value;
 }
 
 /// Summary of a session for the history list.

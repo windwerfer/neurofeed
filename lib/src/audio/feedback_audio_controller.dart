@@ -47,6 +47,8 @@ class FeedbackAudioController {
   /// Selected guardrail warning sound (bell variants / alarm / none).
   GuardrailSound _warningSound = GuardrailSound.softBowl;
 
+  GuardrailSound get warningSound => _warningSound;
+
   /// Alarm-loop bookkeeping: the ramp grows over the first minute while a
   /// warning stays active, then holds at full volume.
   Timer? _alarmTimer;

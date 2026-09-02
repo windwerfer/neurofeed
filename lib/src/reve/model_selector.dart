@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
@@ -5,9 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
-import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/models.dart';
@@ -198,60 +197,49 @@ class _ModelInstallBubbleState extends ConsumerState<ModelInstallBubble> {
 
 /// The model dropdown used in the settings card and the session gate bubble.
 ///
-/// Shows every guardrail mode with its size, a check when its files are already on
-/// disk, and persists the selection to [Settings].
+/// Shows every foundation model with its size, a check when its files are
+/// already on disk, and persists the selection to [Settings.guardModel].
 class ModelSelectorDropdown extends ConsumerWidget {
   const ModelSelectorDropdown({super.key, this.onChanged});
 
-  final ValueChanged<GuardrailMode>? onChanged;
+  final ValueChanged<ModelKind>? onChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
-    final fb = ref.watch(feedbackStateProvider);
-    final mode = settings.guardrailModeForProtocol[fb.protocol]!;
-    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
-    final protocolInfo = catalog?.forName(fb.protocol.name);
+    final selected =
+        modelKindFromFfId(settings.guardModel) ?? defaultModelKind;
 
-    // Modes available for this protocol
-    final allowedModes = GuardrailMode.values.where((m) {
-      if (protocolInfo?.guardrailAllowed == false) {
-        return m == GuardrailMode.none;
-      }
-      return true;
-    }).toList();
-
-    return DropdownButtonFormField<GuardrailMode>(
-      initialValue: mode,
+    return DropdownButtonFormField<ModelKind>(
+      initialValue: selected,
       isExpanded: true,
       decoration: const InputDecoration(
         border: OutlineInputBorder(),
         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
       items: [
-        for (final m in allowedModes)
+        for (final k in ModelKind.values)
           DropdownMenuItem(
-            value: m,
+            value: k,
             child: Row(
               children: [
-                Expanded(child: Text(m.label)),
-                if (m.isAi) ModelInstalledCheck(kind: m.modelKind!),
-                if (m.isBandMath) ModelInstalledCheck(alwaysShow: true),
+                Expanded(child: Text(k.folderLabel)),
+                ModelInstalledCheck(kind: k),
               ],
             ),
           ),
       ],
-      onChanged: (m) {
-        if (m == null) return;
-        settings.setGuardrailMode(fb.protocol, m);
-        onChanged?.call(m);
+      onChanged: (k) {
+        if (k == null) return;
+        unawaited(ref.read(modelEngineNotifierProvider.notifier).select(k));
+        onChanged?.call(k);
       },
     );
   }
 }
 
-/// Short description + "how to get it" text for the currently selected guardrail mode,
-/// plus its install status.
+/// Short description + "how to get it" text for the currently selected
+/// foundation model, plus its install status.
 class ModelInfoBlock extends ConsumerWidget {
   const ModelInfoBlock({super.key});
 
@@ -259,17 +247,12 @@ class ModelInfoBlock extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final settings = ref.watch(settingsProvider);
-    final fb = ref.watch(feedbackStateProvider);
-    final mode = settings.guardrailModeForProtocol[fb.protocol]!;
+    final kind = modelKindFromFfId(settings.guardModel) ?? defaultModelKind;
     final engineState = ref.watch(modelEngineNotifierProvider);
-    final installed = mode.modelKind != null
-        ? ref.watch(modelInstalledProvider(mode.modelKind!)).value
-        : mode.isBandMath;
+    final installed = ref.watch(modelInstalledProvider(kind)).value;
 
     String statusText;
-    if (mode.isBandMath) {
-      statusText = 'Classical frontal-delta math — always available.';
-    } else if (engineState is ModelEngineReady) {
+    if (engineState is ModelEngineReady) {
       statusText = engineState.description;
     } else if (engineState is ModelEngineLoading) {
       statusText = 'Loading…';
@@ -283,37 +266,29 @@ class ModelInfoBlock extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 12),
-        if (mode.isBandMath)
-          Text(
-            'Classical frontal-delta math, no AI model required. '
-            'Uses the per-second frontal delta band power as the sleep-drift signal.',
-            style: theme.textTheme.bodyMedium,
-          )
-        else if (mode.modelKind != null)
-          Text(
-            mode.modelKind!.shortDescription,
-            style: theme.textTheme.bodyMedium,
-          ),
+        Text(
+          kind.shortDescription,
+          style: theme.textTheme.bodyMedium,
+        ),
         const SizedBox(height: 6),
-        if (mode.modelKind != null)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(top: 2),
-                child: Icon(Icons.info_outline, size: 14),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  mode.modelKind!.getGuide,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 2),
+              child: Icon(Icons.info_outline, size: 14),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                kind.getGuide,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
         const SizedBox(height: 6),
         Text(
           statusText,

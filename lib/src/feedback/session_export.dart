@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -6,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:muse_ml/src/charts/band_cache.dart';
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
@@ -16,6 +14,7 @@ import 'package:muse_ml/src/feedback/session_pdf_export.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/rust/api/edf_export.dart';
+import 'package:muse_ml/src/rust/api/session_format.dart';
 
 /// What an export produces.
 enum ExportKind { pdf, pngThumbnail, pngAll, csv, edf }
@@ -138,11 +137,9 @@ class SessionExporter {
   static const exportDirName = 'export';
 
   /// Load protocol info from the JSON asset.
-  static Future<ProtocolInfo?> _loadProtocolInfo(ProtocolType type) async {
-    final raw = await rootBundle.loadString(ProtocolCatalog.asset);
-    final json = jsonDecode(raw) as Map<String, Object?>;
-    final catalog = ProtocolCatalog.fromJson(json);
-    return catalog.forName(type.name);
+  static Future<ProtocolDocument?> _loadProtocolInfo(String id) async {
+    final catalog = await ProtocolCatalog.load();
+    return catalog.forName(id);
   }
 
   Future<SessionExportResult> exportSessions({
@@ -341,7 +338,7 @@ class SessionExporter {
         params: EdfExportParams(
           patientId: 'Muse ML',
           recordingId:
-              '${meta.protocol.name} ${meta.savedAt}',
+              '${meta.protocol} ${meta.savedAt}',
           year: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).year,
           month: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).month,
           day: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).day,
@@ -388,8 +385,8 @@ class SessionExporter {
     SessionSummary s,
     List<ExportWarning> warnings,
   ) async {
-    final data = await _readBody(s, warnings);
-    if (data == null) {
+    final prepared = await _prepareComputed(s, warnings);
+    if (prepared == null) {
       return 0;
     }
     final images = <ExportedImage>[];
@@ -401,19 +398,8 @@ class SessionExporter {
       images.add(ExportedImage('thumbnail.png', Uint8List.fromList(thumbnail)));
     }
 
-    final meta = s.metadata;
-    final protocol = await _loadProtocolInfo(meta.protocol);
-    if (protocol == null) {
-      warnings.add(ExportWarning(s.id, 'protocol not found in catalog'));
-      return 0;
-    }
-    final prepared = prepareChartData(
-      data,
-      trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
-      metric: protocol.rewardMetric,
-      conditions: protocol.conditions,
-    );
-    final charts = chartsFor(prepared, meta);
+    final meta = prepared.meta;
+    final charts = chartsFor(prepared.data, meta);
 
     for (final chart in charts) {
       final bytes = await rasterizeChart(chart);
@@ -466,6 +452,34 @@ class SessionExporter {
     return SessionReader.readRaw(body);
   }
 
+  Future<({SessionChartData data, SessionMetadata meta})?> _prepareComputed(
+    SessionSummary s,
+    List<ExportWarning> warnings,
+  ) async {
+    final container = await _store.readContainer(s.id);
+    if (container == null) {
+      warnings.add(ExportWarning(s.id, 'could not read session file'));
+      return null;
+    }
+    final head = v5ParseHead(bytes: container);
+    final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ?? s.metadata;
+    final protocol = await _loadProtocolInfo(meta.protocol);
+    if (protocol == null) {
+      warnings.add(ExportWarning(s.id, 'protocol not found in catalog'));
+      return null;
+    }
+    final frames = v5ExtractComputed(bytes: container);
+    return (
+      data: prepareChartDataFromComputed(
+        frames,
+        trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
+        metric: protocol.reward?.feature ?? 'band.atr',
+        conditions: protocol.conditions,
+      ),
+      meta: meta,
+    );
+  }
+
   static String _num(double v) => v.toStringAsPrecision(6);
 
   /// File stem for one session: `yyyyMMdd_HHmmss_protocol_id8`.
@@ -478,7 +492,7 @@ class SessionExporter {
         '${t.minute.toString().padLeft(2, '0')}'
         '${t.second.toString().padLeft(2, '0')}';
     final shortId = id.length > 8 ? id.substring(id.length - 8) : id;
-    return '${date}_${time}_${meta.protocol.name}_$shortId';
+    return '${date}_${time}_${meta.protocol}_$shortId';
   }
 
   /// The same charts the detail view shows: bands, alpha-vs-theta, movement,
@@ -543,8 +557,7 @@ class SessionExporter {
         yMax: 100,
       ),
     ];
-    final drowsiness = meta.drowsiness;
-    if (drowsiness != null && drowsiness.buckets.isNotEmpty) {
+    if (prepared.guardrailSleepDir.isNotEmpty) {
       charts.add(
         ExportChart(
           title: 'Sleep guardrail',
@@ -553,15 +566,15 @@ class SessionExporter {
             ExportChartLine(
               'sleep-dir',
               const Color(0xFFAB47BC),
-              [for (final b in drowsiness.buckets) b.sleepDir],
-              threshold: drowsiness.threshold,
+              prepared.guardrailSleepDir,
+              threshold: meta.drowsiness?.threshold,
             ),
           ],
         ),
       );
     }
     final music = meta.music;
-    if (music != null && music.buckets.isNotEmpty) {
+    if (music != null && music.series.isNotEmpty) {
       charts.add(
         ExportChart(
           title: 'Music cutoff',
@@ -570,7 +583,7 @@ class SessionExporter {
             ExportChartLine(
               'cutoff',
               const Color(0xFF66BB6A),
-              [for (final b in music.buckets) b.cutoffHz],
+              [for (final s in music.series) s.cutoffHz],
             ),
           ],
         ),
