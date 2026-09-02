@@ -1,5 +1,14 @@
 # Feedback Dev Todos
 
+## Next (session charts)
+
+Frozen spec + implementer handoff (new thread):
+
+- [`.ai/feeback/session-computed-charts.md`](session-computed-charts.md)
+- [`.ai/feeback/handoff-session-computed-charts.md`](handoff-session-computed-charts.md)
+
+1 Hz computed is the only summary waveform. Assemble v5 in scratch at session end. No 400-bucket `SessionOverview`.
+
 ## Current branch: main (Phase I merged, ready for testing)
 
 - [x] Phase 0: Navigation backbone + state machine + stub views
