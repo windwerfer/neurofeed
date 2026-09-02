@@ -4,14 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/feedback/feedback_engine.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
-const int electrodeAf7 = 1;
-const int electrodeAf8 = 2;
-
 /// A per-pad signal-quality score at or above this value is treated as a
-/// "good" electrode and contributes to the live ATR computation. Pads below
-/// it are dropped for that sample. Kept in sync with [signalGoodThreshold]
-/// so the calibration gate and the live autodrop use the same notion of a
-/// good contact. (Future feedback options may add per-pad weighting here.)
+/// "good" electrode and contributes to inhibit relative-band aggregation.
+/// Pads below it are dropped for that sample. Kept in sync with
+/// [signalGoodThreshold] so the calibration gate and the live autodrop use
+/// the same notion of a good contact.
 const double atrUsableSignalThreshold = 80.0;
 
 const double movementGateThreshold = 0.05;
@@ -58,17 +55,7 @@ class RelativeTarget {
     }
     return betaRel / thetaRel;
   }
-
 }
-
-/// PR 3 temporary extractor — deleted in PR 4 when RewardLane reads FeatureDto.
-double? scalarForFeature(String id, RelativeTarget t) => switch (id) {
-  'band.atr' => t.atr,
-  'band.tar' => t.tar,
-  'band.btr' => t.betaTheta,
-  'band.alpha' => t.alphaRel,
-  _ => null,
-};
 
 /// Continuous band-ratio uptraining engine.
 ///
@@ -86,13 +73,12 @@ double? scalarForFeature(String id, RelativeTarget t) => switch (id) {
 /// learning zone.
 class RatioEngine implements FeedbackEngine {
   /// Direction-agnostic ratio engine, tagged with the reward feature id the
-  /// caller is currently extracting. Updated on protocol selection; the
-  /// extraction lane ([FeedbackStateNotifier._metricOf]) feeds matching
-  /// values.
+  /// caller is currently feeding ([FeatureDto.value]).
   String featureId;
 
-  /// Success-rate window in feedback epochs (~10 Hz, so this covers ~30 s).
-  static const int epochWindow = 300;
+  /// Wall-clock success-rate window. Equivalent of today's 300 epochs at
+  /// ~4 Hz `_onBands` (not 30 one-Hz [FeatureDto] samples).
+  static const int epochWindowSeconds = 75;
   static const double highSuccessRate = 0.8;
   static const double lowSuccessRate = 0.4;
 
@@ -109,8 +95,9 @@ class RatioEngine implements FeedbackEngine {
 
   int percentile;
   final List<double> _baseline = [];
-  final List<bool> _epochs = [];
+  final List<({DateTime time, bool inTarget})> _epochs = [];
   final List<({DateTime time, double value, bool clean})> _recent = [];
+  DateTime? _epochStartedAt;
   double? _threshold;
   double? _initialThreshold;
   bool _dynamicAdapt = true;
@@ -119,10 +106,15 @@ class RatioEngine implements FeedbackEngine {
   double _emaAlpha = defaultEmaAlpha;
   double? _emaThreshold;
 
+  /// Wall-clock success window. Production is [epochWindowSeconds]; tests may
+  /// pass a shorter duration.
+  final Duration epochWindow;
+
   RatioEngine({
     this.percentile = 40,
     this.featureId = 'band.atr',
-  });
+    Duration? epochWindow,
+  }) : epochWindow = epochWindow ?? const Duration(seconds: epochWindowSeconds);
 
   @override
   bool get hasBaseline => _baseline.isNotEmpty;
@@ -191,13 +183,21 @@ class RatioEngine implements FeedbackEngine {
   }
 
   /// Success rate over the current rolling epoch window, or null when the
-  /// window is not full yet.
+  /// window is not full yet ([epochWindow] of wall-clock time).
   @override
   double? get successRate {
-    if (_epochs.length < epochWindow) {
+    if (!_epochWindowFull) {
       return null;
     }
-    return _epochs.where((b) => b).length / _epochs.length;
+    return _epochs.where((e) => e.inTarget).length / _epochs.length;
+  }
+
+  bool get _epochWindowFull {
+    final start = _epochStartedAt;
+    if (start == null || _epochs.isEmpty) {
+      return false;
+    }
+    return DateTime.now().difference(start) >= epochWindow;
   }
 
   @override
@@ -205,6 +205,7 @@ class RatioEngine implements FeedbackEngine {
     _baseline.clear();
     _epochs.clear();
     _recent.clear();
+    _epochStartedAt = null;
     _threshold = null;
     _initialThreshold = null;
     _emaThreshold = null;
@@ -269,10 +270,10 @@ class RatioEngine implements FeedbackEngine {
 
   @override
   void recordEpoch(bool inTarget) {
-    _epochs.add(inTarget);
-    if (_epochs.length > epochWindow) {
-      _epochs.removeAt(0);
-    }
+    final now = DateTime.now();
+    _epochStartedAt ??= now;
+    _epochs.add((time: now, inTarget: inTarget));
+    _epochs.removeWhere((e) => now.difference(e.time) > epochWindow);
   }
 
   /// Records a live session sample for in-flight recalibration. Samples
@@ -302,18 +303,20 @@ class RatioEngine implements FeedbackEngine {
       ..clear()
       ..addAll(clean);
     _epochs.clear();
+    _epochStartedAt = null;
     _initialThreshold = null;
     computeThreshold();
     return true;
   }
 
-  /// Adjusts the threshold based on the recent success rate (rolling window of
-  /// [epochWindow] epochs). Success above [highSuccessRate] means the task is
-  /// too easy (threshold raised); below [lowSuccessRate] too hard (threshold
-  /// lowered). The threshold is clamped between the baseline percentile and
-  /// baselineMean + [ceilingStddevs] standard deviations so it can never race
-  /// beyond what the user can physically produce, and a zero-success window
-  /// immediately resets it to the baseline percentile (circuit breaker).
+  /// Adjusts the threshold based on the recent success rate (rolling
+  /// [epochWindow] of wall-clock time). Success above [highSuccessRate] means
+  /// the task is too easy (threshold raised); below [lowSuccessRate] too hard
+  /// (threshold lowered). The threshold is clamped between the baseline
+  /// percentile and baselineMean + [ceilingStddevs] standard deviations so it
+  /// can never race beyond what the user can physically produce, and a
+  /// zero-success window immediately resets it to the baseline percentile
+  /// (circuit breaker).
   @override
   void adapt() {
     if (!_dynamicAdapt) {
@@ -321,7 +324,7 @@ class RatioEngine implements FeedbackEngine {
     }
     final t = _threshold;
     final initial = _initialThreshold;
-    if (t == null || initial == null || _epochs.length < epochWindow) {
+    if (t == null || initial == null || !_epochWindowFull) {
       return;
     }
     final mean = baselineMean;
@@ -330,7 +333,7 @@ class RatioEngine implements FeedbackEngine {
     final maxAllowed = mean == null || sd == null
         ? t * raise
         : mean + ceilingStddevs * sd;
-    final success = _epochs.where((b) => b).length / _epochs.length;
+    final success = _epochs.where((e) => e.inTarget).length / _epochs.length;
     if (success == 0.0) {
       _threshold = initial;
       _emaThreshold = initial;
@@ -405,11 +408,29 @@ class RatioEngine implements FeedbackEngine {
   }
 }
 
-class TargetStateAggregator {
+/// Relative-band aggregator for **inhibit + nerd-stats**, not the reward
+/// scalar. Reward native values come from [FeatureDto]. Electrodes are
+/// montage **names** (Muse AF7/AF8); Dart's 4-slot quality autodrops pads.
+class RelativeBandAggregator {
+  RelativeBandAggregator(this.electrodeNames, {required this.montageNames});
+
+  final List<String> electrodeNames;
+  final List<String> montageNames;
   final Map<int, _ChannelBands> _latest = {};
 
+  Set<int> get _indices {
+    final out = <int>{};
+    for (final name in electrodeNames) {
+      final i = montageNames.indexOf(name);
+      if (i >= 0) {
+        out.add(i);
+      }
+    }
+    return out;
+  }
+
   void update(BandsDto bands) {
-    if (bands.electrode == electrodeAf7 || bands.electrode == electrodeAf8) {
+    if (_indices.contains(bands.electrode)) {
       _latest[bands.electrode] = _ChannelBands(
         timestamp: bands.timestamp,
         delta: bands.delta,
@@ -425,22 +446,22 @@ class TargetStateAggregator {
     _latest.clear();
   }
 
-  /// Resolves the combined per-sample relative bands from the two frontal
-  /// pads, dropping any pad whose signal quality is currently below
+  /// Resolves the combined per-sample relative bands from the named pads,
+  /// dropping any pad whose signal quality is currently below
   /// [atrUsableSignalThreshold] instead of averaging corrupted data into the
-  /// result. Uses the single usable pad when the other is bad, and returns
-  /// null only when neither pad is usable.
+  /// result. Uses any remaining usable pad, and returns null only when none
+  /// of the named pads are usable.
   RelativeTarget? evaluate([List<double>? quality]) {
-    final af7 = _latest[electrodeAf7];
-    final af8 = _latest[electrodeAf8];
     final picked = <_RelativeBands>[];
-    if (af7 != null && _padUsable(quality, electrodeAf7)) {
-      final rel = af7.relative();
-      if (rel != null) picked.add(rel);
-    }
-    if (af8 != null && _padUsable(quality, electrodeAf8)) {
-      final rel = af8.relative();
-      if (rel != null) picked.add(rel);
+    for (final i in _indices) {
+      final ch = _latest[i];
+      if (ch == null || !_padUsable(quality, i)) {
+        continue;
+      }
+      final rel = ch.relative();
+      if (rel != null) {
+        picked.add(rel);
+      }
     }
     if (picked.isEmpty) {
       return null;

@@ -1,7 +1,13 @@
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
-import 'package:muse_ml/src/feedback/target_state.dart';
+import 'package:muse_ml/src/feedback/target_state.dart'
+    show movementGateThreshold;
+
+/// Charts stay Muse-4-ch this series (non-goal). Local copies; do not import
+/// from the reward path.
+const int electrodeAf7 = 1;
+const int electrodeAf8 = 2;
 
 /// Decimated, display-ready chart series for one session: the per-second
 /// (or per-bucket) band-relative powers of the frontal AF7/AF8 average, the

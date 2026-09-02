@@ -238,10 +238,11 @@ class _FaultyPadFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final quality = ref.read(appStateProvider).signalQuality;
-    final bothNeeded = neededElectrodes
+    final gate = ref.read(feedbackStateProvider.notifier).gateElectrodes;
+    final bothNeeded = gate
         .where((i) => i < (quality?.length ?? 0))
         .every((i) => (quality?[i] ?? 0) >= signalGoodThreshold);
-    final anyNeeded = neededElectrodes.any(
+    final anyNeeded = gate.any(
       (i) =>
           i < (quality?.length ?? 0) &&
           (quality?[i] ?? 0) >= signalGoodThreshold,
