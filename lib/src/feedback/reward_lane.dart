@@ -1,3 +1,4 @@
+import 'package:muse_ml/src/audio/reward_output.dart';
 import 'package:muse_ml/src/feedback/feature_bus.dart';
 import 'package:muse_ml/src/feedback/feedback_phase.dart';
 import 'package:muse_ml/src/feedback/gate_electrodes.dart';
@@ -29,14 +30,14 @@ class RewardTick {
 class RewardLane {
   RewardLane({
     required this.engine,
-    required this.onReward,
+    required this.output,
     required this.onStats,
     required this.onComputedFeedback,
     required this.onThresholdChanged,
   });
 
   final RatioEngine engine;
-  final void Function(double value, {required bool inTarget}) onReward;
+  RewardOutput output;
   final void Function(double value) onStats;
   final void Function({
     required double ratio,
@@ -98,13 +99,7 @@ class RewardLane {
     final rel = _bands.evaluate(tick.quality);
     if (rel == null) {
       onStats(sample.value);
-      onReward(sample.value, inTarget: false);
-      onComputedFeedback(
-        ratio: sample.value,
-        threshold: engine.threshold,
-        inTarget: false,
-        inTargetPct: engine.successRate ?? 0.0,
-      );
+      _emit(sample.value, inTarget: false);
       return;
     }
     var inTarget = engine.isInTarget(sample.value);
@@ -128,9 +123,14 @@ class RewardLane {
       onThresholdChanged();
     }
     onStats(sample.value);
-    onReward(sample.value, inTarget: inTarget);
+    _emit(sample.value, inTarget: inTarget);
+  }
+
+  void _emit(double value, {required bool inTarget}) {
+    final pct = engine.percentileOf(value) ?? 50.0;
+    output.onSample(percentile: pct, inTarget: inTarget);
     onComputedFeedback(
-      ratio: sample.value,
+      ratio: value,
       threshold: engine.threshold,
       inTarget: inTarget,
       inTargetPct: engine.successRate ?? 0.0,

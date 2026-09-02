@@ -5,6 +5,8 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:muse_ml/src/audio/calibration_clips.dart';
+import 'package:muse_ml/src/audio/guardrail_sound.dart';
+import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/feedback/feature_catalog.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 
@@ -81,6 +83,11 @@ void main() {
             reason: 'reward.feature ${info.reward!.feature} missing from features.json');
         expect(feature!.usableAsReward(), isTrue,
             reason: '${info.reward!.feature} must be usableFor reward');
+        expect(
+          RewardOutputId.values.map((e) => e.name),
+          contains(info.reward!.output),
+          reason: '${info.id} reward.output ${info.reward!.output} is not a RewardOutputId',
+        );
       }
       if (info.guard != null) {
         final feature = features[info.guard!.feature];
@@ -88,6 +95,11 @@ void main() {
             reason: 'guard.feature ${info.guard!.feature} missing from features.json');
         expect(feature!.usableAsGuard(), isTrue,
             reason: '${info.guard!.feature} must be usableFor guard');
+        expect(
+          GuardrailSound.values.map((e) => e.name),
+          contains(info.guard!.output),
+          reason: '${info.id} guard.output ${info.guard!.output} is not a GuardrailSound',
+        );
       }
     }
   });

@@ -18,6 +18,7 @@ import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
+import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/settings.dart';
 
@@ -231,8 +232,8 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         feedbackSoundName: widget.readOnly
             ? (meta?.feedbackSound == null
                   ? null
-                  : feedbackModeFromName(meta!.feedbackSound!).label)
-            : fb.feedbackMode.label,
+                  : feedbackSoundLabel(meta!.feedbackSound))
+            : fb.rewardOutput.label,
         prepared: _prepared!,
         drowsiness: widget.readOnly
             ? meta?.drowsiness
@@ -342,7 +343,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       durationMinutes: fb.durationMinutes,
       elapsedSeconds: fb.elapsedSeconds,
       sound: fb.soundName,
-      feedbackSound: fb.feedbackMode.name,
+      feedbackSound: fb.rewardOutput.name,
       savedAt: DateTime.now().toIso8601String(),
       notes: _notes.text,
       stats: stats == null

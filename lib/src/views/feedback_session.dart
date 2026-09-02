@@ -309,7 +309,7 @@ class _PhaseControls extends ConsumerWidget {
       if (await _refuseCrownStart(context, ref)) return;
       if (!context.mounted) return;
       final settings = ref.watch(settingsProvider);
-      if (fb.feedbackMode == FeedbackMode.music) {
+      if (fb.rewardOutput == RewardOutputId.musicFilter) {
         if (settings.musicFolder == null) {
           await showDialog<void>(
             context: context,
@@ -710,10 +710,10 @@ class _SessionSettingsCard extends ConsumerWidget {
           const Divider(height: 1, indent: 16, endIndent: 16),
           if (hasReward) ...[
             const _FeedbackTile(),
-            if (fb.feedbackMode == FeedbackMode.binaural) ...[
+            if (fb.rewardOutput == RewardOutputId.binauralSwell) ...[
               const _BinauralTile(),
             ],
-            if (fb.feedbackMode == FeedbackMode.music) ...[
+            if (fb.rewardOutput == RewardOutputId.musicFilter) ...[
               const _MusicTile(),
             ],
           ],
@@ -802,7 +802,7 @@ class _FeedbackTile extends ConsumerWidget {
       leading: const Icon(Icons.headphones),
       title: const Text('Feedback Sound'),
       subtitle: Text(
-        '${fb.feedbackMode.label} • ${fb.baselinePercentile}th percentile',
+        '${fb.rewardOutput.label} • ${fb.baselinePercentile}th percentile',
       ),
       trailing: IconButton(
         icon: const Icon(Icons.settings),
@@ -813,17 +813,17 @@ class _FeedbackTile extends ConsumerWidget {
         ),
       ),
       onTap: () async {
-        final result = await showDialog<FeedbackMode>(
+        final result = await showDialog<RewardOutputId>(
           context: context,
-          builder: (ctx) => _FeedbackModePicker(current: fb.feedbackMode),
+          builder: (ctx) => _RewardOutputPicker(current: fb.rewardOutput),
         );
-        if (result == null || result == fb.feedbackMode) {
+        if (result == null || result == fb.rewardOutput) {
           return;
         }
         if (!context.mounted) {
           return;
         }
-        if (result == FeedbackMode.music) {
+        if (result == RewardOutputId.musicFilter) {
           final settings = ref.watch(settingsProvider);
           if (settings.musicFolder == null) {
             final proceed = await showDialog<bool>(
@@ -887,10 +887,10 @@ class _FeedbackTile extends ConsumerWidget {
           if (guardrailIntended && settings.guardrailIsAiFor(fb.protocol)) {
             await _maybeWarnMusicAiCpu(context, settings);
           }
-          ref.read(feedbackStateProvider.notifier).selectFeedbackMode(result);
+          ref.read(feedbackStateProvider.notifier).selectRewardOutput(result);
           return;
         }
-        ref.read(feedbackStateProvider.notifier).selectFeedbackMode(result);
+        ref.read(feedbackStateProvider.notifier).selectRewardOutput(result);
       },
     );
   }
@@ -1914,9 +1914,9 @@ class _SoundPicker extends StatelessWidget {
     );
   }
 }
-class _FeedbackModePicker extends StatelessWidget {
-  final FeedbackMode current;
-  const _FeedbackModePicker({required this.current});
+class _RewardOutputPicker extends StatelessWidget {
+  final RewardOutputId current;
+  const _RewardOutputPicker({required this.current});
 
   @override
   Widget build(BuildContext context) {
@@ -1926,7 +1926,7 @@ class _FeedbackModePicker extends StatelessWidget {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ...FeedbackMode.values.map((m) {
+          ...RewardOutputId.values.map((m) {
             final sel = m == current;
             return ListTile(
               leading: Icon(
@@ -1934,18 +1934,7 @@ class _FeedbackModePicker extends StatelessWidget {
                 color: sel ? theme.colorScheme.primary : null,
               ),
               title: Text(m.label),
-              subtitle: m == FeedbackMode.bowlChimes
-                  ? const Text('Warm chimes when you reach the target')
-                  : m == FeedbackMode.rain
-                  ? const Text('Rain that quiets as you get closer')
-                  : m == FeedbackMode.music
-                  ? const Text('Your folder through a reward-driven filter')
-                  : m == FeedbackMode.binaural
-                  ? const Text(
-                      'Synth alpha-flow beats that swell as you reach the '
-                      'target (headphones required)',
-                    )
-                  : const Text('Silent feedback — no reward sound'),
+              subtitle: Text(m.subtitle),
               selected: sel,
               onTap: () => Navigator.of(context).pop(m),
             );
@@ -2079,7 +2068,7 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
                   setState(() => _feature = v);
                   settings.setGuardFeature(fb.protocol, v);
                   if (v == guardFeatureAiDrowsiness &&
-                      fb.feedbackMode == FeedbackMode.music) {
+                      fb.rewardOutput == RewardOutputId.musicFilter) {
                     unawaited(_maybeWarnMusicAiCpu(context, settings));
                   }
                 },

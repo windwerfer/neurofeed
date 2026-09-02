@@ -95,7 +95,7 @@ class IncompleteSession {
       'protocol': protocol,
       'durationMinutes': durationMinutes,
       'elapsedSeconds': durationMinutes * 60,
-      'feedbackSound': 'bowlChimes',
+      'feedbackSound': 'chime',
       'metadataDescription': '',
       'device': {
         'name': 'Unknown',

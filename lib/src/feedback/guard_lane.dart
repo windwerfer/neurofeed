@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/audio/audio_service.dart';
-import 'package:muse_ml/src/audio/guardrail_sound.dart';
+import 'package:muse_ml/src/audio/guard_output.dart';
+import 'package:muse_ml/src/audio/reward_output.dart';
 import 'package:muse_ml/src/feedback/feature_bus.dart';
 import 'package:muse_ml/src/feedback/feedback_phase.dart';
 import 'package:muse_ml/src/feedback/gate_electrodes.dart';
@@ -42,8 +42,6 @@ class GuardTick {
     required this.collectingBaseline,
     required this.collectionEyes,
     required this.muffleReward,
-    required this.musicActive,
-    required this.warningSoundName,
     required this.sessionStartAt,
     required this.writeWarningMetadata,
     required this.updateComputed,
@@ -53,8 +51,6 @@ class GuardTick {
   final bool collectingBaseline;
   final String? collectionEyes;
   final bool muffleReward;
-  final bool musicActive;
-  final String warningSoundName;
   final DateTime? sessionStartAt;
   final void Function({
     required double sleepDir,
@@ -77,9 +73,10 @@ class GuardTick {
 /// or `inTarget`. [ReveDto] extras (`clarity` / `dim` / `kind`) feed computed
 /// frames only — the warn path does not read `ReveDto.sleepDir`.
 class GuardLane {
-  GuardLane({required AudioService audio}) : _audio = audio;
+  GuardLane({required this.guardOutput, required this.rewardOutput});
 
-  final AudioService _audio;
+  GuardOutput guardOutput;
+  RewardOutput rewardOutput;
 
   bool enabled = false;
   bool bandMath = false;
@@ -264,29 +261,22 @@ class GuardLane {
       lastSleepDir: lastSleepDir,
       threshold: t,
     );
-    final mufflesMusic = tick.musicActive && tick.muffleReward;
-    final warningSound = GuardrailSound.fromName(tick.warningSoundName);
     if (!over) {
       warningActive = false;
-      if (mufflesMusic) {
-        _audio.setMusicMuffle(false);
+      if (tick.muffleReward) {
+        rewardOutput.setMuffle(false);
       }
-      if (warningSound.playsContinuously) {
-        _audio.stopWarningAlarm();
-      }
+      guardOutput.onGuard(active: false, intensity: 0);
       return;
     }
     warningActive = true;
-    if (mufflesMusic) {
-      _audio.setMusicMuffle(true);
+    if (tick.muffleReward) {
+      rewardOutput.setMuffle(true);
     }
-    if (warningSound.playsContinuously) {
-      unawaited(_audio.startWarningAlarm());
-    }
+    guardOutput.onGuard(active: true, intensity: 1.0);
     final now = DateTime.now();
     if (now.difference(lastWarningChimeAt) >= warningChimeCooldown) {
       lastWarningChimeAt = now;
-      unawaited(_audio.playWarningChime());
       tick.writeWarningMetadata(
         sleepDir: lastSleepDir,
         delta: lastDelta,

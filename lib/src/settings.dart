@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
@@ -23,31 +24,6 @@ enum AppView {
   streaming,
   settings,
 }
-
-/// What rewards during a feedback session: bowl chimes on-target (classic),
-/// a rain loop whose intensity follows the reward, the music folder through a
-/// low-pass filter, or nothing. Where [soundName] is the *background* layer,
-/// this is the *feedback* layer — selecting Rain or Music also suppresses the
-/// background (the modulated loop is the whole soundscape).
-enum FeedbackMode {
-  bowlChimes,
-  rain,
-  music,
-  binaural,
-  none;
-
-  String get label => switch (this) {
-    FeedbackMode.bowlChimes => 'Bowl chimes',
-    FeedbackMode.rain => 'Rain',
-    FeedbackMode.music => 'Music',
-    FeedbackMode.binaural => 'Binaural Beats',
-    FeedbackMode.none => 'None',
-  };
-}
-
-FeedbackMode feedbackModeFromName(String? name) =>
-    FeedbackMode.values.where((m) => m.name == name).firstOrNull ??
-    FeedbackMode.bowlChimes;
 
 /// Data streams that can be persisted into a session file. Each maps to one
 /// (or more) `.muse` event types. Future devices (e.g. an 8-electrode Crown)
@@ -162,7 +138,22 @@ class Settings extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final catalog = await ProtocolCatalog.load();
     await _migrateGuardrailPrefs(prefs, catalog);
+    await _migrateFeedbackModePref(prefs);
     return Settings._(prefs, catalog);
+  }
+
+  /// Rewrite stored `feedback_mode` from old FeedbackMode names
+  /// (`bowlChimes` / `rain` / `music` / `binaural`) to [RewardOutputId]
+  /// names (`chime` / `rainStage` / `musicFilter` / `binauralSwell`).
+  static Future<void> _migrateFeedbackModePref(SharedPreferences prefs) async {
+    final stored = prefs.getString(_feedbackModeKey);
+    if (stored == null || stored.isEmpty) {
+      return;
+    }
+    final migrated = migrateRewardOutputPref(stored);
+    if (migrated != null && migrated != stored) {
+      await prefs.setString(_feedbackModeKey, migrated);
+    }
   }
 
   /// Eager rewrite of `guardrail_mode` from old `ProtocolType.name →
@@ -315,14 +306,30 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The feedback layer: what sounds when the reward fires. Defaults to bowl
-  /// chimes (classic behavior); Rain/Music suppress the background layer.
-  FeedbackMode get feedbackMode =>
-      feedbackModeFromName(_prefs.getString(_feedbackModeKey));
+  /// Stored reward-output id, or null when the user has never set one
+  /// (catalog `reward.output` applies). Eager-migrated from old
+  /// `bowlChimes` / `rain` / `music` / `binaural` names.
+  String? get rewardOutputPref {
+    final stored = _prefs.getString(_feedbackModeKey);
+    if (stored == null || stored.isEmpty) return null;
+    return stored;
+  }
 
-  Future<void> setFeedbackMode(FeedbackMode mode) async {
-    await _prefs.setString(_feedbackModeKey, mode.name);
+  /// Resolved reward output when no catalog document is in hand. Unset pref
+  /// → [RewardOutputId.chime] (catalog default).
+  RewardOutputId get rewardOutput =>
+      rewardOutputIdFromStored(rewardOutputPref);
+
+  Future<void> setRewardOutput(RewardOutputId id) async {
+    await _prefs.setString(_feedbackModeKey, id.name);
     notifyListeners();
+  }
+
+  /// Warning-sound pref, or null when unset (catalog `guard.output` applies).
+  String? get warningSoundPref {
+    final stored = _prefs.getString(_warningSoundKey);
+    if (stored == null || stored.isEmpty) return null;
+    return stored;
   }
 
   int? get durationMinutes => _prefs.getInt(_durationMinutesKey);

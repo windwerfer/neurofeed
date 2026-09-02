@@ -4,6 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/audio/calibration_clips.dart';
+import 'package:muse_ml/src/audio/guard_output.dart';
+import 'package:muse_ml/src/audio/guardrail_sound.dart';
+import 'package:muse_ml/src/audio/output_ids.dart';
+import 'package:muse_ml/src/audio/reward_output.dart';
 import 'package:muse_ml/src/audio/soloud_engine.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/calibration_runner.dart';
@@ -41,9 +45,9 @@ class FeedbackState {
   final int durationMinutes;
   final String soundName;
 
-  /// Feedback layer: what sounds when the reward fires (bowl chimes, rain,
-  /// music, none). Rain/Music suppress the background layer.
-  final FeedbackMode feedbackMode;
+  /// Reward output id (`chime` / `musicFilter` / `rainStage` /
+  /// `binauralSwell` / `none`). Rain/music suppress the background layer.
+  final RewardOutputId rewardOutput;
   final int elapsedSeconds;
   final bool signalGood;
   final String? interruptMessage;
@@ -64,7 +68,7 @@ class FeedbackState {
     this.protocol = 'drowsiness',
     this.durationMinutes = 15,
     this.soundName = 'Ambient Drone',
-    this.feedbackMode = FeedbackMode.bowlChimes,
+    this.rewardOutput = RewardOutputId.chime,
     this.elapsedSeconds = 0,
     this.signalGood = false,
     this.interruptMessage,
@@ -88,7 +92,7 @@ class FeedbackState {
     String? protocol,
     int? durationMinutes,
     String? soundName,
-    FeedbackMode? feedbackMode,
+    RewardOutputId? rewardOutput,
     int? elapsedSeconds,
     bool? signalGood,
     Object? interruptMessage = _sentinel,
@@ -108,7 +112,7 @@ class FeedbackState {
     protocol: protocol ?? this.protocol,
     durationMinutes: durationMinutes ?? this.durationMinutes,
     soundName: soundName ?? this.soundName,
-    feedbackMode: feedbackMode ?? this.feedbackMode,
+    rewardOutput: rewardOutput ?? this.rewardOutput,
     elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
     signalGood: signalGood ?? this.signalGood,
     interruptMessage: identical(interruptMessage, _sentinel)
@@ -143,9 +147,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final storageFuture = _ref.read(sessionStorageProvider.future);
     _recorder = FeedbackRecorder(storage: storageFuture);
 
+    _rewardOutput = const NoneRewardOutput();
+    _guardOutput = const NoneGuardOutput();
     _reward = RewardLane(
       engine: RatioEngine(),
-      onReward: _applyReward,
+      output: _rewardOutput,
       onStats: (value) =>
           _ref.read(liveStatsProvider).push(value, _engine.percentileOf),
       onComputedFeedback:
@@ -166,7 +172,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         state = state.copyWith(currentThreshold: _engine.threshold);
       },
     );
-    _guard = GuardLane(audio: _audio);
+    _guard = GuardLane(
+      guardOutput: _guardOutput,
+      rewardOutput: _rewardOutput,
+    );
     _calibration = CalibrationRunner(
       loadManifest: () => _ref.read(calibrationManifestProvider.future),
       playClip: (file) => _audio.playCalibration(file),
@@ -191,10 +200,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _recorder.setRecordStreams(settings.recordStreams);
     state = state.copyWith(
       soundName: settings.soundName ?? state.soundName,
-      feedbackMode: settings.feedbackMode,
+      rewardOutput: settings.rewardOutput,
       durationMinutes: settings.durationMinutes ?? state.durationMinutes,
       baselinePercentile: settings.baselinePercentile,
     );
+    _syncOutputs();
     unawaited(_clearEnabledFeatures());
   }
 
@@ -219,6 +229,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   int _adaptTick = 0;
   late final RewardLane _reward;
   late final GuardLane _guard;
+  late RewardOutput _rewardOutput;
+  late GuardOutput _guardOutput;
   late final CalibrationRunner _calibration;
   final FeatureBus _bus = FeatureBus();
   late final FeedbackRecorder _recorder;
@@ -266,12 +278,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
     final info = catalog?.forName(protocolId);
     _engine.featureId = info?.reward?.feature ?? 'band.atr';
-    state = state.copyWith(
-      protocol: protocolId,
-      feedbackMode: (info?.hasReward ?? false)
-          ? _ref.read(settingsProvider).feedbackMode
-          : FeedbackMode.none,
+    final settings = _ref.read(settingsProvider);
+    final output = resolveRewardOutputId(
+      hasReward: info?.hasReward ?? false,
+      storedPref: settings.rewardOutputPref,
+      catalogOutput: info?.reward?.output,
     );
+    state = state.copyWith(protocol: protocolId, rewardOutput: output);
+    _syncOutputs();
   }
 
   void selectDuration(int minutes) {
@@ -288,16 +302,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
-  /// Selects the feedback layer (bowl chimes / rain / music / binaural /
-  /// none). Rain and Music suppress the background layer; Binaural Beats
-  /// layer on top of it. Switching mid-session restarts the channels without
-  /// leaving the current phase.
-  void selectFeedbackMode(FeedbackMode mode) {
-    if (mode == FeedbackMode.binaural) {
+  /// Selects the reward output (chime / rainStage / musicFilter /
+  /// binauralSwell / none). Rain and Music suppress the background layer;
+  /// Binaural Beats layer on top of it. Switching mid-session restarts the
+  /// channels without leaving the current phase.
+  void selectRewardOutput(RewardOutputId id) {
+    if (id == RewardOutputId.binauralSwell) {
       _seedBinauralVolumes();
     }
-    state = state.copyWith(feedbackMode: mode);
-    _ref.read(settingsProvider).setFeedbackMode(mode);
+    state = state.copyWith(rewardOutput: id);
+    _ref.read(settingsProvider).setRewardOutput(id);
+    _syncOutputs();
     if (state.phase == FeedbackPhase.playing ||
         state.phase == FeedbackPhase.paused) {
       unawaited(_switchChannelsWhileKeepingPhase());
@@ -315,10 +330,27 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
+  void _syncOutputs() {
+    _rewardOutput = _audio.rewardOutput(state.rewardOutput);
+    _guardOutput = _audio.guardOutput();
+    _reward.output = _rewardOutput;
+    _guard.rewardOutput = _rewardOutput;
+    _guard.guardOutput = _guardOutput;
+    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
+    final spec = catalog?.forName(state.protocol);
+    final settings = _ref.read(settingsProvider);
+    final guardId = resolveGuardOutputId(
+      storedPref: settings.warningSoundPref,
+      catalogOutput: spec?.guard?.output,
+    );
+    _audio.setWarningSound(GuardrailSound.fromName(guardId));
+  }
+
   Future<void> _switchChannelsWhileKeepingPhase() async {
     await _audio.switchChannels(
       sound: state.soundName,
-      feedback: state.feedbackMode,
+      reward: state.rewardOutput,
+      output: _rewardOutput,
     );
     if (state.phase == FeedbackPhase.paused) {
       await _audio.pause();
@@ -889,9 +921,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _adaptTick = 0;
     _trainingStartAt ??= DateTime.now();
     _startTicker();
+    _syncOutputs();
     await _audio.playChannels(
       sound: state.soundName,
-      feedback: state.feedbackMode,
+      reward: state.rewardOutput,
+      output: _rewardOutput,
     );
   }
 
@@ -1173,68 +1207,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
-  /// True when a modulated feedback channel (music, rain or binaural) is
-  /// currently streaming — the guardrail ducks these during warnings.
-  bool get _musicActive => switch (state.feedbackMode) {
-    FeedbackMode.music => _audio.musicPlaying,
-    FeedbackMode.rain => _audio.rainPlaying,
-    FeedbackMode.binaural => _audio.binauralPlaying,
-    _ => false,
-  };
-
-  /// Routes the live reward to the selected feedback layer: bowl chimes fire
-  /// on the full in-target verdict (scalar + conditions), rain maps
-  /// percentile→intensity stage, music maps percentile→cutoff, binaural maps
-  /// percentile→beat volume (full fade off-target). `none` stays silent.
-  /// Still [Settings.feedbackMode] (PR 5 splits outputs).
-  void _applyReward(double value, {required bool inTarget}) {
-    switch (state.feedbackMode) {
-      case FeedbackMode.music:
-        if (_audio.musicPlaying) {
-          _applyMusicCutoff(value);
-        }
-        return;
-      case FeedbackMode.rain:
-        if (_audio.rainPlaying) {
-          _applyRainPercentile(value);
-        }
-        return;
-      case FeedbackMode.binaural:
-        if (_audio.binauralPlaying) {
-          _audio.setBinauralPercentile(_engine.percentileOf(value) ?? 0);
-        }
-        return;
-      case FeedbackMode.none:
-        return;
-      case FeedbackMode.bowlChimes:
-        _audio.onStateUpdate(inTarget);
-        return;
-    }
-  }
-
-  /// Maps the live metric value to a music-filter cutoff: its percentile rank
-  /// within the calibration baseline (0–100) is linearly interpolated between
-  /// the configured low-pass bounds ([Settings.musicMinCutoffHz] →
-  /// [Settings.musicMaxCutoffHz]); [Settings.musicInvertMapping] flips the
-  /// polarity. Higher rank → brighter music by default.
-  void _applyMusicCutoff(double value) {
-    final settings = _ref.read(settingsProvider);
-    final pct = _engine.percentileOf(value) ?? 50.0;
-    final norm = settings.musicInvertMapping ? 100 - pct : pct;
-    final min = settings.musicMinCutoffHz;
-    final max = settings.musicMaxCutoffHz;
-    final cutoff = min + (norm / 100) * (max - min);
-    _audio.setMusicCutoffHz(cutoff);
-  }
-
-  /// Maps the live metric value to a rain intensity stage: the percentile
-  /// rank within the calibration baseline (0–100, 100 = best). Close to the
-  /// target → quiet rain (calm), far off → heavy.
-  void _applyRainPercentile(double value) {
-    final pct = _engine.percentileOf(value) ?? 50.0;
-    _audio.setRainPercentile(pct);
-  }
-
   /// Samples the music feedback channel once a second while playing: appends
   /// the current cutoff to the per-second trace and records a track marker
   /// whenever playback advances to a new track.
@@ -1300,8 +1272,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           state.baselineSecondsLeft > 0,
       collectionEyes: _collectionEyes,
       muffleReward: spec?.guard?.muffleReward ?? false,
-      musicActive: _musicActive,
-      warningSoundName: _ref.read(settingsProvider).warningSoundName,
       sessionStartAt: _sessionStartAt,
       writeWarningMetadata:
           ({

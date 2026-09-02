@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:muse_ml/src/audio/guard_output.dart';
+import 'package:muse_ml/src/audio/reward_output.dart';
 import 'package:muse_ml/src/feedback/feature_bus.dart';
 import 'package:muse_ml/src/feedback/feedback_phase.dart';
 import 'package:muse_ml/src/feedback/gate_electrodes.dart';
@@ -8,6 +10,48 @@ import 'package:muse_ml/src/feedback/reward_lane.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 import 'package:muse_ml/src/rust/api/features.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
+
+class RecordingRewardOutput implements RewardOutput {
+  int samples = 0;
+  double lastPercentile = 0;
+  bool lastInTarget = false;
+  bool? muffle;
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  void onSample({required double percentile, required bool inTarget}) {
+    samples++;
+    lastPercentile = percentile;
+    lastInTarget = inTarget;
+  }
+
+  @override
+  void setMuffle(bool on) => muffle = on;
+}
+
+class RecordingGuardOutput implements GuardOutput {
+  int calls = 0;
+  bool? lastActive;
+  double? lastIntensity;
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<void> stop() async {}
+
+  @override
+  void onGuard({required bool active, required double intensity}) {
+    calls++;
+    lastActive = active;
+    lastIntensity = intensity;
+  }
+}
 
 void main() {
   group('FeatureBus', () {
@@ -155,13 +199,14 @@ void main() {
   group('RewardLane', () {
     RewardLane laneWith(
       RatioEngine engine, {
-      required void Function(double value, {required bool inTarget}) onReward,
+      required RewardOutput output,
+      void Function(double value)? onStats,
       List<TargetCondition> inhibit = const [],
     }) {
       final lane = RewardLane(
         engine: engine,
-        onReward: onReward,
-        onStats: (_) {},
+        output: output,
+        onStats: onStats ?? (_) {},
         onComputedFeedback:
             ({
               required ratio,
@@ -199,18 +244,11 @@ void main() {
     test(
       'missing relative bands fails closed: inTarget false, no recordEpoch',
       () {
-        var rewarded = 0;
-        var inT = true;
+        final out = RecordingRewardOutput();
         final engine = RatioEngine(
           epochWindow: const Duration(milliseconds: 1),
         );
-        final lane = laneWith(
-          engine,
-          onReward: (_, {required inTarget}) {
-            rewarded++;
-            inT = inTarget;
-          },
-        );
+        final lane = laneWith(engine, output: out);
         lane.onFeature(
           const FeatureSample(id: 'band.atr', t: 0, value: 3.0),
           const RewardTick(
@@ -220,22 +258,20 @@ void main() {
             quality: [100, 100, 100, 100],
           ),
         );
-        expect(rewarded, 1);
-        expect(inT, isFalse);
+        expect(out.samples, 1);
+        expect(out.lastInTarget, isFalse);
         expect(engine.successRate, isNull);
       },
     );
 
-    test('FeatureDto drives the reward scalar', () {
-      var last = 0.0;
-      var inT = false;
+    test('FeatureDto native scalar via onStats; onSample gets percentile', () {
+      var lastNative = 0.0;
+      final out = RecordingRewardOutput();
       final engine = RatioEngine();
       final lane = laneWith(
         engine,
-        onReward: (v, {required inTarget}) {
-          last = v;
-          inT = inTarget;
-        },
+        output: out,
+        onStats: (v) => lastNative = v,
       );
       lane.onBands(pad(1));
       lane.onBands(pad(2));
@@ -248,19 +284,16 @@ void main() {
           quality: [100, 100, 100, 100],
         ),
       );
-      expect(last, 4.0);
-      expect(inT, isTrue);
+      expect(lastNative, 4.0);
+      expect(out.samples, 1);
+      expect(out.lastInTarget, isTrue);
+      expect(out.lastPercentile, 100.0);
     });
 
     test('wrong feature id is ignored', () {
-      var rewarded = 0;
+      final out = RecordingRewardOutput();
       final engine = RatioEngine();
-      final lane = laneWith(
-        engine,
-        onReward: (_, {required inTarget}) {
-          rewarded++;
-        },
-      );
+      final lane = laneWith(engine, output: out);
       lane.onBands(pad(1));
       lane.onBands(pad(2));
       lane.onFeature(
@@ -272,18 +305,16 @@ void main() {
           quality: [100, 100, 100, 100],
         ),
       );
-      expect(rewarded, 0);
+      expect(out.samples, 0);
     });
 
     test('inhibit AND-gates inTarget but still records an epoch', () async {
-      var inT = true;
+      final out = RecordingRewardOutput();
       final engine = RatioEngine(epochWindow: const Duration(milliseconds: 20));
       final lane = laneWith(
         engine,
         inhibit: const [BetaCeiling(0.01)],
-        onReward: (_, {required inTarget}) {
-          inT = inTarget;
-        },
+        output: out,
       );
       lane.onBands(pad(1));
       lane.onBands(pad(2));
@@ -297,13 +328,80 @@ void main() {
         const FeatureSample(id: 'band.atr', t: 0, value: 4.0),
         tick,
       );
-      expect(inT, isFalse);
+      expect(out.lastInTarget, isFalse);
       await Future<void>.delayed(const Duration(milliseconds: 25));
       lane.onFeature(
         const FeatureSample(id: 'band.atr', t: 1, value: 4.0),
         tick,
       );
       expect(engine.successRate, 0.0);
+    });
+  });
+
+  group('GuardLane outputs', () {
+    GuardTick tick({required bool muffleReward}) => GuardTick(
+      phase: FeedbackPhase.playing,
+      collectingBaseline: false,
+      collectionEyes: null,
+      muffleReward: muffleReward,
+      sessionStartAt: DateTime.now(),
+      writeWarningMetadata:
+          ({
+            required sleepDir,
+            required delta,
+            required threshold,
+            required bandMath,
+          }) {},
+      updateComputed:
+          ({
+            required sleepDir,
+            required clarity,
+            required delta,
+            required warning,
+            threshold,
+          }) {},
+    );
+
+    test('over calls onGuard and setMuffle when muffleReward', () {
+      final reward = RecordingRewardOutput();
+      final guard = RecordingGuardOutput();
+      final lane = GuardLane(guardOutput: guard, rewardOutput: reward)
+        ..bandMath = false
+        ..threshold = 0.5
+        ..lastSleepDir = 0.9
+        ..lastDelta = 0.1;
+      lane.evaluateWarning(tick(muffleReward: true));
+      expect(lane.warningActive, isTrue);
+      expect(guard.lastActive, isTrue);
+      expect(guard.lastIntensity, 1.0);
+      expect(reward.muffle, isTrue);
+    });
+
+    test('under clears onGuard and un-muffles', () {
+      final reward = RecordingRewardOutput();
+      final guard = RecordingGuardOutput();
+      final lane = GuardLane(guardOutput: guard, rewardOutput: reward)
+        ..bandMath = false
+        ..threshold = 0.5
+        ..lastSleepDir = 0.1
+        ..lastDelta = 0.1;
+      lane.evaluateWarning(tick(muffleReward: true));
+      expect(lane.warningActive, isFalse);
+      expect(guard.lastActive, isFalse);
+      expect(reward.muffle, isFalse);
+    });
+
+    test('muffleReward false does not call setMuffle', () {
+      final reward = RecordingRewardOutput();
+      final guard = RecordingGuardOutput();
+      final lane = GuardLane(guardOutput: guard, rewardOutput: reward)
+        ..bandMath = false
+        ..threshold = 0.5
+        ..lastSleepDir = 0.9
+        ..lastDelta = 0.1;
+      lane.evaluateWarning(tick(muffleReward: false));
+      expect(guard.lastActive, isTrue);
+      expect(reward.muffle, isNull);
     });
   });
 
