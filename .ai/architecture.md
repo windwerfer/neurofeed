@@ -12,7 +12,7 @@ rust_lib_muse_ml
   features.rs        feature registry → MuseEventDto::Feature
   device_config.rs   DeviceKind + electrode montage
   neurosity_osc.rs   Crown/Notion OSC
-  simulator.rs       SimulatedMuse / SimulatedNeurosity
+  simulator.rs       local DeviceSimulator (`simulate` + `sim:*` ids)
   reve.rs            model + guardrail FFI
   session_format.rs  .muse v4 body + .muse.feedback v5 container
   analysis/{gesture,reve,luna,guardrail}.rs
@@ -34,23 +34,26 @@ Permissions: `requestBlePermissions()` in `app.dart`. BLE init:
 
 ## Devices
 
-`DeviceKind` today: `Muse`, `Neurosity`, `SimulatedMuse`,
-`SimulatedNeurosity`. **Next (frozen):** collapse to `Muse` | `Neurosity`;
-simulation is a transport, not a kind — [connect-simulator-ux.md](connect-simulator-ux.md).
+`DeviceKind` is `Muse` | `Neurosity` (headset family: montage / features /
+Crown-start-refused). Simulation is not a kind — it is `connect_with_options`
+`simulate: true` plus synthetic `sim:*` ids. Connect dropdown is Dart
+`ConnectSource` { muse, neurosity, simulator } in
+`lib/src/connect_source.dart` (catalog + Muse BLE filter). Simulator is
+Debug mode only (`enable_simulated_devices`). Spec:
+[connect-simulator-ux.md](connect-simulator-ux.md).
+
 `DeviceConfig` owns channel count, electrode **names**, gate electrodes,
 sampling rate, PPG/IMU flags.
 
-| Kind | Transport | Notes |
-|------|-----------|--------|
-| Muse | btleplug via muse-rs | 4 pads TP9/AF7/AF8/TP10 @ 256 Hz |
-| Neurosity (Crown/Notion) | OSC (`neurosity_osc.rs`) | 8 ch; `/focus` `/calm` as `device.*` features |
-| Simulated* | `simulator.rs` | No headset; for UI/pipeline without BLE |
+| Source | Kind | Transport | Notes |
+|------|-----------|--------|--------|
+| Muse | muse | btleplug via muse-rs | BLE scan, Muse only. 4 pads TP9/AF7/AF8/TP10 @ 256 Hz |
+| Neurosity | neurosity | OSC (`neurosity_osc.rs`) | Never BLE. Empty list OK (no OSC discovery yet). 8 ch |
+| Simulator | muse or neurosity from the row | `simulator.rs` locally | Static catalog; Crown (OSC) / Notion (OSC) are 8-ch sim, no UDP |
 
 **Crown Start is refused** (`crownSessionUnsupportedMessage` in
-`lib/src/feedback/protocol.dart`). The registry can *produce* Crown
-`device.focus` / `device.calm` and `band.*`; running a catalog session on
-Crown is out of scope until quality vectors, computed frames, and charts are
-device-aware. Connect UI still lists Crown.
+`lib/src/feedback/protocol.dart`) whenever `kind == DeviceKind.neurosity`
+(real or simulated). Muse simulator rows stay startable.
 
 ## Feature pipeline
 

@@ -6,19 +6,22 @@ Pipeline PRs 1–7 and session charts from v5 computed 1 Hz are on `main`.
 Frozen pipeline: [feedback/pipeline-contract.md](feedback/pipeline-contract.md).
 Do not reopen those Key Decisions. **Crown Start stays refused.**
 
-## In progress — connect simulator UX + settings cleanup
+## Landed — connect simulator UX + settings cleanup
 
-**Frozen spec:** [connect-simulator-ux.md](connect-simulator-ux.md).  
-**Start here:** [handoff-connect-simulator-ux.md](handoff-connect-simulator-ux.md).
+Implemented on this branch. Frozen spec:
+[connect-simulator-ux.md](connect-simulator-ux.md). Do not reopen those
+Key Decisions. Do not mix OSC-connect or unlocking Crown Start.
 
-Connect dropdown becomes Muse | Neurosity | Simulator (Simulator only in
-Debug mode). `DeviceKind` collapses to Muse | Neurosity; simulation is
-`simulate` + `sim:*` ids. Neurosity listing is OSC-only (empty OK — do not
-fix OSC connect). Simulator catalog includes Crown (OSC) / Notion (OSC) as
-local 8-ch simulator, no UDP.
+Connect dropdown is Muse | Neurosity | Simulator (Simulator only in Debug
+mode). `DeviceKind` is Muse | Neurosity; simulation is `simulate` + `sim:*`
+ids. Neurosity listing is OSC-only (empty OK). Simulator catalog includes
+Crown (OSC) / Notion (OSC) as local 8-ch simulator, no UDP.
 
-Collaterals: remove Settings “AI sleep guardrail” card; fix settings scroll
-hitch; Debug mode switch.
+Settings: no “AI sleep guardrail” card; music cutoff persists on
+`onChangeEnd`; Debug mode switch last after About.
+
+Still not verified on device/desktop: Simulator tap-to-connect and Settings
+scroll feel (`flutter run` / `flutter run -d linux`).
 
 ## Not this thread
 

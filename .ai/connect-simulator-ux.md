@@ -1,9 +1,9 @@
 # Connect simulator UX + settings cleanup
 
-**Status:** Frozen spec. Not implemented.  
+**Status:** Frozen spec. Implemented on `feat/connect-simulator-ux`.  
 **Date:** 2026-09-03  
 **Branch:** `feat/connect-simulator-ux`  
-**Handoff:** [handoff-connect-simulator-ux.md](handoff-connect-simulator-ux.md)
+**Handoff (landed):** [archive/handoff-connect-simulator-ux.md](archive/handoff-connect-simulator-ux.md)
 
 Do not mix with Crown OSC connect, unlocking Crown sessions, or pipeline-contract
 Key Decisions. Session-charts work is done on `main`.
@@ -97,12 +97,12 @@ Hide Rescan while source is Simulator.
 
 ---
 
-## Implementation steps
+## Implementation steps (landed)
 
 1. Remove `_GuardrailCard` from `settings_view.dart`. Drop unused imports.
 2. Settings scroll: RangeSlider persist-on-end + `RepaintBoundary` (+ fewer
    divisions) in `music_settings_panel.dart` / `settings_view.dart`. Debug
-   mode card after About (can land here or with step 4).
+   mode card after About.
 3. Collapse `DeviceKind` to `Muse` \| `Neurosity`. Update
    `device_config.rs`, `simulator.rs`, `muse.rs`, `features.rs` tests,
    `deviceKindIsCrown`. Run `flutter_rust_bridge_codegen generate`. Commit
@@ -155,5 +155,6 @@ Hide Rescan while source is Simulator.
 - `rust/src/api/simulator.rs`
 - `rust/src/api/features.rs` (tests)
 - generated: `rust/src/frb_generated.rs`, `lib/src/rust/`
-- tests under `test/`
-- after landing: `.ai/architecture.md` Devices section
+- `lib/src/connect_source.dart`
+- tests under `test/connect_source_test.dart`
+- `.ai/architecture.md` Devices section (updated)

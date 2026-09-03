@@ -8,6 +8,22 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 use tokio::time::interval;
 
+/// Connected name and firmware for a `sim:*` catalog id.
+/// Unknown ids fall back to Muse S / Crown from [kind].
+pub fn simulated_identity(device_id: &str, kind: DeviceKind) -> (String, String) {
+    match device_id {
+        "sim:muse-2" => ("Muse 2 (Simulated)".to_string(), "Classic".to_string()),
+        "sim:muse-s" => ("Muse S (Simulated)".to_string(), "Classic".to_string()),
+        "sim:muse-s-athena" => ("Muse S Athena (Simulated)".to_string(), "Athena".to_string()),
+        "sim:crown-osc" => ("Crown (Simulated)".to_string(), "Crown_sim_v1.0".to_string()),
+        "sim:notion-osc" => ("Notion (Simulated)".to_string(), "Notion_sim_v1.0".to_string()),
+        _ => match kind {
+            DeviceKind::Muse => ("Muse S (Simulated)".to_string(), "Classic".to_string()),
+            DeviceKind::Neurosity => ("Crown (Simulated)".to_string(), "Crown_sim_v1.0".to_string()),
+        },
+    }
+}
+
 fn now_ms() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -154,9 +170,8 @@ impl DeviceSimulator {
     #[frb(ignore)]
     pub fn with_config(config: DeviceConfig, event_tx: mpsc::Sender<MuseEventDto>, sim_config: SimulatorConfig) -> Self {
         let seed = match config.kind {
-            DeviceKind::SimulatedMuse => 0x4D555345,
-            DeviceKind::SimulatedNeurosity => 0x43524F57,
-            _ => 0xDEADBEEF,
+            DeviceKind::Muse => 0x4D555345,
+            DeviceKind::Neurosity => 0x43524F57,
         };
         let state = Arc::new(Mutex::new(SimulatorState::new(&config, sim_config.clone(), seed)));
         Self {
@@ -459,9 +474,8 @@ impl DeviceSimulator {
             let mut state_lock = state.lock().await;
             
             let _firmware = match config.kind {
-                DeviceKind::SimulatedMuse => "MuseS_sim_v1.0".to_string(),
-                DeviceKind::SimulatedNeurosity => "Crown_sim_v1.0".to_string(),
-                _ => "Unknown_sim".to_string(),
+                DeviceKind::Muse => "MuseS_sim_v1.0".to_string(),
+                DeviceKind::Neurosity => "Crown_sim_v1.0".to_string(),
             };
             
             let telemetry = MuseEventDto::Telemetry(TelemetrySnapshot {
@@ -491,4 +505,45 @@ pub async fn spawn_simulator(
         let _ = sim.start().await;
     });
     Ok(handle)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simulated_identity_catalog_table() {
+        assert_eq!(
+            simulated_identity("sim:muse-2", DeviceKind::Muse),
+            ("Muse 2 (Simulated)".into(), "Classic".into())
+        );
+        assert_eq!(
+            simulated_identity("sim:muse-s", DeviceKind::Muse),
+            ("Muse S (Simulated)".into(), "Classic".into())
+        );
+        assert_eq!(
+            simulated_identity("sim:muse-s-athena", DeviceKind::Muse),
+            ("Muse S Athena (Simulated)".into(), "Athena".into())
+        );
+        assert_eq!(
+            simulated_identity("sim:crown-osc", DeviceKind::Neurosity),
+            ("Crown (Simulated)".into(), "Crown_sim_v1.0".into())
+        );
+        assert_eq!(
+            simulated_identity("sim:notion-osc", DeviceKind::Neurosity),
+            ("Notion (Simulated)".into(), "Notion_sim_v1.0".into())
+        );
+    }
+
+    #[test]
+    fn simulated_identity_unknown_falls_back_by_kind() {
+        assert_eq!(
+            simulated_identity("sim:unknown", DeviceKind::Muse),
+            ("Muse S (Simulated)".into(), "Classic".into())
+        );
+        assert_eq!(
+            simulated_identity("sim:unknown", DeviceKind::Neurosity),
+            ("Crown (Simulated)".into(), "Crown_sim_v1.0".into())
+        );
+    }
 }

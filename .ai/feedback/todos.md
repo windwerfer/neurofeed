@@ -1,11 +1,18 @@
 # Feedback Dev Todos
 
-## Next (connect simulator UX)
+## Next
 
-Frozen spec + implementer handoff (new thread):
+Crown *run*, OSC connect/discovery, Android foreground service, leftover QA
+in this file. Do not mix those with the connect-simulator freeze.
 
-- [`.ai/connect-simulator-ux.md`](../connect-simulator-ux.md)
-- [`.ai/handoff-connect-simulator-ux.md`](../handoff-connect-simulator-ux.md)
+## Connect simulator UX (done)
+
+Muse | Neurosity | Simulator dropdown. `DeviceKind` is Muse | Neurosity.
+Simulator is Debug-mode catalog (`sim:*`), local 8-ch for Crown/Notion OSC
+rows. Settings: no AI sleep guardrail card; Debug mode last after About.
+
+Spec: [../connect-simulator-ux.md](../connect-simulator-ux.md). Handoff
+archive: [../archive/handoff-connect-simulator-ux.md](../archive/handoff-connect-simulator-ux.md).
 
 ## Session charts (done)
 

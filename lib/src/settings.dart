@@ -503,8 +503,8 @@ class Settings extends ChangeNotifier {
 
   static const String _enableSimulatedDevicesKey = 'enable_simulated_devices';
 
-  /// When true, the "Simulate" toggle appears in the connect dialog for
-  /// testing without real hardware. Debug only — defaults to false.
+  /// Debug mode. When true, Simulator appears in the connect dropdown and
+  /// `sim:*` last-device ids may autoconnect. Defaults to false.
   bool get enableSimulatedDevices =>
       _prefs.getBool(_enableSimulatedDevicesKey) ?? false;
 

@@ -12,6 +12,16 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `spawn_simulator`, `with_config`
 
+/// Connected name and firmware for a `sim:*` catalog id.
+/// Unknown ids fall back to Muse S / Crown from [kind].
+Future<(String, String)> simulatedIdentity({
+  required String deviceId,
+  required DeviceKind kind,
+}) => RustLib.instance.api.crateApiSimulatorSimulatedIdentity(
+  deviceId: deviceId,
+  kind: kind,
+);
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>>
 abstract class DeviceSimulator implements RustOpaqueInterface {
   // HINT: Make it `#[frb(sync)]` to let it become the default constructor of Dart class.

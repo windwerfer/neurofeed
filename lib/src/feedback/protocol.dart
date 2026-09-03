@@ -21,7 +21,7 @@ final RegExp userProtocolIdPattern = RegExp(r'^user\.[a-z0-9-]{3,64}$');
 Map<String, Object?> jsonObject(Object? value) =>
     value is Map ? Map<String, Object?>.from(value) : const <String, Object?>{};
 
-/// Clear error when Start is refused on Crown / SimulatedNeurosity.
+/// Clear error when Start is refused on Crown (real or simulated).
 const String crownSessionUnsupportedMessage =
     'Crown sessions are not available yet. You can browse band protocols, '
     'but running a session on Crown is a later update. Connect a Muse to start.';
@@ -465,5 +465,4 @@ class ProtocolDocument {
   }
 }
 
-bool deviceKindIsCrown(DeviceKind kind) =>
-    kind == DeviceKind.neurosity || kind == DeviceKind.simulatedNeurosity;
+bool deviceKindIsCrown(DeviceKind kind) => kind == DeviceKind.neurosity;

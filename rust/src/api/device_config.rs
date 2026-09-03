@@ -2,36 +2,23 @@ use flutter_rust_bridge::frb;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Device kind enumeration
+/// Headset family (montage / features / Crown-start-refused).
+/// Simulation is the `simulate` flag on connect, not a kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[frb(dart_metadata = ("freezed",))]
 pub enum DeviceKind {
     Muse,
     Neurosity,
-    SimulatedMuse,
-    SimulatedNeurosity,
 }
 
 impl DeviceKind {
     pub fn is_muse(&self) -> bool {
-        matches!(self, DeviceKind::Muse | DeviceKind::SimulatedMuse)
+        matches!(self, DeviceKind::Muse)
     }
-    
+
     pub fn is_neurosity(&self) -> bool {
-        matches!(self, DeviceKind::Neurosity | DeviceKind::SimulatedNeurosity)
-    }
-    
-    pub fn is_simulated(&self) -> bool {
-        matches!(self, DeviceKind::SimulatedMuse | DeviceKind::SimulatedNeurosity)
-    }
-    
-    pub fn base_kind(&self) -> DeviceKind {
-        match self {
-            DeviceKind::SimulatedMuse => DeviceKind::Muse,
-            DeviceKind::SimulatedNeurosity => DeviceKind::Neurosity,
-            other => *other,
-        }
+        matches!(self, DeviceKind::Neurosity)
     }
 }
 
@@ -100,21 +87,22 @@ impl DeviceConfig {
             has_imu: true,
         }
     }
-    
-    /// Muse simulated
-    pub fn simulated_muse() -> Self {
-        let mut c = Self::muse();
-        c.kind = DeviceKind::SimulatedMuse;
-        c
-    }
-    
+
     /// Neurosity Crown (8 EEG, no PPG, IMU)
     pub fn neurosity_crown() -> Self {
         Self {
             kind: DeviceKind::Neurosity,
             channel_count: 8,
-            electrode_names: vec!["CP3".into(), "C3".into(), "F5".into(), "PO3".into(), 
-                                   "PO4".into(), "F6".into(), "C4".into(), "CP4".into()],
+            electrode_names: vec![
+                "CP3".into(),
+                "C3".into(),
+                "F5".into(),
+                "PO3".into(),
+                "PO4".into(),
+                "F6".into(),
+                "C4".into(),
+                "CP4".into(),
+            ],
             target_electrodes: vec![3, 4], // PO3, PO4 (posterior alpha)
             needed_electrodes: vec![3, 4],
             signal_good_threshold: 80.0,
@@ -130,47 +118,45 @@ impl DeviceConfig {
             has_imu: true,
         }
     }
-    
-    /// Neurosity Crown simulated
-    pub fn simulated_neurosity_crown() -> Self {
-        let mut c = Self::neurosity_crown();
-        c.kind = DeviceKind::SimulatedNeurosity;
-        c
-    }
-    
+
     /// Get config by kind
     pub fn for_kind(kind: DeviceKind) -> Self {
         match kind {
             DeviceKind::Muse => Self::muse(),
             DeviceKind::Neurosity => Self::neurosity_crown(),
-            DeviceKind::SimulatedMuse => Self::simulated_muse(),
-            DeviceKind::SimulatedNeurosity => Self::simulated_neurosity_crown(),
         }
     }
-    
+
     /// Get electrode index by name
     pub fn electrode_index(&self, name: &str) -> Option<usize> {
-        self.electrode_names.iter().position(|n| n.eq_ignore_ascii_case(name))
+        self.electrode_names
+            .iter()
+            .position(|n| n.eq_ignore_ascii_case(name))
     }
-    
+
     /// Check if electrode is usable (above threshold)
     pub fn is_usable(&self, quality: &[f32], electrode: usize) -> bool {
         electrode < quality.len() && quality[electrode] >= self.signal_good_threshold
     }
-    
+
     /// Check if any needed electrode is usable
     pub fn has_needed_electrode(&self, quality: &[f32]) -> bool {
-        self.needed_electrodes.iter().any(|&i| self.is_usable(quality, i))
+        self.needed_electrodes
+            .iter()
+            .any(|&i| self.is_usable(quality, i))
     }
-    
+
     /// Check if all needed electrodes are good
     pub fn all_needed_good(&self, quality: &[f32]) -> bool {
-        self.needed_electrodes.iter().all(|&i| self.is_usable(quality, i))
+        self.needed_electrodes
+            .iter()
+            .all(|&i| self.is_usable(quality, i))
     }
-    
+
     /// Get target electrode values from a map
     pub fn target_values(&self, values: &HashMap<usize, f32>) -> Vec<f32> {
-        self.target_electrodes.iter()
+        self.target_electrodes
+            .iter()
             .filter_map(|&i| values.get(&i).copied())
             .collect()
     }

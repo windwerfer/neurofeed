@@ -3,9 +3,7 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/feedback/guardrail_mode.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/protocol_catalog.dart';
+import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/reve/reve_card.dart';
@@ -141,64 +139,68 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
       children: [
         Text('Settings', style: theme.textTheme.headlineSmall),
         const SizedBox(height: 16),
-        Card(
-          color: theme.colorScheme.surfaceContainerHighest,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.folder_outlined),
-                  title: const Text('Save feedback to folder'),
-                  subtitle: storage.maybeWhen(
-                    data: (s) =>
-                        Text(s.displayName, style: theme.textTheme.bodySmall),
-                    orElse: () => const Text('Resolving storage…'),
+        RepaintBoundary(
+          child: Card(
+            color: theme.colorScheme.surfaceContainerHighest,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.folder_outlined),
+                    title: const Text('Save feedback to folder'),
+                    subtitle: storage.maybeWhen(
+                      data: (s) =>
+                          Text(s.displayName, style: theme.textTheme.bodySmall),
+                      orElse: () => const Text('Resolving storage…'),
+                    ),
+                    trailing: const Icon(Icons.edit_outlined),
+                    onTap: () => _onPickFolder(ref, context, settings),
                   ),
-                  trailing: const Icon(Icons.edit_outlined),
-                  onTap: () => _onPickFolder(ref, context, settings),
-                ),
-                const Divider(height: 24),
-                Text(
-                  folder == null
-                      ? 'Using the default folder. Tap to choose where session '
-                            'history is stored.'
-                      : 'Sessions are saved to the folder above. Cache/temp '
-                            'files live in a hidden .cache subfolder.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  const Divider(height: 24),
+                  Text(
+                    folder == null
+                        ? 'Using the default folder. Tap to choose where session '
+                              'history is stored.'
+                        : 'Sessions are saved to the folder above. Cache/temp '
+                              'files live in a hidden .cache subfolder.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-                if (folder != null) ...[
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: () => _resetFolder(ref),
-                    icon: const Icon(Icons.autorenew),
-                    label: const Text('Reset to default folder'),
-                  ),
+                  if (folder != null) ...[
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: () => _resetFolder(ref),
+                      icon: const Icon(Icons.autorenew),
+                      label: const Text('Reset to default folder'),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
         const SizedBox(height: 16),
-        _RecordingCard(streams: streams, onToggle: toggle),
+        RepaintBoundary(
+          child: _RecordingCard(streams: streams, onToggle: toggle),
+        ),
         const SizedBox(height: 16),
-        _GesturesCard(settings: settings),
+        RepaintBoundary(child: _GesturesCard(settings: settings)),
         const SizedBox(height: 16),
-        _MusicCard(settings: settings),
+        RepaintBoundary(child: _MusicCard(settings: settings)),
         const SizedBox(height: 16),
-        _GuardrailCard(settings: settings),
-        const SizedBox(height: 16),
-        const AiEngineCard(),
+        const RepaintBoundary(child: AiEngineCard()),
         if (Platform.isAndroid) ...[
           const SizedBox(height: 16),
-          _AudioCard(settings: settings),
+          RepaintBoundary(child: _AudioCard(settings: settings)),
         ],
         const SizedBox(height: 16),
-        const _AboutCard(),
+        const RepaintBoundary(child: _AboutCard()),
+        const SizedBox(height: 16),
+        RepaintBoundary(child: _DebugCard(settings: settings)),
       ],
     );
   }
@@ -241,11 +243,9 @@ class _AboutCard extends StatelessWidget {
                 ),
               ),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const AboutView(),
-                ),
-              ),
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const AboutView())),
             ),
           ],
         ),
@@ -451,7 +451,9 @@ class _AudioCard extends ConsumerWidget {
                   ),
                 ],
               ),
-              subtitle: const Text('Prevents dropouts — adds ~0.1 s sound delay'),
+              subtitle: const Text(
+                'Prevents dropouts — adds ~0.1 s sound delay',
+              ),
               trailing: Switch(
                 value: settings.audioStableMode,
                 onChanged: (on) => settings.setAudioStableMode(on),
@@ -491,23 +493,15 @@ class _AudioCard extends ConsumerWidget {
   }
 }
 
-class _GuardrailCard extends ConsumerStatefulWidget {
-  const _GuardrailCard({required this.settings});
+/// Debug-only switch: Simulator in the connect dropdown.
+class _DebugCard extends ConsumerWidget {
+  const _DebugCard({required this.settings});
 
   final Settings settings;
 
   @override
-  ConsumerState<_GuardrailCard> createState() => _GuardrailCardState();
-}
-
-class _GuardrailCardState extends ConsumerState<_GuardrailCard> {
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
-    final withGuard = catalog?.all.where((p) => p.guard != null).toList() ??
-        const <ProtocolDocument>[];
-
     return Card(
       color: theme.colorScheme.surfaceContainerHighest,
       child: Padding(
@@ -518,47 +512,38 @@ class _GuardrailCardState extends ConsumerState<_GuardrailCard> {
             Row(
               children: [
                 Icon(
-                  Icons.bedtime_outlined,
+                  Icons.bug_report_outlined,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 8),
-                Text('AI sleep guardrail', style: theme.textTheme.titleMedium),
+                Text('Debug mode', style: theme.textTheme.titleMedium),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              'The on-device layer watches for the EEG signature of actually '
-              'falling asleep and plays a soft warning chime. It is a cue, '
-              'never a reward or a safety device — and it only runs when a '
-              'model is installed (card below).',
+              'Adds Simulator to the connect dropdown. Simulated headsets '
+              'run on this device — no Bluetooth or OSC.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const Divider(height: 24),
-            for (final p in withGuard)
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                secondary: Icon(
-                  Icons.psychology_outlined,
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.science_outlined),
+              title: const Text('Debug mode'),
+              subtitle: Text(
+                'Simulator catalog and sim:* autoconnect.',
+                style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
-                title: Text(useProtocolCopy(ref, p).title),
-                subtitle: Text(
-                  'Off: runs the plain ratio engine without warnings.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                value: widget.settings.guardrailEnabledFor(p.id),
-                onChanged: (on) async {
-                  await widget.settings.setGuardFeature(
-                    p.id,
-                    on ? guardFeatureBandDelta : guardFeatureNone,
-                  );
-                  setState(() {});
-                },
               ),
+              value: settings.enableSimulatedDevices,
+              onChanged: (on) async {
+                await settings.setEnableSimulatedDevices(on);
+                ref.read(appStateProvider.notifier).onDebugModeChanged(on);
+              },
+            ),
           ],
         ),
       ),

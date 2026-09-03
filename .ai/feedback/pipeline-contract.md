@@ -11,6 +11,8 @@
 
 PRs 1–7 implemented this contract. Decisions in [Key Decisions](#key-decisions) stay frozen. Do not reopen them. **Crown Start stays refused.** Session charts (computed 1 Hz) are implemented — do not mix v5 layout or FRB changes into this contract.
 
+Later (connect-simulator-ux, do not restore): `DeviceKind` collapsed to Muse | Neurosity. Simulation is `simulate` + `sim:*`, not `SimulatedMuse` / `SimulatedNeurosity` / `base_kind`. Key Decision text below still names Simulated* as of this freeze.
+
 ---
 
 ## Overview

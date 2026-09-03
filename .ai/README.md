@@ -8,8 +8,7 @@ do/don't, then this folder for maps.
 | File | Contents |
 |------|----------|
 | [active-task.md](active-task.md) | Current development focus |
-| [connect-simulator-ux.md](connect-simulator-ux.md) | **Frozen** spec: connect Muse/Neurosity/Simulator + DeviceKind collapse |
-| [handoff-connect-simulator-ux.md](handoff-connect-simulator-ux.md) | **Start here** — implementer steps for that spec |
+| [connect-simulator-ux.md](connect-simulator-ux.md) | **Frozen** connect UX: Muse / Neurosity / Simulator + `DeviceKind` Muse\|Neurosity |
 | [architecture.md](architecture.md) | Stack: BLE, devices, feature pipeline, session, audio, streaming, export |
 | [testing-guide.md](testing-guide.md) | Build/test loop, FFI tests, `flutter run` loader trap |
 | [release.md](release.md) | Release CI, keystore, F-Droid, reproducibility |

@@ -17,6 +17,7 @@ import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/model_selector.dart';
 import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/reve/reve_import.dart';
+import 'package:muse_ml/src/rust/api/device_config.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/status_bar.dart';
 import 'package:muse_ml/src/views/feedback_dashboard.dart';
@@ -1989,7 +1990,7 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
 
   bool _aiDrowsinessListed() {
     final app = ref.read(appStateProvider);
-    final kind = app.listingDeviceKind ?? app.connectDeviceKind;
+    final kind = app.listingDeviceKind ?? DeviceKind.muse;
     if (deviceKindIsCrown(kind)) return false;
     return _anyModelInstalled();
   }
@@ -2152,7 +2153,8 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
 Future<bool> _refuseCrownStart(BuildContext context, WidgetRef ref) async {
   final app = ref.read(appStateProvider);
   if (!app.status.connected ||
-      !deviceKindIsCrown(app.connectDeviceKind)) {
+      app.lastConnectedKind == null ||
+      !deviceKindIsCrown(app.lastConnectedKind!)) {
     return false;
   }
   if (!context.mounted) return true;

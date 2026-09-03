@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/app.dart';
+import 'package:muse_ml/src/connect_source.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/rust/api/device_config.dart';
 import 'package:muse_ml/src/settings.dart';
@@ -64,8 +65,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
             fuelGaugeVoltage: 0,
             temperature: 0,
           ),
-          connectDeviceKind: DeviceKind.muse,
-          connectSimulate: false,
+          connectSource: ConnectSource.muse,
           lastConnectedKind: null,
         ),
       ) {
@@ -104,21 +104,46 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       }
 
       final lastId = _settings.lastDeviceId;
-      if (lastId != null && lastId.isNotEmpty) {
-        final found = await _tryAutoconnect(lastId);
-        if (found) return;
+      if (!shouldIgnoreLastDevice(
+        lastId,
+        debug: _settings.enableSimulatedDevices,
+      )) {
+        if (isSimDeviceId(lastId!)) {
+          final found = await _tryAutoconnectSim(lastId);
+          if (found) return;
+        } else {
+          final found = await _tryAutoconnect(lastId);
+          if (found) return;
+        }
       }
 
-      _startContinuousScan();
+      _startDiscoveryForCurrentSource();
     } catch (e) {
       debugPrint('[muse] init error: $e');
       state = state.copyWith(scanMessage: 'Init error: $e');
     }
   }
 
+  /// Connect a `sim:*` catalog row without BLE. Debug mode only.
+  Future<bool> _tryAutoconnectSim(String lastId) async {
+    final row = simulatorCatalogRow(lastId);
+    if (row == null) return false;
+    debugPrint('[muse] autoconnect: simulator $lastId');
+    state = state.copyWith(
+      connectSource: ConnectSource.simulator,
+      devices: simulatorCatalog,
+      connectWindowOpen: true,
+      scanning: false,
+      scanMessage: 'Connecting simulator…',
+    );
+    await connectTo(row);
+    return state.status.connected;
+  }
+
   /// Scan in short chunks looking for [lastId].  Returns `true` and connects
   /// if found, `false` otherwise.
   Future<bool> _tryAutoconnect(String lastId) async {
+    if (isSimDeviceId(lastId)) return false;
     debugPrint('[muse] autoconnect: looking for $lastId');
     state = state.copyWith(
       connectWindowOpen: true,
@@ -161,15 +186,44 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     return false;
   }
 
+  /// Open the connect window and start discovery for [state.connectSource].
+  void _startDiscoveryForCurrentSource() {
+    switch (state.connectSource) {
+      case ConnectSource.muse:
+        unawaited(_startContinuousScan());
+      case ConnectSource.neurosity:
+        _scanEnabled = false;
+        state = state.copyWith(
+          connectWindowOpen: true,
+          scanning: false,
+          devices: const [],
+          scanMessage: null,
+        );
+      case ConnectSource.simulator:
+        _scanEnabled = false;
+        state = state.copyWith(
+          connectWindowOpen: true,
+          scanning: false,
+          devices: simulatorCatalog,
+          scanMessage: null,
+        );
+    }
+  }
+
   /// Start a continuous scan loop that runs until a device is connected or
   /// the connect window is closed.  Each chunk is a short BLE scan whose
-  /// results are merged into the UI list as they arrive.
+  /// results are merged into the UI list as they arrive. Muse source only.
   Future<void> _startContinuousScan() async {
+    if (state.connectSource != ConnectSource.muse) {
+      _startDiscoveryForCurrentSource();
+      return;
+    }
     _scanEnabled = true;
     debugPrint('[muse] continuous scan starting');
     state = state.copyWith(
       connectWindowOpen: true,
       scanning: true,
+      devices: const [],
       scanMessage: 'Scanning…',
     );
 
@@ -186,18 +240,21 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       var allDevices = <DeviceInfo>[];
 
       while (_scanEnabled && !state.status.connected) {
+        if (state.connectSource != ConnectSource.muse) break;
         await ensureBtleplugReady();
         final devices = await scan(timeoutSecs: BigInt.from(_scanChunkSecs));
         if (!_scanEnabled || state.status.connected) break;
+        if (state.connectSource != ConnectSource.muse) break;
 
-        for (final d in devices) {
+        final museOnly = keepMuseBleDevices(devices);
+        for (final d in museOnly) {
           if (!allDevices.any((x) => x.id == d.id)) {
             allDevices = [...allDevices, d];
           }
         }
         debugPrint(
           '[muse] scan chunk: ${devices.length} device(s) from rust, '
-          '${allDevices.length} unique total',
+          '${museOnly.length} muse, ${allDevices.length} unique total',
         );
         state = state.copyWith(
           devices: allDevices,
@@ -352,8 +409,9 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     _scanEnabled = false;
     final id = device.id;
     final name = device.name;
-    final kind = state.connectDeviceKind;
-    final simulate = state.connectSimulate;
+    final kind = device.kind;
+    final simulate = isSimDeviceId(id);
+    final attempts = simulate ? 1 : _maxConnectAttempts;
     state = state.copyWith(
       connectWindowOpen: false,
       scanning: false,
@@ -361,14 +419,18 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       scanMessage: null,
     );
     Object? lastError;
-    for (var attempt = 1; attempt <= _maxConnectAttempts; attempt++) {
-      debugPrint('[muse] connect attempt $attempt/$_maxConnectAttempts — '
-          '$name ($id) kind=$kind simulate=$simulate');
-      state = state.copyWith(
-        scanMessage: 'Connecting… (attempt $attempt)',
+    for (var attempt = 1; attempt <= attempts; attempt++) {
+      debugPrint(
+        '[muse] connect attempt $attempt/$attempts — '
+        '$name ($id) kind=$kind simulate=$simulate',
       );
+      state = state.copyWith(scanMessage: 'Connecting… (attempt $attempt)');
       try {
-        final status = await connectWithOptions(deviceId: id, kind: kind, simulate: simulate);
+        final status = await connectWithOptions(
+          deviceId: id,
+          kind: kind,
+          simulate: simulate,
+        );
         debugPrint('[muse] connect returned: connected=${status.connected}');
         await _settings.setLastDeviceId(id);
         state = state.copyWith(
@@ -380,18 +442,21 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       } catch (e) {
         lastError = e;
         debugPrint('[muse] connect attempt $attempt failed: $e');
-        if (attempt < _maxConnectAttempts) {
+        if (!simulate && attempt < attempts) {
           await Future<void>.delayed(const Duration(milliseconds: 800));
           await _refreshDevice(id);
         }
       }
     }
-    debugPrint('[muse] connect failed after $_maxConnectAttempts attempts: '
-        '$lastError');
+    debugPrint(
+      '[muse] connect failed after $_maxConnectAttempts attempts: '
+      '$lastError',
+    );
     state = state.copyWith(
       connectingTo: null,
       connectWindowOpen: true,
-      scanMessage: 'Could not connect to $name. Check that it is turned on '
+      scanMessage:
+          'Could not connect to $name. Check that it is turned on '
           'and nearby, then try again.',
     );
   }
@@ -413,11 +478,19 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   /// scan if the last device ID is missing or the device is not found.
   Future<void> _tryReconnect() async {
     final lastId = _settings.lastDeviceId;
-    if (lastId != null && lastId.isNotEmpty) {
-      final ok = await _tryAutoconnect(lastId);
-      if (ok) return;
+    if (!shouldIgnoreLastDevice(
+      lastId,
+      debug: _settings.enableSimulatedDevices,
+    )) {
+      if (isSimDeviceId(lastId!)) {
+        final ok = await _tryAutoconnectSim(lastId);
+        if (ok) return;
+      } else {
+        final ok = await _tryAutoconnect(lastId);
+        if (ok) return;
+      }
     }
-    _startContinuousScan();
+    _startDiscoveryForCurrentSource();
   }
 
   Future<void> disconnectDevice() async {
@@ -439,7 +512,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
   Future<void> openConnectWindowAndScan() async {
     _scanEnabled = false;
-    _startContinuousScan();
+    _startDiscoveryForCurrentSource();
   }
 
   void toggleSidebar() =>
@@ -452,12 +525,21 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     _settings.setLastView(view);
   }
 
-  void setConnectDeviceKind(DeviceKind kind) {
-    state = state.copyWith(connectDeviceKind: kind);
+  void setConnectSource(ConnectSource source) {
+    final resolved = resolveConnectSource(
+      source,
+      debug: _settings.enableSimulatedDevices,
+    );
+    _scanEnabled = false;
+    state = state.copyWith(connectSource: resolved);
+    _startDiscoveryForCurrentSource();
   }
 
-  void setConnectSimulate(bool simulate) {
-    state = state.copyWith(connectSimulate: simulate);
+  /// Debug mode turned off while Simulator is selected → Muse.
+  void onDebugModeChanged(bool enabled) {
+    if (!enabled && state.connectSource == ConnectSource.simulator) {
+      setConnectSource(ConnectSource.muse);
+    }
   }
 
   void toggleConnectWindow() {
@@ -469,7 +551,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         scanMessage: null,
       );
     } else {
-      _startContinuousScan();
+      _startDiscoveryForCurrentSource();
     }
   }
 
@@ -502,8 +584,7 @@ class AppUiState {
     this.scanMessage,
     this.connectingTo,
     this.disconnecting = false,
-    this.connectDeviceKind = DeviceKind.muse,
-    this.connectSimulate = false,
+    this.connectSource = ConnectSource.muse,
     this.lastConnectedKind,
   });
 
@@ -522,21 +603,18 @@ class AppUiState {
   final String? scanMessage;
   final String? connectingTo;
   final bool disconnecting;
-  
-  /// Selected device kind in connect dialog (Muse / Neurosity)
-  final DeviceKind connectDeviceKind;
-  /// Whether to use simulator instead of real hardware
-  final bool connectSimulate;
+
+  /// Selected connect-window source (Muse / Neurosity / Simulator).
+  final ConnectSource connectSource;
 
   /// Kind of the last successful connect this process. Null until a device
-  /// has been connected. Distinct from [connectDeviceKind], which defaults
+  /// has been connected. Distinct from [connectSource], which defaults
   /// to Muse even when nothing has been connected.
   final DeviceKind? lastConnectedKind;
 
-  /// Kind used to filter the protocol list: currently connected, else last
-  /// connected this process. Null when no device has been connected.
-  DeviceKind? get listingDeviceKind =>
-      status.connected ? connectDeviceKind : lastConnectedKind;
+  /// Kind used to filter the protocol list: last connected this process.
+  /// Null when no device has been connected.
+  DeviceKind? get listingDeviceKind => lastConnectedKind;
 
   static const _sentinel = Object();
 
@@ -554,8 +632,7 @@ class AppUiState {
     Object? scanMessage = _sentinel,
     Object? connectingTo = _sentinel,
     bool? disconnecting,
-    DeviceKind? connectDeviceKind,
-    bool? connectSimulate,
+    ConnectSource? connectSource,
     Object? lastConnectedKind = _sentinel,
   }) => AppUiState(
     status: status ?? this.status,
@@ -581,8 +658,7 @@ class AppUiState {
       _ => connectingTo as String?,
     },
     disconnecting: disconnecting ?? this.disconnecting,
-    connectDeviceKind: connectDeviceKind ?? this.connectDeviceKind,
-    connectSimulate: connectSimulate ?? this.connectSimulate,
+    connectSource: connectSource ?? this.connectSource,
     lastConnectedKind: identical(lastConnectedKind, _sentinel)
         ? this.lastConnectedKind
         : lastConnectedKind as DeviceKind?,

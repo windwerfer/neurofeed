@@ -66,9 +66,9 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
 - Format changes land in `rust/src/api/session_format.rs`; keep
   `cargo test --lib session_format` green.
 - Do not reopen pipeline-contract Key Decisions. Do not unlock Crown sessions
-  in the current series. Connect-simulator work has its own frozen spec
-  (`.ai/connect-simulator-ux.md`) — do not mix it with OSC-connect or Crown
-  Start.
+  in the current series. Connect UX is frozen
+  (`.ai/connect-simulator-ux.md`) — do not mix OSC-connect or Crown Start
+  into it. `DeviceKind` is Muse | Neurosity only; do not restore Simulated*.
 
 ## Docs
 Index: [`.ai/README.md`](.ai/README.md). Format/cache:
@@ -78,6 +78,7 @@ Index: [`.ai/README.md`](.ai/README.md). Format/cache:
 ```
 lib/src/                    Flutter UI + Riverpod
   connection_provider.dart  AppStateNotifier: scan/connect
+  connect_source.dart       ConnectSource + simulator catalog
   app.dart                  main(), permissions
   connect_window.dart       ConnectOverlay (every view with a status bar)
   settings.dart, status_bar.dart, version.dart
@@ -110,8 +111,10 @@ assets/                     protocols.json, calibrations.json, features.json, au
 ## Where things live
 - BLE: `rust/src/api/muse.rs` (`scan`, `connect`, `subscribe_events`).
 - JNI attach: `third_party/btleplug/src/droidplug/jni/mod.rs` `get_env()`.
-- Devices: `rust/src/api/device_config.rs`; Crown OSC
-  `neurosity_osc.rs`; simulators `simulator.rs`.
+- Devices: `DeviceKind` is Muse | Neurosity (`device_config.rs`). Connect
+  dropdown is Dart `ConnectSource` (`connect_source.dart`). Simulation is
+  `simulate` + `sim:*` ids (`simulator.rs`), not extra kind variants.
+  Crown OSC: `neurosity_osc.rs` (no discovery API yet).
 - Feature registry: `rust/src/api/features.rs`. Dart bus/lanes as above.
 - Session byte layout: `rust/src/api/session_format.rs` only. Dart is FFI.
 - Session assemble: `lib/src/feedback/session_assembler.dart`
@@ -148,11 +151,23 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **Model install UI is shared** (`lib/src/reve/model_selector.dart`) —
   don't fork it between settings and the guardrail dialog.
 - **Range sliders for cutoffs are log-space**; the label is `label.round()`.
-  Never copy a raw slider position into prefs or tests.
+  Persist music cutoff on `onChangeEnd`, not every `onChanged` tick. Never
+  copy a raw slider position into prefs or tests.
 - **Don't wrap a bounded `DecoratedBox` around a `ListTile` subtitle**
   (Material ink assertion).
 - **Connect overlay must exist in every view with a status bar**
-  (`AppShell` and `FeedbackSessionView` each host one).
+  (`AppShell` and `FeedbackSessionView` each host one). Dropdown is Muse |
+  Neurosity | Simulator (`ConnectSource`). Simulator only in Debug mode
+  (`enable_simulated_devices`). Muse = BLE, keep Muse only. Neurosity =
+  never BLE (empty OSC list is OK). Simulator = static catalog, no BLE,
+  no OSC; hide Rescan. Debug off + Simulator selected → Muse. Ignore
+  `sim:*` `lastDeviceId` when debug is off.
+- **`DeviceKind` is two values** (Muse, Neurosity). FFI enum — regenerate
+  FRB if it changes. `deviceKindIsCrown` is `kind == neurosity`. Crown
+  Start is refused for real and simulated Crown/Notion.
+- **Settings has no “AI sleep guardrail” card.** Guard is per-protocol in
+  the builder + `Settings.guardFeatureFor`. Debug mode is the last card
+  (after About).
 - **flutter_soloud Linux Xiph libs are glibc-2.43-built** unless
   `TRY_SYSTEM_LIBS_FIRST=1` + system `libopus-dev` etc. (devcontainer and
   `release-linux.yml` already do this).

@@ -533,14 +533,7 @@ pub async fn connect_with_options(
 
     // If simulating, we don't need a real device from cache
     let (name, firmware) = if simulate {
-        match kind {
-            DeviceKind::SimulatedMuse | DeviceKind::Muse => {
-                ("Muse S (Simulated)".to_string(), "MuseS_sim_v1.0".to_string())
-            }
-            DeviceKind::SimulatedNeurosity | DeviceKind::Neurosity => {
-                ("Crown (Simulated)".to_string(), "Crown_sim_v1.0".to_string())
-            }
-        }
+        crate::api::simulator::simulated_identity(&device_id, kind)
     } else {
         // Real device - look up from cache
         let device = {

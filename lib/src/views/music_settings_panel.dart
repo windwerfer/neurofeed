@@ -136,9 +136,11 @@ class MusicSettingsPanelState extends ConsumerState<MusicSettingsPanel> {
   String? get _trackSuffix =>
       _trackCount == null ? null : ' · $_trackCount track(s)';
 
-  double _hzToLog(double hz) => (math.log(hz / _floorHz) /
-          math.log(_ceilingHz / _floorHz))
-      .clamp(0.0, 1.0);
+  double _hzToLog(double hz) =>
+      (math.log(hz / _floorHz) / math.log(_ceilingHz / _floorHz)).clamp(
+        0.0,
+        1.0,
+      );
 
   double _logToHz(double t) => (_floorHz * math.pow(_ceilingHz / _floorHz, t))
       .clamp(_floorHz, _ceilingHz);
@@ -149,7 +151,16 @@ class MusicSettingsPanelState extends ConsumerState<MusicSettingsPanel> {
     final low = _range.start;
     final high = _range.end;
 
-    Future<void> setRange(RangeValues logValues) async {
+    void setRangeLocal(RangeValues logValues) {
+      setState(() {
+        _range = RangeValues(
+          _logToHz(logValues.start),
+          _logToHz(logValues.end),
+        );
+      });
+    }
+
+    Future<void> persistRange(RangeValues logValues) async {
       final hz = RangeValues(
         _logToHz(logValues.start),
         _logToHz(logValues.end),
@@ -184,16 +195,15 @@ class MusicSettingsPanelState extends ConsumerState<MusicSettingsPanel> {
         const Divider(height: 24),
         Text('Cutoff range', style: theme.textTheme.titleSmall),
         const SizedBox(height: 4),
-        RangeSlider(
-          min: 0,
-          max: 1,
-          values: RangeValues(_hzToLog(low), _hzToLog(high)),
-          divisions: 200,
-          labels: RangeLabels(
-            '${low.round()} Hz',
-            '${high.round()} Hz',
+        RepaintBoundary(
+          child: RangeSlider(
+            min: 0,
+            max: 1,
+            values: RangeValues(_hzToLog(low), _hzToLog(high)),
+            labels: RangeLabels('${low.round()} Hz', '${high.round()} Hz'),
+            onChanged: setRangeLocal,
+            onChangeEnd: persistRange,
           ),
-          onChanged: setRange,
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

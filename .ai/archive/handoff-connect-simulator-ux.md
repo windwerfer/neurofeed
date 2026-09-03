@@ -3,13 +3,13 @@
 | Field | Value |
 |---|---|
 | Date | 2026-09-03 |
-| Spec | [connect-simulator-ux.md](connect-simulator-ux.md) — **frozen. Read it first.** |
+| Spec | [../connect-simulator-ux.md](../connect-simulator-ux.md) — **frozen.** |
 | Branch | `feat/connect-simulator-ux` (from `main` after session-charts archive) |
 | Do not mix | Crown OSC connect, unlocking Crown Start, pipeline-contract Key Decisions, v5 byte layout |
-| Status | Spec + this handoff only. **Not implemented.** |
+| Status | **Landed** on `feat/connect-simulator-ux`. Archived. |
 
-The previous thread designed the work and stopped at docs. Implement in the
-order below. Do not re-design the dropdown, `DeviceKind`, or OSC listing.
+Spec of record: [../connect-simulator-ux.md](../connect-simulator-ux.md).
+Do not re-design the dropdown, `DeviceKind`, or OSC listing.
 
 ---
 
@@ -140,22 +140,21 @@ protocol catalog if nothing else needs them). Keep `AiEngineCard`. Keep
 
 ## Resume here
 
-Nothing is implemented. Start at step 1.
+Landed. Spec of record is [../connect-simulator-ux.md](../connect-simulator-ux.md).
+`.ai/architecture.md` Devices section matches Muse | Neurosity + `ConnectSource`.
 
 | File | Role |
 |------|------|
+| `lib/src/connect_source.dart` | `ConnectSource` + catalog + Muse BLE filter |
 | `lib/src/views/settings_view.dart` | Guardrail card delete; cards; debug switch |
-| `lib/src/views/music_settings_panel.dart` | RangeSlider jank |
-| `lib/src/settings.dart` | `enableSimulatedDevices` already exists |
+| `lib/src/views/music_settings_panel.dart` | RangeSlider persist-on-end |
+| `lib/src/settings.dart` | `enableSimulatedDevices` |
 | `lib/src/connect_window.dart` | Dropdown + list |
 | `lib/src/connection_provider.dart` | Scan/connect state |
 | `rust/src/api/device_config.rs` | Enum collapse |
 | `rust/src/api/muse.rs` | `scan` / `connect_with_options` |
-| `rust/src/api/simulator.rs` | Seed/firmware |
+| `rust/src/api/simulator.rs` | `simulated_identity` |
 | `lib/src/feedback/protocol.dart` | `deviceKindIsCrown` |
-
-After landing, update `.ai/architecture.md` Devices section (today it still
-documents four `DeviceKind` variants).
 
 ---
 

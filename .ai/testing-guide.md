@@ -79,8 +79,9 @@ flutter test                                      # tests init RustLib.init(exte
 ```
 
 Without the `.so` the FFI never loads. Pure-Dart tests
-(`feedback_pipeline_test.dart`, `user_protocol_builder_test.dart`,
-`output_ids_test.dart`, `calibration_assets_test.dart`, streaming `*_test.dart`)
+(`connect_source_test.dart`, `feedback_pipeline_test.dart`,
+`user_protocol_builder_test.dart`, `output_ids_test.dart`,
+`calibration_assets_test.dart`, streaming `*_test.dart`)
 do not need it.
 
 The PNG export rasterizer needs `TestWidgetsFlutterBinding.ensureInitialized()`

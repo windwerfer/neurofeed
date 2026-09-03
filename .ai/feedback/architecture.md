@@ -57,8 +57,14 @@ A protocol wires: reward feature + output + optional inhibit, optional guard
 feature + output, background kind, calibration id, electrode **names**
 (empty = Rust default).
 
-**Crown Start is refused.** Catalog may list band protocols when the selected
-kind is Crown; `startCalibration` must not silently train C3/F5.
+**Crown Start is refused** whenever `listingDeviceKind` /
+`lastConnectedKind` is `DeviceKind.neurosity` (real Crown/Notion or the
+Crown (OSC) / Notion (OSC) simulator rows). Catalog may list band protocols
+on that kind; `startCalibration` must not silently train C3/F5.
+
+`DeviceKind` is Muse | Neurosity. Simulation is `ConnectSource.simulator` +
+`sim:*` ids, not extra enum variants. List filter is last connected this
+process; no device this process → show all catalog rows.
 
 Non-reward catalog rows: `recordOnly` (calibration skippable) and
 `guardrailOnly` (warnings only).
