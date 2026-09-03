@@ -8,6 +8,8 @@ do/don't, then this folder for maps.
 | File | Contents |
 |------|----------|
 | [active-task.md](active-task.md) | Current development focus |
+| [connect-simulator-ux.md](connect-simulator-ux.md) | **Frozen** spec: connect Muse/Neurosity/Simulator + DeviceKind collapse |
+| [handoff-connect-simulator-ux.md](handoff-connect-simulator-ux.md) | **Start here** — implementer steps for that spec |
 | [architecture.md](architecture.md) | Stack: BLE, devices, feature pipeline, session, audio, streaming, export |
 | [testing-guide.md](testing-guide.md) | Build/test loop, FFI tests, `flutter run` loader trap |
 | [release.md](release.md) | Release CI, keystore, F-Droid, reproducibility |
@@ -20,10 +22,7 @@ do/don't, then this folder for maps.
 |------|----------|
 | [feedback/pipeline-contract.md](feedback/pipeline-contract.md) | Frozen pipeline spec (PRs 1–7 implemented). Do not reopen Key Decisions. |
 | [feedback/architecture.md](feedback/architecture.md) | Lanes, protocol documents, calibration as implemented |
-| [feedback/session-computed-charts.md](feedback/session-computed-charts.md) | **Frozen** next spec: charts from v5 computed 1 Hz |
-| [feedback/handoff-session-computed-charts.md](feedback/handoff-session-computed-charts.md) | Original implementer handoff (steps 1–4 done) |
-| [feedback/handoff-session-computed-charts-resume.md](feedback/handoff-session-computed-charts-resume.md) | **Start here** — remaining steps 5–7 |
-| [feedback/todos.md](feedback/todos.md) | Checklist + frozen-charts note |
+| [feedback/todos.md](feedback/todos.md) | Checklist |
 
 Format / cache byte-level docs (repo root, not here):
 [README_feedback_format.md](../README_feedback_format.md),

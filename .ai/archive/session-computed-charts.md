@@ -1,8 +1,8 @@
 # Session charts from v5 computed 1 Hz
 
-**Status:** Frozen. Implement from [handoff-session-computed-charts.md](handoff-session-computed-charts.md).  
+**Status:** Implemented (steps 1–7). `flutter run` verified 2026-09-03.  
 **Date:** 2026-09-02  
-**Branch to start from:** current working branch (`refactor/eeg_feature_implementation` or whatever is checked out). Prefer a new topic branch. Do not mix with the custom-protocol-builder PR.
+Merged to `main`. Spec kept as the implemented contract. Do not resurrect `SessionOverview`.
 
 No old-format compatibility. Old `.muse.feedback` files are gone.
 
@@ -240,6 +240,8 @@ Rust `session_format.rs`: **no layout change**. Optional: a unit test that naked
 ---
 
 ## Done when
+
+All true (2026-09-03, including `flutter run`):
 
 - Post-session dashboard shows non-empty time-axis graphs from computed.
 - Save writes `session_*.muse.feedback` to the **history** folder, SQLite row appears, scratch temps/v5 are gone, no hang.

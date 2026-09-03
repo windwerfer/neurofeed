@@ -7,9 +7,9 @@
 | Revised | 2026-09-02 (status only; Key Decisions unchanged) |
 | Author | — |
 | Scope | Freeze the feedback pipeline so later PRs (feature bus, protocol-as-document, notifier split, output methods, calibration recipes, custom builder) do not relitigate architecture |
-| Not this doc | Rewrite of `.ai/architecture.md` or `.ai/feedback/architecture.md`; product pitch; session charts (`.ai/feedback/session-computed-charts.md`) |
+| Not this doc | Rewrite of `.ai/architecture.md` or `.ai/feedback/architecture.md`; product pitch; session charts (implemented, see [../archive/session-computed-charts.md](../archive/session-computed-charts.md)) |
 
-PRs 1–7 implemented this contract. Decisions in [Key Decisions](#key-decisions) stay frozen. Do not reopen them. **Crown Start stays refused.** Session-chart work is a separate frozen spec — do not mix it in here.
+PRs 1–7 implemented this contract. Decisions in [Key Decisions](#key-decisions) stay frozen. Do not reopen them. **Crown Start stays refused.** Session charts (computed 1 Hz) are implemented — do not mix v5 layout or FRB changes into this contract.
 
 ---
 

@@ -70,7 +70,8 @@ revert after.
 
 ## Dart tests that hit the FFI (host build)
 Tests that call Rust (e.g. `test/session_export_test.dart`,
-`test/session_store_test.dart`) need the **host-built** library:
+`test/session_store_test.dart`, `test/session_computed_charts_test.dart`)
+need the **host-built** library:
 
 ```bash
 cargo build --manifest-path rust/Cargo.toml      # → rust/target/debug/librust_lib_muse_ml.so

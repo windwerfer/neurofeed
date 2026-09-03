@@ -34,7 +34,9 @@ Permissions: `requestBlePermissions()` in `app.dart`. BLE init:
 
 ## Devices
 
-`DeviceKind`: `Muse`, `Neurosity`, `SimulatedMuse`, `SimulatedNeurosity`.
+`DeviceKind` today: `Muse`, `Neurosity`, `SimulatedMuse`,
+`SimulatedNeurosity`. **Next (frozen):** collapse to `Muse` | `Neurosity`;
+simulation is a transport, not a kind — [connect-simulator-ux.md](connect-simulator-ux.md).
 `DeviceConfig` owns channel count, electrode **names**, gate electrodes,
 sampling rate, PPG/IMU flags.
 
@@ -83,9 +85,12 @@ delegates: `encodeSessionEvent` / `sessionFrameBytes` / `sessionParseBody` /
 `containerEncodeV5` / `v5ParseHead` / `v5ExtractComputed`.
 
 History list: SQLite `session_metadata.db` (typed columns + thumbnail BLOB).
-Detail today still has a 400-bucket `SessionOverview` path — **that is the
-next frozen spec to remove**, see
-[feedback/session-computed-charts.md](feedback/session-computed-charts.md).
+At session `end()`, assemble a real v5 into scratch (placeholder WebP);
+dashboard/history `v5ExtractComputed` → `prepareChartDataFromComputed`.
+Save publishes to the history folder. Crash recovery scans
+`scratchDirectory`. No `SessionOverview` / 400-bucket `metadata.summary`.
+The list sparkline is the WebP thumbnail. Assembler:
+`lib/src/feedback/session_assembler.dart`.
 
 ## Audio
 
@@ -113,9 +118,9 @@ Wire-format reference: `third_party/brainflow/` (tag 5.9.0), not a build dep.
 ## Export
 
 `SessionExporter`: PDF, PNG (thumb + charts), Mind Monitor CSV, EDF+
-(`encodeEdfExport` → `third_party/edf_export`). Charts share
-`prepareChartData` with the dashboard (that builder is in scope of the
-computed-charts spec). Destination `<root>/export/`.
+(`encodeEdfExport` → `third_party/edf_export`). PDF/PNG charts share
+`prepareChartDataFromComputed` with the dashboard. CSV/EDF use the framed
+raw body. Destination `<root>/export/`.
 
 ## Signal quality + gate
 

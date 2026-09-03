@@ -66,8 +66,9 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
 - Format changes land in `rust/src/api/session_format.rs`; keep
   `cargo test --lib session_format` green.
 - Do not reopen pipeline-contract Key Decisions. Do not unlock Crown sessions
-  in the current series. Session-chart work has its own frozen spec
-  (`.ai/feedback/session-computed-charts.md`) — do not mix it with other PRs.
+  in the current series. Connect-simulator work has its own frozen spec
+  (`.ai/connect-simulator-ux.md`) — do not mix it with OSC-connect or Crown
+  Start.
 
 ## Docs
 Index: [`.ai/README.md`](.ai/README.md). Format/cache:
@@ -88,6 +89,10 @@ lib/src/feedback/           session orchestrator + lanes
   target_state.dart         RatioEngine (FeedbackEngine): threshold, EMA, recalibrate
   protocol.dart / protocol_catalog.dart / user_protocol_store.dart
   feature_catalog.dart      assets/features.json copy
+  computed_sampler.dart     1 Hz JSONL; t = seconds from recording start
+  feedback_recorder.dart    scratch temps + assembleScratchV5
+  session_assembler.dart    one containerEncodeV5 / writeScratchV5 wrapper
+  crash_recovery.dart       leftover scratch v5 / three-temps
   session_store*.dart / session_sqlite.dart / session_metadata.dart
   session_export.dart / session_pdf_export.dart / session_chart_data.dart
 lib/src/audio/              SoLoud: AudioService, reward/guard/background outputs
@@ -109,6 +114,10 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `neurosity_osc.rs`; simulators `simulator.rs`.
 - Feature registry: `rust/src/api/features.rs`. Dart bus/lanes as above.
 - Session byte layout: `rust/src/api/session_format.rs` only. Dart is FFI.
+- Session assemble: `lib/src/feedback/session_assembler.dart`
+  (`assembleV5Container`, `writeScratchV5`, `placeholderWebP`).
+- Crash recovery: `lib/src/feedback/crash_recovery.dart` scans
+  `scratchDirectory`, not `getTemporaryDirectory()/sessions`.
 - History cache: `lib/src/feedback/session_sqlite.dart`
   (`session_metadata.db`, thumbnail BLOB). Reconcile in `session_store_core.dart`.
 - SAF: MethodChannel `muse_ml/saf` in `MainActivity.kt`.
@@ -211,6 +220,13 @@ assets/                     protocols.json, calibrations.json, features.json, au
   loaded. See `.ai/testing-guide.md`.
 - **`updateNotes` uses v5** (`containerEncodeV5`). There is no
   `SessionContainer` Dart wrapper anymore.
+- **Assemble v5 at `end()`** into scratch (placeholder WebP) **before**
+  `phase = ended`. Save `publishSession` to history; Discard deletes the
+  scratch v5. One wrapper: `session_assembler.dart`.
+- **Crash recovery** scans `scratchDirectory` for leftover
+  `session_*.muse.feedback` and orphan `.raw` / `.computed` / `.metadata`.
+  Temps go through `writeScratchV5`. Never `decodeImage` on empty bytes.
+- **ComputedSampler.t** is seconds from recording start, not unix epoch.
 - **Charts** plot computed 1 Hz (`v5ExtractComputed` →
   `prepareChartDataFromComputed`). There is no `SessionOverview` /
   400-bucket `metadata.summary`. The list sparkline is the WebP thumbnail.

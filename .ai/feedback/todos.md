@@ -1,13 +1,18 @@
 # Feedback Dev Todos
 
-## Next (session charts)
+## Next (connect simulator UX)
 
 Frozen spec + implementer handoff (new thread):
 
-- [`.ai/feeback/session-computed-charts.md`](session-computed-charts.md)
-- [`.ai/feeback/handoff-session-computed-charts.md`](handoff-session-computed-charts.md)
+- [`.ai/connect-simulator-ux.md`](../connect-simulator-ux.md)
+- [`.ai/handoff-connect-simulator-ux.md`](../handoff-connect-simulator-ux.md)
 
-1 Hz computed is the only summary waveform. Assemble v5 in scratch at session end. No 400-bucket `SessionOverview`.
+## Session charts (done)
+
+Computed 1 Hz is the only summary waveform. Assemble v5 in scratch at session
+end. No 400-bucket `SessionOverview`. `flutter run` verified 2026-09-03.
+
+Spec archive: [../archive/session-computed-charts.md](../archive/session-computed-charts.md).
 
 ## Current branch: main (Phase I merged, ready for testing)
 
@@ -36,7 +41,7 @@ Frozen spec + implementer handoff (new thread):
 ## Phase 5: Session dashboard
 - [x] Session reader (`.muse` parsing — now format v4, owned by Rust: `sessionParseBody`; the old Dart `decompressBlock` FFI path was removed in the format-migration commit)
 - [x] Bands/motion/pulse graphs from recorded data
-- [x] Overview-driven summary detail (400-bucket `SessionOverview` from metadata — no body read) with zoom-synced charts: drag-pan, pinch, ctrl/⌘+scroll zoom, double-tap reset
+- [x] Summary charts from v5 computed 1 Hz (`v5ExtractComputed` → `prepareChartDataFromComputed`); zoom-synced: drag-pan, pinch, ctrl/⌘+scroll zoom, double-tap reset
 - [x] Fixed 0–1 y-axis (relative power) + numeric ticks for Bands and Alpha-vs-Theta; auto-scale for movement/HR
 - [x] Clickable legend rows toggle each series on/off
 - [x] Stats: peak alpha, target time %, stillness %, avg BPM, avg alpha_rel
