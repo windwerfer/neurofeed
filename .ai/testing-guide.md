@@ -60,6 +60,8 @@ revert after.
 ## Rust unit tests + model smoke tests (run in `rust/`)
 - Session-format goldens: `cargo test --lib session_format`
   (full suite: `cargo test --lib`).
+- Simulator stream: `cargo test --lib simulator` (headset events, no
+  derived DTOs, EEG std in the ≥80 quality band, Crown 8-ch / no PPG).
 - Model smoke tests (`#[ignore]`d): `cargo test --lib -- --ignored`
   Needs `.local/luna-base-dl/LUNA_base.safetensors` and
   `.local/reve-base-dl/model.safetensors`. Tests rebuild

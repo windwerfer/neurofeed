@@ -20,6 +20,12 @@ Crown (OSC) / Notion (OSC) as local 8-ch simulator, no UDP.
 Settings: no “AI sleep guardrail” card; music cutoff persists on
 `onChangeEnd`; Debug mode switch last after About.
 
+Simulator connect now actually starts `DeviceSimulator` on the tokio
+runtime (`spawn_simulator` → EEG / PPG / IMU / telemetry). Derived
+bands, pulse, SpO2, gestures, and pad quality come from the same
+forwarder as a live Muse. Athena extra optical channels (8/16ch fNIRS)
+are not simulated — Classic 3-ch PPG only.
+
 Still not verified on device/desktop: Simulator tap-to-connect and Settings
 scroll feel (`flutter run` / `flutter run -d linux`).
 

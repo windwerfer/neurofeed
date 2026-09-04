@@ -13,7 +13,7 @@ do/don't, then this folder for maps.
 | [testing-guide.md](testing-guide.md) | Build/test loop, FFI tests, `flutter run` loader trap |
 | [release.md](release.md) | Release CI, keystore, F-Droid, reproducibility |
 | [btleplug.md](btleplug.md) | btleplug fork (`0.12.0-muse-5`) — JNI attach + notification death spiral |
-| [muse-rs.md](muse-rs.md) | muse-rs `0.1.1` patch, Classic vs Athena, battery |
+| [muse-rs.md](muse-rs.md) | muse-rs `0.1.1` patch, Classic vs Athena, battery, Athena optical/fNIRS gap |
 
 ## Feedback
 

@@ -24,52 +24,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     required super.portManager,
   });
 
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_DeviceSimulatorPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulatorPtr;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_SenderMuseEventDtoPtr => wire
-      ._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDtoPtr;
-
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw);
-
-  @protected
-  DeviceSimulator
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-    dynamic raw,
-  );
-
-  @protected
-  SenderMuseEventDto
-  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-    dynamic raw,
-  );
-
-  @protected
-  DeviceSimulator
-  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-    dynamic raw,
-  );
 
   @protected
   Map<String, String> dco_decode_Map_String_String_None(dynamic raw);
 
   @protected
   Map<BigInt, double> dco_decode_Map_usize_f_32_None(dynamic raw);
-
-  @protected
-  DeviceSimulator
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-    dynamic raw,
-  );
-
-  @protected
-  SenderMuseEventDto
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-    dynamic raw,
-  );
 
   @protected
   RustStreamSink<MuseEventDto> dco_decode_StreamSink_muse_event_dto_Sse(
@@ -332,9 +294,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PulseRecord dco_decode_pulse_record(dynamic raw);
 
   @protected
-  (double, double) dco_decode_record_f_64_f_64(dynamic raw);
-
-  @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
 
   @protected
@@ -345,9 +304,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SessionData dco_decode_session_data(dynamic raw);
-
-  @protected
-  SimulatorConfig dco_decode_simulator_config(dynamic raw);
 
   @protected
   SpO2Dto dco_decode_sp_o_2_dto(dynamic raw);
@@ -389,42 +345,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
-  DeviceSimulator
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  SenderMuseEventDto
-  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  DeviceSimulator
-  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   Map<String, String> sse_decode_Map_String_String_None(
     SseDeserializer deserializer,
   );
 
   @protected
   Map<BigInt, double> sse_decode_Map_usize_f_32_None(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  DeviceSimulator
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  SenderMuseEventDto
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
     SseDeserializer deserializer,
   );
 
@@ -725,9 +651,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PulseRecord sse_decode_pulse_record(SseDeserializer deserializer);
 
   @protected
-  (double, double) sse_decode_record_f_64_f_64(SseDeserializer deserializer);
-
-  @protected
   (String, String) sse_decode_record_string_string(
     SseDeserializer deserializer,
   );
@@ -740,9 +663,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SessionData sse_decode_session_data(SseDeserializer deserializer);
-
-  @protected
-  SimulatorConfig sse_decode_simulator_config(SseDeserializer deserializer);
 
   @protected
   SpO2Dto sse_decode_sp_o_2_dto(SseDeserializer deserializer);
@@ -787,27 +707,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-    DeviceSimulator self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-    SenderMuseEventDto self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-    DeviceSimulator self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_Map_String_String_None(
     Map<String, String> self,
     SseSerializer serializer,
@@ -816,20 +715,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_Map_usize_f_32_None(
     Map<BigInt, double> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-    DeviceSimulator self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-    SenderMuseEventDto self,
     SseSerializer serializer,
   );
 
@@ -1221,12 +1106,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_pulse_record(PulseRecord self, SseSerializer serializer);
 
   @protected
-  void sse_encode_record_f_64_f_64(
-    (double, double) self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_record_string_string(
     (String, String) self,
     SseSerializer serializer,
@@ -1243,12 +1122,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_session_data(SessionData self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_simulator_config(
-    SimulatorConfig self,
-    SseSerializer serializer,
-  );
 
   @protected
   void sse_encode_sp_o_2_dto(SpO2Dto self, SseSerializer serializer);
@@ -1303,72 +1176,4 @@ class RustLibWire implements BaseWire {
   /// The symbols are looked up in [dynamicLibrary].
   RustLibWire(ffi.DynamicLibrary dynamicLibrary)
     : _lookup = dynamicLibrary.lookup;
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulatorPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_muse_ml_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulatorPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulatorPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_muse_ml_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulatorPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDtoPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_muse_ml_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto',
-      );
-  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto =
-      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDtoPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
-
-  void
-  rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-    ffi.Pointer<ffi.Void> ptr,
-  ) {
-    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-      ptr,
-    );
-  }
-
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDtoPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'frbgen_muse_ml_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto',
-      );
-  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto =
-      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDtoPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 }

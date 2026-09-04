@@ -5,4 +5,3 @@ mod frb_generated;
 
 // Re-export types needed by FRB boilerplate
 pub use api::muse::MuseEventDto;
-pub use api::simulator::DeviceSimulator;

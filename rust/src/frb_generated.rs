@@ -25,7 +25,6 @@
 
 // Section: imports
 
-use crate::api::simulator::*;
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
 use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
@@ -33,7 +32,6 @@ use flutter_rust_bridge::{Handler, IntoIntoDart};
 // Section: boilerplate
 
 use crate::api::muse::*;
-use std::sync::mpsc::Sender;
 
 flutter_rust_bridge::frb_generated_boilerplate!(
     default_stream_sink_codec = SseCodec,
@@ -41,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 113566999;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 877165905;
 
 // Section: executor
 
@@ -49,156 +47,6 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
-fn wire__crate__api__simulator__DeviceSimulator_new_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "DeviceSimulator_new",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_config =
-                <crate::api::device_config::DeviceConfig>::sse_decode(&mut deserializer);
-            let api_event_tx = <Sender<MuseEventDto>>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(
-                        crate::api::simulator::DeviceSimulator::new(api_config, api_event_tx),
-                    )?;
-                    Ok(output_ok)
-                })())
-            }
-        },
-    )
-}
-fn wire__crate__api__simulator__DeviceSimulator_start_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "DeviceSimulator_start",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_that = <RustOpaqueMoi<
-                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>,
-            >>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let mut api_that_guard = None;
-                        let decode_indices_ =
-                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
-                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
-                                    &api_that, 0, false,
-                                )],
-                            );
-                        for i in decode_indices_ {
-                            match i {
-                                0 => {
-                                    api_that_guard =
-                                        Some(api_that.lockable_decode_async_ref().await)
-                                }
-                                _ => unreachable!(),
-                            }
-                        }
-                        let api_that_guard = api_that_guard.unwrap();
-                        let output_ok =
-                            crate::api::simulator::DeviceSimulator::start(&*api_that_guard).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__simulator__DeviceSimulator_stop_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "DeviceSimulator_stop",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_that = <RustOpaqueMoi<
-                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>,
-            >>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, ()>(
-                    (move || async move {
-                        let mut api_that_guard = None;
-                        let decode_indices_ =
-                            flutter_rust_bridge::for_generated::lockable_compute_decode_order(
-                                vec![flutter_rust_bridge::for_generated::LockableOrderInfo::new(
-                                    &api_that, 0, false,
-                                )],
-                            );
-                        for i in decode_indices_ {
-                            match i {
-                                0 => {
-                                    api_that_guard =
-                                        Some(api_that.lockable_decode_async_ref().await)
-                                }
-                                _ => unreachable!(),
-                            }
-                        }
-                        let api_that_guard = api_that_guard.unwrap();
-                        let output_ok = Result::<_, ()>::Ok({
-                            crate::api::simulator::DeviceSimulator::stop(&*api_that_guard).await;
-                        })?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
 fn wire__crate__api__features__available_features_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1636,39 +1484,6 @@ fn wire__crate__api__simulator__simulated_identity_impl(
         },
     )
 }
-fn wire__crate__api__simulator__simulator_config_default_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "simulator_config_default",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, ()>((move || {
-                    let output_ok =
-                        Result::<_, ()>::Ok(crate::api::simulator::SimulatorConfig::default())?;
-                    Ok(output_ok)
-                })())
-            }
-        },
-    )
-}
 fn wire__crate__api__muse__subscribe_events_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1861,15 +1676,6 @@ fn wire__crate__api__session_format__v5_parse_header_impl(
     )
 }
 
-// Section: related_funcs
-
-flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
-    flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>
-);
-flutter_rust_bridge::frb_generated_moi_arc_impl_value!(
-    flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Sender<MuseEventDto>>
-);
-
 // Section: dart2rust
 
 impl SseDecode for flutter_rust_bridge::for_generated::anyhow::Error {
@@ -1877,26 +1683,6 @@ impl SseDecode for flutter_rust_bridge::for_generated::anyhow::Error {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <String>::sse_decode(deserializer);
         return flutter_rust_bridge::for_generated::anyhow::anyhow!("{}", inner);
-    }
-}
-
-impl SseDecode for DeviceSimulator {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <RustOpaqueMoi<
-            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>,
-        >>::sse_decode(deserializer);
-        return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
-    }
-}
-
-impl SseDecode for Sender<MuseEventDto> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <RustOpaqueMoi<
-            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Sender<MuseEventDto>>,
-        >>::sse_decode(deserializer);
-        return flutter_rust_bridge::for_generated::rust_auto_opaque_decode_owned(inner);
     }
 }
 
@@ -1913,26 +1699,6 @@ impl SseDecode for std::collections::HashMap<usize, f32> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <Vec<(usize, f32)>>::sse_decode(deserializer);
         return inner.into_iter().collect();
-    }
-}
-
-impl SseDecode
-    for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>>
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <usize>::sse_decode(deserializer);
-        return decode_rust_opaque_moi(inner);
-    }
-}
-
-impl SseDecode
-    for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Sender<MuseEventDto>>>
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <usize>::sse_decode(deserializer);
-        return decode_rust_opaque_moi(inner);
     }
 }
 
@@ -2872,15 +2638,6 @@ impl SseDecode for crate::api::session_format::PulseRecord {
     }
 }
 
-impl SseDecode for (f64, f64) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_field0 = <f64>::sse_decode(deserializer);
-        let mut var_field1 = <f64>::sse_decode(deserializer);
-        return (var_field0, var_field1);
-    }
-}
-
 impl SseDecode for (String, String) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2942,32 +2699,6 @@ impl SseDecode for crate::api::session_format::SessionData {
             peak_alphas: var_peakAlphas,
             eeg_samples: var_eegSamples,
             eeg: var_eeg,
-        };
-    }
-}
-
-impl SseDecode for crate::api::simulator::SimulatorConfig {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_noiseLevel = <f64>::sse_decode(deserializer);
-        let mut var_qualityVariation = <f64>::sse_decode(deserializer);
-        let mut var_enableBlink = <bool>::sse_decode(deserializer);
-        let mut var_enableClench = <bool>::sse_decode(deserializer);
-        let mut var_blinkIntervalRange = <(f64, f64)>::sse_decode(deserializer);
-        let mut var_clenchIntervalRange = <(f64, f64)>::sse_decode(deserializer);
-        let mut var_enableSpo2 = <bool>::sse_decode(deserializer);
-        let mut var_spo2Base = <f64>::sse_decode(deserializer);
-        let mut var_spo2Variation = <f64>::sse_decode(deserializer);
-        return crate::api::simulator::SimulatorConfig {
-            noise_level: var_noiseLevel,
-            quality_variation: var_qualityVariation,
-            enable_blink: var_enableBlink,
-            enable_clench: var_enableClench,
-            blink_interval_range: var_blinkIntervalRange,
-            clench_interval_range: var_clenchIntervalRange,
-            enable_spo2: var_enableSpo2,
-            spo2_base: var_spo2Base,
-            spo2_variation: var_spo2Variation,
         };
     }
 }
@@ -3113,147 +2844,126 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        1 => {
-            wire__crate__api__simulator__DeviceSimulator_new_impl(port, ptr, rust_vec_len, data_len)
-        }
-        2 => wire__crate__api__simulator__DeviceSimulator_start_impl(
+        1 => wire__crate__api__features__available_features_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__session_format__computed_frame_from_json_bytes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        3 => wire__crate__api__simulator__DeviceSimulator_stop_impl(
+        3 => wire__crate__api__session_format__computed_frame_to_json_bytes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        4 => wire__crate__api__features__available_features_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__session_format__computed_frame_from_json_bytes_impl(
+        4 => wire__crate__api__muse__connect_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__muse__connect_with_options_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__muse__connection_status_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        6 => wire__crate__api__session_format__computed_frame_to_json_bytes_impl(
+        8 => wire__crate__api__muse__crown_connect_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__device_config__device_config_all_needed_good_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        7 => wire__crate__api__muse__connect_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__muse__connect_with_options_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__muse__connection_status_default_impl(
+        10 => wire__crate__api__device_config__device_config_electrode_index_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        11 => wire__crate__api__muse__crown_connect_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__device_config__device_config_all_needed_good_impl(
+        11 => wire__crate__api__device_config__device_config_for_kind_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        13 => wire__crate__api__device_config__device_config_electrode_index_impl(
+        12 => wire__crate__api__device_config__device_config_has_needed_electrode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        14 => wire__crate__api__device_config__device_config_for_kind_impl(
+        13 => wire__crate__api__device_config__device_config_is_usable_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        15 => wire__crate__api__device_config__device_config_has_needed_electrode_impl(
+        14 => wire__crate__api__device_config__device_config_muse_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        16 => wire__crate__api__device_config__device_config_is_usable_impl(
+        15 => wire__crate__api__device_config__device_config_neurosity_crown_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        17 => wire__crate__api__device_config__device_config_muse_impl(
+        16 => wire__crate__api__device_config__device_config_target_values_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        18 => wire__crate__api__device_config__device_config_neurosity_crown_impl(
+        17 => wire__crate__api__device_config__device_features_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__device_config__device_config_target_values_impl(
+        18 => wire__crate__api__device_config__device_kind_is_muse_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        20 => wire__crate__api__device_config__device_features_default_impl(
+        19 => wire__crate__api__device_config__device_kind_is_neurosity_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        21 => wire__crate__api__device_config__device_kind_is_muse_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        22 => wire__crate__api__device_config__device_kind_is_neurosity_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        23 => wire__crate__api__muse__disconnect_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__muse__get_status_impl(port, ptr, rust_vec_len, data_len),
-        27 => {
+        20 => wire__crate__api__muse__disconnect_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__muse__get_status_impl(port, ptr, rust_vec_len, data_len),
+        24 => {
             wire__crate__api__reve__guardrail_capture_anchor_impl(port, ptr, rust_vec_len, data_len)
         }
-        28 => wire__crate__api__reve__guardrail_disable_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__reve__guardrail_enable_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__reve__guardrail_live_dim_impl(port, ptr, rust_vec_len, data_len),
-        31 => {
+        25 => wire__crate__api__reve__guardrail_disable_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__reve__guardrail_enable_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__reve__guardrail_live_dim_impl(port, ptr, rust_vec_len, data_len),
+        28 => {
             wire__crate__api__reve__guardrail_reset_anchors_impl(port, ptr, rust_vec_len, data_len)
         }
-        32 => wire__crate__api__muse__init_app_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__muse__is_connected_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__reve__model_config_json_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__reve__model_load_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__reve__model_loaded_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__reve__model_unload_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__muse__scan_impl(port, ptr, rust_vec_len, data_len),
-        42 => {
+        29 => wire__crate__api__muse__init_app_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__muse__is_connected_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__reve__model_config_json_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__reve__model_load_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__reve__model_loaded_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__reve__model_unload_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__muse__scan_impl(port, ptr, rust_vec_len, data_len),
+        39 => {
             wire__crate__api__features__set_enabled_features_impl(port, ptr, rust_vec_len, data_len)
         }
-        43 => wire__crate__api__features__set_feature_electrodes_impl(
+        40 => wire__crate__api__features__set_feature_electrodes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => {
+        41 => {
             wire__crate__api__simulator__simulated_identity_impl(port, ptr, rust_vec_len, data_len)
         }
-        45 => wire__crate__api__simulator__simulator_config_default_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        46 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__muse__telemetry_snapshot_default_impl(
+        42 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__muse__telemetry_snapshot_default_impl(
             port,
             ptr,
             rust_vec_len,
@@ -3271,66 +2981,33 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        10 => {
+        7 => {
             wire__crate__api__session_format__container_encode_v5_impl(ptr, rust_vec_len, data_len)
         }
-        24 => wire__crate__api__edf_export__encode_edf_export_impl(ptr, rust_vec_len, data_len),
-        25 => {
+        21 => wire__crate__api__edf_export__encode_edf_export_impl(ptr, rust_vec_len, data_len),
+        22 => {
             wire__crate__api__session_format__encode_session_event_impl(ptr, rust_vec_len, data_len)
         }
-        39 => {
+        36 => {
             wire__crate__api__session_format__session_frame_bytes_impl(ptr, rust_vec_len, data_len)
         }
-        40 => {
+        37 => {
             wire__crate__api__session_format__session_header_bytes_impl(ptr, rust_vec_len, data_len)
         }
-        41 => {
+        38 => {
             wire__crate__api__session_format__session_parse_body_impl(ptr, rust_vec_len, data_len)
         }
-        48 => {
+        44 => {
             wire__crate__api__session_format__v5_extract_computed_impl(ptr, rust_vec_len, data_len)
         }
-        49 => wire__crate__api__session_format__v5_extract_raw_impl(ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__session_format__v5_parse_head_impl(ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__session_format__v5_parse_header_impl(ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__session_format__v5_extract_raw_impl(ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__session_format__v5_parse_head_impl(ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__session_format__v5_parse_header_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
 
 // Section: rust2dart
-
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for FrbWrapper<DeviceSimulator> {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0)
-            .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for FrbWrapper<DeviceSimulator> {}
-
-impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<DeviceSimulator>> for DeviceSimulator {
-    fn into_into_dart(self) -> FrbWrapper<DeviceSimulator> {
-        self.into()
-    }
-}
-
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for FrbWrapper<Sender<MuseEventDto>> {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self.0)
-            .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for FrbWrapper<Sender<MuseEventDto>>
-{
-}
-
-impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<Sender<MuseEventDto>>> for Sender<MuseEventDto> {
-    fn into_into_dart(self) -> FrbWrapper<Sender<MuseEventDto>> {
-        self.into()
-    }
-}
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::muse::BandsDto {
@@ -4081,34 +3758,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::session_format::SessionData>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::simulator::SimulatorConfig {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.noise_level.into_into_dart().into_dart(),
-            self.quality_variation.into_into_dart().into_dart(),
-            self.enable_blink.into_into_dart().into_dart(),
-            self.enable_clench.into_into_dart().into_dart(),
-            self.blink_interval_range.into_into_dart().into_dart(),
-            self.clench_interval_range.into_into_dart().into_dart(),
-            self.enable_spo2.into_into_dart().into_dart(),
-            self.spo2_base.into_into_dart().into_dart(),
-            self.spo2_variation.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::simulator::SimulatorConfig
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::simulator::SimulatorConfig>
-    for crate::api::simulator::SimulatorConfig
-{
-    fn into_into_dart(self) -> crate::api::simulator::SimulatorConfig {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::muse::SpO2Dto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -4242,25 +3891,6 @@ impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
     }
 }
 
-impl SseEncode for DeviceSimulator {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>>>::sse_encode(flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self), serializer);
-    }
-}
-
-impl SseEncode for Sender<MuseEventDto> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <RustOpaqueMoi<
-            flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Sender<MuseEventDto>>,
-        >>::sse_encode(
-            flutter_rust_bridge::for_generated::rust_auto_opaque_encode::<_, MoiArc<_>>(self),
-            serializer,
-        );
-    }
-}
-
 impl SseEncode for std::collections::HashMap<String, String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4272,28 +3902,6 @@ impl SseEncode for std::collections::HashMap<usize, f32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<(usize, f32)>>::sse_encode(self.into_iter().collect(), serializer);
-    }
-}
-
-impl SseEncode
-    for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>>
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        let (ptr, size) = self.sse_encode_raw();
-        <usize>::sse_encode(ptr, serializer);
-        <i32>::sse_encode(size, serializer);
-    }
-}
-
-impl SseEncode
-    for RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Sender<MuseEventDto>>>
-{
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        let (ptr, size) = self.sse_encode_raw();
-        <usize>::sse_encode(ptr, serializer);
-        <i32>::sse_encode(size, serializer);
     }
 }
 
@@ -5007,14 +4615,6 @@ impl SseEncode for crate::api::session_format::PulseRecord {
     }
 }
 
-impl SseEncode for (f64, f64) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <f64>::sse_encode(self.0, serializer);
-        <f64>::sse_encode(self.1, serializer);
-    }
-}
-
 impl SseEncode for (String, String) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5056,21 +4656,6 @@ impl SseEncode for crate::api::session_format::SessionData {
         );
         <u64>::sse_encode(self.eeg_samples, serializer);
         <Vec<crate::api::session_format::EegSampleRecord>>::sse_encode(self.eeg, serializer);
-    }
-}
-
-impl SseEncode for crate::api::simulator::SimulatorConfig {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <f64>::sse_encode(self.noise_level, serializer);
-        <f64>::sse_encode(self.quality_variation, serializer);
-        <bool>::sse_encode(self.enable_blink, serializer);
-        <bool>::sse_encode(self.enable_clench, serializer);
-        <(f64, f64)>::sse_encode(self.blink_interval_range, serializer);
-        <(f64, f64)>::sse_encode(self.clench_interval_range, serializer);
-        <bool>::sse_encode(self.enable_spo2, serializer);
-        <f64>::sse_encode(self.spo2_base, serializer);
-        <f64>::sse_encode(self.spo2_variation, serializer);
     }
 }
 
@@ -5183,7 +4768,6 @@ mod io {
     // Section: imports
 
     use super::*;
-    use crate::api::simulator::*;
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
@@ -5193,37 +4777,8 @@ mod io {
     // Section: boilerplate
 
     use crate::api::muse::*;
-    use std::sync::mpsc::Sender;
 
     flutter_rust_bridge::frb_generated_boilerplate_io!();
-
-    #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_muse_ml_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-        ptr: *const std::ffi::c_void,
-    ) {
-        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>>::increment_strong_count(ptr as _);
-    }
-
-    #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_muse_ml_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-        ptr: *const std::ffi::c_void,
-    ) {
-        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>>::decrement_strong_count(ptr as _);
-    }
-
-    #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_muse_ml_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-        ptr: *const std::ffi::c_void,
-    ) {
-        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Sender < MuseEventDto >>>::increment_strong_count(ptr as _);
-    }
-
-    #[unsafe(no_mangle)]
-    pub extern "C" fn frbgen_muse_ml_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-        ptr: *const std::ffi::c_void,
-    ) {
-        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Sender < MuseEventDto >>>::decrement_strong_count(ptr as _);
-    }
 }
 #[cfg(not(target_family = "wasm"))]
 pub use io::*;
@@ -5237,7 +4792,6 @@ mod web {
     // Section: imports
 
     use super::*;
-    use crate::api::simulator::*;
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
@@ -5249,37 +4803,8 @@ mod web {
     // Section: boilerplate
 
     use crate::api::muse::*;
-    use std::sync::mpsc::Sender;
 
     flutter_rust_bridge::frb_generated_boilerplate_web!();
-
-    #[wasm_bindgen]
-    pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-        ptr: *const std::ffi::c_void,
-    ) {
-        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>>::increment_strong_count(ptr as _);
-    }
-
-    #[wasm_bindgen]
-    pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerDeviceSimulator(
-        ptr: *const std::ffi::c_void,
-    ) {
-        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>>::decrement_strong_count(ptr as _);
-    }
-
-    #[wasm_bindgen]
-    pub fn rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-        ptr: *const std::ffi::c_void,
-    ) {
-        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Sender < MuseEventDto >>>::increment_strong_count(ptr as _);
-    }
-
-    #[wasm_bindgen]
-    pub fn rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSenderMuseEventDto(
-        ptr: *const std::ffi::c_void,
-    ) {
-        MoiArc::<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Sender < MuseEventDto >>>::decrement_strong_count(ptr as _);
-    }
 }
 #[cfg(target_family = "wasm")]
 pub use web::*;

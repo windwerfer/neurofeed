@@ -112,6 +112,12 @@ Hide Rescan while source is Simulator.
    tables. Simulator catalog. `connect_with_options` simulate branch maps
    `sim:*` → name/firmware. Autoconnect skips BLE for `sim:*` when debug is
    on.
+5. **Stream wiring (follow-up):** `spawn_simulator` on the existing tokio
+   runtime. Headset events only (`Eeg` / `Ppg` / IMU / `Telemetry`).
+   Forwarder derives bands, pulse, SpO₂, gestures, quality. EEG std in
+   `1..15` µV so the 80% gate can open. Classic 3-ch PPG even on the Athena
+   catalog row (firmware string still `Athena`). `DeviceSimulator` is
+   `#[frb(ignore)]`. `cargo test --lib simulator`.
 
 ---
 
@@ -138,7 +144,10 @@ Hide Rescan while source is Simulator.
 - Settings: no “AI sleep guardrail” card; AI engine card remains; debug
   switch at bottom; scroll should not hitch on the music slider.
 - `flutter analyze lib/src` clean. `cargo test --lib` for
-  features/device_config.
+  features/device_config/simulator.
+- Simulator tap: log `[muse] simulator started` then `pkt/s: eeg=` and
+  `ppg=` non-zero; battery ~85%; four green pads; Muse protocol Start
+  clears the 3 s gate. Crown/Notion Start still refused.
 
 ---
 

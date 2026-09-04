@@ -12,7 +12,7 @@ rust_lib_muse_ml
   features.rs        feature registry → MuseEventDto::Feature
   device_config.rs   DeviceKind + electrode montage
   neurosity_osc.rs   Crown/Notion OSC
-  simulator.rs       local DeviceSimulator (`simulate` + `sim:*` ids)
+  simulator.rs       spawn_simulator: Eeg/Ppg/IMU/Telemetry (`sim:*`)
   reve.rs            model + guardrail FFI
   session_format.rs  .muse v4 body + .muse.feedback v5 container
   analysis/{gesture,reve,luna,guardrail}.rs
@@ -49,7 +49,7 @@ sampling rate, PPG/IMU flags.
 |------|-----------|--------|--------|
 | Muse | muse | btleplug via muse-rs | BLE scan, Muse only. 4 pads TP9/AF7/AF8/TP10 @ 256 Hz |
 | Neurosity | neurosity | OSC (`neurosity_osc.rs`) | Never BLE. Empty list OK (no OSC discovery yet). 8 ch |
-| Simulator | muse or neurosity from the row | `simulator.rs` locally | Static catalog; Crown (OSC) / Notion (OSC) are 8-ch sim, no UDP |
+| Simulator | muse or neurosity from the row | `simulator.rs` locally | Static catalog; Crown (OSC) / Notion (OSC) are 8-ch sim, no UDP. Emits headset events only (`Eeg` / `Ppg` / IMU / `Telemetry`); the forwarder derives bands, features, pulse, SpO2, quality. |
 
 **Crown Start is refused** (`crownSessionUnsupportedMessage` in
 `lib/src/feedback/protocol.dart`) whenever `kind == DeviceKind.neurosity`

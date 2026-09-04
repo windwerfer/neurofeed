@@ -114,7 +114,11 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - Devices: `DeviceKind` is Muse | Neurosity (`device_config.rs`). Connect
   dropdown is Dart `ConnectSource` (`connect_source.dart`). Simulation is
   `simulate` + `sim:*` ids (`simulator.rs`), not extra kind variants.
-  Crown OSC: `neurosity_osc.rs` (no discovery API yet).
+  `connect_with_options(simulate: true)` calls `spawn_simulator` on the
+  existing tokio runtime and emits headset events only (`Eeg` / `Ppg` /
+  IMU / `Telemetry`). The event forwarder derives bands, features, pulse,
+  SpO₂, quality — same as a live Muse. `DeviceSimulator` is Rust-only
+  (`#[frb(ignore)]`). Crown OSC: `neurosity_osc.rs` (no discovery API yet).
 - Feature registry: `rust/src/api/features.rs`. Dart bus/lanes as above.
 - Session byte layout: `rust/src/api/session_format.rs` only. Dart is FFI.
 - Session assemble: `lib/src/feedback/session_assembler.dart`
@@ -191,7 +195,18 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **Muse startup** uses `handle.start(true, false)` (commit `217cefe`).
   Classic `p50` enables PPG. Revert that commit if Classic stability
   regresses.
+- **Simulator connect must `tokio::spawn` `DeviceSimulator::start`.** Do
+  not drop the Future (the old std-thread bridge never ran). Do not emit
+  derived `Bands` / Pulse / SpO₂ / Gestures from the sim — the forwarder
+  owns those. EEG std must stay in `1..15` µV so pad quality ≥ 80.
+  `cargo test --lib simulator`.
+- **Athena optical ≠ Classic PPG.** muse-rs maps optical tags `0x34` /
+  `0x35` **first 3 channels only** into `MuseEvent::Ppg` (as if they were
+  ambient/IR/red) and **skips** `0x36` (16-ch). Extra fNIRS optodes are
+  not in this app. Do not add them without Athena hardware. See
+  `.ai/muse-rs.md`.
 - **SpO₂** from PPG IR+Red in `compute_spo2()` (`muse.rs`, commit `4bc0300`).
+  Classic 3-ch PPG only; Athena 8/16-ch optics are not a drop-in.
 - **Event forwarder** polls `guard.events` every 1 s; 30 s silence →
   `Disconnected`. Never `watch::changed()` on a clone of an unpolled primary
   (commit `3078904` / fix `53e3e8f`).
