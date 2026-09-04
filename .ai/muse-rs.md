@@ -87,5 +87,11 @@ Bit-unpacking is documented. HbO/HbR is not a copy-paste:
 Productizing this means new muse-rs types (not `PpgReading`), a new DTO,
 session columns, and UI — plus MBLL params (source-detector distance, DPF)
 that nobody has calibrated here. **Needs a real Athena on the head.** Classic
-Muse S cannot generate these packets. Frozen out of scope:
+Muse S cannot generate these packets. Frozen out of scope for connect UX:
 [connect-simulator-ux.md](connect-simulator-ux.md).
+
+Queued (do not start from the connect branch): raw optical stream as
+`MuseEvent::Optics`, TUI inspector, session tag 11, OpenMuse v1 names as
+mapping metadata only. No Athena SpO₂/HR product.
+[TODO/athena-optics-contract.md](TODO/athena-optics-contract.md),
+[TODO/handoff-athena-optics.md](TODO/handoff-athena-optics.md).

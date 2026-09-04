@@ -27,6 +27,17 @@ Format / cache byte-level docs (repo root, not here):
 [README_feedback_format.md](../README_feedback_format.md),
 [README_history_cache.md](../README_history_cache.md).
 
+## Queued
+
+Not the active branch. Do not mix into connect-simulator-ux or
+pipeline-contract work.
+
+| File | Contents |
+|------|----------|
+| [TODO/README.md](TODO/README.md) | Index |
+| [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md) | Athena optical raw stream (muse-rs `Optics`, session tag 11) |
+| [TODO/handoff-athena-optics.md](TODO/handoff-athena-optics.md) | Implementer order, files, LOC |
+
 ## Archive
 
 Finished work and history live in [archive/](archive/). Do not treat those

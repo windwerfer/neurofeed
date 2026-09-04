@@ -73,6 +73,7 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
 ## Docs
 Index: [`.ai/README.md`](.ai/README.md). Format/cache:
 `README_feedback_format.md`, `README_history_cache.md`.
+Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
 
 ## Project layout
 ```

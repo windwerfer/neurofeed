@@ -5,6 +5,10 @@
 Crown *run*, OSC connect/discovery, Android foreground service, leftover QA
 in this file. Do not mix those with the connect-simulator freeze.
 
+Athena **raw optical stream** (not SpO₂/fNIRS product) is queued in
+[../TODO/athena-optics-contract.md](../TODO/athena-optics-contract.md) —
+own branch after connect-simulator-ux, muse-rs **0.2.0** first.
+
 ## Connect simulator UX (done)
 
 Muse | Neurosity | Simulator dropdown. `DeviceKind` is Muse | Neurosity.
