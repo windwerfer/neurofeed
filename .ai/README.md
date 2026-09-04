@@ -8,11 +8,12 @@ do/don't, then this folder for maps.
 | File | Contents |
 |------|----------|
 | [active-task.md](active-task.md) | Current development focus |
+| [connect-simulator-ux.md](connect-simulator-ux.md) | **Frozen** connect UX: Muse / Neurosity / Simulator + `DeviceKind` Muse\|Neurosity |
 | [architecture.md](architecture.md) | Stack: BLE, devices, feature pipeline, session, audio, streaming, export |
 | [testing-guide.md](testing-guide.md) | Build/test loop, FFI tests, `flutter run` loader trap |
 | [release.md](release.md) | Release CI, keystore, F-Droid, reproducibility |
 | [btleplug.md](btleplug.md) | btleplug fork (`0.12.0-muse-5`) — JNI attach + notification death spiral |
-| [muse-rs.md](muse-rs.md) | muse-rs `0.1.1` patch, Classic vs Athena, battery |
+| [muse-rs.md](muse-rs.md) | muse-rs `0.1.1` patch, Classic vs Athena, battery, Athena optical/fNIRS gap |
 
 ## Feedback
 
@@ -20,14 +21,22 @@ do/don't, then this folder for maps.
 |------|----------|
 | [feedback/pipeline-contract.md](feedback/pipeline-contract.md) | Frozen pipeline spec (PRs 1–7 implemented). Do not reopen Key Decisions. |
 | [feedback/architecture.md](feedback/architecture.md) | Lanes, protocol documents, calibration as implemented |
-| [feedback/session-computed-charts.md](feedback/session-computed-charts.md) | **Frozen** next spec: charts from v5 computed 1 Hz |
-| [feedback/handoff-session-computed-charts.md](feedback/handoff-session-computed-charts.md) | Original implementer handoff (steps 1–4 done) |
-| [feedback/handoff-session-computed-charts-resume.md](feedback/handoff-session-computed-charts-resume.md) | **Start here** — remaining steps 5–7 |
-| [feedback/todos.md](feedback/todos.md) | Checklist + frozen-charts note |
+| [feedback/todos.md](feedback/todos.md) | Checklist |
 
 Format / cache byte-level docs (repo root, not here):
 [README_feedback_format.md](../README_feedback_format.md),
 [README_history_cache.md](../README_history_cache.md).
+
+## Queued
+
+Not the active branch. Do not mix into connect-simulator-ux or
+pipeline-contract work.
+
+| File | Contents |
+|------|----------|
+| [TODO/README.md](TODO/README.md) | Index |
+| [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md) | Athena optical raw stream (muse-rs `Optics`, session tag 11) |
+| [TODO/handoff-athena-optics.md](TODO/handoff-athena-optics.md) | Implementer order, files, LOC |
 
 ## Archive
 

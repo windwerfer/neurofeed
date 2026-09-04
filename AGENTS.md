@@ -66,17 +66,20 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
 - Format changes land in `rust/src/api/session_format.rs`; keep
   `cargo test --lib session_format` green.
 - Do not reopen pipeline-contract Key Decisions. Do not unlock Crown sessions
-  in the current series. Session-chart work has its own frozen spec
-  (`.ai/feedback/session-computed-charts.md`) — do not mix it with other PRs.
+  in the current series. Connect UX is frozen
+  (`.ai/connect-simulator-ux.md`) — do not mix OSC-connect or Crown Start
+  into it. `DeviceKind` is Muse | Neurosity only; do not restore Simulated*.
 
 ## Docs
 Index: [`.ai/README.md`](.ai/README.md). Format/cache:
 `README_feedback_format.md`, `README_history_cache.md`.
+Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
 
 ## Project layout
 ```
 lib/src/                    Flutter UI + Riverpod
   connection_provider.dart  AppStateNotifier: scan/connect
+  connect_source.dart       ConnectSource + simulator catalog
   app.dart                  main(), permissions
   connect_window.dart       ConnectOverlay (every view with a status bar)
   settings.dart, status_bar.dart, version.dart
@@ -88,6 +91,10 @@ lib/src/feedback/           session orchestrator + lanes
   target_state.dart         RatioEngine (FeedbackEngine): threshold, EMA, recalibrate
   protocol.dart / protocol_catalog.dart / user_protocol_store.dart
   feature_catalog.dart      assets/features.json copy
+  computed_sampler.dart     1 Hz JSONL; t = seconds from recording start
+  feedback_recorder.dart    scratch temps + assembleScratchV5
+  session_assembler.dart    one containerEncodeV5 / writeScratchV5 wrapper
+  crash_recovery.dart       leftover scratch v5 / three-temps
   session_store*.dart / session_sqlite.dart / session_metadata.dart
   session_export.dart / session_pdf_export.dart / session_chart_data.dart
 lib/src/audio/              SoLoud: AudioService, reward/guard/background outputs
@@ -105,10 +112,20 @@ assets/                     protocols.json, calibrations.json, features.json, au
 ## Where things live
 - BLE: `rust/src/api/muse.rs` (`scan`, `connect`, `subscribe_events`).
 - JNI attach: `third_party/btleplug/src/droidplug/jni/mod.rs` `get_env()`.
-- Devices: `rust/src/api/device_config.rs`; Crown OSC
-  `neurosity_osc.rs`; simulators `simulator.rs`.
+- Devices: `DeviceKind` is Muse | Neurosity (`device_config.rs`). Connect
+  dropdown is Dart `ConnectSource` (`connect_source.dart`). Simulation is
+  `simulate` + `sim:*` ids (`simulator.rs`), not extra kind variants.
+  `connect_with_options(simulate: true)` calls `spawn_simulator` on the
+  existing tokio runtime and emits headset events only (`Eeg` / `Ppg` /
+  IMU / `Telemetry`). The event forwarder derives bands, features, pulse,
+  SpO₂, quality — same as a live Muse. `DeviceSimulator` is Rust-only
+  (`#[frb(ignore)]`). Crown OSC: `neurosity_osc.rs` (no discovery API yet).
 - Feature registry: `rust/src/api/features.rs`. Dart bus/lanes as above.
 - Session byte layout: `rust/src/api/session_format.rs` only. Dart is FFI.
+- Session assemble: `lib/src/feedback/session_assembler.dart`
+  (`assembleV5Container`, `writeScratchV5`, `placeholderWebP`).
+- Crash recovery: `lib/src/feedback/crash_recovery.dart` scans
+  `scratchDirectory`, not `getTemporaryDirectory()/sessions`.
 - History cache: `lib/src/feedback/session_sqlite.dart`
   (`session_metadata.db`, thumbnail BLOB). Reconcile in `session_store_core.dart`.
 - SAF: MethodChannel `muse_ml/saf` in `MainActivity.kt`.
@@ -139,11 +156,23 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **Model install UI is shared** (`lib/src/reve/model_selector.dart`) —
   don't fork it between settings and the guardrail dialog.
 - **Range sliders for cutoffs are log-space**; the label is `label.round()`.
-  Never copy a raw slider position into prefs or tests.
+  Persist music cutoff on `onChangeEnd`, not every `onChanged` tick. Never
+  copy a raw slider position into prefs or tests.
 - **Don't wrap a bounded `DecoratedBox` around a `ListTile` subtitle**
   (Material ink assertion).
 - **Connect overlay must exist in every view with a status bar**
-  (`AppShell` and `FeedbackSessionView` each host one).
+  (`AppShell` and `FeedbackSessionView` each host one). Dropdown is Muse |
+  Neurosity | Simulator (`ConnectSource`). Simulator only in Debug mode
+  (`enable_simulated_devices`). Muse = BLE, keep Muse only. Neurosity =
+  never BLE (empty OSC list is OK). Simulator = static catalog, no BLE,
+  no OSC; hide Rescan. Debug off + Simulator selected → Muse. Ignore
+  `sim:*` `lastDeviceId` when debug is off.
+- **`DeviceKind` is two values** (Muse, Neurosity). FFI enum — regenerate
+  FRB if it changes. `deviceKindIsCrown` is `kind == neurosity`. Crown
+  Start is refused for real and simulated Crown/Notion.
+- **Settings has no “AI sleep guardrail” card.** Guard is per-protocol in
+  the builder + `Settings.guardFeatureFor`. Debug mode is the last card
+  (after About).
 - **flutter_soloud Linux Xiph libs are glibc-2.43-built** unless
   `TRY_SYSTEM_LIBS_FIRST=1` + system `libopus-dev` etc. (devcontainer and
   `release-linux.yml` already do this).
@@ -167,7 +196,18 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **Muse startup** uses `handle.start(true, false)` (commit `217cefe`).
   Classic `p50` enables PPG. Revert that commit if Classic stability
   regresses.
+- **Simulator connect must `tokio::spawn` `DeviceSimulator::start`.** Do
+  not drop the Future (the old std-thread bridge never ran). Do not emit
+  derived `Bands` / Pulse / SpO₂ / Gestures from the sim — the forwarder
+  owns those. EEG std must stay in `1..15` µV so pad quality ≥ 80.
+  `cargo test --lib simulator`.
+- **Athena optical ≠ Classic PPG.** muse-rs maps optical tags `0x34` /
+  `0x35` **first 3 channels only** into `MuseEvent::Ppg` (as if they were
+  ambient/IR/red) and **skips** `0x36` (16-ch). Extra fNIRS optodes are
+  not in this app. Do not add them without Athena hardware. See
+  `.ai/muse-rs.md`.
 - **SpO₂** from PPG IR+Red in `compute_spo2()` (`muse.rs`, commit `4bc0300`).
+  Classic 3-ch PPG only; Athena 8/16-ch optics are not a drop-in.
 - **Event forwarder** polls `guard.events` every 1 s; 30 s silence →
   `Disconnected`. Never `watch::changed()` on a clone of an unpolled primary
   (commit `3078904` / fix `53e3e8f`).
@@ -211,6 +251,13 @@ assets/                     protocols.json, calibrations.json, features.json, au
   loaded. See `.ai/testing-guide.md`.
 - **`updateNotes` uses v5** (`containerEncodeV5`). There is no
   `SessionContainer` Dart wrapper anymore.
+- **Assemble v5 at `end()`** into scratch (placeholder WebP) **before**
+  `phase = ended`. Save `publishSession` to history; Discard deletes the
+  scratch v5. One wrapper: `session_assembler.dart`.
+- **Crash recovery** scans `scratchDirectory` for leftover
+  `session_*.muse.feedback` and orphan `.raw` / `.computed` / `.metadata`.
+  Temps go through `writeScratchV5`. Never `decodeImage` on empty bytes.
+- **ComputedSampler.t** is seconds from recording start, not unix epoch.
 - **Charts** plot computed 1 Hz (`v5ExtractComputed` →
   `prepareChartDataFromComputed`). There is no `SessionOverview` /
   400-bucket `metadata.summary`. The list sparkline is the WebP thumbnail.

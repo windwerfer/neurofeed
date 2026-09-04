@@ -438,7 +438,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
       return;
     }
-    if (deviceKindIsCrown(app.connectDeviceKind)) {
+    if (app.lastConnectedKind != null &&
+        deviceKindIsCrown(app.lastConnectedKind!)) {
       debugPrint('[feedback] refusing Start on Crown');
       return;
     }
@@ -515,7 +516,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   Future<void> _enableSessionFeatures() async {
     final app = _ref.read(appStateProvider);
-    final kind = app.connectDeviceKind;
+    final kind = app.lastConnectedKind ?? DeviceKind.muse;
     var montage = museMontageNames;
     try {
       final config = await DeviceConfig.forKind(kind: kind);
@@ -951,9 +952,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         buildSessionMetadata().toJson(),
       );
       if (path == null) {
-        debugPrint(
-          '[feedback] end: scratch v5 assemble failed; temps kept',
-        );
+        debugPrint('[feedback] end: scratch v5 assemble failed; temps kept');
       }
     } catch (e, st) {
       debugPrint('[feedback] end: scratch v5 assemble failed: $e\n$st');
@@ -1067,16 +1066,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       deviceId: app.status.connected ? app.status.id : null,
       recordedChannels: channels,
       recordedData: recordStreams.map((s) => s.name).toList(),
-      gestures: settings.markersInFeedbackEnabled
-          ? gestureMarkers
-          : const [],
+      gestures: settings.markersInFeedbackEnabled ? gestureMarkers : const [],
       calibration: calibration,
       drowsiness: drowsy,
       music: sessionMusic,
       metadataDescription: protocol?.metadataDescription,
-      protocolJson: protocol
-          ?.resolved(guardFeature: feature)
-          .toJson(),
+      protocolJson: protocol?.resolved(guardFeature: feature).toJson(),
       protocolVersion: '1',
       sessionSettings: SessionSettings(
         dynamicAdapt: dynamicAdapt,

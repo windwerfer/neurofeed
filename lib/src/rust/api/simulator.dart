@@ -7,98 +7,17 @@ import '../frb_generated.dart';
 import 'device_config.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `new`, `now_ms`, `run_bands`, `run_eeg`, `run_imu`, `run_telemetry`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `SimulatorState`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `spawn_simulator`, `with_config`
+// These functions are ignored because they are not marked as `pub`: `eeg_sample`, `now_ms`, `ppg_sample`, `run_eeg`, `run_imu`, `run_ppg`, `run_telemetry`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `DeviceSimulator`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `spawn_simulator`
+// These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `new`, `start`, `stop`
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<DeviceSimulator>>
-abstract class DeviceSimulator implements RustOpaqueInterface {
-  // HINT: Make it `#[frb(sync)]` to let it become the default constructor of Dart class.
-  static Future<DeviceSimulator> newInstance({
-    required DeviceConfig config,
-    required SenderMuseEventDto eventTx,
-  }) => RustLib.instance.api.crateApiSimulatorDeviceSimulatorNew(
-    config: config,
-    eventTx: eventTx,
-  );
-
-  Future<void> start();
-
-  Future<void> stop();
-}
-
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<Sender < MuseEventDto >>>
-abstract class SenderMuseEventDto implements RustOpaqueInterface {}
-
-/// Configuration for simulator behavior
-class SimulatorConfig {
-  /// Base noise level (0.0 = clean, 1.0 = very noisy)
-  final double noiseLevel;
-
-  /// Signal quality variation amplitude (0.0 = stable, 1.0 = highly variable)
-  final double qualityVariation;
-
-  /// Enable blink simulation (Muse only)
-  final bool enableBlink;
-
-  /// Enable jaw clench simulation (Muse only)
-  final bool enableClench;
-
-  /// Blink interval range (min, max) in seconds
-  final (double, double) blinkIntervalRange;
-
-  /// Clench interval range (min, max) in seconds
-  final (double, double) clenchIntervalRange;
-
-  /// SpO2 simulation (Muse only, requires PPG)
-  final bool enableSpo2;
-
-  /// SpO2 base value (95-99%)
-  final double spo2Base;
-
-  /// SpO2 variation range
-  final double spo2Variation;
-
-  const SimulatorConfig({
-    required this.noiseLevel,
-    required this.qualityVariation,
-    required this.enableBlink,
-    required this.enableClench,
-    required this.blinkIntervalRange,
-    required this.clenchIntervalRange,
-    required this.enableSpo2,
-    required this.spo2Base,
-    required this.spo2Variation,
-  });
-
-  static Future<SimulatorConfig> default_() =>
-      RustLib.instance.api.crateApiSimulatorSimulatorConfigDefault();
-
-  @override
-  int get hashCode =>
-      noiseLevel.hashCode ^
-      qualityVariation.hashCode ^
-      enableBlink.hashCode ^
-      enableClench.hashCode ^
-      blinkIntervalRange.hashCode ^
-      clenchIntervalRange.hashCode ^
-      enableSpo2.hashCode ^
-      spo2Base.hashCode ^
-      spo2Variation.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is SimulatorConfig &&
-          runtimeType == other.runtimeType &&
-          noiseLevel == other.noiseLevel &&
-          qualityVariation == other.qualityVariation &&
-          enableBlink == other.enableBlink &&
-          enableClench == other.enableClench &&
-          blinkIntervalRange == other.blinkIntervalRange &&
-          clenchIntervalRange == other.clenchIntervalRange &&
-          enableSpo2 == other.enableSpo2 &&
-          spo2Base == other.spo2Base &&
-          spo2Variation == other.spo2Variation;
-}
+/// Connected name and firmware for a `sim:*` catalog id.
+/// Unknown ids fall back to Muse S / Crown from [kind].
+Future<(String, String)> simulatedIdentity({
+  required String deviceId,
+  required DeviceKind kind,
+}) => RustLib.instance.api.crateApiSimulatorSimulatedIdentity(
+  deviceId: deviceId,
+  kind: kind,
+);

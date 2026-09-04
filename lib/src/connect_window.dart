@@ -2,19 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/connect_source.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/rust/api/device_config.dart';
 import 'package:muse_ml/src/settings.dart';
-
-/// Display name for DeviceKind enum
-extension DeviceKindDisplayName on DeviceKind {
-  String get displayName => switch (this) {
-    DeviceKind.muse => 'Muse',
-    DeviceKind.neurosity => 'Neurosity',
-    DeviceKind.simulatedMuse => 'Muse (Simulated)',
-    DeviceKind.simulatedNeurosity => 'Neurosity (Simulated)',
-  };
-}
 
 /// Full-body overlay behind the [ConnectWindow]: the dropdown panel over an
 /// opaque tap barrier. While the window is open, tapping anywhere on the
@@ -50,7 +41,14 @@ class ConnectWindow extends ConsumerWidget {
     final state = ref.watch(appStateProvider);
     final notifier = ref.watch(appStateProvider.notifier);
     final settings = ref.watch(settingsProvider);
-    final showSimulate = settings.enableSimulatedDevices;
+    final sources = visibleConnectSources(
+      debug: settings.enableSimulatedDevices,
+    );
+    final source = resolveConnectSource(
+      state.connectSource,
+      debug: settings.enableSimulatedDevices,
+    );
+    final showRescan = !state.scanning && source != ConnectSource.simulator;
 
     return Material(
       elevation: 8,
@@ -69,7 +67,7 @@ class ConnectWindow extends ConsumerWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const Spacer(),
-                if (!state.scanning)
+                if (showRescan)
                   TextButton.icon(
                     onPressed: notifier.openConnectWindowAndScan,
                     icon: const Icon(Icons.refresh),
@@ -78,29 +76,28 @@ class ConnectWindow extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 12),
-            // Device kind dropdown
-            DropdownButtonFormField<DeviceKind>(
-              value: state.connectDeviceKind,
+            DropdownButtonFormField<ConnectSource>(
+              key: ValueKey(source),
+              initialValue: source,
               decoration: const InputDecoration(
                 labelText: 'Device type',
                 border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
               ),
-              items: DeviceKind.values.map((kind) {
-                return DropdownMenuItem(
-                  value: kind,
-                  child: Text(kind.displayName),
-                );
-              }).toList(),
-              onChanged: (kind) {
-                if (kind != null) {
-                  notifier.setConnectDeviceKind(kind);
+              items: [
+                for (final s in sources)
+                  DropdownMenuItem(value: s, child: Text(s.displayName)),
+              ],
+              onChanged: (next) {
+                if (next != null) {
+                  notifier.setConnectSource(next);
                 }
               },
             ),
-            // Experimental banner for Neurosity (Crown/Notion)
-            if (state.connectDeviceKind == DeviceKind.neurosity &&
-                !state.connectSimulate) ...[
+            if (source == ConnectSource.neurosity) ...[
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
@@ -127,7 +124,9 @@ class ConnectWindow extends ConsumerWidget {
                         'Experimental: Neurosity Crown/Notion support is untested on real hardware. '
                         'Please report bugs on GitHub.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onTertiaryContainer,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onTertiaryContainer,
                         ),
                       ),
                     ),
@@ -136,69 +135,21 @@ class ConnectWindow extends ConsumerWidget {
               ),
             ],
             const SizedBox(height: 12),
-            // Simulate toggle (only visible when enabled in settings)
-            if (showSimulate) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.science_outlined,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Simulator (Debug)',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Use built-in simulator instead of real hardware. '
-                      'Produces realistic EEG, bands, IMU, and SpO₂ data.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SwitchListTile(
-                      title: const Text('Enable Simulator'),
-                      subtitle: Text(
-                        state.connectSimulate
-                            ? 'Simulating ${state.connectDeviceKind.displayName}'
-                            : 'Real hardware will be used',
-                      ),
-                      value: state.connectSimulate,
-                      onChanged: (value) {
-                        notifier.setConnectSimulate(value);
-                      },
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
             if (state.devices.isEmpty && !state.scanning)
-              Text('No ${state.connectDeviceKind.displayName} devices found. ${state.connectSimulate ? 'Simulator ready.' : 'Make sure the headset is on.'}')
+              Text(emptyDevicesCopy(source))
             else ...[
               ...state.devices.map(
                 (d) => Material(
                   type: MaterialType.card,
                   color: const Color(0xFF1E212A),
                   child: ListTile(
-                    leading: Icon(d.kind == DeviceKind.muse ? Icons.bluetooth : Icons.headphones),
+                    leading: Icon(
+                      source == ConnectSource.simulator
+                          ? Icons.science_outlined
+                          : d.kind == DeviceKind.muse
+                          ? Icons.bluetooth
+                          : Icons.headphones,
+                    ),
                     title: Text(d.name),
                     subtitle: Text(d.id),
                     enabled: state.connectingTo == null,

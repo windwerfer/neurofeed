@@ -12,7 +12,7 @@ rust_lib_muse_ml
   features.rs        feature registry → MuseEventDto::Feature
   device_config.rs   DeviceKind + electrode montage
   neurosity_osc.rs   Crown/Notion OSC
-  simulator.rs       SimulatedMuse / SimulatedNeurosity
+  simulator.rs       spawn_simulator: Eeg/Ppg/IMU/Telemetry (`sim:*`)
   reve.rs            model + guardrail FFI
   session_format.rs  .muse v4 body + .muse.feedback v5 container
   analysis/{gesture,reve,luna,guardrail}.rs
@@ -34,21 +34,26 @@ Permissions: `requestBlePermissions()` in `app.dart`. BLE init:
 
 ## Devices
 
-`DeviceKind`: `Muse`, `Neurosity`, `SimulatedMuse`, `SimulatedNeurosity`.
+`DeviceKind` is `Muse` | `Neurosity` (headset family: montage / features /
+Crown-start-refused). Simulation is not a kind — it is `connect_with_options`
+`simulate: true` plus synthetic `sim:*` ids. Connect dropdown is Dart
+`ConnectSource` { muse, neurosity, simulator } in
+`lib/src/connect_source.dart` (catalog + Muse BLE filter). Simulator is
+Debug mode only (`enable_simulated_devices`). Spec:
+[connect-simulator-ux.md](connect-simulator-ux.md).
+
 `DeviceConfig` owns channel count, electrode **names**, gate electrodes,
 sampling rate, PPG/IMU flags.
 
-| Kind | Transport | Notes |
-|------|-----------|--------|
-| Muse | btleplug via muse-rs | 4 pads TP9/AF7/AF8/TP10 @ 256 Hz |
-| Neurosity (Crown/Notion) | OSC (`neurosity_osc.rs`) | 8 ch; `/focus` `/calm` as `device.*` features |
-| Simulated* | `simulator.rs` | No headset; for UI/pipeline without BLE |
+| Source | Kind | Transport | Notes |
+|------|-----------|--------|--------|
+| Muse | muse | btleplug via muse-rs | BLE scan, Muse only. 4 pads TP9/AF7/AF8/TP10 @ 256 Hz |
+| Neurosity | neurosity | OSC (`neurosity_osc.rs`) | Never BLE. Empty list OK (no OSC discovery yet). 8 ch |
+| Simulator | muse or neurosity from the row | `simulator.rs` locally | Static catalog; Crown (OSC) / Notion (OSC) are 8-ch sim, no UDP. Emits headset events only (`Eeg` / `Ppg` / IMU / `Telemetry`); the forwarder derives bands, features, pulse, SpO2, quality. |
 
 **Crown Start is refused** (`crownSessionUnsupportedMessage` in
-`lib/src/feedback/protocol.dart`). The registry can *produce* Crown
-`device.focus` / `device.calm` and `band.*`; running a catalog session on
-Crown is out of scope until quality vectors, computed frames, and charts are
-device-aware. Connect UI still lists Crown.
+`lib/src/feedback/protocol.dart`) whenever `kind == DeviceKind.neurosity`
+(real or simulated). Muse simulator rows stay startable.
 
 ## Feature pipeline
 
@@ -83,9 +88,12 @@ delegates: `encodeSessionEvent` / `sessionFrameBytes` / `sessionParseBody` /
 `containerEncodeV5` / `v5ParseHead` / `v5ExtractComputed`.
 
 History list: SQLite `session_metadata.db` (typed columns + thumbnail BLOB).
-Detail today still has a 400-bucket `SessionOverview` path — **that is the
-next frozen spec to remove**, see
-[feedback/session-computed-charts.md](feedback/session-computed-charts.md).
+At session `end()`, assemble a real v5 into scratch (placeholder WebP);
+dashboard/history `v5ExtractComputed` → `prepareChartDataFromComputed`.
+Save publishes to the history folder. Crash recovery scans
+`scratchDirectory`. No `SessionOverview` / 400-bucket `metadata.summary`.
+The list sparkline is the WebP thumbnail. Assembler:
+`lib/src/feedback/session_assembler.dart`.
 
 ## Audio
 
@@ -113,9 +121,9 @@ Wire-format reference: `third_party/brainflow/` (tag 5.9.0), not a build dep.
 ## Export
 
 `SessionExporter`: PDF, PNG (thumb + charts), Mind Monitor CSV, EDF+
-(`encodeEdfExport` → `third_party/edf_export`). Charts share
-`prepareChartData` with the dashboard (that builder is in scope of the
-computed-charts spec). Destination `<root>/export/`.
+(`encodeEdfExport` → `third_party/edf_export`). PDF/PNG charts share
+`prepareChartDataFromComputed` with the dashboard. CSV/EDF use the framed
+raw body. Destination `<root>/export/`.
 
 ## Signal quality + gate
 

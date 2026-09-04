@@ -3,10 +3,10 @@
 | Field | Value |
 |---|---|
 | Date | 2026-09-02 |
-| Spec | [`.ai/feedback/session-computed-charts.md`](session-computed-charts.md) — **frozen**. Do not reopen Key Decisions. |
-| Branch | `feat/session-computed-charts` (off `refactor/eeg_feature_implementation`) |
-| Last commit | `da4e119` `feat(session): assemble scratch v5 at end; charts from computed 1 Hz` |
-| Status | **Steps 1–7 implemented.** Device/desktop `flutter run` still not done. |
+| Spec | [session-computed-charts.md](session-computed-charts.md) — implemented. |
+| Branch | `feat/session-computed-charts` (merged to `main`) |
+| Last commit | `3082017` `feat(session): drop 400-bucket overview; recover scratch v5` |
+| Status | **Steps 1–7 done.** `flutter run` verified 2026-09-03. |
 | Do not mix | Crown Start, v5 byte layout, FRB regen, pipeline-contract Key Decisions |
 
 Read the spec first. Then this file. Then implement remaining steps in order.
@@ -80,8 +80,7 @@ Handoff originally asked to stop after step 3 and check `flutter run -d linux` (
 
 ## Remaining work
 
-Steps 5–7 are implemented. Still open: device/desktop `flutter run -d linux`
-— session-end graphs + Save to history folder, not `.cache`.
+None. Steps 1–7 implemented. `flutter run` verified 2026-09-03.
 
 ### Step 5 — Delete 400-bucket code + docs (done)
 
@@ -100,7 +99,7 @@ Steps 5–7 are implemented. Still open: device/desktop `flutter run -d linux`
 - Use `placeholderWebP`, never empty bytes. Reuse `toFfiFrame` from the assembler; delete the copy in `crash_recovery.dart`.
 - Do **not** scan `getTemporaryDirectory()/sessions`.
 
-### Step 7 — Tests leftover (done; device run still open)
+### Step 7 — Tests leftover (done)
 
 Most of the table in the original handoff already has coverage in `test/session_computed_charts_test.dart`. Still add/adjust as you delete 400-bucket code:
 
@@ -112,7 +111,7 @@ Most of the table in the original handoff already has coverage in `test/session_
 
 `flutter analyze lib/src` clean. `cargo test --lib session_format` still green.
 
-Device/desktop: `flutter run -d linux` — session-end graphs + Save to history folder, not `.cache`.
+Device/desktop: `flutter run` verified 2026-09-03 — session-end graphs + Save to history folder, not `.cache`.
 
 ---
 

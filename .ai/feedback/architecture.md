@@ -1,10 +1,11 @@
 # Feedback system (as implemented)
 
-Pipeline PRs 1–7 on `refactor/eeg_feature_implementation`. Frozen decisions:
+Pipeline PRs 1–7 implemented. Frozen decisions:
 [pipeline-contract.md](pipeline-contract.md) — do not reopen them.
 
-Next work (separate frozen spec, do not mix):
-[session-computed-charts.md](session-computed-charts.md).
+Session summary charts plot v5 computed 1 Hz
+(`v5ExtractComputed` → `prepareChartDataFromComputed`). Spec archive:
+[../archive/session-computed-charts.md](../archive/session-computed-charts.md).
 
 ## Pipeline
 
@@ -56,8 +57,14 @@ A protocol wires: reward feature + output + optional inhibit, optional guard
 feature + output, background kind, calibration id, electrode **names**
 (empty = Rust default).
 
-**Crown Start is refused.** Catalog may list band protocols when the selected
-kind is Crown; `startCalibration` must not silently train C3/F5.
+**Crown Start is refused** whenever `listingDeviceKind` /
+`lastConnectedKind` is `DeviceKind.neurosity` (real Crown/Notion or the
+Crown (OSC) / Notion (OSC) simulator rows). Catalog may list band protocols
+on that kind; `startCalibration` must not silently train C3/F5.
+
+`DeviceKind` is Muse | Neurosity. Simulation is `ConnectSource.simulator` +
+`sim:*` ids, not extra enum variants. List filter is last connected this
+process; no device this process → show all catalog rows.
 
 Non-reward catalog rows: `recordOnly` (calibration skippable) and
 `guardrailOnly` (warnings only).
@@ -93,10 +100,17 @@ Idle → Calibrating → Playing ⇄ Paused → Ended → Dashboard
 Orchestrator: `lib/src/feedback/feedback_state.dart`. No ready phase — a
 finished baseline always calls `startPlaying()`.
 
-## Recording (today)
+## Recording
 
 Three temps under scratch while playing (`.raw` / `.computed` / `.metadata`).
-Dashboard/history still have a 400-bucket `SessionOverview` path and can
-mis-parse the raw body — that is exactly what
-[session-computed-charts.md](session-computed-charts.md) replaces. Do not
-"fix" those in isolation; follow that spec.
+At `end()`, assemble a v5 container into scratch (placeholder WebP), then
+set `phase = ended`. Dashboard and history both
+`v5ExtractComputed` → `prepareChartDataFromComputed`. Save publishes to the
+history folder; Discard deletes the scratch v5.
+
+Crash recovery (`crash_recovery.dart`) scans `scratchDirectory` for leftover
+scratch v5 and orphan three-temps, assembles via `writeScratchV5`, then
+Save → `publishSession` or Discard → delete.
+
+One assembler: `session_assembler.dart`. Spec archive:
+[../archive/session-computed-charts.md](../archive/session-computed-charts.md).

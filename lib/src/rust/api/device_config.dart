@@ -92,14 +92,6 @@ class DeviceConfig {
   static Future<DeviceConfig> neurosityCrown() =>
       RustLib.instance.api.crateApiDeviceConfigDeviceConfigNeurosityCrown();
 
-  /// Muse simulated
-  static Future<DeviceConfig> simulatedMuse() =>
-      RustLib.instance.api.crateApiDeviceConfigDeviceConfigSimulatedMuse();
-
-  /// Neurosity Crown simulated
-  static Future<DeviceConfig> simulatedNeurosityCrown() => RustLib.instance.api
-      .crateApiDeviceConfigDeviceConfigSimulatedNeurosityCrown();
-
   /// Get target electrode values from a map
   Future<Float32List> targetValues({required Map<BigInt, double> values}) =>
       RustLib.instance.api.crateApiDeviceConfigDeviceConfigTargetValues(
@@ -170,22 +162,15 @@ class DeviceFeatures {
           gesture == other.gesture;
 }
 
-/// Device kind enumeration
+/// Headset family (montage / features / Crown-start-refused).
+/// Simulation is the `simulate` flag on connect, not a kind.
 enum DeviceKind {
   muse,
-  neurosity,
-  simulatedMuse,
-  simulatedNeurosity;
-
-  Future<DeviceKind> baseKind() =>
-      RustLib.instance.api.crateApiDeviceConfigDeviceKindBaseKind(that: this);
+  neurosity;
 
   Future<bool> isMuse() =>
       RustLib.instance.api.crateApiDeviceConfigDeviceKindIsMuse(that: this);
 
   Future<bool> isNeurosity() => RustLib.instance.api
       .crateApiDeviceConfigDeviceKindIsNeurosity(that: this);
-
-  Future<bool> isSimulated() => RustLib.instance.api
-      .crateApiDeviceConfigDeviceKindIsSimulated(that: this);
 }

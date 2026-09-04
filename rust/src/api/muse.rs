@@ -1,5 +1,4 @@
 use flutter_rust_bridge::frb;
-use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::api::device_config::DeviceKind;
 use crate::api::features::{self, FeatureDto};
@@ -533,14 +532,7 @@ pub async fn connect_with_options(
 
     // If simulating, we don't need a real device from cache
     let (name, firmware) = if simulate {
-        match kind {
-            DeviceKind::SimulatedMuse | DeviceKind::Muse => {
-                ("Muse S (Simulated)".to_string(), "MuseS_sim_v1.0".to_string())
-            }
-            DeviceKind::SimulatedNeurosity | DeviceKind::Neurosity => {
-                ("Crown (Simulated)".to_string(), "Crown_sim_v1.0".to_string())
-            }
-        }
+        crate::api::simulator::simulated_identity(&device_id, kind)
     } else {
         // Real device - look up from cache
         let device = {
@@ -552,28 +544,12 @@ pub async fn connect_with_options(
         (device.name.clone(), String::new()) // firmware filled after connect
     };
 
-if simulate {
-        // Start simulator
+    if simulate {
         let config = crate::api::device_config::DeviceConfig::for_kind(kind);
-        let (sim_tx, sim_rx) = std::sync::mpsc::channel();
-        let simulator = Arc::new(crate::api::simulator::DeviceSimulator::new(config, sim_tx));
-        
-        // Create unified MuseEventDto channel for the forwarder (tokio)
-        let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
-        
-        // Bridge task: read from std channel (blocking) and forward to tokio channel
-        let bridge_tx = dto_tx.clone();
-        let sim_clone = simulator.clone();
-        std::thread::spawn(move || {
-            // Run the simulator (blocks until stopped)
-            let _ = sim_clone.start();
-            while let Ok(event) = sim_rx.recv() {
-                if bridge_tx.blocking_send(event).is_err() {
-                    break;
-                }
-            }
-        });
-        
+        let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(1024);
+        let simulator = crate::api::simulator::spawn_simulator(config, dto_tx);
+        log::info!("[muse] simulator started for {name} ({device_id})");
+
         {
             let mut guard = state().inner.lock().unwrap();
             guard.connection_epoch += 1;
@@ -588,7 +564,7 @@ if simulate {
         features::set_active_kind(kind);
 
         spawn_event_forwarder();
-        
+
         return Ok(ConnectionStatus {
             connected: true,
             name,

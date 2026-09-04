@@ -244,7 +244,6 @@ fn all_known_electrode_names() -> HashSet<String> {
 
 /// Sync Rust; FRB 2.11.1 exposes a Dart `Future` (not `#[frb(sync)]`).
 pub fn available_features(kind: DeviceKind) -> Vec<FeatureInfo> {
-    let kind = kind.base_kind();
     SPECS
         .iter()
         .map(|spec| {
@@ -278,7 +277,7 @@ pub fn set_enabled_features(ids: Vec<String>) -> anyhow::Result<()> {
     for id in &unique {
         let spec = spec_by_id(id).ok_or_else(|| anyhow::anyhow!("unknown feature id: {id}"))?;
         if let Some(kind) = reg.active_kind {
-            let (ok, reason) = available_on(spec, kind.base_kind());
+            let (ok, reason) = available_on(spec, kind);
             if !ok {
                 anyhow::bail!(
                     "{}",
@@ -299,11 +298,7 @@ pub fn set_feature_electrodes(id: String, names: Vec<String>) -> anyhow::Result<
     }
 
     let mut reg = registry().lock().unwrap_or_else(|e| e.into_inner());
-    if matches!(
-        reg.active_kind.map(|k| k.base_kind()),
-        Some(DeviceKind::Neurosity)
-    ) && spec.id == ID_DROWSINESS
-    {
+    if matches!(reg.active_kind, Some(DeviceKind::Neurosity)) && spec.id == ID_DROWSINESS {
         anyhow::bail!("ai.drowsiness is Muse-only");
     }
 
@@ -392,7 +387,6 @@ pub(crate) fn crown_quality(channel: usize) -> Option<f64> {
 
 pub(crate) fn resolved_electrode_names(kind: DeviceKind, id: &str) -> anyhow::Result<Vec<String>> {
     let spec = spec_by_id(id).ok_or_else(|| anyhow::anyhow!("unknown feature id: {id}"))?;
-    let kind = kind.base_kind();
     let (ok, reason) = available_on(spec, kind);
     if !ok {
         anyhow::bail!(
@@ -624,7 +618,10 @@ mod tests {
         );
         assert_eq!(names[3], "PO3");
         assert_eq!(names[4], "PO4");
-        assert_eq!(DeviceConfig::neurosity_crown().target_electrodes, vec![3, 4]);
+        assert_eq!(
+            DeviceConfig::neurosity_crown().target_electrodes,
+            vec![3, 4]
+        );
     }
 
     #[test]
@@ -641,28 +638,24 @@ mod tests {
         let _lock = reset();
         let idx = resolved_electrode_indices(DeviceKind::Neurosity, ID_ATR).unwrap();
         assert_eq!(idx, vec![3, 4]);
-        let names = resolved_electrode_names(DeviceKind::SimulatedNeurosity, ID_ATR).unwrap();
+        let names = resolved_electrode_names(DeviceKind::Neurosity, ID_ATR).unwrap();
         assert_eq!(names, vec!["PO3", "PO4"]);
     }
 
     #[test]
-    fn simulated_kinds_mirror_base() {
+    fn drowsiness_is_muse_only_focus_is_crown_only() {
         let muse = available_features(DeviceKind::Muse);
-        let sim = available_features(DeviceKind::SimulatedMuse);
-        assert_eq!(muse.len(), 8);
-        for (a, b) in muse.iter().zip(sim.iter()) {
-            assert_eq!(a.id, b.id);
-            assert_eq!(a.available, b.available);
-            assert_eq!(a.default_electrodes, b.default_electrodes);
-        }
         let crown = available_features(DeviceKind::Neurosity);
-        assert!(!crown.iter().find(|f| f.id == ID_DROWSINESS).unwrap().available);
+        assert_eq!(muse.len(), 8);
+        assert!(
+            !crown
+                .iter()
+                .find(|f| f.id == ID_DROWSINESS)
+                .unwrap()
+                .available
+        );
         assert!(crown.iter().find(|f| f.id == ID_FOCUS).unwrap().available);
-        assert!(!available_features(DeviceKind::Muse)
-            .iter()
-            .find(|f| f.id == ID_FOCUS)
-            .unwrap()
-            .available);
+        assert!(!muse.iter().find(|f| f.id == ID_FOCUS).unwrap().available);
     }
 
     #[test]

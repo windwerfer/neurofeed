@@ -1,4 +1,4 @@
-/// Muse / SimulatedMuse montage ([DeviceConfig.muse] electrode names).
+/// Muse montage ([DeviceConfig.muse] electrode names).
 const List<String> museMontageNames = ['TP9', 'AF7', 'AF8', 'TP10'];
 
 /// Frontal pair used as the Muse gate when a feature has no montage extras.

@@ -60,6 +60,8 @@ revert after.
 ## Rust unit tests + model smoke tests (run in `rust/`)
 - Session-format goldens: `cargo test --lib session_format`
   (full suite: `cargo test --lib`).
+- Simulator stream: `cargo test --lib simulator` (headset events, no
+  derived DTOs, EEG std in the ≥80 quality band, Crown 8-ch / no PPG).
 - Model smoke tests (`#[ignore]`d): `cargo test --lib -- --ignored`
   Needs `.local/luna-base-dl/LUNA_base.safetensors` and
   `.local/reve-base-dl/model.safetensors`. Tests rebuild
@@ -70,7 +72,8 @@ revert after.
 
 ## Dart tests that hit the FFI (host build)
 Tests that call Rust (e.g. `test/session_export_test.dart`,
-`test/session_store_test.dart`) need the **host-built** library:
+`test/session_store_test.dart`, `test/session_computed_charts_test.dart`)
+need the **host-built** library:
 
 ```bash
 cargo build --manifest-path rust/Cargo.toml      # → rust/target/debug/librust_lib_muse_ml.so
@@ -78,8 +81,9 @@ flutter test                                      # tests init RustLib.init(exte
 ```
 
 Without the `.so` the FFI never loads. Pure-Dart tests
-(`feedback_pipeline_test.dart`, `user_protocol_builder_test.dart`,
-`output_ids_test.dart`, `calibration_assets_test.dart`, streaming `*_test.dart`)
+(`connect_source_test.dart`, `feedback_pipeline_test.dart`,
+`user_protocol_builder_test.dart`, `output_ids_test.dart`,
+`calibration_assets_test.dart`, streaming `*_test.dart`)
 do not need it.
 
 The PNG export rasterizer needs `TestWidgetsFlutterBinding.ensureInitialized()`

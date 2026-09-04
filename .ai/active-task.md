@@ -1,31 +1,43 @@
 # Active Task
 
-**Branch:** `feat/session-computed-charts`
+**Branch:** `feat/connect-simulator-ux`
 
-Pipeline PRs 1–7 are committed. Frozen spec:
-[feedback/pipeline-contract.md](feedback/pipeline-contract.md). Do not reopen
-those Key Decisions. **Crown Start stays refused.**
+Pipeline PRs 1–7 and session charts from v5 computed 1 Hz are on `main`.
+Frozen pipeline: [feedback/pipeline-contract.md](feedback/pipeline-contract.md).
+Do not reopen those Key Decisions. **Crown Start stays refused.**
 
-## In progress — session charts from v5 computed 1 Hz
+## Landed — connect simulator UX + settings cleanup
 
-**Frozen.** Steps 1–7 implemented on this branch. Spec:
-[feedback/session-computed-charts.md](feedback/session-computed-charts.md).
-Resume notes: [feedback/handoff-session-computed-charts-resume.md](feedback/handoff-session-computed-charts-resume.md).
+Implemented on this branch. Frozen spec:
+[connect-simulator-ux.md](connect-simulator-ux.md). Do not reopen those
+Key Decisions. Do not mix OSC-connect or unlocking Crown Start.
 
-Computed 1 Hz is the only summary waveform. Scratch v5 is assembled at
-`end()`. No `SessionOverview` / 400-bucket metadata. Crash recovery scans
-`scratchDirectory` and reuses `assembleV5Container` / `writeScratchV5`.
+Connect dropdown is Muse | Neurosity | Simulator (Simulator only in Debug
+mode). `DeviceKind` is Muse | Neurosity; simulation is `simulate` + `sim:*`
+ids. Neurosity listing is OSC-only (empty OK). Simulator catalog includes
+Crown (OSC) / Notion (OSC) as local 8-ch simulator, no UDP.
 
-Still not verified on device/desktop: `flutter run -d linux` session-end
-graphs + Save to history (not `.cache`).
+Settings: no “AI sleep guardrail” card; music cutoff persists on
+`onChangeEnd`; Debug mode switch last after About.
+
+Simulator connect now actually starts `DeviceSimulator` on the tokio
+runtime (`spawn_simulator` → EEG / PPG / IMU / telemetry). Derived
+bands, pulse, SpO2, gestures, and pad quality come from the same
+forwarder as a live Muse. Athena extra optical channels (8/16ch fNIRS)
+are not simulated — Classic 3-ch PPG only.
+
+Still not verified on device/desktop: Simulator tap-to-connect and Settings
+scroll feel (`flutter run` / `flutter run -d linux`).
 
 ## Not this thread
 
-- On-device QA (calibration, audio, streaming, export) — leftover boxes in
-  [feedback/todos.md](feedback/todos.md).
 - Crown *run* (quality vectors, computed frames, charts device-aware).
+- Making Crown / Notion OSC connect (or OSC discovery) work.
 - Android foreground service so recording survives app background.
+- On-device QA leftover boxes in [feedback/todos.md](feedback/todos.md).
 - Publish `third_party/edf_export` to git+tag once export proves out on device.
+- Athena optics raw stream (muse-rs `Optics`, session tag 11). Queued:
+  [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md).
 
 ## How to verify BLE (still)
 
