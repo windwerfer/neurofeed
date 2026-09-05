@@ -8,6 +8,7 @@ do/don't, then this folder for maps.
 | File | Contents |
 |------|----------|
 | [active-task.md](active-task.md) | Current development focus |
+| [handoff-agent-http.md](handoff-agent-http.md) | Debug loopback HTTP — continue in a new thread |
 | [connect-simulator-ux.md](connect-simulator-ux.md) | **Frozen** connect UX: Muse / Neurosity / Simulator + `DeviceKind` Muse\|Neurosity |
 | [architecture.md](architecture.md) | Stack: BLE, devices, feature pipeline, session, audio, streaming, export |
 | [testing-guide.md](testing-guide.md) | Build/test loop, FFI tests, Linux agent HTTP, `flutter run` loader trap |

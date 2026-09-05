@@ -11,6 +11,7 @@ Audio silence is N/A (not a failure). Needs a GTK display — if `flutter run -d
 never prints `agent-ready`, stop and report; do not invent Xvfb.
 
 Defines are **`--dart-define` only**. `export MUSE_AGENT=1` does nothing.
+`bool.fromEnvironment` is true only for the string `true`; we also accept `1`/`yes`.
 
 ```bash
 ps aux | grep -iE 'flutter|dart:flutter' | grep -v grep | grep -v defunct \
@@ -23,8 +24,8 @@ mkdir -p /tmp/muse-agent
 : > /tmp/muse-agent/flutter_run.log
 cd /workspaces/flutter_muse_ml
 setsid flutter run -d linux \
-  --dart-define=MUSE_AGENT=1 \
-  --dart-define=MUSE_DEBUG=1 \
+  --dart-define=MUSE_AGENT=true \
+  --dart-define=MUSE_DEBUG=true \
   > /tmp/muse-agent/flutter_run.log 2>&1 < /dev/null &
 echo $! > /tmp/muse-agent/flutter_run.pid
 ```
@@ -60,4 +61,4 @@ kill -- -$(cat /tmp/muse-agent/flutter_run.pid) 2>/dev/null || true
 - `POST /view {"view":"settings"}` to open Settings. Session UI is **not** pushed;
   start/pause/end go through the notifier.
 - HTTP 409 `crown_refused` is success for a Crown-start check.
-- Do not leave `MUSE_AGENT=1` on an Android `flutter run`.
+- Do not leave `MUSE_AGENT=true` on an Android `flutter run`.

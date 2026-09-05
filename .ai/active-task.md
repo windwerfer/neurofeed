@@ -31,9 +31,12 @@ scroll feel (`flutter run` / `flutter run -d linux`).
 
 ## This thread — agent docs + debug HTTP
 
-Focus: `.ai/ui-map.md`, `.ai/test-matrix.md`, and a debug-only loopback HTTP
-server so the agent can `curl` connect / view / session without taps.
-Widget tests and `integration_test` are deferred. Crown Start stays refused.
+Landed on `main` as `160affe` (docs + HTTP). **Continue in a new thread:**
+[handoff-agent-http.md](handoff-agent-http.md).
+
+Unfinished: first live smoke (Muse S → Raw EEG → 10s → Bands). Dart-define
+`MUSE_AGENT=1` did not enable the server; flags now accept `true`/`1`/`yes`.
+Widget tests and `integration_test` stay deferred. Crown Start stays refused.
 
 ## Not this thread
 

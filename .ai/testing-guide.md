@@ -5,14 +5,15 @@ Spoken UI names: [ui-map.md](ui-map.md). Command matrix: [test-matrix.md](test-m
 ## Linux agent loop (debug HTTP)
 
 Agent drive surface. **Not** widget tests. Bind is compile-out unless
-`kDebugMode && --dart-define=MUSE_AGENT=1`. Process env is ignored.
+`kDebugMode && --dart-define=MUSE_AGENT=true`. Process env is ignored.
+(`true` or `1`; Dart `bool.fromEnvironment` does not treat `1` as true.)
 
 This sandbox often has `DISPLAY` unset — if `flutter run -d linux` never
 prints `[muse] agent-ready`, stop and report. Do not invent Xvfb. Do not
 kill Pulse/X/Wayland.
 
 1. Rebuild `rust/target/release/` after codegen (content-hash trap below).
-2. `flutter run -d linux --dart-define=MUSE_AGENT=1 --dart-define=MUSE_DEBUG=1`
+2. `flutter run -d linux --dart-define=MUSE_AGENT=true --dart-define=MUSE_DEBUG=true`
    with stdout in a file. Wait for `[muse] agent-listen 127.0.0.1:<port>`
    **and** `[muse] agent-ready`. Abort on `Content hash`.
 3. Parse the port. `curl` `POST /connect {"id":"sim:muse-2"}`, then
