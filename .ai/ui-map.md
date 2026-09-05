@@ -46,6 +46,7 @@ Must exist in every view with a status bar (`AppShell` + session). Frozen:
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
 | Connect window / overlay | `Connect to a device` | `ConnectOverlay` / `ConnectWindow` | `connect_window.dart` | Tap barrier closes it. |
+| Connect status copy | `Connecting… (attempt N)`, scan results | `scanMessage` | `connect_window.dart` | Cleared to null after a successful connect. |
 | Device type dropdown | `Device type` | `ConnectSource` | `connect_source.dart` | Muse \| Neurosity; + Simulator iff Debug. |
 | Rescan | `Rescan` | `openConnectWindowAndScan` | `connect_window.dart` | **Hidden** on Simulator. |
 | Simulator · Muse 2 | `Muse 2` | `sim:muse-2` | `connect_source.dart` | Startable. Connected name `Muse 2 (Simulated)`. |

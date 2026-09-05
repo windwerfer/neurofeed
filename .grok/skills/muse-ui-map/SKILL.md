@@ -13,3 +13,5 @@ Read `.ai/ui-map.md` before guessing widget names.
    (Muse / Neurosity / Simulator; catalog `Muse 2`, `Crown (OSC)`, …).
 3. If you change on-screen copy or primary chrome, update `.ai/ui-map.md` in
    the same change.
+4. Debug HTTP `POST /view` uses `AppView.name` (`rawEeg`, `bands`,
+   `settings`, …). API: `.ai/testing-guide.md` Linux agent.

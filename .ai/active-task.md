@@ -1,6 +1,6 @@
 # Active Task
 
-**Branch:** `feat/connect-simulator-ux`
+**Branch:** `main`
 
 Pipeline PRs 1–7 and session charts from v5 computed 1 Hz are on `main`.
 Frozen pipeline: [feedback/pipeline-contract.md](feedback/pipeline-contract.md).
@@ -29,14 +29,18 @@ are not simulated — Classic 3-ch PPG only.
 Still not verified on device/desktop: Simulator tap-to-connect and Settings
 scroll feel (`flutter run` / `flutter run -d linux`).
 
-## This thread — agent docs + debug HTTP
+## Landed — debug agent HTTP
 
-Landed on `main` as `160affe` (docs + HTTP). **Continue in a new thread:**
-[handoff-agent-http.md](handoff-agent-http.md).
+Loopback HTTP in `lib/src/agent/`. Drive: [testing-guide.md](testing-guide.md)
+Linux agent, [test-matrix.md](test-matrix.md), skill `muse-run-linux`.
+`--dart-define=MUSE_AGENT=true` (`1`/`yes` also via `parseDartDefineFlag`).
 
-Unfinished: first live smoke (Muse S → Raw EEG → 10s → Bands). Dart-define
-`MUSE_AGENT=1` did not enable the server; flags now accept `true`/`1`/`yes`.
-Widget tests and `integration_test` stay deferred. Crown Start stays refused.
+Live smoke 2026-09-05: Muse S connect (`scanMessage` null), view switch,
+recordOnly skip-cal `phase=playing`, Crown 409. Widget /
+`integration_test` stay deferred. Crown Start stays refused.
+
+Handoff archived:
+[archive/handoff-agent-http.md](archive/handoff-agent-http.md).
 
 ## Not this thread
 

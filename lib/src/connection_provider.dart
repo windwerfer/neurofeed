@@ -455,6 +455,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           status: status,
           connectingTo: null,
           lastConnectedKind: kind,
+          scanMessage: status.connected ? null : state.scanMessage,
         );
         return;
       } catch (e) {

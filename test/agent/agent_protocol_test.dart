@@ -7,8 +7,11 @@ import 'package:muse_ml/src/settings.dart';
 
 void main() {
   test('parseAppView matches enum names', () {
-    expect(parseAppView('settings'), AppView.settings);
-    expect(parseAppView('feedbackHistory'), AppView.feedbackHistory);
+    for (final view in AppView.values) {
+      expect(parseAppView(view.name), view);
+    }
+    expect(parseAppView('rawEeg'), AppView.rawEeg);
+    expect(parseAppView('bands'), AppView.bands);
     expect(parseAppView('nope'), isNull);
     expect(parseAppView(null), isNull);
   });
@@ -23,6 +26,7 @@ void main() {
     final sim = resolveAgentDevice('sim:muse-2', const []);
     expect(sim, isNotNull);
     expect(sim!.name, 'Muse 2');
+    expect(resolveAgentDevice('sim:muse-s', const [])?.name, 'Muse S');
 
     expect(resolveAgentDevice('sim:nope', const []), isNull);
 

@@ -73,7 +73,8 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
   Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
 - Spoken UI names: `.ai/ui-map.md`. What to run: `.ai/test-matrix.md`. Linux
-  agent drive: debug HTTP (`MUSE_AGENT=1`), skill `muse-run-linux`.
+  agent drive: debug HTTP (`--dart-define=MUSE_AGENT=true`), skill
+  `muse-run-linux`. How-to: `.ai/testing-guide.md` Linux agent.
 
 ## Docs
 Index: [`.ai/README.md`](.ai/README.md). UI names: [`.ai/ui-map.md`](.ai/ui-map.md).

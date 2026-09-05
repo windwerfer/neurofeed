@@ -7,6 +7,7 @@ Finished threads and historical notes. Not current orientation — see
 |------|-------------|
 | `handoff-pr2.md` … `handoff-pr7.md` | Pipeline refactor PRs (feature bus → custom builder). Implemented on `refactor/eeg_feature_implementation`. |
 | `handoff-connect-simulator-ux.md` | Implementer steps for connect Muse/Neurosity/Simulator. Landed on `feat/connect-simulator-ux`. Spec remains [../connect-simulator-ux.md](../connect-simulator-ux.md). |
+| `handoff-agent-http.md` | Debug loopback HTTP implementer handoff. Landed. How-to: [../testing-guide.md](../testing-guide.md) Linux agent. |
 | `session-computed-charts.md` | Charts spec (steps 1–7). Implemented: computed 1 Hz, scratch v5 at `end()`, no `SessionOverview`. |
 | `handoff-session-computed-charts.md` | Original implementer handoff (steps 1–4). |
 | `handoff-session-computed-charts-resume.md` | Resume handoff (steps 5–7). `flutter run` verified 2026-09-03. |
