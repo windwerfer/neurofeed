@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
+import 'package:muse_ml/src/agent/agent_flags.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -115,9 +116,12 @@ class Settings extends ChangeNotifier {
   static const String _binauralPresetKey = 'binaural_preset';
   static const String _binauralCarrierKey = 'binaural_carrier_hz';
   static const String _binauralBeatKey = 'binaural_beat_hz';
-  static const String _backgroundBinauralPresetKey = 'background_binaural_preset';
-  static const String _backgroundBinauralCarrierKey = 'background_binaural_carrier_hz';
-  static const String _backgroundBinauralBeatKey = 'background_binaural_beat_hz';
+  static const String _backgroundBinauralPresetKey =
+      'background_binaural_preset';
+  static const String _backgroundBinauralCarrierKey =
+      'background_binaural_carrier_hz';
+  static const String _backgroundBinauralBeatKey =
+      'background_binaural_beat_hz';
   static const String _streamProtocolKey = 'stream_protocol';
   static const String _oscEnabledKey = 'stream_osc_enabled';
   static const String _oscIpKey = 'stream_osc_ip';
@@ -317,8 +321,7 @@ class Settings extends ChangeNotifier {
 
   /// Resolved reward output when no catalog document is in hand. Unset pref
   /// → [RewardOutputId.chime] (catalog default).
-  RewardOutputId get rewardOutput =>
-      rewardOutputIdFromStored(rewardOutputPref);
+  RewardOutputId get rewardOutput => rewardOutputIdFromStored(rewardOutputPref);
 
   Future<void> setRewardOutput(RewardOutputId id) async {
     await _prefs.setString(_feedbackModeKey, id.name);
@@ -371,7 +374,10 @@ class Settings extends ChangeNotifier {
   }
 
   Future<void> setRecordStreams(Set<RecordingStream> streams) async {
-    await _prefs.setStringList(_recordStreamsKey, streams.map((s) => s.name).toList());
+    await _prefs.setStringList(
+      _recordStreamsKey,
+      streams.map((s) => s.name).toList(),
+    );
     notifyListeners();
   }
 
@@ -457,7 +463,8 @@ class Settings extends ChangeNotifier {
 
   /// Warning sound shown in the guardrail gear dialog (`softBowl`/`chime`/
   /// `cough`/`alarm`/`none`). Placeholder asset names — the files land later.
-  String get warningSoundName => _prefs.getString(_warningSoundKey) ?? 'softBowl';
+  String get warningSoundName =>
+      _prefs.getString(_warningSoundKey) ?? 'softBowl';
 
   Future<void> setWarningSoundName(String value) async {
     await _prefs.setString(_warningSoundKey, value);
@@ -506,7 +513,7 @@ class Settings extends ChangeNotifier {
   /// Debug mode. When true, Simulator appears in the connect dropdown and
   /// `sim:*` last-device ids may autoconnect. Defaults to false.
   bool get enableSimulatedDevices =>
-      _prefs.getBool(_enableSimulatedDevicesKey) ?? false;
+      museDebugEnabled || (_prefs.getBool(_enableSimulatedDevicesKey) ?? false);
 
   Future<void> setEnableSimulatedDevices(bool value) async {
     await _prefs.setBool(_enableSimulatedDevicesKey, value);
@@ -585,7 +592,8 @@ class Settings extends ChangeNotifier {
 
   /// Carrier tone (Hz) for the binaural layer; used when [binauralPresetId]
   /// is custom (presets supply their own carrier).
-  double get binauralCarrierHz => _prefs.getDouble(_binauralCarrierKey) ?? 200.0;
+  double get binauralCarrierHz =>
+      _prefs.getDouble(_binauralCarrierKey) ?? 200.0;
 
   Future<void> setBinauralCarrierHz(double value) async {
     await _prefs.setDouble(_binauralCarrierKey, value);

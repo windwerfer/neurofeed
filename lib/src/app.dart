@@ -4,6 +4,8 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/agent/agent_server.dart';
+import 'package:muse_ml/src/agent/agent_server_config.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/feedback/crash_recovery.dart';
@@ -92,9 +94,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         child: Column(
           children: [
             const StatusBar(),
-            Expanded(
-              child: _buildContent(context, state, body),
-            ),
+            Expanded(child: _buildContent(context, state, body)),
           ],
         ),
       ),
@@ -164,8 +164,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   /// sidebar is a squishing Row sibling and the body is fully usable while the
   /// menu is open; on narrow screens the sidebar overlays the full-size body
   /// behind a dim, tap-away scrim.
-  Widget _buildContent(
-      BuildContext context, AppUiState state, Widget body) {
+  Widget _buildContent(BuildContext context, AppUiState state, Widget body) {
     final isWide = MediaQuery.sizeOf(context).width >= 700;
     final connectOverlay = state.connectWindowOpen
         ? const ConnectOverlay()
@@ -175,23 +174,20 @@ class _AppShellState extends ConsumerState<AppShell> {
       return Row(
         children: [
           if (state.sidebarOpen) _buildSidebar(context, state),
-          Expanded(
-            child: Stack(children: [body, connectOverlay]),
-          ),
+          Expanded(child: Stack(children: [body, connectOverlay])),
         ],
       );
     }
 
     return Stack(
       children: [
-        Positioned.fill(
-          child: Stack(children: [body, connectOverlay]),
-        ),
+        Positioned.fill(child: Stack(children: [body, connectOverlay])),
         if (state.sidebarOpen)
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => ref.read(appStateProvider.notifier).setSidebar(false),
+              onTap: () =>
+                  ref.read(appStateProvider.notifier).setSidebar(false),
               child: Container(
                 color: Theme.of(context).colorScheme.scrim.withAlpha(90),
               ),
@@ -250,12 +246,18 @@ Future<void> main() async {
   }
   await requestBlePermissions();
   final settings = await Settings.load();
+  final container = ProviderContainer(
+    overrides: [
+      appStateProvider.overrideWith((ref) => AppStateNotifier(settings)),
+      settingsProvider.overrideWith((ref) => settings),
+    ],
+  );
+  final agentCfg = AgentServerConfig.fromEnvironment();
+  await AgentServer.start(container, agentCfg);
+  final notifier = container.read(appStateProvider.notifier);
   runApp(
-    ProviderScope(
-      overrides: [
-        appStateProvider.overrideWith((ref) => AppStateNotifier(settings)),
-        settingsProvider.overrideWith((ref) => settings),
-      ],
+    UncontrolledProviderScope(
+      container: container,
       child: MaterialApp(
         title: 'Muse ML',
         themeMode: ThemeMode.system,
@@ -277,6 +279,22 @@ Future<void> main() async {
       ),
     ),
   );
+  if (agentCfg.enabled) {
+    var frame = false;
+    var init = false;
+    void maybeReady() {
+      if (frame && init) debugPrint('[muse] agent-ready');
+    }
+
+    notifier.initDone.then((_) {
+      init = true;
+      maybeReady();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      frame = true;
+      maybeReady();
+    });
+  }
 }
 
 /// Requests the Bluetooth LE permissions needed for scanning/connecting.
@@ -328,7 +346,8 @@ class _CrashRecoveryWrapper extends ConsumerStatefulWidget {
   final Widget child;
 
   @override
-  ConsumerState<_CrashRecoveryWrapper> createState() => _CrashRecoveryWrapperState();
+  ConsumerState<_CrashRecoveryWrapper> createState() =>
+      _CrashRecoveryWrapperState();
 }
 
 class _CrashRecoveryWrapperState extends ConsumerState<_CrashRecoveryWrapper> {

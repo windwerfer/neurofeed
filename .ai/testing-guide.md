@@ -1,5 +1,28 @@
 # Testing Guide
 
+Spoken UI names: [ui-map.md](ui-map.md). Command matrix: [test-matrix.md](test-matrix.md).
+
+## Linux agent loop (debug HTTP)
+
+Agent drive surface. **Not** widget tests. Bind is compile-out unless
+`kDebugMode && --dart-define=MUSE_AGENT=1`. Process env is ignored.
+
+This sandbox often has `DISPLAY` unset — if `flutter run -d linux` never
+prints `[muse] agent-ready`, stop and report. Do not invent Xvfb. Do not
+kill Pulse/X/Wayland.
+
+1. Rebuild `rust/target/release/` after codegen (content-hash trap below).
+2. `flutter run -d linux --dart-define=MUSE_AGENT=1 --dart-define=MUSE_DEBUG=1`
+   with stdout in a file. Wait for `[muse] agent-listen 127.0.0.1:<port>`
+   **and** `[muse] agent-ready`. Abort on `Content hash`.
+3. Parse the port. `curl` `POST /connect {"id":"sim:muse-2"}`, then
+   `recordOnly` + duration 1 + `skipCalibration`. Never Crown.
+4. Grep `[feedback] phase=playing`. Always `POST /session/end` then `/session/reset`.
+5. Logs are the stdout file. `grep` anytime — do not `tail -f` as the wait.
+
+Full copy-paste: `.grok/skills/muse-run-linux/SKILL.md`.
+HTTP never writes SharedPreferences (`persist: false`).
+
 ## Environment
 - `adb`: `$HOME/android-sdk/platform-tools/adb`. SDK at `$HOME/android-sdk`.
 - `flutter`: `$HOME/flutter/bin/flutter`. Rust Android targets + `cargo-ndk`.

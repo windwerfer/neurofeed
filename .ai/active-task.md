@@ -29,6 +29,12 @@ are not simulated — Classic 3-ch PPG only.
 Still not verified on device/desktop: Simulator tap-to-connect and Settings
 scroll feel (`flutter run` / `flutter run -d linux`).
 
+## This thread — agent docs + debug HTTP
+
+Focus: `.ai/ui-map.md`, `.ai/test-matrix.md`, and a debug-only loopback HTTP
+server so the agent can `curl` connect / view / session without taps.
+Widget tests and `integration_test` are deferred. Crown Start stays refused.
+
 ## Not this thread
 
 - Crown *run* (quality vectors, computed frames, charts device-aware).

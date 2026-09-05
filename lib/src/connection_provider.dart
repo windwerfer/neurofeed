@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/agent/agent_flags.dart';
 import 'package:muse_ml/src/app.dart';
 import 'package:muse_ml/src/connect_source.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
@@ -65,7 +66,9 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
             fuelGaugeVoltage: 0,
             temperature: 0,
           ),
-          connectSource: ConnectSource.muse,
+          connectSource: museAgentEnabled
+              ? ConnectSource.simulator
+              : ConnectSource.muse,
           lastConnectedKind: null,
         ),
       ) {
@@ -75,6 +78,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   final Settings _settings;
   StreamSubscription<MuseEventDto>? _eventSub;
   bool _scanEnabled = false;
+  final Completer<void> _initDone = Completer<void>();
   final StreamController<MuseEventDto> _eventController =
       StreamController<MuseEventDto>.broadcast();
   double _lastQualityCheck = 0;
@@ -88,6 +92,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
   Stream<MuseEventDto> get eventStream => _eventController.stream;
 
+  Future<void> get initDone => _initDone.future;
+
   Future<void> _init() async {
     try {
       await ensureBtleplugReady();
@@ -100,6 +106,16 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       final status = await getStatus();
       if (status.connected) {
         state = state.copyWith(status: status);
+        return;
+      }
+
+      if (museAgentEnabled) {
+        state = state.copyWith(
+          connectSource: ConnectSource.simulator,
+          devices: simulatorCatalog,
+          connectWindowOpen: false,
+          scanning: false,
+        );
         return;
       }
 
@@ -121,6 +137,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     } catch (e) {
       debugPrint('[muse] init error: $e');
       state = state.copyWith(scanMessage: 'Init error: $e');
+    } finally {
+      if (!_initDone.isCompleted) _initDone.complete();
     }
   }
 
@@ -404,7 +422,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     state = state.copyWith(signalQuality: quals);
   }
 
-  Future<void> connectTo(DeviceInfo device) async {
+  Future<void> connectTo(DeviceInfo device, {bool persist = true}) async {
     if (state.connectingTo != null) return;
     _scanEnabled = false;
     final id = device.id;
@@ -432,7 +450,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           simulate: simulate,
         );
         debugPrint('[muse] connect returned: connected=${status.connected}');
-        await _settings.setLastDeviceId(id);
+        if (persist) await _settings.setLastDeviceId(id);
         state = state.copyWith(
           status: status,
           connectingTo: null,
@@ -493,10 +511,10 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     _startDiscoveryForCurrentSource();
   }
 
-  Future<void> disconnectDevice() async {
+  Future<void> disconnectDevice({bool persist = true}) async {
     _scanEnabled = false;
     await disconnect();
-    await _settings.setLastDeviceId('');
+    if (persist) await _settings.setLastDeviceId('');
   }
 
   /// Disconnect without clearing [lastDeviceId] — called when the app is
@@ -520,9 +538,34 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
   void setSidebar(bool open) => state = state.copyWith(sidebarOpen: open);
 
-  void setCurrentView(AppView view) {
+  void setCurrentView(AppView view, {bool persist = true}) {
     state = state.copyWith(currentView: view);
-    _settings.setLastView(view);
+    if (persist) _settings.setLastView(view);
+  }
+
+  void setConnectWindow({required bool open, ConnectSource? source}) {
+    if (source != null) {
+      setConnectSource(source);
+      if (!open) {
+        _scanEnabled = false;
+        state = state.copyWith(
+          connectWindowOpen: false,
+          scanning: false,
+          scanMessage: null,
+        );
+      }
+      return;
+    }
+    if (open) {
+      _startDiscoveryForCurrentSource();
+    } else {
+      _scanEnabled = false;
+      state = state.copyWith(
+        connectWindowOpen: false,
+        scanning: false,
+        scanMessage: null,
+      );
+    }
   }
 
   void setConnectSource(ConnectSource source) {

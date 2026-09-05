@@ -69,9 +69,15 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   in the current series. Connect UX is frozen
   (`.ai/connect-simulator-ux.md`) — do not mix OSC-connect or Crown Start
   into it. `DeviceKind` is Muse | Neurosity only; do not restore Simulated*.
+- If you change on-screen copy or primary chrome (status bar, sidebar, connect
+  window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
+  Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
+- Spoken UI names: `.ai/ui-map.md`. What to run: `.ai/test-matrix.md`. Linux
+  agent drive: debug HTTP (`MUSE_AGENT=1`), skill `muse-run-linux`.
 
 ## Docs
-Index: [`.ai/README.md`](.ai/README.md). Format/cache:
+Index: [`.ai/README.md`](.ai/README.md). UI names: [`.ai/ui-map.md`](.ai/ui-map.md).
+Tests: [`.ai/test-matrix.md`](.ai/test-matrix.md). Format/cache:
 `README_feedback_format.md`, `README_history_cache.md`.
 Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
 
@@ -81,6 +87,7 @@ lib/src/                    Flutter UI + Riverpod
   connection_provider.dart  AppStateNotifier: scan/connect
   connect_source.dart       ConnectSource + simulator catalog
   app.dart                  main(), permissions
+  agent/                    debug loopback HTTP (`MUSE_AGENT`, compile-out)
   connect_window.dart       ConnectOverlay (every view with a status bar)
   settings.dart, status_bar.dart, version.dart
   views/                    session, history, dashboard, protocol_builder, streaming, …

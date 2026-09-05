@@ -10,7 +10,9 @@ do/don't, then this folder for maps.
 | [active-task.md](active-task.md) | Current development focus |
 | [connect-simulator-ux.md](connect-simulator-ux.md) | **Frozen** connect UX: Muse / Neurosity / Simulator + `DeviceKind` Muse\|Neurosity |
 | [architecture.md](architecture.md) | Stack: BLE, devices, feature pipeline, session, audio, streaming, export |
-| [testing-guide.md](testing-guide.md) | Build/test loop, FFI tests, `flutter run` loader trap |
+| [testing-guide.md](testing-guide.md) | Build/test loop, FFI tests, Linux agent HTTP, `flutter run` loader trap |
+| [ui-map.md](ui-map.md) | Spoken UI names → widgets/files |
+| [test-matrix.md](test-matrix.md) | What can be tested, how, what cannot |
 | [release.md](release.md) | Release CI, keystore, F-Droid, reproducibility |
 | [btleplug.md](btleplug.md) | btleplug fork (`0.12.0-muse-5`) — JNI attach + notification death spiral |
 | [muse-rs.md](muse-rs.md) | muse-rs `0.1.1` patch, Classic vs Athena, battery, Athena optical/fNIRS gap |

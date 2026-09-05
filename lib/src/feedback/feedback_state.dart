@@ -64,6 +64,7 @@ class FeedbackState {
   final int calibrationStepTotal;
   final String? calibrationChallengeHint;
   final String? calibrationChallengeText;
+  final bool audioInitFailed;
 
   const FeedbackState({
     this.phase = FeedbackPhase.idle,
@@ -85,6 +86,7 @@ class FeedbackState {
     this.calibrationStepTotal = 0,
     this.calibrationChallengeHint,
     this.calibrationChallengeText,
+    this.audioInitFailed = false,
   });
 
   static const Object _sentinel = Object();
@@ -109,6 +111,7 @@ class FeedbackState {
     int? calibrationStepTotal,
     Object? calibrationChallengeHint = _sentinel,
     Object? calibrationChallengeText = _sentinel,
+    bool? audioInitFailed,
   }) => FeedbackState(
     phase: phase ?? this.phase,
     protocol: protocol ?? this.protocol,
@@ -141,6 +144,7 @@ class FeedbackState {
     calibrationChallengeText: identical(calibrationChallengeText, _sentinel)
         ? this.calibrationChallengeText
         : calibrationChallengeText as String?,
+    audioInitFailed: audioInitFailed ?? this.audioInitFailed,
   );
 }
 
@@ -292,9 +296,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _syncOutputs();
   }
 
-  void selectDuration(int minutes) {
+  void selectDuration(int minutes, {bool persist = true}) {
     state = state.copyWith(durationMinutes: minutes);
-    _ref.read(settingsProvider).setDurationMinutes(minutes);
+    if (persist) _ref.read(settingsProvider).setDurationMinutes(minutes);
+  }
+
+  void _setPhase(FeedbackPhase phase, {String? extra}) {
+    final extraBit = extra == null ? '' : ' $extra';
+    debugPrint('[feedback] phase=${phase.name}$extraBit');
+    state = state.copyWith(phase: phase);
   }
 
   void selectSound(String name) {
@@ -457,13 +467,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _audio.stop();
     }
     state = state.copyWith(
-      phase: FeedbackPhase.calibrating,
       elapsedSeconds: 0,
       waitingForSignal: false,
       startAnywayAvailable: false,
       baselineSecondsLeft: 0,
       currentThreshold: null,
     );
+    _setPhase(FeedbackPhase.calibrating, extra: 'protocol=${state.protocol}');
     _gestureMarkers.clear();
     _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
     _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -905,30 +915,36 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
       return;
     }
-    state = state.copyWith(
-      phase: FeedbackPhase.playing,
-      currentThreshold: _engine.threshold,
-    );
+    _setPhase(FeedbackPhase.playing);
+    state = state.copyWith(currentThreshold: _engine.threshold);
     _reward.resetBands();
     _adaptTick = 0;
     _trainingStartAt ??= DateTime.now();
     _startTicker();
     _syncOutputs();
-    await _audio.playChannels(
-      sound: state.soundName,
-      reward: state.rewardOutput,
-      output: _rewardOutput,
-    );
+    try {
+      await _audio.playChannels(
+        sound: state.soundName,
+        reward: state.rewardOutput,
+        output: _rewardOutput,
+      );
+      if (state.audioInitFailed) {
+        state = state.copyWith(audioInitFailed: false);
+      }
+    } catch (e) {
+      debugPrint('[feedback] audio-init-failed: $e');
+      state = state.copyWith(audioInitFailed: true);
+    }
   }
 
   Future<void> pause() async {
-    state = state.copyWith(phase: FeedbackPhase.paused);
+    _setPhase(FeedbackPhase.paused);
     _ticker?.cancel();
     await _audio.pause();
   }
 
   Future<void> resume() async {
-    state = state.copyWith(phase: FeedbackPhase.playing);
+    _setPhase(FeedbackPhase.playing);
     await _audio.resume();
     _startTicker();
   }
@@ -957,7 +973,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     } catch (e, st) {
       debugPrint('[feedback] end: scratch v5 assemble failed: $e\n$st');
     }
-    state = state.copyWith(phase: FeedbackPhase.ended);
+    _setPhase(
+      FeedbackPhase.ended,
+      extra: 'scratch=${_recorder.scratchV5Path ?? 'null'}',
+    );
     await _audio.stop();
     await _audio.playEndChime();
   }
@@ -998,6 +1017,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _gateElectrodes = List.of(defaultGateElectrodes);
     _ref.read(liveStatsProvider).reset();
     state = const FeedbackState();
+    debugPrint('[feedback] phase=idle');
   }
 
   String? get sessionFilePath => _recorder.scratchV5Path;
@@ -1167,10 +1187,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _interruptKind = kind;
     final showCountdown = kind == FeedbackInterruptKind.disconnect;
     state = state.copyWith(
-      phase: FeedbackPhase.interrupted,
       interruptMessage: message,
       interruptionSecondsLeft: showCountdown ? _interruptionLeft : null,
     );
+    _setPhase(FeedbackPhase.interrupted);
   }
 
   void _startInterruptTimer() {
@@ -1206,11 +1226,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final wasPlaying = _interruptWasPlaying;
     _clearInterruption();
     if (wasPlaying) {
-      state = state.copyWith(phase: FeedbackPhase.playing);
+      _setPhase(FeedbackPhase.playing);
       _audio.resume();
       _startTicker();
     } else {
-      state = state.copyWith(phase: FeedbackPhase.paused);
+      _setPhase(FeedbackPhase.paused);
     }
   }
 
