@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/audio_service.dart';
@@ -453,13 +452,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       debugPrint('[feedback] refusing Start on Crown');
       return;
     }
-    // Sync the audio engine to the "Reduce audio stutter" setting before
-    // anything plays. Only meaningful on Android (AAudio path selection);
-    // a no-op elsewhere.
-    if (Platform.isAndroid) {
-      await SoLoudEngine.reinit(
+    // Open the audio device before the calibration clip. On Android this
+    // selects the "Reduce audio stutter" AAudio profile (and falls back to
+    // low-latency if that HAL path cannot start). Elsewhere the flag is a
+    // no-op. A failed open is logged; calibration still runs silently.
+    var audioFailed = false;
+    try {
+      await SoLoudEngine.ensureInit(
         stable: _ref.read(settingsProvider).audioStableMode,
       );
+    } catch (e) {
+      debugPrint('[feedback] audio-init-failed: $e');
+      audioFailed = true;
     }
     if (state.phase == FeedbackPhase.playing ||
         state.phase == FeedbackPhase.paused) {
@@ -472,6 +476,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       startAnywayAvailable: false,
       baselineSecondsLeft: 0,
       currentThreshold: null,
+      audioInitFailed: audioFailed,
     );
     _setPhase(FeedbackPhase.calibrating, extra: 'protocol=${state.protocol}');
     _gestureMarkers.clear();

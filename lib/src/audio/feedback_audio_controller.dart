@@ -35,6 +35,7 @@ class FeedbackAudioController {
   /// Cache of loaded [AudioSource]s keyed by asset path, so loops and chimes
   /// reuse one native sound instead of re-decoding on every trigger.
   final Map<String, AudioSource> _sources = {};
+  int _engineEpoch = -1;
 
   SoundHandle? _backgroundHandle;
   SoundHandle? _bellHandle;
@@ -98,6 +99,10 @@ class FeedbackAudioController {
   /// audio from a temp file ([LoadMode.disk]); decodes short one-shots
   /// ([LoadMode.memory]) for instant low-latency triggers.
   Future<AudioSource> _sourceFor(String assetPath, {required bool stream}) {
+    if (_engineEpoch != SoLoudEngine.epoch) {
+      _sources.clear();
+      _engineEpoch = SoLoudEngine.epoch;
+    }
     final existing = _sources[assetPath];
     if (existing != null) {
       return Future.value(existing);
@@ -159,7 +164,10 @@ class FeedbackAudioController {
     _settings.setBackgroundVolume(_backgroundVolume);
     final background = _backgroundHandle;
     if (background != null) {
-      _safeHandle(background, (h) => SoLoud.instance.setVolume(h, _backgroundVolumeTotal));
+      _safeHandle(
+        background,
+        (h) => SoLoud.instance.setVolume(h, _backgroundVolumeTotal),
+      );
     }
   }
 
@@ -216,7 +224,10 @@ class FeedbackAudioController {
   void _applyVolumes() {
     final background = _backgroundHandle;
     if (background != null) {
-      _safeHandle(background, (h) => SoLoud.instance.setVolume(h, _backgroundVolumeTotal));
+      _safeHandle(
+        background,
+        (h) => SoLoud.instance.setVolume(h, _backgroundVolumeTotal),
+      );
     }
     _applyFeedbackVolumes();
     final bell = _bellHandle;

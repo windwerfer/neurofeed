@@ -188,8 +188,9 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `/etc/alsa/conf.d/99-pulseaudio-default.conf` (copied from `.example` in
   the Dockerfile) or playback is silent.
 - **Audio latency profile only matters on Android.** "Reduce audio stutter"
-  (`Settings.audioStableMode`) is Android-only; `SoLoudEngine.reinit` at
-  session start.
+  (`Settings.audioStableMode`) is Android-only; `SoLoudEngine.ensureInit`
+  at session start (falls back to low-latency if the conservative AAudio
+  path cannot start).
 - **Flutter directory assets** only bundle files directly in the declared
   directory. `pubspec.yaml` lists every `assets/audio/` subdir. Guard:
   `test/calibration_assets_test.dart`.

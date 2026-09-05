@@ -1,0 +1,142 @@
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:muse_ml/src/audio/soloud_engine.dart';
+
+void main() {
+  setUp(SoLoudEngine.resetForTest);
+  tearDown(SoLoudEngine.resetForTest);
+
+  test('opens with the requested conservative profile', () async {
+    final calls = <bool>[];
+    SoLoudEngine.resetForTest(
+      init: ({required bool lowLatency}) async {
+        calls.add(lowLatency);
+      },
+      deinit: () async {},
+    );
+
+    await SoLoudEngine.ensureInit(stable: true);
+
+    expect(calls, [false]);
+    expect(SoLoudEngine.isReady, isTrue);
+    expect(SoLoudEngine.stable, isTrue);
+    expect(SoLoudEngine.epoch, 1);
+  });
+
+  test('falls back to low-latency when conservative init fails', () async {
+    final calls = <bool>[];
+    SoLoudEngine.resetForTest(
+      init: ({required bool lowLatency}) async {
+        calls.add(lowLatency);
+        if (!lowLatency) {
+          throw StateError('backend not inited');
+        }
+      },
+      deinit: () async {},
+    );
+
+    await SoLoudEngine.ensureInit(stable: true);
+
+    expect(calls, [false, true]);
+    expect(SoLoudEngine.isReady, isTrue);
+    expect(SoLoudEngine.stable, isFalse);
+  });
+
+  test('does not retry a conservative profile that already failed', () async {
+    var inits = 0;
+    SoLoudEngine.resetForTest(
+      init: ({required bool lowLatency}) async {
+        inits++;
+        if (!lowLatency) {
+          throw StateError('backend not inited');
+        }
+      },
+      deinit: () async {},
+    );
+
+    await SoLoudEngine.ensureInit(stable: true);
+    await SoLoudEngine.ensureInit(stable: true);
+
+    expect(inits, 2);
+    expect(SoLoudEngine.stable, isFalse);
+  });
+
+  test('retries after a failed open instead of caching the error', () async {
+    var inits = 0;
+    SoLoudEngine.resetForTest(
+      init: ({required bool lowLatency}) async {
+        inits++;
+        if (inits <= 2) {
+          throw StateError('backend not inited');
+        }
+      },
+      deinit: () async {},
+    );
+
+    await expectLater(SoLoudEngine.ensureInit(stable: true), throwsStateError);
+    expect(SoLoudEngine.isReady, isFalse);
+
+    await SoLoudEngine.ensureInit(stable: false);
+    expect(SoLoudEngine.isReady, isTrue);
+    expect(inits, 3);
+  });
+
+  test('concurrent callers share one native init', () async {
+    var inits = 0;
+    final started = Completer<void>();
+    final release = Completer<void>();
+    SoLoudEngine.resetForTest(
+      init: ({required bool lowLatency}) async {
+        inits++;
+        if (!started.isCompleted) {
+          started.complete();
+        }
+        await release.future;
+      },
+      deinit: () async {},
+    );
+
+    final a = SoLoudEngine.ensureInit(stable: true);
+    final b = SoLoudEngine.ensureInit(stable: true);
+    await started.future;
+    release.complete();
+    await Future.wait([a, b]);
+
+    expect(inits, 1);
+    expect(SoLoudEngine.isReady, isTrue);
+  });
+
+  test('switching profile tears down then reopens', () async {
+    final events = <String>[];
+    SoLoudEngine.resetForTest(
+      init: ({required bool lowLatency}) async {
+        events.add('init lowLatency=$lowLatency');
+      },
+      deinit: () async {
+        events.add('deinit');
+      },
+    );
+
+    await SoLoudEngine.ensureInit(stable: true);
+    await SoLoudEngine.ensureInit(stable: false);
+
+    expect(events, ['init lowLatency=false', 'deinit', 'init lowLatency=true']);
+    expect(SoLoudEngine.stable, isFalse);
+    expect(SoLoudEngine.epoch, greaterThan(1));
+  });
+
+  test('deinit invalidates readiness and epoch', () async {
+    SoLoudEngine.resetForTest(
+      init: ({required bool lowLatency}) async {},
+      deinit: () async {},
+    );
+
+    await SoLoudEngine.ensureInit();
+    final epoch = SoLoudEngine.epoch;
+    SoLoudEngine.deinit();
+
+    expect(SoLoudEngine.isReady, isFalse);
+    expect(SoLoudEngine.epoch, greaterThan(epoch));
+  });
+}

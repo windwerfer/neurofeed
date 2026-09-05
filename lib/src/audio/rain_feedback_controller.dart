@@ -42,6 +42,7 @@ class RainFeedbackController {
   int _stage = 2; // moderate rain until the first real percentile arrives
   double _channelVolume = 1.0;
   bool _loaded = false;
+  int _engineEpoch = -1;
 
   bool get isPlaying => _voice.playing;
 
@@ -56,6 +57,11 @@ class RainFeedbackController {
   /// Starts the modulated rain loop.
   Future<void> start() async {
     await SoLoudEngine.ensureInit();
+    if (_engineEpoch != SoLoudEngine.epoch) {
+      _loaded = false;
+      _source = null;
+      _engineEpoch = SoLoudEngine.epoch;
+    }
     if (!_loaded) {
       try {
         _source = await SoLoud.instance.loadFile(

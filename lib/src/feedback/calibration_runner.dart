@@ -188,9 +188,13 @@ class CalibrationRunner {
     if (step.clip != null) {
       final sessionStart = sessionStartAt();
       final clipStart = DateTime.now();
-      await playClip(
-        step.clip!.file,
-      ).timeout(calibrationAudioTimeout, onTimeout: () {});
+      try {
+        await playClip(
+          step.clip!.file,
+        ).timeout(calibrationAudioTimeout, onTimeout: () {});
+      } catch (e) {
+        debugPrint('[feedback] calibration clip failed: $e');
+      }
       if (phaseOf() != FeedbackPhase.calibrating) {
         return;
       }

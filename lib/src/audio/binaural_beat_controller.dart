@@ -1,5 +1,6 @@
 import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:muse_ml/src/audio/modulated_voice.dart';
+import 'package:muse_ml/src/audio/soloud_engine.dart';
 
 /// Goal-based binaural-beat presets. Each preset picks the beat difference
 /// (the perceived entrainment frequency) and a comfortable carrier tone.
@@ -83,6 +84,7 @@ class BinauralBeatController {
 
   AudioSource? _leftSource;
   AudioSource? _rightSource;
+  int _engineEpoch = -1;
 
   double _gain = 0;
   double _percentile = 0;
@@ -98,6 +100,12 @@ class BinauralBeatController {
     required double carrierHz,
     required double beatHz,
   }) async {
+    await SoLoudEngine.ensureInit();
+    if (_engineEpoch != SoLoudEngine.epoch) {
+      _leftSource = null;
+      _rightSource = null;
+      _engineEpoch = SoLoudEngine.epoch;
+    }
     _left.stop();
     _right.stop();
     if (_leftSource == null || _rightSource == null) {
@@ -116,12 +124,7 @@ class BinauralBeatController {
     }
     _setFrequencies(carrierHz, beatHz);
     _left.play(_leftSource!, volume: 0, pan: -1, activateFilter: false);
-    _right.play(
-      _rightSource!,
-      volume: 0,
-      pan: 1,
-      activateFilter: false,
-    );
+    _right.play(_rightSource!, volume: 0, pan: 1, activateFilter: false);
     _percentile = 0;
     _applyVolume();
   }

@@ -1,52 +1,140 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
 
-/// Shared single-flight initialization for the app-wide [SoLoud] engine.
+typedef SoLoudInitFn = Future<void> Function({required bool lowLatency});
+typedef SoLoudDeinitFn = Future<void> Function();
+
+/// Shared SoLoud backend for every audio controller.
 ///
-/// Both the ambient/chime controller and the music-feedback controller use the
-/// same engine; [ensureInit] runs `SoLoud.instance.init()` exactly once and
-/// returns the same future for concurrent callers.
+/// [ensureInit] is single-flight: concurrent callers share one open. A failed
+/// open is not cached — the next call retries.
 ///
-/// The engine initializes with the stable (conservative) audio profile — on
-/// Android that is AAudio's legacy path instead of low-latency MMAP, which
-/// gives the audio callback more headroom when the CPU is busy (fewer
-/// dropouts, ~0.1 s more output latency). Android sessions sync to the
-/// "Reduce audio stutter" setting via [reinit] at session start; the profile
-/// is a no-op on other platforms.
+/// On Android, `stable: true` ("Reduce audio stutter") uses AAudio's legacy
+/// mixer instead of the low-latency MMAP path. Some HALs never reach STARTED
+/// on that path and [SoLoud.init] throws [SoLoudBackendNotInitedException].
+/// When that happens we fall back to low-latency and skip the conservative
+/// profile for the rest of the process. The flag is a no-op on other platforms.
 class SoLoudEngine {
-  static Future<void>? _init;
+  static SoLoudInitFn _initNative = _defaultInit;
+  static SoLoudDeinitFn _deinitNative = _defaultDeinit;
 
-  /// Active profile: true = conservative (fewer dropouts, ~0.1 s more latency),
-  /// false = low-latency (AAudio MMAP on Android; a no-op elsewhere).
+  static Future<void>? _inflight;
+  static bool _ready = false;
   static bool _stable = true;
+  static bool _conservativeUnavailable = false;
+  static int _epoch = 0;
 
-  /// Initializes the engine if needed. Safe to call concurrently. Uses the
-  /// profile last selected via [reinit] (conservative by default).
-  static Future<void> ensureInit({bool? stable}) {
-    _stable = stable ?? _stable;
-    return _init ??= SoLoud.instance.init(lowLatency: !_stable);
+  static bool get isReady => _ready;
+
+  /// Profile that actually opened. True = conservative (higher latency).
+  static bool get stable => _stable;
+
+  /// Bumped on every successful open and on teardown. Cached [AudioSource]s
+  /// from a previous value belong to a dead native engine.
+  static int get epoch => _epoch;
+
+  static Future<void> _defaultInit({required bool lowLatency}) =>
+      SoLoud.instance.init(lowLatency: lowLatency);
+
+  static Future<void> _defaultDeinit() async {
+    SoLoud.instance.deinit();
   }
 
-  /// Switches the engine to the [stable] profile. Re-initializes the device
-  /// when already running (dropping any loaded voices/sources — call while
-  /// nothing is playing). No-op when the requested profile is already active;
-  /// when the engine is not initialized yet, only the profile is recorded and
-  /// the next [ensureInit] uses it.
-  static Future<void> reinit({required bool stable}) async {
-    if (stable == _stable) {
+  /// Opens the engine if needed. Pass [stable] to select the Android AAudio
+  /// profile; omitted, the last requested (or default conservative) profile
+  /// is used. After a conservative-profile failure, a later [stable]: true
+  /// stays on the working low-latency device instead of retrying the HAL.
+  static Future<void> ensureInit({bool? stable}) async {
+    final wantStable = stable ?? _stable;
+    while (true) {
+      final targetStable = wantStable && !_conservativeUnavailable;
+      if (_ready && _stable == targetStable) {
+        return;
+      }
+      final existing = _inflight;
+      if (existing != null) {
+        await existing;
+        continue;
+      }
+      final opened = _open(targetStable);
+      _inflight = opened;
+      try {
+        await opened;
+        return;
+      } finally {
+        if (identical(_inflight, opened)) {
+          _inflight = null;
+        }
+      }
+    }
+  }
+
+  static Future<void> _open(bool wantStable) async {
+    if (_ready && wantStable != _stable) {
+      await _close();
+    }
+    if (!_ready) {
+      await _initWithFallback(wantStable);
+    }
+  }
+
+  static Future<void> _initWithFallback(bool wantStable) async {
+    final tryStableFirst = wantStable && !_conservativeUnavailable;
+    Object? lastError;
+    for (final stable in [tryStableFirst, !tryStableFirst]) {
+      if (stable && _conservativeUnavailable) {
+        continue;
+      }
+      try {
+        await _initNative(lowLatency: !stable);
+        _stable = stable;
+        _ready = true;
+        _epoch++;
+        if (stable != wantStable) {
+          debugPrint(
+            '[audio] opened with stable=$stable (requested stable=$wantStable)',
+          );
+        }
+        return;
+      } catch (e) {
+        lastError = e;
+        debugPrint('[audio] init stable=$stable failed: $e');
+        if (stable) {
+          _conservativeUnavailable = true;
+        }
+      }
+    }
+    throw lastError!;
+  }
+
+  static Future<void> _close() async {
+    _ready = false;
+    _epoch++;
+    await _deinitNative();
+  }
+
+  /// Tears the engine down. Safe when it was never opened. Used at app
+  /// teardown; profile switches go through [ensureInit] instead.
+  static void deinit() {
+    _inflight = null;
+    if (!_ready) {
       return;
     }
-    _stable = stable;
-    if (_init != null) {
-      deinit();
-      await ensureInit();
-    }
+    _ready = false;
+    _epoch++;
+    unawaited(_deinitNative());
   }
 
-  /// Tears the engine down (used at app teardown). Re-initializable afterwards.
-  static void deinit() {
-    if (_init != null) {
-      SoLoud.instance.deinit();
-      _init = null;
-    }
+  @visibleForTesting
+  static void resetForTest({SoLoudInitFn? init, SoLoudDeinitFn? deinit}) {
+    _initNative = init ?? _defaultInit;
+    _deinitNative = deinit ?? _defaultDeinit;
+    _inflight = null;
+    _ready = false;
+    _stable = true;
+    _conservativeUnavailable = false;
+    _epoch = 0;
   }
 }
