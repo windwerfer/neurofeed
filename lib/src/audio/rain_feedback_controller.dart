@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:muse_ml/src/audio/modulated_voice.dart';
@@ -11,7 +9,7 @@ import 'package:muse_ml/src/audio/soloud_engine.dart';
 /// cutoff smoothly and step the volume, so the rain reads as "getting closer"
 /// when the user approaches the target.
 ///
-/// Unlike [MusicFeedbackController] this is a single bundled loop, so it has
+/// Unlike [MusicController] this is a single bundled loop, so it has
 /// no playlist machinery — just a [ModulatedVoice] and a stage mapper.
 class RainFeedbackController {
   RainFeedbackController();
@@ -29,7 +27,7 @@ class RainFeedbackController {
 
   /// Deadband around a stage boundary (percentile points) before a transition
   /// is accepted — prevents stage flicker when the percentile sits on a bound.
-  static const double _hysteresis = 3.0;
+  static const double hysteresis = 3.0;
 
   final ModulatedVoice _voice = ModulatedVoice(
     initialCutoff: 900,
@@ -38,11 +36,8 @@ class RainFeedbackController {
     slewSeconds: 0.5,
   );
 
-  AudioSource? _source;
   int _stage = 2; // moderate rain until the first real percentile arrives
   double _channelVolume = 1.0;
-  bool _loaded = false;
-  int _engineEpoch = -1;
 
   bool get isPlaying => _voice.playing;
 
@@ -57,31 +52,17 @@ class RainFeedbackController {
   /// Starts the modulated rain loop.
   Future<void> start() async {
     await SoLoudEngine.ensureInit();
-    if (_engineEpoch != SoLoudEngine.epoch) {
-      _loaded = false;
-      _source = null;
-      _engineEpoch = SoLoudEngine.epoch;
-    }
-    if (!_loaded) {
-      try {
-        _source = await SoLoud.instance.loadFile(
-          rainAsset,
-          mode: LoadMode.disk,
-          autoDispose: false,
-        );
-        _loaded = true;
-      } catch (e) {
-        debugPrint('[rain] asset load failed: $e');
-        return;
-      }
-    }
-    final src = _source;
-    if (src == null) {
-      return;
+    final AudioSource src;
+    try {
+      src = await SoLoudEngine.loadAsset(rainAsset, stream: true);
+    } catch (e) {
+      debugPrint('[rain] asset load failed: $e');
+      rethrow;
     }
     _voice.play(
       src,
       volume: _volumeForStage(_stage, _channelVolume),
+      looping: true,
       activateFilter: true,
     );
     _voice.setTargetCutoff(_stageCutoffs[_stage]);
@@ -106,19 +87,11 @@ class RainFeedbackController {
   /// a 5-stage intensity; close to target → quiet.
   void setTargetPercentile(double pct) {
     final clamped = pct.isFinite ? pct.clamp(0.0, 100.0) : 50.0;
-    final target = _stageFor(clamped);
-    if (target == _stage) {
+    final next = rainStageWithHysteresis(current: _stage, pct: clamped);
+    if (next == _stage) {
       return;
     }
-    final lower = target < _stage ? _bounds[target] : null;
-    final upper = target > _stage ? _bounds[_stage] : null;
-    if (target > _stage && upper != null && clamped < upper + _hysteresis) {
-      return;
-    }
-    if (target < _stage && lower != null && clamped > lower - _hysteresis) {
-      return;
-    }
-    _stage = target;
+    _stage = next;
     _voice.setTargetCutoff(_stageCutoffs[_stage]);
     _voice.slewVolumeTo(_volumeForStage(_stage, _channelVolume));
     debugPrint(
@@ -132,21 +105,48 @@ class RainFeedbackController {
   /// cutoff and ducks the volume so heavy rain softens.
   void setMuffle(bool on) => _voice.setMuffle(on);
 
-  int _stageFor(double pct) {
-    var stage = 0;
-    for (final b in _bounds) {
-      if (pct >= b) {
-        stage++;
-      }
-    }
-    return stage;
-  }
-
   double _volumeForStage(int stage, double channel) =>
       (_stageVolumes[stage] * channel).clamp(0.0, 1.0);
 
   void dispose() {
     _voice.stop();
-    unawaited(_voice.disposeSource());
   }
+}
+
+/// Maps percentile 0–100 onto stage index 0–4 (heavy → calm).
+@visibleForTesting
+int rainStageIndexFor(double pct) {
+  var stage = 0;
+  for (final b in RainFeedbackController._bounds) {
+    if (pct >= b) {
+      stage++;
+    }
+  }
+  return stage;
+}
+
+/// Applies [RainFeedbackController.hysteresis] around stage bounds.
+@visibleForTesting
+int rainStageWithHysteresis({
+  required int current,
+  required double pct,
+  double hysteresis = RainFeedbackController.hysteresis,
+}) {
+  final target = rainStageIndexFor(pct);
+  if (target == current) {
+    return current;
+  }
+  final lower = target < current
+      ? RainFeedbackController._bounds[target]
+      : null;
+  final upper = target > current
+      ? RainFeedbackController._bounds[current]
+      : null;
+  if (target > current && upper != null && pct < upper + hysteresis) {
+    return current;
+  }
+  if (target < current && lower != null && pct > lower - hysteresis) {
+    return current;
+  }
+  return target;
 }

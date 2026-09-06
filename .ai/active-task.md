@@ -1,10 +1,22 @@
 # Active Task
 
-**Branch:** `main`
+**Branch:** `fix/soloud-engine-hardening`
 
 Pipeline PRs 1–7 and session charts from v5 computed 1 Hz are on `main`.
 Frozen pipeline: [feedback/pipeline-contract.md](feedback/pipeline-contract.md).
 Do not reopen those Key Decisions. **Crown Start stays refused.**
+
+## This thread — SoLoud engine hardening (implemented)
+
+Spec: [audio-engine.md](audio-engine.md). Handoff archived:
+[archive/handoff-soloud-engine.md](archive/handoff-soloud-engine.md).
+
+Engine owns init/deinit, epoch, and bundled-asset cache. Rain uses
+`loadAsset` + looping. Chime preloads on `start()`. Calibration await uses
+`getLength + 2s`. Alarm first tick is immediate; pause stops it.
+`AudioService.setMusicMuffle` is gone; `RewardOutput.setMuffle` ducks
+modulated reward plus both binaural controllers. Unmodulated background
+is not ducked. `guard_lane.dart` was not edited.
 
 ## Landed — connect simulator UX + settings cleanup
 

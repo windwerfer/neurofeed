@@ -102,8 +102,7 @@ class BinauralBeatController {
   }) async {
     await SoLoudEngine.ensureInit();
     if (_engineEpoch != SoLoudEngine.epoch) {
-      _leftSource = null;
-      _rightSource = null;
+      await _disposeWaveforms();
       _engineEpoch = SoLoudEngine.epoch;
     }
     _left.stop();
@@ -188,6 +187,10 @@ class BinauralBeatController {
   }
 
   Future<void> dispose() async {
+    await _disposeWaveforms();
+  }
+
+  Future<void> _disposeWaveforms() async {
     _left.stop();
     _right.stop();
     final left = _leftSource;

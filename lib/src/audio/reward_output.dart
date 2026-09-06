@@ -6,7 +6,9 @@ import 'package:muse_ml/src/audio/rain_feedback_controller.dart';
 import 'package:muse_ml/src/settings.dart';
 
 /// Reward-lane audio. [onSample] gets percentile rank (0–100) and the
-/// boolean in-target verdict. [setMuffle] is a no-op for chime.
+/// boolean in-target verdict. [setMuffle] ducks mufflable reward audio and,
+/// when [onBackgroundBinauralMuffle] is set, the background binaural layer.
+/// Chime / none one-shots are not muffled.
 abstract class RewardOutput {
   Future<void> start();
   Future<void> stop();
@@ -21,37 +23,46 @@ RewardOutput rewardOutputFor(
   required RainFeedbackController rain,
   required BinauralBeatController binaural,
   required Settings settings,
-  void Function(bool on)? onMuffleExtras,
+  void Function(bool on)? onBackgroundBinauralMuffle,
 }) {
   switch (id) {
     case RewardOutputId.chime:
-      return ChimeRewardOutput(chime);
+      return ChimeRewardOutput(
+        chime,
+        onBackgroundBinauralMuffle: onBackgroundBinauralMuffle,
+      );
     case RewardOutputId.musicFilter:
       return MusicFilterRewardOutput(
         music,
         settings,
-        onMuffleExtras: onMuffleExtras,
+        onBackgroundBinauralMuffle: onBackgroundBinauralMuffle,
       );
     case RewardOutputId.rainStage:
-      return RainStageRewardOutput(rain, onMuffleExtras: onMuffleExtras);
+      return RainStageRewardOutput(
+        rain,
+        onBackgroundBinauralMuffle: onBackgroundBinauralMuffle,
+      );
     case RewardOutputId.binauralSwell:
       return BinauralSwellRewardOutput(
         binaural,
         settings,
-        onMuffleExtras: onMuffleExtras,
+        onBackgroundBinauralMuffle: onBackgroundBinauralMuffle,
       );
     case RewardOutputId.none:
-      return const NoneRewardOutput();
+      return NoneRewardOutput(
+        onBackgroundBinauralMuffle: onBackgroundBinauralMuffle,
+      );
   }
 }
 
 class ChimeRewardOutput implements RewardOutput {
-  ChimeRewardOutput(this._chime);
+  ChimeRewardOutput(this._chime, {this.onBackgroundBinauralMuffle});
 
   final FeedbackAudioController _chime;
+  final void Function(bool on)? onBackgroundBinauralMuffle;
 
   @override
-  Future<void> start() async {}
+  Future<void> start() => _chime.preloadChime();
 
   @override
   Future<void> stop() async {}
@@ -62,19 +73,21 @@ class ChimeRewardOutput implements RewardOutput {
   }
 
   @override
-  void setMuffle(bool on) {}
+  void setMuffle(bool on) {
+    onBackgroundBinauralMuffle?.call(on);
+  }
 }
 
 class MusicFilterRewardOutput implements RewardOutput {
   MusicFilterRewardOutput(
     this._music,
     this._settings, {
-    this.onMuffleExtras,
+    this.onBackgroundBinauralMuffle,
   });
 
   final MusicController _music;
   final Settings _settings;
-  final void Function(bool on)? onMuffleExtras;
+  final void Function(bool on)? onBackgroundBinauralMuffle;
 
   @override
   Future<void> start() async {
@@ -98,15 +111,15 @@ class MusicFilterRewardOutput implements RewardOutput {
   @override
   void setMuffle(bool on) {
     _music.setMuffle(on);
-    onMuffleExtras?.call(on);
+    onBackgroundBinauralMuffle?.call(on);
   }
 }
 
 class RainStageRewardOutput implements RewardOutput {
-  RainStageRewardOutput(this._rain, {this.onMuffleExtras});
+  RainStageRewardOutput(this._rain, {this.onBackgroundBinauralMuffle});
 
   final RainFeedbackController _rain;
-  final void Function(bool on)? onMuffleExtras;
+  final void Function(bool on)? onBackgroundBinauralMuffle;
 
   @override
   Future<void> start() => _rain.start();
@@ -122,7 +135,7 @@ class RainStageRewardOutput implements RewardOutput {
   @override
   void setMuffle(bool on) {
     _rain.setMuffle(on);
-    onMuffleExtras?.call(on);
+    onBackgroundBinauralMuffle?.call(on);
   }
 }
 
@@ -130,12 +143,12 @@ class BinauralSwellRewardOutput implements RewardOutput {
   BinauralSwellRewardOutput(
     this._binaural,
     this._settings, {
-    this.onMuffleExtras,
+    this.onBackgroundBinauralMuffle,
   });
 
   final BinauralBeatController _binaural;
   final Settings _settings;
-  final void Function(bool on)? onMuffleExtras;
+  final void Function(bool on)? onBackgroundBinauralMuffle;
 
   @override
   Future<void> start() => _binaural.start(
@@ -154,12 +167,14 @@ class BinauralSwellRewardOutput implements RewardOutput {
   @override
   void setMuffle(bool on) {
     _binaural.setMuffle(on);
-    onMuffleExtras?.call(on);
+    onBackgroundBinauralMuffle?.call(on);
   }
 }
 
 class NoneRewardOutput implements RewardOutput {
-  const NoneRewardOutput();
+  const NoneRewardOutput({this.onBackgroundBinauralMuffle});
+
+  final void Function(bool on)? onBackgroundBinauralMuffle;
 
   @override
   Future<void> start() async {}
@@ -171,5 +186,7 @@ class NoneRewardOutput implements RewardOutput {
   void onSample({required double percentile, required bool inTarget}) {}
 
   @override
-  void setMuffle(bool on) {}
+  void setMuffle(bool on) {
+    onBackgroundBinauralMuffle?.call(on);
+  }
 }

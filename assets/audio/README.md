@@ -14,7 +14,7 @@ Everything here is bundled into the app with attribution (see
 | `bowl/bowl_high-421829__dersinnsspace__tibetan-bowl_center-hit.opus` | Reward bowl (high) — also the guardrail "Soft bowl" | "Tibetan bowl center hit" by dersinnsspace — https://freesound.org/s/421829/ | CC0 1.0 |
 | `bell/864397__valerie-vivegnis__2607.opus` | End-of-session + guardrail warning chime (also guardrail "Bell chime") | "26.07.24 Tibetan Singing Bowl – Octave Pitch-Shifted Scale" by Valerie-Vivegnis — https://freesound.org/s/864397/ | CC BY 4.0 |
 | `guardrail-chime-01.opus` | Guardrail "Bell chime" | same work as `864397__valerie-vivegnis` — https://freesound.org/s/864397/ | CC BY 4.0 |
-| `guardrail-softBowl-01.opus` | Guardrail "Soft bowl" (unused placeholder) | same work as `bowl_high-421829__dersinnsspace` — https://freesound.org/s/421829/ | CC0 1.0 |
+| `guardrail-softBowl-01.opus` | Guardrail "Soft bowl" | same work as `bowl_high-421829__dersinnsspace` — https://freesound.org/s/421829/ | CC0 1.0 |
 | `guardrail-cough-01.opus` (…02, …03) | Guardrail "Cough" | "Coughing 001.wav" by frenkfurth — https://freesound.org/s/650914/ | CC0 1.0 |
 | `guardrail-alarm-01.opus` | Guardrail "Alarm clock" | "Alarm Clock Digital" by zanox — https://freesound.org/s/233645/ | **CC BY-NC 4.0** |
 

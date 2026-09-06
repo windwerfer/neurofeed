@@ -100,12 +100,18 @@ The list sparkline is the WebP thumbnail. Assembler:
 `AudioService` over flutter_soloud. Five volume channels: master ×
 background / feedback / intro / end bell / guardrail warning.
 
+`SoLoudEngine` is the process singleton: init/deinit, AAudio profile, epoch,
+and bundled-asset cache. Controllers do not deinit it. The Android AAudio
+profile (`Settings.audioStableMode`) reopens only at session start
+(`AudioService.ensureReady(reopenIfProfileDiffers: true)`). Bundled files
+go through `SoLoudEngine.loadAsset`; user music uses `loadFile` and is not
+cached.
+
 Reward outputs (`RewardOutputId`): `chime`, `musicFilter`, `rainStage`,
 `binauralSwell`, `none`. Background (`BackgroundKind`) is unmapped to a
 feature. Guard outputs warn only — they never change `inTarget`.
-
-`SoLoudEngine` tracks stable vs low-latency; the profile only matters on
-Android AAudio. Synced from `Settings.audioStableMode` at session start.
+Muffle is `RewardOutput.setMuffle` (GuardLane); it ducks modulated reward
+plus both binaural controllers, not the unmodulated background loop.
 
 ## Network streaming
 

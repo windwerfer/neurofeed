@@ -90,6 +90,12 @@ Five volume channels (master × background / feedback / intro / end bell /
 guardrail). Music + AI at once is allowed; a one-time stutter warning fires
 at **choice** time (`_maybeWarnMusicAiCpu`).
 
+`SoLoudEngine` owns init/deinit, epoch, and the bundled-asset cache.
+Session start: `AudioService.ensureReady(reopenIfProfileDiffers: true)`.
+Muffle is `RewardOutput.setMuffle` (GuardLane); it ducks modulated reward
+plus both binaural controllers, not the unmapped background loop. Spec:
+[../audio-engine.md](../audio-engine.md).
+
 ## State machine
 
 ```

@@ -7,7 +7,6 @@ import 'package:muse_ml/src/audio/guard_output.dart';
 import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/audio/reward_output.dart';
-import 'package:muse_ml/src/audio/soloud_engine.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/calibration_runner.dart';
 import 'package:muse_ml/src/feedback/computed_sampler.dart';
@@ -458,9 +457,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     // no-op. A failed open is logged; calibration still runs silently.
     var audioFailed = false;
     try {
-      await SoLoudEngine.ensureInit(
-        stable: _ref.read(settingsProvider).audioStableMode,
-      );
+      await _audio.ensureReady(reopenIfProfileDiffers: true);
     } catch (e) {
       debugPrint('[feedback] audio-init-failed: $e');
       audioFailed = true;

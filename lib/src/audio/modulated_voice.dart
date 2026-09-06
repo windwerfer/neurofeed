@@ -37,8 +37,8 @@ class ModulatedVoice {
   /// Optional volume glided toward while muffled; null keeps the voice volume.
   double? muffleVolume;
 
-  AudioSource? source;
-  SoundHandle? handle;
+  AudioSource? _source;
+  SoundHandle? _handle;
 
   Timer? _slewTimer;
   bool _playing = false;
@@ -67,26 +67,39 @@ class ModulatedVoice {
   /// new source steps in for the same channel).
   double get voiceVolume => _volume;
 
+  AudioSource? get source => _source;
+
+  SoundHandle? get handle => _handle;
+
   /// Starts (or restarts) playback of [src] at [volume], panned [pan]
   /// (−1 hard left … +1 hard right). When [activateFilter] is false the voice
   /// plays unprocessed (static background music, binaural ears — no slew).
+  /// [looping] is per handle; rain passes true, music tracks pass false.
   void play(
     AudioSource src, {
     required double volume,
     double pan = 0,
+    bool looping = false,
     bool activateFilter = true,
   }) {
-    final newHandle = SoLoud.instance.play(src, volume: volume, pan: pan);
+    stop();
+    _source = src;
+    final newHandle = SoLoud.instance.play(
+      src,
+      volume: volume,
+      pan: pan,
+      looping: looping,
+    );
+    _handle = newHandle;
+    _filterWired = false;
     if (activateFilter) {
       src.filters.biquadFilter.activate();
       src.filters.biquadFilter.type(soundHandle: newHandle).value = 0;
       src.filters.biquadFilter.wet(soundHandle: newHandle).value = 1.0;
       src.filters.biquadFilter.resonance(soundHandle: newHandle).value = 0.15;
       _filterWired = true;
-      _applyCutoffImmediate(newHandle);
+      _applyCutoffImmediate(newHandle, src);
     }
-    source = src;
-    handle = newHandle;
     _volume = volume;
     _slewingVolume = false;
     _targetVolume = volume;
@@ -101,7 +114,7 @@ class ModulatedVoice {
       return;
     }
     _paused = true;
-    final h = handle;
+    final h = _handle;
     if (h != null) {
       try {
         SoLoud.instance.setPause(h, true);
@@ -114,7 +127,7 @@ class ModulatedVoice {
     if (!_playing || !_paused) {
       return;
     }
-    final h = handle;
+    final h = _handle;
     if (h != null) {
       try {
         SoLoud.instance.setPause(h, false);
@@ -129,23 +142,24 @@ class ModulatedVoice {
     _playing = false;
     _paused = false;
     _stopSlew();
-    final h = handle;
+    _filterWired = false;
+    final h = _handle;
     if (h != null) {
       try {
         SoLoud.instance.stop(h);
       } catch (_) {}
     }
-    handle = null;
+    _handle = null;
   }
 
   /// Disposes the currently loaded source (including its filters).
   Future<void> disposeSource() async {
-    final src = source;
+    final src = _source;
     if (src != null) {
       try {
         await SoLoud.instance.disposeSource(src);
       } catch (_) {}
-      source = null;
+      _source = null;
     }
   }
 
@@ -154,7 +168,7 @@ class ModulatedVoice {
     _volume = v.clamp(0.0, 1.0);
     _targetVolume = _volume;
     _slewingVolume = false;
-    final h = handle;
+    final h = _handle;
     if (h != null) {
       try {
         SoLoud.instance.setVolume(h, _volume);
@@ -207,7 +221,7 @@ class ModulatedVoice {
       }
       return;
     }
-    final h = handle;
+    final h = _handle;
     if (h == null) {
       return;
     }
@@ -219,7 +233,7 @@ class ModulatedVoice {
       _currentCutoff = target;
     }
     final clamped = _currentCutoff.clamp(10.0, 16000.0);
-    final src = source;
+    final src = _source;
     if (src != null) {
       try {
         src.filters.biquadFilter.frequency(soundHandle: h).value = clamped;
@@ -233,7 +247,7 @@ class ModulatedVoice {
   }
 
   void _applyVolumeStep() {
-    final h = handle;
+    final h = _handle;
     if (h == null) {
       return;
     }
@@ -249,11 +263,7 @@ class ModulatedVoice {
     } catch (_) {}
   }
 
-  void _applyCutoffImmediate(SoundHandle h) {
-    final src = source;
-    if (src == null) {
-      return;
-    }
+  void _applyCutoffImmediate(SoundHandle h, AudioSource src) {
     try {
       src.filters.biquadFilter.frequency(soundHandle: h).value = _currentCutoff
           .clamp(10.0, 16000.0);

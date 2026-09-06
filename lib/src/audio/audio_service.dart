@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/binaural_beat_controller.dart';
 import 'package:muse_ml/src/audio/feedback_audio_controller.dart';
@@ -7,6 +9,7 @@ import 'package:muse_ml/src/audio/music_controller.dart';
 import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/audio/rain_feedback_controller.dart';
 import 'package:muse_ml/src/audio/reward_output.dart';
+import 'package:muse_ml/src/audio/soloud_engine.dart';
 import 'package:muse_ml/src/settings.dart';
 
 export 'package:muse_ml/src/audio/output_ids.dart'
@@ -67,10 +70,10 @@ class AudioService {
   };
 
   List<String> get availableSounds => [
-        ...soundAssets.keys,
-        musicSoundName,
-        binauralSoundName,
-      ];
+    ...soundAssets.keys,
+    musicSoundName,
+    binauralSoundName,
+  ];
 
   static bool isMusicSound(String sound) => sound == musicSoundName;
   static bool isBinauralSound(String sound) => sound == binauralSoundName;
@@ -149,6 +152,12 @@ class AudioService {
     _binaural.setGain(_controller.masterVolume * _controller.feedbackVolume);
   }
 
+  Future<void> ensureReady({bool reopenIfProfileDiffers = false}) =>
+      SoLoudEngine.ensureInit(
+        stable: _settings.audioStableMode,
+        reopenIfProfileDiffers: reopenIfProfileDiffers,
+      );
+
   RewardOutput rewardOutput(RewardOutputId id) => rewardOutputFor(
     id,
     chime: _controller,
@@ -156,13 +165,14 @@ class AudioService {
     rain: _rain,
     binaural: _binaural,
     settings: _settings,
-    onMuffleExtras: _backgroundBinaural.setMuffle,
+    onBackgroundBinauralMuffle: _backgroundBinaural.setMuffle,
   );
 
   GuardOutput guardOutput() => guardOutputFor(controller: _controller);
 
   /// Starts the unmapped background layer from a picker [sound] name.
   Future<void> startBackground(String sound) async {
+    await ensureReady();
     if (isMusicSound(sound)) {
       await _backgroundMusic.load();
       await _backgroundMusic.start();
@@ -191,7 +201,8 @@ class AudioService {
     required RewardOutputId reward,
     RewardOutput? output,
   }) async {
-    await _stopChannels();
+    await ensureReady();
+    await stop();
     if (!suppressesBackground(reward)) {
       await startBackground(sound);
     }
@@ -229,6 +240,7 @@ class AudioService {
   /// Music feedback channel: reloads the folder from settings and begins
   /// playback. Used when a folder is first chosen mid-session.
   Future<void> startMusic() async {
+    await ensureReady();
     await _feedbackMusic.load();
     await _feedbackMusic.start();
   }
@@ -256,7 +268,9 @@ class AudioService {
 
   /// True while music plays unmodulated as the background layer —
   /// shown as "(background)" in the session UI.
-  bool get musicIsStatic => _backgroundMusic.isPlaying && _backgroundMusic.mode == MusicPlaybackMode.background;
+  bool get musicIsStatic =>
+      _backgroundMusic.isPlaying &&
+      _backgroundMusic.mode == MusicPlaybackMode.background;
 
   /// Whether the modulated rain channel is actively playing.
   bool get rainPlaying => _rain.isPlaying;
@@ -274,10 +288,8 @@ class AudioService {
   void setBackgroundBinauralFrequencies({
     required double carrierHz,
     required double beatHz,
-  }) => _backgroundBinaural.setFrequencies(
-        carrierHz: carrierHz,
-        beatHz: beatHz,
-      );
+  }) =>
+      _backgroundBinaural.setFrequencies(carrierHz: carrierHz, beatHz: beatHz);
 
   /// Feeds the live reward percentile (0–100) to the binaural volume — full
   /// fade at zero (off-target), full channel gain at the 100th percentile.
@@ -290,31 +302,19 @@ class AudioService {
     required double beatHz,
   }) => _binaural.setFrequencies(carrierHz: carrierHz, beatHz: beatHz);
 
-  /// Ducks whichever modulated channel is active during a guardrail warning.
-  void setMusicMuffle(bool on) {
-    _backgroundBinaural.setMuffle(on);
-    _feedbackMusic.setMuffle(on);
-    _rain.setMuffle(on);
-    _binaural.setMuffle(on);
-  }
-
-  /// Guardrail warning state.
-  bool get mufflesForWarning =>
-      _backgroundBinaural.muffleActive ||
-      _feedbackMusic.muffleActive ||
-      _rain.muffleActive ||
-      _binaural.muffleActive;
-
-  set mufflesForWarning(bool on) => setMusicMuffle(on);
-
   void onStateUpdate(bool inTarget) => _controller.onStateUpdate(inTarget);
 
   void onMovement() => _controller.onMovement();
 
-  Future<void> playCalibration([String? assetPath]) =>
-      _controller.playCalibration(assetPath);
+  Future<void> playCalibration([String? assetPath]) async {
+    await ensureReady();
+    await _controller.playCalibration(assetPath);
+  }
 
-  Future<void> playEndChime() => _controller.playEndChime();
+  Future<void> playEndChime() async {
+    await ensureReady();
+    await _controller.playEndChime();
+  }
 
   Future<void> playRecalibrateChime() => _controller.playRecalibrateChime();
 
@@ -326,12 +326,16 @@ class AudioService {
       _controller.setWarningSound(sound);
 
   /// Starts the continuous ramping alarm used while a warning stays active.
-  Future<void> startWarningAlarm() => _controller.startWarningAlarm();
+  Future<void> startWarningAlarm() async {
+    await ensureReady();
+    await _controller.startWarningAlarm();
+  }
 
   /// Stops the continuous alarm (also stops it in [stop]).
   void stopWarningAlarm() => _controller.stopWarningAlarm();
 
   Future<void> pause() async {
+    _controller.stopWarningAlarm();
     await _controller.pauseBackground();
     _backgroundMusic.pause();
     _feedbackMusic.pause();
@@ -358,22 +362,19 @@ class AudioService {
     await _controller.stop();
   }
 
-  Future<void> _stopChannels() async {
-    await _backgroundMusic.stop();
-    await _feedbackMusic.stop();
-    await _rain.stop();
-    await _backgroundBinaural.stop();
-    await _binaural.stop();
-    await _controller.stop();
-  }
-
   void dispose() {
-    _backgroundMusic.dispose();
-    _feedbackMusic.dispose();
-    _rain.dispose();
-    _backgroundBinaural.dispose();
-    _binaural.dispose();
-    _controller.dispose();
+    unawaited(() async {
+      try {
+        await stop();
+      } catch (_) {}
+      await _backgroundMusic.dispose();
+      await _feedbackMusic.dispose();
+      _rain.dispose();
+      await _backgroundBinaural.dispose();
+      await _binaural.dispose();
+      _controller.dispose();
+      await SoLoudEngine.deinit();
+    }());
   }
 }
 
