@@ -34,6 +34,7 @@ JSON names IDs. Rust owns `(device, feature)` electrodes and autodrop.
 | FeedbackEngine | `lib/src/feedback/feedback_engine.dart` | Interface; `RatioEngine` implements it (`target_state.dart`) |
 | CalibrationRunner | `lib/src/feedback/calibration_runner.dart` | Compose stages from subscribed features |
 | Gate names | `lib/src/feedback/gate_electrodes.dart` | Names, never indices, resolved against the device montage |
+| Feature probe | `lib/src/feedback/feature_override.dart` | Debug + sim: latch native `FeatureDto.value` before the bus/lanes |
 
 v1 feature ids (`assets/features.json` + `SPECS` in `features.rs`):
 

@@ -45,6 +45,8 @@ class AgentCommands {
       '/session/resume' => _resume(),
       '/session/end' => _end(),
       '/session/reset' => _reset(),
+      '/session/override' => _override(body),
+      '/session/feature' => _feature(body),
       _ => agentError(404, 'unknown_route', path),
     };
   }
@@ -72,6 +74,14 @@ class AgentCommands {
       'durationMinutes': fb.durationMinutes,
       'audioInitFailed': fb.audioInitFailed,
       'scanMessage': app.scanMessage,
+      'overrideEnabled': fb.featureOverrideEnabled,
+      'override': fb.featureOverrides,
+      'probeFeatures': _feedback.probeFeatureIds,
+      'percentile': _feedback.rewardLastPercentile,
+      'inTarget': _feedback.rewardLastInTarget,
+      'rewardValue': _feedback.rewardLastNative,
+      'warningActive': _feedback.guardWarningActive,
+      'threshold': fb.currentThreshold,
     };
   }
 
@@ -201,6 +211,39 @@ class AgentCommands {
 
   Future<AgentHttpResult> _reset() async {
     _feedback.reset();
+    return _ok();
+  }
+
+  AgentHttpResult _override(Map<String, Object?>? body) {
+    if (!_feedback.featureProbeAvailable) {
+      return agentError(412, 'probe_unavailable');
+    }
+    final enabled = body?['enabled'];
+    if (enabled is! bool) {
+      return agentError(400, 'bad_request', 'enabled bool required');
+    }
+    _feedback.setFeatureOverrideEnabled(enabled);
+    return _ok();
+  }
+
+  AgentHttpResult _feature(Map<String, Object?>? body) {
+    if (!_feedback.featureProbeAvailable) {
+      return agentError(412, 'probe_unavailable');
+    }
+    final id = body?['id'] as String?;
+    if (id == null || id.isEmpty) {
+      return agentError(400, 'bad_request', 'id required');
+    }
+    final raw = body?['value'];
+    if (raw == null) {
+      _feedback.setFeatureOverride(id, null);
+      return _ok();
+    }
+    final value = raw is num ? raw.toDouble() : null;
+    if (value == null) {
+      return agentError(400, 'bad_request', 'value number required');
+    }
+    _feedback.setFeatureOverride(id, value);
     return _ok();
   }
 }

@@ -77,6 +77,7 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 | Start skip-cal | `Start (skip calibration)` | `startCalibration(skipCalibration: true)` | `feedback_session.dart` | recordOnly. |
 | Crown refused dialog | `Crown sessions are not available yet…` | `crownSessionUnsupportedMessage` | `protocol.dart` | Real and sim Crown. |
 | Pause / Resume / End | phase controls | `pause` / `resume` / `end` | `feedback_state.dart` | |
+| Feature probe | `Feature probe` | `_FeatureProbeCard` | `feedback_session.dart` | Debug + sim connected only. Master switch + one slider per present feature id. |
 
 ### Settings cards — `lib/src/views/settings_view.dart`
 
@@ -105,6 +106,7 @@ Guardrail AI engine, Audio (Android only), About, Debug mode.
 | Reward lane | session audio | `RewardLane` | `reward_lane.dart` | Guard never modulates. |
 | Guard lane | protocol builder Guard | `GuardLane` | `guard_lane.dart` | Warns only. |
 | Feature bus | — | `FeatureBus` | `feature_bus.dart` | |
+| Feature probe latch | debug sliders | `FeatureOverride` | `feature_override.dart` | Replaces `FeatureDto.value` in `_onEvent` while playing. |
 
 ## Agent HTTP (debug)
 

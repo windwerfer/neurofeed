@@ -75,6 +75,11 @@ Headset / simulator
 Copy for features: `assets/features.json` (`usableFor`: `reward` / `guard`).
 `band.atr` is never a guard. Inhibit ≠ guard. Background ≠ reward output.
 
+Debug + simulated device: `FeatureOverride` can latch `FeatureDto.value` by
+id in `FeedbackStateNotifier._onEvent` (playing/paused only). Session
+**Feature probe** card: master switch + one slider per present feature.
+Skip-cal on a sim seeds a synthetic baseline so percentile/`inTarget` work.
+
 ## Session files
 
 `.muse.feedback` v5, Rust-owned (`rust/src/api/session_format.rs`):

@@ -7,10 +7,12 @@ import 'package:muse_ml/src/audio/guard_output.dart';
 import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/audio/reward_output.dart';
+import 'package:muse_ml/src/connect_source.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/calibration_runner.dart';
 import 'package:muse_ml/src/feedback/computed_sampler.dart';
 import 'package:muse_ml/src/feedback/feature_bus.dart';
+import 'package:muse_ml/src/feedback/feature_override.dart';
 import 'package:muse_ml/src/feedback/feedback_phase.dart';
 import 'package:muse_ml/src/feedback/feedback_recorder.dart';
 import 'package:muse_ml/src/feedback/gate_electrodes.dart';
@@ -63,6 +65,8 @@ class FeedbackState {
   final String? calibrationChallengeHint;
   final String? calibrationChallengeText;
   final bool audioInitFailed;
+  final bool featureOverrideEnabled;
+  final Map<String, double> featureOverrides;
 
   const FeedbackState({
     this.phase = FeedbackPhase.idle,
@@ -85,6 +89,8 @@ class FeedbackState {
     this.calibrationChallengeHint,
     this.calibrationChallengeText,
     this.audioInitFailed = false,
+    this.featureOverrideEnabled = false,
+    this.featureOverrides = const {},
   });
 
   static const Object _sentinel = Object();
@@ -110,6 +116,8 @@ class FeedbackState {
     Object? calibrationChallengeHint = _sentinel,
     Object? calibrationChallengeText = _sentinel,
     bool? audioInitFailed,
+    bool? featureOverrideEnabled,
+    Map<String, double>? featureOverrides,
   }) => FeedbackState(
     phase: phase ?? this.phase,
     protocol: protocol ?? this.protocol,
@@ -143,6 +151,9 @@ class FeedbackState {
         ? this.calibrationChallengeText
         : calibrationChallengeText as String?,
     audioInitFailed: audioInitFailed ?? this.audioInitFailed,
+    featureOverrideEnabled:
+        featureOverrideEnabled ?? this.featureOverrideEnabled,
+    featureOverrides: featureOverrides ?? this.featureOverrides,
   );
 }
 
@@ -234,6 +245,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   late GuardOutput _guardOutput;
   late final CalibrationRunner _calibration;
   final FeatureBus _bus = FeatureBus();
+  final FeatureOverride _featureOverride = FeatureOverride();
   late final FeedbackRecorder _recorder;
 
   RatioEngine get _engine => _reward.engine;
@@ -392,6 +404,163 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     state = state.copyWith(showNerdStats: !state.showNerdStats);
   }
 
+  bool get featureProbeAvailable {
+    if (!kDebugMode) {
+      return false;
+    }
+    final app = _ref.read(appStateProvider);
+    return app.status.connected && isSimDeviceId(app.status.id);
+  }
+
+  List<String> get probeFeatureIds {
+    if (_enabledFeatureIds.isNotEmpty) {
+      return List.unmodifiable(_enabledFeatureIds);
+    }
+    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
+    final spec = catalog?.forName(state.protocol);
+    final settings = _ref.read(settingsProvider);
+    final ids = <String>[];
+    final reward = spec?.reward?.feature;
+    if (reward != null) {
+      ids.add(reward);
+    }
+    if (spec?.guard != null && settings.guardrailEnabledFor(state.protocol)) {
+      final guard = settings.guardFeatureFor(state.protocol);
+      if (guard != guardFeatureNone && !ids.contains(guard)) {
+        ids.add(guard);
+      }
+    }
+    return ids;
+  }
+
+  double? get rewardLastNative => _reward.lastNative;
+
+  double? get rewardLastPercentile => _reward.lastPercentile;
+
+  bool get rewardLastInTarget => _reward.lastInTarget;
+
+  bool get guardWarningActive => _guard.warningActive;
+
+  double? get guardThreshold => _guard.threshold;
+
+  void setFeatureOverrideEnabled(bool on) {
+    if (on && !featureProbeAvailable) {
+      return;
+    }
+    if (on) {
+      for (final id in probeFeatureIds) {
+        _featureOverride.setIfAbsent(id);
+      }
+    }
+    _featureOverride.enabled = on;
+    _syncOverrideState();
+    if (!on) {
+      return;
+    }
+    if (state.phase == FeedbackPhase.playing ||
+        state.phase == FeedbackPhase.paused) {
+      _replaceBaselineForProbe();
+      _emitOverrideTicks();
+    }
+    if (_sessionStartAt != null) {
+      _recorder.writeMetadata({
+        'type': 'feature_override',
+        'enabled': true,
+        'values': Map<String, double>.from(_featureOverride.values),
+      });
+    }
+  }
+
+  void setFeatureOverride(String id, double? value) {
+    if (value != null && !featureProbeAvailable) {
+      return;
+    }
+    _featureOverride.set(id, value);
+    _syncOverrideState();
+    if (value != null) {
+      _emitOverrideTick(id, value);
+    }
+  }
+
+  void _replaceBaselineForProbe() {
+    _engine.reset();
+    _seedSyntheticBaseline();
+  }
+
+  void _emitOverrideTicks() {
+    for (final e in _featureOverride.values.entries) {
+      _emitOverrideTick(e.key, e.value);
+    }
+  }
+
+  void _emitOverrideTick(String id, double value) {
+    if (!_featureOverride.enabled ||
+        !featureProbeAvailable ||
+        (state.phase != FeedbackPhase.playing &&
+            state.phase != FeedbackPhase.paused)) {
+      return;
+    }
+    debugPrint('[probe] $id=${value.toStringAsFixed(3)}');
+    _onEvent(
+      MuseEventDto.feature(
+        FeatureDto(
+          id: id,
+          timestamp: DateTime.now().millisecondsSinceEpoch.toDouble(),
+          value: value,
+        ),
+      ),
+    );
+  }
+
+  void _syncOverrideState() {
+    state = state.copyWith(
+      featureOverrideEnabled: _featureOverride.enabled,
+      featureOverrides: Map<String, double>.from(_featureOverride.values),
+    );
+  }
+
+  MuseEventDto _maybeOverrideFeature(MuseEventDto event) {
+    if (!_featureOverride.enabled ||
+        !featureProbeAvailable ||
+        (state.phase != FeedbackPhase.playing &&
+            state.phase != FeedbackPhase.paused)) {
+      return event;
+    }
+    return _featureOverride.apply(event);
+  }
+
+  void _seedSyntheticBaseline() {
+    if (_reward.hasReward) {
+      for (final v in FeatureOverride.baselineSamples(_reward.featureId)) {
+        _engine.addBaselineSample(v);
+      }
+      final threshold = _engine.computeThreshold();
+      state = state.copyWith(currentThreshold: threshold);
+      _ref
+          .read(liveStatsProvider)
+          .setBaseline(
+            percentile: _engine.baselinePercentile,
+            count: _engine.baselineCount,
+            mean: _engine.baselineMean,
+            stddev: _engine.baselineStddev,
+          );
+      _ref.read(liveStatsProvider).setThreshold(threshold);
+    }
+    if (_guard.enabled) {
+      _guard.baselineSleepDir
+        ..clear()
+        ..addAll(FeatureOverride.baselineSamples(_guard.featureId));
+      _guard.finalizeBaseline(
+        warningThresholdPercentile: warningThresholdPercentile,
+      );
+    }
+    debugPrint(
+      '[feedback] synthetic baseline seeded '
+      'reward=${_reward.hasReward ? _reward.featureId : 'off'} '
+      'guard=${_guard.enabled ? _guard.featureId : 'off'}',
+    );
+  }
+
   bool get dynamicAdapt => _engine.dynamicAdapt;
 
   double get responsiveness => _engine.responsiveness;
@@ -501,6 +670,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     await _maybeEnableGuardrail();
     if (skipCalibration) {
       _engine.reset();
+      if (featureProbeAvailable) {
+        _seedSyntheticBaseline();
+      }
       await startPlaying();
       return;
     }
@@ -937,6 +1109,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       debugPrint('[feedback] audio-init-failed: $e');
       state = state.copyWith(audioInitFailed: true);
     }
+    if (_featureOverride.enabled && featureProbeAvailable) {
+      _replaceBaselineForProbe();
+      _emitOverrideTicks();
+    }
   }
 
   Future<void> pause() async {
@@ -1017,6 +1193,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _recalibrations.clear();
     _collectionEyes = null;
     _gateElectrodes = List.of(defaultGateElectrodes);
+    _featureOverride.clear();
     _ref.read(liveStatsProvider).reset();
     state = const FeedbackState();
     debugPrint('[feedback] phase=idle');
@@ -1274,6 +1451,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   void _onEvent(MuseEventDto event) {
+    event = _maybeOverrideFeature(event);
     if (_recorder.isRecording) {
       _recorder.writeEvent(event);
     }

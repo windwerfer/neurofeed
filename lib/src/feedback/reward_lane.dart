@@ -55,6 +55,9 @@ class RewardLane {
   List<TargetCondition> _inhibit = const [];
   String _featureId = 'band.atr';
   bool _hasReward = false;
+  double? lastNative;
+  double? lastPercentile;
+  bool lastInTarget = false;
 
   bool get hasReward => _hasReward;
 
@@ -128,6 +131,9 @@ class RewardLane {
 
   void _emit(double value, {required bool inTarget}) {
     final pct = engine.percentileOf(value) ?? 50.0;
+    lastNative = value;
+    lastPercentile = pct;
+    lastInTarget = inTarget;
     output.onSample(percentile: pct, inTarget: inTarget);
     onComputedFeedback(
       ratio: value,
@@ -144,5 +150,8 @@ class RewardLane {
   void reset() {
     engine.reset();
     _bands.reset();
+    lastNative = null;
+    lastPercentile = null;
+    lastInTarget = false;
   }
 }

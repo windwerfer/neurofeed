@@ -27,7 +27,8 @@ flutter test \
   test/agent/agent_protocol_test.dart \
   test/agent/agent_config_test.dart \
   test/agent/agent_server_test.dart \
-  test/app_ui_state_test.dart
+  test/app_ui_state_test.dart \
+  test/feature_override_test.dart
 ```
 
 ## FFI (host lib first)
@@ -64,6 +65,7 @@ cargo test --lib                  # features / simulator / device_config
 | Session format v5 | Rust + Dart+FFI | `session_format` + export/charts tests | rust + FFI | Roundtrip | Don't edit layout from Dart |
 | Simulator identity | Rust unit | `simulator.rs` | `cargo test --lib simulator` | name/firmware table | Live spawn needs tokio |
 | Streaming OSC/BF | Dart unit | `test/streaming_*.dart` | `flutter test test/streaming_*.dart` | Datagram shape | View untested |
+| Feature probe | Dart unit | `test/feature_override_test.dart` | that file | Latch replace; synthetic TAR/delta baseline | Ear-test is human |
 | Audio playback | — | ids only | — | — | Silence ≠ fail in this container |
 | Live charts | — | none | — | — | Visual **cannot** without goldens |
 | REVE/LUNA | Rust `#[ignore]` | analysis tests | `cargo test --lib -- --ignored` | If `.local/` weights | Never CI |

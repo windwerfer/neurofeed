@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,7 +8,9 @@ import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/audio/binaural_beat_controller.dart';
 import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/connect_source.dart';
 import 'package:muse_ml/src/connect_window.dart';
+import 'package:muse_ml/src/feedback/feature_override.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
@@ -62,11 +65,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          copy.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(copy.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
             icon: Icon(
@@ -87,7 +86,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
           child: StatusBar(showMenu: false),
         ),
       ),
-body: Stack(
+      body: Stack(
         children: [
           SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -102,6 +101,12 @@ body: Stack(
                         fb.phase == FeedbackPhase.paused)) ...[
                   const SizedBox(height: 8),
                   const _NerdStatsBubble(),
+                ],
+                if (kDebugMode &&
+                    connected &&
+                    isSimDeviceId(app.status.id)) ...[
+                  const SizedBox(height: 8),
+                  const _FeatureProbeCard(),
                 ],
                 const SizedBox(height: 16),
                 // Session settings (idle and during feedback for on-the-fly changes)
@@ -177,12 +182,12 @@ class _GuideCard extends StatelessWidget {
         content: SingleChildScrollView(
           child: Text(guideText, style: theme.textTheme.bodyMedium),
         ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Done'),
-        ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Done'),
+          ),
+        ],
       ),
     );
   }
@@ -346,7 +351,11 @@ class _PhaseControls extends ConsumerWidget {
                 onPressed: () async {
                   if (await _refuseCrownStart(context, ref)) return;
                   if (!context.mounted) return;
-                  final ready = await showModelGateDialog(context, ref, fb.protocol);
+                  final ready = await showModelGateDialog(
+                    context,
+                    ref,
+                    fb.protocol,
+                  );
                   if (ready && context.mounted) {
                     await startSession();
                   }
@@ -674,6 +683,103 @@ class _NerdStatsBubble extends ConsumerWidget {
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _FeatureProbeCard extends ConsumerWidget {
+  const _FeatureProbeCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fb = ref.watch(feedbackStateProvider);
+    final notifier = ref.read(feedbackStateProvider.notifier);
+    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
+    final theme = Theme.of(context);
+    final ids = notifier.probeFeatureIds;
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SwitchListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              title: Text('Feature probe', style: theme.textTheme.titleSmall),
+              subtitle: const Text(
+                'Replace live simulator features while playing. '
+                'Enabling reseeds a synthetic baseline in slider units.',
+              ),
+              value: fb.featureOverrideEnabled,
+              onChanged: notifier.setFeatureOverrideEnabled,
+            ),
+            if (ids.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                child: Text(
+                  'This protocol has no reward or guard feature.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              )
+            else
+              for (final id in ids)
+                _FeatureProbeSlider(
+                  id: id,
+                  label: catalog?.features[id]?.shortLabel ?? id,
+                  value: fb.featureOverrides[id] ?? FeatureOverride.initial(id),
+                  onChanged: (v) => notifier.setFeatureOverride(id, v),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FeatureProbeSlider extends StatelessWidget {
+  const _FeatureProbeSlider({
+    required this.id,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String id;
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final range = FeatureOverride.rangeFor(id);
+    final theme = Theme.of(context);
+    final span = range.max - range.min;
+    final divisions = span <= 0 ? 1 : (span * 100).round().clamp(1, 300);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '$label ${value.toStringAsFixed(2)}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          Slider(
+            min: range.min,
+            max: range.max,
+            divisions: divisions,
+            value: value.clamp(range.min, range.max).toDouble(),
+            label: value.toStringAsFixed(2),
+            onChanged: onChanged,
+          ),
+        ],
       ),
     );
   }
@@ -1137,7 +1243,9 @@ class _BinauralSettingsDialogState
       settings.setBackgroundBinauralPresetId(_presetId);
       settings.setBackgroundBinauralCarrierHz(_carrierHz);
       settings.setBackgroundBinauralBeatHz(_beatHz);
-      ref.read(audioServiceProvider).setBackgroundBinauralFrequencies(
+      ref
+          .read(audioServiceProvider)
+          .setBackgroundBinauralFrequencies(
             carrierHz: _carrierHz,
             beatHz: _beatHz,
           );
@@ -1145,10 +1253,9 @@ class _BinauralSettingsDialogState
       settings.setBinauralPresetId(_presetId);
       settings.setBinauralCarrierHz(_carrierHz);
       settings.setBinauralBeatHz(_beatHz);
-      ref.read(audioServiceProvider).setBinauralFrequencies(
-            carrierHz: _carrierHz,
-            beatHz: _beatHz,
-          );
+      ref
+          .read(audioServiceProvider)
+          .setBinauralFrequencies(carrierHz: _carrierHz, beatHz: _beatHz);
     }
   }
 
@@ -1321,8 +1428,7 @@ class _TuneSlider extends StatelessWidget {
             divisions: divisions,
             label: format(value),
             onChanged: (v) {
-              final stepped =
-                  (v / step).roundToDouble() * step;
+              final stepped = (v / step).roundToDouble() * step;
               onChanged(stepped.clamp(min, max));
             },
           ),
@@ -1378,8 +1484,8 @@ class _GuardrailTileState extends ConsumerState<_GuardrailTile> {
     final fb = ref.watch(feedbackStateProvider);
     // Sync with external changes (e.g. the Settings card) and protocol switch.
     _enabled = _readEnabled();
-    final inSession = fb.phase == FeedbackPhase.playing ||
-        fb.phase == FeedbackPhase.paused;
+    final inSession =
+        fb.phase == FeedbackPhase.playing || fb.phase == FeedbackPhase.paused;
     final settings = ref.watch(settingsProvider);
     final feature = settings.guardFeatureFor(fb.protocol);
     final sound = GuardrailSound.fromName(settings.warningSoundName);
@@ -1387,7 +1493,9 @@ class _GuardrailTileState extends ConsumerState<_GuardrailTile> {
       leading: const Icon(Icons.shield_outlined),
       title: const Text('Guardrail'),
       subtitle: Text(
-        _enabled ? '${guardFeatureLabel(feature)} • ${sound.label}' : 'disabled',
+        _enabled
+            ? '${guardFeatureLabel(feature)} • ${sound.label}'
+            : 'disabled',
       ),
       trailing: inSession
           ? null
@@ -1425,7 +1533,8 @@ class _DurationSection extends ConsumerWidget {
     final theme = Theme.of(context);
     final chips = <int>[
       ...quickDurations,
-      if (lastCustom != null && !quickDurations.contains(lastCustom)) lastCustom,
+      if (lastCustom != null && !quickDurations.contains(lastCustom))
+        lastCustom,
     ];
 
     Future<void> openCustom() async {
@@ -1455,8 +1564,9 @@ class _DurationSection extends ConsumerWidget {
                 ChoiceChip(
                   label: Text('$d min'),
                   selected: d == selected,
-                  onSelected: (_) =>
-                      ref.read(feedbackStateProvider.notifier).selectDuration(d),
+                  onSelected: (_) => ref
+                      .read(feedbackStateProvider.notifier)
+                      .selectDuration(d),
                 ),
               ChoiceChip(
                 label: const Text('Custom…'),
@@ -1535,10 +1645,7 @@ class _PercentileSlider extends StatelessWidget {
   static const int min = 5;
   static const int max = 95;
 
-  const _PercentileSlider({
-    required this.value,
-    required this.onChanged,
-  });
+  const _PercentileSlider({required this.value, required this.onChanged});
 
   final int value;
   final ValueChanged<int> onChanged;
@@ -1706,7 +1813,6 @@ class _VolumeDialogState extends State<_VolumeDialog> {
   }
 }
 
-
 class _TargetSettingsDialog extends ConsumerStatefulWidget {
   const _TargetSettingsDialog();
 
@@ -1812,7 +1918,7 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
             'your typical ratio.',
             style: theme.textTheme.bodySmall,
           ),
-_PercentileSlider(
+          _PercentileSlider(
             value: _percentile,
             onChanged: (v) {
               setState(() => _percentile = v);
@@ -1831,7 +1937,6 @@ _PercentileSlider(
     );
   }
 }
-
 
 class _TargetSettingsInfoDialog extends StatelessWidget {
   const _TargetSettingsInfoDialog();
@@ -1880,7 +1985,6 @@ class _TargetSettingsInfoDialog extends StatelessWidget {
   }
 }
 
-
 class _SoundPicker extends StatelessWidget {
   final String current;
   final List<String> sounds;
@@ -1915,6 +2019,7 @@ class _SoundPicker extends StatelessWidget {
     );
   }
 }
+
 class _RewardOutputPicker extends StatelessWidget {
   final RewardOutputId current;
   const _RewardOutputPicker({required this.current});
@@ -1985,8 +2090,8 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
   }
 
   bool _anyModelInstalled() => ModelKind.values.any(
-        (k) => ref.read(modelInstalledProvider(k)).valueOrNull == true,
-      );
+    (k) => ref.read(modelInstalledProvider(k)).valueOrNull == true,
+  );
 
   bool _aiDrowsinessListed() {
     final app = ref.read(appStateProvider);
@@ -2026,14 +2131,15 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
   @override
   Widget build(BuildContext context) {
     final fb = ref.watch(feedbackStateProvider);
-    final inSession = fb.phase == FeedbackPhase.playing ||
-        fb.phase == FeedbackPhase.paused;
+    final inSession =
+        fb.phase == FeedbackPhase.playing || fb.phase == FeedbackPhase.paused;
     final settings = ref.watch(settingsProvider);
     final audio = ref.read(audioServiceProvider);
     final theme = Theme.of(context);
     final features = _gearFeatures();
-    final current =
-        features.contains(_feature) ? _feature : guardFeatureBandDelta;
+    final current = features.contains(_feature)
+        ? _feature
+        : guardFeatureBandDelta;
 
     return AlertDialog(
       title: const Text('Guardrail'),
@@ -2113,8 +2219,8 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
               _sound.playsContinuously
                   ? 'Repeats with a volume ramp while a warning stays active'
                   : _sound == GuardrailSound.none
-                      ? 'Warnings stay silent'
-                      : 'Plays once per warning',
+                  ? 'Warnings stay silent'
+                  : 'Plays once per warning',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
@@ -2138,12 +2244,7 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _onDone,
-          child: const Text('Done'),
-        ),
-      ],
+      actions: [TextButton(onPressed: _onDone, child: const Text('Done'))],
     );
   }
 }
@@ -2213,7 +2314,11 @@ Future<void> _maybeWarnMusicAiCpu(
   );
 }
 
-void _showGuide(BuildContext context, ProtocolDocument protocol, ProtocolCopy copy) {
+void _showGuide(
+  BuildContext context,
+  ProtocolDocument protocol,
+  ProtocolCopy copy,
+) {
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -2242,4 +2347,3 @@ void _showGuide(BuildContext context, ProtocolDocument protocol, ProtocolCopy co
     ),
   );
 }
-
