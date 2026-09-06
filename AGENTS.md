@@ -69,6 +69,9 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   in the current series. Connect UX is frozen
   (`.ai/connect-simulator-ux.md`) — do not mix OSC-connect or Crown Start
   into it. `DeviceKind` is Muse | Neurosity only; do not restore Simulated*.
+  Audio-engine Key Decisions (`.ai/audio-engine.md`) are frozen: do not duck
+  unmodulated background; do not deinit SoLoud from a controller; do not
+  restore `AudioService.setMusicMuffle`.
 - If you change on-screen copy or primary chrome (status bar, sidebar, connect
   window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
   Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
@@ -78,7 +81,8 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
 
 ## Docs
 Index: [`.ai/README.md`](.ai/README.md). UI names: [`.ai/ui-map.md`](.ai/ui-map.md).
-Tests: [`.ai/test-matrix.md`](.ai/test-matrix.md). Format/cache:
+Tests: [`.ai/test-matrix.md`](.ai/test-matrix.md). Audio engine:
+[`.ai/audio-engine.md`](.ai/audio-engine.md). Format/cache:
 `README_feedback_format.md`, `README_history_cache.md`.
 Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
 
@@ -105,7 +109,7 @@ lib/src/feedback/           session orchestrator + lanes
   crash_recovery.dart       leftover scratch v5 / three-temps
   session_store*.dart / session_sqlite.dart / session_metadata.dart
   session_export.dart / session_pdf_export.dart / session_chart_data.dart
-lib/src/audio/              SoLoud: AudioService, reward/guard/background outputs
+lib/src/audio/              SoLoudEngine + AudioService, reward/guard/background
 lib/src/reve/               model download/import/load UI
 lib/src/streaming/          OSC / LSL / BrainFlow
 lib/src/charts/             live EEG + SessionRecorder / SessionReader
@@ -139,6 +143,11 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - SAF: MethodChannel `muse_ml/saf` in `MainActivity.kt`.
 - Guard feature ids: `lib/src/feedback/guardrail_mode.dart` (string helpers,
   not an enum). Per-protocol prefs migrate from old `GuardrailMode.name`.
+- Audio engine: `lib/src/audio/soloud_engine.dart` (init/deinit, epoch,
+  bundled `loadAsset` cache). Session facade `audio_service.dart`.
+  `RewardOutput.setMuffle` is the live muffle API (`guard_lane.dart`
+  already calls it). Bundled files: `SoLoudEngine.loadAsset`. User music:
+  `loadFile`, uncached. Spec: `.ai/audio-engine.md`.
 - Audio outputs: `lib/src/audio/output_ids.dart`.
 - Protocol builder: `lib/src/views/protocol_builder.dart`.
 - Release CI: `.ai/release.md`. Toolchain: `rust/rust-toolchain.toml` (1.97.1)
@@ -188,9 +197,19 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `/etc/alsa/conf.d/99-pulseaudio-default.conf` (copied from `.example` in
   the Dockerfile) or playback is silent.
 - **Audio latency profile only matters on Android.** "Reduce audio stutter"
-  (`Settings.audioStableMode`) is Android-only; `SoLoudEngine.ensureInit`
-  at session start (falls back to low-latency if the conservative AAudio
-  path cannot start).
+  (`Settings.audioStableMode`) is Android-only. Session start calls
+  `AudioService.ensureReady(reopenIfProfileDiffers: true)` (falls back to
+  low-latency if the conservative AAudio path cannot start). A Settings
+  toggle does nothing until the next session start. Controllers may
+  `SoLoudEngine.ensureInit()` with no args (no-op if ready).
+- **Do not deinit SoLoud from a controller.** `FeedbackAudioController.dispose`
+  must not call `SoLoudEngine.deinit`; `AudioService.dispose` is the only
+  teardown. Bundled audio uses `SoLoudEngine.loadAsset`, never `loadFile`
+  (rain used to `loadFile` an asset key — that fails on Android).
+- **Muffle is `RewardOutput.setMuffle`.** Do not add `AudioService.setMusicMuffle`.
+  Duck modulated reward + both binaural controllers. Do **not** duck
+  unmodulated background (drone / static music / rain-as-background).
+  Do not edit `guard_lane.dart` for muffle.
 - **Flutter directory assets** only bundle files directly in the declared
   directory. `pubspec.yaml` lists every `assets/audio/` subdir. Guard:
   `test/calibration_assets_test.dart`.

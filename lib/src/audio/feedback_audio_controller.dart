@@ -11,7 +11,7 @@ import 'package:muse_ml/src/settings.dart';
 /// Public surface mirrors the pre-SoLoud (just_audio) controller so
 /// [AudioService] and the feedback notifier stay unchanged for chime/sound
 /// feedback. Music feedback (folder + low-pass filter) lives in
-/// [MusicFeedbackController].
+/// [MusicController].
 class FeedbackAudioController {
   static const Duration targetHoldDuration = Duration(milliseconds: 2500);
   static const Duration rewardCooldown = Duration(seconds: 8);
@@ -32,10 +32,8 @@ class FeedbackAudioController {
 
   final Settings _settings;
 
-  /// Cache of loaded [AudioSource]s keyed by asset path, so loops and chimes
-  /// reuse one native sound instead of re-decoding on every trigger.
-  final Map<String, AudioSource> _sources = {};
-  int _engineEpoch = -1;
+  AudioSource? _bowlSource;
+  int _bowlEpoch = -1;
 
   SoundHandle? _backgroundHandle;
   SoundHandle? _bellHandle;
@@ -95,28 +93,22 @@ class FeedbackAudioController {
 
   double get _guardrailVolumeTotal => _masterVolume * _guardrailVolume;
 
-  /// Loads an asset once and caches the [AudioSource]. Streams long/looped
+  /// Loads a bundled asset through the engine cache. Streams long/looped
   /// audio from a temp file ([LoadMode.disk]); decodes short one-shots
   /// ([LoadMode.memory]) for instant low-latency triggers.
-  Future<AudioSource> _sourceFor(String assetPath, {required bool stream}) {
-    if (_engineEpoch != SoLoudEngine.epoch) {
-      _sources.clear();
-      _engineEpoch = SoLoudEngine.epoch;
+  Future<AudioSource> _sourceFor(String assetPath, {required bool stream}) =>
+      SoLoudEngine.loadAsset(assetPath, stream: stream);
+
+  /// Memory-loads [bowlLowAsset] so [_triggerChime] is cache-hit only.
+  Future<void> preloadChime() async {
+    await SoLoudEngine.ensureInit();
+    try {
+      _bowlSource = await SoLoudEngine.loadAsset(bowlLowAsset, stream: false);
+      _bowlEpoch = SoLoudEngine.epoch;
+    } catch (e) {
+      debugPrint('[audio] chime skipped: bowl source not loaded');
+      _bowlSource = null;
     }
-    final existing = _sources[assetPath];
-    if (existing != null) {
-      return Future.value(existing);
-    }
-    return SoLoud.instance
-        .loadAsset(
-          assetPath,
-          mode: stream ? LoadMode.disk : LoadMode.memory,
-          autoDispose: false,
-        )
-        .then((source) {
-          _sources[assetPath] = source;
-          return source;
-        });
   }
 
   /// Plays a one-shot voice and resolves when that exact voice ends. Used for
@@ -124,13 +116,9 @@ class FeedbackAudioController {
   Future<void> _playAndAwaitEnd(
     AudioSource source, {
     required double volume,
-    Duration timeout = const Duration(seconds: 15),
   }) async {
     final handle = SoLoud.instance.play(source, volume: volume);
-    await _awaitHandleEnd(source, handle).timeout(timeout, onTimeout: () {});
-  }
-
-  Future<void> _awaitHandleEnd(AudioSource source, SoundHandle handle) {
+    final timeout = calibrationAwaitTimeout(_sourceLength(source));
     final completer = Completer<void>();
     final sub = source.soundEvents.listen((event) {
       if (event.event == SoundEventType.handleIsNoMoreValid &&
@@ -139,17 +127,36 @@ class FeedbackAudioController {
         completer.complete();
       }
     });
-    return completer.future.whenComplete(sub.cancel);
+    try {
+      await completer.future.timeout(timeout);
+    } on TimeoutException {
+      try {
+        SoLoud.instance.stop(handle);
+      } catch (_) {}
+    } finally {
+      await sub.cancel();
+    }
   }
 
-  /// Applies [action] to a possibly-stale handle, dropping it if the voice no
-  /// longer exists (SoLoud throws for vanished handles). Used to keep volume
-  /// changes and prunes cheap.
-  void _safeHandle(SoundHandle handle, void Function(SoundHandle) action) {
+  Duration _sourceLength(AudioSource source) {
+    try {
+      return SoLoud.instance.getLength(source);
+    } catch (_) {
+      return Duration.zero;
+    }
+  }
+
+  /// Applies [action] to a possibly-stale handle. [onGone] runs if SoLoud
+  /// throws for a vanished handle.
+  void _safeHandle(
+    SoundHandle handle,
+    void Function(SoundHandle) action, {
+    void Function()? onGone,
+  }) {
     try {
       action(handle);
     } catch (_) {
-      _chimeHandles.remove(handle);
+      onGone?.call();
     }
   }
 
@@ -167,6 +174,7 @@ class FeedbackAudioController {
       _safeHandle(
         background,
         (h) => SoLoud.instance.setVolume(h, _backgroundVolumeTotal),
+        onGone: () => _backgroundHandle = null,
       );
     }
   }
@@ -188,18 +196,24 @@ class FeedbackAudioController {
     _settings.setBellVolume(_bellVolume);
     final bell = _bellHandle;
     if (bell != null) {
-      _safeHandle(bell, (h) => SoLoud.instance.setVolume(h, _bellVolumeTotal));
+      _safeHandle(
+        bell,
+        (h) => SoLoud.instance.setVolume(h, _bellVolumeTotal),
+        onGone: () => _bellHandle = null,
+      );
     }
   }
 
   void setGuardrailVolume(double value) {
     _guardrailVolume = value.clamp(0.0, 1.0);
     _settings.setGuardrailVolume(_guardrailVolume);
-    final bell = _bellHandle;
-    if (bell != null) {
+    final alarm = _alarmHandle;
+    if (alarm != null) {
       _safeHandle(
-        bell,
-        (h) => SoLoud.instance.setVolume(h, _guardrailVolumeTotal),
+        alarm,
+        (h) =>
+            SoLoud.instance.setVolume(h, _guardrailVolumeTotal * _alarmRamp()),
+        onGone: () => _alarmHandle = null,
       );
     }
   }
@@ -227,12 +241,17 @@ class FeedbackAudioController {
       _safeHandle(
         background,
         (h) => SoLoud.instance.setVolume(h, _backgroundVolumeTotal),
+        onGone: () => _backgroundHandle = null,
       );
     }
     _applyFeedbackVolumes();
     final bell = _bellHandle;
     if (bell != null) {
-      _safeHandle(bell, (h) => SoLoud.instance.setVolume(h, _bellVolumeTotal));
+      _safeHandle(
+        bell,
+        (h) => SoLoud.instance.setVolume(h, _bellVolumeTotal),
+        onGone: () => _bellHandle = null,
+      );
     }
   }
 
@@ -241,6 +260,7 @@ class FeedbackAudioController {
       _safeHandle(
         handle,
         (h) => SoLoud.instance.setVolume(h, _feedbackVolumeTotal),
+        onGone: () => _chimeHandles.remove(handle),
       );
     }
   }
@@ -379,19 +399,29 @@ class FeedbackAudioController {
       return;
     }
     _alarmSince = DateTime.now();
-    _alarmTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      final elapsed = DateTime.now().difference(_alarmSince!).inSeconds;
-      final ramp = 0.12 + 0.88 * (elapsed / 60.0).clamp(0.0, 1.0);
+    void playTick() {
       final handle = SoLoud.instance.play(
         source!,
-        volume: _guardrailVolumeTotal * ramp,
+        volume: _guardrailVolumeTotal * _alarmRamp(),
       );
       final prev = _alarmHandle;
       _alarmHandle = handle;
       if (prev != null) {
         _safeHandle(prev, SoLoud.instance.stop);
       }
-    });
+    }
+
+    playTick();
+    _alarmTimer = Timer.periodic(const Duration(seconds: 2), (_) => playTick());
+  }
+
+  double _alarmRamp() {
+    final since = _alarmSince;
+    if (since == null) {
+      return 1.0;
+    }
+    final elapsed = DateTime.now().difference(since).inSeconds;
+    return 0.12 + 0.88 * (elapsed / 60.0).clamp(0.0, 1.0);
   }
 
   /// Stops the continuous alarm and its handle.
@@ -438,9 +468,7 @@ class FeedbackAudioController {
   }
 
   void dispose() {
-    stopWarningAlarm();
-    _sources.clear();
-    SoLoudEngine.deinit();
+    unawaited(stop());
   }
 
   void _stopBackground() {
@@ -458,7 +486,7 @@ class FeedbackAudioController {
   }
 
   void _triggerChime() {
-    final source = _sources[bowlLowAsset];
+    final source = _bowlEpoch == SoLoudEngine.epoch ? _bowlSource : null;
     if (source == null) {
       debugPrint('[audio] chime skipped: bowl source not loaded');
       return;
@@ -471,10 +499,27 @@ class FeedbackAudioController {
     }
     final handle = SoLoud.instance.play(source, volume: _feedbackVolumeTotal);
     _chimeHandles.add(handle);
-    // Prune finished voices so the list stays short.
-    final stale = _chimeHandles.where((h) => !source.handles.contains(h));
-    for (final s in stale) {
-      _chimeHandles.remove(s);
+    for (final h in List.of(_chimeHandles)) {
+      if (!source.handles.contains(h)) {
+        _chimeHandles.remove(h);
+      }
     }
   }
+}
+
+/// Timeout for awaiting a calibration clip: [length] + 2s, floor 15s, cap 90s.
+/// A zero (or unknown) length uses 60s — disk-stream [getLength] can be 0.
+@visibleForTesting
+Duration calibrationAwaitTimeout(Duration length) {
+  if (length == Duration.zero) {
+    return const Duration(seconds: 60);
+  }
+  final padded = length + const Duration(seconds: 2);
+  if (padded < const Duration(seconds: 15)) {
+    return const Duration(seconds: 15);
+  }
+  if (padded > const Duration(seconds: 90)) {
+    return const Duration(seconds: 90);
+  }
+  return padded;
 }

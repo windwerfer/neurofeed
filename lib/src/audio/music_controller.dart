@@ -52,6 +52,7 @@ class MusicController {
   bool _shuffle = false;
 
   StreamSubscription? _endSub;
+  int _engineEpoch = -1;
 
   final StreamController<String> _trackChanges = StreamController.broadcast();
 
@@ -91,6 +92,9 @@ class MusicController {
 
   Future<bool> load() async {
     refreshSettings();
+    if (_voice.playing) {
+      return hasTracks;
+    }
     final folder = _settings.musicFolder;
     _tracks.clear();
     _order.clear();
@@ -119,15 +123,24 @@ class MusicController {
       if (!await dir.exists()) {
         return false;
       }
-      final entries = dir.listSync().whereType<File>();
-      final files = entries
-          .where(
-            (f) => musicSupportedExtensions.contains(_extensionOf(f.path)),
-          )
-          .toList()
-        ..sort(
-          (a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()),
-        );
+      final List<File> files;
+      try {
+        files =
+            dir
+                .listSync()
+                .whereType<File>()
+                .where(
+                  (f) =>
+                      musicSupportedExtensions.contains(_extensionOf(f.path)),
+                )
+                .toList()
+              ..sort(
+                (a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()),
+              );
+      } catch (e) {
+        debugPrint('[music] list failed: $e');
+        return false;
+      }
       _tracks.addAll(
         files.map((f) => MusicTrack(name: _nameOf(f.path), path: f.path)),
       );
@@ -185,6 +198,7 @@ class MusicController {
       return;
     }
     await SoLoudEngine.ensureInit();
+    _engineEpoch = SoLoudEngine.epoch;
     _position = 0;
     await _playCurrent();
   }
@@ -229,11 +243,7 @@ class MusicController {
     if (_shuffle) {
       _order.shuffle();
     }
-    if (_position >= 0 && _position < _order.length) {
-      final current = _order[_position];
-      _order.removeAt(_position);
-      _order.insert(0, current);
-    }
+    _position = moveCurrentToFront(_order, _position);
   }
 
   void setTargetCutoff(double hz) {
@@ -262,6 +272,9 @@ class MusicController {
     _endSub = null;
     _voice.stop();
     await _voice.disposeSource();
+    if (_engineEpoch != SoLoudEngine.epoch) {
+      _engineEpoch = SoLoudEngine.epoch;
+    }
     final track = _tracks[_order[_position]];
     try {
       final src = await SoLoud.instance.loadFile(
@@ -303,7 +316,23 @@ class MusicController {
     }
   }
 
-  void dispose() {
-    _trackChanges.close();
+  Future<void> dispose() async {
+    await _endSub?.cancel();
+    _endSub = null;
+    _voice.stop();
+    await _voice.disposeSource();
+    await _trackChanges.close();
   }
+}
+
+/// After shuffling [order], move the track at [position] to index 0.
+/// Returns 0 when a current track existed, otherwise [position].
+@visibleForTesting
+int moveCurrentToFront(List<int> order, int position) {
+  if (position >= 0 && position < order.length) {
+    final current = order.removeAt(position);
+    order.insert(0, current);
+    return 0;
+  }
+  return position;
 }

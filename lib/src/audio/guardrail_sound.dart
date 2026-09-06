@@ -6,9 +6,7 @@ import 'package:flutter/foundation.dart';
 enum GuardrailSound {
   softBowl(
     label: 'Soft bowl',
-    // Current warning bell (864397__valerie-vivegnis__2607) until the user
-    // drops in a dedicated guardrail-softBowl-01 file.
-    assetPath: 'assets/audio/bell/864397__valerie-vivegnis__2607.opus',
+    assetPath: 'assets/audio/guardrail-softBowl-01.opus',
     playsContinuously: false,
   ),
   chime(

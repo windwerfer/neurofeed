@@ -16,6 +16,7 @@ flutter test \
   test/user_protocol_builder_test.dart \
   test/output_ids_test.dart \
   test/soloud_engine_test.dart \
+  test/audio_hardening_test.dart \
   test/calibration_assets_test.dart \
   test/settings_guardrail_migrate_test.dart \
   test/session_metadata_roundtrip_test.dart \

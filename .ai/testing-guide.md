@@ -64,8 +64,9 @@ Pulse, X, Wayland, adb, or the Dart language-server.
 - Session UI is not mounted. Dashboard `pushReplacement` on `ended` will
   not run.
 - Default duration is 15 min if you skip `/session/duration`.
-- SoLoud init throw is caught → `audioInitFailed` + log; phase can still
-  be `playing`. Audio silence in this container is N/A, not a failure.
+- SoLoud init throw at `AudioService.ensureReady` is caught →
+  `audioInitFailed` + log; phase can still be `playing`. Audio silence in
+  this container is N/A, not a failure.
 - GTK at-spi / cursor-theme warnings on Linux are noise.
 - `persist: false` means a human `lastDeviceId` (including Crown) can
   still autoconnect on the next launch.
