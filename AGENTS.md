@@ -114,9 +114,10 @@ lib/src/session_v5/         v5 writer / assemble / ComputedFrame / DeviceInfoV5
   scratch_writer.dart       SessionRecorder (prefix default `session`)
   computed_frame.dart       Dart ComputedFrame (+ .freezed.dart)
   models.dart               DeviceInfoV5, StreamsConfig
-lib/src/monitor/            live graphs + recording (PR 1a: controller + band cache)
+lib/src/monitor/            live graphs + recording (PR 1b: tmp_ writer + exclusive lease)
   monitor_controller.dart   constructed in main(); hydrates if already connected
   cache/band_cache.dart     1 Hz bands, 30 min cap; no EEG LiveCache
+  recording/                capture_lease, tmp_ MonitorRecorder, MonitorSampler
 lib/src/audio/              SoLoudEngine + AudioService, reward/guard/background
 lib/src/reve/               model download/import/load UI
 lib/src/streaming/          OSC / LSL / BrainFlow

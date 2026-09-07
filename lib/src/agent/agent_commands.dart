@@ -4,6 +4,7 @@ import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
+import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/version.dart';
 
@@ -57,6 +58,7 @@ class AgentCommands {
     final app = _container.read(appStateProvider);
     final fb = _container.read(feedbackStateProvider);
     final settings = _container.read(settingsProvider);
+    final mon = _container.read(monitorControllerProvider);
     return {
       'ok': true,
       'view': app.currentView.name,
@@ -71,6 +73,8 @@ class AgentCommands {
       'phase': fb.phase.name,
       'protocol': fb.protocol,
       'elapsedSeconds': fb.elapsedSeconds,
+      'captureKind': mon.kind.name,
+      'captureElapsedSeconds': mon.captureElapsedSeconds,
       'durationMinutes': fb.durationMinutes,
       'audioInitFailed': fb.audioInitFailed,
       'scanMessage': app.scanMessage,

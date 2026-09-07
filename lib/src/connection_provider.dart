@@ -10,8 +10,6 @@ import 'package:muse_ml/src/connect_source.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/rust/api/device_config.dart';
 import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/session_v5/scratch_writer.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
 
 /// Duration of each scan chunk when scanning continuously.
 const _scanChunkSecs = 3;
@@ -43,7 +41,7 @@ Future<void> ensureBtleplugReady() async {
 
 /// Holds all connection + UI state for the app.
 class AppStateNotifier extends StateNotifier<AppUiState> {
-  AppStateNotifier(this._settings)
+  AppStateNotifier(this._settings, {bool initialize = true})
     : super(
         AppUiState(
           status: const ConnectionStatus(
@@ -70,8 +68,16 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           lastConnectedKind: null,
         ),
       ) {
-    _init();
+    if (initialize) {
+      _init();
+    } else if (!_initDone.isCompleted) {
+      _initDone.complete();
+    }
   }
+
+  @visibleForTesting
+  AppStateNotifier.forTest(Settings settings)
+    : this(settings, initialize: false);
 
   final Settings _settings;
   StreamSubscription<MuseEventDto>? _eventSub;
@@ -85,7 +91,6 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   /// -1 means no data yet for that pad.
   final List<double> _lineNoise = List.filled(4, -1);
   final _PadQualityRing _padQuality = _PadQualityRing();
-  final SessionRecorder sessionRecorder = SessionRecorder();
 
   Stream<MuseEventDto> get eventStream => _eventController.stream;
 
@@ -289,27 +294,11 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     }
   }
 
-  Future<void> _startContinuousRecorder() async {
-    try {
-      final storage = await resolveSessionStorage(_settings);
-      await storage.ensureDir();
-      final dir = scratchDirectory(storage);
-      if (!await dir.exists()) {
-        await dir.create(recursive: true);
-      }
-      await sessionRecorder.start(dir);
-    } catch (e) {
-      debugPrint('[muse] continuous recorder start failed: $e');
-    }
-  }
-
   void _onEvent(MuseEventDto event) {
-    sessionRecorder.writeEvent(event);
     switch (event) {
       case MuseEventDto_Connected():
         debugPrint('[muse] event: connected ${event.field0}');
         _scanEnabled = false;
-        unawaited(_startContinuousRecorder());
         state = state.copyWith(
           status: state.status.copyWith(connected: true, name: event.field0),
           connectWindowOpen: false,
@@ -318,7 +307,6 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         );
       case MuseEventDto_Disconnected():
         debugPrint('[muse] event: disconnected');
-        sessionRecorder.stop();
         _lineNoise.fillRange(0, _lineNoise.length, -1);
         _padQuality.clear();
         _lastQualityCheck = 0;
@@ -596,6 +584,41 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     }
   }
 
+  @visibleForTesting
+  void debugSetConnected({
+    bool connected = true,
+    DeviceKind kind = DeviceKind.muse,
+    String name = 'Muse 2',
+    String id = 'sim:muse-2',
+    String firmware = 'Classic',
+  }) {
+    if (connected) {
+      state = state.copyWith(
+        status: ConnectionStatus(
+          connected: true,
+          name: name,
+          id: id,
+          firmware: firmware,
+        ),
+        lastConnectedKind: kind,
+      );
+    } else {
+      state = state.copyWith(
+        status: const ConnectionStatus(
+          connected: false,
+          name: '',
+          id: '',
+          firmware: '',
+        ),
+      );
+    }
+  }
+
+  @visibleForTesting
+  void debugAddEvent(MuseEventDto event) {
+    _eventController.add(event);
+  }
+
   @override
   void dispose() {
     _scanEnabled = false;
@@ -718,7 +741,10 @@ class _PadQualityRing {
   static const _capacity = 256;
   static const _channelCount = 4;
 
-  final List<_PadChannel?> _channels = List<_PadChannel?>.filled(_channelCount, null);
+  final List<_PadChannel?> _channels = List<_PadChannel?>.filled(
+    _channelCount,
+    null,
+  );
 
   void appendEeg(EegDto dto) {
     final ch = dto.electrode;
@@ -740,7 +766,9 @@ class _PadQualityRing {
   double get latestTimestamp {
     var latest = 0.0;
     for (final buf in _channels) {
-      if (buf != null && buf.length > 0 && buf.timestampAt(buf.length - 1) > latest) {
+      if (buf != null &&
+          buf.length > 0 &&
+          buf.timestampAt(buf.length - 1) > latest) {
         latest = buf.timestampAt(buf.length - 1);
       }
     }
@@ -764,8 +792,8 @@ class _PadQualityRing {
 
 class _PadChannel {
   _PadChannel(int capacity)
-      : timestamps = Float64List(capacity),
-        values = Float64List(capacity);
+    : timestamps = Float64List(capacity),
+      values = Float64List(capacity);
 
   final Float64List timestamps;
   final Float64List values;

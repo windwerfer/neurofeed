@@ -9,21 +9,29 @@ import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/rust/api/session_format.dart' as ffi;
 import 'package:muse_ml/src/settings.dart';
 
+enum SidecarMode { jsonl, snapshot }
+
 /// v5 scratch writer — writes three uncompressed temp files during recording:
 /// - raw: framed `.muse` body (`sessionHeaderBytes` + `sessionFrameBytes`)
 /// - computed: JSON Lines (one Dart ComputedFrame per line)
-/// - metadata: JSON Lines (calibration, guardrail, etc.)
+/// - sidecar: JSONL `.metadata` (feedback) or atomic `.json` snapshot (monitor)
 ///
 /// Does not assemble the v5 container. Callers flush, read temps, and pass
 /// bytes to [assembleV5Container]. Prefix defaults to `session`.
 class SessionRecorder {
+  SessionRecorder({List<int> Function()? headerBytes})
+    : _headerBytes = headerBytes ?? ffi.sessionHeaderBytes;
+
   static const _flushInterval = Duration(seconds: 30);
   static const _maxPendingBytes = 65536;
+
+  final List<int> Function() _headerBytes;
 
   File? _rawFile;
   File? _computedFile;
   File? _metadataFile;
   String? _sessionId;
+  SidecarMode _sidecar = SidecarMode.jsonl;
 
   final _rawPending = BytesBuilder();
   int _rawEvents = 0;
@@ -49,30 +57,57 @@ class SessionRecorder {
   Directory? get tempDir => _rawFile?.parent;
 
   /// Start a new session recording in [dir] (scratch directory).
-  /// Creates three temp files: raw, computed, metadata.
-  /// [prefix] defaults to `session` so the base path is `$dir/${prefix}_$ts`.
-  Future<void> start(Directory dir, {String prefix = 'session'}) async {
+  /// Creates raw + computed temps and a sidecar (`.metadata` JSONL or `.json`
+  /// snapshot). [prefix] defaults to `session` so the base path is
+  /// `$dir/${prefix}_$ts`.
+  Future<void> start(
+    Directory dir, {
+    String prefix = 'session',
+    String? id,
+    SidecarMode sidecar = SidecarMode.jsonl,
+  }) async {
     if (_rawFile != null) return;
 
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    _sessionId = ts.toString();
+    final ts = id ?? DateTime.now().millisecondsSinceEpoch.toString();
+    _sessionId = ts;
+    _sidecar = sidecar;
     final base = '${dir.path}/${prefix}_$ts';
 
     _rawFile = File('$base.raw');
     _computedFile = File('$base.computed');
-    _metadataFile = File('$base.metadata');
+    _metadataFile = sidecar == SidecarMode.snapshot
+        ? File('$base.json')
+        : File('$base.metadata');
 
     _rawEvents = 0;
     _computedFrames = 0;
     channels.clear();
 
-    await _rawFile!.writeAsBytes(ffi.sessionHeaderBytes(), mode: FileMode.write);
+    await _rawFile!.writeAsBytes(_headerBytes(), mode: FileMode.write);
+    await _computedFile!.writeAsBytes(const <int>[], mode: FileMode.write);
 
     debugPrint(
       '[session] recorder v5 start: $_rawFile, $_computedFile, $_metadataFile',
     );
 
     _flushTimer = Timer.periodic(_flushInterval, (_) => flush());
+  }
+
+  /// Atomically overwrite the snapshot sidecar (`prefix_$id.json.tmp` then
+  /// rename onto `prefix_$id.json`). No-op in JSONL mode.
+  Future<void> writeSidecarSnapshot(Map<String, Object?> json) async {
+    if (_sidecar != SidecarMode.snapshot || _metadataFile == null) return;
+    final target = _metadataFile!;
+    final tmp = File('${target.path}.tmp');
+    await tmp.writeAsBytes(utf8.encode(jsonEncode(json)), flush: true);
+    try {
+      await tmp.rename(target.path);
+    } on FileSystemException {
+      if (await target.exists()) {
+        await target.delete();
+      }
+      await tmp.rename(target.path);
+    }
   }
 
   /// Write a Muse event to the raw file (uncompressed records, framed on flush).
@@ -82,8 +117,8 @@ class SessionRecorder {
     final enabled = switch (event) {
       MuseEventDto_Eeg() => _enabled(RecordingStream.eeg),
       MuseEventDto_Telemetry() => _enabled(RecordingStream.telemetry),
-      MuseEventDto_Accelerometer() || MuseEventDto_Gyroscope() =>
-        _enabled(RecordingStream.imu),
+      MuseEventDto_Accelerometer() ||
+      MuseEventDto_Gyroscope() => _enabled(RecordingStream.imu),
       MuseEventDto_Ppg() => _enabled(RecordingStream.ppg),
       MuseEventDto_Bands() => _enabled(RecordingStream.bands),
       MuseEventDto_Pulse() => _enabled(RecordingStream.pulse),
@@ -148,7 +183,7 @@ class SessionRecorder {
 
   /// Read the three temp files after a flush. Does not delete them.
   Future<({Uint8List raw, Uint8List computed, Uint8List metadata})?>
-      readTemps() async {
+  readTemps() async {
     if (_rawFile == null) return null;
     final raw = await _rawFile!.readAsBytes();
     final computed = (_computedFile != null && await _computedFile!.exists())
@@ -163,7 +198,10 @@ class SessionRecorder {
   /// Clean up temp files after a successful assemble. Keeps [sessionId].
   Future<void> cleanupTempFiles() async {
     stopPeriodicFlush();
-    for (final f in [_rawFile, _computedFile, _metadataFile]) {
+    final sidecarTmp = _metadataFile != null && _sidecar == SidecarMode.snapshot
+        ? File('${_metadataFile!.path}.tmp')
+        : null;
+    for (final f in [_rawFile, _computedFile, _metadataFile, sidecarTmp]) {
       if (f != null && await f.exists()) {
         try {
           await f.delete();

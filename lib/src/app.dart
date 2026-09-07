@@ -10,6 +10,8 @@ import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/feedback/crash_recovery.dart';
+import 'package:muse_ml/src/feedback/session_storage.dart';
+import 'package:muse_ml/src/monitor/recording/crash_recovery.dart';
 import 'package:muse_ml/src/rust/frb_generated.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/status_bar.dart';
@@ -360,11 +362,12 @@ class _CrashRecoveryWrapperState extends ConsumerState<_CrashRecoveryWrapper> {
     super.didChangeDependencies();
     if (!_checked) {
       _checked = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          // ignore: unawaited_futures
-          showCrashRecoveryDialog(context, ref);
-        }
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await showCrashRecoveryDialog(context, ref);
+        if (!mounted) return;
+        final storage = await ref.read(sessionStorageProvider.future);
+        await deleteLeftoverTmpCaptures(scratchDirectory(storage));
       });
     }
   }
