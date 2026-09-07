@@ -6,6 +6,7 @@ Crown-start / v5 layout threads.
 
 | Thread | Spec | Handoff |
 |--------|------|---------|
+| Monitor graphs + recording | [../monitor.md](../monitor.md) | [handoff-monitor.md](handoff-monitor.md) — **start at PR 0**, one PR per thread |
 | Athena optics (raw stream) | [athena-optics-contract.md](athena-optics-contract.md) | [handoff-athena-optics.md](handoff-athena-optics.md) |
 
 When a thread lands, move its spec to `.ai/` (live) or `archive/` and
