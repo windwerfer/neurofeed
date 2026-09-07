@@ -13,7 +13,7 @@ import 'package:muse_ml/src/charts/smooth_path.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
-import 'package:muse_ml/src/feedback/session_assembler.dart';
+import 'package:muse_ml/src/session_v5/assemble.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';

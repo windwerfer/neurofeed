@@ -3,11 +3,11 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-import 'package:muse_ml/src/charts/session_recorder.dart';
-import 'package:muse_ml/src/feedback/computed_frame.dart' as dart;
+import 'package:muse_ml/src/session_v5/scratch_writer.dart';
+import 'package:muse_ml/src/session_v5/computed_frame.dart' as dart;
 import 'package:muse_ml/src/feedback/computed_sampler.dart';
 import 'package:muse_ml/src/feedback/crash_recovery.dart';
-import 'package:muse_ml/src/feedback/session_assembler.dart';
+import 'package:muse_ml/src/session_v5/assemble.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';

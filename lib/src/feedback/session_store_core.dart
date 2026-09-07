@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/feedback/session_assembler.dart';
+import 'package:muse_ml/src/session_v5/assemble.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/session_sqlite.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';

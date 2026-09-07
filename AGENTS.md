@@ -105,14 +105,19 @@ lib/src/feedback/           session orchestrator + lanes
   feature_catalog.dart      assets/features.json copy
   computed_sampler.dart     1 Hz JSONL; t = seconds from recording start
   feedback_recorder.dart    scratch temps + assembleScratchV5
-  session_assembler.dart    one containerEncodeV5 / writeScratchV5 wrapper
+  session_assembler.dart    re-export of session_v5/assemble.dart
   crash_recovery.dart       leftover scratch v5 / three-temps
   session_store*.dart / session_sqlite.dart / session_metadata.dart
   session_export.dart / session_pdf_export.dart / session_chart_data.dart
+lib/src/session_v5/         v5 writer / assemble / ComputedFrame / DeviceInfoV5
+  assemble.dart             assembleV5Container, writeScratchV5(prefix:), placeholderWebP
+  scratch_writer.dart       SessionRecorder (prefix default `session`)
+  computed_frame.dart       Dart ComputedFrame (+ .freezed.dart)
+  models.dart               DeviceInfoV5, StreamsConfig
 lib/src/audio/              SoLoudEngine + AudioService, reward/guard/background
 lib/src/reve/               model download/import/load UI
 lib/src/streaming/          OSC / LSL / BrainFlow
-lib/src/charts/             live EEG + SessionRecorder / SessionReader
+lib/src/charts/             live EEG + SessionReader (writer is session_v5/)
 rust/src/api/
   muse.rs, features.rs, device_config.rs, neurosity_osc.rs, simulator.rs
   reve.rs, session_format.rs, edf_export.rs
@@ -134,8 +139,11 @@ assets/                     protocols.json, calibrations.json, features.json, au
   (`#[frb(ignore)]`). Crown OSC: `neurosity_osc.rs` (no discovery API yet).
 - Feature registry: `rust/src/api/features.rs`. Dart bus/lanes as above.
 - Session byte layout: `rust/src/api/session_format.rs` only. Dart is FFI.
-- Session assemble: `lib/src/feedback/session_assembler.dart`
+- Session assemble: `lib/src/session_v5/assemble.dart`
   (`assembleV5Container`, `writeScratchV5`, `placeholderWebP`).
+  Scratch writer: `lib/src/session_v5/scratch_writer.dart` (`SessionRecorder`).
+  Old paths (`feedback/session_assembler.dart`, `charts/session_recorder.dart`,
+  `feedback/computed_frame.dart`, `feedback/session_v5_models.dart`) re-export.
 - Crash recovery: `lib/src/feedback/crash_recovery.dart` scans
   `scratchDirectory`, not `getTemporaryDirectory()/sessions`.
 - History cache: `lib/src/feedback/session_sqlite.dart`
@@ -281,7 +289,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `SessionContainer` Dart wrapper anymore.
 - **Assemble v5 at `end()`** into scratch (placeholder WebP) **before**
   `phase = ended`. Save `publishSession` to history; Discard deletes the
-  scratch v5. One wrapper: `session_assembler.dart`.
+  scratch v5. One wrapper: `session_v5/assemble.dart`.
 - **Crash recovery** scans `scratchDirectory` for leftover
   `session_*.muse.feedback` and orphan `.raw` / `.computed` / `.metadata`.
   Temps go through `writeScratchV5`. Never `decodeImage` on empty bytes.

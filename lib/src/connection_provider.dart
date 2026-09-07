@@ -12,7 +12,7 @@ import 'package:muse_ml/src/rust/api/device_config.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/charts/live_cache.dart';
 import 'package:muse_ml/src/charts/band_cache.dart';
-import 'package:muse_ml/src/charts/session_recorder.dart';
+import 'package:muse_ml/src/session_v5/scratch_writer.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 
 /// Duration of each scan chunk when scanning continuously.

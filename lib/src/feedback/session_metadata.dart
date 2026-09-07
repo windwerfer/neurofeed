@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'session_v5_models.dart';
+import 'package:muse_ml/src/session_v5/models.dart';
 
 enum GestureType { doubleBlink, doubleClench, eyeUp, eyeDown }
 
