@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/agent/agent_server.dart';
 import 'package:muse_ml/src/agent/agent_server_config.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/feedback/crash_recovery.dart';
 import 'package:muse_ml/src/rust/frb_generated.dart';
@@ -255,6 +256,7 @@ Future<void> main() async {
   final agentCfg = AgentServerConfig.fromEnvironment();
   await AgentServer.start(container, agentCfg);
   final notifier = container.read(appStateProvider.notifier);
+  container.read(monitorControllerProvider);
   runApp(
     UncontrolledProviderScope(
       container: container,

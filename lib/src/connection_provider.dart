@@ -10,8 +10,6 @@ import 'package:muse_ml/src/connect_source.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/rust/api/device_config.dart';
 import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/charts/live_cache.dart';
-import 'package:muse_ml/src/charts/band_cache.dart';
 import 'package:muse_ml/src/session_v5/scratch_writer.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 
@@ -86,8 +84,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   /// Latest 50/60 Hz line-noise ratio per electrode from Bands events.
   /// -1 means no data yet for that pad.
   final List<double> _lineNoise = List.filled(4, -1);
-  final LiveCache liveCache = LiveCache();
-  final BandCache bandCache = BandCache();
+  final _PadQualityRing _padQuality = _PadQualityRing();
   final SessionRecorder sessionRecorder = SessionRecorder();
 
   Stream<MuseEventDto> get eventStream => _eventController.stream;
@@ -323,6 +320,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         debugPrint('[muse] event: disconnected');
         sessionRecorder.stop();
         _lineNoise.fillRange(0, _lineNoise.length, -1);
+        _padQuality.clear();
+        _lastQualityCheck = 0;
         state = state.copyWith(
           status: const ConnectionStatus(
             connected: false,
@@ -345,11 +344,9 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         );
         _tryReconnect();
       case MuseEventDto_Eeg():
-        final eeg = event.field0;
-        liveCache.appendEeg(eeg);
+        _padQuality.appendEeg(event.field0);
         _maybeComputeSignalQuality();
       case MuseEventDto_Bands():
-        bandCache.appendBands(event.field0);
         final idx = event.field0.electrode;
         if (idx >= 0 && idx < _lineNoise.length) {
           _lineNoise[idx] = event.field0.lineNoiseRatio;
@@ -371,28 +368,28 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   /// Keep in sync with Rust `features::pad_quality_from_std_and_noise` until
   /// the Crown-run series deletes this Dart copy.
   void _maybeComputeSignalQuality() {
-    final now = liveCache.latestTimestamp;
+    final now = _padQuality.latestTimestamp;
     if (now - _lastQualityCheck < 0.9) return;
     _lastQualityCheck = now;
 
     const window = 1.0;
     final quals = List.filled(4, 0.0);
 
-    for (final ch in liveCache.channels) {
+    for (final ch in _padQuality.channels) {
       if (ch < 0 || ch > 3) continue;
-      final samples = liveCache.getRange(ch, now - window, now);
+      final samples = _padQuality.valuesIn(ch, now - window, now);
       if (samples.length < 10) continue;
 
       final n = samples.length;
       double sum = 0;
-      for (final s in samples) {
-        sum += s.v;
+      for (final v in samples) {
+        sum += v;
       }
       final mean = sum / n;
 
       double sumSq = 0;
-      for (final s in samples) {
-        sumSq += (s.v - mean) * (s.v - mean);
+      for (final v in samples) {
+        sumSq += (v - mean) * (v - mean);
       }
       final variance = sumSq / n;
       final std = sqrt(variance);
@@ -714,3 +711,105 @@ final appStateProvider = StateNotifierProvider<AppStateNotifier, AppUiState>((
 ) {
   throw UnimplementedError('Initialize with settings before use');
 });
+
+/// 4-ch, 1 s EEG ring for status-bar pad quality. Not the 5 min live cache.
+class _PadQualityRing {
+  static const _sampleRate = 256.0;
+  static const _capacity = 256;
+  static const _channelCount = 4;
+
+  final List<_PadChannel?> _channels = List<_PadChannel?>.filled(_channelCount, null);
+
+  void appendEeg(EegDto dto) {
+    final ch = dto.electrode;
+    if (ch < 0 || ch > 3) return;
+    final buf = _channels[ch] ??= _PadChannel(_capacity);
+    final dt = 1.0 / _sampleRate;
+    final baseSecs = dto.timestamp / 1000.0;
+    for (var i = 0; i < dto.samples.length; i++) {
+      buf.add(baseSecs + i * dt, dto.samples[i]);
+    }
+  }
+
+  Iterable<int> get channels sync* {
+    for (var i = 0; i < _channelCount; i++) {
+      if (_channels[i] != null) yield i;
+    }
+  }
+
+  double get latestTimestamp {
+    var latest = 0.0;
+    for (final buf in _channels) {
+      if (buf != null && buf.length > 0 && buf.timestampAt(buf.length - 1) > latest) {
+        latest = buf.timestampAt(buf.length - 1);
+      }
+    }
+    return latest;
+  }
+
+  List<double> valuesIn(int channel, double startT, double endT) {
+    if (channel < 0 || channel > 3) return const [];
+    final buf = _channels[channel];
+    if (buf == null || buf.length == 0) return const [];
+    final lo = buf.lowerBound(startT);
+    final hi = buf.upperBound(endT);
+    if (lo >= hi) return const [];
+    return List<double>.generate(hi - lo, (i) => buf.valueAt(lo + i));
+  }
+
+  void clear() {
+    _channels.fillRange(0, _channelCount, null);
+  }
+}
+
+class _PadChannel {
+  _PadChannel(int capacity)
+      : timestamps = Float64List(capacity),
+        values = Float64List(capacity);
+
+  final Float64List timestamps;
+  final Float64List values;
+  int _head = 0;
+  int _count = 0;
+
+  int get length => _count;
+
+  void add(double t, double v) {
+    timestamps[_head] = t;
+    values[_head] = v;
+    _head = (_head + 1) % timestamps.length;
+    if (_count < timestamps.length) _count++;
+  }
+
+  int _physicalIndex(int i) =>
+      (_head - _count + i + timestamps.length) % timestamps.length;
+
+  double timestampAt(int i) => timestamps[_physicalIndex(i)];
+  double valueAt(int i) => values[_physicalIndex(i)];
+
+  int lowerBound(double t) {
+    var lo = 0, hi = _count;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (timestampAt(mid) < t) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  }
+
+  int upperBound(double t) {
+    var lo = 0, hi = _count;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (timestampAt(mid) <= t) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  }
+}

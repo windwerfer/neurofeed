@@ -4,59 +4,34 @@
 |---|---|
 | Date | 2026-09-07 |
 | Spec | [../monitor.md](../monitor.md) — **frozen Key Decisions. Do not reopen.** |
-| Suggested branch | `feat/monitor-graphs` from `main` (after SoLoud / current work merges). Do **not** pile onto `fix/soloud-engine-hardening` or Athena optics. |
-| Cadence | **One PR per thread.** This file is the series map. Start at **PR 0**. |
+| Branch | `refactor/monitor` (PR 0 `22cfd38`, PR 1a this commit). Suggested name was `feat/monitor-graphs`. |
+| Cadence | **One PR per thread.** This file is the series map. Next is **PR 1b**. |
 | Do not mix | Crown Start, OSC-connect, pipeline-contract Key Decisions, v5 68-byte header / FRB, Android foreground service, Athena optics, growing status-bar pads to 8. |
 
-Read the spec first (`Key Decisions`, `File layout`, `PR Plan`, `Implementer protocol`). This file is implementer order, current-code pitfalls, and the **PR 0** start. Do not re-design graphs, naming, or the lease.
+Read the spec first (`Key Decisions`, `File layout`, `PR Plan`, `Implementer protocol`). This file is implementer order, current-code pitfalls, and the **PR 1b** start. Do not re-design graphs, naming, or the lease.
 
 ---
 
 ## Paste this to start a new thread
 
-**PR 0 (first thread):**
+**PR 1b (this thread):**
 
 ```
-Implement monitor PR 0 only: extract lib/src/session_v5/.
-Spec: .ai/monitor.md (frozen). Handoff: .ai/TODO/handoff-monitor.md (this file, section “This thread — PR 0”).
-Behavior-preserving. No UI. No FFI. No lib/src/monitor/ yet. Do not start PR 1a.
+Implement monitor PR 1b only: tmp_ writer + exclusive capture lease.
+Spec: .ai/monitor.md (frozen). Handoff: .ai/TODO/handoff-monitor.md (section “This thread — PR 1b”).
+Kill AppStateNotifier.sessionRecorder. Connect starts tmp_$ts. Feedback acquireFeedbackLease. No GraphShell. No Record button. No PR 1c. Do not start PR 2.
 ```
 
 **Later graph threads (2 / 3 / 4)** must paste an ASCII wireframe and wait before painters. See spec **Implementer protocol**.
 
 ---
 
-## What this series is doing
+## Landed
 
-Sidebar live-signal views (Bands, Raw EEG, Spectrogram, PSD) were a first test: sweep EEG with add/remove graphs, a custom Bands dashboard, two placeholders. Recording is dual-owned:
-
-- `AppStateNotifier.sessionRecorder` writes `session_$ts` temps from connect and **deletes** them on disconnect.
-- `FeedbackRecorder` starts a **second** `SessionRecorder` on `startCalibration()`, also `session_$id`, same scratch dir.
-
-This series: isolate graphs + connect/explicit recording under `lib/src/monitor/`, exclusive capture lease, rolling `tmp_` (30 min) for Inspect-beyond-RAM, explicit `recording_` with Save/Discard, unified **History** list. Feedback sessions stay `session_*`.
-
----
-
-## Frozen (short — full list in the spec)
-
-Do not re-litigate:
-
-1. Feature root `lib/src/monitor/` + extract `lib/src/session_v5/` first.
-2. Graph architecture **B** (`GraphShell` + per-kind panes). Cancel add/remove and `avgMode`.
-3. **Follow / Inspect.** Not Live/History.
-4. Sidebar: Feedback, **History**, Bands, Raw EEG, Histogram, PSD, **Spectrogram**. No Recordings item. Enum `feedbackHistory` stays; label becomes `History`.
-5. Raw EEG = **oscilloscope sweep** (green wipe L→R). N panes = `channelCount.toInt()`. Not stripchart. Keep `SweepBuffer`.
-6. Exclusive lease: `tmp` \| `recording` \| `feedback` \| `idle`. Release feedback lease only when `!_recorder.isRecording`.
-7. Prefixes `tmp_$ts` / `recording_$ts` / `session_$id`. Feedback crash recovery stays `session_*` only.
-8. Published files in the **same history folder**. One sqlite `session_metadata.db` + `kind`. Settings **Save files to folder**.
-9. Spectrogram keeps that name. Histogram is new. PSD sidebar shortens to `PSD`.
-10. Non-EEG: top-right electrode **text** labels, tap toggles **average**, depressed = on, default all, last-one stays. EEG: no chips.
-11. 5 min SweepBuffer RAM + 30 min tmp. No second `LiveCache` EEG ring. File-backed Inspect is **PR 1c, required**.
-12. `MonitorController` constructed in `main()` (same `ProviderContainer` as `AppStateNotifier`) + hydrate if already connected.
-13. No FFI. Dart FFT in `monitor/dsp.dart` when those views land.
-14. Graph PRs 2/3/4: **ASCII first**, wait, then code.
-15. Crown graphs + recording allowed; Crown **Start Session** still refused.
-16. Start Session during Record: three-layer refuse (`_refuseRecordingStart`, `AgentCommands._start` 409 `recording_active` **before** notifier, lease). Distinct from `crown_refused`.
+| PR | Commit / note |
+|---|---|
+| **0** | `22cfd38` — `lib/src/session_v5/` (writer, assemble, ComputedFrame, models). Prefix default `session`. Sidecar still `.metadata` JSONL. Thin re-exports at old paths. |
+| **1a** | `MonitorController` constructed in `main()` after `appStateProvider.notifier`. Subscribes to broadcast `eventStream`, hydrates montage if already connected. Band ring in `monitor/cache/band_cache.dart` (1800). `bandNames`/`bandColors` in `charts/band_style.dart`. Pad quality is a 4-ch **1 s** ring in `connection_provider.dart`. `CaptureKind` exists but stays `idle`. `sessionRecorder` **still on AppState** — 1b kills it. `live_cache.dart` unused (delete in PR 2). `SweepEegView` untouched. |
 
 ---
 
@@ -79,122 +54,180 @@ Hide Record until 5a. Copy changes update `.ai/ui-map.md` in the same PR.
 
 ---
 
-## Current code (why PR 0 exists)
+## Current code (why PR 1b exists)
 
-| Piece | Where | Problem |
+| Piece | Where | After 1a |
 |---|---|---|
-| Connect writer | `lib/src/connection_provider.dart` `sessionRecorder` + `_startContinuousRecorder` | `session_$ts`; `stop()` deletes; ignores `Settings.recordStreams` |
-| Feedback writer | `lib/src/feedback/feedback_recorder.dart` → own `SessionRecorder` | second `session_$id` in the same scratch dir |
-| Scratch temps | `lib/src/charts/session_recorder.dart` | hardcoded `session_$ts.{raw,computed,metadata}` |
-| Assemble | `lib/src/feedback/session_assembler.dart` | `writeScratchV5` hardcodes `session_$id.muse.feedback` |
-| Dart `ComputedFrame` | `lib/src/feedback/computed_frame.dart` + `.freezed.dart` | needed by both products; move with part file |
-| V5 models | `lib/src/feedback/session_v5_models.dart` | `DeviceInfoV5`, `StreamsConfig` — recording metadata source of truth |
+| Connect writer | `AppStateNotifier.sessionRecorder` + `_startContinuousRecorder` | **still dual-owned.** `session_$ts`; `stop()` deletes; **ignores** `Settings.recordStreams` |
+| Feedback writer | `FeedbackRecorder` → own `SessionRecorder` | second `session_$id` in the same scratch dir |
+| Scratch writer | `lib/src/session_v5/scratch_writer.dart` | class `SessionRecorder`; `start(dir, {prefix = 'session'})`; sidecar **`.metadata` JSONL only** — no `.json` snapshot yet |
+| Assemble | `lib/src/session_v5/assemble.dart` | `writeScratchV5(..., {prefix = 'session'})` |
+| Monitor controller | `lib/src/monitor/monitor_controller.dart` | `main()` + hydrate; appends **bands only**; `CaptureKind.idle`; no disk |
+| Band cache | `lib/src/monitor/cache/band_cache.dart` | 30 min / 1800; Bands view reads this |
+| Pad quality | `connection_provider` `_PadQualityRing` | 4-ch, 1 s, skip `ch > 3` — **do not grow** |
 | Crash recovery | `lib/src/feedback/crash_recovery.dart` | `session_*` only — **must stay that way** |
-| Sweep EEG | `lib/src/views/sweep_eeg_view.dart` + `charts/sweep_buffer.dart` | add/remove (cap 12); **keep the wipe**; move buffer in PR 2 |
-| Placeholders | `views/psd_view.dart`, `views/terminal.dart` | delete in PR 4 |
-| `eventStream` | `connection_provider.dart` | **broadcast** — no listener ⇒ dropped. `main()` constructs `AppStateNotifier` before `runApp`. PR 1a hydrates. |
-| `DeviceConfig.channelCount` | FRB `BigInt` | always `.toInt()` |
-| Pad quality | `connection_provider` `_maybeComputeSignalQuality` | 4-ch, skip `ch > 3` — **out of scope** |
+| Sweep EEG | `views/sweep_eeg_view.dart` + `charts/sweep_buffer.dart` | own `SweepBuffer` + `eventStream`. **Do not rewire** (PR 2) |
+| `ComputedSampler` | `feedback/computed_sampler.dart` | **4-ch hardcoded.** Do not reuse for monitor |
+| `GET /state` | `agent_commands.dart` `_stateJson` | no `captureKind` / `captureElapsedSeconds` yet |
+| `live_cache.dart` | `lib/src/charts/live_cache.dart` | unused. Delete in PR 2, not 1b |
 
 ---
 
-## This thread — PR 0
+## This thread — PR 1b
 
-**Title:** `Extract session_v5 writer, assembler, ComputedFrame, and v5 models`
+**Title:** `Replace dual session_ writers with tmp_ capture lease`
 
-**Do:** move shared v5 Dart next to the FFI wrappers so monitor can assemble without importing feedback lanes.
+**Do:** one exclusive `ScratchWriter`. Connect starts rolling `tmp_$ts`. Feedback `startCalibration` acquires the lease (discards tmp). Release only when the feedback writer is actually closed.
 
-**Do not:** UI, `lib/src/monitor/`, lease, tmp/recording prefixes in live connect, GraphShell, FFI, `build_runner` unless you edit `computed_frame.dart` source (moving the existing `.freezed.dart` is enough).
+**Do not:** GraphShell, SweepEegView rewire, Record button, `recording_` prefix in live UI, file-backed Inspect (PR 1c), FFI, growing pad-quality to 8, assembling tmp, teaching feedback `crash_recovery.dart` about `tmp_` / `recording_`.
 
-### Target tree
+### Target files (new)
 
 ```
-lib/src/session_v5/
-  assemble.dart              # assembleV5Container, writeScratchV5, parseComputedJsonl,
-                             # toFfiFrame, encodeThumbnailWebP, placeholderWebP,
-                             # extractComputedScalars, ComputedScalars
-  placeholder_webp.dart      # optional split; may live at top of assemble.dart
-  scratch_writer.dart        # SessionRecorder moved; prefix default 'session'
-  computed_frame.dart        # + computed_frame.freezed.dart (move together)
-  models.dart                # was session_v5_models.dart
+lib/src/monitor/recording/
+  capture_lease.dart         # CaptureKind transitions; at most one open writer
+  monitor_recorder.dart      # ScratchWriter prefix tmp (and recording later);
+                             # Settings.recordStreams; 30 min silent rotate
+  monitor_sampler.dart       # 1 Hz ComputedFrame; N = channelCount.toInt();
+                             # zeroed GuardrailInfo / FeedbackInfo
+  crash_recovery.dart        # stub: glob-delete leftover tmp_* on launch
+                             # (recording_* recovery is PR 5b)
 ```
 
-### Moves (keep behavior)
+`CaptureKind` already lives in `monitor_state.dart`. Wire it from the lease — do not add a second enum.
 
-| From | To |
-|---|---|
-| `lib/src/feedback/computed_frame.dart` **and** `computed_frame.freezed.dart` | `session_v5/` — `part 'computed_frame.freezed.dart'` stays valid |
-| `lib/src/feedback/session_v5_models.dart` | `session_v5/models.dart` |
-| `lib/src/charts/session_recorder.dart` | `session_v5/scratch_writer.dart` (keep class name `SessionRecorder` or rename to `ScratchWriter` **and** typedef/re-export the old name) |
-| Assemble helpers in `session_assembler.dart` (not FeedbackRecorder) | `session_v5/assemble.dart` |
+### Kill dual writers
 
-Leave **thin re-exports** at the old paths so a missed import still compiles:
+Remove from `AppStateNotifier`:
 
-- `lib/src/feedback/computed_frame.dart` → `export 'package:muse_ml/src/session_v5/computed_frame.dart';`
-- `lib/src/feedback/session_v5_models.dart` → export `session_v5/models.dart`
-- `lib/src/feedback/session_assembler.dart` → export assemble symbols
-- `lib/src/charts/session_recorder.dart` → export the writer
-- `lib/src/feedback/session_store.dart` already `export 'session_v5_models.dart';` — keep that file as a re-export so `session_store.dart` does not change its public API
+- `sessionRecorder`
+- `_startContinuousRecorder()`
+- `sessionRecorder.writeEvent` in `_onEvent`
+- `sessionRecorder.stop()` on disconnect
 
-**Also retarget call sites** (do not rely on re-exports forever):
+Connect/disconnect ownership moves to `MonitorController`:
 
-| File | Today |
-|---|---|
-| `lib/src/feedback/computed_sampler.dart` | `computed_frame.dart` |
-| `lib/src/feedback/feedback_recorder.dart` | `session_recorder` + `session_assembler` + `computed_frame` |
-| `lib/src/feedback/crash_recovery.dart` | `session_assembler` |
-| `lib/src/feedback/session_store_core.dart` | `session_assembler` (`assembleV5Container`, `placeholderWebP`, `extractComputedScalars`) |
-| `lib/src/views/feedback_dashboard.dart` | `encodeThumbnailWebP` |
-| `lib/src/connection_provider.dart` | `charts/session_recorder.dart` |
-| `test/session_computed_charts_test.dart` | recorder + assembler + computed_frame |
+- `status.connected` true (event **or** hydrate-if-already-connected listen) **and** lease idle **and** feedback writer closed → start `tmp_$ts`
+- disconnect / process exit while `tmp` → **discard, no prompt**
 
-`FeedbackRecorder.assembleScratchV5` **stays** that method name (wrapper around `writeScratchV5`). Do not rename it.
+Keep the 4-ch 1 s `_PadQualityRing`. Keep `eventStream` broadcast.
 
-### Allowed API tweaks (must default to today’s behavior)
+### Lease (spec table — do not improvise)
 
-`writeScratchV5` — add optional `prefix` (default `'session'`):
+`enum CaptureKind { idle, tmp, recording, feedback }` — already defined.
+
+| From \ To | tmp | recording | feedback | idle |
+|---|---|---|---|---|
+| idle | connect, feedback writer closed | **not this PR** (Record is 5a) | `startCalibration` after `acquireFeedbackLease` | — |
+| tmp | 30 min rotate: discard + new tmp | **not this PR** | session start: **discard tmp, no prompt** | disconnect: **discard, no prompt** |
+| recording | forbidden | — | refused (5a) | 5a |
+| feedback | **only when `!_recorder.isRecording`**, if still connected: restart tmp | Record hidden/disabled (5a) | — | writer closed |
+
+**Do not key tmp-restart off `FeedbackPhase.idle`.** `end()` sets `ended` even when assemble fails.
+
+**Do not release after a failed assemble.** `FeedbackRecorder.assembleScratchV5`:
+
+- success → `cleanupTempFiles()` → `isRecording == false` → **release**; restart tmp if connected
+- failure (`null`) → temps kept, `isRecording == true` → **stay `CaptureKind.feedback`**, no `tmp_*`
 
 ```dart
-final file = File('${dir.path}/${prefix}_$id.muse.feedback');
+// FeedbackStateNotifier.end(), after assembleScratchV5:
+if (!_recorder.isRecording) {
+  await ref.read(monitorControllerProvider.notifier).releaseFeedbackLease();
+}
+// reset() / discardSession() already stop() the recorder, then:
+await releaseFeedbackLease(); // idempotent
 ```
 
-`SessionRecorder.start` — add optional `prefix` (default `'session'`) so the base path is `$dir/${prefix}_$ts`. Sidecar stays **`.metadata` JSONL**. Do **not** implement the monitor `.json` snapshot here.
+`startCalibration`: `acquireFeedbackLease()` first (after Crown refuse). On false, `debugPrint('[feedback] refusing Start: recording_active'); return;` — even though Record is hidden until 5a, the lease API must exist so a later Record path cannot open a second writer.
 
-Do not change `containerEncodeV5` / header / tags.
+Feedback **may import the lease API only** (`monitorControllerProvider.notifier.acquireFeedbackLease` / `releaseFeedbackLease`). Do not import monitor caches, panes, or `device_montage.dart`. `buildSessionMetadata` still uses `DeviceConfig.forKind` → `electrodeNames`.
 
-### PR 0 done when
+### tmp writer
 
-- `lib/src/session_v5/` exists with the files above.
-- Old paths are re-exports (or gone if every call site is updated **and** `flutter analyze` is clean).
-- Feedback still writes `session_*.raw` / `.computed` / `.metadata` and assembles `session_*.muse.feedback`.
-- Connect still uses the same writer (still dual-owned — that is PR 1b).
-- No new sidebar, no Record button, no `CaptureKind`.
+`SessionRecorder.start` today: prefix default `session`, sidecar **`.metadata` JSONL**.
 
-### Verify (PR 0)
+1b must add snapshot sidecar for monitor (spec Key Decision 10). Feedback stays JSONL:
+
+```dart
+Future<void> start(
+  Directory dir, {
+  String prefix = 'session',
+  String? id,
+  SidecarMode sidecar = SidecarMode.jsonl, // jsonl → .metadata; snapshot → .json
+});
+```
+
+- tmp path: `$dir/tmp_$ts.{raw,computed,json}`
+- Snapshot: sibling `tmp_$ts.json.tmp` then `rename` onto `tmp_$ts.json`. **Not** `.$id.json.tmp`. **Not** in-place `writeAsString`.
+- `RecordingMetadata` JSON: `kind: "tmp"` or omit user-facing kind — tmp is **never assembled**. Need a complete `StreamsConfig` (ten keys; disabled = `enabled: false`, `rateHz: 0`) if you write the snapshot. Reuse `DeviceInfoV5` / `StreamsConfig` from `session_v5/models.dart`.
+- Apply `Settings.recordStreams` to tmp (**behavior change** vs today’s all-streams connect dump). Call out in a short comment / log; do not add a second Settings card.
+- 30 min silent rotate: discard tmp, start a new `tmp_$ts`, reset `captureStartedAtMs`.
+- **Never** `writeScratchV5` on tmp. Never publish tmp.
+
+`MonitorSampler` (do **not** reuse `ComputedSampler`):
+
+- `bands`, `lineNoise`, `signalQuality` length = `config.channelCount.toInt()` (BigInt → int)
+- Zeroed `GuardrailInfo` / `FeedbackInfo`
+- `t` = seconds from **this** capture’s start (`captureStartedAtMs`)
+- Gestures: copy latest 1 Hz names if present
+
+Montage: `lastConnectedKind ?? DeviceKind.muse` → Muse-4 vs Crown-8 names already on `MonitorState` (`kMuseElectrodeNames` / `kCrownElectrodeNames`). `channelCount` is already `.toInt()` on that state.
+
+### Launch glob-delete
+
+`_CrashRecoveryWrapper` (`lib/src/app.dart`) currently only `showCrashRecoveryDialog` (`session_*`). After that (or before, order: **feedback first**, then monitor tmp delete):
+
+- glob-delete leftover `tmp_*.raw` / `.computed` / `.json` in `scratchDirectory()`
+- do **not** scan `recording_*` (PR 5b)
+- do **not** extend `lib/src/feedback/crash_recovery.dart`
+
+### Agent HTTP (1b slice only)
+
+`GET /state`: add `captureKind` and `captureElapsedSeconds`. Do **not** reuse feedback `elapsedSeconds`. `persist: false` already. No `/record/*` (5a). No 409 `recording_active` (5a). Crown 409 stays `crown_refused`.
+
+### Tests
+
+```
+test/monitor/capture_lease_test.dart
+test/monitor/monitor_sampler_test.dart
+```
+
+Required cases:
+
+1. Successful `end()` while still connected → `captureKind == tmp`
+2. `assembleScratchV5` returns null → `captureKind` remains `feedback`, **no** `tmp_*` files
+3. `reset()` / `discardSession()` after stop → lease released; tmp restarts if connected
+4. Connect while idle → `tmp_$ts.{raw,computed,json}` (not `session_`)
+5. Disconnect while tmp → files gone
+6. Sampler: N-length arrays; `t` elapsed from capture start; zeroed guard/feedback
+7. `StreamsConfig.fromJson` ten keys on the tmp sidecar
+
+### PR 1b done when
+
+- `AppStateNotifier.sessionRecorder` is gone
+- At most one open scratch writer
+- Connect writes `tmp_*` (Settings `recordStreams` applied)
+- Feedback still writes `session_*` after `acquireFeedbackLease`
+- Failed assemble does not start tmp
+- Launch deletes leftover `tmp_*`
+- No Record chrome, no GraphShell, no `lib/src/monitor/panes/`
+- `flutter analyze lib/src` clean
+
+### Verify (PR 1b)
 
 ```bash
 flutter analyze lib/src
-cargo build --manifest-path rust/Cargo.toml
-flutter test test/session_computed_charts_test.dart \
-  test/session_store_test.dart test/session_export_test.dart \
-  test/session_metadata_roundtrip_test.dart
+flutter test test/monitor/capture_lease_test.dart \
+  test/monitor/monitor_sampler_test.dart \
+  test/monitor/band_cache_test.dart
 ```
 
-Do **not** run FRB. Do **not** `cargo check --target aarch64-linux-android`. Host `.so` trap: build the lib before those FFI tests. See `.ai/testing-guide.md` / skill `muse-verify`.
+FFI not required unless you touch `writeScratchV5` (tmp is never assembled). Do **not** run FRB. Do **not** `cargo check --target aarch64-linux-android`.
 
 ---
 
-## Next threads (do not start in PR 0)
-
-Read the matching spec sections when that thread opens.
-
-### PR 1a — controller + caches, no disk
-
-Construct `monitorControllerProvider` in `main()` immediately after `appStateProvider.notifier`. Subscribe to broadcast `eventStream`, **hydrate if `status.connected`**. Split `bandNames`/`bandColors` → `lib/src/charts/band_style.dart` (feedback dashboard/export keep importing charts). Move band ring into monitor. **Do not** add a second 5 min EEG `LiveCache`. Do not rewire `SweepEegView`. Keep 4-ch pad-quality ring in `connection_provider`.
-
-### PR 1b — tmp + lease
-
-Kill `AppStateNotifier.sessionRecorder` / `_startContinuousRecorder`. Connect starts `tmp_$ts`. Feedback `startCalibration` `acquireFeedbackLease` (discards tmp). `end()` releases **only if `!_recorder.isRecording`**. Failed `assembleScratchV5` stays `CaptureKind.feedback`. `Settings.recordStreams` applies to tmp (behavior change vs today’s all-streams dump). 30 min silent rotate. Launch glob-deletes leftover `tmp_*`. Tests in `test/monitor/capture_lease_test.dart`.
+## Next threads (do not start in PR 1b)
 
 ### PR 1c — file-backed Inspect (**required**)
 
@@ -220,7 +253,7 @@ Record/Stop, 409 `recording_active` on **`AgentCommands._start`** (there is no `
 
 **Monitor must not import:** `feedback_state.dart`, lanes, protocol, `session_store*.dart`, feedback `crash_recovery.dart`.
 
-**Feedback must not import `monitor/`** except the lease API (PR 1b). `buildSessionMetadata` uses `DeviceConfig.forKind` → `electrodeNames`, **not** `device_montage.dart`.
+**Feedback must not import `lib/src/monitor/`** except the lease API (this PR). `buildSessionMetadata` uses `DeviceConfig.forKind` → `electrodeNames`, **not** `device_montage.dart`.
 
 History list stays `lib/src/views/feedback_history.dart` (PR 6). Recording dashboard / Save-Discard live under `monitor/views/`.
 
@@ -228,15 +261,16 @@ History list stays `lib/src/views/feedback_history.dart` (PR 6). Recording dashb
 
 ## Pitfalls
 
-- **Broadcast `eventStream`:** constructing the controller only in `AppShell` misses connect. PR 1a = `main()` + hydrate. Do not copy `StreamingController`.
-- **`assembleScratchV5` failure** keeps `_rawFile` (`isRecording == true`). Starting `tmp_` then is two writers again.
-- **SAF** list/read/delete have **no** `dir:`. Do not publish into a `recordings/` child.
-- **`channelCount` is `BigInt`.**
-- **SweepBuffer is the 5 min EEG ring.** Do not also `LiveCache.appendEeg`.
-- **tmp rotate** resets inspectable range; Record does not include pre-click bytes (Follow rings still show them).
+- **Broadcast `eventStream`:** controller is already constructed in `main()` (1a). Do not move it to AppShell. Do not copy `StreamingController`.
+- **`assembleScratchV5` failure** keeps `_rawFile` (`isRecording == true`). Releasing the lease and starting `tmp_` then is two writers again — the bug this PR exists to kill.
+- **SAF** list/read/delete have **no** `dir:`. Do not publish into a `recordings/` child (and 1b does not publish at all).
+- **`channelCount` is `BigInt`.** Always `.toInt()`.
+- **SweepBuffer is the 5 min EEG ring** (still in `charts/`, used by SweepEegView). Do not add a LiveCache EEG ring. `live_cache.dart` is dead; leave it for PR 2.
+- **tmp rotate** resets inspectable range (PR 1c). Record (5a) does not include pre-click bytes.
 - Stale `rust/target/release/` breaks `flutter run` if you ever touch FFI (this series should not).
 - `flutter analyze lib/src` after every Dart PR. No goldens / `integration_test`.
 - Agent HTTP: `persist: false`. `GET /state` uses `captureKind` + `captureElapsedSeconds`, not feedback `elapsedSeconds`. Crown 409 stays `crown_refused`.
+- Sidecar rename must be `prefix_$id.json.tmp` → `prefix_$id.json`. Feedback `.metadata` JSONL stays append-only.
 
 ---
 

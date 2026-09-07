@@ -3,18 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/charts/eeg_data_source.dart';
-import 'package:muse_ml/src/charts/band_cache.dart';
 import 'package:muse_ml/src/charts/chart_controller.dart';
 import 'package:muse_ml/src/charts/smooth_path.dart';
-import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/monitor/monitor.dart';
 
 class BandsView extends ConsumerWidget {
   const BandsView({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final notifier = ref.read(appStateProvider.notifier);
-    return BandsDashboard(source: notifier.bandCache);
+    final bandCache = ref.read(monitorControllerProvider.notifier).bandCache;
+    return BandsDashboard(source: bandCache);
   }
 }
 

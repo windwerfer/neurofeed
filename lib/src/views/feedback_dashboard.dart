@@ -8,7 +8,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/charts/band_cache.dart' show bandColors, bandNames;
+import 'package:muse_ml/src/charts/band_style.dart' show bandColors, bandNames;
 import 'package:muse_ml/src/charts/smooth_path.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
