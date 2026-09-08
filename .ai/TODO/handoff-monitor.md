@@ -2,27 +2,28 @@
 
 | Field | Value |
 |---|---|
-| Date | 2026-09-07 |
+| Date | 2026-09-08 |
 | Spec | [../monitor.md](../monitor.md) — **frozen Key Decisions. Do not reopen.** |
-| Branch | `refactor/monitor` (PR 0 `22cfd38`, PR 1a `2a66eae`, PR 1b this commit). Suggested name was `feat/monitor-graphs`. |
-| Cadence | **One PR per thread.** This file is the series map. Next is **PR 1c**. |
+| Branch | `refactor/monitor` (PR 0 `22cfd38`, PR 1a `2a66eae`, PR 1b `8a0b9f0`, PR 1c this commit). Suggested name was `feat/monitor-graphs`. |
+| Cadence | **One PR per thread.** This file is the series map. Next is **PR 2**. |
 | Do not mix | Crown Start, OSC-connect, pipeline-contract Key Decisions, v5 68-byte header / FRB, Android foreground service, Athena optics, growing status-bar pads to 8. |
 
-Read the spec first (`Key Decisions`, `File layout`, `PR Plan`, `Implementer protocol`). This file is implementer order, current-code pitfalls, and the **PR 1c** start. Do not re-design graphs, naming, or the lease.
+Read the spec first (`Key Decisions`, `File layout`, `PR Plan`, `Implementer protocol`). This file is implementer order, current-code pitfalls, and the **PR 2** start. Do not re-design graphs, naming, or the lease.
 
 ---
 
 ## Paste this to start a new thread
 
-**PR 1c (this thread):**
+**PR 2 (this thread):**
 
 ```
-Implement monitor PR 1c only: file-backed Inspect of tmp/recording .raw.
-Spec: .ai/monitor.md (frozen). Handoff: .ai/TODO/handoff-monitor.md (section “This thread — PR 1c”).
-Index framed .raw at flush boundaries; getRange prepends sessionHeaderBytes() then sessionParseBody. Convert ms-epoch timestamps to elapsed via captureStartedAtMs. No GraphShell. No Record button. Do not start PR 2.
+Implement monitor PR 2 only: GraphShell + N stacked sweep EEG panes.
+Spec: .ai/monitor.md (frozen). Handoff: .ai/TODO/handoff-monitor.md (section “This thread — PR 2”).
+Paste ASCII of GraphShell + N stacked sweep panes (Follow/Inspect, 10 s window, green wipe, no Record, no electrode chips, no add/remove) and WAIT before painters.
+Then move sweep_buffer.dart into monitor/cache/. Delete graph_config / eeg_dashboard / eeg_chart and SweepEegView add/remove / eeg_layout_*. Default 10 s (2560 samples). Muse-4 vs Crown-8 from lastConnectedKind. Inspect beyond 5 min uses FileBackedSource (PR 1c). Hide Record until 5a.
 ```
 
-**Later graph threads (2 / 3 / 4)** must paste an ASCII wireframe and wait before painters. See spec **Implementer protocol**.
+**Graph threads (2 / 3 / 4)** must paste an ASCII wireframe and wait before painters. See spec **Implementer protocol**.
 
 ---
 
@@ -31,8 +32,9 @@ Index framed .raw at flush boundaries; getRange prepends sessionHeaderBytes() th
 | PR | Commit / note |
 |---|---|
 | **0** | `22cfd38` — `lib/src/session_v5/` (writer, assemble, ComputedFrame, models). Prefix default `session`. Thin re-exports at old paths. |
-| **1a** | `2a66eae` — `MonitorController` in `main()` after `appStateProvider.notifier`. Band ring in `monitor/cache/band_cache.dart` (1800). `bandNames`/`bandColors` in `charts/band_style.dart`. Pad quality is a 4-ch **1 s** ring. `live_cache.dart` unused (delete in PR 2). `SweepEegView` untouched. |
-| **1b** | Exclusive `tmp_` writer + lease. `AppStateNotifier.sessionRecorder` gone. Connect starts `tmp_$ts.{raw,computed,json}` with `Settings.recordStreams`. Feedback `acquireFeedbackLease` discards tmp; `end()` releases only if `!isRecording`. Launch glob-deletes leftover `tmp_*`. `GET /state` has `captureKind` / `captureElapsedSeconds`. Snapshot sidecar `prefix_$id.json.tmp` → `prefix_$id.json`. No Record chrome, no GraphShell, no file-backed Inspect. |
+| **1a** | `2a66eae` — `MonitorController` in `main()` after `appStateProvider.notifier`. Band ring in `monitor/cache/band_cache.dart` (1800). `bandNames`/`bandColors` in `charts/band_style.dart`. Pad quality is a 4-ch **1 s** ring. `live_cache.dart` unused (delete in PR 2). `SweepEegView` still owns its own SweepBuffer. |
+| **1b** | `8a0b9f0` — Exclusive `tmp_` writer + lease. Connect starts `tmp_$ts.{raw,computed,json}` with `Settings.recordStreams`. Feedback `acquireFeedbackLease` discards tmp; `end()` releases only if `!isRecording`. Launch glob-deletes leftover `tmp_*`. `GET /state` has `captureKind` / `captureElapsedSeconds`. |
+| **1c** | `RecordingIndex` + `FileBackedSource` under `monitor/cache/`. `flushRaw` callback indexes `(elapsedT, fileLength)` at frame boundaries. `getRange` prepends `sessionHeaderBytes()` then `sessionParseBody`; timestamps are elapsed from `captureStartedAtMs`. tmp rotate clears the index. Deleted unused `charts/disk_session.dart`. **Live Inspect is still SweepBuffer 5 min RAM only** until PR 2 wires this source. |
 
 ---
 
@@ -55,133 +57,158 @@ Hide Record until 5a. Copy changes update `.ai/ui-map.md` in the same PR.
 
 ---
 
-## Current code (why PR 1c exists)
+## Current code (after PR 1c)
 
-| Piece | Where | After 1b |
+| Piece | Where | After 1c |
 |---|---|---|
-| Connect writer | `MonitorController` + `MonitorRecorder` | `tmp_$ts.{raw,computed,json}`; flush every 30 s or 64 KiB via `SessionRecorder.flushRaw` (`sessionFrameBytes`) |
-| Index | **missing** | Inspect beyond SweepBuffer 5 min has no file reader |
-| `.raw` layout | `session_format.rs` | 12-byte `MUSEBIN` header, then frames `[u32 LE zstd-len][payload]`. `sessionParseBody` **rejects** a mid-file slice (`Truncated .muse header` / `Not a .muse file`) |
-| `flushRaw` | `session_v5/scratch_writer.dart` | appends one frame; **no callback**, no index |
-| Sweep EEG | `views/sweep_eeg_view.dart` + `charts/sweep_buffer.dart` | own 5 min `SweepBuffer` + `eventStream`. **Do not rewire** (PR 2) |
-| `disk_session.dart` | `lib/src/charts/disk_session.dart` | unused stub (`getRange` returns `[]`). Replaced by `file_backed_source.dart` — **delete** if still unreferenced |
-| `live_cache.dart` | `lib/src/charts/live_cache.dart` | unused. Delete in PR 2, not 1c |
-| Lease / tmp | `monitor/recording/` | exclusive; rotate resets `captureStartedAtMs` (and must reset the index) |
+| Connect writer | `MonitorController` + `MonitorRecorder` | `tmp_$ts.{raw,computed,json}`; flush every 30 s or 64 KiB |
+| Index | `monitor/cache/recording_index.dart` | `(elapsedT, fileLength)` at `flushRaw` frame boundaries. First frame offset **12**. Rotate clears. |
+| File-backed source | `monitor/cache/file_backed_source.dart` | `MonitorController.fileBackedSource` → `getRange(startElapsed, endElapsed)`. Prepends header. Elapsed via `captureStartedAtMs`. Null start → empty. |
+| Sweep EEG | `views/sweep_eeg_view.dart` + `charts/sweep_buffer.dart` | **own** 5 min `SweepBuffer` + `eventStream`. Add/remove, `GraphConfig.avgMode`, `eeg_layout_*`. **Rewire in PR 2.** |
+| Raw EEG route | `app.dart` `AppView.rawEeg` → `RawEegView` → `SweepEegView` | Replace with `monitor/views/raw_eeg_view.dart` |
+| `live_cache.dart` | `lib/src/charts/live_cache.dart` | unused. **Delete in PR 2.** |
+| `graph_config.dart` / `eeg_chart.dart` / `eeg_dashboard.dart` | `lib/src/charts/` | add/remove + dead dashboard. **Delete in PR 2.** |
+| Lease / tmp | `monitor/recording/` | exclusive; rotate resets `captureStartedAtMs` and the index |
 | Pad quality | `connection_provider` `_PadQualityRing` | 4-ch, 1 s — **do not grow** |
-| Crash recovery | `feedback/crash_recovery.dart` | `session_*` only. Monitor glob-deletes `tmp_*` only |
 
-tmp exists so Inspect of the **current connection** can go past 5 min RAM, up to the 30 min cap. Until 1c that is a documented gap — do not claim 30 min Inspect.
+Live Inspect is still SweepBuffer **5 min RAM only** until PR 2 calls `FileBackedSource.getRange`. Do not claim 30 min Inspect is done until that wire exists.
 
 ---
 
-## This thread — PR 1c
+## PR 1c (landed) — what shipped
 
-**Title:** `Index tmp_/recording_ raw frames for Inspect beyond SweepBuffer`
+`RecordingIndex` + `FileBackedSource` under `monitor/cache/`. `SessionRecorder.onRawFlushed(fileLength)` after each `sessionFrameBytes` append. `MonitorRecorder` tracks last EEG ts, converts `(tsMs - captureStartedAtMs) / 1000.0`, skips the entry if no EEG yet. Bands-only flush reuses last EEG ts. Rotate / discard / new tmp **clears** the index.
 
-**Do:** frame-boundary index of the open `tmp_` (and later `recording_`) `.raw`. `FileBackedSource.getRange` reads complete frames, **prepends `sessionHeaderBytes()`**, calls `sessionParseBody`, converts ms-epoch record timestamps to elapsed via `captureStartedAtMs`.
+`FileBackedSource.getRange`: covering frames → `RandomAccessFile.setPosition` at a **frame boundary** (offset 12 for the first) → complete frames only → prepend `sessionHeaderBytes()` → `sessionParseBody` → elapsed timestamps. Incomplete trailing frame omitted. `captureStartedAtMs == null` → empty `SessionData` (never unix epoch).
 
-**Do not:** GraphShell, SweepEegView rewire, Record button, `recording_` live UI, assembling tmp, moving `sweep_buffer.dart`, deleting `live_cache.dart`, growing pad-quality to 8, changing the v5/`.muse` byte layout, FFI surface, claiming saved-recording dashboard Inspect (PR 6).
+PR 2 Inspect of the current connection: SweepBuffer if the window fits in 5 min; otherwise `ref.read(monitorControllerProvider.notifier).fileBackedSource?.getRange(...)`. Follow still paints from RAM only.
 
-### Target files (new)
+Tests: `test/monitor/recording_index_test.dart`, `file_backed_source_test.dart` (FFI). Host lib: `cargo build --manifest-path rust/Cargo.toml`.
+
+---
+
+## This thread — PR 2
+
+**Title:** `N stacked sweep EEG panes; cancel add/remove`
+
+**ASCII first (required).** Paste a wireframe of `GraphShell` + N stacked sweep panes and **wait**. Do not write painters, move `sweep_buffer.dart`, or delete views until the ASCII is approved.
+
+Wireframe must show:
+
+- Header: **Follow | Inspect**, window length (2/4/8/10 s, default **10 s**), **no Record**, **no electrode chips**
+- N stacked sweep panes (placeholder N = 4 Muse / 8 Crown from `lastConnectedKind`)
+- Left electrode labels, plot, shared y-scale
+- Follow = green wipe left→right; Inspect = grey freeze cursor
+- Empty / waiting-for-signal state
+- **No** add/remove, **no** drawer, **no** SMOOTH/REALTIME
+
+### Do
+
+- `GraphShell` as `ConsumerWidget` chrome (architecture B). Record slot exists but **hidden** until 5a.
+- N stacked `SweepPane`s, `N = config.channelCount.toInt()` (`DeviceKind.muse` → 4 TP9/AF7/AF8/TP10; `neurosity` → 8 Crown names). Simulator Crown (`sim:crown-osc`) is 8-ch and startable for graphs.
+- Keep oscilloscope sweep. Move `charts/sweep_buffer.dart` → `monitor/cache/sweep_buffer.dart`. Keep 300 s history + display ring + `dispPos`. `freeze()` / `resume()` / `sampleAt` / `displaySample`.
+- Default window **10 s** (`2560` samples). Discrete 2 / 4 / 8 / 10 s.
+- Follow = live green wipe. Inspect = `freeze()` + pan. Pinch-pan or drag **enters Inspect**. Follow snaps back (`resume()`).
+- Inspect of the current connection: SweepBuffer if the window fits in 5 min; otherwise `FileBackedSource.getRange` (PR 1c). Convert nothing — 1c already returns elapsed `t`.
+- `MonitorController` owns the SweepBuffer (one ring, not a second LiveCache). Hydrate/subscribe already in `main()`.
+- Delete add/remove, `GraphConfig`, `avgMode`, `eeg_layout_*` persistence.
+- Delete `live_cache.dart` once unused.
+- Update `.ai/ui-map.md` for Follow / Inspect / Raw EEG chrome (same PR). Spoken names: Follow, Inspect — not Live / History / Freeze.
+
+### Do not
+
+- Implement painters before ASCII approval.
+- Stripchart replacement. Do not delete `SweepBuffer`.
+- Record button / Stop / `recording_` live UI (5a). Hide the chrome slot.
+- Electrode chips on Raw EEG (each electrode is a pane).
+- Bands / Histogram / PSD / Spectrogram (PR 3 / 4).
+- Growing pad-quality to 8. Status-bar dots stay 4-ch.
+- FFI / v5 header / lease / prefixes.
+- Claiming 30 min Inspect unless `FileBackedSource` is actually called from Inspect.
+- `device_montage.dart` imported from feedback. Feedback stays on `DeviceConfig.forKind`.
+
+### Target files
 
 ```
-lib/src/monitor/cache/
-  recording_index.dart       # (elapsedT, fileLength) at flushRaw frame boundaries
-  file_backed_source.dart    # getRange: seek complete frames, prepend header, parse
+lib/src/monitor/
+  graph_shell.dart                 # NEW — chrome only
+  viewport_controller.dart         # NEW — Follow / Inspect; elapsed domain
+  empty_state.dart                 # NEW — "Waiting for signal"
+  device_montage.dart              # NEW — monitor-only; N = channelCount.toInt()
+  panes/sweep_pane.dart            # NEW — one electrode, green wipe / grey freeze
+  views/raw_eeg_view.dart          # NEW — Column of N SweepPanes
+  cache/sweep_buffer.dart          # MOVED from charts/
+  cache/eeg_data_source.dart       # MOVE from charts/ if Raw EEG needs ChartSample
+                                   # (or keep using SweepBuffer APIs directly)
 
-test/monitor/
-  recording_index_test.dart  # and/or file_backed_source_test.dart — Dart+FFI
+lib/src/app.dart                   # AppView.rawEeg body → monitor RawEegView
+.ai/ui-map.md                      # Follow / Inspect / Raw EEG chrome
+
+DELETE:
+  lib/src/views/sweep_eeg_view.dart
+  lib/src/views/raw_eeg.dart
+  lib/src/charts/graph_config.dart
+  lib/src/charts/eeg_chart.dart
+  lib/src/charts/eeg_dashboard.dart
+  lib/src/charts/live_cache.dart    # if no remaining consumers
 ```
 
-`disk_session.dart` is an unused stub. Delete it in this PR if nothing imports it (today nothing does). Do not keep a second disk source.
+Ignore `eeg_layout_*` prefs; do not migrate `GraphConfig` JSON.
 
-### Index
+### SweepBuffer ownership
 
-`RecordingIndex` entries are `(elapsedT, fileLength)` produced **only** at `flushRaw` (`sessionFrameBytes`) boundaries. Do **not** index mid-frame or unflushed pending bytes.
+Today `SweepEegView` constructs its own `SweepBuffer` and listens to `eventStream`. After PR 2, **one** SweepBuffer lives on `MonitorController` (constructed in `main()`, already subscribed). Do **not** also run `LiveCache.appendEeg`. Delete `live_cache.dart`.
 
-- `elapsedT` = last EEG timestamp in that flush, converted: `(tsMs - captureStartedAtMs) / 1000.0`. If the flush has no EEG (bands-only, etc.), use the last EEG ts already seen, or skip the entry if none yet.
-- `fileLength` = `_rawFile.lengthSync()` **after** the frame is appended. That is the exclusive end offset of this frame (start of the next).
-- First frame starts at offset **12** (header). Do not treat offset 0 as a frame.
-- Binary search / scan the index to find entries covering `[startElapsed, endElapsed]`.
+Follow writes the display ring. Inspect `freeze()` then `sampleAt` + pan. Beyond 5 min: `fileBackedSource?.getRange(startElapsed, endElapsed)` — EEG packet `timestamp` is already elapsed seconds; samples are 1/256 s apart.
 
-Hook `flushRaw` — add a callback on `SessionRecorder` or wrap it in `MonitorRecorder`. Do not fork a second writer. Periodic 30 s flush + 64 KiB auto-flush already exist; index those.
+`captureStartedAtMs == null`: RAM ring only (index 0 ⇒ t = 0 for the visible window). Never treat null as unix epoch (1c already skips file-backed).
 
-**tmp rotate** (already in 1b): discard file, new `tmp_$ts`, reset `captureStartedAtMs`. **Clear the index.** Inspect of “current connection” is the new tmp plus whatever is still in the 5 min RAM ring — not the previous tmp.
+### Montage
 
-### `FileBackedSource.getRange(startElapsed, endElapsed)`
-
-Frozen steps:
-
-1. Find index entries covering the window.
-2. `RandomAccessFile.setPosition` at the first needed frame start; read **complete** frames through the last needed frame (do not slice mid-frame).
-3. **Prepend `sessionHeaderBytes()`** (12-byte `MUSEBIN` header). A mid-file slice without it fails `sessionParseBody`.
-4. `sessionParseBody` on that buffer. Convert record timestamps (ms epoch) to elapsed via `captureStartedAtMs`.
-
-`EegSampleRecord.timestamp` is the ms epoch of the **first** sample in the packet; later samples in the packet are 1/256 s apart. Viewport domain is **elapsed seconds from this capture**, same as computed JSONL `t`.
-
-```
-elapsed = (tsMs - captureStartedAtMs) / 1000.0
+```dart
+final kind = app.lastConnectedKind ?? DeviceKind.muse;
+final names = electrodeNamesForKind(kind); // already on MonitorState
+final n = names.length; // 4 or 8
 ```
 
-**Never treat `captureStartedAtMs == null` as unix epoch.** If missing, skip file-backed range (RAM ring only).
+`channelCount` on FFI `DeviceConfig` is `BigInt` — `.toInt()` if you call `forKind`. `MonitorState.channelCount` is already an `int`.
 
-`SessionData.eegSamples` is `BigInt` — `.toInt()` if you need an `int`.
+### Tests
 
-Saved recordings (`v5ExtractRaw` → in-memory body that **already has** the 12-byte header) can wait for the recording dashboard (PR 6). **tmp** index is this PR. Do not treat the zstd v5 container as seekable.
+Pure Dart preferred. No goldens / `integration_test`.
 
-### Who consumes it (not this PR)
-
-PR 2 Inspect of the current connection: SweepBuffer if the window fits in 5 min; otherwise `FileBackedSource`. 1c lands the source and keeps it wired from the tmp writer so PR 2 can call `getRange`. Do **not** change SweepEegView in 1c.
-
-Follow still paints from RAM rings only.
-
-### Tests (FFI)
-
-Host lib first: `cargo build --manifest-path rust/Cargo.toml`.
-
-Required cases:
-
-1. After `writeEvent` + `flushRaw`, index has one entry; `fileLength` equals the `.raw` size
-2. `getRange` over that window returns EEG (or bands) with **elapsed** `t`, not unix seconds
-3. Slice **without** prepending `sessionHeaderBytes()` → `sessionParseBody` errors (`Truncated .muse header` / `Not a .muse file`) — assert the prepend path does not
-4. `getRange` does not start mid-frame (read from a frame boundary; incomplete last frame is omitted)
-5. Rotate / new tmp → index empty (or only the new file)
-6. `captureStartedAtMs == null` → no unix-epoch range
-
-### PR 1c done when
-
-- `RecordingIndex` + `FileBackedSource` exist under `monitor/cache/`
-- tmp `flushRaw` appends index entries
-- `getRange` prepends `sessionHeaderBytes()` then `sessionParseBody`
-- timestamps are elapsed from `captureStartedAtMs`
-- tmp rotate clears the index
-- No GraphShell, no Record chrome, SweepEegView untouched
+- Default window is 2560 samples / 10 s
+- Muse-4 vs Crown-8 pane count from `lastConnectedKind`
+- Follow wipe advances `dispPos`; Inspect `freeze()` stops it
+- No `eeg_layout_*` writes
+- Inspect window older than SweepBuffer 5 min calls `FileBackedSource` (can stub)
 - `flutter analyze lib/src` clean
-- FFI tests green
 
-Until PR 2 uses this, **say in the PR** that live Inspect is still SweepBuffer 5 min RAM only. Do not claim 30 min Inspect is done.
-
-### Verify (PR 1c)
+### Verify (PR 2)
 
 ```bash
-cargo build --manifest-path rust/Cargo.toml
 flutter analyze lib/src
-flutter test test/monitor/recording_index_test.dart \
-  test/monitor/file_backed_source_test.dart \
-  test/monitor/capture_lease_test.dart \
-  test/monitor/monitor_sampler_test.dart \
-  test/monitor/band_cache_test.dart
+flutter test test/monitor/
 ```
 
-(Adjust test filenames if you combine them.) Do **not** run FRB. Do **not** `cargo check --target aarch64-linux-android`.
+FFI tests in `test/monitor/file_backed_source_test.dart` still need
+`cargo build --manifest-path rust/Cargo.toml` first. Do **not** run FRB.
+Do **not** `cargo check --target aarch64-linux-android`. Visual sweep
+cannot be verified in CI — human `flutter run` after ASCII approval.
+
+### PR 2 done when
+
+- ASCII approved, then painters
+- GraphShell + N SweepPanes; add/remove gone
+- SweepBuffer moved; `live_cache.dart` / `graph_config.dart` / old Raw EEG views gone
+- Record hidden; no chips
+- Inspect beyond 5 min uses 1c `FileBackedSource`
+- `.ai/ui-map.md` updated
+- `flutter analyze lib/src` clean
 
 ---
 
-## Next threads (do not start in PR 1c)
-
-### PR 2 — sweep EEG (ASCII first)
-
-Paste ASCII of GraphShell + N stacked sweep panes (Follow/Inspect, 10 s window, green wipe, **no** Record yet, **no** electrode chips, no add/remove). Wait. Then move `sweep_buffer.dart` into `monitor/cache/`. Delete `graph_config.dart`, `eeg_dashboard.dart`, `eeg_chart.dart`, `sweep_eeg_view.dart` add/remove / `eeg_layout_*`. Default 10 s (`2560` samples). Placeholders: Muse-4 vs Crown-8 from `lastConnectedKind`. Inspect beyond 5 min uses 1c `FileBackedSource`.
+## Next threads (do not start in PR 2)
 
 ### PR 3 / 4 — other graphs (ASCII first, each view)
 
@@ -207,16 +234,16 @@ History list stays `lib/src/views/feedback_history.dart` (PR 6). Recording dashb
 
 ## Pitfalls
 
-- **`sessionParseBody` needs the 12-byte header.** A seek into framed `.raw` is not a `.muse` body. Always prepend `sessionHeaderBytes()`.
-- **Do not slice mid-frame.** Frames are `[u32 LE length][zstd bytes]`. Incomplete trailing frame: omit it.
-- **Index only at `flushRaw`.** Unflushed pending bytes stay RAM-only until the 30 s / 64 KiB flush.
-- **Broadcast `eventStream`:** controller stays in `main()` (1a). Do not move it to AppShell.
-- **`assembleScratchV5` failure** keeps `_rawFile`. Do not release the lease (1b invariant).
-- **tmp rotate** resets inspectable file-backed range. Clear the index.
-- **Record (5a)** does not include pre-click bytes in the recording file. Out of scope for 1c.
-- **`channelCount` is `BigInt`.** Always `.toInt()`. Same for `SessionData.eegSamples`.
-- **SweepBuffer is the 5 min EEG ring** (still in `charts/`). Do not add a LiveCache EEG ring. Leave `live_cache.dart` for PR 2.
-- Stale `rust/target/release/` breaks `flutter run` if you ever touch FFI (this series should not). 1c **calls** existing FFI (`sessionHeaderBytes` / `sessionParseBody` / `sessionFrameBytes`); it must not change them.
+- **ASCII first.** Paste the wireframe and wait. Painters after approval only.
+- **`sessionParseBody` needs the 12-byte header.** File-backed Inspect already prepends in 1c. Do not parse a mid-file slice yourself.
+- **Do not slice mid-frame.** 1c omits incomplete trailing frames.
+- **Index only at `flushRaw`.** Unflushed pending bytes stay RAM-only until the 30 s / 64 KiB flush. Inspect of the last few seconds may still be SweepBuffer-only.
+- **Broadcast `eventStream`:** controller stays in `main()` (1a). Do not move it to AppShell. After PR 2, SweepBuffer is on the controller — do not also subscribe in the view.
+- **tmp rotate** resets inspectable file-backed range. Clear was 1c; SweepBuffer RAM still has up to 5 min of the previous tmp.
+- **Record (5a)** does not include pre-click bytes. Out of scope for PR 2.
+- **`channelCount` is `BigInt` on FFI.** `MonitorState.channelCount` is already `int`.
+- **SweepBuffer is the 5 min EEG ring.** Do not add a LiveCache EEG ring. Delete `live_cache.dart` in this PR.
+- Stale `rust/target/release/` breaks `flutter run` if you ever touch FFI (this series should not).
 - `flutter analyze lib/src` after every Dart PR. No goldens / `integration_test`.
 - Agent HTTP: `persist: false`. No `/record/*` (5a). Crown 409 stays `crown_refused`.
 - Sidecar rename stays `prefix_$id.json.tmp` → `prefix_$id.json`. Feedback `.metadata` JSONL stays append-only.
@@ -228,9 +255,10 @@ History list stays `lib/src/views/feedback_history.dart` (PR 6). Recording dashb
 | When | Update |
 |---|---|
 | Any on-screen copy | `.ai/ui-map.md` in that PR |
+| Follow / Inspect (PR 2) | `.ai/ui-map.md` |
 | `AppView.histogram` (PR 4) | `.ai/test-matrix.md`, `.ai/testing-guide.md` `POST /view` |
 | `/record/*` and 409 (PR 5a) | testing-guide |
 | History label / Save files to folder (PR 6) | ui-map |
 | Series complete | `.ai/architecture.md`, `.ai/README.md`; move this handoff to `.ai/archive/` |
 
-Do not edit pipeline-contract or connect-simulator-ux. PR 1c has no on-screen copy.
+Do not edit pipeline-contract or connect-simulator-ux.

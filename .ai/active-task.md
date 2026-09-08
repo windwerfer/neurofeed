@@ -7,32 +7,35 @@ Monitor series (frozen spec [monitor.md](monitor.md), implementer
 Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
 or the v5 68-byte header.
 
-## This thread — PR 1b (implemented)
+## Last thread — PR 1c (implemented)
 
-Replace dual `session_` writers with an exclusive `tmp_` capture lease.
+File-backed Inspect of tmp/recording `.raw`.
 
-- `AppStateNotifier.sessionRecorder` is gone. Connect starts rolling
-  `tmp_$ts.{raw,computed,json}` (Settings `recordStreams` applied).
-- Feedback `startCalibration` `acquireFeedbackLease` (discards tmp).
-  `end()` releases only when `!_recorder.isRecording`. Failed assemble
-  stays `CaptureKind.feedback` and does not start tmp.
-- Launch glob-deletes leftover `tmp_*` after feedback crash recovery.
-  Feedback `crash_recovery.dart` still `session_*` only.
-- `GET /state` exposes `captureKind` and `captureElapsedSeconds`.
-- No GraphShell, no Record button, no `recording_` live UI, no file-backed
-  Inspect (PR 1c).
+- `RecordingIndex` entries `(elapsedT, fileLength)` only at `flushRaw`
+  frame boundaries. First frame starts at offset 12.
+- `FileBackedSource.getRange` seeks complete frames, prepends
+  `sessionHeaderBytes()`, then `sessionParseBody`.
+- Record timestamps (ms epoch) convert to elapsed via
+  `captureStartedAtMs`. Null start → no unix-epoch range.
+- tmp rotate clears the index.
+- Deleted unused `charts/disk_session.dart`.
+- No GraphShell, no Record button, SweepEegView untouched.
+
+**Live Inspect is still SweepBuffer 5 min RAM only.** PR 2 must wire
+`FileBackedSource` before claiming 30 min Inspect.
 
 ## Landed
 
 - PR 0 — `lib/src/session_v5/`
 - PR 1a — `MonitorController` in `main()` + band cache
-- PR 1b — tmp writer + exclusive lease (this commit)
+- PR 1b — tmp writer + exclusive lease
+- PR 1c — file-backed Inspect of tmp `.raw` (this commit)
 
 ## Next
 
-**PR 1c** — file-backed Inspect of tmp `.raw` (required). Index flush
-boundaries; `getRange` prepends `sessionHeaderBytes()` then
-`sessionParseBody`. Then PR 2 GraphShell (ASCII first). Hide Record until 5a.
+**PR 2** — GraphShell + N stacked sweep EEG panes. **ASCII first**, then
+wait (handoff section “This thread — PR 2”). Hide Record until 5a.
+Inspect beyond 5 min uses 1c `FileBackedSource`.
 
 ## Not this thread
 

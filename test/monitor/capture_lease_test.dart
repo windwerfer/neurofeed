@@ -281,5 +281,22 @@ void main() {
       expect(container.read(monitorControllerProvider).kind, CaptureKind.tmp);
       expect(tmpFiles(), isNotEmpty);
     });
+
+    test('rotate tmp clears the recording index', () async {
+      container.read(monitorControllerProvider);
+      app.debugSetConnected();
+      await settle();
+
+      final notifier = container.read(monitorControllerProvider.notifier);
+      notifier.recordingIndex.add(elapsedT: 1, fileLength: 100);
+      expect(notifier.recordingIndex.entries, isNotEmpty);
+
+      await notifier.rotateTmp();
+      await settle();
+
+      expect(notifier.recordingIndex.entries, isEmpty);
+      expect(container.read(monitorControllerProvider).kind, CaptureKind.tmp);
+      expect(tmpFiles(), isNotEmpty);
+    });
   });
 }

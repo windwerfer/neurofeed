@@ -38,6 +38,9 @@ class SessionRecorder {
   int _computedFrames = 0;
   Timer? _flushTimer;
 
+  /// Called after a frame is appended, with `_rawFile.lengthSync()`.
+  void Function(int fileLength)? onRawFlushed;
+
   /// Streams to persist. Defaults to all.
   Set<RecordingStream> recordStreams = RecordingStream.values.toSet();
 
@@ -169,6 +172,7 @@ class SessionRecorder {
     _rawPending.clear();
     final framed = ffi.sessionFrameBytes(data: raw);
     _rawFile!.writeAsBytesSync(framed, mode: FileMode.append);
+    onRawFlushed?.call(_rawFile!.lengthSync());
   }
 
   /// Flush all to disk.

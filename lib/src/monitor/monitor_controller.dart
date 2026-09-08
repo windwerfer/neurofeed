@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/monitor/cache/band_cache.dart';
+import 'package:muse_ml/src/monitor/cache/file_backed_source.dart';
+import 'package:muse_ml/src/monitor/cache/recording_index.dart';
 import 'package:muse_ml/src/monitor/monitor_state.dart';
 import 'package:muse_ml/src/monitor/recording/capture_lease.dart';
 import 'package:muse_ml/src/monitor/recording/monitor_recorder.dart';
@@ -39,6 +41,10 @@ class MonitorController extends Notifier<MonitorState> {
 
   @visibleForTesting
   Future<void> get pendingOps => _op;
+
+  RecordingIndex get recordingIndex => _capture!.index;
+
+  FileBackedSource? get fileBackedSource => _capture?.source;
 
   @override
   MonitorState build() {
@@ -158,6 +164,7 @@ class MonitorController extends Notifier<MonitorState> {
         dir: dir,
         recordStreams: settings.recordStreams,
         metadata: _currentMetadata,
+        captureStartedAtMs: startedAt,
       );
       state = state.copyWith(captureId: _capture!.captureId);
       _startSampler(names.length, startedAt);
