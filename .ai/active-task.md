@@ -29,7 +29,7 @@ File-backed Inspect of tmp/recording `.raw`.
 - PR 0 — `lib/src/session_v5/`
 - PR 1a — `MonitorController` in `main()` + band cache
 - PR 1b — tmp writer + exclusive lease
-- PR 1c — file-backed Inspect of tmp `.raw` (this commit)
+- PR 1c — file-backed Inspect of tmp `.raw` (`3fb276b`)
 
 ## Next
 

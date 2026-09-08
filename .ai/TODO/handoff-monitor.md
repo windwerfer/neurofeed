@@ -4,11 +4,29 @@
 |---|---|
 | Date | 2026-09-08 |
 | Spec | [../monitor.md](../monitor.md) — **frozen Key Decisions. Do not reopen.** |
-| Branch | `refactor/monitor` (PR 0 `22cfd38`, PR 1a `2a66eae`, PR 1b `8a0b9f0`, PR 1c this commit). Suggested name was `feat/monitor-graphs`. |
+| Branch | `refactor/monitor` (PR 0 `22cfd38`, PR 1a `2a66eae`, PR 1b `8a0b9f0`, PR 1c `3fb276b`). Suggested name was `feat/monitor-graphs`. |
 | Cadence | **One PR per thread.** This file is the series map. Next is **PR 2**. |
 | Do not mix | Crown Start, OSC-connect, pipeline-contract Key Decisions, v5 68-byte header / FRB, Android foreground service, Athena optics, growing status-bar pads to 8. |
 
 Read the spec first (`Key Decisions`, `File layout`, `PR Plan`, `Implementer protocol`). This file is implementer order, current-code pitfalls, and the **PR 2** start. Do not re-design graphs, naming, or the lease.
+
+---
+
+## Close the thread (every PR)
+
+A thread is **not done** until all four are true. Do not ask permission.
+
+1. Code + tests + `flutter analyze lib/src` green.
+2. **Rewrite this handoff** for the next PR in the same change:
+   - Landed table: this PR's **commit hash** (or `this commit` if hashing after) + one-line note
+   - Current-code table
+   - Compact “what shipped” for this PR; full **This thread — PR N+1** brief (target files, do/don't, tests, pitfalls)
+   - **Paste this to start a new thread** is a fenced prompt for PR N+1 only
+   - `.ai/active-task.md` matches (last thread landed, next is N+1)
+3. **Commit** code + this file + `active-task.md` (and ui-map / test-matrix when the spec says). Do not leave the handoff uncommitted. Do not end with “I can commit if you want.”
+4. Reply with the **next-thread prompt in a fenced block** the user can copy into a new chat. Nothing else required from them. Graph PRs (2 / 3 / 4) keep ASCII-first + wait in that prompt.
+
+After PR 6: archive this file to `.ai/archive/`, update `.ai/architecture.md` / `.ai/README.md`, commit, and reply that the series is complete (no next-thread prompt).
 
 ---
 
@@ -21,6 +39,7 @@ Implement monitor PR 2 only: GraphShell + N stacked sweep EEG panes.
 Spec: .ai/monitor.md (frozen). Handoff: .ai/TODO/handoff-monitor.md (section “This thread — PR 2”).
 Paste ASCII of GraphShell + N stacked sweep panes (Follow/Inspect, 10 s window, green wipe, no Record, no electrode chips, no add/remove) and WAIT before painters.
 Then move sweep_buffer.dart into monitor/cache/. Delete graph_config / eeg_dashboard / eeg_chart and SweepEegView add/remove / eeg_layout_*. Default 10 s (2560 samples). Muse-4 vs Crown-8 from lastConnectedKind. Inspect beyond 5 min uses FileBackedSource (PR 1c). Hide Record until 5a.
+When done: commit; rewrite .ai/TODO/handoff-monitor.md and .ai/active-task.md for PR 3 (Landed + This thread + fenced next-thread prompt); reply with that fenced prompt so it can be pasted into the next thread. Do not skip the commit or the next-thread prompt.
 ```
 
 **Graph threads (2 / 3 / 4)** must paste an ASCII wireframe and wait before painters. See spec **Implementer protocol**.
@@ -34,7 +53,7 @@ Then move sweep_buffer.dart into monitor/cache/. Delete graph_config / eeg_dashb
 | **0** | `22cfd38` — `lib/src/session_v5/` (writer, assemble, ComputedFrame, models). Prefix default `session`. Thin re-exports at old paths. |
 | **1a** | `2a66eae` — `MonitorController` in `main()` after `appStateProvider.notifier`. Band ring in `monitor/cache/band_cache.dart` (1800). `bandNames`/`bandColors` in `charts/band_style.dart`. Pad quality is a 4-ch **1 s** ring. `live_cache.dart` unused (delete in PR 2). `SweepEegView` still owns its own SweepBuffer. |
 | **1b** | `8a0b9f0` — Exclusive `tmp_` writer + lease. Connect starts `tmp_$ts.{raw,computed,json}` with `Settings.recordStreams`. Feedback `acquireFeedbackLease` discards tmp; `end()` releases only if `!isRecording`. Launch glob-deletes leftover `tmp_*`. `GET /state` has `captureKind` / `captureElapsedSeconds`. |
-| **1c** | `RecordingIndex` + `FileBackedSource` under `monitor/cache/`. `flushRaw` callback indexes `(elapsedT, fileLength)` at frame boundaries. `getRange` prepends `sessionHeaderBytes()` then `sessionParseBody`; timestamps are elapsed from `captureStartedAtMs`. tmp rotate clears the index. Deleted unused `charts/disk_session.dart`. **Live Inspect is still SweepBuffer 5 min RAM only** until PR 2 wires this source. |
+| **1c** | `3fb276b` — `RecordingIndex` + `FileBackedSource` under `monitor/cache/`. `flushRaw` callback indexes `(elapsedT, fileLength)` at frame boundaries. `getRange` prepends `sessionHeaderBytes()` then `sessionParseBody`; timestamps are elapsed from `captureStartedAtMs`. tmp rotate clears the index. Deleted unused `charts/disk_session.dart`. **Live Inspect is still SweepBuffer 5 min RAM only** until PR 2 wires this source. |
 
 ---
 
@@ -90,6 +109,8 @@ Tests: `test/monitor/recording_index_test.dart`, `file_backed_source_test.dart` 
 ## This thread — PR 2
 
 **Title:** `N stacked sweep EEG panes; cancel add/remove`
+
+When this PR is done, follow **Close the thread** (commit + rewrite this file for PR 3 + fenced next-thread prompt). Do not skip it.
 
 **ASCII first (required).** Paste a wireframe of `GraphShell` + N stacked sweep panes and **wait**. Do not write painters, move `sweep_buffer.dart`, or delete views until the ASCII is approved.
 
@@ -205,6 +226,7 @@ cannot be verified in CI — human `flutter run` after ASCII approval.
 - Inspect beyond 5 min uses 1c `FileBackedSource`
 - `.ai/ui-map.md` updated
 - `flutter analyze lib/src` clean
+- **Close the thread:** rewrite this handoff + `active-task.md` for PR 3, **commit**, reply with the fenced PR 3 paste prompt
 
 ---
 
@@ -251,6 +273,8 @@ History list stays `lib/src/views/feedback_history.dart` (PR 6). Recording dashb
 ---
 
 ## Docs when a PR lands
+
+Every PR: this handoff + `.ai/active-task.md` + **commit** + fenced next-thread prompt (see **Close the thread**). Plus:
 
 | When | Update |
 |---|---|
