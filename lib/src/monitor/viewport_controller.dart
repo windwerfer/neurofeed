@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
 
@@ -7,6 +9,10 @@ class ViewportController extends ChangeNotifier {
   static const double defaultWindowSeconds = 10;
   static const int defaultWindowSamples = 2560;
   static const List<double> eegWindowOptions = [2, 4, 8, 10];
+  static const double bandsDefaultWindowSeconds = 30;
+  static const List<double> bandsWindowOptions = [15, 30, 60, 120];
+  static const double bandsZoomFloor = 5;
+  static const double bandsZoomCap = 1800;
 
   ViewportMode mode = ViewportMode.follow;
   double windowSeconds = defaultWindowSeconds;
@@ -71,6 +77,115 @@ class ViewportController extends ChangeNotifier {
     inspectStartElapsed = start;
     notifyListeners();
   }
+
+  void followStrip() {
+    if (mode == ViewportMode.follow) return;
+    mode = ViewportMode.follow;
+    inspectStartElapsed = null;
+    notifyListeners();
+  }
+
+  void enterInspectStrip({required double newestElapsed}) {
+    if (mode == ViewportMode.inspect && inspectStartElapsed != null) return;
+    mode = ViewportMode.inspect;
+    inspectStartElapsed = newestElapsed - windowSeconds;
+    notifyListeners();
+  }
+
+  void setStripWindowSeconds(double secs, {double? newestElapsed}) {
+    windowSeconds = secs;
+    if (mode == ViewportMode.inspect && newestElapsed != null) {
+      inspectStartElapsed = _clampStripStart(
+        inspectStartElapsed ?? newestElapsed - secs,
+        newestElapsed: newestElapsed,
+        oldestElapsed: 0,
+      );
+    }
+    notifyListeners();
+  }
+
+  double stripVisibleStart({required double newestElapsed}) {
+    if (mode == ViewportMode.follow) {
+      return newestElapsed - windowSeconds;
+    }
+    return inspectStartElapsed ?? newestElapsed - windowSeconds;
+  }
+
+  double stripVisibleEnd({required double newestElapsed}) =>
+      stripVisibleStart(newestElapsed: newestElapsed) + windowSeconds;
+
+  void panStrip(
+    double deltaSeconds, {
+    required double newestElapsed,
+    double oldestElapsed = 0,
+  }) {
+    if (mode != ViewportMode.inspect) return;
+    final start =
+        (inspectStartElapsed ?? newestElapsed - windowSeconds) + deltaSeconds;
+    inspectStartElapsed = _clampStripStart(
+      start,
+      newestElapsed: newestElapsed,
+      oldestElapsed: oldestElapsed,
+    );
+    notifyListeners();
+  }
+
+  void pinchX({
+    required double scaleFromStart,
+    required double windowAtStart,
+    required double focalElapsed,
+    required double focalFraction,
+    required double newestElapsed,
+    required double elapsedCap,
+    double oldestElapsed = 0,
+  }) {
+    if (scaleFromStart <= 0 || !scaleFromStart.isFinite) return;
+    if (mode != ViewportMode.inspect) {
+      mode = ViewportMode.inspect;
+    }
+    final cap = math.max(bandsZoomFloor, math.min(elapsedCap, bandsZoomCap));
+    var next = windowAtStart / scaleFromStart;
+    if (next < bandsZoomFloor) next = bandsZoomFloor;
+    if (next > cap) next = cap;
+    windowSeconds = next;
+    inspectStartElapsed = _clampStripStart(
+      focalElapsed - focalFraction * next,
+      newestElapsed: newestElapsed,
+      oldestElapsed: oldestElapsed,
+    );
+    notifyListeners();
+  }
+
+  double _clampStripStart(
+    double start, {
+    required double newestElapsed,
+    required double oldestElapsed,
+  }) {
+    final minStart = oldestElapsed;
+    final maxStart = newestElapsed - windowSeconds;
+    if (maxStart < minStart) {
+      if (start < maxStart) return maxStart;
+      if (start > minStart) return minStart;
+      return start;
+    }
+    if (start < minStart) return minStart;
+    if (start > maxStart) return maxStart;
+    return start;
+  }
+}
+
+bool windowIsPreset(double seconds, List<double> options) {
+  for (final o in options) {
+    if ((o - seconds).abs() < 1e-6) return true;
+  }
+  return false;
+}
+
+double presetOrCustomValue(double seconds, List<double> options) {
+  for (final o in options) {
+    if ((o - seconds).abs() < 1e-6) return o;
+  }
+  return seconds;
 }
 
 /// Format elapsed-from-capture for the EEG x-axis (`m:ss`, or `h:mm:ss`).

@@ -206,6 +206,7 @@ class MonitorController extends Notifier<MonitorState> {
     _lease.tryDiscardTmp();
     _latestEegTsMs = null;
     sweepBuffer.clear();
+    bandCache.clear();
     state = MonitorState(
       kind: CaptureKind.idle,
       electrodeNames: state.electrodeNames,

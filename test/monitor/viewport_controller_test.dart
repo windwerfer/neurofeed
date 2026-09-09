@@ -131,4 +131,79 @@ void main() {
     expect(wide.first, greaterThanOrEqualTo(0));
     expect(wide.last, lessThanOrEqualTo(10));
   });
+
+  test('bands default window is 30 s with 15/30/60/120 presets', () {
+    expect(ViewportController.bandsDefaultWindowSeconds, 30);
+    expect(ViewportController.bandsWindowOptions, [15, 30, 60, 120]);
+    final v = ViewportController()
+      ..windowSeconds = ViewportController.bandsDefaultWindowSeconds;
+    expect(v.windowSeconds, 30);
+    expect(windowIsPreset(30, ViewportController.bandsWindowOptions), isTrue);
+    expect(windowIsPreset(47, ViewportController.bandsWindowOptions), isFalse);
+  });
+
+  test('pinchX sets a custom window; preset restore; Follow keeps length', () {
+    final v = ViewportController()
+      ..windowSeconds = ViewportController.bandsDefaultWindowSeconds;
+    v.pinchX(
+      scaleFromStart: 30 / 47,
+      windowAtStart: 30,
+      focalElapsed: 40,
+      focalFraction: 0.5,
+      newestElapsed: 80,
+      elapsedCap: 80,
+    );
+    expect(v.mode, ViewportMode.inspect);
+    expect(v.windowSeconds, closeTo(47, 0.05));
+    expect(
+      windowIsPreset(v.windowSeconds, ViewportController.bandsWindowOptions),
+      isFalse,
+    );
+
+    v.setStripWindowSeconds(30, newestElapsed: 80);
+    expect(v.windowSeconds, 30);
+    expect(
+      windowIsPreset(v.windowSeconds, ViewportController.bandsWindowOptions),
+      isTrue,
+    );
+    expect(v.mode, ViewportMode.inspect);
+
+    v.windowSeconds = 47;
+    v.followStrip();
+    expect(v.mode, ViewportMode.follow);
+    expect(v.windowSeconds, 47);
+  });
+
+  test('pinchX zoom floor is 5 s and cap is min(elapsed, 1800)', () {
+    final v = ViewportController()..windowSeconds = 30;
+    v.pinchX(
+      scaleFromStart: 100,
+      windowAtStart: 30,
+      focalElapsed: 20,
+      focalFraction: 0.5,
+      newestElapsed: 40,
+      elapsedCap: 40,
+    );
+    expect(v.windowSeconds, ViewportController.bandsZoomFloor);
+
+    v.pinchX(
+      scaleFromStart: 0.01,
+      windowAtStart: 30,
+      focalElapsed: 20,
+      focalFraction: 0.5,
+      newestElapsed: 100,
+      elapsedCap: 100,
+    );
+    expect(v.windowSeconds, 100);
+
+    v.pinchX(
+      scaleFromStart: 0.01,
+      windowAtStart: 30,
+      focalElapsed: 20,
+      focalFraction: 0.5,
+      newestElapsed: 2000,
+      elapsedCap: 2000,
+    );
+    expect(v.windowSeconds, ViewportController.bandsZoomCap);
+  });
 }

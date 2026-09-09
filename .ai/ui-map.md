@@ -31,7 +31,7 @@ Width `kSidebarWidth` (220). Overlay below 700px; row sibling at ≥ 700.
 |---|---|---|---|---|
 | Feedback | `Feedback` | `AppView.feedback` | `app.dart` | Body: `FeedbackListView`. |
 | Feedback History | `Feedback History` | `AppView.feedbackHistory` | `app.dart` | `FeedbackHistoryView`. |
-| Bands | `Bands` | `AppView.bands` | `app.dart` | |
+| Bands | `Bands` | `AppView.bands` | `app.dart` | GraphShell. `monitor/views/bands_view.dart`. |
 | Raw EEG | `Raw EEG` | `AppView.rawEeg` | `app.dart` | Sweep. `monitor/views/raw_eeg_view.dart`. |
 | Spectrogram | `Spectrogram` | `AppView.spectrogram` | `app.dart` | |
 | PSD | `Power Spectral Density (PSD)` | `AppView.psd` | `app.dart` | Full label. |
@@ -70,6 +70,22 @@ GraphShell chrome. Record slot hidden until PR 5a. No electrode chips
 | Waiting for signal | `Waiting for signal` | `MonitorWaitingSignal` | `empty_state.dart` | Connected, no samples. |
 | Electrode name | `TP9` / Crown names | `SweepPane` | `panes/sweep_pane.dart` | In-pane, top-right, gray. Not a chip. |
 | Y scale | `Auto` / `±50 µV` … | `SharedYScale` | `sweep_pane.dart` | Overflow. One scale for the column. |
+
+### Bands — `lib/src/monitor/views/bands_view.dart`
+
+GraphShell chrome. Record slot hidden until PR 5a. One strip pane, five
+series (delta / theta / alpha / beta / gamma). Electrode text toggles are
+average membership, not extra graphs.
+
+| Spoken name | On-screen text | Code symbol | File | Notes |
+|---|---|---|---|---|
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Strip, newest at right. Not Live / History. |
+| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze; pan / pinch-X. Drag or pinch enters Inspect. |
+| Window length | `15s` `30s` `60s` `120s` | `ViewportController.bandsWindowOptions` | `graph_shell.dart` | Default **30 s**. |
+| Custom window | `custom` | `windowIsPreset` | `graph_shell.dart` | Closed label after pinch-X. Picking a preset restores. |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Top-right, depressed = in the mean. Default all on. Last one stays. |
+| Y unit | `dB` | `linearToDb` | `panes/time_series_pane.dart` | `10·log10` of linear µV²/Hz. 0 is not the floor. |
+| Waiting for signal | `Waiting for signal` | `MonitorWaitingSignal` | `empty_state.dart` | Connected, no BandCache samples. |
 
 ### Feedback list — `lib/src/views/feedback_list.dart`
 

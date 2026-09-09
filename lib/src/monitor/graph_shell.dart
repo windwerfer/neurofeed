@@ -77,13 +77,24 @@ class GraphShell extends ConsumerWidget {
                   const SizedBox(width: 12),
                   DropdownButtonHideUnderline(
                     child: DropdownButton<double>(
-                      value: viewport.windowSeconds,
+                      value: presetOrCustomValue(
+                        viewport.windowSeconds,
+                        windowOptions,
+                      ),
                       isDense: true,
                       items: [
                         for (final s in windowOptions)
                           DropdownMenuItem(
                             value: s,
                             child: Text('${s.round()}s'),
+                          ),
+                        if (!windowIsPreset(
+                          viewport.windowSeconds,
+                          windowOptions,
+                        ))
+                          DropdownMenuItem(
+                            value: viewport.windowSeconds,
+                            child: const Text('custom'),
                           ),
                       ],
                       onChanged: (v) {
@@ -99,7 +110,13 @@ class GraphShell extends ConsumerWidget {
                     const SizedBox.shrink(),
                   ],
                   const Spacer(),
-                  ?toolbarExtras,
+                  if (toolbarExtras != null)
+                    Flexible(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: toolbarExtras!,
+                      ),
+                    ),
                 ],
               ),
             ),
