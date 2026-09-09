@@ -32,7 +32,7 @@ Width `kSidebarWidth` (220). Overlay below 700px; row sibling at ≥ 700.
 | Feedback | `Feedback` | `AppView.feedback` | `app.dart` | Body: `FeedbackListView`. |
 | Feedback History | `Feedback History` | `AppView.feedbackHistory` | `app.dart` | `FeedbackHistoryView`. |
 | Bands | `Bands` | `AppView.bands` | `app.dart` | |
-| Raw EEG | `Raw EEG` | `AppView.rawEeg` | `app.dart` | |
+| Raw EEG | `Raw EEG` | `AppView.rawEeg` | `app.dart` | Sweep. `monitor/views/raw_eeg_view.dart`. |
 | Spectrogram | `Spectrogram` | `AppView.spectrogram` | `app.dart` | |
 | PSD | `Power Spectral Density (PSD)` | `AppView.psd` | `app.dart` | Full label. |
 | Streaming | `Streaming` | `AppView.streaming` | `app.dart` | Trailing `StreamDot`. |
@@ -56,6 +56,20 @@ Must exist in every view with a status bar (`AppShell` + session). Frozen:
 | Simulator · Notion (OSC) | `Notion (OSC)` | `sim:notion-osc` | `connect_source.dart` | Kind Neurosity. **Start refused.** |
 
 ## Views
+
+### Raw EEG — `lib/src/monitor/views/raw_eeg_view.dart`
+
+GraphShell chrome. Record slot hidden until PR 5a. No electrode chips
+(each electrode is a pane). No add/remove.
+
+| Spoken name | On-screen text | Code symbol | File | Notes |
+|---|---|---|---|---|
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Live wipe. Not Live / History. |
+| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze + pan. Drag/pinch enters Inspect. |
+| Window length | `2s` `4s` `8s` `10s` | `ViewportController.windowSeconds` | `graph_shell.dart` | Default **10 s** (2560 samples). |
+| Waiting for signal | `Waiting for signal` | `MonitorWaitingSignal` | `empty_state.dart` | Connected, no samples. |
+| Electrode name | `TP9` / Crown names | `SweepPane` | `panes/sweep_pane.dart` | In-pane, top-right, gray. Not a chip. |
+| Y scale | `Auto` / `±50 µV` … | `SharedYScale` | `sweep_pane.dart` | Overflow. One scale for the column. |
 
 ### Feedback list — `lib/src/views/feedback_list.dart`
 

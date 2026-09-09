@@ -7,7 +7,9 @@ import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/monitor/cache/band_cache.dart';
 import 'package:muse_ml/src/monitor/cache/file_backed_source.dart';
 import 'package:muse_ml/src/monitor/cache/recording_index.dart';
+import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
 import 'package:muse_ml/src/monitor/monitor_state.dart';
+import 'package:muse_ml/src/monitor/viewport_controller.dart';
 import 'package:muse_ml/src/monitor/recording/capture_lease.dart';
 import 'package:muse_ml/src/monitor/recording/monitor_recorder.dart';
 import 'package:muse_ml/src/monitor/recording/monitor_sampler.dart';
@@ -31,6 +33,8 @@ class MonitorController extends Notifier<MonitorState> {
   final SessionRecorder Function() _createRecorder;
 
   final BandCache bandCache = BandCache();
+  final SweepBuffer sweepBuffer = SweepBuffer()
+    ..setDisplayWindow(ViewportController.defaultWindowSamples);
   final CaptureLease _lease = CaptureLease();
 
   StreamSubscription<MuseEventDto>? _eventSub;
@@ -45,6 +49,15 @@ class MonitorController extends Notifier<MonitorState> {
   RecordingIndex get recordingIndex => _capture!.index;
 
   FileBackedSource? get fileBackedSource => _capture?.source;
+
+  /// Elapsed seconds of the newest EEG sample, or null if the capture
+  /// clock is unknown. Never treats a null start as unix epoch.
+  double? get ramNewestElapsed {
+    final start = state.captureStartedAtMs;
+    final ts = _latestEegTsMs;
+    if (start == null || ts == null) return null;
+    return (ts - start) / 1000.0;
+  }
 
   @override
   MonitorState build() {
@@ -192,6 +205,7 @@ class MonitorController extends Notifier<MonitorState> {
     await _stopTmpWriter();
     _lease.tryDiscardTmp();
     _latestEegTsMs = null;
+    sweepBuffer.clear();
     state = MonitorState(
       kind: CaptureKind.idle,
       electrodeNames: state.electrodeNames,
@@ -253,6 +267,7 @@ class MonitorController extends Notifier<MonitorState> {
     switch (event) {
       case MuseEventDto_Eeg():
         _latestEegTsMs = event.field0.timestamp.round();
+        sweepBuffer.append(event.field0);
       case MuseEventDto_Bands():
         bandCache.appendBands(event.field0);
         _sampler?.updateBands(event.field0.electrode, event.field0);

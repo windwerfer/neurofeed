@@ -114,14 +114,19 @@ lib/src/session_v5/         v5 writer / assemble / ComputedFrame / DeviceInfoV5
   scratch_writer.dart       SessionRecorder (prefix default `session`)
   computed_frame.dart       Dart ComputedFrame (+ .freezed.dart)
   models.dart               DeviceInfoV5, StreamsConfig
-lib/src/monitor/            live graphs + recording (PR 1b: tmp_ writer + exclusive lease)
+lib/src/monitor/            live graphs + recording
   monitor_controller.dart   constructed in main(); hydrates if already connected
+  graph_shell.dart          Follow/Inspect chrome; Record hidden until 5a
+  viewport_controller.dart  Follow / Inspect; elapsed domain
   cache/band_cache.dart     1 Hz bands, 30 min cap; no EEG LiveCache
+  cache/sweep_buffer.dart   5 min EEG RAM + display ring (moved from charts/)
+  panes/sweep_pane.dart     one electrode, theme wipe / Inspect fill-right
+  views/raw_eeg_view.dart   N stacked SweepPanes (Muse-4 / Crown-8)
   recording/                capture_lease, tmp_ MonitorRecorder, MonitorSampler
 lib/src/audio/              SoLoudEngine + AudioService, reward/guard/background
 lib/src/reve/               model download/import/load UI
 lib/src/streaming/          OSC / LSL / BrainFlow
-lib/src/charts/             band_style, SessionReader, SweepBuffer (writer is session_v5/)
+lib/src/charts/             band_style, SessionReader, smooth_path (writer is session_v5/)
 rust/src/api/
   muse.rs, features.rs, device_config.rs, neurosity_osc.rs, simulator.rs
   reve.rs, session_format.rs, edf_export.rs
@@ -150,9 +155,11 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `feedback/computed_frame.dart`, `feedback/session_v5_models.dart`) re-export.
 - Monitor: `lib/src/monitor/` — `MonitorController` is constructed in `main()`
   from the same `ProviderContainer` as `AppStateNotifier`, and hydrates if
-  already connected. Band ring is `monitor/cache/band_cache.dart`. `bandNames`
-  / `bandColors` stay in `lib/src/charts/band_style.dart`. Pad quality is a
-  4-ch 1 s ring in `connection_provider.dart` (not a 5 min EEG LiveCache).
+  already connected. Band ring is `monitor/cache/band_cache.dart`. EEG RAM is
+  `monitor/cache/sweep_buffer.dart` (5 min). Raw EEG is N stacked `SweepPane`s
+  in `monitor/views/raw_eeg_view.dart`. `bandNames` / `bandColors` stay in
+  `lib/src/charts/band_style.dart`. Pad quality is a 4-ch 1 s ring in
+  `connection_provider.dart` (not a 5 min EEG LiveCache).
 - Crash recovery: `lib/src/feedback/crash_recovery.dart` scans
   `scratchDirectory`, not `getTemporaryDirectory()/sessions`.
 - History cache: `lib/src/feedback/session_sqlite.dart`

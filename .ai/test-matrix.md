@@ -31,7 +31,9 @@ flutter test \
   test/feature_override_test.dart \
   test/monitor/band_cache_test.dart \
   test/monitor/capture_lease_test.dart \
-  test/monitor/monitor_sampler_test.dart
+  test/monitor/monitor_sampler_test.dart \
+  test/monitor/viewport_controller_test.dart \
+  test/monitor/graph_shell_test.dart
 ```
 
 ## FFI (host lib first)

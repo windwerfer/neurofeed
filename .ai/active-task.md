@@ -7,22 +7,17 @@ Monitor series (frozen spec [monitor.md](monitor.md), implementer
 Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
 or the v5 68-byte header.
 
-## Last thread — PR 1c (implemented)
+## Last thread — PR 2 (implemented)
 
-File-backed Inspect of tmp/recording `.raw`.
+GraphShell + N stacked sweep EEG panes.
 
-- `RecordingIndex` entries `(elapsedT, fileLength)` only at `flushRaw`
-  frame boundaries. First frame starts at offset 12.
-- `FileBackedSource.getRange` seeks complete frames, prepends
-  `sessionHeaderBytes()`, then `sessionParseBody`.
-- Record timestamps (ms epoch) convert to elapsed via
-  `captureStartedAtMs`. Null start → no unix-epoch range.
-- tmp rotate clears the index.
-- Deleted unused `charts/disk_session.dart`.
-- No GraphShell, no Record button, SweepEegView untouched.
-
-**Live Inspect is still SweepBuffer 5 min RAM only.** PR 2 must wire
-`FileBackedSource` before claiming 30 min Inspect.
+- `SweepBuffer` moved to `monitor/cache/`; owned by `MonitorController`.
+- Default 10 s (2560 samples). Muse-4 vs Crown-8 from `lastConnectedKind`.
+- Follow: thin theme wipe, gray traces, names in-pane top-right.
+- Inspect: wipe + previous pass vanish; fill-right with live data;
+  pan uses RAM; older than 5 min calls `FileBackedSource`.
+- Record hidden. No chips, no add/remove. Deleted `graph_config` /
+  `eeg_dashboard` / `eeg_chart` / `live_cache` / old Raw EEG views.
 
 ## Landed
 
@@ -30,12 +25,12 @@ File-backed Inspect of tmp/recording `.raw`.
 - PR 1a — `MonitorController` in `main()` + band cache
 - PR 1b — tmp writer + exclusive lease
 - PR 1c — file-backed Inspect of tmp `.raw` (`3fb276b`)
+- PR 2 — GraphShell + N stacked sweep EEG panes (`28008c9`)
 
 ## Next
 
-**PR 2** — GraphShell + N stacked sweep EEG panes. **ASCII first**, then
-wait (handoff section “This thread — PR 2”). Hide Record until 5a.
-Inspect beyond 5 min uses 1c `FileBackedSource`.
+**PR 3** — Bands on GraphShell + electrode toggles. **ASCII first**, then
+wait (handoff section “This thread — PR 3”). Hide Record until 5a.
 
 ## Not this thread
 
@@ -46,7 +41,7 @@ Inspect beyond 5 min uses 1c `FileBackedSource`.
 - Publish `third_party/edf_export` to git+tag once export proves out on device.
 - Athena optics raw stream (muse-rs `Optics`, session tag 11). Queued:
   [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md).
-- GraphShell (PR 2), Record button (PR 5a).
+- Histogram / PSD / Spectrogram (PR 4), Record button (PR 5a).
 
 ## How to verify BLE (still)
 

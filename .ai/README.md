@@ -39,7 +39,7 @@ pipeline-contract work.
 | File | Contents |
 |------|----------|
 | [TODO/README.md](TODO/README.md) | Index |
-| [TODO/handoff-monitor.md](TODO/handoff-monitor.md) | Monitor series: **PR 2 next**, one PR per thread |
+| [TODO/handoff-monitor.md](TODO/handoff-monitor.md) | Monitor series: **PR 3 next**, one PR per thread |
 | [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md) | Athena optical raw stream (muse-rs `Optics`, session tag 11) |
 | [TODO/handoff-athena-optics.md](TODO/handoff-athena-optics.md) | Implementer order, files, LOC |
 

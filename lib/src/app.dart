@@ -18,7 +18,7 @@ import 'package:muse_ml/src/status_bar.dart';
 import 'package:muse_ml/src/streaming/streaming_controller.dart';
 import 'package:muse_ml/src/streaming/streaming_indicator.dart';
 import 'package:muse_ml/src/views/bands.dart';
-import 'package:muse_ml/src/views/raw_eeg.dart';
+import 'package:muse_ml/src/monitor/views/raw_eeg_view.dart';
 import 'package:muse_ml/src/views/terminal.dart';
 import 'package:muse_ml/src/views/psd_view.dart';
 import 'package:muse_ml/src/views/settings_view.dart';
