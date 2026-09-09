@@ -2,12 +2,12 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Draft (rev 4) |
+| **Status** | Draft (rev 5) |
 | **Author** | TBD |
-| **Date** | 2026-09-07 |
+| **Date** | 2026-09-09 |
 | **Audience** | Senior engineers on Muse ML |
 | **Companion** | Canonical spec. Implementer handoff: [TODO/handoff-monitor.md](TODO/handoff-monitor.md). One PR per thread; start at PR 0. |
-| **Does not reopen** | Pipeline-contract Key Decisions, Crown Start, Connect UX, v5 68-byte header, exclusive lease, prefixes, GraphShell B, Follow/Inspect names, history-root files, MonitorController in `main()`, 409 `recording_active`, lease release only when `!isRecording` |
+| **Does not reopen** | Pipeline-contract Key Decisions, Crown Start, Connect UX, v5 68-byte header, exclusive lease, prefixes, GraphShell B, Follow/Inspect names, history-root files, MonitorController in `main()`, 409 `recording_active`, lease release only when `!isRecording`, **Bands Y is dB display (storage stays linear µV²/Hz)** |
 
 ---
 
@@ -34,6 +34,14 @@ Locked by the product owner. Do not re-litigate:
 7. Graph PRs (2, 3, 4) paste an **ASCII wireframe** and wait for approval before painters.
 8. tmp cap **30 min** silent rotate. 5 min RAM hot cache stays.
 9. 5 min RAM is the right split vs OpenBCI / Muse Monitor / bedside (see comparison table). Do not grow RAM to 30 min.
+
+### User decisions (2026-09-09) — Bands ASCII
+
+Locked after the PR 3 wireframe. Do not re-litigate:
+
+10. Bands Y is **dB**, matching the Muse app (Live / post-session Powerbands), the Muse SDK (absolute band power = log of PSD, units Bels), and Mind Monitor. Display `10·log10(max(linear µV²/Hz, ε))`. BandCache, FFI, and `.muse` stay **linear µV²/Hz**. This **lifts** Bands skip-v1 **log-Y** (display only). Relative % stays v2.
+11. Bands pinch-zoom is **X only**. When the window is not 15 / 30 / 60 / 120 s, the dropdown closed label is **`custom`**. Picking a preset restores that length. Zoom-in floor ~5 s; zoom-out cap `min(elapsed, BandCache 30 min)`. Raw EEG stays discrete 2 / 4 / 8 / 10 s — no custom.
+12. Sample above the current Y-max: **dashed hold at last in-range Y**. Isolate in `monitor/panes/overshoot_hold.dart` so it can be deleted later (**< 100 lines**). Blink is small on dB; electrode pops may still overshoot. Do not use overshoot samples for the auto scale.
 
 No FFI surface change. Rust still owns `.muse` / `.muse.feedback` byte layout. `kind: "recording"` lives **inside** the zstd metadata JSON blob **and** as a sqlite column; not in the 68-byte header.
 
@@ -502,7 +510,7 @@ Follow zoom-out cap: 5 min (`SweepBuffer` history). Inspect zoom-out cap: `min(c
 | Mode | Spoken / on-screen | Behavior |
 |---|---|---|
 | **Follow** | Follow | **EEG:** live green wipe bar left→right, overwrite in place (`display` ring, `dispPos`). **Other views:** strip/heatmap advances with new data. |
-| **Inspect** | Inspect | **EEG:** `SweepBuffer.freeze()`; grey cursor; pan/scrub `sampleAt` + file-backed tmp/recording beyond 5 min. **Other views:** viewport frozen; pan/zoom on user input. Pinch-pan or drag **enters Inspect**. Follow snaps back to live (EEG: `resume()`). |
+| **Inspect** | Inspect | **EEG:** `SweepBuffer.freeze()`; grey cursor; pan/scrub `sampleAt` + file-backed tmp/recording beyond 5 min. **Other views:** viewport frozen; pan/zoom on user input. One-finger drag pans X; two-finger pinch scales X (Bands: dropdown shows `custom`). Pinch-pan or drag **enters Inspect**. Follow snaps back to live at the **current** window length (preset or custom). EEG: `resume()`. |
 
 **Do not name these Live / History.**
 
@@ -542,7 +550,7 @@ Electrode labels are **top-right**, **non-EEG views only**. Raw EEG has no chips
 | Control | v1 | Notes |
 |---|---|---|
 | Follow \| Inspect | yes | `SegmentedButton`. Follow disabled on saved-recording dashboard. |
-| Window length | yes | EEG discrete **2/4/8/10 s**, default **10 s** (today `2560/256`). Bands 15/30/60/120 s. Spectrogram 10/20/30 s. |
+| Window length | yes | EEG discrete **2/4/8/10 s**, default **10 s** (today `2560/256`). Bands **15/30/60/120 s**, default **30 s**, plus pinch-X **`custom`**. Spectrogram 10/20/30 s. GraphShell: if `windowSeconds` is not in `windowOptions`, the closed label is `custom`; picking a preset restores it. |
 | Record / Stop recording | yes from PR 5a | **Hidden until 5a.** Disabled when `CaptureKind.feedback` or disconnected. |
 | Recording elapsed | yes | When `CaptureKind.recording` only. |
 | Electrode labels | non-EEG | Text (`TP9` … / Crown names). Tap toggles **average membership**. Selected = **depressed** (`ToggleButtons` or filled). Default **all on**. Disallow zero (last one stays on). **Not overlay, not extra graphs.** |
@@ -665,14 +673,20 @@ Common: 256 Hz; Follow default; pinch-pan → Inspect; Record in chrome (from 5a
 
 ### Bands (band power)
 
+ASCII approved 2026-09-09. Painters in PR 3.
+
 | | v1 |
 |---|---|
 | **Pane count** | **1** |
-| **Series** | 5: delta / theta / alpha / beta / gamma. Colors from `lib/src/charts/band_style.dart`. |
-| **Axes / units** | X: time (elapsed). Y: **absolute power µV²/Hz**. Relative % is v2. |
-| **Default window** | **30 s**. Discrete 15 / 30 / 60 / 120 s. |
-| **Channel handling** | **Mean of selected electrodes.** Top-right text labels, tap toggles average, depressed = on, default all, last-one stays. Still **one** graph. |
-| **Skip v1** | SMOOTH in the main bar, REALTIME offset, Add graph, side drawer, log-Y, relative power, overlay traces. |
+| **Series** | 5: delta / theta / alpha / beta / gamma. Colors from `lib/src/charts/band_style.dart`. Always all five; no band toggles. |
+| **Axes / units** | X: time (elapsed `m:ss`). Y: **dB** = `10·log10(max(linear µV²/Hz, ε))`. Follow Muse app / SDK / Mind Monitor. BandCache, FFI, and `.muse` stay **linear µV²/Hz**. Relative % is v2. |
+| **Mean** | Mean of selected electrodes **in dB** (Mind Monitor averages SDK log values). Linear mean-then-log is **not** the display. Still one graph. |
+| **Default window** | **30 s**. Discrete 15 / 30 / 60 / 120 s. Pinch-zoom **X** → **`custom`** (dropdown closed label; picking a preset restores). Zoom-in floor ~5 s; zoom-out cap `min(elapsed, BandCache 30 min)`. |
+| **Y scale** | Auto on visible **dB** + ~15% pad. Y may be negative; **0 is not the floor**. Ease up ~1–2 s, down ~8–15 s so the axis does not pump. |
+| **Overshoot hold** | Sample above current Y-max: **dashed hold at last in-range Y**, not the real spike and not a rail clip. Isolate in `monitor/panes/overshoot_hold.dart` (flag + helpers, **< 100 lines**) so it can be deleted in one file. Overshoot samples do **not** set the auto scale. |
+| **Channel handling** | **Mean of selected electrodes.** Top-right text labels (`toolbarExtras`), tap toggles average, depressed = on, default all, last-one stays. Still **one** graph. Not overlay, not extra graphs. Muse-4 vs Crown-8 from `lastConnectedKind`. |
+| **Follow / Inspect** | Strip (not sweep). Follow: newest at right. Inspect: freeze; pan/pinch. Drag or pinch **enters Inspect**. Follow snaps to live at the current length. |
+| **Skip v1** | SMOOTH in the main bar, REALTIME offset, Add graph, side drawer, relative power, overlay traces, pinch-Y, dashed-at-rail. **log-Y is v1** (display only). |
 
 ### Histogram
 
@@ -1274,8 +1288,9 @@ Would make `feedback_dashboard.dart` and `session_export.dart` import monitor. *
 26. **`bandNames` / `bandColors` stay in `lib/src/charts/band_style.dart`** so feedback export/dashboard never import monitor.
 27. **v1 History list is sqlite-only** (`kind` filter). Do not copy the stub `backfillPending`.
 28. **Non-EEG electrode toggles:** top-right text, depressed = in the average, default all on, last-one stays. EEG: no chips.
-29. **Graph PRs 2/3/4: ASCII wireframe first**, wait for user correction, then painters.
+29. **Graph PRs 2/3/4: ASCII wireframe first**, wait for user correction, then painters. **PR 3 ASCII is approved** (2026-09-09); do not wait again.
 30. **5 min RAM + 30 min tmp** is the locked split. Do not grow RAM to 30 min.
+31. **Bands Y is dB display** (`10·log10` of linear µV²/Hz). Storage / FFI / `.muse` stay linear. Mean of selected electrodes is in **dB**. Pinch-X → `custom` on Bands only. Overshoot hold is a strippable dashed last-in-range (see Bands table).
 
 ---
 
@@ -1289,6 +1304,12 @@ None. Previous questions resolved 2026-09-07:
 4. Spectrogram name kept.
 5. Sweep EEG kept.
 6. File-backed Inspect is required (PR 1c), not optional.
+
+Resolved 2026-09-09:
+
+7. Bands Y → **dB** (Muse app + SDK + Mind Monitor), not linear µV²/Hz and not robust-percentile linear. Storage stays linear.
+8. Bands pinch-X → dropdown **`custom`**; presets restore. No pinch-Y.
+9. Overshoot → dashed hold at last in-range Y, isolated so it can be stripped.
 
 ---
 
@@ -1353,6 +1374,8 @@ Before writing Dart for **PR 2 (Raw EEG), PR 3 (Bands), or PR 4 (Histogram / PSD
 2. **Wait** for the user to correct it.
 3. Do **not** implement the painter until that ASCII is approved.
 
+**PR 3 ASCII is approved** (2026-09-09). The next thread implements painters; do not paste-and-wait again.
+
 PRs 0, 1a, 1b, **1c**, 5a, 5b, 6 do **not** need ASCII.
 
 ---
@@ -1401,13 +1424,13 @@ PR 2 Inspect may use SweepBuffer 5 min until 1c, but **1c is not optional** and 
 - **ASCII:** required before painters (Implementer protocol).
 - **Changes:** Keep oscilloscope sweep (green wipe Follow, grey freeze Inspect). N panes from montage. Default **10 s**. No add/remove / `avgMode` / `eeg_layout_*`. **Record hidden.** No chips. Do not replace with stripchart. Do not delete `SweepBuffer`.
 
-### PR 3 — Bands in GraphShell (ASCII first)
+### PR 3 — Bands in GraphShell (ASCII **approved** 2026-09-09)
 
 - **Title:** `Standardize Bands view on GraphShell`
-- **Files:** `views/bands_view.dart`, `electrode_toggles.dart`; delete `views/bands.dart`; `.ai/ui-map.md`.
+- **Files:** `views/bands_view.dart`, `electrode_toggles.dart`, `panes/time_series_pane.dart`, `panes/overshoot_hold.dart`; delete `views/bands.dart`; `.ai/ui-map.md`.
 - **Depends on:** PR 2
-- **ASCII:** required before painters.
-- **Changes:** One pane, 5 series, 30 s default. Top-right electrode text toggles (average, depressed, all-on, last-one stays). Drop SMOOTH/REALTIME/Add graph.
+- **ASCII:** approved. Do not wait. See Bands table + user decisions 10–12.
+- **Changes:** One pane, 5 series, 30 s default. Y **dB** display (`10·log10`; storage linear). Mean of selected in dB. Pinch-X → `custom`. Overshoot dashed hold (strippable). Top-right electrode text toggles (average, depressed, all-on, last-one stays). Drop SMOOTH/REALTIME/Add graph. Record hidden.
 
 ### PR 4 — Histogram, PSD, Spectrogram (ASCII first)
 

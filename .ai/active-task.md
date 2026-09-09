@@ -2,22 +2,23 @@
 
 **Branch:** `refactor/monitor`
 
-Monitor series (frozen spec [monitor.md](monitor.md), implementer
+Monitor series (frozen spec [monitor.md](monitor.md) **rev 5**, implementer
 [TODO/handoff-monitor.md](TODO/handoff-monitor.md)). One PR per thread.
 Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
-or the v5 68-byte header.
+or the v5 68-byte header. Bands Y is **dB display** (storage linear).
 
-## Last thread — PR 2 (implemented)
+## Last thread — PR 3 ASCII (approved, specs locked)
 
-GraphShell + N stacked sweep EEG panes.
+Wireframe approved. Frozen spec updated (rev 5). Painters **not** in this
+thread — next thread implements PR 3.
 
-- `SweepBuffer` moved to `monitor/cache/`; owned by `MonitorController`.
-- Default 10 s (2560 samples). Muse-4 vs Crown-8 from `lastConnectedKind`.
-- Follow: thin theme wipe, gray traces, names in-pane top-right.
-- Inspect: wipe + previous pass vanish; fill-right with live data;
-  pan uses RAM; older than 5 min calls `FileBackedSource`.
-- Record hidden. No chips, no add/remove. Deleted `graph_config` /
-  `eeg_dashboard` / `eeg_chart` / `live_cache` / old Raw EEG views.
+- Y: **dB** = `10·log10` of linear µV²/Hz (Muse app / SDK / Mind Monitor).
+  BandCache stays linear.
+- Mean of selected electrodes **in dB**.
+- Pinch-X → dropdown **`custom`**; 15/30/60/120 restore. Default 30 s.
+- Overshoot: dashed hold at last in-range Y, isolated in
+  `overshoot_hold.dart` (<100 lines, easy to strip).
+- One pane, five series, electrode text toggles, Record hidden.
 
 ## Landed
 
@@ -25,12 +26,14 @@ GraphShell + N stacked sweep EEG panes.
 - PR 1a — `MonitorController` in `main()` + band cache
 - PR 1b — tmp writer + exclusive lease
 - PR 1c — file-backed Inspect of tmp `.raw` (`3fb276b`)
-- PR 2 — GraphShell + N stacked sweep EEG panes (`28008c9`)
+- PR 2 — GraphShell + N stacked sweep EEG panes (`a9717bb`)
+- PR 3 ASCII — spec rev 5 (this commit)
 
 ## Next
 
-**PR 3** — Bands on GraphShell + electrode toggles. **ASCII first**, then
-wait (handoff section “This thread — PR 3”). Hide Record until 5a.
+**PR 3 implementation** — Bands on GraphShell + electrode toggles.
+ASCII already approved; **do not wait**. Handoff section
+“This thread — PR 3”. Hide Record until 5a.
 
 ## Not this thread
 
