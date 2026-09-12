@@ -61,6 +61,37 @@ void main() {
     expect(only0[0].first.db, closeTo(20, 1e-6));
   });
 
+  test('highlightFractions is the T-second window on a wider strip', () {
+    final follow = highlightFractions(
+      visStart: 0,
+      visEnd: 30,
+      highlightStart: 22,
+      highlightEnd: 30,
+    );
+    expect(follow, isNotNull);
+    expect(follow!.$1, closeTo(22 / 30, 1e-9));
+    expect(follow.$2, closeTo(1, 1e-9));
+
+    final clipped = highlightFractions(
+      visStart: 10,
+      visEnd: 40,
+      highlightStart: 5,
+      highlightEnd: 18,
+    );
+    expect(clipped!.$1, closeTo(0, 1e-9));
+    expect(clipped.$2, closeTo(8 / 30, 1e-9));
+
+    expect(
+      highlightFractions(
+        visStart: 0,
+        visEnd: 30,
+        highlightStart: 40,
+        highlightEnd: 48,
+      ),
+      isNull,
+    );
+  });
+
   test('10·log10 floor (ε) does not produce NaN', () {
     expect(linearToDb(0).isFinite, isTrue);
     expect(linearToDb(-1).isFinite, isTrue);

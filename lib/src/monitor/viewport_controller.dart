@@ -99,6 +99,20 @@ class ViewportController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void inspectEndingAt(
+    double endElapsed, {
+    required double newestElapsed,
+    double oldestElapsed = 0,
+  }) {
+    mode = ViewportMode.inspect;
+    inspectStartElapsed = _clampStripStart(
+      endElapsed - windowSeconds,
+      newestElapsed: newestElapsed,
+      oldestElapsed: oldestElapsed,
+    );
+    notifyListeners();
+  }
+
   void setStripWindowSeconds(double secs, {double? newestElapsed}) {
     windowSeconds = secs;
     if (mode == ViewportMode.inspect && newestElapsed != null) {
@@ -195,6 +209,40 @@ double presetOrCustomValue(double seconds, List<double> options) {
     if ((o - seconds).abs() < 1e-6) return o;
   }
   return seconds;
+}
+
+double bandsContextZoomFloor(double epochSeconds) {
+  final t = epochSeconds.isFinite && epochSeconds > 0
+      ? epochSeconds
+      : ViewportController.bandsZoomFloor;
+  return math.max(ViewportController.bandsZoomFloor, t);
+}
+
+void ensureContextCoversEpoch({
+  required ViewportController context,
+  required double epochSeconds,
+  required double newestElapsed,
+}) {
+  if (context.windowSeconds + 1e-9 < epochSeconds) {
+    context.setStripWindowSeconds(epochSeconds, newestElapsed: newestElapsed);
+  }
+}
+
+void alignEpochToContext({
+  required ViewportController epoch,
+  required ViewportController context,
+  required double contextNewestElapsed,
+  double contextOldestElapsed = 0,
+}) {
+  if (context.mode == ViewportMode.follow) {
+    epoch.followStrip();
+    return;
+  }
+  epoch.inspectEndingAt(
+    context.stripVisibleEnd(newestElapsed: contextNewestElapsed),
+    newestElapsed: contextNewestElapsed,
+    oldestElapsed: contextOldestElapsed,
+  );
 }
 
 String formatWindowSeconds(double seconds) => '${seconds.round()}s';

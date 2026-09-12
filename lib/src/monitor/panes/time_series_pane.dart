@@ -66,6 +66,22 @@ List<List<BandPoint>> buildBandSeries({
   return series;
 }
 
+(double, double)? highlightFractions({
+  required double visStart,
+  required double visEnd,
+  required double highlightStart,
+  required double highlightEnd,
+}) {
+  final span = visEnd - visStart;
+  if (span <= 0) return null;
+  var a = (highlightStart - visStart) / span;
+  var b = (highlightEnd - visStart) / span;
+  if (a < 0) a = 0;
+  if (b > 1) b = 1;
+  if (b <= a) return null;
+  return (a, b);
+}
+
 class TimeSeriesPane extends StatefulWidget {
   const TimeSeriesPane({
     super.key,
@@ -73,12 +89,18 @@ class TimeSeriesPane extends StatefulWidget {
     required this.viewport,
     required this.newestElapsed,
     required this.connected,
+    this.highlightStartElapsed,
+    this.highlightEndElapsed,
+    this.highlightColor,
   });
 
   final List<List<BandPoint>> series;
   final ViewportController viewport;
   final double newestElapsed;
   final bool connected;
+  final double? highlightStartElapsed;
+  final double? highlightEndElapsed;
+  final Color? highlightColor;
 
   @override
   State<TimeSeriesPane> createState() => _TimeSeriesPaneState();
@@ -104,6 +126,9 @@ class _TimeSeriesPaneState extends State<TimeSeriesPane> {
         axisColor: theme.colorScheme.onSurfaceVariant,
         gridColor: theme.colorScheme.outlineVariant,
         connected: widget.connected,
+        highlightStartElapsed: widget.highlightStartElapsed,
+        highlightEndElapsed: widget.highlightEndElapsed,
+        highlightColor: widget.highlightColor ?? theme.colorScheme.primary,
       ),
     );
   }
@@ -180,6 +205,9 @@ class TimeSeriesPanePainter extends CustomPainter {
     required this.axisColor,
     required this.gridColor,
     required this.connected,
+    this.highlightStartElapsed,
+    this.highlightEndElapsed,
+    this.highlightColor = const Color(0x00000000),
   });
 
   static const double yGutter = 44;
@@ -195,6 +223,9 @@ class TimeSeriesPanePainter extends CustomPainter {
   final Color axisColor;
   final Color gridColor;
   final bool connected;
+  final double? highlightStartElapsed;
+  final double? highlightEndElapsed;
+  final Color highlightColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -216,6 +247,7 @@ class TimeSeriesPanePainter extends CustomPainter {
     _drawGrid(canvas, chart, visStart, visEnd, span);
     canvas.save();
     canvas.clipRect(chart);
+    _drawHighlight(canvas, chart, visStart, visEnd);
     if (connected) {
       for (var i = 0; i < series.length && i < bandColors.length; i++) {
         _drawSeries(canvas, chart, series[i], bandColors[i], visStart, span);
@@ -249,6 +281,38 @@ class TimeSeriesPanePainter extends CustomPainter {
       final x = chart.left + (t - visStart) / span * chart.width;
       canvas.drawLine(Offset(x, chart.top), Offset(x, chart.bottom), paint);
     }
+  }
+
+  void _drawHighlight(
+    Canvas canvas,
+    Rect chart,
+    double visStart,
+    double visEnd,
+  ) {
+    final start = highlightStartElapsed;
+    final end = highlightEndElapsed;
+    if (start == null || end == null) return;
+    final frac = highlightFractions(
+      visStart: visStart,
+      visEnd: visEnd,
+      highlightStart: start,
+      highlightEnd: end,
+    );
+    if (frac == null) return;
+    final x0 = chart.left + frac.$1 * chart.width;
+    final x1 = chart.left + frac.$2 * chart.width;
+    final rect = Rect.fromLTRB(x0, chart.top, x1, chart.bottom);
+    canvas.drawRect(
+      rect,
+      Paint()..color = highlightColor.withValues(alpha: 0.18),
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..color = highlightColor.withValues(alpha: 0.45)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
   }
 
   void _drawSeries(
@@ -438,6 +502,9 @@ class TimeSeriesPanePainter extends CustomPainter {
         old.viewport.windowSeconds != viewport.windowSeconds ||
         old.viewport.inspectStartElapsed != viewport.inspectStartElapsed ||
         old.connected != connected ||
-        old.series != series;
+        old.series != series ||
+        old.highlightStartElapsed != highlightStartElapsed ||
+        old.highlightEndElapsed != highlightEndElapsed ||
+        old.highlightColor != highlightColor;
   }
 }

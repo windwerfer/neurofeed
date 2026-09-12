@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/charts/band_style.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/monitor/cache/sweep_mean.dart';
 import 'package:muse_ml/src/monitor/dsp.dart';
@@ -8,7 +9,9 @@ import 'package:muse_ml/src/monitor/empty_state.dart';
 import 'package:muse_ml/src/monitor/graph_shell.dart';
 import 'package:muse_ml/src/monitor/monitor_controller.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
+import 'package:muse_ml/src/monitor/panes/bands_context_strip.dart';
 import 'package:muse_ml/src/monitor/panes/histogram_pane.dart';
+import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
 
 enum HistogramUvRange { uv50, uv100, uv200 }
@@ -23,6 +26,8 @@ class HistogramView extends ConsumerStatefulWidget {
 class _HistogramViewState extends ConsumerState<HistogramView> {
   final ViewportController _viewport = ViewportController()
     ..windowSeconds = ViewportController.histogramDefaultWindowSeconds;
+  final ViewportController _strip = ViewportController()
+    ..windowSeconds = ViewportController.bandsDefaultWindowSeconds;
 
   Set<int> _selected = {};
   int _montageLen = 0;
@@ -32,11 +37,11 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
   @override
   void initState() {
     super.initState();
-    ref
-        .read(monitorControllerProvider.notifier)
-        .sweepBuffer
-        .addListener(_onTick);
+    final mon = ref.read(monitorControllerProvider.notifier);
+    mon.sweepBuffer.addListener(_onTick);
+    mon.bandCache.addListener(_onTick);
     _viewport.addListener(_onTick);
+    _strip.addListener(_onTick);
   }
 
   void _onTick() {
@@ -46,8 +51,11 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
   @override
   void dispose() {
     _mon.sweepBuffer.removeListener(_onTick);
+    _mon.bandCache.removeListener(_onTick);
     _viewport.removeListener(_onTick);
+    _strip.removeListener(_onTick);
     _viewport.dispose();
+    _strip.dispose();
     super.dispose();
   }
 
@@ -66,6 +74,23 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
   double _newestElapsed() =>
       sweepNewestElapsed(_mon.sweepBuffer, _mon.ramNewestElapsed);
 
+  double _bandNewest() {
+    final cache = _mon.bandCache;
+    final startMs = ref.read(monitorControllerProvider).captureStartedAtMs;
+    if (!cache.hasData) return _newestElapsed();
+    return cache.latestTimestamp - bandOriginUnix(cache, startMs);
+  }
+
+  double _bandOldest() {
+    final cache = _mon.bandCache;
+    final startMs = ref.read(monitorControllerProvider).captureStartedAtMs;
+    if (!cache.hasData) return 0;
+    final origin = bandOriginUnix(cache, startMs);
+    var oldest = cache.oldestTimestamp - origin;
+    if (oldest < 0) oldest = 0;
+    return oldest;
+  }
+
   double get _halfRange {
     switch (_uv) {
       case HistogramUvRange.uv50:
@@ -77,10 +102,38 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
     }
   }
 
-  void _follow() => _viewport.followStrip();
+  void _follow() {
+    _strip.followStrip();
+    _viewport.followStrip();
+  }
 
-  void _inspect() =>
-      _viewport.enterInspectStrip(newestElapsed: _newestElapsed());
+  void _inspect() {
+    _strip.enterInspectStrip(newestElapsed: _bandNewest());
+    alignEpochToContext(
+      epoch: _viewport,
+      context: _strip,
+      contextNewestElapsed: _bandNewest(),
+      contextOldestElapsed: _bandOldest(),
+    );
+  }
+
+  void _onWindowChanged(double seconds) {
+    final newest = _newestElapsed();
+    _viewport.setStripWindowSeconds(seconds, newestElapsed: newest);
+    ensureContextCoversEpoch(
+      context: _strip,
+      epochSeconds: seconds,
+      newestElapsed: _bandNewest(),
+    );
+    if (_strip.mode == ViewportMode.inspect) {
+      alignEpochToContext(
+        epoch: _viewport,
+        context: _strip,
+        contextNewestElapsed: _bandNewest(),
+        contextOldestElapsed: _bandOldest(),
+      );
+    }
+  }
 
   Widget _uvMenu(BuildContext context) {
     final label = '±${_halfRange.round()} µV';
@@ -130,6 +183,19 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
     final inspectLabel = _viewport.mode == ViewportMode.inspect
         ? '${formatElapsed(start)}–${formatElapsed(end)}'
         : null;
+    final bandNewest = _bandNewest();
+    final bandOldest = _bandOldest();
+    final stripStart = _strip.stripVisibleStart(newestElapsed: bandNewest);
+    final stripEnd = _strip.stripVisibleEnd(newestElapsed: bandNewest);
+    final series = connected
+        ? buildBandSeries(
+            cache: _mon.bandCache,
+            electrodes: _selected,
+            startElapsed: stripStart,
+            endElapsed: stripEnd,
+            captureStartedAtMs: state.captureStartedAtMs,
+          )
+        : [for (var i = 0; i < bandNames.length; i++) <BandPoint>[]];
 
     return GraphShell(
       title: 'Histogram',
@@ -138,8 +204,7 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
       windowOptions: ViewportController.histogramPsdWindowOptions,
       onFollow: _follow,
       onInspect: _inspect,
-      onWindowChanged: (s) =>
-          _viewport.setStripWindowSeconds(s, newestElapsed: newest),
+      onWindowChanged: _onWindowChanged,
       inspectRangeLabel: inspectLabel,
       toolbarMiddle: _uvMenu(context),
       toolbarExtras: ElectrodeToggles(
@@ -151,26 +216,33 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
           });
         },
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: HistogramPane(
-                    counts: counts,
-                    halfRange: _halfRange,
-                    connected: connected,
-                    hairlineUv: _hairlineUv,
-                    onTapUv: (uv) => setState(() => _hairlineUv = uv),
-                  ),
-                ),
-                if (connected && !buffer.hasData)
-                  const Positioned.fill(child: MonitorWaitingSignal()),
-              ],
+      body: HistogramPsdSplit(
+        primary: Stack(
+          children: [
+            Positioned.fill(
+              child: HistogramPane(
+                counts: counts,
+                halfRange: _halfRange,
+                connected: connected,
+                hairlineUv: _hairlineUv,
+                onTapUv: (uv) => setState(() => _hairlineUv = uv),
+              ),
             ),
-          ),
-        ],
+            if (connected && !buffer.hasData)
+              const Positioned.fill(child: MonitorWaitingSignal()),
+          ],
+        ),
+        strip: BandsContextStrip(
+          stripViewport: _strip,
+          epochViewport: _viewport,
+          series: series,
+          stripNewestElapsed: bandNewest,
+          stripOldestElapsed: bandOldest,
+          highlightStartElapsed: start,
+          highlightEndElapsed: end,
+          connected: connected,
+          waiting: connected && !_mon.bandCache.hasData,
+        ),
       ),
     );
   }

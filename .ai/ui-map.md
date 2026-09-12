@@ -95,34 +95,36 @@ average membership, not extra graphs.
 
 ### Histogram — `lib/src/monitor/views/histogram_view.dart`
 
-GraphShell chrome. Record / Stop recording. One pane (Column +
-Expanded; PR 7 will add a Bands strip). Mean of selected electrodes.
-No time slider. No pinch-`custom`.
+GraphShell chrome. Record / Stop recording. ~70% histogram + ~30% Bands
+context strip (`HistogramPsdSplit` flex 7/3). Mean of selected electrodes
+drives both panes. No time slider. Histogram X is µV (no pinch-`custom`).
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Last T seconds. |
-| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. |
-| Window length | `2s` `4s` `8s` | `histogramPsdWindowOptions` | `graph_shell.dart` | Default **8 s**. |
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Last T seconds. Highlight flush-right on the strip. |
+| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. Pan/pinch on the strip. |
+| Window length | `2s` `4s` `8s` | `histogramPsdWindowOptions` | `graph_shell.dart` | Default **8 s**. Highlight width = T. |
 | µV range | `±100 µV` | `HistogramUvRange` | `histogram_view.dart` | Own domain. Overflow ±50 / ±200. Not Raw EEG Y-scale. |
-| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership. Last one stays. |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for histogram **and** strip. Last one stays. |
 | Hairline | `−12 µV   48` | tap on pane | `histogram_pane.dart` | Tap, not drag. |
-| Landscape cinema | — | `appViewIsGraph` | `app.dart` / `graph_shell.dart` | Hides status bar, sidebar, toolbar. |
+| Bands context strip | `30s` / `custom` | `BandsContextStrip` | `panes/bands_context_strip.dart` | Default **30 s**. Pinch-X like Bands. Compact dropdown on the strip, not GraphShell. |
+| Landscape cinema | — | `appViewIsGraph` | `app.dart` / `graph_shell.dart` | Hides status bar, sidebar, toolbar, and strip `30s ▾`. Both panes stay. |
 
 ### PSD — `lib/src/monitor/views/psd_view.dart`
 
-GraphShell title `Power Spectral Density`. Record / Stop recording. Column +
-Expanded (PR 7 hook). Welch of last T seconds.
+GraphShell title `Power Spectral Density`. Record / Stop recording. Same
+70/30 split and Bands context strip as Histogram. Welch of last T seconds.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Last T seconds. |
-| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. |
-| Window length | `2s` `4s` `8s` | `histogramPsdWindowOptions` | `graph_shell.dart` | Default **4 s**. |
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Last T seconds. Highlight flush-right on the strip. |
+| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. Pan/pinch on the strip. |
+| Window length | `2s` `4s` `8s` | `histogramPsdWindowOptions` | `graph_shell.dart` | Default **4 s**. Highlight width = T. |
 | Hz range | `0–60 Hz` | `PsdHzRange` | `psd_view.dart` | Overflow `0–100 Hz`. |
-| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership. Last one stays. |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for PSD **and** strip. Last one stays. |
 | Hairline | `10.2 Hz   −8.4 dB` | tap on pane | `psd_pane.dart` | Tap, not drag. |
 | Alpha peak | `{n} Hz` | `alphaPeakHz` | `dsp.dart` | Argmax 8–13 Hz. |
+| Bands context strip | `30s` / `custom` | `BandsContextStrip` | `panes/bands_context_strip.dart` | Same strip as Histogram. Spectrogram does **not** get this strip. |
 
 ### Spectrogram — `lib/src/monitor/views/spectrogram_view.dart`
 

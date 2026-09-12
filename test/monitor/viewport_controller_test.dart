@@ -209,6 +209,50 @@ void main() {
     expect(v.windowSeconds, 47);
   });
 
+  test('alignEpochToContext right-aligns T on the strip window', () {
+    final epoch = ViewportController()..windowSeconds = 8;
+    final context = ViewportController()..windowSeconds = 30;
+    context.enterInspectStrip(newestElapsed: 80);
+    expect(context.stripVisibleStart(newestElapsed: 80), closeTo(50, 1e-9));
+    alignEpochToContext(
+      epoch: epoch,
+      context: context,
+      contextNewestElapsed: 80,
+    );
+    expect(epoch.mode, ViewportMode.inspect);
+    expect(epoch.stripVisibleStart(newestElapsed: 80), closeTo(72, 1e-9));
+    expect(epoch.stripVisibleEnd(newestElapsed: 80), closeTo(80, 1e-9));
+    expect(epoch.windowSeconds, 8);
+
+    context.followStrip();
+    alignEpochToContext(
+      epoch: epoch,
+      context: context,
+      contextNewestElapsed: 80,
+    );
+    expect(epoch.mode, ViewportMode.follow);
+  });
+
+  test('bandsContextZoomFloor is max(5 s, T); context covers epoch T', () {
+    expect(bandsContextZoomFloor(2), ViewportController.bandsZoomFloor);
+    expect(bandsContextZoomFloor(8), 8);
+    expect(bandsContextZoomFloor(4), ViewportController.bandsZoomFloor);
+
+    final context = ViewportController()..windowSeconds = 5;
+    ensureContextCoversEpoch(
+      context: context,
+      epochSeconds: 8,
+      newestElapsed: 40,
+    );
+    expect(context.windowSeconds, 8);
+    ensureContextCoversEpoch(
+      context: context,
+      epochSeconds: 4,
+      newestElapsed: 40,
+    );
+    expect(context.windowSeconds, 8);
+  });
+
   test('pinchX zoom floor is 5 s and cap is min(elapsed, 1800)', () {
     final v = ViewportController()..windowSeconds = 30;
     v.pinchX(

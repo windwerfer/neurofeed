@@ -38,6 +38,7 @@ flutter test \
   test/monitor/histogram_pane_test.dart \
   test/monitor/electrode_toggles_test.dart \
   test/monitor/time_series_pane_test.dart \
+  test/monitor/bands_context_strip_test.dart \
   test/monitor/overshoot_hold_test.dart \
   test/monitor/recording_metadata_test.dart \
   test/history_filter_test.dart \

@@ -11,6 +11,7 @@ export 'graph_shell.dart';
 export 'monitor_controller.dart';
 export 'monitor_providers.dart';
 export 'monitor_state.dart';
+export 'panes/bands_context_strip.dart';
 export 'panes/histogram_pane.dart';
 export 'panes/overshoot_hold.dart';
 export 'panes/psd_pane.dart';

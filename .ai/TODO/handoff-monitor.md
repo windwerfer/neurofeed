@@ -3,12 +3,12 @@
 | Field | Value |
 |---|---|
 | Date | 2026-09-12 |
-| Spec | [../monitor.md](../monitor.md) — **frozen Key Decisions. Do not reopen.** Rev **6**. Bands Y is **dB display**. **PR 6 unified History landed.** |
-| Branch | `refactor/monitor` (PR 0 `22cfd38`, PR 1a `2a66eae`, PR 1b `8a0b9f0`, PR 1c `3fb276b`, PR 2 `a9717bb`, PR 3 ASCII `8e45d37`, PR 3 `878cc8a`, PR 4 ASCII `4c968fa`, PR 4 `c3a40f5`, PR 5a `4fc83ec`, PR 5b `d4afac0`, PR 6 **this commit**). |
-| Cadence | **One PR per thread.** This file is the series map. Next is **PR 7** (Bands context strip under Histogram/PSD — **ASCII first**). |
+| Spec | [../monitor.md](../monitor.md) — **frozen Key Decisions. Do not reopen.** Rev **6**. Bands Y is **dB display**. **PR 7 Bands context strip landed.** |
+| Branch | `refactor/monitor` (PR 0 `22cfd38`, PR 1a `2a66eae`, PR 1b `8a0b9f0`, PR 1c `3fb276b`, PR 2 `a9717bb`, PR 3 ASCII `8e45d37`, PR 3 `878cc8a`, PR 4 ASCII `4c968fa`, PR 4 `c3a40f5`, PR 5a `4fc83ec`, PR 5b `d4afac0`, PR 6 `5195eca`, PR 7 **this commit**). |
+| Cadence | **One PR per thread.** This file is the series map. Next is **PR 8** (Spectrogram `FFT 1s ▾` — last in the series). |
 | Do not mix | Crown Start, OSC-connect, pipeline-contract Key Decisions, v5 68-byte header / FRB, Android foreground service, Athena optics, growing status-bar pads to 8. |
 
-Read the spec first (`Key Decisions`, **Histogram + PSD — Bands as a time map (PR 7)**). This file is implementer order, current-code pitfalls, and the **PR 7** start. Do not re-design graphs, naming, or the lease. Do not implement 8. **Paste ASCII and wait** before painters.
+Read the spec first (`Key Decisions`, **Spectrogram FFT window (PR 8)**). This file is implementer order, current-code pitfalls, and the **PR 8** start. Do not re-design graphs, naming, or the lease. Do not add averaging. After 8, archive this handoff.
 
 ---
 
@@ -32,13 +32,13 @@ After **PR 8**: archive this file to `.ai/archive/`, update `.ai/architecture.md
 
 ## Paste this to start a new thread
 
-**PR 7 (this thread). Bands context strip under Histogram and PSD. ASCII first. Do not start 8.**
+**PR 8 (this thread). Spectrogram FFT window. Last in the series. Do not add averaging.**
 
 ```
-Implement monitor PR 7: Bands context strip (~30%) under Histogram and PSD. Spec: .ai/monitor.md (frozen, rev 6) section “Histogram + PSD — Bands as a time map (PR 7)”. Handoff: .ai/TODO/handoff-monitor.md (section “This thread — PR 7”).
-ASCII first: paste a two-pane wireframe (Histogram and the same for PSD) and wait for approval. Do not implement painters until the ASCII is approved in-thread. Do not start PR 8.
-PR 4 already left Column + Expanded + shared ViewportController epoch. Reuse TimeSeriesPane; do not fork the Bands sidebar view. Highlight is time only (width = Histogram/PSD 2/4/8 s window). Bands strip is wider than T (default 30 s, pinch-X custom like Bands). One electrode-toggle set drives both panes. Spectrogram does not get this strip. Landscape cinema: both panes, no chrome.
-When ASCII is approved: implement the strip; update .ai/ui-map.md; flutter analyze lib/src. Then Close the thread: commit; rewrite .ai/TODO/handoff-monitor.md and .ai/active-task.md for PR 8 (Landed + This thread + fenced next-thread prompt); reply with that fenced prompt. If ASCII is not yet approved, stop after the wireframe — do not implement. Do not skip the commit or the next-thread prompt once implementation lands.
+Implement monitor PR 8: Spectrogram FFT window chrome. Spec: .ai/monitor.md (frozen, rev 6) section “Spectrogram FFT window (PR 8)”. Handoff: .ai/TODO/handoff-monitor.md (section “This thread — PR 8”).
+Chrome `FFT 1s ▾` next to `20s` / `mag ▾` with discrete 0.5 s / 1 s / 2 s → 128 / 256 / 512. Default 1 s. Not a free slider. dsp.dart n is already parameterized. Spectrogram only; PSD Welch stays 1 s / 256-pt. Do not add averaging. Do not give Histogram/PSD this control. Do not add a Bands strip to Spectrogram.
+Update .ai/ui-map.md. flutter analyze lib/src.
+This is the last PR in the series. Close the thread: commit; archive .ai/TODO/handoff-monitor.md to .ai/archive/; update .ai/architecture.md and .ai/README.md; rewrite .ai/active-task.md as series complete. Reply that the series is complete — no next-thread prompt.
 ```
 
 ---
@@ -58,15 +58,16 @@ When ASCII is approved: implement the strip; update .ai/ui-map.md; flutter analy
 | **4** | `c3a40f5` — Histogram + PSD + Spectrogram painters. `AppView.histogram`. Landscape cinema. `dsp.dart` Hamming `1/N²`, `n` parameterized. Record still hidden. |
 | **5a** | `4fc83ec` — Record / Stop / assemble / 409 `recording_active`. |
 | **5b** | `d4afac0` — Crash recovery for `recording_*` + sqlite `kind`. |
-| **6** | **this commit** — Unified History + All/Feedback/Recordings filter + Save files to folder. |
+| **6** | `5195eca` — Unified History + All/Feedback/Recordings filter + Save files to folder. |
+| **7** | **this commit** — Bands context strip under Histogram and PSD. |
 
-### PR 6 shipped
+### PR 7 shipped
 
-- Sidebar **History** (`AppView.feedbackHistory` unchanged). Filter All \| Feedback \| Recordings on `FeedbackHistoryView`. `SessionSummary.kind` / `path` from sqlite. Default All.
-- `kind = feedback` → `FeedbackDashboardView`. `kind = recording` → `monitor/views/recording_dashboard.dart` (Follow disabled; Inspect via in-memory `v5ExtractRaw`; reuse panes). v1 recording thumbs are not sparklines.
-- v1 list is sqlite-only: no directory backfill of `recording_*` without a row. No `AppView.recordings`. No `recording_metadata.db`.
-- `SessionStore` read/delete/`updateNotes` use sqlite `path` (recordings are `recording_$id.muse.feedback`, not `session_$id`). `moveAllTo` copies both `session_` and `recording_` `.muse.feedback`.
-- Settings card **Save files to folder**. Folder-change dialog: `Move {s} session(s) and {r} recording(s) into the new folder? Choosing No leaves them in the current folder.` `_applyFolder` and `_resetFolder` both invalidate `sessionListProvider`.
+- Histogram and PSD: `HistogramPsdSplit` flex **7 / 3** (~70% / ~30%). Constants `kHistogramPsdPrimaryFlex` / `kBandsContextStripFlex` — not a user setting.
+- Bottom pane is `BandsContextStrip`: same `TimeSeriesPane` as sidebar Bands + time-only highlight. Highlight width = GraphShell T (2 / 4 / 8 s). Follow = flush-right (last T of the strip).
+- Strip window default **30 s**; pinch-X like Bands (`custom`); compact `30s ▾` on the strip (not a second GraphShell dropdown). Landscape hides that dropdown; both panes stay.
+- One electrode-toggle set drives histogram/PSD mean **and** strip mean. Histogram/PSD painters unchanged.
+- Spectrogram: no strip. Standalone Bands unchanged. Recording-dashboard Histogram/PSD stay one pane.
 
 ---
 
@@ -84,22 +85,25 @@ When ASCII is approved: implement the strip; update .ai/ui-map.md; flutter analy
 | **5a** | Record / Stop / assemble / 409 `recording_active` | no — landed | 1b, 2 |
 | **5b** | Crash recovery + `publish` into `session_metadata.db` (`kind`) | no — landed | 5a |
 | **6** | Unified History list + filter + Save files to folder | no — landed | 5b |
-| **7** | Bands context strip (~30%) under Histogram and PSD | **yes** — **this thread** | 4, 6 |
-| **8** | Spectrogram `FFT 1s ▾` 0.5 / 1 / 2 s (128 / 256 / 512) | no | 4, 7 |
+| **7** | Bands context strip (~30%) under Histogram and PSD | **yes** — landed | 4, 6 |
+| **8** | Spectrogram `FFT 1s ▾` 0.5 / 1 / 2 s (128 / 256 / 512) | no — **this thread** | 4, 7 |
 
 Copy changes update `.ai/ui-map.md` in the same PR.
 
 ---
 
-## Current code (after PR 6)
+## Current code (after PR 7)
 
-| Piece | Where | After 6 |
+| Piece | Where | After 7 |
 |---|---|---|
 | Connect writer | `MonitorController` + `MonitorRecorder` | `tmp_$ts` on connect; **Record** starts `recording_$ts.{raw,computed,json}`. |
 | Index | `monitor/cache/recording_index.dart` | Same `RecordingIndex` on tmp and recording `flushRaw`. Rotate (tmp only) clears. |
 | Assemble | `MonitorRecorder.assemble` → `writeScratchV5(prefix: recording)` | Placeholder WebP. Never assemble tmp. |
 | Save/Discard | `monitor/views/recording_save_discard.dart` | Title param. Live Save → `RecordingStore.publish`. Crash recovery title `Incomplete recording detected`. `RecordingSaveHost` on `AppShell`. |
 | GraphShell | `monitor/graph_shell.dart` | `showRecord: true` on five live views. `followEnabled: false` on recording dashboard. Landscape hides toolbar. |
+| Histogram / PSD | `monitor/views/{histogram,psd}_view.dart` | `HistogramPsdSplit` 7/3 + `BandsContextStrip`. GraphShell `2s/4s/8s` is T. Strip default 30 s. |
+| Bands strip | `monitor/panes/bands_context_strip.dart` | Reuses `TimeSeriesPane`. Highlight overlay is time only. Compact `30s ▾` / `custom`. |
+| Spectrogram | `monitor/views/spectrogram_view.dart` | One pane. `mag ▾`. FFT still 256-pt (`kDefaultFftN`). **PR 8** adds `FFT 1s ▾`. |
 | CaptureLease | `monitor/recording/capture_lease.dart` | idle/tmp/recording/feedback. tmp→recording, recording→idle. Feedback refuses recording. |
 | Agent | `agent_commands.dart` | `/record/start\|stop`; `_start` 412 `not_connected` → 409 `crown_refused` → 409 `recording_active`. |
 | Feedback Start | `feedback_session.dart` | `_refuseCrownStart` then `_refuseRecordingStart`. |
@@ -107,80 +111,72 @@ Copy changes update `.ai/ui-map.md` in the same PR.
 | RecordingStore | `monitor/recording/recording_store.dart` | publish = history-root file + sqlite `kind=recording`. Discard deletes scratch. |
 | Sqlite | `feedback/session_sqlite.dart` | `kind TEXT NOT NULL DEFAULT 'feedback'`. |
 | History list | `views/feedback_history.dart` | On-screen **History**. Filter All \| Feedback \| Recordings. Open by `kind`. |
-| Recording dashboard | `monitor/views/recording_dashboard.dart` | Follow disabled. Inspect `v5ExtractRaw`. Reuses panes. |
+| Recording dashboard | `monitor/views/recording_dashboard.dart` | Follow disabled. Inspect `v5ExtractRaw`. Histogram/PSD still one pane (no strip). |
 | SessionStore | `feedback/session_store_core.dart` | List carries `kind`/`path`. Read/delete by sqlite `path`. `moveAllTo` both prefixes. sqlite-only list. |
 | Folder change | `views/settings_view.dart` | Card **Save files to folder**. Dialog counts both prefixes. `sessionListProvider` invalidated from `_applyFolder` and `_resetFolder`. |
 
 ---
 
-## This thread — PR 7
+## This thread — PR 8
 
-**Title:** `Add Bands context strip under Histogram and PSD`
+**Title:** `Add Spectrogram FFT 1s window control`
 
-**ASCII first.** Spec: **Histogram + PSD — Bands as a time map (PR 7)**. PR 4 left `Column` + `Expanded` + shared epoch. **Paste ASCII and wait** before painters.
+No ASCII. Spec: **Spectrogram FFT window (PR 8)**. Then archive this handoff.
 
-When ASCII is approved and the strip is implemented, follow **Close the thread** (commit + rewrite this file for PR 8 + fenced next-thread prompt). If ASCII is not approved yet, stop after the wireframe.
+When the chrome is implemented, follow **Close the thread** with the **After PR 8** rule (archive + architecture/README; **no** next-thread prompt).
 
 ### Do
 
-- Paste a two-pane ASCII wireframe for Histogram (same chrome for PSD): ~70% histogram/PSD + ~30% Bands context strip. Highlight width = T (2 / 4 / 8 s). Bands strip **wider** than T (default **30 s**, pinch-X `custom` like Bands).
-- After approval: insert `TimeSeriesPane` under the existing `Expanded` pane. Highlight overlay is **time only**. Histogram stays raw µV in `[start, start+T]`; PSD stays Welch of that window. Bands is the map, not the data source.
-- One electrode-toggle set drives both panes.
-- Landscape cinema: both panes, no chrome (PR 4 already cinemas GraphShell).
-- Reuse `TimeSeriesPane`. Do not fork the Bands sidebar view. Do not change standalone Bands behavior except by sharing the pane widget.
+- Chrome **`FFT 1s ▾`** next to `20s` / `mag ▾`. Discrete **0.5 s / 1 s / 2 s** → **128 / 256 / 512**. Default **1 s**. Not a free slider.
+- Pass that `n` into `stftColumns` / `dsp.dart` (already parameterized). Longer window → finer Hz, more time smear per column.
+- Spectrogram **only**. Live `SpectrogramView`. Recording-dashboard spectrogram already has `mag ▾` — give it the same FFT control if it calls `stftColumns`.
 - Update `.ai/ui-map.md` when chrome copy lands.
 
 ### Do not
 
-- Implement before the ASCII is approved.
-- PR 8 Spectrogram `FFT 1s ▾`.
-- Give Spectrogram this strip (X is already time).
-- Fork Bands view / `TimeSeriesPane`. Change Histogram / PSD / Spectrogram **painters** (the histogram/PSD painters stay; add a strip below).
-- Time slider (none in PR 4; this strip replaces Inspect-elapsed as the primary time map).
+- Averaging 1/4/8 s (rejected). Hold-finger readout. Hz-range dual-thumb.
+- Change PSD Welch (stays 1 s / 256-pt). Do not add `FFT 1s ▾` to Histogram or PSD.
+- Bands context strip on Spectrogram (X is already time).
+- Fork `dsp.dart` or rewrite Cooley–Tukey. Do not add an FFT package.
 - Crown Start, OSC-connect, v5 header, growing pads to 8.
 - Widget goldens / `integration_test`.
 
-### Target files (after ASCII approval)
+### Target files
 
 ```
-lib/src/monitor/views/histogram_view.dart
-lib/src/monitor/views/psd_view.dart
-lib/src/monitor/panes/time_series_pane.dart   # highlight overlay only if needed; do not fork
+lib/src/monitor/views/spectrogram_view.dart
+lib/src/monitor/dsp.dart                  # n already parameterized; mapping helper only if needed
+lib/src/monitor/views/recording_dashboard.dart   # spectrogram graph, same FFT chrome
 .ai/ui-map.md
 .ai/test-matrix.md
+.ai/architecture.md                       # series complete
+.ai/README.md                             # series complete
+.ai/TODO/handoff-monitor.md               # move to .ai/archive/
+.ai/active-task.md
 ```
 
-### Tests (after implement)
+### Tests
 
-- Histogram / PSD still `Column` + `Expanded` + strip; epoch matches the highlight
-- One electrode set drives both panes
-- Spectrogram view unchanged (no strip)
+- Default `n = 256` (1 s). 0.5 s → 128; 2 s → 512.
+- PSD Welch still `n = 256` / 1 s segments.
+- Hamming + `1/N²` still locked at 256; extend for 128 / 512 if not already.
 - `flutter analyze lib/src` clean
 
-### Verify (PR 7)
+### Verify (PR 8)
 
 ```bash
 flutter analyze lib/src
-flutter test test/monitor/histogram_pane_test.dart test/monitor/time_series_pane_test.dart test/monitor/graph_shell_test.dart
+flutter test test/monitor/dsp_test.dart test/monitor/graph_shell_test.dart
 ```
 
 Do **not** run FRB. Do **not** `cargo check --target aarch64-linux-android`.
 
-### PR 7 done when
+### PR 8 done when
 
-- ASCII approved in-thread
-- Histogram and PSD show a ~30% Bands context strip; highlight = T-second window
-- Spectrogram unchanged; standalone Bands unchanged
+- Spectrogram chrome `FFT 1s ▾` with 0.5 / 1 / 2 s
+- PSD Welch unchanged; Histogram/PSD strip unchanged
 - `flutter analyze lib/src` clean
-- **Close the thread:** rewrite this handoff + `active-task.md` for PR 8, **commit**, reply with the fenced PR 8 paste prompt
-
----
-
-## Next threads (do not start in PR 7)
-
-### PR 8 — Spectrogram FFT window
-
-After 7. Chrome `FFT 1s ▾` 0.5 / 1 / 2 s → 128 / 256 / 512. `dsp.dart` `n` already parameterized. PSD Welch stays 1 s / 256-pt. Then archive this handoff.
+- **Close the series:** archive this handoff to `.ai/archive/`, update architecture + README, rewrite `active-task.md`, **commit**, reply that the series is complete (**no** fenced next-thread prompt)
 
 ---
 
@@ -198,14 +194,16 @@ History list stays `lib/src/views/feedback_history.dart`. Recording dashboard / 
 
 ## Pitfalls
 
-- **PR 7 is ASCII first.** Paste the two-pane wireframe and wait. Do not paint the strip until approved.
-- **Do not fork Bands view.** Reuse `TimeSeriesPane`. Highlight is time only.
-- **Spectrogram does not get this strip.**
+- **No averaging.** `FFT 1s ▾` is the FFT-window control instead of averaging.
+- **PSD Welch stays 1 s / 256-pt.** Do not thread Spectrogram `n` into `welch()`.
+- **Do not add a Bands strip to Spectrogram.**
+- **Do not fork Bands view.** Histogram/PSD strip already reuses `TimeSeriesPane`.
 - **v1 History list is sqlite-only** (landed PR 6). Do not add a directory backfill of `recording_*` without a row.
 - **`SessionStore` read/delete use sqlite `path`.** Recordings are `recording_$id.muse.feedback`.
 - **No `AppView.recordings`.** Enum stays `feedbackHistory`; on-screen **History**.
 - Agent HTTP: `persist: false`. Crown 409 stays `crown_refused`.
 - `flutter analyze lib/src` after every Dart PR.
+- After this PR, **archive the handoff**. Do not leave a “PR 9” prompt.
 
 ---
 
@@ -218,7 +216,7 @@ Every PR: this handoff + `.ai/active-task.md` + **commit** + fenced next-thread 
 | Any on-screen copy | `.ai/ui-map.md` in that PR |
 | `/record/*` and 409 (PR 5a) | testing-guide + ui-map |
 | History label / Save files to folder (PR 6) | ui-map |
-| Bands strip under Histogram/PSD (PR 7) | ui-map |
+| Bands strip under Histogram/PSD (PR 7) | ui-map — landed |
 | Spectrogram `FFT 1s ▾` (PR 8) | ui-map |
 | Series complete (after **8**) | `.ai/architecture.md`, `.ai/README.md`; move this handoff to `.ai/archive/` |
 

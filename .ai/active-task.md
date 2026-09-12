@@ -7,12 +7,12 @@ Monitor series (frozen spec [monitor.md](monitor.md) **rev 6**, implementer
 Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
 or the v5 68-byte header. Bands Y is **dB display** (storage linear).
 
-## Last thread — PR 6
+## Last thread — PR 7
 
-Unified History: sidebar **History**, filter All | Feedback | Recordings.
-Recording rows open `recording_dashboard.dart` (Follow disabled). Settings
-card **Save files to folder**; folder-change copies `session_` and
-`recording_` prefixes. sqlite-only list; delete/read by sqlite `path`.
+Bands context strip under Histogram and PSD (~70/30 flex, not a user
+setting). Reuses `TimeSeriesPane`; highlight is time only (width = T).
+Strip default 30 s, pinch-X `custom`. One electrode set drives both panes.
+Spectrogram unchanged. Recording-dashboard Histogram/PSD stay one pane.
 
 ## Landed
 
@@ -27,13 +27,13 @@ card **Save files to folder**; folder-change copies `session_` and
 - PR 4 — Histogram + PSD + Spectrogram painters (`c3a40f5`)
 - PR 5a — Record / Stop / assemble / 409 `recording_active` (`4fc83ec`)
 - PR 5b — Crash recovery + sqlite `kind` (`d4afac0`)
-- PR 6 — Unified History + filter + Save files to folder (this commit)
+- PR 6 — Unified History + filter + Save files to folder (`5195eca`)
+- PR 7 — Bands context strip under Histogram and PSD (this commit)
 
 ## Next
 
-**PR 7** — Bands context strip under Histogram and PSD. **ASCII first**
-(paste wireframe and wait). Handoff section “This thread — PR 7”. Then
-**8** Spectrogram `FFT 1s ▾`.
+**PR 8** — Spectrogram `FFT 1s ▾` 0.5 / 1 / 2 s (128 / 256 / 512). Last in
+the series. Handoff section “This thread — PR 8”. Then archive the handoff.
 
 ## Not this thread
 
@@ -44,8 +44,7 @@ card **Save files to folder**; folder-change copies `session_` and
 - Publish `third_party/edf_export` to git+tag once export proves out on device.
 - Athena optics raw stream (muse-rs `Optics`, session tag 11). Queued:
   [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md).
-- PR 8 Spectrogram FFT window.
-- Implementing the Bands strip before ASCII approval.
+- Averaging, a Bands strip on Spectrogram, or changing PSD Welch.
 
 ## How to verify BLE (still)
 
