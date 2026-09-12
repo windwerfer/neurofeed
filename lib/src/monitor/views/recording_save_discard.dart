@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
+import 'package:muse_ml/src/monitor/recording/crash_recovery.dart';
+
+const kSaveRecordingTitle = 'Save recording?';
+const kIncompleteRecordingTitle = 'Incomplete recording detected';
 
 /// Save / Discard for an assembled `recording_$ts.muse.feedback`.
-/// Same dialog on GraphShell Stop, session-view Stop, and in-app disconnect.
+/// Same dialog on GraphShell Stop, session-view Stop, in-app disconnect,
+/// and launch crash recovery (title [kIncompleteRecordingTitle]).
 Future<void> showRecordingSaveDiscardDialog({
   required BuildContext context,
   required Future<void> Function() onSave,
   required Future<void> Function() onDiscard,
+  String title = kSaveRecordingTitle,
 }) async {
   final choice = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
-    builder: (ctx) => const RecordingSaveDiscardDialog(),
+    builder: (ctx) => RecordingSaveDiscardDialog(title: title),
   );
   if (choice == true) {
     await onSave();
@@ -22,14 +29,19 @@ Future<void> showRecordingSaveDiscardDialog({
 }
 
 class RecordingSaveDiscardDialog extends StatelessWidget {
-  const RecordingSaveDiscardDialog({super.key});
+  const RecordingSaveDiscardDialog({
+    super.key,
+    this.title = kSaveRecordingTitle,
+  });
+
+  final String title;
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       child: AlertDialog(
-        title: const Text('Save recording?'),
+        title: Text(title),
         content: const Text('Save this recording to History, or discard it.'),
         actions: [
           TextButton(
@@ -43,6 +55,26 @@ class RecordingSaveDiscardDialog extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// After feedback's session_* crash dialog. Scans `recording_*` only.
+Future<void> showRecordingCrashRecoveryDialog(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final storage = await ref.read(sessionStorageProvider.future);
+  final recovered = await scanRecoverableRecordings(scratchDirectory(storage));
+  if (recovered.isEmpty) return;
+  final store = await ref.read(recordingStoreProvider.future);
+  for (final rec in recovered) {
+    if (!context.mounted) return;
+    await showRecordingSaveDiscardDialog(
+      context: context,
+      title: kIncompleteRecordingTitle,
+      onSave: () => store.publish(rec.scratchV5),
+      onDiscard: () => store.discard(rec.scratchV5),
     );
   }
 }

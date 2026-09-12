@@ -22,6 +22,7 @@ export 'recording/crash_recovery.dart';
 export 'recording/monitor_recorder.dart';
 export 'recording/monitor_sampler.dart';
 export 'recording/recording_metadata.dart';
+export 'recording/recording_store.dart';
 export 'viewport_controller.dart';
 export 'views/bands_view.dart';
 export 'views/histogram_view.dart';

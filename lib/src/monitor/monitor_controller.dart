@@ -15,6 +15,7 @@ import 'package:muse_ml/src/monitor/recording/capture_lease.dart';
 import 'package:muse_ml/src/monitor/recording/monitor_recorder.dart';
 import 'package:muse_ml/src/monitor/recording/monitor_sampler.dart';
 import 'package:muse_ml/src/monitor/recording/recording_metadata.dart';
+import 'package:muse_ml/src/monitor/recording/recording_store.dart';
 import 'package:muse_ml/src/rust/api/device_config.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/session_v5/models.dart';
@@ -335,27 +336,20 @@ class MonitorController extends Notifier<MonitorState> {
   Future<void> _savePendingUnlocked() async {
     final path = state.pendingScratchPath;
     if (path == null) return;
-    final storage = await ref.read(sessionStorageProvider.future);
-    await storage.ensureDir();
+    final store = await ref.read(recordingStoreProvider.future);
     final file = File(path);
-    final name = file.uri.pathSegments.last;
     if (await file.exists()) {
-      await storage.writeFileAtomic(name, await file.readAsBytes());
-      try {
-        await file.delete();
-      } catch (_) {}
+      await store.publish(file);
     }
-    debugPrint('[monitor] recording save $name');
+    debugPrint('[monitor] recording save $path');
     await _finishPendingUnlocked();
   }
 
   Future<void> _discardPendingUnlocked() async {
     final path = state.pendingScratchPath;
     if (path == null) return;
-    try {
-      final file = File(path);
-      if (await file.exists()) await file.delete();
-    } catch (_) {}
+    final store = await ref.read(recordingStoreProvider.future);
+    await store.discard(File(path));
     debugPrint('[monitor] recording discard');
     await _finishPendingUnlocked();
   }

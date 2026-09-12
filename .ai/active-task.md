@@ -7,12 +7,13 @@ Monitor series (frozen spec [monitor.md](monitor.md) **rev 6**, implementer
 Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
 or the v5 68-byte header. Bands Y is **dB display** (storage linear).
 
-## Last thread — PR 5a
+## Last thread — PR 5b
 
-Record / Stop recording on GraphShell. `recording_$ts` temps, assemble on
-Stop, Save/Discard (file copy, no sqlite `kind`). 409 `recording_active`.
-`POST /record/start|stop`. `_refuseRecordingStart`. Same `RecordingIndex`
-on recording `flushRaw`.
+Crash recovery for leftover `recording_*` (temps assemble, assembled v5
+dialog). Title `Incomplete recording detected`. `RecordingStore.publish`
+upserts `session_metadata.db` `kind = 'recording'`. Existing rows default
+`feedback`. Live Save wired through publish. tmp glob and feedback
+`session_*` scanner unchanged.
 
 ## Landed
 
@@ -25,13 +26,14 @@ on recording `flushRaw`.
 - PR 3 — Bands on GraphShell (`878cc8a`)
 - PR 4 ASCII — spec rev 6 (`4c968fa`)
 - PR 4 — Histogram + PSD + Spectrogram painters (`c3a40f5`)
-- PR 5a — Record / Stop / assemble / 409 `recording_active` (this commit)
+- PR 5a — Record / Stop / assemble / 409 `recording_active` (`4fc83ec`)
+- PR 5b — Crash recovery + sqlite `kind` (this commit)
 
 ## Next
 
-**PR 5b** — Crash recovery + sqlite `kind`. Handoff section “This thread —
-PR 5b”. Then 6 (History filter), **7** Bands strip, **8** Spectrogram
-`FFT 1s ▾`.
+**PR 6** — Unified History + filter + Save files to folder. Handoff
+section “This thread — PR 6”. Then **7** Bands strip (ASCII first),
+**8** Spectrogram `FFT 1s ▾`.
 
 ## Not this thread
 
@@ -42,7 +44,6 @@ PR 5b”. Then 6 (History filter), **7** Bands strip, **8** Spectrogram
 - Publish `third_party/edf_export` to git+tag once export proves out on device.
 - Athena optics raw stream (muse-rs `Optics`, session tag 11). Queued:
   [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md).
-- PR 6 History filter / Save files to folder.
 - PR 7 Bands context strip. PR 8 Spectrogram FFT window.
 - Changing graph painters.
 
