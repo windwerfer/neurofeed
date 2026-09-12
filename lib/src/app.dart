@@ -138,7 +138,7 @@ class _AppShellState extends ConsumerState<AppShell> {
             onTap: () => _selectView(AppView.feedback),
           ),
           _SideBarItem(
-            label: 'Feedback History',
+            label: 'History',
             selected: state.currentView == AppView.feedbackHistory,
             onTap: () => _selectView(AppView.feedbackHistory),
           ),

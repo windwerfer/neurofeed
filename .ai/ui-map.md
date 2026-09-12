@@ -32,7 +32,7 @@ Width `kSidebarWidth` (220). Overlay below 700px; row sibling at ≥ 700.
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
 | Feedback | `Feedback` | `AppView.feedback` | `app.dart` | Body: `FeedbackListView`. |
-| Feedback History | `Feedback History` | `AppView.feedbackHistory` | `app.dart` | `FeedbackHistoryView`. |
+| History | `History` | `AppView.feedbackHistory` | `app.dart` | Label only. Enum stays `feedbackHistory`. Filter All \| Feedback \| Recordings. |
 | Bands | `Bands` | `AppView.bands` | `app.dart` | GraphShell. `monitor/views/bands_view.dart`. |
 | Raw EEG | `Raw EEG` | `AppView.rawEeg` | `app.dart` | Sweep. `monitor/views/raw_eeg_view.dart`. |
 | Histogram | `Histogram` | `AppView.histogram` | `app.dart` | After Raw EEG. `monitor/views/histogram_view.dart`. |
@@ -136,6 +136,20 @@ Keep `AppView.spectrogram`. Record / Stop recording. No Bands strip.
 | Magnitude | `mag ▾` | dual-thumb RangeSlider | `spectrogram_view.dart` | Color min/max of log power. Not Hz. Not auto-pumping. |
 | Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership. Last one stays. |
 
+### History — `lib/src/views/feedback_history.dart`
+
+Sidebar **History** (`AppView.feedbackHistory`). One sqlite list; no
+`AppView.recordings`. Recording thumbnails are not sparklines.
+
+| Spoken name | On-screen text | Code symbol | File | Notes |
+|---|---|---|---|---|
+| History | `History` | `FeedbackHistoryView` | `feedback_history.dart` | Headline. Sidebar same label. |
+| Filter All | `All` | `HistoryKindFilter.all` | `feedback_history.dart` | Default. |
+| Filter Feedback | `Feedback` | `HistoryKindFilter.feedback` | `feedback_history.dart` | `kind = feedback` → `FeedbackDashboardView`. |
+| Filter Recordings | `Recordings` | `HistoryKindFilter.recordings` | `feedback_history.dart` | `kind = recording` → `RecordingDashboardView`. |
+| Recording row | `Recording • {date}` | `SessionSummary.isRecording` | `feedback_history.dart` | Opens `monitor/views/recording_dashboard.dart`. Follow disabled. |
+| Folder-change dialog | `Move {s} session(s) and {r} recording(s) into the new folder? Choosing No leaves them in the current folder.` | `folderChangeMoveBody` | `settings_view.dart` | Counts both prefixes. |
+
 ### Feedback list — `lib/src/views/feedback_list.dart`
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
@@ -168,7 +182,7 @@ Guardrail AI engine, Audio (Android only), About, Debug mode.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Save folder | `Save feedback to folder` | `setSessionFolder` | `settings_view.dart` | |
+| Save folder | `Save files to folder` | `setSessionFolder` | `settings_view.dart` | Was `Save feedback to folder`. |
 | Session recording | `Session recording` | `_RecordingCard` | `settings_view.dart` | |
 | Gesture markers | `Gesture markers` | `_GesturesCard` | `settings_view.dart` | |
 | Music feedback | `Music feedback` | `_MusicCard` | `settings_view.dart` | Persist cutoff on `onChangeEnd`. |

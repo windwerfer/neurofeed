@@ -11,6 +11,11 @@ import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/views/about_view.dart';
 import 'package:muse_ml/src/views/music_settings_panel.dart';
 
+/// Folder-change confirm copy. Counts both `session_` and `recording_` prefixes.
+String folderChangeMoveBody(int sessions, int recordings) =>
+    'Move $sessions session(s) and $recordings recording(s) into the new '
+    'folder? Choosing No leaves them in the current folder.';
+
 /// Settings view — session storage folder + session recording options.
 class SettingsView extends ConsumerStatefulWidget {
   const SettingsView({super.key});
@@ -76,25 +81,21 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     }
     final current = ref.read(sessionStorageProvider);
     final existing = current.valueOrNull;
-    final count = existing == null
-        ? 0
-        : (await existing.listFiles())
-              .where(
-                (n) => n.startsWith('session_') && n.endsWith('.muse.feedback'),
-              )
-              .length;
+    final counted = existing == null
+        ? (sessions: 0, recordings: 0)
+        : countHistoryContainers(await existing.listFiles());
     if (!context.mounted) {
       return;
     }
+    final total = counted.sessions + counted.recordings;
     final migrate = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Copy existing sessions?'),
+        title: const Text('Copy existing files?'),
         content: Text(
-          count > 0
-              ? 'Move $count existing session(s) into the new folder? '
-                    'Choosing No leaves them in the current folder.'
-              : 'Choose this folder for saved sessions?',
+          total > 0
+              ? folderChangeMoveBody(counted.sessions, counted.recordings)
+              : 'Choose this folder for saved files?',
         ),
         actions: [
           TextButton(
@@ -103,7 +104,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(count > 0 ? 'Copy' : 'Yes'),
+            child: Text(total > 0 ? 'Copy' : 'Yes'),
           ),
         ],
       ),
@@ -150,7 +151,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.folder_outlined),
-                    title: const Text('Save feedback to folder'),
+                    title: const Text('Save files to folder'),
                     subtitle: storage.maybeWhen(
                       data: (s) =>
                           Text(s.displayName, style: theme.textTheme.bodySmall),
@@ -162,9 +163,9 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   const Divider(height: 24),
                   Text(
                     folder == null
-                        ? 'Using the default folder. Tap to choose where session '
-                              'history is stored.'
-                        : 'Sessions are saved to the folder above. Cache/temp '
+                        ? 'Using the default folder. Tap to choose where '
+                              'session and recording files are stored.'
+                        : 'Files are saved to the folder above. Cache/temp '
                               'files live in a hidden .cache subfolder.',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,

@@ -140,4 +140,33 @@ void main() {
     expect(find.text('custom'), findsNothing);
     expect(find.text('30s'), findsOneWidget);
   });
+
+  testWidgets('Follow is disabled when followEnabled is false', (tester) async {
+    _portrait(tester);
+    final viewport = ViewportController()
+      ..mode = ViewportMode.inspect
+      ..inspectStartElapsed = 0;
+    addTearDown(viewport.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GraphShell(
+            title: 'Recording',
+            followEnabled: false,
+            viewport: viewport,
+            windowOptions: ViewportController.eegWindowOptions,
+            onFollow: () => viewport.mode = ViewportMode.follow,
+            onInspect: () {},
+            onWindowChanged: (_) {},
+            body: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Follow'), findsOneWidget);
+    expect(find.text('Inspect'), findsOneWidget);
+    await tester.tap(find.text('Follow'));
+    await tester.pump();
+    expect(viewport.mode, ViewportMode.inspect);
+  });
 }

@@ -40,6 +40,7 @@ flutter test \
   test/monitor/time_series_pane_test.dart \
   test/monitor/overshoot_hold_test.dart \
   test/monitor/recording_metadata_test.dart \
+  test/history_filter_test.dart \
   test/agent/agent_commands_test.dart
 ```
 
@@ -79,7 +80,7 @@ cargo test --lib                  # features / simulator / device_config
 | Lanes / features | Dart unit | `test/feedback_pipeline_test.dart` | that file | Guard does not change reward | Orchestrator as a whole |
 | Protocol JSON | Dart unit | `user_protocol_builder_test.dart`, `calibration_assets_test.dart` | those files | Catalog copy, clip files | Builder UI |
 | Guard pref migrate | Dart unit | `settings_guardrail_migrate_test.dart` | that file | Old enum → feature ids | Debug switch widget |
-| History / store | Dart+FFI | `session_store_test.dart` | FFI command above | `publishSession` lists id | History UI |
+| History / store | Dart+FFI | `session_store_test.dart`, `test/history_filter_test.dart` | FFI command above + `flutter test test/history_filter_test.dart` | List includes `kind=recording`; no orphan-file backfill; `moveAllTo` both prefixes; delete uses sqlite `path`; filter All/Feedback/Recordings | History widget |
 | Session format v5 | Rust + Dart+FFI | `session_format` + export/charts tests | rust + FFI | Roundtrip | Don't edit layout from Dart |
 | Simulator identity | Rust unit | `simulator.rs` | `cargo test --lib simulator` | name/firmware table | Live spawn needs tokio |
 | Streaming OSC/BF | Dart unit | `test/streaming_*.dart` | `flutter test test/streaming_*.dart` | Datagram shape | View untested |

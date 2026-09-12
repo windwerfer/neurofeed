@@ -282,10 +282,7 @@ class SessionCalibrationPhase {
 }
 
 class SessionRecalibration {
-  const SessionRecalibration({
-    required this.atSecs,
-    required this.baseline,
-  });
+  const SessionRecalibration({required this.atSecs, required this.baseline});
 
   final double atSecs;
   final SessionBaselineStats baseline;
@@ -302,10 +299,7 @@ class SessionRecalibration {
     final baseline = SessionBaselineStats.fromJson(json['baseline']);
     return SessionRecalibration(
       atSecs: (json['atSecs'] as num?)?.toDouble() ?? 0,
-      baseline: baseline ?? const SessionBaselineStats(
-        percentile: 0,
-        count: 0,
-      ),
+      baseline: baseline ?? const SessionBaselineStats(percentile: 0, count: 0),
     );
   }
 }
@@ -513,7 +507,9 @@ class SessionSettings {
       markersInFeedbackEnabled:
           json['markersInFeedbackEnabled'] as bool? ?? false,
       eyeMarkersEnabled: json['eyeMarkersEnabled'] as bool? ?? false,
-      modelSnapshot: ModelSnapshot.fromJson(json['modelSnapshot'] as Map<String, dynamic>?),
+      modelSnapshot: ModelSnapshot.fromJson(
+        json['modelSnapshot'] as Map<String, dynamic>?,
+      ),
       guardFeature: json['guardFeature'] as String?,
       guardModel: json['guardModel'] as String?,
     );
@@ -782,26 +778,43 @@ Object? _coerceJson(Object? value) {
   return value;
 }
 
-/// Summary of a session for the history list.
+/// Summary of a session or recording for the History list.
 class SessionSummary {
   const SessionSummary({
     required this.id,
     required this.metadata,
+    this.kind = 'feedback',
+    this.path,
   });
 
   final String id;
   final SessionMetadata metadata;
 
+  /// `feedback` or `recording`. Sqlite column; default `feedback`.
+  final String kind;
+
+  /// History-root filename from sqlite (`session_$id.muse.feedback` or
+  /// `recording_$id.muse.feedback`). Null on summaries that never hit sqlite.
+  final String? path;
+
+  bool get isRecording => kind == 'recording';
+
   Map<String, Object?> toJson() => {
     'id': id,
     'metadata': metadata.toJson(),
+    'kind': kind,
+    if (path != null) 'path': path,
   };
 
   static SessionSummary? fromJson(Map<String, dynamic>? json) {
     if (json == null) return null;
     return SessionSummary(
       id: json['id'] as String? ?? '',
-      metadata: SessionMetadata.fromJson(json['metadata'] as Map<String, dynamic>?)!,
+      metadata: SessionMetadata.fromJson(
+        json['metadata'] as Map<String, dynamic>?,
+      )!,
+      kind: json['kind'] as String? ?? 'feedback',
+      path: json['path'] as String?,
     );
   }
 }

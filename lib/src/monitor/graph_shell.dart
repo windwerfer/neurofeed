@@ -23,6 +23,7 @@ class GraphShell extends ConsumerWidget {
     this.inspectRangeLabel,
     this.formatWindow,
     this.showRecord = false,
+    this.followEnabled = true,
   });
 
   final String title;
@@ -39,6 +40,10 @@ class GraphShell extends ConsumerWidget {
 
   /// Record / Stop recording. Set true on the five live graph views.
   final bool showRecord;
+
+  /// Saved-recording dashboard has no live stream. Follow stays visible
+  /// but disabled.
+  final bool followEnabled;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -61,17 +66,20 @@ class GraphShell extends ConsumerWidget {
                 child: Row(
                   children: [
                     SegmentedButton<ViewportMode>(
-                      segments: const [
+                      segments: [
                         ButtonSegment(
                           value: ViewportMode.follow,
-                          label: Text('Follow'),
+                          label: const Text('Follow'),
+                          enabled: followEnabled,
                         ),
-                        ButtonSegment(
+                        const ButtonSegment(
                           value: ViewportMode.inspect,
                           label: Text('Inspect'),
                         ),
                       ],
-                      selected: {viewport.mode},
+                      selected: {
+                        followEnabled ? viewport.mode : ViewportMode.inspect,
+                      },
                       showSelectedIcon: false,
                       style: const ButtonStyle(
                         visualDensity: VisualDensity.compact,
@@ -80,6 +88,9 @@ class GraphShell extends ConsumerWidget {
                       onSelectionChanged: (s) {
                         if (s.isEmpty) return;
                         final next = s.first;
+                        if (next == ViewportMode.follow && !followEnabled) {
+                          return;
+                        }
                         if (next == viewport.mode) return;
                         if (next == ViewportMode.follow) {
                           onFollow();
