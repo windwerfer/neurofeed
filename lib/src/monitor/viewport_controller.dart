@@ -13,6 +13,13 @@ class ViewportController extends ChangeNotifier {
   static const List<double> bandsWindowOptions = [15, 30, 60, 120];
   static const double bandsZoomFloor = 5;
   static const double bandsZoomCap = 1800;
+  static const double histogramDefaultWindowSeconds = 8;
+  static const double psdDefaultWindowSeconds = 4;
+  static const List<double> histogramPsdWindowOptions = [2, 4, 8];
+  static const double spectrogramDefaultWindowSeconds = 20;
+  static const List<double> spectrogramWindowOptions = [10, 20, 30, 120, 300];
+  static const double spectrogramZoomFloor = 5;
+  static const double spectrogramZoomCap = 300;
 
   ViewportMode mode = ViewportMode.follow;
   double windowSeconds = defaultWindowSeconds;
@@ -138,14 +145,16 @@ class ViewportController extends ChangeNotifier {
     required double newestElapsed,
     required double elapsedCap,
     double oldestElapsed = 0,
+    double zoomFloor = bandsZoomFloor,
+    double zoomCap = bandsZoomCap,
   }) {
     if (scaleFromStart <= 0 || !scaleFromStart.isFinite) return;
     if (mode != ViewportMode.inspect) {
       mode = ViewportMode.inspect;
     }
-    final cap = math.max(bandsZoomFloor, math.min(elapsedCap, bandsZoomCap));
+    final cap = math.max(zoomFloor, math.min(elapsedCap, zoomCap));
     var next = windowAtStart / scaleFromStart;
-    if (next < bandsZoomFloor) next = bandsZoomFloor;
+    if (next < zoomFloor) next = zoomFloor;
     if (next > cap) next = cap;
     windowSeconds = next;
     inspectStartElapsed = _clampStripStart(
@@ -186,6 +195,15 @@ double presetOrCustomValue(double seconds, List<double> options) {
     if ((o - seconds).abs() < 1e-6) return o;
   }
   return seconds;
+}
+
+String formatWindowSeconds(double seconds) => '${seconds.round()}s';
+
+String formatSpectrogramWindow(double seconds) {
+  if (seconds >= 60 && (seconds % 60).abs() < 1e-6) {
+    return '${(seconds / 60).round()}min';
+  }
+  return formatWindowSeconds(seconds);
 }
 
 /// Format elapsed-from-capture for the EEG x-axis (`m:ss`, or `h:mm:ss`).

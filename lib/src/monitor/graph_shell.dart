@@ -13,7 +13,10 @@ class GraphShell extends ConsumerWidget {
     required this.onWindowChanged,
     required this.body,
     this.title = '',
+    this.toolbarMiddle,
     this.toolbarExtras,
+    this.inspectRangeLabel,
+    this.formatWindow,
     this.showRecord = false,
   });
 
@@ -23,7 +26,10 @@ class GraphShell extends ConsumerWidget {
   final VoidCallback onFollow;
   final VoidCallback onInspect;
   final ValueChanged<double> onWindowChanged;
+  final Widget? toolbarMiddle;
   final Widget? toolbarExtras;
+  final String? inspectRangeLabel;
+  final String Function(double seconds)? formatWindow;
   final Widget body;
 
   /// Hidden until PR 5a. Slot exists so 5a only unhides.
@@ -32,95 +38,111 @@ class GraphShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final cinema = MediaQuery.orientationOf(context) == Orientation.landscape;
+    final format = formatWindow ?? formatWindowSeconds;
     return Semantics(
       label: title.isEmpty ? 'Graph' : title,
       child: Column(
         children: [
-          Material(
-            color: theme.colorScheme.surfaceContainer,
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: theme.dividerColor)),
-              ),
-              child: Row(
-                children: [
-                  SegmentedButton<ViewportMode>(
-                    segments: const [
-                      ButtonSegment(
-                        value: ViewportMode.follow,
-                        label: Text('Follow'),
-                      ),
-                      ButtonSegment(
-                        value: ViewportMode.inspect,
-                        label: Text('Inspect'),
-                      ),
-                    ],
-                    selected: {viewport.mode},
-                    showSelectedIcon: false,
-                    style: const ButtonStyle(
-                      visualDensity: VisualDensity.compact,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onSelectionChanged: (s) {
-                      if (s.isEmpty) return;
-                      final next = s.first;
-                      if (next == viewport.mode) return;
-                      if (next == ViewportMode.follow) {
-                        onFollow();
-                      } else {
-                        onInspect();
-                      }
-                    },
-                  ),
-                  const SizedBox(width: 12),
-                  DropdownButtonHideUnderline(
-                    child: DropdownButton<double>(
-                      value: presetOrCustomValue(
-                        viewport.windowSeconds,
-                        windowOptions,
-                      ),
-                      isDense: true,
-                      items: [
-                        for (final s in windowOptions)
-                          DropdownMenuItem(
-                            value: s,
-                            child: Text('${s.round()}s'),
-                          ),
-                        if (!windowIsPreset(
-                          viewport.windowSeconds,
-                          windowOptions,
-                        ))
-                          DropdownMenuItem(
-                            value: viewport.windowSeconds,
-                            child: const Text('custom'),
-                          ),
+          if (!cinema)
+            Material(
+              color: theme.colorScheme.surfaceContainer,
+              child: Container(
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: theme.dividerColor)),
+                ),
+                child: Row(
+                  children: [
+                    SegmentedButton<ViewportMode>(
+                      segments: const [
+                        ButtonSegment(
+                          value: ViewportMode.follow,
+                          label: Text('Follow'),
+                        ),
+                        ButtonSegment(
+                          value: ViewportMode.inspect,
+                          label: Text('Inspect'),
+                        ),
                       ],
-                      onChanged: (v) {
-                        if (v == null || v == viewport.windowSeconds) {
-                          return;
+                      selected: {viewport.mode},
+                      showSelectedIcon: false,
+                      style: const ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onSelectionChanged: (s) {
+                        if (s.isEmpty) return;
+                        final next = s.first;
+                        if (next == viewport.mode) return;
+                        if (next == ViewportMode.follow) {
+                          onFollow();
+                        } else {
+                          onInspect();
                         }
-                        onWindowChanged(v);
                       },
                     ),
-                  ),
-                  if (showRecord) ...[
                     const SizedBox(width: 12),
-                    const SizedBox.shrink(),
-                  ],
-                  const Spacer(),
-                  if (toolbarExtras != null)
-                    Flexible(
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: toolbarExtras!,
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<double>(
+                        value: presetOrCustomValue(
+                          viewport.windowSeconds,
+                          windowOptions,
+                        ),
+                        isDense: true,
+                        items: [
+                          for (final s in windowOptions)
+                            DropdownMenuItem(value: s, child: Text(format(s))),
+                          if (!windowIsPreset(
+                            viewport.windowSeconds,
+                            windowOptions,
+                          ))
+                            DropdownMenuItem(
+                              value: viewport.windowSeconds,
+                              child: const Text('custom'),
+                            ),
+                        ],
+                        onChanged: (v) {
+                          if (v == null || v == viewport.windowSeconds) {
+                            return;
+                          }
+                          onWindowChanged(v);
+                        },
                       ),
                     ),
-                ],
+                    if (inspectRangeLabel != null &&
+                        viewport.mode == ViewportMode.inspect) ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          inspectRangeLabel!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelMedium,
+                        ),
+                      ),
+                    ],
+                    if (toolbarMiddle != null) ...[
+                      const SizedBox(width: 12),
+                      toolbarMiddle!,
+                    ],
+                    if (showRecord) ...[
+                      const SizedBox(width: 12),
+                      const SizedBox.shrink(),
+                    ],
+                    const Spacer(),
+                    if (toolbarExtras != null)
+                      Flexible(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: toolbarExtras!,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
           Expanded(child: body),
         ],
       ),

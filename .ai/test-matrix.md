@@ -33,7 +33,12 @@ flutter test \
   test/monitor/capture_lease_test.dart \
   test/monitor/monitor_sampler_test.dart \
   test/monitor/viewport_controller_test.dart \
-  test/monitor/graph_shell_test.dart
+  test/monitor/graph_shell_test.dart \
+  test/monitor/dsp_test.dart \
+  test/monitor/histogram_pane_test.dart \
+  test/monitor/electrode_toggles_test.dart \
+  test/monitor/time_series_pane_test.dart \
+  test/monitor/overshoot_hold_test.dart
 ```
 
 ## FFI (host lib first)
@@ -59,7 +64,7 @@ cargo test --lib                  # features / simulator / device_config
 |---|---|---|---|---|---|
 | Connect catalog | Dart unit | `test/connect_source_test.dart` | `flutter test test/connect_source_test.dart` | Frozen ids/labels; debug off hides Simulator | No widget of dropdown |
 | Connect live (sim) | agent-linux | HTTP | `POST /connect` `sim:muse-2` or `sim:muse-s` | `connected=true`; `scanMessage` **null** | Real BLE **cannot** |
-| View switch | agent-linux | HTTP | `POST /view` `bands` / `rawEeg` / `settings` | `GET /state` → `view=` that name | Button wiring untested |
+| View switch | agent-linux | HTTP | `POST /view` `bands` / `rawEeg` / `histogram` / `spectrogram` / `psd` / `settings` | `GET /state` → `view=` that name | Button wiring untested |
 | Sidebar / connect window | agent-linux | HTTP | `POST /sidebar`, `POST /connect-window` | `sidebarOpen` / `connectWindowOpen` | Overlay chrome untested |
 | Session start Crown | Dart + HTTP | notifier refuse | `POST /session/start` after `sim:crown-osc` | HTTP 409 `crown_refused` | Dialog UI untested |
 | Session start Muse sim | agent-linux | HTTP | `recordOnly` + skip-cal | `[feedback] phase=playing` | 50 s cal too slow — always skip |
@@ -92,7 +97,7 @@ Pure Dart first (`flutter analyze lib/src` + `test/agent/*` +
 2. Wait `[muse] agent-listen` **and** `[muse] agent-ready`. Abort on `Content hash`. Parse the port.
 3. `GET /health` → `{ok:true}`. `POST /view {"view":"nope"}` → `unknown_view`.
 4. `POST /connect {"id":"sim:muse-2"}` or `sim:muse-s` (not Crown). `connected=true`, `scanMessage` null.
-5. `POST /view` `bands`, then `rawEeg` (optional `settings`). `GET /state` matches.
+5. `POST /view` `bands`, then `rawEeg` / `histogram` / `spectrogram` / `psd` (optional `settings`). `GET /state` matches. Keep `spectrogram` (no `waterfall`).
 6. `POST /session/select {"protocol":"recordOnly"}`
 7. `POST /session/duration {"minutes":1}`
 8. `POST /session/start {"skipCalibration":true}` → `phase=playing`.

@@ -10,6 +10,8 @@ How to use: pick a surface in the TOC, then match **Spoken name**.
 ### Status bar — `lib/src/status_bar.dart`
 
 Hosted by `AppShell` and `FeedbackSessionView` (`showMenu: false` on session).
+Landscape cinema on graph views hides this bar (and the sidebar + GraphShell
+toolbar); portrait restores. Not Settings / Feedback / Streaming / History.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
@@ -33,8 +35,9 @@ Width `kSidebarWidth` (220). Overlay below 700px; row sibling at ≥ 700.
 | Feedback History | `Feedback History` | `AppView.feedbackHistory` | `app.dart` | `FeedbackHistoryView`. |
 | Bands | `Bands` | `AppView.bands` | `app.dart` | GraphShell. `monitor/views/bands_view.dart`. |
 | Raw EEG | `Raw EEG` | `AppView.rawEeg` | `app.dart` | Sweep. `monitor/views/raw_eeg_view.dart`. |
-| Spectrogram | `Spectrogram` | `AppView.spectrogram` | `app.dart` | |
-| PSD | `Power Spectral Density (PSD)` | `AppView.psd` | `app.dart` | Full label. |
+| Histogram | `Histogram` | `AppView.histogram` | `app.dart` | After Raw EEG. `monitor/views/histogram_view.dart`. |
+| Spectrogram | `Spectrogram` | `AppView.spectrogram` | `app.dart` | `monitor/views/spectrogram_view.dart`. |
+| PSD | `PSD` | `AppView.psd` | `app.dart` | Short label. Title `Power Spectral Density`. |
 | Streaming | `Streaming` | `AppView.streaming` | `app.dart` | Trailing `StreamDot`. |
 | Settings | `Settings` | `AppView.settings` | `app.dart` | |
 
@@ -86,6 +89,49 @@ average membership, not extra graphs.
 | Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Top-right, depressed = in the mean. Default all on. Last one stays. |
 | Y unit | `dB` | `linearToDb` | `panes/time_series_pane.dart` | `10·log10` of linear µV²/Hz. 0 is not the floor. |
 | Waiting for signal | `Waiting for signal` | `MonitorWaitingSignal` | `empty_state.dart` | Connected, no BandCache samples. |
+
+### Histogram — `lib/src/monitor/views/histogram_view.dart`
+
+GraphShell chrome. Record slot hidden until PR 5a. One pane (Column +
+Expanded; PR 7 will add a Bands strip). Mean of selected electrodes.
+No time slider. No pinch-`custom`.
+
+| Spoken name | On-screen text | Code symbol | File | Notes |
+|---|---|---|---|---|
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Last T seconds. |
+| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. |
+| Window length | `2s` `4s` `8s` | `histogramPsdWindowOptions` | `graph_shell.dart` | Default **8 s**. |
+| µV range | `±100 µV` | `HistogramUvRange` | `histogram_view.dart` | Own domain. Overflow ±50 / ±200. Not Raw EEG Y-scale. |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership. Last one stays. |
+| Hairline | `−12 µV   48` | tap on pane | `histogram_pane.dart` | Tap, not drag. |
+| Landscape cinema | — | `appViewIsGraph` | `app.dart` / `graph_shell.dart` | Hides status bar, sidebar, toolbar. |
+
+### PSD — `lib/src/monitor/views/psd_view.dart`
+
+GraphShell title `Power Spectral Density`. Record hidden. Column +
+Expanded (PR 7 hook). Welch of last T seconds.
+
+| Spoken name | On-screen text | Code symbol | File | Notes |
+|---|---|---|---|---|
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Last T seconds. |
+| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. |
+| Window length | `2s` `4s` `8s` | `histogramPsdWindowOptions` | `graph_shell.dart` | Default **4 s**. |
+| Hz range | `0–60 Hz` | `PsdHzRange` | `psd_view.dart` | Overflow `0–100 Hz`. |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership. Last one stays. |
+| Hairline | `10.2 Hz   −8.4 dB` | tap on pane | `psd_pane.dart` | Tap, not drag. |
+| Alpha peak | `{n} Hz` | `alphaPeakHz` | `dsp.dart` | Argmax 8–13 Hz. |
+
+### Spectrogram — `lib/src/monitor/views/spectrogram_view.dart`
+
+Keep `AppView.spectrogram`. Record hidden. No Bands strip.
+
+| Spoken name | On-screen text | Code symbol | File | Notes |
+|---|---|---|---|---|
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Newest column at right. |
+| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze; pan / pinch-X. |
+| Window length | `10s` `20s` `30s` `2min` `5min` | `spectrogramWindowOptions` | `graph_shell.dart` | Default **20 s**. Pinch-X → `custom`. Cap 5 min. |
+| Magnitude | `mag ▾` | dual-thumb RangeSlider | `spectrogram_view.dart` | Color min/max of log power. Not Hz. Not auto-pumping. |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership. Last one stays. |
 
 ### Feedback list — `lib/src/views/feedback_list.dart`
 

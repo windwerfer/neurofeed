@@ -18,9 +18,10 @@ import 'package:muse_ml/src/status_bar.dart';
 import 'package:muse_ml/src/streaming/streaming_controller.dart';
 import 'package:muse_ml/src/streaming/streaming_indicator.dart';
 import 'package:muse_ml/src/monitor/views/bands_view.dart';
+import 'package:muse_ml/src/monitor/views/histogram_view.dart';
+import 'package:muse_ml/src/monitor/views/psd_view.dart';
 import 'package:muse_ml/src/monitor/views/raw_eeg_view.dart';
-import 'package:muse_ml/src/views/terminal.dart';
-import 'package:muse_ml/src/views/psd_view.dart';
+import 'package:muse_ml/src/monitor/views/spectrogram_view.dart';
 import 'package:muse_ml/src/views/settings_view.dart';
 import 'package:muse_ml/src/views/streaming_view.dart';
 import 'package:muse_ml/src/views/feedback_list.dart';
@@ -82,6 +83,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         body = const BandsView();
       case AppView.rawEeg:
         body = const RawEegView();
+      case AppView.histogram:
+        body = const HistogramView();
       case AppView.spectrogram:
         body = const SpectrogramView();
       case AppView.psd:
@@ -92,12 +95,18 @@ class _AppShellState extends ConsumerState<AppShell> {
         body = const SettingsView();
     }
 
+    final cinema =
+        appViewIsGraph(state.currentView) &&
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            const StatusBar(),
-            Expanded(child: _buildContent(context, state, body)),
+            if (!cinema) const StatusBar(),
+            Expanded(
+              child: _buildContent(context, state, body, cinema: cinema),
+            ),
           ],
         ),
       ),
@@ -138,12 +147,17 @@ class _AppShellState extends ConsumerState<AppShell> {
             onTap: () => _selectView(AppView.rawEeg),
           ),
           _SideBarItem(
+            label: 'Histogram',
+            selected: state.currentView == AppView.histogram,
+            onTap: () => _selectView(AppView.histogram),
+          ),
+          _SideBarItem(
             label: 'Spectrogram',
             selected: state.currentView == AppView.spectrogram,
             onTap: () => _selectView(AppView.spectrogram),
           ),
           _SideBarItem(
-            label: 'Power Spectral Density (PSD)',
+            label: 'PSD',
             selected: state.currentView == AppView.psd,
             onTap: () => _selectView(AppView.psd),
           ),
@@ -167,16 +181,22 @@ class _AppShellState extends ConsumerState<AppShell> {
   /// sidebar is a squishing Row sibling and the body is fully usable while the
   /// menu is open; on narrow screens the sidebar overlays the full-size body
   /// behind a dim, tap-away scrim.
-  Widget _buildContent(BuildContext context, AppUiState state, Widget body) {
+  Widget _buildContent(
+    BuildContext context,
+    AppUiState state,
+    Widget body, {
+    required bool cinema,
+  }) {
     final isWide = MediaQuery.sizeOf(context).width >= 700;
     final connectOverlay = state.connectWindowOpen
         ? const ConnectOverlay()
         : const SizedBox.shrink();
+    final showSidebar = !cinema && state.sidebarOpen;
 
     if (isWide) {
       return Row(
         children: [
-          if (state.sidebarOpen) _buildSidebar(context, state),
+          if (showSidebar) _buildSidebar(context, state),
           Expanded(child: Stack(children: [body, connectOverlay])),
         ],
       );
@@ -185,7 +205,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     return Stack(
       children: [
         Positioned.fill(child: Stack(children: [body, connectOverlay])),
-        if (state.sidebarOpen)
+        if (showSidebar)
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -196,7 +216,7 @@ class _AppShellState extends ConsumerState<AppShell> {
               ),
             ),
           ),
-        if (state.sidebarOpen)
+        if (showSidebar)
           Positioned(
             left: 0,
             top: 0,

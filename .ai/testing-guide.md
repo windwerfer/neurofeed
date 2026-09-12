@@ -47,7 +47,7 @@ Pulse, X, Wayland, adb, or the Dart language-server.
 |---|---|---|
 | `GET /health` | — | `{ok, version}` |
 | `GET /state` | — | view, connected, device*, phase, protocol, duration, `audioInitFailed`, `scanMessage`, override*, `percentile`, `inTarget`, `warningActive`, `threshold` |
-| `POST /view` | `{view}` | `feedback`, `feedbackHistory`, `bands`, `rawEeg`, `spectrogram`, `psd`, `streaming`, `settings` |
+| `POST /view` | `{view}` | `feedback`, `feedbackHistory`, `bands`, `rawEeg`, `histogram`, `spectrogram`, `psd`, `streaming`, `settings` |
 | `POST /sidebar` | `{open:bool}` | |
 | `POST /connect-window` | `{open, source?}` | `source`: `muse`/`neurosity`/`simulator`. `setConnectWindow` (not toggle). |
 | `POST /connect` | `{id}` | Simulator catalog then scanned list. `persist: false`. 409 `connect_failed` / `busy`. |

@@ -132,6 +132,41 @@ void main() {
     expect(wide.last, lessThanOrEqualTo(10));
   });
 
+  test('histogram/PSD/spectrogram window presets', () {
+    expect(ViewportController.histogramDefaultWindowSeconds, 8);
+    expect(ViewportController.psdDefaultWindowSeconds, 4);
+    expect(ViewportController.histogramPsdWindowOptions, [2, 4, 8]);
+    expect(ViewportController.spectrogramDefaultWindowSeconds, 20);
+    expect(ViewportController.spectrogramWindowOptions, [10, 20, 30, 120, 300]);
+    expect(formatSpectrogramWindow(20), '20s');
+    expect(formatSpectrogramWindow(120), '2min');
+    expect(formatSpectrogramWindow(300), '5min');
+    expect(
+      windowIsPreset(8, ViewportController.histogramPsdWindowOptions),
+      isTrue,
+    );
+    expect(
+      windowIsPreset(7, ViewportController.histogramPsdWindowOptions),
+      isFalse,
+    );
+  });
+
+  test('spectrogram pinchX cap is 5 min', () {
+    final v = ViewportController()
+      ..windowSeconds = ViewportController.spectrogramDefaultWindowSeconds;
+    v.pinchX(
+      scaleFromStart: 0.01,
+      windowAtStart: 20,
+      focalElapsed: 100,
+      focalFraction: 0.5,
+      newestElapsed: 400,
+      elapsedCap: 400,
+      zoomFloor: ViewportController.spectrogramZoomFloor,
+      zoomCap: ViewportController.spectrogramZoomCap,
+    );
+    expect(v.windowSeconds, ViewportController.spectrogramZoomCap);
+  });
+
   test('bands default window is 30 s with 15/30/60/120 presets', () {
     expect(ViewportController.bandsDefaultWindowSeconds, 30);
     expect(ViewportController.bandsWindowOptions, [15, 30, 60, 120]);

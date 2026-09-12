@@ -122,6 +122,10 @@ lib/src/monitor/            live graphs + recording
   cache/sweep_buffer.dart   5 min EEG RAM + display ring (moved from charts/)
   panes/sweep_pane.dart     one electrode, theme wipe / Inspect fill-right
   views/raw_eeg_view.dart   N stacked SweepPanes (Muse-4 / Crown-8)
+  views/histogram_view.dart Column + Expanded; ±100 µV, 64 bins
+  views/psd_view.dart       Welch; GraphShell title Power Spectral Density
+  views/spectrogram_view.dart heatmap; mag ▾ color min/max
+  dsp.dart                  Hamming FFT 1/N²; n parameterized (default 256)
   recording/                capture_lease, tmp_ MonitorRecorder, MonitorSampler
 lib/src/audio/              SoLoudEngine + AudioService, reward/guard/background
 lib/src/reve/               model download/import/load UI
@@ -157,7 +161,8 @@ assets/                     protocols.json, calibrations.json, features.json, au
   from the same `ProviderContainer` as `AppStateNotifier`, and hydrates if
   already connected. Band ring is `monitor/cache/band_cache.dart`. EEG RAM is
   `monitor/cache/sweep_buffer.dart` (5 min). Raw EEG is N stacked `SweepPane`s
-  in `monitor/views/raw_eeg_view.dart`. `bandNames` / `bandColors` stay in
+  in `monitor/views/raw_eeg_view.dart`. Histogram / PSD / Spectrogram are
+  `monitor/views/{histogram,psd,spectrogram}_view.dart`. `bandNames` / `bandColors` stay in
   `lib/src/charts/band_style.dart`. Pad quality is a 4-ch 1 s ring in
   `connection_provider.dart` (not a 5 min EEG LiveCache).
 - Crash recovery: `lib/src/feedback/crash_recovery.dart` scans

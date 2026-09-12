@@ -3,12 +3,12 @@
 | Field | Value |
 |---|---|
 | Date | 2026-09-12 |
-| Spec | [../monitor.md](../monitor.md) — **frozen Key Decisions. Do not reopen.** Rev **6**. Bands Y is **dB display**. **PR 4 ASCII is approved.** |
-| Branch | `refactor/monitor` (PR 0 `22cfd38`, PR 1a `2a66eae`, PR 1b `8a0b9f0`, PR 1c `3fb276b`, PR 2 `a9717bb`, PR 3 ASCII `8e45d37`, PR 3 `878cc8a`, PR 4 ASCII **this commit**). |
-| Cadence | **One PR per thread.** This file is the series map. Next is **PR 4 painters** (Histogram + PSD + Spectrogram). ASCII already approved — **do not wait**. |
+| Spec | [../monitor.md](../monitor.md) — **frozen Key Decisions. Do not reopen.** Rev **6**. Bands Y is **dB display**. **PR 4 painters landed.** |
+| Branch | `refactor/monitor` (PR 0 `22cfd38`, PR 1a `2a66eae`, PR 1b `8a0b9f0`, PR 1c `3fb276b`, PR 2 `a9717bb`, PR 3 ASCII `8e45d37`, PR 3 `878cc8a`, PR 4 ASCII `4c968fa`, PR 4 **this commit**). |
+| Cadence | **One PR per thread.** This file is the series map. Next is **PR 5a** (Record / Stop / assemble / 409 `recording_active`). |
 | Do not mix | Crown Start, OSC-connect, pipeline-contract Key Decisions, v5 68-byte header / FRB, Android foreground service, Athena optics, growing status-bar pads to 8. |
 
-Read the spec first (`Key Decisions`, user decisions **13–20**, Histogram / PSD / Spectrogram tables, **Build PR 4 with PR 7/8 in mind**, landscape cinema). This file is implementer order, current-code pitfalls, and the **PR 4** start. Do not re-design graphs, naming, or the lease. Do not change Bands or Raw EEG **painters**. Do not implement PR 7 or PR 8.
+Read the spec first (`Key Decisions`, recording lifecycle, Capture lease, Agent HTTP `/record/*`, Start Session vs Record). This file is implementer order, current-code pitfalls, and the **PR 5a** start. Do not re-design graphs, naming, or the lease. Do not implement 5b (crash recovery + sqlite `kind`), 6, 7, or 8.
 
 ---
 
@@ -32,15 +32,14 @@ After **PR 8**: archive this file to `.ai/archive/`, update `.ai/architecture.md
 
 ## Paste this to start a new thread
 
-**PR 4 (this thread). ASCII is approved. Implement painters. Do not paste-and-wait. Do not implement PR 7 or PR 8.**
+**PR 5a (this thread). Record / Stop / assemble / 409 `recording_active`. Do not start 5b/6/7/8.**
 
 ```
-Implement monitor PR 4 only: Histogram + PSD + Spectrogram painters. ASCII is already approved (2026-09-12) — do not paste wireframes or wait. Spec: .ai/monitor.md (frozen, rev 6, user decisions 13–20). Handoff: .ai/TODO/handoff-monitor.md (section “This thread — PR 4”).
-Histogram is a new AppView. Keep AppView.spectrogram and sidebar Spectrogram. PSD sidebar label PSD. Same electrode toggles as Bands (average membership, default all on, last-one stays). Dart FFT in monitor/dsp.dart: Hamming, 1/N², default 256-pt, n parameterized (power-of-two) for later PR 8. Band edges 1–4 / 4–8 / 8–13 / 13–30 / 30–50.
-Histogram: own ±100 µV (overflow ±50/±200), 64 bins, 2/4/8 default 8 s, tap hairline readout, Inspect freeze + elapsed m:ss–m:ss, no time slider, no pinch-custom. PSD: 2/4/8 default 4 s, X 0–60 (overflow 0–100), Y log power, band shading, alpha peak, same tap/Inspect. Spectrogram: 10s/20s/30s/2min/5min default 20 s, pinch-X custom cap 5 min, mag ▾ dual-thumb color min/max (not Hz), Y 0–60 Hz, hop ~0.25 s. Landscape cinema on graph views (hide status bar, sidebar, GraphShell toolbar). Record hidden until 5a.
-Build for upcoming PRs (do not implement them): HistogramView/PsdView body is Column + Expanded so PR 7 can insert a ~30% Bands TimeSeriesPane with a time highlight; do not add a time slider; epoch is ViewportController strip start/end; one shared electrode Set. dsp.dart n is a parameter so PR 8 is FFT 0.5/1/2 s (128/256/512) on Spectrogram only.
-Do not change Bands or Raw EEG painters. Do not implement the Bands context strip or the FFT dropdown.
-When done: commit; rewrite .ai/TODO/handoff-monitor.md and .ai/active-task.md for PR 5a (Landed + This thread + fenced next-thread prompt); reply with that fenced prompt so it can be pasted into the next thread. Do not skip the commit or the next-thread prompt.
+Implement monitor PR 5a only: Record / Stop / assemble / 409 recording_active. Spec: .ai/monitor.md (frozen, rev 6). Handoff: .ai/TODO/handoff-monitor.md (section “This thread — PR 5a”).
+Unhide Record on GraphShell (showRecord: true). Record starts recording_$ts (discard tmp, no pre-click bytes on disk). Stop recording flushes, writeScratchV5(prefix: recording, placeholder WebP), then Save/Discard. Save copies the scratch v5 into the history root; Discard deletes it. Then restart tmp if still connected. Recording elapsed only while CaptureKind.recording. Disabled when feedback or disconnected (tooltip Stop the feedback session to record).
+Agent: POST /record/start (412 disconnected, 409 feedback_active) and POST /record/stop. AgentCommands._start 409 recording_active before startCalibration (order: 412 not_connected → 409 crown_refused → 409 recording_active). UI _refuseRecordingStart in feedback_session.dart after _refuseCrownStart. Lease already refuses recording. flushRaw must keep indexing (same RecordingIndex). persist: false.
+Do not implement 5b (crash recovery + sqlite kind), 6 (History filter / Save files to folder), 7, or 8. Do not change graph painters.
+When done: commit; rewrite .ai/TODO/handoff-monitor.md and .ai/active-task.md for PR 5b (Landed + This thread + fenced next-thread prompt); reply with that fenced prompt so it can be pasted into the next thread. Do not skip the commit or the next-thread prompt.
 ```
 
 ---
@@ -56,13 +55,19 @@ When done: commit; rewrite .ai/TODO/handoff-monitor.md and .ai/active-task.md fo
 | **2** | `a9717bb` — GraphShell + N stacked sweep EEG panes. `SweepBuffer` on `MonitorController` (`monitor/cache/`). Default 10 s / 2560. Muse-4 vs Crown-8. Follow wipe; Inspect HOLD + fill-right; beyond 5 min calls `FileBackedSource`. Record hidden. Deleted add/remove, `graph_config`, `eeg_chart`, `eeg_dashboard`, `live_cache`, old Raw EEG views. |
 | **3 ASCII** | `8e45d37` — Spec rev 5. Bands Y **dB** display; pinch-X **`custom`**; overshoot dashed hold (strippable). |
 | **3** | `878cc8a` — Bands on GraphShell. One `TimeSeriesPane`, five series, mean of selected in dB. Electrode toggles (all on, last-one stays). Default 30 s; pinch-X → `custom`. Overshoot hold isolated in `overshoot_hold.dart`. Old `views/bands.dart` + `chart_controller.dart` deleted. Record hidden. |
-| **4 ASCII** | **this commit** — Spec rev 6. Landscape cinema; spectrogram `mag ▾` color; Histogram/PSD one pane + tap readout; PR 7 Bands context strip; PR 8 Spectrogram FFT 0.5/1/2 s. |
+| **4 ASCII** | `4c968fa` — Spec rev 6. Landscape cinema; spectrogram `mag ▾` color; Histogram/PSD one pane + tap readout; PR 7 Bands context strip; PR 8 Spectrogram FFT 0.5/1/2 s. |
+| **4** | **this commit** — Histogram + PSD + Spectrogram painters. `AppView.histogram`. Landscape cinema. `dsp.dart` Hamming `1/N²`, `n` parameterized. Record still hidden. |
 
-### PR 4 ASCII shipped (docs only)
+### PR 4 shipped
 
-- `.ai/monitor.md` rev 6: user decisions 13–20, ASCII wireframes, landscape cinema, **Build PR 4 with PR 7/8 in mind**
-- Series map: **7** (Bands strip under Histogram/PSD), **8** (Spectrogram FFT window) after 6
-- Painters are the **next** thread
+- `AppView.histogram`; sidebar Histogram after Raw EEG; PSD label `PSD`; Spectrogram unchanged
+- Histogram / PSD / Spectrogram on GraphShell; electrode toggles reused; Record hidden
+- Histogram: ±100 µV (overflow ±50/±200), 64 bins, 2/4/8 default 8 s, tap hairline, Inspect `m:ss–m:ss`, Column + Expanded
+- PSD: Welch 1 s Hamming 50% hop 256-pt, 2/4/8 default 4 s, X 0–60 (0–100 overflow), log Y, band shading, alpha peak, Column + Expanded
+- Spectrogram: 10s/20s/30s/2min/5min default 20 s, pinch-X `custom` cap 5 min, `mag ▾` color min/max, Y 0–60 Hz, hop ~0.25 s
+- Landscape cinema on graph views (status bar, sidebar, GraphShell toolbar)
+- Placeholders `views/psd_view.dart` / `views/terminal.dart` deleted
+- PR 7/8 hooks only: no Bands strip, no FFT dropdown, no time slider
 
 ---
 
@@ -76,154 +81,144 @@ When done: commit; rewrite .ai/TODO/handoff-monitor.md and .ai/active-task.md fo
 | **1c** | File-backed Inspect of tmp/recording `.raw` | no | 1b |
 | **2** | GraphShell + N stacked **sweep** EEG panes; cancel add/remove | **yes** (landed) | 1b; prefer 1c first |
 | **3** | Bands on GraphShell + electrode toggles | **yes** (landed) | 2 |
-| **4** | Histogram + PSD + Spectrogram (`AppView.histogram` only) | **yes** (approved 2026-09-12) — **this thread implements** | 2; ∥ 3 |
-| **5a** | Record / Stop / assemble / 409 `recording_active` | no | 1b, 2 |
+| **4** | Histogram + PSD + Spectrogram (`AppView.histogram` only) | **yes** (landed) | 2; ∥ 3 |
+| **5a** | Record / Stop / assemble / 409 `recording_active` | no — **this thread** | 1b, 2 |
 | **5b** | Crash recovery + `publish` into `session_metadata.db` (`kind`) | no | 5a |
 | **6** | Unified History list + filter + Save files to folder | no | 5b |
 | **7** | Bands context strip (~30%) under Histogram and PSD | **yes** | 4, 6 |
 | **8** | Spectrogram `FFT 1s ▾` 0.5 / 1 / 2 s (128 / 256 / 512) | no | 4, 7 |
 
-Hide Record until 5a. Copy changes update `.ai/ui-map.md` in the same PR.
+Copy changes update `.ai/ui-map.md` in the same PR.
 
 ---
 
-## Current code (after PR 3 + PR 4 ASCII)
+## Current code (after PR 4)
 
-| Piece | Where | After 3 / 4 ASCII |
+| Piece | Where | After 4 |
 |---|---|---|
-| Connect writer | `MonitorController` + `MonitorRecorder` | `tmp_$ts.{raw,computed,json}`; flush every 30 s or 64 KiB |
-| Index | `monitor/cache/recording_index.dart` | `(elapsedT, fileLength)` at `flushRaw` frame boundaries. First frame offset **12**. Rotate clears. |
+| Connect writer | `MonitorController` + `MonitorRecorder` | `tmp_$ts.{raw,computed,json}`; flush every 30 s or 64 KiB. **No `recording_` yet.** |
+| Index | `monitor/cache/recording_index.dart` | `(elapsedT, fileLength)` at `flushRaw` frame boundaries. First frame offset **12**. Rotate clears. Keep this on Record. |
 | File-backed source | `monitor/cache/file_backed_source.dart` | Wired from Raw EEG Inspect when the window starts older than SweepBuffer RAM. |
-| Sweep EEG | `monitor/cache/sweep_buffer.dart` on `MonitorController` | One 5 min ring. Follow wraps; Inspect freeze fills right without wrap. |
-| Raw EEG route | `app.dart` `AppView.rawEeg` → `monitor/views/raw_eeg_view.dart` | N `SweepPane`s. GraphShell Follow/Inspect, 10 s default. No Record, no chips, no add/remove, no `custom`. |
-| GraphShell | `monitor/graph_shell.dart` | Shared chrome. Record slot `showRecord: false`. When `windowSeconds` ∉ `windowOptions`, closed label is **`custom`**. PR 4 hides the toolbar in landscape (cinema). |
-| Bands | `monitor/views/bands_view.dart` | One `TimeSeriesPane`, five series, dB Y, electrode toggles, 30 s default, pinch-X `custom`. **Do not change the painter.** Cinema is shell/app chrome only. |
-| Electrode toggles | `monitor/electrode_toggles.dart` | Top-right text; average membership; last-one stays. Reuse in PR 4. |
-| BandCache | `monitor/cache/band_cache.dart` on `MonitorController` | 1 Hz, 1800 samples. Timestamps are **unix seconds**. Convert to elapsed at the pane using `captureStartedAtMs`. Linear µV²/Hz. |
-| Overshoot | `monitor/panes/overshoot_hold.dart` | Bands only. `kBandsOvershootHold`. Do not use for Histogram/PSD/Spectrogram. |
+| Sweep EEG | `monitor/cache/sweep_buffer.dart` on `MonitorController` | One 5 min ring. Histogram/PSD/Spectrogram read via `cache/sweep_mean.dart`. |
+| GraphShell | `monitor/graph_shell.dart` | Shared chrome. Record slot `showRecord: false`. Landscape hides toolbar. `formatWindow` / `inspectRangeLabel` / `toolbarMiddle`. |
+| Histogram | `monitor/views/histogram_view.dart` | Column + Expanded. ±100 µV, 64 bins, 8 s default. |
+| PSD | `monitor/views/psd_view.dart` | Column + Expanded. Welch 256-pt, 4 s default. Title `Power Spectral Density`. |
+| Spectrogram | `monitor/views/spectrogram_view.dart` | Heatmap, `mag ▾`, 20 s default, pinch-X `custom`. |
+| FFT | `monitor/dsp.dart` | Hamming, `1/N²`, `n` power-of-two (default 256). |
+| CaptureLease | `monitor/recording/capture_lease.dart` | tmp / feedback only. **No recording transitions yet.** |
 | Lease / tmp | `monitor/recording/` | exclusive; rotate resets `captureStartedAtMs` and the index |
-| Pad quality | `connection_provider` `_PadQualityRing` | 4-ch, 1 s — **do not grow** |
-| Histogram / PSD / Spectrogram | `views/psd_view.dart`, `views/terminal.dart` | **Placeholders.** PR 4 painters replace them. |
-| `AppView` | `settings.dart` | No `histogram` yet. `spectrogram` and `psd` exist. |
+| Agent | `agent_commands.dart` `_start` | 412 `not_connected` → 409 `crown_refused` → start. **No `recording_active`. No `/record/*`.** |
+| Feedback Start | `feedback_session.dart` | `_refuseCrownStart` only. No `_refuseRecordingStart`. |
+| `AppView` | `settings.dart` | `histogram` exists. `parseAppView` is `v.name`. |
 
 ---
 
-## This thread — PR 4
+## This thread — PR 5a
 
-**Title:** `Add Histogram; implement PSD and Spectrogram`
+**Title:** `Record / Stop recording; 409 recording_active`
 
-**ASCII approved 2026-09-12.** Implement. Do not paste wireframes. Do not wait. Spec tables + ASCII in `.ai/monitor.md` are the layout.
+No ASCII. Spec: recording lifecycle, Capture lease table, Agent HTTP, Start Session vs Record (three layers, like Crown).
 
-When painters are done, follow **Close the thread** (commit + rewrite this file for PR 5a + fenced next-thread prompt). Do not skip it.
+When done, follow **Close the thread** (commit + rewrite this file for PR 5b + fenced next-thread prompt). Do not skip it.
 
 ### Do
 
-- Reuse PR 2/3 `GraphShell`, `ViewportController`, `ElectrodeToggles`. Record stays hidden (`showRecord: false`).
-- Same electrode toggles as Bands: top-right text, depressed = in the **average**, default all on, last-one stays. Muse-4 vs Crown-8 from `lastConnectedKind`. Not overlay, not extra graphs.
-- **Histogram** — new `AppView.histogram`. Sidebar **Histogram** (after Raw EEG). One pane. X: µV, own domain **±100** (overflow ±50 / ±200), not Raw EEG `SharedYScale`. Y: **count**. Window **2 / 4 / 8 s**, default **8 s**. No `custom`. 64 linear bins. Mean of selected. Follow = last T seconds. Inspect = freeze + chrome **`m:ss–m:ss`**. Tap (not drag) hairline + label. **No time slider.** View `body` = `Column` with the pane `Expanded` (PR 7 will insert ~30% Bands below).
-- **PSD** — keep `AppView.psd`. Sidebar **PSD**. GraphShell title `Power Spectral Density`. One pane, no overlay. Welch of last T seconds, mean of selected. X: Hz **0–60** (0–100 overflow). Y: log power (`dB`). Window **2 / 4 / 8 s**, default **4 s**. 1 s Hamming segments, 50% hop, 256-pt FFT. Band shading: delta **1–4**, theta **4–8**, alpha **8–13**, beta **13–30**, gamma **30–50**. Peak: argmax 8–13 Hz, one label. Same Follow/Inspect/tap/Column-as-Histogram.
-- **Spectrogram** — keep `AppView.spectrogram` and sidebar **Spectrogram**. Widget `monitor/views/spectrogram_view.dart`. Heatmap: X = time, Y = **0–60 Hz**, color = log power. STFT of the **mean** of selected. Window **10s / 20s / 30s / 2min / 5min**, default **20 s**, pinch-X **`custom`**, cap **5 min**. Hop ~0.25 s. Chrome **`mag ▾`**: dual-thumb **color min/max**, live, not Hz, not auto-pumping. Slim colorbar on the right. No averaging. No hold-finger. No FFT dropdown (PR 8).
-- **Landscape cinema** — graph views only (`bands`, `rawEeg`, `histogram`, `psd`, `spectrogram`). Landscape: hide StatusBar, sidebar, GraphShell toolbar; pane fills. Portrait restores. Not Settings/Feedback/Streaming/History. Bands/Raw EEG painters unchanged.
-- FFT: **`monitor/dsp.dart` only.** No FFT package. Cooley–Tukey, Hamming, power `(re²+im²)/(n*n)`. Default **`n = 256`**. **`n` is a power-of-two parameter** so PR 8 can pass 128 / 512 without rewriting FFT. Tests lock 256-pt + edges.
-- EEG RAM is `SweepBuffer` only. Histogram/PSD/Spectrogram `getRange` through a thin adapter over `SweepBuffer.sampleAt` (index / 256 Hz). Do **not** add a second LiveCache EEG ring. Epoch for Histogram/PSD = `ViewportController` strip start/end (PR 7 highlight will use the same numbers).
-- `settings.dart`: add `AppView.histogram` only. `parseAppView` is `v.name` — no `waterfall` alias. Update `_viewFromName` / `_viewNames` / `app.dart` switch + sidebar (Histogram after Raw EEG; PSD label `PSD`; Spectrogram stays).
-- `test/agent/agent_protocol_test.dart`: `parseAppView('histogram')`. `spectrogram` stays the real name.
-- Delete placeholders `lib/src/views/psd_view.dart` and `lib/src/views/terminal.dart` when replacements land.
-- Update `.ai/ui-map.md`, `.ai/test-matrix.md`, `.ai/testing-guide.md` (`POST /view` `histogram`; **keep** `spectrogram`).
-- Export new files from `monitor/monitor.dart`.
+- **GraphShell** — `showRecord: true` on all five graph views (or build Record inside the shell from `monitorControllerProvider`). On-screen **`Record`** / **`Stop recording`**. Disabled when `CaptureKind.feedback` or disconnected. Tooltip `Stop the feedback session to record`. Show recording elapsed only while `CaptureKind.recording`. Landscape cinema still hides the toolbar (user rotates to portrait to Record).
+- **`MonitorController.startRecording` / `stopRecording`**
+  - Record: discard tmp (no prompt), start `recording_$ts.{raw,computed,json}` with `Settings.recordStreams`. Reset `captureStartedAtMs`. **Do not include pre-click bytes** (rings still show them in Follow).
+  - Stop: flush, `writeScratchV5(prefix: 'recording')` with `placeholderWebP`, then Save/Discard. After Save or Discard, if still connected start tmp.
+- **`CaptureLease`** — add tmp→recording and recording→idle. Feedback still **refuses** recording (`tryAcquireFeedback` already does). Record button hidden/disabled during feedback.
+- **`MonitorRecorder`** — start with prefix `recording`. **`flushRaw` must keep indexing** the same `RecordingIndex` (PR 1c). Do not fork a second index.
+- **Save/Discard** — `monitor/views/recording_save_discard.dart`. Same dialog on Stop and (later) in-app disconnect-while-recording. `barrierDismissible: false`. Save: copy assembled scratch v5 into the **history root** as `recording_$ts.muse.feedback`. Discard: delete scratch v5. **Sqlite `kind` is 5b** — do not add the column here unless Save cannot work without it; prefer file copy only.
+- **Agent**
+  - `POST /record/start` — 412 disconnected; 409 `feedback_active`; else start recording. `persist: false`.
+  - `POST /record/stop` — 200; assemble. Tests assert scratch v5 exists; do **not** publish as a History row test (that is 5b/6).
+  - `AgentCommands._start`: after Crown check, if `captureKind == recording` return 409 `recording_active` **before** `startCalibration`. Order: 412 `not_connected` → 409 `crown_refused` → 409 `recording_active` → start. There is **no** `_sessionStart`.
+- **UI refuse** — `_refuseRecordingStart` in `feedback_session.dart` after `_refuseCrownStart`. Dialog title `Recording in progress`, body `Stop the recording before starting a session.`, actions `Cancel` / `Stop recording`. Start is **not** auto-continued.
+- **Notifier** — `acquireFeedbackLease()` already returns false while recording; keep `debugPrint('[feedback] refusing Start: recording_active'); return;`.
+- In-app Disconnect while recording: flush+assemble, then the same Save/Discard dialog. Process exit: best-effort assemble inside `disconnectOnClose`; **no dialog** (5b recovers).
+- Update `.ai/ui-map.md` (Record / Stop recording) and `.ai/testing-guide.md` (`/record/*`, 409 `recording_active`).
 
 ### Do not
 
-- Paste ASCII or wait for approval (already approved).
-- Implement PR 7 (Bands strip under Histogram/PSD) or PR 8 (`FFT 1s ▾`).
-- Add a time slider under Histogram/PSD (PR 7 replaces that idea).
-- Record button (5a).
-- Change Bands or Raw EEG **painters**. Do not put chips on Raw EEG. Do not add `custom` to EEG window options. Do not reuse Bands overshoot hold. Cinema may hide their GraphShell toolbar in landscape — that is the allowed chrome change.
-- Rename Spectrogram → Waterfall. No `AppView.waterfall`. No `AppView.recordings`.
-- FFT package. New FFI. Linear-Y default on PSD. Log bins / KDE / per-channel overlay on Histogram. Stacked per-channel spectrograms. Spectrogram averaging. Hold-finger spectrogram readout. Hz-range dual-thumb (magnitude is the dual-thumb).
-- Import `device_montage.dart` from feedback.
-- FFI / v5 header / lease / prefixes. Growing pad-quality to 8.
-- Crown Start, OSC-connect.
+- 5b crash recovery for `recording_*`, sqlite `kind`, `RecordingStore.publish` into `session_metadata.db` (unless Save is implemented as that helper — then 5b still owns crash recovery + History list).
+- PR 6 History filter All|Feedback|Recordings, Settings **Save files to folder**.
+- PR 7 Bands strip. PR 8 FFT dropdown.
+- Change Histogram / PSD / Spectrogram / Bands / Raw EEG **painters**.
+- Assemble `tmp_`. Rename tmp→recording in place. Two writers.
+- Crown Start, OSC-connect, v5 header, growing pads to 8.
+- Widget goldens / `integration_test`.
 
 ### Target files
 
 ```
 lib/src/monitor/
-  dsp.dart                         # NEW — Cooley–Tukey Hamming 1/N²; n parameterized; default 256
-  panes/histogram_pane.dart        # NEW
-  panes/psd_pane.dart              # NEW
-  panes/spectrogram_pane.dart      # NEW
-  views/histogram_view.dart        # NEW — Column + Expanded (PR 7 hook)
-  views/psd_view.dart              # NEW — Column + Expanded (PR 7 hook)
-  views/spectrogram_view.dart      # NEW
-  monitor.dart                     # export
-  viewport_controller.dart         # histogram/psd/spectrogram window options
-  graph_shell.dart                 # landscape: hide toolbar
+  graph_shell.dart                     # showRecord; Record / Stop recording
+  monitor_controller.dart              # startRecording / stopRecording
+  recording/capture_lease.dart         # tmp → recording → idle
+  recording/monitor_recorder.dart      # prefix recording_; keep flushRaw index
+  views/recording_save_discard.dart    # NEW
 
-lib/src/settings.dart              # AppView.histogram; _viewFromName / _viewNames
-lib/src/app.dart                   # sidebar + body + landscape cinema (status/sidebar)
-lib/src/agent/agent_protocol.dart  # parseAppView already uses v.name — add enum value
-test/agent/agent_protocol_test.dart
-test/monitor/dsp_test.dart
+lib/src/agent/agent_commands.dart      # /record/start|stop; _start 409 recording_active
+lib/src/views/feedback_session.dart    # _refuseRecordingStart
+lib/src/feedback/feedback_state.dart   # already refuses lease; log recording_active
+
 .ai/ui-map.md
-.ai/test-matrix.md
 .ai/testing-guide.md
-
-DELETE:
-  lib/src/views/psd_view.dart
-  lib/src/views/terminal.dart      # placeholder SpectrogramView
+.ai/test-matrix.md
 ```
 
 ### Tests
 
 Pure Dart preferred. No goldens / `integration_test`.
 
-- `parseAppView('histogram')`; `parseAppView('spectrogram')` still works; no `waterfall`
-- DSP: Hamming 256-pt, power `1/N²`, band edges 1–4 / 4–8 / 8–13 / 13–30 / 30–50; `n` accepts other powers of two (even if PR 4 only calls 256)
-- Histogram 64 bins, own ±100 µV domain
-- Electrode toggles reused (default all on, last-one stays) — already covered; do not fork
+- Record while tmp → `captureKind == recording`; tmp files gone; `recording_*` temps exist
+- Stop → scratch `recording_$ts.muse.feedback` exists (placeholder WebP)
+- Discard deletes scratch; Save copies to history root
+- `flushRaw` still indexes during recording (same `RecordingIndex`)
+- `acquireFeedbackLease` false while recording
+- Agent `_start` 409 `recording_active` (and still 409 `crown_refused` for Crown)
+- `POST /record/start` 412 disconnected; 409 `feedback_active`
 - `flutter analyze lib/src` clean
 
-### Verify (PR 4)
+### Verify (PR 5a)
 
 ```bash
 flutter analyze lib/src
-flutter test test/monitor/ test/agent/agent_protocol_test.dart
+flutter test test/monitor/ test/agent/
 ```
 
-Do **not** run FRB. Do **not** `cargo check --target aarch64-linux-android`. Visual graphs cannot be verified in CI — human `flutter run`.
+Do **not** run FRB. Do **not** `cargo check --target aarch64-linux-android`.
 
-### PR 4 done when
+### PR 5a done when
 
-- Painters for Histogram, PSD, Spectrogram match the approved ASCII
-- `AppView.histogram` exists; Spectrogram name unchanged; PSD sidebar `PSD`
-- Same electrode toggles; Record hidden
-- Landscape cinema on graph views
-- Histogram/PSD are `Column` + `Expanded` (PR 7 hook); no time slider; `dsp` `n` parameterized
-- Placeholders deleted
-- ui-map + test-matrix + testing-guide updated
+- Record / Stop on GraphShell; elapsed while recording; disabled during feedback
+- `recording_$ts` temps + assemble on Stop + Save/Discard
+- 409 `recording_active` on `_start`; `/record/start|stop`; UI refuse dialog
+- Indexing continues on recording `flushRaw`
+- ui-map + testing-guide updated
 - `flutter analyze lib/src` clean
-- **Close the thread:** rewrite this handoff + `active-task.md` for PR 5a, **commit**, reply with the fenced PR 5a paste prompt
+- **Close the thread:** rewrite this handoff + `active-task.md` for PR 5b, **commit**, reply with the fenced PR 5b paste prompt
 
 ---
 
-## Next threads (do not start in PR 4)
+## Next threads (do not start in PR 5a)
 
-### PR 5a — Record / Stop / assemble / 409 `recording_active`
+### PR 5b — Crash recovery + sqlite `kind`
 
-Record/Stop on GraphShell, 409 `recording_active` on **`AgentCommands._start`** (there is no `_sessionStart`), Save/Discard. Recording `flushRaw` must keep indexing (same `RecordingIndex`).
+`recording_*` only (not `tmp_`, not `session_*`). Incomplete recording dialog. `RecordingStore.publish` upserts `session_metadata.db` with `kind = 'recording'`. Default `kind = 'feedback'` migrates existing rows.
 
-### PR 5b / 6
+### PR 6 — Unified History
 
-Crash recovery for `recording_*` only, History filter All|Feedback|Recordings, sqlite `kind`, Settings **Save files to folder**.
+On-screen **History**; filter All | Feedback | Recordings. Settings **Save files to folder**; `moveAllTo` both prefixes.
 
 ### PR 7 — Bands context strip under Histogram and PSD (ASCII first)
 
-After 6. Spec: [../monitor.md](../monitor.md) section **Histogram + PSD — Bands as a time map (PR 7)**. ~70% histogram/PSD + ~30% `TimeSeriesPane`. Highlight = T-second averaging window; Bands strip wider (30 s default, pinch-X). One electrode set. Time only — Histogram still raw µV, PSD still Welch. Spectrogram does **not** get this. Reuse `TimeSeriesPane`; do not fork Bands view. PR 4 already left `Column` + `Expanded` + shared epoch.
+After 6. Spec section **Histogram + PSD — Bands as a time map (PR 7)**. PR 4 left `Column` + `Expanded` + shared epoch.
 
 ### PR 8 — Spectrogram FFT window
 
-After 7. Chrome `FFT 1s ▾`: **0.5 / 1 / 2 s** → **128 / 256 / 512**. Not a free slider. Spectrogram only. PSD Welch stays 1 s / 256-pt. `dsp.dart` `n` was parameterized in PR 4. Then archive this handoff.
+After 7. `FFT 1s ▾` 0.5 / 1 / 2 s → 128 / 256 / 512. `dsp.dart` `n` already parameterized. Then archive this handoff.
 
 ---
 
@@ -241,18 +236,16 @@ History list stays `lib/src/views/feedback_history.dart` (PR 6). Recording dashb
 
 ## Pitfalls
 
-- **PR 4 ASCII is approved.** Do not paste wireframes. Do not implement PR 7/8.
-- **PR 7 hook:** Histogram/PSD `Column` + `Expanded`. No time slider. Epoch = strip start/end. One `Set<int>` for electrodes. Do not fork `TimeSeriesPane`.
-- **PR 8 hook:** `dsp` `n` is a parameter. Default 256. Do not add the FFT dropdown yet.
-- **`mag ▾` is color**, not Hz. Y is 0–60 Hz.
-- **Broadcast `eventStream`:** controller stays in `main()` (1a). Do not move it to AppShell. SweepBuffer is on the controller — do not also subscribe in a view. BandCache is on the controller — do not add a second ring. Histogram/PSD/Spectrogram read SweepBuffer via an adapter.
-- **Electrode toggles are average membership**, not extra graphs, not overlay. Last-one stays on. Reuse `electrode_toggles.dart`.
-- **Do not copy Raw EEG sweep** into these views. Histogram is bins; PSD is a spectrum; Spectrogram is a heatmap.
-- **FFT matches Rust:** Hamming, `1/N²`, edges 1–4 / 4–8 / 8–13 / 13–30 / 30–50. Do not invent edges.
-- **Histogram domain is own ±100 µV**, not Raw EEG `SharedYScale`.
-- **`channelCount` is `BigInt` on FFI.** `MonitorState.channelCount` is already `int`.
-- `flutter analyze lib/src` after every Dart PR. No goldens / `integration_test`.
-- Agent HTTP: `persist: false`. No `/record/*` (5a). Crown 409 stays `crown_refused`. `POST /view` `histogram` is new; `spectrogram` already listed.
+- **Record does not include pre-click bytes** on disk. Follow rings still show them. Intentional.
+- **Do not rename tmp → recording.** Discard tmp, start a new capture.
+- **`flushRaw` indexing** must work for `recording_` the same as tmp. Rotate does not apply to recording (uncapped except a 2 h warning).
+- **409 `recording_active` is not `crown_refused`.** Distinct codes. Order: not_connected → crown_refused → recording_active.
+- **There is no `_sessionStart`.** Patch `AgentCommands._start`.
+- **Release lease after Stop** only when the recording writer is closed; then tmp if connected.
+- **Do not assemble tmp.** Launch still glob-deletes leftover `tmp_*`.
+- **Sqlite `kind` is 5b.** History filter is 6. Painters are done; do not restyle graphs.
+- Agent HTTP: `persist: false`. Crown 409 stays `crown_refused`.
+- `flutter analyze lib/src` after every Dart PR.
 
 ---
 
@@ -263,10 +256,7 @@ Every PR: this handoff + `.ai/active-task.md` + **commit** + fenced next-thread 
 | When | Update |
 |---|---|
 | Any on-screen copy | `.ai/ui-map.md` in that PR |
-| Follow / Inspect (PR 2) | `.ai/ui-map.md` |
-| Bands toggles / custom / dB (PR 3) | `.ai/ui-map.md` |
-| `AppView.histogram` / cinema / mag (PR 4) | `.ai/ui-map.md`, `.ai/test-matrix.md`, `.ai/testing-guide.md` `POST /view` |
-| `/record/*` and 409 (PR 5a) | testing-guide |
+| `/record/*` and 409 (PR 5a) | testing-guide + ui-map |
 | History label / Save files to folder (PR 6) | ui-map |
 | Bands strip under Histogram/PSD (PR 7) | ui-map |
 | Spectrogram `FFT 1s ▾` (PR 8) | ui-map |

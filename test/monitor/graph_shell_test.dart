@@ -3,10 +3,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muse_ml/src/monitor/graph_shell.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
 
+void _portrait(WidgetTester tester) {
+  tester.view.physicalSize = const Size(800, 1200);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
 void main() {
   testWidgets('GraphShell shows Follow/Inspect and hides Record', (
     tester,
   ) async {
+    _portrait(tester);
     final viewport = ViewportController();
     addTearDown(viewport.dispose);
     await tester.pumpWidget(
@@ -31,9 +39,72 @@ void main() {
     expect(find.text('pane'), findsOneWidget);
   });
 
+  testWidgets('landscape cinema hides toolbar; pane stays', (tester) async {
+    tester.view.physicalSize = const Size(800, 400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final viewport = ViewportController();
+    addTearDown(viewport.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GraphShell(
+            title: 'Histogram',
+            viewport: viewport,
+            windowOptions: ViewportController.histogramPsdWindowOptions,
+            onFollow: () {},
+            onInspect: () {},
+            onWindowChanged: (_) {},
+            inspectRangeLabel: '0:00–0:08',
+            body: const SizedBox.expand(child: Text('pane')),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Follow'), findsNothing);
+    expect(find.text('Inspect'), findsNothing);
+    expect(find.text('pane'), findsOneWidget);
+  });
+
+  testWidgets('spectrogram window labels use min; inspect range shown', (
+    tester,
+  ) async {
+    _portrait(tester);
+    final viewport = ViewportController()
+      ..windowSeconds = ViewportController.spectrogramDefaultWindowSeconds
+      ..mode = ViewportMode.inspect;
+    addTearDown(viewport.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GraphShell(
+            title: 'Spectrogram',
+            viewport: viewport,
+            windowOptions: ViewportController.spectrogramWindowOptions,
+            formatWindow: formatSpectrogramWindow,
+            onFollow: () {},
+            onInspect: () {},
+            onWindowChanged: (_) {},
+            inspectRangeLabel: '0:00–0:20',
+            body: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('20s'), findsOneWidget);
+    expect(find.text('0:00–0:20'), findsOneWidget);
+
+    await tester.tap(find.byType(DropdownButton<double>));
+    await tester.pumpAndSettle();
+    expect(find.text('2min'), findsOneWidget);
+    expect(find.text('5min'), findsOneWidget);
+  });
+
   testWidgets('custom when window is not a preset; preset restores', (
     tester,
   ) async {
+    _portrait(tester);
     final viewport = ViewportController()..windowSeconds = 47;
     addTearDown(viewport.dispose);
     await tester.pumpWidget(

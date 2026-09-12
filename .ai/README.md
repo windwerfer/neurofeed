@@ -39,7 +39,7 @@ pipeline-contract work.
 | File | Contents |
 |------|----------|
 | [TODO/README.md](TODO/README.md) | Index |
-| [TODO/handoff-monitor.md](TODO/handoff-monitor.md) | Monitor series: **PR 4 painters next** (ASCII approved), then 5a–6, **7** Bands context strip, **8** Spectrogram FFT window |
+| [TODO/handoff-monitor.md](TODO/handoff-monitor.md) | Monitor series: **PR 5a next** (Record / Stop), then 5b–6, **7** Bands context strip, **8** Spectrogram FFT window |
 | [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md) | Athena optical raw stream (muse-rs `Optics`, session tag 11) |
 | [TODO/handoff-athena-optics.md](TODO/handoff-athena-optics.md) | Implementer order, files, LOC |
 

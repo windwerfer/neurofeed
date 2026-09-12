@@ -6,7 +6,7 @@ Crown-start / v5 layout threads.
 
 | Thread | Spec | Handoff |
 |--------|------|---------|
-| Monitor graphs + recording | [../monitor.md](../monitor.md) | [handoff-monitor.md](handoff-monitor.md) — **PR 4 painters next** (ASCII approved), then 5a–6, **7** Bands strip under Histogram/PSD, **8** Spectrogram FFT window |
+| Monitor graphs + recording | [../monitor.md](../monitor.md) | [handoff-monitor.md](handoff-monitor.md) — **PR 5a next** (Record / Stop), then 5b–6, **7** Bands strip under Histogram/PSD, **8** Spectrogram FFT window |
 | Athena optics (raw stream) | [athena-optics-contract.md](athena-optics-contract.md) | [handoff-athena-optics.md](handoff-athena-optics.md) |
 
 When a thread lands, move its spec to `.ai/` (live) or `archive/` and
