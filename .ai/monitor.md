@@ -2,12 +2,12 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Draft (rev 5) |
+| **Status** | Draft (rev 6) |
 | **Author** | TBD |
-| **Date** | 2026-09-09 |
+| **Date** | 2026-09-12 |
 | **Audience** | Senior engineers on Muse ML |
 | **Companion** | Canonical spec. Implementer handoff: [TODO/handoff-monitor.md](TODO/handoff-monitor.md). One PR per thread; start at PR 0. |
-| **Does not reopen** | Pipeline-contract Key Decisions, Crown Start, Connect UX, v5 68-byte header, exclusive lease, prefixes, GraphShell B, Follow/Inspect names, history-root files, MonitorController in `main()`, 409 `recording_active`, lease release only when `!isRecording`, **Bands Y is dB display (storage stays linear µV²/Hz)** |
+| **Does not reopen** | Pipeline-contract Key Decisions, Crown Start, Connect UX, v5 68-byte header, exclusive lease, prefixes, GraphShell B, Follow/Inspect names, history-root files, MonitorController in `main()`, 409 `recording_active`, lease release only when `!isRecording`, **Bands Y is dB display (storage stays linear µV²/Hz)**, **PR 4 ASCII (rev 6): landscape cinema, spectrogram magnitude dual-thumb, Histogram/PSD one pane + later Bands context strip** |
 
 ---
 
@@ -42,6 +42,19 @@ Locked after the PR 3 wireframe. Do not re-litigate:
 10. Bands Y is **dB**, matching the Muse app (Live / post-session Powerbands), the Muse SDK (absolute band power = log of PSD, units Bels), and Mind Monitor. Display `10·log10(max(linear µV²/Hz, ε))`. BandCache, FFI, and `.muse` stay **linear µV²/Hz**. This **lifts** Bands skip-v1 **log-Y** (display only). Relative % stays v2.
 11. Bands pinch-zoom is **X only**. When the window is not 15 / 30 / 60 / 120 s, the dropdown closed label is **`custom`**. Picking a preset restores that length. Zoom-in floor ~5 s; zoom-out cap `min(elapsed, BandCache 30 min)`. Raw EEG stays discrete 2 / 4 / 8 / 10 s — no custom.
 12. Sample above the current Y-max: **dashed hold at last in-range Y**. Isolate in `monitor/panes/overshoot_hold.dart` so it can be deleted later (**< 100 lines**). Blink is small on dB; electrode pops may still overshoot. Do not use overshoot samples for the auto scale.
+
+### User decisions (2026-09-12) — PR 4 ASCII
+
+Locked after the PR 4 wireframes. Do not re-litigate. **PR 4 ASCII is approved;** the next thread implements painters (do not paste-and-wait again).
+
+13. **Landscape cinema** on the five graph views only (`bands`, `rawEeg`, `histogram`, `psd`, `spectrogram`). Landscape hides status bar, sidebar, and GraphShell toolbar; the pane fills the screen. Portrait restores chrome. Settings / Feedback / Streaming / History keep normal chrome. Connect is portrait (no status bar to tap). Plot gestures still work. Bands and Raw EEG **painters are unchanged**; they only get extra pixels. Land in PR 4 (`AppShell` + `GraphShell`).
+14. Spectrogram dual-thumb is **magnitude** (color min/max of log power), live as the thumbs move — **not** Hz range. Y stays **0–60 Hz**. Closed chrome label **`mag ▾`**. Not auto-pumping every frame (Mind Monitor Magnitude Min/Max, not a frequency cutoff).
+15. Spectrogram time: discrete **10 s / 20 s / 30 s / 2 min / 5 min**, default **20 s**. Pinch-X → GraphShell **`custom`**. Pan in Inspect (like Bands). Zoom-out cap **5 min** (SweepBuffer RAM). No 10 min in this series.
+16. No spectrogram averaging (1/4/8 s). No hold-finger readout (hold becomes drag, which pans).
+17. PR 4 FFT stays **256-pt** Hamming `1/N²`. **PR 8** (after 6 and 7) adds Spectrogram chrome **`FFT 1s ▾`** with **0.5 / 1 / 2 s** → **128 / 256 / 512** samples. Not a free slider. This is the FFT-window control, **instead of** averaging. PSD Welch stays 1 s / 256-pt segments.
+18. Histogram / PSD in **PR 4 are one pane each.** Windows **2 / 4 / 8 s** (Histogram default **8 s**, PSD default **4 s**). Follow = last T seconds. Inspect = freeze. Chrome shows elapsed **`m:ss–m:ss`** in Inspect. Tap (not drag) draws a vertical hairline + numeric label above the plot. **No time slider.** No pinch-`custom` on µV/Hz. Histogram X own **±100 µV** (overflow ±50 / ±200). PSD X **0–60 Hz** (overflow 0–100).
+19. **PR 7** (after 6): squished **Bands context strip (~30% height)** under Histogram and under PSD. Highlight = the T-second averaging window; the Bands strip is **wider** than T (Bands-like 30 s default, pinch-X). One electrode-toggle set drives both panes. The highlight is **time only** — Histogram is still raw µV in that window; PSD is still Welch of that window; Bands is the map, not the data source. Spectrogram does **not** get this strip (X is already time). ASCII first. Drops any Inspect-only time slider (none in PR 4).
+20. **PR 4 must leave the door open for PR 7 and PR 8** (see [Build PR 4 with PR 7/8 in mind](#build-pr-4-with-pr-78-in-mind)). Do not ship a time slider or a full-bleed painter that cannot sit above a 30% strip.
 
 No FFI surface change. Rust still owns `.muse` / `.muse.feedback` byte layout. `kind: "recording"` lives **inside** the zstd metadata JSON blob **and** as a sqlite column; not in the 68-byte header.
 
@@ -101,9 +114,9 @@ Independently, `FeedbackStateNotifier.startCalibration()` → `FeedbackRecorder.
 ### Goals
 
 - Isolate live graphs + connect/explicit recording under `lib/src/monitor/` so a graph agent primarily pulls that folder plus a short **required-siblings** list (not “only that folder”).
-- Fixed graph count: **1 pane** for Bands / Histogram / PSD / Spectrogram; **N stacked sweep panes** for Raw EEG (`N = config.channelCount.toInt()`).
+- Fixed graph count: **1 pane** for Bands / Histogram / PSD / Spectrogram in PR 4; **N stacked sweep panes** for Raw EEG (`N = config.channelCount.toInt()`). **PR 7** adds a ~30% Bands context pane under Histogram and PSD only (not Spectrogram, not standalone Bands).
 - Cancel add/remove, `GraphConfig.avgMode` overlay, and persisted multi-graph layouts. **Keep oscilloscope sweep.**
-- Shared chrome: Follow | Inspect, window length, Record / Stop recording, disconnected/waiting empty state.
+- Shared chrome: Follow | Inspect, window length, Record / Stop recording, disconnected/waiting empty state. Landscape cinema on graph views (PR 4).
 - Auto `tmp_` capture on connect; exclusive with feedback sessions and explicit Record; crash-safe `recording_` with Save/Discard.
 - Device-aware channel counts and labels (Muse 4, Crown 8). Crown **graphs and recording are allowed**.
 - On-screen copy changes land with `.ai/ui-map.md` in the same PR.
@@ -452,7 +465,8 @@ class GraphPaneContext {
 
 - **Raw EEG:** `Column` of `N` `SweepPane`s, `N = config.channelCount.toInt()`. One electrode each. Shared sweep cursor. **Oscilloscope wipe**, not stripchart.
 - **Bands:** one `TimeSeriesPane`, five series, mean of `averageElectrodes`.
-- **Histogram / PSD / Spectrogram:** own pane widgets; mean of `averageElectrodes`.
+- **Histogram / PSD (PR 4):** own pane widgets; mean of `averageElectrodes`. View `body` is a **`Column`** with the histogram/PSD pane `Expanded` — PR 7 inserts a ~30% `TimeSeriesPane` below; do not assume the painter is the only child forever.
+- **Spectrogram:** own heatmap pane; mean of `averageElectrodes`. No Bands strip (PR 7 does not apply).
 - No `GraphConfig`. No add/remove. No `avgMode` overlay. No extra graphs from electrode taps.
 
 ### EEG RAM: SweepBuffer only (do not double-buffer)
@@ -550,7 +564,8 @@ Electrode labels are **top-right**, **non-EEG views only**. Raw EEG has no chips
 | Control | v1 | Notes |
 |---|---|---|
 | Follow \| Inspect | yes | `SegmentedButton`. Follow disabled on saved-recording dashboard. |
-| Window length | yes | EEG discrete **2/4/8/10 s**, default **10 s** (today `2560/256`). Bands **15/30/60/120 s**, default **30 s**, plus pinch-X **`custom`**. Spectrogram 10/20/30 s. GraphShell: if `windowSeconds` is not in `windowOptions`, the closed label is `custom`; picking a preset restores it. |
+| Window length | yes | EEG discrete **2/4/8/10 s**, default **10 s** (today `2560/256`). Bands **15/30/60/120 s**, default **30 s**, plus pinch-X **`custom`**. Histogram / PSD discrete **2/4/8 s** (defaults **8 s** / **4 s**), no `custom`. Spectrogram **10s / 20s / 30s / 2min / 5min**, default **20 s**, pinch-X **`custom`**, cap 5 min. GraphShell: if `windowSeconds` is not in `windowOptions`, the closed label is `custom`; picking a preset restores it. |
+| Landscape cinema | yes from PR 4 | Graph views only. Hide status bar, sidebar, GraphShell toolbar. Pane fills. Portrait restores. |
 | Record / Stop recording | yes from PR 5a | **Hidden until 5a.** Disabled when `CaptureKind.feedback` or disconnected. |
 | Recording elapsed | yes | When `CaptureKind.recording` only. |
 | Electrode labels | non-EEG | Text (`TP9` … / Crown names). Tap toggles **average membership**. Selected = **depressed** (`ToggleButtons` or filled). Default **all on**. Disallow zero (last one stays on). **Not overlay, not extra graphs.** |
@@ -690,43 +705,164 @@ ASCII approved 2026-09-09. Painters in PR 3.
 
 ### Histogram
 
-| | v1 |
+ASCII approved 2026-09-12. Painters in PR 4. **PR 7** adds a Bands context strip under this pane — structure the view for that (see [Build PR 4 with PR 7/8 in mind](#build-pr-4-with-pr-78-in-mind)).
+
+```
+┌─ GraphShell ─────────────────────────────────────────────────────────────────┐
+│ [ Follow | Inspect ]   8s ▾                          ±100 µV ▾  [TP9][AF7][AF8][TP10]
+│                        2 / 4 / 8                     ±50/±100/   average membership
+│                        default 8s                    ±200        last-one stays
+│                        Inspect: elapsed m:ss–m:ss    (Record hidden)
+├──────────────────────────────────────────────────────────────────────────────┤
+│ count                                                                        │
+│         ████                                                                 │
+│   -100        0        100  µV     tap hairline → “−12 µV   48”              │
+│   64 linear bins · mean of selected · no time slider · no pinch-custom       │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+| | PR 4 (v1) |
 |---|---|
-| **Pane count** | **1** |
+| **Pane count** | **1** (PR 7 adds a second pane below; PR 4 `body` is a `Column` + `Expanded`) |
 | **Series** | Amplitude histogram of the visible time window. |
 | **Axes / units** | X: µV, **own fixed domain independent of Raw EEG’s `SharedYScale`**. Default **±100 µV**. Overflow ±50 / ±200. Y: **count**. |
-| **Default window** | **8 s** of samples (own control). |
+| **Default window** | **8 s**. Discrete **2 / 4 / 8 s**. No `custom`. |
 | **Bins** | Fixed 64 linear bins over that domain. No log bins. |
 | **Channel handling** | Mean of selected electrodes (same top-right toggles). Default all on. |
-| **Skip v1** | Log bins, Gaussian fit, overlay per channel, KDE, coupling to EEG Y-scale. |
+| **Follow / Inspect** | Follow = last T seconds, live. Inspect = freeze that epoch. Chrome elapsed **`m:ss–m:ss`**. Plot-drag does **not** pan time (X is µV). **No time slider** (PR 7’s Bands strip is the time map). |
+| **Tap readout** | Tap (not drag): vertical hairline + label above the bars (`−12 µV   48`). |
+| **Skip v1 / later** | Log bins, Gaussian fit, overlay per channel, KDE, coupling to EEG Y-scale, time slider. **Bands context strip is PR 7**, not skip-forever. |
 
 ### PSD
 
-| | v1 |
+ASCII approved 2026-09-12. Painters in PR 4. Same PR 7 context strip as Histogram.
+
+```
+┌─ GraphShell ─────────────────────────────────────────────────────────────────┐
+│ [ Follow | Inspect ]   4s ▾                           0–60 Hz ▾  [TP9][AF7][AF8][TP10]
+│                        2 / 4 / 8                      0–60 / 0–100
+│                        default 4s                     Inspect: m:ss–m:ss
+├──────────────────────────────────────────────────────────────────────────────┤
+│ dB                                                                           │
+│            * 10.2 Hz                                                         │
+│     ╱╲    ╱│╲                                                                │
+│    ╱  ╲__╱ │  ╲________                                                      │
+│    0  4  8 13  30  50  60 Hz     tap hairline → “10.2 Hz   −8.4 dB”           │
+│    |δ| θ | α |  β  | γ |  bandColors shading · one series · no overlay       │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+Sidebar label **`PSD`**. GraphShell `title` / semantics **`Power Spectral Density`**.
+
+| | PR 4 (v1) |
 |---|---|
-| **Pane count** | **1** |
-| **Series** | Welch of the last T seconds. **Mean** of selected electrodes (top-right toggles). Still one pane, **no overlay**. |
-| **Axes / units** | X: Hz, **0–60** (0–100 overflow). Y: **log power**. |
-| **Default window** | **4 s** into Welch (1 s Hamming segments, 50% hop, **256-point** FFT). Discrete 2 / 4 / 8 s. |
+| **Pane count** | **1** (PR 7 adds a second pane below; same `Column` + `Expanded` as Histogram) |
+| **Series** | Welch of the last T seconds. **Mean** of selected electrodes. Still one pane, **no overlay**. |
+| **Axes / units** | X: Hz, **0–60** (0–100 overflow). Y: **log power** (`dB` = `10·log10` of `1/N²` power). |
+| **Default window** | **4 s** into Welch (1 s Hamming segments, 50% hop, **256-point** FFT). Discrete **2 / 4 / 8 s**. No `custom`. |
 | **Band shading** | Copy `compute_fft_bands` in `muse.rs` (~1346–1351), **do not invent edges**: |
 | | delta **1–4**, theta **4–8**, alpha **8–13**, beta **13–30**, gamma **30–min(50, Nyquist)**. Nyquist is 128 Hz at 256 Hz / 256-pt; the Rust cap is `half_n.min(50)` → **30–50 Hz**. |
 | **Peak marker** | Argmax in 8–13 Hz (Rust alpha). One label. |
-| **FFT implementation** | **`monitor/dsp.dart` only.** No FFT package in `pubspec.yaml`. Local Cooley–Tukey, Hamming window, power `(re²+im²)/(n*n)` to match Rust ` / (n * n)`, `n = 256`. |
-| **Skip v1** | Linear-Y default, 1/f overlay, coherence, topo, SEF/MF, new FFI. |
+| **FFT implementation** | **`monitor/dsp.dart` only.** No FFT package in `pubspec.yaml`. Local Cooley–Tukey, Hamming window, power `(re²+im²)/(n*n)` to match Rust ` / (n * n)`. PR 4 default **`n = 256`**. Implement for general power-of-two `n` so PR 8 is a dropdown, not a rewrite. |
+| **Follow / Inspect** | Same as Histogram: freeze + elapsed label. No time slider. Plot-drag does not pan time (X is Hz). |
+| **Tap readout** | Tap (not drag): hairline + `10.2 Hz   −8.4 dB`. |
+| **Skip v1 / later** | Linear-Y default, 1/f overlay, coherence, topo, SEF/MF, new FFI, time slider. **Bands context strip is PR 7.** PSD Welch stays 1 s / 256-pt when PR 8 adds Spectrogram FFT sizes. |
 
 ### Spectrogram
 
 Keep `AppView.spectrogram`, sidebar `Spectrogram`, widget `SpectrogramView` in `monitor/views/spectrogram_view.dart`. “Waterfall” may appear **once** in docs as an industry synonym, **not** on screen.
 
-| | v1 |
-|---|---|
-| **Pane count** | **1** |
-| **Series** | Heatmap: X = time, Y = **0–60 Hz**, color = log power. Same 256-pt Hamming STFT as PSD (`dsp.dart`) of the **mean** of selected electrodes. |
-| **Default window** | **20 s** × 0–60 Hz. Discrete 10 / 20 / 30 s. Hop ~0.25 s. |
-| **Channel handling** | Top-right toggles → average. Default all on. Not exclusive-single, not overlay heatmaps. |
-| **Skip v1** | 3D mesh, colormap editor, stacked per-channel heatmaps, renaming the sidebar. |
+ASCII approved 2026-09-12. Painters in PR 4. **PR 8** adds `FFT 1s ▾` — do not add it in PR 4; keep `n` parameterized in `dsp.dart`.
 
-Delete placeholder `lib/src/views/terminal.dart` (`SpectrogramView`) and `psd_view.dart` when the real views land.
+```
+┌─ GraphShell ─────────────────────────────────────────────────────────────────┐
+│ [ Follow | Inspect ]   20s ▾        mag ▾                        [TP9][AF7][AF8][TP10]
+│                        10s / 20s / 30s / 2min / 5min             average membership
+│                        pinch-X → custom · pan in Inspect         (Record hidden)
+│                        mag ▾ = dual-thumb color min/max (live)
+├──────────────────────────────────────────────────────────────────────────────┤
+│ Hz                                                                           │
+│  60 ┤ ░░▒▒▓▓████░░░░▒▒▓▓██░░░░▒▒▓▓████  ┃ color bar = mag range              │
+│   0 ┼──────────────────────────────────  ┃                                   │
+│     0:00              0:10              0:20  elapsed                        │
+│     STFT mean(selected) · 256-pt Hamming · hop ~0.25 s · Y fixed 0–60 Hz     │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+| | PR 4 (v1) |
+|---|---|
+| **Pane count** | **1** (no Bands strip here — X is already time) |
+| **Series** | Heatmap: X = time, Y = **0–60 Hz**, color = log power. Same Hamming STFT as PSD (`dsp.dart`) of the **mean** of selected electrodes. |
+| **Default window** | **20 s**. Discrete **10 s / 20 s / 30 s / 2 min / 5 min**. Pinch-X → **`custom`**. Zoom-out cap **5 min**. Hop ~0.25 s. |
+| **Magnitude** | Chrome **`mag ▾`**: dual-thumb **color min/max** (log power), live. Not Hz zoom, not a DSP filter. Not auto-pumping every frame. Slim colorbar on the right tracks the same range. |
+| **Channel handling** | Top-right toggles → average. Default all on. Not exclusive-single, not overlay heatmaps. |
+| **Follow / Inspect** | Heatmap strip. Follow: newest column at the right. Inspect: freeze; drag pans time; pinch-X scales (dropdown `custom`). |
+| **Skip v1 / later** | 3D mesh, colormap editor, stacked per-channel heatmaps, renaming the sidebar, hold-finger column readout, averaging 1/4/8 s, Hz-range dual-thumb. **FFT window control is PR 8**, not skip-forever. |
+
+### Landscape cinema (all five graph views)
+
+PR 4. Portrait = current chrome. Landscape on `bands` / `rawEeg` / `histogram` / `psd` / `spectrogram`:
+
+```
+ portrait                          rotate                         landscape
+┌────────┬──────────────────┐              ┌─────────────────────────────────┐
+│ sidebar│ status           │              │                                 │
+│        ├──────────────────┤              │         graph pane only         │
+│ Bands  │ [Follow|Inspect] │     ──►      │     (axes + plot + hairline)    │
+│ Raw EEG│  20s ▾  TP9 AF7  │              │                                 │
+│ Hist.  ├──────────────────┤              │  no status · no sidebar         │
+│ Spect. │                  │              │  no Follow/Inspect · no 20s ▾   │
+│ PSD    │   graph pane     │              │  no electrodes · no mag ▾       │
+└────────┴──────────────────┘              └─────────────────────────────────┘
+```
+
+`AppShell` hides StatusBar + sidebar. `GraphShell` hides the toolbar row. Feedback / History / Streaming / Settings do **not** cinema. Rotate back to restore. Plot gestures (spectrogram pan/pinch, Histogram/PSD tap readout) still work.
+
+### Build PR 4 with PR 7/8 in mind
+
+PR 4 ships **one pane** Histogram / PSD / Spectrogram. Two later PRs will attach chrome and a second pane. Do not implement 7 or 8 in PR 4. Do not paint a corner:
+
+| Later PR | What lands | What PR 4 must already have |
+|---|---|---|
+| **7** — Bands context strip under Histogram and PSD | ~70% histogram/PSD + ~30% `TimeSeriesPane`; highlight = T-second epoch; pan/pinch on the Bands strip | View `body` = `Column` + `Expanded` histogram/PSD pane. Epoch = `ViewportController` strip start/end (same numbers the highlight will use). **No time slider.** One shared `Set<int>` electrode selection. Reuse `TimeSeriesPane` as-is (do not fork). Do not change Bands **view**. |
+| **8** — Spectrogram `FFT 1s ▾` | Discrete **0.5 / 1 / 2 s** → **128 / 256 / 512**. Not a free slider. Spectrogram only. | `dsp.dart` Cooley–Tukey takes power-of-two `n` (PR 4 calls `n = 256`). Tests lock Hamming + `1/N²` + band edges at 256. PSD Welch stays 1 s / 256-pt. |
+
+### Histogram + PSD — Bands as a time map (PR 7)
+
+After PR 6. ASCII first in that thread (two-pane chrome). Not this thread.
+
+Histogram and PSD are summaries of a time window; their X axes are µV and Hz, so they cannot show *which* window. A squished Bands strip with a moving highlight is overview+detail: Bands is the map, Histogram/PSD is the street view. Pan/pinch stay on a graph the user already knows.
+
+```
+  PR 7 — not PR 4
+┌─ Histogram (same for PSD; highlight width = Welch T) ────────────────────────┐
+│ [ Follow | Inspect ]   8s ▾   ±100 µV ▾                      [TP9][AF7][AF8][TP10]
+├──────────────────────────────────────────────────────────────────────────────┤
+│ count                                        ~70%                            │
+│         ████  (tap hairline)                                                 │
+│  -100        0        100 µV                                                 │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ dB  Bands context                            ~30%                            │
+│     ····[#### highlight = 8 s ####]····  pan/pinch here                      │
+│     0:00              0:20              0:30                                 │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+Locked for that PR (do not invent a different layout):
+
+- Highlight width = Histogram/PSD window (**2 / 4 / 8 s**). Bands strip **wider** than T (default **30 s**, pinch-X `custom` like Bands). If both were 8 s the highlight would fill the pane and context is gone.
+- One electrode-toggle set drives both panes.
+- Highlight is **time only**. Histogram = raw µV in `[start, start+T]`. PSD = Welch of that window. Bands is not the data source.
+- Spectrogram does **not** get this strip.
+- Landscape cinema: both panes, no chrome.
+- Reuse `TimeSeriesPane` + a highlight overlay. Do not fork Bands view. Do not change the standalone Bands sidebar view’s behavior except by sharing the pane widget.
+- Drops the Inspect elapsed-only navigation as the *primary* time map (chrome `m:ss–m:ss` may stay).
+
+### Spectrogram FFT window (PR 8)
+
+After PR 7. No averaging. Chrome next to `20s` / `mag ▾`: **`FFT 1s ▾`** with **0.5 s / 1 s / 2 s** (128 / 256 / 512). Not a free slider. Default **1 s**. Longer window → finer Hz, more time smear per column. Spectrogram only; PSD Welch stays 1 s / 256-pt.
+
+Delete placeholder `lib/src/views/terminal.dart` (`SpectrogramView`) and `psd_view.dart` when the PR 4 views land.
 
 ---
 
@@ -1280,7 +1416,7 @@ Would make `feedback_dashboard.dart` and `session_export.dart` import monitor. *
 18. **Crown graphs + recording allowed; Crown Start still refused.** Status-bar 4-pad ring stays 4-ch.
 19. **EEG RAM is SweepBuffer only** (300 s history + 10 s display). No second LiveCache EEG ring. File-backed Inspect (PR **1c**, required) prepends `sessionHeaderBytes()`. Non-EEG elapsed domain from `captureStartedAtMs` / SweepBuffer index.
 20. **tmp cap 30 min silent rotate.** 5 min RAM is the hot cache (see comparison table). Explicit recordings uncapped (soft 2 h warning).
-21. **Dart FFT in `dsp.dart`:** Hamming, `1/N²`, 256-pt, band edges 1–4 / 4–8 / 8–13 / 13–30 / 30–50. Histogram Y-scale is **own** ±100 µV.
+21. **Dart FFT in `dsp.dart`:** Hamming, `1/N²`, band edges 1–4 / 4–8 / 8–13 / 13–30 / 30–50. PR 4 default **256-pt**; `n` is a power-of-two parameter (PR 8: 128 / 256 / 512). Histogram X-scale is **own** ±100 µV.
 22. **No Android foreground service in this series.**
 23. **`MonitorController` is constructed in `main()`** from the same `ProviderContainer` as `AppStateNotifier`, and hydrates if already connected. Not AppShell.
 24. **Copy changes update `.ai/ui-map.md` in the same PR.** Spectrogram stays `spectrogram`. History label change is PR 6. Histogram is the only new `AppView`.
@@ -1288,9 +1424,12 @@ Would make `feedback_dashboard.dart` and `session_export.dart` import monitor. *
 26. **`bandNames` / `bandColors` stay in `lib/src/charts/band_style.dart`** so feedback export/dashboard never import monitor.
 27. **v1 History list is sqlite-only** (`kind` filter). Do not copy the stub `backfillPending`.
 28. **Non-EEG electrode toggles:** top-right text, depressed = in the average, default all on, last-one stays. EEG: no chips.
-29. **Graph PRs 2/3/4: ASCII wireframe first**, wait for user correction, then painters. **PR 3 ASCII is approved** (2026-09-09); do not wait again.
-30. **5 min RAM + 30 min tmp** is the locked split. Do not grow RAM to 30 min.
-31. **Bands Y is dB display** (`10·log10` of linear µV²/Hz). Storage / FFI / `.muse` stay linear. Mean of selected electrodes is in **dB**. Pinch-X → `custom` on Bands only. Overshoot hold is a strippable dashed last-in-range (see Bands table).
+29. **Graph PRs 2/3/4: ASCII wireframe first**, wait for user correction, then painters. **PR 3 ASCII is approved** (2026-09-09). **PR 4 ASCII is approved** (2026-09-12); the next thread implements painters — do not paste-and-wait again. **PR 7** (Bands context strip) is ASCII first. PR 8 is a dropdown, no ASCII wait.
+30. **5 min RAM + 30 min tmp** is the locked split. Do not grow RAM to 30 min. Spectrogram zoom-out cap is 5 min.
+31. **Bands Y is dB display** (`10·log10` of linear µV²/Hz). Storage / FFI / `.muse` stay linear. Mean of selected electrodes is in **dB**. Pinch-X → `custom` on Bands (and Spectrogram). Overshoot hold is a strippable dashed last-in-range (see Bands table).
+32. **Landscape cinema** (PR 4): graph views hide status bar, sidebar, GraphShell toolbar. Portrait restores. Not Settings/Feedback/Streaming/History.
+33. **Spectrogram `mag ▾`** is color min/max (log power), not Hz. Y fixed 0–60 Hz. No averaging, no hold-finger. FFT-window chrome is **PR 8**.
+34. **Histogram/PSD PR 4 = one pane.** No time slider. Tap readout. Inspect elapsed `m:ss–m:ss`. **PR 7** is the Bands context strip (~30%) under both. PR 4 `Column` + `Expanded` + shared epoch so 7 does not rewrite painters.
 
 ---
 
@@ -1310,6 +1449,15 @@ Resolved 2026-09-09:
 7. Bands Y → **dB** (Muse app + SDK + Mind Monitor), not linear µV²/Hz and not robust-percentile linear. Storage stays linear.
 8. Bands pinch-X → dropdown **`custom`**; presets restore. No pinch-Y.
 9. Overshoot → dashed hold at last in-range Y, isolated so it can be stripped.
+
+Resolved 2026-09-12 (PR 4 ASCII):
+
+10. Landscape → **cinema** on graph views (chrome off, pane fills). Portrait restores.
+11. Spectrogram dual-thumb → **magnitude / color**, not Hz range. Y stays 0–60 Hz.
+12. Spectrogram time → **10s / 20s / 30s / 2min / 5min** + pinch `custom`, cap 5 min. No averaging. No hold-finger.
+13. FFT window chrome → **PR 8** (`0.5 / 1 / 2 s`), not PR 4. 256-pt stays the default.
+14. Histogram/PSD time map → **PR 7** Bands context strip (~30%), not a slider under µV/Hz. PR 4 is one pane + Inspect elapsed + tap readout.
+15. Series continues after 6: **PR 7** then **PR 8**, then archive.
 
 ---
 
@@ -1347,7 +1495,7 @@ Point at `.ai/test-matrix.md` and `.ai/testing-guide.md`.
 | Dart + FFI | `writeScratchV5(prefix: recording)`; metadata JSON `kind == recording`; `publish` upserts `session_metadata.db` with `kind=recording`; History list unions prefixes | `cargo build --manifest-path rust/Cargo.toml` then `flutter test test/monitor/recording_store_test.dart` |
 | Rust | only if FFI changed (prefer not) | `cargo test --lib session_format` |
 | Agent Linux | `POST /view` `histogram` / `spectrogram` / `feedbackHistory`; `POST /record/start` after `sim:muse-2`; `GET /state` `captureKind`; `POST /session/start` → 409 `recording_active`; Crown 409 `crown_refused` | `.ai/testing-guide.md`; `persist: false` |
-| Visual graphs | **cannot** | human `flutter run` after ASCII approval |
+| Visual graphs | **cannot** | human `flutter run` (PR 4 ASCII is approved) |
 
 `flutter analyze lib/src` after every Dart PR.
 
@@ -1358,7 +1506,7 @@ Point at `.ai/test-matrix.md` and `.ai/testing-guide.md`.
 - **This file** `.ai/monitor.md` (canonical)
 - `.ai/ui-map.md` — History label, Follow/Inspect/Record, electrode toggles, Save files to folder, folder-change dialog, Spectrogram (not Waterfall)
 - `.ai/README.md`, `.ai/architecture.md`
-- `.ai/test-matrix.md` / `.ai/testing-guide.md` — PR 4 adds `histogram`; PR 5a `/record/*` and 409 `recording_active`
+- `.ai/test-matrix.md` / `.ai/testing-guide.md` — PR 4 adds `histogram`; PR 5a `/record/*` and 409 `recording_active`; PR 7/8 do not add HTTP
 - `README_feedback_format.md` — `kind` in metadata JSON
 - `README_history_cache.md` — `kind` column on `sessions`; both prefixes in the history folder
 
@@ -1368,15 +1516,15 @@ Point at `.ai/test-matrix.md` and `.ai/testing-guide.md`.
 
 File layout, lease, prefixes, architecture B, **sweep EEG**, Follow/Inspect names, Spectrogram name, unified History, and Record/Stop are **locked**.
 
-Before writing Dart for **PR 2 (Raw EEG), PR 3 (Bands), or PR 4 (Histogram / PSD / Spectrogram)**:
+Before writing Dart for **PR 2 (Raw EEG), PR 3 (Bands), PR 4 (Histogram / PSD / Spectrogram), or PR 7 (Bands context strip)**:
 
 1. Paste an **ASCII wireframe** of `GraphShell` + that view (header, Follow/Inspect, window length, Record, electrode labels if any, panes, axes, sweep cursor vs time axis).
 2. **Wait** for the user to correct it.
 3. Do **not** implement the painter until that ASCII is approved.
 
-**PR 3 ASCII is approved** (2026-09-09). The next thread implements painters; do not paste-and-wait again.
+**PR 3 ASCII is approved** (2026-09-09). **PR 4 ASCII is approved** (2026-09-12). The next thread implements PR 4 painters; do not paste-and-wait again.
 
-PRs 0, 1a, 1b, **1c**, 5a, 5b, 6 do **not** need ASCII.
+PRs 0, 1a, 1b, **1c**, 5a, 5b, 6, **8** do **not** need ASCII. PR 8 is a discrete FFT-size dropdown on chrome already locked above.
 
 ---
 
@@ -1384,7 +1532,7 @@ PRs 0, 1a, 1b, **1c**, 5a, 5b, 6 do **not** need ASCII.
 
 Each PR is independently reviewable and mergeable. UI copy PRs include `.ai/ui-map.md`. Hide Record until 5a.
 
-**Suggested merge order:** 0 → 1a → 1b → **1c** → 2 → (3 ∥ 4) → 5a → 5b → 6.
+**Suggested merge order:** 0 → 1a → 1b → **1c** → 2 → (3 ∥ 4) → 5a → 5b → 6 → **7** → **8**.
 
 PR 2 Inspect may use SweepBuffer 5 min until 1c, but **1c is not optional** and should land before claiming EEG Inspect is done. Prefer 1c immediately after 1b, before or with PR 2.
 
@@ -1432,13 +1580,13 @@ PR 2 Inspect may use SweepBuffer 5 min until 1c, but **1c is not optional** and 
 - **ASCII:** approved. Do not wait. See Bands table + user decisions 10–12.
 - **Changes:** One pane, 5 series, 30 s default. Y **dB** display (`10·log10`; storage linear). Mean of selected in dB. Pinch-X → `custom`. Overshoot dashed hold (strippable). Top-right electrode text toggles (average, depressed, all-on, last-one stays). Drop SMOOTH/REALTIME/Add graph. Record hidden.
 
-### PR 4 — Histogram, PSD, Spectrogram (ASCII first)
+### PR 4 — Histogram, PSD, Spectrogram (ASCII **approved** 2026-09-12)
 
 - **Title:** `Add Histogram; implement PSD and Spectrogram`
-- **Files:** `dsp.dart`, histogram/psd/spectrogram panes + views (`spectrogram_view.dart`); `settings.dart` add `AppView.histogram` only; `app.dart` sidebar; `agent_protocol.dart` + tests; delete `psd_view.dart`, `terminal.dart`; `.ai/ui-map.md`, `.ai/test-matrix.md`, `.ai/testing-guide.md` (`histogram`; **keep** `spectrogram`).
+- **Files:** `dsp.dart`, histogram/psd/spectrogram panes + views (`spectrogram_view.dart`); `graph_shell.dart` / `app.dart` landscape cinema; `settings.dart` add `AppView.histogram` only; `app.dart` sidebar; `agent_protocol.dart` + tests; delete `psd_view.dart`, `terminal.dart`; `.ai/ui-map.md`, `.ai/test-matrix.md`, `.ai/testing-guide.md` (`histogram`; **keep** `spectrogram`).
 - **Depends on:** PR 2
-- **ASCII:** required for each of the three views before its painter.
-- **Changes:** Keep `AppView.spectrogram` and sidebar **Spectrogram**. PSD sidebar label **PSD**. Histogram new. Same electrode toggles as Bands. Dart FFT Hamming 256-pt `1/N²`; band edges 1–4 / 4–8 / 8–13 / 13–30 / 30–50. Histogram own ±100 µV. Can land parallel to PR 3.
+- **ASCII:** approved (user decisions 13–20). Do not wait. See Histogram / PSD / Spectrogram / landscape tables.
+- **Changes:** Keep `AppView.spectrogram` and sidebar **Spectrogram**. PSD sidebar label **PSD**. Histogram new. Same electrode toggles as Bands. Dart FFT Hamming `1/N²`, default 256-pt, `n` parameterized. Histogram own ±100 µV, 64 bins, 2/4/8 default 8 s, tap readout, Inspect elapsed, **no time slider**. PSD 2/4/8 default 4 s, 0–60 Hz, band shading, alpha peak, tap readout. Spectrogram 10/20/30s/2min/5min default 20 s, pinch `custom` cap 5 min, **`mag ▾`** dual-thumb color, Y 0–60 Hz. Landscape cinema on graph views. Record hidden. **Do not** implement PR 7 strip or PR 8 FFT dropdown. **Do** `Column` + `Expanded` on Histogram/PSD views. Can land parallel to PR 3 (already landed).
 
 ### PR 5a — Record / Stop / assemble / 409
 
@@ -1460,3 +1608,19 @@ PR 2 Inspect may use SweepBuffer 5 min until 1c, but **1c is not optional** and 
 - **Files:** `lib/src/views/feedback_history.dart` (filter All \| Feedback \| Recordings); `app.dart` sidebar label `History`; `session_sqlite.dart` `kind` if not in 5b; `session_store_core.dart` `list`/`moveAllTo` both prefixes; `recording_dashboard.dart`; `settings_view.dart` **Save files to folder** + dialog counts both prefixes; `.ai/ui-map.md`.
 - **Depends on:** PR 5b
 - **Changes:** No new sidebar item. Enum stays `feedbackHistory`. Feedback row → `FeedbackDashboardView`. Recording row → `recording_dashboard.dart`. Placeholder thumbs, no sparkline. Folder-change copy. `_resetFolder` invalidates the history list.
+
+### PR 7 — Bands context strip under Histogram and PSD (ASCII first)
+
+- **Title:** `Bands time map under Histogram and PSD`
+- **Files:** `views/histogram_view.dart`, `views/psd_view.dart` (Column: Expanded histogram/PSD + ~30% `TimeSeriesPane`); highlight overlay on `TimeSeriesPane` or a thin wrapper; `.ai/ui-map.md`.
+- **Depends on:** PR 4 (and the series through 6 — do not start before 6 unless product says otherwise)
+- **ASCII:** required (two-pane chrome). Spec section [Histogram + PSD — Bands as a time map (PR 7)](#histogram--psd--bands-as-a-time-map-pr-7) is locked; the wireframe is spacing/chrome, not a redesign.
+- **Changes:** Overview+detail. Highlight width = 2/4/8 s averaging window. Bands strip wider (30 s default, pinch-X `custom`). One electrode-toggle set. Highlight is time only. Spectrogram unchanged. Reuse `TimeSeriesPane`; do not fork Bands view; do not change standalone Bands. Landscape cinema: both panes, no chrome.
+
+### PR 8 — Spectrogram FFT window
+
+- **Title:** `Spectrogram FFT 0.5 / 1 / 2 s`
+- **Files:** `views/spectrogram_view.dart` chrome `FFT 1s ▾`; `dsp.dart` already parameterized in PR 4; `.ai/ui-map.md`.
+- **Depends on:** PR 4, PR 7
+- **ASCII:** not required. Discrete dropdown only.
+- **Changes:** **0.5 / 1 / 2 s** → **128 / 256 / 512**. Default **1 s**. Not a free slider. Spectrogram only. PSD Welch stays 1 s / 256-pt. No averaging control. After this PR: archive the handoff, update `.ai/architecture.md` / `.ai/README.md`.
