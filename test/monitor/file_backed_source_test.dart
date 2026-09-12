@@ -109,6 +109,31 @@ void main() {
     await rec.discard();
   });
 
+  test('flushRaw indexes recording_ on the same RecordingIndex', () async {
+    final dir = await Directory.systemTemp.createTemp('muse_rec_idx_');
+    addTearDown(() => dir.delete(recursive: true));
+    final rec = _recorder();
+    await rec.startRecording(
+      dir: dir,
+      recordStreams: RecordingStream.values.toSet(),
+      metadata: _meta,
+      captureStartedAtMs: _startMs,
+    );
+
+    rec.writeEvent(_eeg(5000));
+    rec.flushRaw();
+
+    expect(rec.prefix, 'recording');
+    expect(rec.currentFilePath, contains('recording_'));
+    expect(rec.index.entries, hasLength(1));
+    final raw = File(rec.currentFilePath!);
+    expect(rec.index.entries.single.fileLength, raw.lengthSync());
+    expect(rec.index.entries.single.elapsedT, closeTo(5.0, 0.001));
+    expect(rec.index.covering(0, 10)!.startOffset, kMuseBodyHeaderLength);
+
+    await rec.discard();
+  });
+
   test('getRange returns elapsed t, not unix seconds', () async {
     final dir = await Directory.systemTemp.createTemp('muse_range_');
     addTearDown(() => dir.delete(recursive: true));

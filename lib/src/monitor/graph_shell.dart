@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/monitor/monitor_providers.dart';
+import 'package:muse_ml/src/monitor/monitor_state.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
 
-/// Shared chrome for live monitor graphs. Record is a slot, hidden until PR 5a.
+/// Shared chrome for live monitor graphs. Record / Stop recording from PR 5a.
 class GraphShell extends ConsumerWidget {
   const GraphShell({
     super.key,
@@ -32,7 +37,7 @@ class GraphShell extends ConsumerWidget {
   final String Function(double seconds)? formatWindow;
   final Widget body;
 
-  /// Hidden until PR 5a. Slot exists so 5a only unhides.
+  /// Record / Stop recording. Set true on the five live graph views.
   final bool showRecord;
 
   @override
@@ -129,7 +134,7 @@ class GraphShell extends ConsumerWidget {
                     ],
                     if (showRecord) ...[
                       const SizedBox(width: 12),
-                      const SizedBox.shrink(),
+                      const _RecordControls(),
                     ],
                     const Spacer(),
                     if (toolbarExtras != null)
@@ -146,6 +151,86 @@ class GraphShell extends ConsumerWidget {
           Expanded(child: body),
         ],
       ),
+    );
+  }
+}
+
+class _RecordControls extends ConsumerStatefulWidget {
+  const _RecordControls();
+
+  @override
+  ConsumerState<_RecordControls> createState() => _RecordControlsState();
+}
+
+class _RecordControlsState extends ConsumerState<_RecordControls> {
+  Timer? _tick;
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  void _syncTick(bool recording) {
+    if (recording) {
+      _tick ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    } else {
+      _tick?.cancel();
+      _tick = null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mon = ref.watch(monitorControllerProvider);
+    final connected = ref.watch(
+      appStateProvider.select((s) => s.status.connected),
+    );
+    final recording = mon.kind == CaptureKind.recording;
+    _syncTick(recording);
+    final disabled =
+        !recording &&
+        (mon.kind == CaptureKind.feedback ||
+            !connected ||
+            mon.pendingScratchPath != null);
+    final label = recording ? 'Stop recording' : 'Record';
+    Widget button = TextButton(
+      onPressed: disabled
+          ? null
+          : () {
+              final notifier = ref.read(monitorControllerProvider.notifier);
+              if (recording) {
+                unawaited(notifier.stopRecording());
+              } else {
+                unawaited(notifier.startRecording());
+              }
+            },
+      style: const ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(label),
+    );
+    if (disabled) {
+      button = Tooltip(
+        message: 'Stop the feedback session to record',
+        child: button,
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        button,
+        if (recording) ...[
+          const SizedBox(width: 8),
+          Text(
+            formatElapsed(mon.captureElapsedSeconds),
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+        ],
+      ],
     );
   }
 }

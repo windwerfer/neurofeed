@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -121,6 +122,10 @@ class MonitorController extends Notifier<MonitorState> {
 
   Future<bool> acquireFeedbackLease() {
     return _serialized(() async {
+      if (state.pendingScratchPath != null) {
+        debugPrint('[monitor] lease refuse recording_active');
+        return false;
+      }
       final wasTmp = _lease.kind == CaptureKind.tmp;
       if (!_lease.tryAcquireFeedback()) {
         debugPrint('[monitor] lease refuse recording_active');
@@ -147,6 +152,37 @@ class MonitorController extends Notifier<MonitorState> {
       if (app.status.connected) {
         await _startTmpUnlocked();
       }
+    });
+  }
+
+  Future<void> startRecording() => _serialized(_startRecordingUnlocked);
+
+  /// Flush and assemble `recording_$ts.muse.feedback`. When [promptSave] is
+  /// true, [MonitorState.pendingScratchPath] is set so Save/Discard can run.
+  /// Agent / process-exit pass [promptSave] false. Restart tmp only when
+  /// asked — UI does that after Save/Discard.
+  Future<File?> stopRecording({
+    bool promptSave = true,
+    bool restartTmp = false,
+  }) {
+    return _serialized(
+      () => _assembleRecordingUnlocked(
+        promptSave: promptSave,
+        restartTmp: restartTmp,
+      ),
+    );
+  }
+
+  Future<void> savePendingRecording() => _serialized(_savePendingUnlocked);
+
+  Future<void> discardPendingRecording() =>
+      _serialized(_discardPendingUnlocked);
+
+  /// Best-effort assemble on process exit. No Save/Discard dialog.
+  Future<void> assembleRecordingOnExit() {
+    return _serialized(() async {
+      if (_lease.kind != CaptureKind.recording) return;
+      await _assembleRecordingUnlocked(promptSave: false);
     });
   }
 
@@ -201,6 +237,13 @@ class MonitorController extends Notifier<MonitorState> {
   }
 
   Future<void> _onDisconnectedUnlocked() async {
+    if (_lease.kind == CaptureKind.recording) {
+      await _assembleRecordingUnlocked(promptSave: true);
+      _latestEegTsMs = null;
+      sweepBuffer.clear();
+      bandCache.clear();
+      return;
+    }
     if (_lease.kind != CaptureKind.tmp) return;
     await _stopTmpWriter();
     _lease.tryDiscardTmp();
@@ -211,7 +254,122 @@ class MonitorController extends Notifier<MonitorState> {
       kind: CaptureKind.idle,
       electrodeNames: state.electrodeNames,
       channelCount: state.channelCount,
+      pendingScratchPath: state.pendingScratchPath,
     );
+  }
+
+  Future<void> _startRecordingUnlocked() async {
+    final app = ref.read(appStateProvider);
+    if (!app.status.connected) return;
+    if (state.pendingScratchPath != null) return;
+    if (_lease.kind == CaptureKind.feedback) return;
+    if (_lease.kind == CaptureKind.recording) return;
+    if (_lease.kind == CaptureKind.tmp) {
+      await _stopTmpWriter();
+    }
+    if (!_lease.tryBeginRecording()) return;
+    try {
+      final storage = await ref.read(sessionStorageProvider.future);
+      await storage.ensureDir();
+      final dir = scratchDirectory(storage);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      final settings = ref.read(settingsProvider);
+      final names = electrodeNamesForKind(app.lastConnectedKind);
+      final startedAt = _latestEegTsMs ?? DateTime.now().millisecondsSinceEpoch;
+      state = MonitorState(
+        kind: CaptureKind.recording,
+        electrodeNames: names,
+        channelCount: names.length,
+        captureStartedAtMs: startedAt,
+      );
+      await _capture!.startRecording(
+        dir: dir,
+        recordStreams: settings.recordStreams,
+        metadata: _currentMetadata,
+        captureStartedAtMs: startedAt,
+      );
+      state = state.copyWith(captureId: _capture!.captureId);
+      _startSampler(names.length, startedAt);
+      debugPrint('[monitor] recording start id=${_capture!.captureId}');
+    } catch (e, st) {
+      debugPrint('[monitor] recording start failed: $e\n$st');
+      _lease.tryReleaseRecording();
+      _stopSampler();
+      final after = ref.read(appStateProvider);
+      state = MonitorState.idle(deviceKind: after.lastConnectedKind);
+      if (after.status.connected) {
+        await _startTmpUnlocked();
+      }
+    }
+  }
+
+  Future<File?> _assembleRecordingUnlocked({
+    required bool promptSave,
+    bool restartTmp = false,
+  }) async {
+    if (_lease.kind != CaptureKind.recording) return null;
+    _stopSampler();
+    final meta = _currentMetadata().toJson();
+    final file = await _capture?.assemble(metadataJson: meta);
+    if (file == null) {
+      debugPrint('[monitor] recording assemble failed; temps kept');
+      return null;
+    }
+    _lease.tryReleaseRecording();
+    final app = ref.read(appStateProvider);
+    state = MonitorState(
+      kind: CaptureKind.idle,
+      electrodeNames: state.electrodeNames,
+      channelCount: state.channelCount,
+      pendingScratchPath: promptSave ? file.path : null,
+    );
+    debugPrint('[monitor] recording stop ${file.path}');
+    if (restartTmp && app.status.connected) {
+      await _startTmpUnlocked();
+    }
+    return file;
+  }
+
+  Future<void> _savePendingUnlocked() async {
+    final path = state.pendingScratchPath;
+    if (path == null) return;
+    final storage = await ref.read(sessionStorageProvider.future);
+    await storage.ensureDir();
+    final file = File(path);
+    final name = file.uri.pathSegments.last;
+    if (await file.exists()) {
+      await storage.writeFileAtomic(name, await file.readAsBytes());
+      try {
+        await file.delete();
+      } catch (_) {}
+    }
+    debugPrint('[monitor] recording save $name');
+    await _finishPendingUnlocked();
+  }
+
+  Future<void> _discardPendingUnlocked() async {
+    final path = state.pendingScratchPath;
+    if (path == null) return;
+    try {
+      final file = File(path);
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
+    debugPrint('[monitor] recording discard');
+    await _finishPendingUnlocked();
+  }
+
+  Future<void> _finishPendingUnlocked() async {
+    final app = ref.read(appStateProvider);
+    if (_lease.kind == CaptureKind.tmp) {
+      state = state.copyWith(pendingScratchPath: null);
+      return;
+    }
+    state = MonitorState.idle(deviceKind: app.lastConnectedKind);
+    if (app.status.connected) {
+      await _startTmpUnlocked();
+    }
   }
 
   Future<void> _stopTmpWriter() async {
@@ -244,7 +402,7 @@ class MonitorController extends Notifier<MonitorState> {
     return RecordingMetadata(
       formatVersion: 5,
       appVersion: appVersion,
-      kind: 'tmp',
+      kind: _lease.kind == CaptureKind.recording ? 'recording' : 'tmp',
       savedAt: DateTime.now().toUtc(),
       startedAt: DateTime.fromMillisecondsSinceEpoch(started, isUtc: true),
       elapsedSeconds: elapsed,

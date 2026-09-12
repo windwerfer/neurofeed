@@ -150,6 +150,7 @@ class _BandsViewState extends ConsumerState<BandsView> {
 
     return GraphShell(
       title: 'Bands',
+      showRecord: true,
       viewport: _viewport,
       windowOptions: ViewportController.bandsWindowOptions,
       onFollow: _follow,

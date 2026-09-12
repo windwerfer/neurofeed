@@ -14,6 +14,7 @@ class MonitorState {
     required this.channelCount,
     this.captureStartedAtMs,
     this.captureId,
+    this.pendingScratchPath,
   });
 
   final CaptureKind kind;
@@ -21,6 +22,9 @@ class MonitorState {
   final int channelCount;
   final int? captureStartedAtMs;
   final String? captureId;
+
+  /// Assembled `recording_$ts.muse.feedback` waiting for Save / Discard.
+  final String? pendingScratchPath;
 
   Duration get captureElapsed {
     final start = captureStartedAtMs;
@@ -46,6 +50,7 @@ class MonitorState {
     int? channelCount,
     Object? captureStartedAtMs = _sentinel,
     Object? captureId = _sentinel,
+    Object? pendingScratchPath = _sentinel,
   }) => MonitorState(
     kind: kind ?? this.kind,
     electrodeNames: electrodeNames ?? this.electrodeNames,
@@ -56,6 +61,9 @@ class MonitorState {
     captureId: identical(captureId, _sentinel)
         ? this.captureId
         : captureId as String?,
+    pendingScratchPath: identical(pendingScratchPath, _sentinel)
+        ? this.pendingScratchPath
+        : pendingScratchPath as String?,
   );
 
   static const Object _sentinel = Object();

@@ -8,6 +8,7 @@ import 'package:muse_ml/src/agent/agent_server.dart';
 import 'package:muse_ml/src/agent/agent_server_config.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
+import 'package:muse_ml/src/monitor/views/recording_save_discard.dart';
 import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/feedback/crash_recovery.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
@@ -46,6 +47,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     super.initState();
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: () async {
+        await ref
+            .read(monitorControllerProvider.notifier)
+            .assembleRecordingOnExit();
         final notifier = ref.read(appStateProvider.notifier);
         await notifier.disconnectOnClose();
         return AppExitResponse.exit;
@@ -99,15 +103,17 @@ class _AppShellState extends ConsumerState<AppShell> {
         appViewIsGraph(state.currentView) &&
         MediaQuery.orientationOf(context) == Orientation.landscape;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            if (!cinema) const StatusBar(),
-            Expanded(
-              child: _buildContent(context, state, body, cinema: cinema),
-            ),
-          ],
+    return RecordingSaveHost(
+      child: Scaffold(
+        body: SafeArea(
+          child: Column(
+            children: [
+              if (!cinema) const StatusBar(),
+              Expanded(
+                child: _buildContent(context, state, body, cinema: cinema),
+              ),
+            ],
+          ),
         ),
       ),
     );

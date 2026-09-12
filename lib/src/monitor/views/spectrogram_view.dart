@@ -280,6 +280,7 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
 
     return GraphShell(
       title: 'Spectrogram',
+      showRecord: true,
       viewport: _viewport,
       windowOptions: ViewportController.spectrogramWindowOptions,
       formatWindow: formatSpectrogramWindow,

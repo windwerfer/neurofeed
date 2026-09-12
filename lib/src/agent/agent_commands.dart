@@ -5,6 +5,7 @@ import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
+import 'package:muse_ml/src/monitor/monitor_state.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/version.dart';
 
@@ -48,6 +49,8 @@ class AgentCommands {
       '/session/reset' => _reset(),
       '/session/override' => _override(body),
       '/session/feature' => _feature(body),
+      '/record/start' => _recordStart(),
+      '/record/stop' => _recordStop(),
       _ => agentError(404, 'unknown_route', path),
     };
   }
@@ -178,8 +181,36 @@ class AgentCommands {
         deviceKindIsCrown(app.lastConnectedKind!)) {
       return agentError(409, 'crown_refused', crownSessionUnsupportedMessage);
     }
+    if (_container.read(monitorControllerProvider).kind ==
+        CaptureKind.recording) {
+      return agentError(
+        409,
+        'recording_active',
+        'Stop the recording before starting a session.',
+      );
+    }
     final skip = body?['skipCalibration'] == true;
     await _feedback.startCalibration(skipCalibration: skip);
+    return _ok();
+  }
+
+  Future<AgentHttpResult> _recordStart() async {
+    final app = _container.read(appStateProvider);
+    if (!app.status.connected) {
+      return agentError(412, 'disconnected');
+    }
+    final mon = _container.read(monitorControllerProvider);
+    if (mon.kind == CaptureKind.feedback) {
+      return agentError(409, 'feedback_active');
+    }
+    await _container.read(monitorControllerProvider.notifier).startRecording();
+    return _ok();
+  }
+
+  Future<AgentHttpResult> _recordStop() async {
+    await _container
+        .read(monitorControllerProvider.notifier)
+        .stopRecording(promptSave: false, restartTmp: true);
     return _ok();
   }
 

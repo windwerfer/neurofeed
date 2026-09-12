@@ -62,7 +62,7 @@ Must exist in every view with a status bar (`AppShell` + session). Frozen:
 
 ### Raw EEG — `lib/src/monitor/views/raw_eeg_view.dart`
 
-GraphShell chrome. Record slot hidden until PR 5a. No electrode chips
+GraphShell chrome. Record / Stop recording. No electrode chips
 (each electrode is a pane). No add/remove.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
@@ -70,13 +70,16 @@ GraphShell chrome. Record slot hidden until PR 5a. No electrode chips
 | Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Live wipe. Not Live / History. |
 | Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze + pan. Drag/pinch enters Inspect. |
 | Window length | `2s` `4s` `8s` `10s` | `ViewportController.windowSeconds` | `graph_shell.dart` | Default **10 s** (2560 samples). |
+| Record | `Record` | `_RecordControls` | `graph_shell.dart` | Starts `recording_$ts`. Disabled when feedback or disconnected. |
+| Stop recording | `Stop recording` | `_RecordControls` | `graph_shell.dart` | Assemble + Save/Discard. Elapsed while recording. |
+| Record disabled | tooltip `Stop the feedback session to record` | `_RecordControls` | `graph_shell.dart` | `CaptureKind.feedback` or not connected. Landscape hides toolbar. |
 | Waiting for signal | `Waiting for signal` | `MonitorWaitingSignal` | `empty_state.dart` | Connected, no samples. |
 | Electrode name | `TP9` / Crown names | `SweepPane` | `panes/sweep_pane.dart` | In-pane, top-right, gray. Not a chip. |
 | Y scale | `Auto` / `±50 µV` … | `SharedYScale` | `sweep_pane.dart` | Overflow. One scale for the column. |
 
 ### Bands — `lib/src/monitor/views/bands_view.dart`
 
-GraphShell chrome. Record slot hidden until PR 5a. One strip pane, five
+GraphShell chrome. Record / Stop recording. One strip pane, five
 series (delta / theta / alpha / beta / gamma). Electrode text toggles are
 average membership, not extra graphs.
 
@@ -92,7 +95,7 @@ average membership, not extra graphs.
 
 ### Histogram — `lib/src/monitor/views/histogram_view.dart`
 
-GraphShell chrome. Record slot hidden until PR 5a. One pane (Column +
+GraphShell chrome. Record / Stop recording. One pane (Column +
 Expanded; PR 7 will add a Bands strip). Mean of selected electrodes.
 No time slider. No pinch-`custom`.
 
@@ -108,7 +111,7 @@ No time slider. No pinch-`custom`.
 
 ### PSD — `lib/src/monitor/views/psd_view.dart`
 
-GraphShell title `Power Spectral Density`. Record hidden. Column +
+GraphShell title `Power Spectral Density`. Record / Stop recording. Column +
 Expanded (PR 7 hook). Welch of last T seconds.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
@@ -123,7 +126,7 @@ Expanded (PR 7 hook). Welch of last T seconds.
 
 ### Spectrogram — `lib/src/monitor/views/spectrogram_view.dart`
 
-Keep `AppView.spectrogram`. Record hidden. No Bands strip.
+Keep `AppView.spectrogram`. Record / Stop recording. No Bands strip.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
@@ -149,9 +152,11 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Start Session | `Start Session` | `_PhaseControls.startSession` | `feedback_session.dart` | Crown → dialog. |
+| Start Session | `Start Session` | `_PhaseControls.startSession` | `feedback_session.dart` | Crown → dialog. Recording → dialog. |
 | Start skip-cal | `Start (skip calibration)` | `startCalibration(skipCalibration: true)` | `feedback_session.dart` | recordOnly. |
 | Crown refused dialog | `Crown sessions are not available yet…` | `crownSessionUnsupportedMessage` | `protocol.dart` | Real and sim Crown. |
+| Recording refused dialog | `Recording in progress` / `Stop the recording before starting a session.` | `_refuseRecordingStart` | `feedback_session.dart` | Actions `Cancel` / `Stop recording`. Start is not auto-continued. |
+| Save recording | `Save recording?` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | `Save` / `Discard`. `barrierDismissible: false`. |
 | Pause / Resume / End | phase controls | `pause` / `resume` / `end` | `feedback_state.dart` | |
 | Feature probe | `Feature probe` | `_FeatureProbeCard` | `feedback_session.dart` | Debug + sim connected only. Master switch + one slider per present feature id. |
 

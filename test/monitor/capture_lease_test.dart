@@ -43,6 +43,28 @@ void main() {
       expect(lease.kind, CaptureKind.recording);
     });
 
+    test('idle or tmp → recording; recording → idle', () {
+      final fromIdle = CaptureLease();
+      expect(fromIdle.tryBeginRecording(), isTrue);
+      expect(fromIdle.kind, CaptureKind.recording);
+      expect(fromIdle.tryBeginRecording(), isFalse);
+      expect(fromIdle.tryReleaseRecording(), isTrue);
+      expect(fromIdle.kind, CaptureKind.idle);
+      expect(fromIdle.tryReleaseRecording(), isFalse);
+
+      final fromTmp = CaptureLease();
+      expect(fromTmp.tryBeginTmp(), isTrue);
+      expect(fromTmp.tryBeginRecording(), isTrue);
+      expect(fromTmp.kind, CaptureKind.recording);
+    });
+
+    test('feedback refuses recording', () {
+      final lease = CaptureLease();
+      expect(lease.tryAcquireFeedback(), isTrue);
+      expect(lease.tryBeginRecording(), isFalse);
+      expect(lease.kind, CaptureKind.feedback);
+    });
+
     test('release is idempotent and only from feedback', () {
       final lease = CaptureLease();
       expect(lease.tryReleaseFeedback(), isFalse);
@@ -126,6 +148,15 @@ void main() {
           .listSync()
           .whereType<File>()
           .where((f) => f.uri.pathSegments.last.startsWith('session_'))
+          .toList();
+    }
+
+    List<File> recordingFiles() {
+      if (!scratch.existsSync()) return const [];
+      return scratch
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.uri.pathSegments.last.startsWith('recording_'))
           .toList();
     }
 
@@ -297,6 +328,45 @@ void main() {
       expect(notifier.recordingIndex.entries, isEmpty);
       expect(container.read(monitorControllerProvider).kind, CaptureKind.tmp);
       expect(tmpFiles(), isNotEmpty);
+    });
+
+    test('Record while tmp → recording_* temps; tmp gone', () async {
+      container.read(monitorControllerProvider);
+      app.debugSetConnected();
+      await settle();
+      expect(tmpFiles(), isNotEmpty);
+
+      final notifier = container.read(monitorControllerProvider.notifier);
+      await notifier.startRecording();
+      await settle();
+
+      final mon = container.read(monitorControllerProvider);
+      expect(mon.kind, CaptureKind.recording);
+      expect(mon.captureId, isNotNull);
+      expect(mon.captureStartedAtMs, isNotNull);
+      expect(tmpFiles(), isEmpty);
+      final names = recordingFiles()
+          .map((f) => f.uri.pathSegments.last)
+          .toList();
+      expect(names.any((n) => n.endsWith('.raw')), isTrue);
+      expect(names.any((n) => n.endsWith('.computed')), isTrue);
+      expect(names.any((n) => n.endsWith('.json')), isTrue);
+      expect(names.every((n) => n.startsWith('recording_')), isTrue);
+    });
+
+    test('acquireFeedbackLease is false while recording', () async {
+      container.read(monitorControllerProvider);
+      app.debugSetConnected();
+      await settle();
+      final notifier = container.read(monitorControllerProvider.notifier);
+      await notifier.startRecording();
+      await settle();
+      expect(await notifier.acquireFeedbackLease(), isFalse);
+      expect(
+        container.read(monitorControllerProvider).kind,
+        CaptureKind.recording,
+      );
+      expect(recordingFiles(), isNotEmpty);
     });
   });
 }

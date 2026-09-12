@@ -38,7 +38,9 @@ flutter test \
   test/monitor/histogram_pane_test.dart \
   test/monitor/electrode_toggles_test.dart \
   test/monitor/time_series_pane_test.dart \
-  test/monitor/overshoot_hold_test.dart
+  test/monitor/overshoot_hold_test.dart \
+  test/monitor/recording_metadata_test.dart \
+  test/agent/agent_commands_test.dart
 ```
 
 ## FFI (host lib first)
@@ -46,7 +48,9 @@ flutter test \
 ```bash
 cargo build --manifest-path rust/Cargo.toml
 flutter test test/session_store_test.dart test/session_export_test.dart \
-  test/session_computed_charts_test.dart
+  test/session_computed_charts_test.dart \
+  test/monitor/file_backed_source_test.dart \
+  test/monitor/recording_assemble_test.dart
 ```
 
 `test/streaming_lsl_test.dart` needs liblsl — skip if missing.
@@ -67,6 +71,7 @@ cargo test --lib                  # features / simulator / device_config
 | View switch | agent-linux | HTTP | `POST /view` `bands` / `rawEeg` / `histogram` / `spectrogram` / `psd` / `settings` | `GET /state` → `view=` that name | Button wiring untested |
 | Sidebar / connect window | agent-linux | HTTP | `POST /sidebar`, `POST /connect-window` | `sidebarOpen` / `connectWindowOpen` | Overlay chrome untested |
 | Session start Crown | Dart + HTTP | notifier refuse | `POST /session/start` after `sim:crown-osc` | HTTP 409 `crown_refused` | Dialog UI untested |
+| Record / Stop | Dart + FFI | `test/monitor/capture_lease_test.dart`, `recording_assemble_test.dart`, `test/agent/agent_commands_test.dart` | `POST /record/start` after `sim:muse-2`; `GET /state` `captureKind=recording`; `POST /record/stop` scratch v5 | 412 `disconnected`; 409 `feedback_active`; 409 `recording_active` on `/session/start` | Save/Discard widget untested |
 | Session start Muse sim | agent-linux | HTTP | `recordOnly` + skip-cal | `[feedback] phase=playing` | 50 s cal too slow — always skip |
 | Lanes / features | Dart unit | `test/feedback_pipeline_test.dart` | that file | Guard does not change reward | Orchestrator as a whole |
 | Protocol JSON | Dart unit | `user_protocol_builder_test.dart`, `calibration_assets_test.dart` | those files | Catalog copy, clip files | Builder UI |

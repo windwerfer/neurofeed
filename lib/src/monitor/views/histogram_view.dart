@@ -133,6 +133,7 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
 
     return GraphShell(
       title: 'Histogram',
+      showRecord: true,
       viewport: _viewport,
       windowOptions: ViewportController.histogramPsdWindowOptions,
       onFollow: _follow,

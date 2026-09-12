@@ -126,6 +126,7 @@ class _PsdViewState extends ConsumerState<PsdView> {
 
     return GraphShell(
       title: 'Power Spectral Density',
+      showRecord: true,
       viewport: _viewport,
       windowOptions: ViewportController.histogramPsdWindowOptions,
       onFollow: _follow,

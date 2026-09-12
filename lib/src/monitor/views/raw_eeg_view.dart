@@ -219,6 +219,7 @@ class _RawEegViewState extends ConsumerState<RawEegView> {
     final newest = mon.ramNewestElapsed;
     return GraphShell(
       title: 'Raw EEG',
+      showRecord: true,
       viewport: _viewport,
       windowOptions: ViewportController.eegWindowOptions,
       onFollow: _follow,

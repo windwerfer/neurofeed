@@ -27,4 +27,5 @@ export 'views/bands_view.dart';
 export 'views/histogram_view.dart';
 export 'views/psd_view.dart';
 export 'views/raw_eeg_view.dart';
+export 'views/recording_save_discard.dart';
 export 'views/spectrogram_view.dart';

@@ -7,11 +7,12 @@ Monitor series (frozen spec [monitor.md](monitor.md) **rev 6**, implementer
 Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
 or the v5 68-byte header. Bands Y is **dB display** (storage linear).
 
-## Last thread — PR 4 painters
+## Last thread — PR 5a
 
-Histogram + PSD + Spectrogram on GraphShell. `AppView.histogram`. Landscape
-cinema. Dart FFT Hamming `1/N²`. Record still hidden. PR 7/8 not started
-(Column + Expanded and parameterized `n` only).
+Record / Stop recording on GraphShell. `recording_$ts` temps, assemble on
+Stop, Save/Discard (file copy, no sqlite `kind`). 409 `recording_active`.
+`POST /record/start|stop`. `_refuseRecordingStart`. Same `RecordingIndex`
+on recording `flushRaw`.
 
 ## Landed
 
@@ -23,13 +24,14 @@ cinema. Dart FFT Hamming `1/N²`. Record still hidden. PR 7/8 not started
 - PR 3 ASCII — spec rev 5 (`8e45d37`)
 - PR 3 — Bands on GraphShell (`878cc8a`)
 - PR 4 ASCII — spec rev 6 (`4c968fa`)
-- PR 4 — Histogram + PSD + Spectrogram painters (this commit)
+- PR 4 — Histogram + PSD + Spectrogram painters (`c3a40f5`)
+- PR 5a — Record / Stop / assemble / 409 `recording_active` (this commit)
 
 ## Next
 
-**PR 5a** — Record / Stop / assemble / 409 `recording_active`. Handoff
-section “This thread — PR 5a”. Then 5b (crash recovery + sqlite `kind`),
-6 (History filter), **7** Bands strip, **8** Spectrogram `FFT 1s ▾`.
+**PR 5b** — Crash recovery + sqlite `kind`. Handoff section “This thread —
+PR 5b”. Then 6 (History filter), **7** Bands strip, **8** Spectrogram
+`FFT 1s ▾`.
 
 ## Not this thread
 
@@ -40,7 +42,6 @@ section “This thread — PR 5a”. Then 5b (crash recovery + sqlite `kind`),
 - Publish `third_party/edf_export` to git+tag once export proves out on device.
 - Athena optics raw stream (muse-rs `Optics`, session tag 11). Queued:
   [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md).
-- PR 5b crash recovery + sqlite `kind`.
 - PR 6 History filter / Save files to folder.
 - PR 7 Bands context strip. PR 8 Spectrogram FFT window.
 - Changing graph painters.

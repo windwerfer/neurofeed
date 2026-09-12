@@ -46,7 +46,7 @@ Pulse, X, Wayland, adb, or the Dart language-server.
 | Verb | Body | Notes |
 |---|---|---|
 | `GET /health` | — | `{ok, version}` |
-| `GET /state` | — | view, connected, device*, phase, protocol, duration, `audioInitFailed`, `scanMessage`, override*, `percentile`, `inTarget`, `warningActive`, `threshold` |
+| `GET /state` | — | view, connected, device*, phase, protocol, duration, `audioInitFailed`, `scanMessage`, override*, `percentile`, `inTarget`, `warningActive`, `threshold`, `captureKind`, `captureElapsedSeconds` |
 | `POST /view` | `{view}` | `feedback`, `feedbackHistory`, `bands`, `rawEeg`, `histogram`, `spectrogram`, `psd`, `streaming`, `settings` |
 | `POST /sidebar` | `{open:bool}` | |
 | `POST /connect-window` | `{open, source?}` | `source`: `muse`/`neurosity`/`simulator`. `setConnectWindow` (not toggle). |
@@ -54,7 +54,9 @@ Pulse, X, Wayland, adb, or the Dart language-server.
 | `POST /disconnect` | `{}` | `persist: false` (does not wipe human `lastDeviceId`). |
 | `POST /session/select` | `{protocol}` | 412 `unknown_protocol`. |
 | `POST /session/duration` | `{minutes}` | `persist: false`. Smoke uses `1`. |
-| `POST /session/start` | `{skipCalibration}` | 412 not connected; 409 `crown_refused`. |
+| `POST /session/start` | `{skipCalibration}` | 412 `not_connected`; 409 `crown_refused`; 409 `recording_active`. Order: not_connected → crown_refused → recording_active. Distinct from `crown_refused`. |
+| `POST /record/start` | `{}` | 412 `disconnected`; 409 `feedback_active`; else start `recording_$ts`. `persist: false`. |
+| `POST /record/stop` | `{}` | 200; assemble scratch `recording_$ts.muse.feedback`. Does not publish. `persist: false`. |
 | `POST /session/pause\|resume\|end\|reset` | `{}` | end/reset are 200 no-ops if idle / not connected. **Always end+reset** after a smoke. |
 | `POST /session/override` | `{enabled:bool}` | Debug + sim only. 412 `probe_unavailable` otherwise. Enabling while playing **reseeds** a synthetic baseline in slider units (live sim ATR is ~10⁴; a 0–3 slider cannot beat that). |
 | `POST /session/feature` | `{id, value}` | Latch native `FeatureDto.value` and emit immediately. `value: null` clears that id. 412 if probe off. |

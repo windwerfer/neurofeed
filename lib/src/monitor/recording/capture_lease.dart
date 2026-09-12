@@ -31,4 +31,19 @@ class CaptureLease {
     kind = CaptureKind.idle;
     return true;
   }
+
+  /// Record from idle or tmp. Refuses [CaptureKind.feedback] and an
+  /// already-open recording.
+  bool tryBeginRecording() {
+    if (kind != CaptureKind.idle && kind != CaptureKind.tmp) return false;
+    kind = CaptureKind.recording;
+    return true;
+  }
+
+  /// Recording writer closed. Idempotent when not [CaptureKind.recording].
+  bool tryReleaseRecording() {
+    if (kind != CaptureKind.recording) return false;
+    kind = CaptureKind.idle;
+    return true;
+  }
 }
