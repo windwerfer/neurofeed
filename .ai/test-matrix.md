@@ -28,7 +28,31 @@ flutter test \
   test/agent/agent_config_test.dart \
   test/agent/agent_server_test.dart \
   test/app_ui_state_test.dart \
-  test/feature_override_test.dart
+  test/connection_reconnect_test.dart \
+  test/feature_override_test.dart \
+  test/monitor/band_cache_test.dart \
+  test/monitor/sweep_buffer_test.dart \
+  test/monitor/capture_lease_test.dart \
+  test/monitor/monitor_sampler_test.dart \
+  test/monitor/viewport_controller_test.dart \
+  test/monitor/graph_shell_test.dart \
+  test/monitor/graph_cinema_test.dart \
+  test/monitor/dsp_test.dart \
+  test/monitor/stft_ring_test.dart \
+  test/monitor/sliding_spectrum_test.dart \
+  test/monitor/spectrogram_pane_test.dart \
+  test/monitor/histogram_pane_test.dart \
+  test/monitor/split_pane_tick_test.dart \
+  test/monitor/electrode_toggles_test.dart \
+  test/monitor/band_toggles_test.dart \
+  test/monitor/time_series_pane_test.dart \
+  test/monitor/bands_context_strip_test.dart \
+  test/monitor/plot_isolation_test.dart \
+  test/monitor/sweep_pane_test.dart \
+  test/monitor/overshoot_hold_test.dart \
+  test/monitor/recording_metadata_test.dart \
+  test/history_filter_test.dart \
+  test/agent/agent_commands_test.dart
 ```
 
 ## FFI (host lib first)
@@ -36,7 +60,11 @@ flutter test \
 ```bash
 cargo build --manifest-path rust/Cargo.toml
 flutter test test/session_store_test.dart test/session_export_test.dart \
-  test/session_computed_charts_test.dart
+  test/session_computed_charts_test.dart \
+  test/monitor/file_backed_source_test.dart \
+  test/monitor/recording_assemble_test.dart \
+  test/monitor/crash_recovery_test.dart \
+  test/monitor/recording_store_test.dart
 ```
 
 `test/streaming_lsl_test.dart` needs liblsl — skip if missing.
@@ -54,20 +82,22 @@ cargo test --lib                  # features / simulator / device_config
 |---|---|---|---|---|---|
 | Connect catalog | Dart unit | `test/connect_source_test.dart` | `flutter test test/connect_source_test.dart` | Frozen ids/labels; debug off hides Simulator | No widget of dropdown |
 | Connect live (sim) | agent-linux | HTTP | `POST /connect` `sim:muse-2` or `sim:muse-s` | `connected=true`; `scanMessage` **null** | Real BLE **cannot** |
-| View switch | agent-linux | HTTP | `POST /view` `bands` / `rawEeg` / `settings` | `GET /state` → `view=` that name | Button wiring untested |
+| View switch | agent-linux | HTTP | `POST /view` `bands` / `rawEeg` / `histogram` / `spectrogram` / `psd` / `settings` | `GET /state` → `view=` that name | Button wiring untested |
 | Sidebar / connect window | agent-linux | HTTP | `POST /sidebar`, `POST /connect-window` | `sidebarOpen` / `connectWindowOpen` | Overlay chrome untested |
 | Session start Crown | Dart + HTTP | notifier refuse | `POST /session/start` after `sim:crown-osc` | HTTP 409 `crown_refused` | Dialog UI untested |
+| Record / Stop | Dart + FFI | `test/monitor/capture_lease_test.dart`, `recording_assemble_test.dart`, `test/agent/agent_commands_test.dart` | `POST /record/start` after `sim:muse-2`; `GET /state` `captureKind=recording`; `POST /record/stop` scratch v5 | 412 `disconnected`; 409 `feedback_active`; 409 `recording_active` on `/session/start` | Save/Discard widget untested |
+| Recording crash recovery | Dart + FFI | `test/monitor/crash_recovery_test.dart`, `recording_store_test.dart` | `flutter test test/monitor/crash_recovery_test.dart test/monitor/recording_store_test.dart` | Leftover `recording_*` assemble; `tmp_`/`session_*` untouched; publish `kind=recording`; existing rows `feedback`; discard no sqlite row | Dialog widget untested |
 | Session start Muse sim | agent-linux | HTTP | `recordOnly` + skip-cal | `[feedback] phase=playing` | 50 s cal too slow — always skip |
 | Lanes / features | Dart unit | `test/feedback_pipeline_test.dart` | that file | Guard does not change reward | Orchestrator as a whole |
 | Protocol JSON | Dart unit | `user_protocol_builder_test.dart`, `calibration_assets_test.dart` | those files | Catalog copy, clip files | Builder UI |
 | Guard pref migrate | Dart unit | `settings_guardrail_migrate_test.dart` | that file | Old enum → feature ids | Debug switch widget |
-| History / store | Dart+FFI | `session_store_test.dart` | FFI command above | `publishSession` lists id | History UI |
+| History / store | Dart+FFI | `session_store_test.dart`, `test/history_filter_test.dart` | FFI command above + `flutter test test/history_filter_test.dart` | List includes `kind=recording`; no orphan-file backfill; `moveAllTo` both prefixes; delete uses sqlite `path`; filter All/Feedback/Recordings | History widget |
 | Session format v5 | Rust + Dart+FFI | `session_format` + export/charts tests | rust + FFI | Roundtrip | Don't edit layout from Dart |
 | Simulator identity | Rust unit | `simulator.rs` | `cargo test --lib simulator` | name/firmware table | Live spawn needs tokio |
 | Streaming OSC/BF | Dart unit | `test/streaming_*.dart` | `flutter test test/streaming_*.dart` | Datagram shape | View untested |
 | Feature probe | Dart unit | `test/feature_override_test.dart` | that file | Latch replace; synthetic TAR/delta baseline | Ear-test is human |
 | Audio playback | — | ids only | — | — | Silence ≠ fail in this container |
-| Live charts | — | none | — | — | Visual **cannot** without goldens |
+| Live charts | Dart unit | `test/monitor/*` | dsp / panes / graph_shell / strip / plot_isolation / sweep_pane / sliding_spectrum | FFT 256-pt, strip highlight, window presets, plot `RepaintBoundary`, GraphShell isolated from plot ticks, Raw EEG min/max downsample, Follow sliding Welch / histogram | Visual **cannot** without goldens |
 | REVE/LUNA | Rust `#[ignore]` | analysis tests | `cargo test --lib -- --ignored` | If `.local/` weights | Never CI |
 | Real BLE Muse | **cannot** | — | phone + testing-guide logcat | Human | |
 | Real Crown OSC | **cannot** | — | — | Start refused | |
@@ -87,7 +117,7 @@ Pure Dart first (`flutter analyze lib/src` + `test/agent/*` +
 2. Wait `[muse] agent-listen` **and** `[muse] agent-ready`. Abort on `Content hash`. Parse the port.
 3. `GET /health` → `{ok:true}`. `POST /view {"view":"nope"}` → `unknown_view`.
 4. `POST /connect {"id":"sim:muse-2"}` or `sim:muse-s` (not Crown). `connected=true`, `scanMessage` null.
-5. `POST /view` `bands`, then `rawEeg` (optional `settings`). `GET /state` matches.
+5. `POST /view` `bands`, then `rawEeg` / `histogram` / `spectrogram` / `psd` (optional `settings`). `GET /state` matches. Keep `spectrogram` (no `waterfall`).
 6. `POST /session/select {"protocol":"recordOnly"}`
 7. `POST /session/duration {"minutes":1}`
 8. `POST /session/start {"skipCalibration":true}` → `phase=playing`.

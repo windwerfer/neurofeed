@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
-import 'package:muse_ml/src/charts/band_cache.dart';
+import 'package:muse_ml/src/charts/band_style.dart';
 import 'package:muse_ml/src/charts/session_reader.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';

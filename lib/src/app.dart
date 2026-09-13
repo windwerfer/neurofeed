@@ -7,17 +7,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/agent/agent_server.dart';
 import 'package:muse_ml/src/agent/agent_server_config.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/monitor/graph_cinema.dart';
+import 'package:muse_ml/src/monitor/monitor_providers.dart';
+import 'package:muse_ml/src/monitor/views/recording_save_discard.dart';
 import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/feedback/crash_recovery.dart';
+import 'package:muse_ml/src/feedback/session_storage.dart';
+import 'package:muse_ml/src/monitor/recording/crash_recovery.dart';
 import 'package:muse_ml/src/rust/frb_generated.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/status_bar.dart';
 import 'package:muse_ml/src/streaming/streaming_controller.dart';
 import 'package:muse_ml/src/streaming/streaming_indicator.dart';
-import 'package:muse_ml/src/views/bands.dart';
-import 'package:muse_ml/src/views/raw_eeg.dart';
-import 'package:muse_ml/src/views/terminal.dart';
-import 'package:muse_ml/src/views/psd_view.dart';
+import 'package:muse_ml/src/monitor/views/bands_view.dart';
+import 'package:muse_ml/src/monitor/views/histogram_view.dart';
+import 'package:muse_ml/src/monitor/views/psd_view.dart';
+import 'package:muse_ml/src/monitor/views/raw_eeg_view.dart';
+import 'package:muse_ml/src/monitor/views/spectrogram_view.dart';
 import 'package:muse_ml/src/views/settings_view.dart';
 import 'package:muse_ml/src/views/streaming_view.dart';
 import 'package:muse_ml/src/views/feedback_list.dart';
@@ -42,6 +48,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     super.initState();
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: () async {
+        await ref
+            .read(monitorControllerProvider.notifier)
+            .assembleRecordingOnExit();
         final notifier = ref.read(appStateProvider.notifier);
         await notifier.disconnectOnClose();
         return AppExitResponse.exit;
@@ -67,10 +76,18 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(appStateProvider);
+    final currentView = ref.watch(
+      appStateProvider.select((s) => s.currentView),
+    );
+    final sidebarOpen = ref.watch(
+      appStateProvider.select((s) => s.sidebarOpen),
+    );
+    final connectWindowOpen = ref.watch(
+      appStateProvider.select((s) => s.connectWindowOpen),
+    );
 
     final Widget body;
-    switch (state.currentView) {
+    switch (currentView) {
       case AppView.feedback:
         body = const FeedbackListView();
       case AppView.feedbackHistory:
@@ -79,6 +96,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         body = const BandsView();
       case AppView.rawEeg:
         body = const RawEegView();
+      case AppView.histogram:
+        body = const HistogramView();
       case AppView.spectrogram:
         body = const SpectrogramView();
       case AppView.psd:
@@ -89,21 +108,39 @@ class _AppShellState extends ConsumerState<AppShell> {
         body = const SettingsView();
     }
 
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            const StatusBar(),
-            Expanded(child: _buildContent(context, state, body)),
-          ],
-        ),
+    return GraphCinema(
+      child: Builder(
+        builder: (context) {
+          final cinema = appViewIsGraph(currentView) && GraphCinema.of(context);
+          return RecordingSaveHost(
+            child: Scaffold(
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    if (!cinema) const StatusBar(),
+                    Expanded(
+                      child: _buildContent(
+                        context,
+                        currentView: currentView,
+                        sidebarOpen: sidebarOpen,
+                        connectWindowOpen: connectWindowOpen,
+                        body: body,
+                        cinema: cinema,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
   /// Sidebar: full-height rail shown either as a squishing Row sibling (wide
   /// screens) or as an overlay above the body (narrow screens).
-  Widget _buildSidebar(BuildContext context, AppUiState state) {
+  Widget _buildSidebar(BuildContext context, AppView currentView) {
     return Container(
       width: kSidebarWidth,
       decoration: BoxDecoration(
@@ -116,43 +153,48 @@ class _AppShellState extends ConsumerState<AppShell> {
         children: [
           _SideBarItem(
             label: 'Feedback',
-            selected: state.currentView == AppView.feedback,
+            selected: currentView == AppView.feedback,
             onTap: () => _selectView(AppView.feedback),
           ),
           _SideBarItem(
-            label: 'Feedback History',
-            selected: state.currentView == AppView.feedbackHistory,
+            label: 'History',
+            selected: currentView == AppView.feedbackHistory,
             onTap: () => _selectView(AppView.feedbackHistory),
           ),
           _SideBarItem(
             label: 'Bands',
-            selected: state.currentView == AppView.bands,
+            selected: currentView == AppView.bands,
             onTap: () => _selectView(AppView.bands),
           ),
           _SideBarItem(
             label: 'Raw EEG',
-            selected: state.currentView == AppView.rawEeg,
+            selected: currentView == AppView.rawEeg,
             onTap: () => _selectView(AppView.rawEeg),
           ),
           _SideBarItem(
+            label: 'Histogram',
+            selected: currentView == AppView.histogram,
+            onTap: () => _selectView(AppView.histogram),
+          ),
+          _SideBarItem(
             label: 'Spectrogram',
-            selected: state.currentView == AppView.spectrogram,
+            selected: currentView == AppView.spectrogram,
             onTap: () => _selectView(AppView.spectrogram),
           ),
           _SideBarItem(
-            label: 'Power Spectral Density (PSD)',
-            selected: state.currentView == AppView.psd,
+            label: 'PSD',
+            selected: currentView == AppView.psd,
             onTap: () => _selectView(AppView.psd),
           ),
           _SideBarItem(
             label: 'Streaming',
-            selected: state.currentView == AppView.streaming,
+            selected: currentView == AppView.streaming,
             trailing: const StreamDot(),
             onTap: () => _selectView(AppView.streaming),
           ),
           _SideBarItem(
             label: 'Settings',
-            selected: state.currentView == AppView.settings,
+            selected: currentView == AppView.settings,
             onTap: () => _selectView(AppView.settings),
           ),
         ],
@@ -164,16 +206,24 @@ class _AppShellState extends ConsumerState<AppShell> {
   /// sidebar is a squishing Row sibling and the body is fully usable while the
   /// menu is open; on narrow screens the sidebar overlays the full-size body
   /// behind a dim, tap-away scrim.
-  Widget _buildContent(BuildContext context, AppUiState state, Widget body) {
+  Widget _buildContent(
+    BuildContext context, {
+    required AppView currentView,
+    required bool sidebarOpen,
+    required bool connectWindowOpen,
+    required Widget body,
+    required bool cinema,
+  }) {
     final isWide = MediaQuery.sizeOf(context).width >= 700;
-    final connectOverlay = state.connectWindowOpen
+    final connectOverlay = connectWindowOpen
         ? const ConnectOverlay()
         : const SizedBox.shrink();
+    final showSidebar = !cinema && sidebarOpen;
 
     if (isWide) {
       return Row(
         children: [
-          if (state.sidebarOpen) _buildSidebar(context, state),
+          if (showSidebar) _buildSidebar(context, currentView),
           Expanded(child: Stack(children: [body, connectOverlay])),
         ],
       );
@@ -182,7 +232,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     return Stack(
       children: [
         Positioned.fill(child: Stack(children: [body, connectOverlay])),
-        if (state.sidebarOpen)
+        if (showSidebar)
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -193,13 +243,13 @@ class _AppShellState extends ConsumerState<AppShell> {
               ),
             ),
           ),
-        if (state.sidebarOpen)
+        if (showSidebar)
           Positioned(
             left: 0,
             top: 0,
             bottom: 0,
             width: kSidebarWidth,
-            child: _buildSidebar(context, state),
+            child: _buildSidebar(context, currentView),
           ),
       ],
     );
@@ -255,6 +305,7 @@ Future<void> main() async {
   final agentCfg = AgentServerConfig.fromEnvironment();
   await AgentServer.start(container, agentCfg);
   final notifier = container.read(appStateProvider.notifier);
+  container.read(monitorControllerProvider);
   runApp(
     UncontrolledProviderScope(
       container: container,
@@ -358,11 +409,14 @@ class _CrashRecoveryWrapperState extends ConsumerState<_CrashRecoveryWrapper> {
     super.didChangeDependencies();
     if (!_checked) {
       _checked = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          // ignore: unawaited_futures
-          showCrashRecoveryDialog(context, ref);
-        }
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await showCrashRecoveryDialog(context, ref);
+        if (!mounted) return;
+        final storage = await ref.read(sessionStorageProvider.future);
+        await deleteLeftoverTmpCaptures(scratchDirectory(storage));
+        if (!mounted) return;
+        await showRecordingCrashRecoveryDialog(context, ref);
       });
     }
   }

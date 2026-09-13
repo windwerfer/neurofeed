@@ -1,330 +1,153 @@
-# Muse ML — `.muse.feedback` v5 Metadata Format
+# Muse ML — `.muse.feedback` v5
 
-**Format version:** 5  
-**Container:** `[68-byte header][WebP thumbnail][metadata (zstd)][computed 1 Hz (zstd)][raw (zstd)]`  
-**All timestamps:** seconds from recording (calibration) start, unless noted as wall-clock epoch.
+**Format version:** 5
+**Container:** `[68-byte header][WebP thumbnail][metadata (zstd)][computed 1 Hz (zstd)][raw (zstd)]`
+
+Rust owns the byte layout (`rust/src/api/session_format.rs`). Dart only calls FFI.
+
+Two filenames, same container type, same history folder:
+
+| Kind | Published name | Scratch temps | Metadata JSON |
+|------|----------------|---------------|---------------|
+| Feedback session | `session_$id.muse.feedback` | `session_$id.{raw,computed,metadata}` | Flat `SessionMetadata` (`lib/src/feedback/session_metadata.dart`) |
+| Recording | `recording_$ts.muse.feedback` | `recording_$ts.{raw,computed,json}` | Nested `RecordingMetadata` (`lib/src/monitor/recording/recording_metadata.dart`) |
+
+`tmp_$ts.*` is a rolling connect-time capture. It is **never** assembled or published.
+
+History list is sqlite `kind` (`feedback` \| `recording`), not a directory scan. See [README_history_cache.md](README_history_cache.md).
+
+**Timestamps:** computed `t` and gesture offsets are seconds from **this capture’s start**. Raw EEG/band timestamps in the `.muse` body are **ms epochs**.
 
 ---
 
-## Top-Level Metadata JSON Structure
+## v5 container layout
+
+```
+Offset 0:        68-byte fixed header
+  [0..5]     = b"MUSE5\0"
+  [6]        = 5 (version)
+  [7]        = flags (reserved)
+  [8..15]    = thumbnail_offset (u64 LE)
+  [16..23]   = thumbnail_length (u64 LE)
+  [24..31]   = metadata_offset (u64 LE)
+  [32..39]   = metadata_length (u64 LE)
+  [40..47]   = computed_offset (u64 LE)
+  [48..55]   = computed_length (u64 LE)
+  [56..63]   = raw_offset (u64 LE)
+  [64..67]   = crc32(header[0..63])
+
+Offset thumbnail_offset: WebP thumbnail (placeholder at assemble; 640×360)
+Offset metadata_offset:  zstd-compressed metadata JSON
+Offset computed_offset:  zstd JSON Lines (one ComputedFrame per line)
+Offset raw_offset:       zstd-compressed raw .muse v4 body
+```
+
+`v5ParseHead` returns opaque `metadataJson` bytes. It does **not** parse `kind`.
+
+There is no `metadata.summary` / `SessionOverview` and no 400-bucket series.
+Dashboard, history, PDF, and PNG charts plot computed 1 Hz:
+`v5ExtractComputed` → `prepareChartDataFromComputed`. The history-list
+preview is the WebP thumbnail.
+
+---
+
+## Feedback metadata (`SessionMetadata`)
+
+This is what `SessionMetadata.toJson()` actually writes. It is **flat**
+(device fields are `deviceName` / `deviceModel` / `deviceId`, not a nested
+`device` object). It does **not** write `formatVersion`, `appVersion`,
+`kind`, or `streams`. Sqlite stores `kind = 'feedback'` on publish.
+
+```json
+{
+  "protocol": "drowsiness",
+  "durationMinutes": 15,
+  "elapsedSeconds": 900,
+  "durationS": 900,
+  "sound": "Ambient Drone",
+  "savedAt": "2026-08-22T14:30:00.000Z",
+  "startedAt": "2026-08-22T14:15:00.000Z",
+  "notes": "",
+  "deviceName": "Muse 0ABC",
+  "deviceModel": "Classic",
+  "deviceId": "AA:BB:CC:DD:EE:FF",
+  "recordedChannels": ["TP9", "AF7", "AF8", "TP10"],
+  "feedbackSound": "bowlChimes",
+  "metadataDescription": "…",
+  "protocolVersion": "1",
+  "calibrationProfile": "eyes-closed-01",
+  "calibration": { "version": 2, "kind": "staged", "calibrationId": "eyes-closed-01" },
+  "sessionSettings": { "dynamicAdapt": true, "guardFeature": "ai.drowsiness" },
+  "gestures": [{ "type": "doubleBlink", "at": 45 }],
+  "drowsiness": { "scoreTotalPct": 12.5, "meanSleepDir": 0.34 },
+  "music": { "tracks": [{ "at": 150.0, "name": "track01.opus" }] }
+}
+```
+
+Gesture JSON key is **`at`** (seconds from recording start, stored as int),
+not `offsetSeconds`. Music track/cutoff samples also use `at`.
+
+`sessionSettings` includes `guardFeature` (`band.delta` / `ai.drowsiness` /
+`none`) and optional `modelSnapshot` **inside** settings, not at the top
+level.
+
+Calibration `kind` is `"single"` or `"staged"`. Phases and recalibrations
+are present when that calibration ran.
+
+---
+
+## Recording metadata (`RecordingMetadata`)
+
+Written for `recording_*` (and the tmp sidecar snapshot). Nested `device`
+and a complete ten-key `streams` object. Disabled streams stay in the map
+as `{ "enabled": false, "rateHz": 0 }` — never omitted (`StreamsConfig.fromJson`
+requires all ten keys).
 
 ```json
 {
   "formatVersion": 5,
-  "appVersion": "1.0.0+1",
-  "savedAt": "2026-08-22T14:30:00.000Z",
-  "notes": "User free-text notes",
-  "protocol": "drowsiness",
-  "durationMinutes": 15,
-  "elapsedSeconds": 900,
-  "feedbackSound": "bowlChimes",
-  "metadataDescription": "Scientific description from protocols.json",
-  "device": { ... },
-  "calibration": { ... },
-  "streams": { ... },
-  "sessionSettings": { ... },
-  "gestures": [ ... ],
-  "drowsiness": { ... },
-  "music": { ... },
-  "modelSnapshot": { ... }
-}
-```
-
----
-
-## 1. Device Information
-
-```json
-"device": {
-  "name": "Muse 0ABC",
-  "id": "AA:BB:CC:DD:EE:FF",
-  "firmware": "3.0.12",
-  "model": "Classic",
-  "sensors": ["EEG", "PPG", "IMU"],
-  "channelCount": 4,
-  "channelLabels": ["TP9", "AF7", "AF8", "TP10"]
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | string | BLE display name |
-| `id` | string | MAC address (stable identifier) |
-| `firmware` | string | Headset firmware version |
-| `model` | string | "Classic", "Athena", "Crown", or "Unknown" |
-| `sensors` | string[] | Subset of `["EEG", "PPG", "IMU"]` |
-| `channelCount` | int | Number of EEG electrodes (4 for Muse, 8 for Crown) |
-| `channelLabels` | string[] | Electrode labels in index order (0..N-1) |
-
----
-
-## 2. Calibration Record
-
-Complete snapshot of the calibration that ran (or was skipped).
-
-```json
-"calibration": {
-  "version": 2,
-  "kind": "staged",
-  "calibrationId": "eyes-closed-01",
-  "calibrationJson": { ... },
-  "calibrationStartSecs": 1724327400.123,
-  "calibrationEndSecs": 1724327550.456,
-  "trainingStartSecs": 1724327550.456,
-  "usedStartAnyway": false,
-  "greenStableSeconds": 3,
-  "faultyPadSeconds": 20,
-  "baseline": {
-    "percentile": 40,
-    "count": 120,
-    "mean": 1.85,
-    "stddev": 0.42
+  "appVersion": "dev",
+  "kind": "recording",
+  "savedAt": "2026-09-07T12:00:00.000Z",
+  "startedAt": "2026-09-07T11:50:00.000Z",
+  "elapsedSeconds": 600,
+  "durationS": 600,
+  "notes": "",
+  "device": {
+    "name": "Muse 2 (Simulated)",
+    "id": "sim:muse-2",
+    "firmware": "Classic",
+    "model": "Classic",
+    "sensors": ["EEG", "PPG", "IMU"],
+    "channelCount": 4,
+    "channelLabels": ["TP9", "AF7", "AF8", "TP10"]
   },
-  "phases": [
-    {
-      "clipId": "artifacts",
-      "clipFile": "calibration/artifacts.opus",
-      "spokenText": "Blink, clench, look up, look down...",
-      "eyes": null,
-      "challengeText": null,
-      "startSecs": 0.0,
-      "endSecs": 30.0,
-      "kind": "stage"
-    },
-    {
-      "clipId": "eyes-open-challenge",
-      "clipFile": "calibration/eyes_open.opus",
-      "spokenText": "Keep eyes open, count backwards from 100...",
-      "eyes": "open",
-      "challengeText": "Count backwards from 100 by 7s",
-      "startSecs": 30.0,
-      "endSecs": 60.0,
-      "kind": "stage"
-    },
-    {
-      "clipId": "eyes-closed-rest",
-      "clipFile": "calibration/eyes_closed.opus",
-      "spokenText": "Close eyes, let mind rest...",
-      "eyes": "closed",
-      "challengeText": null,
-      "startSecs": 60.0,
-      "endSecs": 150.0,
-      "kind": "stage"
-    }
-  ],
-  "recalibrations": [
-    {
-      "atSecs": 420.5,
-      "baseline": {
-        "percentile": 40,
-        "count": 85,
-        "mean": 1.92,
-        "stddev": 0.38
-      }
-    }
-  ],
-  "trainingStartOffsetSecs": 150.333
+  "streams": {
+    "eeg": { "enabled": true, "rateHz": 256 },
+    "bands": { "enabled": true, "rateHz": 1 },
+    "pulse": { "enabled": true, "rateHz": 1 },
+    "spo2": { "enabled": true, "rateHz": 1 },
+    "movement": { "enabled": true, "rateHz": 1 },
+    "peakAlpha": { "enabled": true, "rateHz": 1 },
+    "imu": { "enabled": true, "rateHz": 52 },
+    "ppg": { "enabled": true, "rateHz": 64 },
+    "telemetry": { "enabled": true, "rateHz": 1 },
+    "gestures": { "enabled": false, "rateHz": 0 }
+  }
 }
 ```
 
-### Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `version` | int | Calibration manifest version (2) |
-| `kind` | string | `"single"` or `"staged"` |
-| `calibrationId` | string | Key from `calibrations.json` (e.g., `eyes-closed-01`) |
-| `calibrationJson` | object | **Full immutable snapshot** of the calibration definition from `calibrations.json` (both variants, all clips, texts, timings) |
-| `calibrationStartSecs` | float? | Wall-clock epoch seconds when calibration began (recording start) |
-| `calibrationEndSecs` | float? | Wall-clock epoch seconds when baseline finished |
-| `trainingStartSecs` | float? | Wall-clock epoch seconds when feedback/training began |
-| `usedStartAnyway` | bool | User bypassed green-stable gate via faulty-pad fallback |
-| `greenStableSeconds` | int? | Required continuous green-signal seconds before calibration proceeds |
-| `faultyPadSeconds` | int? | Non-green seconds on non-program pads before "Continue anyway" offered |
-| `baseline` | object | ATR baseline statistics (percentile, count, mean, stddev) |
-| `phases` | array | Clip phases with timings, spoken text, challenge text, eye state |
-| `recalibrations` | array | In-flight recalibrations (timestamp + new baseline stats) |
-| `trainingStartOffsetSecs` | float? | Derived: `trainingStartSecs - calibrationStartSecs` (seconds) |
-
-### Phase Object
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `clipId` | string | Identifier from `calibrations.json` |
-| `clipFile` | string | Audio asset path (e.g., `calibration/artifacts.opus`) |
-| `spokenText` | string | Spoken transcript of the guidance clip |
-| `eyes` | string? | `"open"`, `"closed"`, or `null` |
-| `challengeText` | string? | On-screen cognitive challenge (e.g., "Count backwards by 7s") |
-| `startSecs` | float? | Seconds from recording start to phase start |
-| `endSecs` | float? | Seconds from recording start to phase end |
-| `kind` | string | `"intro"` (single calibration) or `"stage"` (staged calibration) |
+Omit on recordings: `protocol`, `calibration`, `music`, `feedbackSound`,
+`drowsiness`, `modelSnapshot`, `sessionSettings`. Gestures are not a
+`RecordingStream`. Enablement follows Settings → **Session recording**
+(also applies to tmp and feedback).
 
 ---
 
-## 3. Streams Configuration
+## Computed stream (1 Hz) — own zstd section
 
-What data streams were recorded and at what rate.
-
-```json
-"streams": {
-  "eeg": { "enabled": true, "rateHz": 256, "electrodes": [0,1,2,3] },
-  "bands": { "enabled": true, "rateHz": 10, "electrodes": [0,1,2,3] },
-  "pulse": { "enabled": true, "rateHz": 1 },
-  "spo2": { "enabled": true, "rateHz": 1 },
-  "movement": { "enabled": true, "rateHz": 1 },
-  "peakAlpha": { "enabled": true, "rateHz": 10 },
-  "imu": { "enabled": true, "rateHz": 52, "sensors": ["accel", "gyro"] },
-  "ppg": { "enabled": true, "rateHz": 64, "channels": ["ir", "red"] },
-  "telemetry": { "enabled": true, "rateHz": 1 },
-  "gestures": { "enabled": true, "rateHz": 1 }
-}
-```
-
-| Stream | Rate | Notes |
-|--------|------|-------|
-| `eeg` | 256 Hz | Raw EEG per electrode (µV) |
-| `bands` | 10 Hz | Absolute band powers (δ, θ, α, β, γ) per electrode |
-| `pulse` | 1 Hz | Heart rate BPM from PPG IR |
-| `spo2` | 1 Hz | Blood oxygen % from PPG IR+Red |
-| `movement` | 1 Hz | Accelerometer-derived movement score |
-| `peakAlpha` | 10 Hz | Peak alpha frequency + power |
-| `imu` | 52 Hz | Accelerometer + gyroscope (3-axis each) |
-| `ppg` | 64 Hz | Raw IR + Red channels |
-| `telemetry` | 1 Hz | Battery, fuel gauge, temperature |
-| `gestures` | 1 Hz | Blink/clench/eye events |
-
----
-
-## 4. Session Settings Snapshot
-
-All session-affecting settings at save time.
-
-```json
-"sessionSettings": {
-  "dynamicAdapt": true,
-  "responsiveness": 0.5,
-  "baselinePercentile": 40,
-  "guardrailEnabled": true,
-  "guardrailEngine": "lunaLarge",
-  "warningThresholdPercentile": 90,
-  "warningSound": "softChime",
-  "musicFolder": "/Music/Meditation",
-  "musicMinCutoffHz": 220.0,
-  "musicMaxCutoffHz": 4000.0,
-  "musicInvert": false,
-  "musicShuffle": true,
-  "binauralPresetId": "theta4",
-  "binauralCarrierHz": 200.0,
-  "binauralBeatHz": 4.0,
-  "markersInFeedbackEnabled": true,
-  "eyeMarkersEnabled": false
-}
-```
-
----
- 
-## 5. Charts (computed 1 Hz)
-
-There is no `metadata.summary` / `SessionOverview` and no 400-bucket series in the file. Dashboard, history, PDF, and PNG charts all plot the v5 computed 1 Hz stream:
-
-`v5ExtractComputed` → `prepareChartDataFromComputed`
-
-X-axis is elapsed seconds from recording start (`ComputedFrame.t`). Paint-time decimation only if a series has more points than pixels; do not bake N=400 into the file. The history list sparkline is the WebP thumbnail, not a stored series.
-
-Full-resolution 1 Hz data lives in the zstd-compressed computed section (see Section 10).
- 
----
- 
-## 6. Gesture Markers
-
-Timestamped gesture events during the session.
-
-```json
-"gestures": [
-  { "type": "doubleBlink", "offsetSeconds": 45.2 },
-  { "type": "doubleClench", "offsetSeconds": 123.7 },
-  { "type": "eyeUp", "offsetSeconds": 201.4 }
-]
-```
-
-| Type | Values |
-|------|--------|
-| `type` | `"doubleBlink"`, `"doubleClench"`, `"eyeUp"`, `"eyeDown"` |
-| `offsetSeconds` | float — seconds from **recording (calibration) start** |
-
----
-
-## 7. Guardrail (Drowsiness) Scalars
-
-Metadata keeps scalars only. The waveform is plotted from `ComputedFrame.guardrail` in the computed 1 Hz stream.
-
-```json
-"drowsiness": {
-  "scoreTotalPct": 12.5,
-  "meanSleepDir": 0.34,
-  "threshold": 0.62
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `scoreTotalPct` | float | % of scored seconds with warning active |
-| `meanSleepDir` | float | Mean sleep-direction over scored seconds |
-| `threshold` | float? | Baseline percentile threshold used for warnings |
-
----
-
-## 8. Music Feedback Record
-
-```json
-"music": {
-  "trackCount": 8,
-  "minCutoffHz": 220.0,
-  "maxCutoffHz": 4000.0,
-  "invert": false,
-  "shuffle": true,
-  "tracks": [
-    { "offsetSecs": 150.0, "name": "track01.opus" },
-    { "offsetSecs": 198.3, "name": "track02.opus" }
-  ],
-  "series": [
-    { "at": 150.0, "hz": 2450.0 },
-    { "at": 151.0, "hz": 2380.0 }
-  ]
-}
-```
-
-Sparse `tracks` plus 1 Hz `series`. No 400-bucket `buckets`.
-
----
-
-## 9. Model Snapshot (Guardrail AI Identity)
-
-Critical for reproducibility when fine-tuning foundation models.
-
-```json
-"modelSnapshot": {
-  "engine": "lunaLarge",
-  "weightsSha256": "a1b2c3d4e5f6...",
-  "configJson": { ... },
-  "repoRevision": "v0.0.4-latent-embedding-fix",
-  "loadedAt": "2026-08-22T14:25:10.000Z"
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `engine` | string | `"bandMath"`, `"lunaBase"`, `"lunaLarge"`, `"reveBase"`, or `"none"` |
-| `weightsSha256` | string | SHA-256 of the `model.safetensors` file |
-| `configJson` | object | Full model config (from `model_config_json()` FFI) |
-| `repoRevision` | string | Git tag/rev of the model repo (e.g., `v0.0.4-latent-embedding-fix`) |
-| `loadedAt` | string | ISO8601 timestamp when model was loaded for this session |
-
----
-
-## 10. Computed Stream (1 Hz) — Separate zstd Section
-
-Not in metadata JSON — stored in its own zstd-compressed section as JSON Lines (one `ComputedFrame` per line). Each frame:
+JSON Lines, one `ComputedFrame` per line. `t` is seconds from **this**
+capture start.
 
 ```json
 {
@@ -342,108 +165,60 @@ Not in metadata JSON — stored in its own zstd-compressed section as JSON Lines
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `t` | float | Seconds from recording start |
-| `bands` | float[4][5] | Absolute band powers per electrode [δ, θ, α, β, γ] |
-| `pulse` | float? | BPM |
-| `movement` | float? | 0.0–1.0 |
-| `peakAlpha` | object? | `{ freq, power }` |
-| `spo2` | float? | % |
-| `lineNoise` | float[4] | Per-electrode 50/60 Hz mains fraction |
-| `signalQuality` | int[4] | Per-pad 0–100 quality score |
-| `guardrail` | object | Sleep-direction, clarity, warning, frontal delta |
-| `feedback` | object | ATR ratio, threshold, in-target, success % |
-| `gestures` | string[] | Event names in this second |
+| Field | Notes |
+|-------|--------|
+| `bands` | `N × 5` absolute powers `[δ, θ, α, β, γ]`. Feedback sampler is **4-ch**. Monitor sampler is `channelCount`. |
+| `lineNoise` / `signalQuality` | Same `N`. |
+| `guardrail` / `feedback` | Recordings write zeroed structs. |
 
 ---
 
-## 11. Raw Stream — Separate zstd Section
+## Raw stream — own zstd section
 
-The original `.muse` v4 body (header + zstd frames with tags 1–10). Contains all high-rate events:
+Original `.muse` v4 body (header + zstd frames, tags 1–10):
 
-| Tag | Stream | Rate | Payload |
-|-----|--------|------|---------|
+| Tag | Stream | Typical rate | Payload |
+|-----|--------|--------------|---------|
 | 1 | EEG | 256 Hz | [ts, electrode, n, n×f32] |
 | 2 | Telemetry | 1 Hz | [ts, battery, fuel, temp] |
 | 3 | Accelerometer | 52 Hz | [ts, seq, n, n×(x,y,z)] |
 | 4 | Gyroscope | 52 Hz | [ts, seq, n, n×(x,y,z)] |
 | 5 | PPG | 64 Hz | [ts, channel, n, n×f32] |
-| 6 | Bands | 10 Hz | [ts, electrode, δ,θ,α,β,γ] |
+| 6 | Bands | ~10 Hz on the wire | [ts, electrode, δ,θ,α,β,γ] |
 | 7 | Pulse | 1 Hz | [ts, bpm, conf] |
 | 8 | Movement | 1 Hz | [ts, score] |
-| 9 | PeakAlpha | 10 Hz | [ts, freq, power] |
+| 9 | PeakAlpha | ~10 Hz on the wire | [ts, freq, power] |
 | 10 | SpO₂ | 1 Hz | [ts, spo2, conf] |
 
----
-
-## v5 Container Layout
-
-```
-Offset 0:        68-byte fixed header
-  [0..5]     = b"MUSE5\0"
-  [6]        = 5 (version)
-  [7]        = flags (reserved)
-  [8..15]    = thumbnail_offset (u64 LE)
-  [16..23]   = thumbnail_length (u64 LE)
-  [24..31]   = metadata_offset (u64 LE)
-  [32..39]   = metadata_length (u64 LE)
-  [40..47]   = computed_offset (u64 LE)
-  [48..55]   = computed_length (u64 LE)
-  [56..63]   = raw_offset (u64 LE)
-  [64..67]   = crc32(header[0..63])
-
-Offset thumbnail_offset: WebP thumbnail (640×360, lossy q=75)
-
-Offset metadata_offset: zstd-compressed metadata JSON (level 3)
-
-Offset computed_offset: zstd-computed 1 Hz frames as JSON Lines (level 3)
-
-Offset raw_offset: zstd-compressed raw .muse body (level 3)
-```
-
-**Reading**: Read first 68 bytes → parse header → exact-offset reads for each section → zstd decompress.
+`ts` in this body is a **ms epoch**. CSV export divides by 1000 before flooring.
 
 ---
 
-## Crash Recovery
+## Scratch and crash recovery
 
-During recording, three uncompressed temp files are written to `<cache>/sessions/<session_id>/`:
+Live writes always go to `scratchDirectory()`, not the history folder (SAF
+is history-only).
 
-```
-session_<ts>.raw          # raw event bytes (uncompressed)
-session_<ts>.computed     # JSON Lines (one ComputedFrame per line)
-session_<ts>.metadata     # JSON Lines (metadata events)
-```
+| Prefix | Temps | On crash / leftover |
+|--------|-------|---------------------|
+| `session_$id` | `.raw` `.computed` `.metadata` (JSONL) | Feedback dialog **Incomplete Session Detected** → Save Session / Discard. Assembles via `writeScratchV5`. |
+| `recording_$ts` | `.raw` `.computed` `.json` (atomic snapshot) | **Incomplete recording detected** → Save / Discard. Same History folder, sqlite `kind=recording`. |
+| `tmp_$ts` | `.raw` `.computed` `.json` | Launch **glob-deletes**. Never assembled. |
 
-On app start, any incomplete triplets are detected. A **blocking modal** shows:
-- Session duration, protocol, calibration kind
-- Artifacts detected, guardrail warnings
-- Buttons: **Save Session** (assembles v5) / **Discard**
-
-No navigation allowed until dismissed.
+Feedback recovery must not learn `tmp_` / `recording_`. Monitor recovery
+must not learn `session_`.
 
 ---
 
-## Migration Notes
+## Implementation
 
-- **No v4 backward compatibility** — v5 is a clean break.
-- Old v4 files are ignored by the new history UI.
-- "Clear Cache" button in Settings → drops SQLite tables → re-imports all v5 files on next history load (reads metadata + computed from each file).
-- Users should delete old `.muse.feedback` v4 files manually.
+| Piece | Where |
+|-------|--------|
+| Byte layout / FFI | `rust/src/api/session_format.rs` |
+| Assemble / scratch v5 | `lib/src/session_v5/assemble.dart` |
+| Scratch writer | `lib/src/session_v5/scratch_writer.dart` (`SessionRecorder`, `prefix`) |
+| Feedback metadata | `lib/src/feedback/session_metadata.dart` |
+| Recording metadata | `lib/src/monitor/recording/recording_metadata.dart` |
+| ComputedFrame | `lib/src/session_v5/computed_frame.dart` |
 
----
-
-## Implementation Checklist
-
-- [ ] Rust: `container_encode_v5` (✅ done)
-- [ ] Rust: `v5_parse_header`, `v5_parse_head`, `v5_extract_computed`, `v5_extract_raw` (✅ done)
-- [ ] Dart: `ComputedFrame` + `ComputedSampler` (✅ done)
-- [ ] Dart: `SessionRecorder` rewrite with 3 temp files (in progress)
-- [ ] Dart: `FeedbackRecorder.appendComputed` / `finalize` → calls `container_encode_v5`
-- [ ] Dart: Crash recovery scan + blocking modal
-- [ ] Dart: `SessionMetadata` v5 fields (`formatVersion`, `appVersion`, `modelSnapshot`, `streams`)
-- [ ] Rust: `modelSnapshot` helper (weights SHA-256, config JSON, repo revision)
-- [ ] SQLite: `computed` table (1 Hz rows), updated `metadata` blob
-- [ ] History UI: reads from SQLite, not head reads
-- [ ] Tests: v5 round-trip, crash recovery, SQLite import
+No v4 `.muse.feedback` compatibility. Old v4 files are ignored by History.

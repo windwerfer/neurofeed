@@ -1,60 +1,20 @@
 # Active Task
 
-**Branch:** `fix/soloud-engine-hardening`
+**Branch:** `refactor/monitor`
 
-Pipeline PRs 1–7 and session charts from v5 computed 1 Hz are on `main`.
-Frozen pipeline: [feedback/pipeline-contract.md](feedback/pipeline-contract.md).
-Do not reopen those Key Decisions. **Crown Start stays refused.**
+**Now:** none. Monitor product **and** draw-path perf are complete.
+Spec: [monitor.md](monitor.md). History:
+[archive/handoff-monitor.md](archive/handoff-monitor.md),
+[archive/handoff-monitor-perf.md](archive/handoff-monitor-perf.md)
+(PRs 1–7 landed; **PR 8 skipped**).
 
-## This thread — SoLoud engine hardening (implemented)
+Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
+or the v5 68-byte header. Bands Y is **dB display** (storage linear).
+Do not add averaging, a Bands strip on Spectrogram, Spectrogram FFT-window
+chrome, or `SMOOTH` / `REAL TIME` Bands chrome. Do not pause `SweepBuffer`
+/ `BandCache` on view change.
 
-Spec: [audio-engine.md](audio-engine.md). Handoff archived:
-[archive/handoff-soloud-engine.md](archive/handoff-soloud-engine.md).
-
-Engine owns init/deinit, epoch, and bundled-asset cache. Rain uses
-`loadAsset` + looping. Chime preloads on `start()`. Calibration await uses
-`getLength + 2s`. Alarm first tick is immediate; pause stops it.
-`AudioService.setMusicMuffle` is gone; `RewardOutput.setMuffle` ducks
-modulated reward plus both binaural controllers. Unmodulated background
-is not ducked. `guard_lane.dart` was not edited.
-
-## Landed — connect simulator UX + settings cleanup
-
-Implemented on this branch. Frozen spec:
-[connect-simulator-ux.md](connect-simulator-ux.md). Do not reopen those
-Key Decisions. Do not mix OSC-connect or unlocking Crown Start.
-
-Connect dropdown is Muse | Neurosity | Simulator (Simulator only in Debug
-mode). `DeviceKind` is Muse | Neurosity; simulation is `simulate` + `sim:*`
-ids. Neurosity listing is OSC-only (empty OK). Simulator catalog includes
-Crown (OSC) / Notion (OSC) as local 8-ch simulator, no UDP.
-
-Settings: no “AI sleep guardrail” card; music cutoff persists on
-`onChangeEnd`; Debug mode switch last after About.
-
-Simulator connect now actually starts `DeviceSimulator` on the tokio
-runtime (`spawn_simulator` → EEG / PPG / IMU / telemetry). Derived
-bands, pulse, SpO2, gestures, and pad quality come from the same
-forwarder as a live Muse. Athena extra optical channels (8/16ch fNIRS)
-are not simulated — Classic 3-ch PPG only.
-
-Still not verified on device/desktop: Simulator tap-to-connect and Settings
-scroll feel (`flutter run` / `flutter run -d linux`).
-
-## Landed — debug agent HTTP
-
-Loopback HTTP in `lib/src/agent/`. Drive: [testing-guide.md](testing-guide.md)
-Linux agent, [test-matrix.md](test-matrix.md), skill `muse-run-linux`.
-`--dart-define=MUSE_AGENT=true` (`1`/`yes` also via `parseDartDefineFlag`).
-
-Live smoke 2026-09-05: Muse S connect (`scanMessage` null), view switch,
-recordOnly skip-cal `phase=playing`, Crown 409. Widget /
-`integration_test` stay deferred. Crown Start stays refused.
-
-Handoff archived:
-[archive/handoff-agent-http.md](archive/handoff-agent-http.md).
-
-## Not this thread
+## Queued elsewhere (not this branch)
 
 - Crown *run* (quality vectors, computed frames, charts device-aware).
 - Making Crown / Notion OSC connect (or OSC discovery) work.

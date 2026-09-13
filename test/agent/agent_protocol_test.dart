@@ -12,6 +12,10 @@ void main() {
     }
     expect(parseAppView('rawEeg'), AppView.rawEeg);
     expect(parseAppView('bands'), AppView.bands);
+    expect(parseAppView('histogram'), AppView.histogram);
+    expect(parseAppView('spectrogram'), AppView.spectrogram);
+    expect(parseAppView('psd'), AppView.psd);
+    expect(parseAppView('waterfall'), isNull);
     expect(parseAppView('nope'), isNull);
     expect(parseAppView(null), isNull);
   });

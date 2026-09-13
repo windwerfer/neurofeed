@@ -10,10 +10,6 @@ import 'package:muse_ml/src/connect_source.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/rust/api/device_config.dart';
 import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/charts/live_cache.dart';
-import 'package:muse_ml/src/charts/band_cache.dart';
-import 'package:muse_ml/src/charts/session_recorder.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
 
 /// Duration of each scan chunk when scanning continuously.
 const _scanChunkSecs = 3;
@@ -45,8 +41,9 @@ Future<void> ensureBtleplugReady() async {
 
 /// Holds all connection + UI state for the app.
 class AppStateNotifier extends StateNotifier<AppUiState> {
-  AppStateNotifier(this._settings)
-    : super(
+  AppStateNotifier(this._settings, {bool initialize = true})
+    : _testMode = !initialize,
+      super(
         AppUiState(
           status: const ConnectionStatus(
             connected: false,
@@ -72,23 +69,39 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           lastConnectedKind: null,
         ),
       ) {
-    _init();
+    if (initialize) {
+      _init();
+    } else if (!_initDone.isCompleted) {
+      _initDone.complete();
+    }
   }
 
+  @visibleForTesting
+  AppStateNotifier.forTest(Settings settings)
+    : this(settings, initialize: false);
+
   final Settings _settings;
+  final bool _testMode;
   StreamSubscription<MuseEventDto>? _eventSub;
   bool _scanEnabled = false;
+  bool _allowAutoReconnect = true;
+  bool _reconnectInFlight = false;
   final Completer<void> _initDone = Completer<void>();
   final StreamController<MuseEventDto> _eventController =
       StreamController<MuseEventDto>.broadcast();
   double _lastQualityCheck = 0;
 
+  /// Lost-link and launch auto-reconnect. Cleared by a user disconnect
+  /// (status bar / agent) until the next [connectTo].
+  bool get allowAutoReconnect => _allowAutoReconnect;
+
+  @visibleForTesting
+  int debugReconnectCalls = 0;
+
   /// Latest 50/60 Hz line-noise ratio per electrode from Bands events.
   /// -1 means no data yet for that pad.
   final List<double> _lineNoise = List.filled(4, -1);
-  final LiveCache liveCache = LiveCache();
-  final BandCache bandCache = BandCache();
-  final SessionRecorder sessionRecorder = SessionRecorder();
+  final _PadQualityRing _padQuality = _PadQualityRing();
 
   Stream<MuseEventDto> get eventStream => _eventController.stream;
 
@@ -128,8 +141,9 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           final found = await _tryAutoconnectSim(lastId);
           if (found) return;
         } else {
-          final found = await _tryAutoconnect(lastId);
-          if (found) return;
+          // Unbounded scan for lastDeviceId; do not block initDone on it.
+          unawaited(_tryAutoconnect(lastId));
+          return;
         }
       }
 
@@ -158,11 +172,12 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     return state.status.connected;
   }
 
-  /// Scan in short chunks looking for [lastId].  Returns `true` and connects
-  /// if found, `false` otherwise.
+  /// Scan in short chunks looking for [lastId] until it appears, the user
+  /// cancels, or auto-reconnect is disabled. Returns `true` if connected.
   Future<bool> _tryAutoconnect(String lastId) async {
     if (isSimDeviceId(lastId)) return false;
     debugPrint('[muse] autoconnect: looking for $lastId');
+    _scanEnabled = true;
     state = state.copyWith(
       connectWindowOpen: true,
       scanning: true,
@@ -177,31 +192,44 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         );
         return false;
       }
-      for (var i = 0; i < 5; i++) {
+      var chunks = 0;
+      while (_scanEnabled && _allowAutoReconnect && !state.status.connected) {
         await ensureBtleplugReady();
+        if (!_scanEnabled || !_allowAutoReconnect || state.status.connected) {
+          break;
+        }
         final devices = await scan(timeoutSecs: BigInt.from(_scanChunkSecs));
+        if (!_scanEnabled || !_allowAutoReconnect || state.status.connected) {
+          break;
+        }
         final match =
             devices.where((d) => d.id == lastId).firstOrNull ??
             devices.where((d) => d.name == lastId).firstOrNull;
         if (match != null) {
           debugPrint('[muse] autoconnect: found ${match.name}, connecting');
           await connectTo(match);
-          return true;
+          if (state.status.connected) return true;
+          if (!_allowAutoReconnect) return false;
+          _scanEnabled = true;
+          state = state.copyWith(
+            connectWindowOpen: true,
+            scanning: true,
+            scanMessage: 'Looking for last device…',
+          );
+          continue;
         }
+        chunks++;
         state = state.copyWith(
-          scanMessage: 'Searching… (${(i + 1) * _scanChunkSecs}s)',
+          scanMessage: 'Searching… (${chunks * _scanChunkSecs}s)',
         );
       }
-      debugPrint('[muse] autoconnect: last device not found after 5 chunks');
-      state = state.copyWith(
-        scanning: false,
-        scanMessage: 'Last device not found',
-      );
     } catch (e) {
       debugPrint('[muse] autoconnect error: $e');
-      state = state.copyWith(scanning: false, scanMessage: 'Scan error: $e');
+      if (_scanEnabled && _allowAutoReconnect) {
+        state = state.copyWith(scanning: false, scanMessage: 'Scan error: $e');
+      }
     }
-    return false;
+    return state.status.connected;
   }
 
   /// Open the connect window and start discovery for [state.connectSource].
@@ -292,27 +320,11 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     }
   }
 
-  Future<void> _startContinuousRecorder() async {
-    try {
-      final storage = await resolveSessionStorage(_settings);
-      await storage.ensureDir();
-      final dir = scratchDirectory(storage);
-      if (!await dir.exists()) {
-        await dir.create(recursive: true);
-      }
-      await sessionRecorder.start(dir);
-    } catch (e) {
-      debugPrint('[muse] continuous recorder start failed: $e');
-    }
-  }
-
   void _onEvent(MuseEventDto event) {
-    sessionRecorder.writeEvent(event);
     switch (event) {
       case MuseEventDto_Connected():
         debugPrint('[muse] event: connected ${event.field0}');
         _scanEnabled = false;
-        unawaited(_startContinuousRecorder());
         state = state.copyWith(
           status: state.status.copyWith(connected: true, name: event.field0),
           connectWindowOpen: false,
@@ -321,35 +333,11 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         );
       case MuseEventDto_Disconnected():
         debugPrint('[muse] event: disconnected');
-        sessionRecorder.stop();
-        _lineNoise.fillRange(0, _lineNoise.length, -1);
-        state = state.copyWith(
-          status: const ConnectionStatus(
-            connected: false,
-            name: '',
-            id: '',
-            firmware: '',
-          ),
-          batteryLevel: 0,
-          signalQuality: null,
-          gestures: null,
-          telemetry: const TelemetrySnapshot(
-            batteryLevel: 0,
-            fuelGaugeVoltage: 0,
-            temperature: 0,
-          ),
-          connectWindowOpen: true,
-          connectingTo: null,
-          scanning: false,
-          scanMessage: 'Reconnecting…',
-        );
-        _tryReconnect();
+        _onDisconnected();
       case MuseEventDto_Eeg():
-        final eeg = event.field0;
-        liveCache.appendEeg(eeg);
+        _padQuality.appendEeg(event.field0);
         _maybeComputeSignalQuality();
       case MuseEventDto_Bands():
-        bandCache.appendBands(event.field0);
         final idx = event.field0.electrode;
         if (idx >= 0 && idx < _lineNoise.length) {
           _lineNoise[idx] = event.field0.lineNoiseRatio;
@@ -368,31 +356,82 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     }
   }
 
+  void _onDisconnected() {
+    // A second Disconnected (muse-rs watcher after our own sink event) must
+    // not abort an in-flight reconnect or restart one the user already
+    // cancelled.
+    if (!state.status.connected && !state.disconnecting) {
+      return;
+    }
+    _lineNoise.fillRange(0, _lineNoise.length, -1);
+    _padQuality.clear();
+    _lastQualityCheck = 0;
+    const idle = ConnectionStatus(
+      connected: false,
+      name: '',
+      id: '',
+      firmware: '',
+    );
+    const telemetry = TelemetrySnapshot(
+      batteryLevel: 0,
+      fuelGaugeVoltage: 0,
+      temperature: 0,
+    );
+    if (!_allowAutoReconnect) {
+      state = state.copyWith(
+        status: idle,
+        batteryLevel: 0,
+        signalQuality: null,
+        gestures: null,
+        telemetry: telemetry,
+        connectWindowOpen: false,
+        connectingTo: null,
+        scanning: false,
+        scanMessage: null,
+        disconnecting: false,
+      );
+      return;
+    }
+    state = state.copyWith(
+      status: idle,
+      batteryLevel: 0,
+      signalQuality: null,
+      gestures: null,
+      telemetry: telemetry,
+      connectWindowOpen: true,
+      connectingTo: null,
+      scanning: false,
+      scanMessage: 'Reconnecting…',
+      disconnecting: false,
+    );
+    unawaited(_tryReconnect());
+  }
+
   /// Keep in sync with Rust `features::pad_quality_from_std_and_noise` until
   /// the Crown-run series deletes this Dart copy.
   void _maybeComputeSignalQuality() {
-    final now = liveCache.latestTimestamp;
+    final now = _padQuality.latestTimestamp;
     if (now - _lastQualityCheck < 0.9) return;
     _lastQualityCheck = now;
 
     const window = 1.0;
     final quals = List.filled(4, 0.0);
 
-    for (final ch in liveCache.channels) {
+    for (final ch in _padQuality.channels) {
       if (ch < 0 || ch > 3) continue;
-      final samples = liveCache.getRange(ch, now - window, now);
+      final samples = _padQuality.valuesIn(ch, now - window, now);
       if (samples.length < 10) continue;
 
       final n = samples.length;
       double sum = 0;
-      for (final s in samples) {
-        sum += s.v;
+      for (final v in samples) {
+        sum += v;
       }
       final mean = sum / n;
 
       double sumSq = 0;
-      for (final s in samples) {
-        sumSq += (s.v - mean) * (s.v - mean);
+      for (final v in samples) {
+        sumSq += (v - mean) * (v - mean);
       }
       final variance = sumSq / n;
       final std = sqrt(variance);
@@ -424,6 +463,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
   Future<void> connectTo(DeviceInfo device, {bool persist = true}) async {
     if (state.connectingTo != null) return;
+    _allowAutoReconnect = true;
     _scanEnabled = false;
     final id = device.id;
     final name = device.name;
@@ -494,28 +534,51 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   }
 
   /// Attempt to reconnect to the last known device; fall back to continuous
-  /// scan if the last device ID is missing or the device is not found.
+  /// scan if the last device ID is missing. Does not auto-connect a different
+  /// headset.
   Future<void> _tryReconnect() async {
-    final lastId = _settings.lastDeviceId;
-    if (!shouldIgnoreLastDevice(
-      lastId,
-      debug: _settings.enableSimulatedDevices,
-    )) {
-      if (isSimDeviceId(lastId!)) {
-        final ok = await _tryAutoconnectSim(lastId);
-        if (ok) return;
-      } else {
-        final ok = await _tryAutoconnect(lastId);
-        if (ok) return;
+    debugReconnectCalls++;
+    if (_testMode) return;
+    if (_reconnectInFlight) return;
+    if (!_allowAutoReconnect) return;
+    _reconnectInFlight = true;
+    try {
+      final lastId = _settings.lastDeviceId;
+      if (!shouldIgnoreLastDevice(
+        lastId,
+        debug: _settings.enableSimulatedDevices,
+      )) {
+        if (isSimDeviceId(lastId!)) {
+          final ok = await _tryAutoconnectSim(lastId);
+          if (ok || !_allowAutoReconnect) return;
+        } else {
+          final ok = await _tryAutoconnect(lastId);
+          if (ok || !_allowAutoReconnect) return;
+        }
       }
+      if (_allowAutoReconnect && !state.status.connected) {
+        _startDiscoveryForCurrentSource();
+      }
+    } finally {
+      _reconnectInFlight = false;
     }
-    _startDiscoveryForCurrentSource();
   }
 
+  /// User / agent disconnect. Stays down for this process; keeps
+  /// [Settings.lastDeviceId] so the next launch can auto-connect.
+  ///
+  /// [persist] is kept for call-site compatibility (agent passes `false`)
+  /// and no longer clears the saved id.
   Future<void> disconnectDevice({bool persist = true}) async {
+    _allowAutoReconnect = false;
     _scanEnabled = false;
-    await disconnect();
-    if (persist) await _settings.setLastDeviceId('');
+    state = state.copyWith(disconnecting: true);
+    try {
+      await disconnect();
+    } catch (e) {
+      debugPrint('[muse] disconnect error: $e');
+      _onDisconnected();
+    }
   }
 
   /// Disconnect without clearing [lastDeviceId] — called when the app is
@@ -597,6 +660,49 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     } else {
       _startDiscoveryForCurrentSource();
     }
+  }
+
+  @visibleForTesting
+  void debugSetConnected({
+    bool connected = true,
+    DeviceKind kind = DeviceKind.muse,
+    String name = 'Muse 2',
+    String id = 'sim:muse-2',
+    String firmware = 'Classic',
+  }) {
+    if (connected) {
+      _allowAutoReconnect = true;
+      state = state.copyWith(
+        status: ConnectionStatus(
+          connected: true,
+          name: name,
+          id: id,
+          firmware: firmware,
+        ),
+        lastConnectedKind: kind,
+      );
+    } else {
+      state = state.copyWith(
+        status: const ConnectionStatus(
+          connected: false,
+          name: '',
+          id: '',
+          firmware: '',
+        ),
+      );
+    }
+  }
+
+  @visibleForTesting
+  void debugAddEvent(MuseEventDto event) {
+    _eventController.add(event);
+    _onEvent(event);
+  }
+
+  @visibleForTesting
+  void debugMarkUserDisconnected() {
+    _allowAutoReconnect = false;
+    _scanEnabled = false;
   }
 
   @override
@@ -714,3 +820,110 @@ final appStateProvider = StateNotifierProvider<AppStateNotifier, AppUiState>((
 ) {
   throw UnimplementedError('Initialize with settings before use');
 });
+
+/// 4-ch, 1 s EEG ring for status-bar pad quality. Not the 5 min live cache.
+class _PadQualityRing {
+  static const _sampleRate = 256.0;
+  static const _capacity = 256;
+  static const _channelCount = 4;
+
+  final List<_PadChannel?> _channels = List<_PadChannel?>.filled(
+    _channelCount,
+    null,
+  );
+
+  void appendEeg(EegDto dto) {
+    final ch = dto.electrode;
+    if (ch < 0 || ch > 3) return;
+    final buf = _channels[ch] ??= _PadChannel(_capacity);
+    final dt = 1.0 / _sampleRate;
+    final baseSecs = dto.timestamp / 1000.0;
+    for (var i = 0; i < dto.samples.length; i++) {
+      buf.add(baseSecs + i * dt, dto.samples[i]);
+    }
+  }
+
+  Iterable<int> get channels sync* {
+    for (var i = 0; i < _channelCount; i++) {
+      if (_channels[i] != null) yield i;
+    }
+  }
+
+  double get latestTimestamp {
+    var latest = 0.0;
+    for (final buf in _channels) {
+      if (buf != null &&
+          buf.length > 0 &&
+          buf.timestampAt(buf.length - 1) > latest) {
+        latest = buf.timestampAt(buf.length - 1);
+      }
+    }
+    return latest;
+  }
+
+  List<double> valuesIn(int channel, double startT, double endT) {
+    if (channel < 0 || channel > 3) return const [];
+    final buf = _channels[channel];
+    if (buf == null || buf.length == 0) return const [];
+    final lo = buf.lowerBound(startT);
+    final hi = buf.upperBound(endT);
+    if (lo >= hi) return const [];
+    return List<double>.generate(hi - lo, (i) => buf.valueAt(lo + i));
+  }
+
+  void clear() {
+    _channels.fillRange(0, _channelCount, null);
+  }
+}
+
+class _PadChannel {
+  _PadChannel(int capacity)
+    : timestamps = Float64List(capacity),
+      values = Float64List(capacity);
+
+  final Float64List timestamps;
+  final Float64List values;
+  int _head = 0;
+  int _count = 0;
+
+  int get length => _count;
+
+  void add(double t, double v) {
+    timestamps[_head] = t;
+    values[_head] = v;
+    _head = (_head + 1) % timestamps.length;
+    if (_count < timestamps.length) _count++;
+  }
+
+  int _physicalIndex(int i) =>
+      (_head - _count + i + timestamps.length) % timestamps.length;
+
+  double timestampAt(int i) => timestamps[_physicalIndex(i)];
+  double valueAt(int i) => values[_physicalIndex(i)];
+
+  int lowerBound(double t) {
+    var lo = 0, hi = _count;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (timestampAt(mid) < t) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  }
+
+  int upperBound(double t) {
+    var lo = 0, hi = _count;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (timestampAt(mid) <= t) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  }
+}

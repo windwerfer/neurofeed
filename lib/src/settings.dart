@@ -20,10 +20,27 @@ enum AppView {
   feedbackHistory,
   bands,
   rawEeg,
+  histogram,
   spectrogram,
   psd,
   streaming,
   settings,
+}
+
+bool appViewIsGraph(AppView view) {
+  switch (view) {
+    case AppView.bands:
+    case AppView.rawEeg:
+    case AppView.histogram:
+    case AppView.psd:
+    case AppView.spectrogram:
+      return true;
+    case AppView.feedback:
+    case AppView.feedbackHistory:
+    case AppView.streaming:
+    case AppView.settings:
+      return false;
+  }
 }
 
 /// Data streams that can be persisted into a session file. Each maps to one
@@ -47,6 +64,7 @@ const Map<AppView, String> _viewNames = {
   AppView.feedbackHistory: 'feedbackHistory',
   AppView.bands: 'bands',
   AppView.rawEeg: 'rawEeg',
+  AppView.histogram: 'histogram',
   AppView.spectrogram: 'spectrogram',
   AppView.psd: 'psd',
   AppView.streaming: 'streaming',
@@ -63,6 +81,8 @@ AppView _viewFromName(String? name) {
       return AppView.bands;
     case 'rawEeg':
       return AppView.rawEeg;
+    case 'histogram':
+      return AppView.histogram;
     case 'spectrogram':
       return AppView.spectrogram;
     case 'psd':

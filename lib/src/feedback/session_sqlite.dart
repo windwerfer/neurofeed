@@ -127,6 +127,8 @@ class SessionSqlite {
       CREATE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id)
     ''');
 
+    _ensureKindColumn();
+
     _db.execute('''
       CREATE TABLE IF NOT EXISTS state_markers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,12 +148,21 @@ class SessionSqlite {
     ''');
   }
 
-/// Insert or replace a session row.
+  /// Existing DBs created before recordings: `kind` defaults to `feedback`.
+  void _ensureKindColumn() {
+    final cols = _db.select('PRAGMA table_info(sessions)');
+    if (cols.any((r) => r['name'] == 'kind')) return;
+    _db.execute(
+      "ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'feedback'",
+    );
+  }
+
+  /// Insert or replace a session row.
   Future<void> upsertSession(SessionRow row) async {
     _db.execute('''
       INSERT INTO sessions (
         id, path, format_version, app_version, saved_at, started_at, duration_s,
-        protocol, protocol_version, device_name, device_model, device_id,
+        protocol, kind, protocol_version, device_name, device_model, device_id,
         calibration_profile, recorded_channels, recorded_streams,
         off_meta, len_meta, off_computed, len_computed, off_raw, len_raw,
         avg_hr, avg_spo2, peak_alpha_hz, peak_alpha_power,
@@ -160,7 +171,7 @@ class SessionSqlite {
         guardrail_engine, model_kind, model_sha256, feedback_engine,
         user_id, session_id, notes_preview,
         file_size, mtime, thumbnail, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         path = excluded.path,
         format_version = excluded.format_version,
@@ -169,6 +180,7 @@ class SessionSqlite {
         started_at = excluded.started_at,
         duration_s = excluded.duration_s,
         protocol = excluded.protocol,
+        kind = excluded.kind,
         protocol_version = excluded.protocol_version,
         device_name = excluded.device_name,
         device_model = excluded.device_model,
@@ -257,12 +269,6 @@ class SessionSqlite {
     _db.execute('DELETE FROM state_markers WHERE session_id = ?', [sessionId]);
   }
 
-  /// Clear all data (for "Clear Cache" button).
-  Future<void> clearAll() async {
-    _db.execute('DELETE FROM state_markers');
-    _db.execute('DELETE FROM sessions');
-  }
-
   void close() => _db.dispose();
 }
 
@@ -276,6 +282,8 @@ class SessionRow {
   final DateTime startedAt;
   final int durationS;
   final String protocol;
+  /// `feedback` or `recording`. Existing rows migrate to `feedback`.
+  final String kind;
   final String? protocolVersion;
   final String? deviceName;
   final String? deviceModel;
@@ -322,6 +330,7 @@ class SessionRow {
     required this.startedAt,
     required this.durationS,
     required this.protocol,
+    this.kind = 'feedback',
     this.protocolVersion,
     this.deviceName,
     this.deviceModel,
@@ -363,7 +372,7 @@ class SessionRow {
   List<Object?> toList() => [
     id, path, formatVersion, appVersion,
     savedAt.toIso8601String(), startedAt.toIso8601String(),
-    durationS, protocol, protocolVersion, deviceName, deviceModel, deviceId,
+    durationS, protocol, kind, protocolVersion, deviceName, deviceModel, deviceId,
     calibrationProfile, recordedChannels, recordedStreams,
     offMeta, lenMeta, offComputed, lenComputed, offRaw, lenRaw,
     avgHr, avgSpo2, peakAlphaHz, peakAlphaPower,
@@ -389,6 +398,7 @@ class SessionRow {
       startedAt: parseDt(row['started_at']),
       durationS: row['duration_s'] as int,
       protocol: row['protocol'] as String,
+      kind: row['kind'] as String? ?? 'feedback',
       protocolVersion: row['protocol_version'] as String?,
       deviceName: row['device_name'] as String?,
       deviceModel: row['device_model'] as String?,

@@ -8,6 +8,8 @@ import 'package:muse_ml/src/audio/audio_service.dart';
 import 'package:muse_ml/src/audio/binaural_beat_controller.dart';
 import 'package:muse_ml/src/audio/guardrail_sound.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/monitor/monitor_providers.dart';
+import 'package:muse_ml/src/monitor/monitor_state.dart';
 import 'package:muse_ml/src/connect_source.dart';
 import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/feedback/feature_override.dart';
@@ -314,6 +316,8 @@ class _PhaseControls extends ConsumerWidget {
     Future<void> startSession({bool skipCalibration = false}) async {
       if (await _refuseCrownStart(context, ref)) return;
       if (!context.mounted) return;
+      if (await _refuseRecordingStart(context, ref)) return;
+      if (!context.mounted) return;
       final settings = ref.watch(settingsProvider);
       if (fb.rewardOutput == RewardOutputId.musicFilter) {
         if (settings.musicFolder == null) {
@@ -350,6 +354,8 @@ class _PhaseControls extends ConsumerWidget {
               FilledButton.icon(
                 onPressed: () async {
                   if (await _refuseCrownStart(context, ref)) return;
+                  if (!context.mounted) return;
+                  if (await _refuseRecordingStart(context, ref)) return;
                   if (!context.mounted) return;
                   final ready = await showModelGateDialog(
                     context,
@@ -2272,6 +2278,36 @@ Future<bool> _refuseCrownStart(BuildContext context, WidgetRef ref) async {
       ],
     ),
   );
+  return true;
+}
+
+/// Returns true when Start was refused because an explicit recording is open.
+/// Stop recording is not auto-continued into Start.
+Future<bool> _refuseRecordingStart(BuildContext context, WidgetRef ref) async {
+  if (ref.read(monitorControllerProvider).kind != CaptureKind.recording) {
+    return false;
+  }
+  if (!context.mounted) return true;
+  final stop = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Recording in progress'),
+      content: const Text('Stop the recording before starting a session.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Stop recording'),
+        ),
+      ],
+    ),
+  );
+  if (stop == true) {
+    await ref.read(monitorControllerProvider.notifier).stopRecording();
+  }
   return true;
 }
 

@@ -10,13 +10,16 @@ do/don't, then this folder for maps.
 | [active-task.md](active-task.md) | Current development focus |
 | [audio-engine.md](audio-engine.md) | **Implemented** SoLoud engine hardening (lifetime, loads, leftover muffle) |
 | [connect-simulator-ux.md](connect-simulator-ux.md) | **Frozen** connect UX: Muse / Neurosity / Simulator + `DeviceKind` Muse\|Neurosity |
-| [architecture.md](architecture.md) | Stack: BLE, devices, feature pipeline, session, audio, streaming, export |
+| [architecture.md](architecture.md) | Stack: BLE, devices, feature pipeline, session, monitor, audio, streaming, export |
 | [testing-guide.md](testing-guide.md) | Build/test loop, FFI tests, Linux agent HTTP, `flutter run` loader trap |
 | [ui-map.md](ui-map.md) | Spoken UI names → widgets/files |
 | [test-matrix.md](test-matrix.md) | What can be tested, how, what cannot |
 | [release.md](release.md) | Release CI, keystore, F-Droid, reproducibility |
 | [btleplug.md](btleplug.md) | btleplug fork (`0.12.0-muse-5`) — JNI attach + notification death spiral |
 | [muse-rs.md](muse-rs.md) | muse-rs `0.1.1` patch, Classic vs Athena, battery, Athena optical/fNIRS gap |
+| [monitor.md](monitor.md) | **Implemented.** Live graphs + connect-time recording. Cinema: mobile landscape / desktop F11. Bands: PCHIP, 1 s Follow lead, in-pane chips. Draw-path perf PRs 1–7 landed; PR 8 skipped. |
+| [headset-fit.md](headset-fit.md) | Pad colors, Classic vs Athena, status-bar dots |
+| [export.md](export.md) | History export: PDF / PNG / CSV / EDF+ |
 
 ## Feedback
 
@@ -26,9 +29,10 @@ do/don't, then this folder for maps.
 | [feedback/architecture.md](feedback/architecture.md) | Lanes, protocol documents, calibration as implemented |
 | [feedback/todos.md](feedback/todos.md) | Checklist |
 
-Format / cache byte-level docs (repo root, not here):
+Format / cache / export (repo root + here):
 [README_feedback_format.md](../README_feedback_format.md),
-[README_history_cache.md](../README_history_cache.md).
+[README_history_cache.md](../README_history_cache.md),
+[export.md](export.md).
 
 ## Queued
 

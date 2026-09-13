@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/charts/session_recorder.dart';
-import 'package:muse_ml/src/feedback/computed_frame.dart';
-import 'package:muse_ml/src/feedback/session_assembler.dart';
+import 'package:muse_ml/src/session_v5/assemble.dart';
+import 'package:muse_ml/src/session_v5/computed_frame.dart';
+import 'package:muse_ml/src/session_v5/scratch_writer.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 import 'package:muse_ml/src/settings.dart';

@@ -5,17 +5,42 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/session_export.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
+import 'package:muse_ml/src/monitor/views/recording_dashboard.dart';
 import 'package:muse_ml/src/views/feedback_dashboard.dart';
+
+enum HistoryKindFilter { all, feedback, recordings }
+
+List<SessionSummary> filterHistoryByKind(
+  List<SessionSummary> all,
+  HistoryKindFilter filter,
+) {
+  switch (filter) {
+    case HistoryKindFilter.all:
+      return all;
+    case HistoryKindFilter.feedback:
+      return [
+        for (final s in all)
+          if (s.kind == 'feedback') s,
+      ];
+    case HistoryKindFilter.recordings:
+      return [
+        for (final s in all)
+          if (s.kind == 'recording') s,
+      ];
+  }
+}
 
 class FeedbackHistoryView extends ConsumerStatefulWidget {
   const FeedbackHistoryView({super.key});
 
   @override
-  ConsumerState<FeedbackHistoryView> createState() => _FeedbackHistoryViewState();
+  ConsumerState<FeedbackHistoryView> createState() =>
+      _FeedbackHistoryViewState();
 }
 
 class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
   final Set<String> _selected = {};
+  HistoryKindFilter _filter = HistoryKindFilter.all;
 
   bool get _selecting => _selected.isNotEmpty;
 
@@ -43,13 +68,12 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
     }
   }
 
-  List<SessionSummary> _selectedSessions(List<SessionSummary> all) =>
-      [for (final s in all) if (_selected.contains(s.id)) s];
+  List<SessionSummary> _selectedSessions(List<SessionSummary> all) => [
+    for (final s in all)
+      if (_selected.contains(s.id)) s,
+  ];
 
-  Future<void> _export(
-    List<SessionSummary> sessions,
-    ExportKind kind,
-  ) async {
+  Future<void> _export(List<SessionSummary> sessions, ExportKind kind) async {
     final store = await ref.read(sessionStoreProvider.future);
     final history = await store.storage;
     final target = await resolveExportStorage(history);
@@ -73,8 +97,10 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
       ),
     );
     try {
-      final result = await SessionExporter(store, target)
-          .exportSessions(sessions: sessions, kind: kind);
+      final result = await SessionExporter(
+        store,
+        target,
+      ).exportSessions(sessions: sessions, kind: kind);
       if (!mounted) {
         return;
       }
@@ -85,9 +111,9 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
         return;
       }
       Navigator.of(context, rootNavigator: true).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Export failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
     }
   }
 
@@ -116,12 +142,19 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
   }
 
   Future<void> _deleteSelected(List<SessionSummary> sessions) async {
+    final rec = sessions.where((s) => s.isRecording).length;
+    final fb = sessions.length - rec;
+    final title = rec == 0
+        ? 'Delete ${sessions.length} session(s)?'
+        : fb == 0
+        ? 'Delete ${sessions.length} recording(s)?'
+        : 'Delete ${sessions.length} item(s)?';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete ${sessions.length} session(s)?'),
+        title: Text(title),
         content: const Text(
-          'This permanently removes the selected session files and cannot '
+          'This permanently removes the selected files and cannot '
           'be undone.',
         ),
         actions: [
@@ -154,12 +187,25 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
     }
     setState(_selected.clear);
     ref.invalidate(sessionListProvider);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Deleted $deleted session(s)')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Deleted $deleted file(s)')));
   }
 
   void _openExportSheet(List<SessionSummary> sessions) {
+    final exportable = [
+      for (final s in sessions)
+        if (!s.isRecording) s,
+    ];
+    if (exportable.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Export is not available for recordings.'),
+        ),
+      );
+      return;
+    }
+    sessions = exportable;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -239,7 +285,7 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
             children: [
               Expanded(
                 child: Text(
-                  _selecting ? '${_selected.length} selected' : 'Session History',
+                  _selecting ? '${_selected.length} selected' : 'History',
                   style: theme.textTheme.headlineSmall,
                 ),
               ),
@@ -258,19 +304,53 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
             ],
           ),
           const SizedBox(height: 8),
+          SegmentedButton<HistoryKindFilter>(
+            segments: const [
+              ButtonSegment(value: HistoryKindFilter.all, label: Text('All')),
+              ButtonSegment(
+                value: HistoryKindFilter.feedback,
+                label: Text('Feedback'),
+              ),
+              ButtonSegment(
+                value: HistoryKindFilter.recordings,
+                label: Text('Recordings'),
+              ),
+            ],
+            selected: {_filter},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) {
+              if (s.isEmpty) return;
+              setState(() {
+                _filter = s.first;
+                final visible = {
+                  for (final x in filterHistoryByKind(
+                    sessions.valueOrNull ?? const [],
+                    _filter,
+                  ))
+                    x.id,
+                };
+                _selected.removeWhere((id) => !visible.contains(id));
+              });
+            },
+          ),
+          const SizedBox(height: 8),
           Expanded(
             child: sessions.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(
                 child: Text(
-                  'Could not load session history: $e',
+                  'Could not load history: $e',
                   style: theme.textTheme.bodySmall,
                 ),
               ),
-              data: (list) {
-                debugPrint('[history] loaded ${list.length} session(s)');
+              data: (all) {
+                final list = filterHistoryByKind(all, _filter);
+                debugPrint(
+                  '[history] loaded ${all.length} row(s), '
+                  'filter=${_filter.name} showing ${list.length}',
+                );
                 if (list.isEmpty) {
-                  return _EmptyHistory(theme: theme);
+                  return _EmptyHistory(theme: theme, filter: _filter);
                 }
                 return Column(
                   children: [
@@ -291,6 +371,15 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
                               onTap: () {
                                 if (_selecting) {
                                   _toggle(summary.id);
+                                } else if (summary.isRecording) {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => RecordingDashboardView(
+                                        sessionId: summary.id,
+                                        path: summary.path,
+                                      ),
+                                    ),
+                                  );
                                 } else {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
@@ -318,7 +407,8 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
                         onSelectNone: _clearSelection,
                         onExport: () =>
                             _openExportSheet(_selectedSessions(list)),
-                        onDelete: () => _deleteSelected(_selectedSessions(list)),
+                        onDelete: () =>
+                            _deleteSelected(_selectedSessions(list)),
                       ),
                   ],
                 );
@@ -472,14 +562,19 @@ class _HistoryTileState extends ConsumerState<_HistoryTile>
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              _Thumbnail(id: widget.summary.id),
+              _Thumbnail(
+                id: widget.summary.id,
+                isRecording: widget.summary.isRecording,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${protocolListTitle(catalog, meta.protocol)} • $date',
+                      widget.summary.isRecording
+                          ? 'Recording • $date'
+                          : '${protocolListTitle(catalog, meta.protocol)} • $date',
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -511,29 +606,34 @@ class _HistoryTileState extends ConsumerState<_HistoryTile>
 }
 
 class _Thumbnail extends ConsumerWidget {
-  const _Thumbnail({required this.id});
+  const _Thumbnail({required this.id, required this.isRecording});
 
   final String id;
+  final bool isRecording;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    Widget placeholder() => Container(
+      width: 64,
+      height: 48,
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Icon(
+        isRecording ? Icons.fiber_manual_record : Icons.auto_graph,
+        size: 24,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    );
+    if (isRecording) {
+      return placeholder();
+    }
     final store = ref.read(sessionStoreProvider.future);
     return FutureBuilder<List<int>?>(
       future: store.then((s) => s.readPng(id)),
       builder: (context, snap) {
         final bytes = snap.data;
         if (bytes == null || bytes.isEmpty) {
-          return Container(
-            width: 64,
-            height: 48,
-            color: theme.colorScheme.surfaceContainerHighest,
-            child: Icon(
-              Icons.auto_graph,
-              size: 24,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          );
+          return placeholder();
         }
         return Image.memory(
           Uint8List.fromList(bytes),
@@ -541,16 +641,7 @@ class _Thumbnail extends ConsumerWidget {
           height: 48,
           fit: BoxFit.cover,
           gaplessPlayback: true,
-          errorBuilder: (_, _, _) => Container(
-            width: 64,
-            height: 48,
-            color: theme.colorScheme.surfaceContainerHighest,
-            child: Icon(
-              Icons.auto_graph,
-              size: 24,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
+          errorBuilder: (_, _, _) => placeholder(),
         );
       },
     );
@@ -558,12 +649,27 @@ class _Thumbnail extends ConsumerWidget {
 }
 
 class _EmptyHistory extends StatelessWidget {
-  const _EmptyHistory({required this.theme});
+  const _EmptyHistory({required this.theme, required this.filter});
 
   final ThemeData theme;
+  final HistoryKindFilter filter;
 
   @override
   Widget build(BuildContext context) {
+    final (title, body) = switch (filter) {
+      HistoryKindFilter.recordings => (
+        'No saved recordings yet.',
+        'Tap Record on a graph, then Save to see it here.',
+      ),
+      HistoryKindFilter.feedback => (
+        'No saved sessions yet.',
+        'Complete a session and tap Save to see it here.',
+      ),
+      HistoryKindFilter.all => (
+        'No saved files yet.',
+        'Complete a session or save a recording to see it here.',
+      ),
+    };
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -574,13 +680,10 @@ class _EmptyHistory extends StatelessWidget {
             color: theme.colorScheme.onSurfaceVariant.withAlpha(100),
           ),
           const SizedBox(height: 16),
-          Text(
-            'No saved sessions yet.',
-            style: theme.textTheme.titleMedium,
-          ),
+          Text(title, style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
-            'Complete a session and tap Save to see it here.',
+            body,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,

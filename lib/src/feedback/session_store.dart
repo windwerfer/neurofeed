@@ -6,7 +6,8 @@ import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/feedback/session_store_core.dart';
 
-export 'session_store_core.dart' show SessionStore;
+export 'session_store_core.dart'
+    show SessionStore, countHistoryContainers, isHistoryContainerName;
 export 'session_metadata.dart';
 export 'session_v5_models.dart';
 

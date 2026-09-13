@@ -5,6 +5,11 @@ Finished threads and historical notes. Not current orientation — see
 
 | File | What it was |
 |------|-------------|
+| `handoff-monitor.md` | Monitor series map (PRs 0–7). **Complete.** PR 8 cancelled. Follow-up: Bands PCHIP + 1 s Follow lead + in-pane chips. Live spec: [../monitor.md](../monitor.md). |
+| `handoff-monitor-perf.md` | Graph draw-path perf (PRs 1–7). **Complete.** PR 8 skipped. Live spec: [../monitor.md](../monitor.md). |
+| `monitor-rev6-design.md` | Pre-implementer monitor spec + PR plan. Superseded by [../monitor.md](../monitor.md). |
+| `pipeline-contract-pr-plan.md` | Feedback pipeline PR 1–7 implementer plan. Contract remains [../feedback/pipeline-contract.md](../feedback/pipeline-contract.md). |
+| `feedback-todos-historical.md` | Landed phase checklists. Live leftovers: [../feedback/todos.md](../feedback/todos.md). |
 | `handoff-pr2.md` … `handoff-pr7.md` | Pipeline refactor PRs (feature bus → custom builder). Implemented on `refactor/eeg_feature_implementation`. |
 | `handoff-connect-simulator-ux.md` | Implementer steps for connect Muse/Neurosity/Simulator. Landed on `feat/connect-simulator-ux`. Spec remains [../connect-simulator-ux.md](../connect-simulator-ux.md). |
 | `handoff-agent-http.md` | Debug loopback HTTP implementer handoff. Landed. How-to: [../testing-guide.md](../testing-guide.md) Linux agent. |

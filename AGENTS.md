@@ -65,13 +65,19 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
 - `flutter analyze lib/src` must stay clean after edits.
 - Format changes land in `rust/src/api/session_format.rs`; keep
   `cargo test --lib session_format` green.
-- Do not reopen pipeline-contract Key Decisions. Do not unlock Crown sessions
-  in the current series. Connect UX is frozen
-  (`.ai/connect-simulator-ux.md`) — do not mix OSC-connect or Crown Start
-  into it. `DeviceKind` is Muse | Neurosity only; do not restore Simulated*.
-  Audio-engine Key Decisions (`.ai/audio-engine.md`) are frozen: do not duck
-  unmodulated background; do not deinit SoLoud from a controller; do not
-  restore `AudioService.setMusicMuffle`.
+- Do not reopen pipeline-contract Key Decisions. Do not unlock Crown
+  sessions. Connect UX is frozen (`.ai/connect-simulator-ux.md`) — do not
+  mix OSC-connect or Crown Start into it. `DeviceKind` is Muse | Neurosity
+  only; do not restore Simulated*. Audio-engine Key Decisions
+  (`.ai/audio-engine.md`) are frozen: do not duck unmodulated background;
+  do not deinit SoLoud from a controller; do not restore
+  `AudioService.setMusicMuffle`. Monitor spec (`.ai/monitor.md` rev 6) is
+  implemented (product PRs 0–7). Draw-path perf PRs 1–7 landed; PR 8
+  skipped. Do not add Spectrogram `FFT 1s ▾`, averaging, or a Bands strip
+  on Spectrogram. Do not restore Bands `SMOOTH` / `REAL TIME` chrome.
+  Bands Follow lead is 1 s (Spectrogram stays flush-right). Do not pause
+  `SweepBuffer` / `BandCache` on view change. Hidden graphs stay unmounted
+  (`AppShell` `switch`, not `IndexedStack`).
 - If you change on-screen copy or primary chrome (status bar, sidebar, connect
   window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
   Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
@@ -82,8 +88,10 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
 ## Docs
 Index: [`.ai/README.md`](.ai/README.md). UI names: [`.ai/ui-map.md`](.ai/ui-map.md).
 Tests: [`.ai/test-matrix.md`](.ai/test-matrix.md). Audio engine:
-[`.ai/audio-engine.md`](.ai/audio-engine.md). Format/cache:
-`README_feedback_format.md`, `README_history_cache.md`.
+[`.ai/audio-engine.md`](.ai/audio-engine.md). Monitor:
+[`.ai/monitor.md`](.ai/monitor.md) (implemented). Fit:
+[`.ai/headset-fit.md`](.ai/headset-fit.md). Export: [`.ai/export.md`](.ai/export.md).
+Format/cache: `README_feedback_format.md`, `README_history_cache.md`.
 Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
 
 ## Project layout
@@ -105,14 +113,41 @@ lib/src/feedback/           session orchestrator + lanes
   feature_catalog.dart      assets/features.json copy
   computed_sampler.dart     1 Hz JSONL; t = seconds from recording start
   feedback_recorder.dart    scratch temps + assembleScratchV5
-  session_assembler.dart    one containerEncodeV5 / writeScratchV5 wrapper
-  crash_recovery.dart       leftover scratch v5 / three-temps
+  session_assembler.dart    re-export of session_v5/assemble.dart
+  crash_recovery.dart       leftover `session_*` scratch v5 / three-temps
   session_store*.dart / session_sqlite.dart / session_metadata.dart
   session_export.dart / session_pdf_export.dart / session_chart_data.dart
+lib/src/session_v5/         v5 writer / assemble / ComputedFrame / DeviceInfoV5
+  assemble.dart             assembleV5Container, writeScratchV5(prefix:), placeholderWebP
+  scratch_writer.dart       SessionRecorder (prefix default `session`)
+  computed_frame.dart       Dart ComputedFrame (+ .freezed.dart)
+  models.dart               DeviceInfoV5, StreamsConfig
+lib/src/monitor/            live graphs + recording
+  monitor_controller.dart   constructed in main(); hydrates if already connected
+  graph_shell.dart          Follow/Inspect + Record / Stop
+  graph_cinema.dart         mobile landscape hides chrome; desktop F11 same hide
+  viewport_controller.dart  Follow / Inspect; elapsed domain; Bands Follow lead 1 s
+  electrode_toggles.dart    non-EEG average membership (chrome)
+  band_toggles.dart         in-pane delta/theta/alpha/beta/gamma chips
+  cache/band_cache.dart     1 Hz bands, 30 min cap; no EEG LiveCache
+  cache/sweep_buffer.dart   5 min EEG RAM + display ring (moved from charts/)
+  cache/stft_ring.dart      Follow STFT columns (Inspect / electrodes / window = full)
+  cache/sliding_spectrum.dart  Follow Welch / histogram (Inspect = full)
+  panes/sweep_pane.dart     one electrode, theme wipe / Inspect fill-right
+  panes/time_series_pane.dart  Bands strip; PCHIP; Follow ticker when lead > 0
+  panes/bands_context_strip.dart  ~30% Bands map under Histogram/PSD
+  views/bands_view.dart     GraphShell Bands; in-pane BandToggles
+  views/raw_eeg_view.dart   N stacked SweepPanes (Muse-4 / Crown-8)
+  views/histogram_view.dart 70/30 split; ±100 µV, 64 bins
+  views/psd_view.dart       Welch; GraphShell title Power Spectral Density
+  views/spectrogram_view.dart heatmap; mag ▾; 256-pt FFT (no size chrome)
+  views/recording_dashboard.dart  History row; Follow disabled
+  dsp.dart                  Hamming FFT 1/N²; n parameterized (default 256)
+  recording/                lease, tmp_/recording_ writer, crash_recovery, store
 lib/src/audio/              SoLoudEngine + AudioService, reward/guard/background
 lib/src/reve/               model download/import/load UI
 lib/src/streaming/          OSC / LSL / BrainFlow
-lib/src/charts/             live EEG + SessionRecorder / SessionReader
+lib/src/charts/             band_style, SessionReader, smooth_path (writer is session_v5/)
 rust/src/api/
   muse.rs, features.rs, device_config.rs, neurosity_osc.rs, simulator.rs
   reve.rs, session_format.rs, edf_export.rs
@@ -134,12 +169,36 @@ assets/                     protocols.json, calibrations.json, features.json, au
   (`#[frb(ignore)]`). Crown OSC: `neurosity_osc.rs` (no discovery API yet).
 - Feature registry: `rust/src/api/features.rs`. Dart bus/lanes as above.
 - Session byte layout: `rust/src/api/session_format.rs` only. Dart is FFI.
-- Session assemble: `lib/src/feedback/session_assembler.dart`
+- Session assemble: `lib/src/session_v5/assemble.dart`
   (`assembleV5Container`, `writeScratchV5`, `placeholderWebP`).
-- Crash recovery: `lib/src/feedback/crash_recovery.dart` scans
-  `scratchDirectory`, not `getTemporaryDirectory()/sessions`.
+  Scratch writer: `lib/src/session_v5/scratch_writer.dart` (`SessionRecorder`).
+  Old paths (`feedback/session_assembler.dart`, `charts/session_recorder.dart`,
+  `feedback/computed_frame.dart`, `feedback/session_v5_models.dart`) re-export.
+- Monitor: `lib/src/monitor/` — `MonitorController` is constructed in `main()`
+  from the same `ProviderContainer` as `AppStateNotifier`, and hydrates if
+  already connected. Band ring is `monitor/cache/band_cache.dart`. EEG RAM is
+  `monitor/cache/sweep_buffer.dart` (5 min). Raw EEG is N stacked `SweepPane`s
+  in `monitor/views/raw_eeg_view.dart`. Histogram / PSD / Spectrogram are
+  `monitor/views/{histogram,psd,spectrogram}_view.dart`. Histogram and PSD
+  have a ~30% Bands context strip; Spectrogram does not. FFT is 256-pt
+  Hamming (`kDefaultFftN`); no size dropdown. Bands traces are PCHIP;
+  Follow on 1 Hz strips uses `bandsFollowLeadSeconds` (1 s) and a vsync
+  ticker in `TimeSeriesPane`. In-pane `BandToggles` hide series (last-one
+  stays); strip legend is painted, not tappable. EEG notify is
+  vsync-coalesced (RAM writes stay 256 Hz). Follow Spectrogram STFT,
+  PSD Welch, and Histogram are incremental; Inspect / electrodes / window
+  still full recompute. Raw EEG traces min/max-downsample per pixel;
+  `RawEegView.dispose` sets wipe-ring window 0. `bandNames` / `bandColors`
+  stay in `lib/src/charts/band_style.dart`. Pad quality is a 4-ch 1 s ring
+  in `connection_provider.dart` (not a 5 min EEG LiveCache).
+- Crash recovery: feedback `lib/src/feedback/crash_recovery.dart` scans
+  `scratchDirectory` for `session_*` only. Monitor
+  `lib/src/monitor/recording/crash_recovery.dart` scans `recording_*`;
+  launch glob-deletes leftover `tmp_*`. Neither scanner crosses prefixes.
 - History cache: `lib/src/feedback/session_sqlite.dart`
-  (`session_metadata.db`, thumbnail BLOB). Reconcile in `session_store_core.dart`.
+  (`session_metadata.db`, thumbnail BLOB, `kind` `feedback`|`recording`).
+  `SessionStore.list()` is sqlite-only (no orphan-file backfill).
+  `RecordingStore.publish` upserts the same DB.
 - SAF: MethodChannel `muse_ml/saf` in `MainActivity.kt`.
 - Guard feature ids: `lib/src/feedback/guardrail_mode.dart` (string helpers,
   not an enum). Per-protocol prefs migrate from old `GuardrailMode.name`.
@@ -252,10 +311,15 @@ assets/                     protocols.json, calibrations.json, features.json, au
   90 s rolling buffer.
 - **Storage resolution is async** (`sessionStorageProvider` FutureProvider).
   Always `ref.read(sessionStoreProvider.future)`.
-- **SAF is history-only.** Live recording always goes to scratch
-  (`scratchDirectory()`).
+- **SAF is history-only.** Live capture always goes to scratch
+  (`scratchDirectory()`): `tmp_` on connect, `recording_` on Record,
+  `session_` on feedback. Exclusive lease — at most one writer.
+- **Record vs Start Session:** recording refuses Start (dialog + agent 409
+  `recording_active`). Feedback refuses Record. Record does not keep
+  pre-click tmp bytes.
 - **Desktop default dir**: fall back to `$HOME/Documents`, never `/tmp`.
-  Changing the save folder **moves** sessions (`moveAllTo`).
+  Changing the save folder **moves** `session_*` and `recording_*`
+  (`moveAllTo`). Settings card is **Save files to folder**.
 - **Signal gate**: before calibration, gate pads green for 3 s; after
   baseline, no re-lock. Playing pauses only when all gate pads are critical
   for 10 s; never auto-ends. Names in `gate_electrodes.dart`, default Muse
@@ -281,10 +345,12 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `SessionContainer` Dart wrapper anymore.
 - **Assemble v5 at `end()`** into scratch (placeholder WebP) **before**
   `phase = ended`. Save `publishSession` to history; Discard deletes the
-  scratch v5. One wrapper: `session_assembler.dart`.
-- **Crash recovery** scans `scratchDirectory` for leftover
+  scratch v5. One wrapper: `session_v5/assemble.dart`.
+- **Crash recovery** is prefix-strict. Feedback: leftover
   `session_*.muse.feedback` and orphan `.raw` / `.computed` / `.metadata`.
-  Temps go through `writeScratchV5`. Never `decodeImage` on empty bytes.
+  Monitor: leftover `recording_*` (dialog **Incomplete recording detected**).
+  `tmp_*` is deleted, never assembled. Temps go through `writeScratchV5`.
+  Never `decodeImage` on empty bytes.
 - **ComputedSampler.t** is seconds from recording start, not unix epoch.
 - **Charts** plot computed 1 Hz (`v5ExtractComputed` →
   `prepareChartDataFromComputed`). There is no `SessionOverview` /

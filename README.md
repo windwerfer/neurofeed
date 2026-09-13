@@ -1,56 +1,51 @@
-# muse_ml
+# Muse ML
 
-Muse EEG headset companion app — Flutter + Rust via `flutter_rust_bridge`.
-Protocol/transport: [muse-rs](https://github.com/eugenehp/muse-rs) patched to
-[windwerfer/muse-rs](https://github.com/windwerfer/muse-rs) tag `0.1.1`.
+Companion app for Interaxon Muse EEG headsets. Flutter UI, Rust BLE stack
+([muse-rs](https://github.com/windwerfer/muse-rs) `0.1.1`,
+[btleplug](https://github.com/windwerfer/btleplug) `0.12.0-muse-5`).
 
-## Features
+## What it does
 
-- **BLE scan + connect** to Muse S (Android), autoconnect to last device;
-  Neurosity Crown/Notion over OSC (connect UI only — sessions refused);
-  Muse/Crown simulators
-- **Biofeedback sessions**: 50 s silent calibration (or staged AI sequence) →
-  personalized threshold on a chosen feature (ATR and other band ratios) →
-  real-time audio feedback
-  - Reward / guard / background as separate outputs (chimes, rain, music
-    filter, binaural, warning sounds)
-  - Movement-gated rewards, dynamic adaptive target with lockout guards,
-    in-flight recalibration
-  - 5 volume channels (master × background / feedback / intro / end bell /
-    guardrail)
-  - Custom programs via the protocol builder (same JSON type as the catalog)
-- **AI sleep guardrail**: on-device drowsiness (REVE/LUNA) or band-math
-  delta; warning only, never modulates the reward
-- **Session dashboard + history**: graphs, stats, notes, save/discard,
-  SQLite-backed list
+- **Connect** a Muse over BLE (Android). Debug mode adds a Simulator catalog.
+  Neurosity Crown/Notion appear in the connect UI (OSC); **Start Session**
+  for Crown is refused.
+- **Live monitor** while connected: Bands, Raw EEG, Histogram, Spectrogram,
+  PSD. Follow the live signal or Inspect recent history.
+- **Record** from the graph bar. Saved recordings sit in the same History
+  list as biofeedback sessions.
+- **Biofeedback**: pick a program (or build one), 50 s silent calibration
+  (or a staged AI sequence), then audio reward on a chosen EEG feature.
+  Optional drowsiness **warning** (on-device REVE/LUNA or band-math delta)
+  never changes the reward.
+- **History**: sessions and recordings, notes, charts, export (PDF, CSV, EDF).
+- **Streaming** to OSC, LSL, or BrainFlow while connected.
 
-All user preferences persist across restarts.
+Preferences persist across restarts.
 
-## Session file format
+## Session files
 
-Each finished session is a **single self-contained `.muse.feedback`** file:
+Finished sessions and recordings are a single `.muse.feedback` file:
 
 ```
-[68-byte header][WebP thumbnail][metadata JSON (zstd)][computed 1Hz (zstd)][raw (zstd)]
+[68-byte header][WebP thumbnail][metadata JSON (zstd)][computed 1 Hz (zstd)][raw (zstd)]
 ```
 
-- The leading WebP thumbnail and zstd-compressed metadata are stored in the head for instant loading and thumbnail preview.
-- The `json` holds `SessionMetadata` (protocol, timings, sound, notes, stats).
-- Computed 1Hz frames provide decimated telemetry for fast charting and export.
-- The raw section contains the compressed frame stream parsed by `SessionReader`
-  (see `lib/src/charts/session_reader.dart`).
-- **History view is fast**: listing and thumbnails load via SQLite
-  (`session_metadata.db`, thumbnail BLOB) and v5 head reads.
+History lists them from SQLite (`session_metadata.db`) so opening the list
+does not parse every file. Settings → **Save files to folder** chooses the
+directory; changing it **moves** existing files.
 
-Sessions live in the chosen save folder (see Settings → *Save feedback to
-folder*). Changing the folder **moves** (not copies) existing sessions.
-Live recordings stream to a hidden `.cache/` subfolder and are only assembled
-into the final `.muse.feedback` on save.
+Byte layout: [README_feedback_format.md](README_feedback_format.md).
+History cache: [README_history_cache.md](README_history_cache.md).
+Export: [`.ai/export.md`](.ai/export.md). Pad fit:
+[`.ai/headset-fit.md`](.ai/headset-fit.md).
 
 ## Status
 
-See [`.ai/active-task.md`](.ai/active-task.md). On-device checklist:
-[`.ai/feedback/todos.md`](.ai/feedback/todos.md).
+Android 10+ **arm64-v8a only** (no x86 emulator, no 32-bit). Linux and
+Windows builds exist in CI; iOS/macOS are not a current target.
+
+Live monitor + connect-time recording is implemented. Crown *sessions*,
+OSC discovery, and Athena extra optical channels are not.
 
 ## Quick start
 
@@ -58,58 +53,13 @@ See [`.ai/active-task.md`](.ai/active-task.md). On-device checklist:
 flutter run
 ```
 
-Scan for nearby Muse headsets by tapping **Rescan**.
+Tap the status bar to open **Connect**, then **Rescan** for a Muse.
 
-**Supported:** Android 10+ (API 29), **arm64-v8a only** (no x86 emulator,
-no 32-bit). Older API levels would theoretically work but are untested.
-
-### Linux / dev-container audio
-
-Audio uses **flutter_soloud**, whose Linux backend is ALSA. The dev-container
-has no sound card and plays through the host's PulseAudio/PipeWire socket
-(`PULSE_SERVER=unix:/tmp/pulse-socket`). That requires:
-
-- `libasound2-plugins` + an active `/etc/alsa/conf.d/99-pulseaudio-default.conf`
-  (the package ships it as `.example`; the Dockerfile `cp`s it) so ALSA's
-  `default` PCM routes to PulseAudio.
-- `TRY_SYSTEM_LIBS_FIRST=1` + `libopus-dev libogg-dev libvorbis-dev libflac-dev`
-  when building, so flutter_soloud links the system Xiph codecs instead of its
-  glibc-2.43-precompiled ones.
-
-All of this is already in `.devcontainer/Dockerfile`. Verify playback with
-`aplay -D default /tmp/beep.wav` (silent output usually means the ALSA → Pulse
-routing above is missing, not that the app is broken).
-
-## Debugging
-
-```bash
-# Rust + BLE logs
-adb logcat -s btleplug rust_lib_muse_ml RustError
-
-# Everything muse-related
-adb logcat | grep -iE "scan_all|btleplug|muse"
-
-# ATR adaptation diagnostics (10 s cadence + adapt events)
-adb logcat | grep -E "\[atr\]|\[feedback\]|\[chime\]"
-```
-
-## Architecture
-
-```
-Flutter UI (lib/src/) ←─ FFI ──→ Rust (rust/src/api/muse.rs)
-                                    ↕ muse-rs 0.1.1 (patched fork)
-                                    ↕ btleplug 0.12.0-muse-5
-                                    ↕ Android BLE (JNI)
-```
-
-BLE transport: [btleplug fork](https://github.com/windwerfer/btleplug) tag
-`0.12.0-muse-5`. See [`.ai/btleplug.md`](.ai/btleplug.md) and
-[`.ai/muse-rs.md`](.ai/muse-rs.md). Full map:
+Agent-oriented build/test notes (Linux audio, FFI, logcat):
+[`.ai/testing-guide.md`](.ai/testing-guide.md). Internals index:
 [`.ai/README.md`](.ai/README.md).
 
 ## Third-party notices
 
-Credits and licenses for every bundled library, the REVE/LUNA model engine,
-and the freesound audio assets live in
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) (also visible in-app under
-**Settings → About → Third-party notices**).
+Credits and licenses: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
+(also **Settings → About → Third-party notices**).

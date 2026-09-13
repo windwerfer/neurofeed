@@ -3,12 +3,36 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/feedback/session_assembler.dart';
+import 'package:muse_ml/src/session_v5/assemble.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/session_sqlite.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/rust/api/session_format.dart';
 import 'package:muse_ml/src/version.dart';
+
+/// History-root v5 names: `session_*.muse.feedback` and
+/// `recording_*.muse.feedback`. Not `tmp_`.
+bool isHistoryContainerName(String name) {
+  if (!name.endsWith('.muse.feedback')) return false;
+  return name.startsWith('session_') || name.startsWith('recording_');
+}
+
+/// Count published session and recording containers in a [listFiles] result.
+({int sessions, int recordings}) countHistoryContainers(
+  Iterable<String> names,
+) {
+  var sessions = 0;
+  var recordings = 0;
+  for (final name in names) {
+    if (!name.endsWith('.muse.feedback')) continue;
+    if (name.startsWith('session_')) {
+      sessions++;
+    } else if (name.startsWith('recording_')) {
+      recordings++;
+    }
+  }
+  return (sessions: sessions, recordings: recordings);
+}
 
 class SessionStore {
   SessionStore({Future<SessionStorage>? storage})
@@ -18,7 +42,9 @@ class SessionStore {
   final Future<SessionStorage> _storage;
   final Future<SessionSqlite> _sqlite;
 
-  static Future<SessionSqlite> _initSqlite(Future<SessionStorage>? storage) async {
+  static Future<SessionSqlite> _initSqlite(
+    Future<SessionStorage>? storage,
+  ) async {
     if (storage != null) {
       final s = await storage;
       final cacheDir = await resolveSessionCacheDir(s);
@@ -40,6 +66,8 @@ class SessionStore {
       for (final r in rows)
         SessionSummary(
           id: r.id,
+          kind: r.kind,
+          path: r.path,
           metadata: SessionMetadata(
             protocol: r.protocol,
             durationMinutes: r.durationS ~/ 60,
@@ -49,6 +77,12 @@ class SessionStore {
             deviceName: r.deviceName,
             deviceModel: r.deviceModel,
             deviceId: r.deviceId,
+            recordedChannels: r.recordedChannels.isEmpty
+                ? const <String>[]
+                : r.recordedChannels
+                      .split(',')
+                      .where((s) => s.isNotEmpty)
+                      .toList(),
             durationS: r.durationS,
             startedAt: r.startedAt.toIso8601String(),
             protocolVersion: r.protocolVersion,
@@ -77,7 +111,7 @@ class SessionStore {
 
   Future<List<int>?> readMuse(String id) async {
     final storage = await _storage;
-    final bytes = await storage.readFile(_museName(id));
+    final bytes = await storage.readFile(await _fileNameFor(id));
     if (bytes == null) return null;
     return v5ExtractRaw(bytes: Uint8List.fromList(bytes));
   }
@@ -85,7 +119,7 @@ class SessionStore {
   /// Full v5 container bytes from the history folder.
   Future<Uint8List?> readContainer(String id) async {
     final storage = await _storage;
-    final bytes = await storage.readFile(_museName(id));
+    final bytes = await storage.readFile(await _fileNameFor(id));
     if (bytes == null) return null;
     return Uint8List.fromList(bytes);
   }
@@ -93,12 +127,14 @@ class SessionStore {
   Future<List<int>?> readPng(String id) async {
     final sqlite = await _sqlite;
     final session = await sqlite.getSession(id);
-    if (session != null && session.thumbnail != null && session.thumbnail!.isNotEmpty) {
+    if (session != null &&
+        session.thumbnail != null &&
+        session.thumbnail!.isNotEmpty) {
       return session.thumbnail;
     }
     // Fallback: parse from container file if not in cache
     final storage = await _storage;
-    final bytes = await storage.readFile(_museName(id));
+    final bytes = await storage.readFile(await _fileNameFor(id));
     if (bytes == null) return null;
     try {
       final head = v5ParseHead(bytes: Uint8List.fromList(bytes));
@@ -118,6 +154,16 @@ class SessionStore {
   }
 
   String _museName(String id) => 'session_$id.muse.feedback';
+
+  /// Sqlite `path` when present (`recording_$id.muse.feedback` for
+  /// recordings). Falls back to `session_$id.muse.feedback`.
+  Future<String> _fileNameFor(String id) async {
+    final sqlite = await _sqlite;
+    final row = await sqlite.getSession(id);
+    final path = row?.path;
+    if (path != null && path.isNotEmpty) return path;
+    return _museName(id);
+  }
 
   /// Namespace for cache rows — a short hash of the storage location so two
   /// history folders never share metadata rows even when ids collide.
@@ -161,57 +207,73 @@ class SessionStore {
     }
     await storage.writeFileAtomic(_museName(id), container);
     final scalars = extractComputedScalars(frames);
-    final durationS =
-        metadata.durationS != 0 ? metadata.durationS : metadata.elapsedSeconds;
+    final durationS = metadata.durationS != 0
+        ? metadata.durationS
+        : metadata.elapsedSeconds;
     final sqlite = await _sqlite;
-    await sqlite.upsertSession(SessionRow(
-      id: id,
-      path: _museName(id),
-      formatVersion: 5,
-      appVersion: appVersion,
-      savedAt: DateTime.tryParse(metadata.savedAt) ?? DateTime.now(),
-      startedAt: DateTime.tryParse(metadata.startedAt ?? metadata.savedAt) ?? DateTime.now(),
-      durationS: durationS,
-      protocol: metadata.protocol,
-      protocolVersion: metadata.protocolVersion,
-      deviceName: metadata.deviceName,
-      deviceModel: metadata.deviceModel,
-      deviceId: metadata.deviceId,
-      calibrationProfile: metadata.calibrationProfile,
-      recordedChannels: metadata.recordedChannels.join(','),
-      recordedStreams: '',
-      offMeta: 0,
-      lenMeta: 0,
-      offComputed: 0,
-      lenComputed: 0,
-      offRaw: 0,
-      lenRaw: 0,
-      avgHr: scalars.avgHr ?? metadata.stats?.avgBpm,
-      avgSpo2: scalars.avgSpo2 ?? metadata.avgSpo2,
-      peakAlphaHz: scalars.peakAlphaHz ?? metadata.peakAlphaHz,
-      peakAlphaPower: scalars.peakAlphaPower ?? metadata.peakAlphaPower,
-      pctInTarget: scalars.pctInTarget ?? metadata.pctInTarget,
-      avgMovement: scalars.avgMovement ?? metadata.avgMovement,
-      guardrailWarnCount: scalars.guardrailWarnCount ?? metadata.guardrailWarnCount,
-      avgSleepDir: scalars.avgSleepDir ?? metadata.avgSleepDir,
-      signalQualityMean: metadata.signalQualityMean,
-      pctQcOk: metadata.pctQcOk,
-      markerCount: metadata.gestures.length,
-      guardrailEngine: metadata.guardrailEngine,
-      modelKind: metadata.modelKind,
-      modelSha256: metadata.modelSha256,
-      feedbackEngine: metadata.feedbackEngine,
-      userId: metadata.userId,
-      sessionId: metadata.sessionId,
-      notesPreview: metadata.notes.isNotEmpty ? (metadata.notes.length > 50 ? metadata.notes.substring(0, 50) : metadata.notes) : null,
-      fileSize: container.length,
-      mtime: DateTime.now().millisecondsSinceEpoch,
-      thumbnail: thumb.isNotEmpty ? thumb : null,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    ));
+    await sqlite.upsertSession(
+      SessionRow(
+        id: id,
+        path: _museName(id),
+        formatVersion: 5,
+        appVersion: appVersion,
+        savedAt: DateTime.tryParse(metadata.savedAt) ?? DateTime.now(),
+        startedAt:
+            DateTime.tryParse(metadata.startedAt ?? metadata.savedAt) ??
+            DateTime.now(),
+        durationS: durationS,
+        protocol: metadata.protocol,
+        kind: 'feedback',
+        protocolVersion: metadata.protocolVersion,
+        deviceName: metadata.deviceName,
+        deviceModel: metadata.deviceModel,
+        deviceId: metadata.deviceId,
+        calibrationProfile: metadata.calibrationProfile,
+        recordedChannels: metadata.recordedChannels.join(','),
+        recordedStreams: '',
+        offMeta: 0,
+        lenMeta: 0,
+        offComputed: 0,
+        lenComputed: 0,
+        offRaw: 0,
+        lenRaw: 0,
+        avgHr: scalars.avgHr ?? metadata.stats?.avgBpm,
+        avgSpo2: scalars.avgSpo2 ?? metadata.avgSpo2,
+        peakAlphaHz: scalars.peakAlphaHz ?? metadata.peakAlphaHz,
+        peakAlphaPower: scalars.peakAlphaPower ?? metadata.peakAlphaPower,
+        pctInTarget: scalars.pctInTarget ?? metadata.pctInTarget,
+        avgMovement: scalars.avgMovement ?? metadata.avgMovement,
+        guardrailWarnCount:
+            scalars.guardrailWarnCount ?? metadata.guardrailWarnCount,
+        avgSleepDir: scalars.avgSleepDir ?? metadata.avgSleepDir,
+        signalQualityMean: metadata.signalQualityMean,
+        pctQcOk: metadata.pctQcOk,
+        markerCount: metadata.gestures.length,
+        guardrailEngine: metadata.guardrailEngine,
+        modelKind: metadata.modelKind,
+        modelSha256: metadata.modelSha256,
+        feedbackEngine: metadata.feedbackEngine,
+        userId: metadata.userId,
+        sessionId: metadata.sessionId,
+        notesPreview: metadata.notes.isNotEmpty
+            ? (metadata.notes.length > 50
+                  ? metadata.notes.substring(0, 50)
+                  : metadata.notes)
+            : null,
+        fileSize: container.length,
+        mtime: DateTime.now().millisecondsSinceEpoch,
+        thumbnail: thumb.isNotEmpty ? thumb : null,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    );
     debugPrint('[session] written ${_museName(id)} to ${storage.location}');
-    return SessionSummary(id: id, metadata: metadata);
+    return SessionSummary(
+      id: id,
+      metadata: metadata,
+      kind: 'feedback',
+      path: _museName(id),
+    );
   }
 
   /// Replace the free-text notes of an existing session and rewrite the
@@ -220,7 +282,7 @@ class SessionStore {
   /// or unreadable.
   Future<bool> updateNotes(String id, String notes) async {
     final storage = await _storage;
-    final name = _museName(id);
+    final name = await _fileNameFor(id);
     final bytes = await storage.readFile(name);
     if (bytes == null || bytes.isEmpty) {
       debugPrint('[session] updateNotes($id): file not found ($name)');
@@ -229,7 +291,8 @@ class SessionStore {
     final full = Uint8List.fromList(bytes);
     final head = v5ParseHead(bytes: full);
     final decoded =
-        jsonDecode(String.fromCharCodes(head.metadataJson)) as Map<String, Object?>;
+        jsonDecode(String.fromCharCodes(head.metadataJson))
+            as Map<String, Object?>;
     decoded['notes'] = notes;
     final jsonBytes = Uint8List.fromList(
       const JsonEncoder().convert(decoded).codeUnits,
@@ -246,51 +309,54 @@ class SessionStore {
     final sqlite = await _sqlite;
     final existing = await sqlite.getSession(id);
     if (existing != null) {
-      await sqlite.upsertSession(SessionRow(
-        id: existing.id,
-        path: existing.path,
-        formatVersion: existing.formatVersion,
-        appVersion: existing.appVersion,
-        savedAt: existing.savedAt,
-        startedAt: existing.startedAt,
-        durationS: existing.durationS,
-        protocol: existing.protocol,
-        protocolVersion: existing.protocolVersion,
-        deviceName: existing.deviceName,
-        deviceModel: existing.deviceModel,
-        deviceId: existing.deviceId,
-        calibrationProfile: existing.calibrationProfile,
-        recordedChannels: existing.recordedChannels,
-        recordedStreams: existing.recordedStreams,
-        offMeta: existing.offMeta,
-        lenMeta: existing.lenMeta,
-        offComputed: existing.offComputed,
-        lenComputed: existing.lenComputed,
-        offRaw: existing.offRaw,
-        lenRaw: existing.lenRaw,
-        avgHr: existing.avgHr,
-        avgSpo2: existing.avgSpo2,
-        peakAlphaHz: existing.peakAlphaHz,
-        peakAlphaPower: existing.peakAlphaPower,
-        pctInTarget: existing.pctInTarget,
-        avgMovement: existing.avgMovement,
-        guardrailWarnCount: existing.guardrailWarnCount,
-        avgSleepDir: existing.avgSleepDir,
-        signalQualityMean: existing.signalQualityMean,
-        pctQcOk: existing.pctQcOk,
-        markerCount: existing.markerCount,
-        guardrailEngine: existing.guardrailEngine,
-        modelKind: existing.modelKind,
-        modelSha256: existing.modelSha256,
-        feedbackEngine: existing.feedbackEngine,
-        userId: existing.userId,
-        sessionId: existing.sessionId,
-        notesPreview: notes.length > 50 ? notes.substring(0, 50) : notes,
-        fileSize: existing.fileSize,
-        mtime: DateTime.now().millisecondsSinceEpoch,
-        createdAt: existing.createdAt,
-        updatedAt: DateTime.now(),
-      ));
+      await sqlite.upsertSession(
+        SessionRow(
+          id: existing.id,
+          path: existing.path,
+          formatVersion: existing.formatVersion,
+          appVersion: existing.appVersion,
+          savedAt: existing.savedAt,
+          startedAt: existing.startedAt,
+          durationS: existing.durationS,
+          protocol: existing.protocol,
+          kind: existing.kind,
+          protocolVersion: existing.protocolVersion,
+          deviceName: existing.deviceName,
+          deviceModel: existing.deviceModel,
+          deviceId: existing.deviceId,
+          calibrationProfile: existing.calibrationProfile,
+          recordedChannels: existing.recordedChannels,
+          recordedStreams: existing.recordedStreams,
+          offMeta: existing.offMeta,
+          lenMeta: existing.lenMeta,
+          offComputed: existing.offComputed,
+          lenComputed: existing.lenComputed,
+          offRaw: existing.offRaw,
+          lenRaw: existing.lenRaw,
+          avgHr: existing.avgHr,
+          avgSpo2: existing.avgSpo2,
+          peakAlphaHz: existing.peakAlphaHz,
+          peakAlphaPower: existing.peakAlphaPower,
+          pctInTarget: existing.pctInTarget,
+          avgMovement: existing.avgMovement,
+          guardrailWarnCount: existing.guardrailWarnCount,
+          avgSleepDir: existing.avgSleepDir,
+          signalQualityMean: existing.signalQualityMean,
+          pctQcOk: existing.pctQcOk,
+          markerCount: existing.markerCount,
+          guardrailEngine: existing.guardrailEngine,
+          modelKind: existing.modelKind,
+          modelSha256: existing.modelSha256,
+          feedbackEngine: existing.feedbackEngine,
+          userId: existing.userId,
+          sessionId: existing.sessionId,
+          notesPreview: notes.length > 50 ? notes.substring(0, 50) : notes,
+          fileSize: existing.fileSize,
+          mtime: DateTime.now().millisecondsSinceEpoch,
+          createdAt: existing.createdAt,
+          updatedAt: DateTime.now(),
+        ),
+      );
     }
     debugPrint('[session] updateNotes($id): notes saved ($name)');
     return true;
@@ -300,7 +366,7 @@ class SessionStore {
   /// false when the file was already gone.
   Future<bool> delete(String id) async {
     final storage = await _storage;
-    final name = _museName(id);
+    final name = await _fileNameFor(id);
     final existed = await storage.fileExists(name);
     await storage.deleteFile(name);
     final sqlite = await _sqlite;
@@ -320,7 +386,7 @@ class SessionStore {
     final names = await storage.listFiles();
     var moved = 0;
     for (final name in names) {
-      if (!name.startsWith('session_') || !name.endsWith('.muse.feedback')) {
+      if (!isHistoryContainerName(name)) {
         continue;
       }
       final bytes = await storage.readFile(name);
@@ -336,8 +402,7 @@ class SessionStore {
     // to the new storage key. Mtimes will mismatch once and refresh on the
     // first open of the new folder.
     (await _sqlite).close();
-    debugPrint('[session] moved $moved session(s)');
+    debugPrint('[session] moved $moved file(s)');
     return moved;
   }
-
 }

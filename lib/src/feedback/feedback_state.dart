@@ -27,6 +27,7 @@ import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
+import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/rust/api/device_config.dart';
@@ -620,6 +621,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       debugPrint('[feedback] refusing Start on Crown');
       return;
     }
+    final leased = await _ref
+        .read(monitorControllerProvider.notifier)
+        .acquireFeedbackLease();
+    if (!leased) {
+      debugPrint('[feedback] refusing Start: recording_active');
+      return;
+    }
     // Open the audio device before the calibration clip. On Android this
     // selects the "Reduce audio stutter" AAudio profile (and falls back to
     // low-latency if that HAL path cannot start). Elsewhere the flag is a
@@ -1151,6 +1159,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     } catch (e, st) {
       debugPrint('[feedback] end: scratch v5 assemble failed: $e\n$st');
     }
+    if (!_recorder.isRecording) {
+      await _ref
+          .read(monitorControllerProvider.notifier)
+          .releaseFeedbackLease();
+    }
     _setPhase(
       FeedbackPhase.ended,
       extra: 'scratch=${_recorder.scratchV5Path ?? 'null'}',
@@ -1183,7 +1196,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _musicSeries.clear();
     _musicTracks.clear();
     _audio.stop();
-    _recorder.discardSession();
+    unawaited(discardSession());
     _reward.reset();
     _bus.reset();
     _sessionStartAt = null;
@@ -1220,7 +1233,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// Streams enabled for this session's recording.
   Set<RecordingStream> get recordStreams => _recorder.streams;
 
-  Future<void> discardSession() => _recorder.discardSession();
+  Future<void> discardSession() async {
+    await _recorder.discardSession();
+    await _ref.read(monitorControllerProvider.notifier).releaseFeedbackLease();
+  }
 
   Future<void> deleteScratchV5() => _recorder.deleteScratchV5();
 
@@ -1477,10 +1493,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             state.phase == FeedbackPhase.paused ||
             (state.phase == FeedbackPhase.interrupted &&
                 _interruptKind == FeedbackInterruptKind.badSignal)) {
-          _interruptSession(
-            'Connection lost — reconnecting…',
-            kind: FeedbackInterruptKind.disconnect,
-          );
+          if (!_ref.read(appStateProvider.notifier).allowAutoReconnect) {
+            unawaited(end());
+          } else {
+            _interruptSession(
+              'Connection lost — reconnecting…',
+              kind: FeedbackInterruptKind.disconnect,
+            );
+          }
         }
       default:
         break;
