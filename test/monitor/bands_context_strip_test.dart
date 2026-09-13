@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muse_ml/src/monitor/panes/bands_context_strip.dart';
@@ -9,6 +10,19 @@ void _portrait(WidgetTester tester) {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+}
+
+Future<void> _withPlatform(
+  TargetPlatform platform,
+  Future<void> Function() body,
+) async {
+  final previous = debugDefaultTargetPlatformOverride;
+  debugDefaultTargetPlatformOverride = platform;
+  try {
+    await body();
+  } finally {
+    debugDefaultTargetPlatformOverride = previous;
+  }
 }
 
 void main() {
@@ -81,33 +95,72 @@ void main() {
     expect(find.text('8s'), findsNothing);
   });
 
-  testWidgets('landscape cinema hides strip window dropdown', (tester) async {
-    tester.view.physicalSize = const Size(800, 400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final strip = ViewportController()
-      ..windowSeconds = ViewportController.bandsDefaultWindowSeconds;
-    final epoch = ViewportController()..windowSeconds = 8;
-    addTearDown(strip.dispose);
-    addTearDown(epoch.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: BandsContextStrip(
-            stripViewport: strip,
-            epochViewport: epoch,
-            series: const [],
-            stripNewestElapsed: 40,
-            stripOldestElapsed: 0,
-            highlightStartElapsed: 32,
-            highlightEndElapsed: 40,
-            connected: false,
+  testWidgets('mobile landscape cinema hides strip window dropdown', (
+    tester,
+  ) async {
+    await _withPlatform(TargetPlatform.android, () async {
+      tester.view.physicalSize = const Size(800, 400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final strip = ViewportController()
+        ..windowSeconds = ViewportController.bandsDefaultWindowSeconds;
+      final epoch = ViewportController()..windowSeconds = 8;
+      addTearDown(strip.dispose);
+      addTearDown(epoch.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BandsContextStrip(
+              stripViewport: strip,
+              epochViewport: epoch,
+              series: const [],
+              stripNewestElapsed: 40,
+              stripOldestElapsed: 0,
+              highlightStartElapsed: 32,
+              highlightEndElapsed: 40,
+              connected: false,
+            ),
           ),
         ),
-      ),
-    );
-    expect(find.byType(TimeSeriesPane), findsOneWidget);
-    expect(find.byKey(const ValueKey('bands-context-window')), findsNothing);
+      );
+      expect(find.byType(TimeSeriesPane), findsOneWidget);
+      expect(find.byKey(const ValueKey('bands-context-window')), findsNothing);
+    });
+  });
+
+  testWidgets('desktop landscape keeps strip window dropdown', (tester) async {
+    await _withPlatform(TargetPlatform.linux, () async {
+      tester.view.physicalSize = const Size(1600, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final strip = ViewportController()
+        ..windowSeconds = ViewportController.bandsDefaultWindowSeconds;
+      final epoch = ViewportController()..windowSeconds = 8;
+      addTearDown(strip.dispose);
+      addTearDown(epoch.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BandsContextStrip(
+              stripViewport: strip,
+              epochViewport: epoch,
+              series: const [],
+              stripNewestElapsed: 40,
+              stripOldestElapsed: 0,
+              highlightStartElapsed: 32,
+              highlightEndElapsed: 40,
+              connected: false,
+            ),
+          ),
+        ),
+      );
+      expect(find.byType(TimeSeriesPane), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('bands-context-window')),
+        findsOneWidget,
+      );
+    });
   });
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/monitor/graph_cinema.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/monitor/monitor_state.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
@@ -48,7 +49,7 @@ class GraphShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final cinema = MediaQuery.orientationOf(context) == Orientation.landscape;
+    final cinema = GraphCinema.of(context);
     final format = formatWindow ?? formatWindowSeconds;
     return Semantics(
       label: title.isEmpty ? 'Graph' : title,

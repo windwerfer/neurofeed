@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muse_ml/src/monitor/graph_shell.dart';
@@ -8,6 +9,31 @@ void _portrait(WidgetTester tester) {
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+}
+
+Future<void> _withPlatform(
+  TargetPlatform platform,
+  Future<void> Function() body,
+) async {
+  final previous = debugDefaultTargetPlatformOverride;
+  debugDefaultTargetPlatformOverride = platform;
+  try {
+    await body();
+  } finally {
+    debugDefaultTargetPlatformOverride = previous;
+  }
+}
+
+GraphShell _shell(ViewportController viewport, {required Widget body}) {
+  return GraphShell(
+    title: 'Histogram',
+    viewport: viewport,
+    windowOptions: ViewportController.histogramPsdWindowOptions,
+    onFollow: () {},
+    onInspect: () {},
+    onWindowChanged: (_) {},
+    body: body,
+  );
 }
 
 void main() {
@@ -39,32 +65,60 @@ void main() {
     expect(find.text('pane'), findsOneWidget);
   });
 
-  testWidgets('landscape cinema hides toolbar; pane stays', (tester) async {
-    tester.view.physicalSize = const Size(800, 400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final viewport = ViewportController();
-    addTearDown(viewport.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: GraphShell(
-            title: 'Histogram',
-            viewport: viewport,
-            windowOptions: ViewportController.histogramPsdWindowOptions,
-            onFollow: () {},
-            onInspect: () {},
-            onWindowChanged: (_) {},
-            inspectRangeLabel: '0:00–0:08',
-            body: const SizedBox.expand(child: Text('pane')),
+  testWidgets('mobile landscape cinema hides toolbar; pane stays', (
+    tester,
+  ) async {
+    await _withPlatform(TargetPlatform.android, () async {
+      tester.view.physicalSize = const Size(800, 400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final viewport = ViewportController();
+      addTearDown(viewport.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: GraphShell(
+              title: 'Histogram',
+              viewport: viewport,
+              windowOptions: ViewportController.histogramPsdWindowOptions,
+              onFollow: () {},
+              onInspect: () {},
+              onWindowChanged: (_) {},
+              inspectRangeLabel: '0:00–0:08',
+              body: const SizedBox.expand(child: Text('pane')),
+            ),
           ),
         ),
-      ),
-    );
-    expect(find.text('Follow'), findsNothing);
-    expect(find.text('Inspect'), findsNothing);
-    expect(find.text('pane'), findsOneWidget);
+      );
+      expect(find.text('Follow'), findsNothing);
+      expect(find.text('Inspect'), findsNothing);
+      expect(find.text('pane'), findsOneWidget);
+    });
+  });
+
+  testWidgets('desktop landscape keeps toolbar', (tester) async {
+    await _withPlatform(TargetPlatform.linux, () async {
+      tester.view.physicalSize = const Size(1600, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final viewport = ViewportController();
+      addTearDown(viewport.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: _shell(
+              viewport,
+              body: const SizedBox.expand(child: Text('pane')),
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Follow'), findsOneWidget);
+      expect(find.text('Inspect'), findsOneWidget);
+      expect(find.text('pane'), findsOneWidget);
+    });
   });
 
   testWidgets('spectrogram window labels use min; inspect range shown', (

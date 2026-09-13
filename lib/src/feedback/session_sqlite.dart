@@ -269,12 +269,6 @@ class SessionSqlite {
     _db.execute('DELETE FROM state_markers WHERE session_id = ?', [sessionId]);
   }
 
-  /// Clear all data (for "Clear Cache" button).
-  Future<void> clearAll() async {
-    _db.execute('DELETE FROM state_markers');
-    _db.execute('DELETE FROM sessions');
-  }
-
   void close() => _db.dispose();
 }
 

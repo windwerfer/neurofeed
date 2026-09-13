@@ -7,6 +7,7 @@ export 'device_montage.dart';
 export 'dsp.dart';
 export 'electrode_toggles.dart';
 export 'empty_state.dart';
+export 'graph_cinema.dart';
 export 'graph_shell.dart';
 export 'monitor_controller.dart';
 export 'monitor_providers.dart';

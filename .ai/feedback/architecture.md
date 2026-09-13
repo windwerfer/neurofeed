@@ -119,5 +119,8 @@ Crash recovery (`crash_recovery.dart`) scans `scratchDirectory` for leftover
 scratch v5 and orphan three-temps, assembles via `writeScratchV5`, then
 Save → `publishSession` or Discard → delete.
 
-One assembler: `session_assembler.dart`. Spec archive:
+One assembler: `lib/src/session_v5/assemble.dart` (re-export
+`session_assembler.dart`). Exclusive with Monitor: acquire/release the
+capture lease; leftover `session_*` only in this crash scanner. Spec
+archive:
 [../archive/session-computed-charts.md](../archive/session-computed-charts.md).

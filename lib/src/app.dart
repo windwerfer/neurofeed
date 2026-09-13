@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/agent/agent_server.dart';
 import 'package:muse_ml/src/agent/agent_server_config.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/monitor/graph_cinema.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/monitor/views/recording_save_discard.dart';
 import 'package:muse_ml/src/connect_window.dart';
@@ -99,22 +100,31 @@ class _AppShellState extends ConsumerState<AppShell> {
         body = const SettingsView();
     }
 
-    final cinema =
-        appViewIsGraph(state.currentView) &&
-        MediaQuery.orientationOf(context) == Orientation.landscape;
-
-    return RecordingSaveHost(
-      child: Scaffold(
-        body: SafeArea(
-          child: Column(
-            children: [
-              if (!cinema) const StatusBar(),
-              Expanded(
-                child: _buildContent(context, state, body, cinema: cinema),
+    return GraphCinema(
+      child: Builder(
+        builder: (context) {
+          final cinema =
+              appViewIsGraph(state.currentView) && GraphCinema.of(context);
+          return RecordingSaveHost(
+            child: Scaffold(
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    if (!cinema) const StatusBar(),
+                    Expanded(
+                      child: _buildContent(
+                        context,
+                        state,
+                        body,
+                        cinema: cinema,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }

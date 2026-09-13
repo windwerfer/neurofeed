@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:muse_ml/src/monitor/empty_state.dart';
+import 'package:muse_ml/src/monitor/graph_cinema.dart';
 import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
 
@@ -132,7 +133,7 @@ class _BandsContextStripState extends State<BandsContextStrip> {
 
   @override
   Widget build(BuildContext context) {
-    final cinema = MediaQuery.orientationOf(context) == Orientation.landscape;
+    final cinema = GraphCinema.of(context);
     return Stack(
       children: [
         Positioned.fill(

@@ -1,116 +1,28 @@
-# Feedback Dev Todos
+# Feedback leftovers
+
+Not the monitor series. Do not mix with connect-simulator-ux or
+pipeline-contract Key Decisions.
 
 ## Next
 
-Crown *run*, OSC connect/discovery, Android foreground service, leftover QA
-in this file. Do not mix those with the connect-simulator freeze.
+- Crown *run* (quality vectors, computed frames, charts device-aware).
+- OSC connect / discovery for Crown / Notion.
+- Android foreground service so recording survives app background.
+- EEG artifact flag for jaw-clench / blink EMG (accel gating only catches head motion).
+- Athena raw optical stream — [../TODO/athena-optics-contract.md](../TODO/athena-optics-contract.md).
+- Publish `third_party/edf_export` to git+tag after a device export pass.
 
-Athena **raw optical stream** (not SpO₂/fNIRS product) is queued in
-[../TODO/athena-optics-contract.md](../TODO/athena-optics-contract.md) —
-own branch after connect-simulator-ux, muse-rs **0.2.0** first.
+Historical phase checklists: [../archive/feedback-todos-historical.md](../archive/feedback-todos-historical.md).
 
-## Connect simulator UX (done)
+## On-device QA (still)
 
-Muse | Neurosity | Simulator dropdown. `DeviceKind` is Muse | Neurosity.
-Simulator is Debug-mode catalog (`sim:*`), local 8-ch for Crown/Notion OSC
-rows. Settings: no AI sleep guardrail card; Debug mode last after About.
-
-Spec: [../connect-simulator-ux.md](../connect-simulator-ux.md). Handoff
-archive: [../archive/handoff-connect-simulator-ux.md](../archive/handoff-connect-simulator-ux.md).
-
-## Session charts (done)
-
-Computed 1 Hz is the only summary waveform. Assemble v5 in scratch at session
-end. No 400-bucket `SessionOverview`. `flutter run` verified 2026-09-03.
-
-Spec archive: [../archive/session-computed-charts.md](../archive/session-computed-charts.md).
-
-## Current branch: main (Phase I merged, ready for testing)
-
-- [x] Phase 0: Navigation backbone + state machine + stub views
-- [x] Phase 1: Rust derived metrics (pulse, movement, peak alpha)
-- [x] Phase 2: Recording extension + zstd compression
-- [x] Phase 3: Audio playback (flutter_soloud + AudioService)
-
-## Phase 3.5: Dual-layer reward audio
-- [x] Target-state predicate: relative band power (alpha_rel > theta_rel), AF7/AF8 average
-- [x] Dual-layer engine: background (drone/rain) + bowl reward chime pool (10 players, full-volume start, completion reset)
-- [x] Movement gating: accel score > 0.05 resets hold timer and gates chimes (1 s buffer)
-- [x] Sound selector (Ambient Drone / Drone Loop / Rain) + on-the-fly switch during feedback
-- [x] **Music feedback**: user folder played through a reward-driven low-pass filter (flutter_soloud + `MusicFeedbackController`) — folder picker + cutoff range / invert / shuffle in Settings; `SessionMusic` trace + track list in the dashboard; Opus supported natively (Xiph decoders bundled)
-- [ ] v1.1: EEG artifact flag for jaw-clench/blink EMG (accel gating only catches head motion)
-
-## Phase 4: Full session flow
-- [x] Auto-start after calibration (ready phase removed): all-green at end of baseline → playing immediately
-- [x] Connection check on start — opens connect window if Muse disconnected (calibration + playing)
-- [x] Wire FeedbackRecorder into session lifecycle (start on playing, save on end, discard on reset)
-- [x] End-of-session → session dashboard navigation (auto pushReplacement)
-- [x] Calibration completed event sound (bowl_high confirmation chime)
-- [x] Disconnect during playing/paused → interrupted phase: pause, 10 s grace countdown, auto-resume on reconnect, end only if unrecovered
-- [x] Persistent bad signal (any channel < 40 for 10 s) → interrupted phase; recovers when signal returns to green
-
-## Phase 5: Session dashboard
-- [x] Session reader (`.muse` parsing — now format v4, owned by Rust: `sessionParseBody`; the old Dart `decompressBlock` FFI path was removed in the format-migration commit)
-- [x] Bands/motion/pulse graphs from recorded data
-- [x] Summary charts from v5 computed 1 Hz (`v5ExtractComputed` → `prepareChartDataFromComputed`); zoom-synced: drag-pan, pinch, ctrl/⌘+scroll zoom, double-tap reset
-- [x] Fixed 0–1 y-axis (relative power) + numeric ticks for Bands and Alpha-vs-Theta; auto-scale for movement/HR
-- [x] Clickable legend rows toggle each series on/off
-- [x] Stats: peak alpha, target time %, stillness %, avg BPM, avg alpha_rel
-- [x] Notes text field (persisted in Phase 6 metadata)
-- [x] **Notes editable in the history detail**: corner save chevron (only when dirty) + spinner + brief "saved" flash; `PopScope` "Unsaved notes — Save/Stay/Discard" on Back
-- [x] Save (green, renames temp → session_<ts>.muse) / Discard (gray, deletes temp); saves via crash-safe `writeFileAtomic`
-- [x] Thumbnail generation (RepaintBoundary → PNG next to .muse)
-
-## Phase 6: Feedback history
-- [x] Session metadata persistence (JSON alongside .muse)
-- [x] History list view with thumbnails, dates, stats
-- [x] Tap to re-open dashboard (read-only mode, notes prefilled)
-- [x] **Editable notes persisted back into the saved `.muse.feedback`** — crash-safe rewrite (`SessionStore.updateNotes`; FS tmp+rename, SAF `writeFileAtomic` + `recoverDoc`)
-
-## Phase I (merged to main): Volume, recalibrate, adaptive target, persistence
-- [x] 5-channel volume control (master / background / feedback / intro / end bell) with live apply + reset
-- [x] In-flight recalibrate (refresh icon during playing/paused): re-anchors from last 90 s of clean data, soft low chime; ≥ 60 s + ≥ 30 clean samples guard
-- [x] Adaptive lockout guards: ceiling = baselineMean + 1.5 SD, floor = baseline percentile, zero-success circuit breaker, asymmetric steps
-- [x] Target settings dialog (gear icon): dynamic-target on/off + gentle↔responsive slider + (i) explainer
-- [x] Persistence: volumes, sound, duration, target settings — saved and restored across restarts
-- [x] ATR diagnostics logging (`[atr]` every 10 s, adapt events; `[feedback]` recalibrate events)
-
-## Ready for testing (on-device checklist)
-- [ ] Calibration flow: voice intro → 90 s baseline → auto-start, threshold visible in nerd stats
-- [ ] Reward chimes during feedback; movement (scratch head) gates them
-- [ ] Volume dialog: all 5 sliders audible live; reset button restores defaults
-- [ ] Target settings: dynamic-target off keeps threshold static; slider changes adaptation speed; (i) explains
-- [ ] Recalibrate during playing: chime sounds, threshold + baseline stats update in nerd stats bubble
-- [ ] Restart app: volumes, sound, duration, target settings restored
-- [ ] Watch `[atr]` logs around the 2–4 min mark: threshold must stay ≤ ceiling (mean + 1.5 SD)
-- [ ] Lockout test: if target feels unreachable, threshold should reset via circuit breaker or lower fast (responsive setting)
-- [ ] Mid-session Muse drop (power off / walk away): forwarder watchdog emits Disconnected after ~30 s silence → session pauses with grace countdown, auto-reconnect resumes the stream (watch `[muse] forwarder: newer connection` in logcat)
-- [ ] Staged REVE calibration (drowsiness protocol): artifacts cue (15 s) → eyes-open (30 s) → eyes-closed (45 s); step name + per-step countdown in the calibrating UI; `V_clear` captured during eyes-open, sleep baseline during eyes-closed (`[guardrail]` logs); staged-variant clips heard + calibration id/variant + recipe JSON persisted in metadata; eyes-open stage shows a random challenge prompt (hint above, text big) persisted in phase metadata
-
-## Next (v1.1 backlog)
-- [ ] EEG artifact flag for EMG (jaw clench / blink) into ATR epoch cleaning
-- [x] Percentile selector persistence + defaults per protocol (Phase 8)
-- [x] Optional continuous (EMA) adaptation instead of discrete 30 s jumps (Phase 8)
-- [ ] Multi-protocol presets (alpha/theta targets, band ratios)
-- [x] Calibration audio variants: manifest-driven recipes (`assets/calibrations.json` v2) — each calibration id (`eyes-closed-01`/`eyes-open-01`) carries both a `single` variant (randomized intro clips + silent baseline) and a `staged` 3-part REVE sequence (artifacts / eyes-open / eyes-closed) with per-stage metadata phases; `assets/protocols.json` maps each protocol one-to-one to a calibration id, and `CalibrationManifest.recipeFor` picks the variant by guardrail engine (AI model ready → staged, band math / no guardrail → single). Copy + `metadataDescription` are JSON-only (no Dart fallback, sync test removed); clips stream alongside raw EEG (Option B) so collection gates on the silent windows only
-- [x] In-stage challenge prompts: eyes-open stage shows a randomly chosen `challengeText` (big) with the fixed `challengeTextHint` above (smaller); the chosen challenge is persisted in the phase metadata of the `.feedback` file; picks fresh per calibration run
-- [x] Repro metadata v2: `SessionCalibration` records `calibrationId` + immutable `calibrationJson` snapshot (both variants from `assets/calibrations.json`), baseline stats, per-phase clip timings, and `recalibrations` (every in-flight recalibrate: timestamp + new baseline); `SessionMetadata` records the protocol's `metadataDescription` (from `assets/protocols.json`) and a `sessionSettings` snapshot (dynamic adapt, responsiveness, baseline percentile, guardrail engine/method + warning threshold/sound, music/binaural options, marker toggles). Back-compat parsing deliberately dropped (pre-alpha)
-
-## Phase 8 (cleanup & polish) — COMPLETED
-- [x] Gesture marker log/rendering in history detail (`feedback_dashboard.dart` `gestureWidgets()`)
-- [x] Percentile persistence: `Settings.baselinePercentile` + `SessionSettings.baselinePercentile`
-- [x] Continuous EMA adaptation: `RatioEngine.adaptEma(value)` per clean sample
-- [x] Calibration audio variants & multi-protocol presets (verified working)
-- [x] Extended session export tests: `session_export_test.dart` re-enabled with v5 containers + calibration/gesture assertions
-- [x] Golden round-trip test: `test/session_metadata_roundtrip_test.dart` (SessionMetadata + GestureMarker + SessionCalibration)
-- [x] SQLite metadata cache docs: `README_history_cache.md`
-- [x] Feedback format docs updated: `README_feedback_format.md` (v5 container, metadata, computed 1 Hz, raw)
-- [x] AGENTS.md updated with Phase 8 changes
-- [x] .ai/ docs updated: `active-task.md`, `lessons-learned.md`
-
-## v1.2 meta-block
-- [ ] Neurosity Crown 8-electrode support — channel labels are already metadata-driven; only the default channel-name list needs extending per device.
-- [ ] On-device listening pass for binaural + music modes: reward-swell audibility, guardrail muffle, volume-channel math; tune `BinauralBeatController` voice parameters (carrier/beat mix, swell shape) against the TB336FU speakers.
-- [ ] On-device streaming verification: point real receivers at the phone (LSL Viewer, an OSC sink, BrainFlow recording) and confirm live EEG/bands/IMU/PPG arrive with sane rates; verify port+1/+2 IMU/PPG only appear when `separateGroups` is on.
-- [ ] On-device audio-profile pass: with the TB336FU speakers, toggle "Reduce audio stutter" and check for audible latency (~0.1 s) / dropout differences during music + AI guardrail; confirm the switch applies at the next session start (not mid-session).
-- [ ] On-device export pass: record a short session, export PDF/PNG/CSV/EDF+ to a real folder (and a SAF-picked folder) and open each result on the tablet; verify CSV column layout in a spreadsheet and EDF+ in an EDF reader (EEGlab/EDFbrowser). Push `third_party/edf_export` to user GitHub and switch `rust/Cargo.toml` to a git+tag dep once it proves out.
+- Calibration → auto-start; reward chimes; movement gates them.
+- Five volume sliders live; target settings; in-flight recalibrate.
+- Prefs survive restart. `[atr]` threshold stays ≤ ceiling.
+- Disconnect ~30 s silence → interrupted + grace; reconnect resumes.
+- Staged REVE calibration (artifacts / eyes-open / eyes-closed).
+- Binaural + music + guard muffle on a real speaker.
+- Streaming to a real LSL / OSC / BrainFlow sink.
+- Android **Reduce audio stutter** at the *next* session start.
+- Export PDF/PNG/CSV/EDF+ of a short session to a real folder (and SAF).
+  See [../export.md](../export.md). Fit/pads: [../headset-fit.md](../headset-fit.md).

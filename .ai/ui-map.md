@@ -3,15 +3,20 @@
 Spoken name → on-screen text → code → file. Grep the first two columns when a
 human describes a bug. Frozen connect/pipeline names are mirrored, not renamed.
 
-How to use: pick a surface in the TOC, then match **Spoken name**.
+How to use: pick a surface, then match **Spoken name**.
+
+Surfaces: Status bar · Sidebar · Connect · GraphShell · Raw EEG · Bands ·
+Histogram · PSD · Spectrogram · History · Recording dashboard · Feedback
+list · Session · Settings.
 
 ## Chrome
 
 ### Status bar — `lib/src/status_bar.dart`
 
 Hosted by `AppShell` and `FeedbackSessionView` (`showMenu: false` on session).
-Landscape cinema on graph views hides this bar (and the sidebar + GraphShell
-toolbar); portrait restores. Not Settings / Feedback / Streaming / History.
+On **mobile**, landscape cinema on graph views hides this bar (and the sidebar
++ GraphShell toolbar); portrait restores. Desktop keeps chrome; **F11**
+toggles the same hide. Not Settings / Feedback / Streaming / History.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
@@ -22,7 +27,7 @@ toolbar); portrait restores. Not Settings / Feedback / Streaming / History.
 | Disconnecting | `Disconnecting…` | `disconnecting` | `status_bar.dart` | |
 | Device name | `status.name` (e.g. `Muse 2 (Simulated)`) | `ConnectionStatus.name` | `status_bar.dart` | After connect. |
 | Battery | `{n}%` | `batteryLevel` | `status_bar.dart` | From `bp`, not fuel gauge. |
-| Signal pads | `/ ‾ ‾ \` | `_signalQualityRow` | `status_bar.dart` | Green/amber/red. |
+| Signal pads | `/ ‾ ‾ \` | `_signalQualityRow` | `status_bar.dart` | TP9 AF7 AF8 TP10. Green ≥80, amber ≥40, red <40. [headset-fit.md](headset-fit.md). |
 | Disconnect | tooltip `Disconnect` | `disconnectDevice` | `status_bar.dart` | Icon `link_off`. |
 
 ### Sidebar — `lib/src/app.dart`
@@ -40,6 +45,22 @@ Width `kSidebarWidth` (220). Overlay below 700px; row sibling at ≥ 700.
 | PSD | `PSD` | `AppView.psd` | `app.dart` | Short label. Title `Power Spectral Density`. |
 | Streaming | `Streaming` | `AppView.streaming` | `app.dart` | Trailing `StreamDot`. |
 | Settings | `Settings` | `AppView.settings` | `app.dart` | |
+
+### GraphShell — `lib/src/monitor/graph_shell.dart`
+
+Shared chrome for the five live graph views. Record is global
+(`MonitorController`); Follow/Inspect and window length are per-view.
+
+| Spoken name | On-screen text | Code symbol | File | Notes |
+|---|---|---|---|---|
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Not Live / History. Disabled on saved-recording dashboard. |
+| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Drag/pinch on time-X graphs enters Inspect. |
+| Window length | `10s` / `30s` / … | `windowOptions` | `graph_shell.dart` | Per-view presets. Pinch-X on Bands/Spectrogram → `custom`. |
+| Record | `Record` | `_RecordControls` | `graph_shell.dart` | All five **live** views. Starts `recording_$ts`. |
+| Stop recording | `Stop recording` | `_RecordControls` | `graph_shell.dart` | Assemble + Save/Discard. Elapsed while recording. |
+| Record disabled | tooltip `Stop the feedback session to record` | `_RecordControls` | `graph_shell.dart` | `CaptureKind.feedback` or disconnected. |
+| Landscape cinema | — | `GraphCinema` | `graph_cinema.dart` | Graph views only. **Mobile:** landscape hides status bar, sidebar, GraphShell toolbar; portrait restores. **Desktop:** chrome stays; **F11** toggles the same hide. Not Settings / Feedback / Streaming / History. |
+| Waiting for signal | `Waiting for signal` | `MonitorWaitingSignal` | `empty_state.dart` | Connected, no samples yet. |
 
 ### Connect window — `lib/src/connect_window.dart`
 
@@ -62,26 +83,22 @@ Must exist in every view with a status bar (`AppShell` + session). Frozen:
 
 ### Raw EEG — `lib/src/monitor/views/raw_eeg_view.dart`
 
-GraphShell chrome. Record / Stop recording. No electrode chips
-(each electrode is a pane). No add/remove.
+GraphShell chrome. No electrode chips (each electrode is a pane). No
+add/remove.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Live wipe. Not Live / History. |
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Live green wipe. |
 | Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze + pan. Drag/pinch enters Inspect. |
-| Window length | `2s` `4s` `8s` `10s` | `ViewportController.windowSeconds` | `graph_shell.dart` | Default **10 s** (2560 samples). |
-| Record | `Record` | `_RecordControls` | `graph_shell.dart` | Starts `recording_$ts`. Disabled when feedback or disconnected. |
-| Stop recording | `Stop recording` | `_RecordControls` | `graph_shell.dart` | Assemble + Save/Discard. Elapsed while recording. |
-| Record disabled | tooltip `Stop the feedback session to record` | `_RecordControls` | `graph_shell.dart` | `CaptureKind.feedback` or not connected. Landscape hides toolbar. |
-| Waiting for signal | `Waiting for signal` | `MonitorWaitingSignal` | `empty_state.dart` | Connected, no samples. |
+| Window length | `2s` `4s` `8s` `10s` | `ViewportController.windowSeconds` | `graph_shell.dart` | Default **10 s** (2560 samples). No `custom`. |
 | Electrode name | `TP9` / Crown names | `SweepPane` | `panes/sweep_pane.dart` | In-pane, top-right, gray. Not a chip. |
 | Y scale | `Auto` / `±50 µV` … | `SharedYScale` | `sweep_pane.dart` | Overflow. One scale for the column. |
 
 ### Bands — `lib/src/monitor/views/bands_view.dart`
 
-GraphShell chrome. Record / Stop recording. One strip pane, five
-series (delta / theta / alpha / beta / gamma). Electrode text toggles are
-average membership, not extra graphs.
+GraphShell chrome. One strip pane, five series (delta / theta / alpha /
+beta / gamma). Electrode text toggles are average membership, not extra
+graphs.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
@@ -95,9 +112,10 @@ average membership, not extra graphs.
 
 ### Histogram — `lib/src/monitor/views/histogram_view.dart`
 
-GraphShell chrome. Record / Stop recording. ~70% histogram + ~30% Bands
-context strip (`HistogramPsdSplit` flex 7/3). Mean of selected electrodes
-drives both panes. No time slider. Histogram X is µV (no pinch-`custom`).
+GraphShell chrome. ~70% histogram + ~30% Bands context strip
+(`HistogramPsdSplit` flex 7/3). Mean of selected electrodes drives both
+panes. No time slider. Histogram X is µV (no pinch-`custom`). Recording
+dashboard Histogram is **one pane** (no strip).
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
@@ -108,12 +126,14 @@ drives both panes. No time slider. Histogram X is µV (no pinch-`custom`).
 | Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for histogram **and** strip. Last one stays. |
 | Hairline | `−12 µV   48` | tap on pane | `histogram_pane.dart` | Tap, not drag. |
 | Bands context strip | `30s` / `custom` | `BandsContextStrip` | `panes/bands_context_strip.dart` | Default **30 s**. Pinch-X like Bands. Compact dropdown on the strip, not GraphShell. |
-| Landscape cinema | — | `appViewIsGraph` | `app.dart` / `graph_shell.dart` | Hides status bar, sidebar, toolbar, and strip `30s ▾`. Both panes stay. |
+| Landscape cinema | — | `GraphCinema` | `graph_cinema.dart` | **Mobile** landscape hides chrome + strip `30s ▾` (both panes stay). **Desktop** keeps chrome; **F11** hides the same (including the strip dropdown). |
 
 ### PSD — `lib/src/monitor/views/psd_view.dart`
 
-GraphShell title `Power Spectral Density`. Record / Stop recording. Same
-70/30 split and Bands context strip as Histogram. Welch of last T seconds.
+GraphShell title `Power Spectral Density`. Same 70/30 split and Bands
+context strip as Histogram. Welch of last T seconds. Recording dashboard
+PSD is **one pane** (no strip). FFT 1 s / 256-pt (not the Spectrogram
+window).
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
@@ -128,13 +148,15 @@ GraphShell title `Power Spectral Density`. Record / Stop recording. Same
 
 ### Spectrogram — `lib/src/monitor/views/spectrogram_view.dart`
 
-Keep `AppView.spectrogram`. Record / Stop recording. No Bands strip.
+Keep `AppView.spectrogram`. No Bands strip. STFT is 1 s / 256-pt Hamming.
+No `FFT 1s ▾`.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
 | Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Newest column at right. |
 | Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze; pan / pinch-X. |
 | Window length | `10s` `20s` `30s` `2min` `5min` | `spectrogramWindowOptions` | `graph_shell.dart` | Default **20 s**. Pinch-X → `custom`. Cap 5 min. |
+| Custom window | `custom` | `windowIsPreset` | `graph_shell.dart` | Closed label after pinch-X. |
 | Magnitude | `mag ▾` | dual-thumb RangeSlider | `spectrogram_view.dart` | Color min/max of log power. Not Hz. Not auto-pumping. |
 | Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership. Last one stays. |
 
@@ -150,7 +172,21 @@ Sidebar **History** (`AppView.feedbackHistory`). One sqlite list; no
 | Filter Feedback | `Feedback` | `HistoryKindFilter.feedback` | `feedback_history.dart` | `kind = feedback` → `FeedbackDashboardView`. |
 | Filter Recordings | `Recordings` | `HistoryKindFilter.recordings` | `feedback_history.dart` | `kind = recording` → `RecordingDashboardView`. |
 | Recording row | `Recording • {date}` | `SessionSummary.isRecording` | `feedback_history.dart` | Opens `monitor/views/recording_dashboard.dart`. Follow disabled. |
+| Export | `PDF report` / `PNG thumbnail` / `PNG charts` / `CSV (Mind Monitor)` / `EDF+ raw EEG` | `ExportKind` | `feedback_history.dart` | Feedback sessions only. Recordings: `Export is not available for recordings.` [export.md](export.md). |
 | Folder-change dialog | `Move {s} session(s) and {r} recording(s) into the new folder? Choosing No leaves them in the current folder.` | `folderChangeMoveBody` | `settings_view.dart` | Counts both prefixes. |
+
+### Recording dashboard — `lib/src/monitor/views/recording_dashboard.dart`
+
+History row `kind = recording`. Follow is visible but **disabled**. Inspect
+uses `v5ExtractRaw`. Histogram/PSD have **no** Bands strip.
+
+| Spoken name | On-screen text | Code symbol | File | Notes |
+|---|---|---|---|---|
+| Graph switcher | `Raw EEG` `Bands` `Histogram` `PSD` `Spectrogram` | `RecordingDashGraph` | `recording_dashboard.dart` | SegmentedButton under the shell. |
+| Follow | `Follow` | `followEnabled: false` | `graph_shell.dart` | Shown, disabled. |
+| Magnitude | `mag ▾` | `_magMenu` | `recording_dashboard.dart` | Spectrogram graph only. Same as live. |
+| Hz range | `0–60 Hz` | `PsdHzRange` | `recording_dashboard.dart` | PSD graph. Overflow `0–100 Hz`. |
+| µV range | `±100 µV` | `HistogramUvRange` | `recording_dashboard.dart` | Histogram graph. |
 
 ### Feedback list — `lib/src/views/feedback_list.dart`
 
@@ -172,8 +208,9 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 | Start skip-cal | `Start (skip calibration)` | `startCalibration(skipCalibration: true)` | `feedback_session.dart` | recordOnly. |
 | Crown refused dialog | `Crown sessions are not available yet…` | `crownSessionUnsupportedMessage` | `protocol.dart` | Real and sim Crown. |
 | Recording refused dialog | `Recording in progress` / `Stop the recording before starting a session.` | `_refuseRecordingStart` | `feedback_session.dart` | Actions `Cancel` / `Stop recording`. Start is not auto-continued. |
-| Save recording | `Save recording?` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | `Save` / `Discard`. `barrierDismissible: false`. GraphShell Stop, session-view Stop, in-app disconnect. |
-| Incomplete recording | `Incomplete recording detected` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | Launch crash recovery of leftover `recording_*`. Same widget; title only. |
+| Save recording | `Save recording?` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | Body `Save this recording to History, or discard it.` Actions `Save` / `Discard`. `barrierDismissible: false`. GraphShell Stop, session-view Stop, in-app disconnect. |
+| Incomplete recording | `Incomplete recording detected` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | Launch leftover `recording_*`. Same widget; title only. |
+| Incomplete session | `Incomplete Session Detected` | `_CrashRecoveryDialog` | `feedback/crash_recovery.dart` | Leftover `session_*`. Actions `Discard` / `Save Session`. Not the recording dialog. |
 | Pause / Resume / End | phase controls | `pause` / `resume` / `end` | `feedback_state.dart` | |
 | Feature probe | `Feature probe` | `_FeatureProbeCard` | `feedback_session.dart` | Debug + sim connected only. Master switch + one slider per present feature id. |
 
@@ -184,8 +221,9 @@ Guardrail AI engine, Audio (Android only), About, Debug mode.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Save folder | `Save files to folder` | `setSessionFolder` | `settings_view.dart` | Was `Save feedback to folder`. |
-| Session recording | `Session recording` | `_RecordingCard` | `settings_view.dart` | |
+| Save folder | `Save files to folder` | `setSessionFolder` | `settings_view.dart` | Was `Save feedback to folder`. Moves sessions **and** recordings. |
+| Reset folder | `Reset to default folder` | `_resetFolder` | `settings_view.dart` | Shown when a custom folder is set. |
+| Session recording | `Session recording` | `_RecordingCard` | `settings_view.dart` | Stream toggles. Applies to **tmp, Record, and feedback**. |
 | Gesture markers | `Gesture markers` | `_GesturesCard` | `settings_view.dart` | |
 | Music feedback | `Music feedback` | `_MusicCard` | `settings_view.dart` | Persist cutoff on `onChangeEnd`. |
 | Guardrail AI engine | `Guardrail AI engine` | `AiEngineCard` | `reve_card.dart` | Not “AI sleep guardrail”. |
@@ -208,6 +246,13 @@ Guardrail AI engine, Audio (Android only), About, Debug mode.
 
 ## Agent HTTP (debug)
 
-Not a screen. `kDebugMode && --dart-define=MUSE_AGENT=1`. See
+Not a screen. `kDebugMode && --dart-define=MUSE_AGENT=true`. See
 [testing-guide.md](testing-guide.md) (Linux agent) and
 `.grok/skills/muse-run-linux/SKILL.md`.
+
+| Spoken name | HTTP | Notes |
+|---|---|---|
+| Switch view | `POST /view` | `histogram` / `spectrogram` / `psd` / `feedbackHistory` / … |
+| Record | `POST /record/start` | 412 `disconnected`; 409 `feedback_active`. |
+| Stop recording | `POST /record/stop` | Assembles scratch; does not publish. |
+| Start during Record | `POST /session/start` | 409 `recording_active` (after `not_connected` / `crown_refused`). |

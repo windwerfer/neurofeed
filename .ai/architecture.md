@@ -92,13 +92,30 @@ Raw body is format v4 (f32 payloads, f64 timestamps), framed zstd. Dart
 delegates: `encodeSessionEvent` / `sessionFrameBytes` / `sessionParseBody` /
 `containerEncodeV5` / `v5ParseHead` / `v5ExtractComputed`.
 
-History list: SQLite `session_metadata.db` (typed columns + thumbnail BLOB).
+History list: SQLite `session_metadata.db` (typed columns + thumbnail BLOB,
+`kind` `feedback` \| `recording`). `SessionStore.list()` is sqlite-only.
 At session `end()`, assemble a real v5 into scratch (placeholder WebP);
 dashboard/history `v5ExtractComputed` → `prepareChartDataFromComputed`.
-Save publishes to the history folder. Crash recovery scans
-`scratchDirectory`. No `SessionOverview` / 400-bucket `metadata.summary`.
-The list sparkline is the WebP thumbnail. Assembler:
-`lib/src/feedback/session_assembler.dart`.
+Save publishes to the history folder. Feedback crash recovery scans
+`session_*` in `scratchDirectory`; recordings use a separate scanner.
+No `SessionOverview` / 400-bucket `metadata.summary`. The list preview is
+the WebP thumbnail. Assembler: `lib/src/session_v5/assemble.dart`
+(re-export `feedback/session_assembler.dart`).
+
+## Monitor
+
+Live graphs + connect-time recording under `lib/src/monitor/`. Spec
+[monitor.md](monitor.md). Spectrogram FFT is 1 s / 256-pt; no size chrome.
+
+`MonitorController` is constructed in `main()` from the same
+`ProviderContainer` as `AppStateNotifier`, and hydrates if already connected.
+Exclusive capture lease: `tmp_` on connect (30 min rotate, never published),
+`recording_` on Record, `session_` on feedback. Unified History lists both
+`kind`s. GraphShell: Follow / Inspect; Raw EEG is N stacked sweep panes;
+Bands dB display; Histogram/PSD have a ~30% Bands context strip; Spectrogram
+is a heatmap with `mag ▾` (Y 0–60 Hz). Graph chrome hide (`GraphCinema`):
+**mobile landscape**, or desktop **F11** (same hide). Desktop landscape
+alone does not hide chrome.
 
 ## Audio
 

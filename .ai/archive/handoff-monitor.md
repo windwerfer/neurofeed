@@ -2,44 +2,13 @@
 
 | Field | Value |
 |---|---|
-| Date | 2026-09-12 |
-| Spec | [../monitor.md](../monitor.md) — **frozen Key Decisions. Do not reopen.** Rev **6**. Bands Y is **dB display**. **PR 7 Bands context strip landed.** |
-| Branch | `refactor/monitor` (PR 0 `22cfd38`, PR 1a `2a66eae`, PR 1b `8a0b9f0`, PR 1c `3fb276b`, PR 2 `a9717bb`, PR 3 ASCII `8e45d37`, PR 3 `878cc8a`, PR 4 ASCII `4c968fa`, PR 4 `c3a40f5`, PR 5a `4fc83ec`, PR 5b `d4afac0`, PR 6 `5195eca`, PR 7 **this commit**). |
-| Cadence | **One PR per thread.** This file is the series map. Next is **PR 8** (Spectrogram `FFT 1s ▾` — last in the series). |
+| Date | 2026-09-13 |
+| Status | **Series complete.** Archived. Do not start a new monitor PR from this file. |
+| Spec | [../monitor.md](../monitor.md) — **frozen** rev **6**. Bands Y is **dB display**. **PR 8 cancelled** (2026-09-13): Spectrogram stays 1 s / 256-pt; no `FFT 1s ▾`. |
+| Branch | `refactor/monitor` (PR 0 `22cfd38` … PR 7 `b197709`). |
 | Do not mix | Crown Start, OSC-connect, pipeline-contract Key Decisions, v5 68-byte header / FRB, Android foreground service, Athena optics, growing status-bar pads to 8. |
 
-Read the spec first (`Key Decisions`, **Spectrogram FFT window (PR 8)**). This file is implementer order, current-code pitfalls, and the **PR 8** start. Do not re-design graphs, naming, or the lease. Do not add averaging. After 8, archive this handoff.
-
----
-
-## Close the thread (every PR)
-
-A thread is **not done** until all four are true. Do not ask permission.
-
-1. Code + tests + `flutter analyze lib/src` green.
-2. **Rewrite this handoff** for the next PR in the same change:
-   - Landed table: this PR's **commit hash** (or `this commit` if hashing after) + one-line note
-   - Current-code table
-   - Compact “what shipped” for this PR; full **This thread — PR N+1** brief (target files, do/don't, tests, pitfalls)
-   - **Paste this to start a new thread** is a fenced prompt for PR N+1 only
-   - `.ai/active-task.md` matches (last thread landed, next is N+1)
-3. **Commit** code + this file + `active-task.md` (and ui-map / test-matrix when the spec says). Do not leave the handoff uncommitted. Do not end with “I can commit if you want.”
-4. Reply with the **next-thread prompt in a fenced block** the user can copy into a new chat. Nothing else required from them.
-
-After **PR 8**: archive this file to `.ai/archive/`, update `.ai/architecture.md` / `.ai/README.md`, commit, and reply that the series is complete (no next-thread prompt).
-
----
-
-## Paste this to start a new thread
-
-**PR 8 (this thread). Spectrogram FFT window. Last in the series. Do not add averaging.**
-
-```
-Implement monitor PR 8: Spectrogram FFT window chrome. Spec: .ai/monitor.md (frozen, rev 6) section “Spectrogram FFT window (PR 8)”. Handoff: .ai/TODO/handoff-monitor.md (section “This thread — PR 8”).
-Chrome `FFT 1s ▾` next to `20s` / `mag ▾` with discrete 0.5 s / 1 s / 2 s → 128 / 256 / 512. Default 1 s. Not a free slider. dsp.dart n is already parameterized. Spectrogram only; PSD Welch stays 1 s / 256-pt. Do not add averaging. Do not give Histogram/PSD this control. Do not add a Bands strip to Spectrogram.
-Update .ai/ui-map.md. flutter analyze lib/src.
-This is the last PR in the series. Close the thread: commit; archive .ai/TODO/handoff-monitor.md to .ai/archive/; update .ai/architecture.md and .ai/README.md; rewrite .ai/active-task.md as series complete. Reply that the series is complete — no next-thread prompt.
-```
+PRs **0–7 landed**. **PR 8 was cancelled** — FFT-window chrome is not a normal-user control; default 256-pt Hamming is enough. No averaging. PSD Welch stays 1 s / 256-pt. No next-thread prompt.
 
 ---
 
@@ -59,7 +28,8 @@ This is the last PR in the series. Close the thread: commit; archive .ai/TODO/ha
 | **5a** | `4fc83ec` — Record / Stop / assemble / 409 `recording_active`. |
 | **5b** | `d4afac0` — Crash recovery for `recording_*` + sqlite `kind`. |
 | **6** | `5195eca` — Unified History + All/Feedback/Recordings filter + Save files to folder. |
-| **7** | **this commit** — Bands context strip under Histogram and PSD. |
+| **7** | `b197709` — Bands context strip under Histogram and PSD. |
+| **8** | **cancelled** 2026-09-13 — no Spectrogram `FFT 1s ▾`. Stays `kDefaultFftN = 256`. |
 
 ### PR 7 shipped
 
@@ -86,7 +56,7 @@ This is the last PR in the series. Close the thread: commit; archive .ai/TODO/ha
 | **5b** | Crash recovery + `publish` into `session_metadata.db` (`kind`) | no — landed | 5a |
 | **6** | Unified History list + filter + Save files to folder | no — landed | 5b |
 | **7** | Bands context strip (~30%) under Histogram and PSD | **yes** — landed | 4, 6 |
-| **8** | Spectrogram `FFT 1s ▾` 0.5 / 1 / 2 s (128 / 256 / 512) | no — **this thread** | 4, 7 |
+| **8** | Spectrogram `FFT 1s ▾` 0.5 / 1 / 2 s (128 / 256 / 512) | — | **cancelled** |
 
 Copy changes update `.ai/ui-map.md` in the same PR.
 
@@ -103,7 +73,7 @@ Copy changes update `.ai/ui-map.md` in the same PR.
 | GraphShell | `monitor/graph_shell.dart` | `showRecord: true` on five live views. `followEnabled: false` on recording dashboard. Landscape hides toolbar. |
 | Histogram / PSD | `monitor/views/{histogram,psd}_view.dart` | `HistogramPsdSplit` 7/3 + `BandsContextStrip`. GraphShell `2s/4s/8s` is T. Strip default 30 s. |
 | Bands strip | `monitor/panes/bands_context_strip.dart` | Reuses `TimeSeriesPane`. Highlight overlay is time only. Compact `30s ▾` / `custom`. |
-| Spectrogram | `monitor/views/spectrogram_view.dart` | One pane. `mag ▾`. FFT still 256-pt (`kDefaultFftN`). **PR 8** adds `FFT 1s ▾`. |
+| Spectrogram | `monitor/views/spectrogram_view.dart` | One pane. `mag ▾`. FFT **256-pt** (`kDefaultFftN`). No FFT-window chrome (PR 8 cancelled). |
 | CaptureLease | `monitor/recording/capture_lease.dart` | idle/tmp/recording/feedback. tmp→recording, recording→idle. Feedback refuses recording. |
 | Agent | `agent_commands.dart` | `/record/start\|stop`; `_start` 412 `not_connected` → 409 `crown_refused` → 409 `recording_active`. |
 | Feedback Start | `feedback_session.dart` | `_refuseCrownStart` then `_refuseRecordingStart`. |
@@ -117,66 +87,9 @@ Copy changes update `.ai/ui-map.md` in the same PR.
 
 ---
 
-## This thread — PR 8
+## PR 8 — cancelled (2026-09-13)
 
-**Title:** `Add Spectrogram FFT 1s window control`
-
-No ASCII. Spec: **Spectrogram FFT window (PR 8)**. Then archive this handoff.
-
-When the chrome is implemented, follow **Close the thread** with the **After PR 8** rule (archive + architecture/README; **no** next-thread prompt).
-
-### Do
-
-- Chrome **`FFT 1s ▾`** next to `20s` / `mag ▾`. Discrete **0.5 s / 1 s / 2 s** → **128 / 256 / 512**. Default **1 s**. Not a free slider.
-- Pass that `n` into `stftColumns` / `dsp.dart` (already parameterized). Longer window → finer Hz, more time smear per column.
-- Spectrogram **only**. Live `SpectrogramView`. Recording-dashboard spectrogram already has `mag ▾` — give it the same FFT control if it calls `stftColumns`.
-- Update `.ai/ui-map.md` when chrome copy lands.
-
-### Do not
-
-- Averaging 1/4/8 s (rejected). Hold-finger readout. Hz-range dual-thumb.
-- Change PSD Welch (stays 1 s / 256-pt). Do not add `FFT 1s ▾` to Histogram or PSD.
-- Bands context strip on Spectrogram (X is already time).
-- Fork `dsp.dart` or rewrite Cooley–Tukey. Do not add an FFT package.
-- Crown Start, OSC-connect, v5 header, growing pads to 8.
-- Widget goldens / `integration_test`.
-
-### Target files
-
-```
-lib/src/monitor/views/spectrogram_view.dart
-lib/src/monitor/dsp.dart                  # n already parameterized; mapping helper only if needed
-lib/src/monitor/views/recording_dashboard.dart   # spectrogram graph, same FFT chrome
-.ai/ui-map.md
-.ai/test-matrix.md
-.ai/architecture.md                       # series complete
-.ai/README.md                             # series complete
-.ai/TODO/handoff-monitor.md               # move to .ai/archive/
-.ai/active-task.md
-```
-
-### Tests
-
-- Default `n = 256` (1 s). 0.5 s → 128; 2 s → 512.
-- PSD Welch still `n = 256` / 1 s segments.
-- Hamming + `1/N²` still locked at 256; extend for 128 / 512 if not already.
-- `flutter analyze lib/src` clean
-
-### Verify (PR 8)
-
-```bash
-flutter analyze lib/src
-flutter test test/monitor/dsp_test.dart test/monitor/graph_shell_test.dart
-```
-
-Do **not** run FRB. Do **not** `cargo check --target aarch64-linux-android`.
-
-### PR 8 done when
-
-- Spectrogram chrome `FFT 1s ▾` with 0.5 / 1 / 2 s
-- PSD Welch unchanged; Histogram/PSD strip unchanged
-- `flutter analyze lib/src` clean
-- **Close the series:** archive this handoff to `.ai/archive/`, update architecture + README, rewrite `active-task.md`, **commit**, reply that the series is complete (**no** fenced next-thread prompt)
+No Spectrogram `FFT 1s ▾`. `dsp.dart` stays parameterized (`n` power-of-two) but live and recording-dashboard spectrograms call **`kDefaultFftN = 256`** (1 s). PSD Welch stays 1 s / 256-pt. No averaging. Do not add this control later without a spec amendment.
 
 ---
 
@@ -192,32 +105,15 @@ History list stays `lib/src/views/feedback_history.dart`. Recording dashboard / 
 
 ---
 
-## Pitfalls
+## Pitfalls (as shipped)
 
-- **No averaging.** `FFT 1s ▾` is the FFT-window control instead of averaging.
-- **PSD Welch stays 1 s / 256-pt.** Do not thread Spectrogram `n` into `welch()`.
+- **No averaging.** Rejected; PR 8 FFT-window chrome was the alternative and is also cancelled.
+- **PSD Welch stays 1 s / 256-pt.** Spectrogram uses the same default `n = 256`.
 - **Do not add a Bands strip to Spectrogram.**
 - **Do not fork Bands view.** Histogram/PSD strip already reuses `TimeSeriesPane`.
 - **v1 History list is sqlite-only** (landed PR 6). Do not add a directory backfill of `recording_*` without a row.
 - **`SessionStore` read/delete use sqlite `path`.** Recordings are `recording_$id.muse.feedback`.
 - **No `AppView.recordings`.** Enum stays `feedbackHistory`; on-screen **History**.
 - Agent HTTP: `persist: false`. Crown 409 stays `crown_refused`.
-- `flutter analyze lib/src` after every Dart PR.
-- After this PR, **archive the handoff**. Do not leave a “PR 9” prompt.
-
----
-
-## Docs when a PR lands
-
-Every PR: this handoff + `.ai/active-task.md` + **commit** + fenced next-thread prompt (see **Close the thread**). Plus:
-
-| When | Update |
-|---|---|
-| Any on-screen copy | `.ai/ui-map.md` in that PR |
-| `/record/*` and 409 (PR 5a) | testing-guide + ui-map |
-| History label / Save files to folder (PR 6) | ui-map |
-| Bands strip under Histogram/PSD (PR 7) | ui-map — landed |
-| Spectrogram `FFT 1s ▾` (PR 8) | ui-map |
-| Series complete (after **8**) | `.ai/architecture.md`, `.ai/README.md`; move this handoff to `.ai/archive/` |
 
 Do not edit pipeline-contract or connect-simulator-ux.
