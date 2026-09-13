@@ -22,33 +22,35 @@ class HistogramPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: onTapUv == null
-          ? null
-          : (d) {
-              final size = context.size;
-              if (size == null) return;
-              onTapUv!(
-                HistogramPanePainter.uvForX(
-                  d.localPosition.dx,
-                  size,
-                  halfRange,
-                ),
-              );
-            },
-      child: CustomPaint(
-        painter: HistogramPanePainter(
-          counts: counts,
-          halfRange: halfRange,
-          connected: connected,
-          hairlineUv: hairlineUv,
-          axisColor: theme.colorScheme.onSurfaceVariant,
-          gridColor: theme.colorScheme.outlineVariant,
-          barColor: theme.colorScheme.primary,
-          hairlineColor: theme.colorScheme.onSurface,
+    return RepaintBoundary(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: onTapUv == null
+            ? null
+            : (d) {
+                final size = context.size;
+                if (size == null) return;
+                onTapUv!(
+                  HistogramPanePainter.uvForX(
+                    d.localPosition.dx,
+                    size,
+                    halfRange,
+                  ),
+                );
+              },
+        child: CustomPaint(
+          painter: HistogramPanePainter(
+            counts: counts,
+            halfRange: halfRange,
+            connected: connected,
+            hairlineUv: hairlineUv,
+            axisColor: theme.colorScheme.onSurfaceVariant,
+            gridColor: theme.colorScheme.outlineVariant,
+            barColor: theme.colorScheme.primary,
+            hairlineColor: theme.colorScheme.onSurface,
+          ),
+          child: const SizedBox.expand(),
         ),
-        child: const SizedBox.expand(),
       ),
     );
   }

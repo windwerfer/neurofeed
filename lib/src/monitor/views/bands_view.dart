@@ -33,18 +33,16 @@ class _BandsViewState extends ConsumerState<BandsView> {
   @override
   void initState() {
     super.initState();
-    ref.read(monitorControllerProvider.notifier).bandCache.addListener(_onTick);
-    _viewport.addListener(_onTick);
+    _viewport.addListener(_onViewport);
   }
 
-  void _onTick() {
+  void _onViewport() {
     if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _mon.bandCache.removeListener(_onTick);
-    _viewport.removeListener(_onTick);
+    _viewport.removeListener(_onViewport);
     _viewport.dispose();
     super.dispose();
   }
@@ -127,29 +125,17 @@ class _BandsViewState extends ConsumerState<BandsView> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(monitorControllerProvider);
-    final app = ref.watch(appStateProvider);
+    final connected = ref.watch(
+      appStateProvider.select((s) => s.status.connected),
+    );
     ref.listen(appStateProvider.select((s) => s.status.connected), (
       prev,
       next,
     ) {
       if (next != true) _follow();
     });
-    final connected = app.status.connected;
     final names = state.electrodeNames;
     _syncMontage(names);
-    final cache = _mon.bandCache;
-    final newest = _newestElapsed();
-    final start = _viewport.stripVisibleStart(newestElapsed: newest);
-    final end = _viewport.stripVisibleEnd(newestElapsed: newest);
-    final series = connected
-        ? buildBandSeries(
-            cache: cache,
-            electrodes: _selected,
-            startElapsed: start,
-            endElapsed: end,
-            captureStartedAtMs: state.captureStartedAtMs,
-          )
-        : [for (var i = 0; i < bandNames.length; i++) <BandPoint>[]];
 
     return GraphShell(
       title: 'Bands',
@@ -159,7 +145,7 @@ class _BandsViewState extends ConsumerState<BandsView> {
       onFollow: _follow,
       onInspect: _inspect,
       onWindowChanged: (s) =>
-          _viewport.setStripWindowSeconds(s, newestElapsed: newest),
+          _viewport.setStripWindowSeconds(s, newestElapsed: _newestElapsed()),
       toolbarExtras: ElectrodeToggles(
         names: names,
         selected: _selected,
@@ -175,18 +161,47 @@ class _BandsViewState extends ConsumerState<BandsView> {
             child: GestureDetector(
               onScaleStart: _onScaleStart,
               onScaleUpdate: _onScaleUpdate,
-              child: TimeSeriesPane(
-                series: series,
-                viewport: _viewport,
-                newestElapsed: newest,
-                connected: connected,
-                visibleBands: _visibleBands,
-                drawLegend: false,
+              child: ListenableBuilder(
+                listenable: _mon.bandCache,
+                builder: (context, _) {
+                  final cache = _mon.bandCache;
+                  final newest = _newestElapsed();
+                  final start = _viewport.stripVisibleStart(
+                    newestElapsed: newest,
+                  );
+                  final end = _viewport.stripVisibleEnd(newestElapsed: newest);
+                  final series = connected
+                      ? buildBandSeries(
+                          cache: cache,
+                          electrodes: _selected,
+                          startElapsed: start,
+                          endElapsed: end,
+                          captureStartedAtMs: state.captureStartedAtMs,
+                        )
+                      : [
+                          for (var i = 0; i < bandNames.length; i++)
+                            <BandPoint>[],
+                        ];
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: TimeSeriesPane(
+                          series: series,
+                          viewport: _viewport,
+                          newestElapsed: newest,
+                          connected: connected,
+                          visibleBands: _visibleBands,
+                          drawLegend: false,
+                        ),
+                      ),
+                      if (connected && !cache.hasData)
+                        const Positioned.fill(child: MonitorWaitingSignal()),
+                    ],
+                  );
+                },
               ),
             ),
           ),
-          if (connected && !cache.hasData)
-            const Positioned.fill(child: MonitorWaitingSignal()),
           Positioned(
             right: 8,
             top: TimeSeriesPanePainter.topGutter,

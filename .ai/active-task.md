@@ -5,8 +5,8 @@
 **Now:** graph draw-path perf, PRs **1–7** (PR **8** gated). Plan:
 [archive/handoff-monitor-perf.md](archive/handoff-monitor-perf.md).
 **Next thread:** short prompt pointing at
-[archive/handoff-monitor-perf-5.md](archive/handoff-monitor-perf-5.md)
-(isolate graph paints from shell rebuilds). Sequential local
+[archive/handoff-monitor-perf-6.md](archive/handoff-monitor-perf-6.md)
+(downsample Raw EEG; idle wipe ring). Sequential local
 commits. Do not push, do not new branch.
 
 Monitor product series **complete** (spec [monitor.md](monitor.md)). PRs

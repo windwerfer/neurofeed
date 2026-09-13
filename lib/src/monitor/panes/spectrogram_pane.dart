@@ -159,19 +159,21 @@ class _SpectrogramPaneState extends State<SpectrogramPane> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return CustomPaint(
-      painter: SpectrogramPanePainter(
-        columns: widget.columns,
-        viewport: widget.viewport,
-        newestElapsed: widget.newestElapsed,
-        magMin: widget.magMin,
-        magMax: widget.magMax,
-        connected: widget.connected,
-        heatmap: _heatmap,
-        axisColor: theme.colorScheme.onSurfaceVariant,
-        gridColor: theme.colorScheme.outlineVariant,
+    return RepaintBoundary(
+      child: CustomPaint(
+        painter: SpectrogramPanePainter(
+          columns: widget.columns,
+          viewport: widget.viewport,
+          newestElapsed: widget.newestElapsed,
+          magMin: widget.magMin,
+          magMax: widget.magMax,
+          connected: widget.connected,
+          heatmap: _heatmap,
+          axisColor: theme.colorScheme.onSurfaceVariant,
+          gridColor: theme.colorScheme.outlineVariant,
+        ),
+        child: const SizedBox.expand(),
       ),
-      child: const SizedBox.expand(),
     );
   }
 }

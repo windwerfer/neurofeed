@@ -46,6 +46,7 @@ flutter test \
   test/monitor/band_toggles_test.dart \
   test/monitor/time_series_pane_test.dart \
   test/monitor/bands_context_strip_test.dart \
+  test/monitor/plot_isolation_test.dart \
   test/monitor/overshoot_hold_test.dart \
   test/monitor/recording_metadata_test.dart \
   test/history_filter_test.dart \
@@ -94,7 +95,7 @@ cargo test --lib                  # features / simulator / device_config
 | Streaming OSC/BF | Dart unit | `test/streaming_*.dart` | `flutter test test/streaming_*.dart` | Datagram shape | View untested |
 | Feature probe | Dart unit | `test/feature_override_test.dart` | that file | Latch replace; synthetic TAR/delta baseline | Ear-test is human |
 | Audio playback | — | ids only | — | — | Silence ≠ fail in this container |
-| Live charts | Dart unit | `test/monitor/*` | dsp / panes / graph_shell / strip | FFT 256-pt, strip highlight, window presets | Visual **cannot** without goldens |
+| Live charts | Dart unit | `test/monitor/*` | dsp / panes / graph_shell / strip / plot_isolation | FFT 256-pt, strip highlight, window presets, plot `RepaintBoundary`, GraphShell isolated from plot ticks | Visual **cannot** without goldens |
 | REVE/LUNA | Rust `#[ignore]` | analysis tests | `cargo test --lib -- --ignored` | If `.local/` weights | Never CI |
 | Real BLE Muse | **cannot** | — | phone + testing-guide logcat | Human | |
 | Real Crown OSC | **cannot** | — | — | Start refused | |

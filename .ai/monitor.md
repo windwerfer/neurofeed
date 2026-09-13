@@ -142,7 +142,12 @@ set / window-length still full recompute. The heatmap is a bitmap painted with
 dashboard).
 
 EEG RAM is SweepBuffer only (5 min). SweepBuffer and BandCache coalesce
-`notifyListeners` to vsync; RAM writes stay 256 Hz. Histogram/PSD Inspect does not
+`notifyListeners` to vsync; RAM writes stay 256 Hz. AppShell `select`s
+`currentView` / sidebar / connect-window (pad quality does not rebuild the
+shell). Live graphs `select` connected. Plot panes sit in `RepaintBoundary`.
+Data ticks rebuild the plot through `ListenableBuilder` (Histogram/PSD: sweep
+→ primary, bands → strip) and do not rebuild GraphShell. Hidden graphs stay
+unmounted (`AppShell` `switch`, not `IndexedStack`). Histogram/PSD Inspect does not
 re-Welch / re-bin; Follow is still last T seconds. Inspect past 5 min reads the open
 tmp/recording `.raw` via `FileBackedSource`. After tmp rotate, Inspect is
 the **new** tmp plus whatever is still in RAM.

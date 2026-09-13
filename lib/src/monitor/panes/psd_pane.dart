@@ -25,28 +25,32 @@ class PsdPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: onTapHz == null
-          ? null
-          : (d) {
-              final size = context.size;
-              if (size == null) return;
-              onTapHz!(PsdPanePainter.hzForX(d.localPosition.dx, size, maxHz));
-            },
-      child: CustomPaint(
-        painter: PsdPanePainter(
-          spectrum: spectrum,
-          maxHz: maxHz,
-          connected: connected,
-          peakHz: peakHz,
-          hairlineHz: hairlineHz,
-          axisColor: theme.colorScheme.onSurfaceVariant,
-          gridColor: theme.colorScheme.outlineVariant,
-          lineColor: theme.colorScheme.onSurface,
-          hairlineColor: theme.colorScheme.onSurface,
+    return RepaintBoundary(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: onTapHz == null
+            ? null
+            : (d) {
+                final size = context.size;
+                if (size == null) return;
+                onTapHz!(
+                  PsdPanePainter.hzForX(d.localPosition.dx, size, maxHz),
+                );
+              },
+        child: CustomPaint(
+          painter: PsdPanePainter(
+            spectrum: spectrum,
+            maxHz: maxHz,
+            connected: connected,
+            peakHz: peakHz,
+            hairlineHz: hairlineHz,
+            axisColor: theme.colorScheme.onSurfaceVariant,
+            gridColor: theme.colorScheme.outlineVariant,
+            lineColor: theme.colorScheme.onSurface,
+            hairlineColor: theme.colorScheme.onSurface,
+          ),
+          child: const SizedBox.expand(),
         ),
-        child: const SizedBox.expand(),
       ),
     );
   }

@@ -140,13 +140,15 @@ class _BandsContextStripState extends State<BandsContextStrip> {
           child: GestureDetector(
             onScaleStart: _onScaleStart,
             onScaleUpdate: _onScaleUpdate,
-            child: TimeSeriesPane(
-              series: widget.series,
-              viewport: _strip,
-              newestElapsed: widget.stripNewestElapsed,
-              connected: widget.connected,
-              highlightStartElapsed: widget.highlightStartElapsed,
-              highlightEndElapsed: widget.highlightEndElapsed,
+            child: RepaintBoundary(
+              child: TimeSeriesPane(
+                series: widget.series,
+                viewport: _strip,
+                newestElapsed: widget.stripNewestElapsed,
+                connected: widget.connected,
+                highlightStartElapsed: widget.highlightStartElapsed,
+                highlightEndElapsed: widget.highlightEndElapsed,
+              ),
             ),
           ),
         ),

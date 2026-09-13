@@ -76,10 +76,18 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(appStateProvider);
+    final currentView = ref.watch(
+      appStateProvider.select((s) => s.currentView),
+    );
+    final sidebarOpen = ref.watch(
+      appStateProvider.select((s) => s.sidebarOpen),
+    );
+    final connectWindowOpen = ref.watch(
+      appStateProvider.select((s) => s.connectWindowOpen),
+    );
 
     final Widget body;
-    switch (state.currentView) {
+    switch (currentView) {
       case AppView.feedback:
         body = const FeedbackListView();
       case AppView.feedbackHistory:
@@ -103,8 +111,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     return GraphCinema(
       child: Builder(
         builder: (context) {
-          final cinema =
-              appViewIsGraph(state.currentView) && GraphCinema.of(context);
+          final cinema = appViewIsGraph(currentView) && GraphCinema.of(context);
           return RecordingSaveHost(
             child: Scaffold(
               body: SafeArea(
@@ -114,8 +121,10 @@ class _AppShellState extends ConsumerState<AppShell> {
                     Expanded(
                       child: _buildContent(
                         context,
-                        state,
-                        body,
+                        currentView: currentView,
+                        sidebarOpen: sidebarOpen,
+                        connectWindowOpen: connectWindowOpen,
+                        body: body,
                         cinema: cinema,
                       ),
                     ),
@@ -131,7 +140,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   /// Sidebar: full-height rail shown either as a squishing Row sibling (wide
   /// screens) or as an overlay above the body (narrow screens).
-  Widget _buildSidebar(BuildContext context, AppUiState state) {
+  Widget _buildSidebar(BuildContext context, AppView currentView) {
     return Container(
       width: kSidebarWidth,
       decoration: BoxDecoration(
@@ -144,48 +153,48 @@ class _AppShellState extends ConsumerState<AppShell> {
         children: [
           _SideBarItem(
             label: 'Feedback',
-            selected: state.currentView == AppView.feedback,
+            selected: currentView == AppView.feedback,
             onTap: () => _selectView(AppView.feedback),
           ),
           _SideBarItem(
             label: 'History',
-            selected: state.currentView == AppView.feedbackHistory,
+            selected: currentView == AppView.feedbackHistory,
             onTap: () => _selectView(AppView.feedbackHistory),
           ),
           _SideBarItem(
             label: 'Bands',
-            selected: state.currentView == AppView.bands,
+            selected: currentView == AppView.bands,
             onTap: () => _selectView(AppView.bands),
           ),
           _SideBarItem(
             label: 'Raw EEG',
-            selected: state.currentView == AppView.rawEeg,
+            selected: currentView == AppView.rawEeg,
             onTap: () => _selectView(AppView.rawEeg),
           ),
           _SideBarItem(
             label: 'Histogram',
-            selected: state.currentView == AppView.histogram,
+            selected: currentView == AppView.histogram,
             onTap: () => _selectView(AppView.histogram),
           ),
           _SideBarItem(
             label: 'Spectrogram',
-            selected: state.currentView == AppView.spectrogram,
+            selected: currentView == AppView.spectrogram,
             onTap: () => _selectView(AppView.spectrogram),
           ),
           _SideBarItem(
             label: 'PSD',
-            selected: state.currentView == AppView.psd,
+            selected: currentView == AppView.psd,
             onTap: () => _selectView(AppView.psd),
           ),
           _SideBarItem(
             label: 'Streaming',
-            selected: state.currentView == AppView.streaming,
+            selected: currentView == AppView.streaming,
             trailing: const StreamDot(),
             onTap: () => _selectView(AppView.streaming),
           ),
           _SideBarItem(
             label: 'Settings',
-            selected: state.currentView == AppView.settings,
+            selected: currentView == AppView.settings,
             onTap: () => _selectView(AppView.settings),
           ),
         ],
@@ -198,21 +207,23 @@ class _AppShellState extends ConsumerState<AppShell> {
   /// menu is open; on narrow screens the sidebar overlays the full-size body
   /// behind a dim, tap-away scrim.
   Widget _buildContent(
-    BuildContext context,
-    AppUiState state,
-    Widget body, {
+    BuildContext context, {
+    required AppView currentView,
+    required bool sidebarOpen,
+    required bool connectWindowOpen,
+    required Widget body,
     required bool cinema,
   }) {
     final isWide = MediaQuery.sizeOf(context).width >= 700;
-    final connectOverlay = state.connectWindowOpen
+    final connectOverlay = connectWindowOpen
         ? const ConnectOverlay()
         : const SizedBox.shrink();
-    final showSidebar = !cinema && state.sidebarOpen;
+    final showSidebar = !cinema && sidebarOpen;
 
     if (isWide) {
       return Row(
         children: [
-          if (showSidebar) _buildSidebar(context, state),
+          if (showSidebar) _buildSidebar(context, currentView),
           Expanded(child: Stack(children: [body, connectOverlay])),
         ],
       );
@@ -238,7 +249,7 @@ class _AppShellState extends ConsumerState<AppShell> {
             top: 0,
             bottom: 0,
             width: kSidebarWidth,
-            child: _buildSidebar(context, state),
+            child: _buildSidebar(context, currentView),
           ),
       ],
     );

@@ -34,6 +34,8 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
   HistogramUvRange _uv = HistogramUvRange.uv100;
   double? _hairlineUv;
   final HistogramTick _tick = HistogramTick();
+  final ValueNotifier<int> _primaryTick = ValueNotifier(0);
+  final ValueNotifier<int> _stripTick = ValueNotifier(0);
 
   @override
   void initState() {
@@ -48,6 +50,10 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
     _recomputeSeries();
   }
 
+  void _pingPrimary() => _primaryTick.value++;
+
+  void _pingStrip() => _stripTick.value++;
+
   void _onSweep() {
     if (!mounted) return;
     final newest = _newestElapsed();
@@ -60,7 +66,7 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
       newestElapsed: _mon.ramNewestElapsed ?? newest,
       halfRange: _halfRange,
     )) {
-      setState(() {});
+      _pingPrimary();
     }
   }
 
@@ -73,13 +79,13 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
   void _onBands() {
     if (!mounted) return;
     _recomputeSeries();
-    setState(() {});
+    _pingStrip();
   }
 
   void _onStrip() {
     if (!mounted) return;
     _recomputeSeries();
-    setState(() {});
+    _pingStrip();
   }
 
   @override
@@ -88,6 +94,8 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
     _mon.bandCache.removeListener(_onBands);
     _viewport.removeListener(_onEpoch);
     _strip.removeListener(_onStrip);
+    _primaryTick.dispose();
+    _stripTick.dispose();
     _viewport.dispose();
     _strip.dispose();
     super.dispose();
@@ -222,14 +230,15 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(monitorControllerProvider);
-    final app = ref.watch(appStateProvider);
+    final connected = ref.watch(
+      appStateProvider.select((s) => s.status.connected),
+    );
     ref.listen(appStateProvider.select((s) => s.status.connected), (
       prev,
       next,
     ) {
       if (next != true) _follow();
     });
-    final connected = app.status.connected;
     final names = state.electrodeNames;
     final prevSelected = Set<int>.of(_selected);
     _syncMontage(names);
@@ -245,9 +254,6 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
     final inspectLabel = _viewport.mode == ViewportMode.inspect
         ? '${formatElapsed(start)}–${formatElapsed(end)}'
         : null;
-    final bandNewest = _bandNewest();
-    final bandOldest = _bandOldest();
-    final series = connected ? _tick.series : emptyBandSeries();
 
     return GraphShell(
       title: 'Histogram',
@@ -271,31 +277,51 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
         },
       ),
       body: HistogramPsdSplit(
-        primary: Stack(
-          children: [
-            Positioned.fill(
-              child: HistogramPane(
-                counts: _tick.counts,
-                halfRange: _halfRange,
-                connected: connected,
-                hairlineUv: _hairlineUv,
-                onTapUv: (uv) => setState(() => _hairlineUv = uv),
-              ),
-            ),
-            if (connected && !buffer.hasData)
-              const Positioned.fill(child: MonitorWaitingSignal()),
-          ],
+        primary: ListenableBuilder(
+          listenable: _primaryTick,
+          builder: (context, _) {
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: HistogramPane(
+                    counts: _tick.counts,
+                    halfRange: _halfRange,
+                    connected: connected,
+                    hairlineUv: _hairlineUv,
+                    onTapUv: (uv) {
+                      _hairlineUv = uv;
+                      _pingPrimary();
+                    },
+                  ),
+                ),
+                if (connected && !buffer.hasData)
+                  const Positioned.fill(child: MonitorWaitingSignal()),
+              ],
+            );
+          },
         ),
-        strip: BandsContextStrip(
-          stripViewport: _strip,
-          epochViewport: _viewport,
-          series: series,
-          stripNewestElapsed: bandNewest,
-          stripOldestElapsed: bandOldest,
-          highlightStartElapsed: start,
-          highlightEndElapsed: end,
-          connected: connected,
-          waiting: connected && !_mon.bandCache.hasData,
+        strip: ListenableBuilder(
+          listenable: _stripTick,
+          builder: (context, _) {
+            final bandNewest = _bandNewest();
+            final bandOldest = _bandOldest();
+            final newest = _newestElapsed();
+            return BandsContextStrip(
+              stripViewport: _strip,
+              epochViewport: _viewport,
+              series: connected ? _tick.series : emptyBandSeries(),
+              stripNewestElapsed: bandNewest,
+              stripOldestElapsed: bandOldest,
+              highlightStartElapsed: _viewport.stripVisibleStart(
+                newestElapsed: newest,
+              ),
+              highlightEndElapsed: _viewport.stripVisibleEnd(
+                newestElapsed: newest,
+              ),
+              connected: connected,
+              waiting: connected && !_mon.bandCache.hasData,
+            );
+          },
         ),
       ),
     );

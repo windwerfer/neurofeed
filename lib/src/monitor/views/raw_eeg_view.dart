@@ -35,20 +35,18 @@ class _RawEegViewState extends ConsumerState<RawEegView> {
     final buf = ref.read(monitorControllerProvider.notifier).sweepBuffer;
     buf.setDisplayWindow(_viewport.windowSamples);
     if (buf.frozen) buf.resume();
-    buf.addListener(_onTick);
-    _viewport.addListener(_onTick);
-    _yScale.addListener(_onTick);
+    _viewport.addListener(_onChrome);
+    _yScale.addListener(_onChrome);
   }
 
-  void _onTick() {
+  void _onChrome() {
     if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _mon.sweepBuffer.removeListener(_onTick);
-    _viewport.removeListener(_onTick);
-    _yScale.removeListener(_onTick);
+    _viewport.removeListener(_onChrome);
+    _yScale.removeListener(_onChrome);
     _viewport.dispose();
     _yScale.dispose();
     super.dispose();
@@ -199,14 +197,15 @@ class _RawEegViewState extends ConsumerState<RawEegView> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(monitorControllerProvider);
-    final app = ref.watch(appStateProvider);
+    final connected = ref.watch(
+      appStateProvider.select((s) => s.status.connected),
+    );
     ref.listen(appStateProvider.select((s) => s.status.connected), (
       prev,
       next,
     ) {
       if (next != true) _follow();
     });
-    final connected = app.status.connected;
     final names = state.electrodeNames;
     final mon = _mon;
     final buffer = mon.sweepBuffer;
@@ -214,9 +213,6 @@ class _RawEegViewState extends ConsumerState<RawEegView> {
     final trace = theme.colorScheme.onSurface.withValues(alpha: 0.65);
     final wipe = theme.colorScheme.onSurface;
 
-    _syncAutoY(buffer);
-    final file = _fileData(state);
-    final newest = mon.ramNewestElapsed;
     return GraphShell(
       title: 'Raw EEG',
       showRecord: true,
@@ -239,47 +235,56 @@ class _RawEegViewState extends ConsumerState<RawEegView> {
         child: GestureDetector(
           onScaleStart: _onScaleStart,
           onScaleUpdate: _onScaleUpdate,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    const minH = 160.0;
-                    final n = names.length;
-                    Widget pane(int i) => SweepPane(
-                      electrode: i,
-                      label: names[i],
-                      buffer: buffer,
-                      viewport: _viewport,
-                      yScale: _yScale,
-                      showXAxis: i == n - 1,
-                      traceColor: trace,
-                      wipeColor: wipe,
-                      fileSamples: _channelFromFile(file, i),
-                      newestElapsed: newest,
-                      captureStartedAtMs: state.captureStartedAtMs,
-                    );
-                    if (n * minH >= constraints.maxHeight) {
-                      return SingleChildScrollView(
-                        child: Column(
+          child: ListenableBuilder(
+            listenable: buffer,
+            builder: (context, _) {
+              _syncAutoY(buffer);
+              final file = _fileData(state);
+              final newest = mon.ramNewestElapsed;
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        const minH = 160.0;
+                        final n = names.length;
+                        Widget pane(int i) => SweepPane(
+                          electrode: i,
+                          label: names[i],
+                          buffer: buffer,
+                          viewport: _viewport,
+                          yScale: _yScale,
+                          showXAxis: i == n - 1,
+                          traceColor: trace,
+                          wipeColor: wipe,
+                          fileSamples: _channelFromFile(file, i),
+                          newestElapsed: newest,
+                          captureStartedAtMs: state.captureStartedAtMs,
+                        );
+                        if (n * minH >= constraints.maxHeight) {
+                          return SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                for (var i = 0; i < n; i++)
+                                  SizedBox(height: minH, child: pane(i)),
+                              ],
+                            ),
+                          );
+                        }
+                        return Column(
                           children: [
                             for (var i = 0; i < n; i++)
-                              SizedBox(height: minH, child: pane(i)),
+                              Expanded(child: pane(i)),
                           ],
-                        ),
-                      );
-                    }
-                    return Column(
-                      children: [
-                        for (var i = 0; i < n; i++) Expanded(child: pane(i)),
-                      ],
-                    );
-                  },
-                ),
-              ),
-              if (connected && !buffer.hasData)
-                const Positioned.fill(child: MonitorWaitingSignal()),
-            ],
+                        );
+                      },
+                    ),
+                  ),
+                  if (connected && !buffer.hasData)
+                    const Positioned.fill(child: MonitorWaitingSignal()),
+                ],
+              );
+            },
           ),
         ),
       ),

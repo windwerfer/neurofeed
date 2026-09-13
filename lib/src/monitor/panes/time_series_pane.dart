@@ -191,22 +191,24 @@ class _TimeSeriesPaneState extends State<TimeSeriesPane>
     final theme = Theme.of(context);
     final wallNow = DateTime.now().millisecondsSinceEpoch / 1000.0;
     _easeY(wallNow);
-    return CustomPaint(
-      painter: TimeSeriesPanePainter(
-        series: widget.series,
-        viewport: widget.viewport,
-        newestElapsed: widget.newestElapsed,
-        wallNow: wallNow,
-        yMin: _yMin,
-        yMax: _yMax,
-        axisColor: theme.colorScheme.onSurfaceVariant,
-        gridColor: theme.colorScheme.outlineVariant,
-        connected: widget.connected,
-        highlightStartElapsed: widget.highlightStartElapsed,
-        highlightEndElapsed: widget.highlightEndElapsed,
-        highlightColor: widget.highlightColor ?? theme.colorScheme.primary,
-        visibleBands: widget.visibleBands,
-        drawLegend: widget.drawLegend,
+    return RepaintBoundary(
+      child: CustomPaint(
+        painter: TimeSeriesPanePainter(
+          series: widget.series,
+          viewport: widget.viewport,
+          newestElapsed: widget.newestElapsed,
+          wallNow: wallNow,
+          yMin: _yMin,
+          yMax: _yMax,
+          axisColor: theme.colorScheme.onSurfaceVariant,
+          gridColor: theme.colorScheme.outlineVariant,
+          connected: widget.connected,
+          highlightStartElapsed: widget.highlightStartElapsed,
+          highlightEndElapsed: widget.highlightEndElapsed,
+          highlightColor: widget.highlightColor ?? theme.colorScheme.primary,
+          visibleBands: widget.visibleBands,
+          drawLegend: widget.drawLegend,
+        ),
       ),
     );
   }

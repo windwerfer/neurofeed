@@ -90,6 +90,13 @@ void main() {
       ),
     );
     expect(find.byType(TimeSeriesPane), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(BandsContextStrip),
+        matching: find.byType(RepaintBoundary),
+      ),
+      findsWidgets,
+    );
     expect(find.byKey(const ValueKey('bands-context-window')), findsOneWidget);
     expect(find.text('30s'), findsOneWidget);
     expect(find.text('8s'), findsNothing);

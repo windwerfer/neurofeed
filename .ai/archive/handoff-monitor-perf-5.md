@@ -5,7 +5,7 @@
 | Date | 2026-09-13 |
 | Branch | `refactor/monitor` (do not push, do not create a branch) |
 | Status | **Start PR 5.** Plan is already on disk. Do not re-plan. |
-| Parent | `1ff3a9b` — paint spectrogram from a bitmap |
+| Parent | `dd6d58b` — paint spectrogram from a bitmap |
 | Series law | [handoff-monitor-perf.md](handoff-monitor-perf.md) |
 | Product spec | [../monitor.md](../monitor.md) |
 
@@ -15,7 +15,7 @@
 Continue monitor graph perf on `refactor/monitor`. Do not push, do not
 create a branch, do not open a GitHub PR. Implement ONLY PR5. Plan is
 on disk — do not re-plan. Read `.ai/archive/handoff-monitor-perf-5.md`
-and follow it. Parent is `1ff3a9b`.
+and follow it. Parent is `dd6d58b`.
 ```
 
 ---
@@ -61,7 +61,7 @@ Do not edit GraphShell Record/Follow **look**. Do not keep hidden graphs alive.
 
 ## What PR4 landed
 
-Commit `1ff3a9b` — `perf(monitor): paint spectrogram from a bitmap`
+Commit `dd6d58b` — `perf(monitor): paint spectrogram from a bitmap`
 
 - `SpectrogramPane` is a `StatefulWidget`. On columns / mag / connected
   change it writes BGRA (`rasterizeSpectrogramBgra`), height = bins with

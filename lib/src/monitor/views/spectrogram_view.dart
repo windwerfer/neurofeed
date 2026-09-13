@@ -35,6 +35,7 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
   bool _magLocked = false;
   int _lastHop = -1;
   final StftRing _ring = StftRing();
+  final ValueNotifier<int> _plotTick = ValueNotifier(0);
 
   @override
   void initState() {
@@ -43,12 +44,14 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
         .read(monitorControllerProvider.notifier)
         .sweepBuffer
         .addListener(_onBuffer);
-    _viewport.addListener(_onTick);
+    _viewport.addListener(_onViewport);
   }
 
-  void _onTick() {
+  void _onViewport() {
     if (mounted) setState(() {});
   }
+
+  void _pingPlot() => _plotTick.value++;
 
   void _onBuffer() {
     if (!mounted) return;
@@ -56,13 +59,14 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
     final hop = _mon.sweepBuffer.sampleCount ~/ kStftHopSamples;
     if (hop == _lastHop) return;
     _lastHop = hop;
-    setState(() {});
+    _pingPlot();
   }
 
   @override
   void dispose() {
     _mon.sweepBuffer.removeListener(_onBuffer);
-    _viewport.removeListener(_onTick);
+    _viewport.removeListener(_onViewport);
+    _plotTick.dispose();
     _viewport.dispose();
     super.dispose();
   }
@@ -224,40 +228,17 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(monitorControllerProvider);
-    final app = ref.watch(appStateProvider);
+    final connected = ref.watch(
+      appStateProvider.select((s) => s.status.connected),
+    );
     ref.listen(appStateProvider.select((s) => s.status.connected), (
       prev,
       next,
     ) {
       if (next != true) _follow();
     });
-    final connected = app.status.connected;
     final names = state.electrodeNames;
     _syncMontage(names);
-    final buffer = _mon.sweepBuffer;
-    final newest = _newestElapsed();
-    final start = _viewport.stripVisibleStart(newestElapsed: newest);
-    final end = _viewport.stripVisibleEnd(newestElapsed: newest);
-    final columns = connected && buffer.hasData
-        ? _stft(start, end)
-        : const <StftColumn>[];
-    var magMin = _magMin;
-    var magMax = _magMax;
-    if (!_magLocked) {
-      final m = _magFrom(columns);
-      if (m != null) {
-        magMin = m.$1;
-        magMax = m.$2;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || _magLocked) return;
-          setState(() {
-            _magMin = magMin;
-            _magMax = magMax;
-            _magLocked = true;
-          });
-        });
-      }
-    }
 
     return GraphShell(
       title: 'Spectrogram',
@@ -268,7 +249,7 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
       onFollow: _follow,
       onInspect: _inspect,
       onWindowChanged: (s) =>
-          _viewport.setStripWindowSeconds(s, newestElapsed: newest),
+          _viewport.setStripWindowSeconds(s, newestElapsed: _newestElapsed()),
       toolbarMiddle: _magMenu(context),
       toolbarExtras: ElectrodeToggles(
         names: names,
@@ -282,21 +263,49 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
       body: GestureDetector(
         onScaleStart: _onScaleStart,
         onScaleUpdate: _onScaleUpdate,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: SpectrogramPane(
-                columns: columns,
-                viewport: _viewport,
-                newestElapsed: newest,
-                magMin: magMin,
-                magMax: magMax,
-                connected: connected,
-              ),
-            ),
-            if (connected && !buffer.hasData)
-              const Positioned.fill(child: MonitorWaitingSignal()),
-          ],
+        child: ListenableBuilder(
+          listenable: _plotTick,
+          builder: (context, _) {
+            final buffer = _mon.sweepBuffer;
+            final newest = _newestElapsed();
+            final start = _viewport.stripVisibleStart(newestElapsed: newest);
+            final end = _viewport.stripVisibleEnd(newestElapsed: newest);
+            final columns = connected && buffer.hasData
+                ? _stft(start, end)
+                : const <StftColumn>[];
+            var magMin = _magMin;
+            var magMax = _magMax;
+            if (!_magLocked) {
+              final m = _magFrom(columns);
+              if (m != null) {
+                magMin = m.$1;
+                magMax = m.$2;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted || _magLocked) return;
+                  _magMin = magMin;
+                  _magMax = magMax;
+                  _magLocked = true;
+                  _pingPlot();
+                });
+              }
+            }
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: SpectrogramPane(
+                    columns: columns,
+                    viewport: _viewport,
+                    newestElapsed: newest,
+                    magMin: magMin,
+                    magMax: magMax,
+                    connected: connected,
+                  ),
+                ),
+                if (connected && !buffer.hasData)
+                  const Positioned.fill(child: MonitorWaitingSignal()),
+              ],
+            );
+          },
         ),
       ),
     );

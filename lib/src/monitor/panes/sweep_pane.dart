@@ -66,44 +66,46 @@ class SweepPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final axisColor = theme.colorScheme.onSurfaceVariant;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: CustomPaint(
-                painter: SweepPanePainter(
-                  electrode: electrode,
-                  buffer: buffer,
-                  viewport: viewport,
-                  yScale: yScale,
-                  showXAxis: showXAxis,
-                  traceColor: traceColor,
-                  wipeColor: wipeColor,
-                  axisColor: axisColor,
-                  gridColor: theme.colorScheme.outlineVariant,
-                  fileSamples: fileSamples,
-                  newestElapsed: newestElapsed,
-                  captureStartedAtMs: captureStartedAtMs,
-                  generation: buffer.generation,
+    return RepaintBoundary(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: SweepPanePainter(
+                    electrode: electrode,
+                    buffer: buffer,
+                    viewport: viewport,
+                    yScale: yScale,
+                    showXAxis: showXAxis,
+                    traceColor: traceColor,
+                    wipeColor: wipeColor,
+                    axisColor: axisColor,
+                    gridColor: theme.colorScheme.outlineVariant,
+                    fileSamples: fileSamples,
+                    newestElapsed: newestElapsed,
+                    captureStartedAtMs: captureStartedAtMs,
+                    generation: buffer.generation,
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              top: 6,
-              right: SweepPanePainter.yGutter + 8,
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: traceColor,
-                  fontSize: 11,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+              Positioned(
+                top: 6,
+                right: SweepPanePainter.yGutter + 8,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: traceColor,
+                    fontSize: 11,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
               ),
-            ),
-          ],
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 }

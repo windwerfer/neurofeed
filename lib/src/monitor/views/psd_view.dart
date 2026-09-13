@@ -34,6 +34,8 @@ class _PsdViewState extends ConsumerState<PsdView> {
   PsdHzRange _hz = PsdHzRange.hz60;
   double? _hairlineHz;
   final PsdTick _tick = PsdTick();
+  final ValueNotifier<int> _primaryTick = ValueNotifier(0);
+  final ValueNotifier<int> _stripTick = ValueNotifier(0);
 
   @override
   void initState() {
@@ -48,6 +50,10 @@ class _PsdViewState extends ConsumerState<PsdView> {
     _recomputeSeries();
   }
 
+  void _pingPrimary() => _primaryTick.value++;
+
+  void _pingStrip() => _stripTick.value++;
+
   void _onSweep() {
     if (!mounted) return;
     final newest = _newestElapsed();
@@ -59,7 +65,7 @@ class _PsdViewState extends ConsumerState<PsdView> {
       endElapsed: _viewport.stripVisibleEnd(newestElapsed: newest),
       newestElapsed: _mon.ramNewestElapsed ?? newest,
     )) {
-      setState(() {});
+      _pingPrimary();
     }
   }
 
@@ -72,13 +78,13 @@ class _PsdViewState extends ConsumerState<PsdView> {
   void _onBands() {
     if (!mounted) return;
     _recomputeSeries();
-    setState(() {});
+    _pingStrip();
   }
 
   void _onStrip() {
     if (!mounted) return;
     _recomputeSeries();
-    setState(() {});
+    _pingStrip();
   }
 
   @override
@@ -87,6 +93,8 @@ class _PsdViewState extends ConsumerState<PsdView> {
     _mon.bandCache.removeListener(_onBands);
     _viewport.removeListener(_onEpoch);
     _strip.removeListener(_onStrip);
+    _primaryTick.dispose();
+    _stripTick.dispose();
     _viewport.dispose();
     _strip.dispose();
     super.dispose();
@@ -207,14 +215,15 @@ class _PsdViewState extends ConsumerState<PsdView> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(monitorControllerProvider);
-    final app = ref.watch(appStateProvider);
+    final connected = ref.watch(
+      appStateProvider.select((s) => s.status.connected),
+    );
     ref.listen(appStateProvider.select((s) => s.status.connected), (
       prev,
       next,
     ) {
       if (next != true) _follow();
     });
-    final connected = app.status.connected;
     final names = state.electrodeNames;
     final prevSelected = Set<int>.of(_selected);
     _syncMontage(names);
@@ -230,9 +239,6 @@ class _PsdViewState extends ConsumerState<PsdView> {
     final inspectLabel = _viewport.mode == ViewportMode.inspect
         ? '${formatElapsed(start)}–${formatElapsed(end)}'
         : null;
-    final bandNewest = _bandNewest();
-    final bandOldest = _bandOldest();
-    final series = connected ? _tick.series : emptyBandSeries();
 
     return GraphShell(
       title: 'Power Spectral Density',
@@ -256,32 +262,52 @@ class _PsdViewState extends ConsumerState<PsdView> {
         },
       ),
       body: HistogramPsdSplit(
-        primary: Stack(
-          children: [
-            Positioned.fill(
-              child: PsdPane(
-                spectrum: connected ? _tick.spectrum : null,
-                maxHz: _maxHz,
-                connected: connected,
-                peakHz: connected ? _tick.peak : null,
-                hairlineHz: _hairlineHz,
-                onTapHz: (hz) => setState(() => _hairlineHz = hz),
-              ),
-            ),
-            if (connected && !buffer.hasData)
-              const Positioned.fill(child: MonitorWaitingSignal()),
-          ],
+        primary: ListenableBuilder(
+          listenable: _primaryTick,
+          builder: (context, _) {
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: PsdPane(
+                    spectrum: connected ? _tick.spectrum : null,
+                    maxHz: _maxHz,
+                    connected: connected,
+                    peakHz: connected ? _tick.peak : null,
+                    hairlineHz: _hairlineHz,
+                    onTapHz: (hz) {
+                      _hairlineHz = hz;
+                      _pingPrimary();
+                    },
+                  ),
+                ),
+                if (connected && !buffer.hasData)
+                  const Positioned.fill(child: MonitorWaitingSignal()),
+              ],
+            );
+          },
         ),
-        strip: BandsContextStrip(
-          stripViewport: _strip,
-          epochViewport: _viewport,
-          series: series,
-          stripNewestElapsed: bandNewest,
-          stripOldestElapsed: bandOldest,
-          highlightStartElapsed: start,
-          highlightEndElapsed: end,
-          connected: connected,
-          waiting: connected && !_mon.bandCache.hasData,
+        strip: ListenableBuilder(
+          listenable: _stripTick,
+          builder: (context, _) {
+            final bandNewest = _bandNewest();
+            final bandOldest = _bandOldest();
+            final newest = _newestElapsed();
+            return BandsContextStrip(
+              stripViewport: _strip,
+              epochViewport: _viewport,
+              series: connected ? _tick.series : emptyBandSeries(),
+              stripNewestElapsed: bandNewest,
+              stripOldestElapsed: bandOldest,
+              highlightStartElapsed: _viewport.stripVisibleStart(
+                newestElapsed: newest,
+              ),
+              highlightEndElapsed: _viewport.stripVisibleEnd(
+                newestElapsed: newest,
+              ),
+              connected: connected,
+              waiting: connected && !_mon.bandCache.hasData,
+            );
+          },
         ),
       ),
     );
