@@ -200,7 +200,10 @@ class _PsdViewState extends ConsumerState<PsdView> {
     return PopupMenuButton<PsdHzRange>(
       tooltip: 'Hz range',
       initialValue: _hz,
-      onSelected: (v) => setState(() => _hz = v),
+      onSelected: (v) => setState(() {
+        _hz = v;
+        _recomputeEeg();
+      }),
       itemBuilder: (context) => const [
         PopupMenuItem(value: PsdHzRange.hz60, child: Text('0–60 Hz')),
         PopupMenuItem(value: PsdHzRange.hz100, child: Text('0–100 Hz')),
@@ -222,7 +225,10 @@ class _PsdViewState extends ConsumerState<PsdView> {
       prev,
       next,
     ) {
-      if (next != true) _follow();
+      if (next != true) {
+        _follow();
+        _recomputeEeg();
+      }
     });
     final names = state.electrodeNames;
     final prevSelected = Set<int>.of(_selected);

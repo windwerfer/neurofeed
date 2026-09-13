@@ -5,7 +5,7 @@
 | Date | 2026-09-13 |
 | Branch | `refactor/monitor` (do not push, do not create a branch) |
 | Status | **Start PR 7.** Plan is already on disk. Do not re-plan. |
-| Parent | `be73ba6` — downsample Raw EEG traces and idle the wipe ring |
+| Parent | `09bac0c` — downsample Raw EEG traces and idle the wipe ring |
 | Series law | [handoff-monitor-perf.md](handoff-monitor-perf.md) |
 | Product spec | [../monitor.md](../monitor.md) |
 
@@ -15,7 +15,7 @@
 Continue monitor graph perf on `refactor/monitor`. Do not push, do not
 create a branch, do not open a GitHub PR. Implement ONLY PR7. Plan is
 on disk — do not re-plan. Read `.ai/archive/handoff-monitor-perf-7.md`
-and follow it. Parent is `be73ba6`.
+and follow it. Parent is `09bac0c`.
 ```
 
 ---
@@ -63,7 +63,7 @@ Do not edit GraphShell Record/Follow **look**. Do not keep hidden graphs alive.
 
 ## What PR6 landed
 
-Commit `be73ba6` — `perf(monitor): downsample Raw EEG traces and idle the wipe ring`
+Commit `09bac0c` — `perf(monitor): downsample Raw EEG traces and idle the wipe ring`
 
 - `emitSweepTrace`: Follow and Inspect min/max per pixel column (two
   vertices per x). 2560 samples at width 100 → 200 path points. File-backed

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muse_ml/src/monitor/cache/band_cache.dart';
+import 'package:muse_ml/src/monitor/cache/sliding_spectrum.dart';
 import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
 import 'package:muse_ml/src/monitor/dsp.dart';
 import 'package:muse_ml/src/monitor/split_pane_tick.dart';
@@ -194,4 +195,93 @@ void main() {
       );
     },
   );
+
+  test('Follow histogram slides in place; PSD waits for a Welch hop', () {
+    final buf = SweepBuffer();
+    _fillSeconds(buf, 10, seconds: 8);
+    var newest = (buf.sampleCount - 1) / SweepBuffer.sampleRate;
+    final hist = HistogramTick();
+    expect(
+      hist.onSweep(
+        mode: ViewportMode.follow,
+        buffer: buf,
+        electrodes: {0},
+        startElapsed: newest - 8,
+        endElapsed: newest,
+        newestElapsed: newest,
+        halfRange: 100,
+      ),
+      isTrue,
+    );
+    final histId = hist.counts;
+
+    buf.append(_eeg(0, List<double>.filled(kWelchHopSamples, 70)));
+    newest = (buf.sampleCount - 1) / SweepBuffer.sampleRate;
+    expect(
+      hist.onSweep(
+        mode: ViewportMode.follow,
+        buffer: buf,
+        electrodes: {0},
+        startElapsed: newest - 8,
+        endElapsed: newest,
+        newestElapsed: newest,
+        halfRange: 100,
+      ),
+      isTrue,
+    );
+    expect(identical(hist.counts, histId), isTrue);
+    expect(hist.counts[histogramBinFor(70)], greaterThan(0));
+
+    final psdBuf = SweepBuffer();
+    List<double> sine(double hz, int count) => [
+      for (var i = 0; i < count; i++)
+        math.sin(2 * math.pi * hz * i / SweepBuffer.sampleRate),
+    ];
+    for (var s = 0; s < 4; s++) {
+      psdBuf.append(_eeg(0, sine(10, 256)));
+    }
+    var psdNewest = (psdBuf.sampleCount - 1) / SweepBuffer.sampleRate;
+    final psd = PsdTick();
+    expect(
+      psd.onSweep(
+        mode: ViewportMode.follow,
+        buffer: psdBuf,
+        electrodes: {0},
+        startElapsed: psdNewest - 4,
+        endElapsed: psdNewest,
+        newestElapsed: psdNewest,
+      ),
+      isTrue,
+    );
+    final spec = psd.spectrum;
+    expect(psd.peak, closeTo(10, 1));
+    expect(
+      psd.onSweep(
+        mode: ViewportMode.follow,
+        buffer: psdBuf,
+        electrodes: {0},
+        startElapsed: psdNewest - 4,
+        endElapsed: psdNewest,
+        newestElapsed: psdNewest,
+      ),
+      isFalse,
+    );
+    expect(identical(psd.spectrum, spec), isTrue);
+
+    psdBuf.append(_eeg(0, sine(10, kWelchHopSamples)));
+    psdNewest = (psdBuf.sampleCount - 1) / SweepBuffer.sampleRate;
+    expect(
+      psd.onSweep(
+        mode: ViewportMode.follow,
+        buffer: psdBuf,
+        electrodes: {0},
+        startElapsed: psdNewest - 4,
+        endElapsed: psdNewest,
+        newestElapsed: psdNewest,
+      ),
+      isTrue,
+    );
+    expect(identical(psd.spectrum, spec), isFalse);
+    expect(psd.peak, closeTo(10, 1));
+  });
 }

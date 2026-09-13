@@ -11,18 +11,19 @@ Float64List meanEegWindow({
   required double startElapsed,
   required double endElapsed,
   required double? newestElapsed,
+  Float64List? out,
 }) {
   final span = endElapsed - startElapsed;
   if (span <= 0) return Float64List(0);
   final n = (span * SweepBuffer.sampleRate).round();
   if (n <= 0) return Float64List(0);
   final selected = electrodes.toList();
-  final out = Float64List(n);
+  final dest = (out != null && out.length == n) ? out : Float64List(n);
   if (selected.isEmpty) {
     for (var i = 0; i < n; i++) {
-      out[i] = double.nan;
+      dest[i] = double.nan;
     }
-    return out;
+    return dest;
   }
   for (var i = 0; i < n; i++) {
     final elapsed = startElapsed + i / SweepBuffer.sampleRate;
@@ -40,9 +41,9 @@ Float64List meanEegWindow({
       sum += v;
       count++;
     }
-    out[i] = count == 0 ? double.nan : sum / count;
+    dest[i] = count == 0 ? double.nan : sum / count;
   }
-  return out;
+  return dest;
 }
 
 double sweepNewestElapsed(SweepBuffer buffer, double? ramNewestElapsed) {

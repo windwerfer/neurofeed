@@ -237,7 +237,10 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
       prev,
       next,
     ) {
-      if (next != true) _follow();
+      if (next != true) {
+        _follow();
+        _recomputeEeg();
+      }
     });
     final names = state.electrodeNames;
     final prevSelected = Set<int>.of(_selected);

@@ -39,6 +39,7 @@ flutter test \
   test/monitor/graph_cinema_test.dart \
   test/monitor/dsp_test.dart \
   test/monitor/stft_ring_test.dart \
+  test/monitor/sliding_spectrum_test.dart \
   test/monitor/spectrogram_pane_test.dart \
   test/monitor/histogram_pane_test.dart \
   test/monitor/split_pane_tick_test.dart \
@@ -96,7 +97,7 @@ cargo test --lib                  # features / simulator / device_config
 | Streaming OSC/BF | Dart unit | `test/streaming_*.dart` | `flutter test test/streaming_*.dart` | Datagram shape | View untested |
 | Feature probe | Dart unit | `test/feature_override_test.dart` | that file | Latch replace; synthetic TAR/delta baseline | Ear-test is human |
 | Audio playback | — | ids only | — | — | Silence ≠ fail in this container |
-| Live charts | Dart unit | `test/monitor/*` | dsp / panes / graph_shell / strip / plot_isolation / sweep_pane | FFT 256-pt, strip highlight, window presets, plot `RepaintBoundary`, GraphShell isolated from plot ticks, Raw EEG min/max downsample | Visual **cannot** without goldens |
+| Live charts | Dart unit | `test/monitor/*` | dsp / panes / graph_shell / strip / plot_isolation / sweep_pane / sliding_spectrum | FFT 256-pt, strip highlight, window presets, plot `RepaintBoundary`, GraphShell isolated from plot ticks, Raw EEG min/max downsample, Follow sliding Welch / histogram | Visual **cannot** without goldens |
 | REVE/LUNA | Rust `#[ignore]` | analysis tests | `cargo test --lib -- --ignored` | If `.local/` weights | Never CI |
 | Real BLE Muse | **cannot** | — | phone + testing-guide logcat | Human | |
 | Real Crown OSC | **cannot** | — | — | Start refused | |

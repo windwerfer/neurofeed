@@ -1,6 +1,6 @@
 import 'package:muse_ml/src/monitor/cache/band_cache.dart';
+import 'package:muse_ml/src/monitor/cache/sliding_spectrum.dart';
 import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_mean.dart';
 import 'package:muse_ml/src/monitor/dsp.dart';
 import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
@@ -13,6 +13,7 @@ List<List<BandPoint>> emptyBandSeries() => [
 ];
 
 class HistogramTick {
+  final SlidingHistogram _sliding = SlidingHistogram();
   List<int> counts = List<int>.filled(kHistogramBins, 0);
   List<List<BandPoint>> series = emptyBandSeries();
   double startElapsed = 0;
@@ -28,15 +29,15 @@ class HistogramTick {
     required double halfRange,
   }) {
     if (!shouldRecomputeEegOnSweep(mode: mode)) return false;
-    recomputeEeg(
+    return _apply(
       buffer: buffer,
       electrodes: electrodes,
       startElapsed: startElapsed,
       endElapsed: endElapsed,
       newestElapsed: newestElapsed,
       halfRange: halfRange,
+      forceFull: false,
     );
-    return true;
   }
 
   void recomputeEeg({
@@ -47,16 +48,41 @@ class HistogramTick {
     required double? newestElapsed,
     required double halfRange,
   }) {
-    this.startElapsed = startElapsed;
-    this.endElapsed = endElapsed;
-    final samples = meanEegWindow(
+    _apply(
       buffer: buffer,
       electrodes: electrodes,
       startElapsed: startElapsed,
       endElapsed: endElapsed,
       newestElapsed: newestElapsed,
+      halfRange: halfRange,
+      forceFull: true,
     );
-    counts = histogramCounts(samples, halfRange: halfRange);
+  }
+
+  bool _apply({
+    required SweepBuffer buffer,
+    required Set<int> electrodes,
+    required double startElapsed,
+    required double endElapsed,
+    required double? newestElapsed,
+    required double halfRange,
+    required bool forceFull,
+  }) {
+    this.startElapsed = startElapsed;
+    this.endElapsed = endElapsed;
+    final changed = _sliding.update(
+      buffer: buffer,
+      electrodes: electrodes,
+      startElapsed: startElapsed,
+      endElapsed: endElapsed,
+      newestElapsed: newestElapsed,
+      halfRange: halfRange,
+      forceFull: forceFull,
+    );
+    if (changed || forceFull) {
+      counts = _sliding.counts;
+    }
+    return changed;
   }
 
   void recomputeSeries({
@@ -81,6 +107,7 @@ class HistogramTick {
 }
 
 class PsdTick {
+  final SlidingWelch _sliding = SlidingWelch();
   Spectrum? spectrum;
   double? peak;
   List<List<BandPoint>> series = emptyBandSeries();
@@ -96,14 +123,14 @@ class PsdTick {
     required double? newestElapsed,
   }) {
     if (!shouldRecomputeEegOnSweep(mode: mode)) return false;
-    recomputeEeg(
+    return _apply(
       buffer: buffer,
       electrodes: electrodes,
       startElapsed: startElapsed,
       endElapsed: endElapsed,
       newestElapsed: newestElapsed,
+      forceFull: false,
     );
-    return true;
   }
 
   void recomputeEeg({
@@ -113,22 +140,39 @@ class PsdTick {
     required double endElapsed,
     required double? newestElapsed,
   }) {
-    this.startElapsed = startElapsed;
-    this.endElapsed = endElapsed;
-    if (!buffer.hasData) {
-      spectrum = null;
-      peak = null;
-      return;
-    }
-    final samples = meanEegWindow(
+    _apply(
       buffer: buffer,
       electrodes: electrodes,
       startElapsed: startElapsed,
       endElapsed: endElapsed,
       newestElapsed: newestElapsed,
+      forceFull: true,
     );
-    spectrum = welch(samples);
-    peak = alphaPeakHz(spectrum!);
+  }
+
+  bool _apply({
+    required SweepBuffer buffer,
+    required Set<int> electrodes,
+    required double startElapsed,
+    required double endElapsed,
+    required double? newestElapsed,
+    required bool forceFull,
+  }) {
+    this.startElapsed = startElapsed;
+    this.endElapsed = endElapsed;
+    final changed = _sliding.update(
+      buffer: buffer,
+      electrodes: electrodes,
+      startElapsed: startElapsed,
+      endElapsed: endElapsed,
+      newestElapsed: newestElapsed,
+      forceFull: forceFull,
+    );
+    if (changed || forceFull) {
+      spectrum = _sliding.spectrum;
+      peak = spectrum == null ? null : alphaPeakHz(spectrum!);
+    }
+    return changed;
   }
 
   void recomputeSeries({

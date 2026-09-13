@@ -3,10 +3,10 @@
 | Field | Value |
 |---|---|
 | Date | 2026-09-13 |
-| Status | **Start PR 7.** Paste [handoff-monitor-perf-7.md](handoff-monitor-perf-7.md). |
-| Branch | `refactor/monitor` (head `be73ba6` after PR6). Sequential local commits. Do not push, do not GitHub PR, do not new branch. |
+| Status | **Start PR 8 (gated).** Paste [handoff-monitor-perf-8.md](handoff-monitor-perf-8.md) only if a profile still shows wipe-ring copies or tmp `encodeSessionEvent`. |
+| Branch | `refactor/monitor` (head 305099c after PR7). Sequential local commits. Do not push, do not GitHub PR, do not new branch. |
 | Product spec | [../monitor.md](../monitor.md) — **frozen**. This series does not add chrome. |
-| Start here | [handoff-monitor-perf-7.md](handoff-monitor-perf-7.md) |
+| Start here | [handoff-monitor-perf-8.md](handoff-monitor-perf-8.md) |
 
 Do not reopen: pipeline-contract Key Decisions, Crown Start, Connect UX, v5
 68-byte header. Do not add Spectrogram `FFT 1s ▾`, averaging, a Bands strip
@@ -63,8 +63,8 @@ after PR7.
 | **3** | Spectrogram column ring | #3 DSP | **landed** | `2833b0a` |
 | **4** | Spectrogram bitmap | #3 paint | **landed** | `dd6d58b` |
 | **5** | Isolate the paint tree | #5 | **landed** | `b431604` |
-| **6** | Raw EEG painter | #6 | **landed** | `be73ba6` |
-| **7** | Sliding Welch / histogram | #4 | **next** | — |
+| **6** | Raw EEG painter | #6 | **landed** | `09bac0c` |
+| **7** | Sliding Welch / histogram | #4 | **landed** | `305099c` |
 | **8** | Capture extras | #8 | gated | — |
 
 ```

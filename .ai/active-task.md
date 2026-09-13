@@ -2,12 +2,12 @@
 
 **Branch:** `refactor/monitor`
 
-**Now:** graph draw-path perf, PRs **1–7** (PR **8** gated). Plan:
+**Now:** graph draw-path perf PRs **1–7 landed**. PR **8** gated. Plan:
 [archive/handoff-monitor-perf.md](archive/handoff-monitor-perf.md).
-**Next thread:** short prompt pointing at
-[archive/handoff-monitor-perf-7.md](archive/handoff-monitor-perf-7.md)
-(sliding Welch / histogram on Follow). Sequential local
-commits. Do not push, do not new branch.
+**Next thread:** [archive/handoff-monitor-perf-8.md](archive/handoff-monitor-perf-8.md)
+only if a profile still shows wipe-ring copies or tmp
+`encodeSessionEvent`. Sequential local commits. Do not push, do not
+new branch.
 
 Monitor product series **complete** (spec [monitor.md](monitor.md)). PRs
 **0–7 landed**, product **PR 8 cancelled**. History:

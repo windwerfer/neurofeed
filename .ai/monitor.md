@@ -53,6 +53,7 @@ lib/src/monitor/
     file_backed_source.dart   Inspect beyond RAM (tmp / recording .raw)
     sweep_mean.dart
     stft_ring.dart            Follow STFT column ring (Inspect / electrodes / window = full)
+    sliding_spectrum.dart     Follow Welch / histogram (Inspect / electrodes / window = full)
   panes/                      SweepPane, TimeSeriesPane, histogram / PSD /
                               spectrogram, BandsContextStrip, overshoot_hold
   views/                      five live graphs + recording dashboard + Save/Discard
@@ -137,9 +138,12 @@ are one pane (no strip). Follow is disabled there.
 
 DSP: `monitor/dsp.dart` only. Hamming, power `(re²+im²)/(n*n)`. Live `n = 256`.
 Follow Spectrogram STFT is incremental (one new hop FFT); Inspect / electrode
-set / window-length still full recompute. The heatmap is a bitmap painted with
-`FilterQuality.none`, rasterized inside `SpectrogramPane` (live + recording
-dashboard).
+set / window-length still full recompute. Follow Histogram adds/subtracts
+bins; Follow PSD is sliding Welch (hop `n/2` = 128). Inspect pan, window,
+electrodes, µV/Hz range, and disconnect full-recompute. Recording dashboard
+stays one-shot `welch` / `histogramCounts`. The heatmap is a bitmap painted
+with `FilterQuality.none`, rasterized inside `SpectrogramPane` (live +
+recording dashboard).
 
 EEG RAM is SweepBuffer only (5 min). SweepBuffer and BandCache coalesce
 `notifyListeners` to vsync; RAM writes stay 256 Hz. AppShell `select`s
@@ -148,7 +152,8 @@ shell). Live graphs `select` connected. Plot panes sit in `RepaintBoundary`.
 Data ticks rebuild the plot through `ListenableBuilder` (Histogram/PSD: sweep
 → primary, bands → strip) and do not rebuild GraphShell. Hidden graphs stay
 unmounted (`AppShell` `switch`, not `IndexedStack`). Histogram/PSD Inspect does not
-re-Welch / re-bin; Follow is still last T seconds. Inspect past 5 min reads the open
+re-Welch / re-bin; Follow is still last T seconds (sliding Welch / histogram).
+Inspect past 5 min reads the open
 tmp/recording `.raw` via `FileBackedSource`. After tmp rotate, Inspect is
 the **new** tmp plus whatever is still in RAM.
 
