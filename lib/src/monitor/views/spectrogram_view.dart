@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/monitor/cache/stft_ring.dart';
 import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
 import 'package:muse_ml/src/monitor/cache/sweep_mean.dart';
 import 'package:muse_ml/src/monitor/dsp.dart';
@@ -33,10 +34,7 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
   double _magMax = 0;
   bool _magLocked = false;
   int _lastHop = -1;
-  List<StftColumn> _columns = const [];
-  Set<int> _cachedElectrodes = const {};
-  double _cachedStart = 0;
-  double _cachedEnd = 0;
+  final StftRing _ring = StftRing();
 
   @override
   void initState() {
@@ -144,30 +142,13 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
   }
 
   List<StftColumn> _stft(double start, double end) {
-    final sameElectrodes =
-        _cachedElectrodes.length == _selected.length &&
-        _cachedElectrodes.containsAll(_selected);
-    if (sameElectrodes &&
-        (start - _cachedStart).abs() < 1e-6 &&
-        (end - _cachedEnd).abs() < 1e-6 &&
-        _columns.isNotEmpty &&
-        _viewport.mode == ViewportMode.inspect) {
-      return _columns;
-    }
-    final pad = kDefaultFftN / SweepBuffer.sampleRate;
-    final samples = meanEegWindow(
+    return _ring.columnsFor(
       buffer: _mon.sweepBuffer,
       electrodes: _selected,
-      startElapsed: start - pad,
-      endElapsed: end,
-      newestElapsed: _mon.ramNewestElapsed ?? _newestElapsed(),
+      start: start,
+      end: end,
+      newest: _mon.ramNewestElapsed ?? _newestElapsed(),
     );
-    final cols = stftColumns(samples, startElapsed: start - pad);
-    _columns = cols;
-    _cachedElectrodes = Set<int>.from(_selected);
-    _cachedStart = start;
-    _cachedEnd = end;
-    return cols;
   }
 
   (double, double)? _magFrom(List<StftColumn> cols) {

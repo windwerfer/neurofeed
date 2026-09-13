@@ -52,6 +52,7 @@ lib/src/monitor/
     recording_index.dart      (elapsedT, fileLength) at frame boundaries
     file_backed_source.dart   Inspect beyond RAM (tmp / recording .raw)
     sweep_mean.dart
+    stft_ring.dart            Follow STFT column ring (Inspect / electrodes / window = full)
   panes/                      SweepPane, TimeSeriesPane, histogram / PSD /
                               spectrogram, BandsContextStrip, overshoot_hold
   views/                      five live graphs + recording dashboard + Save/Discard
@@ -135,6 +136,8 @@ electrode-toggle set drives both panes. Recording-dashboard Histogram/PSD
 are one pane (no strip). Follow is disabled there.
 
 DSP: `monitor/dsp.dart` only. Hamming, power `(re²+im²)/(n*n)`. Live `n = 256`.
+Follow Spectrogram STFT is incremental (one new hop FFT); Inspect / electrode
+set / window-length still full recompute.
 
 EEG RAM is SweepBuffer only (5 min). SweepBuffer and BandCache coalesce
 `notifyListeners` to vsync; RAM writes stay 256 Hz. Histogram/PSD Inspect does not

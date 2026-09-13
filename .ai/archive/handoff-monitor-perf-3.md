@@ -5,11 +5,18 @@
 | Date | 2026-09-13 |
 | Branch | `refactor/monitor` (do not push, do not create a branch) |
 | Status | **Start PR 3.** Plan is already on disk. Do not re-plan. |
-| Parent | `d45011f` — skip Inspect DSP and split histogram/PSD ticks |
+| Parent | `8cd0f6a` — skip Inspect DSP and split histogram/PSD ticks |
 | Series law | [handoff-monitor-perf.md](handoff-monitor-perf.md) |
 | Product spec | [../monitor.md](../monitor.md) |
 
-Paste **this whole file** into the new thread.
+**Paste prompt** (this is what the next thread gets; this file is the brief):
+
+```
+Continue monitor graph perf on `refactor/monitor`. Do not push, do not
+create a branch, do not open a GitHub PR. Implement ONLY PR3. Plan is
+on disk — do not re-plan. Read `.ai/archive/handoff-monitor-perf-3.md`
+and follow it. Parent is `8cd0f6a`.
+```
 
 ---
 
@@ -54,7 +61,7 @@ Do not change hop or `kDefaultFftN`. Do not edit GraphShell / AppShell.
 
 ## What PR2 landed
 
-Commit `d45011f` — `perf(monitor): skip Inspect DSP and split histogram/PSD ticks`
+Commit `8cd0f6a` — `perf(monitor): skip Inspect DSP and split histogram/PSD ticks`
 
 - `HistogramTick` / `PsdTick` in `lib/src/monitor/split_pane_tick.dart`.
   `shouldRecomputeEegOnSweep` is false in Inspect.
@@ -159,5 +166,5 @@ flutter test test/monitor/dsp_test.dart test/monitor/stft_ring_test.dart
    `FilterQuality.none`; recording dashboard shares the pane; no goldens).
    Same shape as this file: table, frozen, what PR3 landed, PR4 Do/Do not/
    files/tests/commit, resume pointers, “when done”.
-4. Print that PR4 handoff in **one** fenced block at the end of the turn
-   so it can be copied into the next thread.
+4. Print a **short** paste prompt at the end of the turn (branch, PR4
+   only, path to that file, parent SHA). Do not dump the whole file.

@@ -18,7 +18,7 @@ do/don't, then this folder for maps.
 | [btleplug.md](btleplug.md) | btleplug fork (`0.12.0-muse-5`) — JNI attach + notification death spiral |
 | [muse-rs.md](muse-rs.md) | muse-rs `0.1.1` patch, Classic vs Athena, battery, Athena optical/fNIRS gap |
 | [monitor.md](monitor.md) | **Implemented.** Live graphs + connect-time recording. Cinema: mobile landscape / desktop F11. Bands: PCHIP, 1 s Follow lead, in-pane chips. |
-| [archive/handoff-monitor-perf.md](archive/handoff-monitor-perf.md) | **In progress.** Graph draw-path perf PRs 1–7. Start: [handoff-monitor-perf-3.md](archive/handoff-monitor-perf-3.md). |
+| [archive/handoff-monitor-perf.md](archive/handoff-monitor-perf.md) | **In progress.** Graph draw-path perf PRs 1–7. Start: [handoff-monitor-perf-4.md](archive/handoff-monitor-perf-4.md). |
 | [headset-fit.md](headset-fit.md) | Pad colors, Classic vs Athena, status-bar dots |
 | [export.md](export.md) | History export: PDF / PNG / CSV / EDF+ |
 

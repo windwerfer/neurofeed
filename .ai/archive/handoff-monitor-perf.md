@@ -3,10 +3,10 @@
 | Field | Value |
 |---|---|
 | Date | 2026-09-13 |
-| Status | **Start PR 3.** Paste [handoff-monitor-perf-3.md](handoff-monitor-perf-3.md). |
-| Branch | `refactor/monitor` (head `d45011f` after PR2). Sequential local commits. Do not push, do not GitHub PR, do not new branch. |
+| Status | **Start PR 4.** Paste [handoff-monitor-perf-4.md](handoff-monitor-perf-4.md). |
+| Branch | `refactor/monitor` (head `f87b83d` after PR3). Sequential local commits. Do not push, do not GitHub PR, do not new branch. |
 | Product spec | [../monitor.md](../monitor.md) — **frozen**. This series does not add chrome. |
-| Start here | [handoff-monitor-perf-3.md](handoff-monitor-perf-3.md) |
+| Start here | [handoff-monitor-perf-4.md](handoff-monitor-perf-4.md) |
 
 Do not reopen: pipeline-contract Key Decisions, Crown Start, Connect UX, v5
 68-byte header. Do not add Spectrogram `FFT 1s ▾`, averaging, a Bands strip
@@ -35,7 +35,7 @@ after PR7.
 2. Verify: `flutter analyze lib/src` + the tests in the slice ([../test-matrix.md](../test-matrix.md); skill `muse-verify`). No `flutter run` unless the human asks.
 3. Update [../monitor.md](../monitor.md) draw-path notes and [../test-matrix.md](../test-matrix.md) if you added a test file. **Do not** touch [../ui-map.md](../ui-map.md) unless on-screen copy/chrome actually changed (it should not).
 4. **Commit** on `refactor/monitor` (message in the slice). Do not `git push`.
-5. Write the **next** paste-ready handoff to `handoff-monitor-perf-N.md`, refresh the index table below, print that handoff in one fenced block.
+5. Write the **next** handoff to `handoff-monitor-perf-N.md`, refresh the index table below, print a **short** paste prompt (path to that file + parent SHA). The file is the brief; do not dump it into chat.
 
 ---
 
@@ -59,9 +59,9 @@ after PR7.
 | PR | Thread | Items | Status | Commit |
 |---|---|---|---|---|
 | **1** | Coalesce cache notifies | #1 | **landed** | `8ecfc65` |
-| **2** | Histogram/PSD tick policy | #2 + #7 | **landed** | `d45011f` |
-| **3** | Spectrogram column ring | #3 DSP | **next** | — |
-| **4** | Spectrogram bitmap | #3 paint | pending | — |
+| **2** | Histogram/PSD tick policy | #2 + #7 | **landed** | `8cd0f6a` |
+| **3** | Spectrogram column ring | #3 DSP | **landed** | `f87b83d` |
+| **4** | Spectrogram bitmap | #3 paint | **next** | — |
 | **5** | Isolate the paint tree | #5 | pending | — |
 | **6** | Raw EEG painter | #6 | pending | — |
 | **7** | Sliding Welch / histogram | #4 | pending | — |
@@ -367,4 +367,4 @@ If the gate does not fire, set this file’s status to **series complete; PR8 sk
 3. What PR N–1 landed (files, commit).
 4. **PR N scope:** Do / Do not / files / tests / commit message (from this plan).
 5. Resume pointers (symbols + paths).
-6. “When done: commit, write `handoff-monitor-perf-(N+1).md`, print it.”
+6. “When done: commit, write `handoff-monitor-perf-(N+1).md`, print a short paste prompt.” Put a **Paste prompt** block at the top of that file.
