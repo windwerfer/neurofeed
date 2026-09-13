@@ -5,7 +5,7 @@
 | Date | 2026-09-13 |
 | Branch | `refactor/monitor` (do not push, do not create a branch) |
 | Status | **Start PR 6.** Plan is already on disk. Do not re-plan. |
-| Parent | `95d6d63` — isolate graph paints from shell rebuilds |
+| Parent | `b431604` — isolate graph paints from shell rebuilds |
 | Series law | [handoff-monitor-perf.md](handoff-monitor-perf.md) |
 | Product spec | [../monitor.md](../monitor.md) |
 
@@ -15,7 +15,7 @@
 Continue monitor graph perf on `refactor/monitor`. Do not push, do not
 create a branch, do not open a GitHub PR. Implement ONLY PR6. Plan is
 on disk — do not re-plan. Read `.ai/archive/handoff-monitor-perf-6.md`
-and follow it. Parent is `95d6d63`.
+and follow it. Parent is `b431604`.
 ```
 
 ---
@@ -61,7 +61,7 @@ Do not edit GraphShell Record/Follow **look**. Do not keep hidden graphs alive.
 
 ## What PR5 landed
 
-Commit `95d6d63` — `perf(monitor): isolate graph paints from shell rebuilds`
+Commit `b431604` — `perf(monitor): isolate graph paints from shell rebuilds`
 
 - `AppShell` `select`s `currentView`, `sidebarOpen`, `connectWindowOpen`.
   Pad quality / battery do not rebuild the shell. Hidden views stay a

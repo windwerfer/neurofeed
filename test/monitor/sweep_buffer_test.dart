@@ -51,6 +51,36 @@ void main() {
     expect(n, 1);
   });
 
+  test('append with display window 0 is RAM-only', () {
+    final buf = SweepBuffer();
+    expect(buf.displayWindow, 0);
+    buf.append(_eeg(0, [1, 2, 3]));
+    expect(buf.sampleCount, 3);
+    expect(buf.cursor, 0);
+    expect(buf.displaySample(0, 0), isNaN);
+  });
+
+  test('setDisplayWindow(0) then append does not grow display or cursor', () {
+    final buf = SweepBuffer();
+    buf.setDisplayWindow(10);
+    buf.append(_eeg(0, List<double>.filled(15, 1)));
+    expect(buf.cursor, 15);
+    expect(buf.displayWindow, 10);
+    expect(buf.displaySample(0, 0), 1);
+
+    buf.setDisplayWindow(0);
+    expect(buf.displayWindow, 0);
+    expect(buf.cursor, 0);
+    final ram = buf.sampleCount;
+    buf.append(_eeg(0, List<double>.filled(32, 2)));
+    buf.append(_eeg(1, List<double>.filled(8, 3)));
+    expect(buf.sampleCount, ram + 32);
+    expect(buf.displayWindow, 0);
+    expect(buf.cursor, 0);
+    expect(buf.displaySample(0, 0), isNaN);
+    expect(buf.displaySample(1, 0), isNaN);
+  });
+
   testWidgets('BandCache.appendBands burst notifies once after pump', (
     tester,
   ) async {

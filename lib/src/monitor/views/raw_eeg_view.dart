@@ -24,17 +24,20 @@ class RawEegView extends ConsumerStatefulWidget {
 class _RawEegViewState extends ConsumerState<RawEegView> {
   final ViewportController _viewport = ViewportController();
   final SharedYScale _yScale = SharedYScale();
+  final Stopwatch _autoYClock = Stopwatch();
+  Duration _lastAutoY = Duration.zero;
 
   double? _fileCacheStart;
   double? _fileCacheEnd;
   SessionData? _fileCache;
+  late final SweepBuffer _sweepBuffer;
 
   @override
   void initState() {
     super.initState();
-    final buf = ref.read(monitorControllerProvider.notifier).sweepBuffer;
-    buf.setDisplayWindow(_viewport.windowSamples);
-    if (buf.frozen) buf.resume();
+    _sweepBuffer = ref.read(monitorControllerProvider.notifier).sweepBuffer;
+    _sweepBuffer.setDisplayWindow(_viewport.windowSamples);
+    if (_sweepBuffer.frozen) _sweepBuffer.resume();
     _viewport.addListener(_onChrome);
     _yScale.addListener(_onChrome);
   }
@@ -47,6 +50,8 @@ class _RawEegViewState extends ConsumerState<RawEegView> {
   void dispose() {
     _viewport.removeListener(_onChrome);
     _yScale.removeListener(_onChrome);
+    // Only Raw EEG uses the wipe ring; idle it so append is RAM-only.
+    _sweepBuffer.setDisplayWindow(0);
     _viewport.dispose();
     _yScale.dispose();
     super.dispose();
@@ -134,6 +139,12 @@ class _RawEegViewState extends ConsumerState<RawEegView> {
 
   void _syncAutoY(SweepBuffer buffer) {
     if (_yScale.mode != YScaleMode.auto) return;
+    if (_autoYClock.isRunning &&
+        _autoYClock.elapsed - _lastAutoY < const Duration(milliseconds: 250)) {
+      return;
+    }
+    if (!_autoYClock.isRunning) _autoYClock.start();
+    _lastAutoY = _autoYClock.elapsed;
     double lo = double.infinity;
     double hi = double.negativeInfinity;
     void acc(double s) {

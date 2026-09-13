@@ -152,6 +152,12 @@ re-Welch / re-bin; Follow is still last T seconds. Inspect past 5 min reads the 
 tmp/recording `.raw` via `FileBackedSource`. After tmp rotate, Inspect is
 the **new** tmp plus whatever is still in RAM.
 
+Raw EEG traces downsample min/max per pixel column when samples exceed chart
+width (peaks kept; wipe bar still `cursor % n`). Axis Y/X labels reuse
+`TextPainter`s for the same string. Auto-Y runs at most 4 Hz. Only Raw EEG
+uses the Follow wipe ring; leaving that view calls `setDisplayWindow(0)` so
+`append` is RAM-only.
+
 ---
 
 ## Montage

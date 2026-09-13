@@ -4,6 +4,102 @@ import 'package:flutter/material.dart';
 import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
 
+bool sweepSampleOk(double s) => !s.isNaN && s.abs() <= 1e6;
+
+/// Min/max envelope of [n] samples into at most one vertical tick per pixel
+/// column when [n] > [widthPx]. Returns the number of move/line vertices.
+int emitSweepTrace({
+  required int n,
+  required double widthPx,
+  required double Function(int i) sampleAt,
+  required void Function(double x, double y) moveTo,
+  required void Function(double x, double y) lineTo,
+}) {
+  if (n <= 0 || widthPx <= 0) return 0;
+  final cols = widthPx.floor();
+  if (cols <= 0) return 0;
+
+  var points = 0;
+  var started = false;
+  void move(double x, double y) {
+    moveTo(x, y);
+    points++;
+    started = true;
+  }
+
+  void line(double x, double y) {
+    lineTo(x, y);
+    points++;
+  }
+
+  if (n <= cols) {
+    for (var i = 0; i < n; i++) {
+      final s = sampleAt(i);
+      if (!sweepSampleOk(s)) {
+        started = false;
+        continue;
+      }
+      if (!started) {
+        move(i.toDouble(), s);
+      } else {
+        line(i.toDouble(), s);
+      }
+    }
+    return points;
+  }
+
+  for (var col = 0; col < cols; col++) {
+    var i0 = (col * n) ~/ cols;
+    var i1 = ((col + 1) * n) ~/ cols;
+    if (i1 <= i0) i1 = i0 + 1;
+    if (i0 >= n) break;
+    if (i1 > n) i1 = n;
+    var lo = double.infinity;
+    var hi = double.negativeInfinity;
+    for (var i = i0; i < i1; i++) {
+      final s = sampleAt(i);
+      if (!sweepSampleOk(s)) continue;
+      if (s < lo) lo = s;
+      if (s > hi) hi = s;
+    }
+    if (lo.isInfinite) {
+      started = false;
+      continue;
+    }
+    final x = i0.toDouble();
+    if (!started) {
+      move(x, lo);
+    } else {
+      line(x, lo);
+    }
+    line(x, hi);
+  }
+  return points;
+}
+
+class _AxisLabelCache {
+  static const int _cap = 64;
+  static final Map<String, TextPainter> _cache = {};
+
+  static TextPainter painter(String text, TextStyle style) {
+    final key = '$text#${style.color?.toARGB32()}#${style.fontSize}';
+    final hit = _cache.remove(key);
+    if (hit != null) {
+      _cache[key] = hit;
+      return hit;
+    }
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    if (_cache.length >= _cap) {
+      _cache.remove(_cache.keys.first)?.dispose();
+    }
+    _cache[key] = tp;
+    return tp;
+  }
+}
+
 enum YScaleMode { auto, fixed50, fixed100, fixed200 }
 
 class SharedYScale extends ChangeNotifier {
@@ -217,23 +313,17 @@ class SweepPanePainter extends CustomPainter {
       ..isAntiAlias = true;
 
     final path = Path();
-    var started = false;
-
-    for (int i = 0; i < n; i++) {
-      final s = _sampleAt(i, n);
-      if (s.isNaN || s.abs() > 1e6) {
-        started = false;
-        continue;
-      }
-      final x = chart.left + i * xScale;
-      final y = chart.center.dy - s * yScalePx;
-      if (!started) {
-        path.moveTo(x, y);
-        started = true;
-      } else {
-        path.lineTo(x, y);
-      }
-    }
+    emitSweepTrace(
+      n: n,
+      widthPx: chart.width,
+      sampleAt: (i) => _sampleAt(i, n),
+      moveTo: (x, y) {
+        path.moveTo(chart.left + x * xScale, chart.center.dy - y * yScalePx);
+      },
+      lineTo: (x, y) {
+        path.lineTo(chart.left + x * xScale, chart.center.dy - y * yScalePx);
+      },
+    );
     canvas.drawPath(path, paint);
   }
 
@@ -275,10 +365,7 @@ class SweepPanePainter extends CustomPainter {
     void label(double v) {
       final py = chart.center.dy - v * yScalePx;
       final text = v == 0 ? '0' : v.toStringAsFixed(0);
-      final tp = TextPainter(
-        text: TextSpan(text: text, style: style),
-        textDirection: TextDirection.ltr,
-      )..layout();
+      final tp = _AxisLabelCache.painter(text, style);
       tp.paint(canvas, Offset(chart.right + 4, py - tp.height / 2));
     }
 
@@ -328,10 +415,7 @@ class SweepPanePainter extends CustomPainter {
         x = chart.left + i * xScale;
       }
       if (elapsed < 0) continue;
-      final tp = TextPainter(
-        text: TextSpan(text: formatElapsed(elapsed), style: style),
-        textDirection: TextDirection.ltr,
-      )..layout();
+      final tp = _AxisLabelCache.painter(formatElapsed(elapsed), style);
       var dx = x - tp.width / 2;
       if (dx < chart.left) dx = chart.left;
       if (dx + tp.width > chart.right) dx = chart.right - tp.width;

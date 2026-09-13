@@ -75,6 +75,8 @@ class SweepBuffer extends ChangeNotifier with FrameCoalescedNotify {
     return ch.display[linearIndex];
   }
 
+  /// Follow wipe-ring length in samples. `0` idles the ring (RAM-only append).
+  /// Only Raw EEG uses the wipe ring.
   void setDisplayWindow(int window) {
     if (window == _displayWindow) return;
     _displayWindow = window;
@@ -89,7 +91,7 @@ class SweepBuffer extends ChangeNotifier with FrameCoalescedNotify {
   void append(EegDto dto) {
     final ch = _channels.putIfAbsent(
       dto.electrode,
-      () => _ChannelBuf(capacity, _displayWindow > 0 ? _displayWindow : 1),
+      () => _ChannelBuf(capacity, _displayWindow),
     );
     if (_displayWindow == 0) {
       for (final s in dto.samples) {
