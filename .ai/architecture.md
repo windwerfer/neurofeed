@@ -106,6 +106,10 @@ the WebP thumbnail. Assembler: `lib/src/session_v5/assemble.dart`
 
 Live graphs + connect-time recording under `lib/src/monitor/`. Spec
 [monitor.md](monitor.md). Spectrogram FFT is 1 s / 256-pt; no size chrome.
+Draw-path (PRs 1–7, PR 8 skipped): vsync-coalesced cache notifies; Follow
+STFT / Welch / histogram are incremental; spectrogram is a bitmap; Raw EEG
+min/max-downsamples and idles the wipe ring when that view unmounts.
+History: [archive/handoff-monitor-perf.md](archive/handoff-monitor-perf.md).
 
 `MonitorController` is constructed in `main()` from the same
 `ProviderContainer` as `AppStateNotifier`, and hydrates if already connected.

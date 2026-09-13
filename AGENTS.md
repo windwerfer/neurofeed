@@ -72,9 +72,12 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   (`.ai/audio-engine.md`) are frozen: do not duck unmodulated background;
   do not deinit SoLoud from a controller; do not restore
   `AudioService.setMusicMuffle`. Monitor spec (`.ai/monitor.md` rev 6) is
-  implemented (PRs 0–7). Do not add Spectrogram `FFT 1s ▾`, averaging, or
-  a Bands strip on Spectrogram. Do not restore Bands `SMOOTH` / `REAL TIME`
-  chrome. Bands Follow lead is 1 s (Spectrogram stays flush-right).
+  implemented (product PRs 0–7). Draw-path perf PRs 1–7 landed; PR 8
+  skipped. Do not add Spectrogram `FFT 1s ▾`, averaging, or a Bands strip
+  on Spectrogram. Do not restore Bands `SMOOTH` / `REAL TIME` chrome.
+  Bands Follow lead is 1 s (Spectrogram stays flush-right). Do not pause
+  `SweepBuffer` / `BandCache` on view change. Hidden graphs stay unmounted
+  (`AppShell` `switch`, not `IndexedStack`).
 - If you change on-screen copy or primary chrome (status bar, sidebar, connect
   window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
   Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
@@ -128,6 +131,8 @@ lib/src/monitor/            live graphs + recording
   band_toggles.dart         in-pane delta/theta/alpha/beta/gamma chips
   cache/band_cache.dart     1 Hz bands, 30 min cap; no EEG LiveCache
   cache/sweep_buffer.dart   5 min EEG RAM + display ring (moved from charts/)
+  cache/stft_ring.dart      Follow STFT columns (Inspect / electrodes / window = full)
+  cache/sliding_spectrum.dart  Follow Welch / histogram (Inspect = full)
   panes/sweep_pane.dart     one electrode, theme wipe / Inspect fill-right
   panes/time_series_pane.dart  Bands strip; PCHIP; Follow ticker when lead > 0
   panes/bands_context_strip.dart  ~30% Bands map under Histogram/PSD
@@ -179,7 +184,11 @@ assets/                     protocols.json, calibrations.json, features.json, au
   Hamming (`kDefaultFftN`); no size dropdown. Bands traces are PCHIP;
   Follow on 1 Hz strips uses `bandsFollowLeadSeconds` (1 s) and a vsync
   ticker in `TimeSeriesPane`. In-pane `BandToggles` hide series (last-one
-  stays); strip legend is painted, not tappable. `bandNames` / `bandColors`
+  stays); strip legend is painted, not tappable. EEG notify is
+  vsync-coalesced (RAM writes stay 256 Hz). Follow Spectrogram STFT,
+  PSD Welch, and Histogram are incremental; Inspect / electrodes / window
+  still full recompute. Raw EEG traces min/max-downsample per pixel;
+  `RawEegView.dispose` sets wipe-ring window 0. `bandNames` / `bandColors`
   stay in `lib/src/charts/band_style.dart`. Pad quality is a 4-ch 1 s ring
   in `connection_provider.dart` (not a 5 min EEG LiveCache).
 - Crash recovery: feedback `lib/src/feedback/crash_recovery.dart` scans

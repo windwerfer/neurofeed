@@ -5,7 +5,7 @@
 | **Status** | Implemented |
 | **Date** | 2026-09-13 |
 | **Chrome names** | [ui-map.md](ui-map.md) |
-| **Series history** | [archive/handoff-monitor.md](archive/handoff-monitor.md), [archive/monitor-rev6-design.md](archive/monitor-rev6-design.md) |
+| **Series history** | [archive/handoff-monitor.md](archive/handoff-monitor.md), [archive/monitor-rev6-design.md](archive/monitor-rev6-design.md), [archive/handoff-monitor-perf.md](archive/handoff-monitor-perf.md) (draw-path PRs 1–7; PR 8 skipped) |
 
 Do not reopen: pipeline-contract Key Decisions, Crown Start, Connect UX, v5
 68-byte header. Do not add Spectrogram `FFT 1s ▾`, averaging, or a Bands

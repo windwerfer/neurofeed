@@ -2,21 +2,17 @@
 
 **Branch:** `refactor/monitor`
 
-**Now:** graph draw-path perf PRs **1–7 landed**. PR **8** gated. Plan:
-[archive/handoff-monitor-perf.md](archive/handoff-monitor-perf.md).
-**Next thread:** [archive/handoff-monitor-perf-8.md](archive/handoff-monitor-perf-8.md)
-only if a profile still shows wipe-ring copies or tmp
-`encodeSessionEvent`. Sequential local commits. Do not push, do not
-new branch.
-
-Monitor product series **complete** (spec [monitor.md](monitor.md)). PRs
-**0–7 landed**, product **PR 8 cancelled**. History:
-[archive/handoff-monitor.md](archive/handoff-monitor.md).
+**Now:** none. Monitor product **and** draw-path perf are complete.
+Spec: [monitor.md](monitor.md). History:
+[archive/handoff-monitor.md](archive/handoff-monitor.md),
+[archive/handoff-monitor-perf.md](archive/handoff-monitor-perf.md)
+(PRs 1–7 landed; **PR 8 skipped**).
 
 Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
 or the v5 68-byte header. Bands Y is **dB display** (storage linear).
 Do not add averaging, a Bands strip on Spectrogram, Spectrogram FFT-window
-chrome, or `SMOOTH` / `REAL TIME` Bands chrome.
+chrome, or `SMOOTH` / `REAL TIME` Bands chrome. Do not pause `SweepBuffer`
+/ `BandCache` on view change.
 
 ## Queued elsewhere (not this branch)
 
