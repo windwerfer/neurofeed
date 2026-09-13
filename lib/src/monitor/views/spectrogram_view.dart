@@ -36,14 +36,13 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
   int _lastHop = -1;
   final StftRing _ring = StftRing();
   final ValueNotifier<int> _plotTick = ValueNotifier(0);
+  late final MonitorController _mon;
 
   @override
   void initState() {
     super.initState();
-    ref
-        .read(monitorControllerProvider.notifier)
-        .sweepBuffer
-        .addListener(_onBuffer);
+    _mon = ref.read(monitorControllerProvider.notifier);
+    _mon.sweepBuffer.addListener(_onBuffer);
     _viewport.addListener(_onViewport);
   }
 
@@ -70,8 +69,6 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
     _viewport.dispose();
     super.dispose();
   }
-
-  MonitorController get _mon => ref.read(monitorControllerProvider.notifier);
 
   void _syncMontage(List<String> names) {
     if (names.length == _montageLen &&
