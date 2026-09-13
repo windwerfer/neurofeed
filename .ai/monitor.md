@@ -137,7 +137,8 @@ are one pane (no strip). Follow is disabled there.
 DSP: `monitor/dsp.dart` only. Hamming, power `(re²+im²)/(n*n)`. Live `n = 256`.
 
 EEG RAM is SweepBuffer only (5 min). SweepBuffer and BandCache coalesce
-`notifyListeners` to vsync; RAM writes stay 256 Hz. Inspect past 5 min reads the open
+`notifyListeners` to vsync; RAM writes stay 256 Hz. Histogram/PSD Inspect does not
+re-Welch / re-bin; Follow is still last T seconds. Inspect past 5 min reads the open
 tmp/recording `.raw` via `FileBackedSource`. After tmp rotate, Inspect is
 the **new** tmp plus whatever is still in RAM.
 

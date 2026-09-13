@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/charts/band_style.dart';
 import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/monitor/cache/sweep_mean.dart';
-import 'package:muse_ml/src/monitor/dsp.dart';
 import 'package:muse_ml/src/monitor/electrode_toggles.dart';
 import 'package:muse_ml/src/monitor/empty_state.dart';
 import 'package:muse_ml/src/monitor/graph_shell.dart';
@@ -12,6 +10,7 @@ import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/monitor/panes/bands_context_strip.dart';
 import 'package:muse_ml/src/monitor/panes/psd_pane.dart';
 import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
+import 'package:muse_ml/src/monitor/split_pane_tick.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
 
 enum PsdHzRange { hz60, hz100 }
@@ -34,27 +33,60 @@ class _PsdViewState extends ConsumerState<PsdView> {
   int _montageLen = 0;
   PsdHzRange _hz = PsdHzRange.hz60;
   double? _hairlineHz;
+  final PsdTick _tick = PsdTick();
 
   @override
   void initState() {
     super.initState();
     final mon = ref.read(monitorControllerProvider.notifier);
-    mon.sweepBuffer.addListener(_onTick);
-    mon.bandCache.addListener(_onTick);
-    _viewport.addListener(_onTick);
-    _strip.addListener(_onTick);
+    mon.sweepBuffer.addListener(_onSweep);
+    mon.bandCache.addListener(_onBands);
+    _viewport.addListener(_onEpoch);
+    _strip.addListener(_onStrip);
+    _syncMontage(ref.read(monitorControllerProvider).electrodeNames);
+    _recomputeEeg();
+    _recomputeSeries();
   }
 
-  void _onTick() {
-    if (mounted) setState(() {});
+  void _onSweep() {
+    if (!mounted) return;
+    final newest = _newestElapsed();
+    if (_tick.onSweep(
+      mode: _viewport.mode,
+      buffer: _mon.sweepBuffer,
+      electrodes: _selected,
+      startElapsed: _viewport.stripVisibleStart(newestElapsed: newest),
+      endElapsed: _viewport.stripVisibleEnd(newestElapsed: newest),
+      newestElapsed: _mon.ramNewestElapsed ?? newest,
+    )) {
+      setState(() {});
+    }
+  }
+
+  void _onEpoch() {
+    if (!mounted) return;
+    _recomputeEeg();
+    setState(() {});
+  }
+
+  void _onBands() {
+    if (!mounted) return;
+    _recomputeSeries();
+    setState(() {});
+  }
+
+  void _onStrip() {
+    if (!mounted) return;
+    _recomputeSeries();
+    setState(() {});
   }
 
   @override
   void dispose() {
-    _mon.sweepBuffer.removeListener(_onTick);
-    _mon.bandCache.removeListener(_onTick);
-    _viewport.removeListener(_onTick);
-    _strip.removeListener(_onTick);
+    _mon.sweepBuffer.removeListener(_onSweep);
+    _mon.bandCache.removeListener(_onBands);
+    _viewport.removeListener(_onEpoch);
+    _strip.removeListener(_onStrip);
     _viewport.dispose();
     _strip.dispose();
     super.dispose();
@@ -93,6 +125,34 @@ class _PsdViewState extends ConsumerState<PsdView> {
   }
 
   double get _maxHz => _hz == PsdHzRange.hz100 ? 100 : 60;
+
+  void _recomputeEeg() {
+    final newest = _newestElapsed();
+    _tick.recomputeEeg(
+      buffer: _mon.sweepBuffer,
+      electrodes: _selected,
+      startElapsed: _viewport.stripVisibleStart(newestElapsed: newest),
+      endElapsed: _viewport.stripVisibleEnd(newestElapsed: newest),
+      newestElapsed: _mon.ramNewestElapsed ?? newest,
+    );
+  }
+
+  void _recomputeSeries() {
+    if (ref.read(appStateProvider).status.connected != true) {
+      _tick.clearSeries();
+      return;
+    }
+    final bandNewest = _bandNewest();
+    _tick.recomputeSeries(
+      cache: _mon.bandCache,
+      electrodes: _selected,
+      startElapsed: _strip.stripVisibleStart(newestElapsed: bandNewest),
+      endElapsed: _strip.stripVisibleEnd(newestElapsed: bandNewest),
+      captureStartedAtMs: ref
+          .read(monitorControllerProvider)
+          .captureStartedAtMs,
+    );
+  }
 
   void _follow() {
     _strip.followStrip();
@@ -156,40 +216,23 @@ class _PsdViewState extends ConsumerState<PsdView> {
     });
     final connected = app.status.connected;
     final names = state.electrodeNames;
+    final prevSelected = Set<int>.of(_selected);
     _syncMontage(names);
+    if (prevSelected.length != _selected.length ||
+        !prevSelected.containsAll(_selected)) {
+      _recomputeEeg();
+      _recomputeSeries();
+    }
     final buffer = _mon.sweepBuffer;
     final newest = _newestElapsed();
     final start = _viewport.stripVisibleStart(newestElapsed: newest);
     final end = _viewport.stripVisibleEnd(newestElapsed: newest);
-    Spectrum? spectrum;
-    double? peak;
-    if (connected && buffer.hasData) {
-      final samples = meanEegWindow(
-        buffer: buffer,
-        electrodes: _selected,
-        startElapsed: start,
-        endElapsed: end,
-        newestElapsed: _mon.ramNewestElapsed ?? newest,
-      );
-      spectrum = welch(samples);
-      peak = alphaPeakHz(spectrum);
-    }
     final inspectLabel = _viewport.mode == ViewportMode.inspect
         ? '${formatElapsed(start)}–${formatElapsed(end)}'
         : null;
     final bandNewest = _bandNewest();
     final bandOldest = _bandOldest();
-    final stripStart = _strip.stripVisibleStart(newestElapsed: bandNewest);
-    final stripEnd = _strip.stripVisibleEnd(newestElapsed: bandNewest);
-    final series = connected
-        ? buildBandSeries(
-            cache: _mon.bandCache,
-            electrodes: _selected,
-            startElapsed: stripStart,
-            endElapsed: stripEnd,
-            captureStartedAtMs: state.captureStartedAtMs,
-          )
-        : [for (var i = 0; i < bandNames.length; i++) <BandPoint>[]];
+    final series = connected ? _tick.series : emptyBandSeries();
 
     return GraphShell(
       title: 'Power Spectral Density',
@@ -207,6 +250,8 @@ class _PsdViewState extends ConsumerState<PsdView> {
         onToggle: (i) {
           setState(() {
             _selected = toggleAverageElectrode(_selected, i);
+            _recomputeEeg();
+            _recomputeSeries();
           });
         },
       ),
@@ -215,10 +260,10 @@ class _PsdViewState extends ConsumerState<PsdView> {
           children: [
             Positioned.fill(
               child: PsdPane(
-                spectrum: spectrum,
+                spectrum: connected ? _tick.spectrum : null,
                 maxHz: _maxHz,
                 connected: connected,
-                peakHz: peak,
+                peakHz: connected ? _tick.peak : null,
                 hairlineHz: _hairlineHz,
                 onTapHz: (hz) => setState(() => _hairlineHz = hz),
               ),

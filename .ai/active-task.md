@@ -2,9 +2,15 @@
 
 **Branch:** `refactor/monitor`
 
-Monitor series **complete** (spec [monitor.md](monitor.md)). PRs **0–7
-landed**, **PR 8 cancelled**. History: [archive/handoff-monitor.md](archive/handoff-monitor.md).
-Bands Follow slide + PCHIP + in-pane chips: same handoff, follow-up section.
+**Now:** graph draw-path perf, PRs **1–7** (PR **8** gated). Plan:
+[archive/handoff-monitor-perf.md](archive/handoff-monitor-perf.md).
+**Next thread:** paste [archive/handoff-monitor-perf-3.md](archive/handoff-monitor-perf-3.md)
+(incremental Spectrogram STFT column ring). Sequential local
+commits. Do not push, do not new branch.
+
+Monitor product series **complete** (spec [monitor.md](monitor.md)). PRs
+**0–7 landed**, product **PR 8 cancelled**. History:
+[archive/handoff-monitor.md](archive/handoff-monitor.md).
 
 Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
 or the v5 68-byte header. Bands Y is **dB display** (storage linear).
