@@ -39,6 +39,7 @@ flutter test \
   test/monitor/graph_cinema_test.dart \
   test/monitor/dsp_test.dart \
   test/monitor/stft_ring_test.dart \
+  test/monitor/spectrogram_pane_test.dart \
   test/monitor/histogram_pane_test.dart \
   test/monitor/split_pane_tick_test.dart \
   test/monitor/electrode_toggles_test.dart \

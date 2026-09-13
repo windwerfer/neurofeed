@@ -1,8 +1,62 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:muse_ml/src/monitor/dsp.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
 
-class SpectrogramPane extends StatelessWidget {
+class SpectrogramHeatmapBgra {
+  const SpectrogramHeatmapBgra({
+    required this.bytes,
+    required this.width,
+    required this.height,
+  });
+
+  final Uint8List bytes;
+  final int width;
+  final int height;
+
+  int pixelOffset(int x, int y) => (y * width + x) * 4;
+}
+
+SpectrogramHeatmapBgra? rasterizeSpectrogramBgra(
+  List<StftColumn> columns, {
+  required double magMin,
+  required double magMax,
+  double maxHz = SpectrogramPanePainter.maxHz,
+}) {
+  if (columns.isEmpty) return null;
+  final width = columns.length;
+  final n = columns.first.db.length;
+  if (n < 2) return null;
+  final fftN = (n - 1) * 2;
+  final hzBin = fftN > 0 ? kFftSampleRate / fftN : 1.0;
+  var height = 0;
+  for (var k = 0; k < n; k++) {
+    if (k * hzBin >= maxHz) break;
+    height++;
+  }
+  if (height < 1) return null;
+
+  final bytes = Uint8List(width * height * 4);
+  final magSpan = magMax - magMin;
+  for (var x = 0; x < columns.length; x++) {
+    final db = columns[x].db;
+    final limit = height < db.length ? height : db.length;
+    for (var k = 0; k < limit; k++) {
+      final t = magSpan.abs() < 1e-9 ? 0.0 : (db[k] - magMin) / magSpan;
+      final argb = SpectrogramPanePainter.colorFor(t).toARGB32();
+      final offset = ((height - 1 - k) * width + x) * 4;
+      bytes[offset] = argb & 0xFF;
+      bytes[offset + 1] = (argb >> 8) & 0xFF;
+      bytes[offset + 2] = (argb >> 16) & 0xFF;
+      bytes[offset + 3] = (argb >> 24) & 0xFF;
+    }
+  }
+  return SpectrogramHeatmapBgra(bytes: bytes, width: width, height: height);
+}
+
+class SpectrogramPane extends StatefulWidget {
   const SpectrogramPane({
     super.key,
     required this.columns,
@@ -21,16 +75,99 @@ class SpectrogramPane extends StatelessWidget {
   final bool connected;
 
   @override
+  State<SpectrogramPane> createState() => _SpectrogramPaneState();
+}
+
+class _SpectrogramPaneState extends State<SpectrogramPane> {
+  ui.Image? _heatmap;
+  int _generation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleRaster();
+  }
+
+  @override
+  void didUpdateWidget(SpectrogramPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.columns != widget.columns ||
+        oldWidget.magMin != widget.magMin ||
+        oldWidget.magMax != widget.magMax ||
+        oldWidget.connected != widget.connected) {
+      _scheduleRaster();
+    }
+  }
+
+  @override
+  void dispose() {
+    _generation++;
+    _heatmap?.dispose();
+    _heatmap = null;
+    super.dispose();
+  }
+
+  void _scheduleRaster() {
+    _generation++;
+    final gen = _generation;
+    if (!widget.connected || widget.columns.isEmpty) {
+      _dropHeatmap();
+      return;
+    }
+    final bmp = rasterizeSpectrogramBgra(
+      widget.columns,
+      magMin: widget.magMin,
+      magMax: widget.magMax,
+    );
+    if (bmp == null) {
+      _dropHeatmap();
+      return;
+    }
+    ui.decodeImageFromPixels(
+      bmp.bytes,
+      bmp.width,
+      bmp.height,
+      ui.PixelFormat.bgra8888,
+      (image) {
+        if (!mounted || gen != _generation) {
+          image.dispose();
+          return;
+        }
+        final previous = _heatmap;
+        setState(() {
+          _heatmap = image;
+        });
+        if (previous != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            previous.dispose();
+          });
+        }
+      },
+    );
+  }
+
+  void _dropHeatmap() {
+    final previous = _heatmap;
+    if (previous == null) return;
+    _heatmap = null;
+    if (mounted) setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      previous.dispose();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return CustomPaint(
       painter: SpectrogramPanePainter(
-        columns: columns,
-        viewport: viewport,
-        newestElapsed: newestElapsed,
-        magMin: magMin,
-        magMax: magMax,
-        connected: connected,
+        columns: widget.columns,
+        viewport: widget.viewport,
+        newestElapsed: widget.newestElapsed,
+        magMin: widget.magMin,
+        magMax: widget.magMax,
+        connected: widget.connected,
+        heatmap: _heatmap,
         axisColor: theme.colorScheme.onSurfaceVariant,
         gridColor: theme.colorScheme.outlineVariant,
       ),
@@ -47,6 +184,7 @@ class SpectrogramPanePainter extends CustomPainter {
     required this.magMin,
     required this.magMax,
     required this.connected,
+    required this.heatmap,
     required this.axisColor,
     required this.gridColor,
   });
@@ -72,6 +210,7 @@ class SpectrogramPanePainter extends CustomPainter {
   final double magMin;
   final double magMax;
   final bool connected;
+  final ui.Image? heatmap;
   final Color axisColor;
   final Color gridColor;
 
@@ -108,8 +247,8 @@ class SpectrogramPanePainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(chart);
     canvas.drawRect(chart, Paint()..color = _stops.first.$2);
-    if (connected && columns.isNotEmpty) {
-      _drawHeatmap(canvas, chart, visStart, span);
+    if (connected && columns.isNotEmpty && heatmap != null) {
+      _drawHeatmap(canvas, chart, visStart, span, heatmap!);
     }
     canvas.restore();
     _drawYLabels(canvas, chart);
@@ -117,38 +256,32 @@ class SpectrogramPanePainter extends CustomPainter {
     _drawColorbar(canvas, size, chart);
   }
 
-  void _drawHeatmap(Canvas canvas, Rect chart, double visStart, double span) {
+  void _drawHeatmap(
+    Canvas canvas,
+    Rect chart,
+    double visStart,
+    double span,
+    ui.Image image,
+  ) {
     if (columns.isEmpty) return;
-    final magSpan = magMax - magMin;
     final hop = columns.length >= 2
         ? (columns[1].elapsed - columns[0].elapsed).abs()
         : 0.25;
-    final colW = (hop / span * chart.width).clamp(1.0, chart.width);
-    final n = columns.first.db.length;
-    if (n < 2) return;
-    final fftN = (n - 1) * 2;
-    final hzBin = fftN > 0 ? kFftSampleRate / fftN : 1.0;
-
-    for (final col in columns) {
-      if (col.elapsed < visStart - hop || col.elapsed > visStart + span + hop) {
-        continue;
-      }
-      final x = chart.left + (col.elapsed - visStart) / span * chart.width;
-      if (x + colW < chart.left || x > chart.right) continue;
-      final lastBin = (maxHz / hzBin).floor().clamp(0, col.db.length - 1);
-      for (var k = 0; k <= lastBin; k++) {
-        final hz0 = k * hzBin;
-        final hz1 = (k + 1) * hzBin;
-        if (hz0 >= maxHz) break;
-        final y1 = chart.bottom - (hz0 / maxHz).clamp(0.0, 1.0) * chart.height;
-        final y0 = chart.bottom - (hz1 / maxHz).clamp(0.0, 1.0) * chart.height;
-        final t = magSpan.abs() < 1e-9 ? 0.0 : (col.db[k] - magMin) / magSpan;
-        canvas.drawRect(
-          Rect.fromLTRB(x, y0, x + colW, y1),
-          Paint()..color = colorFor(t),
-        );
-      }
-    }
+    final hopSec = hop > 1e-12 ? hop : 0.25;
+    final x0 =
+        chart.left + (columns.first.elapsed - visStart) / span * chart.width;
+    final dest = Rect.fromLTWH(
+      x0,
+      chart.top,
+      hopSec / span * chart.width * columns.length,
+      chart.height,
+    );
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      dest,
+      Paint()..filterQuality = FilterQuality.none,
+    );
   }
 
   void _drawYLabels(Canvas canvas, Rect chart) {
@@ -238,6 +371,7 @@ class SpectrogramPanePainter extends CustomPainter {
         old.magMin != magMin ||
         old.magMax != magMax ||
         old.connected != connected ||
+        old.heatmap != heatmap ||
         old.viewport.mode != viewport.mode ||
         old.viewport.windowSeconds != viewport.windowSeconds ||
         old.viewport.inspectStartElapsed != viewport.inspectStartElapsed;

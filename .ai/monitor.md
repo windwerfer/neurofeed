@@ -137,7 +137,9 @@ are one pane (no strip). Follow is disabled there.
 
 DSP: `monitor/dsp.dart` only. Hamming, power `(re²+im²)/(n*n)`. Live `n = 256`.
 Follow Spectrogram STFT is incremental (one new hop FFT); Inspect / electrode
-set / window-length still full recompute.
+set / window-length still full recompute. The heatmap is a bitmap painted with
+`FilterQuality.none`, rasterized inside `SpectrogramPane` (live + recording
+dashboard).
 
 EEG RAM is SweepBuffer only (5 min). SweepBuffer and BandCache coalesce
 `notifyListeners` to vsync; RAM writes stay 256 Hz. Histogram/PSD Inspect does not

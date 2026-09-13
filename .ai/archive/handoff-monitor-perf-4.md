@@ -5,7 +5,7 @@
 | Date | 2026-09-13 |
 | Branch | `refactor/monitor` (do not push, do not create a branch) |
 | Status | **Start PR 4.** Plan is already on disk. Do not re-plan. |
-| Parent | `f87b83d` — incremental spectrogram STFT columns |
+| Parent | `2833b0a` — incremental spectrogram STFT columns |
 | Series law | [handoff-monitor-perf.md](handoff-monitor-perf.md) |
 | Product spec | [../monitor.md](../monitor.md) |
 
@@ -15,7 +15,7 @@
 Continue monitor graph perf on `refactor/monitor`. Do not push, do not
 create a branch, do not open a GitHub PR. Implement ONLY PR4. Plan is
 on disk — do not re-plan. Read `.ai/archive/handoff-monitor-perf-4.md`
-and follow it. Parent is `f87b83d`.
+and follow it. Parent is `2833b0a`.
 ```
 
 ---
@@ -61,7 +61,7 @@ Do not change hop or `kDefaultFftN`. Do not edit GraphShell / AppShell.
 
 ## What PR3 landed
 
-Commit `f87b83d` — `perf(monitor): incremental spectrogram STFT columns`
+Commit `2833b0a` — `perf(monitor): incremental spectrogram STFT columns`
 
 - Helper `lib/src/monitor/cache/stft_ring.dart`: `columnsFor(buffer,
   electrodes, start, end, newest)`.
