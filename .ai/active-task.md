@@ -3,35 +3,15 @@
 **Branch:** `refactor/monitor`
 
 Monitor series **complete** (spec [monitor.md](monitor.md)). PRs **0–7
-landed**. **PR 8 cancelled**: Spectrogram stays 1 s / 256-pt Hamming; no
-`FFT 1s ▾`. Handoff: [archive/handoff-monitor.md](archive/handoff-monitor.md).
-
-Cinema (`graph_cinema.dart`): **mobile landscape** hides graph chrome
-(portrait restores). **Desktop keeps chrome**; **F11** hides the same.
+landed**, **PR 8 cancelled**. History: [archive/handoff-monitor.md](archive/handoff-monitor.md).
+Bands Follow slide + PCHIP + in-pane chips: same handoff, follow-up section.
 
 Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
 or the v5 68-byte header. Bands Y is **dB display** (storage linear).
-Do not add averaging, a Bands strip on Spectrogram, or Spectrogram FFT-window
-chrome.
+Do not add averaging, a Bands strip on Spectrogram, Spectrogram FFT-window
+chrome, or `SMOOTH` / `REAL TIME` Bands chrome.
 
-## Landed
-
-- PR 0 — `lib/src/session_v5/`
-- PR 1a — `MonitorController` in `main()` + band cache
-- PR 1b — tmp writer + exclusive lease
-- PR 1c — file-backed Inspect of tmp `.raw` (`3fb276b`)
-- PR 2 — GraphShell + N stacked sweep EEG panes (`a9717bb`)
-- PR 3 ASCII — spec rev 5 (`8e45d37`)
-- PR 3 — Bands on GraphShell (`878cc8a`)
-- PR 4 ASCII — spec rev 6 (`4c968fa`)
-- PR 4 — Histogram + PSD + Spectrogram painters (`c3a40f5`)
-- PR 5a — Record / Stop / assemble / 409 `recording_active` (`4fc83ec`)
-- PR 5b — Crash recovery + sqlite `kind` (`d4afac0`)
-- PR 6 — Unified History + filter + Save files to folder (`5195eca`)
-- PR 7 — Bands context strip under Histogram and PSD (`b197709`)
-- PR 8 — **cancelled** (no FFT-window dropdown)
-
-## Queued elsewhere (not monitor PRs)
+## Queued elsewhere (not this branch)
 
 - Crown *run* (quality vectors, computed frames, charts device-aware).
 - Making Crown / Notion OSC connect (or OSC discovery) work.

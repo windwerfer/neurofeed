@@ -13,6 +13,10 @@ class ViewportController extends ChangeNotifier {
   static const List<double> bandsWindowOptions = [15, 30, 60, 120];
   static const double bandsZoomFloor = 5;
   static const double bandsZoomCap = 1800;
+
+  /// Follow lead for 1 Hz Bands strips (not Spectrogram). Newest sample
+  /// reaches the right edge ~1 s after it arrives.
+  static const double bandsFollowLeadSeconds = 1.0;
   static const double histogramDefaultWindowSeconds = 8;
   static const double psdDefaultWindowSeconds = 4;
   static const List<double> histogramPsdWindowOptions = [2, 4, 8];
@@ -24,8 +28,15 @@ class ViewportController extends ChangeNotifier {
   ViewportMode mode = ViewportMode.follow;
   double windowSeconds = defaultWindowSeconds;
 
+  /// 0 = Follow right edge is cache newest (Spectrogram). Bands uses
+  /// [bandsFollowLeadSeconds].
+  double followLeadSeconds = 0;
+
   /// Left-edge elapsed seconds while Inspecting. Null in Follow.
   double? inspectStartElapsed;
+
+  double? _sampleAnchor;
+  double? _wallAnchor;
 
   int get windowSamples => (windowSeconds * SweepBuffer.sampleRate).round();
 
@@ -92,10 +103,44 @@ class ViewportController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void enterInspectStrip({required double newestElapsed}) {
+  void resetFollowAnchors() {
+    _sampleAnchor = null;
+    _wallAnchor = null;
+  }
+
+  /// Call from the cache listener when a new 1 Hz sample arrives, not from
+  /// the Follow ticker. [wallNow] is injectable for tests (unix seconds).
+  void noteStripSample(double newestElapsed, {double? wallNow}) {
+    final now = wallNow ?? DateTime.now().millisecondsSinceEpoch / 1000.0;
+    if (_sampleAnchor == null || _wallAnchor == null) {
+      _sampleAnchor = newestElapsed;
+      _wallAnchor = now;
+      return;
+    }
+    if ((newestElapsed - _sampleAnchor!).abs() < 1e-12) return;
+    _wallAnchor = _wallAnchor! + (newestElapsed - _sampleAnchor!);
+    _sampleAnchor = newestElapsed;
+  }
+
+  double stripFollowNewest(double newestElapsed, {double? wallNow}) {
+    if (mode != ViewportMode.follow || followLeadSeconds <= 0) {
+      return newestElapsed;
+    }
+    final now = wallNow ?? DateTime.now().millisecondsSinceEpoch / 1000.0;
+    if (_sampleAnchor == null || _wallAnchor == null) {
+      return newestElapsed - followLeadSeconds;
+    }
+    return _sampleAnchor! + (now - _wallAnchor!) - followLeadSeconds;
+  }
+
+  void enterInspectStrip({required double newestElapsed, double? wallNow}) {
     if (mode == ViewportMode.inspect && inspectStartElapsed != null) return;
+    final start = stripVisibleStart(
+      newestElapsed: newestElapsed,
+      wallNow: wallNow,
+    );
     mode = ViewportMode.inspect;
-    inspectStartElapsed = newestElapsed - windowSeconds;
+    inspectStartElapsed = start;
     notifyListeners();
   }
 
@@ -125,15 +170,16 @@ class ViewportController extends ChangeNotifier {
     notifyListeners();
   }
 
-  double stripVisibleStart({required double newestElapsed}) {
+  double stripVisibleStart({required double newestElapsed, double? wallNow}) {
     if (mode == ViewportMode.follow) {
-      return newestElapsed - windowSeconds;
+      return stripFollowNewest(newestElapsed, wallNow: wallNow) - windowSeconds;
     }
     return inspectStartElapsed ?? newestElapsed - windowSeconds;
   }
 
-  double stripVisibleEnd({required double newestElapsed}) =>
-      stripVisibleStart(newestElapsed: newestElapsed) + windowSeconds;
+  double stripVisibleEnd({required double newestElapsed, double? wallNow}) =>
+      stripVisibleStart(newestElapsed: newestElapsed, wallNow: wallNow) +
+      windowSeconds;
 
   void panStrip(
     double deltaSeconds, {

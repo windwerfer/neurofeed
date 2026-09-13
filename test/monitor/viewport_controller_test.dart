@@ -253,6 +253,58 @@ void main() {
     expect(context.windowSeconds, 8);
   });
 
+  test('Follow lead: at sample arrival display end is newest − 1 s', () {
+    final v = ViewportController()
+      ..windowSeconds = 30
+      ..followLeadSeconds = ViewportController.bandsFollowLeadSeconds;
+    v.noteStripSample(80, wallNow: 1000);
+    expect(v.stripFollowNewest(80, wallNow: 1000), closeTo(79, 1e-9));
+    expect(
+      v.stripVisibleEnd(newestElapsed: 80, wallNow: 1000),
+      closeTo(79, 1e-9),
+    );
+    expect(
+      v.stripVisibleStart(newestElapsed: 80, wallNow: 1000),
+      closeTo(49, 1e-9),
+    );
+    expect(v.stripFollowNewest(80, wallNow: 1001), closeTo(80, 1e-9));
+    expect(
+      v.stripVisibleEnd(newestElapsed: 80, wallNow: 1001),
+      closeTo(80, 1e-9),
+    );
+
+    v.noteStripSample(81, wallNow: 1001);
+    expect(v.stripFollowNewest(81, wallNow: 1001), closeTo(80, 1e-9));
+  });
+
+  test('Inspect freezes displayed window; wall clock does not slide', () {
+    final v = ViewportController()
+      ..windowSeconds = 30
+      ..followLeadSeconds = ViewportController.bandsFollowLeadSeconds;
+    v.noteStripSample(80, wallNow: 1000);
+    v.enterInspectStrip(newestElapsed: 80, wallNow: 1000);
+    expect(v.mode, ViewportMode.inspect);
+    expect(
+      v.stripVisibleStart(newestElapsed: 80, wallNow: 1000),
+      closeTo(49, 1e-9),
+    );
+    expect(
+      v.stripVisibleStart(newestElapsed: 90, wallNow: 1010),
+      closeTo(49, 1e-9),
+    );
+    expect(
+      v.stripVisibleEnd(newestElapsed: 90, wallNow: 1010),
+      closeTo(79, 1e-9),
+    );
+  });
+
+  test('followLead 0 is flush-right', () {
+    final v = ViewportController()..windowSeconds = 20;
+    expect(v.followLeadSeconds, 0);
+    expect(v.stripVisibleEnd(newestElapsed: 50), 50);
+    expect(v.stripVisibleStart(newestElapsed: 50), 30);
+  });
+
   test('pinchX zoom floor is 5 s and cap is min(elapsed, 1800)', () {
     final v = ViewportController()..windowSeconds = 30;
     v.pinchX(

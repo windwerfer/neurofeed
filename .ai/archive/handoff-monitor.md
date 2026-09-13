@@ -8,7 +8,9 @@
 | Branch | `refactor/monitor` (PR 0 `22cfd38` … PR 7 `b197709`). |
 | Do not mix | Crown Start, OSC-connect, pipeline-contract Key Decisions, v5 68-byte header / FRB, Android foreground service, Athena optics, growing status-bar pads to 8. |
 
-PRs **0–7 landed**. **PR 8 was cancelled** — FFT-window chrome is not a normal-user control; default 256-pt Hamming is enough. No averaging. PSD Welch stays 1 s / 256-pt. No next-thread prompt.
+PRs **0–7 landed**. **PR 8 was cancelled** — FFT-window chrome is not a normal-user control; default 256-pt Hamming is enough. No averaging. PSD Welch stays 1 s / 256-pt.
+
+**Follow-up (post PR 7, same branch):** Bands 1 Hz display — PCHIP strokes, Follow vsync + ~1 s lead (`ViewportController.bandsFollowLeadSeconds`), in-pane `BandToggles` (depressed = visible, last-one-stays). Histogram/PSD strip gets the same Follow slide; its legend stays painted / non-interactive. Spectrogram Follow stays flush-right (`followLeadSeconds = 0`). Inspect freezes the displayed window and may still rebuild at 1 Hz; no ticker. Do not restore `main`’s `SMOOTH` / `REAL TIME` chrome. Live spec: [../monitor.md](../monitor.md).
 
 ---
 
@@ -107,7 +109,9 @@ History list stays `lib/src/views/feedback_history.dart`. Recording dashboard / 
 
 ## Pitfalls (as shipped)
 
-- **No averaging.** Rejected; PR 8 FFT-window chrome was the alternative and is also cancelled.
+- **No averaging.** Rejected; PR 8 FFT-window chrome was the alternative and is also cancelled. Visual PCHIP + Follow lead is display-only (not DSP averaging).
+- **Do not restore `SMOOTH` / `REAL TIME` Bands chrome.** Always-on PCHIP; Follow lead is 1 s with no toggle.
+- **Spectrogram `followLeadSeconds` stays 0.** Only 1 Hz Bands strips set `bandsFollowLeadSeconds`.
 - **PSD Welch stays 1 s / 256-pt.** Spectrogram uses the same default `n = 256`.
 - **Do not add a Bands strip to Spectrogram.**
 - **Do not fork Bands view.** Histogram/PSD strip already reuses `TimeSeriesPane`.

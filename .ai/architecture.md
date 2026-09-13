@@ -112,7 +112,8 @@ Live graphs + connect-time recording under `lib/src/monitor/`. Spec
 Exclusive capture lease: `tmp_` on connect (30 min rotate, never published),
 `recording_` on Record, `session_` on feedback. Unified History lists both
 `kind`s. GraphShell: Follow / Inspect; Raw EEG is N stacked sweep panes;
-Bands dB display; Histogram/PSD have a ~30% Bands context strip; Spectrogram
+Bands dB display (PCHIP; Follow ~1 s lead; in-pane band chips);
+Histogram/PSD have a ~30% Bands context strip; Spectrogram
 is a heatmap with `mag ▾` (Y 0–60 Hz). Graph chrome hide (`GraphCinema`):
 **mobile landscape**, or desktop **F11** (same hide). Desktop landscape
 alone does not hide chrome.

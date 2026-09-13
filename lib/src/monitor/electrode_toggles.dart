@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 
 Set<int> allElectrodeIndices(int count) => {for (var i = 0; i < count; i++) i};
 
-Set<int> toggleAverageElectrode(Set<int> selected, int index) {
+Set<int> toggleKeepingLast(Set<int> selected, int index) {
   if (!selected.contains(index)) {
     return {...selected, index};
   }
   if (selected.length <= 1) return Set<int>.from(selected);
   return {...selected}..remove(index);
 }
+
+Set<int> toggleAverageElectrode(Set<int> selected, int index) =>
+    toggleKeepingLast(selected, index);
 
 class ElectrodeToggles extends StatelessWidget {
   const ElectrodeToggles({

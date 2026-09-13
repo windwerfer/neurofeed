@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:muse_ml/src/charts/smooth_path.dart';
+import 'package:muse_ml/src/monitor/band_toggles.dart';
 import 'package:muse_ml/src/monitor/cache/band_cache.dart';
 import 'package:muse_ml/src/monitor/panes/overshoot_hold.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
@@ -92,6 +95,8 @@ class TimeSeriesPane extends StatefulWidget {
     this.highlightStartElapsed,
     this.highlightEndElapsed,
     this.highlightColor,
+    this.visibleBands,
+    this.drawLegend = true,
   });
 
   final List<List<BandPoint>> series;
@@ -101,26 +106,97 @@ class TimeSeriesPane extends StatefulWidget {
   final double? highlightStartElapsed;
   final double? highlightEndElapsed;
   final Color? highlightColor;
+  final Set<int>? visibleBands;
+  final bool drawLegend;
 
   @override
   State<TimeSeriesPane> createState() => _TimeSeriesPaneState();
 }
 
-class _TimeSeriesPaneState extends State<TimeSeriesPane> {
+class _TimeSeriesPaneState extends State<TimeSeriesPane>
+    with SingleTickerProviderStateMixin {
   double _yMin = -10;
   double _yMax = 20;
   int? _yMs;
   bool _established = false;
+  Ticker? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker(_onFollowTick);
+    widget.viewport.addListener(_onViewport);
+    _maybeNoteSample();
+    _syncTicker();
+  }
+
+  @override
+  void didUpdateWidget(TimeSeriesPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.viewport != widget.viewport) {
+      oldWidget.viewport.removeListener(_onViewport);
+      widget.viewport.addListener(_onViewport);
+    }
+    _maybeNoteSample();
+    _syncTicker();
+  }
+
+  bool get _hasSamples {
+    for (final s in widget.series) {
+      if (s.isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  void _maybeNoteSample() {
+    if (!widget.connected || !_hasSamples) {
+      if (!widget.connected) widget.viewport.resetFollowAnchors();
+      return;
+    }
+    widget.viewport.noteStripSample(widget.newestElapsed);
+  }
+
+  @override
+  void dispose() {
+    widget.viewport.removeListener(_onViewport);
+    _ticker?.dispose();
+    super.dispose();
+  }
+
+  void _onViewport() {
+    _syncTicker();
+    if (mounted) setState(() {});
+  }
+
+  void _onFollowTick(Duration _) {
+    if (mounted) setState(() {});
+  }
+
+  void _syncTicker() {
+    final run =
+        widget.connected &&
+        widget.viewport.mode == ViewportMode.follow &&
+        widget.viewport.followLeadSeconds > 0;
+    final ticker = _ticker;
+    if (ticker == null) return;
+    if (run) {
+      if (!ticker.isActive) ticker.start();
+    } else if (ticker.isActive) {
+      ticker.stop();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    _easeY();
+    final wallNow = DateTime.now().millisecondsSinceEpoch / 1000.0;
+    _easeY(wallNow);
     return CustomPaint(
       painter: TimeSeriesPanePainter(
         series: widget.series,
         viewport: widget.viewport,
         newestElapsed: widget.newestElapsed,
+        wallNow: wallNow,
         yMin: _yMin,
         yMax: _yMax,
         axisColor: theme.colorScheme.onSurfaceVariant,
@@ -129,20 +205,25 @@ class _TimeSeriesPaneState extends State<TimeSeriesPane> {
         highlightStartElapsed: widget.highlightStartElapsed,
         highlightEndElapsed: widget.highlightEndElapsed,
         highlightColor: widget.highlightColor ?? theme.colorScheme.primary,
+        visibleBands: widget.visibleBands,
+        drawLegend: widget.drawLegend,
       ),
     );
   }
 
-  void _easeY() {
+  void _easeY(double wallNow) {
     final start = widget.viewport.stripVisibleStart(
       newestElapsed: widget.newestElapsed,
+      wallNow: wallNow,
     );
     final end = widget.viewport.stripVisibleEnd(
       newestElapsed: widget.newestElapsed,
+      wallNow: wallNow,
     );
     final raw = <double>[];
-    for (final series in widget.series) {
-      for (final p in series) {
+    for (var i = 0; i < widget.series.length; i++) {
+      if (!isBandVisible(i, widget.visibleBands)) continue;
+      for (final p in widget.series[i]) {
         if (p.elapsed < start || p.elapsed > end) continue;
         raw.add(p.db);
       }
@@ -200,6 +281,7 @@ class TimeSeriesPanePainter extends CustomPainter {
     required this.series,
     required this.viewport,
     required this.newestElapsed,
+    required this.wallNow,
     required this.yMin,
     required this.yMax,
     required this.axisColor,
@@ -208,16 +290,19 @@ class TimeSeriesPanePainter extends CustomPainter {
     this.highlightStartElapsed,
     this.highlightEndElapsed,
     this.highlightColor = const Color(0x00000000),
+    this.visibleBands,
+    this.drawLegend = true,
   });
 
   static const double yGutter = 44;
-  static const double legendGutter = 56;
+  static const double legendGutter = 68;
   static const double xGutter = 22;
   static const double topGutter = 18;
 
   final List<List<BandPoint>> series;
   final ViewportController viewport;
   final double newestElapsed;
+  final double wallNow;
   final double yMin;
   final double yMax;
   final Color axisColor;
@@ -226,6 +311,8 @@ class TimeSeriesPanePainter extends CustomPainter {
   final double? highlightStartElapsed;
   final double? highlightEndElapsed;
   final Color highlightColor;
+  final Set<int>? visibleBands;
+  final bool drawLegend;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -237,8 +324,14 @@ class TimeSeriesPanePainter extends CustomPainter {
     );
     if (chart.width <= 0 || chart.height <= 0) return;
 
-    final visStart = viewport.stripVisibleStart(newestElapsed: newestElapsed);
-    final visEnd = viewport.stripVisibleEnd(newestElapsed: newestElapsed);
+    final visStart = viewport.stripVisibleStart(
+      newestElapsed: newestElapsed,
+      wallNow: wallNow,
+    );
+    final visEnd = viewport.stripVisibleEnd(
+      newestElapsed: newestElapsed,
+      wallNow: wallNow,
+    );
     final span = visEnd - visStart;
     if (span <= 0) return;
     final ySpan = yMax - yMin;
@@ -250,13 +343,14 @@ class TimeSeriesPanePainter extends CustomPainter {
     _drawHighlight(canvas, chart, visStart, visEnd);
     if (connected) {
       for (var i = 0; i < series.length && i < bandColors.length; i++) {
+        if (!isBandVisible(i, visibleBands)) continue;
         _drawSeries(canvas, chart, series[i], bandColors[i], visStart, span);
       }
     }
     canvas.restore();
     _drawYLabels(canvas, chart);
     _drawXLabels(canvas, chart, visStart, visEnd);
-    _drawLegend(canvas, chart);
+    if (drawLegend) _drawLegend(canvas, chart);
   }
 
   void _drawGrid(
@@ -342,10 +436,8 @@ class TimeSeriesPanePainter extends CustomPainter {
         solid.clear();
         return;
       }
-      final path = Path()..moveTo(solid.first.dx, solid.first.dy);
-      for (var i = 1; i < solid.length; i++) {
-        path.lineTo(solid[i].dx, solid[i].dy);
-      }
+      final path = Path();
+      buildSmoothPath(path, solid);
       canvas.drawPath(path, paint);
       solid.clear();
     }
@@ -498,6 +590,7 @@ class TimeSeriesPanePainter extends CustomPainter {
     return old.yMin != yMin ||
         old.yMax != yMax ||
         old.newestElapsed != newestElapsed ||
+        old.wallNow != wallNow ||
         old.viewport.mode != viewport.mode ||
         old.viewport.windowSeconds != viewport.windowSeconds ||
         old.viewport.inspectStartElapsed != viewport.inspectStartElapsed ||
@@ -505,6 +598,8 @@ class TimeSeriesPanePainter extends CustomPainter {
         old.series != series ||
         old.highlightStartElapsed != highlightStartElapsed ||
         old.highlightEndElapsed != highlightEndElapsed ||
-        old.highlightColor != highlightColor;
+        old.highlightColor != highlightColor ||
+        old.drawLegend != drawLegend ||
+        old.visibleBands != visibleBands;
   }
 }

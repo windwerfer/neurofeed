@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muse_ml/src/charts/band_style.dart';
+import 'package:muse_ml/src/monitor/band_toggles.dart';
 import 'package:muse_ml/src/monitor/cache/band_cache.dart';
 import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
@@ -90,6 +91,12 @@ void main() {
       ),
       isNull,
     );
+  });
+
+  test('hidden band is omitted from visibility helper', () {
+    expect(isBandVisible(0, {0, 2}), isTrue);
+    expect(isBandVisible(1, {0, 2}), isFalse);
+    expect(isBandVisible(4, null), isTrue);
   });
 
   test('10·log10 floor (ε) does not produce NaN', () {

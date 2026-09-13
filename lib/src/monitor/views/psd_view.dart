@@ -27,7 +27,8 @@ class _PsdViewState extends ConsumerState<PsdView> {
   final ViewportController _viewport = ViewportController()
     ..windowSeconds = ViewportController.psdDefaultWindowSeconds;
   final ViewportController _strip = ViewportController()
-    ..windowSeconds = ViewportController.bandsDefaultWindowSeconds;
+    ..windowSeconds = ViewportController.bandsDefaultWindowSeconds
+    ..followLeadSeconds = ViewportController.bandsFollowLeadSeconds;
 
   Set<int> _selected = {};
   int _montageLen = 0;

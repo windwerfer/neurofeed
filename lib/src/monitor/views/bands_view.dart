@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/charts/band_style.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/monitor/band_toggles.dart';
 import 'package:muse_ml/src/monitor/electrode_toggles.dart';
 import 'package:muse_ml/src/monitor/empty_state.dart';
 import 'package:muse_ml/src/monitor/graph_shell.dart';
@@ -19,9 +20,11 @@ class BandsView extends ConsumerStatefulWidget {
 
 class _BandsViewState extends ConsumerState<BandsView> {
   final ViewportController _viewport = ViewportController()
-    ..windowSeconds = ViewportController.bandsDefaultWindowSeconds;
+    ..windowSeconds = ViewportController.bandsDefaultWindowSeconds
+    ..followLeadSeconds = ViewportController.bandsFollowLeadSeconds;
 
   Set<int> _selected = {};
+  Set<int> _visibleBands = allBandIndices();
   int _montageLen = 0;
   double _pinchWindowAtStart = ViewportController.bandsDefaultWindowSeconds;
   double _pinchFocalElapsed = 0;
@@ -166,23 +169,37 @@ class _BandsViewState extends ConsumerState<BandsView> {
           });
         },
       ),
-      body: GestureDetector(
-        onScaleStart: _onScaleStart,
-        onScaleUpdate: _onScaleUpdate,
-        child: Stack(
-          children: [
-            Positioned.fill(
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onScaleStart: _onScaleStart,
+              onScaleUpdate: _onScaleUpdate,
               child: TimeSeriesPane(
                 series: series,
                 viewport: _viewport,
                 newestElapsed: newest,
                 connected: connected,
+                visibleBands: _visibleBands,
+                drawLegend: false,
               ),
             ),
-            if (connected && !cache.hasData)
-              const Positioned.fill(child: MonitorWaitingSignal()),
-          ],
-        ),
+          ),
+          if (connected && !cache.hasData)
+            const Positioned.fill(child: MonitorWaitingSignal()),
+          Positioned(
+            right: 8,
+            top: TimeSeriesPanePainter.topGutter,
+            child: BandToggles(
+              selected: _visibleBands,
+              onToggle: (i) {
+                setState(() {
+                  _visibleBands = toggleVisibleBand(_visibleBands, i);
+                });
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

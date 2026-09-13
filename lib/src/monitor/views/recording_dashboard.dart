@@ -10,6 +10,7 @@ import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
 import 'package:muse_ml/src/monitor/device_montage.dart';
 import 'package:muse_ml/src/monitor/dsp.dart';
+import 'package:muse_ml/src/monitor/band_toggles.dart';
 import 'package:muse_ml/src/monitor/electrode_toggles.dart';
 import 'package:muse_ml/src/monitor/graph_shell.dart';
 import 'package:muse_ml/src/monitor/panes/histogram_pane.dart';
@@ -65,6 +66,7 @@ class _RecordingDashboardViewState
 
   RecordingDashGraph _graph = RecordingDashGraph.rawEeg;
   Set<int> _selected = {};
+  Set<int> _visibleBands = allBandIndices();
   int _montageLen = 0;
   HistogramUvRange _uv = HistogramUvRange.uv100;
   PsdHzRange _hz = PsdHzRange.hz60;
@@ -477,27 +479,46 @@ class _RecordingDashboardViewState
       inspectRangeLabel: inspectLabel,
       toolbarMiddle: _toolbarMiddle(context),
       toolbarExtras: extras,
-      body: Listener(
-        onPointerSignal: (e) {
-          if (e is PointerScrollEvent && _panEnabled) {
-            final delta =
-                e.scrollDelta.dy / 120 * _viewport.windowSeconds * 0.1;
-            if (_graph == RecordingDashGraph.rawEeg) {
-              _viewport.panSeconds(delta, newestElapsed: newest);
-            } else {
-              _viewport.panStrip(
-                delta,
-                newestElapsed: newest,
-                oldestElapsed: 0,
-              );
-            }
-          }
-        },
-        child: GestureDetector(
-          onScaleStart: _onScaleStart,
-          onScaleUpdate: _onScaleUpdate,
-          child: _pane(theme, loaded, start, end),
-        ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Listener(
+              onPointerSignal: (e) {
+                if (e is PointerScrollEvent && _panEnabled) {
+                  final delta =
+                      e.scrollDelta.dy / 120 * _viewport.windowSeconds * 0.1;
+                  if (_graph == RecordingDashGraph.rawEeg) {
+                    _viewport.panSeconds(delta, newestElapsed: newest);
+                  } else {
+                    _viewport.panStrip(
+                      delta,
+                      newestElapsed: newest,
+                      oldestElapsed: 0,
+                    );
+                  }
+                }
+              },
+              child: GestureDetector(
+                onScaleStart: _onScaleStart,
+                onScaleUpdate: _onScaleUpdate,
+                child: _pane(theme, loaded, start, end),
+              ),
+            ),
+          ),
+          if (_graph == RecordingDashGraph.bands)
+            Positioned(
+              right: 8,
+              top: TimeSeriesPanePainter.topGutter,
+              child: BandToggles(
+                selected: _visibleBands,
+                onToggle: (i) {
+                  setState(() {
+                    _visibleBands = toggleVisibleBand(_visibleBands, i);
+                  });
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -523,6 +544,8 @@ class _RecordingDashboardViewState
           viewport: _viewport,
           newestElapsed: loaded.newestElapsed,
           connected: true,
+          visibleBands: _visibleBands,
+          drawLegend: false,
         );
       case RecordingDashGraph.histogram:
         final half = switch (_uv) {

@@ -40,8 +40,9 @@ lib/src/monitor/
   monitor_providers.dart
   graph_shell.dart            Follow / Inspect, window, Record / Stop
   graph_cinema.dart           mobile landscape, or desktop F11
-  viewport_controller.dart    elapsed seconds from capture start
+  viewport_controller.dart    elapsed seconds from capture start; Bands Follow lead 1 s
   electrode_toggles.dart      non-EEG average membership
+  band_toggles.dart           in-pane delta/theta/alpha/beta/gamma chips
   empty_state.dart            Waiting for signal
   dsp.dart                    Hamming FFT, 1/N², n power-of-two (live uses 256)
   device_montage.dart         N = channelCount (Muse 4 / Crown 8)
@@ -124,7 +125,7 @@ Drag/pinch on a time-X graph enters Inspect.
 | View | Panes | Window | Notes |
 |------|-------|--------|-------|
 | Raw EEG | N stacked sweep | 2/4/8/**10 s** | Oscilloscope wipe. No chips. Shared Y. |
-| Bands | 1 strip, 5 series | 15/**30**/60/120 s + pinch `custom` | Y = dB display; storage linear µV²/Hz. Mean of selected in dB. Overshoot = dashed hold. |
+| Bands | 1 strip, 5 series | 15/**30**/60/120 s + pinch `custom` | Y = dB display; storage linear µV²/Hz. Mean of selected in dB. Overshoot = dashed hold. PCHIP strokes. Follow slides with ~1 s lead (1 Hz cache). In-pane band chips toggle series (depressed = visible). |
 | Histogram | ~70% + ~30% Bands strip | 2/4/**8 s** | X ±100 µV (overflow ±50/±200), 64 bins. Tap hairline. Strip default 30 s. |
 | PSD | same split | 2/**4**/8 s | X 0–60 Hz (overflow 0–100). Welch 1 s / 256-pt, 50% hop. Band shading + alpha peak. |
 | Spectrogram | 1 heatmap | 10/**20**/30 s / 2 min / 5 min + pinch `custom` | Y 0–60 Hz. `mag ▾` color min/max. STFT 256-pt, hop ~0.25 s. No strip, no FFT-size chrome. |
@@ -147,8 +148,12 @@ the **new** tmp plus whatever is still in RAM.
 Muse: TP9 AF7 AF8 TP10. Crown/Notion: 8 names. Simulator Crown is 8-ch
 for graphs; Start Session stays refused. Status-bar pads stay 4-ch.
 
-Non-EEG toggles: top-right text, depressed = in the mean, default all on,
-last one stays. Raw EEG has no chips.
+Non-EEG electrode toggles: top-right text, depressed = in the mean, default
+all on, last one stays. Raw EEG has no chips.
+
+Bands series chips: in-pane `BandToggles` (right gutter), label color = line,
+depressed = visible, last one stays. Histogram/PSD strip legend is painted
+and not tappable. Recording-dashboard Bands uses the same chips.
 
 ---
 
@@ -174,6 +179,8 @@ Not `SessionMetadata.toJson()`. Format: [README_feedback_format.md](../README_fe
 - Unified History; Settings **Save files to folder**; sidebar **Spectrogram**.
 - Raw EEG stays sweep. 5 min RAM + 30 min tmp. Do not grow RAM to 30 min.
 - Bands Y is dB display. Pinch-X `custom` on Bands and Spectrogram only.
+  Follow on 1 Hz Bands strips slides with ~1 s lead + always-on PCHIP.
+  Spectrogram Follow is flush-right. No `SMOOTH` / `REAL TIME` chrome.
 - Cinema: mobile landscape hides chrome; desktop **F11** does the same.
   Spectrogram `mag ▾` is color, not Hz.
 - No averaging, no hold-finger readout, no FFT-window chrome (256-pt only).

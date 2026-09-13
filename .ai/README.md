@@ -17,7 +17,7 @@ do/don't, then this folder for maps.
 | [release.md](release.md) | Release CI, keystore, F-Droid, reproducibility |
 | [btleplug.md](btleplug.md) | btleplug fork (`0.12.0-muse-5`) — JNI attach + notification death spiral |
 | [muse-rs.md](muse-rs.md) | muse-rs `0.1.1` patch, Classic vs Athena, battery, Athena optical/fNIRS gap |
-| [monitor.md](monitor.md) | **Implemented.** Live graphs + connect-time recording. Cinema: mobile landscape / desktop F11. |
+| [monitor.md](monitor.md) | **Implemented.** Live graphs + connect-time recording. Cinema: mobile landscape / desktop F11. Bands: PCHIP, 1 s Follow lead, in-pane chips. |
 | [headset-fit.md](headset-fit.md) | Pad colors, Classic vs Athena, status-bar dots |
 | [export.md](export.md) | History export: PDF / PNG / CSV / EDF+ |
 

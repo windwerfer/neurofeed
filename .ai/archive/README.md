@@ -5,7 +5,7 @@ Finished threads and historical notes. Not current orientation — see
 
 | File | What it was |
 |------|-------------|
-| `handoff-monitor.md` | Monitor series map (PRs 0–7). **Complete.** PR 8 cancelled. Live spec: [../monitor.md](../monitor.md). |
+| `handoff-monitor.md` | Monitor series map (PRs 0–7). **Complete.** PR 8 cancelled. Follow-up: Bands PCHIP + 1 s Follow lead + in-pane chips. Live spec: [../monitor.md](../monitor.md). |
 | `monitor-rev6-design.md` | Pre-implementer monitor spec + PR plan. Superseded by [../monitor.md](../monitor.md). |
 | `pipeline-contract-pr-plan.md` | Feedback pipeline PR 1–7 implementer plan. Contract remains [../feedback/pipeline-contract.md](../feedback/pipeline-contract.md). |
 | `feedback-todos-historical.md` | Landed phase checklists. Live leftovers: [../feedback/todos.md](../feedback/todos.md). |

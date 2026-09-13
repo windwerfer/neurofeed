@@ -73,7 +73,8 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   do not deinit SoLoud from a controller; do not restore
   `AudioService.setMusicMuffle`. Monitor spec (`.ai/monitor.md` rev 6) is
   implemented (PRs 0–7). Do not add Spectrogram `FFT 1s ▾`, averaging, or
-  a Bands strip on Spectrogram.
+  a Bands strip on Spectrogram. Do not restore Bands `SMOOTH` / `REAL TIME`
+  chrome. Bands Follow lead is 1 s (Spectrogram stays flush-right).
 - If you change on-screen copy or primary chrome (status bar, sidebar, connect
   window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
   Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
@@ -122,11 +123,15 @@ lib/src/monitor/            live graphs + recording
   monitor_controller.dart   constructed in main(); hydrates if already connected
   graph_shell.dart          Follow/Inspect + Record / Stop
   graph_cinema.dart         mobile landscape hides chrome; desktop F11 same hide
-  viewport_controller.dart  Follow / Inspect; elapsed domain
+  viewport_controller.dart  Follow / Inspect; elapsed domain; Bands Follow lead 1 s
+  electrode_toggles.dart    non-EEG average membership (chrome)
+  band_toggles.dart         in-pane delta/theta/alpha/beta/gamma chips
   cache/band_cache.dart     1 Hz bands, 30 min cap; no EEG LiveCache
   cache/sweep_buffer.dart   5 min EEG RAM + display ring (moved from charts/)
   panes/sweep_pane.dart     one electrode, theme wipe / Inspect fill-right
+  panes/time_series_pane.dart  Bands strip; PCHIP; Follow ticker when lead > 0
   panes/bands_context_strip.dart  ~30% Bands map under Histogram/PSD
+  views/bands_view.dart     GraphShell Bands; in-pane BandToggles
   views/raw_eeg_view.dart   N stacked SweepPanes (Muse-4 / Crown-8)
   views/histogram_view.dart 70/30 split; ±100 µV, 64 bins
   views/psd_view.dart       Welch; GraphShell title Power Spectral Density
@@ -171,7 +176,10 @@ assets/                     protocols.json, calibrations.json, features.json, au
   in `monitor/views/raw_eeg_view.dart`. Histogram / PSD / Spectrogram are
   `monitor/views/{histogram,psd,spectrogram}_view.dart`. Histogram and PSD
   have a ~30% Bands context strip; Spectrogram does not. FFT is 256-pt
-  Hamming (`kDefaultFftN`); no size dropdown. `bandNames` / `bandColors`
+  Hamming (`kDefaultFftN`); no size dropdown. Bands traces are PCHIP;
+  Follow on 1 Hz strips uses `bandsFollowLeadSeconds` (1 s) and a vsync
+  ticker in `TimeSeriesPane`. In-pane `BandToggles` hide series (last-one
+  stays); strip legend is painted, not tappable. `bandNames` / `bandColors`
   stay in `lib/src/charts/band_style.dart`. Pad quality is a 4-ch 1 s ring
   in `connection_provider.dart` (not a 5 min EEG LiveCache).
 - Crash recovery: feedback `lib/src/feedback/crash_recovery.dart` scans
