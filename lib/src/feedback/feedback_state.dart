@@ -1493,10 +1493,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             state.phase == FeedbackPhase.paused ||
             (state.phase == FeedbackPhase.interrupted &&
                 _interruptKind == FeedbackInterruptKind.badSignal)) {
-          _interruptSession(
-            'Connection lost — reconnecting…',
-            kind: FeedbackInterruptKind.disconnect,
-          );
+          if (!_ref.read(appStateProvider.notifier).allowAutoReconnect) {
+            unawaited(end());
+          } else {
+            _interruptSession(
+              'Connection lost — reconnecting…',
+              kind: FeedbackInterruptKind.disconnect,
+            );
+          }
         }
       default:
         break;

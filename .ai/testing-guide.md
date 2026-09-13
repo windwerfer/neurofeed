@@ -51,7 +51,7 @@ Pulse, X, Wayland, adb, or the Dart language-server.
 | `POST /sidebar` | `{open:bool}` | |
 | `POST /connect-window` | `{open, source?}` | `source`: `muse`/`neurosity`/`simulator`. `setConnectWindow` (not toggle). |
 | `POST /connect` | `{id}` | Simulator catalog then scanned list. `persist: false`. 409 `connect_failed` / `busy`. |
-| `POST /disconnect` | `{}` | `persist: false` (does not wipe human `lastDeviceId`). |
+| `POST /disconnect` | `{}` | User disconnect: stays down this process. Keeps `lastDeviceId` for next-launch autoconnect. |
 | `POST /session/select` | `{protocol}` | 412 `unknown_protocol`. |
 | `POST /session/duration` | `{minutes}` | `persist: false`. Smoke uses `1`. |
 | `POST /session/start` | `{skipCalibration}` | 412 `not_connected`; 409 `crown_refused`; 409 `recording_active`. Order: not_connected → crown_refused → recording_active. Distinct from `crown_refused`. |

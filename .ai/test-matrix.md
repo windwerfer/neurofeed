@@ -28,6 +28,7 @@ flutter test \
   test/agent/agent_config_test.dart \
   test/agent/agent_server_test.dart \
   test/app_ui_state_test.dart \
+  test/connection_reconnect_test.dart \
   test/feature_override_test.dart \
   test/monitor/band_cache_test.dart \
   test/monitor/sweep_buffer_test.dart \

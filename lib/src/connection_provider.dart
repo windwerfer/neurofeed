@@ -42,7 +42,8 @@ Future<void> ensureBtleplugReady() async {
 /// Holds all connection + UI state for the app.
 class AppStateNotifier extends StateNotifier<AppUiState> {
   AppStateNotifier(this._settings, {bool initialize = true})
-    : super(
+    : _testMode = !initialize,
+      super(
         AppUiState(
           status: const ConnectionStatus(
             connected: false,
@@ -80,12 +81,22 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     : this(settings, initialize: false);
 
   final Settings _settings;
+  final bool _testMode;
   StreamSubscription<MuseEventDto>? _eventSub;
   bool _scanEnabled = false;
+  bool _allowAutoReconnect = true;
+  bool _reconnectInFlight = false;
   final Completer<void> _initDone = Completer<void>();
   final StreamController<MuseEventDto> _eventController =
       StreamController<MuseEventDto>.broadcast();
   double _lastQualityCheck = 0;
+
+  /// Lost-link and launch auto-reconnect. Cleared by a user disconnect
+  /// (status bar / agent) until the next [connectTo].
+  bool get allowAutoReconnect => _allowAutoReconnect;
+
+  @visibleForTesting
+  int debugReconnectCalls = 0;
 
   /// Latest 50/60 Hz line-noise ratio per electrode from Bands events.
   /// -1 means no data yet for that pad.
@@ -130,8 +141,9 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           final found = await _tryAutoconnectSim(lastId);
           if (found) return;
         } else {
-          final found = await _tryAutoconnect(lastId);
-          if (found) return;
+          // Unbounded scan for lastDeviceId; do not block initDone on it.
+          unawaited(_tryAutoconnect(lastId));
+          return;
         }
       }
 
@@ -160,11 +172,12 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     return state.status.connected;
   }
 
-  /// Scan in short chunks looking for [lastId].  Returns `true` and connects
-  /// if found, `false` otherwise.
+  /// Scan in short chunks looking for [lastId] until it appears, the user
+  /// cancels, or auto-reconnect is disabled. Returns `true` if connected.
   Future<bool> _tryAutoconnect(String lastId) async {
     if (isSimDeviceId(lastId)) return false;
     debugPrint('[muse] autoconnect: looking for $lastId');
+    _scanEnabled = true;
     state = state.copyWith(
       connectWindowOpen: true,
       scanning: true,
@@ -179,31 +192,44 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         );
         return false;
       }
-      for (var i = 0; i < 5; i++) {
+      var chunks = 0;
+      while (_scanEnabled && _allowAutoReconnect && !state.status.connected) {
         await ensureBtleplugReady();
+        if (!_scanEnabled || !_allowAutoReconnect || state.status.connected) {
+          break;
+        }
         final devices = await scan(timeoutSecs: BigInt.from(_scanChunkSecs));
+        if (!_scanEnabled || !_allowAutoReconnect || state.status.connected) {
+          break;
+        }
         final match =
             devices.where((d) => d.id == lastId).firstOrNull ??
             devices.where((d) => d.name == lastId).firstOrNull;
         if (match != null) {
           debugPrint('[muse] autoconnect: found ${match.name}, connecting');
           await connectTo(match);
-          return true;
+          if (state.status.connected) return true;
+          if (!_allowAutoReconnect) return false;
+          _scanEnabled = true;
+          state = state.copyWith(
+            connectWindowOpen: true,
+            scanning: true,
+            scanMessage: 'Looking for last device…',
+          );
+          continue;
         }
+        chunks++;
         state = state.copyWith(
-          scanMessage: 'Searching… (${(i + 1) * _scanChunkSecs}s)',
+          scanMessage: 'Searching… (${chunks * _scanChunkSecs}s)',
         );
       }
-      debugPrint('[muse] autoconnect: last device not found after 5 chunks');
-      state = state.copyWith(
-        scanning: false,
-        scanMessage: 'Last device not found',
-      );
     } catch (e) {
       debugPrint('[muse] autoconnect error: $e');
-      state = state.copyWith(scanning: false, scanMessage: 'Scan error: $e');
+      if (_scanEnabled && _allowAutoReconnect) {
+        state = state.copyWith(scanning: false, scanMessage: 'Scan error: $e');
+      }
     }
-    return false;
+    return state.status.connected;
   }
 
   /// Open the connect window and start discovery for [state.connectSource].
@@ -307,30 +333,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         );
       case MuseEventDto_Disconnected():
         debugPrint('[muse] event: disconnected');
-        _lineNoise.fillRange(0, _lineNoise.length, -1);
-        _padQuality.clear();
-        _lastQualityCheck = 0;
-        state = state.copyWith(
-          status: const ConnectionStatus(
-            connected: false,
-            name: '',
-            id: '',
-            firmware: '',
-          ),
-          batteryLevel: 0,
-          signalQuality: null,
-          gestures: null,
-          telemetry: const TelemetrySnapshot(
-            batteryLevel: 0,
-            fuelGaugeVoltage: 0,
-            temperature: 0,
-          ),
-          connectWindowOpen: true,
-          connectingTo: null,
-          scanning: false,
-          scanMessage: 'Reconnecting…',
-        );
-        _tryReconnect();
+        _onDisconnected();
       case MuseEventDto_Eeg():
         _padQuality.appendEeg(event.field0);
         _maybeComputeSignalQuality();
@@ -351,6 +354,57 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       default:
         break;
     }
+  }
+
+  void _onDisconnected() {
+    // A second Disconnected (muse-rs watcher after our own sink event) must
+    // not abort an in-flight reconnect or restart one the user already
+    // cancelled.
+    if (!state.status.connected && !state.disconnecting) {
+      return;
+    }
+    _lineNoise.fillRange(0, _lineNoise.length, -1);
+    _padQuality.clear();
+    _lastQualityCheck = 0;
+    const idle = ConnectionStatus(
+      connected: false,
+      name: '',
+      id: '',
+      firmware: '',
+    );
+    const telemetry = TelemetrySnapshot(
+      batteryLevel: 0,
+      fuelGaugeVoltage: 0,
+      temperature: 0,
+    );
+    if (!_allowAutoReconnect) {
+      state = state.copyWith(
+        status: idle,
+        batteryLevel: 0,
+        signalQuality: null,
+        gestures: null,
+        telemetry: telemetry,
+        connectWindowOpen: false,
+        connectingTo: null,
+        scanning: false,
+        scanMessage: null,
+        disconnecting: false,
+      );
+      return;
+    }
+    state = state.copyWith(
+      status: idle,
+      batteryLevel: 0,
+      signalQuality: null,
+      gestures: null,
+      telemetry: telemetry,
+      connectWindowOpen: true,
+      connectingTo: null,
+      scanning: false,
+      scanMessage: 'Reconnecting…',
+      disconnecting: false,
+    );
+    unawaited(_tryReconnect());
   }
 
   /// Keep in sync with Rust `features::pad_quality_from_std_and_noise` until
@@ -409,6 +463,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
   Future<void> connectTo(DeviceInfo device, {bool persist = true}) async {
     if (state.connectingTo != null) return;
+    _allowAutoReconnect = true;
     _scanEnabled = false;
     final id = device.id;
     final name = device.name;
@@ -479,28 +534,51 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   }
 
   /// Attempt to reconnect to the last known device; fall back to continuous
-  /// scan if the last device ID is missing or the device is not found.
+  /// scan if the last device ID is missing. Does not auto-connect a different
+  /// headset.
   Future<void> _tryReconnect() async {
-    final lastId = _settings.lastDeviceId;
-    if (!shouldIgnoreLastDevice(
-      lastId,
-      debug: _settings.enableSimulatedDevices,
-    )) {
-      if (isSimDeviceId(lastId!)) {
-        final ok = await _tryAutoconnectSim(lastId);
-        if (ok) return;
-      } else {
-        final ok = await _tryAutoconnect(lastId);
-        if (ok) return;
+    debugReconnectCalls++;
+    if (_testMode) return;
+    if (_reconnectInFlight) return;
+    if (!_allowAutoReconnect) return;
+    _reconnectInFlight = true;
+    try {
+      final lastId = _settings.lastDeviceId;
+      if (!shouldIgnoreLastDevice(
+        lastId,
+        debug: _settings.enableSimulatedDevices,
+      )) {
+        if (isSimDeviceId(lastId!)) {
+          final ok = await _tryAutoconnectSim(lastId);
+          if (ok || !_allowAutoReconnect) return;
+        } else {
+          final ok = await _tryAutoconnect(lastId);
+          if (ok || !_allowAutoReconnect) return;
+        }
       }
+      if (_allowAutoReconnect && !state.status.connected) {
+        _startDiscoveryForCurrentSource();
+      }
+    } finally {
+      _reconnectInFlight = false;
     }
-    _startDiscoveryForCurrentSource();
   }
 
+  /// User / agent disconnect. Stays down for this process; keeps
+  /// [Settings.lastDeviceId] so the next launch can auto-connect.
+  ///
+  /// [persist] is kept for call-site compatibility (agent passes `false`)
+  /// and no longer clears the saved id.
   Future<void> disconnectDevice({bool persist = true}) async {
+    _allowAutoReconnect = false;
     _scanEnabled = false;
-    await disconnect();
-    if (persist) await _settings.setLastDeviceId('');
+    state = state.copyWith(disconnecting: true);
+    try {
+      await disconnect();
+    } catch (e) {
+      debugPrint('[muse] disconnect error: $e');
+      _onDisconnected();
+    }
   }
 
   /// Disconnect without clearing [lastDeviceId] — called when the app is
@@ -593,6 +671,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     String firmware = 'Classic',
   }) {
     if (connected) {
+      _allowAutoReconnect = true;
       state = state.copyWith(
         status: ConnectionStatus(
           connected: true,
@@ -617,6 +696,13 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   @visibleForTesting
   void debugAddEvent(MuseEventDto event) {
     _eventController.add(event);
+    _onEvent(event);
+  }
+
+  @visibleForTesting
+  void debugMarkUserDisconnected() {
+    _allowAutoReconnect = false;
+    _scanEnabled = false;
   }
 
   @override
