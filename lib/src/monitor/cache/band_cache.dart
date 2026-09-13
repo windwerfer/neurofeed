@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:muse_ml/src/charts/band_style.dart';
 import 'package:muse_ml/src/charts/eeg_data_source.dart';
+import 'package:muse_ml/src/monitor/cache/frame_coalesced_notify.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 export 'package:muse_ml/src/charts/band_style.dart';
@@ -27,7 +28,9 @@ Color bandChannelColor(int channel) {
   return bandColors[b % bandColors.length];
 }
 
-class BandCache extends ChangeNotifier implements EegDataSource {
+class BandCache extends ChangeNotifier
+    with FrameCoalescedNotify
+    implements EegDataSource {
   static const int _capacityPerBand = 1800;
 
   final Map<int, _BandRing> _channels = {};
@@ -42,7 +45,7 @@ class BandCache extends ChangeNotifier implements EegDataSource {
     _insert(dto.electrode, 2, ts, dto.alpha);
     _insert(dto.electrode, 3, ts, dto.beta);
     _insert(dto.electrode, 4, ts, dto.gamma);
-    notifyListeners();
+    notifyListenersCoalesced();
   }
 
   void _insert(int electrode, int bandIdx, double t, double v) {

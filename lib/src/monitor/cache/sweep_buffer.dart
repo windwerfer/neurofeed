@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:muse_ml/src/monitor/cache/frame_coalesced_notify.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 class _ChannelBuf {
@@ -22,7 +23,7 @@ class _ChannelBuf {
   }
 }
 
-class SweepBuffer extends ChangeNotifier {
+class SweepBuffer extends ChangeNotifier with FrameCoalescedNotify {
   static const double sampleRate = 256.0;
 
   final int capacity;
@@ -97,7 +98,7 @@ class SweepBuffer extends ChangeNotifier {
         if (ch.count < capacity) ch.count++;
       }
       _generation++;
-      notifyListeners();
+      notifyListenersCoalesced();
       return;
     }
     for (final s in dto.samples) {
@@ -115,7 +116,7 @@ class SweepBuffer extends ChangeNotifier {
       }
     }
     _generation++;
-    notifyListeners();
+    notifyListenersCoalesced();
   }
 
   /// Snap the wipe to the current pass and stop wrapping. History still
