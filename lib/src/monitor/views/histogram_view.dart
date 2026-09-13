@@ -36,13 +36,14 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
   final HistogramTick _tick = HistogramTick();
   final ValueNotifier<int> _primaryTick = ValueNotifier(0);
   final ValueNotifier<int> _stripTick = ValueNotifier(0);
+  late final MonitorController _mon;
 
   @override
   void initState() {
     super.initState();
-    final mon = ref.read(monitorControllerProvider.notifier);
-    mon.sweepBuffer.addListener(_onSweep);
-    mon.bandCache.addListener(_onBands);
+    _mon = ref.read(monitorControllerProvider.notifier);
+    _mon.sweepBuffer.addListener(_onSweep);
+    _mon.bandCache.addListener(_onBands);
     _viewport.addListener(_onEpoch);
     _strip.addListener(_onStrip);
     _syncMontage(ref.read(monitorControllerProvider).electrodeNames);
@@ -100,8 +101,6 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
     _strip.dispose();
     super.dispose();
   }
-
-  MonitorController get _mon => ref.read(monitorControllerProvider.notifier);
 
   void _syncMontage(List<String> names) {
     if (names.length == _montageLen &&
