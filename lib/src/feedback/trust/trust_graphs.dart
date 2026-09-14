@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:muse_ml/src/feedback/guard_lane.dart';
+import 'package:muse_ml/src/feedback/trust/trust_inhibit.dart';
 import 'package:muse_ml/src/feedback/trust/trust_more.dart';
 import 'package:muse_ml/src/feedback/trust/trust_pane.dart';
 import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
@@ -22,6 +23,7 @@ class TrustGraphsColumn extends StatefulWidget {
     required this.guardLabel,
     required this.rewardColor,
     required this.guardColor,
+    this.inhibit = const [],
   });
 
   final TrustTrace trace;
@@ -33,6 +35,7 @@ class TrustGraphsColumn extends StatefulWidget {
   final String guardLabel;
   final Color rewardColor;
   final Color guardColor;
+  final List<TrustInhibitSpec> inhibit;
 
   @override
   State<TrustGraphsColumn> createState() => _TrustGraphsColumnState();
@@ -144,6 +147,21 @@ class _TrustGraphsColumnState extends State<TrustGraphsColumn>
                   seriesColor: widget.rewardColor,
                 ),
               ),
+              if (widget.inhibit.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 112,
+                  child: InhibitTrustPane(
+                    key: const Key('trust-inhibit-pane'),
+                    samples: widget.trace.reward,
+                    marks: widget.trace.marks,
+                    viewport: widget.viewport,
+                    newestElapsed: newest,
+                    wallNow: wallNow,
+                    specs: widget.inhibit,
+                  ),
+                ),
+              ],
               if (widget.showMore) ...[
                 const SizedBox(height: 8),
                 TrustRewardMore(

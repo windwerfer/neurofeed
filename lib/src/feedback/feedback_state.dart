@@ -1697,6 +1697,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           inhibitTags: List<String>.of(_reward.lastInhibitTags),
           clean: !_reward.lastDirty,
           dirtyReason: _reward.lastDirtyReason,
+          betaRel: _reward.lastRelative?.betaRel,
+          deltaRel: _reward.lastRelative?.deltaRel,
         ),
       );
       if (_reward.lastDirty) {

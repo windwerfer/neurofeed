@@ -3,9 +3,14 @@
 | Field | Value |
 |---|---|
 | Date | 2026-09-14 |
-| Spec | [trust-graphs.md](trust-graphs.md) |
-| Status | **PR 1 and PR 2 landed** on this branch. Do **not** reopen graph decisions. |
+| Spec | [trust-graphs.md](trust-graphs.md) (this file is PR 1+2 history) |
+| Status | **PR 1 and PR 2 landed.** Inhibit pane follow-up landed after; live spec [../trust-graphs.md](../trust-graphs.md). |
 | Do not mix | Crown Start, pipeline-contract Key Decisions, Connect UX, monitor GraphShell/Inspect, RatioEngine 80/40, `guardrailDeltaCeiling` 0.25 |
+
+**Follow-up:** gray wash + inhibit pane replaced the held-back gray
+stroke. Reward stroke stays series color. `beta high` / `delta high`
+labels moved to the inhibit pane. Do not follow the PR 1 “gray stroke /
+below-the-line is not gray” encoding.
 
 ---
 

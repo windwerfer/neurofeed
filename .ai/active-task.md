@@ -1,10 +1,11 @@
 # Active Task
 
-**Branch:** `refactor/monitor`
+**Branch:** `main` (ahead of `origin/main`)
 
-**Now:** trust graphs **PR 1 + PR 2 landed** on this branch.
-Spec: [TODO/trust-graphs.md](TODO/trust-graphs.md),
-[TODO/handoff-trust-graphs.md](TODO/handoff-trust-graphs.md).
+**Now:** trust graphs **implemented**, including the inhibit pane under
+Reward. Spec: [trust-graphs.md](trust-graphs.md). History:
+[archive/trust-graphs.md](archive/trust-graphs.md),
+[archive/handoff-trust-graphs.md](archive/handoff-trust-graphs.md).
 
 Monitor product **and** draw-path perf are complete. Spec:
 [monitor.md](monitor.md). History:
@@ -27,8 +28,6 @@ chrome, or `SMOOTH` / `REAL TIME` Bands chrome. Do not pause `SweepBuffer`
 - Publish `third_party/edf_export` to git+tag once export proves out on device.
 - Athena optics raw stream (muse-rs `Optics`, session tag 11). Queued:
   [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md).
-- Live reward/guard trust graphs: PR 1 + PR 2 landed.
-  [TODO/trust-graphs.md](TODO/trust-graphs.md).
 
 ## How to verify BLE (still)
 

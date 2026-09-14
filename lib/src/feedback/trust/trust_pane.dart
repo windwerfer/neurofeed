@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:muse_ml/src/charts/dashed_polyline.dart';
 import 'package:muse_ml/src/charts/smooth_path.dart';
+import 'package:muse_ml/src/feedback/trust/trust_inhibit.dart';
 import 'package:muse_ml/src/feedback/trust/trust_runs.dart';
 import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
 import 'package:muse_ml/src/feedback/trust/trust_viewport.dart';
@@ -22,7 +23,7 @@ class RewardTrustPane extends StatelessWidget {
     required this.wallNow,
     required this.label,
     required this.seriesColor,
-    this.heldBackFill = kTrustHeldBackFill,
+    this.inhibitWash = kTrustInhibitWash,
   });
 
   final List<TrustRewardSample> samples;
@@ -32,7 +33,7 @@ class RewardTrustPane extends StatelessWidget {
   final double wallNow;
   final String label;
   final Color seriesColor;
-  final bool heldBackFill;
+  final bool inhibitWash;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +50,47 @@ class RewardTrustPane extends StatelessWidget {
           seriesColor: seriesColor,
           axisColor: theme.colorScheme.onSurfaceVariant,
           onSurface: theme.colorScheme.onSurface,
-          heldBackFill: heldBackFill,
+          inhibitWash: inhibitWash,
+        ),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
+class InhibitTrustPane extends StatelessWidget {
+  const InhibitTrustPane({
+    super.key,
+    required this.samples,
+    required this.marks,
+    required this.viewport,
+    required this.newestElapsed,
+    required this.wallNow,
+    required this.specs,
+  });
+
+  final List<TrustRewardSample> samples;
+  final List<TrustGestureMark> marks;
+  final TrustViewport viewport;
+  final double newestElapsed;
+  final double wallNow;
+  final List<TrustInhibitSpec> specs;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return RepaintBoundary(
+      child: CustomPaint(
+        painter: InhibitTrustPainter(
+          samples: samples,
+          marks: marks,
+          visStart: viewport.visibleStart(newestElapsed, wallNow: wallNow),
+          visEnd: viewport.visibleEnd(newestElapsed, wallNow: wallNow),
+          windowSeconds: viewport.windowSeconds,
+          specs: specs,
+          axisColor: theme.colorScheme.onSurfaceVariant,
+          onSurface: theme.colorScheme.onSurface,
+          errorColor: theme.colorScheme.error,
         ),
         child: const SizedBox.expand(),
       ),
@@ -220,13 +261,20 @@ void _paintHeader(
   tp.paint(canvas, Offset(size.width - tp.width - 4, 2));
 }
 
-void _paintHLine(Canvas canvas, Rect plot, double y, {required Color color}) {
+void _paintHLine(
+  Canvas canvas,
+  Rect plot,
+  double y, {
+  required Color color,
+  double alpha = 0.55,
+  double strokeWidth = 1,
+}) {
   canvas.drawLine(
     Offset(plot.left, y),
     Offset(plot.right, y),
     Paint()
-      ..color = color.withValues(alpha: 0.55)
-      ..strokeWidth = 1,
+      ..color = color.withValues(alpha: alpha)
+      ..strokeWidth = strokeWidth,
   );
 }
 
@@ -241,7 +289,7 @@ class RewardTrustPainter extends CustomPainter {
     required this.seriesColor,
     required this.axisColor,
     required this.onSurface,
-    this.heldBackFill = kTrustHeldBackFill,
+    this.inhibitWash = kTrustInhibitWash,
   });
 
   final List<TrustRewardSample> samples;
@@ -253,7 +301,7 @@ class RewardTrustPainter extends CustomPainter {
   final Color seriesColor;
   final Color axisColor;
   final Color onSurface;
-  final bool heldBackFill;
+  final bool inhibitWash;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -292,30 +340,21 @@ class RewardTrustPainter extends CustomPainter {
       for (final s in samples)
         if (s.t >= visStart - 1 && s.t <= visEnd + 1) s,
     ];
-    final runs = rewardRuns(vis);
-    final gray = onSurface.withValues(alpha: 0.45);
-    for (var i = 0; i < runs.length; i++) {
-      final run = runs[i];
-      if (!shouldPaintHeldBackFill(gate: heldBackFill, kind: run.kind)) {
-        continue;
+    if (inhibitWash) {
+      final wash = Paint()..color = onSurface.withValues(alpha: 0.10);
+      for (final spanT in inhibitWashSpans(vis, visEnd: visEnd)) {
+        final left = _x(spanT.tStart, plot, visStart, span);
+        final right = _x(spanT.tEnd, plot, visStart, span);
+        canvas.drawRect(
+          Rect.fromLTRB(
+            math.max(left, plot.left),
+            plot.top,
+            math.min(right, plot.right),
+            plot.bottom,
+          ),
+          wash,
+        );
       }
-      final nextT = i + 1 < runs.length ? runs[i + 1].tStart : null;
-      final rightT = heldBackFillEnd(
-        tEnd: run.tEnd,
-        nextT: nextT,
-        visEnd: visEnd,
-      );
-      final left = _x(run.tStart, plot, visStart, span);
-      final right = _x(rightT, plot, visStart, span);
-      canvas.drawRect(
-        Rect.fromLTRB(
-          math.max(left, plot.left),
-          plot.top,
-          math.min(right, plot.right),
-          plot.bottom,
-        ),
-        Paint()..color = onSurface.withValues(alpha: 0.10),
-      );
     }
 
     final thr = vis.isEmpty ? 40.0 : vis.last.thresholdPercentile;
@@ -328,6 +367,7 @@ class RewardTrustPainter extends CustomPainter {
       9,
     );
 
+    final runs = rewardRuns(vis);
     for (var i = 0; i < runs.length; i++) {
       final run = runs[i];
       final next = i + 1 < runs.length ? runs[i + 1].samples.first : null;
@@ -339,22 +379,23 @@ class RewardTrustPainter extends CustomPainter {
             _y(s.plotPercentile ?? s.percentile, plot, yMin, yMax),
           ),
       ];
-      final color = run.kind == TrustStrokeKind.heldBack ? gray : seriesColor;
       _paintRunStroke(
         canvas,
         pts,
-        color: color,
+        color: seriesColor,
         dashed: run.kind == TrustStrokeKind.dirty,
       );
-      final tag = rewardRunLabel(run);
-      if (tag != null) {
-        _paintText(
-          canvas,
-          tag,
-          Offset(_x(run.tStart, plot, visStart, span) + 2, plot.top + 2),
-          color,
-          10,
-        );
+      if (run.kind == TrustStrokeKind.dirty) {
+        final tag = rewardRunLabel(run);
+        if (tag != null) {
+          _paintText(
+            canvas,
+            tag,
+            Offset(_x(run.tStart, plot, visStart, span) + 2, plot.top + 2),
+            seriesColor,
+            10,
+          );
+        }
       }
     }
 
@@ -382,7 +423,224 @@ class RewardTrustPainter extends CustomPainter {
       old.windowSeconds != windowSeconds ||
       old.label != label ||
       old.seriesColor != seriesColor ||
-      old.heldBackFill != heldBackFill;
+      old.inhibitWash != inhibitWash;
+}
+
+class InhibitTrustPainter extends CustomPainter {
+  InhibitTrustPainter({
+    required this.samples,
+    required this.marks,
+    required this.visStart,
+    required this.visEnd,
+    required this.windowSeconds,
+    required this.specs,
+    required this.axisColor,
+    required this.onSurface,
+    required this.errorColor,
+  });
+
+  final List<TrustRewardSample> samples;
+  final List<TrustGestureMark> marks;
+  final double visStart;
+  final double visEnd;
+  final double windowSeconds;
+  final List<TrustInhibitSpec> specs;
+  final Color axisColor;
+  final Color onSurface;
+  final Color errorColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final plot = _chartRect(size);
+    if (plot.width <= 0 || plot.height <= 0) return;
+    final span = visEnd - visStart;
+    if (span <= 0 || specs.isEmpty) return;
+    const yMin = 0.0;
+    final yMax = inhibitAxisMax(specs);
+    _paintHeader(
+      canvas,
+      size,
+      left: inhibitPaneLabel(specs),
+      right: 'inhibit',
+      color: axisColor,
+    );
+    _paintText(
+      canvas,
+      yMax >= 1 ? '1.0' : yMax.toStringAsFixed(2),
+      Offset(0, _y(yMax, plot, yMin, yMax) - 6),
+      axisColor,
+      9,
+    );
+    _paintText(
+      canvas,
+      '0',
+      Offset(2, _y(0, plot, yMin, yMax) - 6),
+      axisColor,
+      9,
+    );
+
+    canvas.save();
+    canvas.clipRect(plot);
+
+    final vis = [
+      for (final s in samples)
+        if (s.t >= visStart - 1 && s.t <= visEnd + 1) s,
+    ];
+
+    final byCeiling = [...specs]
+      ..sort((a, b) => b.ceiling.compareTo(a.ceiling));
+    for (final spec in byCeiling) {
+      final top = _y(spec.ceiling.clamp(yMin, yMax), plot, yMin, yMax);
+      canvas.drawRect(
+        Rect.fromLTRB(plot.left, top, plot.right, plot.bottom),
+        Paint()..color = inhibitSeriesColor(spec.id).withValues(alpha: 0.08),
+      );
+    }
+
+    for (final spec in specs) {
+      final series = inhibitSeriesColor(spec.id);
+      final y = _y(spec.ceiling.clamp(yMin, yMax), plot, yMin, yMax);
+      _paintHLine(canvas, plot, y, color: series, alpha: 0.9, strokeWidth: 1.2);
+      _paintText(
+        canvas,
+        spec.ceiling.toStringAsFixed(2),
+        Offset(plot.left + 2, y - 12),
+        series,
+        9,
+      );
+    }
+
+    final queued = <_InhibitStroke>[];
+    for (final spec in specs) {
+      final series = inhibitSeriesColor(spec.id);
+      final overshoot = inhibitOvershootColor(spec.id, errorColor);
+      final runs = inhibitRuns(vis, spec);
+      for (var i = 0; i < runs.length; i++) {
+        queued.add(
+          _InhibitStroke(
+            spec: spec,
+            run: runs[i],
+            next: i + 1 < runs.length ? runs[i + 1].samples.first : null,
+            color: inhibitRunColor(
+              runs[i].kind,
+              series: series,
+              overshoot: overshoot,
+            ),
+          ),
+        );
+      }
+    }
+    for (final stroke in queued) {
+      if (stroke.run.kind == TrustInhibitKind.overshoot) continue;
+      _paintInhibitRun(
+        canvas,
+        plot,
+        run: stroke.run,
+        next: stroke.next,
+        spec: stroke.spec,
+        visStart: visStart,
+        span: span,
+        yMin: yMin,
+        yMax: yMax,
+        color: stroke.color,
+        dashed: stroke.run.kind == TrustInhibitKind.dirty,
+      );
+    }
+    var overshootLabelSlot = 0;
+    for (final stroke in queued) {
+      if (stroke.run.kind != TrustInhibitKind.overshoot) continue;
+      _paintInhibitRun(
+        canvas,
+        plot,
+        run: stroke.run,
+        next: stroke.next,
+        spec: stroke.spec,
+        visStart: visStart,
+        span: span,
+        yMin: yMin,
+        yMax: yMax,
+        color: stroke.color,
+        dashed: false,
+      );
+      _paintText(
+        canvas,
+        stroke.spec.overshootLabel,
+        Offset(
+          _x(stroke.run.tStart, plot, visStart, span) + 2,
+          plot.top + 2 + overshootLabelSlot * 12,
+        ),
+        stroke.color,
+        10,
+      );
+      overshootLabelSlot++;
+    }
+
+    _paintMarks(
+      canvas,
+      plot,
+      marks: marks,
+      visStart: visStart,
+      span: span,
+      color: onSurface,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant InhibitTrustPainter old) =>
+      old.samples.length != samples.length ||
+      old.samples != samples ||
+      (samples.isNotEmpty &&
+          old.samples.isNotEmpty &&
+          old.samples.last.t != samples.last.t) ||
+      old.marks != marks ||
+      old.visStart != visStart ||
+      old.visEnd != visEnd ||
+      old.windowSeconds != windowSeconds ||
+      old.specs != specs ||
+      old.errorColor != errorColor;
+}
+
+class _InhibitStroke {
+  const _InhibitStroke({
+    required this.spec,
+    required this.run,
+    required this.next,
+    required this.color,
+  });
+
+  final TrustInhibitSpec spec;
+  final TrustInhibitRun run;
+  final TrustRewardSample? next;
+  final Color color;
+}
+
+void _paintInhibitRun(
+  Canvas canvas,
+  Rect plot, {
+  required TrustInhibitRun run,
+  required TrustRewardSample? next,
+  required TrustInhibitSpec spec,
+  required double visStart,
+  required double span,
+  required double yMin,
+  required double yMax,
+  required Color color,
+  required bool dashed,
+}) {
+  final stroke = runStrokeSamples(run.samples, next);
+  final pts = <Offset>[];
+  for (final s in stroke) {
+    final y = inhibitPlotY(s, spec);
+    if (y == null) continue;
+    pts.add(
+      Offset(
+        _x(s.t, plot, visStart, span),
+        _y(y.clamp(yMin, yMax), plot, yMin, yMax),
+      ),
+    );
+  }
+  _paintRunStroke(canvas, pts, color: color, dashed: dashed);
 }
 
 class GuardWarnPainter extends CustomPainter {

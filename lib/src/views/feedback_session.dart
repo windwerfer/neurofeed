@@ -21,6 +21,7 @@ import 'package:muse_ml/src/feedback/protocol_catalog.dart';
 import 'package:muse_ml/src/feedback/trust/nerd_sheet.dart';
 import 'package:muse_ml/src/feedback/trust/trust_chips.dart';
 import 'package:muse_ml/src/feedback/trust/trust_graphs.dart';
+import 'package:muse_ml/src/feedback/trust/trust_inhibit.dart';
 import 'package:muse_ml/src/feedback/trust/trust_viewport.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/model_selector.dart';
@@ -148,6 +149,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
                     guardLabel: guardLabel,
                     rewardColor: protocol.color,
                     guardColor: bandColors[0],
+                    inhibit: trustInhibitSpecs(protocol.conditions),
                   ),
                 const SizedBox(height: 16),
                 if (fb.phase == FeedbackPhase.idle ||
