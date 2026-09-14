@@ -27,6 +27,8 @@ import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
+import 'package:muse_ml/src/feedback/trust/trust_gestures.dart';
+import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/models.dart';
@@ -235,10 +237,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   int _faultyPadSeconds = 0;
   DateTime _lastMovementAt = DateTime.fromMillisecondsSinceEpoch(0);
   DateTime _lastGestureAt = DateTime.fromMillisecondsSinceEpoch(0);
-  DateTime _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
-  DateTime _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastBlinkDirtyAt = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastClenchDirtyAt = DateTime.fromMillisecondsSinceEpoch(0);
   int _prevEyeState = 0;
   final List<GestureMarker> _gestureMarkers = [];
+  final TrustTrace _trust = TrustTrace();
+  final TrustGestureTracker _trustGestures = TrustGestureTracker();
   int _adaptTick = 0;
   late final RewardLane _reward;
   late final GuardLane _guard;
@@ -250,6 +254,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   late final FeedbackRecorder _recorder;
 
   RatioEngine get _engine => _reward.engine;
+
+  TrustTrace get trust => _trust;
 
   /// Per-second sleep-guardrail readings captured while playing (only when
   /// the guardrail is armed). Persisted as [SessionDrowsiness] metadata.
@@ -285,7 +291,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   List<String> _enabledFeatureIds = const [];
 
   List<int> _gateElectrodes = List.of(defaultGateElectrodes);
-  bool _clenchWasActive = false;
 
   AudioService get _audio => _ref.read(audioServiceProvider);
 
@@ -654,10 +659,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     );
     _setPhase(FeedbackPhase.calibrating, extra: 'protocol=${state.protocol}');
     _gestureMarkers.clear();
-    _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
-    _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _trust.reset();
+    _trustGestures.reset();
+    _lastBlinkDirtyAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _lastClenchDirtyAt = DateTime.fromMillisecondsSinceEpoch(0);
     _prevEyeState = 0;
-    _clenchWasActive = false;
     _sessionStartAt = DateTime.now();
     _trainingStartAt = null;
     _usedStartAnyway = false;
@@ -1185,11 +1191,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _adaptTick = 0;
     _lastMovementAt = DateTime.fromMillisecondsSinceEpoch(0);
     _lastGestureAt = DateTime.fromMillisecondsSinceEpoch(0);
-    _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
-    _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _lastBlinkDirtyAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _lastClenchDirtyAt = DateTime.fromMillisecondsSinceEpoch(0);
     _prevEyeState = 0;
-    _clenchWasActive = false;
     _gestureMarkers.clear();
+    _trust.reset();
+    _trustGestures.reset();
     _guard.teardown();
     unawaited(_clearEnabledFeatures());
     _drowsinessSeries.clear();
@@ -1547,18 +1554,35 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     );
   }
 
-  RewardTick _rewardTick() => RewardTick(
-    phase: state.phase,
-    collectingBaseline:
-        state.phase == FeedbackPhase.calibrating &&
-        state.baselineSecondsLeft > 0,
-    sampleIsClean: _sampleIsClean,
-    quality: _ref.read(appStateProvider).signalQuality,
-  );
+  RewardTick _rewardTick() {
+    final quality = _ref.read(appStateProvider).signalQuality;
+    return RewardTick(
+      phase: state.phase,
+      collectingBaseline:
+          state.phase == FeedbackPhase.calibrating &&
+          state.baselineSecondsLeft > 0,
+      sampleIsClean: _sampleIsClean,
+      quality: quality,
+      dirtyReason: artifactDirtyReason(
+        now: DateTime.now(),
+        lastMovementAt: _lastMovementAt,
+        lastJawAt: _lastClenchDirtyAt,
+        lastBlinkAt: _lastBlinkDirtyAt,
+        buffer: movementBuffer,
+      ),
+    );
+  }
+
+  double _trustElapsed() {
+    final start = _trainingStartAt ?? _sessionStartAt;
+    if (start == null) return state.elapsedSeconds.toDouble();
+    return DateTime.now().difference(start).inMilliseconds / 1000.0;
+  }
 
   GuardTick _guardTick() {
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
     final spec = catalog?.forName(state.protocol);
+    final quality = _ref.read(appStateProvider).signalQuality;
     return GuardTick(
       phase: state.phase,
       collectingBaseline:
@@ -1567,6 +1591,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       collectionEyes: _collectionEyes,
       muffleReward: spec?.guard?.muffleReward ?? false,
       sessionStartAt: _sessionStartAt,
+      sampleIsClean: _sampleIsClean && _reward.padsUsable(quality),
       writeWarningMetadata:
           ({
             required sleepDir,
@@ -1614,10 +1639,56 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     _reward.onFeature(sample, _rewardTick());
+    if (state.phase == FeedbackPhase.playing &&
+        _reward.hasReward &&
+        sample.id == _reward.featureId &&
+        sample.value.isFinite) {
+      _trust.pushReward(
+        TrustRewardSample(
+          t: _trustElapsed(),
+          native: _reward.lastNative ?? sample.value,
+          percentile: _reward.lastPercentile ?? 50,
+          thresholdPercentile: _reward.lastThresholdPercentile,
+          inTarget: _reward.lastInTarget,
+          heldBack: _reward.lastHeldBack,
+          inhibitTags: List<String>.of(_reward.lastInhibitTags),
+          clean: !_reward.lastDirty,
+          dirtyReason: _reward.lastDirtyReason,
+        ),
+      );
+      if (_reward.lastDirty) {
+        _audio.onMovement();
+      }
+    }
     if (_guard.onFeature(sample, _guardTick())) {
       final start = _sessionStartAt;
       if (start != null) {
         _guard.recordSample(_drowsinessSeries, start);
+      }
+      if (state.phase == FeedbackPhase.playing) {
+        final native = _guard.bandMath ? _guard.lastDelta : _guard.lastSleepDir;
+        _trust.pushGuard(
+          TrustGuardSample(
+            t: _trustElapsed(),
+            featurePercentile: _guard.percentileOf(native) ?? 50,
+            warningActive: _guard.warningActive,
+            warnOver: _guard.warnOver,
+            ceilingOver: _guard.ceilingOver,
+            lastDelta: _guard.lastDelta,
+            clean:
+                _sampleIsClean &&
+                _reward.padsUsable(_ref.read(appStateProvider).signalQuality),
+            dirtyReason: _reward.lastDirty
+                ? _reward.lastDirtyReason
+                : artifactDirtyReason(
+                    now: DateTime.now(),
+                    lastMovementAt: _lastMovementAt,
+                    lastJawAt: _lastClenchDirtyAt,
+                    lastBlinkAt: _lastBlinkDirtyAt,
+                    buffer: movementBuffer,
+                  ),
+          ),
+        );
       }
     }
   }
@@ -1659,59 +1730,49 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// activity marks the ATR sample window as contaminated (like movement);
   /// double-blink / double-clench and (optionally) eye up/down become
   /// persisted markers when a feedback session is running and the relevant
-  /// settings toggle is on.
+  /// settings toggle is on. The live trust ring always receives Blink/Jaw
+  /// marks; persist still gates `end()` metadata.
   void _onGestures(GestureDto g) {
     final now = DateTime.now();
+    if (g.blinkCount > 0) {
+      _lastBlinkDirtyAt = now;
+    }
+    if (g.clench) {
+      _lastClenchDirtyAt = now;
+    }
     if (g.blinkCount > 0 || g.clench) {
       _lastGestureAt = now;
     }
-    if (state.phase != FeedbackPhase.playing) {
+    if (state.phase != FeedbackPhase.playing &&
+        state.phase != FeedbackPhase.paused) {
       return;
     }
-    if (!_ref.read(settingsProvider).markersInFeedbackEnabled) {
+    if (state.phase == FeedbackPhase.playing &&
+        (g.blinkCount > 0 || g.clench)) {
+      _audio.onMovement();
+    }
+    final persist = _ref.read(settingsProvider).markersInFeedbackEnabled;
+    final types = _trustGestures.ingest(g, now);
+    final t = _trustElapsed();
+    for (final type in types) {
+      recordLiveMark(
+        live: _trust,
+        persisted: _gestureMarkers,
+        persistEnabled: persist,
+        type: type,
+        t: t,
+      );
+    }
+    if (!persist) {
       return;
     }
     final gestures = <String>[];
-    if (g.blinkCount >= 2) {
-      _gestureMarkers.add(
-        GestureMarker(
-          type: GestureType.doubleBlink,
-          offsetSeconds: state.elapsedSeconds,
-        ),
-      );
-      _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
+    if (g.blinkCount > 0) {
       gestures.add('blink');
-    } else if (g.blinkCount > 0) {
-      if (now.difference(_lastBlinkAt) <= const Duration(seconds: 2)) {
-        _gestureMarkers.add(
-          GestureMarker(
-            type: GestureType.doubleBlink,
-            offsetSeconds: state.elapsedSeconds,
-          ),
-        );
-        _lastBlinkAt = DateTime.fromMillisecondsSinceEpoch(0);
-        gestures.add('blink');
-      } else {
-        _lastBlinkAt = now;
-        gestures.add('blink');
-      }
     }
-    if (g.clench && !_clenchWasActive) {
-      if (now.difference(_lastClenchAt) <= const Duration(seconds: 2)) {
-        _gestureMarkers.add(
-          GestureMarker(
-            type: GestureType.doubleClench,
-            offsetSeconds: state.elapsedSeconds,
-          ),
-        );
-        _lastClenchAt = DateTime.fromMillisecondsSinceEpoch(0);
-        gestures.add('clench');
-      } else {
-        _lastClenchAt = now;
-        gestures.add('clench');
-      }
+    if (types.contains(GestureType.doubleClench)) {
+      gestures.add('clench');
     }
-    _clenchWasActive = g.clench;
     if (_ref.read(settingsProvider).eyeMarkersEnabled) {
       if (g.eye != _prevEyeState && g.eye != 0) {
         _gestureMarkers.add(
@@ -1812,6 +1873,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _eventSub?.cancel();
     _appSub?.close();
     _bus.dispose();
+    _trust.dispose();
     super.dispose();
   }
 }

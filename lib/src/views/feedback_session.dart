@@ -16,8 +16,12 @@ import 'package:muse_ml/src/feedback/feature_override.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
+import 'package:muse_ml/src/charts/band_style.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
+import 'package:muse_ml/src/feedback/trust/trust_chips.dart';
+import 'package:muse_ml/src/feedback/trust/trust_graphs.dart';
+import 'package:muse_ml/src/feedback/trust/trust_viewport.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/model_selector.dart';
 import 'package:muse_ml/src/reve/models.dart';
@@ -37,6 +41,14 @@ class FeedbackSessionView extends ConsumerStatefulWidget {
 }
 
 class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
+  final TrustViewport _trustViewport = TrustViewport();
+
+  @override
+  void dispose() {
+    _trustViewport.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -64,6 +76,26 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
     final connected = app.status.connected;
     final theme = Theme.of(context);
     final guardrailOn = protocol.guardrailAllowed;
+    final settings = ref.watch(settingsProvider);
+    final flags = TrustLaneFlags(
+      hasReward: protocol.hasReward,
+      guardRunning:
+          protocol.guardrailAllowed &&
+          settings.guardrailEnabledFor(fb.protocol),
+    );
+    final rewardOn = flags.showRewardChip && settings.trustRewardVisible;
+    final guardOn =
+        flags.showGuardChip &&
+        settings.trustGuardVisible(rewardChipShown: flags.showRewardChip);
+    final moreOn = settings.trustMoreVisible;
+    final showGraphs = trustGraphsVisible(fb.phase) && (rewardOn || guardOn);
+    final rewardLabel =
+        catalog?.features[protocol.reward?.feature ?? '']?.shortLabel ??
+        protocol.reward?.feature ??
+        '';
+    final guardFeature = settings.guardFeatureFor(fb.protocol);
+    final guardLabel =
+        catalog?.features[guardFeature]?.shortLabel ?? guardFeature;
 
     return Scaffold(
       appBar: AppBar(
@@ -95,14 +127,42 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Guide card
-                _GuideCard(protocol: protocol, copy: copy),
-                // Nerd stats bubble
+                if (flags.showRow) ...[
+                  TrustChipRow(
+                    flags: flags,
+                    rewardOn: rewardOn,
+                    guardOn: guardOn,
+                    moreOn: moreOn,
+                    onReward: (on) => settings.setTrustRewardVisible(on),
+                    onGuard: (on) => settings.setTrustGuardVisible(on),
+                    onMore: (on) => settings.setTrustMoreVisible(on),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (showGraphs)
+                  TrustGraphsColumn(
+                    key: const Key('trust-graphs-column'),
+                    trace: ref.read(feedbackStateProvider.notifier).trust,
+                    viewport: _trustViewport,
+                    showReward: rewardOn,
+                    showGuard: guardOn,
+                    showMore: moreOn,
+                    rewardLabel: rewardLabel,
+                    guardLabel: guardLabel,
+                    rewardColor: protocol.color,
+                    guardColor: bandColors[0],
+                  ),
                 if (fb.showNerdStats &&
                     (fb.phase == FeedbackPhase.playing ||
                         fb.phase == FeedbackPhase.paused)) ...[
                   const SizedBox(height: 8),
                   const _NerdStatsBubble(),
+                ],
+                const SizedBox(height: 16),
+                if (fb.phase == FeedbackPhase.idle ||
+                    fb.phase == FeedbackPhase.playing ||
+                    fb.phase == FeedbackPhase.paused) ...[
+                  _SessionSettingsCard(showGuardrail: guardrailOn),
                 ],
                 if (kDebugMode &&
                     connected &&
@@ -110,14 +170,6 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
                   const SizedBox(height: 8),
                   const _FeatureProbeCard(),
                 ],
-                const SizedBox(height: 16),
-                // Session settings (idle and during feedback for on-the-fly changes)
-                if (fb.phase == FeedbackPhase.idle ||
-                    fb.phase == FeedbackPhase.playing ||
-                    fb.phase == FeedbackPhase.paused) ...[
-                  _SessionSettingsCard(showGuardrail: guardrailOn),
-                ],
-                // Muse-not-connected hint (idle only)
                 if (fb.phase == FeedbackPhase.idle && !connected) ...[
                   const SizedBox(height: 12),
                   Row(
@@ -135,10 +187,8 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
                   ),
                 ],
                 const SizedBox(height: 16),
-                // Phase-specific controls
                 _PhaseControls(protocol: protocol),
                 const SizedBox(height: 8),
-                // Timer display
                 if (fb.phase == FeedbackPhase.playing ||
                     fb.phase == FeedbackPhase.paused)
                   Text(
@@ -147,6 +197,8 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall,
                   ),
+                const SizedBox(height: 16),
+                _GuideCard(protocol: protocol, copy: copy),
               ],
             ),
           ),

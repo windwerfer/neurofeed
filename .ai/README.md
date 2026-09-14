@@ -42,6 +42,8 @@ pipeline-contract work.
 | File | Contents |
 |------|----------|
 | [TODO/README.md](TODO/README.md) | Index |
+| [TODO/trust-graphs.md](TODO/trust-graphs.md) | Live reward/guard trust graphs (PR 1 landed; PR 2 nerd sheet) |
+| [TODO/handoff-trust-graphs.md](TODO/handoff-trust-graphs.md) | PR 1 files / leftover PR 2 |
 | [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md) | Athena optical raw stream (muse-rs `Optics`, session tag 11) |
 | [TODO/handoff-athena-optics.md](TODO/handoff-athena-optics.md) | Implementer order, files, LOC |
 
