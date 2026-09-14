@@ -1,6 +1,7 @@
 import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
 
-const bool kTrustHeldBackFill = true;
+/// Gray wash on the reward pane when inhibit is out (any reward Y).
+const bool kTrustInhibitWash = true;
 
 enum TrustStrokeKind { inZone, below, heldBack, dirty }
 
@@ -100,10 +101,47 @@ String? rewardRunLabel(TrustRun<TrustRewardSample> run) {
   return null;
 }
 
-bool shouldPaintHeldBackFill({
+/// Inhibit-out is the only gray wash on the reward graph. Not dirty, not
+/// below-the-line without a failed inhibit.
+bool sampleHasInhibitWash(TrustRewardSample s) =>
+    s.clean && s.inhibitTags.isNotEmpty;
+
+bool shouldPaintInhibitWash({
   required bool gate,
-  required TrustStrokeKind kind,
-}) => gate && kind == TrustStrokeKind.heldBack;
+  required TrustRewardSample sample,
+}) => gate && sampleHasInhibitWash(sample);
+
+class TrustTimeSpan {
+  const TrustTimeSpan({required this.tStart, required this.tEnd});
+
+  final double tStart;
+  final double tEnd;
+}
+
+/// Consecutive inhibit-out runs. Occupancy is [first.t, next sample t);
+/// a trailing run extends to [visEnd].
+List<TrustTimeSpan> inhibitWashSpans(
+  List<TrustRewardSample> samples, {
+  required double visEnd,
+}) {
+  if (samples.isEmpty) return const [];
+  final spans = <TrustTimeSpan>[];
+  int? start;
+  for (var i = 0; i < samples.length; i++) {
+    final wash = sampleHasInhibitWash(samples[i]);
+    if (wash && start == null) {
+      start = i;
+    } else if (!wash && start != null) {
+      spans.add(TrustTimeSpan(tStart: samples[start].t, tEnd: samples[i].t));
+      start = null;
+    }
+  }
+  if (start != null) {
+    final tEnd = visEnd > samples[start].t ? visEnd : samples.last.t;
+    spans.add(TrustTimeSpan(tStart: samples[start].t, tEnd: tEnd));
+  }
+  return spans;
+}
 
 /// Occupancy of a run: [tStart, next sample t). Last run extends to [visEnd].
 double heldBackFillEnd({

@@ -2,11 +2,16 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Spec frozen. **PR 1 and PR 2 landed.** |
+| **Status** | PR 1 + PR 2 history. **Superseded** by [../trust-graphs.md](../trust-graphs.md). |
 | **Date** | 2026-09-14 |
-| **Branch** | `refactor/monitor` (do not branch from `main`) |
+| **Branch** | landed on `refactor/monitor`, now on `main` |
 | **Origin** | `.ai/archive/trust-graph-agent-prompt.md` plus the 2026-09-14 design thread |
 | **Do not mix** | Pipeline-contract Key Decisions, Crown Start, Connect UX, v5 header, monitor GraphShell/Inspect, RatioEngine 80/40 / default p40, guard `percentileWarn` / `guardrailDeltaCeiling` 0.25, catalog protocols |
+
+The held-back **gray stroke** and “below-the-line is not gray” rules
+below are **not** current. Current encoding: gray **wash** whenever
+inhibit is out; reward stroke stays series color; inhibit pane under
+Reward.
 
 Display + plumbing. No new catalog rows or features.
 

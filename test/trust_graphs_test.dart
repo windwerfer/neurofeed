@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muse_ml/src/feedback/feedback_phase.dart';
+import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/trust/trust_chips.dart';
 import 'package:muse_ml/src/feedback/trust/trust_gestures.dart';
 import 'package:muse_ml/src/feedback/trust/trust_graphs.dart';
+import 'package:muse_ml/src/feedback/trust/trust_inhibit.dart';
 import 'package:muse_ml/src/feedback/trust/trust_more.dart';
 import 'package:muse_ml/src/feedback/trust/trust_runs.dart';
 import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
@@ -21,6 +23,8 @@ TrustRewardSample _r({
   List<String> tags = const [],
   double percentile = 60,
   TrustDirtyReason? dirty,
+  double? betaRel,
+  double? deltaRel,
 }) => TrustRewardSample(
   t: t,
   native: 1,
@@ -31,6 +35,8 @@ TrustRewardSample _r({
   inhibitTags: tags,
   clean: clean,
   dirtyReason: dirty,
+  betaRel: betaRel,
+  deltaRel: deltaRel,
 );
 
 void main() {
@@ -134,49 +140,55 @@ void main() {
   });
 
   group('held back', () {
-    test(
-      'gray fill+stroke when above line + inhibit fail; label beta high',
-      () {
-        final run = rewardRuns([
-          _r(
-            t: 0,
-            clean: true,
-            inTarget: false,
-            heldBack: true,
-            tags: ['beta'],
-          ),
-          _r(
-            t: 1,
-            clean: true,
-            inTarget: false,
-            heldBack: true,
-            tags: ['beta'],
-          ),
-        ]).single;
-        expect(run.kind, TrustStrokeKind.heldBack);
-        expect(rewardRunLabel(run), 'beta high');
-        expect(
-          shouldPaintHeldBackFill(gate: kTrustHeldBackFill, kind: run.kind),
-          isTrue,
-        );
-      },
-    );
-
-    test('below-the-line is not gray', () {
-      final run = rewardRuns([_r(t: 0, clean: true, inTarget: false)]).single;
-      expect(run.kind, TrustStrokeKind.below);
-      expect(shouldPaintHeldBackFill(gate: true, kind: run.kind), isFalse);
+    test('above line + inhibit fail is held back; label beta high', () {
+      final run = rewardRuns([
+        _r(t: 0, clean: true, inTarget: false, heldBack: true, tags: ['beta']),
+        _r(t: 1, clean: true, inTarget: false, heldBack: true, tags: ['beta']),
+      ]).single;
+      expect(run.kind, TrustStrokeKind.heldBack);
+      expect(rewardRunLabel(run), 'beta high');
     });
 
-    test('kTrustHeldBackFill gates the fill', () {
+    test('gray wash when inhibit is out, even below the line', () {
+      final belowOut = _r(t: 0, clean: true, inTarget: false, tags: ['beta']);
+      final belowOk = _r(t: 1, clean: true, inTarget: false);
+      final aboveOut = _r(
+        t: 2,
+        clean: true,
+        inTarget: false,
+        heldBack: true,
+        tags: ['delta'],
+      );
+      expect(shouldPaintInhibitWash(gate: true, sample: belowOut), isTrue);
+      expect(shouldPaintInhibitWash(gate: true, sample: belowOk), isFalse);
+      expect(shouldPaintInhibitWash(gate: true, sample: aboveOut), isTrue);
+      expect(shouldPaintInhibitWash(gate: false, sample: belowOut), isFalse);
+    });
+
+    test('dirty is not a gray wash', () {
       expect(
-        shouldPaintHeldBackFill(gate: false, kind: TrustStrokeKind.heldBack),
+        shouldPaintInhibitWash(
+          gate: true,
+          sample: _r(
+            t: 0,
+            clean: false,
+            inTarget: false,
+            tags: ['beta'],
+            dirty: TrustDirtyReason.movement,
+          ),
+        ),
         isFalse,
       );
+    });
+
+    test('kTrustInhibitWash gates the fill', () {
+      final out = _r(t: 0, clean: true, inTarget: true, tags: ['beta']);
+      expect(kTrustInhibitWash, isTrue);
       expect(
-        shouldPaintHeldBackFill(gate: true, kind: TrustStrokeKind.heldBack),
+        shouldPaintInhibitWash(gate: kTrustInhibitWash, sample: out),
         isTrue,
       );
+      expect(shouldPaintInhibitWash(gate: false, sample: out), isFalse);
     });
 
     test('fill occupancy uses next sample t, so 5 s is wider than 1 s', () {
@@ -270,6 +282,7 @@ void main() {
       expect(find.byKey(const Key('trust-reward-more')), findsOneWidget);
       expect(find.byKey(const Key('trust-guard-more')), findsNothing);
       expect(find.byKey(const Key('trust-reward-pane')), findsOneWidget);
+      expect(find.byKey(const Key('trust-inhibit-pane')), findsNothing);
       expect(find.byKey(const Key('trust-guard-warn-pane')), findsNothing);
 
       await tester.pumpWidget(
@@ -313,6 +326,167 @@ void main() {
       );
       expect(find.byKey(const Key('trust-reward-more')), findsNothing);
       expect(find.byKey(const Key('trust-guard-more')), findsNothing);
+    });
+
+    testWidgets('inhibit pane under Reward when protocol has inhibit', (
+      tester,
+    ) async {
+      final trace = TrustTrace();
+      final viewport = TrustViewport();
+      final two = trustInhibitSpecs([
+        const BetaCeiling(0.25),
+        const DeltaCeiling(0.5),
+      ]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TrustGraphsColumn(
+              trace: trace,
+              viewport: viewport,
+              showReward: true,
+              showGuard: false,
+              showMore: false,
+              rewardLabel: 'ATR',
+              guardLabel: 'δ',
+              rewardColor: Colors.green,
+              guardColor: Colors.blue,
+              inhibit: two,
+            ),
+          ),
+        ),
+      );
+      expect(find.byKey(const Key('trust-reward-pane')), findsOneWidget);
+      expect(find.byKey(const Key('trust-inhibit-pane')), findsOneWidget);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TrustGraphsColumn(
+              trace: trace,
+              viewport: viewport,
+              showReward: false,
+              showGuard: true,
+              showMore: false,
+              rewardLabel: 'ATR',
+              guardLabel: 'δ',
+              rewardColor: Colors.green,
+              guardColor: Colors.blue,
+              inhibit: two,
+            ),
+          ),
+        ),
+      );
+      expect(find.byKey(const Key('trust-inhibit-pane')), findsNothing);
+    });
+  });
+
+  group('inhibit', () {
+    test('specs: one or two ceilings, omitted when empty', () {
+      expect(trustInhibitSpecs(const []), isEmpty);
+      expect(trustInhibitSpecs(const [BetaCeiling(0.25)]), [
+        const TrustInhibitSpec(id: TrustInhibitId.beta, ceiling: 0.25),
+      ]);
+      final both = trustInhibitSpecs(const [
+        BetaCeiling(0.25),
+        DeltaCeiling(0.5),
+      ]);
+      expect(both, hasLength(2));
+      expect(both[0].id, TrustInhibitId.beta);
+      expect(both[1].id, TrustInhibitId.delta);
+      expect(inhibitPaneLabel(both), 'β · δ');
+    });
+
+    test('series and overshoot colors stay distinct for two inhibitors', () {
+      const error = Color(0xFFB00020);
+      final beta = inhibitSeriesColor(TrustInhibitId.beta);
+      final delta = inhibitSeriesColor(TrustInhibitId.delta);
+      final betaOver = inhibitOvershootColor(TrustInhibitId.beta, error);
+      final deltaOver = inhibitOvershootColor(TrustInhibitId.delta, error);
+      expect(beta, isNot(delta));
+      expect(betaOver, isNot(beta));
+      expect(deltaOver, isNot(delta));
+      expect(betaOver, isNot(deltaOver));
+      expect(betaOver, isNot(delta));
+      expect(deltaOver, isNot(beta));
+    });
+
+    test('overshoot is y > ceiling; dirty is dotted not overshoot', () {
+      const spec = TrustInhibitSpec(id: TrustInhibitId.beta, ceiling: 0.25);
+      final inside = _r(t: 0, clean: true, inTarget: true, betaRel: 0.10);
+      final over = _r(
+        t: 1,
+        clean: true,
+        inTarget: false,
+        tags: ['beta'],
+        heldBack: true,
+        betaRel: 0.40,
+      );
+      final dirty = _r(
+        t: 2,
+        clean: false,
+        inTarget: false,
+        dirty: TrustDirtyReason.movement,
+        betaRel: 0.40,
+      );
+      expect(inhibitStrokeKind(inside, spec), TrustInhibitKind.inside);
+      expect(inhibitStrokeKind(over, spec), TrustInhibitKind.overshoot);
+      expect(inhibitStrokeKind(dirty, spec), TrustInhibitKind.dirty);
+      final runs = inhibitRuns([inside, over, dirty], spec);
+      expect(runs.map((r) => r.kind), [
+        TrustInhibitKind.inside,
+        TrustInhibitKind.overshoot,
+        TrustInhibitKind.dirty,
+      ]);
+    });
+
+    test('wash spans cover inhibit-out occupancy including below-the-line', () {
+      final spans = inhibitWashSpans([
+        _r(t: 0, clean: true, inTarget: false, tags: ['beta']),
+        _r(t: 1, clean: true, inTarget: false, tags: ['beta']),
+        _r(t: 2, clean: true, inTarget: false),
+        _r(t: 3, clean: true, inTarget: false, heldBack: true, tags: ['delta']),
+      ], visEnd: 10);
+      expect(spans, hasLength(2));
+      expect(spans[0].tStart, 0);
+      expect(spans[0].tEnd, 2);
+      expect(spans[1].tStart, 3);
+      expect(spans[1].tEnd, 10);
+    });
+
+    test('dirty holds last clean inhibit Y', () {
+      final trace = TrustTrace();
+      trace.pushReward(
+        _r(t: 0, clean: true, inTarget: true, betaRel: 0.12, deltaRel: 0.20),
+      );
+      trace.pushReward(
+        _r(
+          t: 1,
+          clean: false,
+          inTarget: false,
+          dirty: TrustDirtyReason.movement,
+          betaRel: 0.90,
+          deltaRel: 0.90,
+        ),
+      );
+      expect(trace.reward.last.plotBetaRel, 0.12);
+      expect(trace.reward.last.plotDeltaRel, 0.20);
+      expect(trace.reward.last.plotPercentile, 60);
+    });
+
+    test('axis max leaves room above the highest ceiling', () {
+      expect(
+        inhibitAxisMax(const [
+          TrustInhibitSpec(id: TrustInhibitId.beta, ceiling: 0.25),
+        ]),
+        0.5,
+      );
+      expect(
+        inhibitAxisMax(const [
+          TrustInhibitSpec(id: TrustInhibitId.beta, ceiling: 0.25),
+          TrustInhibitSpec(id: TrustInhibitId.delta, ceiling: 0.5),
+        ]),
+        closeTo(0.7, 1e-9),
+      );
     });
   });
 

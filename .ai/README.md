@@ -18,6 +18,7 @@ do/don't, then this folder for maps.
 | [btleplug.md](btleplug.md) | btleplug fork (`0.12.0-muse-5`) — JNI attach + notification death spiral |
 | [muse-rs.md](muse-rs.md) | muse-rs `0.1.1` patch, Classic vs Athena, battery, Athena optical/fNIRS gap |
 | [monitor.md](monitor.md) | **Implemented.** Live graphs + connect-time recording. Cinema: mobile landscape / desktop F11. Bands: PCHIP, 1 s Follow lead, in-pane chips. Draw-path perf PRs 1–7 landed; PR 8 skipped. |
+| [trust-graphs.md](trust-graphs.md) | **Implemented.** Session Reward / Guard / More chips + Follow-only graphs. Inhibit pane under Reward when the protocol has a ceiling. |
 | [headset-fit.md](headset-fit.md) | Pad colors, Classic vs Athena, status-bar dots |
 | [export.md](export.md) | History export: PDF / PNG / CSV / EDF+ |
 
@@ -42,8 +43,6 @@ pipeline-contract work.
 | File | Contents |
 |------|----------|
 | [TODO/README.md](TODO/README.md) | Index |
-| [TODO/trust-graphs.md](TODO/trust-graphs.md) | Live reward/guard trust graphs (PR 1 + PR 2 landed) |
-| [TODO/handoff-trust-graphs.md](TODO/handoff-trust-graphs.md) | PR 1 + PR 2 files |
 | [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md) | Athena optical raw stream (muse-rs `Optics`, session tag 11) |
 | [TODO/handoff-athena-optics.md](TODO/handoff-athena-optics.md) | Implementer order, files, LOC |
 

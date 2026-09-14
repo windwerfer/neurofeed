@@ -217,9 +217,10 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 | Reward chip | `Reward` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Depressed = on. Default on. Omitted without a reward lane. Persist `Settings.trustRewardVisible`. |
 | Guard chip | `Guard` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Default off; **on** when Reward is omitted (`guardrailOnly`). Omitted when protocol has no guard or Session Settings guard is `none`. Persist `Settings.trustGuardVisible`. |
 | More chip | `More` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Default on. Readouts under visible lane(s). `recordOnly` hides the whole row. Persist `Settings.trustMoreVisible`. |
-| Reward graph | catalog `shortLabel` (`ATR` / `TAR` / `BTR` / `α`) | `RewardTrustPane` | `feedback/trust/trust_pane.dart` | Playing/paused only. Follow-only, default 75 s. Not `% calm`. |
+| Reward graph | catalog `shortLabel` (`ATR` / `TAR` / `BTR` / `α`) | `RewardTrustPane` | `feedback/trust/trust_pane.dart` | Playing/paused only. Follow-only, default 75 s. Not `% calm`. Gray **wash** only while inhibit is out (any reward Y). Stroke stays series color. Dirty is dotted. |
+| Inhibit graph | `β` / `δ` / `inhibit` | `InhibitTrustPane` | `feedback/trust/trust_pane.dart` | Under Reward when the protocol has inhibit. Same Follow window. One pane; two series if β and δ. Ceiling line matches series color. Overshoot uses a distinct hue-keeping color. Hidden if Reward is off. |
 | Guard graphs | `warn` / `δ ceiling` | `GuardWarnPane` / `GuardCeilingPane` | `feedback/trust/trust_pane.dart` | Two panes. Playing/paused only. |
-| Held back | `beta high` / `delta high` / `beta · delta` | `heldBackLabel` | `feedback/trust/trust_runs.dart` | Gray stroke + fill. Below-the-line is not gray. |
+| Held back | `beta high` / `delta high` | `TrustInhibitSpec.overshootLabel` | `feedback/trust/trust_inhibit.dart` | Labels on the inhibit pane at zone-exit. More verdict `Held back` is still above-the-line + inhibit fail. |
 | Noisy | `pads` / `movement` / dotted | dirty run | `trust_runs.dart` | Isolated 1 s blink = dotted, no text. |
 | Blink mark / Jaw mark | `Blink` / `Jaw` | `TrustGestureMark` | `feedback/trust/trust_trace.dart` | Live ring even if Gesture markers persist is off. Not eye up/down. |
 | Reward More | `In zone` / `Below the line` / `Noisy — not counting` / `Held back` | `TrustRewardMore` | `feedback/trust/trust_more.dart` | Strip + Now rail + Hold. Strip glyphs from the first sample. |
@@ -267,7 +268,7 @@ Guardrail AI engine, Audio (Android only), About, Debug mode.
 | Paused / interrupted / ended | matching log | `paused` / `interrupted` / `ended` | | |
 | Reward lane | session audio | `RewardLane` | `reward_lane.dart` | Guard never modulates. Dirty skips `recordEpoch` / `onSample`. |
 | Guard lane | protocol builder Guard | `GuardLane` | `guard_lane.dart` | Warns only. Dirty skips `evaluateWarning`. |
-| Trust graphs | Reward / Guard / More | `TrustTrace` / `TrustViewport` | `feedback/trust/` | Follow-only; not GraphShell. |
+| Trust graphs | Reward / Guard / More | `TrustTrace` / `TrustViewport` | `feedback/trust/` | Follow-only; not GraphShell. Inhibit pane shares the Reward window. |
 | Feature bus | — | `FeatureBus` | `feature_bus.dart` | |
 | Feature probe latch | debug sliders | `FeatureOverride` | `feature_override.dart` | Replaces `FeatureDto.value` in `_onEvent` while playing. |
 

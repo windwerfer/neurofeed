@@ -22,3 +22,6 @@ Finished threads and historical notes. Not current orientation — see
 | `lessons-learned.md` | JNI/btleplug attempts that failed before the fork |
 | `graph-todo.md` | July 2026 live-chart / recording plan (Phases 1/3/4 done). Leftover: Android foreground service. |
 | `muse-rs_batteryindicator.md` | Superseded by [../muse-rs.md](../muse-rs.md) |
+| `trust-graphs.md` | PR 1+2 plan (gray held-back stroke). **Superseded** by [../trust-graphs.md](../trust-graphs.md) (inhibit pane + gray wash). |
+| `handoff-trust-graphs.md` | PR 1+2 files. Inhibit pane is a later follow-up; live spec [../trust-graphs.md](../trust-graphs.md). |
+| `trust-graph-agent-prompt.md` | Pre-spec agent prompt. |

@@ -77,7 +77,11 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   on Spectrogram. Do not restore Bands `SMOOTH` / `REAL TIME` chrome.
   Bands Follow lead is 1 s (Spectrogram stays flush-right). Do not pause
   `SweepBuffer` / `BandCache` on view change. Hidden graphs stay unmounted
-  (`AppShell` `switch`, not `IndexedStack`).
+  (`AppShell` `switch`, not `IndexedStack`). Trust graphs
+  (`.ai/trust-graphs.md`) are implemented: Follow-only; gray wash is
+  inhibit-out only (not dirty, not below-the-line without a failed
+  inhibit); reward stroke stays series color; do not reuse monitor graph
+  widgets.
 - If you change on-screen copy or primary chrome (status bar, sidebar, connect
   window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
   Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
@@ -92,6 +96,7 @@ Tests: [`.ai/test-matrix.md`](.ai/test-matrix.md). Audio engine:
 [`.ai/monitor.md`](.ai/monitor.md) (implemented). Fit:
 [`.ai/headset-fit.md`](.ai/headset-fit.md). Export: [`.ai/export.md`](.ai/export.md).
 Format/cache: `README_feedback_format.md`, `README_history_cache.md`.
+Trust graphs: [`.ai/trust-graphs.md`](.ai/trust-graphs.md) (implemented).
 Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
 
 ## Project layout
@@ -117,6 +122,7 @@ lib/src/feedback/           session orchestrator + lanes
   crash_recovery.dart       leftover `session_*` reopens session summary
   session_store*.dart / session_sqlite.dart / session_metadata.dart
   session_export.dart / session_pdf_export.dart / session_chart_data.dart
+  trust/                    live Reward / Guard / inhibit graphs + nerd sheet
 lib/src/session_v5/         v5 writer / assemble / ComputedFrame / DeviceInfoV5
   assemble.dart             assembleV5Container, writeScratchV5(prefix:), placeholderWebP
   scratch_writer.dart       SessionRecorder (prefix default `session`)
@@ -210,6 +216,10 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `loadFile`, uncached. Spec: `.ai/audio-engine.md`.
 - Audio outputs: `lib/src/audio/output_ids.dart`.
 - Protocol builder: `lib/src/views/protocol_builder.dart`.
+- Trust graphs: `lib/src/feedback/trust/` — Follow-only session plots, not
+  GraphShell. Reward pane + optional inhibit pane (same window) when the
+  protocol has `betaCeiling` / `deltaCeiling`. Gray wash on reward only
+  while inhibit is out. Spec: `.ai/trust-graphs.md`.
 - Release CI: `.ai/release.md`. Toolchain: `rust/rust-toolchain.toml` (1.97.1)
   kept in sync with workflow `RUST_VERSION`.
 

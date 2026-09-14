@@ -19,6 +19,10 @@ class TrustRewardSample {
     required this.clean,
     this.dirtyReason,
     this.plotPercentile,
+    this.betaRel,
+    this.deltaRel,
+    this.plotBetaRel,
+    this.plotDeltaRel,
   });
 
   final double t;
@@ -31,8 +35,16 @@ class TrustRewardSample {
   final bool clean;
   final TrustDirtyReason? dirtyReason;
   final double? plotPercentile;
+  final double? betaRel;
+  final double? deltaRel;
+  final double? plotBetaRel;
+  final double? plotDeltaRel;
 
-  TrustRewardSample copyWith({double? plotPercentile}) => TrustRewardSample(
+  TrustRewardSample copyWith({
+    double? plotPercentile,
+    double? plotBetaRel,
+    double? plotDeltaRel,
+  }) => TrustRewardSample(
     t: t,
     native: native,
     percentile: percentile,
@@ -43,6 +55,10 @@ class TrustRewardSample {
     clean: clean,
     dirtyReason: dirtyReason,
     plotPercentile: plotPercentile ?? this.plotPercentile,
+    betaRel: betaRel,
+    deltaRel: deltaRel,
+    plotBetaRel: plotBetaRel ?? this.plotBetaRel,
+    plotDeltaRel: plotDeltaRel ?? this.plotDeltaRel,
   );
 }
 
@@ -112,15 +128,31 @@ class TrustTrace extends ChangeNotifier {
   double? _lastCleanRewardPlot;
   double? _lastCleanGuardPlot;
   double? _lastCleanDeltaPlot;
+  double? _lastCleanBetaRelPlot;
+  double? _lastCleanDeltaRelPlot;
 
   void pushReward(TrustRewardSample sample) {
     var plot = sample.percentile;
+    var plotBeta = sample.betaRel;
+    var plotDeltaRel = sample.deltaRel;
     if (!sample.clean) {
       plot = _lastCleanRewardPlot ?? sample.percentile;
+      plotBeta = _lastCleanBetaRelPlot ?? sample.betaRel;
+      plotDeltaRel = _lastCleanDeltaRelPlot ?? sample.deltaRel;
     } else {
       _lastCleanRewardPlot = sample.percentile;
+      if (sample.betaRel != null) _lastCleanBetaRelPlot = sample.betaRel;
+      if (sample.deltaRel != null) _lastCleanDeltaRelPlot = sample.deltaRel;
+      plotBeta = sample.betaRel ?? _lastCleanBetaRelPlot;
+      plotDeltaRel = sample.deltaRel ?? _lastCleanDeltaRelPlot;
     }
-    reward.add(sample.copyWith(plotPercentile: plot));
+    reward.add(
+      sample.copyWith(
+        plotPercentile: plot,
+        plotBetaRel: plotBeta,
+        plotDeltaRel: plotDeltaRel,
+      ),
+    );
     _prune();
     notifyListeners();
   }
@@ -158,6 +190,8 @@ class TrustTrace extends ChangeNotifier {
     _lastCleanRewardPlot = null;
     _lastCleanGuardPlot = null;
     _lastCleanDeltaPlot = null;
+    _lastCleanBetaRelPlot = null;
+    _lastCleanDeltaRelPlot = null;
     notifyListeners();
   }
 
