@@ -119,7 +119,7 @@ Set `false` if the fill is too noisy — labels and gray stroke stay.
 
 ### Reward More (three distinct widgets, glued under the reward pane)
 
-1. **Last 75 s strip** (engine window, not “last minute”). Until full: `warming up…`, not 0%. Glyphs: colored `█` in zone, gray `█` or `▒` held back, `░` below, `·` noisy. Percent = in-zone / counted seconds (exclude noisy).
+1. **Last 75 s strip** (engine window, not “last minute”). Glyphs from the first sample (no warming-up gate). Colored `█` in zone, gray `█` or `▒` held back, `░` below, `·` noisy. Percent = in-zone / counted seconds so far (exclude noisy).
 2. **Now rail + needle** (required; not a bar copy of the strip). Tick at live release percentile. `●` clean, `○` dirty. Copy: `above` / `below` / `noisy` / `held back`, plus `chime` only when the bowl is eligible (clean, in zone, inhibit pass).
 3. **Hold** — seconds in zone. Resets on dip, dirty, or held-back.
 

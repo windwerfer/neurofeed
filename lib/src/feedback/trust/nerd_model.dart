@@ -241,8 +241,7 @@ String nerdFixed(double? v, {int digits = 2}) {
   return v.toStringAsFixed(digits);
 }
 
-String nerdRate(double? pct, {required bool warming}) {
-  if (warming) return 'warming up…';
+String nerdRate(double? pct) {
   if (pct == null) return '—';
   return '${pct.round()}%';
 }
@@ -329,10 +328,7 @@ NerdSheetSnapshot nerdSheetFromLanes({
       NerdInfoRowData(
         id: NerdRowId.success,
         label: 'Success rate',
-        value: nerdRate(
-          inZonePercent(window),
-          warming: trustStripWarmingUp(window.length),
-        ),
+        value: nerdRate(inZonePercent(window)),
         infoTitle: 'Success rate',
         infoBody:
             'Share of the last 75 s in zone, excluding noisy seconds. '
@@ -421,10 +417,7 @@ NerdSheetSnapshot nerdSheetFromLanes({
       NerdInfoRowData(
         id: NerdRowId.warningRate,
         label: 'Warning rate',
-        value: nerdRate(
-          warningPercent(window),
-          warming: trustStripWarmingUp(window.length),
-        ),
+        value: nerdRate(warningPercent(window)),
         infoTitle: 'Warning rate',
         infoBody:
             'Share of the last 75 s in warning, excluding noisy seconds. '
