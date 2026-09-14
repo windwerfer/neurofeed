@@ -12,7 +12,6 @@ class TrustRewardMore extends StatelessWidget {
     final theme = Theme.of(context);
     final window = lastWindow(samples);
     final now = samples.isEmpty ? null : samples.last;
-    final warming = trustStripWarmingUp(window.length);
     final pct = inZonePercent(window);
     final verdict = rewardVerdict(now);
     final needle = now?.percentile ?? 0;
@@ -24,9 +23,8 @@ class TrustRewardMore extends StatelessWidget {
         Text(rewardVerdictCopy(verdict), style: theme.textTheme.labelLarge),
         const SizedBox(height: 4),
         _StripLine(
-          glyphs: warming ? null : rewardStripText(window),
-          warming: warming,
-          percentLabel: warming ? null : '${(pct ?? 0).round()}% in zone',
+          glyphs: window.isEmpty ? null : rewardStripText(window),
+          percentLabel: pct == null ? null : '${pct.round()}% in zone',
         ),
         const SizedBox(height: 6),
         TrustNowRail(
@@ -58,7 +56,6 @@ class TrustGuardMore extends StatelessWidget {
     final theme = Theme.of(context);
     final window = lastGuardWindow(samples);
     final now = samples.isEmpty ? null : samples.last;
-    final warming = trustStripWarmingUp(window.length);
     final pct = warningPercent(window);
     final verdict = guardVerdict(now);
     final trip = guardTripwireCopy(now);
@@ -69,9 +66,8 @@ class TrustGuardMore extends StatelessWidget {
         Text(guardVerdictCopy(verdict), style: theme.textTheme.labelLarge),
         const SizedBox(height: 4),
         _StripLine(
-          glyphs: warming ? null : guardStripText(window),
-          warming: warming,
-          percentLabel: warming ? null : '${(pct ?? 0).round()}% warning',
+          glyphs: window.isEmpty ? null : guardStripText(window),
+          percentLabel: pct == null ? null : '${pct.round()}% warning',
         ),
         const SizedBox(height: 6),
         TrustNowRail(
@@ -94,21 +90,16 @@ class TrustGuardMore extends StatelessWidget {
 }
 
 class _StripLine extends StatelessWidget {
-  const _StripLine({
-    required this.glyphs,
-    required this.warming,
-    required this.percentLabel,
-  });
+  const _StripLine({required this.glyphs, required this.percentLabel});
 
   final String? glyphs;
-  final bool warming;
   final String? percentLabel;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    if (warming) {
-      return Text('warming up…', style: theme.textTheme.bodySmall);
+    if (glyphs == null && percentLabel == null) {
+      return const SizedBox.shrink();
     }
     return Row(
       children: [

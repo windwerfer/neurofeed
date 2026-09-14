@@ -105,6 +105,22 @@ bool shouldPaintHeldBackFill({
   required TrustStrokeKind kind,
 }) => gate && kind == TrustStrokeKind.heldBack;
 
+/// Occupancy of a run: [tStart, next sample t). Last run extends to [visEnd].
+double heldBackFillEnd({
+  required double tEnd,
+  required double? nextT,
+  required double visEnd,
+}) {
+  if (nextT != null) return nextT > tEnd ? nextT : tEnd;
+  return visEnd > tEnd ? visEnd : tEnd;
+}
+
+/// Include the next run's first sample so a 1-point run still draws a segment.
+List<T> runStrokeSamples<T>(List<T> samples, T? nextStart) {
+  if (samples.isEmpty || nextStart == null) return samples;
+  return [...samples, nextStart];
+}
+
 TrustRewardVerdict rewardVerdict(TrustRewardSample? now) {
   if (now == null) return TrustRewardVerdict.below;
   if (!now.clean) return TrustRewardVerdict.noisy;
@@ -235,6 +251,3 @@ List<TrustGuardSample> lastGuardWindow(
       if (s.t >= cut) s,
   ];
 }
-
-bool trustStripWarmingUp(int sampleCount, {int full = 75}) =>
-    sampleCount < full;

@@ -5,6 +5,7 @@ import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/trust/trust_chips.dart';
 import 'package:muse_ml/src/feedback/trust/trust_gestures.dart';
 import 'package:muse_ml/src/feedback/trust/trust_graphs.dart';
+import 'package:muse_ml/src/feedback/trust/trust_more.dart';
 import 'package:muse_ml/src/feedback/trust/trust_runs.dart';
 import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
 import 'package:muse_ml/src/feedback/trust/trust_viewport.dart';
@@ -177,6 +178,34 @@ void main() {
         isTrue,
       );
     });
+
+    test('fill occupancy uses next sample t, so 5 s is wider than 1 s', () {
+      const visEnd = 75.0;
+      final oneSecond = heldBackFillEnd(tEnd: 1, nextT: 2, visEnd: visEnd) - 1;
+      final fiveSeconds =
+          heldBackFillEnd(tEnd: 4, nextT: 5, visEnd: visEnd) - 0;
+      expect(oneSecond, 1);
+      expect(fiveSeconds, 5);
+      expect(fiveSeconds, greaterThan(oneSecond));
+      expect(heldBackFillEnd(tEnd: 10, nextT: null, visEnd: 15), 15);
+    });
+
+    test('kind change still joins a segment instead of two dots', () {
+      final inZone = _r(t: 0, clean: true, inTarget: true);
+      final held = _r(
+        t: 1,
+        clean: true,
+        inTarget: false,
+        heldBack: true,
+        tags: ['beta'],
+      );
+      final runs = rewardRuns([inZone, held]);
+      expect(runs, hasLength(2));
+      expect(
+        runStrokeSamples(runs[0].samples, runs[1].samples.first),
+        hasLength(2),
+      );
+    });
   });
 
   group('verdict', () {
@@ -201,6 +230,21 @@ void main() {
   });
 
   group('More', () {
+    testWidgets('strip populates immediately; no warming up', (tester) async {
+      final samples = [
+        _r(t: 0, clean: true, inTarget: true),
+        _r(t: 1, clean: true, inTarget: false),
+        _r(t: 2, clean: true, inTarget: true),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: TrustRewardMore(samples: samples)),
+        ),
+      );
+      expect(find.text('warming up…'), findsNothing);
+      expect(find.textContaining('% in zone'), findsOneWidget);
+    });
+
     testWidgets('More glued to visible lanes; guard More is one block', (
       tester,
     ) async {

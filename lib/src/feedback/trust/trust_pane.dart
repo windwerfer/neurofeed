@@ -51,6 +51,7 @@ class RewardTrustPane extends StatelessWidget {
           onSurface: theme.colorScheme.onSurface,
           heldBackFill: heldBackFill,
         ),
+        child: const SizedBox.expand(),
       ),
     );
   }
@@ -92,6 +93,7 @@ class GuardWarnPane extends StatelessWidget {
           axisColor: theme.colorScheme.onSurfaceVariant,
           onSurface: theme.colorScheme.onSurface,
         ),
+        child: const SizedBox.expand(),
       ),
     );
   }
@@ -135,6 +137,7 @@ class GuardCeilingPane extends StatelessWidget {
           ceiling: ceiling,
           liveDelta: live,
         ),
+        child: const SizedBox.expand(),
       ),
     );
   }
@@ -291,20 +294,28 @@ class RewardTrustPainter extends CustomPainter {
     ];
     final runs = rewardRuns(vis);
     final gray = onSurface.withValues(alpha: 0.45);
-    for (final run in runs) {
-      if (shouldPaintHeldBackFill(gate: heldBackFill, kind: run.kind)) {
-        final left = _x(run.tStart, plot, visStart, span);
-        final right = _x(run.tEnd + 1, plot, visStart, span);
-        canvas.drawRect(
-          Rect.fromLTRB(
-            math.max(left, plot.left),
-            plot.top,
-            math.min(right, plot.right),
-            plot.bottom,
-          ),
-          Paint()..color = onSurface.withValues(alpha: 0.10),
-        );
+    for (var i = 0; i < runs.length; i++) {
+      final run = runs[i];
+      if (!shouldPaintHeldBackFill(gate: heldBackFill, kind: run.kind)) {
+        continue;
       }
+      final nextT = i + 1 < runs.length ? runs[i + 1].tStart : null;
+      final rightT = heldBackFillEnd(
+        tEnd: run.tEnd,
+        nextT: nextT,
+        visEnd: visEnd,
+      );
+      final left = _x(run.tStart, plot, visStart, span);
+      final right = _x(rightT, plot, visStart, span);
+      canvas.drawRect(
+        Rect.fromLTRB(
+          math.max(left, plot.left),
+          plot.top,
+          math.min(right, plot.right),
+          plot.bottom,
+        ),
+        Paint()..color = onSurface.withValues(alpha: 0.10),
+      );
     }
 
     final thr = vis.isEmpty ? 40.0 : vis.last.thresholdPercentile;
@@ -317,31 +328,24 @@ class RewardTrustPainter extends CustomPainter {
       9,
     );
 
-    for (final run in runs) {
+    for (var i = 0; i < runs.length; i++) {
+      final run = runs[i];
+      final next = i + 1 < runs.length ? runs[i + 1].samples.first : null;
+      final stroke = runStrokeSamples(run.samples, next);
       final pts = [
-        for (final s in run.samples)
+        for (final s in stroke)
           Offset(
             _x(s.t, plot, visStart, span),
             _y(s.plotPercentile ?? s.percentile, plot, yMin, yMax),
           ),
       ];
-      if (pts.isEmpty) continue;
       final color = run.kind == TrustStrokeKind.heldBack ? gray : seriesColor;
-      final paint = Paint()
-        ..color = color
-        ..strokeWidth = 1.6
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.round
-        ..strokeCap = StrokeCap.round;
-      if (run.kind == TrustStrokeKind.dirty) {
-        paintDashedPolyline(canvas, pts, paint);
-      } else if (pts.length == 1) {
-        canvas.drawCircle(pts.first, 1.5, paint..style = PaintingStyle.fill);
-      } else {
-        final path = Path();
-        buildSmoothPath(path, pts);
-        canvas.drawPath(path, paint);
-      }
+      _paintRunStroke(
+        canvas,
+        pts,
+        color: color,
+        dashed: run.kind == TrustStrokeKind.dirty,
+      );
       final tag = rewardRunLabel(run);
       if (tag != null) {
         _paintText(
@@ -367,7 +371,11 @@ class RewardTrustPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant RewardTrustPainter old) =>
+      old.samples.length != samples.length ||
       old.samples != samples ||
+      (samples.isNotEmpty &&
+          old.samples.isNotEmpty &&
+          old.samples.last.t != samples.last.t) ||
       old.marks != marks ||
       old.visStart != visStart ||
       old.visEnd != visEnd ||
@@ -439,7 +447,11 @@ class GuardWarnPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant GuardWarnPainter old) =>
+      old.samples.length != samples.length ||
       old.samples != samples ||
+      (samples.isNotEmpty &&
+          old.samples.isNotEmpty &&
+          old.samples.last.t != samples.last.t) ||
       old.marks != marks ||
       old.visStart != visStart ||
       old.visEnd != visEnd ||
@@ -517,12 +529,45 @@ class GuardCeilingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant GuardCeilingPainter old) =>
+      old.samples.length != samples.length ||
       old.samples != samples ||
+      (samples.isNotEmpty &&
+          old.samples.isNotEmpty &&
+          old.samples.last.t != samples.last.t) ||
       old.marks != marks ||
       old.visStart != visStart ||
       old.visEnd != visEnd ||
       old.liveDelta != liveDelta ||
       old.ceiling != ceiling;
+}
+
+void _paintRunStroke(
+  Canvas canvas,
+  List<Offset> pts, {
+  required Color color,
+  required bool dashed,
+}) {
+  if (pts.isEmpty) return;
+  final paint = Paint()
+    ..color = color
+    ..strokeWidth = 1.6
+    ..style = PaintingStyle.stroke
+    ..strokeJoin = StrokeJoin.round
+    ..strokeCap = StrokeCap.round;
+  if (dashed) {
+    paintDashedPolyline(canvas, pts, paint);
+    if (pts.length == 1) {
+      canvas.drawCircle(pts.first, 1.5, paint..style = PaintingStyle.fill);
+    }
+    return;
+  }
+  if (pts.length == 1) {
+    canvas.drawCircle(pts.first, 1.5, paint..style = PaintingStyle.fill);
+    return;
+  }
+  final path = Path();
+  buildSmoothPath(path, pts);
+  canvas.drawPath(path, paint);
 }
 
 void _paintGuardSeries(
@@ -541,45 +586,26 @@ void _paintGuardSeries(
       if (s.t >= visStart - 1 && s.t <= visStart + span + 1) s,
   ];
   if (vis.isEmpty) return;
-  var dirty = vis.first.clean ? false : true;
-  var buf = <Offset>[
-    Offset(
-      _x(vis.first.t, plot, visStart, span),
-      _y(yOf(vis.first), plot, yMin, yMax),
-    ),
-  ];
-  void flush(bool asDirty) {
-    if (buf.isEmpty) return;
-    final paint = Paint()
-      ..color = seriesColor
-      ..strokeWidth = 1.6
-      ..style = PaintingStyle.stroke
-      ..strokeJoin = StrokeJoin.round
-      ..strokeCap = StrokeCap.round;
-    if (asDirty) {
-      paintDashedPolyline(canvas, buf, paint);
-    } else if (buf.length == 1) {
-      canvas.drawCircle(buf.first, 1.5, paint..style = PaintingStyle.fill);
-    } else {
-      final path = Path();
-      buildSmoothPath(path, buf);
-      canvas.drawPath(path, paint);
-    }
+  var dirty = !vis.first.clean;
+  var buf = <TrustGuardSample>[vis.first];
+  void flush(bool asDirty, TrustGuardSample? next) {
+    final stroke = runStrokeSamples(buf, next);
+    final pts = [
+      for (final s in stroke)
+        Offset(_x(s.t, plot, visStart, span), _y(yOf(s), plot, yMin, yMax)),
+    ];
+    _paintRunStroke(canvas, pts, color: seriesColor, dashed: asDirty);
   }
 
   for (var i = 1; i < vis.length; i++) {
     final d = !vis[i].clean;
-    final pt = Offset(
-      _x(vis[i].t, plot, visStart, span),
-      _y(yOf(vis[i]), plot, yMin, yMax),
-    );
     if (d == dirty) {
-      buf.add(pt);
+      buf.add(vis[i]);
     } else {
-      flush(dirty);
+      flush(dirty, vis[i]);
       dirty = d;
-      buf = [pt];
+      buf = [vis[i]];
     }
   }
-  flush(dirty);
+  flush(dirty, null);
 }
