@@ -132,11 +132,13 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         );
     final catalog = await ProtocolCatalog.load();
     final protocol = catalog.forName(meta.protocol);
-    final prepared = prepareChartDataFromComputed(
-      frames,
+    final prepared = prepareChartDataFromV5(
+      frames: frames,
+      bytes: bytes,
       trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
       metric: protocol?.reward?.feature ?? 'band.atr',
       conditions: protocol?.conditions ?? const [],
+      startedAt: meta.startedAt,
     );
     return _DashboardLoad(
       prepared: prepared,
@@ -184,18 +186,22 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     final copy = useProtocolCopy(ref, protocol);
 
     return PopScope(
-      // Warn before leaving a history session with unsaved notes edits. The
-      // live session view has its own explicit Save/Discard path, so it is
-      // not guarded here.
-      canPop: !widget.readOnly || !_notesDirty,
+      // Live summary must Save or Discard — Back must not drop the scratch.
+      // History detail still warns when notes are dirty.
+      canPop: widget.readOnly && !_notesDirty,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) {
           return;
         }
-        _confirmUnsavedNotes();
+        if (widget.readOnly) {
+          _confirmUnsavedNotes();
+        }
       },
       child: Scaffold(
-        appBar: AppBar(title: Text('${copy.title} — Session')),
+        appBar: AppBar(
+          title: Text('${copy.title} — Session'),
+          automaticallyImplyLeading: widget.readOnly,
+        ),
         body: _busy
             ? const Center(child: CircularProgressIndicator())
             : _dashboard(meta, fb, protocol, copy.title),
@@ -333,10 +339,25 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       final frames = v5ExtractComputed(bytes: bytes);
       final raw = v5ExtractRaw(bytes: bytes);
       final thumb = encodeThumbnailWebP(_thumbnail ?? Uint8List(0));
-      final metadata = notifier.buildSessionMetadata(
-        notes: _notes.text,
-        stats: _prepared?.stats,
-      );
+      final stats = _prepared?.stats;
+      final metadata = _fileMeta?.withSaveFields(
+            notes: _notes.text,
+            stats: stats == null
+                ? null
+                : SessionStatsData(
+                    peakAlphaFreq: stats.peakAlphaFreq,
+                    peakAlphaPower: stats.peakAlphaPower,
+                    targetPct: stats.targetPct,
+                    stillnessPct: stats.stillnessPct,
+                    avgBpm: stats.avgBpm,
+                    avgAlphaRel: stats.avgAlphaRel,
+                  ),
+            avgSpo2: stats?.avgSpo2,
+          ) ??
+          notifier.buildSessionMetadata(
+            notes: _notes.text,
+            stats: stats,
+          );
       final v5 = assembleV5Container(
         thumbnail: thumb,
         metadataJson: metadata.toJson(),
@@ -346,6 +367,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       final store = await ref.read(sessionStoreProvider.future);
       await store.publishSession(id, metadata, encodedV5: v5);
       await notifier.deleteScratchV5();
+      notifier.reset();
       debugPrint('[dashboard] save: published session_$id.muse.feedback');
       if (mounted) {
         ref.invalidate(sessionListProvider);
@@ -374,7 +396,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   Future<void> _discard() async {
     setState(() => _busy = true);
     try {
-      await ref.read(feedbackStateProvider.notifier).discardSession();
+      final notifier = ref.read(feedbackStateProvider.notifier);
+      await notifier.discardSession();
+      notifier.reset();
       if (mounted) {
         Navigator.of(context).pop();
       }

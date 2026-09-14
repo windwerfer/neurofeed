@@ -7,6 +7,7 @@ import 'package:muse_ml/src/session_v5/scratch_writer.dart';
 import 'package:muse_ml/src/session_v5/computed_frame.dart' as dart;
 import 'package:muse_ml/src/feedback/computed_sampler.dart';
 import 'package:muse_ml/src/feedback/crash_recovery.dart';
+import 'package:muse_ml/src/feedback/feedback_recorder.dart';
 import 'package:muse_ml/src/session_v5/assemble.dart';
 import 'package:muse_ml/src/feedback/session_chart_data.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
@@ -65,6 +66,39 @@ void main() {
       sampler.emitFrame();
       expect(last, isNotNull);
       expect(last!.t, closeTo(2.25, 0.001));
+    });
+
+    test('pulse and spo2 latch into emitted frames', () {
+      final start = DateTime.utc(2026, 1, 1, 12);
+      dart.ComputedFrame? last;
+      final sampler = ComputedSampler(
+        onFrame: (f) => last = f,
+        recordingStart: start,
+        now: () => start.add(const Duration(seconds: 1)),
+      );
+      sampler.updatePulse(
+        const PulseDto(timestamp: 0, bpm: 72, confidence: 0.9),
+      );
+      sampler.updateSpO2(
+        const SpO2Dto(timestamp: 0, spo2: 98, confidence: 0.8),
+      );
+      sampler.emitFrame();
+      expect(last!.pulse, 72);
+      expect(last!.spo2, 98);
+    });
+  });
+
+  group('FeedbackRecorder attach', () {
+    test('attachAssembledScratch exposes id and path', () {
+      final rec = FeedbackRecorder(
+        storage: Future.value(FileSystemSessionStorage(Directory.systemTemp)),
+      );
+      rec.attachAssembledScratch(
+        id: 'abc',
+        path: '/tmp/session_abc.muse.feedback',
+      );
+      expect(rec.sessionId, 'abc');
+      expect(rec.scratchV5Path, '/tmp/session_abc.muse.feedback');
     });
   });
 
@@ -126,6 +160,40 @@ void main() {
       expect(prepared.x, isNotEmpty);
       expect(prepared.alphaRel, hasLength(prepared.x.length));
       expect(prepared.x.first, 0);
+      expect(prepared.bpm, isNotEmpty);
+      expect(prepared.spo2, isNotEmpty);
+    });
+
+    test('prepareChartDataFromComputed fills pulse from raw when omitted', () {
+      final frames = [
+        for (var t = 0; t < 3; t++)
+          toFfiFrame(
+            _dartFrame(t.toDouble()).copyWith(pulse: null, spo2: null),
+          ),
+      ];
+      final raw = SessionData(
+        bands: const [],
+        pulses: const [
+          PulseRecord(timestamp: 0, bpm: 72, confidence: 0.9),
+          PulseRecord(timestamp: 1, bpm: 74, confidence: 0.9),
+          PulseRecord(timestamp: 2, bpm: 70, confidence: 0.8),
+        ],
+        spo2S: const [
+          SpO2Record(timestamp: 0, spo2: 98, confidence: 0.9),
+          SpO2Record(timestamp: 1, spo2: 97, confidence: 0.9),
+        ],
+        movements: const [],
+        peakAlphas: const [],
+        eegSamples: BigInt.zero,
+        eeg: const [],
+      );
+      final omitted = prepareChartDataFromComputed(frames);
+      expect(omitted.bpm, isEmpty);
+      expect(omitted.spo2, isEmpty);
+      final filled = prepareChartDataFromComputed(frames, rawFallback: raw);
+      expect(filled.bpm, [72, 74, 70]);
+      expect(filled.spo2, [98, 97]);
+      expect(filled.stats.avgBpm, closeTo(72, 0.01));
     });
 
     test('empty thumbnail assemble does not throw; magic is MUSE5\\0', () {

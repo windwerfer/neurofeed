@@ -612,6 +612,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// The ATR engine then has no baseline, which is fine — no-reward protocols
   /// never evaluate it.
   Future<void> startCalibration({bool skipCalibration = false}) async {
+    if (hasUnsavedSession) {
+      debugPrint('[feedback] refusing Start: unsaved session');
+      return;
+    }
     final app = _ref.read(appStateProvider);
     if (!app.status.connected) {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
@@ -1175,6 +1179,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   void reset() {
+    if (hasUnsavedSession) {
+      debugPrint('[feedback] reset refused: unsaved scratch');
+      return;
+    }
     _ticker?.cancel();
     _interruptTimer?.cancel();
     _interruptTimer = null;
@@ -1220,6 +1228,39 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   String? get scratchV5Path => _recorder.scratchV5Path;
 
   String? get sessionId => _recorder.sessionId;
+
+  /// Ended session with a scratch v5 that has not been saved or discarded.
+  bool get hasUnsavedSession =>
+      state.phase == FeedbackPhase.ended && scratchV5Path != null;
+
+  /// Re-attach an assembled scratch v5 after a process restart so the
+  /// summary can Save / Discard. Does not discard existing files.
+  void restoreEndedSession({
+    required String id,
+    required String scratchPath,
+    SessionMetadata? metadata,
+  }) {
+    _recorder.attachAssembledScratch(id: id, path: scratchPath);
+    _calibrationRecord = metadata?.calibration;
+    final protocol = metadata?.protocol;
+    final sound = metadata?.sound;
+    state = FeedbackState(
+      phase: FeedbackPhase.ended,
+      protocol: (protocol != null && protocol.isNotEmpty)
+          ? protocol
+          : state.protocol,
+      durationMinutes: metadata?.durationMinutes ?? state.durationMinutes,
+      elapsedSeconds: metadata?.elapsedSeconds ?? 0,
+      soundName: (sound != null && sound.isNotEmpty) ? sound : state.soundName,
+      rewardOutput: metadata?.feedbackSound != null
+          ? rewardOutputIdFromStored(metadata!.feedbackSound)
+          : state.rewardOutput,
+      baselinePercentile:
+          metadata?.sessionSettings?.baselinePercentile ??
+          state.baselinePercentile,
+    );
+    debugPrint('[feedback] phase=ended restored scratch=$scratchPath');
+  }
 
   /// Recorded calibration record for the current session (timeline, gate,
   /// baseline stats, intro clip). Null until calibration completes.
@@ -1480,6 +1521,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         _onBands(field0);
       case MuseEventDto_Feature(:final field0):
         _onFeature(field0);
+      case MuseEventDto_Pulse(:final field0):
+        _computedSampler?.updatePulse(field0);
+      case MuseEventDto_SpO2(:final field0):
+        _computedSampler?.updateSpO2(field0);
+      case MuseEventDto_PeakAlpha(:final field0):
+        _computedSampler?.updatePeakAlpha(field0);
       case MuseEventDto_Movement(:final field0):
         _onMovement(field0);
       case MuseEventDto_Gestures(:final field0):

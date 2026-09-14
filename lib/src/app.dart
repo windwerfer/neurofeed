@@ -389,8 +389,9 @@ Future<bool> requestBlePermissions() async {
   return false;
 }
 
-/// Wrapper that checks for incomplete sessions on first build and shows
-/// the crash recovery dialog if needed.
+/// Wrapper that checks for leftover `session_*` / `recording_*` scratch on
+/// first build. Feedback leftovers reopen the session summary (Save/Discard);
+/// recordings still use the recording dialog.
 class _CrashRecoveryWrapper extends ConsumerStatefulWidget {
   const _CrashRecoveryWrapper({required this.child});
 

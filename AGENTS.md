@@ -111,10 +111,10 @@ lib/src/feedback/           session orchestrator + lanes
   target_state.dart         RatioEngine (FeedbackEngine): threshold, EMA, recalibrate
   protocol.dart / protocol_catalog.dart / user_protocol_store.dart
   feature_catalog.dart      assets/features.json copy
-  computed_sampler.dart     1 Hz JSONL; t = seconds from recording start
+  computed_sampler.dart     1 Hz JSONL; Pulse/SpO₂/PeakAlpha from `_onEvent`
   feedback_recorder.dart    scratch temps + assembleScratchV5
   session_assembler.dart    re-export of session_v5/assemble.dart
-  crash_recovery.dart       leftover `session_*` scratch v5 / three-temps
+  crash_recovery.dart       leftover `session_*` reopens session summary
   session_store*.dart / session_sqlite.dart / session_metadata.dart
   session_export.dart / session_pdf_export.dart / session_chart_data.dart
 lib/src/session_v5/         v5 writer / assemble / ComputedFrame / DeviceInfoV5
@@ -192,7 +192,8 @@ assets/                     protocols.json, calibrations.json, features.json, au
   stay in `lib/src/charts/band_style.dart`. Pad quality is a 4-ch 1 s ring
   in `connection_provider.dart` (not a 5 min EEG LiveCache).
 - Crash recovery: feedback `lib/src/feedback/crash_recovery.dart` scans
-  `scratchDirectory` for `session_*` only. Monitor
+  `scratchDirectory` for `session_*` only and reopens the session summary
+  (Save/Discard; Back blocked). Monitor
   `lib/src/monitor/recording/crash_recovery.dart` scans `recording_*`;
   launch glob-deletes leftover `tmp_*`. Neither scanner crosses prefixes.
 - History cache: `lib/src/feedback/session_sqlite.dart`
@@ -344,14 +345,24 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **`updateNotes` uses v5** (`containerEncodeV5`). There is no
   `SessionContainer` Dart wrapper anymore.
 - **Assemble v5 at `end()`** into scratch (placeholder WebP) **before**
-  `phase = ended`. Save `publishSession` to history; Discard deletes the
-  scratch v5. One wrapper: `session_v5/assemble.dart`.
+  `phase = ended`. Live summary cannot pop — Save `publishSession` to
+  history or Discard deletes the scratch v5. One wrapper:
+  `session_v5/assemble.dart`.
 - **Crash recovery** is prefix-strict. Feedback: leftover
-  `session_*.muse.feedback` and orphan `.raw` / `.computed` / `.metadata`.
-  Monitor: leftover `recording_*` (dialog **Incomplete recording detected**).
+  `session_*.muse.feedback` and orphan `.raw` / `.computed` / `.metadata`
+  reopen the session summary. Monitor: leftover `recording_*` (dialog
+  **Incomplete recording detected**).
   `tmp_*` is deleted, never assembled. Temps go through `writeScratchV5`.
   Never `decodeImage` on empty bytes.
 - **ComputedSampler.t** is seconds from recording start, not unix epoch.
+  `_onEvent` must latch Pulse / SpO₂ / PeakAlpha (same as the monitor
+  sampler). Do not leave those cases as `default`.
 - **Charts** plot computed 1 Hz (`v5ExtractComputed` →
-  `prepareChartDataFromComputed`). There is no `SessionOverview` /
-  400-bucket `metadata.summary`. The list sparkline is the WebP thumbnail.
+  `prepareChartDataFromV5` / `prepareChartDataFromComputed`). Pulse/SpO₂
+  fall back to the raw body when computed frames omitted them. There is
+  no `SessionOverview` / 400-bucket `metadata.summary`. The list sparkline
+  is the WebP thumbnail.
+- **Unsaved ended session cannot be dropped.** Live summary `canPop:
+  false`; protocol tap reopens it; `reset()` / Start refuse while scratch
+  remains. Agent `POST /session/start` and `/session/reset` return 409
+  `unsaved_session`. Classic Muse startup is still `p50` (not `p21`).

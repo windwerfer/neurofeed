@@ -189,6 +189,13 @@ class AgentCommands {
         'Stop the recording before starting a session.',
       );
     }
+    if (_feedback.hasUnsavedSession) {
+      return agentError(
+        409,
+        'unsaved_session',
+        'Save or discard the ended session first.',
+      );
+    }
     final skip = body?['skipCalibration'] == true;
     await _feedback.startCalibration(skipCalibration: skip);
     return _ok();
@@ -245,6 +252,13 @@ class AgentCommands {
   }
 
   Future<AgentHttpResult> _reset() async {
+    if (_feedback.hasUnsavedSession) {
+      return agentError(
+        409,
+        'unsaved_session',
+        'Save or discard the ended session first.',
+      );
+    }
     _feedback.reset();
     return _ok();
   }

@@ -211,7 +211,7 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 | Recording refused dialog | `Recording in progress` / `Stop the recording before starting a session.` | `_refuseRecordingStart` | `feedback_session.dart` | Actions `Cancel` / `Stop recording`. Start is not auto-continued. |
 | Save recording | `Save recording?` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | Body `Save this recording to History, or discard it.` Actions `Save` / `Discard`. `barrierDismissible: false`. GraphShell Stop, session-view Stop, in-app disconnect. |
 | Incomplete recording | `Incomplete recording detected` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | Launch leftover `recording_*`. Same widget; title only. |
-| Incomplete session | `Incomplete Session Detected` | `_CrashRecoveryDialog` | `feedback/crash_recovery.dart` | Leftover `session_*`. Actions `Discard` / `Save Session`. Not the recording dialog. |
+| Incomplete session | leftover `session_*` reopens summary | `showCrashRecoveryDialog` | `feedback/crash_recovery.dart` | Launch leftover `session_*` → `FeedbackDashboardView` (Save/Discard). Not a dialog. Not the recording dialog. |
 | Pause / Resume / End | phase controls | `pause` / `resume` / `end` | `feedback_state.dart` | |
 | Guide | `Guide` | `_GuideCard` | `feedback_session.dart` | Bottom, under Pause/End. |
 | Reward chip | `Reward` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Depressed = on. Default on. Omitted without a reward lane. Persist `Settings.trustRewardVisible`. |
@@ -226,6 +226,19 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 | Guard More | `Warning` / `Quiet` / `Noisy` | `TrustGuardMore` | `feedback/trust/trust_more.dart` | One block under both guard panes. |
 | Nerd stats | science icon / sheet title `Nerd` | `NerdSheet` | `feedback/trust/nerd_sheet.dart` | App-bar science icon opens the sheet. Piles + band stack + (i) rows. Old bubble gone. Guard block only if the lane ran. Cooldown 20 s is nerd-only. Feature probe stays debug+sim, not in the sheet. |
 | Feature probe | `Feature probe` | `_FeatureProbeCard` | `feedback_session.dart` | Debug + sim connected only. Master switch + one slider per present feature id. Below Session Settings. Not in the nerd sheet. |
+
+### Feedback summary — `lib/src/views/feedback_dashboard.dart`
+
+Pushed after End (`pushReplacement` from the session route). Leftover
+`session_*` scratch at launch opens the same screen. Not an `AppView`.
+
+| Spoken name | On-screen text | Code symbol | File | Notes |
+|---|---|---|---|---|
+| Session summary | `{protocol} — Session` | `FeedbackDashboardView` | `feedback_dashboard.dart` | Live (`readOnly: false`) or History (`readOnly: true`). |
+| Back | AppBar leading / system back | `PopScope` | `feedback_dashboard.dart` | **Blocked** on live unsaved summary. Must Save or Discard. History: warn if notes dirty. |
+| Save | `Save` | `_save` | `feedback_dashboard.dart` | Publishes scratch v5 to History. Live only. |
+| Discard | `Discard` | `_discard` | `feedback_dashboard.dart` | Deletes scratch v5. Live only. |
+| Heart rate / SpO₂ | `Heart rate / SpO₂` | `prepared.bpm` / `prepared.spo2` | `feedback_dashboard.dart` | From computed 1 Hz pulse/SpO₂; raw body fallback if those fields were omitted. Empty copy: `No reliable heart-rate or SpO₂ data was captured for this session.` |
 
 ### Settings cards — `lib/src/views/settings_view.dart`
 
@@ -270,3 +283,4 @@ Not a screen. `kDebugMode && --dart-define=MUSE_AGENT=true`. See
 | Record | `POST /record/start` | 412 `disconnected`; 409 `feedback_active`. |
 | Stop recording | `POST /record/stop` | Assembles scratch; does not publish. |
 | Start during Record | `POST /session/start` | 409 `recording_active` (after `not_connected` / `crown_refused`). |
+| Start with unsaved summary | `POST /session/start` | 409 `unsaved_session`. Same for `POST /session/reset`. |

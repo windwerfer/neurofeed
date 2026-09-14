@@ -470,11 +470,13 @@ class SessionExporter {
     }
     final frames = v5ExtractComputed(bytes: container);
     return (
-      data: prepareChartDataFromComputed(
-        frames,
+      data: prepareChartDataFromV5(
+        frames: frames,
+        bytes: container,
         trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
         metric: protocol.reward?.feature ?? 'band.atr',
         conditions: protocol.conditions,
+        startedAt: meta.startedAt,
       ),
       meta: meta,
     );

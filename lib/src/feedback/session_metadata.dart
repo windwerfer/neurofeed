@@ -747,6 +747,27 @@ class SessionMetadata {
     );
   }
 
+  /// Overlay notes / stats / savedAt onto this snapshot for a Save rewrite.
+  SessionMetadata withSaveFields({
+    required String notes,
+    SessionStatsData? stats,
+    double? avgSpo2,
+  }) {
+    final json = Map<String, Object?>.from(toJson());
+    json['notes'] = notes;
+    json['savedAt'] = DateTime.now().toIso8601String();
+    if (stats != null) {
+      json['stats'] = stats.toJson();
+      json['peakAlphaHz'] = stats.peakAlphaFreq;
+      json['peakAlphaPower'] = stats.peakAlphaPower;
+      json['pctInTarget'] = stats.targetPct;
+    }
+    if (avgSpo2 != null) {
+      json['avgSpo2'] = avgSpo2;
+    }
+    return SessionMetadata.fromJson(json)!;
+  }
+
   /// Parse metadata JSON bytes from a v5 head (`jsonDecode` maps are
   /// `Map<String, dynamic>`; [fromJson] expects `Map<String, Object?>`).
   static SessionMetadata? fromJsonBytes(List<int> bytes) {

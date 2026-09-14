@@ -21,6 +21,7 @@ class FeedbackRecorder {
   final Future<SessionStorage> _storage;
   final SessionRecorder _recorder = SessionRecorder();
   String? _scratchV5Path;
+  String? _attachedId;
 
   static Future<SessionStorage> _defaultStorage() async {
     return FileSystemSessionStorage(await defaultSessionDir());
@@ -32,7 +33,13 @@ class FeedbackRecorder {
 
   String? get scratchV5Path => _scratchV5Path;
 
-  String? get sessionId => _recorder.sessionId;
+  String? get sessionId => _recorder.sessionId ?? _attachedId;
+
+  /// Point at an already-assembled scratch v5 (process restart / leftover).
+  void attachAssembledScratch({required String id, required String path}) {
+    _attachedId = id;
+    _scratchV5Path = path;
+  }
 
   /// Electrode indices that produced data in the current session recording.
   Set<int> get recordedChannels => Set.unmodifiable(_recorder.channels);
@@ -116,6 +123,7 @@ class FeedbackRecorder {
   Future<void> deleteScratchV5() async {
     final path = _scratchV5Path;
     _scratchV5Path = null;
+    _attachedId = null;
     if (path == null) return;
     final file = File(path);
     if (await file.exists()) {
