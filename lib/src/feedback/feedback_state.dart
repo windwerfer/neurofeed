@@ -62,7 +62,6 @@ class FeedbackState {
   final int baselineSecondsLeft;
   final int baselinePercentile;
   final double? currentThreshold;
-  final bool showNerdStats;
   final String? calibrationStepName;
   final int calibrationStepTotal;
   final String? calibrationChallengeHint;
@@ -86,7 +85,6 @@ class FeedbackState {
     this.baselineSecondsLeft = 0,
     this.baselinePercentile = defaultBaselinePercentile,
     this.currentThreshold,
-    this.showNerdStats = false,
     this.calibrationStepName,
     this.calibrationStepTotal = 0,
     this.calibrationChallengeHint,
@@ -113,7 +111,6 @@ class FeedbackState {
     int? baselineSecondsLeft,
     int? baselinePercentile,
     Object? currentThreshold = _sentinel,
-    bool? showNerdStats,
     Object? calibrationStepName = _sentinel,
     int? calibrationStepTotal,
     Object? calibrationChallengeHint = _sentinel,
@@ -142,7 +139,6 @@ class FeedbackState {
     currentThreshold: identical(currentThreshold, _sentinel)
         ? this.currentThreshold
         : currentThreshold as double?,
-    showNerdStats: showNerdStats ?? this.showNerdStats,
     calibrationStepName: identical(calibrationStepName, _sentinel)
         ? this.calibrationStepName
         : calibrationStepName as String?,
@@ -406,10 +402,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
-  void toggleNerdStats() {
-    state = state.copyWith(showNerdStats: !state.showNerdStats);
-  }
-
   bool get featureProbeAvailable {
     if (!kDebugMode) {
       return false;
@@ -438,6 +430,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     return ids;
   }
+
+  RewardLane get rewardLane => _reward;
+
+  GuardLane get guardLane => _guard;
 
   double? get rewardLastNative => _reward.lastNative;
 

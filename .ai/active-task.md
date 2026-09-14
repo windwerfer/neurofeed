@@ -2,8 +2,8 @@
 
 **Branch:** `refactor/monitor`
 
-**Now:** trust graphs **PR 1 landed** on this branch. PR 2 (nerd sheet) is
-next: [TODO/trust-graphs.md](TODO/trust-graphs.md),
+**Now:** trust graphs **PR 1 + PR 2 landed** on this branch.
+Spec: [TODO/trust-graphs.md](TODO/trust-graphs.md),
 [TODO/handoff-trust-graphs.md](TODO/handoff-trust-graphs.md).
 
 Monitor product **and** draw-path perf are complete. Spec:
@@ -27,7 +27,7 @@ chrome, or `SMOOTH` / `REAL TIME` Bands chrome. Do not pause `SweepBuffer`
 - Publish `third_party/edf_export` to git+tag once export proves out on device.
 - Athena optics raw stream (muse-rs `Optics`, session tag 11). Queued:
   [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md).
-- Live reward/guard trust graphs: PR 1 landed; PR 2 nerd sheet queued.
+- Live reward/guard trust graphs: PR 1 + PR 2 landed.
   [TODO/trust-graphs.md](TODO/trust-graphs.md).
 
 ## How to verify BLE (still)

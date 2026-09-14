@@ -15,10 +15,10 @@ import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/feedback/feature_override.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
-import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/charts/band_style.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
+import 'package:muse_ml/src/feedback/trust/nerd_sheet.dart';
 import 'package:muse_ml/src/feedback/trust/trust_chips.dart';
 import 'package:muse_ml/src/feedback/trust/trust_graphs.dart';
 import 'package:muse_ml/src/feedback/trust/trust_viewport.dart';
@@ -102,13 +102,10 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
         title: Text(copy.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
-            icon: Icon(
-              fb.showNerdStats ? Icons.science : Icons.science_outlined,
-            ),
+            key: const Key('nerd-stats-button'),
+            icon: const Icon(Icons.science_outlined),
             tooltip: 'Nerd stats',
-            isSelected: fb.showNerdStats,
-            onPressed: () =>
-                ref.read(feedbackStateProvider.notifier).toggleNerdStats(),
+            onPressed: () => showNerdSheet(context),
           ),
           IconButton(
             icon: const Icon(Icons.info_outline),
@@ -152,12 +149,6 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
                     rewardColor: protocol.color,
                     guardColor: bandColors[0],
                   ),
-                if (fb.showNerdStats &&
-                    (fb.phase == FeedbackPhase.playing ||
-                        fb.phase == FeedbackPhase.paused)) ...[
-                  const SizedBox(height: 8),
-                  const _NerdStatsBubble(),
-                ],
                 const SizedBox(height: 16),
                 if (fb.phase == FeedbackPhase.idle ||
                     fb.phase == FeedbackPhase.playing ||
@@ -687,62 +678,6 @@ class _PhaseControls extends ConsumerWidget {
           ],
         );
     }
-  }
-}
-
-class _NerdStatsBubble extends ConsumerWidget {
-  const _NerdStatsBubble();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final stats = ref.watch(liveStatsProvider);
-    final fb = ref.watch(feedbackStateProvider);
-    final theme = Theme.of(context);
-    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
-    final protocol = protocolOrPlaceholder(catalog, fb.protocol);
-    final percentile = stats.currentPercentile;
-    final atr = stats.currentAtr;
-    final threshold = stats.threshold;
-    final baselineMean = stats.baselineMean;
-    final baselineStddev = stats.baselineStddev;
-    final rewardFeature = protocol.reward?.feature;
-    final metricName = rewardFeature == null
-        ? ''
-        : catalog?.features[rewardFeature]?.shortLabel ?? rewardFeature;
-    final lines = <String>[];
-    if (percentile == null || atr == null) {
-      lines.add('Collecting…');
-    } else {
-      lines.add(
-        '$metricName ${atr.toStringAsFixed(2)} · p${percentile.round()} of baseline',
-      );
-    }
-    lines.add(
-      'thr ${threshold?.toStringAsFixed(2) ?? '—'} '
-      '(p${stats.baselinePercentile ?? '—'})',
-    );
-    lines.add(
-      'base mean ${baselineMean?.toStringAsFixed(2) ?? '—'} '
-      '± ${baselineStddev?.toStringAsFixed(2) ?? '—'} '
-      '(n=${stats.baselineCount ?? 0})',
-    );
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.secondaryContainer,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          lines.join('\n'),
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSecondaryContainer,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-        ),
-      ),
-    );
   }
 }
 
