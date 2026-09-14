@@ -30,6 +30,8 @@ flutter test \
   test/app_ui_state_test.dart \
   test/connection_reconnect_test.dart \
   test/feature_override_test.dart \
+  test/trust_graphs_test.dart \
+  test/trust_dirty_test.dart \
   test/monitor/band_cache_test.dart \
   test/monitor/sweep_buffer_test.dart \
   test/monitor/capture_lease_test.dart \
@@ -89,6 +91,7 @@ cargo test --lib                  # features / simulator / device_config
 | Recording crash recovery | Dart + FFI | `test/monitor/crash_recovery_test.dart`, `recording_store_test.dart` | `flutter test test/monitor/crash_recovery_test.dart test/monitor/recording_store_test.dart` | Leftover `recording_*` assemble; `tmp_`/`session_*` untouched; publish `kind=recording`; existing rows `feedback`; discard no sqlite row | Dialog widget untested |
 | Session start Muse sim | agent-linux | HTTP | `recordOnly` + skip-cal | `[feedback] phase=playing` | 50 s cal too slow — always skip |
 | Lanes / features | Dart unit | `test/feedback_pipeline_test.dart` | that file | Guard does not change reward | Orchestrator as a whole |
+| Trust graphs | Dart unit | `test/trust_graphs_test.dart`, `test/trust_dirty_test.dart` | those files | Chip defaults/persist; dirty skip epoch/audio/guard; held-back gray; verdict priority; More glued; viewport 75 s Follow 15–300; Blink/Jaw live ring; calibrating hides graphs | Visual Follow slide **cannot** |
 | Protocol JSON | Dart unit | `user_protocol_builder_test.dart`, `calibration_assets_test.dart` | those files | Catalog copy, clip files | Builder UI |
 | Guard pref migrate | Dart unit | `settings_guardrail_migrate_test.dart` | that file | Old enum → feature ids | Debug switch widget |
 | History / store | Dart+FFI | `session_store_test.dart`, `test/history_filter_test.dart` | FFI command above + `flutter test test/history_filter_test.dart` | List includes `kind=recording`; no orphan-file backfill; `moveAllTo` both prefixes; delete uses sqlite `path`; filter All/Feedback/Recordings | History widget |

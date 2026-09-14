@@ -45,6 +45,7 @@ class GuardTick {
     required this.sessionStartAt,
     required this.writeWarningMetadata,
     required this.updateComputed,
+    this.sampleIsClean = true,
   });
 
   final FeedbackPhase phase;
@@ -67,6 +68,7 @@ class GuardTick {
     double? threshold,
   })
   updateComputed;
+  final bool sampleIsClean;
 }
 
 /// Guard lane: [FeatureDto] → percentileWarn. Never changes the reward scalar
@@ -147,7 +149,9 @@ class GuardLane {
         return false;
       }
       if (tick.phase == FeedbackPhase.playing && threshold != null) {
-        evaluateWarning(tick);
+        if (tick.sampleIsClean) {
+          evaluateWarning(tick);
+        }
         return true;
       }
       return false;
@@ -163,7 +167,9 @@ class GuardLane {
       return false;
     }
     if (tick.phase == FeedbackPhase.playing && threshold != null) {
-      evaluateWarning(tick);
+      if (tick.sampleIsClean) {
+        evaluateWarning(tick);
+      }
       return true;
     }
     return false;
@@ -210,6 +216,23 @@ class GuardLane {
           }),
     );
   }
+
+  double? percentileOf(double value) {
+    if (baselineSleepDir.isEmpty) {
+      return null;
+    }
+    final below = baselineSleepDir.where((s) => s < value).length;
+    return (below / baselineSleepDir.length) * 100;
+  }
+
+  bool get warnOver {
+    final t = threshold;
+    if (t == null) return false;
+    if (bandMath) return lastDelta > t;
+    return lastSleepDir > t;
+  }
+
+  bool get ceilingOver => lastDelta > guardrailDeltaCeiling;
 
   void recomputeThreshold(int percentile) {
     if (baselineSleepDir.isEmpty) {

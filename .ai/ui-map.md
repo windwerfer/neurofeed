@@ -213,7 +213,18 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 | Incomplete recording | `Incomplete recording detected` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | Launch leftover `recording_*`. Same widget; title only. |
 | Incomplete session | `Incomplete Session Detected` | `_CrashRecoveryDialog` | `feedback/crash_recovery.dart` | Leftover `session_*`. Actions `Discard` / `Save Session`. Not the recording dialog. |
 | Pause / Resume / End | phase controls | `pause` / `resume` / `end` | `feedback_state.dart` | |
-| Feature probe | `Feature probe` | `_FeatureProbeCard` | `feedback_session.dart` | Debug + sim connected only. Master switch + one slider per present feature id. |
+| Guide | `Guide` | `_GuideCard` | `feedback_session.dart` | Bottom, under Pause/End. |
+| Reward chip | `Reward` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Depressed = on. Default on. Omitted without a reward lane. Persist `Settings.trustRewardVisible`. |
+| Guard chip | `Guard` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Default off; **on** when Reward is omitted (`guardrailOnly`). Omitted when protocol has no guard or Session Settings guard is `none`. Persist `Settings.trustGuardVisible`. |
+| More chip | `More` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Default on. Readouts under visible lane(s). `recordOnly` hides the whole row. Persist `Settings.trustMoreVisible`. |
+| Reward graph | catalog `shortLabel` (`ATR` / `TAR` / `BTR` / `α`) | `RewardTrustPane` | `feedback/trust/trust_pane.dart` | Playing/paused only. Follow-only, default 75 s. Not `% calm`. |
+| Guard graphs | `warn` / `δ ceiling` | `GuardWarnPane` / `GuardCeilingPane` | `feedback/trust/trust_pane.dart` | Two panes. Playing/paused only. |
+| Held back | `beta high` / `delta high` / `beta · delta` | `heldBackLabel` | `feedback/trust/trust_runs.dart` | Gray stroke + fill. Below-the-line is not gray. |
+| Noisy | `pads` / `movement` / dotted | dirty run | `trust_runs.dart` | Isolated 1 s blink = dotted, no text. |
+| Blink mark / Jaw mark | `Blink` / `Jaw` | `TrustGestureMark` | `feedback/trust/trust_trace.dart` | Live ring even if Gesture markers persist is off. Not eye up/down. |
+| Reward More | `In zone` / `Below the line` / `Noisy — not counting` / `Held back` | `TrustRewardMore` | `feedback/trust/trust_more.dart` | Strip + Now rail + Hold. `warming up…` until 75 s. |
+| Guard More | `Warning` / `Quiet` / `Noisy` | `TrustGuardMore` | `feedback/trust/trust_more.dart` | One block under both guard panes. |
+| Feature probe | `Feature probe` | `_FeatureProbeCard` | `feedback_session.dart` | Debug + sim connected only. Master switch + one slider per present feature id. Below Session Settings. |
 
 ### Settings cards — `lib/src/views/settings_view.dart`
 
@@ -240,8 +251,9 @@ Guardrail AI engine, Audio (Android only), About, Debug mode.
 | Calibrating | `[feedback] phase=calibrating` | `FeedbackPhase.calibrating` | | 50 s baseline unless skip. |
 | Playing | `[feedback] phase=playing` | `FeedbackPhase.playing` | | Agent asserts this. |
 | Paused / interrupted / ended | matching log | `paused` / `interrupted` / `ended` | | |
-| Reward lane | session audio | `RewardLane` | `reward_lane.dart` | Guard never modulates. |
-| Guard lane | protocol builder Guard | `GuardLane` | `guard_lane.dart` | Warns only. |
+| Reward lane | session audio | `RewardLane` | `reward_lane.dart` | Guard never modulates. Dirty skips `recordEpoch` / `onSample`. |
+| Guard lane | protocol builder Guard | `GuardLane` | `guard_lane.dart` | Warns only. Dirty skips `evaluateWarning`. |
+| Trust graphs | Reward / Guard / More | `TrustTrace` / `TrustViewport` | `feedback/trust/` | Follow-only; not GraphShell. |
 | Feature bus | — | `FeatureBus` | `feature_bus.dart` | |
 | Feature probe latch | debug sliders | `FeatureOverride` | `feature_override.dart` | Replaces `FeatureDto.value` in `_onEvent` while playing. |
 

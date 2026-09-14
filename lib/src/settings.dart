@@ -120,6 +120,9 @@ class Settings extends ChangeNotifier {
   static const String _recordStreamsKey = 'record_streams';
   static const String _eyeMarkersKey = 'gesture_eye_markers';
   static const String _markersInFeedbackKey = 'gesture_markers_in_feedback';
+  static const String _trustRewardVisibleKey = 'trust_reward_visible';
+  static const String _trustGuardVisibleKey = 'trust_guard_visible';
+  static const String _trustMoreVisibleKey = 'trust_more_visible';
   static const String _warningThresholdPercentileKey =
       'reve_warning_threshold_percentile';
   static const String _guardrailModeKey = 'guardrail_mode';
@@ -418,6 +421,34 @@ class Settings extends ChangeNotifier {
 
   Future<void> setMarkersInFeedbackEnabled(bool value) async {
     await _prefs.setBool(_markersInFeedbackKey, value);
+    notifyListeners();
+  }
+
+  /// Reward trust graph chip. Default on.
+  bool get trustRewardVisible => _prefs.getBool(_trustRewardVisibleKey) ?? true;
+
+  Future<void> setTrustRewardVisible(bool value) async {
+    await _prefs.setBool(_trustRewardVisibleKey, value);
+    notifyListeners();
+  }
+
+  /// Guard trust graph chip. Null when never set — caller applies
+  /// Reward-on/Guard-off, or Guard-on when the Reward chip is omitted.
+  bool? get trustGuardVisibleOrNull => _prefs.getBool(_trustGuardVisibleKey);
+
+  bool trustGuardVisible({required bool rewardChipShown}) =>
+      trustGuardVisibleOrNull ?? !rewardChipShown;
+
+  Future<void> setTrustGuardVisible(bool value) async {
+    await _prefs.setBool(_trustGuardVisibleKey, value);
+    notifyListeners();
+  }
+
+  /// More readouts under visible trust lanes. Default on.
+  bool get trustMoreVisible => _prefs.getBool(_trustMoreVisibleKey) ?? true;
+
+  Future<void> setTrustMoreVisible(bool value) async {
+    await _prefs.setBool(_trustMoreVisibleKey, value);
     notifyListeners();
   }
 

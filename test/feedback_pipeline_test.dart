@@ -9,6 +9,7 @@ import 'package:muse_ml/src/feedback/guard_lane.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/reward_lane.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
+import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
 import 'package:muse_ml/src/rust/api/features.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
@@ -242,28 +243,24 @@ void main() {
       lineNoiseRatio: 0,
     );
 
-    test(
-      'missing relative bands fails closed: inTarget false, no recordEpoch',
-      () {
-        final out = RecordingRewardOutput();
-        final engine = RatioEngine(
-          epochWindow: const Duration(milliseconds: 1),
-        );
-        final lane = laneWith(engine, output: out);
-        lane.onFeature(
-          const FeatureSample(id: 'band.atr', t: 0, value: 3.0),
-          const RewardTick(
-            phase: FeedbackPhase.playing,
-            collectingBaseline: false,
-            sampleIsClean: true,
-            quality: [100, 100, 100, 100],
-          ),
-        );
-        expect(out.samples, 1);
-        expect(out.lastInTarget, isFalse);
-        expect(engine.successRate, isNull);
-      },
-    );
+    test('missing relative bands is dirty: no onSample, no recordEpoch', () {
+      final out = RecordingRewardOutput();
+      final engine = RatioEngine(epochWindow: const Duration(milliseconds: 1));
+      final lane = laneWith(engine, output: out);
+      lane.onFeature(
+        const FeatureSample(id: 'band.atr', t: 0, value: 3.0),
+        const RewardTick(
+          phase: FeedbackPhase.playing,
+          collectingBaseline: false,
+          sampleIsClean: true,
+          quality: [100, 100, 100, 100],
+        ),
+      );
+      expect(out.samples, 0);
+      expect(lane.lastDirty, isTrue);
+      expect(lane.lastDirtyReason, TrustDirtyReason.pads);
+      expect(engine.successRate, isNull);
+    });
 
     test('FeatureDto native scalar via onStats; onSample gets percentile', () {
       var lastNative = 0.0;

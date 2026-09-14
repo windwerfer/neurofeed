@@ -4,6 +4,7 @@ import 'package:muse_ml/src/feedback/feedback_phase.dart';
 import 'package:muse_ml/src/feedback/gate_electrodes.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
+import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 /// Snapshot of orchestrator session state for one reward-lane tick.
@@ -13,20 +14,22 @@ class RewardTick {
     required this.collectingBaseline,
     required this.sampleIsClean,
     required this.quality,
+    this.dirtyReason,
   });
 
   final FeedbackPhase phase;
   final bool collectingBaseline;
   final bool sampleIsClean;
   final List<double>? quality;
+  final TrustDirtyReason? dirtyReason;
 }
 
 /// Reward lane: [FeatureDto] native value → threshold + inhibit AND-gate.
 ///
 /// Missing [FeatureDto] this tick is a no-sample (hold last output, do not
 /// [RatioEngine.recordEpoch]). Inhibit relative bands come from always-on
-/// [BandsDto] via [RelativeBandAggregator]; a missing vector fails closed
-/// (`inTarget = false`, no [RatioEngine.recordEpoch]).
+/// [BandsDto] via [RelativeBandAggregator]. Dirty (`!sampleIsClean` or
+/// unusable gate pads) skips [RatioEngine.recordEpoch] and [RewardOutput.onSample].
 class RewardLane {
   RewardLane({
     required this.engine,
@@ -57,11 +60,19 @@ class RewardLane {
   bool _hasReward = false;
   double? lastNative;
   double? lastPercentile;
+  double lastThresholdPercentile = 0;
   bool lastInTarget = false;
+  bool lastHeldBack = false;
+  bool lastDirty = false;
+  TrustDirtyReason? lastDirtyReason;
+  List<String> lastInhibitTags = const [];
+  RelativeTarget? lastRelative;
 
   bool get hasReward => _hasReward;
 
   String get featureId => _featureId;
+
+  bool padsUsable(List<double>? quality) => _bands.evaluate(quality) != null;
 
   void configure({
     required bool hasReward,
@@ -100,28 +111,50 @@ class RewardLane {
       return;
     }
     final rel = _bands.evaluate(tick.quality);
-    if (rel == null) {
+    final padsDown = rel == null;
+    if (rel != null) {
+      lastRelative = rel;
+    }
+    lastNative = sample.value;
+    lastPercentile = engine.percentileOf(sample.value) ?? 50.0;
+    final thr = engine.threshold;
+    lastThresholdPercentile = thr == null ? 0 : engine.percentileOf(thr) ?? 0;
+    final dirty = !tick.sampleIsClean || padsDown;
+    lastDirty = dirty;
+    lastDirtyReason = padsDown ? TrustDirtyReason.pads : tick.dirtyReason;
+    if (dirty) {
+      lastInTarget = false;
+      lastHeldBack = false;
+      lastInhibitTags = const [];
+      engine.recordSessionSample(sample.value, clean: false);
       onStats(sample.value);
-      _emit(sample.value, inTarget: false);
       return;
     }
-    var inTarget = engine.isInTarget(sample.value);
-    if (inTarget) {
-      for (final c in _inhibit) {
-        if (!c.passes(
-          deltaRel: rel.deltaRel,
-          thetaRel: rel.thetaRel,
-          alphaRel: rel.alphaRel,
-          betaRel: rel.betaRel,
-        )) {
-          inTarget = false;
-          break;
+    final bands = rel;
+    final above = engine.isInTarget(sample.value);
+    final failed = <String>[];
+    for (final c in _inhibit) {
+      if (!c.passes(
+        deltaRel: bands.deltaRel,
+        thetaRel: bands.thetaRel,
+        alphaRel: bands.alphaRel,
+        betaRel: bands.betaRel,
+      )) {
+        switch (c) {
+          case BetaCeiling():
+            failed.add('beta');
+          case DeltaCeiling():
+            failed.add('delta');
         }
       }
     }
+    final inTarget = above && failed.isEmpty;
+    lastInTarget = inTarget;
+    lastHeldBack = above && failed.isNotEmpty;
+    lastInhibitTags = failed;
     engine.recordEpoch(inTarget);
-    engine.recordSessionSample(sample.value, clean: tick.sampleIsClean);
-    if (tick.sampleIsClean && engine.useEmaAdapt) {
+    engine.recordSessionSample(sample.value, clean: true);
+    if (engine.useEmaAdapt) {
       engine.adaptEma(sample.value);
       onThresholdChanged();
     }
@@ -152,6 +185,12 @@ class RewardLane {
     _bands.reset();
     lastNative = null;
     lastPercentile = null;
+    lastThresholdPercentile = 0;
     lastInTarget = false;
+    lastHeldBack = false;
+    lastDirty = false;
+    lastDirtyReason = null;
+    lastInhibitTags = const [];
+    lastRelative = null;
   }
 }

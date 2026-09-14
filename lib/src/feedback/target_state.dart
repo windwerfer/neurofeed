@@ -122,6 +122,9 @@ class RatioEngine implements FeedbackEngine {
   @override
   int get baselineCount => _baseline.length;
 
+  /// Copy of the rest-pile samples. Getter only — no math change.
+  List<double> get baselineSamples => List<double>.unmodifiable(_baseline);
+
   @override
   int get baselinePercentile => percentile;
 
