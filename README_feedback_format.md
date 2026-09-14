@@ -201,7 +201,7 @@ is history-only).
 
 | Prefix | Temps | On crash / leftover |
 |--------|-------|---------------------|
-| `session_$id` | `.raw` `.computed` `.metadata` (JSONL) | Feedback dialog **Incomplete Session Detected** → Save Session / Discard. Assembles via `writeScratchV5`. |
+| `session_$id` | `.raw` `.computed` `.metadata` (JSONL) | Reopens the session summary (`FeedbackDashboardView`) → Save / Discard. Assembles via `writeScratchV5`. Back is blocked; must Save or Discard. |
 | `recording_$ts` | `.raw` `.computed` `.json` (atomic snapshot) | **Incomplete recording detected** → Save / Discard. Same History folder, sqlite `kind=recording`. |
 | `tmp_$ts` | `.raw` `.computed` `.json` | Launch **glob-deletes**. Never assembled. |
 

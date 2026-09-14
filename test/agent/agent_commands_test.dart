@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muse_ml/src/agent/agent_commands.dart';
 import 'package:muse_ml/src/connection_provider.dart';
+import 'package:muse_ml/src/feedback/feedback_state.dart';
+import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/monitor/monitor_controller.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
@@ -143,6 +145,52 @@ void main() {
       expect(res.body['error'], 'not_connected');
     },
   );
+
+  test('POST /session/start 409 unsaved_session', () async {
+    container.read(monitorControllerProvider);
+    app.debugSetConnected();
+    await settle();
+    container.read(feedbackStateProvider.notifier).restoreEndedSession(
+      id: 'unsaved1',
+      scratchPath: '${history.path}/session_unsaved1.muse.feedback',
+      metadata: SessionMetadata(
+        protocol: 'drowsiness',
+        durationMinutes: 1,
+        elapsedSeconds: 10,
+        sound: 'Ambient Drone',
+        savedAt: DateTime.utc(2026, 9, 14).toIso8601String(),
+      ),
+    );
+    final res = await agent.handle(
+      method: 'POST',
+      path: '/session/start',
+      body: const {'skipCalibration': true},
+    );
+    expect(res.status, 409);
+    expect(res.body['error'], 'unsaved_session');
+  });
+
+  test('POST /session/reset 409 unsaved_session', () async {
+    container.read(feedbackStateProvider.notifier).restoreEndedSession(
+      id: 'unsaved2',
+      scratchPath: '${history.path}/session_unsaved2.muse.feedback',
+      metadata: SessionMetadata(
+        protocol: 'drowsiness',
+        durationMinutes: 1,
+        elapsedSeconds: 10,
+        sound: 'Ambient Drone',
+        savedAt: DateTime.utc(2026, 9, 14).toIso8601String(),
+      ),
+    );
+    final res = await agent.handle(
+      method: 'POST',
+      path: '/session/reset',
+      body: const {},
+    );
+    expect(res.status, 409);
+    expect(res.body['error'], 'unsaved_session');
+    expect(container.read(feedbackStateProvider).phase, FeedbackPhase.ended);
+  });
 
   test('POST /record/start while connected starts recording', () async {
     container.read(monitorControllerProvider);

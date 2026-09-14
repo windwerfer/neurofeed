@@ -8,8 +8,27 @@ import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/feedback/user_protocol_store.dart';
 import 'package:muse_ml/src/reve/model_engine.dart';
 import 'package:muse_ml/src/reve/models.dart';
+import 'package:muse_ml/src/views/feedback_dashboard.dart';
 import 'package:muse_ml/src/views/feedback_session.dart';
 import 'package:muse_ml/src/views/protocol_builder.dart';
+
+void _openProtocol(
+  BuildContext context,
+  WidgetRef ref,
+  ProtocolDocument protocol,
+) {
+  final notifier = ref.read(feedbackStateProvider.notifier);
+  if (ref.read(feedbackStateProvider).phase == FeedbackPhase.ended) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const FeedbackDashboardView()),
+    );
+    return;
+  }
+  notifier.selectProtocol(protocol.id);
+  Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => const FeedbackSessionView()),
+  );
+}
 
 class FeedbackListView extends ConsumerWidget {
   const FeedbackListView({super.key});
@@ -168,16 +187,7 @@ class _RecentSlot extends ConsumerWidget {
       margin: EdgeInsets.zero,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          final notifier = ref.read(feedbackStateProvider.notifier);
-          if (ref.read(feedbackStateProvider).phase == FeedbackPhase.ended) {
-            notifier.reset();
-          }
-          notifier.selectProtocol(protocol.id);
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const FeedbackSessionView()),
-          );
-        },
+        onTap: () => _openProtocol(context, ref, protocol),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           child: Text(
@@ -266,19 +276,7 @@ class _ProtocolCard extends ConsumerWidget {
           Expanded(
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
-              onTap: () {
-                final notifier = ref.read(feedbackStateProvider.notifier);
-                if (ref.read(feedbackStateProvider).phase ==
-                    FeedbackPhase.ended) {
-                  notifier.reset();
-                }
-                notifier.selectProtocol(protocol.id);
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const FeedbackSessionView(),
-                  ),
-                );
-              },
+              onTap: () => _openProtocol(context, ref, protocol),
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Row(

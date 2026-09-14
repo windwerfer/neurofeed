@@ -385,5 +385,40 @@ void main() {
       expect(restored.phases.length, equals(1));
       expect(restored.recalibrations.length, equals(1));
     });
+
+    test('withSaveFields overlays notes and stats, keeps session facts', () {
+      final original = SessionMetadata(
+        protocol: 'drowsiness',
+        durationMinutes: 15,
+        elapsedSeconds: 900,
+        sound: 'Ambient Drone',
+        savedAt: '2026-09-02T00:00:00.000Z',
+        notes: 'old',
+        drowsiness: const SessionDrowsiness(
+          scoreTotalPct: 12.5,
+          meanSleepDir: 0.35,
+        ),
+        sessionId: 'abc',
+      );
+      final saved = original.withSaveFields(
+        notes: 'new notes',
+        stats: const SessionStatsData(
+          peakAlphaFreq: 10.5,
+          peakAlphaPower: 120,
+          targetPct: 65,
+          stillnessPct: 80,
+          avgBpm: 72,
+          avgAlphaRel: 0.3,
+        ),
+        avgSpo2: 98.1,
+      );
+      expect(saved.notes, 'new notes');
+      expect(saved.protocol, 'drowsiness');
+      expect(saved.drowsiness?.scoreTotalPct, 12.5);
+      expect(saved.sessionId, 'abc');
+      expect(saved.stats?.avgBpm, 72);
+      expect(saved.avgSpo2, 98.1);
+      expect(saved.savedAt, isNot('2026-09-02T00:00:00.000Z'));
+    });
   });
 }

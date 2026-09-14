@@ -5,9 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/session_v5/assemble.dart';
+import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/feedback/session_store.dart';
 import 'package:muse_ml/src/rust/api/session_format.dart' as ffi;
+import 'package:muse_ml/src/views/feedback_dashboard.dart';
 
 /// An assembled scratch v5 left over from a crash or an interrupted save.
 class RecoverableSession {
@@ -17,6 +19,7 @@ class RecoverableSession {
     required this.protocol,
     required this.elapsedSeconds,
     required this.calibrationKind,
+    this.metadata,
   });
 
   final String id;
@@ -24,6 +27,7 @@ class RecoverableSession {
   final String protocol;
   final int elapsedSeconds;
   final String calibrationKind;
+  final SessionMetadata? metadata;
 
   /// Publish the scratch v5 into history, then delete it.
   Future<void> save(SessionStore store) async {
@@ -138,10 +142,11 @@ Future<RecoverableSession?> _fromV5(File file, String id) async {
   var protocol = '';
   var elapsed = 0;
   var calibrationKind = '';
+  SessionMetadata? meta;
   try {
     final bytes = Uint8List.fromList(await file.readAsBytes());
     final head = ffi.v5ParseHead(bytes: bytes);
-    final meta = SessionMetadata.fromJsonBytes(head.metadataJson);
+    meta = SessionMetadata.fromJsonBytes(head.metadataJson);
     if (meta != null) {
       protocol = meta.protocol;
       elapsed = meta.elapsedSeconds;
@@ -156,6 +161,7 @@ Future<RecoverableSession?> _fromV5(File file, String id) async {
     protocol: protocol,
     elapsedSeconds: elapsed,
     calibrationKind: calibrationKind,
+    metadata: meta,
   );
 }
 
@@ -195,6 +201,7 @@ Future<RecoverableSession?> _assembleTemps({
       protocol: meta.protocol,
       elapsedSeconds: meta.elapsedSeconds,
       calibrationKind: meta.calibration?.kind ?? '',
+      metadata: meta,
     );
   } catch (e, st) {
     debugPrint('[crash] assemble temps for $id failed: $e\n$st');
@@ -250,7 +257,8 @@ Future<List<RecoverableSession>> scanRecoverableSessions(
   return recovered;
 }
 
-/// Blocking Save / Discard modal for leftover scratch sessions at startup.
+/// Re-open the session summary for leftover scratch sessions at startup.
+/// The summary cannot be dismissed except by Save or Discard.
 Future<void> showCrashRecoveryDialog(
   BuildContext context,
   WidgetRef ref,
@@ -261,88 +269,14 @@ Future<void> showCrashRecoveryDialog(
 
   for (final session in sessions) {
     if (!context.mounted) return;
-    final shouldSave = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => _CrashRecoveryDialog(session: session),
+    ref.read(feedbackStateProvider.notifier).restoreEndedSession(
+      id: session.id,
+      scratchPath: session.scratchV5.path,
+      metadata: session.metadata,
     );
-    if (shouldSave == true) {
-      final store = await ref.read(sessionStoreProvider.future);
-      await session.save(store);
-      ref.invalidate(sessionListProvider);
-    } else {
-      await session.discard();
-    }
-  }
-}
-
-class _CrashRecoveryDialog extends StatelessWidget {
-  const _CrashRecoveryDialog({required this.session});
-
-  final RecoverableSession session;
-
-  @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      child: AlertDialog(
-        title: const Text('Incomplete Session Detected'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'The app crashed or was closed during a recording session. '
-                'You have an incomplete session that can be recovered.',
-              ),
-              const SizedBox(height: 16),
-              _InfoRow(label: 'Session', value: session.id),
-              _InfoRow(
-                label: 'Protocol',
-                value: session.protocol.isEmpty ? 'Unknown' : session.protocol,
-              ),
-              _InfoRow(label: 'Duration', value: '${session.elapsedSeconds}s'),
-              if (session.calibrationKind.isNotEmpty)
-                _InfoRow(label: 'Calibration', value: session.calibrationKind),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Discard'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Save Session'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 140,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-          ),
-          Expanded(child: Text(value)),
-        ],
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const FeedbackDashboardView(),
       ),
     );
   }

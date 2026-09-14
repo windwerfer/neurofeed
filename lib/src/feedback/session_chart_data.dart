@@ -234,13 +234,53 @@ SessionChartData prepareChartData(
   );
 }
 
+/// Wall-clock ms of [startedAt] (ISO-8601), or null.
+double? recordingStartMsFromIso(String? startedAt) {
+  if (startedAt == null || startedAt.isEmpty) return null;
+  return DateTime.tryParse(startedAt)?.millisecondsSinceEpoch.toDouble();
+}
+
+/// Chart data from a v5 container: computed frames, with pulse/SpO₂ filled
+/// from the raw body when the 1 Hz frames omitted them.
+SessionChartData prepareChartDataFromV5({
+  required List<ffi.ComputedFrame> frames,
+  required List<int> bytes,
+  double? trainingStartOffset,
+  String metric = 'band.atr',
+  List<TargetCondition> conditions = const [],
+  String? startedAt,
+}) {
+  ffi.SessionData? raw;
+  try {
+    final body = ffi.v5ExtractRaw(bytes: bytes);
+    if (body.isNotEmpty) {
+      raw = ffi.sessionParseBody(bytes: body);
+    }
+  } catch (_) {}
+  return prepareChartDataFromComputed(
+    frames,
+    trainingStartOffset: trainingStartOffset,
+    metric: metric,
+    conditions: conditions,
+    rawFallback: raw,
+    recordingStartMs: recordingStartMsFromIso(startedAt),
+  );
+}
+
 /// Build chart data from v5 computed 1 Hz frames. X is elapsed seconds from
 /// the displayed window start. Pads with `total <= 0` are autodropped.
+///
+/// When computed frames have no pulse/SpO₂ (older sessions, or a sampler
+/// that never latched those events), [rawFallback] fills them from the
+/// `.muse` body. [recordingStartMs] aligns raw `now_ms` timestamps to the
+/// computed `t` domain.
 SessionChartData prepareChartDataFromComputed(
   List<ffi.ComputedFrame> frames, {
   double? trainingStartOffset,
   String metric = 'band.atr',
   List<TargetCondition> conditions = const [],
+  ffi.SessionData? rawFallback,
+  double? recordingStartMs,
 }) {
   final cut =
       (trainingStartOffset != null && trainingStartOffset > 0)
@@ -306,8 +346,8 @@ SessionChartData prepareChartDataFromComputed(
     }
   }
 
-  final bpmX = <double>[];
-  final bpm = <double>[];
+  var bpmX = <double>[];
+  var bpm = <double>[];
   var bpmSum = 0.0;
   for (final f in kept) {
     final p = f.pulse;
@@ -317,8 +357,8 @@ SessionChartData prepareChartDataFromComputed(
     bpmSum += p;
   }
 
-  final spo2X = <double>[];
-  final spo2 = <double>[];
+  var spo2X = <double>[];
+  var spo2 = <double>[];
   var spo2Sum = 0.0;
   for (final f in kept) {
     final s = f.spo2;
@@ -326,6 +366,25 @@ SessionChartData prepareChartDataFromComputed(
     spo2X.add(f.t - startTs);
     spo2.add(s);
     spo2Sum += s;
+  }
+
+  if (rawFallback != null && (bpm.isEmpty || spo2.isEmpty)) {
+    final filled = _physioFromRaw(
+      rawFallback,
+      cut: cut,
+      startTs: startTs,
+      recordingStartMs: recordingStartMs,
+    );
+    if (bpm.isEmpty) {
+      bpm = filled.bpm;
+      bpmX = filled.bpmX;
+      bpmSum = filled.bpmSum;
+    }
+    if (spo2.isEmpty) {
+      spo2 = filled.spo2;
+      spo2X = filled.spo2X;
+      spo2Sum = filled.spo2Sum;
+    }
   }
 
   double? peakFreq;
@@ -371,6 +430,73 @@ SessionChartData prepareChartDataFromComputed(
       avgSpo2: spo2.isEmpty ? null : spo2Sum / spo2.length,
       avgAlphaRel: alphaRel.isEmpty ? 0 : alphaRelSum / alphaRel.length,
     ),
+  );
+}
+
+({
+  List<double> bpm,
+  List<double> bpmX,
+  double bpmSum,
+  List<double> spo2,
+  List<double> spo2X,
+  double spo2Sum,
+}) _physioFromRaw(
+  ffi.SessionData data, {
+  required double? cut,
+  required double startTs,
+  double? recordingStartMs,
+}) {
+  double origin = recordingStartMs ?? 0;
+  if (recordingStartMs == null) {
+    double? minTs;
+    void consider(double ts) {
+      if (minTs == null || ts < minTs!) minTs = ts;
+    }
+
+    for (final p in data.pulses) {
+      consider(p.timestamp);
+    }
+    for (final s in data.spo2S) {
+      consider(s.timestamp);
+    }
+    origin = minTs ?? 0;
+  }
+
+  double elapsed(double ts) {
+    final delta = ts - origin;
+    if (origin > 1e11) return delta / 1000.0;
+    return delta;
+  }
+
+  final bpmX = <double>[];
+  final bpm = <double>[];
+  var bpmSum = 0.0;
+  for (final p in data.pulses) {
+    final t = elapsed(p.timestamp);
+    if (cut != null && t < cut) continue;
+    bpmX.add(t - startTs);
+    bpm.add(p.bpm);
+    bpmSum += p.bpm;
+  }
+
+  final spo2X = <double>[];
+  final spo2 = <double>[];
+  var spo2Sum = 0.0;
+  for (final s in data.spo2S) {
+    final t = elapsed(s.timestamp);
+    if (cut != null && t < cut) continue;
+    spo2X.add(t - startTs);
+    spo2.add(s.spo2);
+    spo2Sum += s.spo2;
+  }
+
+  return (
+    bpm: bpm,
+    bpmX: bpmX,
+    bpmSum: bpmSum,
+    spo2: spo2,
+    spo2X: spo2X,
+    spo2Sum: spo2Sum,
   );
 }
 

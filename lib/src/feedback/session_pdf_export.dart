@@ -31,11 +31,13 @@ Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) asyn
     return null;
   }
   final frames = v5ExtractComputed(bytes: container);
-  final prepared = prepareChartDataFromComputed(
-    frames,
+  final prepared = prepareChartDataFromV5(
+    frames: frames,
+    bytes: container,
     trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
     metric: protocol.reward?.feature ?? 'band.atr',
     conditions: protocol.conditions,
+    startedAt: meta.startedAt,
   );
   final charts = SessionExporter.chartsFor(prepared, meta);
 
