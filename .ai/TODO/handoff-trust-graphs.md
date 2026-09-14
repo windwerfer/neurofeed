@@ -1,10 +1,10 @@
-# Handoff — trust graphs PR 1
+# Handoff — trust graphs PR 1 + PR 2
 
 | Field | Value |
 |---|---|
 | Date | 2026-09-14 |
 | Spec | [trust-graphs.md](trust-graphs.md) |
-| Status | **PR 1 landed** on this branch. Do **not** reopen graph decisions. **PR 2** is the nerd sheet. |
+| Status | **PR 1 and PR 2 landed** on this branch. Do **not** reopen graph decisions. |
 | Do not mix | Crown Start, pipeline-contract Key Decisions, Connect UX, monitor GraphShell/Inspect, RatioEngine 80/40, `guardrailDeltaCeiling` 0.25 |
 
 ---
@@ -13,7 +13,7 @@
 
 Live Reward / Guard / More chips on the feedback session. Graphs + More only
 while **playing** and **paused**. Calibration hides graphs/More; chips may
-still show. Guide sits under Pause/End. Science-icon nerd bubble is unchanged.
+still show. Guide sits under Pause/End. Science-icon nerd sheet (PR 2) replaces the bubble.
 
 - Follow-only viewport: default **75 s**, pinch-X and Ctrl+scroll **15–300 s**,
   1 s Follow lead. Shared window. Not persisted. No Inspect, no on-screen
@@ -32,15 +32,20 @@ still show. Guide sits under Pause/End. Science-icon nerd bubble is unchanged.
 Tests: `flutter analyze lib/src` clean.
 `flutter test test/trust_graphs_test.dart test/trust_dirty_test.dart test/feedback_pipeline_test.dart`.
 
-## Leftover (PR 2)
+## Leftover
 
-Replace `_NerdStatsBubble` with the science-icon sheet: native pile
-histogram + live triangle + threshold tick; relative δ θ α β γ stack with
-inhibit ceilings; (i) rows. Guard block only if the lane ran. Cooldown 20 s
-is nerd-only. Feature probe stays debug+sim, not in the sheet.
+None in this series. Do not reopen: two guard panes, held-back gray fill,
+dirty plumbing, Follow-only zoom.
 
-Do not reopen: two guard panes, held-back gray fill, dirty plumbing,
-Follow-only zoom.
+## Landed (PR 2)
+
+Science-icon sheet replaces `_NerdStatsBubble`. Native pile histogram + live
+triangle + threshold tick; relative δ θ α β γ stack with inhibit ceilings;
+(i) rows. Guard block only if the lane ran. Cooldown 20 s is nerd-only.
+Feature probe stays debug+sim, not in the sheet.
+
+Tests: `flutter analyze lib/src` clean.
+`flutter test test/nerd_sheet_test.dart`.
 
 ## Files
 
@@ -65,5 +70,13 @@ Edited:
 - `lib/src/views/feedback_session.dart` — chips + graphs + Guide at bottom
 - `.ai/ui-map.md`, `.ai/test-matrix.md`
 
-Not in PR 1: nerd sheet, deleting `_NerdStatsBubble`, catalog/protocol/engine
-math, monitor widgets, Crown.
+PR 2:
+
+- `lib/src/feedback/trust/nerd_model.dart`, `nerd_sheet.dart`
+- `test/nerd_sheet_test.dart`
+- `lib/src/views/feedback_session.dart` — science icon opens sheet; bubble gone
+- `lib/src/feedback/feedback_state.dart` — `rewardLane` / `guardLane` getters;
+  `showNerdStats` removed
+- `.ai/ui-map.md`, `.ai/test-matrix.md`
+
+Not in this series: catalog/protocol/engine math, monitor widgets, Crown.

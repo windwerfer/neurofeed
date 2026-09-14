@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| **Status** | Spec frozen. **PR 1 landed.** PR 2 not started. |
+| **Status** | Spec frozen. **PR 1 and PR 2 landed.** |
 | **Date** | 2026-09-14 |
 | **Branch** | `refactor/monitor` (do not branch from `main`) |
 | **Origin** | `.ai/archive/trust-graph-agent-prompt.md` plus the 2026-09-14 design thread |
@@ -66,7 +66,7 @@ Chips may render while idle/calibrating; **graphs and More render only in playin
 
 Keep Session Settings and Pause/End visible. Do not hide them behind graphs. Feature probe stays debug + simulator, below settings is fine.
 
-Science icon in PR 1: **leave the existing nerd bubble**. PR 2 replaces it with the sheet.
+Science icon opens the nerd sheet (PR 2). Old bubble is gone.
 
 ---
 
