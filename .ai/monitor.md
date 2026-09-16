@@ -174,7 +174,7 @@ for graphs; Start Session stays refused. Status-bar pads stay 4-ch.
 Non-EEG electrode toggles: top-right text, depressed = in the mean, default
 all on, last one stays. Raw EEG has no chips.
 
-Bands series chips: in-pane `BandToggles` (right gutter), label color = line,
+Bands series chips: in-pane `BandToggles` (top-right overlay), label color = line,
 depressed = visible, last one stays. Histogram/PSD strip legend is painted
 and not tappable. Recording-dashboard Bands uses the same chips.
 

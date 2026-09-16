@@ -107,7 +107,7 @@ graphs. In-pane band chips toggle series visibility.
 | Window length | `15s` `30s` `60s` `120s` | `ViewportController.bandsWindowOptions` | `graph_shell.dart` | Default **30 s**. |
 | Custom window | `custom` | `windowIsPreset` | `graph_shell.dart` | Closed label after pinch-X. Picking a preset restores. |
 | Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Top-right, depressed = in the mean. Default all on. Last one stays. |
-| Band toggle | `delta` / `theta` / `alpha` / `beta` / `gamma` | `BandToggles` | `band_toggles.dart` | In-pane, right gutter. Depressed = visible. Last one stays. Label color = line. |
+| Band toggle | `delta` / `theta` / `alpha` / `beta` / `gamma` | `BandToggles` | `band_toggles.dart` | In-pane, top-right overlay. Depressed = visible. Last one stays. Label color = line. |
 | Y unit | `dB` | `linearToDb` | `panes/time_series_pane.dart` | `10·log10` of linear µV²/Hz. 0 is not the floor. |
 | Waiting for signal | `Waiting for signal` | `MonitorWaitingSignal` | `empty_state.dart` | Connected, no BandCache samples. |
 

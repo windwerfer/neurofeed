@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muse_ml/src/charts/band_style.dart';
@@ -105,6 +106,51 @@ void main() {
     expect(linearToDb(double.nan).isFinite, isTrue);
     expect(linearToDb(kBandsLogEpsilon), closeTo(-120, 1e-6));
     expect(linearToDb(0), closeTo(linearToDb(kBandsLogEpsilon), 1e-9));
+  });
+
+  test('staggered electrode timestamps merge into one tick', () {
+    final cache = BandCache();
+    cache.appendBands(_bands(electrode: 0, timestamp: 1000, delta: 100));
+    cache.appendBands(_bands(electrode: 1, timestamp: 1004, delta: 10000));
+    cache.appendBands(_bands(electrode: 2, timestamp: 1008, delta: 100));
+    cache.appendBands(_bands(electrode: 3, timestamp: 1012, delta: 10000));
+
+    final series = buildBandSeries(
+      cache: cache,
+      electrodes: {0, 1, 2, 3},
+      startElapsed: 0,
+      endElapsed: 10,
+      captureStartedAtMs: 0,
+    );
+    expect(series[0], hasLength(1));
+    expect(series[0].first.db, closeTo(30, 1e-6));
+    expect(series[0].first.elapsed, closeTo(1.006, 1e-9));
+  });
+
+  test('ticks 1 s apart stay two points', () {
+    expect(
+      mergeBandTickPoints(const [BandPoint(1.0, 10), BandPoint(2.0, 12)]),
+      hasLength(2),
+    );
+    expect(
+      mergeBandTickPoints(const [
+        BandPoint(1.000, 10),
+        BandPoint(1.004, 20),
+        BandPoint(1.008, 30),
+        BandPoint(2.000, 5),
+      ]),
+      hasLength(2),
+    );
+  });
+
+  test('plot is full-bleed horizontally', () {
+    expect(TimeSeriesPanePainter.yGutter, 0);
+    expect(TimeSeriesPanePainter.legendGutter, 0);
+    const size = Size(400, 300);
+    final chart = TimeSeriesPanePainter.chartRect(size);
+    expect(chart.left, 0);
+    expect(chart.right, 400);
+    expect(chart.width, 400);
   });
 
   test('null captureStartedAtMs is not unix epoch', () {

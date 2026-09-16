@@ -846,12 +846,12 @@ List<List<BandPoint>> bandSeriesFromRecords({
   }
   return [
     for (final map in byT)
-      [
+      mergeBandTickPoints([
         for (final k in (map.keys.toList()..sort()))
           BandPoint(
             k / 1000.0,
             map[k]!.reduce((a, b) => a + b) / map[k]!.length,
           ),
-      ],
+      ]),
   ];
 }
