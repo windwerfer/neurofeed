@@ -126,6 +126,7 @@ class Settings extends ChangeNotifier {
   static const String _trustMoreVisibleKey = 'trust_more_visible';
   static const String _warningThresholdPercentileKey =
       'reve_warning_threshold_percentile';
+  static const String _inhibitCeilingsKey = 'inhibit_ceilings';
   static const String _guardrailModeKey = 'guardrail_mode';
   static const String _guardModelKey = 'guard_model';
   static const String _warningSoundKey = 'warning_sound';
@@ -465,6 +466,54 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
+  Map<String, dynamic> _readInhibitMap() {
+    final stored = _prefs.getString(_inhibitCeilingsKey);
+    if (stored == null || stored.isEmpty) return {};
+    try {
+      final decoded = jsonDecode(stored);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return {};
+  }
+
+  /// Per-protocol inhibit ceiling overrides (`beta` / `delta` → relative max).
+  /// Missing tags keep the protocol document value.
+  Map<String, double> inhibitCeilingOverrides(String protocolId) {
+    final raw = _readInhibitMap()[protocolId];
+    if (raw is! Map) return const {};
+    final out = <String, double>{};
+    for (final e in raw.entries) {
+      final v = e.value;
+      if (v is num) out[e.key.toString()] = v.toDouble();
+    }
+    return out;
+  }
+
+  Future<void> setInhibitCeiling(
+    String protocolId,
+    String tag,
+    double max,
+  ) async {
+    final root = Map<String, dynamic>.from(_readInhibitMap());
+    final row = Map<String, dynamic>.from(
+      root[protocolId] is Map
+          ? Map<String, dynamic>.from(root[protocolId] as Map)
+          : const <String, dynamic>{},
+    );
+    row[tag] = max;
+    root[protocolId] = row;
+    await _prefs.setString(_inhibitCeilingsKey, jsonEncode(root));
+    notifyListeners();
+  }
+
+  Future<void> clearInhibitCeilingOverrides(String protocolId) async {
+    final root = Map<String, dynamic>.from(_readInhibitMap());
+    if (!root.containsKey(protocolId)) return;
+    root.remove(protocolId);
+    await _prefs.setString(_inhibitCeilingsKey, jsonEncode(root));
+    notifyListeners();
+  }
+
   /// Per-protocol guard feature: `band.delta` / `ai.drowsiness` / `none`.
   /// Documents without a guard lane always return `none`.
   String guardFeatureFor(String protocolId) {
@@ -513,7 +562,7 @@ class Settings extends ChangeNotifier {
   bool guardrailIsAiFor(String protocolId) =>
       guardFeatureFor(protocolId) == guardFeatureAiDrowsiness;
 
-  /// Warning sound shown in the guardrail gear dialog (`softBowl`/`chime`/
+  /// Warning sound shown in the Guardrail tap dialog (`softBowl`/`chime`/
   /// `cough`/`alarm`/`none`). Placeholder asset names — the files land later.
   String get warningSoundName =>
       _prefs.getString(_warningSoundKey) ?? 'softBowl';

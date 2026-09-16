@@ -48,16 +48,30 @@ void main() {
     expect(settings.guardFeatureFor('recordOnly'), guardFeatureNone);
   });
 
-  test('mixed AI leftovers: first freeze-order isAi wins guard_model', () async {
-    SharedPreferences.setMockInitialValues({
-      'guardrail_mode': jsonEncode({
-        'drowsiness': 'drowsinessLunaLarge',
-        'twilight': 'drowsinessReveBase',
-      }),
-    });
+  test(
+    'mixed AI leftovers: first freeze-order isAi wins guard_model',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'guardrail_mode': jsonEncode({
+          'drowsiness': 'drowsinessLunaLarge',
+          'twilight': 'drowsinessReveBase',
+        }),
+      });
+      final settings = await Settings.load();
+      expect(settings.guardModel, 'luna_large');
+      expect(settings.guardFeatureFor('drowsiness'), guardFeatureAiDrowsiness);
+      expect(settings.guardFeatureFor('twilight'), guardFeatureAiDrowsiness);
+    },
+  );
+
+  test('inhibit ceiling overrides persist per protocol', () async {
+    SharedPreferences.setMockInitialValues({});
     final settings = await Settings.load();
-    expect(settings.guardModel, 'luna_large');
-    expect(settings.guardFeatureFor('drowsiness'), guardFeatureAiDrowsiness);
-    expect(settings.guardFeatureFor('twilight'), guardFeatureAiDrowsiness);
+    expect(settings.inhibitCeilingOverrides('concentration'), isEmpty);
+    await settings.setInhibitCeiling('concentration', 'beta', 0.22);
+    expect(settings.inhibitCeilingOverrides('concentration')['beta'], 0.22);
+    expect(settings.inhibitCeilingOverrides('drowsiness'), isEmpty);
+    await settings.clearInhibitCeilingOverrides('concentration');
+    expect(settings.inhibitCeilingOverrides('concentration'), isEmpty);
   });
 }

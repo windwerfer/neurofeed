@@ -215,6 +215,9 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 | Incomplete session | leftover `session_*` reopens summary | `showCrashRecoveryDialog` | `feedback/crash_recovery.dart` | Launch leftover `session_*` → `FeedbackDashboardView` (Save/Discard). Not a dialog. Not the recording dialog. |
 | Pause / Resume / End | phase controls | `pause` / `resume` / `end` | `feedback_state.dart` | |
 | Guide | `Guide` | `_GuideCard` | `feedback_session.dart` | Bottom, under Pause/End. |
+| Session Settings | `Session Settings` | `_SessionSettingsCard` | `feedback_session.dart` | Idle, playing, paused. |
+| Feedback Sound | `Feedback Sound` | `_FeedbackTile` | `feedback_session.dart` | Tap picks output. Gear opens Target Settings: reward threshold plus 0–2 inhibit ceiling sliders. |
+| Guardrail | `Guardrail` | `_GuardrailTile` | `feedback_session.dart` | Same layout as Feedback Sound. Tap opens scorer dialog (enable switch top right, engine, warning sound). Gear opens warning threshold; AI also shows the fixed δ ceiling. |
 | Reward chip | `Reward` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Depressed = on. Default on. Omitted without a reward lane. Persist `Settings.trustRewardVisible`. |
 | Guard chip | `Guard` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Default off; **on** when Reward is omitted (`guardrailOnly`). Omitted when protocol has no guard or Session Settings guard is `none`. Persist `Settings.trustGuardVisible`. |
 | More chip | `More` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Default on. Readouts under visible lane(s). `recordOnly` hides the whole row. Persist `Settings.trustMoreVisible`. |

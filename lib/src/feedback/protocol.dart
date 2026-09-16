@@ -94,6 +94,37 @@ TargetCondition parseInhibit(Map<String, Object?> json) {
   }
 }
 
+String inhibitTag(TargetCondition c) => switch (c) {
+  BetaCeiling() => 'beta',
+  DeltaCeiling() => 'delta',
+};
+
+double inhibitMax(TargetCondition c) => switch (c) {
+  BetaCeiling(:final maxBetaRel) => maxBetaRel,
+  DeltaCeiling(:final maxDeltaRel) => maxDeltaRel,
+};
+
+String inhibitSliderLabel(TargetCondition c) => switch (c) {
+  BetaCeiling() => 'Beta ceiling',
+  DeltaCeiling() => 'Delta ceiling',
+};
+
+/// Overlay session ceiling tweaks onto the protocol's inhibit list. Unknown
+/// tags are ignored; missing tags keep the document max.
+List<TargetCondition> overlayInhibitCeilings(
+  List<TargetCondition> base,
+  Map<String, double> overrides,
+) {
+  if (overrides.isEmpty) return base;
+  return [
+    for (final c in base)
+      switch (c) {
+        BetaCeiling() => BetaCeiling(overrides['beta'] ?? c.maxBetaRel),
+        DeltaCeiling() => DeltaCeiling(overrides['delta'] ?? c.maxDeltaRel),
+      },
+  ];
+}
+
 /// User-facing copy for a protocol document.
 class ProtocolCopy {
   const ProtocolCopy({
