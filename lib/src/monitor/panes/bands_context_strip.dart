@@ -156,7 +156,7 @@ class _BandsContextStripState extends State<BandsContextStrip> {
           const Positioned.fill(child: MonitorWaitingSignal()),
         if (!cinema)
           Positioned(
-            left: TimeSeriesPanePainter.yGutter,
+            left: 8,
             top: 0,
             child: _StripWindowMenu(
               viewport: _strip,

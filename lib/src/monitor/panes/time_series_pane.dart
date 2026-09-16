@@ -10,6 +10,8 @@ import 'package:muse_ml/src/monitor/viewport_controller.dart';
 
 const double kBandsLogEpsilon = 1e-12;
 
+const double kBandTickMergeSeconds = 0.25;
+
 class BandPoint {
   const BandPoint(this.elapsed, this.db);
   final double elapsed;
@@ -58,15 +60,40 @@ List<List<BandPoint>> buildBandSeries({
       }
     }
     final keys = byT.keys.toList()..sort();
-    series.add([
-      for (final k in keys)
-        BandPoint(
-          k / 1000.0 - origin,
-          byT[k]!.reduce((a, b) => a + b) / byT[k]!.length,
-        ),
-    ]);
+    series.add(
+      mergeBandTickPoints([
+        for (final k in keys)
+          BandPoint(
+            k / 1000.0 - origin,
+            byT[k]!.reduce((a, b) => a + b) / byT[k]!.length,
+          ),
+      ]),
+    );
   }
   return series;
+}
+
+List<BandPoint> mergeBandTickPoints(Iterable<BandPoint> pts) {
+  final sorted = pts.toList()..sort((a, b) => a.elapsed.compareTo(b.elapsed));
+  if (sorted.length <= 1) return sorted;
+  final out = <BandPoint>[];
+  var sumT = sorted[0].elapsed;
+  var sumY = sorted[0].db;
+  var n = 1;
+  for (var i = 1; i < sorted.length; i++) {
+    if (sorted[i].elapsed - sorted[i - 1].elapsed <= kBandTickMergeSeconds) {
+      sumT += sorted[i].elapsed;
+      sumY += sorted[i].db;
+      n++;
+    } else {
+      out.add(BandPoint(sumT / n, sumY / n));
+      sumT = sorted[i].elapsed;
+      sumY = sorted[i].db;
+      n = 1;
+    }
+  }
+  out.add(BandPoint(sumT / n, sumY / n));
+  return out;
 }
 
 (double, double)? highlightFractions({
@@ -296,10 +323,17 @@ class TimeSeriesPanePainter extends CustomPainter {
     this.drawLegend = true,
   });
 
-  static const double yGutter = 44;
-  static const double legendGutter = 68;
+  static const double yGutter = 0;
+  static const double legendGutter = 0;
   static const double xGutter = 22;
   static const double topGutter = 18;
+
+  static Rect chartRect(Size size) => Rect.fromLTWH(
+    yGutter,
+    topGutter,
+    (size.width - yGutter - legendGutter).clamp(8, double.infinity),
+    (size.height - topGutter - xGutter).clamp(8, double.infinity),
+  );
 
   final List<List<BandPoint>> series;
   final ViewportController viewport;
@@ -318,12 +352,7 @@ class TimeSeriesPanePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final chart = Rect.fromLTWH(
-      yGutter,
-      topGutter,
-      (size.width - yGutter - legendGutter).clamp(8, double.infinity),
-      (size.height - topGutter - xGutter).clamp(8, double.infinity),
-    );
+    final chart = chartRect(size);
     if (chart.width <= 0 || chart.height <= 0) return;
 
     final visStart = viewport.stripVisibleStart(
@@ -506,7 +535,7 @@ class TimeSeriesPanePainter extends CustomPainter {
       text: TextSpan(text: 'dB', style: style.copyWith(fontSize: 11)),
       textDirection: TextDirection.ltr,
     )..layout();
-    title.paint(canvas, Offset(8, chart.top - title.height - 2));
+    title.paint(canvas, Offset(chart.left + 4, chart.top - title.height - 2));
 
     for (final v in _yTicks(chart.height)) {
       final py = _yToPx(chart, v);
@@ -517,7 +546,7 @@ class TimeSeriesPanePainter extends CustomPainter {
         text: TextSpan(text: text, style: style),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(chart.left - tp.width - 4, py - tp.height / 2));
+      tp.paint(canvas, Offset(chart.left + 4, py - tp.height / 2));
     }
   }
 
@@ -572,7 +601,6 @@ class TimeSeriesPanePainter extends CustomPainter {
   }
 
   void _drawLegend(Canvas canvas, Rect chart) {
-    final x = chart.right + 8;
     var y = chart.top;
     for (var i = 0; i < bandNames.length && i < bandColors.length; i++) {
       final tp = TextPainter(
@@ -582,7 +610,7 @@ class TimeSeriesPanePainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(x, y));
+      tp.paint(canvas, Offset(chart.right - tp.width - 8, y));
       y += tp.height + 4;
     }
   }
