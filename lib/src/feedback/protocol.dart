@@ -327,7 +327,7 @@ class ProtocolDocument {
   final int schemaVersion;
   final ProtocolCopy copy;
   final int colorValue;
-  Color get color => Color(colorValue);
+  Color get color => Color(colorValue | 0xFF000000);
   final String calibration;
   final bool calibrationSkippable;
   final ProtocolBackground background;
