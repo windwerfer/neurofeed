@@ -55,24 +55,23 @@ above-the-line **and** inhibit fail. Priority: noisy > held back > below
 
 ---
 
-## Inhibit pane
+## Inhibit panes
 
 Shown under Reward when the protocol has inhibit (`betaCeiling` /
 `deltaCeiling`). Hidden if Reward is off or `inhibit: []`. Same
-Follow window as Reward.
+Follow window as Reward. **One pane per ceiling** (`trustInhibitSpecs`):
+0, 1, or 2. Reward ATR pane is always shown while Reward is on.
 
-One pane. Two series if both ceilings are set (β purple, δ cyan —
-`bandColors`). Each series:
+Each pane is one series (β purple, δ cyan — `bandColors`):
 
 - Ceiling **line** in the series color (pass zone is `[0, ceiling]`).
 - Light fill from 0 to that ceiling.
-- Overshoot (Y > ceiling) in a hue-keeping blend toward `error` so two
-  overshoots cannot collapse into one red line. Labels `beta high` /
-  `delta high` at zone-exit.
+- Overshoot (Y > ceiling) in a hue-keeping blend toward `error`. Labels
+  `beta high` / `delta high` at zone-exit.
 
 Dirty: dotted, hold last clean relative Y. Not overshoot, not a wash.
 
-Y domain is relative power, padded so the highest ceiling is not
+Y domain is relative power, padded so the pane’s ceiling is not
 squashed (`inhibitAxisMax`).
 
 Files: `trust_inhibit.dart` (specs, colors, run split),
@@ -82,9 +81,12 @@ Files: `trust_inhibit.dart` (specs, colors, run split),
 
 ## Guard
 
-Unchanged: two panes (percentile warn + native δ ceiling 0–0.5 / line
-0.25). Held-back / inhibit wash does **not** apply. One More block under
-both.
+One pane per distinct warn signal (`trustGuardPaneSpecs`). Guard on
+always has at least the percentile warn pane. Band-math (`band.delta`)
+is one signal — warn only. AI (`ai.drowsiness`) scores sleep-dir and
+still rails on always-on frontal δ — two panes (percentile warn + native
+δ ceiling 0–0.5 / line 0.25). Held-back / inhibit wash does **not**
+apply. One More block under the pane(s).
 
 ---
 
