@@ -217,9 +217,10 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - Audio outputs: `lib/src/audio/output_ids.dart`.
 - Protocol builder: `lib/src/views/protocol_builder.dart`.
 - Trust graphs: `lib/src/feedback/trust/` — Follow-only session plots, not
-  GraphShell. Reward pane + optional inhibit pane (same window) when the
-  protocol has `betaCeiling` / `deltaCeiling`. Gray wash on reward only
-  while inhibit is out. Spec: `.ai/trust-graphs.md`.
+  GraphShell. Reward pane always while Reward is on; 0–2 inhibit panes
+  (same window) from `betaCeiling` / `deltaCeiling`. Guard is 1–2 panes
+  from distinct warn signals. Gray wash on reward only while inhibit is
+  out. Spec: `.ai/trust-graphs.md`.
 - Release CI: `.ai/release.md`. Toolchain: `rust/rust-toolchain.toml` (1.97.1)
   kept in sync with workflow `RUST_VERSION`.
 

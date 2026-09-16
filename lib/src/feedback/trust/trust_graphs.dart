@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:muse_ml/src/feedback/guard_lane.dart';
+import 'package:muse_ml/src/feedback/trust/trust_guard.dart';
 import 'package:muse_ml/src/feedback/trust/trust_inhibit.dart';
 import 'package:muse_ml/src/feedback/trust/trust_more.dart';
 import 'package:muse_ml/src/feedback/trust/trust_pane.dart';
@@ -24,6 +25,7 @@ class TrustGraphsColumn extends StatefulWidget {
     required this.rewardColor,
     required this.guardColor,
     this.inhibit = const [],
+    this.guardPanes = const [TrustGuardPaneId.warn],
   });
 
   final TrustTrace trace;
@@ -36,6 +38,7 @@ class TrustGraphsColumn extends StatefulWidget {
   final Color rewardColor;
   final Color guardColor;
   final List<TrustInhibitSpec> inhibit;
+  final List<TrustGuardPaneId> guardPanes;
 
   @override
   State<TrustGraphsColumn> createState() => _TrustGraphsColumnState();
@@ -125,6 +128,11 @@ class _TrustGraphsColumnState extends State<TrustGraphsColumn>
     }
     final newest = widget.trace.newestElapsed();
     final wallNow = DateTime.now().millisecondsSinceEpoch / 1000.0;
+    final guardPanes = widget.showGuard
+        ? (widget.guardPanes.isEmpty
+              ? const [TrustGuardPaneId.warn]
+              : widget.guardPanes)
+        : const <TrustGuardPaneId>[];
     return Listener(
       onPointerSignal: _onPointerSignal,
       child: GestureDetector(
@@ -147,18 +155,18 @@ class _TrustGraphsColumnState extends State<TrustGraphsColumn>
                   seriesColor: widget.rewardColor,
                 ),
               ),
-              if (widget.inhibit.isNotEmpty) ...[
+              for (final spec in widget.inhibit) ...[
                 const SizedBox(height: 8),
                 SizedBox(
                   height: 112,
                   child: InhibitTrustPane(
-                    key: const Key('trust-inhibit-pane'),
+                    key: Key('trust-inhibit-pane-${spec.id.name}'),
                     samples: widget.trace.reward,
                     marks: widget.trace.marks,
                     viewport: widget.viewport,
                     newestElapsed: newest,
                     wallNow: wallNow,
-                    specs: widget.inhibit,
+                    spec: spec,
                   ),
                 ),
               ],
@@ -172,33 +180,17 @@ class _TrustGraphsColumnState extends State<TrustGraphsColumn>
               const SizedBox(height: 12),
             ],
             if (widget.showGuard) ...[
-              SizedBox(
-                height: 128,
-                child: GuardWarnPane(
-                  key: const Key('trust-guard-warn-pane'),
-                  samples: widget.trace.guard,
-                  marks: widget.trace.marks,
-                  viewport: widget.viewport,
-                  newestElapsed: newest,
-                  wallNow: wallNow,
-                  label: widget.guardLabel,
-                  seriesColor: widget.guardColor,
+              for (var i = 0; i < guardPanes.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                SizedBox(
+                  height: 128,
+                  child: _guardPane(
+                    guardPanes[i],
+                    newest: newest,
+                    wallNow: wallNow,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 128,
-                child: GuardCeilingPane(
-                  key: const Key('trust-guard-ceiling-pane'),
-                  samples: widget.trace.guard,
-                  marks: widget.trace.marks,
-                  viewport: widget.viewport,
-                  newestElapsed: newest,
-                  wallNow: wallNow,
-                  seriesColor: widget.guardColor,
-                  ceiling: guardrailDeltaCeiling,
-                ),
-              ),
+              ],
               if (widget.showMore) ...[
                 const SizedBox(height: 8),
                 TrustGuardMore(
@@ -211,5 +203,36 @@ class _TrustGraphsColumnState extends State<TrustGraphsColumn>
         ),
       ),
     );
+  }
+
+  Widget _guardPane(
+    TrustGuardPaneId id, {
+    required double newest,
+    required double wallNow,
+  }) {
+    switch (id) {
+      case TrustGuardPaneId.warn:
+        return GuardWarnPane(
+          key: const Key('trust-guard-warn-pane'),
+          samples: widget.trace.guard,
+          marks: widget.trace.marks,
+          viewport: widget.viewport,
+          newestElapsed: newest,
+          wallNow: wallNow,
+          label: widget.guardLabel,
+          seriesColor: widget.guardColor,
+        );
+      case TrustGuardPaneId.ceiling:
+        return GuardCeilingPane(
+          key: const Key('trust-guard-ceiling-pane'),
+          samples: widget.trace.guard,
+          marks: widget.trace.marks,
+          viewport: widget.viewport,
+          newestElapsed: newest,
+          wallNow: wallNow,
+          seriesColor: widget.guardColor,
+          ceiling: guardrailDeltaCeiling,
+        );
+    }
   }
 }

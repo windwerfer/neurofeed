@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muse_ml/src/feedback/feedback_phase.dart';
+import 'package:muse_ml/src/feedback/guardrail_mode.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/session_metadata.dart';
 import 'package:muse_ml/src/feedback/trust/trust_chips.dart';
 import 'package:muse_ml/src/feedback/trust/trust_gestures.dart';
 import 'package:muse_ml/src/feedback/trust/trust_graphs.dart';
+import 'package:muse_ml/src/feedback/trust/trust_guard.dart';
 import 'package:muse_ml/src/feedback/trust/trust_inhibit.dart';
 import 'package:muse_ml/src/feedback/trust/trust_more.dart';
 import 'package:muse_ml/src/feedback/trust/trust_runs.dart';
@@ -282,7 +284,8 @@ void main() {
       expect(find.byKey(const Key('trust-reward-more')), findsOneWidget);
       expect(find.byKey(const Key('trust-guard-more')), findsNothing);
       expect(find.byKey(const Key('trust-reward-pane')), findsOneWidget);
-      expect(find.byKey(const Key('trust-inhibit-pane')), findsNothing);
+      expect(find.byKey(const Key('trust-inhibit-pane-beta')), findsNothing);
+      expect(find.byKey(const Key('trust-inhibit-pane-delta')), findsNothing);
       expect(find.byKey(const Key('trust-guard-warn-pane')), findsNothing);
 
       await tester.pumpWidget(
@@ -298,6 +301,7 @@ void main() {
               guardLabel: 'δ',
               rewardColor: Colors.green,
               guardColor: Colors.blue,
+              guardPanes: trustGuardPaneSpecs(guardFeatureAiDrowsiness),
             ),
           ),
         ),
@@ -328,37 +332,66 @@ void main() {
       expect(find.byKey(const Key('trust-guard-more')), findsNothing);
     });
 
-    testWidgets('inhibit pane under Reward when protocol has inhibit', (
+    testWidgets('inhibit panes 0/1/2 under Reward; hidden if Reward is off', (
       tester,
     ) async {
       final trace = TrustTrace();
       final viewport = TrustViewport();
+      final none = trustInhibitSpecs(const []);
+      final one = trustInhibitSpecs(const [BetaCeiling(0.25)]);
       final two = trustInhibitSpecs([
         const BetaCeiling(0.25),
         const DeltaCeiling(0.5),
       ]);
-      await tester.pumpWidget(
+
+      Future<void> pump({
+        required bool showReward,
+        required List<TrustInhibitSpec> inhibit,
+      }) => tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: TrustGraphsColumn(
               trace: trace,
               viewport: viewport,
-              showReward: true,
-              showGuard: false,
+              showReward: showReward,
+              showGuard: !showReward,
               showMore: false,
               rewardLabel: 'ATR',
               guardLabel: 'δ',
               rewardColor: Colors.green,
               guardColor: Colors.blue,
-              inhibit: two,
+              inhibit: inhibit,
             ),
           ),
         ),
       );
-      expect(find.byKey(const Key('trust-reward-pane')), findsOneWidget);
-      expect(find.byKey(const Key('trust-inhibit-pane')), findsOneWidget);
 
-      await tester.pumpWidget(
+      await pump(showReward: true, inhibit: none);
+      expect(find.byKey(const Key('trust-reward-pane')), findsOneWidget);
+      expect(find.byKey(const Key('trust-inhibit-pane-beta')), findsNothing);
+      expect(find.byKey(const Key('trust-inhibit-pane-delta')), findsNothing);
+
+      await pump(showReward: true, inhibit: one);
+      expect(find.byKey(const Key('trust-reward-pane')), findsOneWidget);
+      expect(find.byKey(const Key('trust-inhibit-pane-beta')), findsOneWidget);
+      expect(find.byKey(const Key('trust-inhibit-pane-delta')), findsNothing);
+
+      await pump(showReward: true, inhibit: two);
+      expect(find.byKey(const Key('trust-reward-pane')), findsOneWidget);
+      expect(find.byKey(const Key('trust-inhibit-pane-beta')), findsOneWidget);
+      expect(find.byKey(const Key('trust-inhibit-pane-delta')), findsOneWidget);
+
+      await pump(showReward: false, inhibit: two);
+      expect(find.byKey(const Key('trust-reward-pane')), findsNothing);
+      expect(find.byKey(const Key('trust-inhibit-pane-beta')), findsNothing);
+      expect(find.byKey(const Key('trust-inhibit-pane-delta')), findsNothing);
+    });
+
+    testWidgets('guard panes follow distinct warn signals', (tester) async {
+      final trace = TrustTrace();
+      final viewport = TrustViewport();
+
+      Future<void> pump(List<TrustGuardPaneId> panes) => tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: TrustGraphsColumn(
@@ -371,12 +404,32 @@ void main() {
               guardLabel: 'δ',
               rewardColor: Colors.green,
               guardColor: Colors.blue,
-              inhibit: two,
+              guardPanes: panes,
             ),
           ),
         ),
       );
-      expect(find.byKey(const Key('trust-inhibit-pane')), findsNothing);
+
+      await pump(trustGuardPaneSpecs(guardFeatureBandDelta));
+      expect(find.byKey(const Key('trust-guard-warn-pane')), findsOneWidget);
+      expect(find.byKey(const Key('trust-guard-ceiling-pane')), findsNothing);
+
+      await pump(trustGuardPaneSpecs(guardFeatureAiDrowsiness));
+      expect(find.byKey(const Key('trust-guard-warn-pane')), findsOneWidget);
+      expect(find.byKey(const Key('trust-guard-ceiling-pane')), findsOneWidget);
+    });
+  });
+
+  group('guard panes', () {
+    test('specs: none empty; band-math warn only; AI warn + ceiling', () {
+      expect(trustGuardPaneSpecs(guardFeatureNone), isEmpty);
+      expect(trustGuardPaneSpecs(guardFeatureBandDelta), [
+        TrustGuardPaneId.warn,
+      ]);
+      expect(trustGuardPaneSpecs(guardFeatureAiDrowsiness), [
+        TrustGuardPaneId.warn,
+        TrustGuardPaneId.ceiling,
+      ]);
     });
   });
 

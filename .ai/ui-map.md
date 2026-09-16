@@ -219,13 +219,13 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 | Guard chip | `Guard` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Default off; **on** when Reward is omitted (`guardrailOnly`). Omitted when protocol has no guard or Session Settings guard is `none`. Persist `Settings.trustGuardVisible`. |
 | More chip | `More` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Default on. Readouts under visible lane(s). `recordOnly` hides the whole row. Persist `Settings.trustMoreVisible`. |
 | Reward graph | catalog `shortLabel` (`ATR` / `TAR` / `BTR` / `α`) | `RewardTrustPane` | `feedback/trust/trust_pane.dart` | Playing/paused only. Follow-only, default 75 s. Not `% calm`. Gray **wash** only while inhibit is out (any reward Y). Stroke stays series color. Dirty is dotted. |
-| Inhibit graph | `β` / `δ` / `inhibit` | `InhibitTrustPane` | `feedback/trust/trust_pane.dart` | Under Reward when the protocol has inhibit. Same Follow window. One pane; two series if β and δ. Ceiling line matches series color. Overshoot uses a distinct hue-keeping color. Hidden if Reward is off. |
-| Guard graphs | `warn` / `δ ceiling` | `GuardWarnPane` / `GuardCeilingPane` | `feedback/trust/trust_pane.dart` | Two panes. Playing/paused only. |
+| Inhibit graph | `β` / `δ` / `inhibit` | `InhibitTrustPane` | `feedback/trust/trust_pane.dart` | Under Reward when the protocol has inhibit. Same Follow window. One pane per ceiling (0 / 1 / 2). Ceiling line matches series color. Overshoot uses a distinct hue-keeping color. Hidden if Reward is off. |
+| Guard graphs | `warn` / `δ ceiling` | `GuardWarnPane` / `GuardCeilingPane` | `feedback/trust/trust_pane.dart` | Playing/paused only. Pane count from `trustGuardPaneSpecs`: band-math = warn only; AI = warn + δ ceiling. |
 | Held back | `beta high` / `delta high` | `TrustInhibitSpec.overshootLabel` | `feedback/trust/trust_inhibit.dart` | Labels on the inhibit pane at zone-exit. More verdict `Held back` is still above-the-line + inhibit fail. |
 | Noisy | `pads` / `movement` / dotted | dirty run | `trust_runs.dart` | Isolated 1 s blink = dotted, no text. |
 | Blink mark / Jaw mark | `Blink` / `Jaw` | `TrustGestureMark` | `feedback/trust/trust_trace.dart` | Live ring even if Gesture markers persist is off. Not eye up/down. |
 | Reward More | `In zone` / `Below the line` / `Noisy — not counting` / `Held back` | `TrustRewardMore` | `feedback/trust/trust_more.dart` | Strip + Now rail + Hold. Strip glyphs from the first sample. |
-| Guard More | `Warning` / `Quiet` / `Noisy` | `TrustGuardMore` | `feedback/trust/trust_more.dart` | One block under both guard panes. |
+| Guard More | `Warning` / `Quiet` / `Noisy` | `TrustGuardMore` | `feedback/trust/trust_more.dart` | One block under the guard pane(s). |
 | Nerd stats | science icon / sheet title `Nerd` | `NerdSheet` | `feedback/trust/nerd_sheet.dart` | App-bar science icon opens the sheet. Piles + band stack + (i) rows. Old bubble gone. Guard block only if the lane ran. Cooldown 20 s is nerd-only. Feature probe stays debug+sim, not in the sheet. |
 | Feature probe | `Feature probe` | `_FeatureProbeCard` | `feedback_session.dart` | Debug + sim connected only. Master switch + one slider per present feature id. Below Session Settings. Not in the nerd sheet. |
 

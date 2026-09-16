@@ -35,7 +35,7 @@ JSON names IDs. Rust owns `(device, feature)` electrodes and autodrop.
 | CalibrationRunner | `lib/src/feedback/calibration_runner.dart` | Compose stages from subscribed features |
 | Gate names | `lib/src/feedback/gate_electrodes.dart` | Names, never indices, resolved against the device montage |
 | Feature probe | `lib/src/feedback/feature_override.dart` | Debug + sim: latch native `FeatureDto.value` before the bus/lanes |
-| Trust graphs | `lib/src/feedback/trust/` | Follow-only Reward / Guard plots + optional inhibit pane. Spec: [../trust-graphs.md](../trust-graphs.md) |
+| Trust graphs | `lib/src/feedback/trust/` | Follow-only Reward / Guard plots; 0–2 inhibit panes; 1–2 guard panes. Spec: [../trust-graphs.md](../trust-graphs.md) |
 
 v1 feature ids (`assets/features.json` + `SPECS` in `features.rs`):
 

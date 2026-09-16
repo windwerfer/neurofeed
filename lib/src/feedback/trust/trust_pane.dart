@@ -66,7 +66,7 @@ class InhibitTrustPane extends StatelessWidget {
     required this.viewport,
     required this.newestElapsed,
     required this.wallNow,
-    required this.specs,
+    required this.spec,
   });
 
   final List<TrustRewardSample> samples;
@@ -74,7 +74,7 @@ class InhibitTrustPane extends StatelessWidget {
   final TrustViewport viewport;
   final double newestElapsed;
   final double wallNow;
-  final List<TrustInhibitSpec> specs;
+  final TrustInhibitSpec spec;
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +87,7 @@ class InhibitTrustPane extends StatelessWidget {
           visStart: viewport.visibleStart(newestElapsed, wallNow: wallNow),
           visEnd: viewport.visibleEnd(newestElapsed, wallNow: wallNow),
           windowSeconds: viewport.windowSeconds,
-          specs: specs,
+          spec: spec,
           axisColor: theme.colorScheme.onSurfaceVariant,
           onSurface: theme.colorScheme.onSurface,
           errorColor: theme.colorScheme.error,
@@ -433,7 +433,7 @@ class InhibitTrustPainter extends CustomPainter {
     required this.visStart,
     required this.visEnd,
     required this.windowSeconds,
-    required this.specs,
+    required this.spec,
     required this.axisColor,
     required this.onSurface,
     required this.errorColor,
@@ -444,7 +444,7 @@ class InhibitTrustPainter extends CustomPainter {
   final double visStart;
   final double visEnd;
   final double windowSeconds;
-  final List<TrustInhibitSpec> specs;
+  final TrustInhibitSpec spec;
   final Color axisColor;
   final Color onSurface;
   final Color errorColor;
@@ -454,13 +454,14 @@ class InhibitTrustPainter extends CustomPainter {
     final plot = _chartRect(size);
     if (plot.width <= 0 || plot.height <= 0) return;
     final span = visEnd - visStart;
-    if (span <= 0 || specs.isEmpty) return;
+    if (span <= 0) return;
     const yMin = 0.0;
-    final yMax = inhibitAxisMax(specs);
+    final yMax = inhibitAxisMax([spec]);
+    final series = inhibitSeriesColor(spec.id);
     _paintHeader(
       canvas,
       size,
-      left: inhibitPaneLabel(specs),
+      left: spec.shortLabel,
       right: 'inhibit',
       color: axisColor,
     );
@@ -487,49 +488,35 @@ class InhibitTrustPainter extends CustomPainter {
         if (s.t >= visStart - 1 && s.t <= visEnd + 1) s,
     ];
 
-    final byCeiling = [...specs]
-      ..sort((a, b) => b.ceiling.compareTo(a.ceiling));
-    for (final spec in byCeiling) {
-      final top = _y(spec.ceiling.clamp(yMin, yMax), plot, yMin, yMax);
-      canvas.drawRect(
-        Rect.fromLTRB(plot.left, top, plot.right, plot.bottom),
-        Paint()..color = inhibitSeriesColor(spec.id).withValues(alpha: 0.08),
-      );
-    }
+    final top = _y(spec.ceiling.clamp(yMin, yMax), plot, yMin, yMax);
+    canvas.drawRect(
+      Rect.fromLTRB(plot.left, top, plot.right, plot.bottom),
+      Paint()..color = series.withValues(alpha: 0.08),
+    );
+    _paintHLine(canvas, plot, top, color: series, alpha: 0.9, strokeWidth: 1.2);
+    _paintText(
+      canvas,
+      spec.ceiling.toStringAsFixed(2),
+      Offset(plot.left + 2, top - 12),
+      series,
+      9,
+    );
 
-    for (final spec in specs) {
-      final series = inhibitSeriesColor(spec.id);
-      final y = _y(spec.ceiling.clamp(yMin, yMax), plot, yMin, yMax);
-      _paintHLine(canvas, plot, y, color: series, alpha: 0.9, strokeWidth: 1.2);
-      _paintText(
-        canvas,
-        spec.ceiling.toStringAsFixed(2),
-        Offset(plot.left + 2, y - 12),
-        series,
-        9,
-      );
-    }
-
-    final queued = <_InhibitStroke>[];
-    for (final spec in specs) {
-      final series = inhibitSeriesColor(spec.id);
-      final overshoot = inhibitOvershootColor(spec.id, errorColor);
-      final runs = inhibitRuns(vis, spec);
-      for (var i = 0; i < runs.length; i++) {
-        queued.add(
-          _InhibitStroke(
-            spec: spec,
-            run: runs[i],
-            next: i + 1 < runs.length ? runs[i + 1].samples.first : null,
-            color: inhibitRunColor(
-              runs[i].kind,
-              series: series,
-              overshoot: overshoot,
-            ),
+    final overshoot = inhibitOvershootColor(spec.id, errorColor);
+    final runs = inhibitRuns(vis, spec);
+    final queued = <_InhibitStroke>[
+      for (var i = 0; i < runs.length; i++)
+        _InhibitStroke(
+          spec: spec,
+          run: runs[i],
+          next: i + 1 < runs.length ? runs[i + 1].samples.first : null,
+          color: inhibitRunColor(
+            runs[i].kind,
+            series: series,
+            overshoot: overshoot,
           ),
-        );
-      }
-    }
+        ),
+    ];
     for (final stroke in queued) {
       if (stroke.run.kind == TrustInhibitKind.overshoot) continue;
       _paintInhibitRun(
@@ -546,7 +533,6 @@ class InhibitTrustPainter extends CustomPainter {
         dashed: stroke.run.kind == TrustInhibitKind.dirty,
       );
     }
-    var overshootLabelSlot = 0;
     for (final stroke in queued) {
       if (stroke.run.kind != TrustInhibitKind.overshoot) continue;
       _paintInhibitRun(
@@ -564,15 +550,11 @@ class InhibitTrustPainter extends CustomPainter {
       );
       _paintText(
         canvas,
-        stroke.spec.overshootLabel,
-        Offset(
-          _x(stroke.run.tStart, plot, visStart, span) + 2,
-          plot.top + 2 + overshootLabelSlot * 12,
-        ),
+        spec.overshootLabel,
+        Offset(_x(stroke.run.tStart, plot, visStart, span) + 2, plot.top + 2),
         stroke.color,
         10,
       );
-      overshootLabelSlot++;
     }
 
     _paintMarks(
@@ -597,7 +579,7 @@ class InhibitTrustPainter extends CustomPainter {
       old.visStart != visStart ||
       old.visEnd != visEnd ||
       old.windowSeconds != windowSeconds ||
-      old.specs != specs ||
+      old.spec != spec ||
       old.errorColor != errorColor;
 }
 
