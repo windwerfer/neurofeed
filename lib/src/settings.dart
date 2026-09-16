@@ -561,7 +561,8 @@ class Settings extends ChangeNotifier {
   }
 
   static const String _enableSimulatedDevicesKey = 'enable_simulated_devices';
-  static const String _lastCalibrationBaselineKey = 'last_calibration_baseline';
+  static const String _lastCalibrationBaselinesKey =
+      'last_calibration_baselines';
 
   /// Debug mode. When true, Simulator appears in the connect dropdown and
   /// `sim:*` last-device ids may autoconnect. Defaults to false.
@@ -573,28 +574,41 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
-  LastCalibrationBaseline? get lastCalibrationBaseline {
-    final raw = _prefs.getString(_lastCalibrationBaselineKey);
-    if (raw == null || raw.isEmpty) {
+  LastCalibrationBaseline? lastCalibrationBaselineFor(String deviceId) {
+    if (deviceId.isEmpty) {
       return null;
     }
-    try {
-      final parsed = LastCalibrationBaseline.fromJson(jsonDecode(raw));
-      if (parsed == null || parsed.isEmpty) {
-        return null;
-      }
-      return parsed;
-    } catch (_) {
-      return null;
-    }
+    return _lastCalibrationBaselines()[deviceId];
   }
 
-  Future<void> setLastCalibrationBaseline(LastCalibrationBaseline value) async {
+  Future<void> setLastCalibrationBaseline(
+    String deviceId,
+    LastCalibrationBaseline value,
+  ) async {
+    if (deviceId.isEmpty || value.isEmpty) {
+      return;
+    }
+    final next = Map<String, LastCalibrationBaseline>.from(
+      _lastCalibrationBaselines(),
+    );
+    next[deviceId] = value;
     await _prefs.setString(
-      _lastCalibrationBaselineKey,
-      jsonEncode(value.toJson()),
+      _lastCalibrationBaselinesKey,
+      jsonEncode(LastCalibrationBaseline.encodeStore(next)),
     );
     notifyListeners();
+  }
+
+  Map<String, LastCalibrationBaseline> _lastCalibrationBaselines() {
+    final raw = _prefs.getString(_lastCalibrationBaselinesKey);
+    if (raw == null || raw.isEmpty) {
+      return const {};
+    }
+    try {
+      return LastCalibrationBaseline.decodeStore(jsonDecode(raw));
+    } catch (_) {
+      return const {};
+    }
   }
 
   static const String _musicAiCpuWarningKey = 'music_ai_cpu_warning_shown';

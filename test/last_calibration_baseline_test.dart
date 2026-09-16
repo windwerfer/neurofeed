@@ -141,30 +141,80 @@ void main() {
   });
 
   group('Settings last calibration baseline', () {
-    test('persists and reloads', () async {
+    test('persists per device id', () async {
       SharedPreferences.setMockInitialValues({});
       final settings = await Settings.load();
-      expect(settings.lastCalibrationBaseline, isNull);
+      expect(settings.lastCalibrationBaselineFor('muse-a'), isNull);
       await settings.setLastCalibrationBaseline(
+        'muse-a',
         const LastCalibrationBaseline(
           rewardFeatureId: 'band.tar',
           rewardSamples: [1.1, 1.2],
         ),
       );
-      expect(settings.lastCalibrationBaseline?.rewardFeatureId, 'band.tar');
-      expect(settings.lastCalibrationBaseline?.rewardSamples, [1.1, 1.2]);
+      await settings.setLastCalibrationBaseline(
+        'muse-b',
+        const LastCalibrationBaseline(
+          rewardFeatureId: 'band.atr',
+          rewardSamples: [0.4, 0.5],
+        ),
+      );
+      expect(settings.lastCalibrationBaselineFor('muse-a')?.rewardSamples, [
+        1.1,
+        1.2,
+      ]);
+      expect(
+        settings.lastCalibrationBaselineFor('muse-b')?.rewardFeatureId,
+        'band.atr',
+      );
+      expect(
+        settings.lastCalibrationBaselineFor('muse-a')?.rewardFeatureId,
+        'band.tar',
+      );
 
       final reloaded = await Settings.load();
-      expect(reloaded.lastCalibrationBaseline?.rewardFeatureId, 'band.tar');
-      expect(reloaded.lastCalibrationBaseline?.rewardSamples, [1.1, 1.2]);
+      expect(reloaded.lastCalibrationBaselineFor('muse-a')?.rewardSamples, [
+        1.1,
+        1.2,
+      ]);
+      expect(
+        reloaded.lastCalibrationBaselineFor('muse-b')?.rewardFeatureId,
+        'band.atr',
+      );
+    });
+
+    test('empty device id is ignored', () async {
+      SharedPreferences.setMockInitialValues({});
+      final settings = await Settings.load();
+      await settings.setLastCalibrationBaseline(
+        '',
+        const LastCalibrationBaseline(
+          rewardFeatureId: 'band.atr',
+          rewardSamples: [0.5],
+        ),
+      );
+      expect(settings.lastCalibrationBaselineFor(''), isNull);
     });
 
     test('corrupt pref is treated as missing', () async {
       SharedPreferences.setMockInitialValues({
-        'last_calibration_baseline': '{not json',
+        'last_calibration_baselines': '{not json',
       });
       final settings = await Settings.load();
-      expect(settings.lastCalibrationBaseline, isNull);
+      expect(settings.lastCalibrationBaselineFor('muse-a'), isNull);
+    });
+
+    test('decodeStore skips leftover global payload keys', () {
+      final store = LastCalibrationBaseline.decodeStore({
+        'rewardFeatureId': 'band.atr',
+        'rewardSamples': [0.4, 0.5],
+        'muse-a': {
+          'rewardFeatureId': 'band.tar',
+          'rewardSamples': [1.1],
+        },
+      });
+      expect(store.containsKey('muse-a'), isTrue);
+      expect(store.containsKey('rewardFeatureId'), isFalse);
     });
   });
 
