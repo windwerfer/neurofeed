@@ -37,6 +37,7 @@ class FeedbackAudioController {
 
   SoundHandle? _backgroundHandle;
   SoundHandle? _bellHandle;
+  SoundHandle? _calibrationHandle;
   final List<SoundHandle> _chimeHandles = [];
 
   DateTime? _inTargetSince;
@@ -118,6 +119,7 @@ class FeedbackAudioController {
     required double volume,
   }) async {
     final handle = SoLoud.instance.play(source, volume: volume);
+    _calibrationHandle = handle;
     final timeout = calibrationAwaitTimeout(_sourceLength(source));
     final completer = Completer<void>();
     final sub = source.soundEvents.listen((event) {
@@ -134,6 +136,9 @@ class FeedbackAudioController {
         SoLoud.instance.stop(handle);
       } catch (_) {}
     } finally {
+      if (_calibrationHandle == handle) {
+        _calibrationHandle = null;
+      }
       await sub.cancel();
     }
   }
@@ -456,6 +461,11 @@ class FeedbackAudioController {
     _resetRewardState();
     stopWarningAlarm();
     _stopBackground();
+    final calibration = _calibrationHandle;
+    if (calibration != null) {
+      _safeHandle(calibration, SoLoud.instance.stop);
+      _calibrationHandle = null;
+    }
     final bell = _bellHandle;
     if (bell != null) {
       _safeHandle(bell, SoLoud.instance.stop);
