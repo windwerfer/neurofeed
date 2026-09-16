@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
+import 'package:muse_ml/src/feedback/last_calibration_baseline.dart';
 import 'package:muse_ml/src/agent/agent_flags.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
@@ -560,6 +561,7 @@ class Settings extends ChangeNotifier {
   }
 
   static const String _enableSimulatedDevicesKey = 'enable_simulated_devices';
+  static const String _lastCalibrationBaselineKey = 'last_calibration_baseline';
 
   /// Debug mode. When true, Simulator appears in the connect dropdown and
   /// `sim:*` last-device ids may autoconnect. Defaults to false.
@@ -568,6 +570,30 @@ class Settings extends ChangeNotifier {
 
   Future<void> setEnableSimulatedDevices(bool value) async {
     await _prefs.setBool(_enableSimulatedDevicesKey, value);
+    notifyListeners();
+  }
+
+  LastCalibrationBaseline? get lastCalibrationBaseline {
+    final raw = _prefs.getString(_lastCalibrationBaselineKey);
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    try {
+      final parsed = LastCalibrationBaseline.fromJson(jsonDecode(raw));
+      if (parsed == null || parsed.isEmpty) {
+        return null;
+      }
+      return parsed;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> setLastCalibrationBaseline(LastCalibrationBaseline value) async {
+    await _prefs.setString(
+      _lastCalibrationBaselineKey,
+      jsonEncode(value.toJson()),
+    );
     notifyListeners();
   }
 

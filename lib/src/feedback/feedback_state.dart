@@ -18,6 +18,7 @@ import 'package:muse_ml/src/feedback/feedback_recorder.dart';
 import 'package:muse_ml/src/feedback/gate_electrodes.dart';
 import 'package:muse_ml/src/feedback/guard_lane.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
+import 'package:muse_ml/src/feedback/last_calibration_baseline.dart';
 import 'package:muse_ml/src/feedback/live_stats.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
@@ -192,7 +193,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       playClip: (file) => _audio.playCalibration(file),
       writeMetadata: (meta) => _recorder.writeMetadata(meta),
       updateUi: _onCalibrationUi,
-      phaseOf: () => state.phase,
+      isActive: () =>
+          state.phase == FeedbackPhase.calibrating &&
+          !_skipCalibrationRequested,
       protocolOf: () => state.protocol,
       sessionStartAt: () => _sessionStartAt,
       onCollectionEyes: (eyes) => _collectionEyes = eyes,
@@ -267,6 +270,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   DateTime? _sessionStartAt;
   DateTime? _trainingStartAt;
   bool _usedStartAnyway = false;
+  bool _skipCalibrationRequested = false;
   SessionCalibration? _calibrationRecord;
 
   /// In-flight recalibrations that re-anchored the threshold mid-session.
@@ -667,6 +671,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _sessionStartAt = DateTime.now();
     _trainingStartAt = null;
     _usedStartAnyway = false;
+    _skipCalibrationRequested = false;
     _calibrationRecord = null;
     _recalibrations.clear();
     _calibration.reset();
@@ -973,6 +978,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         _greenSeconds++;
         if (_greenSeconds >= greenStableSeconds) {
           _gateTimer?.cancel();
+          if (_skipCalibrationRequested) {
+            return;
+          }
           unawaited(_calibration.playAndBaseline(plan: _calibrationPlan));
         }
         return;
@@ -1023,10 +1031,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           stddev: _engine.baselineStddev,
         );
     _ref.read(liveStatsProvider).setThreshold(threshold);
-    if (_guard.enabled && (_guard.clearCaptured || _guard.bandMath)) {
+    if (!_skipCalibrationRequested &&
+        _guard.enabled &&
+        (_guard.clearCaptured || _guard.bandMath)) {
       _guard.finalizeBaseline(
         warningThresholdPercentile: warningThresholdPercentile,
       );
+    }
+    if (!_skipCalibrationRequested) {
+      _saveLastCalibrationBaseline();
     }
     if (_sessionStartAt != null) {
       _recorder.writeMetadata({
@@ -1036,6 +1049,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         'baselinePercentile': _engine.baselinePercentile,
         'baselineMean': _engine.baselineMean,
         'baselineStddev': _engine.baselineStddev,
+        'skipped': _skipCalibrationRequested,
+        if (_skipCalibrationRequested) 'skipSource': _calibrationSkipSource,
         'timestamp': DateTime.now().toIso8601String(),
         'elapsedSecs':
             DateTime.now().difference(_sessionStartAt!).inMilliseconds / 1000,
@@ -1049,6 +1064,97 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       calibrationChallengeText: null,
     );
     unawaited(startPlaying());
+  }
+
+  String get _calibrationSkipSource {
+    final id = _ref.read(appStateProvider).status.id;
+    return isSimDeviceId(id) ? 'synthetic' : 'last';
+  }
+
+  void _saveLastCalibrationBaseline() {
+    if (!_engine.hasBaseline && _guard.baselineSleepDir.isEmpty) {
+      return;
+    }
+    unawaited(
+      _ref
+          .read(settingsProvider)
+          .setLastCalibrationBaseline(
+            LastCalibrationBaseline(
+              rewardFeatureId: _reward.featureId,
+              rewardSamples: List.of(_engine.baselineSamples),
+              guardFeatureId: _guard.enabled ? _guard.featureId : null,
+              guardSamples: List.of(_guard.baselineSleepDir),
+            ),
+          ),
+    );
+  }
+
+  void _applyLastCalibrationBaseline() {
+    final last = _ref.read(settingsProvider).lastCalibrationBaseline;
+    if (last == null || last.isEmpty) {
+      return;
+    }
+    if (_reward.hasReward) {
+      last.applyReward(_engine);
+      final threshold = _engine.threshold;
+      state = state.copyWith(currentThreshold: threshold);
+      _ref
+          .read(liveStatsProvider)
+          .setBaseline(
+            percentile: _engine.baselinePercentile,
+            count: _engine.baselineCount,
+            mean: _engine.baselineMean,
+            stddev: _engine.baselineStddev,
+          );
+      _ref.read(liveStatsProvider).setThreshold(threshold);
+    }
+    if (_guard.enabled) {
+      last.applyGuard(
+        _guard,
+        warningThresholdPercentile: warningThresholdPercentile,
+      );
+    }
+    debugPrint(
+      '[feedback] last calibration baseline restored '
+      'reward=${_reward.hasReward ? _reward.featureId : 'off'} '
+      'n=${_engine.baselineCount} '
+      'guard=${_guard.enabled ? _guard.featureId : 'off'} '
+      'guardN=${_guard.baselineSleepDir.length}',
+    );
+  }
+
+  /// Debug Skip on the calibration screen: seed a baseline and go to playing.
+  /// Simulated devices get the canned probe window; a real device reuses the
+  /// last saved calibration. No-op when Skip would be hidden.
+  Future<void> skipCalibration() async {
+    if (state.phase != FeedbackPhase.calibrating) {
+      return;
+    }
+    if (!canSkipCalibration) {
+      return;
+    }
+    _skipCalibrationRequested = true;
+    _gateTimer?.cancel();
+    _gateTimer = null;
+    _calibration.cancelTimers();
+    _engine.reset();
+    final app = _ref.read(appStateProvider);
+    if (isSimDeviceId(app.status.id)) {
+      _seedSyntheticBaseline();
+    } else {
+      _applyLastCalibrationBaseline();
+    }
+    _finishCalibration();
+  }
+
+  bool get canSkipCalibration {
+    final settings = _ref.read(settingsProvider);
+    final app = _ref.read(appStateProvider);
+    return debugSkipCalibrationVisible(
+      debugEnabled: settings.enableSimulatedDevices,
+      simulatedDevice: isSimDeviceId(app.status.id),
+      hasLastBaseline: settings.lastCalibrationBaseline != null,
+    );
   }
 
   /// Records how this calibration ran so a saved session is reproducible:
@@ -1213,6 +1319,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _sessionStartAt = null;
     _trainingStartAt = null;
     _usedStartAnyway = false;
+    _skipCalibrationRequested = false;
     _calibrationRecord = null;
     _recalibrations.clear();
     _collectionEyes = null;

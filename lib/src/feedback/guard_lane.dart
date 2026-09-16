@@ -187,7 +187,10 @@ class GuardLane {
     );
   }
 
-  void finalizeBaseline({required int warningThresholdPercentile}) {
+  void finalizeBaseline({
+    required int warningThresholdPercentile,
+    bool captureAnchor = true,
+  }) {
     final list = List<double>.of(baselineSleepDir)..sort();
     if (list.isNotEmpty) {
       final idx = ((warningThresholdPercentile / 100) * (list.length - 1))
@@ -201,6 +204,10 @@ class GuardLane {
     if (bandMath) {
       sleepCaptured = true;
       debugPrint('[guardrail] band math — no V_sleep anchor to capture');
+      return;
+    }
+    if (!captureAnchor) {
+      sleepCaptured = true;
       return;
     }
     unawaited(

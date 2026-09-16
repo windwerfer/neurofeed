@@ -53,7 +53,7 @@ class CalibrationRunner {
     required this.playClip,
     required this.writeMetadata,
     required this.updateUi,
-    required this.phaseOf,
+    required this.isActive,
     required this.protocolOf,
     required this.sessionStartAt,
     required this.onCollectionEyes,
@@ -64,7 +64,7 @@ class CalibrationRunner {
   final Future<void> Function(String file) playClip;
   final void Function(Map<String, dynamic> meta) writeMetadata;
   final void Function(CalibrationUi ui) updateUi;
-  final FeedbackPhase Function() phaseOf;
+  final bool Function() isActive;
   final String Function() protocolOf;
   final DateTime? Function() sessionStartAt;
   final void Function(String? eyes) onCollectionEyes;
@@ -106,6 +106,9 @@ class CalibrationRunner {
   /// * staged — the requested artifact / challenge / rest clips; each plays
   ///   a guidance clip then collects silently for that stage's seconds.
   Future<void> playAndBaseline({required CalibrationPlan plan}) async {
+    if (!isActive()) {
+      return;
+    }
     updateUi(
       const CalibrationUi(waitingForSignal: false, clearChallenges: true),
     );
@@ -168,7 +171,7 @@ class CalibrationRunner {
   };
 
   Future<void> _runNextStep() async {
-    if (phaseOf() != FeedbackPhase.calibrating) {
+    if (!isActive()) {
       return;
     }
     if (stepIndex >= steps.length) {
@@ -195,7 +198,7 @@ class CalibrationRunner {
       } catch (e) {
         debugPrint('[feedback] calibration clip failed: $e');
       }
-      if (phaseOf() != FeedbackPhase.calibrating) {
+      if (!isActive()) {
         return;
       }
       final clipEnd = DateTime.now();
@@ -227,6 +230,9 @@ class CalibrationRunner {
     }
     if (step.seconds > 0) {
       await _runCollection(step);
+    }
+    if (!isActive()) {
+      return;
     }
     stepIndex++;
     await _runNextStep();
@@ -260,6 +266,9 @@ class CalibrationRunner {
     await completer.future;
     collectionCompleter = null;
     onCollectionEyes(null);
+    if (!isActive()) {
+      return;
+    }
   }
 
   int _collectionLeft = 0;

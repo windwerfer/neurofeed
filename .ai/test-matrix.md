@@ -19,6 +19,7 @@ flutter test \
   test/audio_hardening_test.dart \
   test/calibration_assets_test.dart \
   test/settings_guardrail_migrate_test.dart \
+  test/last_calibration_baseline_test.dart \
   test/session_metadata_roundtrip_test.dart \
   test/streaming_osc_test.dart \
   test/streaming_mixer_test.dart \

@@ -207,6 +207,7 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 |---|---|---|---|---|
 | Start Session | `Start Session` | `_PhaseControls.startSession` | `feedback_session.dart` | Crown → dialog. Recording → dialog. |
 | Start skip-cal | `Start (skip calibration)` | `startCalibration(skipCalibration: true)` | `feedback_session.dart` | recordOnly. |
+| Calibration Skip | `Skip` | `skipCalibration` | `feedback_session.dart` | Next to `Cancel`. Debug mode only. Simulator: canned baseline. Real device: last saved baseline; hidden until one exists. |
 | Crown refused dialog | `Crown sessions are not available yet…` | `crownSessionUnsupportedMessage` | `protocol.dart` | Real and sim Crown. |
 | Recording refused dialog | `Recording in progress` / `Stop the recording before starting a session.` | `_refuseRecordingStart` | `feedback_session.dart` | Actions `Cancel` / `Stop recording`. Start is not auto-continued. |
 | Save recording | `Save recording?` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | Body `Save this recording to History, or discard it.` Actions `Save` / `Discard`. `barrierDismissible: false`. GraphShell Stop, session-view Stop, in-app disconnect. |
@@ -256,14 +257,14 @@ Guardrail AI engine, Audio (Android only), About, Debug mode.
 | Guardrail AI engine | `Guardrail AI engine` | `AiEngineCard` | `reve_card.dart` | Not “AI sleep guardrail”. |
 | Audio (Android) | `Audio` / `Reduce audio stutter` | `_AudioCard` | `settings_view.dart` | Hidden off Android. |
 | About | `About` | `_AboutCard` | `settings_view.dart` | |
-| Debug mode | `Debug mode` | `enableSimulatedDevices` | `settings_view.dart` | Last card. Shows Simulator. |
+| Debug mode | `Debug mode` | `enableSimulatedDevices` | `settings_view.dart` | Last card. Shows Simulator. Also shows calibration `Skip`. |
 
 ## Session internals
 
 | Spoken name | On-screen / log | Code symbol | File | Notes |
 |---|---|---|---|---|
 | Phase idle | `[feedback] phase=idle` | `FeedbackPhase.idle` | `feedback_phase.dart` | |
-| Calibrating | `[feedback] phase=calibrating` | `FeedbackPhase.calibrating` | | 50 s baseline unless skip. |
+| Calibrating | `[feedback] phase=calibrating` | `FeedbackPhase.calibrating` | | 50 s baseline unless skip. Debug `Skip` next to `Cancel`. |
 | Playing | `[feedback] phase=playing` | `FeedbackPhase.playing` | | Agent asserts this. |
 | Paused / interrupted / ended | matching log | `paused` / `interrupted` / `ended` | | |
 | Reward lane | session audio | `RewardLane` | `reward_lane.dart` | Guard never modulates. Dirty skips `recordEpoch` / `onSample`. |

@@ -15,6 +15,7 @@ import 'package:muse_ml/src/connect_window.dart';
 import 'package:muse_ml/src/feedback/feature_override.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
+import 'package:muse_ml/src/feedback/last_calibration_baseline.dart';
 import 'package:muse_ml/src/charts/band_style.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
 import 'package:muse_ml/src/feedback/protocol_catalog.dart';
@@ -567,9 +568,28 @@ class _PhaseControls extends ConsumerWidget {
               Text('Calibrating…', style: theme.textTheme.bodyMedium),
             ],
             const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => ref.read(feedbackStateProvider.notifier).reset(),
-              child: const Text('Cancel'),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () =>
+                      ref.read(feedbackStateProvider.notifier).reset(),
+                  child: const Text('Cancel'),
+                ),
+                if (debugSkipCalibrationVisible(
+                  debugEnabled: settings.enableSimulatedDevices,
+                  simulatedDevice: isSimDeviceId(
+                    ref.watch(appStateProvider).status.id,
+                  ),
+                  hasLastBaseline: settings.lastCalibrationBaseline != null,
+                ))
+                  TextButton(
+                    onPressed: () => ref
+                        .read(feedbackStateProvider.notifier)
+                        .skipCalibration(),
+                    child: const Text('Skip'),
+                  ),
+              ],
             ),
           ],
         );
