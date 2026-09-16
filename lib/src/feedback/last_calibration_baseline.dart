@@ -1,8 +1,8 @@
 import 'package:muse_ml/src/feedback/guard_lane.dart';
 import 'package:muse_ml/src/feedback/target_state.dart';
 
-/// One global last successful calibration, reused by debug Skip on a real
-/// device. Reward and guard sample lists may be empty independently.
+/// Last successful calibration for one device, reused by debug Skip on a
+/// real headset. Reward and guard sample lists may be empty independently.
 class LastCalibrationBaseline {
   const LastCalibrationBaseline({
     required this.rewardFeatureId,
@@ -66,6 +66,29 @@ class LastCalibrationBaseline {
       guardSamples: guardSamples,
     );
   }
+
+  static Map<String, LastCalibrationBaseline> decodeStore(Object? json) {
+    if (json is! Map) {
+      return const {};
+    }
+    final out = <String, LastCalibrationBaseline>{};
+    for (final entry in json.entries) {
+      final id = entry.key;
+      if (id is! String || id.isEmpty) {
+        continue;
+      }
+      final parsed = fromJson(entry.value);
+      if (parsed == null || parsed.isEmpty) {
+        continue;
+      }
+      out[id] = parsed;
+    }
+    return out;
+  }
+
+  static Map<String, Object?> encodeStore(
+    Map<String, LastCalibrationBaseline> byDevice,
+  ) => {for (final e in byDevice.entries) e.key: e.value.toJson()};
 
   void applyReward(RatioEngine engine) {
     for (final v in rewardSamples) {

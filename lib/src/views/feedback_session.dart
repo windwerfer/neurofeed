@@ -352,6 +352,7 @@ class _PhaseControls extends ConsumerWidget {
     final fb = ref.watch(feedbackStateProvider);
     final theme = Theme.of(context);
     final settings = ref.watch(settingsProvider);
+    final deviceId = ref.watch(appStateProvider).status.id;
     final guardrailIntended = settings.guardrailEnabledFor(fb.protocol);
     final needsModel =
         guardrailIntended && settings.guardrailIsAiFor(fb.protocol);
@@ -578,10 +579,9 @@ class _PhaseControls extends ConsumerWidget {
                 ),
                 if (debugSkipCalibrationVisible(
                   debugEnabled: settings.enableSimulatedDevices,
-                  simulatedDevice: isSimDeviceId(
-                    ref.watch(appStateProvider).status.id,
-                  ),
-                  hasLastBaseline: settings.lastCalibrationBaseline != null,
+                  simulatedDevice: isSimDeviceId(deviceId),
+                  hasLastBaseline:
+                      settings.lastCalibrationBaselineFor(deviceId) != null,
                 ))
                   TextButton(
                     onPressed: () => ref

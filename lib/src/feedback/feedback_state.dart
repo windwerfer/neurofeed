@@ -1075,10 +1075,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (!_engine.hasBaseline && _guard.baselineSleepDir.isEmpty) {
       return;
     }
+    final deviceId = _ref.read(appStateProvider).status.id;
+    if (deviceId.isEmpty) {
+      return;
+    }
     unawaited(
       _ref
           .read(settingsProvider)
           .setLastCalibrationBaseline(
+            deviceId,
             LastCalibrationBaseline(
               rewardFeatureId: _reward.featureId,
               rewardSamples: List.of(_engine.baselineSamples),
@@ -1090,7 +1095,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   void _applyLastCalibrationBaseline() {
-    final last = _ref.read(settingsProvider).lastCalibrationBaseline;
+    final deviceId = _ref.read(appStateProvider).status.id;
+    final last = _ref
+        .read(settingsProvider)
+        .lastCalibrationBaselineFor(deviceId);
     if (last == null || last.isEmpty) {
       return;
     }
@@ -1153,7 +1161,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     return debugSkipCalibrationVisible(
       debugEnabled: settings.enableSimulatedDevices,
       simulatedDevice: isSimDeviceId(app.status.id),
-      hasLastBaseline: settings.lastCalibrationBaseline != null,
+      hasLastBaseline:
+          settings.lastCalibrationBaselineFor(app.status.id) != null,
     );
   }
 

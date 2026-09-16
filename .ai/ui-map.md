@@ -207,7 +207,7 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 |---|---|---|---|---|
 | Start Session | `Start Session` | `_PhaseControls.startSession` | `feedback_session.dart` | Crown → dialog. Recording → dialog. |
 | Start skip-cal | `Start (skip calibration)` | `startCalibration(skipCalibration: true)` | `feedback_session.dart` | recordOnly. |
-| Calibration Skip | `Skip` | `skipCalibration` | `feedback_session.dart` | Next to `Cancel`. Debug mode only. Simulator: canned baseline. Real device: last saved baseline; hidden until one exists. |
+| Calibration Skip | `Skip` | `skipCalibration` | `feedback_session.dart` | Next to `Cancel`. Debug mode only. Simulator: canned baseline. Real device: last baseline for this device id; hidden until one exists. |
 | Crown refused dialog | `Crown sessions are not available yet…` | `crownSessionUnsupportedMessage` | `protocol.dart` | Real and sim Crown. |
 | Recording refused dialog | `Recording in progress` / `Stop the recording before starting a session.` | `_refuseRecordingStart` | `feedback_session.dart` | Actions `Cancel` / `Stop recording`. Start is not auto-continued. |
 | Save recording | `Save recording?` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | Body `Save this recording to History, or discard it.` Actions `Save` / `Discard`. `barrierDismissible: false`. GraphShell Stop, session-view Stop, in-app disconnect. |
