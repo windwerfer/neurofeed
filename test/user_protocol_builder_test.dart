@@ -90,6 +90,25 @@ void main() {
     });
   });
 
+  group('ProtocolDocument.color', () {
+    test('catalog 24-bit RGB values paint opaque', () {
+      expect(catalog.all, isNotEmpty);
+      for (final p in catalog.all) {
+        expect(
+          p.colorValue & 0xFF000000,
+          0,
+          reason: '${p.id} is stored as 24-bit RGB',
+        );
+        expect(
+          p.color.a,
+          1.0,
+          reason: '${p.id} must be opaque for the reward stroke',
+        );
+      }
+      expect(draft().color.a, 1.0);
+    });
+  });
+
   group('validateUserProtocolId', () {
     test('accepts user.<slug>', () {
       expect(() => validateUserProtocolId('user.abc'), returnsNormally);
