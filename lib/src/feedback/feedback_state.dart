@@ -602,6 +602,30 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
+  void setInhibitCeiling(String tag, double max) {
+    _ref.read(settingsProvider).setInhibitCeiling(state.protocol, tag, max);
+    _applyLiveInhibit();
+  }
+
+  void resetInhibitCeilings() {
+    _ref.read(settingsProvider).clearInhibitCeilingOverrides(state.protocol);
+    _applyLiveInhibit();
+  }
+
+  void _applyLiveInhibit() {
+    final spec = _ref
+        .read(protocolCatalogProvider)
+        .valueOrNull
+        ?.forName(state.protocol);
+    final settings = _ref.read(settingsProvider);
+    _reward.setInhibit(
+      overlayInhibitCeilings(
+        spec?.conditions ?? const [],
+        settings.inhibitCeilingOverrides(state.protocol),
+      ),
+    );
+  }
+
   /// Begin calibration: play the voice intro, require all electrodes green
   /// for [greenStableSeconds] before starting a [calibrationBaselineSeconds]
   /// silent baseline, then start feedback automatically. Opens the connect
@@ -813,7 +837,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _reward.configure(
       hasReward: spec?.hasReward ?? false,
       featureId: spec?.reward?.feature,
-      inhibit: spec?.conditions ?? const [],
+      inhibit: overlayInhibitCeilings(
+        spec?.conditions ?? const [],
+        settings.inhibitCeilingOverrides(state.protocol),
+      ),
       electrodeNames: rewardNames,
       montageNames: montage,
     );

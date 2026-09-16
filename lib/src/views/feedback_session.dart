@@ -151,7 +151,12 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
                     guardLabel: guardLabel,
                     rewardColor: protocol.color,
                     guardColor: bandColors[0],
-                    inhibit: trustInhibitSpecs(protocol.conditions),
+                    inhibit: trustInhibitSpecs(
+                      overlayInhibitCeilings(
+                        protocol.conditions,
+                        settings.inhibitCeilingOverrides(fb.protocol),
+                      ),
+                    ),
                     guardPanes: trustGuardPaneSpecs(guardFeature),
                   ),
                 const SizedBox(height: 16),
@@ -1465,70 +1470,35 @@ class _TuneSlider extends StatelessWidget {
   }
 }
 
-class _GuardrailTile extends ConsumerStatefulWidget {
+class _GuardrailTile extends ConsumerWidget {
   const _GuardrailTile();
 
   @override
-  ConsumerState<_GuardrailTile> createState() => _GuardrailTileState();
-}
-
-class _GuardrailTileState extends ConsumerState<_GuardrailTile> {
-  bool _enabled = true;
-
-  bool _readEnabled() {
-    final fb = ref.read(feedbackStateProvider);
-    return ref.read(settingsProvider).guardrailEnabledFor(fb.protocol);
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _enabled = _readEnabled();
-  }
-
-  Future<void> _openGear() async {
-    await showDialog<void>(
-      context: context,
-      builder: (_) => const _GuardrailGearDialog(),
-    );
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
-    // Sync with external changes (e.g. the Settings card) and protocol switch.
-    _enabled = _readEnabled();
-    final inSession =
-        fb.phase == FeedbackPhase.playing || fb.phase == FeedbackPhase.paused;
     final settings = ref.watch(settingsProvider);
+    final enabled = settings.guardrailEnabledFor(fb.protocol);
     final feature = settings.guardFeatureFor(fb.protocol);
     final sound = GuardrailSound.fromName(settings.warningSoundName);
     return ListTile(
       leading: const Icon(Icons.shield_outlined),
       title: const Text('Guardrail'),
       subtitle: Text(
-        _enabled
-            ? '${guardFeatureLabel(feature)} • ${sound.label}'
-            : 'disabled',
+        enabled ? '${guardFeatureLabel(feature)} • ${sound.label}' : 'disabled',
       ),
-      trailing: inSession
-          ? null
-          : Switch(
-              value: _enabled,
-              onChanged: (on) {
-                setState(() => _enabled = on);
-                final settings = ref.watch(settingsProvider);
-                if (on) {
-                  settings.setGuardFeature(fb.protocol, guardFeatureBandDelta);
-                } else {
-                  settings.setGuardFeature(fb.protocol, guardFeatureNone);
-                }
-              },
-            ),
-      onTap: _enabled ? _openGear : null,
+      trailing: IconButton(
+        key: const Key('guardrail-tile-gear'),
+        icon: const Icon(Icons.settings),
+        tooltip: 'Guardrail settings',
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (_) => const _GuardrailThresholdDialog(),
+        ),
+      ),
+      onTap: () => showDialog<void>(
+        context: context,
+        builder: (_) => const _GuardrailScorerDialog(),
+      ),
     );
   }
 }
@@ -1683,6 +1653,41 @@ class _PercentileSlider extends StatelessWidget {
         ),
         Text(
           '$v%',
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RelativeCeilingSlider extends StatelessWidget {
+  static const double min = 0.05;
+  static const double max = 0.80;
+
+  const _RelativeCeilingSlider({required this.value, required this.onChanged});
+
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final v = value.clamp(min, max);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Slider(
+          value: v,
+          min: min,
+          max: max,
+          divisions: 75,
+          label: v.toStringAsFixed(2),
+          onChanged: (d) => onChanged(double.parse(d.toStringAsFixed(2))),
+        ),
+        Text(
+          v.toStringAsFixed(2),
           style: theme.textTheme.titleSmall?.copyWith(
             color: theme.colorScheme.primary,
           ),
@@ -1855,6 +1860,7 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
   void _reset() {
     final notifier = ref.read(feedbackStateProvider.notifier);
     notifier.resetTargetSettings();
+    notifier.resetInhibitCeilings();
     setState(() {
       _dynamicAdapt = notifier.dynamicAdapt;
       _responsiveness = notifier.responsiveness;
@@ -1865,6 +1871,14 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final notifier = ref.read(feedbackStateProvider.notifier);
+    final fb = ref.watch(feedbackStateProvider);
+    final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
+    final protocol = protocolOrPlaceholder(catalog, fb.protocol);
+    final settings = ref.watch(settingsProvider);
+    final inhibit = overlayInhibitCeilings(
+      protocol.conditions,
+      settings.inhibitCeilingOverrides(fb.protocol),
+    );
     return AlertDialog(
       title: Row(
         children: [
@@ -1879,70 +1893,87 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
           ),
         ],
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Dynamic target'),
-            subtitle: const Text('Let the target follow your performance'),
-            value: _dynamicAdapt,
-            onChanged: (v) {
-              setState(() => _dynamicAdapt = v);
-              notifier.setDynamicAdapt(v);
-            },
-          ),
-          const SizedBox(height: 8),
-          Slider(
-            value: _responsiveness,
-            onChanged: (v) {
-              setState(() => _responsiveness = v);
-              notifier.setResponsiveness(v);
-            },
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Gentle',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                Text(
-                  'Responsive',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Dynamic target'),
+              subtitle: const Text('Let the target follow your performance'),
+              value: _dynamicAdapt,
+              onChanged: (v) {
+                setState(() => _dynamicAdapt = v);
+                notifier.setDynamicAdapt(v);
+              },
             ),
-          ),
-          Text(
-            'How quickly the target adapts to you',
-            style: theme.textTheme.bodySmall,
-          ),
-          const SizedBox(height: 16),
-          const Divider(),
-          const SizedBox(height: 8),
-          Text('Reward threshold', style: theme.textTheme.titleSmall),
-          const SizedBox(height: 4),
-          Text(
-            'The baseline percentile that sets your target — how strict it '
-            'is versus your calibration. 40% (default) keeps the target near '
-            'your typical ratio.',
-            style: theme.textTheme.bodySmall,
-          ),
-          _PercentileSlider(
-            value: _percentile,
-            onChanged: (v) {
-              setState(() => _percentile = v);
-              notifier.selectPercentile(v);
-            },
-          ),
-        ],
+            const SizedBox(height: 8),
+            Slider(
+              value: _responsiveness,
+              onChanged: (v) {
+                setState(() => _responsiveness = v);
+                notifier.setResponsiveness(v);
+              },
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Gentle',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Text(
+                    'Responsive',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              'How quickly the target adapts to you',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            Text('Reward threshold', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'The baseline percentile that sets your target — how strict it '
+              'is versus your calibration. 40% (default) keeps the target near '
+              'your typical ratio.',
+              style: theme.textTheme.bodySmall,
+            ),
+            _PercentileSlider(
+              value: _percentile,
+              onChanged: (v) {
+                setState(() => _percentile = v);
+                notifier.selectPercentile(v);
+              },
+            ),
+            for (final c in inhibit) ...[
+              const SizedBox(height: 12),
+              Text(inhibitSliderLabel(c), style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(
+                'Reward only while this relative band stays at or below the '
+                'ceiling.',
+                style: theme.textTheme.bodySmall,
+              ),
+              _RelativeCeilingSlider(
+                value: inhibitMax(c),
+                onChanged: (v) => notifier.setInhibitCeiling(inhibitTag(c), v),
+              ),
+            ],
+          ],
+        ),
       ),
       actions: [
         TextButton(onPressed: _reset, child: const Text('Reset')),
@@ -1987,6 +2018,15 @@ class _TargetSettingsInfoDialog extends StatelessWidget {
               'sooner. If the target ever feels unreachable, slide towards '
               'Gentle or turn Dynamic target off — the target is always '
               'kept within reach of your baseline.',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Text('Inhibit ceilings', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'When this protocol has a beta or delta inhibit, the extra '
+              'sliders are the relative-power ceilings that must hold for '
+              'the reward to count. Guard has no inhibit.',
               style: theme.textTheme.bodySmall,
             ),
           ],
@@ -2080,21 +2120,20 @@ class _RewardOutputPicker extends StatelessWidget {
   }
 }
 
-/// Guardrail gear dialog: scorer engine (AI models or band math), warning
-/// sound, and warning threshold. Engine changes apply from the next session;
-/// the sound and threshold apply immediately.
-class _GuardrailGearDialog extends ConsumerStatefulWidget {
-  const _GuardrailGearDialog();
+/// Guardrail tap dialog: on/off toggle, scorer engine, and warning sound.
+/// Engine changes apply from the next session; the sound applies immediately.
+class _GuardrailScorerDialog extends ConsumerStatefulWidget {
+  const _GuardrailScorerDialog();
 
   @override
-  ConsumerState<_GuardrailGearDialog> createState() =>
-      _GuardrailGearDialogState();
+  ConsumerState<_GuardrailScorerDialog> createState() =>
+      _GuardrailScorerDialogState();
 }
 
-class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
+class _GuardrailScorerDialogState
+    extends ConsumerState<_GuardrailScorerDialog> {
   late String _feature;
   late GuardrailSound _sound;
-  late int _threshold;
 
   @override
   void initState() {
@@ -2103,7 +2142,6 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
     final fb = ref.read(feedbackStateProvider);
     _feature = settings.guardFeatureFor(fb.protocol);
     _sound = GuardrailSound.fromName(settings.warningSoundName);
-    _threshold = settings.warningThresholdPercentile;
   }
 
   bool _anyModelInstalled() => ModelKind.values.any(
@@ -2117,16 +2155,38 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
     return _anyModelInstalled();
   }
 
-  List<String> _gearFeatures() {
-    final items = <String>[guardFeatureNone, guardFeatureBandDelta];
+  List<String> _scorerFeatures() {
+    final items = <String>[guardFeatureBandDelta];
     if (_aiDrowsinessListed()) items.add(guardFeatureAiDrowsiness);
     return items;
+  }
+
+  Future<void> _setEnabled(bool on) async {
+    final settings = ref.read(settingsProvider);
+    final fb = ref.read(feedbackStateProvider);
+    if (on) {
+      final next = _feature == guardFeatureNone
+          ? guardFeatureBandDelta
+          : _feature;
+      setState(() => _feature = next);
+      await settings.setGuardFeature(fb.protocol, next);
+      if (next == guardFeatureAiDrowsiness &&
+          fb.rewardOutput == RewardOutputId.musicFilter) {
+        if (mounted) {
+          unawaited(_maybeWarnMusicAiCpu(context, settings));
+        }
+      }
+    } else {
+      await settings.setGuardFeature(fb.protocol, guardFeatureNone);
+    }
   }
 
   Future<void> _onDone() async {
     final settings = ref.read(settingsProvider);
     final fb = ref.read(feedbackStateProvider);
-    if (_feature == guardFeatureAiDrowsiness && !_anyModelInstalled()) {
+    if (settings.guardrailEnabledFor(fb.protocol) &&
+        _feature == guardFeatureAiDrowsiness &&
+        !_anyModelInstalled()) {
       _feature = guardFeatureBandDelta;
       await settings.setGuardFeature(fb.protocol, guardFeatureBandDelta);
       if (mounted) {
@@ -2153,19 +2213,29 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
     final settings = ref.watch(settingsProvider);
     final audio = ref.read(audioServiceProvider);
     final theme = Theme.of(context);
-    final features = _gearFeatures();
+    final enabled = settings.guardrailEnabledFor(fb.protocol);
+    final features = _scorerFeatures();
     final current = features.contains(_feature)
         ? _feature
         : guardFeatureBandDelta;
 
     return AlertDialog(
-      title: const Text('Guardrail'),
+      title: Row(
+        children: [
+          const Expanded(child: Text('Guardrail')),
+          Switch(
+            key: const Key('guardrail-enable-switch'),
+            value: enabled,
+            onChanged: inSession ? null : (on) => unawaited(_setEnabled(on)),
+          ),
+        ],
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (!inSession) ...[
+            if (enabled && !inSession) ...[
               Text('Scorer engine', style: theme.textTheme.titleSmall),
               const SizedBox(height: 4),
               DropdownButtonFormField<String>(
@@ -2198,19 +2268,14 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
                 },
               ),
               const SizedBox(height: 8),
-              if (current == guardFeatureBandDelta)
-                Text(
-                  'Classical frontal-delta math, no AI model — always available.',
-                  style: theme.textTheme.bodySmall,
-                )
-              else if (current == guardFeatureAiDrowsiness)
+              if (current == guardFeatureAiDrowsiness)
                 Text(
                   'AI embedding scorer (${settings.guardModel ?? defaultModelKind.ffId}) — installed',
                   style: theme.textTheme.bodySmall,
                 )
               else
                 Text(
-                  'Guardrail warnings are off for this protocol.',
+                  'Classical frontal-delta math, no AI model — always available.',
                   style: theme.textTheme.bodySmall,
                 ),
               const SizedBox(height: 12),
@@ -2240,7 +2305,46 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
                   : 'Plays once per warning',
               style: theme.textTheme.bodySmall,
             ),
-            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+      actions: [TextButton(onPressed: _onDone, child: const Text('Done'))],
+    );
+  }
+}
+
+class _GuardrailThresholdDialog extends ConsumerStatefulWidget {
+  const _GuardrailThresholdDialog();
+
+  @override
+  ConsumerState<_GuardrailThresholdDialog> createState() =>
+      _GuardrailThresholdDialogState();
+}
+
+class _GuardrailThresholdDialogState
+    extends ConsumerState<_GuardrailThresholdDialog> {
+  late int _threshold;
+
+  @override
+  void initState() {
+    super.initState();
+    _threshold = ref.read(settingsProvider).warningThresholdPercentile;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fb = ref.watch(feedbackStateProvider);
+    final settings = ref.watch(settingsProvider);
+    final theme = Theme.of(context);
+    final panes = trustGuardPaneSpecs(settings.guardFeatureFor(fb.protocol));
+    final showCeiling = panes.contains(TrustGuardPaneId.ceiling);
+    return AlertDialog(
+      title: const Text('Guardrail settings'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text('Warning threshold', style: theme.textTheme.titleSmall),
             const SizedBox(height: 4),
             Text(
@@ -2258,10 +2362,25 @@ class _GuardrailGearDialogState extends ConsumerState<_GuardrailGearDialog> {
                     .setWarningThresholdPercentile(v);
               },
             ),
+            if (showCeiling) ...[
+              const SizedBox(height: 12),
+              Text('δ ceiling', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(
+                'Hard rail at ${guardrailDeltaCeiling.toStringAsFixed(2)}. '
+                'The second warn signal; not adjustable.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
       ),
-      actions: [TextButton(onPressed: _onDone, child: const Text('Done'))],
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Done'),
+        ),
+      ],
     );
   }
 }
@@ -2347,7 +2466,7 @@ Future<void> _maybeWarnMusicAiCpu(
         'desktops handle it fine).\n\n'
         'If you hear dropouts: enable "Reduce audio stutter" in '
         'Settings → Audio, switch the guardrail scorer to Band math in the '
-        'guardrail gear, or choose chimes, rain, or binaural beats as the '
+        'Guardrail tile, or choose chimes, rain, or binaural beats as the '
         'feedback sound.\n\n'
         'This warning shows once.',
       ),

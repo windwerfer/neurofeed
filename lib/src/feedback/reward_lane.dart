@@ -88,6 +88,10 @@ class RewardLane {
     _bands = RelativeBandAggregator(electrodeNames, montageNames: montageNames);
   }
 
+  void setInhibit(List<TargetCondition> inhibit) {
+    _inhibit = inhibit;
+  }
+
   void onBands(BandsDto bands) {
     _bands.update(bands);
   }

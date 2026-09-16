@@ -109,6 +109,26 @@ void main() {
     });
   });
 
+  group('overlayInhibitCeilings', () {
+    test('empty overrides keep document max; known tags replace', () {
+      const base = [BetaCeiling(0.25), DeltaCeiling(0.5)];
+      expect(overlayInhibitCeilings(base, const {}), base);
+      final one = overlayInhibitCeilings(
+        const [BetaCeiling(0.25)],
+        {'beta': 0.22},
+      );
+      expect(one, hasLength(1));
+      expect((one.single as BetaCeiling).maxBetaRel, 0.22);
+      final both = overlayInhibitCeilings(base, {
+        'beta': 0.3,
+        'delta': 0.4,
+        'gamma': 9,
+      });
+      expect((both[0] as BetaCeiling).maxBetaRel, 0.3);
+      expect((both[1] as DeltaCeiling).maxDeltaRel, 0.4);
+    });
+  });
+
   group('validateUserProtocolId', () {
     test('accepts user.<slug>', () {
       expect(() => validateUserProtocolId('user.abc'), returnsNormally);
