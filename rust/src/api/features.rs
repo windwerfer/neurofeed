@@ -172,9 +172,13 @@ const SPECS: &[Spec] = &[
         muse_electrodes: &["AF7", "AF8", "TP9", "TP10"],
         crown_electrodes: &[],
         native_rate_hz: 1.0,
-        muse_available: true,
+        // Honest gate: head packs load, but frozen CBraMod encoder forward is
+        // not linked — do not present as a selectable live scorer.
+        muse_available: false,
         crown_available: false,
-        unavailable_muse: None,
+        unavailable_muse: Some(
+            "ai.a_vig unavailable until CBraMod encoder forward is linked (heads only today)",
+        ),
         unavailable_crown: Some("ai.a_vig is Muse-only"),
     },
     Spec {
@@ -184,9 +188,11 @@ const SPECS: &[Spec] = &[
         muse_electrodes: &["AF7", "AF8", "TP9", "TP10"],
         crown_electrodes: &[],
         native_rate_hz: 1.0,
-        muse_available: true,
+        muse_available: false,
         crown_available: false,
-        unavailable_muse: None,
+        unavailable_muse: Some(
+            "ai.wake_light unavailable until CBraMod encoder forward is linked (heads only today)",
+        ),
         unavailable_crown: Some("ai.wake_light is Muse-only"),
     },
     Spec {
@@ -220,9 +226,12 @@ const SPECS: &[Spec] = &[
         muse_electrodes: &["AF7", "AF8", "TP9", "TP10"],
         crown_electrodes: &[],
         native_rate_hz: 1.0,
-        muse_available: true,
+        // Alias of ai.a_vig — same honest gate (CBraMod encoder pending).
+        muse_available: false,
         crown_available: false,
-        unavailable_muse: None,
+        unavailable_muse: Some(
+            "ai.drowsiness (alias of ai.a_vig) unavailable until CBraMod encoder forward is linked",
+        ),
         unavailable_crown: Some("ai.drowsiness is Muse-only (deprecated alias of ai.a_vig)"),
     },
     Spec {
@@ -739,12 +748,19 @@ mod tests {
         let _lock = reset();
         assert!(set_enabled_features(vec!["bands".into()]).is_err());
         assert!(set_enabled_features(vec!["nope".into()]).is_err());
+        // No active kind: store is allowed (availability checked on connect).
         assert!(set_enabled_features(vec![ID_DROWSINESS.into()]).is_ok());
         set_active_kind(DeviceKind::Neurosity);
         assert!(set_enabled_features(vec![ID_DROWSINESS.into()]).is_err());
         assert!(set_enabled_features(vec![ID_FOCUS.into()]).is_ok());
         set_active_kind(DeviceKind::Muse);
         assert!(set_enabled_features(vec![ID_FOCUS.into()]).is_err());
+        // CBraMod-backed IDs are unavailable on Muse until encoder forward works.
+        assert!(set_enabled_features(vec![ID_DROWSINESS.into()]).is_err());
+        assert!(set_enabled_features(vec![ID_A_VIG.into()]).is_err());
+        assert!(set_enabled_features(vec![ID_WAKE_LIGHT.into()]).is_err());
+        // REVE-backed IDs remain selectable when Muse is active.
+        assert!(set_enabled_features(vec![ID_A_VIG_REVE.into()]).is_ok());
         assert!(set_enabled_features(vec![]).is_ok());
         assert!(!is_enabled(ID_FOCUS));
     }
@@ -869,14 +885,33 @@ mod tests {
         let crown = available_features(DeviceKind::Neurosity);
         for id in AI_FEATURE_IDS {
             let m = muse.iter().find(|f| f.id == *id).unwrap_or_else(|| panic!("missing {id}"));
-            assert!(m.available, "{id} should be available on Muse");
             assert!(m.usable_for.contains(&FeatureLane::Guard));
             let c = crown.iter().find(|f| f.id == *id).unwrap();
             assert!(!c.available, "{id} Muse-only");
         }
+        // CBraMod-backed: unavailable until encoder forward is linked.
+        for id in [ID_A_VIG, ID_WAKE_LIGHT, ID_DROWSINESS] {
+            let m = muse.iter().find(|f| f.id == id).unwrap();
+            assert!(!m.available, "{id} must not be Ready without encoder forward");
+            assert!(
+                m.unavailable_reason
+                    .as_deref()
+                    .unwrap_or("")
+                    .contains("CBraMod encoder"),
+                "{id} reason={:?}",
+                m.unavailable_reason
+            );
+        }
+        // REVE-backed: available on Muse (live scores work once REVE is loaded).
+        for id in [ID_A_VIG_REVE, ID_WAKE_LIGHT_REVE] {
+            let m = muse.iter().find(|f| f.id == id).unwrap();
+            assert!(m.available, "{id} should be available on Muse");
+        }
         assert_eq!(canonical_ai_id(ID_DROWSINESS), ID_A_VIG);
-        assert!(set_enabled_features(vec![ID_A_VIG.into(), ID_WAKE_LIGHT.into()]).is_ok());
+        set_active_kind(DeviceKind::Muse);
+        assert!(set_enabled_features(vec![ID_A_VIG.into(), ID_WAKE_LIGHT.into()]).is_err());
+        assert!(set_enabled_features(vec![ID_A_VIG_REVE.into()]).is_ok());
         set_active_kind(DeviceKind::Neurosity);
-        assert!(set_enabled_features(vec![ID_A_VIG.into()]).is_err());
+        assert!(set_enabled_features(vec![ID_A_VIG_REVE.into()]).is_err());
     }
 }

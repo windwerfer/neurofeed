@@ -2156,19 +2156,14 @@ class _GuardrailScorerDialogState
   }
 
   List<String> _scorerFeatures() {
+    // Ship picker: band.delta always; REVE heads only when REVE base is
+    // installed. CBraMod heads stay hidden until encoder forward can score.
     final items = <String>[guardFeatureBandDelta];
-    if (_aiDrowsinessListed()) {
-      items.addAll([
-        guardFeatureAiAVig,
-        guardFeatureAiWakeLight,
-        guardFeatureAiDrowsiness, // legacy alias
-      ]);
-      final reveInstalled =
-          ref.read(modelInstalledProvider(ModelKind.reveBase)).valueOrNull ==
-          true;
-      if (reveInstalled) {
-        items.addAll([guardFeatureAiAVigReve, guardFeatureAiWakeLightReve]);
-      }
+    final reveInstalled =
+        ref.read(modelInstalledProvider(ModelKind.reveBase)).valueOrNull ==
+        true;
+    if (reveInstalled && _aiDrowsinessListed()) {
+      items.addAll([guardFeatureAiAVigReve, guardFeatureAiWakeLightReve]);
     }
     return items;
   }
@@ -2197,17 +2192,20 @@ class _GuardrailScorerDialogState
     final settings = ref.read(settingsProvider);
     final fb = ref.read(feedbackStateProvider);
     if (settings.guardrailEnabledFor(fb.protocol) &&
-        guardFeatureIsAi(_feature) &&
-        !_anyModelInstalled()) {
+        (guardFeatureIsCbramod(_feature) ||
+            (guardFeatureIsAi(_feature) && !_anyModelInstalled()))) {
       final was = _feature;
       _feature = guardFeatureBandDelta;
       await settings.setGuardFeature(fb.protocol, guardFeatureBandDelta);
       if (mounted) {
+        final why = guardFeatureIsCbramod(was)
+            ? 'not ready (CBraMod encoder forward pending)'
+            : 'not installed';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '${guardFeatureLabel(was)} is not '
-              'installed — reverted to ${guardFeatureLabel(guardFeatureBandDelta)}.',
+              '${guardFeatureLabel(was)} is $why — '
+              'reverted to ${guardFeatureLabel(guardFeatureBandDelta)}.',
             ),
           ),
         );

@@ -392,8 +392,12 @@ fn load_head_pt_zip(path: &Path, in_dim: usize, n_classes: usize) -> anyhow::Res
 }
 
 /// Apply the head for [feature_id] to [emb].
-/// Returns (logits, probs, pred_class, score) where score = P(class 1)
-/// (hypnagogic / light) — higher means more sleepward / light-sleep.
+///
+/// Returns `(logits, probs, pred_class, score)` where:
+/// - `pred_class` = argmax(logits) (eval / debug)
+/// - `score` = **P(class 1)** — P(hypnagogic) for A-vig, P(light) for wake/light.
+///   This continuous scalar is what `FeatureDto.value` carries so guardrail
+///   percentile thresholds stay meaningful (do not emit argmax 0/1 as the DTO).
 pub fn apply_feature(
     feature_id: &str,
     emb: &[f32],
@@ -412,12 +416,29 @@ pub fn apply_feature(
     Ok((logits, probs, pred, score))
 }
 
+/// Whether [feature_id] is backed by the CBraMod encoder (needs native forward).
+pub fn is_cbramod_backed(feature_id: &str) -> bool {
+    matches!(
+        canonical_feature_id(feature_id),
+        ID_A_VIG | ID_WAKE_LIGHT
+    )
+}
+
+/// Whether [feature_id] is backed by REVE (gated base + subsample heads).
+pub fn is_reve_backed(feature_id: &str) -> bool {
+    matches!(
+        canonical_feature_id(feature_id),
+        ID_A_VIG_REVE | ID_WAKE_LIGHT_REVE
+    )
+}
+
 /// Score every loaded head whose embedding dim matches [emb].
-/// Returns `(feature_id, score)` pairs.
+/// Returns `(feature_id, P(class1))` pairs — never argmax, never cross-encoder.
 pub fn score_matching_heads(emb: &[f32]) -> Vec<(String, f32)> {
     let guard = lock();
     let mut out = Vec::new();
     for (id, head) in guard.heads.iter() {
+        // Dim gate keeps CBraMod (200) and REVE (512) packs on their own encoder.
         if head.in_dim != emb.len() {
             continue;
         }
@@ -504,6 +525,35 @@ mod tests {
         for (id, s) in scores {
             assert!(s.is_finite(), "{id}");
         }
+        unload_all();
+    }
+
+    #[test]
+    fn reve_embedding_does_not_score_cbramod_ids() {
+        let _lock = load_all_bundled();
+        let reve_emb = vec![0.01f32; REVE_DIM];
+        let scores = score_matching_heads(&reve_emb);
+        assert!(!scores.is_empty());
+        for (id, s) in &scores {
+            assert!(is_reve_backed(id), "unexpected id {id}");
+            assert!((0.0..=1.0).contains(s));
+        }
+        assert!(!scores.iter().any(|(id, _)| is_cbramod_backed(id)));
+        unload_all();
+    }
+
+    #[test]
+    fn feature_dto_score_is_p_class1_not_argmax() {
+        let _lock = load_all_bundled();
+        let emb = vec![0.01f32; CBRAMOD_DIM];
+        let (logits, probs, pred, score) = apply_feature(ID_A_VIG, &emb).unwrap();
+        assert_eq!(score, probs[1], "FeatureDto scalar must be P(class1)");
+        assert!((0.0..=1.0).contains(&score));
+        assert!(pred == 0 || pred == 1);
+        // Argmax class index is not the live FeatureDto value (unless by chance
+        // P≈0/1 exactly — still assert we publish the probability field).
+        assert_eq!(probs.len(), 2);
+        assert_eq!(logits.len(), 2);
         unload_all();
     }
 

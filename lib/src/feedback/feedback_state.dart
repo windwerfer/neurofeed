@@ -903,7 +903,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         bandMath: false,
         featureId: guardFeatureIsAi(featureId)
             ? featureId
-            : guardFeatureAiAVig,
+            : guardFeatureAiAVigReve,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       if (ok) {
@@ -915,7 +915,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         bandMath: false,
         featureId: guardFeatureIsAi(featureId)
             ? featureId
-            : guardFeatureAiAVig,
+            : guardFeatureAiAVigReve,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       debugPrint('[guardrail] enable failed: $e');

@@ -2,8 +2,9 @@
 //!
 //! Pack id: `cbramod-a-vig-full` (neurofeed_heads). Window: 2 s @ 256 Hz
 //! (512 samples) Muse AF7/AF8/TP9/TP10 → resample to 200 Hz patches → frozen
-//! CBraMod → mean-pool (200-d) → HeadALinear → **argmax** over
-//! `drowsy` / `hypnagogic`.
+//! CBraMod → mean-pool (200-d) → HeadALinear → softmax.
+//! Eval decode may use argmax; live `FeatureDto.value` is **P(hypnagogic)**
+//! (class 1) for guardrail percentile thresholds.
 //!
 //! Encoder weights (~20 MB Apache-2.0) are **not** bundled; pin SHA-256 and
 //! load from the model directory / HF cache (same pattern as REVE user-local
@@ -156,7 +157,7 @@ pub fn load_model(model_dir: &str) -> anyhow::Result<String> {
         "encoder weights missing — download pretrained_weights.pth (Apache-2.0) into the model dir"
     };
     let desc = format!(
-        "CBraMod A-vig ({PACK_ID}) — HeadALinear {EMBED_DIM}→{N_CLASSES}, decode=argmax; {enc_status}; heads={head_descs:?}"
+        "CBraMod A-vig ({PACK_ID}) — HeadALinear {EMBED_DIM}→{N_CLASSES}, FeatureDto=P(hypnagogic); {enc_status}; heads={head_descs:?}"
     );
     log::info!("[cbramod] loaded: {desc} (dir={})", dir.display());
     Ok(desc)
@@ -185,6 +186,7 @@ pub fn generated_config_json() -> String {
   "n_classes": {N_CLASSES},
   "labels": ["drowsy", "hypnagogic"],
   "decode": "argmax",
+  "feature_dto_value": "P(class1)=P(hypnagogic)",
   "window_sec": 2.0,
   "input_sr_hz": {SOURCE_SR_HZ},
   "n_times": {WINDOW_SAMPLES},
