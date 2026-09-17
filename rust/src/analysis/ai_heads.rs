@@ -40,6 +40,15 @@ const CBRAMOD_DIM: usize = 200;
 const REVE_DIM: usize = 512;
 const N_CLASSES: usize = 2;
 
+/// Pinned SHA-256 for shipped f32bin heads (matches pack_manifest head_f32bin_sha256).
+const F32BIN_SHA256: &[(&str, &str)] = &[
+    ("head_a_vig_linear.f32bin", "2695ce91cc5e9cbb8d6f29fc4bfff9b6f1294c106cced6fa2657d4bf6c26ba96"),
+    ("head_c_wake_light_linear.f32bin", "cc0415bc1d3fac7c5f7113315b609185b9d1dbc30ffec77c4448c99b060dc925"),
+    ("head_a_vig_reve_linear.f32bin", "c032abbfa40fb148d3830b41bde4a65bc09144c99106b401872d080daa008256"),
+    ("head_c_wake_light_reve_linear.f32bin", "329ad140681ebe8354257bcb63d6d557596b71a3d41fcd4947001e494b825fe9"),
+];
+
+
 #[derive(Clone, Debug)]
 pub struct LinearHead {
     pub in_dim: usize,
@@ -328,6 +337,15 @@ fn load_head_from_dir(
 }
 
 fn load_head_f32bin(path: &Path, in_dim: usize, n_classes: usize) -> anyhow::Result<LinearHead> {
+    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+        if let Some((_, expect)) = F32BIN_SHA256.iter().find(|(n, _)| *n == name) {
+            let hex = file_sha256(path)?;
+            anyhow::ensure!(
+                &hex == expect,
+                "head f32bin SHA mismatch for {name}\nGot      {hex}\nExpected {expect}"
+            );
+        }
+    }
     let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
     let expect = (n_classes * in_dim + n_classes) * 4;
     anyhow::ensure!(
@@ -568,4 +586,20 @@ mod tests {
             "err={err}"
         );
     }
+}
+
+fn file_sha256(path: &Path) -> anyhow::Result<String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
 }

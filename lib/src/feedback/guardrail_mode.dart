@@ -82,8 +82,11 @@ String? parseGuardFeatureValue(Object? value) {
       'ai.a_vig' ||
       'ai.wake_light' =>
         guardFeatureBandDelta,
-      // Historical REVE mode → REVE A-vig head (UI hides if not installed).
-      'drowsinessReveBase' || 'ai.a_vig_reve' => guardFeatureAiAVigReve,
+      // Legacy REVE *mode* name → band.delta (do not auto-promote to REVE
+      // heads). Explicit ai.*_reve ids are kept; UI/settings drop them when
+      // REVE base is not installed.
+      'drowsinessReveBase' => guardFeatureBandDelta,
+      'ai.a_vig_reve' => guardFeatureAiAVigReve,
       'ai.wake_light_reve' => guardFeatureAiWakeLightReve,
       'none' => guardFeatureNone,
       _ => null,
@@ -99,6 +102,8 @@ String? parseGuardFeatureValue(Object? value) {
       return guardFeatureBandDelta;
     }
     if (feature is String && guardFeatureIsReve(feature)) {
+      // Keep stored REVE head ids; callers must fall back to band.delta when
+      // REVE base is not installed (settings load + scorer Done).
       return feature;
     }
   }

@@ -20,7 +20,7 @@ fn now_ms() -> f64 {
 // ── Guardrail window helpers ─────────────────────────────────────────────────
 
 /// Max samples kept per electrode in the rolling guardrail window buffer.
-/// 5.5 s @ 256 Hz covers the longer LUNA epoch (1280 = 5 s) with headroom.
+/// 5.5 s @ 256 Hz covers a 5 s epoch (1280 samples) with headroom.
 const GUARDRAIL_WINDOW: usize = 1408;
 
 /// App electrode index → model row order (AF7, AF8, TP9, TP10). The forwarder's

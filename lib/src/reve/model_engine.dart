@@ -57,6 +57,10 @@ class ModelInstallResult {
 /// bundled head pack copied from Flutter assets plus an optional
 /// `pretrained_weights.pth` encoder (SHA-pinned, HF Apache-2.0 download).
 /// REVE remains `config.json` + `model.safetensors` via user import.
+/// Flip when native CBraMod encoder forward is linked in Rust.
+/// Until then the Model Ready card stays false even with verified weights.
+const bool kCbramodEncoderForwardReady = false;
+
 class ModelCache {
   const ModelCache();
 
@@ -100,14 +104,80 @@ class ModelCache {
     return missing;
   }
 
-  Future<bool> isInstalledOnDisk(String? sessionFolder, ModelKind kind) async {
+  /// Pack/head files present (CBraMod) or REVE safetensors present.
+  /// Does **not** call [ensureBundledPack] — copying the bundled head must not
+  /// alone mark the model installed/Ready.
+  Future<bool> isPackPresentOnDisk(String? sessionFolder, ModelKind kind) async {
     final dir = await modelDirectory(sessionFolder, kind);
-    if (kind.layout == ModelLayout.cbramodPack) {
-      await ensureBundledPack(dir, kind);
-    } else if (kind.layout == ModelLayout.rlxSafetensors) {
+    if (kind.layout == ModelLayout.rlxSafetensors) {
       await ensureReveExperimentalHeads(dir);
     }
     return (await _missing(dir, kind)).isEmpty;
+  }
+
+  Future<File> _encoderFile(Directory dir) async {
+    final candidates = [
+      File('${dir.path}/pretrained_weights.pth'),
+      File('${dir.path}/encoder/pretrained_weights.pth'),
+    ];
+    for (final f in candidates) {
+      if (await f.exists() && await f.length() > 0) return f;
+    }
+    return candidates.first;
+  }
+
+  /// Encoder weights present and SHA-verified (stamp or live hash).
+  Future<bool> isEncoderVerifiedOnDisk(
+    String? sessionFolder,
+    ModelKind kind,
+  ) async {
+    if (kind.layout != ModelLayout.cbramodPack) {
+      return isVerifiedOnDisk(sessionFolder, kind);
+    }
+    final dir = await modelDirectory(sessionFolder, kind);
+    if (await isVerifiedOnDisk(sessionFolder, kind)) {
+      final enc = await _encoderFile(dir);
+      return enc.existsSync() && await enc.length() > 0;
+    }
+    final enc = await _encoderFile(dir);
+    if (!(await enc.exists()) || await enc.length() == 0) return false;
+    final hex = await sha256Of(enc.openRead());
+    if (hex != kind.sha256) return false;
+    await _stampVerified(dir, kind);
+    return true;
+  }
+
+  /// Installed for badges: CBraMod needs head pack + verified encoder; REVE
+  /// needs safetensors. Ready (scoring) is a stricter gate — see notifier.
+  Future<bool> isInstalledOnDisk(String? sessionFolder, ModelKind kind) async {
+    if (!(await isPackPresentOnDisk(sessionFolder, kind))) return false;
+    if (kind.layout == ModelLayout.cbramodPack) {
+      return isEncoderVerifiedOnDisk(sessionFolder, kind);
+    }
+    return true;
+  }
+
+  /// Human-readable reason CBraMod is not Ready, or null when Ready is allowed.
+  Future<String?> cbramodNotReadyReason(
+    String? sessionFolder,
+    ModelKind kind,
+  ) async {
+    if (kind.layout != ModelLayout.cbramodPack) return null;
+    // Ensure head pack is on disk for load attempts (explicit, not via installed).
+    final dir = await modelDirectory(sessionFolder, kind);
+    await ensureBundledPack(dir, kind);
+    if (!(await isPackPresentOnDisk(sessionFolder, kind))) {
+      return 'CBraMod head pack missing';
+    }
+    if (!(await isEncoderVerifiedOnDisk(sessionFolder, kind))) {
+      return 'CBraMod encoder weights not verified — download or import '
+          'pretrained_weights.pth (SHA-pinned Apache-2.0)';
+    }
+    if (!kCbramodEncoderForwardReady) {
+      return 'CBraMod encoder forward not linked yet (encoder SHA + head OK) — '
+          'not Ready until native forward exists';
+    }
+    return null;
   }
 
   /// Copy the bundled Spur A pack from Flutter assets into [dir] when missing.
@@ -424,6 +494,19 @@ class ModelEngineReady extends ModelEngineState {
   final String description;
 }
 
+/// Files may be present / loaded, but scoring Ready is false — [reason] is
+/// user-facing (e.g. encoder forward pending).
+class ModelEngineNotReady extends ModelEngineState {
+  const ModelEngineNotReady({
+    required this.kind,
+    required this.reason,
+    this.description,
+  });
+  final ModelKind kind;
+  final String reason;
+  final String? description;
+}
+
 /// Previous attempt failed; [message] is user-facing.
 class ModelEngineError extends ModelEngineState {
   const ModelEngineError({required this.kind, required this.message});
@@ -476,6 +559,29 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
 
   Future<ModelEngineState> _probe(ModelKind kind) async {
     try {
+      if (kind.layout == ModelLayout.cbramodPack) {
+        final reason = await _cache.cbramodNotReadyReason(_sessionFolder, kind);
+        // Always try to load head when pack can be ensured — description feeds UI.
+        String? desc;
+        try {
+          final result = await _cache.install(_sessionFolder, kind);
+          desc = result.loadedDesc;
+        } on Exception catch (_) {
+          // Head-only load may still fail if assets missing.
+        }
+        if (reason != null) {
+          if (desc == null &&
+              !(await _cache.isPackPresentOnDisk(_sessionFolder, kind))) {
+            return const ModelEngineNotInstalled();
+          }
+          return ModelEngineNotReady(
+            kind: kind,
+            reason: reason,
+            description: desc,
+          );
+        }
+        return ModelEngineReady(kind: kind, description: desc ?? kind.label);
+      }
       if (!await _cache.isInstalledOnDisk(_sessionFolder, kind)) {
         return const ModelEngineNotInstalled();
       }
@@ -484,6 +590,19 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
     } on Exception catch (e) {
       return ModelEngineError(kind: kind, message: '$e');
     }
+  }
+
+  ModelEngineState _readyOrNot(ModelKind kind, String loadedDesc) {
+    if (kind.layout == ModelLayout.cbramodPack && !kCbramodEncoderForwardReady) {
+      return ModelEngineNotReady(
+        kind: kind,
+        reason:
+            'CBraMod encoder forward not linked yet (encoder SHA + head OK) — '
+            'not Ready until native forward exists',
+        description: loadedDesc,
+      );
+    }
+    return ModelEngineReady(kind: kind, description: loadedDesc);
   }
 
   /// Switch the selected model (persisted to settings) and probe it.
@@ -505,7 +624,7 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
     state = const ModelEngineLoading();
     try {
       final result = await _cache.importModel(_sessionFolder, kind, src);
-      state = ModelEngineReady(kind: kind, description: result.loadedDesc);
+      state = _readyOrNot(kind, result.loadedDesc);
     } on ModelChecksumException catch (e) {
       state = ModelEngineError(kind: kind, message: e.message);
     } on Exception catch (e) {
@@ -529,7 +648,7 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
         kind,
         onProgress: onProgress,
       );
-      state = ModelEngineReady(kind: kind, description: result.loadedDesc);
+      state = _readyOrNot(kind, result.loadedDesc);
     } on ModelChecksumException catch (e) {
       state = ModelEngineError(kind: kind, message: e.message);
     } on ModelDownloadException catch (e) {

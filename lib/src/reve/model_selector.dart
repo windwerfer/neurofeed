@@ -263,6 +263,14 @@ class ModelInfoBlock extends ConsumerWidget {
     String statusText;
     if (engineState is ModelEngineReady) {
       statusText = engineState.description;
+    } else if (engineState is ModelEngineNotReady) {
+      statusText = engineState.reason;
+    } else if (engineState is ModelEngineLoading) {
+      statusText = 'Loading…';
+    } else if (installed == true) {
+      statusText = 'Installed — will load on use.';
+    } else {
+      statusText = 'Not installed yet.';
     } else if (engineState is ModelEngineLoading) {
       statusText = 'Loading…';
     } else if (installed == true) {

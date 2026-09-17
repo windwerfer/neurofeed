@@ -106,6 +106,31 @@ class _AiEngineCardState extends ConsumerState<AiEngineCard> {
           const SizedBox(height: 12),
           ModelInstallBubble(kind: modelKind),
         ];
+      case ModelEngineNotReady(:final reason, :final description):
+        return [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, color: theme.colorScheme.tertiary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  [
+                    if (description != null && description!.isNotEmpty) description!,
+                    reason,
+                  ].join('\n'),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+              TextButton(
+                onPressed: _uninstall,
+                child: const Text('Uninstall'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ModelInstallBubble(kind: modelKind),
+        ];
       case ModelEngineNotInstalled():
         final modelDir = ref.watch(modelFolderProvider);
         return [
