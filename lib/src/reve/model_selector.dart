@@ -271,12 +271,6 @@ class ModelInfoBlock extends ConsumerWidget {
       statusText = 'Installed — will load on use.';
     } else {
       statusText = 'Not installed yet.';
-    } else if (engineState is ModelEngineLoading) {
-      statusText = 'Loading…';
-    } else if (installed == true) {
-      statusText = 'Installed — will load on use.';
-    } else {
-      statusText = 'Not installed yet.';
     }
 
     return Column(
