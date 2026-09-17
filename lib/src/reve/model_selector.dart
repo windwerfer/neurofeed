@@ -17,6 +17,11 @@ const XTypeGroup _safetensorsType = XTypeGroup(
   extensions: ['safetensors'],
 );
 
+const XTypeGroup _pthType = XTypeGroup(
+  label: 'CBraMod encoder',
+  extensions: ['pth'],
+);
+
 /// Let the user pick a `.safetensors` file and import it into the app for
 /// [kind]. Returns the resulting engine state (Ready after a success).
 Future<ModelEngineState> pickAndImportModel(
@@ -25,15 +30,19 @@ Future<ModelEngineState> pickAndImportModel(
 ) async {
   Stream<List<int>>? src;
 
+  final ext = kind.layout == ModelLayout.cbramodPack ? 'pth' : 'safetensors';
+  final types = kind.layout == ModelLayout.cbramodPack
+      ? <XTypeGroup>[_pthType]
+      : <XTypeGroup>[_safetensorsType];
   if (defaultTargetPlatform == TargetPlatform.android) {
     final uri = await SafSessionStorage.pickFile();
     if (uri == null) {
       return ref.read(modelEngineNotifierProvider);
     }
-    final path = await SafSessionStorage.copyUriToCache(uri, 'import_${kind.name}.safetensors');
+    final path = await SafSessionStorage.copyUriToCache(uri, 'import_${kind.name}.$ext');
     src = File(path).openRead();
   } else {
-    final file = await openFile(acceptedTypeGroups: [_safetensorsType]);
+    final file = await openFile(acceptedTypeGroups: types);
     if (file == null) {
       return ref.read(modelEngineNotifierProvider);
     }

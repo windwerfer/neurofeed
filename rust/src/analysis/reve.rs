@@ -10,6 +10,9 @@ use std::sync::{Mutex, MutexGuard};
 use anyhow::Context;
 use reve_rs::ReveEncoder;
 
+/// Model-kind identifier shared with Dart (`ModelKind.ffId`).
+pub const KIND_REVE_BASE: &str = "reve_base";
+
 /// Loaded REVE encoder, guarded so the forwarder can borrow it across threads.
 static ENCODER: Mutex<Option<ReveEncoder>> = Mutex::new(None);
 

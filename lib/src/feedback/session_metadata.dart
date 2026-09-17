@@ -448,7 +448,7 @@ class SessionSettings {
   /// [guardrailEngine] when present.
   final String? guardFeature;
 
-  /// `luna_large` / `luna_base` / `reve_base`.
+  /// `cbramod_a_vig` / `reve_base`.
   final String? guardModel;
 
   Map<String, Object?> toJson() => {

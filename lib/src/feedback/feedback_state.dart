@@ -868,7 +868,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
-  /// Arm the REVE/LUNA sleep-guardrail scorer according to the per-protocol
+  /// Arm the CBraMod/REVE sleep-guardrail scorer according to the per-protocol
   /// setting ([Settings.guardrailEnabledFor]), using the settings-selected
   /// foundation model. Scoring starts immediately in the forwarder (first
   /// embedding lands after ~5 s) so the calibration baseline can capture the
@@ -2014,7 +2014,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     );
   }
 
-  /// Whether the REVE/LUNA sleep guardrail is actively scoring this session.
+  /// Whether the CBraMod/REVE sleep guardrail is actively scoring this session.
   bool get guardrailEnabled => _guard.enabled;
 
   /// Whether the deep-rest (V_sleep) anchor was captured at calibration end.

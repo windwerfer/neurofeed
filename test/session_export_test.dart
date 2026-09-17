@@ -118,7 +118,7 @@ SessionMetadata _metadata({
       responsiveness: 0.5,
       baselinePercentile: 40,
       guardrailEnabled: true,
-      guardrailEngine: 'lunaLarge',
+      guardrailEngine: 'cbramodAVig',
       warningThresholdPercentile: 75,
       warningSound: 'softBowl',
       musicFolder: null,

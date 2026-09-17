@@ -207,6 +207,11 @@ class Settings extends ChangeNotifier {
     }
 
     var guardModel = prefs.getString(_guardModelKey);
+    // LUNA removed: rewrite legacy ffIds to Spur A.
+    if (guardModel == 'luna_large' || guardModel == 'luna_base') {
+      guardModel = 'cbramod_a_vig';
+      await prefs.setString(_guardModelKey, guardModel);
+    }
     if (guardModel == null || guardModel.isEmpty) {
       for (final id in catalogProtocolIds) {
         final v = raw[id];
@@ -532,7 +537,7 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Global installed-model id (`luna_large` / `luna_base` / `reve_base`),
+  /// Global installed-model id (`cbramod_a_vig` / `reve_base` (legacy luna_* migrates to CBraMod)),
   /// or null when unset (band-math).
   String? get guardModel {
     final v = _prefs.getString(_guardModelKey);
