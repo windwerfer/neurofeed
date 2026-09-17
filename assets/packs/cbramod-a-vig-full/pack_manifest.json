@@ -24,5 +24,7 @@
   "ff_id": "cbramod_a_vig",
   "feature_id": "ai.a_vig",
   "in_dim": 200,
-  "n_classes": 2
+  "n_classes": 2,
+  "feature_dto_value": "P(class1)=P(hypnagogic)",
+  "feature_dto_note": "Live FeatureDto emits P(hypnagogic), not argmax. Argmax remains eval decode."
 }

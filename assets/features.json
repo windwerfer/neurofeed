@@ -5,39 +5,49 @@
       "label": "Alpha over Theta",
       "shortLabel": "ATR",
       "source": "band",
-      "usableFor": ["reward"],
-      "rewardCopy": "Rewards alpha ÷ theta on the feature electrodes.",
+      "usableFor": [
+        "reward"
+      ],
+      "rewardCopy": "Rewards alpha \u00f7 theta on the feature electrodes.",
       "guardCopy": null
     },
     "band.tar": {
       "label": "Theta over Alpha",
       "shortLabel": "TAR",
       "source": "band",
-      "usableFor": ["reward"],
-      "rewardCopy": "Rewards theta ÷ alpha on the feature electrodes.",
+      "usableFor": [
+        "reward"
+      ],
+      "rewardCopy": "Rewards theta \u00f7 alpha on the feature electrodes.",
       "guardCopy": null
     },
     "band.btr": {
       "label": "Beta over Theta",
       "shortLabel": "BTR",
       "source": "band",
-      "usableFor": ["reward"],
-      "rewardCopy": "Rewards beta ÷ theta on the feature electrodes.",
+      "usableFor": [
+        "reward"
+      ],
+      "rewardCopy": "Rewards beta \u00f7 theta on the feature electrodes.",
       "guardCopy": null
     },
     "band.alpha": {
       "label": "Relative alpha",
-      "shortLabel": "α",
+      "shortLabel": "\u03b1",
       "source": "band",
-      "usableFor": ["reward"],
+      "usableFor": [
+        "reward"
+      ],
       "rewardCopy": "Rewards relative alpha on the feature electrodes.",
       "guardCopy": null
     },
     "band.delta": {
       "label": "Delta (band math)",
-      "shortLabel": "δ",
+      "shortLabel": "\u03b4",
       "source": "band",
-      "usableFor": ["guard"],
+      "usableFor": [
+        "guard"
+      ],
       "rewardCopy": null,
       "guardCopy": "Warns when frontal delta rises relative to your rest baseline."
     },
@@ -45,56 +55,72 @@
       "label": "CBraMod A-vig",
       "shortLabel": "A-vig",
       "source": "ai",
-      "usableFor": ["guard"],
+      "usableFor": [
+        "guard"
+      ],
       "rewardCopy": null,
-      "guardCopy": "Primary Spur A sleep/drowsy score (CBraMod A-vig, argmax)."
+      "guardCopy": "Primary Spur A sleep/drowsy score (CBraMod A-vig). FeatureDto value is P(hypnagogic). Unavailable until CBraMod encoder forward is linked."
     },
     "ai.wake_light": {
       "label": "CBraMod wake/light",
       "shortLabel": "Wake/light",
       "source": "ai",
-      "usableFor": ["guard"],
+      "usableFor": [
+        "guard"
+      ],
       "rewardCopy": null,
-      "guardCopy": "CBraMod Head C wake vs light-sleep probe score."
+      "guardCopy": "CBraMod Head C wake vs light-sleep probe. FeatureDto value is P(light). Unavailable until CBraMod encoder forward is linked."
     },
     "ai.a_vig_reve": {
       "label": "REVE A-vig (exp.)",
       "shortLabel": "REVE A-vig",
       "source": "ai",
-      "usableFor": ["guard"],
+      "usableFor": [
+        "guard"
+      ],
       "rewardCopy": null,
-      "guardCopy": "Experimental REVE A-vig subsample head (needs gated REVE base)."
+      "guardCopy": "Experimental REVE A-vig subsample head (needs gated REVE base). FeatureDto value is P(hypnagogic)."
     },
     "ai.wake_light_reve": {
       "label": "REVE wake/light (exp.)",
       "shortLabel": "REVE W/L",
       "source": "ai",
-      "usableFor": ["guard"],
+      "usableFor": [
+        "guard"
+      ],
       "rewardCopy": null,
-      "guardCopy": "Experimental REVE Head C wake/light subsample (needs gated REVE base)."
+      "guardCopy": "Experimental REVE Head C wake/light subsample (needs gated REVE base). FeatureDto value is P(light)."
     },
     "ai.drowsiness": {
       "label": "AI drowsiness (legacy)",
       "shortLabel": "AI sleep",
       "source": "ai",
-      "usableFor": ["guard"],
+      "usableFor": [
+        "guard"
+      ],
       "rewardCopy": null,
-      "guardCopy": "Deprecated alias of ai.a_vig — kept for protocol compatibility."
+      "guardCopy": "Deprecated alias of ai.a_vig \u2014 same P(hypnagogic) scalar; unavailable until CBraMod encoder forward is linked."
     },
     "device.focus": {
       "label": "Crown focus",
       "shortLabel": "Focus",
       "source": "device",
-      "usableFor": ["reward", "guard"],
-      "rewardCopy": "Crown-native focus score (0–1).",
+      "usableFor": [
+        "reward",
+        "guard"
+      ],
+      "rewardCopy": "Crown-native focus score (0\u20131).",
       "guardCopy": "Warns from the Crown-native focus score."
     },
     "device.calm": {
       "label": "Crown calm",
       "shortLabel": "Calm",
       "source": "device",
-      "usableFor": ["reward", "guard"],
-      "rewardCopy": "Crown-native calm score (0–1).",
+      "usableFor": [
+        "reward",
+        "guard"
+      ],
+      "rewardCopy": "Crown-native calm score (0\u20131).",
       "guardCopy": "Warns from the Crown-native calm score."
     }
   }

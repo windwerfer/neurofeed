@@ -5,5 +5,6 @@
   "n_classes": 2,
   "decode": "argmax",
   "recommended_head": "heads/head_a_vig_reve_linear.pt",
-  "head_f32bin": "heads/head_a_vig_reve_linear.f32bin"
+  "head_f32bin": "heads/head_a_vig_reve_linear.f32bin",
+  "feature_dto_value": "P(class1)=P(hypnagogic)"
 }

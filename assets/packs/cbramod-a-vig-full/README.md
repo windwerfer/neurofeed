@@ -12,8 +12,9 @@ Frozen **CBraMod** encoder + full-corpus **A-vig** linear head (`drowsy` / `hypn
    that model directory. SHA-256 must match `encoder/EXPECTED.json`:
    `0792cb808c14e6b7a2bb2ce1dff379bc47bc54c49a779825bdfeb33bf8157178`.
 4. Window contract: **2 s @ 256 Hz** (512 samples) Muse AF7/AF8/TP9/TP10 →
-   resample/patch → mean-pool → HeadALinear → **argmax** (not the older 0.53
-   precision-tuned threshold).
+   resample/patch → mean-pool → HeadALinear → softmax. Live **FeatureDto.value
+   is P(hypnagogic)** (class 1) for guardrail percentiles; argmax remains the
+   offline eval decode (not the older 0.53 precision-tuned threshold).
 
 ## Files
 
@@ -37,5 +38,7 @@ SHA pin, head apply, and guardrail kind selection.
 | `ai.wake_light` | Head C wake/light (also mirrored here) |
 | `ai.drowsiness` | Deprecated alias of `ai.a_vig` |
 
-Encoder forward still needs a native Torch/Candle backend; head-linear forward
-runs in-process (ndarray-style) for tests and once an embedding is available.
+Encoder forward still needs a native Torch/Candle backend — until then the
+app marks `ai.a_vig` / `ai.wake_light` / `ai.drowsiness` **unavailable** and
+hides them from the ship scorer picker. Head-linear forward runs in-process
+for unit tests once a synthetic/real embedding is available.

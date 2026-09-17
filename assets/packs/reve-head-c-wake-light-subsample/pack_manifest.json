@@ -20,5 +20,7 @@
   "in_dim": 512,
   "n_classes": 2,
   "head_pt_sha256": "7ef4852b7ce63957542156cc4c5db3e1abb29d910dae30b973b92cefba8eff71",
-  "head_f32bin_sha256": "329ad140681ebe8354257bcb63d6d557596b71a3d41fcd4947001e494b825fe9"
+  "head_f32bin_sha256": "329ad140681ebe8354257bcb63d6d557596b71a3d41fcd4947001e494b825fe9",
+  "feature_dto_value": "P(class1)=P(light)",
+  "feature_dto_note": "Live FeatureDto emits P(light), not argmax. Argmax remains eval decode."
 }

@@ -6,8 +6,16 @@
   "recommended_head": "heads/head_a_vig_linear.pt",
   "head_sha256": "b34730c8eb1415427119bda368394b0b5dfa7d991c5b46cd22f863912efdd62b",
   "decode": "argmax",
-  "labels": ["drowsy", "hypnagogic"],
-  "muse_channels": ["AF7", "AF8", "TP9", "TP10"],
+  "labels": [
+    "drowsy",
+    "hypnagogic"
+  ],
+  "muse_channels": [
+    "AF7",
+    "AF8",
+    "TP9",
+    "TP10"
+  ],
   "embedding_dim": 200,
   "window_sec": 2.0,
   "input_sr_hz": 256.0,
@@ -19,7 +27,8 @@
   "verify_steps": [
     "sha256sum encoder pretrained_weights.pth == encoder/EXPECTED.json",
     "load HeadALinear(in_dim=200, n_classes=2) from recommended_head",
-    "mean-pool CBraMod patch features → (1, 200); head logits; argmax for class"
+    "mean-pool CBraMod patch features \u2192 (1, 200); head logits; softmax; FeatureDto=P(hypnagogic)"
   ],
-  "notes": "Full-corpus A-vig uses argmax (not the older 0.53 precision-tuned threshold)."
+  "notes": "Full-corpus A-vig eval uses argmax. Live FeatureDto.value is P(hypnagogic) for guardrail percentile thresholds. Encoder forward still pending \u2014 registry marks ai.a_vig unavailable until linked.",
+  "feature_dto_value": "P(class1)=P(hypnagogic)"
 }

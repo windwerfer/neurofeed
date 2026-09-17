@@ -16,7 +16,25 @@ const Set<String> guardFeatureAiIds = {
   guardFeatureAiDrowsiness,
 };
 
+/// CBraMod-backed heads — not selectable as live scorers until encoder forward works.
+const Set<String> guardFeatureCbramodIds = {
+  guardFeatureAiAVig,
+  guardFeatureAiWakeLight,
+  guardFeatureAiDrowsiness,
+};
+
+/// REVE-backed experimental heads (selectable when REVE base is installed).
+const Set<String> guardFeatureReveIds = {
+  guardFeatureAiAVigReve,
+  guardFeatureAiWakeLightReve,
+};
+
 bool guardFeatureIsAi(String feature) => guardFeatureAiIds.contains(feature);
+
+bool guardFeatureIsCbramod(String feature) =>
+    guardFeatureCbramodIds.contains(feature);
+
+bool guardFeatureIsReve(String feature) => guardFeatureReveIds.contains(feature);
 
 bool guardFeatureIsBandMath(String feature) => feature == guardFeatureBandDelta;
 
@@ -56,15 +74,16 @@ String? parseGuardFeatureValue(Object? value) {
   if (value is String) {
     return switch (value) {
       'drowsinessMath' || 'band.delta' => guardFeatureBandDelta,
+      // CBraMod / legacy LUNA / alias — migrate off until encoder forward works.
       'drowsinessCbramodAVig' ||
       'drowsinessLunaLarge' ||
       'drowsinessLunaBase' ||
-      'drowsinessReveBase' ||
-      'ai.drowsiness' =>
-        guardFeatureAiDrowsiness,
-      'ai.a_vig' => guardFeatureAiAVig,
-      'ai.wake_light' => guardFeatureAiWakeLight,
-      'ai.a_vig_reve' => guardFeatureAiAVigReve,
+      'ai.drowsiness' ||
+      'ai.a_vig' ||
+      'ai.wake_light' =>
+        guardFeatureBandDelta,
+      // Historical REVE mode → REVE A-vig head (UI hides if not installed).
+      'drowsinessReveBase' || 'ai.a_vig_reve' => guardFeatureAiAVigReve,
       'ai.wake_light_reve' => guardFeatureAiWakeLightReve,
       'none' => guardFeatureNone,
       _ => null,
@@ -72,10 +91,15 @@ String? parseGuardFeatureValue(Object? value) {
   }
   if (value is Map) {
     final feature = value['feature'];
-    if (feature == guardFeatureBandDelta ||
-        feature == guardFeatureNone ||
-        (feature is String && guardFeatureIsAi(feature))) {
+    if (feature == guardFeatureBandDelta || feature == guardFeatureNone) {
       return feature as String;
+    }
+    if (feature is String && guardFeatureIsCbramod(feature)) {
+      // Stored CBraMod head prefs → band.delta until live encoder scores exist.
+      return guardFeatureBandDelta;
+    }
+    if (feature is String && guardFeatureIsReve(feature)) {
+      return feature;
     }
   }
   return null;

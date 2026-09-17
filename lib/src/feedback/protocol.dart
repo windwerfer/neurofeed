@@ -486,14 +486,12 @@ class ProtocolDocument {
         if (!laneOk(guard!.feature, rewardLane: false)) return false;
       } else {
         // Catalog does not lock guard.feature: band.delta or any ai.* head.
+        // CBraMod heads omitted until encoder forward works (registry unavailable).
         final options = <String>{
           guard!.feature,
           'band.delta',
-          'ai.a_vig',
-          'ai.wake_light',
           'ai.a_vig_reve',
           'ai.wake_light_reve',
-          'ai.drowsiness',
         };
         if (!options.any((id) => laneOk(id, rewardLane: false))) {
           return false;
