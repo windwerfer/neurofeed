@@ -41,13 +41,45 @@
       "rewardCopy": null,
       "guardCopy": "Warns when frontal delta rises relative to your rest baseline."
     },
+    "ai.a_vig": {
+      "label": "CBraMod A-vig",
+      "shortLabel": "A-vig",
+      "source": "ai",
+      "usableFor": ["guard"],
+      "rewardCopy": null,
+      "guardCopy": "Primary Spur A sleep/drowsy score (CBraMod A-vig, argmax)."
+    },
+    "ai.wake_light": {
+      "label": "CBraMod wake/light",
+      "shortLabel": "Wake/light",
+      "source": "ai",
+      "usableFor": ["guard"],
+      "rewardCopy": null,
+      "guardCopy": "CBraMod Head C wake vs light-sleep probe score."
+    },
+    "ai.a_vig_reve": {
+      "label": "REVE A-vig (exp.)",
+      "shortLabel": "REVE A-vig",
+      "source": "ai",
+      "usableFor": ["guard"],
+      "rewardCopy": null,
+      "guardCopy": "Experimental REVE A-vig subsample head (needs gated REVE base)."
+    },
+    "ai.wake_light_reve": {
+      "label": "REVE wake/light (exp.)",
+      "shortLabel": "REVE W/L",
+      "source": "ai",
+      "usableFor": ["guard"],
+      "rewardCopy": null,
+      "guardCopy": "Experimental REVE Head C wake/light subsample (needs gated REVE base)."
+    },
     "ai.drowsiness": {
-      "label": "AI drowsiness",
+      "label": "AI drowsiness (legacy)",
       "shortLabel": "AI sleep",
       "source": "ai",
       "usableFor": ["guard"],
       "rewardCopy": null,
-      "guardCopy": "Warns when the live embedding points toward sleep."
+      "guardCopy": "Deprecated alias of ai.a_vig — kept for protocol compatibility."
     },
     "device.focus": {
       "label": "Crown focus",

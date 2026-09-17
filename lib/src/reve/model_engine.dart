@@ -104,6 +104,8 @@ class ModelCache {
     final dir = await modelDirectory(sessionFolder, kind);
     if (kind.layout == ModelLayout.cbramodPack) {
       await ensureBundledPack(dir, kind);
+    } else if (kind.layout == ModelLayout.rlxSafetensors) {
+      await ensureReveExperimentalHeads(dir);
     }
     return (await _missing(dir, kind)).isEmpty;
   }
@@ -124,6 +126,8 @@ class ModelCache {
       'README.md',
       'heads/head_a_vig_linear.f32bin',
       'heads/head_a_vig_linear.pt',
+      'heads/head_c_wake_light_linear.f32bin',
+      'heads/head_c_wake_light_linear.pt',
       'encoder/EXPECTED.json',
     ];
     for (final rel in files) {
@@ -137,6 +141,43 @@ class ModelCache {
         );
       } on Exception {
         // Optional docs may be absent in slim asset lists; head is required.
+      }
+    }
+  }
+
+  /// Copy experimental REVE linear heads into `reve_base/heads/` so Rust can
+  /// score `ai.a_vig_reve` / `ai.wake_light_reve` after a gated base import.
+  Future<void> ensureReveExperimentalHeads(Directory dir) async {
+    await Directory('${dir.path}/heads').create(recursive: true);
+    const copies = <(String, String)>[
+      (
+        'assets/packs/reve-a-vig-subsample/heads/head_a_vig_reve_linear.f32bin',
+        'heads/head_a_vig_reve_linear.f32bin',
+      ),
+      (
+        'assets/packs/reve-a-vig-subsample/heads/head_a_vig_reve_linear.pt',
+        'heads/head_a_vig_reve_linear.pt',
+      ),
+      (
+        'assets/packs/reve-head-c-wake-light-subsample/heads/head_c_wake_light_reve_linear.f32bin',
+        'heads/head_c_wake_light_reve_linear.f32bin',
+      ),
+      (
+        'assets/packs/reve-head-c-wake-light-subsample/heads/head_c_wake_light_reve_linear.pt',
+        'heads/head_c_wake_light_reve_linear.pt',
+      ),
+    ];
+    for (final (asset, rel) in copies) {
+      final dest = File('${dir.path}/$rel');
+      if (await dest.exists() && await dest.length() > 0) continue;
+      try {
+        final data = await rootBundle.load(asset);
+        await dest.writeAsBytes(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+          flush: true,
+        );
+      } on Exception {
+        // Experimental; absence leaves those feature IDs unscored.
       }
     }
   }
@@ -159,6 +200,7 @@ class ModelCache {
       await ensureBundledPack(dir, kind);
       return _importNamed(dir, kind, src, 'pretrained_weights.pth');
     }
+    await ensureReveExperimentalHeads(dir);
     return _importNamed(dir, kind, src, 'model.safetensors');
   }
 

@@ -143,13 +143,20 @@ pub fn load_model(model_dir: &str) -> anyhow::Result<String> {
     });
     *LAST_PROBS.lock().unwrap_or_else(|e| e.into_inner()) = None;
 
+    // Register feature-ID heads (ai.a_vig + optional ai.wake_light).
+    let head_descs = crate::analysis::ai_heads::load_cbramod_model_dir(&dir)
+        .unwrap_or_else(|e| {
+            log::warn!("[cbramod] ai_heads register: {e}");
+            Vec::new()
+        });
+
     let enc_status = if encoder_verified {
         "encoder weights verified (forward backend pending)"
     } else {
         "encoder weights missing — download pretrained_weights.pth (Apache-2.0) into the model dir"
     };
     let desc = format!(
-        "CBraMod A-vig ({PACK_ID}) — HeadALinear {EMBED_DIM}→{N_CLASSES}, decode=argmax; {enc_status}"
+        "CBraMod A-vig ({PACK_ID}) — HeadALinear {EMBED_DIM}→{N_CLASSES}, decode=argmax; {enc_status}; heads={head_descs:?}"
     );
     log::info!("[cbramod] loaded: {desc} (dir={})", dir.display());
     Ok(desc)

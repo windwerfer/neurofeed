@@ -1233,8 +1233,62 @@ fn spawn_event_forwarder() {
                                         return;
                                     }
                                 };
-                                guardrail::set_live_embedding(kind.clone(), embedding);
+                                guardrail::set_live_embedding(kind.clone(), embedding.clone());
                                 let dim = guardrail::live_dim();
+                                // Emit per-feature-ID head scores when packs are loaded for this
+                                // embedding dim (CBraMod 200-d / REVE 512-d). Encoder gaps still
+                                // fail earlier in score_window; head-linear path runs when emb exists.
+                                let head_scores =
+                                    crate::analysis::ai_heads::score_matching_heads(&embedding);
+                                let mut emitted_canonical = std::collections::HashSet::<String>::new();
+                                {
+                                    let mut guard = state()
+                                        .inner
+                                        .lock()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    let mut kill_sink = false;
+                                    if let Some(sink) = guard.sink.as_ref() {
+                                        for (fid, score) in &head_scores {
+                                            let enabled = features::is_enabled(fid)
+                                                || (*fid == features::ID_A_VIG
+                                                    && features::is_enabled(
+                                                        features::ID_DROWSINESS,
+                                                    ));
+                                            if !enabled {
+                                                continue;
+                                            }
+                                            if sink
+                                                .add(MuseEventDto::Feature(FeatureDto {
+                                                    id: fid.clone(),
+                                                    timestamp: ts,
+                                                    value: *score as f64,
+                                                }))
+                                                .is_err()
+                                            {
+                                                kill_sink = true;
+                                                break;
+                                            }
+                                            emitted_canonical.insert(fid.clone());
+                                            if *fid == features::ID_A_VIG
+                                                && features::is_enabled(features::ID_DROWSINESS)
+                                                && sink
+                                                    .add(MuseEventDto::Feature(FeatureDto {
+                                                        id: features::ID_DROWSINESS.to_string(),
+                                                        timestamp: ts,
+                                                        value: *score as f64,
+                                                    }))
+                                                    .is_err()
+                                            {
+                                                kill_sink = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if kill_sink {
+                                        guard.sink = None;
+                                    }
+                                }
+
                                 if let Some((clarity, sd)) = guardrail::clarity_and_sleep_dir() {
                                     let sleep_dir = sd.unwrap_or(1.0 - clarity);
                                     let dto = MuseEventDto::Reve(ReveDto {
@@ -1249,21 +1303,41 @@ fn spawn_event_forwarder() {
                                         .inner
                                         .lock()
                                         .unwrap_or_else(|e| e.into_inner());
+                                    let mut kill_sink = false;
                                     if let Some(sink) = &guard.sink {
                                         if sink.add(dto).is_err() {
-                                            guard.sink = None;
-                                        } else if features::is_enabled(features::ID_DROWSINESS) {
-                                            if sink
-                                                .add(MuseEventDto::Feature(FeatureDto {
-                                                    id: features::ID_DROWSINESS.to_string(),
-                                                    timestamp: ts,
-                                                    value: sleep_dir as f64,
-                                                }))
-                                                .is_err()
-                                            {
-                                                guard.sink = None;
+                                            kill_sink = true;
+                                        } else {
+                                            // Fallback: ai.a_vig / ai.drowsiness from sleep_dir when
+                                            // no matching head score was emitted (e.g. head not loaded).
+                                            let need_a_vig = (features::is_enabled(features::ID_A_VIG)
+                                                || features::is_enabled(features::ID_DROWSINESS))
+                                                && !emitted_canonical.contains(features::ID_A_VIG);
+                                            if need_a_vig {
+                                                for id in [
+                                                    features::ID_A_VIG,
+                                                    features::ID_DROWSINESS,
+                                                ] {
+                                                    if !features::is_enabled(id) {
+                                                        continue;
+                                                    }
+                                                    if sink
+                                                        .add(MuseEventDto::Feature(FeatureDto {
+                                                            id: id.to_string(),
+                                                            timestamp: ts,
+                                                            value: sleep_dir as f64,
+                                                        }))
+                                                        .is_err()
+                                                    {
+                                                        kill_sink = true;
+                                                        break;
+                                                    }
+                                                }
                                             }
                                         }
+                                    }
+                                    if kill_sink {
+                                        guard.sink = None;
                                     }
                                 }
                                 guardrail::finish_score();

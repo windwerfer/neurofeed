@@ -485,8 +485,16 @@ class ProtocolDocument {
       if (locked) {
         if (!laneOk(guard!.feature, rewardLane: false)) return false;
       } else {
-        // Catalog does not lock guard.feature: band.delta or ai.drowsiness.
-        final options = <String>{guard!.feature, 'band.delta', 'ai.drowsiness'};
+        // Catalog does not lock guard.feature: band.delta or any ai.* head.
+        final options = <String>{
+          guard!.feature,
+          'band.delta',
+          'ai.a_vig',
+          'ai.wake_light',
+          'ai.a_vig_reve',
+          'ai.wake_light_reve',
+          'ai.drowsiness',
+        };
         if (!options.any((id) => laneOk(id, rewardLane: false))) {
           return false;
         }
