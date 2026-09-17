@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
+import 'package:muse_ml/src/reve/model_engine.dart';
+import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/feedback/last_calibration_baseline.dart';
 import 'package:muse_ml/src/agent/agent_flags.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
@@ -225,6 +227,11 @@ class Settings extends ChangeNotifier {
       }
     }
 
+    final reveInstalled = await const ModelCache().isInstalledOnDisk(
+      prefs.getString(_sessionFolderKey),
+      ModelKind.reveBase,
+    );
+
     final out = <String, Map<String, String>>{};
     final ids = <String>{...catalogProtocolIds, ...raw.keys};
     for (final id in ids) {
@@ -238,7 +245,11 @@ class Settings extends ChangeNotifier {
       }
       final parsed = parseGuardFeatureValue(raw[id]);
       if (parsed != null) {
-        out[id] = {'feature': parsed};
+        // Never keep ai.*_reve prefs unless REVE base is actually installed.
+        final feature = (guardFeatureIsReve(parsed) && !reveInstalled)
+            ? guardFeatureBandDelta
+            : parsed;
+        out[id] = {'feature': feature};
       } else if (doc?.guard != null || catalogProtocolIds.contains(id)) {
         // Catalog rows with a guard object default ON (band.delta). Ids in
         // the freeze list that have no document yet still must not throw.

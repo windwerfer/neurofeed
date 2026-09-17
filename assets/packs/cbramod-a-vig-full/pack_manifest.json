@@ -26,5 +26,7 @@
   "in_dim": 200,
   "n_classes": 2,
   "feature_dto_value": "P(class1)=P(hypnagogic)",
-  "feature_dto_note": "Live FeatureDto emits P(hypnagogic), not argmax. Argmax remains eval decode."
+  "feature_dto_note": "Live FeatureDto emits P(hypnagogic), not argmax. Argmax remains eval decode.",
+  "head_f32bin_sha256": "2695ce91cc5e9cbb8d6f29fc4bfff9b6f1294c106cced6fa2657d4bf6c26ba96",
+  "head_c_wake_light_f32bin_sha256": "cc0415bc1d3fac7c5f7113315b609185b9d1dbc30ffec77c4448c99b060dc925"
 }

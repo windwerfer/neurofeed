@@ -2191,8 +2191,11 @@ class _GuardrailScorerDialogState
   Future<void> _onDone() async {
     final settings = ref.read(settingsProvider);
     final fb = ref.read(feedbackStateProvider);
+    final reveInstalled =
+        ref.read(modelInstalledProvider(ModelKind.reveBase)).valueOrNull == true;
     if (settings.guardrailEnabledFor(fb.protocol) &&
         (guardFeatureIsCbramod(_feature) ||
+            (guardFeatureIsReve(_feature) && !reveInstalled) ||
             (guardFeatureIsAi(_feature) && !_anyModelInstalled()))) {
       final was = _feature;
       _feature = guardFeatureBandDelta;
@@ -2200,7 +2203,9 @@ class _GuardrailScorerDialogState
       if (mounted) {
         final why = guardFeatureIsCbramod(was)
             ? 'not ready (CBraMod encoder forward pending)'
-            : 'not installed';
+            : guardFeatureIsReve(was)
+                ? 'REVE base not installed'
+                : 'not installed';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

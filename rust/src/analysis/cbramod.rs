@@ -31,6 +31,9 @@ pub const ENCODER_SHA256: &str =
     "0792cb808c14e6b7a2bb2ce1dff379bc47bc54c49a779825bdfeb33bf8157178";
 
 /// Expected SHA-256 of the shipped full-corpus head `.pt`.
+pub const HEAD_F32BIN_SHA256: &str =
+    "2695ce91cc5e9cbb8d6f29fc4bfff9b6f1294c106cced6fa2657d4bf6c26ba96";
+
 pub const HEAD_PT_SHA256: &str =
     "b34730c8eb1415427119bda368394b0b5dfa7d991c5b46cd22f863912efdd62b";
 
@@ -342,6 +345,12 @@ fn load_head(dir: &Path) -> anyhow::Result<HeadALinear> {
 }
 
 fn load_head_f32bin(path: &Path) -> anyhow::Result<HeadALinear> {
+    let hex = file_sha256(path)?;
+    anyhow::ensure!(
+        hex == HEAD_F32BIN_SHA256,
+        "CBraMod head f32bin SHA mismatch\nGot      {hex}\nExpected {HEAD_F32BIN_SHA256}\n{}",
+        path.display()
+    );
     let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
     anyhow::ensure!(
         bytes.len() == (N_CLASSES * EMBED_DIM + N_CLASSES) * 4,

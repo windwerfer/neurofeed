@@ -24,7 +24,7 @@ pub fn model_load(model_dir: String, kind: String) -> anyhow::Result<String> {
             reve::load_model(&model_dir)
         }
         "luna_base" | "luna_large" => anyhow::bail!(
-            "LUNA is disabled — use cbramod_a_vig (Spur A) or reve_base"
+            "Legacy model id disabled — use cbramod_a_vig (Spur A) or reve_base"
         ),
         other => anyhow::bail!("unknown model kind: {other}"),
     }
@@ -46,7 +46,7 @@ pub fn model_config_json(kind: String) -> anyhow::Result<String> {
     match kind.as_str() {
         cbramod::KIND_CBRAMOD_A_VIG => Ok(cbramod::generated_config_json()),
         reve::KIND_REVE_BASE => Ok(reve::generated_config_json()),
-        "luna_base" | "luna_large" => anyhow::bail!("LUNA is disabled"),
+        "luna_base" | "luna_large" => anyhow::bail!("Legacy model id disabled — use cbramod_a_vig or reve_base"),
         other => anyhow::bail!("unknown model kind: {other}"),
     }
 }

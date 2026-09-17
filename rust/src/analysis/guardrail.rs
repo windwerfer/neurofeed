@@ -5,7 +5,7 @@
 //! window while a model is loaded and the guardrail is enabled, then feeds the
 //! pooled latent here via [`set_live_embedding`]. Calibration (Dart side) calls
 //! [`capture_anchor`] to freeze `V_clear` (awake) and `V_sleep` (deepest rest).
-//! Anchors are tagged with the model kind they were captured under so a LUNA
+//! Anchors are tagged with the model kind they were captured under so a prior
 //! vector is never compared against a REVE one.
 //!
 //! Score semantics (see `lib/src/feedback/protocol.dart`, Sleep-Edge Rest):
