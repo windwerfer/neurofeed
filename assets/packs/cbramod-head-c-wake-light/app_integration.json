@@ -1,0 +1,9 @@
+{
+  "pack_id": "cbramod-head-c-wake-light",
+  "feature_id": "ai.wake_light",
+  "in_dim": 200,
+  "n_classes": 2,
+  "decode": "argmax",
+  "recommended_head": "heads/head_c_wake_light_linear.pt",
+  "head_f32bin": "heads/head_c_wake_light_linear.f32bin"
+}

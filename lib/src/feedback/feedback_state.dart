@@ -895,22 +895,27 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     final ffId = settings.guardModel ?? defaultModelKind.ffId;
+    final featureId = settings.guardFeatureFor(state.protocol);
     try {
       final ok = await frb.guardrailEnable(kind: ffId);
       _guard.configure(
         enabled: ok,
         bandMath: false,
-        featureId: guardFeatureAiDrowsiness,
+        featureId: guardFeatureIsAi(featureId)
+            ? featureId
+            : guardFeatureAiAVig,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       if (ok) {
-        debugPrint('[guardrail] enabled ($ffId)');
+        debugPrint('[guardrail] enabled ($ffId, feature=$featureId)');
       }
     } catch (e) {
       _guard.configure(
         enabled: false,
         bandMath: false,
-        featureId: guardFeatureAiDrowsiness,
+        featureId: guardFeatureIsAi(featureId)
+            ? featureId
+            : guardFeatureAiAVig,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       debugPrint('[guardrail] enable failed: $e');

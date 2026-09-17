@@ -21,5 +21,8 @@
   "head_sha256": "b34730c8eb1415427119bda368394b0b5dfa7d991c5b46cd22f863912efdd62b",
   "embedding_dim": 200,
   "n_times": 512,
-  "ff_id": "cbramod_a_vig"
+  "ff_id": "cbramod_a_vig",
+  "feature_id": "ai.a_vig",
+  "in_dim": 200,
+  "n_classes": 2
 }

@@ -519,7 +519,7 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Per-protocol guard feature: `band.delta` / `ai.drowsiness` / `none`.
+  /// Per-protocol guard feature: `band.delta` / `ai.*` head ids / `none`.
   /// Documents without a guard lane always return `none`.
   String guardFeatureFor(String protocolId) {
     final doc = _catalog.forName(protocolId);
@@ -565,7 +565,7 @@ class Settings extends ChangeNotifier {
 
   /// Whether the guardrail runs an AI model for [protocolId].
   bool guardrailIsAiFor(String protocolId) =>
-      guardFeatureFor(protocolId) == guardFeatureAiDrowsiness;
+      guardFeatureIsAi(guardFeatureFor(protocolId));
 
   /// Warning sound shown in the Guardrail tap dialog (`softBowl`/`chime`/
   /// `cough`/`alarm`/`none`). Placeholder asset names — the files land later.

@@ -16,9 +16,37 @@ pub(crate) const ID_TAR: &str = "band.tar";
 pub(crate) const ID_BTR: &str = "band.btr";
 pub(crate) const ID_ALPHA: &str = "band.alpha";
 pub(crate) const ID_DELTA: &str = "band.delta";
+/// Deprecated alias → [`ID_A_VIG`] (protocol compat).
 pub(crate) const ID_DROWSINESS: &str = "ai.drowsiness";
+/// CBraMod A-vig full — primary sleep/drowsy score.
+pub(crate) const ID_A_VIG: &str = "ai.a_vig";
+/// CBraMod Head C wake/light.
+pub(crate) const ID_WAKE_LIGHT: &str = "ai.wake_light";
+/// REVE A-vig subsample (experimental).
+pub(crate) const ID_A_VIG_REVE: &str = "ai.a_vig_reve";
+/// REVE Head C subsample (experimental).
+pub(crate) const ID_WAKE_LIGHT_REVE: &str = "ai.wake_light_reve";
 pub(crate) const ID_FOCUS: &str = "device.focus";
 pub(crate) const ID_CALM: &str = "device.calm";
+
+/// Muse-only AI guard feature ids (including deprecated alias).
+pub(crate) const AI_FEATURE_IDS: &[&str] = &[
+    ID_A_VIG,
+    ID_WAKE_LIGHT,
+    ID_A_VIG_REVE,
+    ID_WAKE_LIGHT_REVE,
+    ID_DROWSINESS,
+];
+
+pub(crate) fn is_ai_feature_id(id: &str) -> bool {
+    AI_FEATURE_IDS.contains(&id)
+}
+
+/// Resolve deprecated alias for scoring.
+#[allow(dead_code)]
+pub(crate) fn canonical_ai_id(id: &str) -> &str {
+    crate::analysis::ai_heads::canonical_feature_id(id)
+}
 
 /// Keep in sync with Dart `atrUsableSignalThreshold` / `signalGoodThreshold`
 /// and the Dart copy of this formula in `connection_provider._maybeComputeSignalQuality`
@@ -138,6 +166,54 @@ const SPECS: &[Spec] = &[
         unavailable_crown: None,
     },
     Spec {
+        id: ID_A_VIG,
+        source: FeatureSource::Ai,
+        usable_for: &[FeatureLane::Guard],
+        muse_electrodes: &["AF7", "AF8", "TP9", "TP10"],
+        crown_electrodes: &[],
+        native_rate_hz: 1.0,
+        muse_available: true,
+        crown_available: false,
+        unavailable_muse: None,
+        unavailable_crown: Some("ai.a_vig is Muse-only"),
+    },
+    Spec {
+        id: ID_WAKE_LIGHT,
+        source: FeatureSource::Ai,
+        usable_for: &[FeatureLane::Guard],
+        muse_electrodes: &["AF7", "AF8", "TP9", "TP10"],
+        crown_electrodes: &[],
+        native_rate_hz: 1.0,
+        muse_available: true,
+        crown_available: false,
+        unavailable_muse: None,
+        unavailable_crown: Some("ai.wake_light is Muse-only"),
+    },
+    Spec {
+        id: ID_A_VIG_REVE,
+        source: FeatureSource::Ai,
+        usable_for: &[FeatureLane::Guard],
+        muse_electrodes: &["AF7", "AF8", "TP9", "TP10"],
+        crown_electrodes: &[],
+        native_rate_hz: 1.0,
+        muse_available: true,
+        crown_available: false,
+        unavailable_muse: None,
+        unavailable_crown: Some("ai.a_vig_reve is Muse-only"),
+    },
+    Spec {
+        id: ID_WAKE_LIGHT_REVE,
+        source: FeatureSource::Ai,
+        usable_for: &[FeatureLane::Guard],
+        muse_electrodes: &["AF7", "AF8", "TP9", "TP10"],
+        crown_electrodes: &[],
+        native_rate_hz: 1.0,
+        muse_available: true,
+        crown_available: false,
+        unavailable_muse: None,
+        unavailable_crown: Some("ai.wake_light_reve is Muse-only"),
+    },
+    Spec {
         id: ID_DROWSINESS,
         source: FeatureSource::Ai,
         usable_for: &[FeatureLane::Guard],
@@ -147,7 +223,7 @@ const SPECS: &[Spec] = &[
         muse_available: true,
         crown_available: false,
         unavailable_muse: None,
-        unavailable_crown: Some("ai.drowsiness is Muse-only"),
+        unavailable_crown: Some("ai.drowsiness is Muse-only (deprecated alias of ai.a_vig)"),
     },
     Spec {
         id: ID_FOCUS,
@@ -298,8 +374,8 @@ pub fn set_feature_electrodes(id: String, names: Vec<String>) -> anyhow::Result<
     }
 
     let mut reg = registry().lock().unwrap_or_else(|e| e.into_inner());
-    if matches!(reg.active_kind, Some(DeviceKind::Neurosity)) && spec.id == ID_DROWSINESS {
-        anyhow::bail!("ai.drowsiness is Muse-only");
+    if matches!(reg.active_kind, Some(DeviceKind::Neurosity)) && is_ai_feature_id(spec.id) {
+        anyhow::bail!("{} is Muse-only", spec.id);
     }
 
     if names.is_empty() {
@@ -646,7 +722,7 @@ mod tests {
     fn drowsiness_is_muse_only_focus_is_crown_only() {
         let muse = available_features(DeviceKind::Muse);
         let crown = available_features(DeviceKind::Neurosity);
-        assert_eq!(muse.len(), 8);
+        assert_eq!(muse.len(), 12);
         assert!(
             !crown
                 .iter()
@@ -784,5 +860,23 @@ mod tests {
         assert!((atr - 2.0).abs() < 1e-9);
         let delta = aggregate_band_feature(ID_DELTA, &pads).unwrap();
         assert!((delta - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn ai_head_feature_ids_registered_and_muse_only() {
+        let _lock = reset();
+        let muse = available_features(DeviceKind::Muse);
+        let crown = available_features(DeviceKind::Neurosity);
+        for id in AI_FEATURE_IDS {
+            let m = muse.iter().find(|f| f.id == *id).unwrap_or_else(|| panic!("missing {id}"));
+            assert!(m.available, "{id} should be available on Muse");
+            assert!(m.usable_for.contains(&FeatureLane::Guard));
+            let c = crown.iter().find(|f| f.id == *id).unwrap();
+            assert!(!c.available, "{id} Muse-only");
+        }
+        assert_eq!(canonical_ai_id(ID_DROWSINESS), ID_A_VIG);
+        assert!(set_enabled_features(vec![ID_A_VIG.into(), ID_WAKE_LIGHT.into()]).is_ok());
+        set_active_kind(DeviceKind::Neurosity);
+        assert!(set_enabled_features(vec![ID_A_VIG.into()]).is_err());
     }
 }

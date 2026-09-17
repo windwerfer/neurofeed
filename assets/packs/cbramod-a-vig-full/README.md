@@ -27,3 +27,15 @@ Frozen **CBraMod** encoder + full-corpus **A-vig** linear head (`drowsy` / `hypn
 
 Encoder forward still requires a native backend follow-up; this pack wires load,
 SHA pin, head apply, and guardrail kind selection.
+
+
+## Feature IDs
+
+| ID | Head |
+|----|------|
+| `ai.a_vig` | A-vig (primary sleep/drowsy) |
+| `ai.wake_light` | Head C wake/light (also mirrored here) |
+| `ai.drowsiness` | Deprecated alias of `ai.a_vig` |
+
+Encoder forward still needs a native Torch/Candle backend; head-linear forward
+runs in-process (ndarray-style) for tests and once an embedding is available.

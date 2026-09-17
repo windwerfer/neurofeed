@@ -1,10 +1,22 @@
 import 'package:muse_ml/src/reve/models.dart';
 
 const String guardFeatureBandDelta = 'band.delta';
-const String guardFeatureAiDrowsiness = 'ai.drowsiness';
+const String guardFeatureAiDrowsiness = 'ai.drowsiness'; // deprecated alias → ai.a_vig
+const String guardFeatureAiAVig = 'ai.a_vig';
+const String guardFeatureAiWakeLight = 'ai.wake_light';
+const String guardFeatureAiAVigReve = 'ai.a_vig_reve';
+const String guardFeatureAiWakeLightReve = 'ai.wake_light_reve';
 const String guardFeatureNone = 'none';
 
-bool guardFeatureIsAi(String feature) => feature == guardFeatureAiDrowsiness;
+const Set<String> guardFeatureAiIds = {
+  guardFeatureAiAVig,
+  guardFeatureAiWakeLight,
+  guardFeatureAiAVigReve,
+  guardFeatureAiWakeLightReve,
+  guardFeatureAiDrowsiness,
+};
+
+bool guardFeatureIsAi(String feature) => guardFeatureAiIds.contains(feature);
 
 bool guardFeatureIsBandMath(String feature) => feature == guardFeatureBandDelta;
 
@@ -50,6 +62,10 @@ String? parseGuardFeatureValue(Object? value) {
       'drowsinessReveBase' ||
       'ai.drowsiness' =>
         guardFeatureAiDrowsiness,
+      'ai.a_vig' => guardFeatureAiAVig,
+      'ai.wake_light' => guardFeatureAiWakeLight,
+      'ai.a_vig_reve' => guardFeatureAiAVigReve,
+      'ai.wake_light_reve' => guardFeatureAiWakeLightReve,
       'none' => guardFeatureNone,
       _ => null,
     };
@@ -57,8 +73,8 @@ String? parseGuardFeatureValue(Object? value) {
   if (value is Map) {
     final feature = value['feature'];
     if (feature == guardFeatureBandDelta ||
-        feature == guardFeatureAiDrowsiness ||
-        feature == guardFeatureNone) {
+        feature == guardFeatureNone ||
+        (feature is String && guardFeatureIsAi(feature))) {
       return feature as String;
     }
   }
@@ -80,6 +96,10 @@ ModelKind? modelKindFromFfId(String? ffId) {
 String guardFeatureLabel(String feature) => switch (feature) {
   guardFeatureNone => 'Off',
   guardFeatureBandDelta => 'Band math (delta)',
-  guardFeatureAiDrowsiness => 'AI drowsiness',
+  guardFeatureAiAVig => 'CBraMod A-vig',
+  guardFeatureAiWakeLight => 'CBraMod wake/light',
+  guardFeatureAiAVigReve => 'REVE A-vig (exp.)',
+  guardFeatureAiWakeLightReve => 'REVE wake/light (exp.)',
+  guardFeatureAiDrowsiness => 'AI drowsiness (legacy)',
   _ => feature,
 };

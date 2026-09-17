@@ -89,6 +89,12 @@ flutter:
     - assets/packs/cbramod-a-vig-full/
     - assets/packs/cbramod-a-vig-full/heads/
     - assets/packs/cbramod-a-vig-full/encoder/
+    - assets/packs/cbramod-head-c-wake-light/
+    - assets/packs/cbramod-head-c-wake-light/heads/
+    - assets/packs/reve-a-vig-subsample/
+    - assets/packs/reve-a-vig-subsample/heads/
+    - assets/packs/reve-head-c-wake-light-subsample/
+    - assets/packs/reve-head-c-wake-light-subsample/heads/
     - THIRD_PARTY_NOTICES.md
 
   # An image asset can refer to one or more resolution-specific "variants", see
