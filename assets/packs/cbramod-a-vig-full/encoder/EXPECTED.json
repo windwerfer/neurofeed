@@ -1,0 +1,25 @@
+{
+  "encoder_name": "CBraMod",
+  "weights_filename": "pretrained_weights.pth",
+  "weights_sha256": "0792cb808c14e6b7a2bb2ce1dff379bc47bc54c49a779825bdfeb33bf8157178",
+  "weights_bytes": 19775842,
+  "license": "Apache-2.0",
+  "hf_repo": "weighting666/CBraMod",
+  "hf_url": "https://huggingface.co/weighting666/CBraMod/resolve/main/pretrained_weights.pth",
+  "code_url": "https://github.com/wjq-learning/CBraMod",
+  "paper": "Wang et al., CBraMod, ICLR 2025 / arXiv:2412.07236",
+  "local_cache_rel": "kaggle_datasets/muse-eeg-heads-cache/models/CBraMod/pretrained_weights.pth",
+  "ship_policy": "Pin checksum in app; fetch Apache-2.0 weights from HF or private muse-eeg-heads-cache. Default publish ships heads + this pin; encoder blob may be redistributed under Apache-2.0 if desired.",
+  "do_not_ship": [
+    "REVE-base gated weights",
+    "LUNA",
+    "BY-NC training mix"
+  ],
+  "frozen": true,
+  "adapter": {
+    "fed_input": "(B, 4, T) @ 256 Hz",
+    "native_input": "(B, C, n_patches, 200) @ 200 Hz",
+    "channel_policy": "keep Muse 4-ch; no fabricated 10-20 montage",
+    "pool": "mean"
+  }
+}

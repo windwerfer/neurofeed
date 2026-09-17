@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
+
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -51,11 +53,10 @@ class ModelInstallResult {
 
 /// On-disk model management for the guardrail AI engines.
 ///
-/// Each model lives in `<sessionFolder>/ai_models/<model>/` as
-/// `config.json` + `model.safetensors`. LUNA (un-gated) is downloaded
-/// directly from Hugging Face and verified against the model's SHA-256; REVE
-/// (gated) is imported from a user-picked file with the same verification. A
-/// managed in-app download for REVE is deferred until hosting exists.
+/// Spur A (CBraMod) lives in `<sessionFolder>/ai_models/cbramod_a_vig/` with a
+/// bundled head pack copied from Flutter assets plus an optional
+/// `pretrained_weights.pth` encoder (SHA-pinned, HF Apache-2.0 download).
+/// REVE remains `config.json` + `model.safetensors` via user import.
 class ModelCache {
   const ModelCache();
 
@@ -74,14 +75,24 @@ class ModelCache {
     return Directory('$base/ai_models/${kind.folder}');
   }
 
-  List<File> _files(Directory dir) => [
-    File('${dir.path}/model.safetensors'),
-    File('${dir.path}/config.json'),
-  ];
+  List<File> _requiredFiles(Directory dir, ModelKind kind) {
+    switch (kind.layout) {
+      case ModelLayout.cbramodPack:
+        return [
+          File('${dir.path}/heads/head_a_vig_linear.f32bin'),
+          File('${dir.path}/pack_manifest.json'),
+        ];
+      case ModelLayout.rlxSafetensors:
+        return [
+          File('${dir.path}/model.safetensors'),
+          File('${dir.path}/config.json'),
+        ];
+    }
+  }
 
-  Future<List<String>> _missing(Directory dir) async {
+  Future<List<String>> _missing(Directory dir, ModelKind kind) async {
     final missing = <String>[];
-    for (final f in _files(dir)) {
+    for (final f in _requiredFiles(dir, kind)) {
       if (!(await f.exists()) || await f.length() == 0) {
         missing.add(f.path.split(Platform.pathSeparator).last);
       }
@@ -91,7 +102,43 @@ class ModelCache {
 
   Future<bool> isInstalledOnDisk(String? sessionFolder, ModelKind kind) async {
     final dir = await modelDirectory(sessionFolder, kind);
-    return (await _missing(dir)).isEmpty;
+    if (kind.layout == ModelLayout.cbramodPack) {
+      await ensureBundledPack(dir, kind);
+    }
+    return (await _missing(dir, kind)).isEmpty;
+  }
+
+  /// Copy the bundled Spur A pack from Flutter assets into [dir] when missing.
+  Future<void> ensureBundledPack(Directory dir, ModelKind kind) async {
+    final root = kind.packAssetRoot;
+    if (root == null) return;
+    await dir.create(recursive: true);
+    final heads = Directory('${dir.path}/heads');
+    await heads.create(recursive: true);
+    final encoder = Directory('${dir.path}/encoder');
+    await encoder.create(recursive: true);
+    const files = <String>[
+      'pack_manifest.json',
+      'app_integration.json',
+      'ATTRIBUTION.md',
+      'README.md',
+      'heads/head_a_vig_linear.f32bin',
+      'heads/head_a_vig_linear.pt',
+      'encoder/EXPECTED.json',
+    ];
+    for (final rel in files) {
+      final dest = File('${dir.path}/$rel');
+      if (await dest.exists() && await dest.length() > 0) continue;
+      try {
+        final data = await rootBundle.load('$root/$rel');
+        await dest.writeAsBytes(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+          flush: true,
+        );
+      } on Exception {
+        // Optional docs may be absent in slim asset lists; head is required.
+      }
+    }
   }
 
   /// SHA-256 of a stream, so a multi-hundred-MB file never lives in memory.
@@ -99,9 +146,8 @@ class ModelCache {
     return sha256.bind(bytes).first.then((d) => d.toString());
   }
 
-  /// Import a user-picked `.safetensors` file for [kind]. Throws
-  /// [ModelChecksumException] when the hash does not match [ModelKind.sha256].
-  /// Returns the loaded model description.
+  /// Import a user-picked weights file for [kind].
+  /// REVE expects `.safetensors`; CBraMod expects `pretrained_weights.pth`.
   Future<ModelInstallResult> importModel(
     String? sessionFolder,
     ModelKind kind,
@@ -109,11 +155,20 @@ class ModelCache {
   ) async {
     final dir = await modelDirectory(sessionFolder, kind);
     await dir.create(recursive: true);
+    if (kind.layout == ModelLayout.cbramodPack) {
+      await ensureBundledPack(dir, kind);
+      return _importNamed(dir, kind, src, 'pretrained_weights.pth');
+    }
+    return _importNamed(dir, kind, src, 'model.safetensors');
+  }
 
-    // Hash and copy in a single pass over the stream: verify the file while
-    // writing to a `.part` sibling, then rename atomically so a bad file is
-    // never left in place and a partial copy never looks like a good model.
-    final part = File('${dir.path}/model.safetensors.part');
+  Future<ModelInstallResult> _importNamed(
+    Directory dir,
+    ModelKind kind,
+    Stream<List<int>> src,
+    String filename,
+  ) async {
+    final part = File('${dir.path}/$filename.part');
     final sink = part.openWrite();
     final digester = _DigestSink();
     final hasher = sha256.startChunkedConversion(digester);
@@ -126,15 +181,11 @@ class ModelCache {
       await sink.close();
       hasher.close();
     }
-
     _verifyHash(kind, digester.hex, part);
-    return _installLoaded(dir, part, kind);
+    return _installLoaded(dir, part, kind, filename);
   }
 
-  /// Download [kind]'s weights directly from Hugging Face and install it.
-  /// Throws [ModelChecksumException] on a hash mismatch and
-  /// [ModelDownloadException] on a network error. [onProgress] is called with
-  /// `(receivedBytes, totalBytes)` (throttled to roughly 256 KiB steps).
+  /// Download [kind]'s primary weights from Hugging Face and install.
   Future<ModelInstallResult> downloadModel(
     String? sessionFolder,
     ModelKind kind, {
@@ -149,7 +200,13 @@ class ModelCache {
     }
     final dir = await modelDirectory(sessionFolder, kind);
     await dir.create(recursive: true);
-    final part = File('${dir.path}/model.safetensors.part');
+    if (kind.layout == ModelLayout.cbramodPack) {
+      await ensureBundledPack(dir, kind);
+    }
+    final filename = kind.layout == ModelLayout.cbramodPack
+        ? 'pretrained_weights.pth'
+        : 'model.safetensors';
+    final part = File('${dir.path}/$filename.part');
     if (await part.exists()) {
       await part.delete();
     }
@@ -201,7 +258,7 @@ class ModelCache {
     } finally {
       client.close(force: true);
     }
-    return _installLoaded(dir, part, kind);
+    return _installLoaded(dir, part, kind, filename);
   }
 
   void _verifyHash(ModelKind kind, String hex, File part) {
@@ -215,16 +272,13 @@ class ModelCache {
     );
   }
 
-  /// Move the verified part into place, write config.json, stamp the
-  /// verification, and load. Only called after [importModel]/[downloadModel]
-  /// have passed `_verifyHash`, so the stamp records that the on-disk file is
-  /// known-good.
   Future<ModelInstallResult> _installLoaded(
     Directory dir,
     File part,
     ModelKind kind,
+    String filename,
   ) async {
-    final dest = File('${dir.path}/model.safetensors');
+    final dest = File('${dir.path}/$filename');
     if (await dest.exists()) {
       await dest.delete();
     }
@@ -239,9 +293,6 @@ class ModelCache {
     );
   }
 
-  /// Write `<dir>/verified.json` holding the SHA-256 the file was verified
-  /// against. The probe/install path never re-hashes — it trusts this stamp —
-  /// so the stamp is the single durable record of "we checked this file once".
   Future<void> _stampVerified(Directory dir, ModelKind kind) async {
     await File('${dir.path}/verified.json').writeAsString(
       '{"sha256":"${kind.sha256}"}',
@@ -249,7 +300,6 @@ class ModelCache {
     );
   }
 
-  /// Whether the on-disk model carries the verification stamp for [kind].
   Future<bool> isVerifiedOnDisk(
     String? sessionFolder,
     ModelKind kind,
@@ -263,9 +313,6 @@ class ModelCache {
     }
   }
 
-  /// Write the app-generated `config.json` unless one already exists. The
-  /// loader needs both files; the config describes the architecture and is
-  /// regenerated from the model's public hyperparameters.
   Future<void> _ensureConfig(Directory dir, ModelKind kind) async {
     final config = File('${dir.path}/config.json');
     if (await config.exists()) return;
@@ -275,15 +322,17 @@ class ModelCache {
     );
   }
 
-  /// Load the model from disk (used by "check for model" — the user may have
-  /// dropped the files in manually). Auto-writes config.json when missing.
+  /// Load the model from disk. For Spur A, copies the bundled head pack first.
   Future<ModelInstallResult> install(
     String? sessionFolder,
     ModelKind kind,
   ) async {
     final dir = await modelDirectory(sessionFolder, kind);
+    if (kind.layout == ModelLayout.cbramodPack) {
+      await ensureBundledPack(dir, kind);
+    }
     await _ensureConfig(dir, kind);
-    final missing = await _missing(dir);
+    final missing = await _missing(dir, kind);
     if (missing.isNotEmpty) {
       throw ModelNotFoundException(
         '${kind.label} model not found.\n'
@@ -355,9 +404,8 @@ class _DigestSink implements Sink<Digest> {
           .toString();
 }
 
-/// Drives [ModelEngineState] for the *selected* model kind. LUNA is downloaded
-/// directly; REVE is only ever obtained via user import (the Hub repo is
-/// gated).
+/// Drives [ModelEngineState] for the *selected* model kind. Spur A (CBraMod)
+/// ships its head pack and downloads the encoder; REVE is user-import only.
 class ModelEngineNotifier extends Notifier<ModelEngineState> {
   static const ModelCache _cache = ModelCache();
 
@@ -425,7 +473,7 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
     return state;
   }
 
-  /// Download the model directly from Hugging Face (LUNA only).
+  /// Download the model directly from Hugging Face (CBraMod encoder).
   Future<ModelEngineState> download(
     ModelKind kind, {
     void Function(int received, int total)? onProgress,

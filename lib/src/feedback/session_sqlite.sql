@@ -52,8 +52,8 @@ CREATE TABLE sessions (
   marker_count     INTEGER DEFAULT 0,
 
   -- Protocol / guardrail / feedback metadata
-  guardrail_engine   TEXT,                  -- 'bandMath' | 'lunaBase' | 'lunaLarge' | 'reveBase' | 'none'
-  model_kind         TEXT,                   -- 'lunaBase' | 'lunaLarge' | 'reveBase' | NULL
+  guardrail_engine   TEXT,                  -- 'bandMath' | 'cbramodAVig' | 'reveBase' | 'none' (legacy luna*)
+  model_kind         TEXT,                   -- 'cbramodAVig' | 'reveBase' | NULL
   model_sha256       TEXT,                   -- weights SHA-256 when AI guardrail used
   feedback_engine    TEXT,                   -- 'atr' | future AI feedback types
   calibration_profile TEXT,                 -- 'single' | 'staged'

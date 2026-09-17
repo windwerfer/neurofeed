@@ -6,7 +6,7 @@ use crate::frb_generated::StreamSink;
 use muse_rs::prelude::*;
 
 use crate::analysis::gesture::GestureDetector;
-use crate::analysis::{guardrail, luna, reve};
+use crate::analysis::{cbramod, guardrail, reve};
 use crate::connection::{state, ActiveConnection, ConnectionHandle};
 
 fn now_ms() -> f64 {
@@ -28,8 +28,8 @@ const GUARDRAIL_WINDOW: usize = 1408;
 /// rows in AF7/AF8/TP9/TP10 order to match the fixed position vectors below.
 const ELECTRODE_TO_MODEL_ROW: [i32; 4] = [1, 2, 0, 3];
 
-/// AF7/AF8/TP9/TP10 approximate EEG coordinates (mm), shared by both encoders
-/// (REVE `positions_xyz`, LUNA `chan_pos`).
+/// AF7/AF8/TP9/TP10 approximate EEG coordinates (mm), used by REVE
+/// (`positions_xyz`). CBraMod Spur A ignores positions (channel-order only).
 const MODEL_POSITIONS: [f32; 12] = [
     -36.0, 30.0, 90.0,  // AF7
     36.0, 30.0, 90.0,   // AF8
@@ -37,12 +37,12 @@ const MODEL_POSITIONS: [f32; 12] = [
     75.0, -18.0, -15.0,  // TP10
 ];
 
-/// Window length for [kind]: LUNA pretrains on 5 s epochs (1280 @ 256 Hz),
+/// Window length for [kind]: CBraMod Spur A uses 2 s (512 @ 256 Hz),
 /// REVE on 4 s (1024 @ 256 Hz).
 fn score_window_len(kind: &str) -> Option<usize> {
     match kind {
-        luna::KIND_LUNA_BASE | luna::KIND_LUNA_LARGE => Some(1280),
-        luna::KIND_REVE_BASE => Some(1024),
+        cbramod::KIND_CBRAMOD_A_VIG => Some(cbramod::WINDOW_SAMPLES),
+        reve::KIND_REVE_BASE => Some(1024),
         _ => None,
     }
 }
@@ -239,8 +239,8 @@ pub struct GestureDto {
 #[frb(dart_metadata = ("freezed",))]
 pub struct ReveDto {
     pub timestamp: f64,
-    /// Model kind that produced this score (`reve_base` | `luna_base` |
-    /// `luna_large`); matches `ModelKind.ffId`.
+    /// Model kind that produced this score (`cbramod_a_vig` | `reve_base`);
+    /// matches `ModelKind.ffId`.
     pub kind: String,
     /// Cosine of the live pooled embedding against the awake `V_clear` anchor
     /// captured during calibration (1.0 = exactly the awake reference).
@@ -1177,10 +1177,10 @@ fn spawn_event_forwarder() {
                             }
                         }
 
-                        // REVE/LUNA sleep-guardrail scoring. Runs once per second
+                        // CBraMod/REVE sleep-guardrail scoring. Runs once per second
                         // while enabled, on a blocking thread so a slow inference
-                        // (LUNA-Large can exceed 1 s) never stalls the event loop.
-                        // Ticks during an in-flight run are coalesced away.
+                        // never stalls the event loop. Ticks during an in-flight
+                        // run are coalesced away.
                         if last_guardrail_attempt.elapsed()
                             >= std::time::Duration::from_secs(1)
                             && guardrail::is_enabled()
@@ -1211,10 +1211,12 @@ fn spawn_event_forwarder() {
                             tokio::spawn(async move {
                                 let infer_kind = kind.clone();
                                 let embedding = tokio::task::spawn_blocking(move || {
-                                    if infer_kind == luna::KIND_REVE_BASE {
+                                    if infer_kind == reve::KIND_REVE_BASE {
                                         reve::score_window(signal, positions, n_channels, n_times)
+                                    } else if infer_kind == cbramod::KIND_CBRAMOD_A_VIG {
+                                        cbramod::score_window(signal, positions, n_channels, n_times)
                                     } else {
-                                        luna::score_window(signal, positions, n_channels, n_times)
+                                        Err(anyhow::anyhow!("unknown guardrail kind: {infer_kind}"))
                                     }
                                 })
                                 .await;

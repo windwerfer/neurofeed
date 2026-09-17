@@ -24,10 +24,7 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   `GLOBAL_JVM`/`GLOBAL_ADAPTER`. See `.ai/btleplug.md`.
 - **`jni = "=0.19"`** — must match btleplug's `jni` or you get link-time
   symbol conflicts.
-- **REVE + LUNA** (on-device drowsiness): git deps — `reve-rs` from upstream
-  `eugenehp` rev `9c8d856…`, `luna-rs` from `windwerfer` tag
-  `v0.0.4-latent-embedding-fix`. No weights shipped. FFI
-  `rust/src/api/reve.rs`; inference `rust/src/analysis/{reve,luna}.rs`;
+- **CBraMod Spur A + optional REVE** (on-device drowsiness): pack `assets/packs/cbramod-a-vig-full/` + `rust/src/analysis/cbramod.rs`; REVE via `reve-rs`; FFI `rust/src/api/reve.rs`; inference `rust/src/analysis/{cbramod,reve}.rs`. LUNA removed;
   Dart `lib/src/reve/`.
 - **Feature pipeline** (implemented): Rust registry produces
   `MuseEventDto::Feature`; Dart `FeatureBus` → `RewardLane` / `GuardLane`.
@@ -157,7 +154,7 @@ lib/src/charts/             band_style, SessionReader, smooth_path (writer is se
 rust/src/api/
   muse.rs, features.rs, device_config.rs, neurosity_osc.rs, simulator.rs
   reve.rs, session_format.rs, edf_export.rs
-rust/src/analysis/          gesture, reve, luna, guardrail
+rust/src/analysis/          gesture, cbramod, reve, guardrail
 assets/                     protocols.json, calibrations.json, features.json, audio/
 .ai/                        project docs (see .ai/README.md)
 ```
@@ -234,9 +231,9 @@ assets/                     protocols.json, calibrations.json, features.json, au
   default `blas` cleared. Keep `version = "0.2.14"` compatible with
   `rlx-runtime 0.2.14`.
 - **Model engine is git deps, not submodules.** Workflows still init
-  `third_party/reve-rs`/`luna-rs` as reference copies only.
+  `third_party/reve-rs` as reference copy only (luna-rs submodule unused).
 - **Gated weights live in `.local/`**, never commit them. `#[ignore]`d smoke
-  tests in `rust/src/analysis/{luna,reve}.rs`.
+  tests in `rust/src/analysis/{cbramod,reve,guardrail}.rs`.
 - **Session format is Rust-owned.** Never edit `.muse` / `.muse.feedback`
   layout in Dart. Some container fns are `#[frb(sync)]`.
 - **Never put a `LayoutBuilder` inside dialog content** (AlertDialog +

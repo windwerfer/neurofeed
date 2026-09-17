@@ -9,8 +9,8 @@ bool guardFeatureIsAi(String feature) => feature == guardFeatureAiDrowsiness;
 bool guardFeatureIsBandMath(String feature) => feature == guardFeatureBandDelta;
 
 /// Writes today's historical `GuardrailMode.name` into session metadata
-/// (`drowsinessMath`, `drowsinessLunaLarge`, …). Do not write `bandMath` /
-/// `luna_base` here.
+/// (`drowsinessMath`, `drowsinessCbramodAVig`, …). Do not write `bandMath` /
+/// raw ffIds here.
 String guardrailEngineName({
   required String feature,
   String? model,
@@ -18,17 +18,19 @@ String guardrailEngineName({
   if (feature == guardFeatureNone) return 'none';
   if (feature == guardFeatureBandDelta) return 'drowsinessMath';
   return switch (model) {
-    'luna_large' => 'drowsinessLunaLarge',
-    'luna_base' => 'drowsinessLunaBase',
+    'cbramod_a_vig' => 'drowsinessCbramodAVig',
     'reve_base' => 'drowsinessReveBase',
-    _ => 'drowsinessLunaLarge',
+    // Legacy LUNA ids → report as Spur A (LUNA removed).
+    'luna_large' || 'luna_base' => 'drowsinessCbramodAVig',
+    _ => 'drowsinessCbramodAVig',
   };
 }
 
 String? ffIdFromOldGuardrailModeName(String name) => switch (name) {
-  'drowsinessLunaLarge' => 'luna_large',
-  'drowsinessLunaBase' => 'luna_base',
+  'drowsinessCbramodAVig' => 'cbramod_a_vig',
   'drowsinessReveBase' => 'reve_base',
+  // Migrate historical LUNA session prefs to Spur A.
+  'drowsinessLunaLarge' || 'drowsinessLunaBase' => 'cbramod_a_vig',
   _ => null,
 };
 
@@ -42,6 +44,7 @@ String? parseGuardFeatureValue(Object? value) {
   if (value is String) {
     return switch (value) {
       'drowsinessMath' || 'band.delta' => guardFeatureBandDelta,
+      'drowsinessCbramodAVig' ||
       'drowsinessLunaLarge' ||
       'drowsinessLunaBase' ||
       'drowsinessReveBase' ||
@@ -64,6 +67,10 @@ String? parseGuardFeatureValue(Object? value) {
 
 ModelKind? modelKindFromFfId(String? ffId) {
   if (ffId == null) return null;
+  // Historical LUNA prefs → Spur A.
+  if (ffId == 'luna_large' || ffId == 'luna_base') {
+    return ModelKind.cbramodAVig;
+  }
   for (final kind in ModelKind.values) {
     if (kind.ffId == ffId) return kind;
   }
