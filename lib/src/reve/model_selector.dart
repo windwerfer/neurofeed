@@ -17,6 +17,11 @@ const XTypeGroup _safetensorsType = XTypeGroup(
   extensions: ['safetensors'],
 );
 
+const XTypeGroup _pthType = XTypeGroup(
+  label: 'CBraMod encoder',
+  extensions: ['pth'],
+);
+
 /// Let the user pick a `.safetensors` file and import it into the app for
 /// [kind]. Returns the resulting engine state (Ready after a success).
 Future<ModelEngineState> pickAndImportModel(
@@ -25,15 +30,19 @@ Future<ModelEngineState> pickAndImportModel(
 ) async {
   Stream<List<int>>? src;
 
+  final ext = kind.layout == ModelLayout.cbramodPack ? 'pth' : 'safetensors';
+  final types = kind.layout == ModelLayout.cbramodPack
+      ? <XTypeGroup>[_pthType]
+      : <XTypeGroup>[_safetensorsType];
   if (defaultTargetPlatform == TargetPlatform.android) {
     final uri = await SafSessionStorage.pickFile();
     if (uri == null) {
       return ref.read(modelEngineNotifierProvider);
     }
-    final path = await SafSessionStorage.copyUriToCache(uri, 'import_${kind.name}.safetensors');
+    final path = await SafSessionStorage.copyUriToCache(uri, 'import_${kind.name}.$ext');
     src = File(path).openRead();
   } else {
-    final file = await openFile(acceptedTypeGroups: [_safetensorsType]);
+    final file = await openFile(acceptedTypeGroups: types);
     if (file == null) {
       return ref.read(modelEngineNotifierProvider);
     }
@@ -198,7 +207,8 @@ class _ModelInstallBubbleState extends ConsumerState<ModelInstallBubble> {
 /// The model dropdown used in the settings card and the session gate bubble.
 ///
 /// Shows every foundation model with its size, a check when its files are
-/// already on disk, and persists the selection to [Settings.guardModel].
+/// already on disk (not the same as Ready), and persists the selection to
+/// [Settings.guardModel].
 class ModelSelectorDropdown extends ConsumerWidget {
   const ModelSelectorDropdown({super.key, this.onChanged});
 
@@ -254,10 +264,15 @@ class ModelInfoBlock extends ConsumerWidget {
     String statusText;
     if (engineState is ModelEngineReady) {
       statusText = engineState.description;
+    } else if (engineState is ModelEngineError) {
+      statusText = engineState.message;
+    } else if (engineState is ModelEngineNotReady) {
+      statusText = engineState.reason;
     } else if (engineState is ModelEngineLoading) {
       statusText = 'Loading…';
     } else if (installed == true) {
-      statusText = 'Installed — will load on use.';
+      statusText =
+          'Files on disk (green check) — not Ready until native load succeeds.';
     } else {
       statusText = 'Not installed yet.';
     }

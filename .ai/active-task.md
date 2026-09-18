@@ -1,17 +1,19 @@
 # Active Task
 
-**Branch:** `main` (ahead of `origin/main`)
+**Branch:** `feat/spur-a-cbramod-guardrail`
 
-**Now:** trust graphs **implemented**, including the inhibit pane under
-Reward. Spec: [trust-graphs.md](trust-graphs.md). History:
-[archive/trust-graphs.md](archive/trust-graphs.md),
-[archive/handoff-trust-graphs.md](archive/handoff-trust-graphs.md).
+**Now:** Spur A — frozen **CBraMod** encoder (Candle CPU) + A-vig HeadALinear
+guardrail path. Pack `assets/packs/cbramod-a-vig-full/`. Encoder weights are
+SHA-pinned Apache-2.0 (`pretrained_weights.pth`); **not** committed — load from
+model dir / `.local/cbramod-fixtures/` for tests. Ready gate: Rust
+`encoder_forward_ready` (Candle load must succeed; Dart
+`kCbramodEncoderForwardReady` is compile-time link only). **CPU/mobile Candle
+forward latency TBD** (not profiled). Feature IDs: `ai.a_vig`, `ai.wake_light`,
+deprecated alias `ai.drowsiness`. Optional REVE remains gated import (RLX CPU).
+**LUNA removed** from ship path.
 
-Monitor product **and** draw-path perf are complete. Spec:
-[monitor.md](monitor.md). History:
-[archive/handoff-monitor.md](archive/handoff-monitor.md),
-[archive/handoff-monitor-perf.md](archive/handoff-monitor-perf.md)
-(PRs 1–7 landed; **PR 8 skipped**).
+Window: **2 s @ 256 Hz** (512 samples) Muse AF7/AF8/TP9/TP10 → resample/patch →
+mean-pool 200-d → head → FeatureDto **P(class 1)**.
 
 Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
 or the v5 68-byte header. Bands Y is **dB display** (storage linear).

@@ -6,7 +6,7 @@ use crate::frb_generated::StreamSink;
 use muse_rs::prelude::*;
 
 use crate::analysis::gesture::GestureDetector;
-use crate::analysis::{guardrail, luna, reve};
+use crate::analysis::{cbramod, guardrail, reve};
 use crate::connection::{state, ActiveConnection, ConnectionHandle};
 
 fn now_ms() -> f64 {
@@ -20,7 +20,7 @@ fn now_ms() -> f64 {
 // ── Guardrail window helpers ─────────────────────────────────────────────────
 
 /// Max samples kept per electrode in the rolling guardrail window buffer.
-/// 5.5 s @ 256 Hz covers the longer LUNA epoch (1280 = 5 s) with headroom.
+/// 5.5 s @ 256 Hz covers a 5 s epoch (1280 samples) with headroom.
 const GUARDRAIL_WINDOW: usize = 1408;
 
 /// App electrode index → model row order (AF7, AF8, TP9, TP10). The forwarder's
@@ -28,8 +28,8 @@ const GUARDRAIL_WINDOW: usize = 1408;
 /// rows in AF7/AF8/TP9/TP10 order to match the fixed position vectors below.
 const ELECTRODE_TO_MODEL_ROW: [i32; 4] = [1, 2, 0, 3];
 
-/// AF7/AF8/TP9/TP10 approximate EEG coordinates (mm), shared by both encoders
-/// (REVE `positions_xyz`, LUNA `chan_pos`).
+/// AF7/AF8/TP9/TP10 approximate EEG coordinates (mm), used by REVE
+/// (`positions_xyz`). CBraMod Spur A ignores positions (channel-order only).
 const MODEL_POSITIONS: [f32; 12] = [
     -36.0, 30.0, 90.0,  // AF7
     36.0, 30.0, 90.0,   // AF8
@@ -37,12 +37,12 @@ const MODEL_POSITIONS: [f32; 12] = [
     75.0, -18.0, -15.0,  // TP10
 ];
 
-/// Window length for [kind]: LUNA pretrains on 5 s epochs (1280 @ 256 Hz),
+/// Window length for [kind]: CBraMod Spur A uses 2 s (512 @ 256 Hz),
 /// REVE on 4 s (1024 @ 256 Hz).
 fn score_window_len(kind: &str) -> Option<usize> {
     match kind {
-        luna::KIND_LUNA_BASE | luna::KIND_LUNA_LARGE => Some(1280),
-        luna::KIND_REVE_BASE => Some(1024),
+        cbramod::KIND_CBRAMOD_A_VIG => Some(cbramod::WINDOW_SAMPLES),
+        reve::KIND_REVE_BASE => Some(1024),
         _ => None,
     }
 }
@@ -239,8 +239,8 @@ pub struct GestureDto {
 #[frb(dart_metadata = ("freezed",))]
 pub struct ReveDto {
     pub timestamp: f64,
-    /// Model kind that produced this score (`reve_base` | `luna_base` |
-    /// `luna_large`); matches `ModelKind.ffId`.
+    /// Model kind that produced this score (`cbramod_a_vig` | `reve_base`);
+    /// matches `ModelKind.ffId`.
     pub kind: String,
     /// Cosine of the live pooled embedding against the awake `V_clear` anchor
     /// captured during calibration (1.0 = exactly the awake reference).
@@ -428,10 +428,8 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
         // and emits a Telemetry event with the correct 0-100 value.
         let _ = handle.send_command("v1").await;
 
-        // Create unified MuseEventDto channel for the forwarder
         let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
         
-        // Converter task: MuseEvent -> MuseEventDto
         let conv_tx = dto_tx.clone();
         tokio::spawn(async move {
             let mut rx = rx;
@@ -522,7 +520,6 @@ pub async fn connect_with_options(
     kind: DeviceKind,
     simulate: bool,
 ) -> anyhow::Result<ConnectionStatus> {
-    // Tear down any existing connection first
     {
         let old = state().inner.lock().unwrap().active.take();
         if let Some(old) = old {
@@ -584,7 +581,6 @@ pub async fn connect_with_options(
             }
         }
         
-        // Create unified MuseEventDto channel for the forwarder
         let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
         
         // Start OSC receiver (creates its own tokio task)
@@ -646,10 +642,8 @@ match start_result {
 
         let _ = handle.send_command("v1").await;
 
-        // Create unified MuseEventDto channel for the forwarder
         let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
         
-        // Converter task: MuseEvent -> MuseEventDto
         let conv_tx = dto_tx.clone();
         tokio::spawn(async move {
             let mut rx = rx;
@@ -1177,10 +1171,10 @@ fn spawn_event_forwarder() {
                             }
                         }
 
-                        // REVE/LUNA sleep-guardrail scoring. Runs once per second
+                        // CBraMod/REVE sleep-guardrail scoring. Runs once per second
                         // while enabled, on a blocking thread so a slow inference
-                        // (LUNA-Large can exceed 1 s) never stalls the event loop.
-                        // Ticks during an in-flight run are coalesced away.
+                        // never stalls the event loop. Ticks during an in-flight
+                        // run are coalesced away.
                         if last_guardrail_attempt.elapsed()
                             >= std::time::Duration::from_secs(1)
                             && guardrail::is_enabled()
@@ -1211,10 +1205,12 @@ fn spawn_event_forwarder() {
                             tokio::spawn(async move {
                                 let infer_kind = kind.clone();
                                 let embedding = tokio::task::spawn_blocking(move || {
-                                    if infer_kind == luna::KIND_REVE_BASE {
+                                    if infer_kind == reve::KIND_REVE_BASE {
                                         reve::score_window(signal, positions, n_channels, n_times)
+                                    } else if infer_kind == cbramod::KIND_CBRAMOD_A_VIG {
+                                        cbramod::score_window(signal, positions, n_channels, n_times)
                                     } else {
-                                        luna::score_window(signal, positions, n_channels, n_times)
+                                        Err(anyhow::anyhow!("unknown guardrail kind: {infer_kind}"))
                                     }
                                 })
                                 .await;
@@ -1231,8 +1227,64 @@ fn spawn_event_forwarder() {
                                         return;
                                     }
                                 };
-                                guardrail::set_live_embedding(kind.clone(), embedding);
+                                guardrail::set_live_embedding(kind.clone(), embedding.clone());
                                 let dim = guardrail::live_dim();
+                                // Emit per-feature-ID head scores when packs are loaded for this
+                                // embedding dim (CBraMod 200-d / REVE 512-d). Encoder gaps still
+                                // fail earlier in score_window; head-linear path runs when emb exists.
+                                // Emit FeatureDto only for heads whose pack matches this
+                                // embedding dim (CBraMod 200-d / REVE 512-d). Value is
+                                // P(class 1) — P(hypnagogic) or P(light) — not argmax.
+                                let head_scores =
+                                    crate::analysis::ai_heads::score_matching_heads(&embedding);
+                                {
+                                    let mut guard = state()
+                                        .inner
+                                        .lock()
+                                        .unwrap_or_else(|e| e.into_inner());
+                                    let mut kill_sink = false;
+                                    if let Some(sink) = guard.sink.as_ref() {
+                                        for (fid, score) in &head_scores {
+                                            let enabled = features::is_enabled(fid)
+                                                || (*fid == features::ID_A_VIG
+                                                    && features::is_enabled(
+                                                        features::ID_DROWSINESS,
+                                                    ));
+                                            if !enabled {
+                                                continue;
+                                            }
+                                            if sink
+                                                .add(MuseEventDto::Feature(FeatureDto {
+                                                    id: fid.clone(),
+                                                    timestamp: ts,
+                                                    value: *score as f64,
+                                                }))
+                                                .is_err()
+                                            {
+                                                kill_sink = true;
+                                                break;
+                                            }
+                                            // Protocol alias: same CBraMod A-vig scalar.
+                                            if *fid == features::ID_A_VIG
+                                                && features::is_enabled(features::ID_DROWSINESS)
+                                                && sink
+                                                    .add(MuseEventDto::Feature(FeatureDto {
+                                                        id: features::ID_DROWSINESS.to_string(),
+                                                        timestamp: ts,
+                                                        value: *score as f64,
+                                                    }))
+                                                    .is_err()
+                                            {
+                                                kill_sink = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if kill_sink {
+                                        guard.sink = None;
+                                    }
+                                }
+
                                 if let Some((clarity, sd)) = guardrail::clarity_and_sleep_dir() {
                                     let sleep_dir = sd.unwrap_or(1.0 - clarity);
                                     let dto = MuseEventDto::Reve(ReveDto {
@@ -1247,21 +1299,17 @@ fn spawn_event_forwarder() {
                                         .inner
                                         .lock()
                                         .unwrap_or_else(|e| e.into_inner());
+                                    let mut kill_sink = false;
                                     if let Some(sink) = &guard.sink {
+                                        // FeatureDto for AI IDs comes only from that ID's own
+                                        // pack/encoder head (score_matching_heads above). Never
+                                        // map REVE cosine sleep_dir onto ai.a_vig / aliases.
                                         if sink.add(dto).is_err() {
-                                            guard.sink = None;
-                                        } else if features::is_enabled(features::ID_DROWSINESS) {
-                                            if sink
-                                                .add(MuseEventDto::Feature(FeatureDto {
-                                                    id: features::ID_DROWSINESS.to_string(),
-                                                    timestamp: ts,
-                                                    value: sleep_dir as f64,
-                                                }))
-                                                .is_err()
-                                            {
-                                                guard.sink = None;
-                                            }
+                                            kill_sink = true;
                                         }
+                                    }
+                                    if kill_sink {
+                                        guard.sink = None;
                                     }
                                 }
                                 guardrail::finish_score();
@@ -1596,10 +1644,6 @@ fn map_event(ev: MuseEvent) -> MuseEventDto {
             samples: r.samples.into_iter().map(|s| s as f64).collect(),
         }),
         MuseEvent::Telemetry(t) => {
-            // log::debug!(
-            //     "[muse] telemetry: battery={:.6} fuel_gauge={:.2} temp={}",
-            //     t.battery_level, t.fuel_gauge_voltage, t.temperature,
-            // );
             MuseEventDto::Telemetry(TelemetrySnapshot {
                 battery_level: t.battery_level,
                 fuel_gauge_voltage: t.fuel_gauge_voltage,
@@ -1635,9 +1679,8 @@ fn map_imu(imu: ImuData) -> ImuDto {
 }
 
 /// Connect to a Neurosity Crown/Notion device via BLE.
-/// Uses the neurosity-ble-rs crate. (Phase D: not yet implemented - returns placeholder)
+/// Stub: not implemented — returns a placeholder connection (Crown Start refused).
 pub async fn crown_connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
-    // Tear down any existing connection first
     {
         let old = state().inner.lock().unwrap().active.take();
         if let Some(old) = old {
@@ -1645,7 +1688,6 @@ pub async fn crown_connect(device_id: String) -> anyhow::Result<ConnectionStatus
         }
     }
 
-    // Look up device from cache
     let device = {
         let guard = state().inner.lock().unwrap();
         guard.devices.get(&device_id).cloned().ok_or_else(|| {
@@ -1655,11 +1697,10 @@ pub async fn crown_connect(device_id: String) -> anyhow::Result<ConnectionStatus
 
     let name = device.name.clone();
     
-    // Create a placeholder event channel (Phase D: real Crown events will come here)
+    // Placeholder channel; Crown BLE Start is refused until implemented.
     let (_tx, rx) = tokio::sync::mpsc::channel(256);
-    
-    // For Phase A, just log that Crown is not yet implemented
-    log::warn!("[crown] Crown BLE not yet implemented (Phase D) - returning placeholder connection");
+
+    log::warn!("[crown] Crown BLE not yet implemented - returning placeholder connection");
 
     {
         let mut guard = state().inner.lock().unwrap();

@@ -1,0 +1,26 @@
+{
+  "pack_id": "reve-a-vig-subsample",
+  "encoder": "REVE-base (frozen, gated)",
+  "task": "A-vig",
+  "labels": [
+    "drowsy",
+    "hypnagogic"
+  ],
+  "montage": "muse4",
+  "window": "2s @ 256 Hz",
+  "head_file": "heads/head_a_vig_reve_linear.pt",
+  "decode": "argmax",
+  "test_macro_f1": 0.7832,
+  "ship_candidate": false,
+  "experimental": true,
+  "sampling": "local CPU subsample \u226480 windows/class/recording \u2014 NOT fair vs full CBraMod subject-holdout",
+  "license_note": "Publish HEAD ONLY. User must fetch gated REVE-base themselves. Do not redistribute REVE base weights.",
+  "source_metrics": "muse-eeg-heads/exports/reve_sleep_heads_local/metrics_summary.json",
+  "feature_id": "ai.a_vig_reve",
+  "in_dim": 512,
+  "n_classes": 2,
+  "head_pt_sha256": "65874a0cd63f62d1810c47438ea4fdaecba8b5e1dd37f0ff9b0b2f88f75ba3cd",
+  "head_f32bin_sha256": "c032abbfa40fb148d3830b41bde4a65bc09144c99106b401872d080daa008256",
+  "feature_dto_value": "P(class1)=P(hypnagogic)",
+  "feature_dto_note": "Live FeatureDto emits P(hypnagogic), not argmax. Argmax remains eval decode."
+}

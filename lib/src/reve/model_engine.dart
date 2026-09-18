@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
+
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -51,11 +53,18 @@ class ModelInstallResult {
 
 /// On-disk model management for the guardrail AI engines.
 ///
-/// Each model lives in `<sessionFolder>/ai_models/<model>/` as
-/// `config.json` + `model.safetensors`. LUNA (un-gated) is downloaded
-/// directly from Hugging Face and verified against the model's SHA-256; REVE
-/// (gated) is imported from a user-picked file with the same verification. A
-/// managed in-app download for REVE is deferred until hosting exists.
+/// Spur A (CBraMod) lives in `<sessionFolder>/ai_models/cbramod_a_vig/` with a
+/// bundled head pack copied from Flutter assets plus an optional
+/// `pretrained_weights.pth` encoder (SHA-pinned, HF Apache-2.0 download).
+/// REVE remains `config.json` + `model.safetensors` via user import.
+/// Compile-time: Candle CBraMod encoder forward is linked in this binary.
+/// Runtime Ready still requires a successful Rust load (`encoder_forward_ready`);
+/// SHA-OK alone is not enough if Candle fails to load.
+const bool kCbramodEncoderForwardReady = true;
+
+/// Loaded-desc marker from Rust when Candle forward actually loaded.
+const String kCbramodEncoderForwardReadyDesc = 'encoder forward ready';
+
 class ModelCache {
   const ModelCache();
 
@@ -74,14 +83,24 @@ class ModelCache {
     return Directory('$base/ai_models/${kind.folder}');
   }
 
-  List<File> _files(Directory dir) => [
-    File('${dir.path}/model.safetensors'),
-    File('${dir.path}/config.json'),
-  ];
+  List<File> _requiredFiles(Directory dir, ModelKind kind) {
+    switch (kind.layout) {
+      case ModelLayout.cbramodPack:
+        return [
+          File('${dir.path}/heads/head_a_vig_linear.f32bin'),
+          File('${dir.path}/pack_manifest.json'),
+        ];
+      case ModelLayout.rlxSafetensors:
+        return [
+          File('${dir.path}/model.safetensors'),
+          File('${dir.path}/config.json'),
+        ];
+    }
+  }
 
-  Future<List<String>> _missing(Directory dir) async {
+  Future<List<String>> _missing(Directory dir, ModelKind kind) async {
     final missing = <String>[];
-    for (final f in _files(dir)) {
+    for (final f in _requiredFiles(dir, kind)) {
       if (!(await f.exists()) || await f.length() == 0) {
         missing.add(f.path.split(Platform.pathSeparator).last);
       }
@@ -89,9 +108,173 @@ class ModelCache {
     return missing;
   }
 
-  Future<bool> isInstalledOnDisk(String? sessionFolder, ModelKind kind) async {
+  /// Pack/head files present (CBraMod) or REVE safetensors present.
+  /// Does **not** call [ensureBundledPack] — copying the bundled head must not
+  /// alone mark the model installed/Ready.
+  Future<bool> isPackPresentOnDisk(String? sessionFolder, ModelKind kind) async {
     final dir = await modelDirectory(sessionFolder, kind);
-    return (await _missing(dir)).isEmpty;
+    if (kind.layout == ModelLayout.rlxSafetensors) {
+      await ensureReveExperimentalHeads(dir);
+    }
+    return (await _missing(dir, kind)).isEmpty;
+  }
+
+  Future<File> _encoderFile(Directory dir) async {
+    final candidates = [
+      File('${dir.path}/pretrained_weights.pth'),
+      File('${dir.path}/encoder/pretrained_weights.pth'),
+    ];
+    for (final f in candidates) {
+      if (await f.exists() && await f.length() > 0) return f;
+    }
+    return candidates.first;
+  }
+
+  /// Encoder weights present and SHA-verified (stamp or live hash).
+  Future<bool> isEncoderVerifiedOnDisk(
+    String? sessionFolder,
+    ModelKind kind,
+  ) async {
+    if (kind.layout != ModelLayout.cbramodPack) {
+      return isVerifiedOnDisk(sessionFolder, kind);
+    }
+    final dir = await modelDirectory(sessionFolder, kind);
+    if (await isVerifiedOnDisk(sessionFolder, kind)) {
+      final enc = await _encoderFile(dir);
+      return enc.existsSync() && await enc.length() > 0;
+    }
+    final enc = await _encoderFile(dir);
+    if (!(await enc.exists()) || await enc.length() == 0) return false;
+    final hex = await sha256Of(enc.openRead());
+    if (hex != kind.sha256) return false;
+    await _stampVerified(dir, kind);
+    return true;
+  }
+
+  /// Installed for badges: CBraMod needs head pack + verified encoder; REVE
+  /// needs safetensors. Ready (scoring) is a stricter gate — see notifier.
+  Future<bool> isInstalledOnDisk(String? sessionFolder, ModelKind kind) async {
+    if (!(await isPackPresentOnDisk(sessionFolder, kind))) return false;
+    if (kind.layout == ModelLayout.cbramodPack) {
+      return isEncoderVerifiedOnDisk(sessionFolder, kind);
+    }
+    return true;
+  }
+
+  /// Human-readable reason CBraMod is not Ready, or null when Ready is allowed.
+  Future<String?> cbramodNotReadyReason(
+    String? sessionFolder,
+    ModelKind kind,
+  ) async {
+    if (kind.layout != ModelLayout.cbramodPack) return null;
+    // Ensure head pack is on disk for load attempts (explicit, not via installed).
+    final dir = await modelDirectory(sessionFolder, kind);
+    await ensureBundledPack(dir, kind);
+    if (!(await isPackPresentOnDisk(sessionFolder, kind))) {
+      return 'CBraMod head pack missing';
+    }
+    if (!(await isEncoderVerifiedOnDisk(sessionFolder, kind))) {
+      return 'CBraMod encoder weights not verified — download or import '
+          'pretrained_weights.pth (SHA-pinned Apache-2.0)';
+    }
+    if (!kCbramodEncoderForwardReady) {
+      return 'CBraMod encoder forward not linked in this build (encoder SHA + head OK) — '
+          'not Ready until native Candle forward is linked';
+    }
+    // Runtime Candle load is verified after install via loadedDesc /
+    // ModelEngineNotifier — SHA alone must not claim Ready.
+    return null;
+  }
+
+  /// Copy the bundled Spur A pack from Flutter assets into [dir] when missing.
+  ///
+  /// Required files must copy successfully; optional docs/pt siblings may be
+  /// absent. Throws [ModelNotFoundException] if a required asset is missing.
+  Future<void> ensureBundledPack(Directory dir, ModelKind kind) async {
+    final root = kind.packAssetRoot;
+    if (root == null) {
+      throw ModelNotFoundException(
+        '${kind.label} has no bundled pack asset root',
+      );
+    }
+    await dir.create(recursive: true);
+    await Directory('${dir.path}/heads').create(recursive: true);
+    await Directory('${dir.path}/encoder').create(recursive: true);
+    const required = <String>[
+      'pack_manifest.json',
+      'heads/head_a_vig_linear.f32bin',
+      'encoder/EXPECTED.json',
+    ];
+    const optional = <String>[
+      'app_integration.json',
+      'ATTRIBUTION.md',
+      'README.md',
+      'heads/head_a_vig_linear.pt',
+      'heads/head_c_wake_light_linear.f32bin',
+      'heads/head_c_wake_light_linear.pt',
+    ];
+    Future<void> copyOne(String rel, {required bool requiredFile}) async {
+      final dest = File('${dir.path}/$rel');
+      if (await dest.exists() && await dest.length() > 0) return;
+      try {
+        final data = await rootBundle.load('$root/$rel');
+        await dest.writeAsBytes(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+          flush: true,
+        );
+      } on Exception catch (e) {
+        if (requiredFile) {
+          throw ModelNotFoundException(
+            'Bundled Spur A pack incomplete — missing required asset '
+            '$root/$rel ($e)',
+          );
+        }
+      }
+    }
+
+    for (final rel in required) {
+      await copyOne(rel, requiredFile: true);
+    }
+    for (final rel in optional) {
+      await copyOne(rel, requiredFile: false);
+    }
+  }
+
+  /// Copy experimental REVE linear heads into `reve_base/heads/` so Rust can
+  /// score `ai.a_vig_reve` / `ai.wake_light_reve` after a gated base import.
+  Future<void> ensureReveExperimentalHeads(Directory dir) async {
+    await Directory('${dir.path}/heads').create(recursive: true);
+    const copies = <(String, String)>[
+      (
+        'assets/packs/reve-a-vig-subsample/heads/head_a_vig_reve_linear.f32bin',
+        'heads/head_a_vig_reve_linear.f32bin',
+      ),
+      (
+        'assets/packs/reve-a-vig-subsample/heads/head_a_vig_reve_linear.pt',
+        'heads/head_a_vig_reve_linear.pt',
+      ),
+      (
+        'assets/packs/reve-head-c-wake-light-subsample/heads/head_c_wake_light_reve_linear.f32bin',
+        'heads/head_c_wake_light_reve_linear.f32bin',
+      ),
+      (
+        'assets/packs/reve-head-c-wake-light-subsample/heads/head_c_wake_light_reve_linear.pt',
+        'heads/head_c_wake_light_reve_linear.pt',
+      ),
+    ];
+    for (final (asset, rel) in copies) {
+      final dest = File('${dir.path}/$rel');
+      if (await dest.exists() && await dest.length() > 0) continue;
+      try {
+        final data = await rootBundle.load(asset);
+        await dest.writeAsBytes(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+          flush: true,
+        );
+      } on Exception {
+        // Experimental; absence leaves those feature IDs unscored.
+      }
+    }
   }
 
   /// SHA-256 of a stream, so a multi-hundred-MB file never lives in memory.
@@ -99,9 +282,8 @@ class ModelCache {
     return sha256.bind(bytes).first.then((d) => d.toString());
   }
 
-  /// Import a user-picked `.safetensors` file for [kind]. Throws
-  /// [ModelChecksumException] when the hash does not match [ModelKind.sha256].
-  /// Returns the loaded model description.
+  /// Import a user-picked weights file for [kind].
+  /// REVE expects `.safetensors`; CBraMod expects `pretrained_weights.pth`.
   Future<ModelInstallResult> importModel(
     String? sessionFolder,
     ModelKind kind,
@@ -109,11 +291,21 @@ class ModelCache {
   ) async {
     final dir = await modelDirectory(sessionFolder, kind);
     await dir.create(recursive: true);
+    if (kind.layout == ModelLayout.cbramodPack) {
+      await ensureBundledPack(dir, kind);
+      return _importNamed(dir, kind, src, 'pretrained_weights.pth');
+    }
+    await ensureReveExperimentalHeads(dir);
+    return _importNamed(dir, kind, src, 'model.safetensors');
+  }
 
-    // Hash and copy in a single pass over the stream: verify the file while
-    // writing to a `.part` sibling, then rename atomically so a bad file is
-    // never left in place and a partial copy never looks like a good model.
-    final part = File('${dir.path}/model.safetensors.part');
+  Future<ModelInstallResult> _importNamed(
+    Directory dir,
+    ModelKind kind,
+    Stream<List<int>> src,
+    String filename,
+  ) async {
+    final part = File('${dir.path}/$filename.part');
     final sink = part.openWrite();
     final digester = _DigestSink();
     final hasher = sha256.startChunkedConversion(digester);
@@ -126,15 +318,11 @@ class ModelCache {
       await sink.close();
       hasher.close();
     }
-
     _verifyHash(kind, digester.hex, part);
-    return _installLoaded(dir, part, kind);
+    return _installLoaded(dir, part, kind, filename);
   }
 
-  /// Download [kind]'s weights directly from Hugging Face and install it.
-  /// Throws [ModelChecksumException] on a hash mismatch and
-  /// [ModelDownloadException] on a network error. [onProgress] is called with
-  /// `(receivedBytes, totalBytes)` (throttled to roughly 256 KiB steps).
+  /// Download [kind]'s primary weights from Hugging Face and install.
   Future<ModelInstallResult> downloadModel(
     String? sessionFolder,
     ModelKind kind, {
@@ -149,7 +337,13 @@ class ModelCache {
     }
     final dir = await modelDirectory(sessionFolder, kind);
     await dir.create(recursive: true);
-    final part = File('${dir.path}/model.safetensors.part');
+    if (kind.layout == ModelLayout.cbramodPack) {
+      await ensureBundledPack(dir, kind);
+    }
+    final filename = kind.layout == ModelLayout.cbramodPack
+        ? 'pretrained_weights.pth'
+        : 'model.safetensors';
+    final part = File('${dir.path}/$filename.part');
     if (await part.exists()) {
       await part.delete();
     }
@@ -201,7 +395,7 @@ class ModelCache {
     } finally {
       client.close(force: true);
     }
-    return _installLoaded(dir, part, kind);
+    return _installLoaded(dir, part, kind, filename);
   }
 
   void _verifyHash(ModelKind kind, String hex, File part) {
@@ -215,16 +409,13 @@ class ModelCache {
     );
   }
 
-  /// Move the verified part into place, write config.json, stamp the
-  /// verification, and load. Only called after [importModel]/[downloadModel]
-  /// have passed `_verifyHash`, so the stamp records that the on-disk file is
-  /// known-good.
   Future<ModelInstallResult> _installLoaded(
     Directory dir,
     File part,
     ModelKind kind,
+    String filename,
   ) async {
-    final dest = File('${dir.path}/model.safetensors');
+    final dest = File('${dir.path}/$filename');
     if (await dest.exists()) {
       await dest.delete();
     }
@@ -239,9 +430,6 @@ class ModelCache {
     );
   }
 
-  /// Write `<dir>/verified.json` holding the SHA-256 the file was verified
-  /// against. The probe/install path never re-hashes — it trusts this stamp —
-  /// so the stamp is the single durable record of "we checked this file once".
   Future<void> _stampVerified(Directory dir, ModelKind kind) async {
     await File('${dir.path}/verified.json').writeAsString(
       '{"sha256":"${kind.sha256}"}',
@@ -249,7 +437,6 @@ class ModelCache {
     );
   }
 
-  /// Whether the on-disk model carries the verification stamp for [kind].
   Future<bool> isVerifiedOnDisk(
     String? sessionFolder,
     ModelKind kind,
@@ -263,27 +450,39 @@ class ModelCache {
     }
   }
 
-  /// Write the app-generated `config.json` unless one already exists. The
-  /// loader needs both files; the config describes the architecture and is
-  /// regenerated from the model's public hyperparameters.
   Future<void> _ensureConfig(Directory dir, ModelKind kind) async {
     final config = File('${dir.path}/config.json');
-    if (await config.exists()) return;
-    await config.writeAsString(
-      await frb.modelConfigJson(kind: kind.ffId),
-      flush: true,
-    );
+    if (await config.exists() && await config.length() > 0) return;
+    // Prefer the Dart template so a successful weight download cannot fail
+    // solely because a stale native lib still rejects `cbramod_a_vig` in
+    // `model_config_json`. Load still needs a matching Rust build.
+    await config.writeAsString(kind.generatedConfigJson, flush: true);
   }
 
-  /// Load the model from disk (used by "check for model" — the user may have
-  /// dropped the files in manually). Auto-writes config.json when missing.
+  /// Clarify stale-native failures after weights already landed on disk.
+  static String friendlyNativeError(Object e) {
+    final s = '$e';
+    if (s.contains('unknown model kind')) {
+      return 'Native library is out of date for this model id. '
+          'The weight file may already be on disk (green check = files present, '
+          'not Ready). Rebuild the app so Rust includes Spur A '
+          '(`cbramod_a_vig`), then tap Check for model.\n\n$s';
+    }
+    return s;
+  }
+
+
+  /// Load the model from disk. For Spur A, copies the bundled head pack first.
   Future<ModelInstallResult> install(
     String? sessionFolder,
     ModelKind kind,
   ) async {
     final dir = await modelDirectory(sessionFolder, kind);
+    if (kind.layout == ModelLayout.cbramodPack) {
+      await ensureBundledPack(dir, kind);
+    }
     await _ensureConfig(dir, kind);
-    final missing = await _missing(dir);
+    final missing = await _missing(dir, kind);
     if (missing.isNotEmpty) {
       throw ModelNotFoundException(
         '${kind.label} model not found.\n'
@@ -333,6 +532,19 @@ class ModelEngineReady extends ModelEngineState {
   final String description;
 }
 
+/// Files may be present / loaded, but scoring Ready is false — [reason] is
+/// user-facing (e.g. encoder forward pending).
+class ModelEngineNotReady extends ModelEngineState {
+  const ModelEngineNotReady({
+    required this.kind,
+    required this.reason,
+    this.description,
+  });
+  final ModelKind kind;
+  final String reason;
+  final String? description;
+}
+
 /// Previous attempt failed; [message] is user-facing.
 class ModelEngineError extends ModelEngineState {
   const ModelEngineError({required this.kind, required this.message});
@@ -355,9 +567,8 @@ class _DigestSink implements Sink<Digest> {
           .toString();
 }
 
-/// Drives [ModelEngineState] for the *selected* model kind. LUNA is downloaded
-/// directly; REVE is only ever obtained via user import (the Hub repo is
-/// gated).
+/// Drives [ModelEngineState] for the *selected* model kind. Spur A (CBraMod)
+/// ships its head pack and downloads the encoder; REVE is user-import only.
 class ModelEngineNotifier extends Notifier<ModelEngineState> {
   static const ModelCache _cache = ModelCache();
 
@@ -386,14 +597,85 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
 
   Future<ModelEngineState> _probe(ModelKind kind) async {
     try {
+      if (kind.layout == ModelLayout.cbramodPack) {
+        final reason = await _cache.cbramodNotReadyReason(_sessionFolder, kind);
+        String? desc;
+        Object? installError;
+        try {
+          final result = await _cache.install(_sessionFolder, kind);
+          desc = result.loadedDesc;
+        } on Exception catch (e) {
+          installError = e;
+        }
+        if (reason != null) {
+          if (!(await _cache.isPackPresentOnDisk(_sessionFolder, kind))) {
+            return ModelEngineError(
+              kind: kind,
+              message: installError?.toString() ??
+                  'CBraMod head pack missing — bundled assets failed to copy',
+            );
+          }
+          return ModelEngineNotReady(
+            kind: kind,
+            reason: reason,
+            description: desc,
+          );
+        }
+        if (desc == null) {
+          final msg = installError != null
+              ? ModelCache.friendlyNativeError(installError)
+              : 'CBraMod load failed after pack+encoder verified';
+          // Candle/forward failure after SHA OK → NotReady (not a silent Ready).
+          if (msg.contains('Candle forward load failed') ||
+              msg.contains('forward load failed')) {
+            return ModelEngineNotReady(
+              kind: kind,
+              reason:
+                  'CBraMod encoder SHA OK but Candle forward failed to load — '
+                  'not Ready',
+              description: msg,
+            );
+          }
+          return ModelEngineError(kind: kind, message: msg);
+        }
+        return _readyOrNot(kind, desc);
+      }
       if (!await _cache.isInstalledOnDisk(_sessionFolder, kind)) {
         return const ModelEngineNotInstalled();
       }
       final result = await _cache.install(_sessionFolder, kind);
       return ModelEngineReady(kind: kind, description: result.loadedDesc);
     } on Exception catch (e) {
-      return ModelEngineError(kind: kind, message: '$e');
+      return ModelEngineError(
+        kind: kind,
+        message: ModelCache.friendlyNativeError(e),
+      );
     }
+  }
+
+  ModelEngineState _readyOrNot(ModelKind kind, String loadedDesc) {
+    if (kind.layout == ModelLayout.cbramodPack) {
+      if (!kCbramodEncoderForwardReady) {
+        return ModelEngineNotReady(
+          kind: kind,
+          reason:
+              'CBraMod encoder forward not linked in this build (encoder SHA + head OK) — '
+              'not Ready until native Candle forward is linked',
+          description: loadedDesc,
+        );
+      }
+      // Gate Ready on Rust encoder_forward_ready (surfaced in load desc).
+      if (!loadedDesc.contains(kCbramodEncoderForwardReadyDesc)) {
+        return ModelEngineNotReady(
+          kind: kind,
+          reason:
+              'CBraMod encoder SHA OK but Candle forward did not load — '
+              'not Ready until encoder_forward_ready',
+          description: loadedDesc,
+        );
+      }
+    }
+    return ModelEngineReady(kind: kind, description: loadedDesc);
   }
 
   /// Switch the selected model (persisted to settings) and probe it.
@@ -415,17 +697,20 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
     state = const ModelEngineLoading();
     try {
       final result = await _cache.importModel(_sessionFolder, kind, src);
-      state = ModelEngineReady(kind: kind, description: result.loadedDesc);
+      state = _readyOrNot(kind, result.loadedDesc);
     } on ModelChecksumException catch (e) {
       state = ModelEngineError(kind: kind, message: e.message);
     } on Exception catch (e) {
-      state = ModelEngineError(kind: kind, message: '$e');
+      state = ModelEngineError(
+        kind: kind,
+        message: ModelCache.friendlyNativeError(e),
+      );
     }
     await _recheckBadges();
     return state;
   }
 
-  /// Download the model directly from Hugging Face (LUNA only).
+  /// Download the model directly from Hugging Face (CBraMod encoder).
   Future<ModelEngineState> download(
     ModelKind kind, {
     void Function(int received, int total)? onProgress,
@@ -439,13 +724,16 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
         kind,
         onProgress: onProgress,
       );
-      state = ModelEngineReady(kind: kind, description: result.loadedDesc);
+      state = _readyOrNot(kind, result.loadedDesc);
     } on ModelChecksumException catch (e) {
       state = ModelEngineError(kind: kind, message: e.message);
     } on ModelDownloadException catch (e) {
       state = ModelEngineError(kind: kind, message: e.message);
     } on Exception catch (e) {
-      state = ModelEngineError(kind: kind, message: '$e');
+      state = ModelEngineError(
+        kind: kind,
+        message: ModelCache.friendlyNativeError(e),
+      );
     }
     await _recheckBadges();
     return state;

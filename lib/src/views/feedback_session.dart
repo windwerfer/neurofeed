@@ -2156,8 +2156,21 @@ class _GuardrailScorerDialogState
   }
 
   List<String> _scorerFeatures() {
+    // Ship picker: band.delta always; CBraMod heads when Spur A encoder is
+    // Ready/installed; REVE heads when REVE base is installed.
     final items = <String>[guardFeatureBandDelta];
-    if (_aiDrowsinessListed()) items.add(guardFeatureAiDrowsiness);
+    final cbramodInstalled =
+        ref.read(modelInstalledProvider(ModelKind.cbramodAVig)).valueOrNull ==
+        true;
+    if (cbramodInstalled && _aiDrowsinessListed()) {
+      items.addAll([guardFeatureAiAVig, guardFeatureAiWakeLight]);
+    }
+    final reveInstalled =
+        ref.read(modelInstalledProvider(ModelKind.reveBase)).valueOrNull ==
+        true;
+    if (reveInstalled && _aiDrowsinessListed()) {
+      items.addAll([guardFeatureAiAVigReve, guardFeatureAiWakeLightReve]);
+    }
     return items;
   }
 
@@ -2170,7 +2183,7 @@ class _GuardrailScorerDialogState
           : _feature;
       setState(() => _feature = next);
       await settings.setGuardFeature(fb.protocol, next);
-      if (next == guardFeatureAiDrowsiness &&
+      if (guardFeatureIsAi(next) &&
           fb.rewardOutput == RewardOutputId.musicFilter) {
         if (mounted) {
           unawaited(_maybeWarnMusicAiCpu(context, settings));
@@ -2184,17 +2197,31 @@ class _GuardrailScorerDialogState
   Future<void> _onDone() async {
     final settings = ref.read(settingsProvider);
     final fb = ref.read(feedbackStateProvider);
+    final reveInstalled =
+        ref.read(modelInstalledProvider(ModelKind.reveBase)).valueOrNull == true;
+    final cbramodInstalled =
+        ref.read(modelInstalledProvider(ModelKind.cbramodAVig)).valueOrNull ==
+        true;
+    final cbramodBlocked =
+        guardFeatureIsCbramod(_feature) && !cbramodInstalled;
     if (settings.guardrailEnabledFor(fb.protocol) &&
-        _feature == guardFeatureAiDrowsiness &&
-        !_anyModelInstalled()) {
+        (cbramodBlocked ||
+            (guardFeatureIsReve(_feature) && !reveInstalled) ||
+            (guardFeatureIsAi(_feature) && !_anyModelInstalled()))) {
+      final was = _feature;
       _feature = guardFeatureBandDelta;
       await settings.setGuardFeature(fb.protocol, guardFeatureBandDelta);
       if (mounted) {
+        final why = guardFeatureIsCbramod(was)
+            ? 'not ready (install/verify CBraMod encoder weights)'
+            : guardFeatureIsReve(was)
+                ? 'REVE base not installed'
+                : 'not installed';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '${guardFeatureLabel(guardFeatureAiDrowsiness)} is not '
-              'installed — reverted to ${guardFeatureLabel(guardFeatureBandDelta)}.',
+              '${guardFeatureLabel(was)} is $why — '
+              'reverted to ${guardFeatureLabel(guardFeatureBandDelta)}.',
             ),
           ),
         );
@@ -2249,7 +2276,7 @@ class _GuardrailScorerDialogState
                       child: Row(
                         children: [
                           Expanded(child: Text(guardFeatureLabel(f))),
-                          if (f == guardFeatureAiDrowsiness)
+                          if (guardFeatureIsAi(f))
                             ModelInstalledCheck(alwaysShow: true),
                           if (f == guardFeatureBandDelta)
                             ModelInstalledCheck(alwaysShow: true),
@@ -2261,16 +2288,16 @@ class _GuardrailScorerDialogState
                   if (v == null) return;
                   setState(() => _feature = v);
                   settings.setGuardFeature(fb.protocol, v);
-                  if (v == guardFeatureAiDrowsiness &&
+                  if (guardFeatureIsAi(v) &&
                       fb.rewardOutput == RewardOutputId.musicFilter) {
                     unawaited(_maybeWarnMusicAiCpu(context, settings));
                   }
                 },
               ),
               const SizedBox(height: 8),
-              if (current == guardFeatureAiDrowsiness)
+              if (guardFeatureIsAi(current))
                 Text(
-                  'AI embedding scorer (${settings.guardModel ?? defaultModelKind.ffId}) — installed',
+                  'AI head ${guardFeatureLabel(current)} (${settings.guardModel ?? defaultModelKind.ffId})',
                   style: theme.textTheme.bodySmall,
                 )
               else
