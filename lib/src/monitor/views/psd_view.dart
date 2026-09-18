@@ -12,6 +12,7 @@ import 'package:muse_ml/src/monitor/panes/psd_pane.dart';
 import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
 import 'package:muse_ml/src/monitor/split_pane_tick.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:muse_ml/src/settings.dart';
 
 enum PsdHzRange { hz60, hz100 }
 
@@ -42,6 +43,15 @@ class _PsdViewState extends ConsumerState<PsdView> {
   void initState() {
     super.initState();
     _mon = ref.read(monitorControllerProvider.notifier);
+    final settings = ref.read(settingsProvider);
+    final epoch = settings.monitorWindowSeconds('psd');
+    if (epoch != null && epoch > 0) {
+      _viewport.windowSeconds = epoch;
+    }
+    final strip = settings.monitorDetailWindowSeconds('psd');
+    if (strip != null && strip > 0) {
+      _strip.windowSeconds = strip;
+    }
     _mon.sweepBuffer.addListener(_onSweep);
     _mon.bandCache.addListener(_onBands);
     _viewport.addListener(_onEpoch);
@@ -192,6 +202,9 @@ class _PsdViewState extends ConsumerState<PsdView> {
         contextOldestElapsed: _bandOldest(),
       );
     }
+    final settings = ref.read(settingsProvider);
+    settings.setMonitorWindowSeconds('psd', seconds);
+    settings.setMonitorDetailWindowSeconds('psd', _strip.windowSeconds);
   }
 
   Widget _hzMenu(BuildContext context) {
@@ -311,6 +324,9 @@ class _PsdViewState extends ConsumerState<PsdView> {
               ),
               connected: connected,
               waiting: connected && !_mon.bandCache.hasData,
+              onStripWindowChanged: (s) => ref
+                  .read(settingsProvider)
+                  .setMonitorDetailWindowSeconds('psd', s),
             );
           },
         ),

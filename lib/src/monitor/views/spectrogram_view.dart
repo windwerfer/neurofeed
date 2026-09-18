@@ -12,6 +12,7 @@ import 'package:muse_ml/src/monitor/monitor_controller.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/monitor/panes/spectrogram_pane.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:muse_ml/src/settings.dart';
 
 class SpectrogramView extends ConsumerStatefulWidget {
   const SpectrogramView({super.key});
@@ -42,6 +43,10 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
   void initState() {
     super.initState();
     _mon = ref.read(monitorControllerProvider.notifier);
+    final saved = ref.read(settingsProvider).monitorWindowSeconds('spectrogram');
+    if (saved != null && saved > 0) {
+      _viewport.windowSeconds = saved;
+    }
     _mon.sweepBuffer.addListener(_onBuffer);
     _viewport.addListener(_onViewport);
   }
@@ -130,7 +135,10 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
         zoomFloor: ViewportController.spectrogramZoomFloor,
         zoomCap: ViewportController.spectrogramZoomCap,
       );
-      return;
+            ref
+          .read(settingsProvider)
+          .setMonitorWindowSeconds('spectrogram', _viewport.windowSeconds);
+return;
     }
     if (d.pointerCount != 1) return;
     final w = context.size?.width ?? 1;
@@ -245,8 +253,10 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
       formatWindow: formatSpectrogramWindow,
       onFollow: _follow,
       onInspect: _inspect,
-      onWindowChanged: (s) =>
-          _viewport.setStripWindowSeconds(s, newestElapsed: _newestElapsed()),
+      onWindowChanged: (s) {
+        _viewport.setStripWindowSeconds(s, newestElapsed: _newestElapsed());
+        ref.read(settingsProvider).setMonitorWindowSeconds('spectrogram', s);
+      },
       toolbarMiddle: _magMenu(context),
       toolbarExtras: ElectrodeToggles(
         names: names,

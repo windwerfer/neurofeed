@@ -52,11 +52,12 @@ lib/src/monitor/
     recording_index.dart      (elapsedT, fileLength) at frame boundaries
     file_backed_source.dart   Inspect beyond RAM (tmp / recording .raw)
     sweep_mean.dart
+    optical_cache.dart       Pulse / SpO2 / IR PPG rings (HR+SpO2)
     stft_ring.dart            Follow STFT column ring (Inspect / electrodes / window = full)
     sliding_spectrum.dart     Follow Welch / histogram (Inspect / electrodes / window = full)
   panes/                      SweepPane, TimeSeriesPane, histogram / PSD /
                               spectrogram, BandsContextStrip, overshoot_hold
-  views/                      five live graphs + recording dashboard + Save/Discard
+  views/                      six live graphs (incl. HR+SpO2) + recording dashboard + Save/Discard
   recording/
     capture_lease.dart        idle | tmp | recording | feedback
     monitor_recorder.dart     tmp_ / recording_ temps
@@ -131,6 +132,7 @@ Drag/pinch on a time-X graph enters Inspect.
 | Histogram | ~70% + ~30% Bands strip | 2/4/**8 s** | X ±100 µV (overflow ±50/±200), 64 bins. Tap hairline. Strip default 30 s. |
 | PSD | same split | 2/**4**/8 s | X 0–60 Hz (overflow 0–100). Welch 1 s / 256-pt, 50% hop. Band shading + alpha peak. |
 | Spectrogram | 1 heatmap | 10/**20**/30 s / 2 min / 5 min + pinch `custom` | Y 0–60 Hz. `mag ▾` color min/max. STFT 256-pt, hop ~0.25 s. No strip, no FFT-size chrome. |
+| HR+SpO2 | dual-axis HR/SpO₂ + IR PPG | top 15/**30**/60/120 s; bottom **10 s** (≤ top) | Muse PPG only. Linked pan/zoom; highlight = bottom window. Avg HR line. Crown → empty. Window lengths persisted. |
 
 Histogram/PSD highlight on the strip is **time only** (width = T). One
 electrode-toggle set drives both panes. Recording-dashboard Histogram/PSD
