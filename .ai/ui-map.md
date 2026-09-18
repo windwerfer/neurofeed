@@ -122,7 +122,7 @@ dashboard Histogram is **one pane** (no strip).
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
 | Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Last T seconds. Highlight flush-right on the strip; slides with the Follow-lead ticker (not 1 Hz). |
-| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. Pan/pinch on the strip. |
+| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. Drag highlight to move epoch; drag outside pans strip. Pinch-X on strip. |
 | Window length | `2s` `4s` `8s` | `histogramPsdWindowOptions` | `graph_shell.dart` | Default **8 s**. Highlight width = T. |
 | µV range | `±100 µV` | `HistogramUvRange` | `histogram_view.dart` | Own domain. Overflow ±50 / ±200. Not Raw EEG Y-scale. |
 | Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for histogram **and** strip. Last one stays. Overflow → pannable + end chevron (shared widget). |
@@ -140,7 +140,7 @@ window).
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
 | Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Last T seconds. Highlight flush-right on the strip; slides with the Follow-lead ticker (not 1 Hz). |
-| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. Pan/pinch on the strip. |
+| Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. Drag highlight to move epoch; drag outside pans strip. Pinch-X on strip. |
 | Window length | `2s` `4s` `8s` | `histogramPsdWindowOptions` | `graph_shell.dart` | Default **4 s**. Highlight width = T. |
 | Hz range | `0–60 Hz` | `PsdHzRange` | `psd_view.dart` | Overflow `0–100 Hz`. |
 | Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for PSD **and** strip. Last one stays. Overflow → pannable + end chevron (shared widget). |

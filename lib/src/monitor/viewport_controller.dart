@@ -340,6 +340,45 @@ void alignEpochToContext({
   );
 }
 
+/// Move the detail/epoch window inside a frozen overview/strip without
+/// panning the overview. Clamps so the highlight stays fully visible.
+/// Enter Inspect on both when still Following (overview lines stay put).
+void panDetailWithinOverview({
+  required ViewportController detail,
+  required ViewportController overview,
+  required double deltaSeconds,
+  required double newestElapsed,
+  double oldestElapsed = 0,
+  double? wallNow,
+  double? highlightEndElapsed,
+}) {
+  if (overview.mode == ViewportMode.follow) {
+    overview.enterInspectStrip(newestElapsed: newestElapsed, wallNow: wallNow);
+  }
+  final ovStart = overview.stripVisibleStart(
+    newestElapsed: newestElapsed,
+    wallNow: wallNow,
+  );
+  final ovEnd = overview.stripVisibleEnd(
+    newestElapsed: newestElapsed,
+    wallNow: wallNow,
+  );
+  if (detail.mode == ViewportMode.follow) {
+    final end = highlightEndElapsed ?? ovEnd;
+    detail.inspectEndingAt(
+      end,
+      newestElapsed: ovEnd,
+      oldestElapsed: ovStart,
+    );
+  }
+  final curEnd = detail.stripVisibleEnd(newestElapsed: newestElapsed);
+  detail.inspectEndingAt(
+    curEnd + deltaSeconds,
+    newestElapsed: ovEnd,
+    oldestElapsed: math.max(oldestElapsed, ovStart),
+  );
+}
+
 String formatWindowSeconds(double seconds) => '${seconds.round()}s';
 
 String formatSpectrogramWindow(double seconds) {

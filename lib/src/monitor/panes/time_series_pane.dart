@@ -131,6 +131,28 @@ List<BandPoint> mergeBandTickPoints(Iterable<BandPoint> pts) {
   return (highlightStart, highlightEnd);
 }
 
+/// True when [localX] lands on the drawn highlight within the chart.
+bool highlightHitTest({
+  required double localX,
+  required double chartLeft,
+  required double chartWidth,
+  required double visStart,
+  required double visEnd,
+  required double highlightStart,
+  required double highlightEnd,
+}) {
+  final frac = highlightFractions(
+    visStart: visStart,
+    visEnd: visEnd,
+    highlightStart: highlightStart,
+    highlightEnd: highlightEnd,
+  );
+  if (frac == null || chartWidth <= 0) return false;
+  final left = chartLeft + frac.$1 * chartWidth;
+  final right = chartLeft + frac.$2 * chartWidth;
+  return localX >= left && localX <= right;
+}
+
 class TimeSeriesPane extends StatefulWidget {
   const TimeSeriesPane({
     super.key,

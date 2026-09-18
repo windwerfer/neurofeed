@@ -203,4 +203,43 @@ void main() {
     expect(series[0][0].elapsed, closeTo(0, 1e-9));
     expect(series[0][1].elapsed, closeTo(1, 1e-9));
   });
+
+  test('highlightHitTest is true only inside the highlight band', () {
+    expect(
+      highlightHitTest(
+        localX: 50,
+        chartLeft: 0,
+        chartWidth: 100,
+        visStart: 0,
+        visEnd: 100,
+        highlightStart: 40,
+        highlightEnd: 60,
+      ),
+      isTrue,
+    );
+    expect(
+      highlightHitTest(
+        localX: 20,
+        chartLeft: 0,
+        chartWidth: 100,
+        visStart: 0,
+        visEnd: 100,
+        highlightStart: 40,
+        highlightEnd: 60,
+      ),
+      isFalse,
+    );
+    expect(
+      highlightHitTest(
+        localX: 36 + 25,
+        chartLeft: 36,
+        chartWidth: 200,
+        visStart: 10,
+        visEnd: 40,
+        highlightStart: 20,
+        highlightEnd: 30,
+      ),
+      isTrue,
+    );
+  });
 }
