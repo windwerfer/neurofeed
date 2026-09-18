@@ -1,0 +1,41 @@
+# Percentile sweep grids and protocol rollup weights.
+# Edit weights here — metrics.md documents the contract.
+
+reward_percentiles: [50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
+guard_percentiles:  [50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
+
+# Protocol simulation defaults (mirror app settings defaults).
+defaults:
+  reward_percentile: 40
+  guard_percentile: 75
+  guardrail_delta_ceiling: 0.25
+
+# Prune rule for sweeps: stop extending higher if primary metric is
+# monotonically worse for `prune_patience` consecutive steps.
+prune:
+  enabled: true
+  patience: 2
+  direction: higher_is_better   # primary metric
+
+# Optional coarser inhibit ceiling grid (v1 secondary; not required for core).
+inhibit_ceilings:
+  betaCeiling: [0.15, 0.20, 0.25, 0.30, 0.35]
+  deltaCeiling: [0.30, 0.40, 0.50, 0.60]
+
+protocol_rollup:
+  reward_weight: 0.50
+  guard_weight: 0.30
+  inhibit_weight: 0.20
+  reward:
+    hit_rate: 0.70
+    stability: 0.30
+  guard:
+    # Prefer label_align(warn_feature). Feature board score blends sep + that align.
+    # warn_rate_health is fallback only when labels are absent (widened band).
+    sep_weight: 0.6
+    label_align_weight: 0.4
+    target_warn_rate: 0.15
+    warn_rate_low: 0.01
+    warn_rate_high: 0.55
+  inhibit:
+    target_block: 0.25

@@ -1,0 +1,3 @@
+# Built Sleep-EDF / external corpora can be large; rebuild locally.
+*.npz
+!*.gitkeep
