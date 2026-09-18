@@ -207,7 +207,8 @@ class _ModelInstallBubbleState extends ConsumerState<ModelInstallBubble> {
 /// The model dropdown used in the settings card and the session gate bubble.
 ///
 /// Shows every foundation model with its size, a check when its files are
-/// already on disk, and persists the selection to [Settings.guardModel].
+/// already on disk (not the same as Ready), and persists the selection to
+/// [Settings.guardModel].
 class ModelSelectorDropdown extends ConsumerWidget {
   const ModelSelectorDropdown({super.key, this.onChanged});
 
@@ -263,12 +264,15 @@ class ModelInfoBlock extends ConsumerWidget {
     String statusText;
     if (engineState is ModelEngineReady) {
       statusText = engineState.description;
+    } else if (engineState is ModelEngineError) {
+      statusText = engineState.message;
     } else if (engineState is ModelEngineNotReady) {
       statusText = engineState.reason;
     } else if (engineState is ModelEngineLoading) {
       statusText = 'Loading…';
     } else if (installed == true) {
-      statusText = 'Installed — will load on use.';
+      statusText =
+          'Files on disk (green check) — not Ready until native load succeeds.';
     } else {
       statusText = 'Not installed yet.';
     }

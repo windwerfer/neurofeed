@@ -94,6 +94,59 @@ enum ModelKind {
   /// Flutter asset root for a bundled pack, if any.
   final String? packAssetRoot;
 
+  /// App-written `config.json` body. Must stay aligned with Rust
+  /// `generated_config_json` for the same kind. Written from Dart so Download
+  /// does not need FRB for a static string (avoids half-install on stale native).
+  String get generatedConfigJson {
+    switch (this) {
+      case ModelKind.cbramodAVig:
+        return '''
+{
+  "model_type": "cbramod_a_vig",
+  "pack_id": "cbramod-a-vig-full",
+  "encoder_family": "CBraMod",
+  "encoder_sha256": "$sha256",
+  "head_arch": "HeadALinear",
+  "in_dim": 200,
+  "n_classes": 2,
+  "labels": ["drowsy", "hypnagogic"],
+  "decode": "argmax",
+  "feature_dto_value": "P(class1)=P(hypnagogic)",
+  "window_sec": 2.0,
+  "input_sr_hz": 256.0,
+  "n_times": 512,
+  "native_sr_hz": 200.0,
+  "patch_samples": 200,
+  "pool": "mean",
+  "muse_channels": ["AF7", "AF8", "TP9", "TP10"]
+}''';
+      case ModelKind.reveBase:
+        return '''
+{
+  "architectures": [
+    "Reve"
+  ],
+  "auto_map": {
+    "AutoConfig": "configuration_reve.ReveConfig",
+    "AutoModel": "modeling_reve.Reve"
+  },
+  "depth": 22,
+  "dtype": "float32",
+  "embed_dim": 512,
+  "freqs": 4,
+  "head_dim": 64,
+  "heads": 8,
+  "mlp_dim_ratio": 2.66,
+  "model_type": "reve",
+  "noise_ratio": 0.0025,
+  "patch_overlap": 20,
+  "patch_size": 200,
+  "transformers_version": "4.56.2",
+  "use_geglu": true
+}''';
+    }
+  }
+
   String get folderLabel => '$label ($sizeMb MB)';
 
   /// Folder used in session files / labels when a REVE-style name is needed.
