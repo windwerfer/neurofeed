@@ -176,16 +176,20 @@ class _BandsViewState extends ConsumerState<BandsView> {
                 builder: (context, _) {
                   final cache = _mon.bandCache;
                   final newest = _newestElapsed();
+                  if (connected && cache.hasData) {
+                    _viewport.noteStripSample(newest);
+                  }
                   final start = _viewport.stripVisibleStart(
                     newestElapsed: newest,
                   );
-                  final end = _viewport.stripVisibleEnd(newestElapsed: newest);
+                  // Fetch through cache tip so the Follow-lead ticker can
+                  // slide new points in; paint domain stays ~1s behind.
                   final series = connected
                       ? buildBandSeries(
                           cache: cache,
                           electrodes: _selected,
                           startElapsed: start,
-                          endElapsed: end,
+                          endElapsed: newest,
                           captureStartedAtMs: state.captureStartedAtMs,
                         )
                       : [

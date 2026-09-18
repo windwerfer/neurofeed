@@ -160,11 +160,12 @@ class _PsdViewState extends ConsumerState<PsdView> {
       return;
     }
     final bandNewest = _bandNewest();
+    _strip.noteStripSample(bandNewest);
     _tick.recomputeSeries(
       cache: _mon.bandCache,
       electrodes: _selected,
       startElapsed: _strip.stripVisibleStart(newestElapsed: bandNewest),
-      endElapsed: _strip.stripVisibleEnd(newestElapsed: bandNewest),
+      endElapsed: bandNewest,
       captureStartedAtMs: ref
           .read(monitorControllerProvider)
           .captureStartedAtMs,
