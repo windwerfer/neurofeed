@@ -192,7 +192,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
     final chartW = (w - gutter - right).clamp(1.0, w);
     final x = d.localFocalPoint.dx - gutter;
 
-    if (!detail) {
+    if (!detail && _overview.mode == ViewportMode.inspect) {
       final ovStart = _overview.stripVisibleStart(newestElapsed: newest);
       final ovEnd = _overview.stripVisibleEnd(newestElapsed: newest);
       final hiStart = _detail.stripVisibleStart(newestElapsed: newest);
@@ -516,6 +516,8 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                           final detailEnd = _detail.stripVisibleEnd(
                             newestElapsed: n,
                           );
+                          final showHighlight =
+                              _overview.mode == ViewportMode.inspect;
                           return Stack(
                             children: [
                               Positioned.fill(
@@ -526,8 +528,10 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                   newestElapsed: n,
                                   connected: connected,
                                   avgHr: cache.avgHr,
-                                  highlightStartElapsed: detailStart,
-                                  highlightEndElapsed: detailEnd,
+                                  highlightStartElapsed:
+                                      showHighlight ? detailStart : null,
+                                  highlightEndElapsed:
+                                      showHighlight ? detailEnd : null,
                                   cursorElapsed: _cursorElapsed,
                                   onTapElapsed: (t) =>
                                       setState(() => _cursorElapsed = t),
@@ -565,12 +569,19 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                   state.captureStartedAtMs,
                                 );
                                 final n = _newestElapsed();
-                                final start = _detail.stripVisibleStart(
-                                  newestElapsed: n,
-                                );
-                                final end = _detail.stripVisibleEnd(
-                                  newestElapsed: n,
-                                );
+                                final sweep =
+                                    _detail.mode == ViewportMode.follow &&
+                                    _overview.mode == ViewportMode.follow;
+                                final start = sweep
+                                    ? n - _detail.windowSeconds
+                                    : _detail.stripVisibleStart(
+                                        newestElapsed: n,
+                                      );
+                                final end = sweep
+                                    ? n
+                                    : _detail.stripVisibleEnd(
+                                        newestElapsed: n,
+                                      );
                                 const pad = 0.25;
                                 final ppg = connected
                                     ? _elapsedSeries(
