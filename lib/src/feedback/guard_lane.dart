@@ -208,6 +208,8 @@ class GuardLane {
       return;
     }
     if (!captureAnchor) {
+      // Skip / last-baseline reuse: percentile warn only — no embedding anchors.
+      clearCaptured = true;
       sleepCaptured = true;
       return;
     }
