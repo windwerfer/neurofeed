@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "description": "Corpus pointers for feedback_gym. Synthetic demo ships in-repo so the gym runs without muse-eeg-heads on disk.",
+  "synthetic": {
+    "id": "demo_session",
+    "path": "corpora/synthetic/demo_session.npz",
+    "generator": "runners.helpers.generate_synthetic_corpus",
+    "hz": 1,
+    "notes": "Wake then drowsy regimes; band ratios + relative bands + precomputed AI score columns + drowsy labels."
+  },
+  "external": [
+    {
+      "id": "muse-eeg-heads-band-math",
+      "optional": true,
+      "hint": "../muse-eeg-heads/band_math (sibling of neurofeed on worker)",
+      "docs": [
+        "COMPARE_AI_VS_BAND.md",
+        "windows/splits under band_math/"
+      ],
+      "how_to_wire": "Point --corpus at an NPZ with the same column schema as demo_session.npz (band_*, delta_rel/theta_rel/alpha_rel/beta_rel, delta_abs, ai_*, labels, cal_n). Sleep-EDF export wiring is a follow-up."
+    }
+  ],
+  "schema": {
+    "required": ["cal_n", "delta_rel", "theta_rel", "alpha_rel", "beta_rel"],
+    "feature_columns": {
+      "band.atr": "band_atr",
+      "band.tar": "band_tar",
+      "band.btr": "band_btr",
+      "band.alpha": "band_alpha",
+      "band.delta": "band_delta",
+      "ai.a_vig": "ai_a_vig",
+      "ai.wake_light": "ai_wake_light",
+      "ai.a_vig_reve": "ai_a_vig_reve",
+      "ai.wake_light_reve": "ai_wake_light_reve",
+      "ai.drowsiness": "ai_drowsiness"
+    },
+    "optional": ["labels", "delta_abs"],
+    "device_features": ["device.focus", "device.calm"]
+  }
+}

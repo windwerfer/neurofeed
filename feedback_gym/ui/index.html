@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>feedback_gym — neurofeed</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>feedback_gym</h1>
+    <div class="meta" id="run-meta">loading…</div>
+    <div class="meta">Metrics contract: <code>../metrics.md</code> · Living stats: <code>../PROTOCOL_STATS.md</code></div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="protocols">Protocols</button>
+    <button class="tab" data-tab="features">Features</button>
+    <button class="tab" data-tab="sweeps">Sweeps</button>
+    <button class="tab" data-tab="compare">Compare</button>
+  </div>
+
+  <main>
+    <div id="boot-error" class="panel" style="display:none;color:var(--bad)"></div>
+
+    <section id="panel-protocols" class="tab-panel">
+      <div class="panel">
+        <h2>Protocol composites</h2>
+        <p class="hint">Click a row for reward / inhibit / guard part breakdown. Crown device features are N/A when no corpus.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>id</th>
+              <th class="num">final</th>
+              <th class="num">reward</th>
+              <th class="num">inhibit</th>
+              <th class="num">guard</th>
+              <th>notes</th>
+            </tr>
+          </thead>
+          <tbody id="protocols-body"></tbody>
+        </table>
+        <div id="protocol-detail" class="detail"></div>
+      </div>
+    </section>
+
+    <section id="panel-features" class="tab-panel" style="display:none">
+      <div class="panel">
+        <h2>Feature board</h2>
+        <p class="hint">Includes orphans (AI + device.*). Device rows show N/A. AI uses precomputed fixture scores when pack inference is unavailable.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>id</th>
+              <th>role</th>
+              <th class="num">best_p</th>
+              <th class="num">score</th>
+              <th class="num">sep</th>
+              <th>sparkline</th>
+              <th>status</th>
+              <th>latency</th>
+            </tr>
+          </thead>
+          <tbody id="features-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="panel-sweeps" class="tab-panel" style="display:none">
+      <div class="panel">
+        <h2>Percentile sweeps (~5% · 50–95, pruned)</h2>
+        <p class="hint">Primary metric curve per feature. best_p is the peak before prune.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>id</th>
+              <th>role</th>
+              <th class="num">best_p</th>
+              <th>curve</th>
+              <th>points</th>
+            </tr>
+          </thead>
+          <tbody id="sweeps-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="panel-compare" class="tab-panel" style="display:none">
+      <div class="panel">
+        <h2>Compare runs</h2>
+        <div id="compare-body"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="footer">neurofeed feedback_gym · offline · no Flutter dependency</div>
+  <script src="app.js"></script>
+</body>
+</html>

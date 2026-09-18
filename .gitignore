@@ -57,3 +57,6 @@ android/.kotlin/
 /windows/flutter/
 .zed/
 .local/
+
+# feedback_gym: ignore dated run folders; keep .gitkeep via results/.gitignore
+feedback_gym/results/*/
