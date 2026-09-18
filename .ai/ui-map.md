@@ -61,7 +61,7 @@ Shared chrome for the five live graph views. Record is global
 | Stop recording | `Stop recording` | `_RecordControls` | `graph_shell.dart` | Assemble + Save/Discard. Elapsed while recording. |
 | Record disabled | tooltip `Stop the feedback session to record` | `_RecordControls` | `graph_shell.dart` | `CaptureKind.feedback` or disconnected. |
 | Landscape cinema | — | `GraphCinema` | `graph_cinema.dart` | Graph views only. **Mobile:** landscape hides status bar, sidebar, GraphShell toolbar; portrait restores. **Desktop:** chrome stays; **F11** toggles the same hide. Not Settings / Feedback / Streaming / History. |
-| Chrome overflow | chevron | `_PannableChromeRow` | `graph_shell.dart` | Whole toolbar pans when Follow/Inspect + electrodes overflow; drag anywhere on the row; chevron jumps to end. |
+| Chrome overflow | chevron | `_PannableChromeRow` | `graph_shell.dart` | Whole toolbar pans when Follow/Inspect + electrodes overflow; mouse/touch drag anywhere on the row (incl. over chips); chevron jumps to end. |
 | Waiting for signal | `Waiting for signal` | `MonitorWaitingSignal` | `empty_state.dart` | Connected, no samples yet. |
 
 ### Connect window — `lib/src/connect_window.dart`
@@ -156,7 +156,7 @@ No `FFT 1s ▾`.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Newest column at right. |
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | ~1 s Follow lead + vsync ticker (same as Bands); newest second off-screen right. Hop from absolute newest (not capped sampleCount) so Follow continues after ~5 min wrap. Empty chart = theme surface. |
 | Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze; pan / pinch-X. |
 | Window length | `10s` `20s` `30s` `2min` `5min` | `spectrogramWindowOptions` | `graph_shell.dart` | Default **20 s**. Pinch-X → `custom`. Cap 5 min. |
 | Custom window | `custom` | `windowIsPreset` | `graph_shell.dart` | Closed label after pinch-X. |

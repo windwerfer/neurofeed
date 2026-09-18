@@ -40,7 +40,7 @@ lib/src/monitor/
   monitor_providers.dart
   graph_shell.dart            Follow / Inspect, window, Record / Stop
   graph_cinema.dart           mobile landscape, or desktop F11
-  viewport_controller.dart    elapsed seconds from capture start; Bands Follow lead 1 s
+  viewport_controller.dart    elapsed seconds from capture start; Bands/Spectrogram Follow lead 1 s
   electrode_toggles.dart      non-EEG average membership
   band_toggles.dart           in-pane delta/theta/alpha/beta/gamma chips
   empty_state.dart            Waiting for signal
@@ -117,7 +117,8 @@ Scratch is always `scratchDirectory()`. SAF is history-only.
 
 Shared chrome: Follow | Inspect, window length, Record / Stop, electrode
 toggles (non-EEG). When the whole chrome row overflows, drag anywhere on
-that line to pan the entire strip (Follow/Inspect slide off first); overflow
+that line (mouse or touch, including over electrode chips) to pan the entire
+strip (Follow/Inspect slide off first); taps still toggle chips; overflow
 chevron jumps to the end. Chrome hide (`graph_cinema.dart`): **mobile landscape**
 hides status bar, sidebar, and GraphShell toolbar (portrait restores).
 **Desktop keeps chrome** in a landscape window; **F11** hides the same
@@ -133,7 +134,7 @@ Drag/pinch on a time-X graph enters Inspect.
 | Bands | 1 strip, 5 series | 15/**30**/60/120 s + pinch `custom` | Y = dB display; storage linear µV²/Hz. Mean of selected in dB. Overshoot = dashed hold. PCHIP strokes. Follow slides with ~1 s lead (1 Hz cache). In-pane band chips toggle series (depressed = visible). |
 | Histogram | ~70% + ~30% Bands strip | 2/4/**8 s** | X ±100 µV (overflow ±50/±200), 64 bins. Tap hairline. Strip default 30 s. |
 | PSD | same split | 2/**4**/8 s | X 0–60 Hz (overflow 0–100). Welch 1 s / 256-pt, 50% hop. Band shading + alpha peak. |
-| Spectrogram | 1 heatmap | 10/**20**/30 s / 2 min / 5 min + pinch `custom` | Y 0–60 Hz. `mag ▾` color min/max. STFT 256-pt, hop ~0.25 s. No strip, no FFT-size chrome. |
+| Spectrogram | 1 heatmap | 10/**20**/30 s / 2 min / 5 min + pinch `custom` | Y 0–60 Hz. `mag ▾` color min/max. STFT 256-pt, hop ~0.25 s. Follow slides with ~1 s lead (same as Bands). No strip, no FFT-size chrome. |
 | HR+SpO2 | dual-axis HR/SpO₂ + IR PPG | top 15/**30**/60/120 s; bottom **10 s** (≤ top) | Muse PPG only. Top highlight **Inspect only** (hidden in Follow); drag highlight in Inspect slides detail. Bottom IR PPG is **sweep** in Follow (EEG-style wipe, fixed ~10 s buffer), walking window in Inspect. Linked pinch/zoom. Avg HR line. Crown → empty. Window lengths persisted. |
 
 Histogram/PSD highlight on the strip is **time only** (width = T). In
@@ -213,7 +214,10 @@ Not `SessionMetadata.toJson()`. Format: [README_feedback_format.md](../README_fe
 - Bands Y is dB display. Pinch-X `custom` on Bands and Spectrogram only.
   Follow on 1 Hz Bands / Histogram / PSD strips slides with ~1 s lead +
   always-on PCHIP (series fetched through cache tip; paint domain lags).
-  Spectrogram Follow is flush-right. No `SMOOTH` / `REAL TIME` chrome.
+  Spectrogram Follow lead matches Bands (~1 s + vsync ticker; columns
+  fetched through tip). Follow hop is keyed off absolute newest elapsed so it
+  keeps tracking after the ~5 min ring wraps. Empty chart regions use theme
+  surface (not colormap blue). No `SMOOTH` / `REAL TIME` chrome.
 - Cinema: mobile landscape hides chrome; desktop **F11** does the same.
   Spectrogram `mag ▾` is color, not Hz.
 - No averaging, no hold-finger readout, no FFT-window chrome (256-pt only).
