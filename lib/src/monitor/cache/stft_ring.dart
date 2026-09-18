@@ -123,6 +123,9 @@ class StftRing {
   }
 
   static StftColumn _column(List<double> samples, double elapsed) {
+    if (!stftWindowHasSignal(samples)) {
+      return StftColumn(elapsed, stftEmptyDb(kDefaultFftN));
+    }
     final spec = fft(samples, n: kDefaultFftN);
     final db = Float64List(spec.power.length);
     for (var k = 0; k < db.length; k++) {

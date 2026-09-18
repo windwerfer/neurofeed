@@ -216,8 +216,12 @@ Not `SessionMetadata.toJson()`. Format: [README_feedback_format.md](../README_fe
   always-on PCHIP (series fetched through cache tip; paint domain lags).
   Spectrogram Follow lead matches Bands (~1 s + vsync ticker; columns
   fetched through tip). Follow hop is keyed off absolute newest elapsed so it
-  keeps tracking after the ~5 min ring wraps. Empty chart regions use theme
-  surface (not colormap blue). No `SMOOTH` / `REAL TIME` chrome.
+  keeps tracking after the ~5 min ring wraps. Horizontal motion is ticker-only:
+  heatmap X geometry is frozen at raster decode (same pattern as Bands — data
+  hops must not also jump the transform). Empty / missing / pre-roll STFT
+  windows are NaN dB and rasterize transparent so theme surface shows through
+  (not colormap stop 0 / blue), including the left edge before the buffer
+  fills. No `SMOOTH` / `REAL TIME` chrome.
 - Cinema: mobile landscape hides chrome; desktop **F11** does the same.
   Spectrogram `mag ▾` is color, not Hz.
 - No averaging, no hold-finger readout, no FFT-window chrome (256-pt only).
