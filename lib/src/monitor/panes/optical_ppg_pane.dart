@@ -5,6 +5,37 @@ import 'package:flutter/scheduler.dart';
 import 'package:muse_ml/src/charts/eeg_data_source.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
 
+import 'package:muse_ml/src/monitor/cache/optical_cache.dart';
+
+/// Sweep slot index in 0 .. slotCount-1 for an absolute elapsed time.
+int ppgSweepSlot({
+  required double elapsed,
+  required double windowSeconds,
+  double sampleRate = OpticalCache.ppgSampleRate,
+}) {
+  final n = (windowSeconds * sampleRate).round();
+  if (n <= 0) return 0;
+  final idx = (elapsed * sampleRate).floor();
+  return ((idx % n) + n) % n;
+}
+
+/// Wipe cursor as a fraction of chart width (0..1) for Follow sweep.
+double ppgSweepCursorFraction({
+  required double newestElapsed,
+  required double windowSeconds,
+  double sampleRate = OpticalCache.ppgSampleRate,
+}) {
+  final n = (windowSeconds * sampleRate).round();
+  if (n <= 0) return 0;
+  return ppgSweepSlot(
+        elapsed: newestElapsed,
+        windowSeconds: windowSeconds,
+        sampleRate: sampleRate,
+      ) /
+      n;
+}
+
+
 /// Raw IR PPG waveform for the bottom HR+SpO2 detail pane.
 class OpticalPpgPane extends StatefulWidget {
   const OpticalPpgPane({
@@ -135,19 +166,37 @@ class _OpticalPpgPaneState extends State<OpticalPpgPane>
     final size = box.size;
     final chart = OpticalPpgPainter.chartRect(size);
     final wallNow = DateTime.now().millisecondsSinceEpoch / 1000.0;
-    final visStart = widget.viewport.stripVisibleStart(
-      newestElapsed: widget.newestElapsed,
-      wallNow: wallNow,
-    );
-    final visEnd = widget.viewport.stripVisibleEnd(
-      newestElapsed: widget.newestElapsed,
-      wallNow: wallNow,
-    );
+    final sweep = widget.viewport.mode == ViewportMode.follow;
+    final window = widget.viewport.windowSeconds;
+    final visStart = sweep
+        ? widget.newestElapsed - window
+        : widget.viewport.stripVisibleStart(
+            newestElapsed: widget.newestElapsed,
+            wallNow: wallNow,
+          );
+    final visEnd = sweep
+        ? widget.newestElapsed
+        : widget.viewport.stripVisibleEnd(
+            newestElapsed: widget.newestElapsed,
+            wallNow: wallNow,
+          );
     final span = visEnd - visStart;
     if (span <= 0 || chart.width <= 0) return;
     final x = d.localPosition.dx;
     if (x < chart.left || x > chart.right) {
       widget.onTapElapsed?.call(null);
+      return;
+    }
+    if (sweep) {
+      final frac = ((x - chart.left) / chart.width).clamp(0.0, 1.0);
+      final slot = (frac * (window * OpticalCache.ppgSampleRate)).round();
+      final cursor = ppgSweepSlot(
+        elapsed: widget.newestElapsed,
+        windowSeconds: window,
+      );
+      final age = (cursor - slot) % (window * OpticalCache.ppgSampleRate).round();
+      final elapsed = widget.newestElapsed - age / OpticalCache.ppgSampleRate;
+      widget.onTapElapsed?.call(elapsed.clamp(visStart, visEnd));
       return;
     }
     final elapsed = visStart + (x - chart.left) / chart.width * span;
@@ -158,14 +207,20 @@ class _OpticalPpgPaneState extends State<OpticalPpgPane>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final wallNow = DateTime.now().millisecondsSinceEpoch / 1000.0;
-    final visStart = widget.viewport.stripVisibleStart(
-      newestElapsed: widget.newestElapsed,
-      wallNow: wallNow,
-    );
-    final visEnd = widget.viewport.stripVisibleEnd(
-      newestElapsed: widget.newestElapsed,
-      wallNow: wallNow,
-    );
+    final sweep = widget.viewport.mode == ViewportMode.follow;
+    final window = widget.viewport.windowSeconds;
+    final visStart = sweep
+        ? widget.newestElapsed - window
+        : widget.viewport.stripVisibleStart(
+            newestElapsed: widget.newestElapsed,
+            wallNow: wallNow,
+          );
+    final visEnd = sweep
+        ? widget.newestElapsed
+        : widget.viewport.stripVisibleEnd(
+            newestElapsed: widget.newestElapsed,
+            wallNow: wallNow,
+          );
     _easeY(visStart, visEnd);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -237,35 +292,57 @@ class OpticalPpgPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final chart = chartRect(size);
     if (chart.width <= 0 || chart.height <= 0) return;
-    final visStart = viewport.stripVisibleStart(
-      newestElapsed: newestElapsed,
-      wallNow: wallNow,
-    );
-    final visEnd = viewport.stripVisibleEnd(
-      newestElapsed: newestElapsed,
-      wallNow: wallNow,
-    );
-    final span = visEnd - visStart;
     final ySpan = yMax - yMin;
-    if (span <= 0 || ySpan <= 0) return;
+    if (ySpan <= 0) return;
+
+    final sweep = viewport.mode == ViewportMode.follow;
+    final window = viewport.windowSeconds;
+    final visStart = sweep
+        ? newestElapsed - window
+        : viewport.stripVisibleStart(
+            newestElapsed: newestElapsed,
+            wallNow: wallNow,
+          );
+    final visEnd = sweep
+        ? newestElapsed
+        : viewport.stripVisibleEnd(
+            newestElapsed: newestElapsed,
+            wallNow: wallNow,
+          );
+    final span = visEnd - visStart;
+    if (span <= 0) return;
 
     final grid = Paint()
       ..color = gridColor
       ..strokeWidth = 1;
-    for (final t in elapsedTicks(
-      start: visStart,
-      end: visEnd,
-      widthPx: chart.width,
-    )) {
-      final x = chart.left + (t - visStart) / span * chart.width;
-      canvas.drawLine(Offset(x, chart.top), Offset(x, chart.bottom), grid);
+    if (sweep) {
+      // Fixed grid in sweep space (0..window).
+      for (final t in elapsedTicks(
+        start: 0,
+        end: window,
+        widthPx: chart.width,
+      )) {
+        final x = chart.left + t / window * chart.width;
+        canvas.drawLine(Offset(x, chart.top), Offset(x, chart.bottom), grid);
+      }
+    } else {
+      for (final t in elapsedTicks(
+        start: visStart,
+        end: visEnd,
+        widthPx: chart.width,
+      )) {
+        final x = chart.left + (t - visStart) / span * chart.width;
+        canvas.drawLine(Offset(x, chart.top), Offset(x, chart.bottom), grid);
+      }
     }
 
     canvas.save();
     canvas.clipRect(chart);
     if (connected && samples.isNotEmpty) {
-      final path = Path();
-      if (samples.length <= chart.width.floor()) {
+      if (sweep) {
+        _drawSweep(canvas, chart, window, ySpan);
+      } else if (samples.length <= chart.width.floor()) {
+        final path = Path();
         var started = false;
         for (final s in samples) {
           if (!s.v.isFinite) {
@@ -281,22 +358,39 @@ class OpticalPpgPainter extends CustomPainter {
             path.lineTo(x, y);
           }
         }
+        canvas.drawPath(
+          path,
+          Paint()
+            ..color = lineColor
+            ..strokeWidth = 1.2
+            ..style = PaintingStyle.stroke
+            ..isAntiAlias = true,
+        );
       } else {
+        final path = Path();
         _drawMinMax(path, chart, visStart, span, ySpan);
+        canvas.drawPath(
+          path,
+          Paint()
+            ..color = lineColor
+            ..strokeWidth = 1.2
+            ..style = PaintingStyle.stroke
+            ..isAntiAlias = true,
+        );
       }
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = lineColor
-          ..strokeWidth = 1.2
-          ..style = PaintingStyle.stroke
-          ..isAntiAlias = true,
-      );
     }
 
     final c = cursorElapsed;
     if (c != null && c >= visStart && c <= visEnd) {
-      final x = chart.left + (c - visStart) / span * chart.width;
+      final x = sweep
+          ? chart.left +
+              ppgSweepSlot(
+                    elapsed: c,
+                    windowSeconds: window,
+                  ) /
+                  math.max(1, (window * OpticalCache.ppgSampleRate).round()) *
+                  chart.width
+          : chart.left + (c - visStart) / span * chart.width;
       canvas.drawLine(
         Offset(x, chart.top),
         Offset(x, chart.bottom),
@@ -314,18 +408,99 @@ class OpticalPpgPainter extends CustomPainter {
     )..layout();
     title.paint(canvas, Offset(chart.left, 2));
 
-    for (final t in elapsedTicks(
-      start: visStart,
-      end: visEnd,
-      widthPx: chart.width,
-    )) {
-      final x = chart.left + (t - visStart) / span * chart.width;
-      final tp = TextPainter(
-        text: TextSpan(text: formatElapsed(t), style: style),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(x - tp.width / 2, chart.bottom + 4));
+    if (sweep) {
+      for (final t in elapsedTicks(
+        start: 0,
+        end: window,
+        widthPx: chart.width,
+      )) {
+        final x = chart.left + t / window * chart.width;
+        // Map sweep-local t to absolute elapsed near newest.
+        final abs = newestElapsed - window + t;
+        if (abs < 0) continue;
+        final tp = TextPainter(
+          text: TextSpan(text: formatElapsed(abs), style: style),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(x - tp.width / 2, chart.bottom + 4));
+      }
+    } else {
+      for (final t in elapsedTicks(
+        start: visStart,
+        end: visEnd,
+        widthPx: chart.width,
+      )) {
+        final x = chart.left + (t - visStart) / span * chart.width;
+        final tp = TextPainter(
+          text: TextSpan(text: formatElapsed(t), style: style),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(x - tp.width / 2, chart.bottom + 4));
+      }
     }
+  }
+
+  void _drawSweep(Canvas canvas, Rect chart, double window, double ySpan) {
+    final rate = OpticalCache.ppgSampleRate;
+    final n = (window * rate).round();
+    if (n <= 0) return;
+    final display = List<double>.filled(n, double.nan);
+    final cursor = ppgSweepSlot(
+      elapsed: newestElapsed,
+      windowSeconds: window,
+      sampleRate: rate,
+    );
+    for (final s in samples) {
+      if (!s.v.isFinite) continue;
+      final age = (newestElapsed - s.t) * rate;
+      if (age < 0 || age >= n) continue;
+      var idx = (cursor - age.round()) % n;
+      if (idx < 0) idx += n;
+      display[idx] = s.v;
+    }
+
+    void strokeRange(int from, int to) {
+      final path = Path();
+      var started = false;
+      for (var i = from; i < to; i++) {
+        final v = display[i];
+        if (!v.isFinite) {
+          started = false;
+          continue;
+        }
+        final x = chart.left + i / n * chart.width;
+        final y = chart.bottom - ((v - yMin) / ySpan) * chart.height;
+        if (!started) {
+          path.moveTo(x, y);
+          started = true;
+        } else {
+          path.lineTo(x, y);
+        }
+      }
+      if (started) {
+        canvas.drawPath(
+          path,
+          Paint()
+            ..color = lineColor
+            ..strokeWidth = 1.2
+            ..style = PaintingStyle.stroke
+            ..isAntiAlias = true,
+        );
+      }
+    }
+
+    // Newer samples sit in [0, cursor); older pass remains in (cursor, n).
+    strokeRange(0, cursor);
+    strokeRange(cursor + 1, n);
+
+    final wipeX = chart.left + cursor / n * chart.width;
+    canvas.drawLine(
+      Offset(wipeX, chart.top),
+      Offset(wipeX, chart.bottom),
+      Paint()
+        ..color = onSurface.withValues(alpha: 0.55)
+        ..strokeWidth = 1.5,
+    );
   }
 
   void _drawMinMax(
@@ -370,6 +545,8 @@ class OpticalPpgPainter extends CustomPainter {
   bool shouldRepaint(covariant OpticalPpgPainter old) =>
       old.samples != samples ||
       old.viewport != viewport ||
+      old.viewport.mode != viewport.mode ||
+      old.viewport.windowSeconds != viewport.windowSeconds ||
       old.newestElapsed != newestElapsed ||
       old.wallNow != wallNow ||
       old.yMin != yMin ||
