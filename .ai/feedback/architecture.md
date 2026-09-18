@@ -1,6 +1,6 @@
 # Feedback architecture
 
-Spur A guardrail AI is **CBraMod** (Candle) + optional REVE; LUNA removed.
+Spur A guardrail AI is **CBraMod** (Candle CPU; **mobile latency TBD**) + optional REVE; LUNA removed. Ready requires `encoder_forward_ready`, not SHA alone.
 
 # Feedback system (as implemented)
 

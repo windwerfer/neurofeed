@@ -20,7 +20,7 @@ rust_lib_muse_ml
         ├─ muse-rs 0.1.1 (patched fork of eugenehp 0.1.0)
         │     transport: btleplug 0.12.0-muse-5
         │     protocol:  parse.rs / protocol.rs / types.rs
-        └─ CBraMod Candle CPU; optional reve-rs (RLX CPU)
+        └─ CBraMod Candle CPU (mobile latency TBD); optional reve-rs (RLX CPU)
 ```
 
 `scan()` / `connect()` / `subscribe_events()` are the BLE FFI entry points.

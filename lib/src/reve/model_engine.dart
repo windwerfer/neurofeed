@@ -57,8 +57,13 @@ class ModelInstallResult {
 /// bundled head pack copied from Flutter assets plus an optional
 /// `pretrained_weights.pth` encoder (SHA-pinned, HF Apache-2.0 download).
 /// REVE remains `config.json` + `model.safetensors` via user import.
-/// True when Rust Candle CBraMod encoder load+forward succeed (Spur A).
+/// Compile-time: Candle CBraMod encoder forward is linked in this binary.
+/// Runtime Ready still requires a successful Rust load (`encoder_forward_ready`);
+/// SHA-OK alone is not enough if Candle fails to load.
 const bool kCbramodEncoderForwardReady = true;
+
+/// Loaded-desc marker from Rust when Candle forward actually loaded.
+const String kCbramodEncoderForwardReadyDesc = 'encoder forward ready';
 
 class ModelCache {
   const ModelCache();
@@ -173,9 +178,11 @@ class ModelCache {
           'pretrained_weights.pth (SHA-pinned Apache-2.0)';
     }
     if (!kCbramodEncoderForwardReady) {
-      return 'CBraMod encoder forward not linked yet (encoder SHA + head OK) — '
-          'not Ready until native forward exists';
+      return 'CBraMod encoder forward not linked in this build (encoder SHA + head OK) — '
+          'not Ready until native Candle forward is linked';
     }
+    // Runtime Candle load is verified after install via loadedDesc /
+    // ModelEngineNotifier — SHA alone must not claim Ready.
     return null;
   }
 
@@ -602,13 +609,22 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
           );
         }
         if (desc == null) {
-          return ModelEngineError(
-            kind: kind,
-            message: installError?.toString() ??
-                'CBraMod load failed after pack+encoder verified',
-          );
+          final msg = installError?.toString() ??
+              'CBraMod load failed after pack+encoder verified';
+          // Candle/forward failure after SHA OK → NotReady (not a silent Ready).
+          if (msg.contains('Candle forward load failed') ||
+              msg.contains('forward load failed')) {
+            return ModelEngineNotReady(
+              kind: kind,
+              reason:
+                  'CBraMod encoder SHA OK but Candle forward failed to load — '
+                  'not Ready',
+              description: msg,
+            );
+          }
+          return ModelEngineError(kind: kind, message: msg);
         }
-        return ModelEngineReady(kind: kind, description: desc);
+        return _readyOrNot(kind, desc);
       }
       if (!await _cache.isInstalledOnDisk(_sessionFolder, kind)) {
         return const ModelEngineNotInstalled();
@@ -621,14 +637,26 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
   }
 
   ModelEngineState _readyOrNot(ModelKind kind, String loadedDesc) {
-    if (kind.layout == ModelLayout.cbramodPack && !kCbramodEncoderForwardReady) {
-      return ModelEngineNotReady(
-        kind: kind,
-        reason:
-            'CBraMod encoder forward not linked yet (encoder SHA + head OK) — '
-            'not Ready until native forward exists',
-        description: loadedDesc,
-      );
+    if (kind.layout == ModelLayout.cbramodPack) {
+      if (!kCbramodEncoderForwardReady) {
+        return ModelEngineNotReady(
+          kind: kind,
+          reason:
+              'CBraMod encoder forward not linked in this build (encoder SHA + head OK) — '
+              'not Ready until native Candle forward is linked',
+          description: loadedDesc,
+        );
+      }
+      // Gate Ready on Rust encoder_forward_ready (surfaced in load desc).
+      if (!loadedDesc.contains(kCbramodEncoderForwardReadyDesc)) {
+        return ModelEngineNotReady(
+          kind: kind,
+          reason:
+              'CBraMod encoder SHA OK but Candle forward did not load — '
+              'not Ready until encoder_forward_ready',
+          description: loadedDesc,
+        );
+      }
     }
     return ModelEngineReady(kind: kind, description: loadedDesc);
   }

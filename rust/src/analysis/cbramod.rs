@@ -122,7 +122,7 @@ fn lock() -> std::sync::MutexGuard<'static, Option<Loaded>> {
 ///
 /// Expected layout (either works):
 /// - `heads/head_a_vig_linear.f32bin` (preferred) or `.pt`
-/// - `pretrained_weights.pth` (optional until encoder forward is linked)
+/// - `pretrained_weights.pth` (required for Ready/scoring; head-only load allowed for tests)
 /// - `pack_manifest.json` / `encoder/EXPECTED.json` (informational)
 pub fn load_model(model_dir: &str) -> anyhow::Result<String> {
     let dir = PathBuf::from(model_dir);
@@ -158,7 +158,11 @@ pub fn load_model(model_dir: &str) -> anyhow::Result<String> {
                 log::info!("[cbramod] encoder forward ready (Candle) at {}", p.display());
             }
             Err(e) => {
-                log::warn!("[cbramod] encoder weights OK but forward load failed: {e}");
+                // Do not leave a half-loaded model that Dart could treat as Ready
+                // (SHA OK is not enough — forward backend must actually load).
+                bail!(
+                    "CBraMod encoder weights verified but Candle forward load failed: {e}"
+                );
             }
         }
     }

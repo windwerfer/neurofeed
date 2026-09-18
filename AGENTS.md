@@ -24,7 +24,7 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   `GLOBAL_JVM`/`GLOBAL_ADAPTER`. See `.ai/btleplug.md`.
 - **`jni = "=0.19"`** — must match btleplug's `jni` or you get link-time
   symbol conflicts.
-- **CBraMod Spur A + optional REVE** (on-device drowsiness): pack `assets/packs/cbramod-a-vig-full/` + Candle encoder in `rust/src/analysis/cbramod_encoder.rs` (loads SHA-pinned `pretrained_weights.pth`, mean-pool 200-d → HeadALinear). Ready gate: Dart `kCbramodEncoderForwardReady`. REVE via `reve-rs`/RLX CPU. FFI `rust/src/api/reve.rs`. LUNA removed from ship path; Dart `lib/src/reve/`.
+- **CBraMod Spur A + optional REVE** (on-device drowsiness): pack `assets/packs/cbramod-a-vig-full/` + Candle encoder in `rust/src/analysis/cbramod_encoder.rs` (loads SHA-pinned `pretrained_weights.pth`, mean-pool 200-d → HeadALinear). Ready requires Rust `encoder_forward_ready` (Candle actually loaded) — SHA OK alone is not Ready (`kCbramodEncoderForwardReady` is compile-time link only). **CPU/mobile forward latency is TBD** (not profiled on-device yet). REVE via `reve-rs`/RLX CPU. FFI `rust/src/api/reve.rs`. LUNA removed from ship path; Dart `lib/src/reve/`.
 - **Feature pipeline** (implemented): Rust registry produces
   `MuseEventDto::Feature`; Dart `FeatureBus` → `RewardLane` / `GuardLane`.
   Copy in `assets/features.json`; electrodes in `rust/src/api/features.rs`.
