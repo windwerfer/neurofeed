@@ -25,9 +25,9 @@ toggles the same hide. Not Settings / Feedback / Streaming / History.
 | Tap to connect | `Not connected — tap to connect` | `toggleConnectWindow` | `status_bar.dart` | Center hit target. |
 | Connecting | `Connecting to {name}…` | `connectingTo` | `status_bar.dart` | |
 | Disconnecting | `Disconnecting…` | `disconnecting` | `status_bar.dart` | |
-| Device name | `status.name` (e.g. `Muse 2 (Simulated)`) | `ConnectionStatus.name` | `status_bar.dart` | After connect. |
+| Device name | `status.name` (e.g. `Muse 2 (Simulated)`) | `ConnectionStatus.name` | `status_bar.dart` | After connect. Elides when chrome is tight; **signal pads keep priority**. |
 | Battery | `{n}%` | `batteryLevel` | `status_bar.dart` | From `bp`, not fuel gauge. |
-| Signal pads | `/ ‾ ‾ \` | `_signalQualityRow` | `status_bar.dart` | TP9 AF7 AF8 TP10. Green ≥80, amber ≥40, red <40. [headset-fit.md](headset-fit.md). |
+| Signal pads | `/ ‾ ‾ \` | `_signalQualityRow` | `status_bar.dart` | TP9 AF7 AF8 TP10. Green ≥80, amber ≥40, red <40. Never elided for a long device name. [headset-fit.md](headset-fit.md). |
 | Disconnect | tooltip `Disconnect` | `disconnectDevice` | `status_bar.dart` | Icon `link_off`. |
 
 ### Sidebar — `lib/src/app.dart`
@@ -107,7 +107,7 @@ graphs. In-pane band chips toggle series visibility.
 | Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze; pan / pinch-X. Drag or pinch enters Inspect. Cache still 1 Hz; no Follow ticker. |
 | Window length | `15s` `30s` `60s` `120s` | `ViewportController.bandsWindowOptions` | `graph_shell.dart` | Default **30 s**. |
 | Custom window | `custom` | `windowIsPreset` | `graph_shell.dart` | Closed label after pinch-X. Picking a preset restores. |
-| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Top-right, depressed = in the mean. Default all on. Last one stays. |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Top-right, depressed = in the mean. Default all on. Last one stays. If chips overflow, strip is horizontally pannable and shows a chevron that jumps to the end. |
 | Band toggle | `delta` / `theta` / `alpha` / `beta` / `gamma` | `BandToggles` | `band_toggles.dart` | In-pane, top-right overlay. Depressed = visible. Last one stays. Label color = line. |
 | Y unit | `dB` | `linearToDb` | `panes/time_series_pane.dart` | `10·log10` of linear µV²/Hz. 0 is not the floor. |
 | Waiting for signal | `Waiting for signal` | `MonitorWaitingSignal` | `empty_state.dart` | Connected, no BandCache samples. |
@@ -121,11 +121,11 @@ dashboard Histogram is **one pane** (no strip).
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Last T seconds. Highlight flush-right on the strip. |
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Last T seconds. Highlight flush-right on the strip; slides with the Follow-lead ticker (not 1 Hz). |
 | Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. Pan/pinch on the strip. |
 | Window length | `2s` `4s` `8s` | `histogramPsdWindowOptions` | `graph_shell.dart` | Default **8 s**. Highlight width = T. |
 | µV range | `±100 µV` | `HistogramUvRange` | `histogram_view.dart` | Own domain. Overflow ±50 / ±200. Not Raw EEG Y-scale. |
-| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for histogram **and** strip. Last one stays. |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for histogram **and** strip. Last one stays. Overflow → pannable + end chevron (shared widget). |
 | Hairline | `−12 µV   48` | tap on pane | `histogram_pane.dart` | Tap, not drag. |
 | Bands context strip | `30s` / `custom` | `BandsContextStrip` | `panes/bands_context_strip.dart` | Default **30 s**. Pinch-X like Bands. Compact dropdown on the strip, not GraphShell. |
 | Landscape cinema | — | `GraphCinema` | `graph_cinema.dart` | **Mobile** landscape hides chrome + strip `30s ▾` (both panes stay). **Desktop** keeps chrome; **F11** hides the same (including the strip dropdown). |
@@ -139,11 +139,11 @@ window).
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Last T seconds. Highlight flush-right on the strip. |
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Last T seconds. Highlight flush-right on the strip; slides with the Follow-lead ticker (not 1 Hz). |
 | Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. Pan/pinch on the strip. |
 | Window length | `2s` `4s` `8s` | `histogramPsdWindowOptions` | `graph_shell.dart` | Default **4 s**. Highlight width = T. |
 | Hz range | `0–60 Hz` | `PsdHzRange` | `psd_view.dart` | Overflow `0–100 Hz`. |
-| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for PSD **and** strip. Last one stays. |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for PSD **and** strip. Last one stays. Overflow → pannable + end chevron (shared widget). |
 | Hairline | `10.2 Hz   −8.4 dB` | tap on pane | `psd_pane.dart` | Tap, not drag. |
 | Alpha peak | `{n} Hz` | `alphaPeakHz` | `dsp.dart` | Argmax 8–13 Hz. |
 | Bands context strip | `30s` / `custom` | `BandsContextStrip` | `panes/bands_context_strip.dart` | Same strip as Histogram. Spectrogram does **not** get this strip. |
@@ -160,7 +160,7 @@ No `FFT 1s ▾`.
 | Window length | `10s` `20s` `30s` `2min` `5min` | `spectrogramWindowOptions` | `graph_shell.dart` | Default **20 s**. Pinch-X → `custom`. Cap 5 min. |
 | Custom window | `custom` | `windowIsPreset` | `graph_shell.dart` | Closed label after pinch-X. |
 | Magnitude | `mag ▾` | dual-thumb RangeSlider | `spectrogram_view.dart` | Color min/max of log power. Not Hz. Not auto-pumping. |
-| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership. Last one stays. |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership. Last one stays. Overflow → pannable + end chevron (shared widget). |
 
 ### History — `lib/src/views/feedback_history.dart`
 

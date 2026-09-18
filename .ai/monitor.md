@@ -134,7 +134,10 @@ Drag/pinch on a time-X graph enters Inspect.
 | Spectrogram | 1 heatmap | 10/**20**/30 s / 2 min / 5 min + pinch `custom` | Y 0–60 Hz. `mag ▾` color min/max. STFT 256-pt, hop ~0.25 s. No strip, no FFT-size chrome. |
 | HR+SpO2 | dual-axis HR/SpO₂ + IR PPG | top 15/**30**/60/120 s; bottom **10 s** (≤ top) | Muse PPG only. Linked pan/zoom; highlight = bottom window. Avg HR line. Crown → empty. Window lengths persisted. |
 
-Histogram/PSD highlight on the strip is **time only** (width = T). One
+Histogram/PSD highlight on the strip is **time only** (width = T). In
+Follow, the highlight is pinned flush-right to the strip's smoothly
+advancing edge (same vsync / Follow-lead ticker as the Bands lines) — not
+keyed off 1 Hz band-cache frames. Inspect keeps absolute epoch times. One
 electrode-toggle set drives both panes. Recording-dashboard Histogram/PSD
 are one pane (no strip). Follow is disabled there.
 
