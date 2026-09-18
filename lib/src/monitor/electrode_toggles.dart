@@ -13,6 +13,8 @@ Set<int> toggleKeepingLast(Set<int> selected, int index) {
 Set<int> toggleAverageElectrode(Set<int> selected, int index) =>
     toggleKeepingLast(selected, index);
 
+/// Electrode chips for average membership. Overflow pan lives on the shared
+/// GraphShell chrome row (drag anywhere on that line).
 class ElectrodeToggles extends StatelessWidget {
   const ElectrodeToggles({
     super.key,
@@ -28,24 +30,21 @@ class ElectrodeToggles extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (names.isEmpty) return const SizedBox.shrink();
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: ToggleButtons(
-        isSelected: [
-          for (var i = 0; i < names.length; i++) selected.contains(i),
-        ],
-        onPressed: onToggle,
-        constraints: const BoxConstraints(minHeight: 28, minWidth: 40),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        borderRadius: BorderRadius.circular(4),
-        children: [
-          for (final n in names)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Text(n, style: const TextStyle(fontSize: 12)),
-            ),
-        ],
-      ),
+    return ToggleButtons(
+      isSelected: [
+        for (var i = 0; i < names.length; i++) selected.contains(i),
+      ],
+      onPressed: onToggle,
+      constraints: const BoxConstraints(minHeight: 28, minWidth: 40),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      borderRadius: BorderRadius.circular(4),
+      children: [
+        for (final n in names)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text(n, style: const TextStyle(fontSize: 12)),
+          ),
+      ],
     );
   }
 }

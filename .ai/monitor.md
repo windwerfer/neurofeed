@@ -40,7 +40,7 @@ lib/src/monitor/
   monitor_providers.dart
   graph_shell.dart            Follow / Inspect, window, Record / Stop
   graph_cinema.dart           mobile landscape, or desktop F11
-  viewport_controller.dart    elapsed seconds from capture start; Bands Follow lead 1 s
+  viewport_controller.dart    elapsed seconds from capture start; Bands/Spectrogram Follow lead 1 s
   electrode_toggles.dart      non-EEG average membership
   band_toggles.dart           in-pane delta/theta/alpha/beta/gamma chips
   empty_state.dart            Waiting for signal
@@ -52,11 +52,12 @@ lib/src/monitor/
     recording_index.dart      (elapsedT, fileLength) at frame boundaries
     file_backed_source.dart   Inspect beyond RAM (tmp / recording .raw)
     sweep_mean.dart
+    optical_cache.dart       Pulse / SpO2 / IR PPG rings (HR+SpO2)
     stft_ring.dart            Follow STFT column ring (Inspect / electrodes / window = full)
     sliding_spectrum.dart     Follow Welch / histogram (Inspect / electrodes / window = full)
   panes/                      SweepPane, TimeSeriesPane, histogram / PSD /
                               spectrogram, BandsContextStrip, overshoot_hold
-  views/                      five live graphs + recording dashboard + Save/Discard
+  views/                      six live graphs (incl. HR+SpO2) + recording dashboard + Save/Discard
   recording/
     capture_lease.dart        idle | tmp | recording | feedback
     monitor_recorder.dart     tmp_ / recording_ temps
@@ -115,7 +116,10 @@ Scratch is always `scratchDirectory()`. SAF is history-only.
 ## Graphs
 
 Shared chrome: Follow | Inspect, window length, Record / Stop, electrode
-toggles (non-EEG). Chrome hide (`graph_cinema.dart`): **mobile landscape**
+toggles (non-EEG). When the whole chrome row overflows, drag anywhere on
+that line (mouse or touch, including over electrode chips) to pan the entire
+strip (Follow/Inspect slide off first); taps still toggle chips; overflow
+chevron jumps to the end. Chrome hide (`graph_cinema.dart`): **mobile landscape**
 hides status bar, sidebar, and GraphShell toolbar (portrait restores).
 **Desktop keeps chrome** in a landscape window; **F11** hides the same
 chrome (F11 again restores). Plot gestures stay. Not Settings / Feedback /
@@ -130,11 +134,17 @@ Drag/pinch on a time-X graph enters Inspect.
 | Bands | 1 strip, 5 series | 15/**30**/60/120 s + pinch `custom` | Y = dB display; storage linear µV²/Hz. Mean of selected in dB. Overshoot = dashed hold. PCHIP strokes. Follow slides with ~1 s lead (1 Hz cache). In-pane band chips toggle series (depressed = visible). |
 | Histogram | ~70% + ~30% Bands strip | 2/4/**8 s** | X ±100 µV (overflow ±50/±200), 64 bins. Tap hairline. Strip default 30 s. |
 | PSD | same split | 2/**4**/8 s | X 0–60 Hz (overflow 0–100). Welch 1 s / 256-pt, 50% hop. Band shading + alpha peak. |
-| Spectrogram | 1 heatmap | 10/**20**/30 s / 2 min / 5 min + pinch `custom` | Y 0–60 Hz. `mag ▾` color min/max. STFT 256-pt, hop ~0.25 s. No strip, no FFT-size chrome. |
+| Spectrogram | 1 heatmap | 10/**20**/30 s / 2 min / 5 min + pinch `custom` | Y 0–60 Hz. `mag ▾` color min/max. STFT 256-pt, hop ~0.25 s. Follow slides with ~1 s lead (same as Bands). No strip, no FFT-size chrome. |
+| HR+SpO2 | dual-axis HR/SpO₂ + IR PPG | top 15/**30**/60/120 s; bottom **10 s** (≤ top) | Muse PPG only. Top highlight **Inspect only** (hidden in Follow); drag highlight in Inspect slides detail. Bottom IR PPG is **sweep** in Follow (EEG-style wipe, fixed ~10 s buffer), walking window in Inspect. Linked pinch/zoom. Avg HR line. Crown → empty. Window lengths persisted. |
 
-Histogram/PSD highlight on the strip is **time only** (width = T). One
-electrode-toggle set drives both panes. Recording-dashboard Histogram/PSD
-are one pane (no strip). Follow is disabled there.
+Histogram/PSD highlight on the strip is **time only** (width = T). In
+Follow, the highlight is pinned flush-right to the strip's smoothly
+advancing edge (same vsync / Follow-lead ticker as the Bands lines) — not
+keyed off 1 Hz band-cache frames. Inspect keeps absolute epoch times. Drag
+the highlight to move the epoch window inside the frozen strip (stop at
+edges); drag outside pans the strip. One electrode-toggle set drives both
+panes. Recording-dashboard Histogram/PSD are one pane (no strip). Follow is
+disabled there.
 
 DSP: `monitor/dsp.dart` only. Hamming, power `(re²+im²)/(n*n)`. Live `n = 256`.
 Follow Spectrogram STFT is incremental (one new hop FFT); Inspect / electrode
@@ -202,8 +212,16 @@ Not `SessionMetadata.toJson()`. Format: [README_feedback_format.md](../README_fe
 - Unified History; Settings **Save files to folder**; sidebar **Spectrogram**.
 - Raw EEG stays sweep. 5 min RAM + 30 min tmp. Do not grow RAM to 30 min.
 - Bands Y is dB display. Pinch-X `custom` on Bands and Spectrogram only.
-  Follow on 1 Hz Bands strips slides with ~1 s lead + always-on PCHIP.
-  Spectrogram Follow is flush-right. No `SMOOTH` / `REAL TIME` chrome.
+  Follow on 1 Hz Bands / Histogram / PSD strips slides with ~1 s lead +
+  always-on PCHIP (series fetched through cache tip; paint domain lags).
+  Spectrogram Follow lead matches Bands (~1 s + vsync ticker; columns
+  fetched through tip). Follow hop is keyed off absolute newest elapsed so it
+  keeps tracking after the ~5 min ring wraps. Horizontal motion is ticker-only:
+  heatmap X geometry is frozen at raster decode (same pattern as Bands — data
+  hops must not also jump the transform). Empty / missing / pre-roll STFT
+  windows are NaN dB and rasterize transparent so theme surface shows through
+  (not colormap stop 0 / blue), including the left edge before the buffer
+  fills. No `SMOOTH` / `REAL TIME` chrome.
 - Cinema: mobile landscape hides chrome; desktop **F11** does the same.
   Spectrogram `mag ▾` is color, not Hz.
 - No averaging, no hold-finger readout, no FFT-window chrome (256-pt only).

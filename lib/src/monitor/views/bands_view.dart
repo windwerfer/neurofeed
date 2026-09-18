@@ -10,6 +10,7 @@ import 'package:muse_ml/src/monitor/monitor_controller.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:muse_ml/src/settings.dart';
 
 class BandsView extends ConsumerStatefulWidget {
   const BandsView({super.key});
@@ -33,6 +34,10 @@ class _BandsViewState extends ConsumerState<BandsView> {
   @override
   void initState() {
     super.initState();
+    final saved = ref.read(settingsProvider).monitorWindowSeconds('bands');
+    if (saved != null && saved > 0) {
+      _viewport.windowSeconds = saved;
+    }
     _viewport.addListener(_onViewport);
   }
 
@@ -110,6 +115,9 @@ class _BandsViewState extends ConsumerState<BandsView> {
         elapsedCap: newest,
         oldestElapsed: _oldestElapsed(),
       );
+      ref
+          .read(settingsProvider)
+          .setMonitorWindowSeconds('bands', _viewport.windowSeconds);
       return;
     }
     if (d.pointerCount != 1) return;
@@ -144,8 +152,10 @@ class _BandsViewState extends ConsumerState<BandsView> {
       windowOptions: ViewportController.bandsWindowOptions,
       onFollow: _follow,
       onInspect: _inspect,
-      onWindowChanged: (s) =>
-          _viewport.setStripWindowSeconds(s, newestElapsed: _newestElapsed()),
+      onWindowChanged: (s) {
+        _viewport.setStripWindowSeconds(s, newestElapsed: _newestElapsed());
+        ref.read(settingsProvider).setMonitorWindowSeconds('bands', s);
+      },
       toolbarExtras: ElectrodeToggles(
         names: names,
         selected: _selected,
@@ -166,16 +176,20 @@ class _BandsViewState extends ConsumerState<BandsView> {
                 builder: (context, _) {
                   final cache = _mon.bandCache;
                   final newest = _newestElapsed();
+                  if (connected && cache.hasData) {
+                    _viewport.noteStripSample(newest);
+                  }
                   final start = _viewport.stripVisibleStart(
                     newestElapsed: newest,
                   );
-                  final end = _viewport.stripVisibleEnd(newestElapsed: newest);
+                  // Fetch through cache tip so the Follow-lead ticker can
+                  // slide new points in; paint domain stays ~1s behind.
                   final series = connected
                       ? buildBandSeries(
                           cache: cache,
                           electrodes: _selected,
                           startElapsed: start,
-                          endElapsed: end,
+                          endElapsed: newest,
                           captureStartedAtMs: state.captureStartedAtMs,
                         )
                       : [

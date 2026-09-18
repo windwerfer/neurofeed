@@ -24,6 +24,7 @@ import 'package:muse_ml/src/monitor/views/histogram_view.dart';
 import 'package:muse_ml/src/monitor/views/psd_view.dart';
 import 'package:muse_ml/src/monitor/views/raw_eeg_view.dart';
 import 'package:muse_ml/src/monitor/views/spectrogram_view.dart';
+import 'package:muse_ml/src/monitor/views/hr_spo2_view.dart';
 import 'package:muse_ml/src/views/settings_view.dart';
 import 'package:muse_ml/src/views/streaming_view.dart';
 import 'package:muse_ml/src/views/feedback_list.dart';
@@ -102,6 +103,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         body = const SpectrogramView();
       case AppView.psd:
         body = const PsdView();
+      case AppView.hrSpo2:
+        body = const HrSpo2View();
       case AppView.streaming:
         body = const StreamingView();
       case AppView.settings:
@@ -185,6 +188,11 @@ class _AppShellState extends ConsumerState<AppShell> {
             label: 'PSD',
             selected: currentView == AppView.psd,
             onTap: () => _selectView(AppView.psd),
+          ),
+          _SideBarItem(
+            label: 'HR+SpO2',
+            selected: currentView == AppView.hrSpo2,
+            onTap: () => _selectView(AppView.hrSpo2),
           ),
           _SideBarItem(
             label: 'Streaming',

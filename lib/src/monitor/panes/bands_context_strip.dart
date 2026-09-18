@@ -41,6 +41,7 @@ class BandsContextStrip extends StatefulWidget {
     required this.highlightEndElapsed,
     required this.connected,
     this.waiting = false,
+    this.onStripWindowChanged,
   });
 
   final ViewportController stripViewport;
@@ -52,6 +53,7 @@ class BandsContextStrip extends StatefulWidget {
   final double highlightEndElapsed;
   final bool connected;
   final bool waiting;
+  final ValueChanged<double>? onStripWindowChanged;
 
   @override
   State<BandsContextStrip> createState() => _BandsContextStripState();
@@ -61,6 +63,7 @@ class _BandsContextStripState extends State<BandsContextStrip> {
   double _pinchWindowAtStart = ViewportController.bandsDefaultWindowSeconds;
   double _pinchFocalElapsed = 0;
   double _pinchFocalFraction = 0.5;
+  bool _draggingHighlight = false;
 
   ViewportController get _strip => widget.stripViewport;
   ViewportController get _epoch => widget.epochViewport;
@@ -76,15 +79,52 @@ class _BandsContextStripState extends State<BandsContextStrip> {
 
   void _onScaleStart(ScaleStartDetails d) {
     final newest = widget.stripNewestElapsed;
+    final oldest = widget.stripOldestElapsed;
+    _draggingHighlight = false;
+    final w = context.size?.width ?? 1;
+    final chartLeft = TimeSeriesPanePainter.yGutter;
+    final chartW =
+        (w - TimeSeriesPanePainter.yGutter - TimeSeriesPanePainter.legendGutter)
+            .clamp(1.0, w);
+    final x = d.localFocalPoint.dx - chartLeft;
+    final ovStart = _strip.stripVisibleStart(newestElapsed: newest);
+    final ovEnd = _strip.stripVisibleEnd(newestElapsed: newest);
+    final resolved = resolveHighlightElapsed(
+      mode: _strip.mode,
+      followLeadSeconds: _strip.followLeadSeconds,
+      visEnd: ovEnd,
+      highlightStart: widget.highlightStartElapsed,
+      highlightEnd: widget.highlightEndElapsed,
+    );
+    if (resolved != null &&
+        highlightHitTest(
+          localX: d.localFocalPoint.dx,
+          chartLeft: chartLeft,
+          chartWidth: chartW,
+          visStart: ovStart,
+          visEnd: ovEnd,
+          highlightStart: resolved.$1,
+          highlightEnd: resolved.$2,
+        )) {
+      _draggingHighlight = true;
+      panDetailWithinOverview(
+        detail: _epoch,
+        overview: _strip,
+        deltaSeconds: 0,
+        newestElapsed: newest,
+        oldestElapsed: oldest,
+        highlightEndElapsed: resolved.$2,
+      );
+      _pinchWindowAtStart = _epoch.windowSeconds;
+      _pinchFocalFraction = (x / chartW).clamp(0.0, 1.0);
+      _pinchFocalElapsed =
+          resolved.$1 + _pinchFocalFraction * _epoch.windowSeconds;
+      return;
+    }
     if (_strip.mode == ViewportMode.follow) {
       _strip.enterInspectStrip(newestElapsed: newest);
     }
     _pinchWindowAtStart = _strip.windowSeconds;
-    final w = context.size?.width ?? 1;
-    final chartW =
-        (w - TimeSeriesPanePainter.yGutter - TimeSeriesPanePainter.legendGutter)
-            .clamp(1, w);
-    final x = d.localFocalPoint.dx - TimeSeriesPanePainter.yGutter;
     _pinchFocalFraction = (x / chartW).clamp(0.0, 1.0);
     _pinchFocalElapsed =
         _strip.stripVisibleStart(newestElapsed: newest) +
@@ -94,7 +134,9 @@ class _BandsContextStripState extends State<BandsContextStrip> {
 
   void _onScaleUpdate(ScaleUpdateDetails d) {
     final newest = widget.stripNewestElapsed;
+    final oldest = widget.stripOldestElapsed;
     if (d.pointerCount >= 2) {
+      _draggingHighlight = false;
       _strip.pinchX(
         scaleFromStart: d.scale,
         windowAtStart: _pinchWindowAtStart,
@@ -102,20 +144,36 @@ class _BandsContextStripState extends State<BandsContextStrip> {
         focalFraction: _pinchFocalFraction,
         newestElapsed: newest,
         elapsedCap: newest,
-        oldestElapsed: widget.stripOldestElapsed,
+        oldestElapsed: oldest,
         zoomFloor: bandsContextZoomFloor(_epoch.windowSeconds),
         zoomCap: ViewportController.bandsZoomCap,
       );
       _align();
+      widget.onStripWindowChanged?.call(_strip.windowSeconds);
       return;
     }
     if (d.pointerCount != 1) return;
     final w = context.size?.width ?? 1;
     if (w <= 0) return;
+    if (_draggingHighlight) {
+      final chartW = (w -
+              TimeSeriesPanePainter.yGutter -
+              TimeSeriesPanePainter.legendGutter)
+          .clamp(1.0, w);
+      final delta = d.focalPointDelta.dx / chartW * _strip.windowSeconds;
+      panDetailWithinOverview(
+        detail: _epoch,
+        overview: _strip,
+        deltaSeconds: delta,
+        newestElapsed: newest,
+        oldestElapsed: oldest,
+      );
+      return;
+    }
     _strip.panStrip(
       -d.focalPointDelta.dx / w * _strip.windowSeconds,
       newestElapsed: newest,
-      oldestElapsed: widget.stripOldestElapsed,
+      oldestElapsed: oldest,
     );
     _align();
   }
@@ -129,6 +187,7 @@ class _BandsContextStripState extends State<BandsContextStrip> {
       newestElapsed: widget.stripNewestElapsed,
     );
     _align();
+    widget.onStripWindowChanged?.call(_strip.windowSeconds);
   }
 
   @override

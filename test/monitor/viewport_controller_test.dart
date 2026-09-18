@@ -337,4 +337,69 @@ void main() {
     );
     expect(v.windowSeconds, ViewportController.bandsZoomCap);
   });
+
+  test('panDetailWithinOverview moves highlight; clamps at overview edges', () {
+    final overview = ViewportController()..windowSeconds = 30;
+    final detail = ViewportController()..windowSeconds = 10;
+    overview.enterInspectStrip(newestElapsed: 100);
+    // overview visible [70, 100]
+    expect(overview.stripVisibleStart(newestElapsed: 100), closeTo(70, 1e-9));
+    detail.inspectEndingAt(100, newestElapsed: 100);
+    expect(detail.stripVisibleStart(newestElapsed: 100), closeTo(90, 1e-9));
+
+    panDetailWithinOverview(
+      detail: detail,
+      overview: overview,
+      deltaSeconds: -15,
+      newestElapsed: 100,
+    );
+    expect(detail.mode, ViewportMode.inspect);
+    expect(overview.stripVisibleStart(newestElapsed: 100), closeTo(70, 1e-9));
+    expect(detail.stripVisibleStart(newestElapsed: 100), closeTo(75, 1e-9));
+    expect(detail.stripVisibleEnd(newestElapsed: 100), closeTo(85, 1e-9));
+
+    // Left edge clamp
+    panDetailWithinOverview(
+      detail: detail,
+      overview: overview,
+      deltaSeconds: -100,
+      newestElapsed: 100,
+    );
+    expect(detail.stripVisibleStart(newestElapsed: 100), closeTo(70, 1e-9));
+    expect(detail.stripVisibleEnd(newestElapsed: 100), closeTo(80, 1e-9));
+
+    // Right edge clamp
+    panDetailWithinOverview(
+      detail: detail,
+      overview: overview,
+      deltaSeconds: 100,
+      newestElapsed: 100,
+    );
+    expect(detail.stripVisibleEnd(newestElapsed: 100), closeTo(100, 1e-9));
+    expect(detail.stripVisibleStart(newestElapsed: 100), closeTo(90, 1e-9));
+    // Overview stayed put
+    expect(overview.stripVisibleStart(newestElapsed: 100), closeTo(70, 1e-9));
+  });
+
+  test('panDetailWithinOverview from Follow enters Inspect without panning overview', () {
+    final overview = ViewportController()
+      ..windowSeconds = 30
+      ..followLeadSeconds = ViewportController.bandsFollowLeadSeconds;
+    final detail = ViewportController()..windowSeconds = 8;
+    overview.noteStripSample(80, wallNow: 1000);
+    expect(overview.mode, ViewportMode.follow);
+    panDetailWithinOverview(
+      detail: detail,
+      overview: overview,
+      deltaSeconds: -5,
+      newestElapsed: 80,
+      wallNow: 1000,
+      highlightEndElapsed: 79,
+    );
+    expect(overview.mode, ViewportMode.inspect);
+    expect(detail.mode, ViewportMode.inspect);
+    // Frozen overview start = follow start at enter (~49)
+    expect(overview.stripVisibleStart(newestElapsed: 80, wallNow: 1000), closeTo(49, 1e-9));
+    expect(detail.stripVisibleEnd(newestElapsed: 80), closeTo(74, 1e-9));
+  });
 }

@@ -112,6 +112,47 @@ List<BandPoint> mergeBandTickPoints(Iterable<BandPoint> pts) {
   return (a, b);
 }
 
+/// Follow + lead: pin the T-second highlight flush-right to the smoothly
+/// advancing strip edge (same ticker path as the plotted lines). Inspect
+/// keeps absolute [highlightStart]/[highlightEnd] from the epoch viewport.
+(double, double)? resolveHighlightElapsed({
+  required ViewportMode mode,
+  required double followLeadSeconds,
+  required double visEnd,
+  required double? highlightStart,
+  required double? highlightEnd,
+}) {
+  if (highlightStart == null || highlightEnd == null) return null;
+  final width = highlightEnd - highlightStart;
+  if (!(width > 0) || !width.isFinite) return null;
+  if (mode == ViewportMode.follow && followLeadSeconds > 0) {
+    return (visEnd - width, visEnd);
+  }
+  return (highlightStart, highlightEnd);
+}
+
+/// True when [localX] lands on the drawn highlight within the chart.
+bool highlightHitTest({
+  required double localX,
+  required double chartLeft,
+  required double chartWidth,
+  required double visStart,
+  required double visEnd,
+  required double highlightStart,
+  required double highlightEnd,
+}) {
+  final frac = highlightFractions(
+    visStart: visStart,
+    visEnd: visEnd,
+    highlightStart: highlightStart,
+    highlightEnd: highlightEnd,
+  );
+  if (frac == null || chartWidth <= 0) return false;
+  final left = chartLeft + frac.$1 * chartWidth;
+  final right = chartLeft + frac.$2 * chartWidth;
+  return localX >= left && localX <= right;
+}
+
 class TimeSeriesPane extends StatefulWidget {
   const TimeSeriesPane({
     super.key,
@@ -414,9 +455,16 @@ class TimeSeriesPanePainter extends CustomPainter {
     double visStart,
     double visEnd,
   ) {
-    final start = highlightStartElapsed;
-    final end = highlightEndElapsed;
-    if (start == null || end == null) return;
+    final resolved = resolveHighlightElapsed(
+      mode: viewport.mode,
+      followLeadSeconds: viewport.followLeadSeconds,
+      visEnd: visEnd,
+      highlightStart: highlightStartElapsed,
+      highlightEnd: highlightEndElapsed,
+    );
+    if (resolved == null) return;
+    final start = resolved.$1;
+    final end = resolved.$2;
     final frac = highlightFractions(
       visStart: visStart,
       visEnd: visEnd,

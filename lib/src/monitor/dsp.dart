@@ -208,6 +208,24 @@ class StftColumn {
   final Float64List db;
 }
 
+/// True when [samples] has at least one finite value (EEG present).
+bool stftWindowHasSignal(List<double> samples) {
+  for (final v in samples) {
+    if (v.isFinite) return true;
+  }
+  return false;
+}
+
+/// NaN dB bins — rasterizer leaves these transparent (surface shows through).
+Float64List stftEmptyDb(int n) {
+  final bins = n ~/ 2 + 1;
+  final db = Float64List(bins);
+  for (var i = 0; i < bins; i++) {
+    db[i] = double.nan;
+  }
+  return db;
+}
+
 List<StftColumn> stftColumns(
   List<double> samples, {
   required double startElapsed,
@@ -223,12 +241,17 @@ List<StftColumn> stftColumns(
     for (var k = 0; k < n; k++) {
       slice[k] = samples[i + k];
     }
+    final elapsed = startElapsed + (i + n) / sampleRate;
+    if (!stftWindowHasSignal(slice)) {
+      out.add(StftColumn(elapsed, stftEmptyDb(n)));
+      continue;
+    }
     final spec = fft(slice, n: n, sampleRate: sampleRate);
     final db = Float64List(spec.power.length);
     for (var k = 0; k < db.length; k++) {
       db[k] = powerToDb(spec.power[k]);
     }
-    out.add(StftColumn(startElapsed + (i + n) / sampleRate, db));
+    out.add(StftColumn(elapsed, db));
   }
   return out;
 }

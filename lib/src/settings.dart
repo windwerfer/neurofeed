@@ -26,6 +26,7 @@ enum AppView {
   histogram,
   spectrogram,
   psd,
+  hrSpo2,
   streaming,
   settings,
 }
@@ -37,6 +38,7 @@ bool appViewIsGraph(AppView view) {
     case AppView.histogram:
     case AppView.psd:
     case AppView.spectrogram:
+    case AppView.hrSpo2:
       return true;
     case AppView.feedback:
     case AppView.feedbackHistory:
@@ -70,6 +72,7 @@ const Map<AppView, String> _viewNames = {
   AppView.histogram: 'histogram',
   AppView.spectrogram: 'spectrogram',
   AppView.psd: 'psd',
+  AppView.hrSpo2: 'hrSpo2',
   AppView.streaming: 'streaming',
   AppView.settings: 'settings',
 };
@@ -90,6 +93,8 @@ AppView _viewFromName(String? name) {
       return AppView.spectrogram;
     case 'psd':
       return AppView.psd;
+    case 'hrSpo2':
+      return AppView.hrSpo2;
     case 'streaming':
       return AppView.streaming;
     case 'settings':
@@ -107,6 +112,8 @@ class Settings extends ChangeNotifier {
   final ProtocolCatalog _catalog;
 
   static const String _lastViewKey = 'last_view';
+  static const String _monitorWindowPrefix = 'monitor_window_';
+  static const String _monitorDetailWindowPrefix = 'monitor_detail_window_';
   static const String _lastDeviceKey = 'last_device_id';
   static const String _masterVolumeKey = 'master_volume';
   static const String _backgroundVolumeKey = 'background_volume';
@@ -275,6 +282,27 @@ class Settings extends ChangeNotifier {
 
   Future<void> setLastView(AppView view) async {
     await _prefs.setString(_lastViewKey, _viewNames[view]!);
+    notifyListeners();
+  }
+
+  /// Persisted GraphShell / overview window length for a monitor view key.
+  double? monitorWindowSeconds(String viewKey) =>
+      _prefs.getDouble('$_monitorWindowPrefix$viewKey');
+
+  Future<void> setMonitorWindowSeconds(String viewKey, double seconds) async {
+    await _prefs.setDouble('$_monitorWindowPrefix$viewKey', seconds);
+    notifyListeners();
+  }
+
+  /// Persisted detail / strip window for dual-pane monitors.
+  double? monitorDetailWindowSeconds(String viewKey) =>
+      _prefs.getDouble('$_monitorDetailWindowPrefix$viewKey');
+
+  Future<void> setMonitorDetailWindowSeconds(
+    String viewKey,
+    double seconds,
+  ) async {
+    await _prefs.setDouble('$_monitorDetailWindowPrefix$viewKey', seconds);
     notifyListeners();
   }
 

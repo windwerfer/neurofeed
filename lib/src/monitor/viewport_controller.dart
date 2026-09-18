@@ -14,7 +14,7 @@ class ViewportController extends ChangeNotifier {
   static const double bandsZoomFloor = 5;
   static const double bandsZoomCap = 1800;
 
-  /// Follow lead for 1 Hz Bands strips (not Spectrogram). Newest sample
+  /// Follow lead for 1 Hz Bands strips and Spectrogram. Newest sample
   /// reaches the right edge ~1 s after it arrives.
   static const double bandsFollowLeadSeconds = 1.0;
   static const double histogramDefaultWindowSeconds = 8;
@@ -24,12 +24,18 @@ class ViewportController extends ChangeNotifier {
   static const List<double> spectrogramWindowOptions = [10, 20, 30, 120, 300];
   static const double spectrogramZoomFloor = 5;
   static const double spectrogramZoomCap = 300;
+  static const double opticalOverviewDefaultWindowSeconds = 30;
+  static const List<double> opticalOverviewWindowOptions = [15, 30, 60, 120];
+  static const double opticalDetailDefaultWindowSeconds = 10;
+  static const List<double> opticalDetailWindowOptions = [2, 4, 8, 10];
+  static const double opticalDetailZoomFloor = 2;
+  static const double opticalDetailZoomCap = 120;
 
   ViewportMode mode = ViewportMode.follow;
   double windowSeconds = defaultWindowSeconds;
 
-  /// 0 = Follow right edge is cache newest (Spectrogram). Bands uses
-  /// [bandsFollowLeadSeconds].
+  /// 0 = Follow right edge is cache newest. Bands / Spectrogram use
+  /// [bandsFollowLeadSeconds] (~1 s lead + vsync ticker).
   double followLeadSeconds = 0;
 
   /// Left-edge elapsed seconds while Inspecting. Null in Follow.
@@ -274,6 +280,49 @@ void ensureContextCoversEpoch({
   }
 }
 
+/// HR+SpO2: top overview must cover the bottom detail window.
+void ensureOverviewCoversDetail({
+  required ViewportController overview,
+  required double detailSeconds,
+  required double newestElapsed,
+}) {
+  if (overview.windowSeconds + 1e-9 < detailSeconds) {
+    overview.setStripWindowSeconds(detailSeconds, newestElapsed: newestElapsed);
+  }
+}
+
+/// Clamp bottom detail window to ≤ top overview.
+void clampDetailToOverview({
+  required ViewportController detail,
+  required ViewportController overview,
+  required double newestElapsed,
+}) {
+  if (detail.windowSeconds > overview.windowSeconds + 1e-9) {
+    detail.setStripWindowSeconds(
+      overview.windowSeconds,
+      newestElapsed: newestElapsed,
+    );
+  }
+}
+
+/// Keep detail's right edge locked to the overview's visible end.
+void alignDetailToOverview({
+  required ViewportController detail,
+  required ViewportController overview,
+  required double newestElapsed,
+  double oldestElapsed = 0,
+}) {
+  if (overview.mode == ViewportMode.follow) {
+    detail.followStrip();
+    return;
+  }
+  detail.inspectEndingAt(
+    overview.stripVisibleEnd(newestElapsed: newestElapsed),
+    newestElapsed: newestElapsed,
+    oldestElapsed: oldestElapsed,
+  );
+}
+
 void alignEpochToContext({
   required ViewportController epoch,
   required ViewportController context,
@@ -288,6 +337,45 @@ void alignEpochToContext({
     context.stripVisibleEnd(newestElapsed: contextNewestElapsed),
     newestElapsed: contextNewestElapsed,
     oldestElapsed: contextOldestElapsed,
+  );
+}
+
+/// Move the detail/epoch window inside a frozen overview/strip without
+/// panning the overview. Clamps so the highlight stays fully visible.
+/// Enter Inspect on both when still Following (overview lines stay put).
+void panDetailWithinOverview({
+  required ViewportController detail,
+  required ViewportController overview,
+  required double deltaSeconds,
+  required double newestElapsed,
+  double oldestElapsed = 0,
+  double? wallNow,
+  double? highlightEndElapsed,
+}) {
+  if (overview.mode == ViewportMode.follow) {
+    overview.enterInspectStrip(newestElapsed: newestElapsed, wallNow: wallNow);
+  }
+  final ovStart = overview.stripVisibleStart(
+    newestElapsed: newestElapsed,
+    wallNow: wallNow,
+  );
+  final ovEnd = overview.stripVisibleEnd(
+    newestElapsed: newestElapsed,
+    wallNow: wallNow,
+  );
+  if (detail.mode == ViewportMode.follow) {
+    final end = highlightEndElapsed ?? ovEnd;
+    detail.inspectEndingAt(
+      end,
+      newestElapsed: ovEnd,
+      oldestElapsed: ovStart,
+    );
+  }
+  final curEnd = detail.stripVisibleEnd(newestElapsed: newestElapsed);
+  detail.inspectEndingAt(
+    curEnd + deltaSeconds,
+    newestElapsed: ovEnd,
+    oldestElapsed: math.max(oldestElapsed, ovStart),
   );
 }
 
