@@ -68,42 +68,51 @@ class StatusBar extends ConsumerWidget {
           Expanded(
             child: GestureDetector(
               onTap: notifier.toggleConnectWindow,
-              child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: state.disconnecting
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text('Disconnecting…'),
-                        ],
+                    ? const Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Disconnecting…'),
+                          ],
+                        ),
                       )
                     : connected
                     ? Row(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
                           const Icon(Icons.bluetooth_connected, size: 18),
                           const SizedBox(width: 8),
-                          Text(state.status.name),
-                          const SizedBox(width: 16),
+                          // Device name yields space before signal quality.
+                          Flexible(
+                            child: Text(
+                              state.status.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              softWrap: false,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
                           const Icon(Icons.battery_full, size: 18),
                           const SizedBox(width: 4),
                           Text(
                             '${(state.batteryLevel < 1 ? state.batteryLevel * 100 : state.batteryLevel).toInt()}%',
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 12),
                           _signalQualityRow(state.signalQuality),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 12),
                           const StreamIndicator(),
                         ],
                       )
                     : state.connectingTo != null
                     ? Row(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
                           const SizedBox(
                             width: 16,
@@ -111,16 +120,25 @@ class StatusBar extends ConsumerWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                           const SizedBox(width: 8),
-                          Text('Connecting to ${state.connectingTo}…'),
+                          Flexible(
+                            child: Text(
+                              'Connecting to ${state.connectingTo}…',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              softWrap: false,
+                            ),
+                          ),
                         ],
                       )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('Not connected — tap to connect'),
-                          const SizedBox(width: 12),
-                          const StreamIndicator(),
-                        ],
+                    : const Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Not connected — tap to connect'),
+                            SizedBox(width: 12),
+                            StreamIndicator(),
+                          ],
+                        ),
                       ),
               ),
             ),
