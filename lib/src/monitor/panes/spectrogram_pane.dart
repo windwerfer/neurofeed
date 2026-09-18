@@ -39,13 +39,17 @@ SpectrogramHeatmapBgra? rasterizeSpectrogramBgra(
   }
   if (height < 1) return null;
 
+  // Zero-filled = transparent. Non-finite / empty bins stay clear so the
+  // chart surface shows through (not colormap stop 0 / viridis blue).
   final bytes = Uint8List(width * height * 4);
   final magSpan = magMax - magMin;
   for (var x = 0; x < columns.length; x++) {
     final db = columns[x].db;
     final limit = height < db.length ? height : db.length;
     for (var k = 0; k < limit; k++) {
-      final t = magSpan.abs() < 1e-9 ? 0.0 : (db[k] - magMin) / magSpan;
+      final v = db[k];
+      if (!v.isFinite) continue;
+      final t = magSpan.abs() < 1e-9 ? 0.0 : (v - magMin) / magSpan;
       final argb = SpectrogramPanePainter.colorFor(t).toARGB32();
       final offset = ((height - 1 - k) * width + x) * 4;
       bytes[offset] = argb & 0xFF;
@@ -82,6 +86,11 @@ class SpectrogramPane extends StatefulWidget {
 class _SpectrogramPaneState extends State<SpectrogramPane>
     with SingleTickerProviderStateMixin {
   ui.Image? _heatmap;
+  /// Geometry frozen with [_heatmap] so hop rebuilds do not shift X —
+  /// only the Follow ticker / [wallNow] drives horizontal motion (Bands).
+  double? _heatFirstElapsed;
+  double? _heatHopSec;
+  int? _heatColumnCount;
   int _generation = 0;
   Ticker? _ticker;
 
@@ -148,6 +157,9 @@ class _SpectrogramPaneState extends State<SpectrogramPane>
     _generation++;
     _heatmap?.dispose();
     _heatmap = null;
+    _heatFirstElapsed = null;
+    _heatHopSec = null;
+    _heatColumnCount = null;
     super.dispose();
   }
 
@@ -158,8 +170,9 @@ class _SpectrogramPaneState extends State<SpectrogramPane>
       _dropHeatmap();
       return;
     }
+    final columns = widget.columns;
     final bmp = rasterizeSpectrogramBgra(
-      widget.columns,
+      columns,
       magMin: widget.magMin,
       magMax: widget.magMax,
     );
@@ -167,6 +180,12 @@ class _SpectrogramPaneState extends State<SpectrogramPane>
       _dropHeatmap();
       return;
     }
+    final hop = columns.length >= 2
+        ? (columns[1].elapsed - columns[0].elapsed).abs()
+        : 0.25;
+    final firstElapsed = columns.first.elapsed;
+    final hopSec = hop > 1e-12 ? hop : 0.25;
+    final columnCount = columns.length;
     ui.decodeImageFromPixels(
       bmp.bytes,
       bmp.width,
@@ -180,6 +199,9 @@ class _SpectrogramPaneState extends State<SpectrogramPane>
         final previous = _heatmap;
         setState(() {
           _heatmap = image;
+          _heatFirstElapsed = firstElapsed;
+          _heatHopSec = hopSec;
+          _heatColumnCount = columnCount;
         });
         if (previous != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -192,12 +214,22 @@ class _SpectrogramPaneState extends State<SpectrogramPane>
 
   void _dropHeatmap() {
     final previous = _heatmap;
-    if (previous == null) return;
+    if (previous == null &&
+        _heatFirstElapsed == null &&
+        _heatHopSec == null &&
+        _heatColumnCount == null) {
+      return;
+    }
     _heatmap = null;
+    _heatFirstElapsed = null;
+    _heatHopSec = null;
+    _heatColumnCount = null;
     if (mounted) setState(() {});
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      previous.dispose();
-    });
+    if (previous != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        previous.dispose();
+      });
+    }
   }
 
   @override
@@ -207,7 +239,6 @@ class _SpectrogramPaneState extends State<SpectrogramPane>
     return RepaintBoundary(
       child: CustomPaint(
         painter: SpectrogramPanePainter(
-          columns: widget.columns,
           viewport: widget.viewport,
           newestElapsed: widget.newestElapsed,
           wallNow: wallNow,
@@ -215,6 +246,9 @@ class _SpectrogramPaneState extends State<SpectrogramPane>
           magMax: widget.magMax,
           connected: widget.connected,
           heatmap: _heatmap,
+          heatFirstElapsed: _heatFirstElapsed,
+          heatHopSec: _heatHopSec,
+          heatColumnCount: _heatColumnCount,
           axisColor: theme.colorScheme.onSurfaceVariant,
           gridColor: theme.colorScheme.outlineVariant,
           chartBackground: theme.colorScheme.surface,
@@ -227,7 +261,6 @@ class _SpectrogramPaneState extends State<SpectrogramPane>
 
 class SpectrogramPanePainter extends CustomPainter {
   SpectrogramPanePainter({
-    required this.columns,
     required this.viewport,
     required this.newestElapsed,
     required this.wallNow,
@@ -235,6 +268,9 @@ class SpectrogramPanePainter extends CustomPainter {
     required this.magMax,
     required this.connected,
     required this.heatmap,
+    this.heatFirstElapsed,
+    this.heatHopSec,
+    this.heatColumnCount,
     required this.axisColor,
     required this.gridColor,
     required this.chartBackground,
@@ -255,7 +291,6 @@ class SpectrogramPanePainter extends CustomPainter {
     (1.0, Color(0xFFF0F921)),
   ];
 
-  final List<StftColumn> columns;
   final ViewportController viewport;
   final double newestElapsed;
   final double wallNow;
@@ -263,6 +298,10 @@ class SpectrogramPanePainter extends CustomPainter {
   final double magMax;
   final bool connected;
   final ui.Image? heatmap;
+  /// Locked to [heatmap] decode — not live STFT columns (avoids hop vs ticker fight).
+  final double? heatFirstElapsed;
+  final double? heatHopSec;
+  final int? heatColumnCount;
   final Color axisColor;
   final Color gridColor;
   final Color chartBackground;
@@ -307,7 +346,12 @@ class SpectrogramPanePainter extends CustomPainter {
     canvas.clipRect(chart);
     // Empty / no-data regions use the graph surface — not viridis blue.
     canvas.drawRect(chart, Paint()..color = chartBackground);
-    if (connected && columns.isNotEmpty && heatmap != null) {
+    if (connected &&
+        heatmap != null &&
+        heatFirstElapsed != null &&
+        heatHopSec != null &&
+        heatColumnCount != null &&
+        heatColumnCount! > 0) {
       _drawHeatmap(canvas, chart, visStart, span, heatmap!);
     }
     canvas.restore();
@@ -323,17 +367,14 @@ class SpectrogramPanePainter extends CustomPainter {
     double span,
     ui.Image image,
   ) {
-    if (columns.isEmpty) return;
-    final hop = columns.length >= 2
-        ? (columns[1].elapsed - columns[0].elapsed).abs()
-        : 0.25;
-    final hopSec = hop > 1e-12 ? hop : 0.25;
-    final x0 =
-        chart.left + (columns.first.elapsed - visStart) / span * chart.width;
+    final first = heatFirstElapsed!;
+    final hopSec = heatHopSec!;
+    final count = heatColumnCount!;
+    final x0 = chart.left + (first - visStart) / span * chart.width;
     final dest = Rect.fromLTWH(
       x0,
       chart.top,
-      hopSec / span * chart.width * columns.length,
+      hopSec / span * chart.width * count,
       chart.height,
     );
     canvas.drawImageRect(
@@ -426,13 +467,15 @@ class SpectrogramPanePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant SpectrogramPanePainter old) {
-    return old.columns != columns ||
-        old.newestElapsed != newestElapsed ||
+    return old.newestElapsed != newestElapsed ||
         old.wallNow != wallNow ||
         old.magMin != magMin ||
         old.magMax != magMax ||
         old.connected != connected ||
         old.heatmap != heatmap ||
+        old.heatFirstElapsed != heatFirstElapsed ||
+        old.heatHopSec != heatHopSec ||
+        old.heatColumnCount != heatColumnCount ||
         old.chartBackground != chartBackground ||
         old.axisColor != axisColor ||
         old.gridColor != gridColor ||
