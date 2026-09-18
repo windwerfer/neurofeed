@@ -43,7 +43,7 @@ Width `kSidebarWidth` (220). Overlay below 700px; row sibling at ≥ 700.
 | Histogram | `Histogram` | `AppView.histogram` | `app.dart` | After Raw EEG. `monitor/views/histogram_view.dart`. |
 | Spectrogram | `Spectrogram` | `AppView.spectrogram` | `app.dart` | `monitor/views/spectrogram_view.dart`. |
 | PSD | `PSD` | `AppView.psd` | `app.dart` | Short label. Title `Power Spectral Density`. |
-| HR+SpO2 | `HR+SpO2` | `AppView.hrSpo2` | `app.dart` | Dual-pane optical. `monitor/views/hr_spo2_view.dart`. |
+| HR+SpO2 | `HR+SpO2` | `AppView.hrSpo2` | `app.dart` | Dual-pane optical. Follow: no top highlight; bottom IR PPG sweeps. Inspect: highlight + walking PPG. `monitor/views/hr_spo2_view.dart`. |
 | Streaming | `Streaming` | `AppView.streaming` | `app.dart` | Trailing `StreamDot`. |
 | Settings | `Settings` | `AppView.settings` | `app.dart` | |
 
@@ -61,6 +61,7 @@ Shared chrome for the five live graph views. Record is global
 | Stop recording | `Stop recording` | `_RecordControls` | `graph_shell.dart` | Assemble + Save/Discard. Elapsed while recording. |
 | Record disabled | tooltip `Stop the feedback session to record` | `_RecordControls` | `graph_shell.dart` | `CaptureKind.feedback` or disconnected. |
 | Landscape cinema | — | `GraphCinema` | `graph_cinema.dart` | Graph views only. **Mobile:** landscape hides status bar, sidebar, GraphShell toolbar; portrait restores. **Desktop:** chrome stays; **F11** toggles the same hide. Not Settings / Feedback / Streaming / History. |
+| Chrome overflow | chevron | `_PannableChromeRow` | `graph_shell.dart` | Whole toolbar pans when Follow/Inspect + electrodes overflow; drag anywhere on the row; chevron jumps to end. |
 | Waiting for signal | `Waiting for signal` | `MonitorWaitingSignal` | `empty_state.dart` | Connected, no samples yet. |
 
 ### Connect window — `lib/src/connect_window.dart`
@@ -107,7 +108,7 @@ graphs. In-pane band chips toggle series visibility.
 | Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze; pan / pinch-X. Drag or pinch enters Inspect. Cache still 1 Hz; no Follow ticker. |
 | Window length | `15s` `30s` `60s` `120s` | `ViewportController.bandsWindowOptions` | `graph_shell.dart` | Default **30 s**. |
 | Custom window | `custom` | `windowIsPreset` | `graph_shell.dart` | Closed label after pinch-X. Picking a preset restores. |
-| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Top-right, depressed = in the mean. Default all on. Last one stays. If chips overflow, strip is horizontally pannable and shows a chevron that jumps to the end. |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Top-right, depressed = in the mean. Default all on. Last one stays. Whole GraphShell chrome row pans on overflow (drag anywhere); chevron jumps to end. Electrode chips are not a separate scroller. |
 | Band toggle | `delta` / `theta` / `alpha` / `beta` / `gamma` | `BandToggles` | `band_toggles.dart` | In-pane, top-right overlay. Depressed = visible. Last one stays. Label color = line. |
 | Y unit | `dB` | `linearToDb` | `panes/time_series_pane.dart` | `10·log10` of linear µV²/Hz. 0 is not the floor. |
 | Waiting for signal | `Waiting for signal` | `MonitorWaitingSignal` | `empty_state.dart` | Connected, no BandCache samples. |
@@ -125,7 +126,7 @@ dashboard Histogram is **one pane** (no strip).
 | Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. Drag highlight to move epoch; drag outside pans strip. Pinch-X on strip. |
 | Window length | `2s` `4s` `8s` | `histogramPsdWindowOptions` | `graph_shell.dart` | Default **8 s**. Highlight width = T. |
 | µV range | `±100 µV` | `HistogramUvRange` | `histogram_view.dart` | Own domain. Overflow ±50 / ±200. Not Raw EEG Y-scale. |
-| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for histogram **and** strip. Last one stays. Overflow → pannable + end chevron (shared widget). |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for histogram **and** strip. Last one stays. Overflow → whole chrome row pans + end chevron (GraphShell). |
 | Hairline | `−12 µV   48` | tap on pane | `histogram_pane.dart` | Tap, not drag. |
 | Bands context strip | `30s` / `custom` | `BandsContextStrip` | `panes/bands_context_strip.dart` | Default **30 s**. Pinch-X like Bands. Compact dropdown on the strip, not GraphShell. |
 | Landscape cinema | — | `GraphCinema` | `graph_cinema.dart` | **Mobile** landscape hides chrome + strip `30s ▾` (both panes stay). **Desktop** keeps chrome; **F11** hides the same (including the strip dropdown). |
@@ -143,7 +144,7 @@ window).
 | Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Chrome `m:ss–m:ss`. Drag highlight to move epoch; drag outside pans strip. Pinch-X on strip. |
 | Window length | `2s` `4s` `8s` | `histogramPsdWindowOptions` | `graph_shell.dart` | Default **4 s**. Highlight width = T. |
 | Hz range | `0–60 Hz` | `PsdHzRange` | `psd_view.dart` | Overflow `0–100 Hz`. |
-| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for PSD **and** strip. Last one stays. Overflow → pannable + end chevron (shared widget). |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership for PSD **and** strip. Last one stays. Overflow → whole chrome row pans + end chevron (GraphShell). |
 | Hairline | `10.2 Hz   −8.4 dB` | tap on pane | `psd_pane.dart` | Tap, not drag. |
 | Alpha peak | `{n} Hz` | `alphaPeakHz` | `dsp.dart` | Argmax 8–13 Hz. |
 | Bands context strip | `30s` / `custom` | `BandsContextStrip` | `panes/bands_context_strip.dart` | Same strip as Histogram. Spectrogram does **not** get this strip. |
@@ -160,7 +161,7 @@ No `FFT 1s ▾`.
 | Window length | `10s` `20s` `30s` `2min` `5min` | `spectrogramWindowOptions` | `graph_shell.dart` | Default **20 s**. Pinch-X → `custom`. Cap 5 min. |
 | Custom window | `custom` | `windowIsPreset` | `graph_shell.dart` | Closed label after pinch-X. |
 | Magnitude | `mag ▾` | dual-thumb RangeSlider | `spectrogram_view.dart` | Color min/max of log power. Not Hz. Not auto-pumping. |
-| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership. Last one stays. Overflow → pannable + end chevron (shared widget). |
+| Electrode toggle | `TP9` / Crown names | `ElectrodeToggles` | `electrode_toggles.dart` | Average membership. Last one stays. Overflow → whole chrome row pans + end chevron (GraphShell). |
 
 ### History — `lib/src/views/feedback_history.dart`
 

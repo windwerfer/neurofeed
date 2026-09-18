@@ -116,7 +116,9 @@ Scratch is always `scratchDirectory()`. SAF is history-only.
 ## Graphs
 
 Shared chrome: Follow | Inspect, window length, Record / Stop, electrode
-toggles (non-EEG). Chrome hide (`graph_cinema.dart`): **mobile landscape**
+toggles (non-EEG). When the whole chrome row overflows, drag anywhere on
+that line to pan the entire strip (Follow/Inspect slide off first); overflow
+chevron jumps to the end. Chrome hide (`graph_cinema.dart`): **mobile landscape**
 hides status bar, sidebar, and GraphShell toolbar (portrait restores).
 **Desktop keeps chrome** in a landscape window; **F11** hides the same
 chrome (F11 again restores). Plot gestures stay. Not Settings / Feedback /
@@ -132,7 +134,7 @@ Drag/pinch on a time-X graph enters Inspect.
 | Histogram | ~70% + ~30% Bands strip | 2/4/**8 s** | X ±100 µV (overflow ±50/±200), 64 bins. Tap hairline. Strip default 30 s. |
 | PSD | same split | 2/**4**/8 s | X 0–60 Hz (overflow 0–100). Welch 1 s / 256-pt, 50% hop. Band shading + alpha peak. |
 | Spectrogram | 1 heatmap | 10/**20**/30 s / 2 min / 5 min + pinch `custom` | Y 0–60 Hz. `mag ▾` color min/max. STFT 256-pt, hop ~0.25 s. No strip, no FFT-size chrome. |
-| HR+SpO2 | dual-axis HR/SpO₂ + IR PPG | top 15/**30**/60/120 s; bottom **10 s** (≤ top) | Muse PPG only. Highlight = bottom window. Drag highlight to slide detail inside a frozen overview (stop at edges); drag outside highlight pans overview. Linked pinch/zoom. Avg HR line. Crown → empty. Window lengths persisted. |
+| HR+SpO2 | dual-axis HR/SpO₂ + IR PPG | top 15/**30**/60/120 s; bottom **10 s** (≤ top) | Muse PPG only. Top highlight **Inspect only** (hidden in Follow); drag highlight in Inspect slides detail. Bottom IR PPG is **sweep** in Follow (EEG-style wipe, fixed ~10 s buffer), walking window in Inspect. Linked pinch/zoom. Avg HR line. Crown → empty. Window lengths persisted. |
 
 Histogram/PSD highlight on the strip is **time only** (width = T). In
 Follow, the highlight is pinned flush-right to the strip's smoothly
@@ -209,7 +211,8 @@ Not `SessionMetadata.toJson()`. Format: [README_feedback_format.md](../README_fe
 - Unified History; Settings **Save files to folder**; sidebar **Spectrogram**.
 - Raw EEG stays sweep. 5 min RAM + 30 min tmp. Do not grow RAM to 30 min.
 - Bands Y is dB display. Pinch-X `custom` on Bands and Spectrogram only.
-  Follow on 1 Hz Bands strips slides with ~1 s lead + always-on PCHIP.
+  Follow on 1 Hz Bands / Histogram / PSD strips slides with ~1 s lead +
+  always-on PCHIP (series fetched through cache tip; paint domain lags).
   Spectrogram Follow is flush-right. No `SMOOTH` / `REAL TIME` chrome.
 - Cinema: mobile landscape hides chrome; desktop **F11** does the same.
   Spectrogram `mag ▾` is color, not Hz.
