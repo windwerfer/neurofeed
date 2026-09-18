@@ -558,6 +558,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         ..addAll(FeatureOverride.baselineSamples(_guard.featureId));
       _guard.finalizeBaseline(
         warningThresholdPercentile: warningThresholdPercentile,
+        captureAnchor: false,
       );
     }
     debugPrint(
