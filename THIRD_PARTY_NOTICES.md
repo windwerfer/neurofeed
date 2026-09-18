@@ -55,7 +55,6 @@ See `Third-party → Rust → rlx / rlx-cpu` below.
 | android_logger | 0.14.1 | MIT / Apache-2.0 | https://github.com/NeoLegends/rust-android-logger |
 | zstd | 0.13.3 | MIT / Apache-2.0 | https://github.com/gyscos/zstd-rs |
 | reveal-rs | (git rev 9c8d856…) | Apache-2.0 | https://github.com/eugenehp/reve-rs |
-| luna-rs (unused; removed from ship path) | v0.0.4-latent-embedding-fix | Apache-2.0 | https://github.com/windwerfer/luna-rs |
 | rlx | 0.2.13 | GPL-3.0-only | https://crates.io/crates/rlx |
 | **rlx-cpu** | 0.2.14 (vendored, patched) | **GPL-3.0-only** | https://crates.io/crates/rlx-cpu; local copy at `vendor/rlx-cpu-0.2.14` |
 

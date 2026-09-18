@@ -15,9 +15,9 @@ enum ModelKind {
     downloadUrl:
         'https://huggingface.co/weighting666/CBraMod/resolve/main/pretrained_weights.pth',
     shortDescription:
-        'Open Spur A vigilance head on frozen CBraMod (Apache-2.0). '
+        'Open Spur A vigilance head on frozen CBraMod (Apache-2.0, Candle CPU). '
         '2 s Muse windows; live FeatureDto is P(hypnagogic). Head pack ships with the app; '
-        'download the ~20 MB encoder weights once. Live scoring waits on encoder forward.',
+        'download the ~20 MB encoder weights once to go Ready.',
     getGuide:
         'Head pack is bundled. Download the CBraMod encoder '
         '(`pretrained_weights.pth`) into the model folder — Apache-2.0, no gate.',

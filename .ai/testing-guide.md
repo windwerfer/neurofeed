@@ -142,13 +142,15 @@ after a connected session.
   (full suite: `cargo test --lib`).
 - Simulator stream: `cargo test --lib simulator` (headset events, no
   derived DTOs, EEG std in the ≥80 quality band, Crown 8-ch / no PPG).
-- Model smoke tests (`#[ignore]`d): `cargo test --lib -- --ignored`
-  Needs `.local/luna-base-dl/LUNA_base.safetensors` and
-  `.local/reve-base-dl/model.safetensors`. Tests rebuild
-  `target/*-smoke/model.safetensors` each run.
-- `reve-rs` / `luna-rs` / muse-rs / btleplug are git deps — `cargo build`
-  needs GitHub. No submodule init required for the build
-  (`third_party/` copies are reference only).
+- CBraMod Spur A encoder smoke: `cargo test --lib cbramod` (needs
+  `.local/cbramod-fixtures/pretrained_weights.pth` or the muse-eeg-heads
+  cache copy; SHA-pinned, not in git). Parity test vs Python embedding in
+  `cbramod_encoder` tests.
+- Optional REVE smoke (`#[ignore]`d): `cargo test --lib -- --ignored`
+  Needs `.local/reve-base-dl/model.safetensors`.
+- `reve-rs` / muse-rs / btleplug are git deps — `cargo build` needs GitHub.
+  No submodule init required for the build (`third_party/` copies are
+  reference only). LUNA is removed from the ship path.
 
 ## Dart tests that hit the FFI (host build)
 Tests that call Rust (e.g. `test/session_export_test.dart`,

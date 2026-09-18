@@ -1,3 +1,7 @@
+# Feedback architecture
+
+Spur A guardrail AI is **CBraMod** (Candle) + optional REVE; LUNA removed.
+
 # Feedback system (as implemented)
 
 Pipeline PRs 1–7 implemented. Frozen decisions:

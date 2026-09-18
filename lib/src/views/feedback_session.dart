@@ -2156,9 +2156,15 @@ class _GuardrailScorerDialogState
   }
 
   List<String> _scorerFeatures() {
-    // Ship picker: band.delta always; REVE heads only when REVE base is
-    // installed. CBraMod heads stay hidden until encoder forward can score.
+    // Ship picker: band.delta always; CBraMod heads when Spur A encoder is
+    // Ready/installed; REVE heads when REVE base is installed.
     final items = <String>[guardFeatureBandDelta];
+    final cbramodInstalled =
+        ref.read(modelInstalledProvider(ModelKind.cbramodAVig)).valueOrNull ==
+        true;
+    if (cbramodInstalled && _aiDrowsinessListed()) {
+      items.addAll([guardFeatureAiAVig, guardFeatureAiWakeLight]);
+    }
     final reveInstalled =
         ref.read(modelInstalledProvider(ModelKind.reveBase)).valueOrNull ==
         true;
@@ -2193,8 +2199,13 @@ class _GuardrailScorerDialogState
     final fb = ref.read(feedbackStateProvider);
     final reveInstalled =
         ref.read(modelInstalledProvider(ModelKind.reveBase)).valueOrNull == true;
+    final cbramodInstalled =
+        ref.read(modelInstalledProvider(ModelKind.cbramodAVig)).valueOrNull ==
+        true;
+    final cbramodBlocked =
+        guardFeatureIsCbramod(_feature) && !cbramodInstalled;
     if (settings.guardrailEnabledFor(fb.protocol) &&
-        (guardFeatureIsCbramod(_feature) ||
+        (cbramodBlocked ||
             (guardFeatureIsReve(_feature) && !reveInstalled) ||
             (guardFeatureIsAi(_feature) && !_anyModelInstalled()))) {
       final was = _feature;
@@ -2202,7 +2213,7 @@ class _GuardrailScorerDialogState
       await settings.setGuardFeature(fb.protocol, guardFeatureBandDelta);
       if (mounted) {
         final why = guardFeatureIsCbramod(was)
-            ? 'not ready (CBraMod encoder forward pending)'
+            ? 'not ready (install/verify CBraMod encoder weights)'
             : guardFeatureIsReve(was)
                 ? 'REVE base not installed'
                 : 'not installed';

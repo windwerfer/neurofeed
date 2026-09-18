@@ -57,9 +57,8 @@ class ModelInstallResult {
 /// bundled head pack copied from Flutter assets plus an optional
 /// `pretrained_weights.pth` encoder (SHA-pinned, HF Apache-2.0 download).
 /// REVE remains `config.json` + `model.safetensors` via user import.
-/// Flip when native CBraMod encoder forward is linked in Rust.
-/// Until then the Model Ready card stays false even with verified weights.
-const bool kCbramodEncoderForwardReady = false;
+/// True when Rust Candle CBraMod encoder load+forward succeed (Spur A).
+const bool kCbramodEncoderForwardReady = true;
 
 class ModelCache {
   const ModelCache();
@@ -181,37 +180,56 @@ class ModelCache {
   }
 
   /// Copy the bundled Spur A pack from Flutter assets into [dir] when missing.
+  ///
+  /// Required files must copy successfully; optional docs/pt siblings may be
+  /// absent. Throws [ModelNotFoundException] if a required asset is missing.
   Future<void> ensureBundledPack(Directory dir, ModelKind kind) async {
     final root = kind.packAssetRoot;
-    if (root == null) return;
+    if (root == null) {
+      throw ModelNotFoundException(
+        '${kind.label} has no bundled pack asset root',
+      );
+    }
     await dir.create(recursive: true);
-    final heads = Directory('${dir.path}/heads');
-    await heads.create(recursive: true);
-    final encoder = Directory('${dir.path}/encoder');
-    await encoder.create(recursive: true);
-    const files = <String>[
+    await Directory('${dir.path}/heads').create(recursive: true);
+    await Directory('${dir.path}/encoder').create(recursive: true);
+    const required = <String>[
       'pack_manifest.json',
+      'heads/head_a_vig_linear.f32bin',
+      'encoder/EXPECTED.json',
+    ];
+    const optional = <String>[
       'app_integration.json',
       'ATTRIBUTION.md',
       'README.md',
-      'heads/head_a_vig_linear.f32bin',
       'heads/head_a_vig_linear.pt',
       'heads/head_c_wake_light_linear.f32bin',
       'heads/head_c_wake_light_linear.pt',
-      'encoder/EXPECTED.json',
     ];
-    for (final rel in files) {
+    Future<void> copyOne(String rel, {required bool requiredFile}) async {
       final dest = File('${dir.path}/$rel');
-      if (await dest.exists() && await dest.length() > 0) continue;
+      if (await dest.exists() && await dest.length() > 0) return;
       try {
         final data = await rootBundle.load('$root/$rel');
         await dest.writeAsBytes(
           data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
           flush: true,
         );
-      } on Exception {
-        // Optional docs may be absent in slim asset lists; head is required.
+      } on Exception catch (e) {
+        if (requiredFile) {
+          throw ModelNotFoundException(
+            'Bundled Spur A pack incomplete — missing required asset '
+            '$root/$rel ($e)',
+          );
+        }
       }
+    }
+
+    for (final rel in required) {
+      await copyOne(rel, requiredFile: true);
+    }
+    for (final rel in optional) {
+      await copyOne(rel, requiredFile: false);
     }
   }
 
@@ -561,18 +579,21 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
     try {
       if (kind.layout == ModelLayout.cbramodPack) {
         final reason = await _cache.cbramodNotReadyReason(_sessionFolder, kind);
-        // Always try to load head when pack can be ensured — description feeds UI.
         String? desc;
+        Object? installError;
         try {
           final result = await _cache.install(_sessionFolder, kind);
           desc = result.loadedDesc;
-        } on Exception catch (_) {
-          // Head-only load may still fail if assets missing.
+        } on Exception catch (e) {
+          installError = e;
         }
         if (reason != null) {
-          if (desc == null &&
-              !(await _cache.isPackPresentOnDisk(_sessionFolder, kind))) {
-            return const ModelEngineNotInstalled();
+          if (!(await _cache.isPackPresentOnDisk(_sessionFolder, kind))) {
+            return ModelEngineError(
+              kind: kind,
+              message: installError?.toString() ??
+                  'CBraMod head pack missing — bundled assets failed to copy',
+            );
           }
           return ModelEngineNotReady(
             kind: kind,
@@ -580,7 +601,14 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
             description: desc,
           );
         }
-        return ModelEngineReady(kind: kind, description: desc ?? kind.label);
+        if (desc == null) {
+          return ModelEngineError(
+            kind: kind,
+            message: installError?.toString() ??
+                'CBraMod load failed after pack+encoder verified',
+          );
+        }
+        return ModelEngineReady(kind: kind, description: desc);
       }
       if (!await _cache.isInstalledOnDisk(_sessionFolder, kind)) {
         return const ModelEngineNotInstalled();
