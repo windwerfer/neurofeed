@@ -16,7 +16,7 @@ const Set<String> guardFeatureAiIds = {
   guardFeatureAiDrowsiness,
 };
 
-/// CBraMod-backed heads — not selectable as live scorers until encoder forward works.
+/// CBraMod-backed heads (Spur A encoder forward linked).
 const Set<String> guardFeatureCbramodIds = {
   guardFeatureAiAVig,
   guardFeatureAiWakeLight,
@@ -74,14 +74,11 @@ String? parseGuardFeatureValue(Object? value) {
   if (value is String) {
     return switch (value) {
       'drowsinessMath' || 'band.delta' => guardFeatureBandDelta,
-      // CBraMod / legacy LUNA / alias — migrate off until encoder forward works.
-      'drowsinessCbramodAVig' ||
-      'drowsinessLunaLarge' ||
-      'drowsinessLunaBase' ||
-      'ai.drowsiness' ||
-      'ai.a_vig' ||
-      'ai.wake_light' =>
-        guardFeatureBandDelta,
+      // Legacy LUNA mode names → Spur A A-vig. Keep CBraMod feature ids.
+      'drowsinessLunaLarge' || 'drowsinessLunaBase' => guardFeatureAiAVig,
+      'drowsinessCbramodAVig' || 'ai.drowsiness' => guardFeatureAiAVig,
+      'ai.a_vig' => guardFeatureAiAVig,
+      'ai.wake_light' => guardFeatureAiWakeLight,
       // Legacy REVE *mode* name → band.delta (do not auto-promote to REVE
       // heads). Explicit ai.*_reve ids are kept; UI/settings drop them when
       // REVE base is not installed.
@@ -98,8 +95,7 @@ String? parseGuardFeatureValue(Object? value) {
       return feature as String;
     }
     if (feature is String && guardFeatureIsCbramod(feature)) {
-      // Stored CBraMod head prefs → band.delta until live encoder scores exist.
-      return guardFeatureBandDelta;
+      return feature;
     }
     if (feature is String && guardFeatureIsReve(feature)) {
       // Keep stored REVE head ids; callers must fall back to band.delta when

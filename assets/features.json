@@ -8,7 +8,7 @@
       "usableFor": [
         "reward"
       ],
-      "rewardCopy": "Rewards alpha \u00f7 theta on the feature electrodes.",
+      "rewardCopy": "Rewards alpha ÷ theta on the feature electrodes.",
       "guardCopy": null
     },
     "band.tar": {
@@ -18,7 +18,7 @@
       "usableFor": [
         "reward"
       ],
-      "rewardCopy": "Rewards theta \u00f7 alpha on the feature electrodes.",
+      "rewardCopy": "Rewards theta ÷ alpha on the feature electrodes.",
       "guardCopy": null
     },
     "band.btr": {
@@ -28,12 +28,12 @@
       "usableFor": [
         "reward"
       ],
-      "rewardCopy": "Rewards beta \u00f7 theta on the feature electrodes.",
+      "rewardCopy": "Rewards beta ÷ theta on the feature electrodes.",
       "guardCopy": null
     },
     "band.alpha": {
       "label": "Relative alpha",
-      "shortLabel": "\u03b1",
+      "shortLabel": "α",
       "source": "band",
       "usableFor": [
         "reward"
@@ -43,7 +43,7 @@
     },
     "band.delta": {
       "label": "Delta (band math)",
-      "shortLabel": "\u03b4",
+      "shortLabel": "δ",
       "source": "band",
       "usableFor": [
         "guard"
@@ -59,7 +59,7 @@
         "guard"
       ],
       "rewardCopy": null,
-      "guardCopy": "Primary Spur A sleep/drowsy score (CBraMod A-vig). FeatureDto value is P(hypnagogic). Unavailable until CBraMod encoder forward is linked."
+      "guardCopy": "Primary Spur A sleep/drowsy score (frozen CBraMod + A-vig head). FeatureDto value is P(hypnagogic)."
     },
     "ai.wake_light": {
       "label": "CBraMod wake/light",
@@ -69,7 +69,7 @@
         "guard"
       ],
       "rewardCopy": null,
-      "guardCopy": "CBraMod Head C wake vs light-sleep probe. FeatureDto value is P(light). Unavailable until CBraMod encoder forward is linked."
+      "guardCopy": "CBraMod Head C wake vs light-sleep probe. FeatureDto value is P(light)."
     },
     "ai.a_vig_reve": {
       "label": "REVE A-vig (exp.)",
@@ -99,7 +99,7 @@
         "guard"
       ],
       "rewardCopy": null,
-      "guardCopy": "Deprecated alias of ai.a_vig \u2014 same P(hypnagogic) scalar; unavailable until CBraMod encoder forward is linked."
+      "guardCopy": "Deprecated alias of ai.a_vig — same P(hypnagogic) scalar from Spur A."
     },
     "device.focus": {
       "label": "Crown focus",
@@ -109,7 +109,7 @@
         "reward",
         "guard"
       ],
-      "rewardCopy": "Crown-native focus score (0\u20131).",
+      "rewardCopy": "Crown-native focus score (0–1).",
       "guardCopy": "Warns from the Crown-native focus score."
     },
     "device.calm": {
@@ -120,7 +120,7 @@
         "reward",
         "guard"
       ],
-      "rewardCopy": "Crown-native calm score (0\u20131).",
+      "rewardCopy": "Crown-native calm score (0–1).",
       "guardCopy": "Warns from the Crown-native calm score."
     }
   }

@@ -8,9 +8,8 @@
 //!
 //! Encoder weights (~20 MB Apache-2.0) are **not** bundled; pin SHA-256 and
 //! load from the model directory / HF cache (same pattern as REVE user-local
-//! weights). Full encoder forward needs a native Torch/Candle backend —
-//! this module loads + verifies the pack, applies the linear head, and exposes
-//! a clear error from [`score_window`] until that backend is linked.
+//! weights). Frozen encoder forward runs on CPU via Candle
+//! ([`cbramod_encoder`]); [`score_window`] mean-pools to 200-d for heads.
 
 use std::fs;
 use std::io::Read;
@@ -106,6 +105,7 @@ struct Loaded {
     #[allow(dead_code)]
     encoder_path: Option<PathBuf>,
     encoder_verified: bool,
+    encoder_forward_ready: bool,
 }
 
 static STATE: Mutex<Option<Loaded>> = Mutex::new(None);
@@ -129,21 +129,45 @@ pub fn load_model(model_dir: &str) -> anyhow::Result<String> {
     let head = load_head(&dir)?;
     let encoder_path = find_encoder(&dir);
     let mut encoder_verified = false;
+    let mut encoder_forward_ready = false;
+    crate::analysis::cbramod_encoder::unload_global();
     if let Some(ref p) = encoder_path {
-        let hex = file_sha256(p)?;
-        if hex != ENCODER_SHA256 {
-            bail!(
-                "CBraMod encoder SHA mismatch\nGot      {hex}\nExpected {ENCODER_SHA256}\n{}",
+        let is_pth = p
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.eq_ignore_ascii_case("pth"))
+            .unwrap_or(false);
+        if is_pth {
+            let hex = file_sha256(p)?;
+            if hex != ENCODER_SHA256 {
+                bail!(
+                    "CBraMod encoder SHA mismatch\nGot      {hex}\nExpected {ENCODER_SHA256}\n{}",
+                    p.display()
+                );
+            }
+        } else {
+            log::info!(
+                "[cbramod] loading non-.pth encoder {} (SHA pin applies to pretrained_weights.pth)",
                 p.display()
             );
         }
         encoder_verified = true;
+        match crate::analysis::cbramod_encoder::load_into_global(p) {
+            Ok(()) => {
+                encoder_forward_ready = true;
+                log::info!("[cbramod] encoder forward ready (Candle) at {}", p.display());
+            }
+            Err(e) => {
+                log::warn!("[cbramod] encoder weights OK but forward load failed: {e}");
+            }
+        }
     }
     *lock() = Some(Loaded {
         head,
         model_dir: dir.clone(),
         encoder_path: encoder_path.clone(),
         encoder_verified,
+        encoder_forward_ready,
     });
     *LAST_PROBS.lock().unwrap_or_else(|e| e.into_inner()) = None;
 
@@ -154,8 +178,10 @@ pub fn load_model(model_dir: &str) -> anyhow::Result<String> {
             Vec::new()
         });
 
-    let enc_status = if encoder_verified {
-        "encoder weights verified (forward backend pending)"
+    let enc_status = if encoder_forward_ready {
+        "encoder forward ready (Candle CPU)"
+    } else if encoder_verified {
+        "encoder weights verified but forward load failed"
     } else {
         "encoder weights missing — download pretrained_weights.pth (Apache-2.0) into the model dir"
     };
@@ -167,9 +193,17 @@ pub fn load_model(model_dir: &str) -> anyhow::Result<String> {
 }
 
 pub fn unload_model() {
+    crate::analysis::cbramod_encoder::unload_global();
     *lock() = None;
     *LAST_PROBS.lock().unwrap_or_else(|e| e.into_inner()) = None;
     log::info!("[cbramod] unloaded");
+}
+
+pub fn encoder_forward_ready() -> bool {
+    lock()
+        .as_ref()
+        .map(|l| l.encoder_forward_ready)
+        .unwrap_or(false)
 }
 
 pub fn is_loaded() -> bool {
@@ -224,8 +258,7 @@ pub fn last_hypnagogic_p() -> Option<f32> {
     last_probs().and_then(|p| p.get(LABEL_HYPNAGOGIC).copied())
 }
 
-/// Score one Muse window. Adapter + head are implemented; frozen encoder
-/// forward is not yet linked in-process (no tch/Candle dep in this PR).
+/// Score one Muse window → 200-d mean-pooled embedding (for heads / guardrail).
 pub fn score_window(
     signal: Vec<f32>,
     _positions: Vec<f32>,
@@ -244,20 +277,26 @@ pub fn score_window(
     );
     let guard = lock();
     let loaded = guard.as_ref().context("no CBraMod model loaded")?;
-    // Prove the adapter path compiles / runs (patches ready for encoder).
     let patches = to_cbramod_patches(&signal, n_channels, n_times)?;
-    let _ = patches;
     if !loaded.encoder_verified {
         bail!(
             "CBraMod encoder weights not present/verified in {} — place pretrained_weights.pth (SHA {ENCODER_SHA256})",
             loaded.model_dir.display()
         );
     }
-    bail!(
-        "CBraMod encoder forward not linked yet (head + SHA pin OK at {}). \
-         Follow-up: native Torch/Candle backend for frozen CBraMod; head apply is ready via apply_head.",
-        loaded.model_dir.display()
-    );
+    if !loaded.encoder_forward_ready {
+        bail!(
+            "CBraMod encoder forward not ready at {} (weights verified but Candle load failed)",
+            loaded.model_dir.display()
+        );
+    }
+    drop(guard);
+    let n_patches = patches.len() / (n_channels * PATCH_SAMPLES);
+    crate::analysis::cbramod_encoder::encode_mean_pool_global(
+        &patches,
+        n_channels,
+        n_patches,
+    )
 }
 
 /// Resample (C,T) @ 256 Hz → patches (C, n_patches, 200) @ 200 Hz.
@@ -307,6 +346,8 @@ fn find_encoder(dir: &Path) -> Option<PathBuf> {
         dir.join("pretrained_weights.pth"),
         dir.join("encoder").join("pretrained_weights.pth"),
         dir.join("models").join("CBraMod").join("pretrained_weights.pth"),
+        dir.join("pretrained_weights.safetensors"),
+        dir.join("encoder").join("pretrained_weights.safetensors"),
     ];
     candidates.into_iter().find(|p| p.is_file())
 }
@@ -453,6 +494,49 @@ mod tests {
     }
 
     #[test]
+    fn score_window_with_fixture_encoder() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../assets/packs/cbramod-a-vig-full");
+        if !root.join("heads/head_a_vig_linear.f32bin").is_file() {
+            eprintln!("skip: bundled pack missing");
+            return;
+        }
+        let enc = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../.local/cbramod-fixtures/pretrained_weights.pth");
+        let enc_alt = Path::new(
+            "/workspace/muse-eeg-heads/kaggle_datasets/muse-eeg-heads-cache/models/CBraMod/pretrained_weights.pth",
+        );
+        let enc_path = if enc.is_file() {
+            enc
+        } else if enc_alt.is_file() {
+            enc_alt.to_path_buf()
+        } else {
+            eprintln!("skip: no encoder fixture");
+            return;
+        };
+        let tmp = std::env::temp_dir().join("cbramod_score_window_test");
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(tmp.join("heads")).unwrap();
+        fs::copy(
+            root.join("heads/head_a_vig_linear.f32bin"),
+            tmp.join("heads/head_a_vig_linear.f32bin"),
+        )
+        .unwrap();
+        fs::copy(&enc_path, tmp.join("pretrained_weights.pth")).unwrap();
+        unload_model();
+        let desc = load_model(&tmp.to_string_lossy()).unwrap();
+        assert!(desc.contains("forward ready"), "{desc}");
+        assert!(encoder_forward_ready());
+        let signal = vec![0.1f32; 4 * WINDOW_SAMPLES];
+        let emb = score_window(signal, vec![], 4, WINDOW_SAMPLES).unwrap();
+        assert_eq!(emb.len(), EMBED_DIM);
+        assert!(emb.iter().all(|v| v.is_finite()));
+        let (_logits, probs, _pred) = apply_head(&emb).unwrap();
+        assert_eq!(probs.len(), 2);
+        unload_model();
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
     fn load_bundled_f32bin_if_present() {
         // Dev tree: assets pack relative to crate.
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -15,12 +15,12 @@ rust_lib_muse_ml
   simulator.rs       spawn_simulator: Eeg/Ppg/IMU/Telemetry (`sim:*`)
   reve.rs            model + guardrail FFI
   session_format.rs  .muse v4 body + .muse.feedback v5 container
-  analysis/{gesture,reve,luna,guardrail}.rs
+  analysis/{gesture,cbramod,cbramod_encoder,reve,guardrail,ai_heads}.rs
         │
         ├─ muse-rs 0.1.1 (patched fork of eugenehp 0.1.0)
         │     transport: btleplug 0.12.0-muse-5
         │     protocol:  parse.rs / protocol.rs / types.rs
-        └─ reve-rs / luna-rs (git deps, RLX CPU)
+        └─ CBraMod Candle CPU; optional reve-rs (RLX CPU)
 ```
 
 `scan()` / `connect()` / `subscribe_events()` are the BLE FFI entry points.

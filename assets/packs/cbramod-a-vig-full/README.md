@@ -26,8 +26,8 @@ Frozen **CBraMod** encoder + full-corpus **A-vig** linear head (`drowsy` / `hypn
 | `app_integration.json` | App contract |
 | `encoder/EXPECTED.json` | Encoder pin only (no `.pth` in git) |
 
-Encoder forward still requires a native backend follow-up; this pack wires load,
-SHA pin, head apply, and guardrail kind selection.
+Encoder forward runs in-process via Candle CPU (Rust). Place the SHA-pinned
+`pretrained_weights.pth` in the model dir (do not commit the blob).
 
 
 ## Feature IDs
@@ -38,7 +38,6 @@ SHA pin, head apply, and guardrail kind selection.
 | `ai.wake_light` | Head C wake/light (also mirrored here) |
 | `ai.drowsiness` | Deprecated alias of `ai.a_vig` |
 
-Encoder forward still needs a native Torch/Candle backend — until then the
-app marks `ai.a_vig` / `ai.wake_light` / `ai.drowsiness` **unavailable** and
-hides them from the ship scorer picker. Head-linear forward runs in-process
-for unit tests once a synthetic/real embedding is available.
+With verified encoder weights loaded, `kCbramodEncoderForwardReady` is true and
+`ai.a_vig` / `ai.wake_light` / `ai.drowsiness` are selectable live scorers.
+Mean-pool embedding (200-d) feeds HeadALinear; FeatureDto value is P(class 1).
