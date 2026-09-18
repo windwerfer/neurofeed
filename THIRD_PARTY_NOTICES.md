@@ -57,6 +57,9 @@ See `Third-party → Rust → rlx / rlx-cpu` below.
 | reveal-rs | (git rev 9c8d856…) | Apache-2.0 | https://github.com/eugenehp/reve-rs |
 | rlx | 0.2.13 | GPL-3.0-only | https://crates.io/crates/rlx |
 | **rlx-cpu** | 0.2.14 (vendored, patched) | **GPL-3.0-only** | https://crates.io/crates/rlx-cpu; local copy at `vendor/rlx-cpu-0.2.14` |
+| candle-core | 0.11.0 | MIT / Apache-2.0 | https://github.com/huggingface/candle |
+| candle-nn | 0.11.0 | MIT / Apache-2.0 | https://github.com/huggingface/candle |
+| rustfft | 6.4.1 | MIT / Apache-2.0 | https://github.com/ejmahler/RustFFT |
 
 Model weights: Spur A ships the A-vig **head** pack; the CBraMod encoder (~20 MB Apache-2.0) downloads
 from Hugging Face with SHA-256 verification; REVE (gated) is user-imported.
@@ -103,6 +106,8 @@ Sound assets are bundled by file. Attribution and license follow Freesound
 - **MIT** — `flutter_rust_bridge`, `flutter_riverpod`/`riverpod`,
   `permission_handler`, `flutter_soloud`, `freezed`, `tokio`, `anyhow`, `log`,
   `env_logger`, `android_logger`, `zstd`, `jni`.
+- **MIT / Apache-2.0** — `candle-core`, `candle-nn`, `rustfft` (Spur A Candle
+  CBraMod encoder path).
 - **GPL-3.0-only** — `rlx`, `rlx-cpu` (see flag at top).
 - **CC0 1.0** — most freesound audio.
 - **CC BY 4.0** — rain, singing-bowl, bell/chime freesound audio.

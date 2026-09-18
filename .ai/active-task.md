@@ -5,8 +5,10 @@
 **Now:** Spur A — frozen **CBraMod** encoder (Candle CPU) + A-vig HeadALinear
 guardrail path. Pack `assets/packs/cbramod-a-vig-full/`. Encoder weights are
 SHA-pinned Apache-2.0 (`pretrained_weights.pth`); **not** committed — load from
-model dir / `.local/cbramod-fixtures/` for tests. Dart Ready gate:
-`kCbramodEncoderForwardReady`. Feature IDs: `ai.a_vig`, `ai.wake_light`,
+model dir / `.local/cbramod-fixtures/` for tests. Ready gate: Rust
+`encoder_forward_ready` (Candle load must succeed; Dart
+`kCbramodEncoderForwardReady` is compile-time link only). **CPU/mobile Candle
+forward latency TBD** (not profiled). Feature IDs: `ai.a_vig`, `ai.wake_light`,
 deprecated alias `ai.drowsiness`. Optional REVE remains gated import (RLX CPU).
 **LUNA removed** from ship path.
 

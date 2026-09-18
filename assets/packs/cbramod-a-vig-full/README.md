@@ -28,6 +28,8 @@ Frozen **CBraMod** encoder + full-corpus **A-vig** linear head (`drowsy` / `hypn
 
 Encoder forward runs in-process via Candle CPU (Rust). Place the SHA-pinned
 `pretrained_weights.pth` in the model dir (do not commit the blob).
+**CPU/mobile forward latency is TBD** — not yet profiled on-device; treat as
+unbudgeted until measured.
 
 
 ## Feature IDs
@@ -38,6 +40,8 @@ Encoder forward runs in-process via Candle CPU (Rust). Place the SHA-pinned
 | `ai.wake_light` | Head C wake/light (also mirrored here) |
 | `ai.drowsiness` | Deprecated alias of `ai.a_vig` |
 
-With verified encoder weights loaded, `kCbramodEncoderForwardReady` is true and
-`ai.a_vig` / `ai.wake_light` / `ai.drowsiness` are selectable live scorers.
-Mean-pool embedding (200-d) feeds HeadALinear; FeatureDto value is P(class 1).
+Ready requires verified encoder weights **and** a successful Candle load
+(`encoder_forward_ready` in Rust). SHA OK with a failed Candle load is
+**not** Ready. `ai.a_vig` / `ai.wake_light` / `ai.drowsiness` are then
+selectable live scorers. Mean-pool embedding (200-d) feeds HeadALinear;
+FeatureDto value is P(class 1).
