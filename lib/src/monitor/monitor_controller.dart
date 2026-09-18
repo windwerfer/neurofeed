@@ -7,6 +7,7 @@ import 'package:muse_ml/src/connection_provider.dart';
 import 'package:muse_ml/src/feedback/session_storage.dart';
 import 'package:muse_ml/src/monitor/cache/band_cache.dart';
 import 'package:muse_ml/src/monitor/cache/file_backed_source.dart';
+import 'package:muse_ml/src/monitor/cache/optical_cache.dart';
 import 'package:muse_ml/src/monitor/cache/recording_index.dart';
 import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
 import 'package:muse_ml/src/monitor/monitor_state.dart';
@@ -35,6 +36,7 @@ class MonitorController extends Notifier<MonitorState> {
   final SessionRecorder Function() _createRecorder;
 
   final BandCache bandCache = BandCache();
+  final OpticalCache opticalCache = OpticalCache();
   final SweepBuffer sweepBuffer = SweepBuffer()
     ..setDisplayWindow(ViewportController.defaultWindowSamples);
   final CaptureLease _lease = CaptureLease();
@@ -193,6 +195,7 @@ class MonitorController extends Notifier<MonitorState> {
   Future<void> _startTmpUnlocked() async {
     if (!ref.read(appStateProvider).status.connected) return;
     if (!_lease.tryBeginTmp()) return;
+    opticalCache.clear();
     try {
       final storage = await ref.read(sessionStorageProvider.future);
       await storage.ensureDir();
@@ -243,6 +246,7 @@ class MonitorController extends Notifier<MonitorState> {
       _latestEegTsMs = null;
       sweepBuffer.clear();
       bandCache.clear();
+      opticalCache.clear();
       return;
     }
     if (_lease.kind != CaptureKind.tmp) return;
@@ -251,6 +255,7 @@ class MonitorController extends Notifier<MonitorState> {
     _latestEegTsMs = null;
     sweepBuffer.clear();
     bandCache.clear();
+    opticalCache.clear();
     state = MonitorState(
       kind: CaptureKind.idle,
       electrodeNames: state.electrodeNames,
@@ -269,6 +274,7 @@ class MonitorController extends Notifier<MonitorState> {
       await _stopTmpWriter();
     }
     if (!_lease.tryBeginRecording()) return;
+    opticalCache.clear();
     try {
       final storage = await ref.read(sessionStorageProvider.future);
       await storage.ensureDir();
@@ -425,13 +431,17 @@ class MonitorController extends Notifier<MonitorState> {
         bandCache.appendBands(event.field0);
         _sampler?.updateBands(event.field0.electrode, event.field0);
       case MuseEventDto_Pulse():
+        opticalCache.appendPulse(event.field0);
         _sampler?.updatePulse(event.field0);
       case MuseEventDto_Movement():
         _sampler?.updateMovement(event.field0);
       case MuseEventDto_PeakAlpha():
         _sampler?.updatePeakAlpha(event.field0);
       case MuseEventDto_SpO2():
+        opticalCache.appendSpO2(event.field0);
         _sampler?.updateSpO2(event.field0);
+      case MuseEventDto_Ppg():
+        opticalCache.appendPpg(event.field0);
       case MuseEventDto_Gestures():
         _sampler?.updateGestures(event.field0);
       default:

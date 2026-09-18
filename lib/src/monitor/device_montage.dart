@@ -17,3 +17,6 @@ List<String> electrodeNamesForKind(DeviceKind? kind) =>
     kind == DeviceKind.neurosity ? kCrownElectrodeNames : kMuseElectrodeNames;
 
 int channelCountForKind(DeviceKind? kind) => electrodeNamesForKind(kind).length;
+
+/// Muse family has PPG; Crown / Notion do not.
+bool deviceHasPpg(DeviceKind? kind) => kind != DeviceKind.neurosity;

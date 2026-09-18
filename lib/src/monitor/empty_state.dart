@@ -22,3 +22,25 @@ class MonitorWaitingSignal extends StatelessWidget {
     );
   }
 }
+
+/// Connected to a headset without PPG (Crown / Notion). Nav entry stays.
+class MonitorNoPpg extends StatelessWidget {
+  const MonitorNoPpg({super.key});
+
+  static const String copy = 'No PPG on this device';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return IgnorePointer(
+      child: Center(
+        child: Text(
+          copy,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+}
