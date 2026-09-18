@@ -452,12 +452,25 @@ class ModelCache {
 
   Future<void> _ensureConfig(Directory dir, ModelKind kind) async {
     final config = File('${dir.path}/config.json');
-    if (await config.exists()) return;
-    await config.writeAsString(
-      await frb.modelConfigJson(kind: kind.ffId),
-      flush: true,
-    );
+    if (await config.exists() && await config.length() > 0) return;
+    // Prefer the Dart template so a successful weight download cannot fail
+    // solely because a stale native lib still rejects `cbramod_a_vig` in
+    // `model_config_json`. Load still needs a matching Rust build.
+    await config.writeAsString(kind.generatedConfigJson, flush: true);
   }
+
+  /// Clarify stale-native failures after weights already landed on disk.
+  static String friendlyNativeError(Object e) {
+    final s = '$e';
+    if (s.contains('unknown model kind')) {
+      return 'Native library is out of date for this model id. '
+          'The weight file may already be on disk (green check = files present, '
+          'not Ready). Rebuild the app so Rust includes Spur A '
+          '(`cbramod_a_vig`), then tap Check for model.\n\n$s';
+    }
+    return s;
+  }
+
 
   /// Load the model from disk. For Spur A, copies the bundled head pack first.
   Future<ModelInstallResult> install(
@@ -609,8 +622,9 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
           );
         }
         if (desc == null) {
-          final msg = installError?.toString() ??
-              'CBraMod load failed after pack+encoder verified';
+          final msg = installError != null
+              ? ModelCache.friendlyNativeError(installError)
+              : 'CBraMod load failed after pack+encoder verified';
           // Candle/forward failure after SHA OK → NotReady (not a silent Ready).
           if (msg.contains('Candle forward load failed') ||
               msg.contains('forward load failed')) {
@@ -632,7 +646,10 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
       final result = await _cache.install(_sessionFolder, kind);
       return ModelEngineReady(kind: kind, description: result.loadedDesc);
     } on Exception catch (e) {
-      return ModelEngineError(kind: kind, message: '$e');
+      return ModelEngineError(
+        kind: kind,
+        message: ModelCache.friendlyNativeError(e),
+      );
     }
   }
 
@@ -684,7 +701,10 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
     } on ModelChecksumException catch (e) {
       state = ModelEngineError(kind: kind, message: e.message);
     } on Exception catch (e) {
-      state = ModelEngineError(kind: kind, message: '$e');
+      state = ModelEngineError(
+        kind: kind,
+        message: ModelCache.friendlyNativeError(e),
+      );
     }
     await _recheckBadges();
     return state;
@@ -710,7 +730,10 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
     } on ModelDownloadException catch (e) {
       state = ModelEngineError(kind: kind, message: e.message);
     } on Exception catch (e) {
-      state = ModelEngineError(kind: kind, message: '$e');
+      state = ModelEngineError(
+        kind: kind,
+        message: ModelCache.friendlyNativeError(e),
+      );
     }
     await _recheckBadges();
     return state;
