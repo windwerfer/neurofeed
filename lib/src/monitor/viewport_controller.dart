@@ -24,6 +24,12 @@ class ViewportController extends ChangeNotifier {
   static const List<double> spectrogramWindowOptions = [10, 20, 30, 120, 300];
   static const double spectrogramZoomFloor = 5;
   static const double spectrogramZoomCap = 300;
+  static const double opticalOverviewDefaultWindowSeconds = 30;
+  static const List<double> opticalOverviewWindowOptions = [15, 30, 60, 120];
+  static const double opticalDetailDefaultWindowSeconds = 10;
+  static const List<double> opticalDetailWindowOptions = [2, 4, 8, 10];
+  static const double opticalDetailZoomFloor = 2;
+  static const double opticalDetailZoomCap = 120;
 
   ViewportMode mode = ViewportMode.follow;
   double windowSeconds = defaultWindowSeconds;
@@ -272,6 +278,49 @@ void ensureContextCoversEpoch({
   if (context.windowSeconds + 1e-9 < epochSeconds) {
     context.setStripWindowSeconds(epochSeconds, newestElapsed: newestElapsed);
   }
+}
+
+/// HR+SpO2: top overview must cover the bottom detail window.
+void ensureOverviewCoversDetail({
+  required ViewportController overview,
+  required double detailSeconds,
+  required double newestElapsed,
+}) {
+  if (overview.windowSeconds + 1e-9 < detailSeconds) {
+    overview.setStripWindowSeconds(detailSeconds, newestElapsed: newestElapsed);
+  }
+}
+
+/// Clamp bottom detail window to ≤ top overview.
+void clampDetailToOverview({
+  required ViewportController detail,
+  required ViewportController overview,
+  required double newestElapsed,
+}) {
+  if (detail.windowSeconds > overview.windowSeconds + 1e-9) {
+    detail.setStripWindowSeconds(
+      overview.windowSeconds,
+      newestElapsed: newestElapsed,
+    );
+  }
+}
+
+/// Keep detail's right edge locked to the overview's visible end.
+void alignDetailToOverview({
+  required ViewportController detail,
+  required ViewportController overview,
+  required double newestElapsed,
+  double oldestElapsed = 0,
+}) {
+  if (overview.mode == ViewportMode.follow) {
+    detail.followStrip();
+    return;
+  }
+  detail.inspectEndingAt(
+    overview.stripVisibleEnd(newestElapsed: newestElapsed),
+    newestElapsed: newestElapsed,
+    oldestElapsed: oldestElapsed,
+  );
 }
 
 void alignEpochToContext({
