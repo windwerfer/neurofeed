@@ -20,6 +20,7 @@ SpectrogramPanePainter _painter({
   required List<StftColumn> columns,
   ViewportController? viewport,
   double newestElapsed = 20,
+  double wallNow = 0,
   double magMin = -40,
   double magMax = 0,
   bool connected = true,
@@ -29,12 +30,14 @@ SpectrogramPanePainter _painter({
     columns: columns,
     viewport: viewport ?? ViewportController(),
     newestElapsed: newestElapsed,
+    wallNow: wallNow,
     magMin: magMin,
     magMax: magMax,
     connected: connected,
     heatmap: heatmap,
     axisColor: const Color(0xFF888888),
     gridColor: const Color(0xFF444444),
+    chartBackground: const Color(0xFF121212),
   );
 }
 
@@ -73,6 +76,17 @@ void main() {
     expect(
       _painter(columns: cols).shouldRepaint(_painter(columns: cols)),
       isFalse,
+    );
+  });
+
+  test('shouldRepaint when wallNow changes', () {
+    final cols = [StftColumn(0, _db())];
+    expect(
+      _painter(
+        columns: cols,
+        wallNow: 1,
+      ).shouldRepaint(_painter(columns: cols, wallNow: 0)),
+      isTrue,
     );
   });
 

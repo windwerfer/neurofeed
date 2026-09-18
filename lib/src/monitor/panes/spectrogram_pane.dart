@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:muse_ml/src/monitor/dsp.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
 
@@ -78,19 +79,33 @@ class SpectrogramPane extends StatefulWidget {
   State<SpectrogramPane> createState() => _SpectrogramPaneState();
 }
 
-class _SpectrogramPaneState extends State<SpectrogramPane> {
+class _SpectrogramPaneState extends State<SpectrogramPane>
+    with SingleTickerProviderStateMixin {
   ui.Image? _heatmap;
   int _generation = 0;
+  Ticker? _ticker;
 
   @override
   void initState() {
     super.initState();
+    _ticker = createTicker((_) {
+      if (mounted) setState(() {});
+    });
+    widget.viewport.addListener(_onViewport);
+    _maybeNoteSample();
+    _syncTicker();
     _scheduleRaster();
   }
 
   @override
   void didUpdateWidget(SpectrogramPane oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.viewport != widget.viewport) {
+      oldWidget.viewport.removeListener(_onViewport);
+      widget.viewport.addListener(_onViewport);
+    }
+    _maybeNoteSample();
+    _syncTicker();
     if (oldWidget.columns != widget.columns ||
         oldWidget.magMin != widget.magMin ||
         oldWidget.magMax != widget.magMax ||
@@ -99,8 +114,37 @@ class _SpectrogramPaneState extends State<SpectrogramPane> {
     }
   }
 
+  void _onViewport() {
+    _syncTicker();
+    if (mounted) setState(() {});
+  }
+
+  void _maybeNoteSample() {
+    if (!widget.connected || widget.columns.isEmpty) {
+      if (!widget.connected) widget.viewport.resetFollowAnchors();
+      return;
+    }
+    widget.viewport.noteStripSample(widget.newestElapsed);
+  }
+
+  void _syncTicker() {
+    final run =
+        widget.connected &&
+        widget.viewport.mode == ViewportMode.follow &&
+        widget.viewport.followLeadSeconds > 0;
+    final ticker = _ticker;
+    if (ticker == null) return;
+    if (run) {
+      if (!ticker.isActive) ticker.start();
+    } else if (ticker.isActive) {
+      ticker.stop();
+    }
+  }
+
   @override
   void dispose() {
+    widget.viewport.removeListener(_onViewport);
+    _ticker?.dispose();
     _generation++;
     _heatmap?.dispose();
     _heatmap = null;
@@ -159,18 +203,21 @@ class _SpectrogramPaneState extends State<SpectrogramPane> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final wallNow = DateTime.now().millisecondsSinceEpoch / 1000.0;
     return RepaintBoundary(
       child: CustomPaint(
         painter: SpectrogramPanePainter(
           columns: widget.columns,
           viewport: widget.viewport,
           newestElapsed: widget.newestElapsed,
+          wallNow: wallNow,
           magMin: widget.magMin,
           magMax: widget.magMax,
           connected: widget.connected,
           heatmap: _heatmap,
           axisColor: theme.colorScheme.onSurfaceVariant,
           gridColor: theme.colorScheme.outlineVariant,
+          chartBackground: theme.colorScheme.surface,
         ),
         child: const SizedBox.expand(),
       ),
@@ -183,12 +230,14 @@ class SpectrogramPanePainter extends CustomPainter {
     required this.columns,
     required this.viewport,
     required this.newestElapsed,
+    required this.wallNow,
     required this.magMin,
     required this.magMax,
     required this.connected,
     required this.heatmap,
     required this.axisColor,
     required this.gridColor,
+    required this.chartBackground,
   });
 
   static const double yGutter = 36;
@@ -209,12 +258,14 @@ class SpectrogramPanePainter extends CustomPainter {
   final List<StftColumn> columns;
   final ViewportController viewport;
   final double newestElapsed;
+  final double wallNow;
   final double magMin;
   final double magMax;
   final bool connected;
   final ui.Image? heatmap;
   final Color axisColor;
   final Color gridColor;
+  final Color chartBackground;
 
   static Rect chartRect(Size size) => Rect.fromLTWH(
     yGutter,
@@ -241,14 +292,21 @@ class SpectrogramPanePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final chart = chartRect(size);
     if (chart.width <= 0 || chart.height <= 0) return;
-    final visStart = viewport.stripVisibleStart(newestElapsed: newestElapsed);
-    final visEnd = viewport.stripVisibleEnd(newestElapsed: newestElapsed);
+    final visStart = viewport.stripVisibleStart(
+      newestElapsed: newestElapsed,
+      wallNow: wallNow,
+    );
+    final visEnd = viewport.stripVisibleEnd(
+      newestElapsed: newestElapsed,
+      wallNow: wallNow,
+    );
     final span = visEnd - visStart;
     if (span <= 0) return;
 
     canvas.save();
     canvas.clipRect(chart);
-    canvas.drawRect(chart, Paint()..color = _stops.first.$2);
+    // Empty / no-data regions use the graph surface — not viridis blue.
+    canvas.drawRect(chart, Paint()..color = chartBackground);
     if (connected && columns.isNotEmpty && heatmap != null) {
       _drawHeatmap(canvas, chart, visStart, span, heatmap!);
     }
@@ -370,12 +428,17 @@ class SpectrogramPanePainter extends CustomPainter {
   bool shouldRepaint(covariant SpectrogramPanePainter old) {
     return old.columns != columns ||
         old.newestElapsed != newestElapsed ||
+        old.wallNow != wallNow ||
         old.magMin != magMin ||
         old.magMax != magMax ||
         old.connected != connected ||
         old.heatmap != heatmap ||
+        old.chartBackground != chartBackground ||
+        old.axisColor != axisColor ||
+        old.gridColor != gridColor ||
         old.viewport.mode != viewport.mode ||
         old.viewport.windowSeconds != viewport.windowSeconds ||
+        old.viewport.followLeadSeconds != viewport.followLeadSeconds ||
         old.viewport.inspectStartElapsed != viewport.inspectStartElapsed;
   }
 }

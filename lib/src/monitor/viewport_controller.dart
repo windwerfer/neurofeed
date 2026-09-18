@@ -14,7 +14,7 @@ class ViewportController extends ChangeNotifier {
   static const double bandsZoomFloor = 5;
   static const double bandsZoomCap = 1800;
 
-  /// Follow lead for 1 Hz Bands strips (not Spectrogram). Newest sample
+  /// Follow lead for 1 Hz Bands strips and Spectrogram. Newest sample
   /// reaches the right edge ~1 s after it arrives.
   static const double bandsFollowLeadSeconds = 1.0;
   static const double histogramDefaultWindowSeconds = 8;
@@ -34,8 +34,8 @@ class ViewportController extends ChangeNotifier {
   ViewportMode mode = ViewportMode.follow;
   double windowSeconds = defaultWindowSeconds;
 
-  /// 0 = Follow right edge is cache newest (Spectrogram). Bands uses
-  /// [bandsFollowLeadSeconds].
+  /// 0 = Follow right edge is cache newest. Bands / Spectrogram use
+  /// [bandsFollowLeadSeconds] (~1 s lead + vsync ticker).
   double followLeadSeconds = 0;
 
   /// Left-edge elapsed seconds while Inspecting. Null in Follow.
