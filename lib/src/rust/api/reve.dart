@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-/// Load a model of [kind] (`reve_base` | `luna_base` | `luna_large`) from
+/// Load a model of [kind] (`cbramod_a_vig` | `reve_base`) from
 /// [model_dir] (must contain `config.json` and `model.safetensors`) and keep
 /// it ready for scoring. Returns a description of the loaded model (inference
 /// runs on CPU). Re-loads replace any prior model.

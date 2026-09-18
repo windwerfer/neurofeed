@@ -1,0 +1,10 @@
+{
+  "pack_id": "reve-head-c-wake-light-subsample",
+  "feature_id": "ai.wake_light_reve",
+  "in_dim": 512,
+  "n_classes": 2,
+  "decode": "argmax",
+  "recommended_head": "heads/head_c_wake_light_reve_linear.pt",
+  "head_f32bin": "heads/head_c_wake_light_reve_linear.f32bin",
+  "feature_dto_value": "P(class1)=P(light)"
+}

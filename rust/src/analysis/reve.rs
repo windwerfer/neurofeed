@@ -10,6 +10,9 @@ use std::sync::{Mutex, MutexGuard};
 use anyhow::Context;
 use reve_rs::ReveEncoder;
 
+/// Model-kind identifier shared with Dart (`ModelKind.ffId`).
+pub const KIND_REVE_BASE: &str = "reve_base";
+
 /// Loaded REVE encoder, guarded so the forwarder can borrow it across threads.
 static ENCODER: Mutex<Option<ReveEncoder>> = Mutex::new(None);
 
@@ -33,6 +36,19 @@ pub fn load_model(model_dir: &str) -> anyhow::Result<String> {
     let desc = encoder.describe();
     debug_assert!(encoder.params().len() > 0, "empty REVE parameter map");
     *ENCODER.lock().unwrap_or_else(|e| e.into_inner()) = Some(encoder);
+    // Experimental REVE heads (ai.a_vig_reve / ai.wake_light_reve) if pack dirs exist.
+    let packs = dir.parent().map(|p| p.to_path_buf());
+    let bundled = crate::analysis::ai_heads::bundled_packs_root();
+    let mut roots: Vec<PathBuf> = vec![bundled];
+    if let Some(p) = packs {
+        roots.push(p);
+    }
+    let root_refs: Vec<&std::path::Path> = roots.iter().map(|p| p.as_path()).collect();
+    match crate::analysis::ai_heads::load_reve_heads(&dir, &root_refs) {
+        Ok(hs) if !hs.is_empty() => log::info!("[reve] ai_heads: {hs:?}"),
+        Ok(_) => log::info!("[reve] ai_heads: no REVE head packs found (experimental features offline)"),
+        Err(e) => log::warn!("[reve] ai_heads: {e}"),
+    }
     log::info!("[reve] loaded: {desc} ({ms_load:.0} ms)");
     Ok(format!("{desc} — loaded in {ms_load:.0} ms"))
 }

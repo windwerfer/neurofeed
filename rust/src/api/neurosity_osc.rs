@@ -63,16 +63,12 @@ pub async fn start_crown_osc_receiver(
 
     let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
 
-    // DeviceConfig for Crown (used for electrode mapping)
     let config = DeviceConfig::neurosity_crown();
     
-    // Band accumulator protected by mutex for concurrent access from OSC handler
     let band_accumulator = Arc::new(Mutex::new(BandAccumulator::default()));
     
-    // Signal quality per electrode (from /signalQuality)
     let signal_quality = Arc::new(Mutex::new([0.5f32; CROWN_ELECTRODE_COUNT]));
     
-    // Latest battery level
     let battery_level = Arc::new(Mutex::new(0.0f32));
     
     // Track if we've seen data from this device_id (filter by serial in address)
@@ -138,7 +134,6 @@ pub async fn start_crown_osc_receiver(
                                 return; // Channel closed
                             }
                         }
-                        // Reset received flags
                         acc.received = [false; 5];
                     }
                 }
@@ -220,7 +215,6 @@ async fn handle_osc_message(
         return Ok(()); // Ignore packets for other devices
     }
 
-    // Parse address pattern
     if addr.ends_with("/raw") {
         handle_raw_eeg(msg, tx).await?;
     } else if addr.ends_with("/brainwaves/delta") {
@@ -299,7 +293,6 @@ async fn handle_raw_eeg(
         return Ok(());
     }
     
-    // Emit one EegDto per electrode with its samples
     for ch in 0..CROWN_ELECTRODE_COUNT {
         let electrode = ch as i32;
         let mut samples = Vec::with_capacity(samples_per_channel);
@@ -420,7 +413,6 @@ pub async fn connect_crown_osc(
     device_id: String,
     tx: mpsc::Sender<MuseEventDto>,
 ) -> anyhow::Result<crate::api::muse::ConnectionStatus> {
-    // Start OSC receiver on default port 9000
     let _handle = start_crown_osc_receiver(device_id.clone(), tx, 9000).await?;
     
     // For OSC, we don't have a traditional "connected" event from the device.

@@ -558,6 +558,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         ..addAll(FeatureOverride.baselineSamples(_guard.featureId));
       _guard.finalizeBaseline(
         warningThresholdPercentile: warningThresholdPercentile,
+        captureAnchor: false,
       );
     }
     debugPrint(
@@ -868,7 +869,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
-  /// Arm the REVE/LUNA sleep-guardrail scorer according to the per-protocol
+  /// Arm the CBraMod/REVE sleep-guardrail scorer according to the per-protocol
   /// setting ([Settings.guardrailEnabledFor]), using the settings-selected
   /// foundation model. Scoring starts immediately in the forwarder (first
   /// embedding lands after ~5 s) so the calibration baseline can capture the
@@ -895,22 +896,27 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     final ffId = settings.guardModel ?? defaultModelKind.ffId;
+    final featureId = settings.guardFeatureFor(state.protocol);
     try {
       final ok = await frb.guardrailEnable(kind: ffId);
       _guard.configure(
         enabled: ok,
         bandMath: false,
-        featureId: guardFeatureAiDrowsiness,
+        featureId: guardFeatureIsAi(featureId)
+            ? featureId
+            : guardFeatureAiAVigReve,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       if (ok) {
-        debugPrint('[guardrail] enabled ($ffId)');
+        debugPrint('[guardrail] enabled ($ffId, feature=$featureId)');
       }
     } catch (e) {
       _guard.configure(
         enabled: false,
         bandMath: false,
-        featureId: guardFeatureAiDrowsiness,
+        featureId: guardFeatureIsAi(featureId)
+            ? featureId
+            : guardFeatureAiAVigReve,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       debugPrint('[guardrail] enable failed: $e');
@@ -2014,7 +2020,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     );
   }
 
-  /// Whether the REVE/LUNA sleep guardrail is actively scoring this session.
+  /// Whether the CBraMod/REVE sleep guardrail is actively scoring this session.
   bool get guardrailEnabled => _guard.enabled;
 
   /// Whether the deep-rest (V_sleep) anchor was captured at calibration end.

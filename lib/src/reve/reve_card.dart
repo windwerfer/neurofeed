@@ -8,9 +8,9 @@ import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/settings.dart';
 
 /// AI-engine setup card: pick which foundation model powers the sleep
-/// guardrail, and download/import/uninstall it. LUNA models are downloaded
-/// directly from Hugging Face (un-gated); REVE is imported from a user-picked
-/// `.safetensors` file (verified by SHA-256) after accepting the model's terms.
+/// guardrail, and download/import/uninstall it. Spur A (CBraMod) ships its
+/// head pack and downloads the Apache-2.0 encoder; REVE is imported from a
+/// user-picked `.safetensors` file after accepting the model's terms.
 class AiEngineCard extends ConsumerStatefulWidget {
   const AiEngineCard({super.key});
 
@@ -47,9 +47,8 @@ class _AiEngineCardState extends ConsumerState<AiEngineCard> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Runs the AI sleep guardrail. Pick a foundation model — '
-              'LUNA downloads straight from Hugging Face; REVE needs the '
-              'license accepted and the file imported.',
+              'Runs the AI sleep guardrail. Spur A (CBraMod A-vig) is the '
+              'default open path; REVE remains an optional gated import.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -102,6 +101,31 @@ class _AiEngineCardState extends ConsumerState<AiEngineCard> {
               Icon(Icons.error_outline, color: theme.colorScheme.error),
               const SizedBox(width: 8),
               Expanded(child: Text(message, style: theme.textTheme.bodySmall)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ModelInstallBubble(kind: modelKind),
+        ];
+      case ModelEngineNotReady(:final reason, :final description):
+        return [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline, color: theme.colorScheme.tertiary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  [
+                    if (description != null && description!.isNotEmpty) description!,
+                    reason,
+                  ].join('\n'),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+              TextButton(
+                onPressed: _uninstall,
+                child: const Text('Uninstall'),
+              ),
             ],
           ),
           const SizedBox(height: 12),

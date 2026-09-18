@@ -131,12 +131,12 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
     surface changes and commit both it and the `lib/src/rust/` Dart files
   - `vendor/rlx-cpu` is a committed `[patch.crates-io]` replacement (its
     default `blas` feature is cleared so no system OpenBLAS is linked on
-    x86_64) — no network fetch needed for it. `reve-rs` and `luna-rs`
-    are **git deps** (`rust/Cargo.toml`: luna-rs at tag `v0.0.4-latent-embedding-fix`
-    on the `windwerfer` fork, reveal-rs at rev `9c8d856…` on upstream `eugenehp`),
-    so cargo fetches them from GitHub directly. The three build workflows also init
-    the `third_party/reve-rs`/`luna-rs` submodules right after checkout, but
-    that is only for reference copies — building does not require it. The
+    x86_64) — no network fetch needed for it. `reve-rs` is a **git dep**
+    (`rust/Cargo.toml`: rev `9c8d856…` on upstream `eugenehp`), so cargo
+    fetches it from GitHub. Spur A CBraMod uses Candle (crates.io) and does
+    not need a git model engine. The three build workflows also init
+    the `third_party/reve-rs` submodule right after checkout, but
+    that is only for a reference copy — building does not require it. The
     init is a **targeted init, not `submodules: true`**:
     the `btleplug` submodule gitlink (`ad6f7650`) is not reachable on the
     fork, so a blanket init could fail CI.
@@ -226,11 +226,10 @@ builds between releases keeps them warm.
   the fork commit; if Cargo rewrites it, keep it. The vendored `rlx-cpu` has
   the same trap: keep its `version = "0.2.13"` semver-compatible with the
   `rlx 0.2` constraint.
-- **`cargo build` fails fetching the model engine**: `reve-rs`/`luna-rs` are git
-  deps (`rust/Cargo.toml`: reveal-rs from upstream `eugenehp` @ rev `9c8d856…`,
-  luna-rs from the `windwerfer` fork @ tag `v0.0.4-latent-embedding-fix`), so a
-  fresh build needs network access to GitHub. If a pinned rev/tag is unreachable,
-  the fork/tag was not pushed — push it first.
+- **`cargo build` fails fetching the model engine**: `reve-rs` is a git
+  dep (`rust/Cargo.toml`: upstream `eugenehp` @ rev `9c8d856…`), so a
+  fresh build needs network access to GitHub. Spur A CBraMod uses Candle from
+  crates.io (no git model engine). If a pinned rev is unreachable, push it first.
 - **Repro reports a diff**: the usual culprit is AGP's "Dependency Info" block
   (id `0x504b4453`) in the APK Signing Block — it is non-deterministic
   (encrypted, randomized per build). `android/app/build.gradle.kts` disables it

@@ -19,8 +19,9 @@ import 'package:muse_ml/src/rust/api/reve.dart' as frb;
 /// Do not silently switch the rail to relative-δ.
 const double guardrailDeltaCeiling = 0.25;
 
-/// `percentileWarn` split: band-math scores native `band.delta`; AI scores
-/// `sleep_dir` and still rails on absolute frontal delta from always-on bands.
+/// `percentileWarn` split: band-math scores native `band.delta`; AI scores the
+/// FeatureDto scalar (P(class1) from the selected head) and still rails on
+/// absolute frontal delta from always-on bands.
 bool percentileWarnOver({
   required bool bandMath,
   required double lastDelta,
@@ -207,6 +208,8 @@ class GuardLane {
       return;
     }
     if (!captureAnchor) {
+      // Skip / last-baseline reuse: percentile warn only — no embedding anchors.
+      clearCaptured = true;
       sleepCaptured = true;
       return;
     }

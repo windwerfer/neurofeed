@@ -58,7 +58,7 @@ void main() {
         }),
       });
       final settings = await Settings.load();
-      expect(settings.guardModel, 'luna_large');
+      expect(settings.guardModel, 'cbramod_a_vig');
       expect(settings.guardFeatureFor('drowsiness'), guardFeatureAiDrowsiness);
       expect(settings.guardFeatureFor('twilight'), guardFeatureAiDrowsiness);
     },

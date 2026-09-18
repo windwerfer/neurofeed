@@ -1,46 +1,52 @@
 //! AI-engine FFI surface: model download/load bookkeeping.
 //!
-//! The app ships no weights. LUNA (`PulpBio/LUNA`, un-gated, Apache-2.0) is
-//! downloaded directly by the app; REVE (`brain-bzh/reve-base`, gated by a
-//! responsible-use agreement, ~280 MB) is imported by the user after accepting
-//! the terms. Either way the files land as `config.json` + `model.safetensors`
-//! in a per-model directory under app storage and are loaded here via the
-//! vendored `reve-rs` / `luna-rs` crates (RLX CPU backend). Scoring itself runs
-//! in `crate::analysis::{reve,luna}` from the event forwarder, not across FFI.
+//! The app ships the Spur A **head pack** (`cbramod-a-vig-full`) but not the
+//! ~20 MB CBraMod encoder blob (SHA-pinned; fetch from HF Apache-2.0). REVE
+//! (`brain-bzh/reve-base`, gated) remains an optional user-imported path.
+//! LUNA has been removed from the ship path.
+//!
+//! Scoring runs in `crate::analysis::{cbramod,reve}` from the event forwarder.
 
-use crate::analysis::{guardrail, luna, reve};
+use crate::analysis::{cbramod, guardrail, reve};
 
-/// Load a model of [kind] (`reve_base` | `luna_base` | `luna_large`) from
-/// [model_dir] (must contain `config.json` and `model.safetensors`) and keep
-/// it ready for scoring. Returns a description of the loaded model (inference
-/// runs on CPU). Re-loads replace any prior model.
+/// Load a model of [kind] (`cbramod_a_vig` | `reve_base`) from [model_dir]
+/// and keep it ready for scoring. Returns a description of the loaded model
+/// (inference runs on CPU). Re-loads replace any prior model.
 pub fn model_load(model_dir: String, kind: String) -> anyhow::Result<String> {
+    // Only one AI backend active at a time.
     match kind.as_str() {
-        luna::KIND_REVE_BASE => reve::load_model(&model_dir),
-        luna::KIND_LUNA_BASE | luna::KIND_LUNA_LARGE => luna::load_model(&model_dir),
+        cbramod::KIND_CBRAMOD_A_VIG => {
+            reve::unload_model();
+            cbramod::load_model(&model_dir)
+        }
+        reve::KIND_REVE_BASE => {
+            cbramod::unload_model();
+            reve::load_model(&model_dir)
+        }
+        "luna_base" | "luna_large" => anyhow::bail!(
+            "Legacy model id disabled — use cbramod_a_vig (Spur A) or reve_base"
+        ),
         other => anyhow::bail!("unknown model kind: {other}"),
     }
 }
 
 /// Drop the loaded model and free its memory.
 pub fn model_unload() {
-    // Drop whichever backend is loaded; unloading both is harmless.
     reve::unload_model();
-    luna::unload_model();
+    cbramod::unload_model();
 }
 
 /// Whether a model is currently loaded.
 pub fn model_loaded() -> bool {
-    reve::is_loaded() || luna::is_loaded()
+    reve::is_loaded() || cbramod::is_loaded()
 }
 
-/// JSON content of the app-generated `config.json` for [kind]. The app writes
-/// this file next to the weights so the loader can describe the graph without
-/// depending on the Hub's own (sometimes partial) config.
+/// JSON content of the app-generated `config.json` for [kind].
 pub fn model_config_json(kind: String) -> anyhow::Result<String> {
     match kind.as_str() {
-        luna::KIND_REVE_BASE => Ok(reve::generated_config_json()),
-        luna::KIND_LUNA_BASE | luna::KIND_LUNA_LARGE => luna::config_json(&kind),
+        cbramod::KIND_CBRAMOD_A_VIG => Ok(cbramod::generated_config_json()),
+        reve::KIND_REVE_BASE => Ok(reve::generated_config_json()),
+        "luna_base" | "luna_large" => anyhow::bail!("Legacy model id disabled — use cbramod_a_vig or reve_base"),
         other => anyhow::bail!("unknown model kind: {other}"),
     }
 }

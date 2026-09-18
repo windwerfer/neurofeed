@@ -1,0 +1,25 @@
+{
+  "pack_id": "cbramod-head-c-wake-light",
+  "encoder": "CBraMod",
+  "task": "Head C wake/light",
+  "labels": [
+    "wake",
+    "light"
+  ],
+  "montage": "muse4",
+  "window": "2s @ 256 Hz n1-slice",
+  "head_file": "heads/head_c_wake_light_linear.pt",
+  "decode": "argmax",
+  "test_macro_f1": 0.7597,
+  "ship_candidate": false,
+  "note": "Probe / research; not 4-way product staging",
+  "sampling": "full corpus subject-holdout",
+  "source_metrics": "muse-eeg-heads/exports/head_c_full_corpus/metrics_summary.json",
+  "feature_id": "ai.wake_light",
+  "in_dim": 200,
+  "n_classes": 2,
+  "head_pt_sha256": "2f4b3f30b1c4e5f57ec2c6dc1234755452edd136490df2523e9ccfc7a1682bce",
+  "head_f32bin_sha256": "cc0415bc1d3fac7c5f7113315b609185b9d1dbc30ffec77c4448c99b060dc925",
+  "feature_dto_value": "P(class1)=P(light)",
+  "feature_dto_note": "Live FeatureDto emits P(light), not argmax. Argmax remains eval decode."
+}

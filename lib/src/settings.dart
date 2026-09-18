@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/audio/output_ids.dart';
 import 'package:muse_ml/src/feedback/feedback_state.dart';
 import 'package:muse_ml/src/feedback/guardrail_mode.dart';
+import 'package:muse_ml/src/reve/model_engine.dart';
+import 'package:muse_ml/src/reve/models.dart';
 import 'package:muse_ml/src/feedback/last_calibration_baseline.dart';
 import 'package:muse_ml/src/agent/agent_flags.dart';
 import 'package:muse_ml/src/feedback/protocol.dart';
@@ -207,6 +209,11 @@ class Settings extends ChangeNotifier {
     }
 
     var guardModel = prefs.getString(_guardModelKey);
+    // LUNA removed: rewrite legacy ffIds to Spur A.
+    if (guardModel == 'luna_large' || guardModel == 'luna_base') {
+      guardModel = 'cbramod_a_vig';
+      await prefs.setString(_guardModelKey, guardModel);
+    }
     if (guardModel == null || guardModel.isEmpty) {
       for (final id in catalogProtocolIds) {
         final v = raw[id];
@@ -219,6 +226,11 @@ class Settings extends ChangeNotifier {
         await prefs.setString(_guardModelKey, guardModel);
       }
     }
+
+    final reveInstalled = await const ModelCache().isInstalledOnDisk(
+      prefs.getString(_sessionFolderKey),
+      ModelKind.reveBase,
+    );
 
     final out = <String, Map<String, String>>{};
     final ids = <String>{...catalogProtocolIds, ...raw.keys};
@@ -233,7 +245,11 @@ class Settings extends ChangeNotifier {
       }
       final parsed = parseGuardFeatureValue(raw[id]);
       if (parsed != null) {
-        out[id] = {'feature': parsed};
+        // Never keep ai.*_reve prefs unless REVE base is actually installed.
+        final feature = (guardFeatureIsReve(parsed) && !reveInstalled)
+            ? guardFeatureBandDelta
+            : parsed;
+        out[id] = {'feature': feature};
       } else if (doc?.guard != null || catalogProtocolIds.contains(id)) {
         // Catalog rows with a guard object default ON (band.delta). Ids in
         // the freeze list that have no document yet still must not throw.
@@ -514,7 +530,7 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Per-protocol guard feature: `band.delta` / `ai.drowsiness` / `none`.
+  /// Per-protocol guard feature: `band.delta` / `ai.*` head ids / `none`.
   /// Documents without a guard lane always return `none`.
   String guardFeatureFor(String protocolId) {
     final doc = _catalog.forName(protocolId);
@@ -532,7 +548,7 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Global installed-model id (`luna_large` / `luna_base` / `reve_base`),
+  /// Global installed-model id (`cbramod_a_vig` / `reve_base` (legacy luna_* migrates to CBraMod)),
   /// or null when unset (band-math).
   String? get guardModel {
     final v = _prefs.getString(_guardModelKey);
@@ -560,10 +576,10 @@ class Settings extends ChangeNotifier {
 
   /// Whether the guardrail runs an AI model for [protocolId].
   bool guardrailIsAiFor(String protocolId) =>
-      guardFeatureFor(protocolId) == guardFeatureAiDrowsiness;
+      guardFeatureIsAi(guardFeatureFor(protocolId));
 
   /// Warning sound shown in the Guardrail tap dialog (`softBowl`/`chime`/
-  /// `cough`/`alarm`/`none`). Placeholder asset names — the files land later.
+  /// `cough`/`alarm`/`none`).
   String get warningSoundName =>
       _prefs.getString(_warningSoundKey) ?? 'softBowl';
 

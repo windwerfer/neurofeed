@@ -5,7 +5,9 @@
       "label": "Alpha over Theta",
       "shortLabel": "ATR",
       "source": "band",
-      "usableFor": ["reward"],
+      "usableFor": [
+        "reward"
+      ],
       "rewardCopy": "Rewards alpha ÷ theta on the feature electrodes.",
       "guardCopy": null
     },
@@ -13,7 +15,9 @@
       "label": "Theta over Alpha",
       "shortLabel": "TAR",
       "source": "band",
-      "usableFor": ["reward"],
+      "usableFor": [
+        "reward"
+      ],
       "rewardCopy": "Rewards theta ÷ alpha on the feature electrodes.",
       "guardCopy": null
     },
@@ -21,7 +25,9 @@
       "label": "Beta over Theta",
       "shortLabel": "BTR",
       "source": "band",
-      "usableFor": ["reward"],
+      "usableFor": [
+        "reward"
+      ],
       "rewardCopy": "Rewards beta ÷ theta on the feature electrodes.",
       "guardCopy": null
     },
@@ -29,7 +35,9 @@
       "label": "Relative alpha",
       "shortLabel": "α",
       "source": "band",
-      "usableFor": ["reward"],
+      "usableFor": [
+        "reward"
+      ],
       "rewardCopy": "Rewards relative alpha on the feature electrodes.",
       "guardCopy": null
     },
@@ -37,23 +45,70 @@
       "label": "Delta (band math)",
       "shortLabel": "δ",
       "source": "band",
-      "usableFor": ["guard"],
+      "usableFor": [
+        "guard"
+      ],
       "rewardCopy": null,
       "guardCopy": "Warns when frontal delta rises relative to your rest baseline."
     },
+    "ai.a_vig": {
+      "label": "CBraMod A-vig",
+      "shortLabel": "A-vig",
+      "source": "ai",
+      "usableFor": [
+        "guard"
+      ],
+      "rewardCopy": null,
+      "guardCopy": "Primary Spur A sleep/drowsy score (frozen CBraMod + A-vig head). FeatureDto value is P(hypnagogic)."
+    },
+    "ai.wake_light": {
+      "label": "CBraMod wake/light",
+      "shortLabel": "Wake/light",
+      "source": "ai",
+      "usableFor": [
+        "guard"
+      ],
+      "rewardCopy": null,
+      "guardCopy": "CBraMod Head C wake vs light-sleep probe. FeatureDto value is P(light)."
+    },
+    "ai.a_vig_reve": {
+      "label": "REVE A-vig (exp.)",
+      "shortLabel": "REVE A-vig",
+      "source": "ai",
+      "usableFor": [
+        "guard"
+      ],
+      "rewardCopy": null,
+      "guardCopy": "Experimental REVE A-vig subsample head (needs gated REVE base). FeatureDto value is P(hypnagogic)."
+    },
+    "ai.wake_light_reve": {
+      "label": "REVE wake/light (exp.)",
+      "shortLabel": "REVE W/L",
+      "source": "ai",
+      "usableFor": [
+        "guard"
+      ],
+      "rewardCopy": null,
+      "guardCopy": "Experimental REVE Head C wake/light subsample (needs gated REVE base). FeatureDto value is P(light)."
+    },
     "ai.drowsiness": {
-      "label": "AI drowsiness",
+      "label": "AI drowsiness (legacy)",
       "shortLabel": "AI sleep",
       "source": "ai",
-      "usableFor": ["guard"],
+      "usableFor": [
+        "guard"
+      ],
       "rewardCopy": null,
-      "guardCopy": "Warns when the live embedding points toward sleep."
+      "guardCopy": "Deprecated alias of ai.a_vig — same P(hypnagogic) scalar from Spur A."
     },
     "device.focus": {
       "label": "Crown focus",
       "shortLabel": "Focus",
       "source": "device",
-      "usableFor": ["reward", "guard"],
+      "usableFor": [
+        "reward",
+        "guard"
+      ],
       "rewardCopy": "Crown-native focus score (0–1).",
       "guardCopy": "Warns from the Crown-native focus score."
     },
@@ -61,7 +116,10 @@
       "label": "Crown calm",
       "shortLabel": "Calm",
       "source": "device",
-      "usableFor": ["reward", "guard"],
+      "usableFor": [
+        "reward",
+        "guard"
+      ],
       "rewardCopy": "Crown-native calm score (0–1).",
       "guardCopy": "Warns from the Crown-native calm score."
     }

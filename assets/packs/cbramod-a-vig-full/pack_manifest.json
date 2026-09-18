@@ -1,0 +1,32 @@
+{
+  "pack_id": "cbramod-a-vig-full",
+  "encoder": "CBraMod",
+  "task": "A-vig",
+  "labels": [
+    "drowsy",
+    "hypnagogic"
+  ],
+  "montage": "muse4",
+  "window": "2s @ 256 Hz",
+  "head_file": "heads/head_a_vig_linear.pt",
+  "decode": "argmax",
+  "test_macro_f1": 0.7469,
+  "ship_candidate": true,
+  "sampling": "full corpus subject-holdout",
+  "source_metrics": "muse-eeg-heads/exports/head_a_vig_full_corpus/metrics_summary.json",
+  "encoder_weights": "HF weighting666/CBraMod pretrained_weights.pth (Apache-2.0); do not bundle gated weights",
+  "encoder_sha256": "0792cb808c14e6b7a2bb2ce1dff379bc47bc54c49a779825bdfeb33bf8157178",
+  "encoder_hf_url": "https://huggingface.co/weighting666/CBraMod/resolve/main/pretrained_weights.pth",
+  "encoder_weights_filename": "pretrained_weights.pth",
+  "head_sha256": "b34730c8eb1415427119bda368394b0b5dfa7d991c5b46cd22f863912efdd62b",
+  "embedding_dim": 200,
+  "n_times": 512,
+  "ff_id": "cbramod_a_vig",
+  "feature_id": "ai.a_vig",
+  "in_dim": 200,
+  "n_classes": 2,
+  "feature_dto_value": "P(class1)=P(hypnagogic)",
+  "feature_dto_note": "Live FeatureDto emits P(hypnagogic), not argmax. Argmax remains eval decode.",
+  "head_f32bin_sha256": "2695ce91cc5e9cbb8d6f29fc4bfff9b6f1294c106cced6fa2657d4bf6c26ba96",
+  "head_c_wake_light_f32bin_sha256": "cc0415bc1d3fac7c5f7113315b609185b9d1dbc30ffec77c4448c99b060dc925"
+}

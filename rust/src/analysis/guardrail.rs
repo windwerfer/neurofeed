@@ -5,7 +5,7 @@
 //! window while a model is loaded and the guardrail is enabled, then feeds the
 //! pooled latent here via [`set_live_embedding`]. Calibration (Dart side) calls
 //! [`capture_anchor`] to freeze `V_clear` (awake) and `V_sleep` (deepest rest).
-//! Anchors are tagged with the model kind they were captured under so a LUNA
+//! Anchors are tagged with the model kind they were captured under so a prior
 //! vector is never compared against a REVE one.
 //!
 //! Score semantics (see `lib/src/feedback/protocol.dart`, Sleep-Edge Rest):
@@ -25,7 +25,7 @@ pub const ANCHOR_CLEAR: &str = "clear";
 pub const ANCHOR_SLEEP: &str = "sleep";
 
 /// A captured reference embedding, tagged with the model kind it was taken
-/// under so a LUNA vector is never compared against a REVE one.
+/// under so a CBraMod vector is never compared against a REVE one.
 #[derive(Clone)]
 pub struct Anchor {
     pub kind: String,
@@ -72,9 +72,8 @@ fn lock() -> std::sync::MutexGuard<'static, Guardrail> {
 /// Enable the guardrail for [kind] and drop any anchors/live vector. Returns
 /// false when [kind] is not a known model kind.
 pub fn enable(kind: &str) -> bool {
-    let valid = kind == crate::analysis::luna::KIND_REVE_BASE
-        || kind == crate::analysis::luna::KIND_LUNA_BASE
-        || kind == crate::analysis::luna::KIND_LUNA_LARGE;
+    let valid = kind == crate::analysis::reve::KIND_REVE_BASE
+        || kind == crate::analysis::cbramod::KIND_CBRAMOD_A_VIG;
     if !valid {
         return false;
     }
@@ -295,12 +294,12 @@ mod tests {
     fn enable_capture_and_score() {
         disable();
         assert!(!is_enabled());
-        assert!(enable("luna_base"));
+        assert!(enable("cbramod_a_vig"));
         assert!(!enable("nope"), "unknown kind rejected");
         assert!(is_enabled());
         assert!(capture_anchor(ANCHOR_CLEAR).is_err(), "no live embedding yet");
 
-        set_live_embedding("luna_base".to_string(), v(0.1, 16));
+        set_live_embedding("cbramod_a_vig".to_string(), v(0.1, 16));
         assert_eq!(live_dim(), 16);
         let ok = capture_anchor(ANCHOR_CLEAR).expect("clear capture after live");
         assert!(ok.contains("V_clear"));
@@ -312,7 +311,7 @@ mod tests {
         assert!((sd - 0.0).abs() < 1e-5, "1 - clarity = 0");
 
         // A distant live vector raises sleep_dir and feeds the sleep peak.
-        set_live_embedding("luna_base".to_string(), v(3.0, 16));
+        set_live_embedding("cbramod_a_vig".to_string(), v(3.0, 16));
         let (_, sd) = clarity_and_sleep_dir().expect("scored");
         let sd = sd.unwrap();
         assert!(sd > 0.3, "distant vector → elevated sleep_dir ({sd})");
