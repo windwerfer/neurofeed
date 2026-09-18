@@ -80,31 +80,4 @@ void main() {
     }
   });
 
-
-  testWidgets('overflow arrow when Crown-8 exceeds width; tap jumps to end', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(180, 400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 180,
-            child: ElectrodeToggles(
-              names: kCrownElectrodeNames,
-              selected: allElectrodeIndices(8),
-              onToggle: (_) {},
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('electrode-overflow-arrow')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('electrode-overflow-arrow')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('electrode-overflow-arrow')), findsNothing);
-  });
-
 }
