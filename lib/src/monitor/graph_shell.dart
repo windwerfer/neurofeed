@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:muse_ml/src/connection_provider.dart';
@@ -164,9 +165,10 @@ class GraphShell extends ConsumerWidget {
 
 
 /// Horizontally pannable GraphShell toolbar. When Follow/Inspect + electrodes
-/// (etc.) overflow the width, drag anywhere on the row pans the whole strip
-/// so electrodes slide into view (leading chrome slides off first). Chevron
-/// jumps to the end.
+/// (etc.) overflow the width, drag anywhere on the row (mouse or touch,
+/// including over electrode chips) pans the whole strip so electrodes slide
+/// into view (leading chrome slides off first). Taps still toggle chips.
+/// Chevron jumps to the end.
 class _PannableChromeRow extends StatefulWidget {
   const _PannableChromeRow({required this.children});
 
@@ -230,13 +232,18 @@ class _PannableChromeRowState extends State<_PannableChromeRow> {
     return LayoutBuilder(
       builder: (context, constraints) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _recomputeOverflow());
-        final scrollable = SingleChildScrollView(
-          controller: _scroll,
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: widget.children,
+        // Desktop defaults omit mouse from dragDevices, so Linux mouse-drag
+        // never pans; touch/trackpad may still work. Enable mouse + touch.
+        final scrollable = ScrollConfiguration(
+          behavior: const _ChromePanScrollBehavior(),
+          child: SingleChildScrollView(
+            controller: _scroll,
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: widget.children,
+            ),
           ),
         );
         return Row(
@@ -259,6 +266,19 @@ class _PannableChromeRowState extends State<_PannableChromeRow> {
       },
     );
   }
+}
+
+/// Mouse + touch (+ stylus/trackpad) can drag-pan the chrome strip.
+class _ChromePanScrollBehavior extends MaterialScrollBehavior {
+  const _ChromePanScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => const {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.trackpad,
+      };
 }
 
 class _RecordControls extends ConsumerStatefulWidget {

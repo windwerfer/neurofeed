@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muse_ml/src/monitor/electrode_toggles.dart';
@@ -260,5 +261,56 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chrome-overflow-arrow')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('chrome-overflow-arrow')), findsNothing);
+  });
+
+  testWidgets('mouse drag on chrome electrodes pans the strip', (tester) async {
+    _portrait(tester);
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    final viewport = ViewportController();
+    addTearDown(viewport.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GraphShell(
+            title: 'Bands',
+            viewport: viewport,
+            windowOptions: ViewportController.bandsWindowOptions,
+            onFollow: () {},
+            onInspect: () {},
+            onWindowChanged: (_) {},
+            showRecord: true,
+            toolbarExtras: ElectrodeToggles(
+              names: kCrownElectrodeNames,
+              selected: allElectrodeIndices(8),
+              onToggle: (_) {},
+            ),
+            body: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chrome-overflow-arrow')), findsOneWidget);
+
+    final scrollable = find.byType(SingleChildScrollView);
+    expect(scrollable, findsOneWidget);
+    final controller = tester
+        .widget<SingleChildScrollView>(scrollable)
+        .controller!;
+    expect(controller.offset, 0);
+
+    // Drag left over the electrode chips (mouse) — strip should pan.
+    final chips = find.byType(ToggleButtons);
+    expect(chips, findsOneWidget);
+    final gesture = await tester.startGesture(
+      tester.getCenter(chips),
+      kind: PointerDeviceKind.mouse,
+    );
+    await gesture.moveBy(const Offset(-120, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(controller.offset, greaterThan(0));
   });
 }
