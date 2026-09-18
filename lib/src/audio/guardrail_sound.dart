@@ -1,8 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-/// Guardrail warning sounds. Placeholder asset names — the actual audio files
-/// land later; missing assets fail a load gracefully and the warning just
-/// stays silent that session.
+/// Guardrail warning sounds. Missing assets fail a load gracefully and the
+/// warning stays silent that session.
 enum GuardrailSound {
   softBowl(
     label: 'Soft bowl',

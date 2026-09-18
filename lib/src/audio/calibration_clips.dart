@@ -95,7 +95,7 @@ class CalibrationStep {
   final String id;
   final String file;
 
-  /// Spoken transcript of the clip (placeholder until real recordings exist).
+  /// Spoken transcript of the clip.
   final String text;
 
   /// Collection seconds associated with this step. 0 for intro variants (the

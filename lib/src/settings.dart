@@ -579,7 +579,7 @@ class Settings extends ChangeNotifier {
       guardFeatureIsAi(guardFeatureFor(protocolId));
 
   /// Warning sound shown in the Guardrail tap dialog (`softBowl`/`chime`/
-  /// `cough`/`alarm`/`none`). Placeholder asset names — the files land later.
+  /// `cough`/`alarm`/`none`).
   String get warningSoundName =>
       _prefs.getString(_warningSoundKey) ?? 'softBowl';
 

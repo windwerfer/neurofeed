@@ -597,7 +597,6 @@ pub fn container_encode_v5(
     let computed_compressed = zstd::encode_all(std::io::Cursor::new(computed_json), 3).unwrap_or_default();
     let raw_compressed = zstd::encode_all(std::io::Cursor::new(raw_body), 3).unwrap_or_default();
 
-    // Build header with offsets.
     let mut offset = V5_HEADER_SIZE as u64 + thumbnail.len() as u64;
     let thumbnail_offset = V5_HEADER_SIZE as u64;
     let thumbnail_length = thumbnail.len() as u64;
@@ -610,7 +609,7 @@ pub fn container_encode_v5(
     let raw_offset = offset;
     // raw_length not stored; compute from file size.
 
-    // Build header bytes (60 bytes).
+    // Build header bytes (V5_HEADER_SIZE = 68).
     let mut header = Vec::with_capacity(V5_HEADER_SIZE);
     header.extend_from_slice(&V5_MAGIC);
     header.push(V5_VERSION);
@@ -622,7 +621,7 @@ pub fn container_encode_v5(
     header.extend_from_slice(&computed_offset.to_le_bytes());
     header.extend_from_slice(&computed_length.to_le_bytes());
     header.extend_from_slice(&raw_offset.to_le_bytes());
-    // CRC32 of first 56 bytes (header without CRC).
+    // CRC32 of first 64 bytes (header without CRC).
     let crc = crc32(&header);
     header.extend_from_slice(&crc.to_le_bytes());
     assert_eq!(header.len(), V5_HEADER_SIZE);
@@ -1325,8 +1324,8 @@ MuseEventDto::Bands(BandsDto {
 
         let mut file = container_encode_v5(&thumbnail, metadata, &computed, raw);
 
-        // Corrupt the CRC32 (last 4 bytes of header).
-        file[56] ^= 0xFF;
+        // Corrupt the CRC32 (last 4 bytes of header, at 64..68).
+        file[64] ^= 0xFF;
 
         // Should fail to parse.
         assert!(v5_parse_header(&file).is_err());
