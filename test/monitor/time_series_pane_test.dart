@@ -6,6 +6,7 @@ import 'package:muse_ml/src/charts/band_style.dart';
 import 'package:muse_ml/src/monitor/band_toggles.dart';
 import 'package:muse_ml/src/monitor/cache/band_cache.dart';
 import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
+import 'package:muse_ml/src/monitor/viewport_controller.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 BandsDto _bands({
@@ -92,6 +93,40 @@ void main() {
       ),
       isNull,
     );
+  });
+
+
+  test('resolveHighlightElapsed pins Follow+lead flush-right to visEnd', () {
+    final follow = resolveHighlightElapsed(
+      mode: ViewportMode.follow,
+      followLeadSeconds: 1,
+      visEnd: 40,
+      highlightStart: 22,
+      highlightEnd: 30,
+    );
+    expect(follow, isNotNull);
+    expect(follow!.$1, closeTo(32, 1e-9));
+    expect(follow.$2, closeTo(40, 1e-9));
+
+    final inspect = resolveHighlightElapsed(
+      mode: ViewportMode.inspect,
+      followLeadSeconds: 1,
+      visEnd: 40,
+      highlightStart: 22,
+      highlightEnd: 30,
+    );
+    expect(inspect!.$1, closeTo(22, 1e-9));
+    expect(inspect.$2, closeTo(30, 1e-9));
+
+    final noLead = resolveHighlightElapsed(
+      mode: ViewportMode.follow,
+      followLeadSeconds: 0,
+      visEnd: 40,
+      highlightStart: 22,
+      highlightEnd: 30,
+    );
+    expect(noLead!.$1, closeTo(22, 1e-9));
+    expect(noLead.$2, closeTo(30, 1e-9));
   });
 
   test('hidden band is omitted from visibility helper', () {
