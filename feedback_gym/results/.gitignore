@@ -1,0 +1,5 @@
+# Keep directory; ignore bulk run artifacts
+*
+!.gitignore
+!.gitkeep
+!latest_run_id.txt

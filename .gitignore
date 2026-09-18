@@ -57,3 +57,9 @@ android/.kotlin/
 /windows/flutter/
 .zed/
 .local/
+
+# feedback_gym: ignore dated run folders; keep .gitkeep via results/.gitignore
+feedback_gym/results/*/
+
+# feedback_gym: built external corpora (rebuild via runners/build_corpus_sleep_edf.py)
+feedback_gym/corpora/external/*.npz

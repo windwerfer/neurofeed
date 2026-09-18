@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "description": "Corpus pointers for feedback_gym. Synthetic demo ships in-repo so the gym runs without muse-eeg-heads on disk.",
+  "synthetic": {
+    "id": "demo_session",
+    "path": "corpora/synthetic/demo_session.npz",
+    "generator": "runners.helpers.generate_synthetic_corpus",
+    "hz": 1,
+    "notes": "Wake then drowsy regimes; band ratios + relative bands + precomputed AI score columns + drowsy labels."
+  },
+  "external": [
+    {
+      "id": "sleep_edf_test",
+      "optional": true,
+      "path": "corpora/external/sleep_edf_test.npz",
+      "gitignored": true,
+      "preset": "sleep-edf-test",
+      "rebuild": "python3 runners/build_corpus_sleep_edf.py [--max-windows-per-rec 500]",
+      "run": "python3 runners/run_gym.py --preset sleep-edf-test",
+      "sources": {
+        "windows": "../muse-eeg-heads/kaggle_datasets/muse-eeg-heads-windows/vigilance_sleep_edf/windows/*_windows.npz",
+        "splits": "../muse-eeg-heads/kaggle_datasets/muse-eeg-heads-windows/vigilance_sleep_edf/splits/test_subjects.json",
+        "emb_cache": "../muse-eeg-heads/exports/head_c_full_corpus/emb_cache/{REC}_emb.npz",
+        "band_math": "../muse-eeg-heads/band_math/features/flutter_bands.py",
+        "heads": "assets/packs/cbramod-a-vig-full/heads/head_{a_vig,c_wake_light}_linear.f32bin",
+        "reve_emb_cache": "../muse-eeg-heads/exports/reve_sleep_heads_local/emb_cache/{REC}_emb.npz",
+        "reve_heads": "assets/packs/reve-*-subsample/heads/*_reve_linear.f32bin"
+      },
+      "labels": "windows y / emb y_a: 0=drowsy (negative), 1=hypnagogic",
+      "cal_policy": "first cal_n=90 samples of concatenated test stream (sessions typically start wake/low-y)",
+      "ai": "softmax P(class1) from emb @ W.T + b; CBraMod W(2,200); REVE W(2,512) subsample-aligned; no encoder forward",
+      "notes": "REVE columns optional (subsample emb_cache, NaN-padded). Falls back to synthetic if paths missing."
+    },
+    {
+      "id": "muse-eeg-heads-band-math",
+      "optional": true,
+      "hint": "../muse-eeg-heads/band_math (sibling of neurofeed on worker)",
+      "docs": [
+        "COMPARE_AI_VS_BAND.md",
+        "windows/splits under band_math/"
+      ],
+      "how_to_wire": "Prefer --preset sleep-edf-test (builds NPZ). Or point --corpus at any NPZ matching demo_session schema."
+    }
+  ],
+  "schema": {
+    "required": [
+      "cal_n",
+      "delta_rel",
+      "theta_rel",
+      "alpha_rel",
+      "beta_rel"
+    ],
+    "feature_columns": {
+      "band.atr": "band_atr",
+      "band.tar": "band_tar",
+      "band.btr": "band_btr",
+      "band.alpha": "band_alpha",
+      "band.delta": "band_delta",
+      "ai.a_vig": "ai_a_vig",
+      "ai.wake_light": "ai_wake_light",
+      "ai.a_vig_reve": "ai_a_vig_reve",
+      "ai.wake_light_reve": "ai_wake_light_reve",
+      "ai.drowsiness": "ai_drowsiness"
+    },
+    "optional": [
+      "labels",
+      "delta_abs",
+      "recording_id",
+      "label_names"
+    ],
+    "device_features": [
+      "device.focus",
+      "device.calm"
+    ]
+  }
+}
