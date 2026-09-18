@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:muse_ml/src/monitor/electrode_toggles.dart';
 import 'package:muse_ml/src/monitor/graph_shell.dart';
+import 'package:muse_ml/src/monitor/device_montage.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
 
 void _portrait(WidgetTester tester) {
@@ -222,5 +224,41 @@ void main() {
     await tester.tap(find.text('Follow'));
     await tester.pump();
     expect(viewport.mode, ViewportMode.inspect);
+  });
+
+  testWidgets('chrome overflow arrow when whole toolbar exceeds width; tap jumps to end', (
+    tester,
+  ) async {
+    _portrait(tester);
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    final viewport = ViewportController();
+    addTearDown(viewport.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GraphShell(
+            title: 'Bands',
+            viewport: viewport,
+            windowOptions: ViewportController.bandsWindowOptions,
+            onFollow: () {},
+            onInspect: () {},
+            onWindowChanged: (_) {},
+            showRecord: true,
+            toolbarExtras: ElectrodeToggles(
+              names: kCrownElectrodeNames,
+              selected: allElectrodeIndices(8),
+              onToggle: (_) {},
+            ),
+            body: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chrome-overflow-arrow')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('chrome-overflow-arrow')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('chrome-overflow-arrow')), findsNothing);
   });
 }
