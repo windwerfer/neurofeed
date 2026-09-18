@@ -12,6 +12,7 @@ import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/monitor/monitor_state.dart';
 import 'package:muse_ml/src/monitor/panes/sweep_pane.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:muse_ml/src/settings.dart';
 import 'package:muse_ml/src/rust/api/session_format.dart';
 
 class RawEegView extends ConsumerStatefulWidget {
@@ -36,6 +37,10 @@ class _RawEegViewState extends ConsumerState<RawEegView> {
   void initState() {
     super.initState();
     _sweepBuffer = ref.read(monitorControllerProvider.notifier).sweepBuffer;
+    final saved = ref.read(settingsProvider).monitorWindowSeconds('rawEeg');
+    if (saved != null && saved > 0) {
+      _viewport.windowSeconds = saved;
+    }
     _sweepBuffer.setDisplayWindow(_viewport.windowSamples);
     if (_sweepBuffer.frozen) _sweepBuffer.resume();
     _viewport.addListener(_onChrome);
@@ -231,7 +236,10 @@ class _RawEegViewState extends ConsumerState<RawEegView> {
       windowOptions: ViewportController.eegWindowOptions,
       onFollow: _follow,
       onInspect: _inspect,
-      onWindowChanged: (s) => _viewport.setWindowSeconds(s, buffer),
+      onWindowChanged: (s) {
+        _viewport.setWindowSeconds(s, buffer);
+        ref.read(settingsProvider).setMonitorWindowSeconds('rawEeg', s);
+      },
       toolbarExtras: _yMenu(context),
       body: Listener(
         onPointerSignal: (e) {

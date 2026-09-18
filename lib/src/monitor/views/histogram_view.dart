@@ -12,6 +12,7 @@ import 'package:muse_ml/src/monitor/panes/histogram_pane.dart';
 import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
 import 'package:muse_ml/src/monitor/split_pane_tick.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:muse_ml/src/settings.dart';
 
 enum HistogramUvRange { uv50, uv100, uv200 }
 
@@ -42,6 +43,15 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
   void initState() {
     super.initState();
     _mon = ref.read(monitorControllerProvider.notifier);
+    final settings = ref.read(settingsProvider);
+    final epoch = settings.monitorWindowSeconds('histogram');
+    if (epoch != null && epoch > 0) {
+      _viewport.windowSeconds = epoch;
+    }
+    final strip = settings.monitorDetailWindowSeconds('histogram');
+    if (strip != null && strip > 0) {
+      _strip.windowSeconds = strip;
+    }
     _mon.sweepBuffer.addListener(_onSweep);
     _mon.bandCache.addListener(_onBands);
     _viewport.addListener(_onEpoch);
@@ -161,11 +171,12 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
       return;
     }
     final bandNewest = _bandNewest();
+    _strip.noteStripSample(bandNewest);
     _tick.recomputeSeries(
       cache: _mon.bandCache,
       electrodes: _selected,
       startElapsed: _strip.stripVisibleStart(newestElapsed: bandNewest),
-      endElapsed: _strip.stripVisibleEnd(newestElapsed: bandNewest),
+      endElapsed: bandNewest,
       captureStartedAtMs: ref
           .read(monitorControllerProvider)
           .captureStartedAtMs,
@@ -203,6 +214,9 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
         contextOldestElapsed: _bandOldest(),
       );
     }
+    final settings = ref.read(settingsProvider);
+    settings.setMonitorWindowSeconds('histogram', seconds);
+    settings.setMonitorDetailWindowSeconds('histogram', _strip.windowSeconds);
   }
 
   Widget _uvMenu(BuildContext context) {
@@ -322,6 +336,9 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
               ),
               connected: connected,
               waiting: connected && !_mon.bandCache.hasData,
+              onStripWindowChanged: (s) => ref
+                  .read(settingsProvider)
+                  .setMonitorDetailWindowSeconds('histogram', s),
             );
           },
         ),

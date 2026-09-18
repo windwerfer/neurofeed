@@ -6,6 +6,7 @@ import 'package:muse_ml/src/charts/band_style.dart';
 import 'package:muse_ml/src/monitor/band_toggles.dart';
 import 'package:muse_ml/src/monitor/cache/band_cache.dart';
 import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
+import 'package:muse_ml/src/monitor/viewport_controller.dart';
 import 'package:muse_ml/src/rust/api/muse.dart';
 
 BandsDto _bands({
@@ -94,6 +95,40 @@ void main() {
     );
   });
 
+
+  test('resolveHighlightElapsed pins Follow+lead flush-right to visEnd', () {
+    final follow = resolveHighlightElapsed(
+      mode: ViewportMode.follow,
+      followLeadSeconds: 1,
+      visEnd: 40,
+      highlightStart: 22,
+      highlightEnd: 30,
+    );
+    expect(follow, isNotNull);
+    expect(follow!.$1, closeTo(32, 1e-9));
+    expect(follow.$2, closeTo(40, 1e-9));
+
+    final inspect = resolveHighlightElapsed(
+      mode: ViewportMode.inspect,
+      followLeadSeconds: 1,
+      visEnd: 40,
+      highlightStart: 22,
+      highlightEnd: 30,
+    );
+    expect(inspect!.$1, closeTo(22, 1e-9));
+    expect(inspect.$2, closeTo(30, 1e-9));
+
+    final noLead = resolveHighlightElapsed(
+      mode: ViewportMode.follow,
+      followLeadSeconds: 0,
+      visEnd: 40,
+      highlightStart: 22,
+      highlightEnd: 30,
+    );
+    expect(noLead!.$1, closeTo(22, 1e-9));
+    expect(noLead.$2, closeTo(30, 1e-9));
+  });
+
   test('hidden band is omitted from visibility helper', () {
     expect(isBandVisible(0, {0, 2}), isTrue);
     expect(isBandVisible(1, {0, 2}), isFalse);
@@ -167,5 +202,44 @@ void main() {
     expect(series[0], hasLength(2));
     expect(series[0][0].elapsed, closeTo(0, 1e-9));
     expect(series[0][1].elapsed, closeTo(1, 1e-9));
+  });
+
+  test('highlightHitTest is true only inside the highlight band', () {
+    expect(
+      highlightHitTest(
+        localX: 50,
+        chartLeft: 0,
+        chartWidth: 100,
+        visStart: 0,
+        visEnd: 100,
+        highlightStart: 40,
+        highlightEnd: 60,
+      ),
+      isTrue,
+    );
+    expect(
+      highlightHitTest(
+        localX: 20,
+        chartLeft: 0,
+        chartWidth: 100,
+        visStart: 0,
+        visEnd: 100,
+        highlightStart: 40,
+        highlightEnd: 60,
+      ),
+      isFalse,
+    );
+    expect(
+      highlightHitTest(
+        localX: 36 + 25,
+        chartLeft: 36,
+        chartWidth: 200,
+        visStart: 10,
+        visEnd: 40,
+        highlightStart: 20,
+        highlightEnd: 30,
+      ),
+      isTrue,
+    );
   });
 }

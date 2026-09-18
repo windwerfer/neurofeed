@@ -16,25 +16,40 @@ Float64List _db({int n = 129, double fill = -40, int? hotBin, double hot = 0}) {
   return db;
 }
 
+Float64List _nanDb({int n = 129}) {
+  final db = Float64List(n);
+  for (var i = 0; i < n; i++) {
+    db[i] = double.nan;
+  }
+  return db;
+}
+
 SpectrogramPanePainter _painter({
-  required List<StftColumn> columns,
   ViewportController? viewport,
   double newestElapsed = 20,
+  double wallNow = 0,
   double magMin = -40,
   double magMax = 0,
   bool connected = true,
   ui.Image? heatmap,
+  double? heatFirstElapsed,
+  double? heatHopSec,
+  int? heatColumnCount,
 }) {
   return SpectrogramPanePainter(
-    columns: columns,
     viewport: viewport ?? ViewportController(),
     newestElapsed: newestElapsed,
+    wallNow: wallNow,
     magMin: magMin,
     magMax: magMax,
     connected: connected,
     heatmap: heatmap,
+    heatFirstElapsed: heatFirstElapsed,
+    heatHopSec: heatHopSec,
+    heatColumnCount: heatColumnCount,
     axisColor: const Color(0xFF888888),
     gridColor: const Color(0xFF444444),
+    chartBackground: const Color(0xFF121212),
   );
 }
 
@@ -47,54 +62,53 @@ void _expectBgra(Uint8List bytes, int offset, Color color) {
 }
 
 void main() {
-  test('shouldRepaint when columns change', () {
-    final a = [StftColumn(0, _db())];
-    final b = [StftColumn(0.25, _db())];
-    expect(_painter(columns: b).shouldRepaint(_painter(columns: a)), isTrue);
-    expect(_painter(columns: a).shouldRepaint(_painter(columns: a)), isFalse);
+  test('shouldRepaint when heat geometry changes', () {
+    expect(
+      _painter(heatFirstElapsed: 1).shouldRepaint(_painter(heatFirstElapsed: 0)),
+      isTrue,
+    );
+    expect(
+      _painter(heatHopSec: 0.5).shouldRepaint(_painter(heatHopSec: 0.25)),
+      isTrue,
+    );
+    expect(
+      _painter(heatColumnCount: 2).shouldRepaint(_painter(heatColumnCount: 1)),
+      isTrue,
+    );
+    expect(_painter().shouldRepaint(_painter()), isFalse);
   });
 
   test('shouldRepaint when mag range changes', () {
-    final cols = [StftColumn(0, _db())];
     expect(
-      _painter(
-        columns: cols,
-        magMin: -20,
-      ).shouldRepaint(_painter(columns: cols, magMin: -40)),
+      _painter(magMin: -20).shouldRepaint(_painter(magMin: -40)),
       isTrue,
     );
     expect(
-      _painter(
-        columns: cols,
-        magMax: -10,
-      ).shouldRepaint(_painter(columns: cols, magMax: 0)),
+      _painter(magMax: -10).shouldRepaint(_painter(magMax: 0)),
       isTrue,
     );
+    expect(_painter().shouldRepaint(_painter()), isFalse);
+  });
+
+  test('shouldRepaint when wallNow changes', () {
     expect(
-      _painter(columns: cols).shouldRepaint(_painter(columns: cols)),
-      isFalse,
+      _painter(wallNow: 1).shouldRepaint(_painter(wallNow: 0)),
+      isTrue,
     );
   });
 
   test(
     'shouldRepaint when newestElapsed or viewport identity fields change',
     () {
-      final cols = [StftColumn(0, _db())];
       expect(
-        _painter(
-          columns: cols,
-          newestElapsed: 21,
-        ).shouldRepaint(_painter(columns: cols, newestElapsed: 20)),
+        _painter(newestElapsed: 21).shouldRepaint(_painter(newestElapsed: 20)),
         isTrue,
       );
       final inspect = ViewportController()
         ..mode = ViewportMode.inspect
         ..inspectStartElapsed = 4;
       expect(
-        _painter(
-          columns: cols,
-          viewport: inspect,
-        ).shouldRepaint(_painter(columns: cols)),
+        _painter(viewport: inspect).shouldRepaint(_painter()),
         isTrue,
       );
     },
@@ -145,5 +159,36 @@ void main() {
       bmp.pixelOffset(1, 0),
       SpectrogramPanePainter.colorFor(1),
     );
+  });
+
+  test('NaN / empty STFT bins rasterize transparent (not colormap blue)', () {
+    final cols = [
+      StftColumn(0, _nanDb()),
+      StftColumn(0.25, _db(fill: 0)),
+    ];
+    final bmp = rasterizeSpectrogramBgra(cols, magMin: -40, magMax: 0)!;
+    expect(bmp.width, 2);
+    // Empty column stays fully transparent (surface shows through).
+    final emptyOff = bmp.pixelOffset(0, 0);
+    expect(bmp.bytes.sublist(emptyOff, emptyOff + 4), [0, 0, 0, 0]);
+    // Signal column still maps magMax to the last colormap stop.
+    _expectBgra(
+      bmp.bytes,
+      bmp.pixelOffset(1, 0),
+      SpectrogramPanePainter.colorFor(1),
+    );
+  });
+
+  test('stftColumns marks all-NaN windows as empty db', () {
+    final n = kDefaultFftN;
+    final samples = Float64List(n * 2);
+    for (var i = 0; i < samples.length; i++) {
+      samples[i] = double.nan;
+    }
+    final cols = stftColumns(samples, startElapsed: 0);
+    expect(cols, isNotEmpty);
+    for (final c in cols) {
+      expect(c.db.every((v) => v.isNaN), isTrue);
+    }
   });
 }

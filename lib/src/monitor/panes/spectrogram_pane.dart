@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:muse_ml/src/monitor/dsp.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
 
@@ -38,13 +39,17 @@ SpectrogramHeatmapBgra? rasterizeSpectrogramBgra(
   }
   if (height < 1) return null;
 
+  // Zero-filled = transparent. Non-finite / empty bins stay clear so the
+  // chart surface shows through (not colormap stop 0 / viridis blue).
   final bytes = Uint8List(width * height * 4);
   final magSpan = magMax - magMin;
   for (var x = 0; x < columns.length; x++) {
     final db = columns[x].db;
     final limit = height < db.length ? height : db.length;
     for (var k = 0; k < limit; k++) {
-      final t = magSpan.abs() < 1e-9 ? 0.0 : (db[k] - magMin) / magSpan;
+      final v = db[k];
+      if (!v.isFinite) continue;
+      final t = magSpan.abs() < 1e-9 ? 0.0 : (v - magMin) / magSpan;
       final argb = SpectrogramPanePainter.colorFor(t).toARGB32();
       final offset = ((height - 1 - k) * width + x) * 4;
       bytes[offset] = argb & 0xFF;
@@ -78,19 +83,38 @@ class SpectrogramPane extends StatefulWidget {
   State<SpectrogramPane> createState() => _SpectrogramPaneState();
 }
 
-class _SpectrogramPaneState extends State<SpectrogramPane> {
+class _SpectrogramPaneState extends State<SpectrogramPane>
+    with SingleTickerProviderStateMixin {
   ui.Image? _heatmap;
+  /// Geometry frozen with [_heatmap] so hop rebuilds do not shift X —
+  /// only the Follow ticker / [wallNow] drives horizontal motion (Bands).
+  double? _heatFirstElapsed;
+  double? _heatHopSec;
+  int? _heatColumnCount;
   int _generation = 0;
+  Ticker? _ticker;
 
   @override
   void initState() {
     super.initState();
+    _ticker = createTicker((_) {
+      if (mounted) setState(() {});
+    });
+    widget.viewport.addListener(_onViewport);
+    _maybeNoteSample();
+    _syncTicker();
     _scheduleRaster();
   }
 
   @override
   void didUpdateWidget(SpectrogramPane oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.viewport != widget.viewport) {
+      oldWidget.viewport.removeListener(_onViewport);
+      widget.viewport.addListener(_onViewport);
+    }
+    _maybeNoteSample();
+    _syncTicker();
     if (oldWidget.columns != widget.columns ||
         oldWidget.magMin != widget.magMin ||
         oldWidget.magMax != widget.magMax ||
@@ -99,11 +123,43 @@ class _SpectrogramPaneState extends State<SpectrogramPane> {
     }
   }
 
+  void _onViewport() {
+    _syncTicker();
+    if (mounted) setState(() {});
+  }
+
+  void _maybeNoteSample() {
+    if (!widget.connected || widget.columns.isEmpty) {
+      if (!widget.connected) widget.viewport.resetFollowAnchors();
+      return;
+    }
+    widget.viewport.noteStripSample(widget.newestElapsed);
+  }
+
+  void _syncTicker() {
+    final run =
+        widget.connected &&
+        widget.viewport.mode == ViewportMode.follow &&
+        widget.viewport.followLeadSeconds > 0;
+    final ticker = _ticker;
+    if (ticker == null) return;
+    if (run) {
+      if (!ticker.isActive) ticker.start();
+    } else if (ticker.isActive) {
+      ticker.stop();
+    }
+  }
+
   @override
   void dispose() {
+    widget.viewport.removeListener(_onViewport);
+    _ticker?.dispose();
     _generation++;
     _heatmap?.dispose();
     _heatmap = null;
+    _heatFirstElapsed = null;
+    _heatHopSec = null;
+    _heatColumnCount = null;
     super.dispose();
   }
 
@@ -114,8 +170,9 @@ class _SpectrogramPaneState extends State<SpectrogramPane> {
       _dropHeatmap();
       return;
     }
+    final columns = widget.columns;
     final bmp = rasterizeSpectrogramBgra(
-      widget.columns,
+      columns,
       magMin: widget.magMin,
       magMax: widget.magMax,
     );
@@ -123,6 +180,12 @@ class _SpectrogramPaneState extends State<SpectrogramPane> {
       _dropHeatmap();
       return;
     }
+    final hop = columns.length >= 2
+        ? (columns[1].elapsed - columns[0].elapsed).abs()
+        : 0.25;
+    final firstElapsed = columns.first.elapsed;
+    final hopSec = hop > 1e-12 ? hop : 0.25;
+    final columnCount = columns.length;
     ui.decodeImageFromPixels(
       bmp.bytes,
       bmp.width,
@@ -136,6 +199,9 @@ class _SpectrogramPaneState extends State<SpectrogramPane> {
         final previous = _heatmap;
         setState(() {
           _heatmap = image;
+          _heatFirstElapsed = firstElapsed;
+          _heatHopSec = hopSec;
+          _heatColumnCount = columnCount;
         });
         if (previous != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -148,29 +214,44 @@ class _SpectrogramPaneState extends State<SpectrogramPane> {
 
   void _dropHeatmap() {
     final previous = _heatmap;
-    if (previous == null) return;
+    if (previous == null &&
+        _heatFirstElapsed == null &&
+        _heatHopSec == null &&
+        _heatColumnCount == null) {
+      return;
+    }
     _heatmap = null;
+    _heatFirstElapsed = null;
+    _heatHopSec = null;
+    _heatColumnCount = null;
     if (mounted) setState(() {});
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      previous.dispose();
-    });
+    if (previous != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        previous.dispose();
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final wallNow = DateTime.now().millisecondsSinceEpoch / 1000.0;
     return RepaintBoundary(
       child: CustomPaint(
         painter: SpectrogramPanePainter(
-          columns: widget.columns,
           viewport: widget.viewport,
           newestElapsed: widget.newestElapsed,
+          wallNow: wallNow,
           magMin: widget.magMin,
           magMax: widget.magMax,
           connected: widget.connected,
           heatmap: _heatmap,
+          heatFirstElapsed: _heatFirstElapsed,
+          heatHopSec: _heatHopSec,
+          heatColumnCount: _heatColumnCount,
           axisColor: theme.colorScheme.onSurfaceVariant,
           gridColor: theme.colorScheme.outlineVariant,
+          chartBackground: theme.colorScheme.surface,
         ),
         child: const SizedBox.expand(),
       ),
@@ -180,15 +261,19 @@ class _SpectrogramPaneState extends State<SpectrogramPane> {
 
 class SpectrogramPanePainter extends CustomPainter {
   SpectrogramPanePainter({
-    required this.columns,
     required this.viewport,
     required this.newestElapsed,
+    required this.wallNow,
     required this.magMin,
     required this.magMax,
     required this.connected,
     required this.heatmap,
+    this.heatFirstElapsed,
+    this.heatHopSec,
+    this.heatColumnCount,
     required this.axisColor,
     required this.gridColor,
+    required this.chartBackground,
   });
 
   static const double yGutter = 36;
@@ -206,15 +291,20 @@ class SpectrogramPanePainter extends CustomPainter {
     (1.0, Color(0xFFF0F921)),
   ];
 
-  final List<StftColumn> columns;
   final ViewportController viewport;
   final double newestElapsed;
+  final double wallNow;
   final double magMin;
   final double magMax;
   final bool connected;
   final ui.Image? heatmap;
+  /// Locked to [heatmap] decode — not live STFT columns (avoids hop vs ticker fight).
+  final double? heatFirstElapsed;
+  final double? heatHopSec;
+  final int? heatColumnCount;
   final Color axisColor;
   final Color gridColor;
+  final Color chartBackground;
 
   static Rect chartRect(Size size) => Rect.fromLTWH(
     yGutter,
@@ -241,15 +331,27 @@ class SpectrogramPanePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final chart = chartRect(size);
     if (chart.width <= 0 || chart.height <= 0) return;
-    final visStart = viewport.stripVisibleStart(newestElapsed: newestElapsed);
-    final visEnd = viewport.stripVisibleEnd(newestElapsed: newestElapsed);
+    final visStart = viewport.stripVisibleStart(
+      newestElapsed: newestElapsed,
+      wallNow: wallNow,
+    );
+    final visEnd = viewport.stripVisibleEnd(
+      newestElapsed: newestElapsed,
+      wallNow: wallNow,
+    );
     final span = visEnd - visStart;
     if (span <= 0) return;
 
     canvas.save();
     canvas.clipRect(chart);
-    canvas.drawRect(chart, Paint()..color = _stops.first.$2);
-    if (connected && columns.isNotEmpty && heatmap != null) {
+    // Empty / no-data regions use the graph surface — not viridis blue.
+    canvas.drawRect(chart, Paint()..color = chartBackground);
+    if (connected &&
+        heatmap != null &&
+        heatFirstElapsed != null &&
+        heatHopSec != null &&
+        heatColumnCount != null &&
+        heatColumnCount! > 0) {
       _drawHeatmap(canvas, chart, visStart, span, heatmap!);
     }
     canvas.restore();
@@ -265,17 +367,14 @@ class SpectrogramPanePainter extends CustomPainter {
     double span,
     ui.Image image,
   ) {
-    if (columns.isEmpty) return;
-    final hop = columns.length >= 2
-        ? (columns[1].elapsed - columns[0].elapsed).abs()
-        : 0.25;
-    final hopSec = hop > 1e-12 ? hop : 0.25;
-    final x0 =
-        chart.left + (columns.first.elapsed - visStart) / span * chart.width;
+    final first = heatFirstElapsed!;
+    final hopSec = heatHopSec!;
+    final count = heatColumnCount!;
+    final x0 = chart.left + (first - visStart) / span * chart.width;
     final dest = Rect.fromLTWH(
       x0,
       chart.top,
-      hopSec / span * chart.width * columns.length,
+      hopSec / span * chart.width * count,
       chart.height,
     );
     canvas.drawImageRect(
@@ -368,14 +467,21 @@ class SpectrogramPanePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant SpectrogramPanePainter old) {
-    return old.columns != columns ||
-        old.newestElapsed != newestElapsed ||
+    return old.newestElapsed != newestElapsed ||
+        old.wallNow != wallNow ||
         old.magMin != magMin ||
         old.magMax != magMax ||
         old.connected != connected ||
         old.heatmap != heatmap ||
+        old.heatFirstElapsed != heatFirstElapsed ||
+        old.heatHopSec != heatHopSec ||
+        old.heatColumnCount != heatColumnCount ||
+        old.chartBackground != chartBackground ||
+        old.axisColor != axisColor ||
+        old.gridColor != gridColor ||
         old.viewport.mode != viewport.mode ||
         old.viewport.windowSeconds != viewport.windowSeconds ||
+        old.viewport.followLeadSeconds != viewport.followLeadSeconds ||
         old.viewport.inspectStartElapsed != viewport.inspectStartElapsed;
   }
 }

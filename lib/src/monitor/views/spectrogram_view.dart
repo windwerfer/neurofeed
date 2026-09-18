@@ -12,6 +12,7 @@ import 'package:muse_ml/src/monitor/monitor_controller.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/monitor/panes/spectrogram_pane.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:muse_ml/src/settings.dart';
 
 class SpectrogramView extends ConsumerStatefulWidget {
   const SpectrogramView({super.key});
@@ -22,7 +23,8 @@ class SpectrogramView extends ConsumerStatefulWidget {
 
 class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
   final ViewportController _viewport = ViewportController()
-    ..windowSeconds = ViewportController.spectrogramDefaultWindowSeconds;
+    ..windowSeconds = ViewportController.spectrogramDefaultWindowSeconds
+    ..followLeadSeconds = ViewportController.bandsFollowLeadSeconds;
 
   Set<int> _selected = {};
   int _montageLen = 0;
@@ -42,6 +44,10 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
   void initState() {
     super.initState();
     _mon = ref.read(monitorControllerProvider.notifier);
+    final saved = ref.read(settingsProvider).monitorWindowSeconds('spectrogram');
+    if (saved != null && saved > 0) {
+      _viewport.windowSeconds = saved;
+    }
     _mon.sweepBuffer.addListener(_onBuffer);
     _viewport.addListener(_onViewport);
   }
@@ -55,7 +61,11 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
   void _onBuffer() {
     if (!mounted) return;
     if (_viewport.mode == ViewportMode.inspect) return;
-    final hop = _mon.sweepBuffer.sampleCount ~/ kStftHopSamples;
+    // Hop from absolute newest elapsed — sampleCount caps at capacity once
+    // the ~5 min ring is full, which previously froze Follow.
+    final newest = _newestElapsed();
+    final hop =
+        (newest * SweepBuffer.sampleRate).floor() ~/ kStftHopSamples;
     if (hop == _lastHop) return;
     _lastHop = hop;
     _pingPlot();
@@ -130,7 +140,10 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
         zoomFloor: ViewportController.spectrogramZoomFloor,
         zoomCap: ViewportController.spectrogramZoomCap,
       );
-      return;
+            ref
+          .read(settingsProvider)
+          .setMonitorWindowSeconds('spectrogram', _viewport.windowSeconds);
+return;
     }
     if (d.pointerCount != 1) return;
     final w = context.size?.width ?? 1;
@@ -245,8 +258,10 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
       formatWindow: formatSpectrogramWindow,
       onFollow: _follow,
       onInspect: _inspect,
-      onWindowChanged: (s) =>
-          _viewport.setStripWindowSeconds(s, newestElapsed: _newestElapsed()),
+      onWindowChanged: (s) {
+        _viewport.setStripWindowSeconds(s, newestElapsed: _newestElapsed());
+        ref.read(settingsProvider).setMonitorWindowSeconds('spectrogram', s);
+      },
       toolbarMiddle: _magMenu(context),
       toolbarExtras: ElectrodeToggles(
         names: names,
@@ -265,10 +280,14 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
           builder: (context, _) {
             final buffer = _mon.sweepBuffer;
             final newest = _newestElapsed();
+            if (connected && buffer.hasData) {
+              _viewport.noteStripSample(newest);
+            }
             final start = _viewport.stripVisibleStart(newestElapsed: newest);
-            final end = _viewport.stripVisibleEnd(newestElapsed: newest);
+            // Fetch through tip so the Follow-lead ticker can slide new
+            // columns in; paint domain stays ~1s behind (same as Bands).
             final columns = connected && buffer.hasData
-                ? _stft(start, end)
+                ? _stft(start, newest)
                 : const <StftColumn>[];
             var magMin = _magMin;
             var magMax = _magMax;
