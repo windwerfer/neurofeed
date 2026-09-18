@@ -41,7 +41,6 @@ Uint8List _buildV5Container({
   required Map<String, dynamic> metadataJson,
   required List<ComputedFrame> computedFrames,
 }) {
-  // Build raw body (v4 format): session header + 3 seconds of events
   final events = <int>[];
   for (var s = 0; s < 3; s++) {
     for (var e = 0; e < 4; e++) {
@@ -270,7 +269,6 @@ void main() {
     storage = FileSystemSessionStorage(tmp);
     store = SessionStore(storage: Future.value(storage));
 
-    // Build raw body (v4 format): session header + 3 seconds of events
     final events = <int>[];
     for (var s = 0; s < 3; s++) {
       for (var e = 0; e < 4; e++) {
@@ -455,7 +453,6 @@ void main() {
   });
 
   test('export of a session without EEG warns instead of failing', () async {
-    // Build raw body without EEG data
     final events = <int>[];
     for (var e = 0; e < 4; e++) {
       events.addAll(
@@ -512,7 +509,6 @@ void main() {
     final metaWithCal = _metadata(withCalibration: true);
     final computedFrames = _buildComputedFrames();
 
-    // Build raw body
     final events = <int>[];
     for (var s = 0; s < 3; s++) {
       for (var e = 0; e < 4; e++) {
@@ -587,7 +583,6 @@ void main() {
     final metaWithGestures = _metadata(withGestures: true);
     final computedFrames = _buildComputedFrames();
 
-    // Build raw body
     final events = <int>[];
     for (var s = 0; s < 3; s++) {
       for (var e = 0; e < 4; e++) {

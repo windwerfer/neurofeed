@@ -428,10 +428,8 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
         // and emits a Telemetry event with the correct 0-100 value.
         let _ = handle.send_command("v1").await;
 
-        // Create unified MuseEventDto channel for the forwarder
         let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
         
-        // Converter task: MuseEvent -> MuseEventDto
         let conv_tx = dto_tx.clone();
         tokio::spawn(async move {
             let mut rx = rx;
@@ -522,7 +520,6 @@ pub async fn connect_with_options(
     kind: DeviceKind,
     simulate: bool,
 ) -> anyhow::Result<ConnectionStatus> {
-    // Tear down any existing connection first
     {
         let old = state().inner.lock().unwrap().active.take();
         if let Some(old) = old {
@@ -584,7 +581,6 @@ pub async fn connect_with_options(
             }
         }
         
-        // Create unified MuseEventDto channel for the forwarder
         let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
         
         // Start OSC receiver (creates its own tokio task)
@@ -646,10 +642,8 @@ match start_result {
 
         let _ = handle.send_command("v1").await;
 
-        // Create unified MuseEventDto channel for the forwarder
         let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
         
-        // Converter task: MuseEvent -> MuseEventDto
         let conv_tx = dto_tx.clone();
         tokio::spawn(async move {
             let mut rx = rx;
@@ -1650,10 +1644,6 @@ fn map_event(ev: MuseEvent) -> MuseEventDto {
             samples: r.samples.into_iter().map(|s| s as f64).collect(),
         }),
         MuseEvent::Telemetry(t) => {
-            // log::debug!(
-            //     "[muse] telemetry: battery={:.6} fuel_gauge={:.2} temp={}",
-            //     t.battery_level, t.fuel_gauge_voltage, t.temperature,
-            // );
             MuseEventDto::Telemetry(TelemetrySnapshot {
                 battery_level: t.battery_level,
                 fuel_gauge_voltage: t.fuel_gauge_voltage,
@@ -1689,9 +1679,8 @@ fn map_imu(imu: ImuData) -> ImuDto {
 }
 
 /// Connect to a Neurosity Crown/Notion device via BLE.
-/// Uses the neurosity-ble-rs crate. (Phase D: not yet implemented - returns placeholder)
+/// Stub: not implemented — returns a placeholder connection (Crown Start refused).
 pub async fn crown_connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
-    // Tear down any existing connection first
     {
         let old = state().inner.lock().unwrap().active.take();
         if let Some(old) = old {
@@ -1699,7 +1688,6 @@ pub async fn crown_connect(device_id: String) -> anyhow::Result<ConnectionStatus
         }
     }
 
-    // Look up device from cache
     let device = {
         let guard = state().inner.lock().unwrap();
         guard.devices.get(&device_id).cloned().ok_or_else(|| {
@@ -1709,11 +1697,10 @@ pub async fn crown_connect(device_id: String) -> anyhow::Result<ConnectionStatus
 
     let name = device.name.clone();
     
-    // Create a placeholder event channel (Phase D: real Crown events will come here)
+    // Placeholder channel; Crown BLE Start is refused until implemented.
     let (_tx, rx) = tokio::sync::mpsc::channel(256);
-    
-    // For Phase A, just log that Crown is not yet implemented
-    log::warn!("[crown] Crown BLE not yet implemented (Phase D) - returning placeholder connection");
+
+    log::warn!("[crown] Crown BLE not yet implemented - returning placeholder connection");
 
     {
         let mut guard = state().inner.lock().unwrap();

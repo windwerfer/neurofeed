@@ -39,8 +39,6 @@ class ComputedSampler {
   double _inTargetPct = 0.0;
   final List<String> _latestGestures = [];
 
-  // Update methods called by FeedbackStateNotifier
-
   void updateBands(int electrode, BandsDto bands) {
     if (electrode >= 0 && electrode < 4) {
       _latestBands[electrode] = [

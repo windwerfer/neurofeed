@@ -389,18 +389,15 @@ class RatioEngine implements FeedbackEngine {
         ? t * (1.0 + _responsiveness * 0.02)
         : mean + ceilingStddevs * sd;
 
-    // Initialize EMA threshold if not set
     _emaThreshold ??= t;
 
-    // EMA update: threshold = threshold + alpha * (value - threshold)
-    // This pulls the threshold toward the live value, bounded by the
-    // initial threshold (floor) and maxAllowed (ceiling).
+    // EMA: threshold += alpha * (value - threshold), clamped to
+    // [initial, maxAllowed].
     final alpha = _emaAlpha;
     var next = _emaThreshold! + alpha * (value - _emaThreshold!);
     next = next.clamp(initial, maxAllowed);
     _emaThreshold = next;
 
-    // Also update the main threshold (used by isInTarget)
     _threshold = next;
 
     debugPrint(
