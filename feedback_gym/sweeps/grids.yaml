@@ -30,9 +30,12 @@ protocol_rollup:
     hit_rate: 0.70
     stability: 0.30
   guard:
-    # label_align preferred; else warn_rate_health peaking at target_warn_rate
+    # Prefer label_align(warn_feature). Feature board score blends sep + that align.
+    # warn_rate_health is fallback only when labels are absent (widened band).
+    sep_weight: 0.6
+    label_align_weight: 0.4
     target_warn_rate: 0.15
-    warn_rate_low: 0.02
-    warn_rate_high: 0.40
+    warn_rate_low: 0.01
+    warn_rate_high: 0.55
   inhibit:
     target_block: 0.25

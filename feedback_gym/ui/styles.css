@@ -95,3 +95,25 @@ td.num, th.num { text-align: right; font-family: var(--mono); font-size: 12px; }
 .footer {
   padding: 8px 28px 24px; color: var(--muted); font-size: 11px;
 }
+
+/* Compare runs */
+.compare-controls {
+  display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;
+  margin-bottom: 14px;
+}
+.compare-controls label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.compare-controls select {
+  background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; min-width: 260px; font: inherit;
+}
+.delta-pos { color: var(--good); }
+.delta-neg { color: var(--bad); }
+.delta-zero { color: var(--muted); }
+.compare-empty {
+  padding: 28px 16px; text-align: center; color: var(--muted);
+  border: 1px dashed var(--border); border-radius: 10px; background: var(--panel2);
+}
+.compare-empty code { color: var(--accent); }

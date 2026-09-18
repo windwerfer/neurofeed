@@ -92,6 +92,32 @@ def inhibit_passes(
     return all_pass, fails
 
 
+def percentile_warn_parts(
+    *,
+    band_math: bool,
+    feature_values: np.ndarray,
+    delta_abs: np.ndarray,
+    threshold: float,
+    delta_ceiling: float = 0.25,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Split guard warn into feature / rail / combined.
+
+    - ``warn_feature``: feature vs percentile threshold only (no delta rail)
+    - ``warn_rail``: absolute delta-ceiling fires (plus band abs ceiling)
+    - ``warn``: combined OR — fidelity to app ``percentileWarnOver``
+    """
+    feat = np.asarray(feature_values, dtype=float)
+    delta = np.asarray(delta_abs, dtype=float)
+    warn_feature = feat > threshold
+    if band_math:
+        # band path also treats feat > ceiling as an absolute rail
+        warn_rail = (feat > delta_ceiling) | (delta > delta_ceiling)
+    else:
+        warn_rail = delta > delta_ceiling
+    warn = warn_feature | warn_rail
+    return warn_feature, warn_rail, warn
+
+
 def percentile_warn_over(
     *,
     band_math: bool,
@@ -100,12 +126,15 @@ def percentile_warn_over(
     threshold: float,
     delta_ceiling: float = 0.25,
 ) -> np.ndarray:
-    """Mirrors guard_lane.percentileWarnOver."""
-    feat = np.asarray(feature_values, dtype=float)
-    delta = np.asarray(delta_abs, dtype=float)
-    if band_math:
-        return (feat > threshold) | (feat > delta_ceiling) | (delta > delta_ceiling)
-    return (feat > threshold) | (delta > delta_ceiling)
+    """Mirrors guard_lane.percentileWarnOver (combined feature | rail)."""
+    _, _, warn = percentile_warn_parts(
+        band_math=band_math,
+        feature_values=feature_values,
+        delta_abs=delta_abs,
+        threshold=threshold,
+        delta_ceiling=delta_ceiling,
+    )
+    return warn
 
 
 # --- Metrics ------------------------------------------------------------------
@@ -177,8 +206,12 @@ def roc_auc(scores: np.ndarray, labels: np.ndarray | None) -> float | None:
 
 
 def warn_rate_health(
-    rate: float, *, target: float = 0.15, low: float = 0.02, high: float = 0.40
+    rate: float, *, target: float = 0.15, low: float = 0.01, high: float = 0.55
 ) -> float:
+    """Fallback guard health when labels are absent (widened band).
+
+    Prefer ``label_align(warn_feature)`` whenever labels exist.
+    """
     if math.isnan(rate):
         return 0.0
     if rate < low or rate > high:
@@ -187,6 +220,38 @@ def warn_rate_health(
     if rate <= target:
         return float((rate - low) / (target - low)) if target > low else 1.0
     return float((high - rate) / (high - target)) if high > target else 1.0
+
+
+def guard_feature_score(
+    *,
+    sep: float | None,
+    label_align_feature: float | None,
+    warn_rate_combined: float | None,
+    sep_weight: float = 0.6,
+    label_align_weight: float = 0.4,
+    warn_health_target: float = 0.15,
+    warn_health_low: float = 0.01,
+    warn_health_high: float = 0.55,
+) -> float | None:
+    """Standalone feature guard score.
+
+    With labels: ``sep_weight * sep + label_align_weight * label_align(warn_feature)``.
+    Without labels: softened ``warn_rate_health`` on the combined warn rate.
+    """
+    if label_align_feature is not None and sep is not None:
+        return float(sep_weight * sep + label_align_weight * label_align_feature)
+    if label_align_feature is not None:
+        return float(label_align_feature)
+    if sep is not None and warn_rate_combined is None:
+        return float(sep)
+    if warn_rate_combined is not None:
+        return warn_rate_health(
+            warn_rate_combined,
+            target=warn_health_target,
+            low=warn_health_low,
+            high=warn_health_high,
+        )
+    return sep
 
 
 def inhibit_health(block: float, target: float = 0.25) -> float:

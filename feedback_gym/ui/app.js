@@ -4,6 +4,8 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
   let DATA = null;
+  let RUNS_INDEX = { runs: [] };
+  let compareCache = {};
 
   function fmt(v, digits = 3) {
     if (v === null || v === undefined || Number.isNaN(v)) return "N/A";
@@ -16,6 +18,12 @@
     if (v >= 0.7) return "score-good";
     if (v >= 0.4) return "score-mid";
     return "score-bad";
+  }
+
+  function deltaClass(d) {
+    if (d === null || d === undefined || Number.isNaN(d)) return "delta-zero";
+    if (Math.abs(d) < 1e-9) return "delta-zero";
+    return d > 0 ? "delta-pos" : "delta-neg";
   }
 
   function sparkline(values, w = 96, h = 22) {
@@ -123,10 +131,152 @@
       });
   }
 
-  function renderCompareStub() {
-    $("#compare-body").innerHTML =
-      `<p class="hint">Compare-runs is a v1 stub. Latest run: <code>${DATA.run_id}</code>.
-       Historical folders live under <code>results/</code>.</p>`;
+  async function loadRun(runMeta) {
+    if (!runMeta) return null;
+    const key = runMeta.run_id;
+    if (compareCache[key]) return compareCache[key];
+    const url = runMeta.run || runMeta.summary;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    const data = await res.json();
+    compareCache[key] = data;
+    return data;
+  }
+
+  function numOrNull(v) {
+    return typeof v === "number" && !Number.isNaN(v) ? v : null;
+  }
+
+  function protocolFinal(run, id) {
+    const p = (run.protocols || []).find((x) => x.id === id);
+    return p ? numOrNull(p.final) : null;
+  }
+
+  function featureField(run, id, field) {
+    const f = (run.features || []).find((x) => x.id === id);
+    return f ? numOrNull(f[field]) : null;
+  }
+
+  function renderDeltaCell(a, b) {
+    if (a === null && b === null) return `<td class="num delta-zero">—</td>`;
+    if (a === null || b === null) {
+      return `<td class="num">${fmt(a)} → ${fmt(b)}</td>`;
+    }
+    const d = b - a;
+    const sign = d > 0 ? "+" : "";
+    return `<td class="num ${deltaClass(d)}">${fmt(a)} → ${fmt(b)} <span>(${sign}${fmt(d)})</span></td>`;
+  }
+
+  async function renderCompare() {
+    const box = $("#compare-body");
+    const runs = RUNS_INDEX.runs || [];
+    if (runs.length < 2) {
+      box.innerHTML = `
+        <div class="compare-empty">
+          <p><strong>Need at least two runs to compare.</strong></p>
+          <p>Latest: <code>${DATA ? DATA.run_id : "—"}</code>. Indexed runs: <code>${runs.length}</code>.</p>
+          <p>Re-run <code>python3 runners/run_gym.py</code> (optionally with different corpora/presets)
+             to populate <code>results/</code> and <code>ui/data/runs_index.json</code>.</p>
+        </div>`;
+      return;
+    }
+
+    const opts = runs
+      .map(
+        (r) =>
+          `<option value="${r.run_id}">${r.run_id} · ${r.corpus || "?"}</option>`
+      )
+      .join("");
+    box.innerHTML = `
+      <div class="compare-controls">
+        <label>Run A
+          <select id="compare-a">${opts}</select>
+        </label>
+        <label>Run B
+          <select id="compare-b">${opts}</select>
+        </label>
+      </div>
+      <div id="compare-tables"></div>`;
+
+    const selA = $("#compare-a");
+    const selB = $("#compare-b");
+    // Default: previous + latest
+    selA.selectedIndex = Math.max(0, runs.length - 2);
+    selB.selectedIndex = runs.length - 1;
+
+    async function refresh() {
+      const metaA = runs.find((r) => r.run_id === selA.value);
+      const metaB = runs.find((r) => r.run_id === selB.value);
+      const tables = $("#compare-tables");
+      try {
+        const [a, b] = await Promise.all([loadRun(metaA), loadRun(metaB)]);
+        const protoIds = [
+          ...new Set([
+            ...(a.protocols || []).map((p) => p.id),
+            ...(b.protocols || []).map((p) => p.id),
+          ]),
+        ];
+        const featIds = [
+          ...new Set([
+            ...(a.features || []).map((f) => f.id),
+            ...(b.features || []).map((f) => f.id),
+          ]),
+        ];
+
+        const protoRows = protoIds
+          .map((id) => {
+            const fa = protocolFinal(a, id);
+            const fb = protocolFinal(b, id);
+            return `<tr><td><code>${id}</code></td>${renderDeltaCell(fa, fb)}</tr>`;
+          })
+          .join("");
+
+        const featRows = featIds
+          .map((id) => {
+            const sa = featureField(a, id, "score");
+            const sb = featureField(b, id, "score");
+            const ea = featureField(a, id, "sep");
+            const eb = featureField(b, id, "sep");
+            const pa = featureField(a, id, "best_p");
+            const pb = featureField(b, id, "best_p");
+            return `<tr>
+              <td><code>${id}</code></td>
+              ${renderDeltaCell(sa, sb)}
+              ${renderDeltaCell(ea, eb)}
+              ${renderDeltaCell(pa, pb)}
+            </tr>`;
+          })
+          .join("");
+
+        tables.innerHTML = `
+          <p class="hint">A = <code>${a.run_id}</code> (${a.corpus || "?"}) ·
+            B = <code>${b.run_id}</code> (${b.corpus || "?"})</p>
+          <h2>Protocol final Δ</h2>
+          <table>
+            <thead><tr><th>id</th><th class="num">final A → B (Δ)</th></tr></thead>
+            <tbody>${protoRows}</tbody>
+          </table>
+          <h2 style="margin-top:18px">Feature score / sep / best_p Δ</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>id</th>
+                <th class="num">score</th>
+                <th class="num">sep</th>
+                <th class="num">best_p</th>
+              </tr>
+            </thead>
+            <tbody>${featRows}</tbody>
+          </table>`;
+      } catch (e) {
+        tables.innerHTML = `<p class="hint" style="color:var(--bad)">Compare load failed: ${e}</p>
+          <p class="hint">Serve <code>feedback_gym/ui</code> over HTTP so <code>../results/</code> fetches work.</p>`;
+      }
+    }
+
+    selA.addEventListener("change", refresh);
+    selB.addEventListener("change", refresh);
+    refresh();
   }
 
   function activateTab(name) {
@@ -147,12 +297,18 @@
         `Could not load data/latest.json (${e}). Serve ui/ over HTTP or re-run the gym.`;
       return;
     }
+    try {
+      const idx = await fetch("data/runs_index.json", { cache: "no-store" });
+      if (idx.ok) RUNS_INDEX = await idx.json();
+    } catch (_) {
+      RUNS_INDEX = { runs: [] };
+    }
     $("#run-meta").textContent =
       `${DATA.timestamp} · run ${DATA.run_id} · corpus ${DATA.corpus}`;
     renderProtocols();
     renderFeatures();
     renderSweeps();
-    renderCompareStub();
+    renderCompare();
     $$(".tab").forEach((t) =>
       t.addEventListener("click", () => activateTab(t.dataset.tab))
     );

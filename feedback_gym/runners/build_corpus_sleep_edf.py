@@ -2,6 +2,8 @@
 """Build feedback_gym NPZ from Sleep-EDF vigilance windows + CBraMod emb_cache.
 
 Uses linear heads from neurofeed assets (no encoder forward / no torch).
+Optionally merges REVE subsample emb_cache (512-d) into ai_*_reve columns
+(NaN-padded onto the CBraMod-aligned stream; Diggus: not fair vs full encode).
 Band columns via muse-eeg-heads band_math.features.flutter_bands.
 
 Labels: windows `y` (0=drowsy/wake-ish binary negative, 1=hypnagogic) —
@@ -49,6 +51,28 @@ DEFAULT_HEAD_C = (
     / "assets/packs/cbramod-a-vig-full/heads/head_c_wake_light_linear.f32bin"
 )
 DEFAULT_OUT = GYM_ROOT / "corpora/external/sleep_edf_test.npz"
+DEFAULT_REVE_EMB = Path(
+    "/workspace/muse-eeg-heads/exports/reve_sleep_heads_local/emb_cache"
+)
+DEFAULT_REVE_HEAD_A = (
+    REPO_ROOT
+    / "assets/packs/reve-a-vig-subsample/heads/head_a_vig_reve_linear.f32bin"
+)
+DEFAULT_REVE_HEAD_C = (
+    REPO_ROOT
+    / "assets/packs/reve-head-c-wake-light-subsample/heads/"
+    "head_c_wake_light_reve_linear.f32bin"
+)
+DEFAULT_REVE_POLICY = Path(
+    "/workspace/muse-eeg-heads/kaggle_datasets/muse-eeg-heads-windows"
+    "/vigilance_sleep_edf/splits/split_policy.json"
+)
+DEFAULT_REVE_SPLITS_DIR = Path(
+    "/workspace/muse-eeg-heads/kaggle_datasets/muse-eeg-heads-windows"
+    "/vigilance_sleep_edf/splits"
+)
+DEFAULT_REVE_WINDOWS = DEFAULT_WINDOWS
+REVE_SEED = 42  # must match muse-eeg-heads train_heads_reve_sleep_local.SEED
 BAND_MATH_CANDIDATES = [
     Path("/workspace/muse-eeg-heads/band_math"),
     REPO_ROOT.parent / "muse-eeg-heads" / "band_math",
@@ -56,16 +80,18 @@ BAND_MATH_CANDIDATES = [
 
 
 def load_linear_head(path: Path) -> tuple[np.ndarray, np.ndarray]:
-    """Load f32bin head: 402 floats = W(2,200) row-major then bias(2).
+    """Load f32bin head: W(2,D) row-major then bias(2).
 
-    Layout confirmed by class separation on Sleep-EDF emb_cache (W as (2,200)
-    separates; (200,2) does not).
+    CBraMod D=200 → 402 floats; REVE D=512 → 1026 floats.
+    Layout confirmed by class separation on Sleep-EDF emb_cache (W as (2,D)
+    separates; (D,2) does not).
     """
     raw = np.fromfile(path, dtype=np.float32)
-    if raw.size != 402:
-        raise ValueError(f"expected 402 float32 in {path}, got {raw.size}")
-    W = raw[:400].reshape(2, 200)
-    b = raw[400:].astype(np.float64)
+    if raw.size < 4 or (raw.size - 2) % 2 != 0:
+        raise ValueError(f"unexpected f32bin size {raw.size} in {path}")
+    dim = (raw.size - 2) // 2
+    W = raw[: 2 * dim].reshape(2, dim)
+    b = raw[2 * dim :].astype(np.float64)
     return W.astype(np.float64), b
 
 
@@ -144,6 +170,82 @@ def _load_test_recordings(splits_path: Path) -> list[str]:
     return list(recs)
 
 
+def _reve_cap_idxs(y: np.ndarray, per_class: int, rng: np.random.Generator) -> np.ndarray:
+    """Replay muse-eeg-heads train_heads_reve_sleep_local.cap_idxs."""
+    if per_class <= 0:
+        return np.arange(len(y), dtype=np.int64)
+    picks = []
+    for c in np.unique(y):
+        cand = np.where(y == c)[0]
+        n = min(per_class, len(cand))
+        if n:
+            picks.append(rng.choice(cand, size=n, replace=False))
+    if not picks:
+        return np.zeros(0, dtype=np.int64)
+    out = np.concatenate(picks)
+    rng.shuffle(out)
+    return out
+
+
+def replay_reve_subsample_locals(
+    *,
+    windows_dir: Path,
+    policy_path: Path,
+    splits_dir: Path,
+    per_class_cap: int = 80,
+    seed: int = REVE_SEED,
+) -> dict[str, np.ndarray]:
+    """Map recording_id → local indices into the QC keep set (REVE emb row order).
+
+    Advances RNG over **all** policy recordings in sorted order (same as the
+    REVE encode script) so test-set indices match the on-disk emb_cache.
+    """
+    if not policy_path.exists() or not splits_dir.exists():
+        return {}
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    split_map: dict[str, str] = {}
+    for sp in ("train", "val", "test"):
+        sp_path = splits_dir / f"{sp}_subjects.json"
+        if not sp_path.exists():
+            continue
+        for sid in json.loads(sp_path.read_text(encoding="utf-8"))["subjects"]:
+            split_map[sid] = sp
+
+    def subject_of(rid: str) -> str:
+        recs = policy.get("recordings", {})
+        if rid in recs:
+            return recs[rid]["subject_id"]
+        return rid if rid.startswith("SN") else rid[:5]
+
+    rng = np.random.default_rng(seed)
+    out: dict[str, np.ndarray] = {}
+    rids = sorted(policy.get("recordings", {}).keys())
+    for rid in rids:
+        sid = subject_of(rid)
+        if split_map.get(sid) is None:
+            continue
+        win_path = windows_dir / f"{rid}_windows.npz"
+        if not win_path.exists():
+            continue
+        win = np.load(win_path, allow_pickle=True)
+        try:
+            idxs_keep = emb_keep_indices(win)
+        except Exception:
+            continue
+        if len(idxs_keep) == 0:
+            continue
+        y_raw = np.asarray(win["y"], dtype=np.int64)
+        label_names = [str(x) for x in np.asarray(win["label_names"]).tolist()]
+        name_to = {n: _HEAD_A_LABELS.index(n) for n in label_names if n in _HEAD_A_LABELS}
+        y_a = np.full(len(y_raw), -1, dtype=np.int64)
+        for old_i, name in enumerate(label_names):
+            if name in name_to:
+                y_a[y_raw == old_i] = name_to[name]
+        local = _reve_cap_idxs(y_a[idxs_keep], per_class_cap, rng)
+        out[rid] = local.astype(np.int64)
+    return out
+
+
 def build_corpus(
     *,
     windows_dir: Path = DEFAULT_WINDOWS,
@@ -155,11 +257,35 @@ def build_corpus(
     max_windows_per_rec: int | None = None,
     cal_n: int = 90,
     recordings: list[str] | None = None,
+    reve_emb_dir: Path | None = DEFAULT_REVE_EMB,
+    reve_head_a_path: Path | None = DEFAULT_REVE_HEAD_A,
+    reve_head_c_path: Path | None = DEFAULT_REVE_HEAD_C,
+    reve_policy_path: Path = DEFAULT_REVE_POLICY,
+    reve_splits_dir: Path = DEFAULT_REVE_SPLITS_DIR,
 ) -> dict[str, Any]:
     """Build and write gym NPZ. Returns summary dict."""
     compute_feats = import_flutter_bands()
     W_a, b_a = load_linear_head(head_a_path)
     W_c, b_c = load_linear_head(head_c_path)
+
+    reve_enabled = False
+    W_ra = b_ra = W_rc = b_rc = None
+    reve_locals: dict[str, np.ndarray] = {}
+    if (
+        reve_emb_dir is not None
+        and Path(reve_emb_dir).is_dir()
+        and reve_head_a_path is not None
+        and Path(reve_head_a_path).is_file()
+    ):
+        W_ra, b_ra = load_linear_head(Path(reve_head_a_path))
+        if reve_head_c_path is not None and Path(reve_head_c_path).is_file():
+            W_rc, b_rc = load_linear_head(Path(reve_head_c_path))
+        reve_locals = replay_reve_subsample_locals(
+            windows_dir=windows_dir,
+            policy_path=reve_policy_path,
+            splits_dir=reve_splits_dir,
+        )
+        reve_enabled = True
 
     if recordings is None:
         recordings = _load_test_recordings(splits_path)
@@ -181,6 +307,11 @@ def build_corpus(
         "ai_drowsiness": [],
         "recording_id": [],
     }
+    if reve_enabled:
+        chunks["ai_a_vig_reve"] = []
+        chunks["ai_wake_light_reve"] = []
+    reve_filled = 0
+    reve_nan = 0
     skipped: list[str] = []
     used: list[str] = []
     n_total = 0
@@ -263,6 +394,38 @@ def build_corpus(
         chunks["ai_drowsiness"].append(p_a)  # alias of a_vig
         chunks["recording_id"].append(np.full(n, rec, dtype=object))
 
+        if reve_enabled:
+            col_a = np.full(n, np.nan, dtype=np.float64)
+            col_c = np.full(n, np.nan, dtype=np.float64)
+            reve_path = Path(reve_emb_dir) / f"{rec}_emb.npz"
+            local = reve_locals.get(rec)
+            if reve_path.exists() and local is not None and W_ra is not None:
+                rz = np.load(reve_path)
+                remb = np.asarray(rz["emb"], dtype=np.float64)
+                if remb.ndim == 2 and remb.shape[0] == len(local) and remb.shape[1] == W_ra.shape[1]:
+                    p_ra = softmax_p_class1(remb, W_ra, b_ra)
+                    p_rc = (
+                        softmax_p_class1(remb, W_rc, b_rc)
+                        if W_rc is not None
+                        else np.full(len(local), np.nan)
+                    )
+                    for i, pos in enumerate(local):
+                        if 0 <= int(pos) < n:
+                            col_a[int(pos)] = p_ra[i]
+                            col_c[int(pos)] = p_rc[i]
+                    reve_filled += int(np.isfinite(col_a).sum())
+                    reve_nan += int((~np.isfinite(col_a)).sum())
+                else:
+                    warnings.warn(
+                        f"REVE skip {rec}: emb shape {remb.shape} vs local {len(local)} "
+                        f"dim {None if W_ra is None else W_ra.shape[1]}"
+                    )
+                    reve_nan += n
+            else:
+                reve_nan += n
+            chunks["ai_a_vig_reve"].append(col_a)
+            chunks["ai_wake_light_reve"].append(col_c)
+
         used.append(rec)
         n_total += n
 
@@ -291,7 +454,7 @@ def build_corpus(
         else:
             arrays[key] = np.concatenate(parts).astype(np.float64)
 
-    # REVE columns omitted (no REVE emb on this box); scorers treat missing as N/A-ish
+    # REVE: subsample-aligned into NaN-padded columns when emb+heads present
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(out_path, **arrays)
@@ -314,8 +477,24 @@ def build_corpus(
         "recordings_skipped": skipped,
         "ai_a_vig_mean_sep": sep_a,
         "ai_wake_light_mean_sep": sep_c,
+        "reve_enabled": reve_enabled,
+        "reve_finite": reve_filled,
+        "reve_nan": reve_nan,
         "bytes": out_path.stat().st_size,
+        "notes": (
+            "REVE sleep emb is a per-class subsample (≤80/class/rec, seed=42); "
+            "scores are NaN-padded onto the CBraMod-aligned stream."
+            if reve_enabled
+            else "REVE columns omitted (emb/heads missing)."
+        ),
     }
+    if reve_enabled and "ai_a_vig_reve" in arrays:
+        rv = arrays["ai_a_vig_reve"]
+        mask = np.isfinite(rv)
+        if mask.any() and (labels[mask] == 1).any() and (labels[mask] == 0).any():
+            summary["ai_a_vig_reve_mean_sep"] = float(
+                rv[mask & (labels == 1)].mean() - rv[mask & (labels == 0)].mean()
+            )
     return summary
 
 
@@ -334,6 +513,14 @@ def main(argv: list[str] | None = None) -> int:
         help="cap windows per recording (faster CI); default = full test",
     )
     p.add_argument("--cal-n", type=int, default=90)
+    p.add_argument("--reve-emb-dir", type=Path, default=DEFAULT_REVE_EMB)
+    p.add_argument("--reve-head-a", type=Path, default=DEFAULT_REVE_HEAD_A)
+    p.add_argument("--reve-head-c", type=Path, default=DEFAULT_REVE_HEAD_C)
+    p.add_argument(
+        "--no-reve",
+        action="store_true",
+        help="skip optional REVE emb_cache merge",
+    )
     args = p.parse_args(argv)
 
     summary = build_corpus(
@@ -345,6 +532,9 @@ def main(argv: list[str] | None = None) -> int:
         out_path=args.out,
         max_windows_per_rec=args.max_windows_per_rec,
         cal_n=args.cal_n,
+        reve_emb_dir=None if args.no_reve else args.reve_emb_dir,
+        reve_head_a_path=None if args.no_reve else args.reve_head_a,
+        reve_head_c_path=None if args.no_reve else args.reve_head_c,
     )
     print(json.dumps(summary, indent=2))
     return 0

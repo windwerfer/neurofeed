@@ -47,7 +47,7 @@
     <section id="panel-features" class="tab-panel" style="display:none">
       <div class="panel">
         <h2>Feature board</h2>
-        <p class="hint">Includes orphans (AI + device.*). Device rows show N/A. AI uses precomputed fixture scores when pack inference is unavailable.</p>
+        <p class="hint">Includes orphans (AI + device.*). Device rows show N/A. AI uses precomputed fixture scores when pack inference is unavailable. Guard scores use <code>warn_feature</code> (see metrics.md).</p>
         <table>
           <thead>
             <tr>
@@ -88,6 +88,7 @@
     <section id="panel-compare" class="tab-panel" style="display:none">
       <div class="panel">
         <h2>Compare runs</h2>
+        <p class="hint">Pick two runs from <code>ui/data/runs_index.json</code> (written at end of <code>run_gym</code>). Δ = B − A.</p>
         <div id="compare-body"></div>
       </div>
     </section>

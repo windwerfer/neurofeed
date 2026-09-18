@@ -76,6 +76,36 @@ def _ensure_sleep_edf(max_windows_per_rec: int | None) -> Path:
         return _ensure_synthetic(load_manifest())
 
 
+
+def write_runs_index(out_path: Path) -> None:
+    """Index results/*/summary.json (fallback run.json) for the Compare UI."""
+    results = GYM_ROOT / "results"
+    rows = []
+    if results.is_dir():
+        for d in sorted(results.iterdir()):
+            if not d.is_dir():
+                continue
+            summary_path = d / "summary.json"
+            run_path = d / "run.json"
+            src = summary_path if summary_path.exists() else run_path
+            if not src.exists():
+                continue
+            try:
+                data = json.loads(src.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                continue
+            rows.append(
+                {
+                    "run_id": data.get("run_id", d.name),
+                    "timestamp": data.get("timestamp"),
+                    "corpus": data.get("corpus"),
+                    "summary": f"../results/{d.name}/summary.json",
+                    "run": f"../results/{d.name}/run.json",
+                }
+            )
+    out_path.write_text(json.dumps({"runs": rows}, indent=2), encoding="utf-8")
+
+
 def write_protocol_stats(run: dict, out_path: Path) -> None:
     lines = [
         "# PROTOCOL_STATS",
@@ -149,6 +179,10 @@ def write_protocol_stats(run: dict, out_path: Path) -> None:
         "- Fixed calibration threshold (no EMA dynamic adapt).",
         "- No dirty-pad / quality gating.",
         "- AI uses precomputed emb_cache + linear heads (no CBraMod/REVE forward).",
+        "- Guard **scores** use `warn_feature` (percentile only); combined warn + rail "
+        "still reported (Sleep-EDF abs delta often trips the 0.25 rail).",
+        "- REVE columns are subsample-aligned (≤80/class/rec) and NaN-padded — Diggus: "
+        "directional only vs full CBraMod.",
         "- Crown `device.*` marked N/A (no corpus).",
         "",
     ]
@@ -228,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         "timestamp": ts.strftime("%Y-%m-%d %H:%M:%S UTC"),
         "corpus": corpus_rel,
         "commit_note": (
-            "sleep-edf emb_cache+linear heads"
+            "sleep-edf CBraMod+REVE emb_cache; guard warn_feature scoring"
             if "sleep_edf" in corpus_rel
             else "offline synthetic/demo unless --corpus/--preset overridden"
         ),
@@ -248,6 +282,35 @@ def main(argv: list[str] | None = None) -> int:
     (results_dir / "features.json").write_text(
         json.dumps(feature_results, indent=2), encoding="utf-8"
     )
+    summary = {
+        "run_id": run_id,
+        "timestamp": run["timestamp"],
+        "corpus": corpus_rel,
+        "commit_note": run.get("commit_note"),
+        "protocols": [
+            {
+                "id": p["id"],
+                "final": p.get("final"),
+                "reward_score": ((p.get("parts") or {}).get("reward") or {}).get("score"),
+                "inhibit_score": ((p.get("parts") or {}).get("inhibit") or {}).get("score"),
+                "guard_score": ((p.get("parts") or {}).get("guard") or {}).get("score"),
+            }
+            for p in protocol_results
+        ],
+        "features": [
+            {
+                "id": f["id"],
+                "score": f.get("score"),
+                "sep": f.get("sep"),
+                "best_p": f.get("best_p"),
+                "status": f.get("status"),
+            }
+            for f in feature_results
+        ],
+    }
+    (results_dir / "summary.json").write_text(
+        json.dumps(summary, indent=2), encoding="utf-8"
+    )
 
     # Latest pointer for UI
     ui_data = GYM_ROOT / "ui" / "data"
@@ -256,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
     # also copy under results as latest symlink-like file
     latest_ptr = GYM_ROOT / "results" / "latest_run_id.txt"
     latest_ptr.write_text(run_id + "\n", encoding="utf-8")
+    write_runs_index(ui_data / "runs_index.json")
 
     write_protocol_stats(run, GYM_ROOT / "PROTOCOL_STATS.md")
 

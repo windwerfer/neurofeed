@@ -13,7 +13,7 @@ from runners.helpers import (
     inhibit_health,
     inhibit_passes,
     label_align,
-    percentile_warn_over,
+    percentile_warn_parts,
     protocol_composite,
     round4,
     flip_stability,
@@ -160,39 +160,63 @@ def simulate_protocol(
             result["notes"].append(f"guard feature {feat_id} missing from corpus")
         else:
             band_math = feat_id.startswith("band.")
-            baseline = series[cal]
-            play_vals = series[play]
-            thr = threshold_at_percentile(baseline, g_p)
-            delta_abs = np.asarray(corpus.get("delta_abs", corpus["band_delta"]))[play]
-            warn = percentile_warn_over(
-                band_math=band_math,
-                feature_values=play_vals,
-                delta_abs=delta_abs,
-                threshold=thr,
-                delta_ceiling=delta_ceiling,
-            )
-            wr = warn_rate(warn)
-            stab = flip_stability(warn)
-            la = label_align(warn, labels)
-            if la is not None:
-                guard_score = la
+            baseline = np.asarray(series[cal], dtype=float)
+            play_vals = np.asarray(series[play], dtype=float)
+            finite = np.isfinite(play_vals)
+            if not finite.any():
+                result["parts"]["guard"] = {
+                    "status": "unavailable",
+                    "feature": feat_id,
+                    "notes": "all-NaN feature column",
+                }
+                result["notes"].append(f"guard feature {feat_id} all-NaN")
             else:
-                guard_score = warn_rate_health(
-                    wr,
-                    target=float(gw.get("target_warn_rate", 0.15)),
-                    low=float(gw.get("warn_rate_low", 0.02)),
-                    high=float(gw.get("warn_rate_high", 0.40)),
+                play_f = play_vals[finite]
+                base_f = baseline[np.isfinite(baseline)]
+                if base_f.size == 0:
+                    base_f = play_f
+                labels_f = None if labels is None else np.asarray(labels)[finite]
+                thr = threshold_at_percentile(base_f, g_p)
+                delta_abs = np.asarray(
+                    corpus.get("delta_abs", corpus["band_delta"]), dtype=float
+                )[play][finite]
+                warn_feature, warn_rail, warn = percentile_warn_parts(
+                    band_math=band_math,
+                    feature_values=play_f,
+                    delta_abs=delta_abs,
+                    threshold=thr,
+                    delta_ceiling=delta_ceiling,
                 )
-            result["parts"]["guard"] = {
-                "feature": feat_id,
-                "policy": guard_cfg.get("policy", "percentileWarn"),
-                "band_math": band_math,
-                "threshold": round4(thr),
-                "warn_rate": round4(wr),
-                "stability": round4(stab),
-                "label_align": round4(la) if la is not None else None,
-                "score": round4(guard_score),
-            }
+                wr = warn_rate(warn)
+                wr_feat = warn_rate(warn_feature)
+                wr_rail = warn_rate(warn_rail)
+                stab = flip_stability(warn_feature)
+                la = label_align(warn_feature, labels_f)
+                la_combined = label_align(warn, labels_f)
+                if la is not None:
+                    guard_score = la
+                else:
+                    guard_score = warn_rate_health(
+                        wr_feat,
+                        target=float(gw.get("target_warn_rate", 0.15)),
+                        low=float(gw.get("warn_rate_low", 0.01)),
+                        high=float(gw.get("warn_rate_high", 0.55)),
+                    )
+                result["parts"]["guard"] = {
+                    "feature": feat_id,
+                    "policy": guard_cfg.get("policy", "percentileWarn"),
+                    "band_math": band_math,
+                    "threshold": round4(thr),
+                    "warn_rate": round4(wr),
+                    "warn_feature_rate": round4(wr_feat),
+                    "rail_rate": round4(wr_rail),
+                    "stability": round4(stab),
+                    "label_align": round4(la) if la is not None else None,
+                    "label_align_combined": round4(la_combined)
+                    if la_combined is not None
+                    else None,
+                    "score": round4(guard_score),
+                }
 
     final = protocol_composite(
         reward_score=reward_score,

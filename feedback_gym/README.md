@@ -61,6 +61,13 @@ cd feedback_gym/ui && python3 -m http.server 8765
 # then http://127.0.0.1:8765/
 ```
 
+### Compare runs
+
+1. Run the gym at least twice (any corpus/preset) so `results/` has ≥2 folders.
+2. Each run writes `results/<id>/summary.json` and refreshes `ui/data/runs_index.json`.
+3. Open the **Compare** tab → pick Run A / Run B → protocol final Δ and feature
+   score/sep/best_p Δ tables. Serve `ui/` over HTTP so `../results/` fetches work.
+
 ## Tests
 
 ```bash
