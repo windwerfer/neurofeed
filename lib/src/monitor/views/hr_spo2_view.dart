@@ -15,6 +15,7 @@ import 'package:muse_ml/src/monitor/monitor_controller.dart';
 import 'package:muse_ml/src/monitor/monitor_providers.dart';
 import 'package:muse_ml/src/monitor/panes/optical_overview_pane.dart';
 import 'package:muse_ml/src/monitor/panes/optical_ppg_pane.dart';
+import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
 import 'package:muse_ml/src/monitor/viewport_controller.dart';
 import 'package:muse_ml/src/settings.dart';
 
@@ -42,6 +43,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
   double _pinchFocalElapsed = 0;
   double _pinchFocalFraction = 0.5;
   bool _pinchOnDetail = false;
+  bool _draggingHighlight = false;
   double? _cursorElapsed;
   late final MonitorController _mon;
 
@@ -176,18 +178,10 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
 
   void _beginPinch(ScaleStartDetails d, {required bool detail}) {
     final newest = _newestElapsed();
+    final oldest = _oldestElapsed();
     _pinchOnDetail = detail;
+    _draggingHighlight = false;
     final vp = detail ? _detail : _overview;
-    if (_overview.mode == ViewportMode.follow) {
-      _overview.enterInspectStrip(newestElapsed: newest);
-      alignDetailToOverview(
-        detail: _detail,
-        overview: _overview,
-        newestElapsed: newest,
-        oldestElapsed: _oldestElapsed(),
-      );
-    }
-    _pinchWindowAtStart = vp.windowSeconds;
     final w = context.size?.width ?? 1;
     final gutter = detail
         ? OpticalPpgPainter.leftGutter
@@ -195,8 +189,50 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
     final right = detail
         ? OpticalPpgPainter.rightGutter
         : OpticalOverviewPainter.rightGutter;
-    final chartW = (w - gutter - right).clamp(1, w);
+    final chartW = (w - gutter - right).clamp(1.0, w);
     final x = d.localFocalPoint.dx - gutter;
+
+    if (!detail) {
+      final ovStart = _overview.stripVisibleStart(newestElapsed: newest);
+      final ovEnd = _overview.stripVisibleEnd(newestElapsed: newest);
+      final hiStart = _detail.stripVisibleStart(newestElapsed: newest);
+      final hiEnd = _detail.stripVisibleEnd(newestElapsed: newest);
+      if (highlightHitTest(
+        localX: d.localFocalPoint.dx,
+        chartLeft: gutter,
+        chartWidth: chartW,
+        visStart: ovStart,
+        visEnd: ovEnd,
+        highlightStart: hiStart,
+        highlightEnd: hiEnd,
+      )) {
+        _draggingHighlight = true;
+        panDetailWithinOverview(
+          detail: _detail,
+          overview: _overview,
+          deltaSeconds: 0,
+          newestElapsed: newest,
+          oldestElapsed: oldest,
+          highlightEndElapsed: hiEnd,
+        );
+        _pinchWindowAtStart = _detail.windowSeconds;
+        _pinchFocalFraction = (x / chartW).clamp(0.0, 1.0);
+        _pinchFocalElapsed =
+            hiStart + _pinchFocalFraction * _detail.windowSeconds;
+        return;
+      }
+    }
+
+    if (_overview.mode == ViewportMode.follow) {
+      _overview.enterInspectStrip(newestElapsed: newest);
+      alignDetailToOverview(
+        detail: _detail,
+        overview: _overview,
+        newestElapsed: newest,
+        oldestElapsed: oldest,
+      );
+    }
+    _pinchWindowAtStart = vp.windowSeconds;
     _pinchFocalFraction = (x / chartW).clamp(0.0, 1.0);
     _pinchFocalElapsed =
         vp.stripVisibleStart(newestElapsed: newest) +
@@ -207,6 +243,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
     final newest = _newestElapsed();
     final oldest = _oldestElapsed();
     if (d.pointerCount >= 2) {
+      _draggingHighlight = false;
       if (_pinchOnDetail) {
         _detail.pinchX(
           scaleFromStart: d.scale,
@@ -259,6 +296,22 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
     if (d.pointerCount != 1) return;
     final w = context.size?.width ?? 1;
     if (w <= 0) return;
+    if (_draggingHighlight) {
+      final chartW = (w -
+              OpticalOverviewPainter.leftGutter -
+              OpticalOverviewPainter.rightGutter)
+          .clamp(1.0, w);
+      final delta =
+          d.focalPointDelta.dx / chartW * _overview.windowSeconds;
+      panDetailWithinOverview(
+        detail: _detail,
+        overview: _overview,
+        deltaSeconds: delta,
+        newestElapsed: newest,
+        oldestElapsed: oldest,
+      );
+      return;
+    }
     final vp = _pinchOnDetail ? _detail : _overview;
     final delta = -d.focalPointDelta.dx / w * vp.windowSeconds;
     if (_pinchOnDetail) {

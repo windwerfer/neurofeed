@@ -132,14 +132,16 @@ Drag/pinch on a time-X graph enters Inspect.
 | Histogram | ~70% + ~30% Bands strip | 2/4/**8 s** | X ±100 µV (overflow ±50/±200), 64 bins. Tap hairline. Strip default 30 s. |
 | PSD | same split | 2/**4**/8 s | X 0–60 Hz (overflow 0–100). Welch 1 s / 256-pt, 50% hop. Band shading + alpha peak. |
 | Spectrogram | 1 heatmap | 10/**20**/30 s / 2 min / 5 min + pinch `custom` | Y 0–60 Hz. `mag ▾` color min/max. STFT 256-pt, hop ~0.25 s. No strip, no FFT-size chrome. |
-| HR+SpO2 | dual-axis HR/SpO₂ + IR PPG | top 15/**30**/60/120 s; bottom **10 s** (≤ top) | Muse PPG only. Linked pan/zoom; highlight = bottom window. Avg HR line. Crown → empty. Window lengths persisted. |
+| HR+SpO2 | dual-axis HR/SpO₂ + IR PPG | top 15/**30**/60/120 s; bottom **10 s** (≤ top) | Muse PPG only. Highlight = bottom window. Drag highlight to slide detail inside a frozen overview (stop at edges); drag outside highlight pans overview. Linked pinch/zoom. Avg HR line. Crown → empty. Window lengths persisted. |
 
 Histogram/PSD highlight on the strip is **time only** (width = T). In
 Follow, the highlight is pinned flush-right to the strip's smoothly
 advancing edge (same vsync / Follow-lead ticker as the Bands lines) — not
-keyed off 1 Hz band-cache frames. Inspect keeps absolute epoch times. One
-electrode-toggle set drives both panes. Recording-dashboard Histogram/PSD
-are one pane (no strip). Follow is disabled there.
+keyed off 1 Hz band-cache frames. Inspect keeps absolute epoch times. Drag
+the highlight to move the epoch window inside the frozen strip (stop at
+edges); drag outside pans the strip. One electrode-toggle set drives both
+panes. Recording-dashboard Histogram/PSD are one pane (no strip). Follow is
+disabled there.
 
 DSP: `monitor/dsp.dart` only. Hamming, power `(re²+im²)/(n*n)`. Live `n = 256`.
 Follow Spectrogram STFT is incremental (one new hop FFT); Inspect / electrode
