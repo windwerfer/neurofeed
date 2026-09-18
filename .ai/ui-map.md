@@ -5,8 +5,8 @@ human describes a bug. Frozen connect/pipeline names are mirrored, not renamed.
 
 How to use: pick a surface, then match **Spoken name**.
 
-Surfaces: Status bar · Sidebar · Connect · GraphShell · Raw EEG · Bands ·
-Histogram · PSD · Spectrogram · History · Recording dashboard · Feedback
+Surfaces: Status bar · Sidebar · Connect · GraphShell · Raw EEG · Bands · HR+SpO2 ·
+Histogram · PSD · Spectrogram · HR+SpO2 · History · Recording dashboard · Feedback
 list · Session · Settings.
 
 ## Chrome
@@ -43,6 +43,7 @@ Width `kSidebarWidth` (220). Overlay below 700px; row sibling at ≥ 700.
 | Histogram | `Histogram` | `AppView.histogram` | `app.dart` | After Raw EEG. `monitor/views/histogram_view.dart`. |
 | Spectrogram | `Spectrogram` | `AppView.spectrogram` | `app.dart` | `monitor/views/spectrogram_view.dart`. |
 | PSD | `PSD` | `AppView.psd` | `app.dart` | Short label. Title `Power Spectral Density`. |
+| HR+SpO2 | `HR+SpO2` | `AppView.hrSpo2` | `app.dart` | Dual-pane optical. `monitor/views/hr_spo2_view.dart`. |
 | Streaming | `Streaming` | `AppView.streaming` | `app.dart` | Trailing `StreamDot`. |
 | Settings | `Settings` | `AppView.settings` | `app.dart` | |
 

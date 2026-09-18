@@ -41,6 +41,7 @@ class BandsContextStrip extends StatefulWidget {
     required this.highlightEndElapsed,
     required this.connected,
     this.waiting = false,
+    this.onStripWindowChanged,
   });
 
   final ViewportController stripViewport;
@@ -52,6 +53,7 @@ class BandsContextStrip extends StatefulWidget {
   final double highlightEndElapsed;
   final bool connected;
   final bool waiting;
+  final ValueChanged<double>? onStripWindowChanged;
 
   @override
   State<BandsContextStrip> createState() => _BandsContextStripState();
@@ -107,6 +109,7 @@ class _BandsContextStripState extends State<BandsContextStrip> {
         zoomCap: ViewportController.bandsZoomCap,
       );
       _align();
+      widget.onStripWindowChanged?.call(_strip.windowSeconds);
       return;
     }
     if (d.pointerCount != 1) return;
@@ -129,6 +132,7 @@ class _BandsContextStripState extends State<BandsContextStrip> {
       newestElapsed: widget.stripNewestElapsed,
     );
     _align();
+    widget.onStripWindowChanged?.call(_strip.windowSeconds);
   }
 
   @override
