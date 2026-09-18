@@ -26,6 +26,11 @@ from runners.helpers import (  # noqa: E402
 from runners.score_feature import score_feature  # noqa: E402
 from runners.simulate_protocol import simulate_protocol  # noqa: E402
 
+PRESETS = {
+    "synthetic": "corpora/synthetic/demo_session.npz",
+    "sleep-edf-test": "corpora/external/sleep_edf_test.npz",
+}
+
 
 def _feature_roles(protocols: dict) -> dict[str, list[str]]:
     roles: dict[str, list[str]] = {}
@@ -39,13 +44,36 @@ def _feature_roles(protocols: dict) -> dict[str, list[str]]:
     return roles
 
 
-def _ensure_corpus(manifest: dict) -> Path:
+def _ensure_synthetic(manifest: dict) -> Path:
     synth = manifest.get("synthetic", {})
     rel = synth.get("path", "corpora/synthetic/demo_session.npz")
     path = GYM_ROOT / rel
     if not path.exists():
         generate_synthetic_corpus(path.parent)
     return path
+
+
+def _ensure_sleep_edf(max_windows_per_rec: int | None) -> Path:
+    """Build external Sleep-EDF NPZ if missing; fall back to synthetic on failure."""
+    out = GYM_ROOT / PRESETS["sleep-edf-test"]
+    if out.exists():
+        return out
+    try:
+        from runners.build_corpus_sleep_edf import build_corpus
+
+        summary = build_corpus(
+            out_path=out,
+            max_windows_per_rec=max_windows_per_rec,
+        )
+        print(f"built sleep-edf corpus: n={summary['n']} -> {out}")
+        return out
+    except Exception as exc:  # noqa: BLE001 — intentional demo fallback
+        print(
+            f"warning: sleep-edf corpus unavailable ({exc}); "
+            "falling back to synthetic demo",
+            file=sys.stderr,
+        )
+        return _ensure_synthetic(load_manifest())
 
 
 def write_protocol_stats(run: dict, out_path: Path) -> None:
@@ -120,7 +148,7 @@ def write_protocol_stats(run: dict, out_path: Path) -> None:
         "",
         "- Fixed calibration threshold (no EMA dynamic adapt).",
         "- No dirty-pad / quality gating.",
-        "- AI uses precomputed fixture columns (no CBraMod/REVE forward).",
+        "- AI uses precomputed emb_cache + linear heads (no CBraMod/REVE forward).",
         "- Crown `device.*` marked N/A (no corpus).",
         "",
     ]
@@ -131,6 +159,19 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run feedback_gym offline harness")
     parser.add_argument("--all", action="store_true", default=True, help="run everything")
     parser.add_argument("--corpus", type=str, default=None, help="override corpus NPZ path")
+    parser.add_argument(
+        "--preset",
+        type=str,
+        choices=sorted(PRESETS.keys()),
+        default=None,
+        help="named corpus: synthetic (default) or sleep-edf-test (builds if missing)",
+    )
+    parser.add_argument(
+        "--max-windows-per-rec",
+        type=int,
+        default=None,
+        help="when building sleep-edf-test, cap windows per recording",
+    )
     args = parser.parse_args(argv)
 
     protocols, features = load_catalog()
@@ -139,8 +180,17 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.corpus:
         corpus_path = Path(args.corpus)
+        if not corpus_path.is_absolute():
+            # resolve relative to CWD first, then gym root
+            cand = Path.cwd() / corpus_path
+            corpus_path = cand if cand.exists() else (GYM_ROOT / corpus_path)
+    elif args.preset == "sleep-edf-test":
+        corpus_path = _ensure_sleep_edf(args.max_windows_per_rec)
+    elif args.preset == "synthetic" or args.preset is None:
+        corpus_path = _ensure_synthetic(manifest)
     else:
-        corpus_path = _ensure_corpus(manifest)
+        corpus_path = _ensure_synthetic(manifest)
+
     corpus = load_corpus(corpus_path)
 
     orphans = orphan_features(protocols, features)
@@ -168,11 +218,20 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
 
+    try:
+        corpus_rel = str(corpus_path.resolve().relative_to(GYM_ROOT.resolve()))
+    except ValueError:
+        corpus_rel = str(corpus_path)
+
     run = {
         "run_id": run_id,
         "timestamp": ts.strftime("%Y-%m-%d %H:%M:%S UTC"),
-        "corpus": str(corpus_path.relative_to(GYM_ROOT)),
-        "commit_note": "offline synthetic/demo unless --corpus overridden",
+        "corpus": corpus_rel,
+        "commit_note": (
+            "sleep-edf emb_cache+linear heads"
+            if "sleep_edf" in corpus_rel
+            else "offline synthetic/demo unless --corpus/--preset overridden"
+        ),
         "protocols": protocol_results,
         "features": feature_results,
         "grids": {
@@ -203,6 +262,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"feedback_gym run {run_id}")
     print(f"  protocols: {len(protocol_results)}")
     print(f"  features:  {len(feature_results)}")
+    print(f"  corpus:    {corpus_rel}")
     print(f"  results:   {results_dir}")
     print(f"  stats:     {GYM_ROOT / 'PROTOCOL_STATS.md'}")
     print(f"  ui data:   {ui_data / 'latest.json'}")

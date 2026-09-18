@@ -10,6 +10,26 @@
   },
   "external": [
     {
+      "id": "sleep_edf_test",
+      "optional": true,
+      "path": "corpora/external/sleep_edf_test.npz",
+      "gitignored": true,
+      "preset": "sleep-edf-test",
+      "rebuild": "python3 runners/build_corpus_sleep_edf.py [--max-windows-per-rec 500]",
+      "run": "python3 runners/run_gym.py --preset sleep-edf-test",
+      "sources": {
+        "windows": "../muse-eeg-heads/kaggle_datasets/muse-eeg-heads-windows/vigilance_sleep_edf/windows/*_windows.npz",
+        "splits": "../muse-eeg-heads/kaggle_datasets/muse-eeg-heads-windows/vigilance_sleep_edf/splits/test_subjects.json",
+        "emb_cache": "../muse-eeg-heads/exports/head_c_full_corpus/emb_cache/{REC}_emb.npz",
+        "band_math": "../muse-eeg-heads/band_math/features/flutter_bands.py",
+        "heads": "assets/packs/cbramod-a-vig-full/heads/head_{a_vig,c_wake_light}_linear.f32bin"
+      },
+      "labels": "windows y / emb y_a: 0=drowsy (negative), 1=hypnagogic",
+      "cal_policy": "first cal_n=90 samples of concatenated test stream (sessions typically start wake/low-y)",
+      "ai": "softmax P(class1) from emb @ W.T + b; W is (2,200) in f32bin; no encoder forward",
+      "notes": "REVE columns omitted. Falls back to synthetic if paths missing."
+    },
+    {
       "id": "muse-eeg-heads-band-math",
       "optional": true,
       "hint": "../muse-eeg-heads/band_math (sibling of neurofeed on worker)",
@@ -17,7 +37,7 @@
         "COMPARE_AI_VS_BAND.md",
         "windows/splits under band_math/"
       ],
-      "how_to_wire": "Point --corpus at an NPZ with the same column schema as demo_session.npz (band_*, delta_rel/theta_rel/alpha_rel/beta_rel, delta_abs, ai_*, labels, cal_n). Sleep-EDF export wiring is a follow-up."
+      "how_to_wire": "Prefer --preset sleep-edf-test (builds NPZ). Or point --corpus at any NPZ matching demo_session schema."
     }
   ],
   "schema": {
@@ -34,7 +54,7 @@
       "ai.wake_light_reve": "ai_wake_light_reve",
       "ai.drowsiness": "ai_drowsiness"
     },
-    "optional": ["labels", "delta_abs"],
+    "optional": ["labels", "delta_abs", "recording_id", "label_names"],
     "device_features": ["device.focus", "device.calm"]
   }
 }

@@ -1,8 +1,8 @@
 {
-  "run_id": "20260918T101047Z",
-  "timestamp": "2026-09-18 10:10:47 UTC",
-  "corpus": "corpora/synthetic/demo_session.npz",
-  "commit_note": "offline synthetic/demo unless --corpus overridden",
+  "run_id": "20260918T101653Z",
+  "timestamp": "2026-09-18 10:16:53 UTC",
+  "corpus": "corpora/external/sleep_edf_test.npz",
+  "commit_note": "sleep-edf emb_cache+linear heads",
   "protocols": [
     {
       "id": "drowsiness",
@@ -12,11 +12,11 @@
         "reward": {
           "feature": "band.atr",
           "policy": "percentileUptrain",
-          "threshold": 1.6105,
-          "hit_rate": 0.2235,
-          "stability": 0.7937,
-          "score": 0.3946,
-          "n_play": 510
+          "threshold": 0.2341,
+          "hit_rate": 0.8554,
+          "stability": 0.8906,
+          "score": 0.866,
+          "n_play": 61646
         },
         "inhibit": {
           "items": [],
@@ -26,15 +26,15 @@
           "feature": "band.delta",
           "policy": "percentileWarn",
           "band_math": true,
-          "threshold": 0.1021,
-          "warn_rate": 0.7118,
-          "stability": 0.8428,
-          "label_align": 0.85,
-          "score": 0.85
+          "threshold": 178.8237,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "score": 0.5
         }
       },
       "notes": [],
-      "final": 0.6523
+      "final": 0.783
     },
     {
       "id": "twilight",
@@ -44,11 +44,11 @@
         "reward": {
           "feature": "band.tar",
           "policy": "percentileUptrain",
-          "threshold": 0.5631,
-          "hit_rate": 0.8471,
-          "stability": 0.8075,
-          "score": 0.8352,
-          "n_play": 510
+          "threshold": 3.338,
+          "hit_rate": 0.216,
+          "stability": 0.8611,
+          "score": 0.4095,
+          "n_play": 61646
         },
         "inhibit": {
           "items": [],
@@ -58,15 +58,15 @@
           "feature": "band.delta",
           "policy": "percentileWarn",
           "band_math": true,
-          "threshold": 0.1021,
-          "warn_rate": 0.7118,
-          "stability": 0.8428,
-          "label_align": 0.85,
-          "score": 0.85
+          "threshold": 178.8237,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "score": 0.5
         }
       },
       "notes": [],
-      "final": 0.8726
+      "final": 0.5548
     },
     {
       "id": "alertnessOpen",
@@ -76,11 +76,11 @@
         "reward": {
           "feature": "band.btr",
           "policy": "percentileUptrain",
-          "threshold": 1.1372,
-          "hit_rate": 0.2431,
-          "stability": 0.8291,
-          "score": 0.4189,
-          "n_play": 510
+          "threshold": 0.2903,
+          "hit_rate": 0.7999,
+          "stability": 0.905,
+          "score": 0.8314,
+          "n_play": 61646
         },
         "inhibit": {
           "items": [],
@@ -91,7 +91,7 @@
       "notes": [
         "no guard lane"
       ],
-      "final": 0.5849
+      "final": 0.8796
     },
     {
       "id": "alertnessClosed",
@@ -101,11 +101,11 @@
         "reward": {
           "feature": "band.btr",
           "policy": "percentileUptrain",
-          "threshold": 1.1372,
-          "hit_rate": 0.2431,
-          "stability": 0.8291,
-          "score": 0.4189,
-          "n_play": 510
+          "threshold": 0.2903,
+          "hit_rate": 0.7999,
+          "stability": 0.905,
+          "score": 0.8314,
+          "n_play": 61646
         },
         "inhibit": {
           "items": [],
@@ -115,15 +115,15 @@
           "feature": "band.delta",
           "policy": "percentileWarn",
           "band_math": true,
-          "threshold": 0.1021,
-          "warn_rate": 0.7118,
-          "stability": 0.8428,
-          "label_align": 0.85,
-          "score": 0.85
+          "threshold": 178.8237,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "score": 0.5
         }
       },
       "notes": [],
-      "final": 0.6645
+      "final": 0.7657
     },
     {
       "id": "mindfulness",
@@ -133,11 +133,11 @@
         "reward": {
           "feature": "band.alpha",
           "policy": "percentileUptrain",
-          "threshold": 0.2929,
-          "hit_rate": 0.2353,
-          "stability": 0.8035,
-          "score": 0.4058,
-          "n_play": 510
+          "threshold": 0.0326,
+          "hit_rate": 0.8787,
+          "stability": 0.9236,
+          "score": 0.8922,
+          "n_play": 61646
         },
         "inhibit": {
           "items": [],
@@ -147,15 +147,15 @@
           "feature": "band.delta",
           "policy": "percentileWarn",
           "band_math": true,
-          "threshold": 0.1021,
-          "warn_rate": 0.7118,
-          "stability": 0.8428,
-          "label_align": 0.85,
-          "score": 0.85
+          "threshold": 178.8237,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "score": 0.5
         }
       },
       "notes": [],
-      "final": 0.6579
+      "final": 0.7961
     },
     {
       "id": "concentration",
@@ -165,36 +165,36 @@
         "reward": {
           "feature": "band.alpha",
           "policy": "percentileUptrain",
-          "threshold": 0.2929,
-          "hit_rate": 0.2176,
-          "stability": 0.8035,
-          "score": 0.3934,
-          "n_play": 510
+          "threshold": 0.0326,
+          "hit_rate": 0.6753,
+          "stability": 0.86,
+          "score": 0.7307,
+          "n_play": 61646
         },
         "inhibit": {
           "items": [
             {
               "type": "betaCeiling",
               "max": 0.25,
-              "inhibit_block": 0.075,
-              "health": 0.65
+              "inhibit_block": 0.2315,
+              "health": 0.963
             }
           ],
-          "score": 0.65
+          "score": 0.963
         },
         "guard": {
           "feature": "band.delta",
           "policy": "percentileWarn",
           "band_math": true,
-          "threshold": 0.1021,
-          "warn_rate": 0.7118,
-          "stability": 0.8428,
-          "label_align": 0.85,
-          "score": 0.85
+          "threshold": 178.8237,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "score": 0.5
         }
       },
       "notes": [],
-      "final": 0.5817
+      "final": 0.708
     },
     {
       "id": "relaxedConcentration",
@@ -204,42 +204,42 @@
         "reward": {
           "feature": "band.atr",
           "policy": "percentileUptrain",
-          "threshold": 1.6105,
-          "hit_rate": 0.1961,
-          "stability": 0.7859,
-          "score": 0.373,
-          "n_play": 510
+          "threshold": 0.2341,
+          "hit_rate": 0.3459,
+          "stability": 0.8409,
+          "score": 0.4944,
+          "n_play": 61646
         },
         "inhibit": {
           "items": [
             {
               "type": "betaCeiling",
               "max": 0.25,
-              "inhibit_block": 0.1228,
-              "health": 0.7456
+              "inhibit_block": 0.2378,
+              "health": 0.9756
             },
             {
               "type": "deltaCeiling",
               "max": 0.5,
-              "inhibit_block": 0.0,
-              "health": 0.5
+              "inhibit_block": 0.3589,
+              "health": 0.7822
             }
           ],
-          "score": 0.6228
+          "score": 0.8789
         },
         "guard": {
           "feature": "band.delta",
           "policy": "percentileWarn",
           "band_math": true,
-          "threshold": 0.1021,
-          "warn_rate": 0.7118,
-          "stability": 0.8428,
-          "label_align": 0.85,
-          "score": 0.85
+          "threshold": 178.8237,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "score": 0.5
         }
       },
       "notes": [],
-      "final": 0.5661
+      "final": 0.573
     },
     {
       "id": "recordOnly",
@@ -268,17 +268,17 @@
           "feature": "band.delta",
           "policy": "percentileWarn",
           "band_math": true,
-          "threshold": 0.1021,
-          "warn_rate": 0.7118,
-          "stability": 0.8428,
-          "label_align": 0.85,
-          "score": 0.85
+          "threshold": 178.8237,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "score": 0.5
         }
       },
       "notes": [
         "no reward lane"
       ],
-      "final": 0.85
+      "final": 0.5
     }
   ],
   "features": [
@@ -297,54 +297,54 @@
       "latency": "~1s",
       "status": "ok",
       "best_p": 50,
-      "score": 0.1902,
-      "sep": 0.9987,
+      "score": 0.8249,
+      "sep": 0.5736,
       "sweep": [
         {
           "p": 50,
-          "threshold": 1.6826,
-          "hit_rate": 0.1902,
-          "stability": 0.7996,
-          "primary": 0.1902
+          "threshold": 0.262,
+          "hit_rate": 0.8249,
+          "stability": 0.8777,
+          "primary": 0.8249
         },
         {
           "p": 55,
-          "threshold": 1.7225,
-          "hit_rate": 0.1725,
-          "stability": 0.8075,
-          "primary": 0.1725
+          "threshold": 0.2769,
+          "hit_rate": 0.8094,
+          "stability": 0.8722,
+          "primary": 0.8094
         },
         {
           "p": 60,
-          "threshold": 1.7759,
-          "hit_rate": 0.1529,
-          "stability": 0.8075,
-          "primary": 0.1529
+          "threshold": 0.2996,
+          "hit_rate": 0.784,
+          "stability": 0.8611,
+          "primary": 0.784
         },
         {
           "p": 65,
-          "threshold": 1.8343,
-          "hit_rate": 0.1333,
-          "stability": 0.8232,
-          "primary": 0.1333
+          "threshold": 0.3161,
+          "hit_rate": 0.7656,
+          "stability": 0.8547,
+          "primary": 0.7656
         },
         {
           "p": 70,
-          "threshold": 1.894,
-          "hit_rate": 0.1216,
-          "stability": 0.835,
-          "primary": 0.1216
+          "threshold": 0.3245,
+          "hit_rate": 0.7564,
+          "stability": 0.8524,
+          "primary": 0.7564
         }
       ],
       "notes": [],
       "sweep_role": "reward",
       "primary_metric": "hit_rate",
       "sparkline": [
-        0.1902,
-        0.1725,
-        0.1529,
-        0.1333,
-        0.1216
+        0.8249,
+        0.8094,
+        0.784,
+        0.7656,
+        0.7564
       ]
     },
     {
@@ -361,54 +361,54 @@
       "latency": "~1s",
       "status": "ok",
       "best_p": 50,
-      "score": 0.8157,
-      "sep": 0.9987,
+      "score": 0.1765,
+      "sep": 0.5736,
       "sweep": [
         {
           "p": 50,
-          "threshold": 0.5906,
-          "hit_rate": 0.8157,
-          "stability": 0.8075,
-          "primary": 0.8157
+          "threshold": 3.796,
+          "hit_rate": 0.1765,
+          "stability": 0.8769,
+          "primary": 0.1765
         },
         {
           "p": 55,
-          "threshold": 0.6016,
-          "hit_rate": 0.8039,
-          "stability": 0.7996,
-          "primary": 0.8039
+          "threshold": 3.9704,
+          "hit_rate": 0.1646,
+          "stability": 0.8804,
+          "primary": 0.1646
         },
         {
           "p": 60,
-          "threshold": 0.6209,
-          "hit_rate": 0.7765,
-          "stability": 0.7937,
-          "primary": 0.7765
+          "threshold": 4.2715,
+          "hit_rate": 0.1446,
+          "stability": 0.8906,
+          "primary": 0.1446
         },
         {
           "p": 65,
-          "threshold": 0.6389,
-          "hit_rate": 0.7569,
-          "stability": 0.8173,
-          "primary": 0.7569
+          "threshold": 4.6504,
+          "hit_rate": 0.125,
+          "stability": 0.9004,
+          "primary": 0.125
         },
         {
           "p": 70,
-          "threshold": 0.6644,
-          "hit_rate": 0.7373,
-          "stability": 0.8251,
-          "primary": 0.7373
+          "threshold": 4.8548,
+          "hit_rate": 0.116,
+          "stability": 0.9044,
+          "primary": 0.116
         }
       ],
       "notes": [],
       "sweep_role": "reward",
       "primary_metric": "hit_rate",
       "sparkline": [
-        0.8157,
-        0.8039,
-        0.7765,
-        0.7569,
-        0.7373
+        0.1765,
+        0.1646,
+        0.1446,
+        0.125,
+        0.116
       ]
     },
     {
@@ -426,54 +426,54 @@
       "latency": "~1s",
       "status": "ok",
       "best_p": 50,
-      "score": 0.1549,
-      "sep": 0.9987,
+      "score": 0.7711,
+      "sep": 0.5907,
       "sweep": [
         {
           "p": 50,
-          "threshold": 1.2686,
-          "hit_rate": 0.1549,
-          "stability": 0.8212,
-          "primary": 0.1549
+          "threshold": 0.3255,
+          "hit_rate": 0.7711,
+          "stability": 0.8968,
+          "primary": 0.7711
         },
         {
           "p": 55,
-          "threshold": 1.2985,
-          "hit_rate": 0.1431,
-          "stability": 0.8173,
-          "primary": 0.1431
+          "threshold": 0.3355,
+          "hit_rate": 0.763,
+          "stability": 0.8951,
+          "primary": 0.763
         },
         {
           "p": 60,
-          "threshold": 1.3109,
-          "hit_rate": 0.1333,
-          "stability": 0.8251,
-          "primary": 0.1333
+          "threshold": 0.3404,
+          "hit_rate": 0.7585,
+          "stability": 0.8939,
+          "primary": 0.7585
         },
         {
           "p": 65,
-          "threshold": 1.3561,
-          "hit_rate": 0.1039,
-          "stability": 0.8468,
-          "primary": 0.1039
+          "threshold": 0.3761,
+          "hit_rate": 0.7304,
+          "stability": 0.89,
+          "primary": 0.7304
         },
         {
           "p": 70,
-          "threshold": 1.3766,
-          "hit_rate": 0.1,
-          "stability": 0.8507,
-          "primary": 0.1
+          "threshold": 0.3929,
+          "hit_rate": 0.7182,
+          "stability": 0.8867,
+          "primary": 0.7182
         }
       ],
       "notes": [],
       "sweep_role": "reward",
       "primary_metric": "hit_rate",
       "sparkline": [
-        0.1549,
-        0.1431,
-        0.1333,
-        0.1039,
-        0.1
+        0.7711,
+        0.763,
+        0.7585,
+        0.7304,
+        0.7182
       ]
     },
     {
@@ -491,54 +491,54 @@
       "latency": "~1s",
       "status": "ok",
       "best_p": 50,
-      "score": 0.1902,
-      "sep": 0.9966,
+      "score": 0.8636,
+      "sep": 0.5228,
       "sweep": [
         {
           "p": 50,
-          "threshold": 0.3028,
-          "hit_rate": 0.1902,
-          "stability": 0.7996,
-          "primary": 0.1902
+          "threshold": 0.0355,
+          "hit_rate": 0.8636,
+          "stability": 0.918,
+          "primary": 0.8636
         },
         {
           "p": 55,
-          "threshold": 0.306,
-          "hit_rate": 0.1667,
-          "stability": 0.8075,
-          "primary": 0.1667
+          "threshold": 0.0365,
+          "hit_rate": 0.858,
+          "stability": 0.9159,
+          "primary": 0.858
         },
         {
           "p": 60,
-          "threshold": 0.3114,
-          "hit_rate": 0.1471,
-          "stability": 0.7957,
-          "primary": 0.1471
+          "threshold": 0.0393,
+          "hit_rate": 0.8417,
+          "stability": 0.9117,
+          "primary": 0.8417
         },
         {
           "p": 65,
-          "threshold": 0.3159,
-          "hit_rate": 0.1314,
-          "stability": 0.8035,
-          "primary": 0.1314
+          "threshold": 0.0414,
+          "hit_rate": 0.8306,
+          "stability": 0.9081,
+          "primary": 0.8306
         },
         {
           "p": 70,
-          "threshold": 0.3218,
-          "hit_rate": 0.1137,
-          "stability": 0.8193,
-          "primary": 0.1137
+          "threshold": 0.0423,
+          "hit_rate": 0.8251,
+          "stability": 0.9062,
+          "primary": 0.8251
         }
       ],
       "notes": [],
       "sweep_role": "reward",
       "primary_metric": "hit_rate",
       "sparkline": [
-        0.1902,
-        0.1667,
-        0.1471,
-        0.1314,
-        0.1137
+        0.8636,
+        0.858,
+        0.8417,
+        0.8306,
+        0.8251
       ]
     },
     {
@@ -560,105 +560,105 @@
       ],
       "latency": "~1s",
       "status": "ok",
-      "best_p": 95,
-      "score": 0.9357,
-      "sep": 1.0,
+      "best_p": 50,
+      "score": 0.5,
+      "sep": 0.5842,
       "sweep": [
         {
           "p": 50,
-          "threshold": 0.0778,
-          "warn_rate": 0.8333,
-          "stability": 0.8114,
-          "label_align": 0.7024,
-          "primary": 0.7024
+          "threshold": 121.2513,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 55,
-          "threshold": 0.0842,
-          "warn_rate": 0.802,
-          "stability": 0.8114,
-          "label_align": 0.7405,
-          "primary": 0.7405
+          "threshold": 139.3056,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 60,
-          "threshold": 0.086,
-          "warn_rate": 0.7961,
-          "stability": 0.7996,
-          "label_align": 0.7476,
-          "primary": 0.7476
+          "threshold": 142.0008,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 65,
-          "threshold": 0.0907,
-          "warn_rate": 0.7667,
-          "stability": 0.8075,
-          "label_align": 0.7833,
-          "primary": 0.7833
+          "threshold": 154.6867,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 70,
-          "threshold": 0.0946,
-          "warn_rate": 0.7431,
-          "stability": 0.8193,
-          "label_align": 0.8119,
-          "primary": 0.8119
+          "threshold": 161.7631,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 75,
-          "threshold": 0.1021,
-          "warn_rate": 0.7118,
-          "stability": 0.8428,
-          "label_align": 0.85,
-          "primary": 0.85
+          "threshold": 178.8237,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 80,
-          "threshold": 0.1058,
-          "warn_rate": 0.698,
-          "stability": 0.8546,
-          "label_align": 0.8667,
-          "primary": 0.8667
+          "threshold": 196.355,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 85,
-          "threshold": 0.1114,
-          "warn_rate": 0.6745,
-          "stability": 0.8939,
-          "label_align": 0.8952,
-          "primary": 0.8952
+          "threshold": 221.5693,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 90,
-          "threshold": 0.1154,
-          "warn_rate": 0.6529,
-          "stability": 0.9293,
-          "label_align": 0.9214,
-          "primary": 0.9214
+          "threshold": 251.6291,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 95,
-          "threshold": 0.125,
-          "warn_rate": 0.6412,
-          "stability": 0.943,
-          "label_align": 0.9357,
-          "primary": 0.9357
+          "threshold": 315.8469,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         }
       ],
       "notes": [],
       "sweep_role": "guard",
       "primary_metric": "label_align",
       "sparkline": [
-        0.7024,
-        0.7405,
-        0.7476,
-        0.7833,
-        0.8119,
-        0.85,
-        0.8667,
-        0.8952,
-        0.9214,
-        0.9357
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
       ]
     },
     {
@@ -672,105 +672,105 @@
       "roles_in_protocols": [],
       "latency": "~2s window / 1 Hz tick",
       "status": "ok",
-      "best_p": 95,
-      "score": 0.9786,
-      "sep": 0.9997,
+      "best_p": 50,
+      "score": 0.5,
+      "sep": 0.8489,
       "sweep": [
         {
           "p": 50,
-          "threshold": 0.1541,
-          "warn_rate": 0.7863,
-          "stability": 0.8153,
-          "label_align": 0.7595,
-          "primary": 0.7595
+          "threshold": 0.0895,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 55,
-          "threshold": 0.169,
-          "warn_rate": 0.7647,
-          "stability": 0.8193,
-          "label_align": 0.7857,
-          "primary": 0.7857
+          "threshold": 0.1029,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 60,
-          "threshold": 0.1763,
-          "warn_rate": 0.7412,
-          "stability": 0.8114,
-          "label_align": 0.8143,
-          "primary": 0.8143
+          "threshold": 0.107,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 65,
-          "threshold": 0.189,
-          "warn_rate": 0.7176,
-          "stability": 0.831,
-          "label_align": 0.8429,
-          "primary": 0.8429
+          "threshold": 0.137,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 70,
-          "threshold": 0.1989,
-          "warn_rate": 0.7039,
-          "stability": 0.8546,
-          "label_align": 0.8595,
-          "primary": 0.8595
+          "threshold": 0.1609,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 75,
-          "threshold": 0.2081,
-          "warn_rate": 0.6882,
-          "stability": 0.8723,
-          "label_align": 0.8786,
-          "primary": 0.8786
+          "threshold": 0.1874,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 80,
-          "threshold": 0.2189,
-          "warn_rate": 0.6745,
-          "stability": 0.888,
-          "label_align": 0.8952,
-          "primary": 0.8952
+          "threshold": 0.2139,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 85,
-          "threshold": 0.2482,
-          "warn_rate": 0.6431,
-          "stability": 0.9194,
-          "label_align": 0.9333,
-          "primary": 0.9333
+          "threshold": 0.2369,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 90,
-          "threshold": 0.2638,
-          "warn_rate": 0.6314,
-          "stability": 0.9391,
-          "label_align": 0.9476,
-          "primary": 0.9476
+          "threshold": 0.2561,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 95,
-          "threshold": 0.3032,
-          "warn_rate": 0.6059,
-          "stability": 0.9784,
-          "label_align": 0.9786,
-          "primary": 0.9786
+          "threshold": 0.3142,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         }
       ],
       "notes": [],
       "sweep_role": "guard",
       "primary_metric": "label_align",
       "sparkline": [
-        0.7595,
-        0.7857,
-        0.8143,
-        0.8429,
-        0.8595,
-        0.8786,
-        0.8952,
-        0.9333,
-        0.9476,
-        0.9786
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
       ]
     },
     {
@@ -784,105 +784,105 @@
       "roles_in_protocols": [],
       "latency": "~2s window / 1 Hz tick",
       "status": "ok",
-      "best_p": 95,
-      "score": 0.9452,
-      "sep": 1.0,
+      "best_p": 50,
+      "score": 0.5,
+      "sep": 0.8612,
       "sweep": [
         {
           "p": 50,
-          "threshold": 0.1004,
-          "warn_rate": 0.7863,
-          "stability": 0.8153,
-          "label_align": 0.7595,
-          "primary": 0.7595
+          "threshold": 0.0668,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 55,
-          "threshold": 0.1019,
-          "warn_rate": 0.7686,
-          "stability": 0.8271,
-          "label_align": 0.781,
-          "primary": 0.781
+          "threshold": 0.0697,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 60,
-          "threshold": 0.1026,
-          "warn_rate": 0.7471,
-          "stability": 0.8232,
-          "label_align": 0.8071,
-          "primary": 0.8071
+          "threshold": 0.0742,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 65,
-          "threshold": 0.1039,
-          "warn_rate": 0.7235,
-          "stability": 0.8428,
-          "label_align": 0.8357,
-          "primary": 0.8357
+          "threshold": 0.1075,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 70,
-          "threshold": 0.1049,
-          "warn_rate": 0.7098,
-          "stability": 0.8664,
-          "label_align": 0.8524,
-          "primary": 0.8524
+          "threshold": 0.1246,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 75,
-          "threshold": 0.1058,
-          "warn_rate": 0.6941,
-          "stability": 0.8841,
-          "label_align": 0.8714,
-          "primary": 0.8714
+          "threshold": 0.1491,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 80,
-          "threshold": 0.1069,
-          "warn_rate": 0.6824,
-          "stability": 0.9037,
-          "label_align": 0.8857,
-          "primary": 0.8857
+          "threshold": 0.1762,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 85,
-          "threshold": 0.1098,
-          "warn_rate": 0.6608,
-          "stability": 0.9312,
-          "label_align": 0.9119,
-          "primary": 0.9119
+          "threshold": 0.1952,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 90,
-          "threshold": 0.1114,
-          "warn_rate": 0.651,
-          "stability": 0.947,
-          "label_align": 0.9238,
-          "primary": 0.9238
+          "threshold": 0.2215,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 95,
-          "threshold": 0.1153,
-          "warn_rate": 0.6333,
-          "stability": 0.9823,
-          "label_align": 0.9452,
-          "primary": 0.9452
+          "threshold": 0.278,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         }
       ],
       "notes": [],
       "sweep_role": "guard",
       "primary_metric": "label_align",
       "sparkline": [
-        0.7595,
-        0.781,
-        0.8071,
-        0.8357,
-        0.8524,
-        0.8714,
-        0.8857,
-        0.9119,
-        0.9238,
-        0.9452
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
       ]
     },
     {
@@ -895,106 +895,13 @@
       "orphan": true,
       "roles_in_protocols": [],
       "latency": "~4s window / 1 Hz tick",
-      "status": "ok",
-      "best_p": 95,
-      "score": 0.9738,
-      "sep": 0.9997,
-      "sweep": [
-        {
-          "p": 50,
-          "threshold": 0.153,
-          "warn_rate": 0.7922,
-          "stability": 0.8075,
-          "label_align": 0.7524,
-          "primary": 0.7524
-        },
-        {
-          "p": 55,
-          "threshold": 0.1734,
-          "warn_rate": 0.7549,
-          "stability": 0.8232,
-          "label_align": 0.7976,
-          "primary": 0.7976
-        },
-        {
-          "p": 60,
-          "threshold": 0.187,
-          "warn_rate": 0.7235,
-          "stability": 0.8369,
-          "label_align": 0.8357,
-          "primary": 0.8357
-        },
-        {
-          "p": 65,
-          "threshold": 0.2102,
-          "warn_rate": 0.6961,
-          "stability": 0.8605,
-          "label_align": 0.869,
-          "primary": 0.869
-        },
-        {
-          "p": 70,
-          "threshold": 0.2251,
-          "warn_rate": 0.6804,
-          "stability": 0.8684,
-          "label_align": 0.8881,
-          "primary": 0.8881
-        },
-        {
-          "p": 75,
-          "threshold": 0.2408,
-          "warn_rate": 0.6627,
-          "stability": 0.8841,
-          "label_align": 0.9095,
-          "primary": 0.9095
-        },
-        {
-          "p": 80,
-          "threshold": 0.2457,
-          "warn_rate": 0.6588,
-          "stability": 0.8919,
-          "label_align": 0.9143,
-          "primary": 0.9143
-        },
-        {
-          "p": 85,
-          "threshold": 0.2663,
-          "warn_rate": 0.6431,
-          "stability": 0.9194,
-          "label_align": 0.9333,
-          "primary": 0.9333
-        },
-        {
-          "p": 90,
-          "threshold": 0.2787,
-          "warn_rate": 0.6373,
-          "stability": 0.9273,
-          "label_align": 0.9405,
-          "primary": 0.9405
-        },
-        {
-          "p": 95,
-          "threshold": 0.3118,
-          "warn_rate": 0.6098,
-          "stability": 0.9666,
-          "label_align": 0.9738,
-          "primary": 0.9738
-        }
-      ],
-      "notes": [],
-      "sweep_role": "guard",
-      "primary_metric": "label_align",
-      "sparkline": [
-        0.7524,
-        0.7976,
-        0.8357,
-        0.869,
-        0.8881,
-        0.9095,
-        0.9143,
-        0.9333,
-        0.9405,
-        0.9738
+      "status": "needs_pack",
+      "best_p": null,
+      "score": null,
+      "sep": null,
+      "sweep": [],
+      "notes": [
+        "AI pack inference unavailable \u2014 add precomputed column to corpus"
       ]
     },
     {
@@ -1007,106 +914,13 @@
       "orphan": true,
       "roles_in_protocols": [],
       "latency": "~4s window / 1 Hz tick",
-      "status": "ok",
-      "best_p": 95,
-      "score": 0.9548,
-      "sep": 0.9999,
-      "sweep": [
-        {
-          "p": 50,
-          "threshold": 0.0882,
-          "warn_rate": 0.8373,
-          "stability": 0.8035,
-          "label_align": 0.6976,
-          "primary": 0.6976
-        },
-        {
-          "p": 55,
-          "threshold": 0.0936,
-          "warn_rate": 0.8176,
-          "stability": 0.7957,
-          "label_align": 0.7214,
-          "primary": 0.7214
-        },
-        {
-          "p": 60,
-          "threshold": 0.0954,
-          "warn_rate": 0.8118,
-          "stability": 0.7957,
-          "label_align": 0.7286,
-          "primary": 0.7286
-        },
-        {
-          "p": 65,
-          "threshold": 0.1016,
-          "warn_rate": 0.798,
-          "stability": 0.7996,
-          "label_align": 0.7452,
-          "primary": 0.7452
-        },
-        {
-          "p": 70,
-          "threshold": 0.1094,
-          "warn_rate": 0.7706,
-          "stability": 0.8193,
-          "label_align": 0.7786,
-          "primary": 0.7786
-        },
-        {
-          "p": 75,
-          "threshold": 0.1207,
-          "warn_rate": 0.7451,
-          "stability": 0.831,
-          "label_align": 0.8095,
-          "primary": 0.8095
-        },
-        {
-          "p": 80,
-          "threshold": 0.1316,
-          "warn_rate": 0.7157,
-          "stability": 0.8507,
-          "label_align": 0.8452,
-          "primary": 0.8452
-        },
-        {
-          "p": 85,
-          "threshold": 0.1385,
-          "warn_rate": 0.698,
-          "stability": 0.8723,
-          "label_align": 0.8667,
-          "primary": 0.8667
-        },
-        {
-          "p": 90,
-          "threshold": 0.1619,
-          "warn_rate": 0.6373,
-          "stability": 0.947,
-          "label_align": 0.9405,
-          "primary": 0.9405
-        },
-        {
-          "p": 95,
-          "threshold": 0.1831,
-          "warn_rate": 0.6255,
-          "stability": 0.9705,
-          "label_align": 0.9548,
-          "primary": 0.9548
-        }
-      ],
-      "notes": [],
-      "sweep_role": "guard",
-      "primary_metric": "label_align",
-      "sparkline": [
-        0.6976,
-        0.7214,
-        0.7286,
-        0.7452,
-        0.7786,
-        0.8095,
-        0.8452,
-        0.8667,
-        0.9405,
-        0.9548
+      "status": "needs_pack",
+      "best_p": null,
+      "score": null,
+      "sep": null,
+      "sweep": [],
+      "notes": [
+        "AI pack inference unavailable \u2014 add precomputed column to corpus"
       ]
     },
     {
@@ -1120,105 +934,105 @@
       "roles_in_protocols": [],
       "latency": "~2s window / 1 Hz tick",
       "status": "ok",
-      "best_p": 95,
-      "score": 0.9786,
-      "sep": 0.9997,
+      "best_p": 50,
+      "score": 0.5,
+      "sep": 0.8489,
       "sweep": [
         {
           "p": 50,
-          "threshold": 0.1541,
-          "warn_rate": 0.7863,
-          "stability": 0.8153,
-          "label_align": 0.7595,
-          "primary": 0.7595
+          "threshold": 0.0895,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 55,
-          "threshold": 0.169,
-          "warn_rate": 0.7647,
-          "stability": 0.8193,
-          "label_align": 0.7857,
-          "primary": 0.7857
+          "threshold": 0.1029,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 60,
-          "threshold": 0.1763,
-          "warn_rate": 0.7412,
-          "stability": 0.8114,
-          "label_align": 0.8143,
-          "primary": 0.8143
+          "threshold": 0.107,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 65,
-          "threshold": 0.189,
-          "warn_rate": 0.7176,
-          "stability": 0.831,
-          "label_align": 0.8429,
-          "primary": 0.8429
+          "threshold": 0.137,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 70,
-          "threshold": 0.1989,
-          "warn_rate": 0.7039,
-          "stability": 0.8546,
-          "label_align": 0.8595,
-          "primary": 0.8595
+          "threshold": 0.1609,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 75,
-          "threshold": 0.2081,
-          "warn_rate": 0.6882,
-          "stability": 0.8723,
-          "label_align": 0.8786,
-          "primary": 0.8786
+          "threshold": 0.1874,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 80,
-          "threshold": 0.2189,
-          "warn_rate": 0.6745,
-          "stability": 0.888,
-          "label_align": 0.8952,
-          "primary": 0.8952
+          "threshold": 0.2139,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 85,
-          "threshold": 0.2482,
-          "warn_rate": 0.6431,
-          "stability": 0.9194,
-          "label_align": 0.9333,
-          "primary": 0.9333
+          "threshold": 0.2369,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 90,
-          "threshold": 0.2638,
-          "warn_rate": 0.6314,
-          "stability": 0.9391,
-          "label_align": 0.9476,
-          "primary": 0.9476
+          "threshold": 0.2561,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         },
         {
           "p": 95,
-          "threshold": 0.3032,
-          "warn_rate": 0.6059,
-          "stability": 0.9784,
-          "label_align": 0.9786,
-          "primary": 0.9786
+          "threshold": 0.3142,
+          "warn_rate": 1.0,
+          "stability": 1.0,
+          "label_align": 0.5,
+          "primary": 0.5
         }
       ],
       "notes": [],
       "sweep_role": "guard",
       "primary_metric": "label_align",
       "sparkline": [
-        0.7595,
-        0.7857,
-        0.8143,
-        0.8429,
-        0.8595,
-        0.8786,
-        0.8952,
-        0.9333,
-        0.9476,
-        0.9786
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5
       ]
     },
     {

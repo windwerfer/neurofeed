@@ -313,7 +313,8 @@ FEATURE_COLUMN = {
 
 
 def load_corpus(path: Path) -> dict[str, Any]:
-    data = np.load(path, allow_pickle=False)
+    # allow_pickle for optional metadata (recording_id, label_names, cal_policy)
+    data = np.load(path, allow_pickle=True)
     out: dict[str, Any] = {k: data[k] for k in data.files}
     cal = int(out.get("cal_n", [90])[0])
     out["cal_n"] = cal
