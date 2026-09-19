@@ -234,10 +234,15 @@ class Settings extends ChangeNotifier {
       }
     }
 
-    final reveInstalled = await const ModelCache().isInstalledOnDisk(
-      prefs.getString(_sessionFolderKey),
-      ModelKind.reveBase,
-    );
+    var reveInstalled = false;
+    try {
+      reveInstalled = await const ModelCache().isInstalledOnDisk(
+        prefs.getString(_sessionFolderKey),
+        ModelKind.reveBase,
+      );
+    } catch (e) {
+      debugPrint('[settings] REVE install check failed: $e');
+    }
 
     final out = <String, Map<String, String>>{};
     final ids = <String>{...catalogProtocolIds, ...raw.keys};

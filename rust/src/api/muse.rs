@@ -309,7 +309,7 @@ pub fn init_app() {
 /// with "Droidplug has not been initialized".
 #[cfg(target_os = "android")]
 #[no_mangle]
-pub extern "C" fn Java_com_example_muse_1ml_MainActivity_museAndroidInit(
+pub extern "C" fn Java_org_windwerfer_neurofeed_MainActivity_museAndroidInit(
     env: *mut jni::sys::JNIEnv,
     _class: *mut jni::sys::jobject,
     _context: *mut jni::sys::jobject,

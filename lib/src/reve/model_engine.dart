@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'package:crypto/crypto.dart';
@@ -76,10 +77,23 @@ class ModelCache {
     String? sessionFolder,
     ModelKind kind,
   ) async {
-    final base =
-        sessionFolder != null && !sessionFolder.startsWith('content://')
-        ? sessionFolder
-        : (await getApplicationDocumentsDirectory()).path;
+    String? base;
+    if (sessionFolder != null && !sessionFolder.startsWith('content://')) {
+      base = sessionFolder;
+    } else {
+      try {
+        base = (await getApplicationDocumentsDirectory()).path;
+      } catch (e) {
+        debugPrint('[models] getApplicationDocumentsDirectory failed: $e');
+        final home = Platform.environment['HOME'];
+        if (home != null && home.isNotEmpty) {
+          base = '$home${Platform.pathSeparator}Documents';
+        }
+      }
+    }
+    if (base == null || base.isEmpty) {
+      throw StateError('cannot resolve application documents directory');
+    }
     return Directory('$base/ai_models/${kind.folder}');
   }
 
