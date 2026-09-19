@@ -1,5 +1,5 @@
-import 'package:muse_ml/src/session_v5/models.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/settings.dart';
 
 /// Snapshot sidecar for monitor tmp / recording captures. Not [SessionMetadata].
 class RecordingMetadata {

@@ -3,17 +3,17 @@ import 'dart:typed_data';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
-import 'package:muse_ml/src/monitor/empty_state.dart';
-import 'package:muse_ml/src/monitor/graph_shell.dart';
-import 'package:muse_ml/src/monitor/monitor_controller.dart';
-import 'package:muse_ml/src/monitor/monitor_providers.dart';
-import 'package:muse_ml/src/monitor/monitor_state.dart';
-import 'package:muse_ml/src/monitor/panes/sweep_pane.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
-import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_buffer.dart';
+import 'package:neurofeed/src/monitor/empty_state.dart';
+import 'package:neurofeed/src/monitor/graph_shell.dart';
+import 'package:neurofeed/src/monitor/monitor_controller.dart';
+import 'package:neurofeed/src/monitor/monitor_providers.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
+import 'package:neurofeed/src/monitor/panes/sweep_pane.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart';
 
 class RawEegView extends ConsumerStatefulWidget {
   const RawEegView({super.key});

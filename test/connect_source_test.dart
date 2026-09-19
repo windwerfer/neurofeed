@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/connect_source.dart';
-import 'package:muse_ml/src/rust/api/device_config.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/connect_source.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 void main() {
   test('catalog ids and labels match the frozen spec', () {

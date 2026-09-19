@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_mean.dart';
-import 'package:muse_ml/src/monitor/electrode_toggles.dart';
-import 'package:muse_ml/src/monitor/empty_state.dart';
-import 'package:muse_ml/src/monitor/graph_shell.dart';
-import 'package:muse_ml/src/monitor/monitor_controller.dart';
-import 'package:muse_ml/src/monitor/monitor_providers.dart';
-import 'package:muse_ml/src/monitor/panes/bands_context_strip.dart';
-import 'package:muse_ml/src/monitor/panes/histogram_pane.dart';
-import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
-import 'package:muse_ml/src/monitor/split_pane_tick.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_mean.dart';
+import 'package:neurofeed/src/monitor/electrode_toggles.dart';
+import 'package:neurofeed/src/monitor/empty_state.dart';
+import 'package:neurofeed/src/monitor/graph_shell.dart';
+import 'package:neurofeed/src/monitor/monitor_controller.dart';
+import 'package:neurofeed/src/monitor/monitor_providers.dart';
+import 'package:neurofeed/src/monitor/panes/bands_context_strip.dart';
+import 'package:neurofeed/src/monitor/panes/histogram_pane.dart';
+import 'package:neurofeed/src/monitor/panes/time_series_pane.dart';
+import 'package:neurofeed/src/monitor/split_pane_tick.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/settings.dart';
 
 enum HistogramUvRange { uv50, uv100, uv200 }
 

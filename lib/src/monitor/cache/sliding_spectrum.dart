@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
-import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_mean.dart';
-import 'package:muse_ml/src/monitor/dsp.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_buffer.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_mean.dart';
+import 'package:neurofeed/src/monitor/dsp.dart';
 
 const int kWelchHopSamples = kDefaultFftN >> 1;
 

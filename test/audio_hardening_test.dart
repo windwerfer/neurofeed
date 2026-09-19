@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/audio/feedback_audio_controller.dart';
-import 'package:muse_ml/src/audio/music_controller.dart';
-import 'package:muse_ml/src/audio/rain_feedback_controller.dart';
-import 'package:muse_ml/src/audio/reward_output.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/audio/feedback_audio_controller.dart';
+import 'package:neurofeed/src/audio/music_controller.dart';
+import 'package:neurofeed/src/audio/rain_feedback_controller.dart';
+import 'package:neurofeed/src/audio/reward_output.dart';
+import 'package:neurofeed/src/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

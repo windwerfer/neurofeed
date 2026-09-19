@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/charts/smooth_path.dart';
+import 'package:neurofeed/src/charts/smooth_path.dart';
 
 void main() {
   test('two points is a straight segment', () {

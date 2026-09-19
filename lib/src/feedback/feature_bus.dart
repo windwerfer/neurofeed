@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 /// One subscribed-feature sample from [MuseEventDto.Feature].
 class FeatureSample {

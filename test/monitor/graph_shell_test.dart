@@ -2,10 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/electrode_toggles.dart';
-import 'package:muse_ml/src/monitor/graph_shell.dart';
-import 'package:muse_ml/src/monitor/device_montage.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/monitor/electrode_toggles.dart';
+import 'package:neurofeed/src/monitor/graph_shell.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
 void _portrait(WidgetTester tester) {
   tester.view.physicalSize = const Size(800, 1200);

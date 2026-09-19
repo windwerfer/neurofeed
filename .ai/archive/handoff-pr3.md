@@ -13,7 +13,7 @@ Read this file, then [`.ai/feeback/pipeline-contract.md`](pipeline-contract.md).
 
 ## What this project is doing
 
-Muse ML: Flutter UI + Rust BLE (`muse-rs` / btleplug) + on-device LUNA/REVE. The **feedback** stack is being restructured so catalog programs and later custom “bookmarks” share one pipeline:
+NeuroFeed: Flutter UI + Rust BLE (`muse-rs` / btleplug) + on-device LUNA/REVE. The **feedback** stack is being restructured so catalog programs and later custom “bookmarks” share one pipeline:
 
 ```
 Rust feature registry → MuseEventDto::Feature(FeatureDto)

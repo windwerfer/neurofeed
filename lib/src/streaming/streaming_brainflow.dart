@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:muse_ml/src/streaming/streaming_mixer.dart';
-import 'package:muse_ml/src/streaming/streaming_models.dart';
+import 'package:neurofeed/src/streaming/streaming_mixer.dart';
+import 'package:neurofeed/src/streaming/streaming_models.dart';
 
 /// Streams sensor groups in BrainFlow's "streaming_board" wire format
 /// (see `multicast_streamer.cpp` / `streaming_board.cpp` upstream): raw

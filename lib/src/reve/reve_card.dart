@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:muse_ml/src/feedback/guardrail_mode.dart';
-import 'package:muse_ml/src/reve/model_engine.dart';
-import 'package:muse_ml/src/reve/model_selector.dart';
-import 'package:muse_ml/src/reve/models.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/feedback/guardrail_mode.dart';
+import 'package:neurofeed/src/reve/model_engine.dart';
+import 'package:neurofeed/src/reve/model_selector.dart';
+import 'package:neurofeed/src/reve/models.dart';
+import 'package:neurofeed/src/settings.dart';
 
 /// AI-engine setup card: pick which foundation model powers the sleep
 /// guardrail, and download/import/uninstall it. Spur A (CBraMod) ships its

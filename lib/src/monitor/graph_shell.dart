@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/monitor/graph_cinema.dart';
-import 'package:muse_ml/src/monitor/monitor_providers.dart';
-import 'package:muse_ml/src/monitor/monitor_state.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/monitor/graph_cinema.dart';
+import 'package:neurofeed/src/monitor/monitor_providers.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
 /// Shared chrome for live monitor graphs. Record / Stop recording from PR 5a.
 class GraphShell extends ConsumerWidget {

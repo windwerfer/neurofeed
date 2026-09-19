@@ -2,14 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/streaming/streaming_brainflow.dart';
-import 'package:muse_ml/src/streaming/streaming_lsl.dart';
-import 'package:muse_ml/src/streaming/streaming_mixer.dart';
-import 'package:muse_ml/src/streaming/streaming_models.dart';
-import 'package:muse_ml/src/streaming/streaming_osc.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/streaming/streaming_brainflow.dart';
+import 'package:neurofeed/src/streaming/streaming_lsl.dart';
+import 'package:neurofeed/src/streaming/streaming_mixer.dart';
+import 'package:neurofeed/src/streaming/streaming_models.dart';
+import 'package:neurofeed/src/streaming/streaming_osc.dart';
 
 /// Immutable snapshot of the streaming UI state.
 @immutable

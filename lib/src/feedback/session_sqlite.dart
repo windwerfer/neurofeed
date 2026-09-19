@@ -12,7 +12,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
 
 /// Resolves the cache directory for the session metadata SQLite database.
 /// - Linux/Windows/macOS: `.cache` subfolder of the history folder

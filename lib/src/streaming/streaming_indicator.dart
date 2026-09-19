@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/streaming/streaming_controller.dart';
+import 'package:neurofeed/src/streaming/streaming_controller.dart';
 
 const _liveColor = Color(0xFF4CAF50);
 const _armedColor = Color(0xFFFFB300);

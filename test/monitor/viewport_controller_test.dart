@@ -1,11 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
-import 'package:muse_ml/src/monitor/device_montage.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
-import 'package:muse_ml/src/rust/api/device_config.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_buffer.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 EegDto _eeg(int electrode, List<double> samples, {double ts = 0}) => EegDto(

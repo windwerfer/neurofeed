@@ -116,7 +116,7 @@ History list stays `lib/src/views/feedback_history.dart`. Recording dashboard / 
 - **Do not add a Bands strip to Spectrogram.**
 - **Do not fork Bands view.** Histogram/PSD strip already reuses `TimeSeriesPane`.
 - **v1 History list is sqlite-only** (landed PR 6). Do not add a directory backfill of `recording_*` without a row.
-- **`SessionStore` read/delete use sqlite `path`.** Recordings are `recording_$id.muse.feedback`.
+- **`SessionStore` read/delete use sqlite `path`.** Recordings are `recording_$id.neurofeed`.
 - **No `AppView.recordings`.** Enum stays `feedbackHistory`; on-screen **History**.
 - Agent HTTP: `persist: false`. Crown 409 stays `crown_refused`.
 

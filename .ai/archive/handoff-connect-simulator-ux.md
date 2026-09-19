@@ -15,7 +15,7 @@ Do not re-design the dropdown, `DeviceKind`, or OSC listing.
 
 ## What this project is doing
 
-Muse ML: Flutter + Rust BLE headset app. Connect UI today dumps every
+NeuroFeed: Flutter + Rust BLE headset app. Connect UI today dumps every
 `DeviceKind` including Simulated* variants, and BLE-scans even for Neurosity
 (Crown/Notion), which actually speak OSC. Simulator is almost unreachable
 (`enable_simulated_devices` has no Settings toggle).

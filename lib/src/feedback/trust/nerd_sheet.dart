@@ -2,11 +2,11 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/charts/band_style.dart';
-import 'package:muse_ml/src/feedback/feedback_state.dart';
-import 'package:muse_ml/src/feedback/protocol_catalog.dart';
-import 'package:muse_ml/src/feedback/trust/nerd_model.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/charts/band_style.dart';
+import 'package:neurofeed/src/feedback/feedback_state.dart';
+import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/feedback/trust/nerd_model.dart';
+import 'package:neurofeed/src/settings.dart';
 
 Future<void> showNerdSheet(BuildContext context) {
   return showModalBottomSheet<void>(

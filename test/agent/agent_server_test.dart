@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/agent/agent_server.dart';
-import 'package:muse_ml/src/agent/agent_server_config.dart';
+import 'package:neurofeed/src/agent/agent_server.dart';
+import 'package:neurofeed/src/agent/agent_server_config.dart';
 
 void main() {
   tearDown(() async {

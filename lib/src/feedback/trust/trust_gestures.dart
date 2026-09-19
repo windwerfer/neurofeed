@@ -1,6 +1,6 @@
-import 'package:muse_ml/src/feedback/session_metadata.dart';
-import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 /// Double-blink / double-clench detector for the live trust ring.
 /// Persist is applied by the caller; detection always runs.

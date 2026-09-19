@@ -3,18 +3,18 @@ import 'dart:typed_data';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/cache/file_backed_source.dart';
-import 'package:muse_ml/src/monitor/cache/recording_index.dart';
-import 'package:muse_ml/src/monitor/recording/monitor_recorder.dart';
-import 'package:muse_ml/src/monitor/recording/recording_metadata.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart';
-import 'package:muse_ml/src/rust/frb_generated.dart';
-import 'package:muse_ml/src/session_v5/models.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/monitor/cache/file_backed_source.dart';
+import 'package:neurofeed/src/monitor/cache/recording_index.dart';
+import 'package:neurofeed/src/monitor/recording/monitor_recorder.dart';
+import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/rust/frb_generated.dart';
+import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/settings.dart';
 
 final String _rustLibPath =
-    '${Directory.current.path}/rust/target/debug/librust_lib_muse_ml.so';
+    '${Directory.current.path}/rust/target/debug/librust_lib_neurofeed.so';
 
 const int _startMs = 1700000000000;
 
@@ -89,7 +89,7 @@ void main() {
   });
 
   test('flushRaw indexes one entry at the .raw size', () async {
-    final dir = await Directory.systemTemp.createTemp('muse_idx_');
+    final dir = await Directory.systemTemp.createTemp('neurofeed_idx_');
     addTearDown(() => dir.delete(recursive: true));
     final rec = await _started(dir);
 
@@ -101,16 +101,16 @@ void main() {
     expect(rec.index.entries.single.fileLength, raw.lengthSync());
     expect(
       rec.index.entries.single.fileLength,
-      greaterThan(kMuseBodyHeaderLength),
+      greaterThan(kRawBodyHeaderLength),
     );
     expect(rec.index.entries.single.elapsedT, closeTo(5.0, 0.001));
-    expect(rec.index.covering(0, 10)!.startOffset, kMuseBodyHeaderLength);
+    expect(rec.index.covering(0, 10)!.startOffset, kRawBodyHeaderLength);
 
     await rec.discard();
   });
 
   test('flushRaw indexes recording_ on the same RecordingIndex', () async {
-    final dir = await Directory.systemTemp.createTemp('muse_rec_idx_');
+    final dir = await Directory.systemTemp.createTemp('neurofeed_rec_idx_');
     addTearDown(() => dir.delete(recursive: true));
     final rec = _recorder();
     await rec.startRecording(
@@ -129,13 +129,13 @@ void main() {
     final raw = File(rec.currentFilePath!);
     expect(rec.index.entries.single.fileLength, raw.lengthSync());
     expect(rec.index.entries.single.elapsedT, closeTo(5.0, 0.001));
-    expect(rec.index.covering(0, 10)!.startOffset, kMuseBodyHeaderLength);
+    expect(rec.index.covering(0, 10)!.startOffset, kRawBodyHeaderLength);
 
     await rec.discard();
   });
 
   test('getRange returns elapsed t, not unix seconds', () async {
-    final dir = await Directory.systemTemp.createTemp('muse_range_');
+    final dir = await Directory.systemTemp.createTemp('neurofeed_range_');
     addTearDown(() => dir.delete(recursive: true));
     final rec = await _started(dir);
 
@@ -155,22 +155,22 @@ void main() {
   });
 
   test('slice without header fails parse; prepend path succeeds', () async {
-    final dir = await Directory.systemTemp.createTemp('muse_hdr_');
+    final dir = await Directory.systemTemp.createTemp('neurofeed_hdr_');
     addTearDown(() => dir.delete(recursive: true));
     final rec = await _started(dir);
 
     rec.writeEvent(_eeg(1000));
     rec.flushRaw();
     final raw = File(rec.currentFilePath!).readAsBytesSync();
-    expect(raw.length, greaterThan(kMuseBodyHeaderLength));
+    expect(raw.length, greaterThan(kRawBodyHeaderLength));
 
     expect(
-      () => sessionParseBody(bytes: raw.sublist(kMuseBodyHeaderLength)),
+      () => sessionParseBody(bytes: raw.sublist(kRawBodyHeaderLength)),
       throwsA(
         predicate(
           (e) =>
-              e.toString().contains('Not a .muse file') ||
-              e.toString().contains('Truncated .muse header'),
+              e.toString().contains('Not a NeuroFeed raw body') ||
+              e.toString().contains('Truncated raw-body header'),
         ),
       ),
     );
@@ -183,7 +183,7 @@ void main() {
   test(
     'getRange reads from a frame boundary; incomplete tail omitted',
     () async {
-      final dir = await Directory.systemTemp.createTemp('muse_frm_');
+      final dir = await Directory.systemTemp.createTemp('neurofeed_frm_');
       addTearDown(() => dir.delete(recursive: true));
       final rec = await _started(dir);
 
@@ -198,7 +198,7 @@ void main() {
       final span = rec.index.covering(8, 12);
       expect(span, isNotNull);
       expect(span!.startOffset, firstLen);
-      expect(span.startOffset, greaterThan(kMuseBodyHeaderLength));
+      expect(span.startOffset, greaterThan(kRawBodyHeaderLength));
 
       final late = rec.source!.getRange(8, 12);
       expect(late.eeg, hasLength(1));
@@ -220,7 +220,7 @@ void main() {
   );
 
   test('rotate / new tmp clears the index', () async {
-    final dir = await Directory.systemTemp.createTemp('muse_rot_');
+    final dir = await Directory.systemTemp.createTemp('neurofeed_rot_');
     addTearDown(() => dir.delete(recursive: true));
     final rec = await _started(dir);
 
@@ -252,7 +252,7 @@ void main() {
   });
 
   test('captureStartedAtMs == null yields no unix-epoch range', () async {
-    final dir = await Directory.systemTemp.createTemp('muse_null_');
+    final dir = await Directory.systemTemp.createTemp('neurofeed_null_');
     addTearDown(() => dir.delete(recursive: true));
     final rec = await _started(dir);
 
@@ -276,7 +276,7 @@ void main() {
   });
 
   test('bands-only flush is skipped until an EEG timestamp exists', () async {
-    final dir = await Directory.systemTemp.createTemp('muse_bands_');
+    final dir = await Directory.systemTemp.createTemp('neurofeed_bands_');
     addTearDown(() => dir.delete(recursive: true));
     final rec = await _started(dir);
 

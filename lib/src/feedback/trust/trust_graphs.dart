@@ -4,13 +4,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:muse_ml/src/feedback/guard_lane.dart';
-import 'package:muse_ml/src/feedback/trust/trust_guard.dart';
-import 'package:muse_ml/src/feedback/trust/trust_inhibit.dart';
-import 'package:muse_ml/src/feedback/trust/trust_more.dart';
-import 'package:muse_ml/src/feedback/trust/trust_pane.dart';
-import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
-import 'package:muse_ml/src/feedback/trust/trust_viewport.dart';
+import 'package:neurofeed/src/feedback/guard_lane.dart';
+import 'package:neurofeed/src/feedback/trust/trust_guard.dart';
+import 'package:neurofeed/src/feedback/trust/trust_inhibit.dart';
+import 'package:neurofeed/src/feedback/trust/trust_more.dart';
+import 'package:neurofeed/src/feedback/trust/trust_pane.dart';
+import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
+import 'package:neurofeed/src/feedback/trust/trust_viewport.dart';
 
 class TrustGraphsColumn extends StatefulWidget {
   const TrustGraphsColumn({

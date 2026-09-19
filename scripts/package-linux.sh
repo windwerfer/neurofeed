@@ -48,46 +48,28 @@ cp -a "$BUNDLE_DIR/." "$APPDIR/"
 
 cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/sh
-exec "$APPDIR"/muse_ml "$@"
+exec "$APPDIR"/neurofeed "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 
-cat > "$APPDIR/muse_ml.desktop" <<EOF
+cat > "$APPDIR/neurofeed.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Muse ML
-Exec=muse_ml
+Name=NeuroFeed
+Exec=neurofeed
 Icon=app
 Categories=Audio;
 Terminal=false
 EOF
 
-python3 - "$APPDIR/app.png" <<'PY'
-import struct
-import sys
-import zlib
-
-width = height = 256
-size = width * height
-raw = b"".join(
-    b"\x00" + b"\x22\x8c\xc2" * width for _ in range(height)
-)
-
-
-def chunk(tag, data):
-    chunk = tag + data
-    return struct.pack(">I", len(data)) + chunk + struct.pack(">I", zlib.crc32(chunk))
-
-
-png = (
-    b"\x89PNG\r\n\x1a\n"
-    + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
-    + chunk(b"IDAT", zlib.compress(raw, 9))
-    + chunk(b"IEND", b"")
-)
-with open(sys.argv[1], "wb") as f:
-    f.write(png)
-PY
+if [ -f "$BUNDLE_DIR/neurofeed.png" ]; then
+  cp "$BUNDLE_DIR/neurofeed.png" "$APPDIR/app.png"
+elif [ -f "$(dirname "$0")/../linux/neurofeed.png" ]; then
+  cp "$(dirname "$0")/../linux/neurofeed.png" "$APPDIR/app.png"
+else
+  echo "neurofeed.png not found for AppImage icon" >&2
+  exit 1
+fi
 
 SOURCE_DATE_EPOCH=0 ARCH=x86_64 "$APPIMAGETOOL" "$APPDIR" "$APPIMAGE_OUT" >/dev/null
 echo "appimage: $APPIMAGE_OUT"

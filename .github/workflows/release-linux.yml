@@ -80,7 +80,7 @@ jobs:
         run: |
           ./scripts/package-linux.sh \
             build/linux/x64/release/bundle \
-            "muse_ml-${{ steps.version.outputs.version }}-linux-x86_64.tar.gz"
+            "neurofeed-${{ steps.version.outputs.version }}-linux-x86_64.tar.gz"
 
       - name: Package AppImage (best effort)
         if: ${{ always() }}
@@ -90,7 +90,7 @@ jobs:
           ./scripts/package-linux.sh \
             build/linux/x64/release/bundle \
             "" \
-            "muse_ml-${{ steps.version.outputs.version }}-linux-x86_64.AppImage"
+            "neurofeed-${{ steps.version.outputs.version }}-linux-x86_64.AppImage"
 
       - name: Upload to release
         if: ${{ github.event.release.tag_name != '' || inputs.tag != '' }}
@@ -100,7 +100,7 @@ jobs:
         run: |
           TAG="${{ github.event.release.tag_name || inputs.tag }}"
           VERSION="${{ steps.version.outputs.version }}"
-          gh release upload "$TAG" "muse_ml-${VERSION}-linux-x86_64.tar.gz" --clobber
-          if [ -f "muse_ml-${VERSION}-linux-x86_64.AppImage" ]; then
-            gh release upload "$TAG" "muse_ml-${VERSION}-linux-x86_64.AppImage" --clobber
+          gh release upload "$TAG" "neurofeed-${VERSION}-linux-x86_64.tar.gz" --clobber
+          if [ -f "neurofeed-${VERSION}-linux-x86_64.AppImage" ]; then
+            gh release upload "$TAG" "neurofeed-${VERSION}-linux-x86_64.AppImage" --clobber
           fi

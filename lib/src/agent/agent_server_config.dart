@@ -1,4 +1,4 @@
-import 'package:muse_ml/src/agent/agent_flags.dart';
+import 'package:neurofeed/src/agent/agent_flags.dart';
 
 class AgentServerConfig {
   const AgentServerConfig({
@@ -8,7 +8,7 @@ class AgentServerConfig {
   });
 
   factory AgentServerConfig.fromEnvironment() =>
-      AgentServerConfig(enabled: museAgentEnabled);
+      AgentServerConfig(enabled: neurofeedAgentEnabled);
 
   final bool enabled;
   final int port;

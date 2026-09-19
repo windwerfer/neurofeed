@@ -1,4 +1,4 @@
-//! EDF+ export of raw EEG from a recorded `.muse` session body.
+//! EDF+ export of raw EEG from a recorded session body.
 //!
 //! The byte layout itself is owned by the `edf_export` crate
 //! (`third_party/edf_export`); this module is the thin FFI surface that
@@ -37,7 +37,7 @@ pub struct EdfExportParams {
 /// too short to estimate a rate from the data.
 const NOMINAL_EEG_RATE: usize = 256;
 
-/// Encodes the raw EEG of a `.muse` body as a complete EDF+ file.
+/// Encodes the raw EEG of a session raw body as a complete EDF+ file.
 ///
 /// `channel_labels` maps the i16 electrode index to a channel label (e.g.
 /// `["TP9", "AF7", "AF8", "TP10"]`); an empty string or out-of-range
@@ -169,7 +169,7 @@ mod tests {
 
     fn params() -> EdfExportParams {
         EdfExportParams {
-            patient_id: "Muse ML".to_string(),
+            patient_id: "NeuroFeed".to_string(),
             recording_id: "session-test".to_string(),
             year: 2026,
             month: 8,
@@ -196,7 +196,7 @@ mod tests {
         // 2 signals + annotation channel → 1024-byte header; 2 data records
         // (334 samples @ 256 Hz → ceil 334/256).
         let header = &out[..1024];
-        assert_eq!(&header[8..88], format!("{:<80}", "Muse ML").as_bytes());
+        assert_eq!(&header[8..88], format!("{:<80}", "NeuroFeed").as_bytes());
         assert_eq!(&header[192..236], format!("{:<44}", "EDF+C").as_bytes());
         assert_eq!(&header[236..244], b"       2");
         // First TP9 sample = 1.0 µV → 16 int16 LE.

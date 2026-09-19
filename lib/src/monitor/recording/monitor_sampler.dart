@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/session_v5/computed_frame.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/session_v5/computed_frame.dart';
 
 /// 1 Hz computed frames for monitor captures. N-channel; zeroed guard/feedback.
 class MonitorSampler {

@@ -5,24 +5,24 @@ import 'dart:typed_data';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/charts/band_style.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
-import 'package:muse_ml/src/monitor/device_montage.dart';
-import 'package:muse_ml/src/monitor/dsp.dart';
-import 'package:muse_ml/src/monitor/band_toggles.dart';
-import 'package:muse_ml/src/monitor/electrode_toggles.dart';
-import 'package:muse_ml/src/monitor/graph_shell.dart';
-import 'package:muse_ml/src/monitor/panes/histogram_pane.dart';
-import 'package:muse_ml/src/monitor/panes/psd_pane.dart';
-import 'package:muse_ml/src/monitor/panes/spectrogram_pane.dart';
-import 'package:muse_ml/src/monitor/panes/sweep_pane.dart';
-import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
-import 'package:muse_ml/src/monitor/recording/recording_metadata.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
-import 'package:muse_ml/src/monitor/views/histogram_view.dart';
-import 'package:muse_ml/src/monitor/views/psd_view.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/charts/band_style.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_buffer.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
+import 'package:neurofeed/src/monitor/dsp.dart';
+import 'package:neurofeed/src/monitor/band_toggles.dart';
+import 'package:neurofeed/src/monitor/electrode_toggles.dart';
+import 'package:neurofeed/src/monitor/graph_shell.dart';
+import 'package:neurofeed/src/monitor/panes/histogram_pane.dart';
+import 'package:neurofeed/src/monitor/panes/psd_pane.dart';
+import 'package:neurofeed/src/monitor/panes/spectrogram_pane.dart';
+import 'package:neurofeed/src/monitor/panes/sweep_pane.dart';
+import 'package:neurofeed/src/monitor/panes/time_series_pane.dart';
+import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/monitor/views/histogram_view.dart';
+import 'package:neurofeed/src/monitor/views/psd_view.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart';
 
 enum RecordingDashGraph { rawEeg, bands, histogram, psd, spectrogram }
 
@@ -122,7 +122,7 @@ class _RecordingDashboardViewState
 
   Future<_LoadedRecording> _open() async {
     final storage = await ref.read(sessionStorageProvider.future);
-    final name = widget.path ?? 'recording_${widget.sessionId}.muse.feedback';
+    final name = widget.path ?? 'recording_${widget.sessionId}.neurofeed';
     final bytes = await storage.readFile(name);
     if (bytes == null || bytes.isEmpty) {
       throw StateError('Recording file not found ($name)');

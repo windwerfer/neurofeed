@@ -1,7 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/streaming/streaming_models.dart';
+import 'package:neurofeed/src/streaming/streaming_models.dart';
 
 /// One emitted sample row of a sensor group (all channels at one timestep).
 @immutable

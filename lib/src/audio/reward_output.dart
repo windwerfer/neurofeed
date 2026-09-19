@@ -1,9 +1,9 @@
-import 'package:muse_ml/src/audio/binaural_beat_controller.dart';
-import 'package:muse_ml/src/audio/feedback_audio_controller.dart';
-import 'package:muse_ml/src/audio/music_controller.dart';
-import 'package:muse_ml/src/audio/output_ids.dart';
-import 'package:muse_ml/src/audio/rain_feedback_controller.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/audio/binaural_beat_controller.dart';
+import 'package:neurofeed/src/audio/feedback_audio_controller.dart';
+import 'package:neurofeed/src/audio/music_controller.dart';
+import 'package:neurofeed/src/audio/output_ids.dart';
+import 'package:neurofeed/src/audio/rain_feedback_controller.dart';
+import 'package:neurofeed/src/settings.dart';
 
 /// Reward-lane audio. [onSample] gets percentile rank (0–100) and the
 /// boolean in-target verdict. [setMuffle] ducks mufflable reward audio and,

@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/recording/recording_metadata.dart';
-import 'package:muse_ml/src/session_v5/models.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
+import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/settings.dart';
 
 void main() {
   test('RecordingMetadata kind recording round-trips', () {

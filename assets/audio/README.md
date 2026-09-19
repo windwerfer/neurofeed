@@ -1,4 +1,4 @@
-# Audio assets for Muse ML Feedback
+# Audio assets for NeuroFeed Feedback
 
 Everything here is bundled into the app with attribution (see
 `THIRD_PARTY_NOTICES.md` at the repo root for the consolidated list).

@@ -8,16 +8,16 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/charts/band_style.dart' show bandColors, bandNames;
-import 'package:muse_ml/src/charts/smooth_path.dart';
-import 'package:muse_ml/src/feedback/feedback_state.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/protocol_catalog.dart';
-import 'package:muse_ml/src/session_v5/assemble.dart';
-import 'package:muse_ml/src/feedback/session_chart_data.dart';
-import 'package:muse_ml/src/audio/output_ids.dart';
-import 'package:muse_ml/src/feedback/session_store.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/charts/band_style.dart' show bandColors, bandNames;
+import 'package:neurofeed/src/charts/smooth_path.dart';
+import 'package:neurofeed/src/feedback/feedback_state.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/feedback/session_chart_data.dart';
+import 'package:neurofeed/src/audio/output_ids.dart';
+import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart';
 
 class FeedbackDashboardView extends ConsumerStatefulWidget {
   const FeedbackDashboardView({
@@ -368,7 +368,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       await store.publishSession(id, metadata, encodedV5: v5);
       await notifier.deleteScratchV5();
       notifier.reset();
-      debugPrint('[dashboard] save: published session_$id.muse.feedback');
+      debugPrint('[dashboard] save: published session_$id.neurofeed');
       if (mounted) {
         ref.invalidate(sessionListProvider);
         Navigator.of(context).pop();

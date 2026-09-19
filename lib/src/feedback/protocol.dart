@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:muse_ml/src/feedback/feature_catalog.dart';
-import 'package:muse_ml/src/rust/api/device_config.dart';
-import 'package:muse_ml/src/rust/api/features.dart';
+import 'package:neurofeed/src/feedback/feature_catalog.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/features.dart';
 
-/// Frozen catalog protocol ids (on-disk `protocol` string in `.muse.feedback`).
+/// Frozen catalog protocol ids (on-disk `protocol` string in `.neurofeed`).
 const List<String> catalogProtocolIds = [
   'drowsiness',
   'twilight',
@@ -154,7 +154,7 @@ class ProtocolCopy {
   final String expectedDelay;
 
   /// Scientific description of what the protocol trains and how, recorded
-  /// into the `.muse.feedback` session metadata.
+  /// into the `.neurofeed` session metadata.
   final String? metadataDescription;
 
   factory ProtocolCopy.fromJson(Map<String, Object?> json) => ProtocolCopy(

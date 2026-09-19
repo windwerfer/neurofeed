@@ -1,15 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/audio/guard_output.dart';
-import 'package:muse_ml/src/audio/reward_output.dart';
-import 'package:muse_ml/src/feedback/feature_bus.dart';
-import 'package:muse_ml/src/feedback/feedback_phase.dart';
-import 'package:muse_ml/src/feedback/gate_electrodes.dart';
-import 'package:muse_ml/src/feedback/guardrail_mode.dart';
-import 'package:muse_ml/src/feedback/session_store.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/rust/api/reve.dart' as frb;
+import 'package:neurofeed/src/audio/guard_output.dart';
+import 'package:neurofeed/src/audio/reward_output.dart';
+import 'package:neurofeed/src/feedback/feature_bus.dart';
+import 'package:neurofeed/src/feedback/feedback_phase.dart';
+import 'package:neurofeed/src/feedback/gate_electrodes.dart';
+import 'package:neurofeed/src/feedback/guardrail_mode.dart';
+import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/rust/api/reve.dart' as frb;
 
 /// Classical frontal-delta hard rail for the sleep guardrail (normalized FFT
 /// band power of the AF7/AF8 average). Overridden by the baseline percentile

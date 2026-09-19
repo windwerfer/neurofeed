@@ -1,10 +1,10 @@
 import 'dart:typed_data';
 
-import 'package:muse_ml/src/charts/session_reader.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/target_state.dart'
+import 'package:neurofeed/src/charts/session_reader.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/target_state.dart'
     show movementGateThreshold;
-import 'package:muse_ml/src/rust/api/session_format.dart' as ffi;
+import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
 
 /// Charts stay Muse-4-ch this series (non-goal). Local copies; do not import
 /// from the reward path.
@@ -14,7 +14,7 @@ const int electrodeAf8 = 2;
 /// Display-ready chart series for one session: per-second band-relative powers
 /// of the frontal AF7/AF8 average, movement, heart rate, SpO2, and derived
 /// stats. Built by [prepareChartDataFromComputed] (v5 computed 1 Hz) or
-/// [prepareChartData] (raw `.muse` body, CSV/EDF only).
+/// [prepareChartData] (raw body, CSV/EDF only).
 class SessionChartData {
   final List<double> x;
   final List<double> alphaRel;
@@ -75,7 +75,7 @@ class SessionChartStats {
   });
 }
 
-/// Build chart data from a parsed `.muse` body. When the session includes
+/// Build chart data from a parsed raw body. When the session includes
 /// calibration, the displayed window and metrics cover the training portion
 /// only; the boundary is an offset from the first recorded event, so it works
 /// regardless of device-clock drift.
@@ -272,7 +272,7 @@ SessionChartData prepareChartDataFromV5({
 ///
 /// When computed frames have no pulse/SpO₂ (older sessions, or a sampler
 /// that never latched those events), [rawFallback] fills them from the
-/// `.muse` body. [recordingStartMs] aligns raw `now_ms` timestamps to the
+/// raw body. [recordingStartMs] aligns raw `now_ms` timestamps to the
 /// computed `t` domain.
 SessionChartData prepareChartDataFromComputed(
   List<ffi.ComputedFrame> frames, {

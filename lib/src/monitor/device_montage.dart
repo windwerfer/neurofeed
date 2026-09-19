@@ -1,4 +1,4 @@
-import 'package:muse_ml/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
 
 const List<String> kMuseElectrodeNames = ['TP9', 'AF7', 'AF8', 'TP10'];
 const List<String> kCrownElectrodeNames = [

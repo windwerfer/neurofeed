@@ -2,19 +2,19 @@ import 'dart:io';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/feedback/session_sqlite.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/monitor/recording/crash_recovery.dart';
-import 'package:muse_ml/src/monitor/recording/recording_metadata.dart';
-import 'package:muse_ml/src/monitor/recording/recording_store.dart';
-import 'package:muse_ml/src/rust/frb_generated.dart';
-import 'package:muse_ml/src/session_v5/assemble.dart';
-import 'package:muse_ml/src/session_v5/models.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/feedback/session_sqlite.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
+import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
+import 'package:neurofeed/src/monitor/recording/recording_store.dart';
+import 'package:neurofeed/src/rust/frb_generated.dart';
+import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/settings.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 final String _rustLibPath =
-    '${Directory.current.path}/rust/target/debug/librust_lib_muse_ml.so';
+    '${Directory.current.path}/rust/target/debug/librust_lib_neurofeed.so';
 
 RecordingMetadata _meta() => RecordingMetadata(
   formatVersion: 5,
@@ -40,7 +40,7 @@ SessionRow _feedbackRow(String id) {
   final now = DateTime.utc(2026, 1, 1);
   return SessionRow(
     id: id,
-    path: 'session_$id.muse.feedback',
+    path: 'session_$id.neurofeed',
     formatVersion: 5,
     appVersion: 'dev',
     savedAt: now,
@@ -77,7 +77,7 @@ void main() {
   late RecordingStore store;
 
   setUp(() async {
-    history = await Directory.systemTemp.createTemp('muse_rec_store_');
+    history = await Directory.systemTemp.createTemp('neurofeed_rec_store_');
     storage = FileSystemSessionStorage(history);
     scratch = scratchDirectory(storage);
     await scratch.create(recursive: true);
@@ -109,14 +109,14 @@ void main() {
 
     expect(scratchV5.existsSync(), isFalse);
     expect(File('${scratch.path}/recording_3003.raw').existsSync(), isFalse);
-    final published = File('${history.path}/recording_3003.muse.feedback');
+    final published = File('${history.path}/recording_3003.neurofeed');
     expect(published.existsSync(), isTrue);
 
     final rec = await sqlite.getSession('3003');
     expect(rec, isNotNull);
     expect(rec!.kind, 'recording');
     expect(rec.protocol, isEmpty);
-    expect(rec.path, 'recording_3003.muse.feedback');
+    expect(rec.path, 'recording_3003.neurofeed');
     expect(rec.deviceId, 'sim:muse-2');
 
     final fb = await sqlite.getSession('oldfb');
@@ -142,13 +142,13 @@ void main() {
     expect(File('${scratch.path}/recording_4004.json').existsSync(), isFalse);
     expect(await sqlite.getSession('4004'), isNull);
     expect(
-      File('${history.path}/recording_4004.muse.feedback').existsSync(),
+      File('${history.path}/recording_4004.neurofeed').existsSync(),
       isFalse,
     );
   });
 
   test('ALTER TABLE migrates existing rows to kind=feedback', () async {
-    final dir = await Directory.systemTemp.createTemp('muse_kind_mig_');
+    final dir = await Directory.systemTemp.createTemp('neurofeed_kind_mig_');
     addTearDown(() => dir.delete(recursive: true));
     final dbPath = '${dir.path}/session_metadata.db';
     final raw = sqlite3.open(dbPath);
@@ -207,7 +207,7 @@ void main() {
         off_meta, len_meta, off_computed, len_computed, off_raw, len_raw,
         file_size, mtime
       ) VALUES (
-        'legacy', 'session_legacy.muse.feedback', 5, 'dev',
+        'legacy', 'session_legacy.neurofeed', 5, 'dev',
         '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 10,
         'drowsiness', 'TP9,AF7,AF8,TP10', 'eeg',
         0, 0, 0, 0, 0, 0,

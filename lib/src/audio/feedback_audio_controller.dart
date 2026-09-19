@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
-import 'package:muse_ml/src/audio/guardrail_sound.dart';
-import 'package:muse_ml/src/audio/soloud_engine.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/audio/guardrail_sound.dart';
+import 'package:neurofeed/src/audio/soloud_engine.dart';
+import 'package:neurofeed/src/settings.dart';
 
 /// Ambient + one-shot feedback sounds on a single SoLoud engine.
 ///

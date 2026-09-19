@@ -2,11 +2,11 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/cache/stft_ring.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_mean.dart';
-import 'package:muse_ml/src/monitor/dsp.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/monitor/cache/stft_ring.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_buffer.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_mean.dart';
+import 'package:neurofeed/src/monitor/dsp.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 EegDto _eeg(int electrode, List<double> samples, {double ts = 0}) => EegDto(
   index: 0,

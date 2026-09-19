@@ -1,8 +1,8 @@
 import 'dart:ui';
 
-import 'package:muse_ml/src/charts/band_style.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
+import 'package:neurofeed/src/charts/band_style.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 
 /// Inhibit is a ceiling on relative band power. Pass zone is [0, ceiling].
 enum TrustInhibitId { beta, delta }

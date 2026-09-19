@@ -3,17 +3,17 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/agent/agent_commands.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/feedback/feedback_state.dart';
-import 'package:muse_ml/src/feedback/session_metadata.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/monitor/monitor_controller.dart';
-import 'package:muse_ml/src/monitor/monitor_providers.dart';
-import 'package:muse_ml/src/monitor/monitor_state.dart';
-import 'package:muse_ml/src/rust/api/device_config.dart';
-import 'package:muse_ml/src/session_v5/scratch_writer.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/agent/agent_commands.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/feedback/feedback_state.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/monitor/monitor_controller.dart';
+import 'package:neurofeed/src/monitor/monitor_providers.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -28,7 +28,7 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     settings = await Settings.load();
-    history = await Directory.systemTemp.createTemp('muse_agent_rec_');
+    history = await Directory.systemTemp.createTemp('neurofeed_agent_rec_');
     final storage = FileSystemSessionStorage(history);
     app = AppStateNotifier.forTest(settings);
     container = ProviderContainer(
@@ -152,7 +152,7 @@ void main() {
     await settle();
     container.read(feedbackStateProvider.notifier).restoreEndedSession(
       id: 'unsaved1',
-      scratchPath: '${history.path}/session_unsaved1.muse.feedback',
+      scratchPath: '${history.path}/session_unsaved1.neurofeed',
       metadata: SessionMetadata(
         protocol: 'drowsiness',
         durationMinutes: 1,
@@ -173,7 +173,7 @@ void main() {
   test('POST /session/reset 409 unsaved_session', () async {
     container.read(feedbackStateProvider.notifier).restoreEndedSession(
       id: 'unsaved2',
-      scratchPath: '${history.path}/session_unsaved2.muse.feedback',
+      scratchPath: '${history.path}/session_unsaved2.neurofeed',
       metadata: SessionMetadata(
         protocol: 'drowsiness',
         durationMinutes: 1,

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/cache/recording_index.dart';
+import 'package:neurofeed/src/monitor/cache/recording_index.dart';
 
 void main() {
   test('empty index covers nothing', () {
@@ -10,7 +10,7 @@ void main() {
     final index = RecordingIndex()..add(elapsedT: 1.0, fileLength: 80);
     final span = index.covering(0, 2);
     expect(span, isNotNull);
-    expect(span!.startOffset, kMuseBodyHeaderLength);
+    expect(span!.startOffset, kRawBodyHeaderLength);
     expect(span.endOffset, 80);
     expect(span.first, 0);
     expect(span.last, 0);
@@ -33,7 +33,7 @@ void main() {
       ..add(elapsedT: 1.0, fileLength: 80)
       ..add(elapsedT: 10.0, fileLength: 200);
     final span = index.covering(0, 12);
-    expect(span!.startOffset, kMuseBodyHeaderLength);
+    expect(span!.startOffset, kRawBodyHeaderLength);
     expect(span.endOffset, 200);
     expect(span.first, 0);
     expect(span.last, 1);

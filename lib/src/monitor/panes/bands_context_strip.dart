@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:muse_ml/src/monitor/empty_state.dart';
-import 'package:muse_ml/src/monitor/graph_cinema.dart';
-import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/monitor/empty_state.dart';
+import 'package:neurofeed/src/monitor/graph_cinema.dart';
+import 'package:neurofeed/src/monitor/panes/time_series_pane.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
 /// Histogram/PSD vs Bands strip height. Not a user setting.
 const int kHistogramPsdPrimaryFlex = 7;

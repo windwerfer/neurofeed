@@ -1,14 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/audio/guard_output.dart';
-import 'package:muse_ml/src/audio/reward_output.dart';
-import 'package:muse_ml/src/feedback/feature_bus.dart';
-import 'package:muse_ml/src/feedback/feature_override.dart';
-import 'package:muse_ml/src/feedback/feedback_phase.dart';
-import 'package:muse_ml/src/feedback/gate_electrodes.dart';
-import 'package:muse_ml/src/feedback/guard_lane.dart';
-import 'package:muse_ml/src/feedback/target_state.dart';
-import 'package:muse_ml/src/rust/api/features.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/audio/guard_output.dart';
+import 'package:neurofeed/src/audio/reward_output.dart';
+import 'package:neurofeed/src/feedback/feature_bus.dart';
+import 'package:neurofeed/src/feedback/feature_override.dart';
+import 'package:neurofeed/src/feedback/feedback_phase.dart';
+import 'package:neurofeed/src/feedback/gate_electrodes.dart';
+import 'package:neurofeed/src/feedback/guard_lane.dart';
+import 'package:neurofeed/src/feedback/target_state.dart';
+import 'package:neurofeed/src/rust/api/features.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 class _RewardOut implements RewardOutput {
   @override

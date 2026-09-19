@@ -115,12 +115,12 @@ cargo test --lib                  # features / simulator / device_config
 
 Needs a GTK window. This sandbox: `DISPLAY` unset — use `GDK_BACKEND=wayland`.
 How to launch and the API table: [testing-guide.md](testing-guide.md) Linux agent.
-Skill: `.grok/skills/muse-run-linux/SKILL.md`.
+Skill: `.grok/skills/neurofeed-run-linux/SKILL.md`.
 
 Pure Dart first (`flutter analyze lib/src` + `test/agent/*` +
 `test/app_ui_state_test.dart` + `test/connect_source_test.dart`). Then live:
 
-1. `GDK_BACKEND=wayland flutter run -d linux --dart-define=MUSE_AGENT=true --dart-define=MUSE_DEBUG=true`
+1. `GDK_BACKEND=wayland flutter run -d linux --dart-define=NEUROFEED_AGENT=true --dart-define=NEUROFEED_DEBUG=true`
 2. Wait `[muse] agent-listen` **and** `[muse] agent-ready`. Abort on `Content hash`. Parse the port.
 3. `GET /health` → `{ok:true}`. `POST /view {"view":"nope"}` → `unknown_view`.
 4. `POST /connect {"id":"sim:muse-2"}` or `sim:muse-s` (not Crown). `connected=true`, `scanMessage` null.

@@ -3,13 +3,13 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/feedback/session_store.dart';
-import 'package:muse_ml/src/reve/reve_card.dart';
-import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/views/about_view.dart';
-import 'package:muse_ml/src/views/music_settings_panel.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/reve/reve_card.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/views/about_view.dart';
+import 'package:neurofeed/src/views/music_settings_panel.dart';
 
 /// Folder-change confirm copy. Counts both `session_` and `recording_` prefixes.
 String folderChangeMoveBody(int sessions, int recordings) =>
@@ -330,7 +330,7 @@ class _GesturesCardState extends State<_GesturesCard> {
               title: const Text('Add markers to feedback sessions'),
               subtitle: Text(
                 'Persist double-blink / double-clench / eye markers in the '
-                'session metadata (.muse.feedback). Detection still runs when '
+                'session metadata (.neurofeed). Detection still runs when '
                 'off, markers are just not saved.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,

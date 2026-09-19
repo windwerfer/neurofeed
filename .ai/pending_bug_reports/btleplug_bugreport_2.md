@@ -21,16 +21,16 @@ forwarder from spawning (since fixed by ForwarderGuard).
 ## Symptoms
 
 ```
-I/rust_lib_muse_ml::api::muse(11377): [muse] pkt/s: eeg=108 bands=4 ppg=0 telem=13 accel=22 gyro=23 ctrl=4 conn=1 other=0
-I/rust_lib_muse_ml::api::muse(11377): [muse] pkt/s: eeg=84 bands=4 ppg=0 telem=10 accel=18 gyro=17 ctrl=0 conn=0 other=0
-I/rust_lib_muse_ml::api::muse(11377): [muse] pkt/s: eeg=89 bands=4 ppg=0 telem=10 accel=18 gyro=18 ctrl=0 conn=0 other=0
-I/rust_lib_muse_ml::api::muse(11377): [muse] pkt/s: eeg=87 bands=4 ppg=0 telem=10 accel=18 gyro=19 ctrl=0 conn=0 other=0
-I/rust_lib_muse_ml::api::muse(11377): [muse] pkt/s: eeg=88 bands=4 ppg=0 telem=10 accel=18 gyro=18 ctrl=0 conn=0 other=0
-I/rust_lib_muse_ml::api::muse(11377): [muse] pkt/s: eeg=85 bands=4 ppg=0 telem=10 accel=18 gyro=17 ctrl=0 conn=0 other=0
+I/rust_lib_neurofeed::api::muse(11377): [muse] pkt/s: eeg=108 bands=4 ppg=0 telem=13 accel=22 gyro=23 ctrl=4 conn=1 other=0
+I/rust_lib_neurofeed::api::muse(11377): [muse] pkt/s: eeg=84 bands=4 ppg=0 telem=10 accel=18 gyro=17 ctrl=0 conn=0 other=0
+I/rust_lib_neurofeed::api::muse(11377): [muse] pkt/s: eeg=89 bands=4 ppg=0 telem=10 accel=18 gyro=18 ctrl=0 conn=0 other=0
+I/rust_lib_neurofeed::api::muse(11377): [muse] pkt/s: eeg=87 bands=4 ppg=0 telem=10 accel=18 gyro=19 ctrl=0 conn=0 other=0
+I/rust_lib_neurofeed::api::muse(11377): [muse] pkt/s: eeg=88 bands=4 ppg=0 telem=10 accel=18 gyro=18 ctrl=0 conn=0 other=0
+I/rust_lib_neurofeed::api::muse(11377): [muse] pkt/s: eeg=85 bands=4 ppg=0 telem=10 accel=18 gyro=17 ctrl=0 conn=0 other=0
   ← data flows for ~6 seconds, then SILENCE
-I/rust_lib_muse_ml::api::muse(11377): [muse] forwarder: alive (epoch=1, no events for 5s, eeg=65 telem=7 accel=13 gyro=13)
-I/rust_lib_muse_ml::api::muse(11377): [muse] forwarder: alive (epoch=1, no events for 5s, eeg=0 telem=0 accel=0 gyro=0)
-I/rust_lib_muse_ml::api::muse(11377): [muse] forwarder: alive (epoch=1, no events for 5s, eeg=0 telem=0 accel=0 gyro=0)
+I/rust_lib_neurofeed::api::muse(11377): [muse] forwarder: alive (epoch=1, no events for 5s, eeg=65 telem=7 accel=13 gyro=13)
+I/rust_lib_neurofeed::api::muse(11377): [muse] forwarder: alive (epoch=1, no events for 5s, eeg=0 telem=0 accel=0 gyro=0)
+I/rust_lib_neurofeed::api::muse(11377): [muse] forwarder: alive (epoch=1, no events for 5s, eeg=0 telem=0 accel=0 gyro=0)
   ← repeats every 5s forever, eeg=0 telem=0
 ```
 
