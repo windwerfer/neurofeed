@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
 
 void main() {
   group('SessionMetadata round-trip', () {

@@ -2,14 +2,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/monitor/cache/file_backed_source.dart';
-import 'package:muse_ml/src/monitor/cache/recording_index.dart';
-import 'package:muse_ml/src/monitor/recording/recording_metadata.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/session_v5/assemble.dart';
-import 'package:muse_ml/src/session_v5/computed_frame.dart';
-import 'package:muse_ml/src/session_v5/scratch_writer.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/monitor/cache/file_backed_source.dart';
+import 'package:neurofeed/src/monitor/cache/recording_index.dart';
+import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/session_v5/computed_frame.dart';
+import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/settings.dart';
 
 /// Connect-time `tmp_$ts` / explicit `recording_$ts` writer. tmp never
 /// assembles. 30 min silent rotate is owned by [MonitorController] via
@@ -158,7 +158,7 @@ class MonitorRecorder {
 
   void flushRaw() => _writer.flushRaw();
 
-  /// Flush, write `recording_$id.muse.feedback` with [placeholderWebP], delete
+  /// Flush, write `recording_$id.neurofeed` with [placeholderWebP], delete
   /// temps on success. Returns null if there was nothing to assemble or encode
   /// failed (temps are kept).
   Future<File?> assemble({required Map<String, Object?> metadataJson}) async {

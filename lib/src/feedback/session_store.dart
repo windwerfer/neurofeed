@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/feedback/session_metadata.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/feedback/session_store_core.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/feedback/session_store_core.dart';
 
 export 'session_store_core.dart'
     show SessionStore, countHistoryContainers, isHistoryContainerName;

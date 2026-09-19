@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart';
 
-export 'package:muse_ml/src/rust/api/session_format.dart'
+export 'package:neurofeed/src/rust/api/session_format.dart'
     show BandsRecord, PulseRecord, MovementRecord, PeakAlphaRecord, SessionData;
 
 class SessionReader {

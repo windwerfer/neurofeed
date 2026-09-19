@@ -1,15 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/audio/guard_output.dart';
-import 'package:muse_ml/src/audio/reward_output.dart';
-import 'package:muse_ml/src/feedback/feature_bus.dart';
-import 'package:muse_ml/src/feedback/feedback_phase.dart';
-import 'package:muse_ml/src/feedback/gate_electrodes.dart';
-import 'package:muse_ml/src/feedback/guard_lane.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/reward_lane.dart';
-import 'package:muse_ml/src/feedback/target_state.dart';
-import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/audio/guard_output.dart';
+import 'package:neurofeed/src/audio/reward_output.dart';
+import 'package:neurofeed/src/feedback/feature_bus.dart';
+import 'package:neurofeed/src/feedback/feedback_phase.dart';
+import 'package:neurofeed/src/feedback/gate_electrodes.dart';
+import 'package:neurofeed/src/feedback/guard_lane.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/reward_lane.dart';
+import 'package:neurofeed/src/feedback/target_state.dart';
+import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 class _Out implements RewardOutput {
   int samples = 0;

@@ -6,10 +6,10 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'package:muse_ml/src/feedback/guardrail_mode.dart';
-import 'package:muse_ml/src/reve/models.dart';
-import 'package:muse_ml/src/rust/api/reve.dart' as frb;
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/feedback/guardrail_mode.dart';
+import 'package:neurofeed/src/reve/models.dart';
+import 'package:neurofeed/src/rust/api/reve.dart' as frb;
+import 'package:neurofeed/src/settings.dart';
 
 /// Thrown when an imported/downloaded file is not the expected weights file.
 class ModelChecksumException implements Exception {

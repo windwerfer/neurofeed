@@ -14,7 +14,7 @@ Read the spec first. Then this file. Then implement in the order below.
 
 ## What this project is doing
 
-Muse ML: Flutter + Rust BLE. Feedback sessions record into a **v5** `.muse.feedback` container:
+NeuroFeed: Flutter + Rust BLE. Feedback sessions record into a **v5** `.neurofeed` container:
 
 ```
 [68-byte header][WebP thumb][metadata zstd][computed 1 Hz zstd][raw zstd]
@@ -103,7 +103,7 @@ Must finish **before** `phase = ended` (the session view navigates on that trans
 
 - Flush, read temps, JSONL → FFI frames (one shared `toFfiFrame`).
 - Metadata **without** `summary`. Drowsiness scalars only. Music tracks+series, no buckets.
-- `containerEncodeV5` + write `scratchDirectory/session_<id>.muse.feedback`.
+- `containerEncodeV5` + write `scratchDirectory/session_<id>.neurofeed`.
 - Placeholder WebP, never empty bytes.
 - Delete `.raw` / `.computed` / `.metadata` only after the v5 write succeeds.
 - Expose `scratchV5Path` (replace `sessionFilePath` pointing at `.raw`).
@@ -135,7 +135,7 @@ If assemble fails, log, keep temps, still end the session (dashboard can show lo
 
 ### Step 6 — Crash recovery
 
-- Scan `scratchDirectory` for `session_*.muse.feedback` and orphan three-temps.
+- Scan `scratchDirectory` for `session_*.neurofeed` and orphan three-temps.
 - Temps → same assemble as `end()`.
 - Modal Save → `publishSession`; Discard → delete.
 
@@ -183,7 +183,7 @@ One branch is enough. If splitting:
 ## Done when
 
 - Session-end dashboard shows time-axis graphs (not “Not enough signal data”).
-- Save does not hang; history folder has `session_*.muse.feedback`; `.cache` temps are gone.
+- Save does not hang; history folder has `session_*.neurofeed`; `.cache` temps are gone.
 - History reopen matches the session-end graphs.
 - Spec file’s “Done when” checklist is all true.
 

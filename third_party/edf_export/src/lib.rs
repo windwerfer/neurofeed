@@ -1,7 +1,7 @@
 //! Minimal EDF+ (European Data Format Plus) writer for EEG time-series
 //! export.
 //!
-//! Supports the subset needed by the Muse ML session export: continuous
+//! Supports the subset needed by the NeuroFeed session export: continuous
 //! (EDF+C) recordings, int16 sample encoding, and a single annotation
 //! channel carrying time-stamped annotations (gestures, calibration
 //! boundaries). The writer is deterministic and dependency-free, with
@@ -305,8 +305,8 @@ fn write_records(out: &mut Vec<u8>, signals: &[EdfSignal], spec: &EdfFileSpec, r
 mod tests {
     use super::*;
 
-    const PATIENT: &str = "Muse ML";
-    const RECORDING: &str = "Muse ML session 0.0.1-test-01";
+    const PATIENT: &str = "NeuroFeed";
+    const RECORDING: &str = "NeuroFeed session 0.0.1-test-01";
 
     fn spec(annotations: &[EdfAnnotation]) -> EdfFileSpec<'_> {
         EdfFileSpec {

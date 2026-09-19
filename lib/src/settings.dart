@@ -2,15 +2,15 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/audio/output_ids.dart';
-import 'package:muse_ml/src/feedback/feedback_state.dart';
-import 'package:muse_ml/src/feedback/guardrail_mode.dart';
-import 'package:muse_ml/src/reve/model_engine.dart';
-import 'package:muse_ml/src/reve/models.dart';
-import 'package:muse_ml/src/feedback/last_calibration_baseline.dart';
-import 'package:muse_ml/src/agent/agent_flags.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/audio/output_ids.dart';
+import 'package:neurofeed/src/feedback/feedback_state.dart';
+import 'package:neurofeed/src/feedback/guardrail_mode.dart';
+import 'package:neurofeed/src/reve/model_engine.dart';
+import 'package:neurofeed/src/reve/models.dart';
+import 'package:neurofeed/src/feedback/last_calibration_baseline.dart';
+import 'package:neurofeed/src/agent/agent_flags.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Default warning threshold for the REVE sleep guardrail: the percent rank of
@@ -49,7 +49,7 @@ bool appViewIsGraph(AppView view) {
 }
 
 /// Data streams that can be persisted into a session file. Each maps to one
-/// (or more) `.muse` event types. Future devices (e.g. an 8-electrode Crown)
+/// (or more) `MuseEvent` types. Future devices (e.g. an 8-electrode Crown)
 /// add streams here without changing the file container format — the body is
 /// a self-describing list of typed events.
 enum RecordingStream {
@@ -660,7 +660,7 @@ class Settings extends ChangeNotifier {
   /// Debug mode. When true, Simulator appears in the connect dropdown and
   /// `sim:*` last-device ids may autoconnect. Defaults to false.
   bool get enableSimulatedDevices =>
-      museDebugEnabled || (_prefs.getBool(_enableSimulatedDevicesKey) ?? false);
+      neurofeedDebugEnabled || (_prefs.getBool(_enableSimulatedDevicesKey) ?? false);
 
   Future<void> setEnableSimulatedDevices(bool value) async {
     await _prefs.setBool(_enableSimulatedDevicesKey, value);

@@ -1,5 +1,5 @@
-import 'package:muse_ml/src/rust/api/device_config.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 /// Connect-window dropdown. Distinct from [DeviceKind] (headset family).
 enum ConnectSource { muse, neurosity, simulator }

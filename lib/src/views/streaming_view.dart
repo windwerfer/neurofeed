@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/streaming/streaming_controller.dart';
-import 'package:muse_ml/src/streaming/streaming_models.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/streaming/streaming_controller.dart';
+import 'package:neurofeed/src/streaming/streaming_models.dart';
 
 /// '192.168.200.34' → '192.168.200'; null unless the IP is private-ranged and
 /// well-formed (the cases that make sense as a LAN destination hint).

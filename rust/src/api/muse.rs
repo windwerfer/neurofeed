@@ -286,7 +286,7 @@ pub fn init_app() {
         android_logger::init_once(
             android_logger::Config::default()
                 .with_max_level(log::LevelFilter::Debug)
-                .with_tag("muse_ml"),
+                .with_tag("neurofeed"),
         );
         // Ensure the max level takes effect even if android_logger was
         // already initialized (e.g. by flutter_rust_bridge). Without this,

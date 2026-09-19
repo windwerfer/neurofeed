@@ -1,5 +1,5 @@
-import 'package:muse_ml/src/rust/api/features.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/rust/api/features.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 /// Native-value range and synthetic-baseline window for one feature id.
 class FeatureOverrideRange {

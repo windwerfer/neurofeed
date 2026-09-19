@@ -5,16 +5,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
-import 'package:muse_ml/src/charts/band_style.dart';
-import 'package:muse_ml/src/charts/session_reader.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/protocol_catalog.dart';
-import 'package:muse_ml/src/feedback/session_chart_data.dart';
-import 'package:muse_ml/src/feedback/session_pdf_export.dart';
-import 'package:muse_ml/src/feedback/session_store.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/rust/api/edf_export.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/charts/band_style.dart';
+import 'package:neurofeed/src/charts/session_reader.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/feedback/session_chart_data.dart';
+import 'package:neurofeed/src/feedback/session_pdf_export.dart';
+import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/rust/api/edf_export.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart';
 
 /// What an export produces.
 enum ExportKind { pdf, pngThumbnail, pngAll, csv, edf }
@@ -336,7 +336,7 @@ class SessionExporter {
         body: body,
         channelLabels: labels,
         params: EdfExportParams(
-          patientId: 'Muse ML',
+          patientId: 'NeuroFeed',
           recordingId:
               '${meta.protocol} ${meta.savedAt}',
           year: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).year,

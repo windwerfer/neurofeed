@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/monitor/monitor_providers.dart';
-import 'package:muse_ml/src/monitor/recording/crash_recovery.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/monitor/monitor_providers.dart';
+import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
 
 const kSaveRecordingTitle = 'Save recording?';
 const kIncompleteRecordingTitle = 'Incomplete recording detected';
 
-/// Save / Discard for an assembled `recording_$ts.muse.feedback`.
+/// Save / Discard for an assembled `recording_$ts.neurofeed`.
 /// Same dialog on GraphShell Stop, session-view Stop, in-app disconnect,
 /// and launch crash recovery (title [kIncompleteRecordingTitle]).
 Future<void> showRecordingSaveDiscardDialog({

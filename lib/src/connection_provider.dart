@@ -4,12 +4,12 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/agent/agent_flags.dart';
-import 'package:muse_ml/src/app.dart';
-import 'package:muse_ml/src/connect_source.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/rust/api/device_config.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/agent/agent_flags.dart';
+import 'package:neurofeed/src/app.dart';
+import 'package:neurofeed/src/connect_source.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/settings.dart';
 
 /// Duration of each scan chunk when scanning continuously.
 const _scanChunkSecs = 3;
@@ -30,7 +30,7 @@ Future<void> ensureBtleplugReady() async {
   if (_btleplugReady.isCompleted) return;
 
   if (defaultTargetPlatform == TargetPlatform.android) {
-    const channel = MethodChannel('muse_ml/init');
+    const channel = MethodChannel('neurofeed/init');
     await channel.invokeMethod('ensureInitialized');
   }
 
@@ -63,7 +63,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
             fuelGaugeVoltage: 0,
             temperature: 0,
           ),
-          connectSource: museAgentEnabled
+          connectSource: neurofeedAgentEnabled
               ? ConnectSource.simulator
               : ConnectSource.muse,
           lastConnectedKind: null,
@@ -122,7 +122,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         return;
       }
 
-      if (museAgentEnabled) {
+      if (neurofeedAgentEnabled) {
         state = state.copyWith(
           connectSource: ConnectSource.simulator,
           devices: simulatorCatalog,
@@ -149,7 +149,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
       _startDiscoveryForCurrentSource();
     } catch (e) {
-      debugPrint('[muse] init error: $e');
+      debugPrint('[neurofeed] init error: $e');
       state = state.copyWith(scanMessage: 'Init error: $e');
     } finally {
       if (!_initDone.isCompleted) _initDone.complete();
@@ -160,7 +160,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   Future<bool> _tryAutoconnectSim(String lastId) async {
     final row = simulatorCatalogRow(lastId);
     if (row == null) return false;
-    debugPrint('[muse] autoconnect: simulator $lastId');
+    debugPrint('[neurofeed] autoconnect: simulator $lastId');
     state = state.copyWith(
       connectSource: ConnectSource.simulator,
       devices: simulatorCatalog,
@@ -176,7 +176,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   /// cancels, or auto-reconnect is disabled. Returns `true` if connected.
   Future<bool> _tryAutoconnect(String lastId) async {
     if (isSimDeviceId(lastId)) return false;
-    debugPrint('[muse] autoconnect: looking for $lastId');
+    debugPrint('[neurofeed] autoconnect: looking for $lastId');
     _scanEnabled = true;
     state = state.copyWith(
       connectWindowOpen: true,
@@ -185,7 +185,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     );
     try {
       if (!await requestBlePermissions()) {
-        debugPrint('[muse] autoconnect: BLE permissions not granted');
+        debugPrint('[neurofeed] autoconnect: BLE permissions not granted');
         state = state.copyWith(
           scanning: false,
           scanMessage: 'BLE permissions not granted',
@@ -206,7 +206,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
             devices.where((d) => d.id == lastId).firstOrNull ??
             devices.where((d) => d.name == lastId).firstOrNull;
         if (match != null) {
-          debugPrint('[muse] autoconnect: found ${match.name}, connecting');
+          debugPrint('[neurofeed] autoconnect: found ${match.name}, connecting');
           await connectTo(match);
           if (state.status.connected) return true;
           if (!_allowAutoReconnect) return false;
@@ -224,7 +224,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         );
       }
     } catch (e) {
-      debugPrint('[muse] autoconnect error: $e');
+      debugPrint('[neurofeed] autoconnect error: $e');
       if (_scanEnabled && _allowAutoReconnect) {
         state = state.copyWith(scanning: false, scanMessage: 'Scan error: $e');
       }
@@ -265,7 +265,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       return;
     }
     _scanEnabled = true;
-    debugPrint('[muse] continuous scan starting');
+    debugPrint('[neurofeed] continuous scan starting');
     state = state.copyWith(
       connectWindowOpen: true,
       scanning: true,
@@ -275,7 +275,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
     try {
       if (!await requestBlePermissions()) {
-        debugPrint('[muse] continuous scan: BLE permissions not granted');
+        debugPrint('[neurofeed] continuous scan: BLE permissions not granted');
         state = state.copyWith(
           scanning: false,
           scanMessage: 'BLE permissions not granted',
@@ -299,7 +299,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           }
         }
         debugPrint(
-          '[muse] scan chunk: ${devices.length} device(s) from rust, '
+          '[neurofeed] scan chunk: ${devices.length} device(s) from rust, '
           '${museOnly.length} muse, ${allDevices.length} unique total',
         );
         state = state.copyWith(
@@ -309,13 +309,13 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       }
 
       if (!state.status.connected) {
-        debugPrint('[muse] continuous scan stopped (no connection)');
+        debugPrint('[neurofeed] continuous scan stopped (no connection)');
         state = state.copyWith(scanning: false);
       } else {
-        debugPrint('[muse] continuous scan stopped (connected)');
+        debugPrint('[neurofeed] continuous scan stopped (connected)');
       }
     } catch (e) {
-      debugPrint('[muse] continuous scan error: $e');
+      debugPrint('[neurofeed] continuous scan error: $e');
       state = state.copyWith(scanning: false, scanMessage: 'Scan error: $e');
     }
   }
@@ -323,7 +323,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   void _onEvent(MuseEventDto event) {
     switch (event) {
       case MuseEventDto_Connected():
-        debugPrint('[muse] event: connected ${event.field0}');
+        debugPrint('[neurofeed] event: connected ${event.field0}');
         _scanEnabled = false;
         state = state.copyWith(
           status: state.status.copyWith(connected: true, name: event.field0),
@@ -332,7 +332,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           connectingTo: null,
         );
       case MuseEventDto_Disconnected():
-        debugPrint('[muse] event: disconnected');
+        debugPrint('[neurofeed] event: disconnected');
         _onDisconnected();
       case MuseEventDto_Eeg():
         _padQuality.appendEeg(event.field0);
@@ -477,7 +477,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     Object? lastError;
     for (var attempt = 1; attempt <= attempts; attempt++) {
       debugPrint(
-        '[muse] connect attempt $attempt/$attempts — '
+        '[neurofeed] connect attempt $attempt/$attempts — '
         '$name ($id) kind=$kind simulate=$simulate',
       );
       state = state.copyWith(scanMessage: 'Connecting… (attempt $attempt)');
@@ -487,7 +487,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           kind: kind,
           simulate: simulate,
         );
-        debugPrint('[muse] connect returned: connected=${status.connected}');
+        debugPrint('[neurofeed] connect returned: connected=${status.connected}');
         if (persist) await _settings.setLastDeviceId(id);
         state = state.copyWith(
           status: status,
@@ -498,7 +498,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         return;
       } catch (e) {
         lastError = e;
-        debugPrint('[muse] connect attempt $attempt failed: $e');
+        debugPrint('[neurofeed] connect attempt $attempt failed: $e');
         if (!simulate && attempt < attempts) {
           await Future<void>.delayed(const Duration(milliseconds: 800));
           await _refreshDevice(id);
@@ -506,7 +506,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       }
     }
     debugPrint(
-      '[muse] connect failed after $_maxConnectAttempts attempts: '
+      '[neurofeed] connect failed after $_maxConnectAttempts attempts: '
       '$lastError',
     );
     state = state.copyWith(
@@ -527,7 +527,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       await ensureBtleplugReady();
       await scan(timeoutSecs: BigInt.from(_scanChunkSecs));
     } catch (e) {
-      debugPrint('[muse] refresh scan error: $e');
+      debugPrint('[neurofeed] refresh scan error: $e');
     }
   }
 
@@ -574,7 +574,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     try {
       await disconnect();
     } catch (e) {
-      debugPrint('[muse] disconnect error: $e');
+      debugPrint('[neurofeed] disconnect error: $e');
       _onDisconnected();
     }
   }

@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:muse_ml/src/charts/band_style.dart';
-import 'package:muse_ml/src/monitor/dsp.dart';
+import 'package:neurofeed/src/charts/band_style.dart';
+import 'package:neurofeed/src/monitor/dsp.dart';
 
 class PsdPane extends StatelessWidget {
   const PsdPane({

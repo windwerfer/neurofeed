@@ -2,12 +2,12 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/charts/band_style.dart';
-import 'package:muse_ml/src/monitor/band_toggles.dart';
-import 'package:muse_ml/src/monitor/cache/band_cache.dart';
-import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/charts/band_style.dart';
+import 'package:neurofeed/src/monitor/band_toggles.dart';
+import 'package:neurofeed/src/monitor/cache/band_cache.dart';
+import 'package:neurofeed/src/monitor/panes/time_series_pane.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 BandsDto _bands({
   required int electrode,

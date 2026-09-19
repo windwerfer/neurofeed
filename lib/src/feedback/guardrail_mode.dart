@@ -1,4 +1,4 @@
-import 'package:muse_ml/src/reve/models.dart';
+import 'package:neurofeed/src/reve/models.dart';
 
 const String guardFeatureBandDelta = 'band.delta';
 const String guardFeatureAiDrowsiness = 'ai.drowsiness'; // deprecated alias → ai.a_vig

@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/agent/agent_protocol.dart';
-import 'package:muse_ml/src/connect_source.dart';
-import 'package:muse_ml/src/rust/api/device_config.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/agent/agent_protocol.dart';
+import 'package:neurofeed/src/connect_source.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/settings.dart';
 
 void main() {
   test('parseAppView matches enum names', () {

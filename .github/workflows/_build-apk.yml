@@ -135,7 +135,7 @@ jobs:
             keytool -genkeypair -v -keystore android/app/release-keystore.jks \
               -alias "$ALIAS" -keyalg RSA -keysize 2048 -validity 10000 \
               -storepass "$PASS" -keypass "$PASS" \
-              -dname "CN=Muse ML CI, OU=CI, O=Muse ML, C=DE"
+              -dname "CN=NeuroFeed CI, OU=CI, O=NeuroFeed, C=DE"
           fi
           if ! keytool -list -keystore android/app/release-keystore.jks -storepass "$PASS" >/dev/null 2>&1; then
             echo "::error::Keystore could not be opened. Check KEYSTORE_BASE64 (exact base64 line) and KEYSTORE_PASSWORD."

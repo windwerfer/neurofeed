@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/feedback/feedback_state.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/protocol_catalog.dart';
-import 'package:muse_ml/src/feedback/session_store.dart';
-import 'package:muse_ml/src/feedback/user_protocol_store.dart';
-import 'package:muse_ml/src/reve/model_engine.dart';
-import 'package:muse_ml/src/reve/models.dart';
-import 'package:muse_ml/src/views/feedback_dashboard.dart';
-import 'package:muse_ml/src/views/feedback_session.dart';
-import 'package:muse_ml/src/views/protocol_builder.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/feedback/feedback_state.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/feedback/user_protocol_store.dart';
+import 'package:neurofeed/src/reve/model_engine.dart';
+import 'package:neurofeed/src/reve/models.dart';
+import 'package:neurofeed/src/views/feedback_dashboard.dart';
+import 'package:neurofeed/src/views/feedback_session.dart';
+import 'package:neurofeed/src/views/protocol_builder.dart';
 
 void _openProtocol(
   BuildContext context,

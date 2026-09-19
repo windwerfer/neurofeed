@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:muse_ml/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_v5/models.dart';
 
 enum GestureType { doubleBlink, doubleClench, eyeUp, eyeDown }
 
@@ -814,8 +814,8 @@ class SessionSummary {
   /// `feedback` or `recording`. Sqlite column; default `feedback`.
   final String kind;
 
-  /// History-root filename from sqlite (`session_$id.muse.feedback` or
-  /// `recording_$id.muse.feedback`). Null on summaries that never hit sqlite.
+  /// History-root filename from sqlite (`session_$id.neurofeed` or
+  /// `recording_$id.neurofeed`). Null on summaries that never hit sqlite.
   final String? path;
 
   bool get isRecording => kind == 'recording';

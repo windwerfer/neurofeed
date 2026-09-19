@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/streaming/streaming_lsl.dart';
-import 'package:muse_ml/src/streaming/streaming_mixer.dart';
-import 'package:muse_ml/src/streaming/streaming_models.dart';
+import 'package:neurofeed/src/streaming/streaming_lsl.dart';
+import 'package:neurofeed/src/streaming/streaming_mixer.dart';
+import 'package:neurofeed/src/streaming/streaming_models.dart';
 
 /// Exercises the real liblsl native library: creates outlets, pushes samples,
 /// destroys them. Fails early if the native asset is missing or broken.

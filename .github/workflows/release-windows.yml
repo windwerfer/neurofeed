@@ -62,13 +62,14 @@ jobs:
         shell: bash
         run: |
           flutter pub get
-          flutter create --platforms=windows --org com.example .
+          flutter create --platforms=windows --org org.windwerfer .
+          cp windows/app_icon.ico windows/runner/resources/app_icon.ico
           flutter build windows --release
 
       - name: Zip bundle
         shell: pwsh
         run: |
-          $zip = "$env:GITHUB_WORKSPACE/muse_ml-${{ steps.version.outputs.version }}-windows-x64.zip"
+          $zip = "$env:GITHUB_WORKSPACE/neurofeed-${{ steps.version.outputs.version }}-windows-x64.zip"
           Compress-Archive -Path build/windows/x64/runner/Release -DestinationPath $zip -CompressionLevel Optimal
 
       - name: Upload to release
@@ -78,4 +79,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ github.event.release.tag_name || inputs.tag }}"
-          gh release upload "$TAG" "muse_ml-${{ steps.version.outputs.version }}-windows-x64.zip" --clobber
+          gh release upload "$TAG" "neurofeed-${{ steps.version.outputs.version }}-windows-x64.zip" --clobber

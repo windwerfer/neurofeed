@@ -4,16 +4,16 @@ import 'dart:typed_data';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/recording/crash_recovery.dart';
-import 'package:muse_ml/src/monitor/recording/recording_metadata.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart';
-import 'package:muse_ml/src/rust/frb_generated.dart';
-import 'package:muse_ml/src/session_v5/assemble.dart';
-import 'package:muse_ml/src/session_v5/models.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
+import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/rust/frb_generated.dart';
+import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/settings.dart';
 
 final String _rustLibPath =
-    '${Directory.current.path}/rust/target/debug/librust_lib_muse_ml.so';
+    '${Directory.current.path}/rust/target/debug/librust_lib_neurofeed.so';
 
 RecordingMetadata _meta() => RecordingMetadata(
   formatVersion: 5,
@@ -45,7 +45,7 @@ void main() {
   late Directory scratch;
 
   setUp(() async {
-    scratch = await Directory.systemTemp.createTemp('muse_rec_crash_');
+    scratch = await Directory.systemTemp.createTemp('neurofeed_rec_crash_');
   });
 
   tearDown(() async {
@@ -56,7 +56,7 @@ void main() {
 
   test('recordingIdFrom is prefix-strict', () {
     expect(recordingIdFrom('recording_123.raw', '.raw'), '123');
-    expect(recordingIdFrom('recording_123.muse.feedback', '.muse.feedback'), '123');
+    expect(recordingIdFrom('recording_123.neurofeed', '.neurofeed'), '123');
     expect(recordingIdFrom('tmp_123.raw', '.raw'), isNull);
     expect(recordingIdFrom('session_123.raw', '.raw'), isNull);
     expect(recordingIdFrom('recording_.raw', '.raw'), isNull);
@@ -75,7 +75,7 @@ void main() {
     expect(recovered.single.scratchV5.existsSync(), isTrue);
     expect(
       recovered.single.scratchV5.uri.pathSegments.last,
-      'recording_1001.muse.feedback',
+      'recording_1001.neurofeed',
     );
     expect(File('${scratch.path}/recording_1001.raw').existsSync(), isFalse);
     expect(File('${scratch.path}/recording_1001.computed').existsSync(), isFalse);
@@ -112,7 +112,7 @@ void main() {
     await File('${scratch.path}/tmp_1.raw').writeAsString('tmp');
     await File('${scratch.path}/tmp_1.computed').writeAsString('tmp');
     await File('${scratch.path}/session_9.raw').writeAsString('ses');
-    await File('${scratch.path}/session_9.muse.feedback').writeAsString('ses');
+    await File('${scratch.path}/session_9.neurofeed').writeAsString('ses');
     await File('${scratch.path}/recording_3.raw').writeAsBytes([1, 2, 3, 4]);
     await File('${scratch.path}/recording_3.computed').writeAsString('');
     await File(
@@ -124,15 +124,15 @@ void main() {
     expect(File('${scratch.path}/tmp_1.raw').existsSync(), isTrue);
     expect(File('${scratch.path}/tmp_1.computed').existsSync(), isTrue);
     expect(File('${scratch.path}/session_9.raw').existsSync(), isTrue);
-    expect(File('${scratch.path}/session_9.muse.feedback').existsSync(), isTrue);
+    expect(File('${scratch.path}/session_9.neurofeed').existsSync(), isTrue);
 
     final n = await deleteLeftoverTmpCaptures(scratch);
     expect(n, 2);
     expect(File('${scratch.path}/tmp_1.raw').existsSync(), isFalse);
     expect(File('${scratch.path}/session_9.raw').existsSync(), isTrue);
-    expect(File('${scratch.path}/session_9.muse.feedback').existsSync(), isTrue);
+    expect(File('${scratch.path}/session_9.neurofeed').existsSync(), isTrue);
     expect(
-      File('${scratch.path}/recording_3.muse.feedback').existsSync(),
+      File('${scratch.path}/recording_3.neurofeed').existsSync(),
       isTrue,
     );
   });

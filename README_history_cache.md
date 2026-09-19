@@ -1,9 +1,9 @@
-# Muse ML — History Metadata Cache (SQLite)
+# NeuroFeed — History Metadata Cache (SQLite)
 
 ## Overview
 
 The history cache is SQLite (`session_metadata.db`) so History does not
-re-read every `.muse.feedback` file on each list/open. It is **not** written
+re-read every `.neurofeed` file on each list/open. It is **not** written
 into the SAF history folder. Thumbnails live as a **BLOB** on the `sessions`
 row.
 
@@ -32,7 +32,7 @@ row is invisible until something upserts it (`publishSession` /
 - Android/iOS: `getApplicationCacheDirectory()`
 
 Isolation is the **database path**, not a column. Changing the save folder
-moves `session_*.muse.feedback` **and** `recording_*.muse.feedback` and
+moves `session_*.neurofeed` **and** `recording_*.neurofeed` and
 opens the destination cache dir.
 
 ---
@@ -48,7 +48,7 @@ working.
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | TEXT PK | Id in the filename (`session_$id` / `recording_$id`) |
-| `path` | TEXT | History-root filename (`session_….muse.feedback` or `recording_….muse.feedback`) |
+| `path` | TEXT | History-root filename (`session_….neurofeed` or `recording_….neurofeed`) |
 | `kind` | TEXT | `feedback` (default) or `recording` |
 | `format_version` | INTEGER | Container format version (5) |
 | `app_version` | TEXT | App version that wrote the file |

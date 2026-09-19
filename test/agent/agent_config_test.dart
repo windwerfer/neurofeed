@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/agent/agent_flags.dart';
-import 'package:muse_ml/src/agent/agent_server_config.dart';
+import 'package:neurofeed/src/agent/agent_flags.dart';
+import 'package:neurofeed/src/agent/agent_server_config.dart';
 
 void main() {
   test('parseDartDefineFlag accepts true/1/yes, not bool.fromEnvironment 1', () {
@@ -12,8 +12,8 @@ void main() {
     expect(parseDartDefineFlag('false'), isFalse);
   });
 
-  test('fromEnvironment is disabled without MUSE_AGENT define', () {
-    expect(museAgentEnabled, isFalse);
+  test('fromEnvironment is disabled without NEUROFEED_AGENT define', () {
+    expect(neurofeedAgentEnabled, isFalse);
     expect(AgentServerConfig.fromEnvironment().enabled, isFalse);
   });
 

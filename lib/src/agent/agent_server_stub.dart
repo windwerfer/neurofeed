@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/agent/agent_server_config.dart';
+import 'package:neurofeed/src/agent/agent_server_config.dart';
 
 class AgentServer {
   static int? get port => null;

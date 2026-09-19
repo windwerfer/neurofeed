@@ -5,19 +5,19 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/monitor/monitor_controller.dart';
-import 'package:muse_ml/src/monitor/monitor_providers.dart';
-import 'package:muse_ml/src/monitor/monitor_state.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart';
-import 'package:muse_ml/src/rust/frb_generated.dart';
-import 'package:muse_ml/src/session_v5/placeholder_webp.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/monitor/monitor_controller.dart';
+import 'package:neurofeed/src/monitor/monitor_providers.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/rust/frb_generated.dart';
+import 'package:neurofeed/src/session_v5/placeholder_webp.dart';
+import 'package:neurofeed/src/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final String _rustLibPath =
-    '${Directory.current.path}/rust/target/debug/librust_lib_muse_ml.so';
+    '${Directory.current.path}/rust/target/debug/librust_lib_neurofeed.so';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +35,7 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     settings = await Settings.load();
-    history = await Directory.systemTemp.createTemp('muse_rec_hist_');
+    history = await Directory.systemTemp.createTemp('neurofeed_rec_hist_');
     final storage = FileSystemSessionStorage(history);
     scratch = scratchDirectory(storage);
     app = AppStateNotifier.forTest(settings);
@@ -69,7 +69,7 @@ void main() {
   }
 
   test(
-    'Stop assembles recording_\$ts.muse.feedback with placeholder WebP',
+    'Stop assembles recording_\$ts.neurofeed with placeholder WebP',
     () async {
       container.read(monitorControllerProvider);
       app.debugSetConnected();
@@ -84,7 +84,7 @@ void main() {
       expect(file!.existsSync(), isTrue);
       expect(
         file.uri.pathSegments.last,
-        matches(RegExp(r'^recording_\d+\.muse\.feedback$')),
+        matches(RegExp(r'^recording_\d+\.neurofeed$')),
       );
       expect(file.lengthSync(), greaterThan(placeholderWebP.length));
 

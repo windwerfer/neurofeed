@@ -14,7 +14,7 @@ Android, if History is not SAF-backed, the sheet can pick a folder.
 | PDF | One vector page per session | Computed 1 Hz charts (`prepareChartDataFromComputed`) |
 | PNG thumbnail | The WebP already in the v5 file | Container head |
 | PNG charts | Thumbnail + each dashboard chart | Same painters as PDF |
-| CSV | 1 Hz `TimeStamp`, `Delta_TP9`…, `RAW_TP9`… | Raw `.muse` body; timestamps ms epoch ÷ 1000 |
+| CSV | 1 Hz `TimeStamp`, `Delta_TP9`…, `RAW_TP9`… | Raw body; timestamps ms epoch ÷ 1000 |
 | EDF+ | Raw EEG + calibration/gesture markers | `encodeEdfExport` |
 
 Code: `lib/src/feedback/session_export.dart`,

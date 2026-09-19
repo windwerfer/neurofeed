@@ -2,11 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:muse_ml/src/charts/smooth_path.dart';
-import 'package:muse_ml/src/monitor/band_toggles.dart';
-import 'package:muse_ml/src/monitor/cache/band_cache.dart';
-import 'package:muse_ml/src/monitor/panes/overshoot_hold.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/charts/smooth_path.dart';
+import 'package:neurofeed/src/monitor/band_toggles.dart';
+import 'package:neurofeed/src/monitor/cache/band_cache.dart';
+import 'package:neurofeed/src/monitor/panes/overshoot_hold.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
 const double kBandsLogEpsilon = 1e-12;
 

@@ -1,4 +1,4 @@
-import 'package:muse_ml/src/monitor/monitor_state.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
 
 /// Exclusive capture owner. At most one scratch writer is open.
 class CaptureLease {

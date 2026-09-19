@@ -1,7 +1,7 @@
 ---
-name: muse-verify
+name: neurofeed-verify
 description: >
-  After Dart or Rust edits in Muse ML, run flutter analyze and the right
+  After Dart or Rust edits in NeuroFeed, run flutter analyze and the right
   flutter test / cargo test commands, including the host .so and
   rust/target/release loader trap. Use when verifying a change or running tests.
 ---

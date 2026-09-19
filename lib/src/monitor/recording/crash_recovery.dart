@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/monitor/recording/recording_metadata.dart';
-import 'package:muse_ml/src/session_v5/assemble.dart';
-import 'package:muse_ml/src/session_v5/models.dart';
-import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/version.dart';
+import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
+import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/version.dart';
 
 const _recordingPrefix = 'recording_';
 
@@ -69,7 +69,7 @@ class _RecordingScratch {
 /// Delete `recording_$id` scratch v5 and leftover temps (not history-root files).
 Future<void> deleteRecordingScratch(Directory dir, String id) async {
   for (final suffix in const [
-    '.muse.feedback',
+    '.neurofeed',
     '.raw',
     '.computed',
     '.json',
@@ -202,7 +202,7 @@ Future<List<RecoverableRecording>> scanRecoverableRecordings(
       set(byId.putIfAbsent(id, _RecordingScratch.new));
     }
 
-    take(recordingIdFrom(name, '.muse.feedback'), (f) => f.v5 = entity);
+    take(recordingIdFrom(name, '.neurofeed'), (f) => f.v5 = entity);
     take(recordingIdFrom(name, '.raw'), (f) => f.raw = entity);
     take(recordingIdFrom(name, '.computed'), (f) => f.computed = entity);
     take(recordingIdFrom(name, '.json'), (f) => f.json = entity);

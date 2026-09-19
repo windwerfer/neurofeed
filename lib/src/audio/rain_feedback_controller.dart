@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
-import 'package:muse_ml/src/audio/modulated_voice.dart';
-import 'package:muse_ml/src/audio/soloud_engine.dart';
+import 'package:neurofeed/src/audio/modulated_voice.dart';
+import 'package:neurofeed/src/audio/soloud_engine.dart';
 
 /// Rain feedback channel: plays the bundled rain loop as a reward-modulated
 /// soundscape. Five intensity stages (1 = heavy downpour far off-target …

@@ -5,7 +5,7 @@
 | **Status** | **Implemented** (rev 6). PRs 0–7 landed. **PR 8 cancelled** 2026-09-13. |
 | **Author** | TBD |
 | **Date** | 2026-09-13 |
-| **Audience** | Senior engineers on Muse ML |
+| **Audience** | Senior engineers on NeuroFeed |
 | **Companion** | Frozen spec (includes historical PR plan). Runtime map: [architecture.md](architecture.md) Monitor. Chrome names: [ui-map.md](ui-map.md). Handoff: [archive/handoff-monitor.md](archive/handoff-monitor.md). |
 | **Does not reopen** | Pipeline-contract Key Decisions, Crown Start, Connect UX, v5 68-byte header, exclusive lease, prefixes, GraphShell B, Follow/Inspect names, history-root files, MonitorController in `main()`, 409 `recording_active`, lease release only when `!isRecording`, **Bands Y is dB display (storage stays linear µV²/Hz)**, **PR 4 ASCII (rev 6): landscape cinema, spectrogram magnitude dual-thumb, Histogram/PSD + Bands context strip**, **PR 8 FFT chrome cancelled (256-pt only)** |
 
@@ -17,7 +17,7 @@ The sidebar live-signal views (Bands, Raw EEG, Spectrogram, PSD) were a first te
 
 This design splits **Monitor** from **Feedback**: a dedicated folder (`lib/src/monitor/`), a standardized graph shell with a fixed pane count, Follow/Inspect viewports, and an exclusive recording lease. On connect, a `tmp_$ts` v5 scratch capture starts automatically (rolling **30 min**, the Inspect-beyond-RAM window). An explicit **Record** control starts a new `recording_$ts` artifact with crash recovery and a Save/Discard dialog. Feedback sessions keep `session_$id` and never share a writer with Monitor.
 
-Published recordings sit in the **same history folder** as sessions: `recording_$ts.muse.feedback` next to `session_*.muse.feedback` (same v5 container type; two files, not merged). A `recordings/` child directory is **not** used. **Unified History:** one sidebar item **History** (`AppView.feedbackHistory`, label only) with filter All | Feedback | Recordings. One sqlite (`session_metadata.db`) with a `kind` column.
+Published recordings sit in the **same history folder** as sessions: `recording_$ts.neurofeed` next to `session_*.neurofeed` (same v5 container type; two files, not merged). A `recordings/` child directory is **not** used. **Unified History:** one sidebar item **History** (`AppView.feedbackHistory`, label only) with filter All | Feedback | Recordings. One sqlite (`session_metadata.db`) with a `kind` column.
 
 Raw EEG stays the current **oscilloscope sweep** (`SweepBuffer` / green wipe bar). Spectrogram keeps its name (`AppView.spectrogram`). Histogram is new.
 
@@ -39,7 +39,7 @@ Locked by the product owner. Do not re-litigate:
 
 Locked after the PR 3 wireframe. Do not re-litigate:
 
-10. Bands Y is **dB**, matching the Muse app (Live / post-session Powerbands), the Muse SDK (absolute band power = log of PSD, units Bels), and Mind Monitor. Display `10·log10(max(linear µV²/Hz, ε))`. BandCache, FFI, and `.muse` stay **linear µV²/Hz**. This **lifts** Bands skip-v1 **log-Y** (display only). Relative % stays v2.
+10. Bands Y is **dB**, matching the Muse app (Live / post-session Powerbands), the Muse SDK (absolute band power = log of PSD, units Bels), and Mind Monitor. Display `10·log10(max(linear µV²/Hz, ε))`. BandCache, FFI, and the raw body stay **linear µV²/Hz**. This **lifts** Bands skip-v1 **log-Y** (display only). Relative % stays v2.
 11. Bands pinch-zoom is **X only**. When the window is not 15 / 30 / 60 / 120 s, the dropdown closed label is **`custom`**. Picking a preset restores that length. Zoom-in floor ~5 s; zoom-out cap `min(elapsed, BandCache 30 min)`. Raw EEG stays discrete 2 / 4 / 8 / 10 s — no custom.
 12. Sample above the current Y-max: **dashed hold at last in-range Y**. Isolate in `monitor/panes/overshoot_hold.dart` so it can be deleted later (**< 100 lines**). Blink is small on dB; electrode pops may still overshoot. Do not use overshoot samples for the auto scale.
 
@@ -60,7 +60,7 @@ Locked after the PR 4 wireframes. Do not re-litigate. **PR 4 ASCII is approved;*
 
 21. **No Spectrogram FFT-window chrome.** 1 s / 256-pt Hamming is the only window. Not a Settings toggle. Averaging stays rejected. Series complete after PR 7.
 
-No FFI surface change. Rust still owns `.muse` / `.muse.feedback` byte layout. `kind: "recording"` lives **inside** the zstd metadata JSON blob **and** as a sqlite column; not in the 68-byte header.
+No FFI surface change. Rust still owns `.neurofeed` byte layout. `kind: "recording"` lives **inside** the zstd metadata JSON blob **and** as a sqlite column; not in the 68-byte header.
 
 ---
 
@@ -73,7 +73,7 @@ No FFI surface change. Rust still owns `.muse` / `.muse.feedback` byte layout. `
 | Sidebar label | `AppView` | Body widget | Reality |
 |---|---|---|---|
 | Feedback | `feedback` | `FeedbackListView` | Product. Isolated in `lib/src/feedback/` + `views/feedback_*.dart`. |
-| Feedback History | `feedbackHistory` | `FeedbackHistoryView` | Saved `session_*.muse.feedback`. **Rev 4:** on-screen rename to **History**; same enum; also lists `recording_*`. |
+| Feedback History | `feedbackHistory` | `FeedbackHistoryView` | Saved `session_*.neurofeed`. **Rev 4:** on-screen rename to **History**; same enum; also lists `recording_*`. |
 | Bands | `bands` | `BandsView` → `BandsDashboard` | Custom painter, 30 s window, electrode/band drawer, no-op Add graph. |
 | Raw EEG | `rawEeg` | `RawEegView` → `SweepEegView` | Oscilloscope sweep, add/remove up to 12, persisted `eeg_layout_$key`. |
 | Spectrogram | `spectrogram` | `SpectrogramView` in `terminal.dart` | Placeholder: “raw event/control log”. |
@@ -106,7 +106,7 @@ Independently, `FeedbackStateNotifier.startCalibration()` → `FeedbackRecorder.
 2. **UI is not standardized** — Bands has SMOOTH/REALTIME/LIVE/drawer; Raw EEG has AUTO/LIVE/add; PSD/Spectrogram are stubs. Histogram does not exist.
 3. *(removed)* Sweep is **kept** as Follow = live green wipe left→right; Inspect = freeze (grey cursor) + pan/scrub. Not stripchart.
 4. **Connect-time recording is throwaway** and collides with feedback temps.
-5. **SweepBuffer is already 5 min** (`windowSeconds = 300`) plus a 10 s display ring. Inspect-back of a long connection must use the rolling `tmp_` file (30 min). Raw `.muse` EEG timestamps are **ms epochs**. Computed JSONL `t` is seconds from capture start. Convert at the source boundary. Do not add a second 5 min LiveCache EEG ring.
+5. **SweepBuffer is already 5 min** (`windowSeconds = 300`) plus a 10 s display ring. Inspect-back of a long connection must use the rolling `tmp_` file (30 min). Raw-body EEG timestamps are **ms epochs**. Computed JSONL `t` is seconds from capture start. Convert at the source boundary. Do not add a second 5 min LiveCache EEG ring.
 6. **ComputedSampler is hardcoded to 4 electrodes** (`List.generate(4, …)`). Crown graphs are in scope; Crown **Start Session** stays refused.
 7. **Channel names** in `eeg_data_source.dart` are hardcoded `TP9/AF7/AF8/TP10` then `CH{n}`. `DeviceConfig.electrodeNames` already knows Muse 4 and Crown 8 (`CP3,C3,F5,PO3,PO4,F6,C4,CP4`). Dart `DeviceConfig.channelCount` is **`BigInt`** (FRB `usize`).
 8. Graph code lives in `lib/src/views/` + `lib/src/charts/` with no agent-isolatable root, unlike `lib/src/feedback/`.
@@ -351,7 +351,7 @@ flowchart TB
     panes --> shell[GraphShell]
     shell --> views[Raw EEG / Bands / Histogram / PSD / Spectrogram]
     writer -->|Stop / crash / in-app disconnect| dlg[RecordingSaveDiscardDialog]
-    dlg --> store["RecordingStore<br/>history root recording_*.muse.feedback"]
+    dlg --> store["RecordingStore<br/>history root recording_*.neurofeed"]
   end
 
   subgraph feedback [lib/src/feedback]
@@ -500,7 +500,7 @@ tmp (30 min file) is why Inspect can go past RAM. See PR 1c.
 | Muse Monitor / Mind Monitor | ~2–10 s | little/none in the live view | optional file |
 | Clinical review (Nihon Kohden, etc.) | 10 s page | entire file | the recording is the history |
 | Bedside/ICU sweep monitors | 6–12 s sweep | often ~1–5 min review memory | then disk |
-| **Muse ML** | sweep window **10 s** default; **5 min RAM**; **30 min tmp file** | 5 min without disk I/O; 30 min via tmp | explicit Record for keeps |
+| **NeuroFeed** | sweep window **10 s** default; **5 min RAM**; **30 min tmp file** | 5 min without disk I/O; 30 min via tmp | explicit Record for keeps |
 
 Verdict: 5 min RAM is generous vs consumer live views and similar to bedside review memory. Growing RAM to 30 min is wrong (8 ch × 256 Hz × 16 B × 1800 s ≈ **59 MB+** just for values+timestamps if we used LiveCache-style rings; SweepBuffer history is already ~8 ch × 76800 × 8 B ≈ 5 MB values, plus display). **5 min hot + 30 min tmp** is the right split. Silent rotate at 30 min. User presses Record for a keepable capture. Inspect-beyond-RAM is **why tmp exists**.
 
@@ -661,8 +661,8 @@ No `AppView.recordings`. No `AppView.waterfall`. `parseAppView('spectrogram')` i
 |---|---|---|---|
 | Background capture | — | `tmp_$ts.{raw,computed,json}` | **Never.** 30 min rolling. |
 | Record | `Record` | starts `recording_$ts.{raw,computed,json}` | Graph chrome (PR 5a). |
-| Stop recording | `Stop recording` | assemble scratch `recording_$ts.muse.feedback` | |
-| Recording (noun) | `Recording` | published history folder `recording_$ts.muse.feedback` | History list row (`kind = recording`). |
+| Stop recording | `Stop recording` | assemble scratch `recording_$ts.neurofeed` | |
+| Recording (noun) | `Recording` | published history folder `recording_$ts.neurofeed` | History list row (`kind = recording`). |
 | History | `History` | sidebar | Unified list. |
 | Feedback session | `Feedback` (filter) | `session_$id.*` | History row (`kind = feedback`). |
 
@@ -698,7 +698,7 @@ ASCII approved 2026-09-09. Painters in PR 3.
 |---|---|
 | **Pane count** | **1** |
 | **Series** | 5: delta / theta / alpha / beta / gamma. Colors from `lib/src/charts/band_style.dart`. Always all five; no band toggles. |
-| **Axes / units** | X: time (elapsed `m:ss`). Y: **dB** = `10·log10(max(linear µV²/Hz, ε))`. Follow Muse app / SDK / Mind Monitor. BandCache, FFI, and `.muse` stay **linear µV²/Hz**. Relative % is v2. |
+| **Axes / units** | X: time (elapsed `m:ss`). Y: **dB** = `10·log10(max(linear µV²/Hz, ε))`. Follow Muse app / SDK / Mind Monitor. BandCache, FFI, and the raw body stay **linear µV²/Hz**. Relative % is v2. |
 | **Mean** | Mean of selected electrodes **in dB** (Mind Monitor averages SDK log values). Linear mean-then-log is **not** the display. Still one graph. |
 | **Default window** | **30 s**. Discrete 15 / 30 / 60 / 120 s. Pinch-zoom **X** → **`custom`** (dropdown closed label; picking a preset restores). Zoom-in floor ~5 s; zoom-out cap `min(elapsed, BandCache 30 min)`. |
 | **Y scale** | Auto on visible **dB** + ~15% pad. Y may be negative; **0 is not the floor**. Ease up ~1–2 s, down ~8–15 s so the axis does not pump. |
@@ -883,8 +883,8 @@ Placeholder `lib/src/views/terminal.dart` (`SpectrogramView`) and `psd_view.dart
 | Kind | Scratch temps | Assembled scratch | Published |
 |---|---|---|---|
 | Background capture | `tmp_$ts.raw` `.computed` `.json` | **never** | **never** |
-| Explicit recording | `recording_$ts.raw` `.computed` `.json` | `recording_$ts.muse.feedback` | **history root** `recording_$ts.muse.feedback` |
-| Feedback session | `session_$id.raw` `.computed` `.metadata` | `session_$id.muse.feedback` | history root `session_$id.muse.feedback` |
+| Explicit recording | `recording_$ts.raw` `.computed` `.json` | `recording_$ts.neurofeed` | **history root** `recording_$ts.neurofeed` |
+| Feedback session | `session_$id.raw` `.computed` `.metadata` | `session_$id.neurofeed` | history root `session_$id.neurofeed` |
 
 `$ts` = `DateTime.now().millisecondsSinceEpoch`, same as today’s `SessionRecorder.start`.
 
@@ -901,11 +901,11 @@ Crash scanners are prefix-strict. Feedback `_idFrom` is `session_` only. Monitor
 | `deleteFile` | **no** | same, tree root |
 | `listFiles` / `listFilesMeta` | **no** | `buildChildDocumentsUriUsingTree` on the **tree root**; “does not descend into subdirs” |
 
-A `recordings/` child would appear on SAF as **one** document named `recordings`, not as `recording_*.muse.feedback` files. Publish could succeed; list, open, discard, and folder-change would not.
+A `recordings/` child would appear on SAF as **one** document named `recordings`, not as `recording_*.neurofeed` files. Publish could succeed; list, open, discard, and folder-change would not.
 
-**v1 choice: (b) publish `recording_$ts.muse.feedback` in the history root** next to `session_*`. Same folder, same v5 container class, **two files**. Zero MethodChannel work.
+**v1 choice: (b) publish `recording_$ts.neurofeed` in the history root** next to `session_*`. Same folder, same v5 container class, **two files**. Zero MethodChannel work.
 
-`SessionStore.moveAllTo` today copies only `session_` + `.muse.feedback`. PR 6 extends it (or a shared helper) to also copy `recording_*.muse.feedback`. History **list** unions both prefixes via sqlite `kind`.
+`SessionStore.moveAllTo` today copies only `session_` + `.neurofeed`. PR 6 extends it (or a shared helper) to also copy `recording_*.neurofeed`. History **list** unions both prefixes via sqlite `kind`.
 
 (a) — extend `SessionStorage` + SAF with `dir:` on list/read/delete — is a future Android PR if product wants a visible subfolder. Not this series.
 
@@ -1000,7 +1000,7 @@ Do **not** reuse `prepareChartDataFromComputed` (`electrodeAf7 = 1` / `electrode
 | | Feedback | Recordings |
 |---|---|---|
 | Scratch | same `scratchDirectory()`, prefix-distinct | same |
-| Published | `<saveRoot>/session_$id.muse.feedback` | `<saveRoot>/recording_$ts.muse.feedback` (**same folder**) |
+| Published | `<saveRoot>/session_$id.neurofeed` | `<saveRoot>/recording_$ts.neurofeed` (**same folder**) |
 | SQLite | **one** `session_metadata.db` + `kind` (`feedback` \| `recording`) | same row type, `kind = 'recording'` |
 | List | History, filter All \| Feedback \| Recordings | same |
 | Folder change | `moveAllTo` copies **both** prefixes | same |
@@ -1177,10 +1177,10 @@ All prompt sites use that one dialog: GraphShell Stop, session-view Stop, in-app
 
 1. Find index entries covering the window.
 2. `RandomAccessFile.setPosition` at the first frame start; read complete frames through the last needed frame (do not slice mid-frame).
-3. **Prepend `sessionHeaderBytes()`** (12-byte `MUSEBIN` header). `sessionParseBody` rejects a mid-file slice (`Truncated .muse header` / `Not a .muse file`).
+3. **Prepend `sessionHeaderBytes()`** (12-byte `NFEDBIN` header). `sessionParseBody` rejects a mid-file slice (`Truncated raw-body header` / `Not a NeuroFeed raw body`).
 4. Call `sessionParseBody` on that buffer. Convert record timestamps (ms epoch) to elapsed via `captureStartedAtMs`.
 
-**Saved files:** `v5ExtractRaw` returns the decompressed `.muse` **body** (already has the 12-byte header). Hold it as an in-memory `Uint8List` (2 h Crown ~100 MB — acceptable v1). Same parser. Do not treat the zstd container as seekable.
+**Saved files:** `v5ExtractRaw` returns the decompressed raw **body** (already has the 12-byte header). Hold it as an in-memory `Uint8List` (2 h Crown ~100 MB — acceptable v1). Same parser. Do not treat the zstd container as seekable.
 
 **PR 1c (required, not optional):** `recording_index.dart` + `file_backed_source.dart`. Until 1c: EEG Inspect = SweepBuffer 5 min RAM only — state that in the PR, do not drop the 30 min tmp requirement. `.ai/monitor.md` records the gap until 1c lands.
 
@@ -1218,7 +1218,7 @@ Future<File> writeScratchV5({
   required List<int> rawBody,
   required List<int> computedJsonl,
 }) async {
-  final file = File('${dir.path}/${prefix}_$id.muse.feedback');
+  final file = File('${dir.path}/${prefix}_$id.neurofeed');
   // assembleV5Container → placeholderWebP + containerEncodeV5
 }
 ```
@@ -1294,7 +1294,7 @@ ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'feedback';
 -- values: 'feedback' | 'recording'
 ```
 
-`RecordingStore.publish` upserts this table with `kind = 'recording'`, `protocol` empty string, path `recording_$id.muse.feedback`. `SessionStore.publishSession` sets `kind = 'feedback'`. History `list()` returns both; the view filters.
+`RecordingStore.publish` upserts this table with `kind = 'recording'`, `protocol` empty string, path `recording_$id.neurofeed`. `SessionStore.publishSession` sets `kind = 'feedback'`. History `list()` returns both; the view filters.
 
 v1 thumbnails are `placeholderWebP` (1×1). History sparkline for recordings: **none** (placeholder). Feedback rows keep today’s WebP thumb if present.
 
@@ -1421,7 +1421,7 @@ Would make `feedback_dashboard.dart` and `session_export.dart` import monitor. *
 13. **tmp is never a user artifact.** Rotate resets inspectable tmp range.
 14. **Record starts a new capture.** Follow rings still show pre-click EEG; Inspect of the recording does not include pre-click bytes.
 15. **One `RecordingSaveDiscardDialog`** for Stop, session-view refuse, in-app disconnect, crash recovery. No full-screen summary at Stop. Placeholder WebP; no sparkline in v1.
-16. **Published recordings live in the same history folder** as `recording_$ts.muse.feedback`. **One sqlite** `session_metadata.db` with `kind`. Unified History list. Settings **Save files to folder**. Folder-change dialog counts both prefixes. `RecordingStore.publish` upserts that DB from PR 5b. PR 6 is History UI + filter, not a new sidebar.
+16. **Published recordings live in the same history folder** as `recording_$ts.neurofeed`. **One sqlite** `session_metadata.db` with `kind`. Unified History list. Settings **Save files to folder**. Folder-change dialog counts both prefixes. `RecordingStore.publish` upserts that DB from PR 5b. PR 6 is History UI + filter, not a new sidebar.
 17. **Start Session during recording: three-layer refuse** — `_refuseRecordingStart`, `AgentCommands._start` 409 `recording_active` **before** the notifier, notifier `acquireFeedbackLease`. Distinct from `crown_refused`.
 18. **Crown graphs + recording allowed; Crown Start still refused.** Status-bar 4-pad ring stays 4-ch.
 19. **EEG RAM is SweepBuffer only** (300 s history + 10 s display). No second LiveCache EEG ring. File-backed Inspect (PR **1c**, required) prepends `sessionHeaderBytes()`. Non-EEG elapsed domain from `captureStartedAtMs` / SweepBuffer index.
@@ -1436,7 +1436,7 @@ Would make `feedback_dashboard.dart` and `session_export.dart` import monitor. *
 28. **Non-EEG electrode toggles:** top-right text, depressed = in the average, default all on, last-one stays. EEG: no chips.
 29. **Graph PRs 2/3/4: ASCII wireframe first**, wait for user correction, then painters. **PR 3 ASCII is approved** (2026-09-09). **PR 4 ASCII is approved** (2026-09-12). **PR 7** (Bands context strip) is ASCII first (landed). PR 8 cancelled — no dropdown.
 30. **5 min RAM + 30 min tmp** is the locked split. Do not grow RAM to 30 min. Spectrogram zoom-out cap is 5 min.
-31. **Bands Y is dB display** (`10·log10` of linear µV²/Hz). Storage / FFI / `.muse` stay linear. Mean of selected electrodes is in **dB**. Pinch-X → `custom` on Bands (and Spectrogram). Overshoot hold is a strippable dashed last-in-range (see Bands table).
+31. **Bands Y is dB display** (`10·log10` of linear µV²/Hz). Storage / FFI / raw body stay linear. Mean of selected electrodes is in **dB**. Pinch-X → `custom` on Bands (and Spectrogram). Overshoot hold is a strippable dashed last-in-range (see Bands table).
 32. **Landscape cinema** (PR 4): graph views hide status bar, sidebar, GraphShell toolbar. **Mobile** landscape only; portrait restores. **Desktop** keeps chrome; **F11** toggles the same hide. Not Settings/Feedback/Streaming/History. `GraphCinema` in `graph_cinema.dart`.
 33. **Spectrogram `mag ▾`** is color min/max (log power), not Hz. Y fixed 0–60 Hz. No averaging, no hold-finger. No FFT-window chrome (PR 8 cancelled).
 34. **Histogram/PSD PR 4 = one pane.** No time slider. Tap readout. Inspect elapsed `m:ss–m:ss`. **PR 7** is the Bands context strip (~30%) under both. PR 4 `Column` + `Expanded` + shared epoch so 7 does not rewrite painters.
@@ -1480,8 +1480,8 @@ Resolved 2026-09-12 (PR 4 ASCII):
 - `lib/src/views/feedback_session.dart` — `_refuseCrownStart`
 - `lib/src/views/settings_view.dart` — `_applyFolder` → `SessionStore.moveAllTo`
 - `lib/src/feedback/session_storage.dart` — `dir:` on write only; list/read/delete root-only
-- `android/app/src/main/kotlin/com/example/muse_ml/MainActivity.kt` — SAF `listFilesMeta` tree-root children; `readFile`/`deleteFile` via `treeRootDoc`
-- `lib/src/feedback/session_store_core.dart` — `moveAllTo` filters `session_` + `.muse.feedback`; `list` is sqlite-only; `backfillPending` empty
+- `android/app/src/main/kotlin/com/example/neurofeed/MainActivity.kt` — SAF `listFilesMeta` tree-root children; `readFile`/`deleteFile` via `treeRootDoc`
+- `lib/src/feedback/session_store_core.dart` — `moveAllTo` filters `session_` + `.neurofeed`; `list` is sqlite-only; `backfillPending` empty
 - `lib/src/feedback/session_metadata.dart` — flat `toJson()`
 - `lib/src/feedback/session_v5_models.dart` — `DeviceInfoV5`, `StreamsConfig`, `StreamInfo`
 - `lib/src/rust/api/device_config.dart` — `BigInt channelCount`
@@ -1603,7 +1603,7 @@ PR 2 Inspect may use SweepBuffer 5 min until 1c, but **1c is not optional** and 
 - **Title:** `Explicit Record/Stop with v5 assemble and recording_active 409`
 - **Files:** `recording_metadata.dart`; `recording_save_discard.dart`; GraphShell Record/Stop (unhide); `AgentCommands._start` 409 **before** notifier; `_refuseRecordingStart` in `feedback_session.dart`; `/record/start|stop`; `test/monitor/recording_metadata_test.dart`; `.ai/ui-map.md`, `.ai/testing-guide.md` (`recording_active` vs `crown_refused`).
 - **Depends on:** PR 1b, PR 2
-- **Changes:** Record discards tmp, starts `recording_$ts`. Stop assembles `recording_$ts.muse.feedback` in scratch, Save/Discard dialog. In-app disconnect while recording: assemble + dialog. Process exit: best-effort assemble, no dialog. Feedback Start three-layer refuse.
+- **Changes:** Record discards tmp, starts `recording_$ts`. Stop assembles `recording_$ts.neurofeed` in scratch, Save/Discard dialog. In-app disconnect while recording: assemble + dialog. Process exit: best-effort assemble, no dialog. Feedback Start three-layer refuse.
 
 ### PR 5b — Recording crash recovery
 

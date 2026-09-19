@@ -1,1 +1,1 @@
-export 'package:muse_ml/src/session_v5/models.dart';
+export 'package:neurofeed/src/session_v5/models.dart';

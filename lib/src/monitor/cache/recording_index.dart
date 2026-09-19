@@ -1,5 +1,5 @@
-/// Offset of the first framed payload after the 12-byte `MUSEBIN` header.
-const int kMuseBodyHeaderLength = 12;
+/// Offset of the first framed payload after the 12-byte `NFEDBIN` header.
+const int kRawBodyHeaderLength = 12;
 
 /// EEG packet timestamp is the first sample; later samples are 1/256 s apart.
 const double kEegPacketSlackSeconds = 1.0;
@@ -58,7 +58,7 @@ class RecordingIndex {
     if (first == null || last == null) return null;
 
     final startOffset = first == 0
-        ? kMuseBodyHeaderLength
+        ? kRawBodyHeaderLength
         : _entries[first - 1].fileLength;
     return (
       first: first,

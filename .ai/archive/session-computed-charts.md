@@ -4,7 +4,7 @@
 **Date:** 2026-09-02  
 Merged to `main`. Spec kept as the implemented contract. Do not resurrect `SessionOverview`.
 
-No old-format compatibility. Old `.muse.feedback` files are gone.
+No old-format compatibility. Old `.neurofeed` files are gone.
 
 ---
 
@@ -37,7 +37,7 @@ The 400-bucket `SessionOverview` in metadata was a pre-v5 workaround so history 
 
 ```
 RECORDING
-  scratch/.cache/session_<ts>.raw        append-only framed .muse body
+  scratch/.cache/session_<ts>.raw        append-only framed raw body
   scratch/.cache/session_<ts>.computed   JSONL (Dart sampler, crash log)
   scratch/.cache/session_<ts>.metadata   JSONL events (optional)
 
@@ -52,7 +52,7 @@ SESSION END (FeedbackStateNotifier.end, BEFORE phase=ended navigation)
        metadataJson: ...,
        computedFrames: that list,
        rawBody: framed .raw bytes)
-     → scratch/session_<ts>.muse.feedback
+     → scratch/session_<ts>.neurofeed
   5. delete the three temps
   6. remember scratchV5Path; then set phase=ended
      (FeedbackSessionView pushReplacement → dashboard)
@@ -66,13 +66,13 @@ DASHBOARD (live, readOnly=false)
   Discard: delete scratch v5
 
 HISTORY (readOnly=true)
-  storage.readFile(session_*.muse.feedback)
+  storage.readFile(session_*.neurofeed)
   v5ParseHead → full metadata (not the SQLite skeleton)
   v5ExtractComputed → same prepareChartDataFromComputed
   PDF/PNG export: same builder
 
 CRASH RECOVERY
-  scan scratchDirectory for leftover .muse.feedback (assembled)
+  scan scratchDirectory for leftover .neurofeed (assembled)
     and/or leftover three-temps (assemble crashed)
   same assemble + publish / discard paths
   scan the real scratch dir, not getTemporaryDirectory()/sessions
@@ -158,7 +158,7 @@ Do in this order so the app is usable after step 3.
 
 - Parse `.computed` JSONL → FFI `ComputedFrame` (reuse `_toFfiFrame`; put it in one place).
 - Build metadata **without** `summary`.
-- `containerEncodeV5` + write `scratch/session_<id>.muse.feedback`.
+- `containerEncodeV5` + write `scratch/session_<id>.neurofeed`.
 - Delete three temps after successful assemble.
 - `sessionFilePath` / a new `scratchV5Path` points at that file.
 - Set `ended` only after the file exists (dashboard must not race).
@@ -190,7 +190,7 @@ After this step: graphs show, Save produces a history file. Ship-quality for on-
 
 ### 6. Crash recovery
 
-- Scan `scratchDirectory(storage)` for `session_*.muse.feedback` and for orphan three-temps.
+- Scan `scratchDirectory(storage)` for `session_*.neurofeed` and for orphan three-temps.
 - Three-temps → same assemble as `end()`.
 - Assembled scratch v5 → Save via `publishSession` or Discard delete.
 - Placeholder thumbnail is OK.
@@ -244,7 +244,7 @@ Rust `session_format.rs`: **no layout change**. Optional: a unit test that naked
 All true (2026-09-03, including `flutter run`):
 
 - Post-session dashboard shows non-empty time-axis graphs from computed.
-- Save writes `session_*.muse.feedback` to the **history** folder, SQLite row appears, scratch temps/v5 are gone, no hang.
+- Save writes `session_*.neurofeed` to the **history** folder, SQLite row appears, scratch temps/v5 are gone, no hang.
 - Reopening from history shows the same graphs.
 - PDF/PNG charts match the dashboard builder.
 - No `summary` key, no 400-bucket fields, no `decodeImage` on empty bytes.

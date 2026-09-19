@@ -1,8 +1,8 @@
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/feedback/feedback_engine.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/feedback/feedback_engine.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 /// A per-pad signal-quality score at or above this value is treated as a
 /// "good" electrode and contributes to inhibit relative-band aggregation.

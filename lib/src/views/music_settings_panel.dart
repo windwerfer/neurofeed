@@ -4,9 +4,9 @@ import 'dart:math' as math;
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/audio/audio_service.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/audio/audio_service.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/settings.dart';
 
 /// Opens the platform folder picker (SAF tree on Android, directory chooser
 /// on desktop) and returns the chosen path/URI, or null when cancelled.

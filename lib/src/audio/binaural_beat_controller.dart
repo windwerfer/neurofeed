@@ -1,6 +1,6 @@
 import 'package:flutter_soloud/flutter_soloud.dart';
-import 'package:muse_ml/src/audio/modulated_voice.dart';
-import 'package:muse_ml/src/audio/soloud_engine.dart';
+import 'package:neurofeed/src/audio/modulated_voice.dart';
+import 'package:neurofeed/src/audio/soloud_engine.dart';
 
 /// Goal-based binaural-beat presets. Each preset picks the beat difference
 /// (the perceived entrainment frequency) and a comfortable carrier tone.

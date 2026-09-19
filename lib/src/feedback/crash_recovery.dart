@@ -4,12 +4,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/session_v5/assemble.dart';
-import 'package:muse_ml/src/feedback/feedback_state.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/feedback/session_store.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart' as ffi;
-import 'package:muse_ml/src/views/feedback_dashboard.dart';
+import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/feedback/feedback_state.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
+import 'package:neurofeed/src/views/feedback_dashboard.dart';
 
 /// An assembled scratch v5 left over from a crash or an interrupted save.
 class RecoverableSession {
@@ -209,7 +209,7 @@ Future<RecoverableSession?> _assembleTemps({
   }
 }
 
-/// Scan [scratchDirectory] for leftover `session_*.muse.feedback` and orphan
+/// Scan [scratchDirectory] for leftover `session_*.neurofeed` and orphan
 /// three-temps. Temps are assembled with [writeScratchV5] before return.
 /// Does not scan `getTemporaryDirectory()/sessions`.
 Future<List<RecoverableSession>> scanRecoverableSessions(
@@ -227,7 +227,7 @@ Future<List<RecoverableSession>> scanRecoverableSessions(
       set(byId.putIfAbsent(id, _ScratchFiles.new));
     }
 
-    take(_idFrom(name, '.muse.feedback'), (f) => f.v5 = entity);
+    take(_idFrom(name, '.neurofeed'), (f) => f.v5 = entity);
     take(_idFrom(name, '.raw'), (f) => f.raw = entity);
     take(_idFrom(name, '.computed'), (f) => f.computed = entity);
     take(_idFrom(name, '.metadata'), (f) => f.metadata = entity);

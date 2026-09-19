@@ -1,4 +1,4 @@
-import 'package:muse_ml/src/feedback/guardrail_mode.dart';
+import 'package:neurofeed/src/feedback/guardrail_mode.dart';
 
 enum TrustGuardPaneId { warn, ceiling }
 

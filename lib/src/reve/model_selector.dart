@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:muse_ml/src/feedback/guardrail_mode.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/reve/model_engine.dart';
-import 'package:muse_ml/src/reve/models.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/feedback/guardrail_mode.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/reve/model_engine.dart';
+import 'package:neurofeed/src/reve/models.dart';
+import 'package:neurofeed/src/settings.dart';
 
 const XTypeGroup _safetensorsType = XTypeGroup(
   label: 'Model weights',

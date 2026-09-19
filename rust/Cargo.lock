@@ -2486,7 +2486,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust_lib_muse_ml"
+name = "rust_lib_neurofeed"
 version = "0.1.0"
 dependencies = [
  "android_logger 0.14.1",

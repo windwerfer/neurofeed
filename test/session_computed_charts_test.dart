@@ -3,22 +3,22 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-import 'package:muse_ml/src/session_v5/scratch_writer.dart';
-import 'package:muse_ml/src/session_v5/computed_frame.dart' as dart;
-import 'package:muse_ml/src/feedback/computed_sampler.dart';
-import 'package:muse_ml/src/feedback/crash_recovery.dart';
-import 'package:muse_ml/src/feedback/feedback_recorder.dart';
-import 'package:muse_ml/src/session_v5/assemble.dart';
-import 'package:muse_ml/src/feedback/session_chart_data.dart';
-import 'package:muse_ml/src/feedback/session_metadata.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/feedback/session_store.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart';
-import 'package:muse_ml/src/rust/frb_generated.dart';
+import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/session_v5/computed_frame.dart' as dart;
+import 'package:neurofeed/src/feedback/computed_sampler.dart';
+import 'package:neurofeed/src/feedback/crash_recovery.dart';
+import 'package:neurofeed/src/feedback/feedback_recorder.dart';
+import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/feedback/session_chart_data.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/rust/frb_generated.dart';
 
 final String _rustLibPath =
-    '${Directory.current.path}/rust/target/debug/librust_lib_muse_ml.so';
+    '${Directory.current.path}/rust/target/debug/librust_lib_neurofeed.so';
 
 dart.ComputedFrame _dartFrame(double t) {
   return dart.ComputedFrame(
@@ -95,10 +95,10 @@ void main() {
       );
       rec.attachAssembledScratch(
         id: 'abc',
-        path: '/tmp/session_abc.muse.feedback',
+        path: '/tmp/session_abc.neurofeed',
       );
       expect(rec.sessionId, 'abc');
-      expect(rec.scratchV5Path, '/tmp/session_abc.muse.feedback');
+      expect(rec.scratchV5Path, '/tmp/session_abc.neurofeed');
     });
   });
 
@@ -110,7 +110,7 @@ void main() {
     });
 
     test('recorder flushRaw frames so sessionParseBody sees bands', () async {
-      final dir = await Directory.systemTemp.createTemp('muse_rec_');
+      final dir = await Directory.systemTemp.createTemp('neurofeed_rec_');
       addTearDown(() => dir.delete(recursive: true));
       final rec = SessionRecorder();
       await rec.start(dir);
@@ -196,19 +196,19 @@ void main() {
       expect(filled.stats.avgBpm, closeTo(72, 0.01));
     });
 
-    test('empty thumbnail assemble does not throw; magic is MUSE5\\0', () {
+    test('empty thumbnail assemble does not throw; magic is NFED5\\0', () {
       final v5 = assembleV5Container(
         thumbnail: const [],
         metadataJson: {'protocol': 'drowsiness'},
         computedFrames: const [],
         rawBody: sessionHeaderBytes(),
       );
-      expect(v5.sublist(0, 6), [0x4D, 0x55, 0x53, 0x45, 0x35, 0x00]);
+      expect(v5.sublist(0, 6), [0x4E, 0x46, 0x45, 0x44, 0x35, 0x00]);
     });
 
     test('publishSession writes history not scratch; SQLite row; no summary',
         () async {
-      final tmp = await Directory.systemTemp.createTemp('muse_pub_');
+      final tmp = await Directory.systemTemp.createTemp('neurofeed_pub_');
       addTearDown(() => tmp.delete(recursive: true));
       final storage = FileSystemSessionStorage(tmp);
       final store = SessionStore(storage: Future.value(storage));
@@ -233,7 +233,7 @@ void main() {
         rawBody: sessionHeaderBytes(),
         computedFrames: [toFfiFrame(_dartFrame(0))],
       );
-      final name = 'session_abc123.muse.feedback';
+      final name = 'session_abc123.neurofeed';
       expect(await storage.fileExists(name), isTrue);
       expect(tmp.path.contains('.cache'), isFalse);
       final list = await store.list();
@@ -250,7 +250,7 @@ void main() {
 
     test('crash recovery scans scratch; temps assemble; discard deletes',
         () async {
-      final tmp = await Directory.systemTemp.createTemp('muse_crash_');
+      final tmp = await Directory.systemTemp.createTemp('neurofeed_crash_');
       addTearDown(() => tmp.delete(recursive: true));
       final storage = FileSystemSessionStorage(tmp);
       final scratch = scratchDirectory(storage);
@@ -274,7 +274,7 @@ void main() {
       expect(recovered.first.elapsedSeconds, 2);
       expect(recovered.first.calibrationKind, 'staged');
       expect(
-        await File('${scratch.path}/session_$id.muse.feedback').exists(),
+        await File('${scratch.path}/session_$id.neurofeed').exists(),
         isTrue,
       );
       expect(await File('${scratch.path}/session_$id.raw').exists(), isFalse);
@@ -289,14 +289,14 @@ void main() {
 
       await recovered.first.discard();
       expect(
-        await File('${scratch.path}/session_$id.muse.feedback').exists(),
+        await File('${scratch.path}/session_$id.neurofeed').exists(),
         isFalse,
       );
     });
 
     test('crash recovery leftover v5 save publishes to history not scratch',
         () async {
-      final tmp = await Directory.systemTemp.createTemp('muse_crash2_');
+      final tmp = await Directory.systemTemp.createTemp('neurofeed_crash2_');
       addTearDown(() => tmp.delete(recursive: true));
       final storage = FileSystemSessionStorage(tmp);
       final scratch = scratchDirectory(storage);
@@ -315,7 +315,7 @@ void main() {
         computedFrames: [toFfiFrame(_dartFrame(0))],
         rawBody: sessionHeaderBytes(),
       );
-      await File('${scratch.path}/session_$id.muse.feedback').writeAsBytes(v5);
+      await File('${scratch.path}/session_$id.neurofeed').writeAsBytes(v5);
       await File('${scratch.path}/session_$id.raw').writeAsBytes([1, 2, 3]);
 
       final recovered = await scanRecoverableSessions(storage);
@@ -325,9 +325,9 @@ void main() {
 
       final store = SessionStore(storage: Future.value(storage));
       await recovered.first.save(store);
-      expect(await storage.fileExists('session_$id.muse.feedback'), isTrue);
+      expect(await storage.fileExists('session_$id.neurofeed'), isTrue);
       expect(
-        await File('${scratch.path}/session_$id.muse.feedback').exists(),
+        await File('${scratch.path}/session_$id.neurofeed').exists(),
         isFalse,
       );
       expect(tmp.path.contains('.cache'), isFalse);
@@ -335,7 +335,7 @@ void main() {
 
     test('crash recovery does not scan history/sessions leftover temps',
         () async {
-      final tmp = await Directory.systemTemp.createTemp('muse_crash3_');
+      final tmp = await Directory.systemTemp.createTemp('neurofeed_crash3_');
       addTearDown(() => tmp.delete(recursive: true));
       final storage = FileSystemSessionStorage(tmp);
       await scratchDirectory(storage).create(recursive: true);

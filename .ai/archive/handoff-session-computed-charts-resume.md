@@ -93,7 +93,7 @@ None. Steps 1–7 implemented. `flutter run` verified 2026-09-03.
 
 ### Step 6 — Crash recovery (done)
 
-- Scan `scratchDirectory(storage)` for leftover `session_*.muse.feedback` **and** orphan three-temps (`.raw` / `.computed` / `.metadata`).
+- Scan `scratchDirectory(storage)` for leftover `session_*.neurofeed` **and** orphan three-temps (`.raw` / `.computed` / `.metadata`).
 - Temps → same `assembleScratchV5` / `assembleV5Container` as `end()`.
 - Assembled scratch v5 → modal Save → `publishSession`; Discard → delete.
 - Use `placeholderWebP`, never empty bytes. Reuse `toFfiFrame` from the assembler; delete the copy in `crash_recovery.dart`.
@@ -131,7 +131,7 @@ Device/desktop: `flutter run` verified 2026-09-03 — session-end graphs + Save 
 ## Done when (whole spec)
 
 - Post-session dashboard shows time-axis graphs from computed (not “Not enough signal data”).
-- Save does not hang; history folder has `session_*.muse.feedback`; `.cache` temps/v5 are gone.
+- Save does not hang; history folder has `session_*.neurofeed`; `.cache` temps/v5 are gone.
 - History reopen matches the session-end graphs.
 - PDF/PNG charts match the dashboard builder.
 - No `summary` key, no 400-bucket fields, no `decodeImage` on empty bytes.

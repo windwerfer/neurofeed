@@ -437,7 +437,7 @@ Cover instead:
 - `MusicController.toggleShuffle` position — extractable without SoLoud
 
 Linux agent: audio silence is N/A in this container
-([test-matrix.md](test-matrix.md)). Do not block on `muse-run-linux`
+([test-matrix.md](test-matrix.md)). Do not block on `neurofeed-run-linux`
 playback. `audioInitFailed=false` after skip-cal on the simulator is a
 bonus, not a gate.
 

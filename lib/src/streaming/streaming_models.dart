@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/settings.dart';
 
 /// Network streaming protocols offered by the Streaming view. Only one is
 /// active at a time; the chosen protocol can be enabled/disabled.
