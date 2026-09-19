@@ -23,8 +23,8 @@ keep `session_$id`. At most one scratch writer is open (exclusive lease).
 
 Published files share the history folder and sqlite:
 
-- `session_$id.muse.feedback` — `kind = feedback`
-- `recording_$ts.muse.feedback` — `kind = recording`
+- `session_$id.neurofeed` — `kind = feedback`
+- `recording_$ts.neurofeed` — `kind = recording`
 
 Sidebar **History** (`AppView.feedbackHistory`) filters All | Feedback |
 Recordings. There is no `AppView.recordings`.

@@ -1,5 +1,5 @@
-name: muse_ml
-description: "A new Flutter project."
+name: neurofeed
+description: "NeuroFeed headset companion."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -31,7 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
 
-  rust_lib_muse_ml:
+  rust_lib_neurofeed:
     path: rust_builder
   flutter_rust_bridge: 2.11.1
 
@@ -86,6 +86,7 @@ flutter:
     - assets/protocols.json
     - assets/features.json
     - assets/calibrations.json
+    - assets/neurofeed_icon.png
     - assets/packs/cbramod-a-vig-full/
     - assets/packs/cbramod-a-vig-full/heads/
     - assets/packs/cbramod-a-vig-full/encoder/

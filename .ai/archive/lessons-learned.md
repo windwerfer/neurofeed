@@ -3,7 +3,7 @@
 ## Android BLE via btleplug — what we tried and why it was abandoned
 
 **Context:** The app's BLE scan silently returned nothing. Logcat from the
-Bluetooth stack showed no scan originating from `com.example.muse_ml`. The
+Bluetooth stack showed no scan originating from `org.windwerfer.neurofeed`. The
 failure was entirely on the Rust/btleplug side, not Dart.
 
 ### Attempt 1 — `btleplug::platform::init()` in Rust `init_app()`

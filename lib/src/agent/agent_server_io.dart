@@ -4,9 +4,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/agent/agent_commands.dart';
-import 'package:muse_ml/src/agent/agent_protocol.dart';
-import 'package:muse_ml/src/agent/agent_server_config.dart';
+import 'package:neurofeed/src/agent/agent_commands.dart';
+import 'package:neurofeed/src/agent/agent_protocol.dart';
+import 'package:neurofeed/src/agent/agent_server_config.dart';
 
 class AgentServer {
   static HttpServer? _server;
@@ -37,14 +37,14 @@ class AgentServer {
         try {
           bound = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         } on SocketException catch (e) {
-          debugPrint('[muse] agent-listen failed: ${last ?? e}');
+          debugPrint('[neurofeed] agent-listen failed: ${last ?? e}');
           return;
         }
       }
     }
     _server = bound;
     final commands = AgentCommands(container);
-    debugPrint('[muse] agent-listen ${bound.address.address}:${bound.port}');
+    debugPrint('[neurofeed] agent-listen ${bound.address.address}:${bound.port}');
     bound.listen((request) {
       unawaited(_handle(request, commands));
     });
@@ -75,7 +75,7 @@ class AgentServer {
       );
       _write(request.response, result);
     } catch (e, st) {
-      debugPrint('[muse] agent-http error: $e\n$st');
+      debugPrint('[neurofeed] agent-http error: $e\n$st');
       _write(request.response, agentError(500, 'bad_request', e.toString()));
     }
   }

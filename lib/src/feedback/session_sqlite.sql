@@ -1,4 +1,4 @@
--- sessions table: one row per .muse.feedback file
+-- sessions table: one row per .neurofeed file
 CREATE TABLE sessions (
   -- Primary key (stable session id, derived from filename)
   id           TEXT PRIMARY KEY NOT NULL,

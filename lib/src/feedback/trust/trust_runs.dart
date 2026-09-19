@@ -1,4 +1,4 @@
-import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
+import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 
 /// Gray wash on the reward pane when inhibit is out (any reward Y).
 const bool kTrustInhibitWash = true;

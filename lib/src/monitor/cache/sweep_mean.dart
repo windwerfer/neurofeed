@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_buffer.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
 /// Mean of selected electrodes over `[startElapsed, endElapsed)` via
 /// [SweepBuffer.sampleAt]. No second EEG ring.

@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:muse_ml/src/connect_window.dart';
-import 'package:muse_ml/src/feedback/guardrail_mode.dart';
-import 'package:muse_ml/src/reve/model_engine.dart';
-import 'package:muse_ml/src/reve/model_selector.dart';
-import 'package:muse_ml/src/reve/models.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/connect_window.dart';
+import 'package:neurofeed/src/feedback/guardrail_mode.dart';
+import 'package:neurofeed/src/reve/model_engine.dart';
+import 'package:neurofeed/src/reve/model_selector.dart';
+import 'package:neurofeed/src/reve/models.dart';
+import 'package:neurofeed/src/settings.dart';
 
 /// The gate bubble shown when the user tries to start a session whose
 /// protocol uses the guardrail, without the selected guardrail model being

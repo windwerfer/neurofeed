@@ -50,7 +50,7 @@ Spec archive: [../archive/session-computed-charts.md](../archive/session-compute
 - [x] Persistent bad signal (any channel < 40 for 10 s) → interrupted phase; recovers when signal returns to green
 
 ## Phase 5: Session dashboard
-- [x] Session reader (`.muse` parsing — now format v4, owned by Rust: `sessionParseBody`; the old Dart `decompressBlock` FFI path was removed in the format-migration commit)
+- [x] Session reader (`.neurofeed` parsing — now format v4, owned by Rust: `sessionParseBody`; the old Dart `decompressBlock` FFI path was removed in the format-migration commit)
 - [x] Bands/motion/pulse graphs from recorded data
 - [x] Summary charts from v5 computed 1 Hz (`v5ExtractComputed` → `prepareChartDataFromComputed`); zoom-synced: drag-pan, pinch, ctrl/⌘+scroll zoom, double-tap reset
 - [x] Fixed 0–1 y-axis (relative power) + numeric ticks for Bands and Alpha-vs-Theta; auto-scale for movement/HR
@@ -58,14 +58,14 @@ Spec archive: [../archive/session-computed-charts.md](../archive/session-compute
 - [x] Stats: peak alpha, target time %, stillness %, avg BPM, avg alpha_rel
 - [x] Notes text field (persisted in Phase 6 metadata)
 - [x] **Notes editable in the history detail**: corner save chevron (only when dirty) + spinner + brief "saved" flash; `PopScope` "Unsaved notes — Save/Stay/Discard" on Back
-- [x] Save (green, renames temp → session_<ts>.muse) / Discard (gray, deletes temp); saves via crash-safe `writeFileAtomic`
-- [x] Thumbnail generation (RepaintBoundary → PNG next to .muse)
+- [x] Save (green, renames temp → session_<ts>.neurofeed) / Discard (gray, deletes temp); saves via crash-safe `writeFileAtomic`
+- [x] Thumbnail generation (RepaintBoundary → PNG next to .neurofeed)
 
 ## Phase 6: Feedback history
-- [x] Session metadata persistence (JSON alongside .muse)
+- [x] Session metadata persistence (JSON alongside .neurofeed)
 - [x] History list view with thumbnails, dates, stats
 - [x] Tap to re-open dashboard (read-only mode, notes prefilled)
-- [x] **Editable notes persisted back into the saved `.muse.feedback`** — crash-safe rewrite (`SessionStore.updateNotes`; FS tmp+rename, SAF `writeFileAtomic` + `recoverDoc`)
+- [x] **Editable notes persisted back into the saved `.neurofeed`** — crash-safe rewrite (`SessionStore.updateNotes`; FS tmp+rename, SAF `writeFileAtomic` + `recoverDoc`)
 
 ## Phase I (merged to main): Volume, recalibrate, adaptive target, persistence
 - [x] 5-channel volume control (master / background / feedback / intro / end bell) with live apply + reset

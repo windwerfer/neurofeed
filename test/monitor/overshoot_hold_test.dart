@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/panes/overshoot_hold.dart';
+import 'package:neurofeed/src/monitor/panes/overshoot_hold.dart';
 
 void main() {
   test('value above Y-max does not feed auto scale', () {

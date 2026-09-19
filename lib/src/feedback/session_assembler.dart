@@ -1,1 +1,1 @@
-export 'package:muse_ml/src/session_v5/assemble.dart';
+export 'package:neurofeed/src/session_v5/assemble.dart';

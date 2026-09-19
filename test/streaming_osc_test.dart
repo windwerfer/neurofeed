@@ -3,9 +3,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/streaming/streaming_mixer.dart';
-import 'package:muse_ml/src/streaming/streaming_models.dart';
-import 'package:muse_ml/src/streaming/streaming_osc.dart';
+import 'package:neurofeed/src/streaming/streaming_mixer.dart';
+import 'package:neurofeed/src/streaming/streaming_models.dart';
+import 'package:neurofeed/src/streaming/streaming_osc.dart';
 
 void main() {
   group('oscEncodeMessage', () {

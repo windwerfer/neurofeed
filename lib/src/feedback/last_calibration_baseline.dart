@@ -1,5 +1,5 @@
-import 'package:muse_ml/src/feedback/guard_lane.dart';
-import 'package:muse_ml/src/feedback/target_state.dart';
+import 'package:neurofeed/src/feedback/guard_lane.dart';
+import 'package:neurofeed/src/feedback/target_state.dart';
 
 /// Last successful calibration for one device, reused by debug Skip on a
 /// real headset. Reward and guard sample lists may be empty independently.

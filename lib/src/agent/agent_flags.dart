@@ -5,14 +5,14 @@ bool parseDartDefineFlag(String raw) {
   return v == 'true' || v == '1' || v == 'yes';
 }
 
-bool get museAgentEnabled =>
+bool get neurofeedAgentEnabled =>
     kDebugMode &&
     parseDartDefineFlag(
-      const String.fromEnvironment('MUSE_AGENT', defaultValue: ''),
+      const String.fromEnvironment('NEUROFEED_AGENT', defaultValue: ''),
     );
 
-bool get museDebugEnabled =>
+bool get neurofeedDebugEnabled =>
     kDebugMode &&
     parseDartDefineFlag(
-      const String.fromEnvironment('MUSE_DEBUG', defaultValue: ''),
+      const String.fromEnvironment('NEUROFEED_DEBUG', defaultValue: ''),
     );

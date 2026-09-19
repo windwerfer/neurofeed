@@ -3,17 +3,17 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/session_v5/assemble.dart';
-import 'package:muse_ml/src/feedback/session_metadata.dart';
-import 'package:muse_ml/src/feedback/session_sqlite.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart';
-import 'package:muse_ml/src/version.dart';
+import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/feedback/session_sqlite.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/version.dart';
 
-/// History-root v5 names: `session_*.muse.feedback` and
-/// `recording_*.muse.feedback`. Not `tmp_`.
+/// History-root v5 names: `session_*.neurofeed` and
+/// `recording_*.neurofeed`. Not `tmp_`.
 bool isHistoryContainerName(String name) {
-  if (!name.endsWith('.muse.feedback')) return false;
+  if (!name.endsWith('.neurofeed')) return false;
   return name.startsWith('session_') || name.startsWith('recording_');
 }
 
@@ -24,7 +24,7 @@ bool isHistoryContainerName(String name) {
   var sessions = 0;
   var recordings = 0;
   for (final name in names) {
-    if (!name.endsWith('.muse.feedback')) continue;
+    if (!name.endsWith('.neurofeed')) continue;
     if (name.startsWith('session_')) {
       sessions++;
     } else if (name.startsWith('recording_')) {
@@ -153,16 +153,16 @@ class SessionStore {
     );
   }
 
-  String _museName(String id) => 'session_$id.muse.feedback';
+  String _containerName(String id) => 'session_$id.neurofeed';
 
-  /// Sqlite `path` when present (`recording_$id.muse.feedback` for
-  /// recordings). Falls back to `session_$id.muse.feedback`.
+  /// Sqlite `path` when present (`recording_$id.neurofeed` for
+  /// recordings). Falls back to `session_$id.neurofeed`.
   Future<String> _fileNameFor(String id) async {
     final sqlite = await _sqlite;
     final row = await sqlite.getSession(id);
     final path = row?.path;
     if (path != null && path.isNotEmpty) return path;
-    return _museName(id);
+    return _containerName(id);
   }
 
   /// Namespace for cache rows — a short hash of the storage location so two
@@ -171,7 +171,7 @@ class SessionStore {
       sha256.convert(utf8.encode(storage.location)).toString().substring(0, 16);
 
   /// Persist a finished session into the history folder as a single
-  /// `.muse.feedback` container. Pass already-encoded [encodedV5] **or**
+  /// `.neurofeed` container. Pass already-encoded [encodedV5] **or**
   /// the (thumbnail, computed, raw) parts — both go through [assembleV5Container].
   Future<SessionSummary> publishSession(
     String id,
@@ -205,7 +205,7 @@ class SessionStore {
         rawBody: Uint8List.fromList(rawBody ?? const []),
       );
     }
-    await storage.writeFileAtomic(_museName(id), container);
+    await storage.writeFileAtomic(_containerName(id), container);
     final scalars = extractComputedScalars(frames);
     final durationS = metadata.durationS != 0
         ? metadata.durationS
@@ -214,7 +214,7 @@ class SessionStore {
     await sqlite.upsertSession(
       SessionRow(
         id: id,
-        path: _museName(id),
+        path: _containerName(id),
         formatVersion: 5,
         appVersion: appVersion,
         savedAt: DateTime.tryParse(metadata.savedAt) ?? DateTime.now(),
@@ -267,18 +267,18 @@ class SessionStore {
         updatedAt: DateTime.now(),
       ),
     );
-    debugPrint('[session] written ${_museName(id)} to ${storage.location}');
+    debugPrint('[session] written ${_containerName(id)} to ${storage.location}');
     return SessionSummary(
       id: id,
       metadata: metadata,
       kind: 'feedback',
-      path: _museName(id),
+      path: _containerName(id),
     );
   }
 
   /// Replace the free-text notes of an existing session and rewrite the
   /// v5 container head in place, preserving the thumbnail, computed frames,
-  /// and the raw .muse body. Returns false when the session file is missing
+  /// and the raw body. Returns false when the session file is missing
   /// or unreadable.
   Future<bool> updateNotes(String id, String notes) async {
     final storage = await _storage;
@@ -362,7 +362,7 @@ class SessionStore {
     return true;
   }
 
-  /// Delete one session from history (the `.muse.feedback` file). Returns
+  /// Delete one session from history (the `.neurofeed` file). Returns
   /// false when the file was already gone.
   Future<bool> delete(String id) async {
     final storage = await _storage;

@@ -1,9 +1,9 @@
-import 'package:muse_ml/src/monitor/cache/band_cache.dart';
-import 'package:muse_ml/src/monitor/cache/sliding_spectrum.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
-import 'package:muse_ml/src/monitor/dsp.dart';
-import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/monitor/cache/band_cache.dart';
+import 'package:neurofeed/src/monitor/cache/sliding_spectrum.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_buffer.dart';
+import 'package:neurofeed/src/monitor/dsp.dart';
+import 'package:neurofeed/src/monitor/panes/time_series_pane.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
 bool shouldRecomputeEegOnSweep({required ViewportMode mode}) =>
     mode != ViewportMode.inspect;

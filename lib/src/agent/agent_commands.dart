@@ -1,13 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/agent/agent_protocol.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/feedback/feedback_state.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/protocol_catalog.dart';
-import 'package:muse_ml/src/monitor/monitor_providers.dart';
-import 'package:muse_ml/src/monitor/monitor_state.dart';
-import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/version.dart';
+import 'package:neurofeed/src/agent/agent_protocol.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/feedback/feedback_state.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/monitor/monitor_providers.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/version.dart';
 
 class AgentCommands {
   AgentCommands(this._container);

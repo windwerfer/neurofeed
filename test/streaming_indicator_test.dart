@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/streaming/streaming_controller.dart';
-import 'package:muse_ml/src/streaming/streaming_models.dart';
-import 'package:muse_ml/src/views/streaming_view.dart';
+import 'package:neurofeed/src/streaming/streaming_controller.dart';
+import 'package:neurofeed/src/streaming/streaming_models.dart';
+import 'package:neurofeed/src/views/streaming_view.dart';
 
 StreamingUiState _state({
   bool connected = false,

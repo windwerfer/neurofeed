@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/device_montage.dart';
-import 'package:muse_ml/src/monitor/electrode_toggles.dart';
-import 'package:muse_ml/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
+import 'package:neurofeed/src/monitor/electrode_toggles.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
 
 void main() {
   test('default all on; last one stays', () {

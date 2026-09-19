@@ -1,4 +1,4 @@
-# Muse ML
+# NeuroFeed
 
 Companion app for Interaxon Muse EEG headsets. Flutter UI, Rust BLE stack
 ([muse-rs](https://github.com/windwerfer/muse-rs) `0.1.1`,
@@ -24,7 +24,7 @@ Preferences persist across restarts.
 
 ## Session files
 
-Finished sessions and recordings are a single `.muse.feedback` file:
+Finished sessions and recordings are a single `.neurofeed` file:
 
 ```
 [68-byte header][WebP thumbnail][metadata JSON (zstd)][computed 1 Hz (zstd)][raw (zstd)]

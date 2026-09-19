@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:muse_ml/src/monitor/dsp.dart';
+import 'package:neurofeed/src/monitor/dsp.dart';
 
 class HistogramPane extends StatelessWidget {
   const HistogramPane({

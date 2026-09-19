@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:muse_ml/src/monitor/cache/recording_index.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/monitor/cache/recording_index.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart';
 
 const double _eegRateHz = 256.0;
 

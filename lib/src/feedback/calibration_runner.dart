@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/audio/calibration_clips.dart';
-import 'package:muse_ml/src/feedback/feedback_phase.dart';
-import 'package:muse_ml/src/feedback/session_store.dart';
+import 'package:neurofeed/src/audio/calibration_clips.dart';
+import 'package:neurofeed/src/feedback/feedback_phase.dart';
+import 'package:neurofeed/src/feedback/session_store.dart';
 
 /// One step of a calibration recipe: an optional guidance clip followed by a
 /// silent collection window. `seconds == 0` means no collection (intro-only).

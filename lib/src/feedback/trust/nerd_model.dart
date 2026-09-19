@@ -1,11 +1,11 @@
 import 'dart:math' as math;
 
-import 'package:muse_ml/src/feedback/guard_lane.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/reward_lane.dart';
-import 'package:muse_ml/src/feedback/target_state.dart';
-import 'package:muse_ml/src/feedback/trust/trust_runs.dart';
-import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
+import 'package:neurofeed/src/feedback/guard_lane.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/reward_lane.dart';
+import 'package:neurofeed/src/feedback/target_state.dart';
+import 'package:neurofeed/src/feedback/trust/trust_runs.dart';
+import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 
 class NerdRowId {
   static const live = 'live';

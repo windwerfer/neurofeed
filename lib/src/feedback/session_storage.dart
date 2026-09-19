@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/settings.dart';
 
 /// Absolute default history folder on desktop (user Documents).
 Future<Directory> _desktopDefault() async {
@@ -54,7 +54,7 @@ Directory scratchDirectory(SessionStorage history) {
 }
 
 /// A file handle inside the history folder. [name] is the bare file name
-/// (e.g. `session_123.muse.feedback`).
+/// (e.g. `session_123.neurofeed`).
 class StoredFile {
   const StoredFile(this.name, this.mtimeMs);
 
@@ -66,7 +66,7 @@ class StoredFile {
 }
 
 /// A file handle inside the history folder. [name] is the bare file name
-/// (e.g. `session_123.muse.feedback`).
+/// (e.g. `session_123.neurofeed`).
 class SessionFile {
   const SessionFile(this.name);
 
@@ -254,7 +254,7 @@ class SafSessionStorage extends SessionStorage {
 
   final String treeUri;
 
-  static const MethodChannel _channel = MethodChannel('muse_ml/saf');
+  static const MethodChannel _channel = MethodChannel('neurofeed/saf');
 
   @override
   String get displayName => 'Android folder';

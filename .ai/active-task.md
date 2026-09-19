@@ -34,4 +34,4 @@ chrome, or `SMOOTH` / `REAL TIME` Bands chrome. Do not pause `SweepBuffer`
 ## How to verify BLE (still)
 
 `flutter run`, status bar battery from `bp` not the fuel gauge. Logcat:
-`adb logcat -s rust_lib_muse_ml:*:*:D`. See [testing-guide.md](testing-guide.md).
+`adb logcat -s rust_lib_neurofeed:*:*:D`. See [testing-guide.md](testing-guide.md).

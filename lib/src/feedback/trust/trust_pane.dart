@@ -2,12 +2,12 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:muse_ml/src/charts/dashed_polyline.dart';
-import 'package:muse_ml/src/charts/smooth_path.dart';
-import 'package:muse_ml/src/feedback/trust/trust_inhibit.dart';
-import 'package:muse_ml/src/feedback/trust/trust_runs.dart';
-import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
-import 'package:muse_ml/src/feedback/trust/trust_viewport.dart';
+import 'package:neurofeed/src/charts/dashed_polyline.dart';
+import 'package:neurofeed/src/charts/smooth_path.dart';
+import 'package:neurofeed/src/feedback/trust/trust_inhibit.dart';
+import 'package:neurofeed/src/feedback/trust/trust_runs.dart';
+import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
+import 'package:neurofeed/src/feedback/trust/trust_viewport.dart';
 
 const double kTrustYGutter = 28;
 const double kTrustXGutter = 16;

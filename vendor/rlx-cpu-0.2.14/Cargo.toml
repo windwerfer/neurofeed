@@ -50,7 +50,7 @@ amx-dense = []
 amx-sme = []
 blas = []
 blas-mkl = ["blas"]
-default = []  # (muse_ml: cleared — the default pulls a hard OpenBLAS
+default = []  # (neurofeed: cleared — the default pulls a hard OpenBLAS
 # link on x86_64 hosts, which breaks Windows/Linux release builds; the
 # portable SIMD/scalar gemm fallback is used instead, same as aarch64 Linux)
 parity-gemm = ["dep:gemm"]

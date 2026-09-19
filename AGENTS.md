@@ -1,4 +1,4 @@
-# AGENTS.md — Muse ML (Flutter + Rust BLE headset app)
+# AGENTS.md — NeuroFeed (Flutter + Rust BLE headset app)
 
 Global orientation. Maps and history live in [`.ai/README.md`](.ai/README.md).
 Current work: [`.ai/active-task.md`](.ai/active-task.md).
@@ -8,7 +8,7 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   sandbox image may be newer (currently 3.44.8) — do not bump the workflow
   pin without intending a release-toolchain change. Dart is bundled.
 - **Rust** via `flutter_rust_bridge` **2.11.1** (pinned `=`, crate + Dart
-  package + codegen CLI). Lib: `rust/` (`rust_lib_muse_ml`). Generated
+  package + codegen CLI). Lib: `rust/` (`rust_lib_neurofeed`). Generated
   bindings `rust/src/frb_generated.rs` and `lib/src/rust/` are **both tracked**
   (commit `7543478`: CI never runs codegen; a missing `frb_generated.rs`
   breaks cargokit with `E0583`). Regenerate with
@@ -82,8 +82,8 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
   Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
 - Spoken UI names: `.ai/ui-map.md`. What to run: `.ai/test-matrix.md`. Linux
-  agent drive: debug HTTP (`--dart-define=MUSE_AGENT=true`), skill
-  `muse-run-linux`. How-to: `.ai/testing-guide.md` Linux agent.
+  agent drive: debug HTTP (`--dart-define=NEUROFEED_AGENT=true`), skill
+  `neurofeed-run-linux`. How-to: `.ai/testing-guide.md` Linux agent.
 
 ## Docs
 Index: [`.ai/README.md`](.ai/README.md). UI names: [`.ai/ui-map.md`](.ai/ui-map.md).
@@ -101,7 +101,7 @@ lib/src/                    Flutter UI + Riverpod
   connection_provider.dart  AppStateNotifier: scan/connect
   connect_source.dart       ConnectSource + simulator catalog
   app.dart                  main(), permissions
-  agent/                    debug loopback HTTP (`MUSE_AGENT`, compile-out)
+  agent/                    debug loopback HTTP (`NEUROFEED_AGENT`, compile-out)
   connect_window.dart       ConnectOverlay (every view with a status bar)
   settings.dart, status_bar.dart, version.dart
   views/                    session, history, dashboard, protocol_builder, streaming, …
@@ -202,7 +202,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
   (`session_metadata.db`, thumbnail BLOB, `kind` `feedback`|`recording`).
   `SessionStore.list()` is sqlite-only (no orphan-file backfill).
   `RecordingStore.publish` upserts the same DB.
-- SAF: MethodChannel `muse_ml/saf` in `MainActivity.kt`.
+- SAF: MethodChannel `neurofeed/saf` in `MainActivity.kt`.
 - Guard feature ids: `lib/src/feedback/guardrail_mode.dart` (string helpers,
   not an enum). Per-protocol prefs migrate from old `GuardrailMode.name`.
 - Audio engine: `lib/src/audio/soloud_engine.dart` (init/deinit, epoch,
@@ -233,7 +233,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `third_party/reve-rs` as reference copy only (do not revive luna-rs).
 - **Gated weights live in `.local/`**, never commit them. `#[ignore]`d smoke
   tests in `rust/src/analysis/{cbramod,cbramod_encoder,reve,guardrail,ai_heads}.rs`.
-- **Session format is Rust-owned.** Never edit `.muse` / `.muse.feedback`
+- **Session format is Rust-owned.** Never edit the `.neurofeed`
   layout in Dart. Some container fns are `#[frb(sync)]`.
 - **Never put a `LayoutBuilder` inside dialog content** (AlertDialog +
   IntrinsicWidth). Use `Align` / `FractionallySizedBox`.
@@ -342,7 +342,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
   doubles are dropped by the receiver. Extend loopback tests when touching
   the wire format.
 - **All session writes are crash-safe** (`writeFileAtomic`).
-- **Band/EEG timestamps in the `.muse` body are ms epochs.** CSV bucketing
+- **Band/EEG timestamps in the raw body are ms epochs.** CSV bucketing
   divides by 1000 before flooring.
 - **FFI-backed `flutter test` needs the host Rust lib**
   (`cargo build --manifest-path rust/Cargo.toml` first).
@@ -356,7 +356,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
   history or Discard deletes the scratch v5. One wrapper:
   `session_v5/assemble.dart`.
 - **Crash recovery** is prefix-strict. Feedback: leftover
-  `session_*.muse.feedback` and orphan `.raw` / `.computed` / `.metadata`
+  `session_*.neurofeed` and orphan `.raw` / `.computed` / `.metadata`
   reopen the session summary. Monitor: leftover `recording_*` (dialog
   **Incomplete recording detected**).
   `tmp_*` is deleted, never assembled. Temps go through `writeScratchV5`.

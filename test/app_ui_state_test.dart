@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/settings.dart';
 
 AppUiState _state({String? scanMessage}) => AppUiState(
   status: const ConnectionStatus(

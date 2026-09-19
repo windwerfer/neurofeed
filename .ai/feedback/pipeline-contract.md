@@ -68,7 +68,7 @@ Pad quality (0–100) is computed **only in Dart**: `connection_provider._maybeC
 
 ### What stays
 
-- `.muse.feedback` v5 byte layout (`rust/src/api/session_format.rs`).
+- `.neurofeed` v5 byte layout (`rust/src/api/session_format.rs`).
 - SQLite history cache **schema**, export, graph views, BLE/JNI, SoLoud internals.
 - Existing catalog **string IDs** (see [Catalog ID freeze](#catalog-id-freeze)).
 - Calibration snapshot pattern (`SessionCalibration.calibrationJson`) — protocols get the same treatment (`protocolJson`).
@@ -84,7 +84,7 @@ Pad quality (0–100) is computed **only in Dart**: `connection_provider._maybeC
 
 - Freeze feature IDs, protocol document schema, lane semantics, FFI, catalog mapping, and PR order.
 - Make Crown features *producible* (registry + `FeatureDto` for `device.focus` / `device.calm` and `band.*`) without requiring a Crown session UI.
-- Kill `ProtocolType` without breaking history listing of existing `.muse.feedback` files.
+- Kill `ProtocolType` without breaking history listing of existing `.neurofeed` files.
 - Split inhibit vs guard, background vs reward output vs guard output.
 - Move electrode selection and band-derived feature math into Rust, with autodrop using a Rust 0–100 quality score.
 - Compose calibration from subscribed features, starting from `assets/calibrations.json` v2.
@@ -452,7 +452,7 @@ If none remain, skip. Dart UI dots stay on the existing 4-slot Dart formula this
 
 ### Catalog ID freeze
 
-Keep these nine IDs forever as the on-disk `protocol` string in `.muse.feedback` metadata and SQLite `sessions.protocol`:
+Keep these nine IDs forever as the on-disk `protocol` string in `.neurofeed` metadata and SQLite `sessions.protocol`:
 
 `drowsiness`, `twilight`, `alertnessOpen`, `alertnessClosed`, `mindfulness`, `concentration`, `relaxedConcentration`, `recordOnly`, `guardrailOnly`
 

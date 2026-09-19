@@ -7,25 +7,25 @@ Spoken UI names: [ui-map.md](ui-map.md). Command matrix: [test-matrix.md](test-m
 Drive the **same Riverpod notifiers** the UI uses (`lib/src/agent/`).
 Not widget tests. Not OS clicks. Session smoke does **not** push
 `FeedbackSessionView`. What to assert: [test-matrix.md](test-matrix.md).
-Copy-paste: `.grok/skills/muse-run-linux/SKILL.md`. Spoken names:
+Copy-paste: `.grok/skills/neurofeed-run-linux/SKILL.md`. Spoken names:
 [ui-map.md](ui-map.md).
 
-Bind is compile-out unless `kDebugMode && MUSE_AGENT`.
-`--dart-define=MUSE_AGENT=true` (also `1` / `yes` via `parseDartDefineFlag`).
+Bind is compile-out unless `kDebugMode && NEUROFEED_AGENT`.
+`--dart-define=NEUROFEED_AGENT=true` (also `1` / `yes` via `parseDartDefineFlag`).
 Raw `bool.fromEnvironment` is true only for the string `true`. Process
-`export MUSE_AGENT=…` does nothing. Profile/release compile it out.
-Bind `127.0.0.1` only. Do not leave `MUSE_AGENT` on an Android `flutter run`.
+`export NEUROFEED_AGENT=…` does nothing. Profile/release compile it out.
+Bind `127.0.0.1` only. Do not leave `NEUROFEED_AGENT` on an Android `flutter run`.
 HTTP never writes SharedPreferences (`persist: false`).
 
 This sandbox often has `DISPLAY` unset. Wayland works
 (`GDK_BACKEND=wayland`). If `flutter run -d linux` never prints
-`[muse] agent-ready`, stop and report. Do not invent Xvfb. Do not kill
+`[neurofeed] agent-ready`, stop and report. Do not invent Xvfb. Do not kill
 Pulse, X, Wayland, adb, or the Dart language-server.
 
 1. Rebuild `rust/target/release/` after codegen (content-hash trap below).
-2. `GDK_BACKEND=wayland flutter run -d linux --dart-define=MUSE_AGENT=true --dart-define=MUSE_DEBUG=true`
-   with stdout in a file. Wait for `[muse] agent-listen 127.0.0.1:<port>`
-   **and** `[muse] agent-ready`. Abort on `Content hash`. Parse the port;
+2. `GDK_BACKEND=wayland flutter run -d linux --dart-define=NEUROFEED_AGENT=true --dart-define=NEUROFEED_DEBUG=true`
+   with stdout in a file. Wait for `[neurofeed] agent-listen 127.0.0.1:<port>`
+   **and** `[neurofeed] agent-ready`. Abort on `Content hash`. Parse the port;
    do not assume 17890 (range 17890–17899, then 0).
 3. Connect a **startable Muse** simulator: `sim:muse-2` or `sim:muse-s`.
    Never `sim:crown-osc` / `sim:notion-osc` for a playing session.
@@ -56,7 +56,7 @@ Pulse, X, Wayland, adb, or the Dart language-server.
 | `POST /session/duration` | `{minutes}` | `persist: false`. Smoke uses `1`. |
 | `POST /session/start` | `{skipCalibration}` | 412 `not_connected`; 409 `crown_refused`; 409 `recording_active`. Order: not_connected → crown_refused → recording_active. Distinct from `crown_refused`. |
 | `POST /record/start` | `{}` | 412 `disconnected`; 409 `feedback_active`; else start `recording_$ts`. `persist: false`. |
-| `POST /record/stop` | `{}` | 200; assemble scratch `recording_$ts.muse.feedback`. Does not publish. `persist: false`. |
+| `POST /record/stop` | `{}` | 200; assemble scratch `recording_$ts.neurofeed`. Does not publish. `persist: false`. |
 | `POST /session/pause\|resume\|end\|reset` | `{}` | end/reset are 200 no-ops if idle / not connected. **Always end+reset** after a smoke. |
 | `POST /session/override` | `{enabled:bool}` | Debug + sim only. 412 `probe_unavailable` otherwise. Enabling while playing **reseeds** a synthetic baseline in slider units (live sim ATR is ~10⁴; a 0–3 slider cannot beat that). |
 | `POST /session/feature` | `{id, value}` | Latch native `FeatureDto.value` and emit immediately. `value: null` clears that id. 412 if probe off. |
@@ -81,7 +81,8 @@ Pulse, X, Wayland, adb, or the Dart language-server.
 ## Environment
 - `adb`: `$HOME/android-sdk/platform-tools/adb`. SDK at `$HOME/android-sdk`.
 - `flutter`: `$HOME/flutter/bin/flutter`. Rust Android targets + `cargo-ndk`.
-- App package: `com.example.muse_ml`.
+- App package: `org.windwerfer.neurofeed` (release). `flutter run` debug
+  builds use `org.windwerfer.neurofeed.debug`.
 - Pick a device with `adb devices` / `flutter devices`. Do not hardcode a
   serial. CI Flutter pin is **3.41.7**; the sandbox image may be newer.
 
@@ -109,14 +110,14 @@ The agent runs this itself. Steps:
 4. **Dump and grep** (only works AFTER step 3; otherwise `-d` hangs):
    ```bash
    timeout 25 adb logcat -d -t 8000 > /tmp/opencode/lc.txt 2>&1
-   grep -nE "\[muse\]|btleplug|JNI call failed|scan error|scan returned|ClassNotFound" /tmp/opencode/lc.txt
+   grep -nE "\[neurofeed\]|btleplug|JNI call failed|scan error|scan returned|ClassNotFound" /tmp/opencode/lc.txt
    ```
 
 ## What to look for
-- `[muse] main entered` — app launched and `debugPrint` reaches logcat.
-- `[muse] requestBlePermissions: result = granted, granted` — permission flow OK.
-- `[muse] starting scan (manual rescan)` — Dart called Rust `scan()`.
-- After a successful scan: `[muse] scan returned N device(s)` and the connect
+- `[neurofeed] main entered` — app launched and `debugPrint` reaches logcat.
+- `[neurofeed] requestBlePermissions: result = granted, granted` — permission flow OK.
+- `[neurofeed] starting scan (manual rescan)` — Dart called Rust `scan()`.
+- After a successful scan: `[neurofeed] scan returned N device(s)` and the connect
   window's `scanMessage` shows `Found N device(s)`.
 - Failure signatures seen historically:
   - `Droidplug has not been initialized` → btleplug not init'd from JNI.
@@ -158,7 +159,7 @@ Tests that call Rust (e.g. `test/session_export_test.dart`,
 need the **host-built** library:
 
 ```bash
-cargo build --manifest-path rust/Cargo.toml      # → rust/target/debug/librust_lib_muse_ml.so
+cargo build --manifest-path rust/Cargo.toml      # → rust/target/debug/librust_lib_neurofeed.so
 flutter test                                      # tests init RustLib.init(externalLibrary: ...)
 ```
 
@@ -186,7 +187,7 @@ in `setUpAll`.
   opens that release `.so` from the project root. A stale release lib
   (built before the last codegen) causes
   `Bad state: Content hash on Dart side (…) is different from Rust side (…)`
-  at `RustLib.init`, while `./muse_ml` from the bundle dir still works.
+  at `RustLib.init`, while `./neurofeed` from the bundle dir still works.
   **Fix:** `cargo build --release --manifest-path rust/Cargo.toml` (or
   delete the stale `.so`), then `flutter run`. Re-run after codegen;
   `flutter clean` / debug builds do not help.

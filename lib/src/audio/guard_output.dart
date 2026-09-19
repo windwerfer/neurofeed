@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:muse_ml/src/audio/feedback_audio_controller.dart';
-import 'package:muse_ml/src/audio/guardrail_sound.dart';
+import 'package:neurofeed/src/audio/feedback_audio_controller.dart';
+import 'package:neurofeed/src/audio/guardrail_sound.dart';
 
 /// Same gap as [warningChimeCooldown] in the guard lane (metadata uses that
 /// copy). One-shots re-fire while [active] stays true.

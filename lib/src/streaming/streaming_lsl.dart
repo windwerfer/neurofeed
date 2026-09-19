@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:liblsl/lsl.dart';
-import 'package:muse_ml/src/streaming/streaming_mixer.dart';
-import 'package:muse_ml/src/streaming/streaming_models.dart';
+import 'package:neurofeed/src/streaming/streaming_mixer.dart';
+import 'package:neurofeed/src/streaming/streaming_models.dart';
 
 /// Streams sensor groups as LSL outlets (one outlet per group), discoverable
 /// by LSL clients (LabRecorder, OpenViBE, …) on the local network. liblsl

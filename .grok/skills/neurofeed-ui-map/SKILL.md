@@ -1,7 +1,7 @@
 ---
-name: muse-ui-map
+name: neurofeed-ui-map
 description: >
-  Map spoken Muse ML UI names (status bar, connect window, Start Session,
+  Map spoken NeuroFeed UI names (status bar, connect window, Start Session,
   Debug mode, Simulator catalog) to widgets and files. Use when the user
   describes a bug in on-screen terms, or before grepping widget names.
 ---

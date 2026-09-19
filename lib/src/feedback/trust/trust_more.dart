@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:muse_ml/src/feedback/trust/trust_runs.dart';
-import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
+import 'package:neurofeed/src/feedback/trust/trust_runs.dart';
+import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 
 class TrustRewardMore extends StatelessWidget {
   const TrustRewardMore({super.key, required this.samples});

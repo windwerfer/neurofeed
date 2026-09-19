@@ -3,9 +3,9 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/dsp.dart';
-import 'package:muse_ml/src/monitor/panes/spectrogram_pane.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/monitor/dsp.dart';
+import 'package:neurofeed/src/monitor/panes/spectrogram_pane.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
 Float64List _db({int n = 129, double fill = -40, int? hotBin, double hot = 0}) {
   final db = Float64List(n);

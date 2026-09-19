@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
-import 'package:muse_ml/src/monitor/dsp.dart';
-import 'package:muse_ml/src/monitor/graph_shell.dart';
-import 'package:muse_ml/src/monitor/panes/histogram_pane.dart';
-import 'package:muse_ml/src/monitor/panes/psd_pane.dart';
-import 'package:muse_ml/src/monitor/panes/spectrogram_pane.dart';
-import 'package:muse_ml/src/monitor/panes/sweep_pane.dart';
-import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_buffer.dart';
+import 'package:neurofeed/src/monitor/dsp.dart';
+import 'package:neurofeed/src/monitor/graph_shell.dart';
+import 'package:neurofeed/src/monitor/panes/histogram_pane.dart';
+import 'package:neurofeed/src/monitor/panes/psd_pane.dart';
+import 'package:neurofeed/src/monitor/panes/spectrogram_pane.dart';
+import 'package:neurofeed/src/monitor/panes/sweep_pane.dart';
+import 'package:neurofeed/src/monitor/panes/time_series_pane.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
 void _portrait(WidgetTester tester) {
   tester.view.physicalSize = const Size(800, 1200);

@@ -4,31 +4,31 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/agent/agent_server.dart';
-import 'package:muse_ml/src/agent/agent_server_config.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/monitor/graph_cinema.dart';
-import 'package:muse_ml/src/monitor/monitor_providers.dart';
-import 'package:muse_ml/src/monitor/views/recording_save_discard.dart';
-import 'package:muse_ml/src/connect_window.dart';
-import 'package:muse_ml/src/feedback/crash_recovery.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/monitor/recording/crash_recovery.dart';
-import 'package:muse_ml/src/rust/frb_generated.dart';
-import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/status_bar.dart';
-import 'package:muse_ml/src/streaming/streaming_controller.dart';
-import 'package:muse_ml/src/streaming/streaming_indicator.dart';
-import 'package:muse_ml/src/monitor/views/bands_view.dart';
-import 'package:muse_ml/src/monitor/views/histogram_view.dart';
-import 'package:muse_ml/src/monitor/views/psd_view.dart';
-import 'package:muse_ml/src/monitor/views/raw_eeg_view.dart';
-import 'package:muse_ml/src/monitor/views/spectrogram_view.dart';
-import 'package:muse_ml/src/monitor/views/hr_spo2_view.dart';
-import 'package:muse_ml/src/views/settings_view.dart';
-import 'package:muse_ml/src/views/streaming_view.dart';
-import 'package:muse_ml/src/views/feedback_list.dart';
-import 'package:muse_ml/src/views/feedback_history.dart';
+import 'package:neurofeed/src/agent/agent_server.dart';
+import 'package:neurofeed/src/agent/agent_server_config.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/monitor/graph_cinema.dart';
+import 'package:neurofeed/src/monitor/monitor_providers.dart';
+import 'package:neurofeed/src/monitor/views/recording_save_discard.dart';
+import 'package:neurofeed/src/connect_window.dart';
+import 'package:neurofeed/src/feedback/crash_recovery.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
+import 'package:neurofeed/src/rust/frb_generated.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/status_bar.dart';
+import 'package:neurofeed/src/streaming/streaming_controller.dart';
+import 'package:neurofeed/src/streaming/streaming_indicator.dart';
+import 'package:neurofeed/src/monitor/views/bands_view.dart';
+import 'package:neurofeed/src/monitor/views/histogram_view.dart';
+import 'package:neurofeed/src/monitor/views/psd_view.dart';
+import 'package:neurofeed/src/monitor/views/raw_eeg_view.dart';
+import 'package:neurofeed/src/monitor/views/spectrogram_view.dart';
+import 'package:neurofeed/src/monitor/views/hr_spo2_view.dart';
+import 'package:neurofeed/src/views/settings_view.dart';
+import 'package:neurofeed/src/views/streaming_view.dart';
+import 'package:neurofeed/src/views/feedback_list.dart';
+import 'package:neurofeed/src/views/feedback_history.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
@@ -299,7 +299,7 @@ Future<void> main() async {
   await RustLib.init();
   // Initialize btleplug on Android (must happen after RustLib.init loads the library)
   if (Platform.isAndroid) {
-    const channel = MethodChannel('muse_ml/init');
+    const channel = MethodChannel('neurofeed/init');
     await channel.invokeMethod('ensureInitialized');
   }
   await requestBlePermissions();
@@ -318,7 +318,7 @@ Future<void> main() async {
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
-        title: 'Muse ML',
+        title: 'NeuroFeed',
         themeMode: ThemeMode.system,
         theme: ThemeData(
           useMaterial3: true,
@@ -342,7 +342,7 @@ Future<void> main() async {
     var frame = false;
     var init = false;
     void maybeReady() {
-      if (frame && init) debugPrint('[muse] agent-ready');
+      if (frame && init) debugPrint('[neurofeed] agent-ready');
     }
 
     notifier.initDone.then((_) {

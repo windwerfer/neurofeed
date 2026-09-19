@@ -1,9 +1,9 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/cache/optical_cache.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/monitor/cache/optical_cache.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 void main() {
   test('OpticalCache keeps IR PPG, pulse, SpO2 and avg HR', () {

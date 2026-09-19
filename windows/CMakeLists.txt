@@ -1,6 +1,6 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
-project(muse_ml LANGUAGES CXX)
+project(neurofeed LANGUAGES CXX)
 
 # MSVC 14.50+/VS 2026 errors on <experimental/coroutine> (STL1011, C2338);
 # permission_handler_windows 0.2.1 pulls it in via /await under C++17.
@@ -9,7 +9,7 @@ add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "muse_ml")
+set(BINARY_NAME "neurofeed")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.

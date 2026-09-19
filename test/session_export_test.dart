@@ -5,12 +5,12 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-import 'package:muse_ml/src/feedback/session_export.dart';
-import 'package:muse_ml/src/feedback/session_metadata.dart';
-import 'package:muse_ml/src/feedback/session_store.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart'
+import 'package:neurofeed/src/feedback/session_export.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart'
     show
         ComputedFrame,
         FeedbackInfo,
@@ -20,12 +20,12 @@ import 'package:muse_ml/src/rust/api/session_format.dart'
         sessionHeaderBytes,
         sessionFrameBytes,
         encodeSessionEvent;
-import 'package:muse_ml/src/rust/frb_generated.dart';
+import 'package:neurofeed/src/rust/frb_generated.dart';
 
 /// Load the host build of the Rust lib so FFI calls work under `flutter test`.
 /// Build it with `cargo build --manifest-path rust/Cargo.toml`.
 final String _rustLibPath =
-    '${Directory.current.path}/rust/target/debug/librust_lib_muse_ml.so';
+    '${Directory.current.path}/rust/target/debug/librust_lib_neurofeed.so';
 
 /// A minimal valid WebP thumbnail (1x1 transparent).
 const _webp1x1 = [
@@ -265,7 +265,7 @@ void main() {
   });
 
   setUp(() async {
-    tmp = await Directory.systemTemp.createTemp('muse_export_test');
+    tmp = await Directory.systemTemp.createTemp('neurofeed_export_test');
     storage = FileSystemSessionStorage(tmp);
     store = SessionStore(storage: Future.value(storage));
 

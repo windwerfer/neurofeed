@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:muse_ml/src/charts/band_style.dart';
-import 'package:muse_ml/src/monitor/electrode_toggles.dart';
+import 'package:neurofeed/src/charts/band_style.dart';
+import 'package:neurofeed/src/monitor/electrode_toggles.dart';
 
 Set<int> allBandIndices() => {for (var i = 0; i < bandNames.length; i++) i};
 
