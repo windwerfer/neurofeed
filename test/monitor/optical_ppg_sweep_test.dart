@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/cache/optical_cache.dart';
-import 'package:muse_ml/src/monitor/panes/optical_ppg_pane.dart';
+import 'package:neurofeed/src/monitor/cache/optical_cache.dart';
+import 'package:neurofeed/src/monitor/panes/optical_ppg_pane.dart';
 
 void main() {
   test('ppgSweepSlot wraps inside the fixed window', () {

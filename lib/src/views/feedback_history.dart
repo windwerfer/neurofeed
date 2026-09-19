@@ -2,11 +2,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/feedback/protocol_catalog.dart';
-import 'package:muse_ml/src/feedback/session_export.dart';
-import 'package:muse_ml/src/feedback/session_store.dart';
-import 'package:muse_ml/src/monitor/views/recording_dashboard.dart';
-import 'package:muse_ml/src/views/feedback_dashboard.dart';
+import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/feedback/session_export.dart';
+import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/monitor/views/recording_dashboard.dart';
+import 'package:neurofeed/src/views/feedback_dashboard.dart';
 
 enum HistoryKindFilter { all, feedback, recordings }
 

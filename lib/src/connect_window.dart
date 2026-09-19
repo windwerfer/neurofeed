@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/connect_source.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/rust/api/device_config.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/connect_source.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/settings.dart';
 
 /// Full-body overlay behind the [ConnectWindow]: the dropdown panel over an
 /// opaque tap barrier. While the window is open, tapping anywhere on the

@@ -280,9 +280,9 @@ Guardrail AI engine, Audio (Android only), About, Debug mode.
 
 ## Agent HTTP (debug)
 
-Not a screen. `kDebugMode && --dart-define=MUSE_AGENT=true`. See
+Not a screen. `kDebugMode && --dart-define=NEUROFEED_AGENT=true`. See
 [testing-guide.md](testing-guide.md) (Linux agent) and
-`.grok/skills/muse-run-linux/SKILL.md`.
+`.grok/skills/neurofeed-run-linux/SKILL.md`.
 
 | Spoken name | HTTP | Notes |
 |---|---|---|

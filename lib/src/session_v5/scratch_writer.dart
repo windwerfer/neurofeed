@@ -4,15 +4,15 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/session_v5/computed_frame.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/rust/api/session_format.dart' as ffi;
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/session_v5/computed_frame.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
+import 'package:neurofeed/src/settings.dart';
 
 enum SidecarMode { jsonl, snapshot }
 
 /// v5 scratch writer — writes three uncompressed temp files during recording:
-/// - raw: framed `.muse` body (`sessionHeaderBytes` + `sessionFrameBytes`)
+/// - raw: framed raw body (`sessionHeaderBytes` + `sessionFrameBytes`)
 /// - computed: JSON Lines (one Dart ComputedFrame per line)
 /// - sidecar: JSONL `.metadata` (feedback) or atomic `.json` snapshot (monitor)
 ///
@@ -51,7 +51,7 @@ class SessionRecorder {
 
   bool get isRecording => _rawFile != null;
 
-  /// Timestamp id used in `${prefix}_<id>.raw` / `.muse.feedback`.
+  /// Timestamp id used in `${prefix}_<id>.raw` / `.neurofeed`.
   String? get sessionId => _sessionId;
 
   String? get currentFilePath => _rawFile?.path;

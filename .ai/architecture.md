@@ -7,14 +7,14 @@ Flutter UI (lib/src)  — Riverpod
         │
 flutter_rust_bridge 2.11.1
         ▼
-rust_lib_muse_ml
+rust_lib_neurofeed
   muse.rs            BLE scan/connect/subscribe, 1 Hz derived metrics, forwarder
   features.rs        feature registry → MuseEventDto::Feature
   device_config.rs   DeviceKind + electrode montage
   neurosity_osc.rs   Crown/Notion OSC
   simulator.rs       spawn_simulator: Eeg/Ppg/IMU/Telemetry (`sim:*`)
   reve.rs            model + guardrail FFI
-  session_format.rs  .muse v4 body + .muse.feedback v5 container
+  session_format.rs  raw body + .neurofeed v5 container
   analysis/{gesture,cbramod,cbramod_encoder,reve,guardrail,ai_heads}.rs
         │
         ├─ muse-rs 0.1.1 (patched fork of eugenehp 0.1.0)
@@ -28,7 +28,7 @@ rust_lib_muse_ml
 streaming, and the feedback orchestrator.
 
 Permissions: `requestBlePermissions()` in `app.dart`. BLE init:
-`main()` → `RustLib.init()` → MethodChannel `muse_ml/init` `ensureInitialized`
+`main()` → `RustLib.init()` → MethodChannel `neurofeed/init` `ensureInitialized`
 → `museAndroidInit()` JNI → `btleplug::platform::init(&env)`. Details:
 [btleplug.md](btleplug.md), [muse-rs.md](muse-rs.md).
 
@@ -83,7 +83,7 @@ Skip-cal on a sim seeds a synthetic baseline so percentile/`inTarget` work.
 
 ## Session files
 
-`.muse.feedback` v5, Rust-owned (`rust/src/api/session_format.rs`):
+`.neurofeed` v5, Rust-owned (`rust/src/api/session_format.rs`):
 
 ```
 [68-byte header][WebP thumb][metadata zstd][computed 1 Hz zstd][raw zstd]

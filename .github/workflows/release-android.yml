@@ -51,7 +51,7 @@ jobs:
     needs: version
     uses: ./.github/workflows/_build-apk.yml
     with:
-      artifact-name: muse-apk
+      artifact-name: neurofeed-apk
       require-signing: ${{ github.event_name == 'release' }}
       version: ${{ needs.version.outputs.version }}
       build-number: ${{ needs.version.outputs.build }}
@@ -62,7 +62,7 @@ jobs:
     needs: version
     uses: ./.github/workflows/_build-apk.yml
     with:
-      artifact-name: muse-aab
+      artifact-name: neurofeed-aab
       artifact-kind: aab
       require-signing: ${{ github.event_name == 'release' }}
       version: ${{ needs.version.outputs.version }}
@@ -78,12 +78,12 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          name: muse-apk
+          name: neurofeed-apk
           path: apk
 
       - uses: actions/download-artifact@v7
         with:
-          name: muse-aab
+          name: neurofeed-aab
           path: aab
 
       - name: Upload to release
@@ -93,7 +93,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ github.event.release.tag_name || inputs.tag }}"
-          cp apk/app-release.apk "muse_ml-${{ needs.version.outputs.version }}.apk"
-          gh release upload "$TAG" "muse_ml-${{ needs.version.outputs.version }}.apk" --clobber
-          cp aab/app-release.aab "muse_ml-${{ needs.version.outputs.version }}.aab"
-          gh release upload "$TAG" "muse_ml-${{ needs.version.outputs.version }}.aab" --clobber
+          cp apk/app-release.apk "neurofeed-${{ needs.version.outputs.version }}.apk"
+          gh release upload "$TAG" "neurofeed-${{ needs.version.outputs.version }}.apk" --clobber
+          cp aab/app-release.aab "neurofeed-${{ needs.version.outputs.version }}.aab"
+          gh release upload "$TAG" "neurofeed-${{ needs.version.outputs.version }}.aab" --clobber

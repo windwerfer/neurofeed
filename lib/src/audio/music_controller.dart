@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
-import 'package:muse_ml/src/audio/modulated_voice.dart';
-import 'package:muse_ml/src/audio/soloud_engine.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/audio/modulated_voice.dart';
+import 'package:neurofeed/src/audio/soloud_engine.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/settings.dart';
 import 'package:path_provider/path_provider.dart';
 
 const Set<String> musicSupportedExtensions = {

@@ -4,11 +4,11 @@ import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:muse_ml/src/audio/calibration_clips.dart';
-import 'package:muse_ml/src/audio/guardrail_sound.dart';
-import 'package:muse_ml/src/audio/output_ids.dart';
-import 'package:muse_ml/src/feedback/feature_catalog.dart';
-import 'package:muse_ml/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/audio/calibration_clips.dart';
+import 'package:neurofeed/src/audio/guardrail_sound.dart';
+import 'package:neurofeed/src/audio/output_ids.dart';
+import 'package:neurofeed/src/feedback/feature_catalog.dart';
+import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 
 /// Validates the two hand-edited asset files against each other and against
 /// the Dart protocol definitions:

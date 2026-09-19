@@ -3,26 +3,26 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/monitor/cache/band_cache.dart';
-import 'package:muse_ml/src/monitor/cache/file_backed_source.dart';
-import 'package:muse_ml/src/monitor/cache/optical_cache.dart';
-import 'package:muse_ml/src/monitor/cache/recording_index.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
-import 'package:muse_ml/src/monitor/monitor_state.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
-import 'package:muse_ml/src/monitor/recording/capture_lease.dart';
-import 'package:muse_ml/src/monitor/recording/monitor_recorder.dart';
-import 'package:muse_ml/src/monitor/recording/monitor_sampler.dart';
-import 'package:muse_ml/src/monitor/recording/recording_metadata.dart';
-import 'package:muse_ml/src/monitor/recording/recording_store.dart';
-import 'package:muse_ml/src/rust/api/device_config.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/session_v5/models.dart';
-import 'package:muse_ml/src/session_v5/scratch_writer.dart';
-import 'package:muse_ml/src/settings.dart';
-import 'package:muse_ml/src/version.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/monitor/cache/band_cache.dart';
+import 'package:neurofeed/src/monitor/cache/file_backed_source.dart';
+import 'package:neurofeed/src/monitor/cache/optical_cache.dart';
+import 'package:neurofeed/src/monitor/cache/recording_index.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_buffer.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/monitor/recording/capture_lease.dart';
+import 'package:neurofeed/src/monitor/recording/monitor_recorder.dart';
+import 'package:neurofeed/src/monitor/recording/monitor_sampler.dart';
+import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
+import 'package:neurofeed/src/monitor/recording/recording_store.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/version.dart';
 
 class MonitorController extends Notifier<MonitorState> {
   MonitorController({
@@ -160,7 +160,7 @@ class MonitorController extends Notifier<MonitorState> {
 
   Future<void> startRecording() => _serialized(_startRecordingUnlocked);
 
-  /// Flush and assemble `recording_$ts.muse.feedback`. When [promptSave] is
+  /// Flush and assemble `recording_$ts.neurofeed`. When [promptSave] is
   /// true, [MonitorState.pendingScratchPath] is set so Save/Discard can run.
   /// Agent / process-exit pass [promptSave] false. Restart tmp only when
   /// asked — UI does that after Save/Discard.

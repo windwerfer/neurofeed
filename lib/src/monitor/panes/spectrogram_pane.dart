@@ -3,8 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:muse_ml/src/monitor/dsp.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/monitor/dsp.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
 class SpectrogramHeatmapBgra {
   const SpectrogramHeatmapBgra({

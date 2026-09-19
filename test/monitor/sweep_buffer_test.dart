@@ -1,9 +1,9 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/cache/band_cache.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/monitor/cache/band_cache.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_buffer.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 EegDto _eeg(int electrode, List<double> samples, {double ts = 0}) => EegDto(
   index: 0,

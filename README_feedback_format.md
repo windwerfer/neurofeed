@@ -1,4 +1,4 @@
-# Muse ML — `.muse.feedback` v5
+# NeuroFeed — `.neurofeed` v5
 
 **Format version:** 5
 **Container:** `[68-byte header][WebP thumbnail][metadata (zstd)][computed 1 Hz (zstd)][raw (zstd)]`
@@ -9,14 +9,14 @@ Two filenames, same container type, same history folder:
 
 | Kind | Published name | Scratch temps | Metadata JSON |
 |------|----------------|---------------|---------------|
-| Feedback session | `session_$id.muse.feedback` | `session_$id.{raw,computed,metadata}` | Flat `SessionMetadata` (`lib/src/feedback/session_metadata.dart`) |
-| Recording | `recording_$ts.muse.feedback` | `recording_$ts.{raw,computed,json}` | Nested `RecordingMetadata` (`lib/src/monitor/recording/recording_metadata.dart`) |
+| Feedback session | `session_$id.neurofeed` | `session_$id.{raw,computed,metadata}` | Flat `SessionMetadata` (`lib/src/feedback/session_metadata.dart`) |
+| Recording | `recording_$ts.neurofeed` | `recording_$ts.{raw,computed,json}` | Nested `RecordingMetadata` (`lib/src/monitor/recording/recording_metadata.dart`) |
 
 `tmp_$ts.*` is a rolling connect-time capture. It is **never** assembled or published.
 
 History list is sqlite `kind` (`feedback` \| `recording`), not a directory scan. See [README_history_cache.md](README_history_cache.md).
 
-**Timestamps:** computed `t` and gesture offsets are seconds from **this capture’s start**. Raw EEG/band timestamps in the `.muse` body are **ms epochs**.
+**Timestamps:** computed `t` and gesture offsets are seconds from **this capture’s start**. Raw EEG/band timestamps in the raw body are **ms epochs**.
 
 ---
 
@@ -24,7 +24,7 @@ History list is sqlite `kind` (`feedback` \| `recording`), not a directory scan.
 
 ```
 Offset 0:        68-byte fixed header
-  [0..5]     = b"MUSE5\0"
+  [0..5]     = b"NFED5\0"
   [6]        = 5 (version)
   [7]        = flags (reserved)
   [8..15]    = thumbnail_offset (u64 LE)
@@ -39,7 +39,7 @@ Offset 0:        68-byte fixed header
 Offset thumbnail_offset: WebP thumbnail (placeholder at assemble; 640×360)
 Offset metadata_offset:  zstd-compressed metadata JSON
 Offset computed_offset:  zstd JSON Lines (one ComputedFrame per line)
-Offset raw_offset:       zstd-compressed raw .muse v4 body
+Offset raw_offset:       zstd-compressed raw body
 ```
 
 `v5ParseHead` returns opaque `metadataJson` bytes. It does **not** parse `kind`.
@@ -175,7 +175,7 @@ capture start.
 
 ## Raw stream — own zstd section
 
-Original `.muse` v4 body (header + zstd frames, tags 1–10):
+Original raw body (header + zstd frames, tags 1–10):
 
 | Tag | Stream | Typical rate | Payload |
 |-----|--------|--------------|---------|
@@ -221,4 +221,4 @@ must not learn `session_`.
 | Recording metadata | `lib/src/monitor/recording/recording_metadata.dart` |
 | ComputedFrame | `lib/src/session_v5/computed_frame.dart` |
 
-No v4 `.muse.feedback` compatibility. Old v4 files are ignored by History.
+No v4 `.neurofeed` compatibility. Old v4 files are ignored by History.

@@ -4,13 +4,13 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
-import 'package:muse_ml/src/feedback/feature_catalog.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/user_protocol_store.dart';
-import 'package:muse_ml/src/rust/api/device_config.dart';
-import 'package:muse_ml/src/rust/api/features.dart';
+import 'package:neurofeed/src/feedback/feature_catalog.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/user_protocol_store.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/features.dart';
 
-export 'package:muse_ml/src/feedback/protocol.dart' show ProtocolCopy;
+export 'package:neurofeed/src/feedback/protocol.dart' show ProtocolCopy;
 
 class ProtocolCatalog {
   const ProtocolCatalog({

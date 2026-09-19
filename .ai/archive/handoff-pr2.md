@@ -13,7 +13,7 @@ The previous thread hit ~250k context. This file is the continuation point. Read
 
 ## What this project is doing
 
-Muse ML: Flutter UI + Rust BLE (`muse-rs` / btleplug) + on-device LUNA/REVE. PoC (connect, record v5, export, AI, audio) is in. The **feedback** stack is being restructured so custom programs and catalog “bookmarks” share one pipeline:
+NeuroFeed: Flutter UI + Rust BLE (`muse-rs` / btleplug) + on-device LUNA/REVE. PoC (connect, record v5, export, AI, audio) is in. The **feedback** stack is being restructured so custom programs and catalog “bookmarks” share one pipeline:
 
 ```
 Rust feature registry → MuseEventDto::Feature(FeatureDto)

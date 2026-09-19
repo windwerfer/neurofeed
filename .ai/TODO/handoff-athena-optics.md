@@ -15,7 +15,7 @@ pitfalls. Do not re-litigate names vs 730/850 here.
 
 ## What this project is doing
 
-Muse ML talks to headsets through **muse-rs**. Classic Muse 2 / Muse S
+NeuroFeed talks to headsets through **muse-rs**. Classic Muse 2 / Muse S
 PPG is three BLE characteristics → `MuseEvent::Ppg` → `PpgDto` → session
 tag 5 → `compute_pulse` / `compute_spo2`.
 

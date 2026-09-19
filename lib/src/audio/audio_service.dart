@@ -1,18 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/audio/binaural_beat_controller.dart';
-import 'package:muse_ml/src/audio/feedback_audio_controller.dart';
-import 'package:muse_ml/src/audio/guard_output.dart';
-import 'package:muse_ml/src/audio/guardrail_sound.dart';
-import 'package:muse_ml/src/audio/music_controller.dart';
-import 'package:muse_ml/src/audio/output_ids.dart';
-import 'package:muse_ml/src/audio/rain_feedback_controller.dart';
-import 'package:muse_ml/src/audio/reward_output.dart';
-import 'package:muse_ml/src/audio/soloud_engine.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/audio/binaural_beat_controller.dart';
+import 'package:neurofeed/src/audio/feedback_audio_controller.dart';
+import 'package:neurofeed/src/audio/guard_output.dart';
+import 'package:neurofeed/src/audio/guardrail_sound.dart';
+import 'package:neurofeed/src/audio/music_controller.dart';
+import 'package:neurofeed/src/audio/output_ids.dart';
+import 'package:neurofeed/src/audio/rain_feedback_controller.dart';
+import 'package:neurofeed/src/audio/reward_output.dart';
+import 'package:neurofeed/src/audio/soloud_engine.dart';
+import 'package:neurofeed/src/settings.dart';
 
-export 'package:muse_ml/src/audio/output_ids.dart'
+export 'package:neurofeed/src/audio/output_ids.dart'
     show binauralSoundName, musicSoundName, RewardOutputId;
 
 /// Orchestrates the three audio layers of a feedback session:

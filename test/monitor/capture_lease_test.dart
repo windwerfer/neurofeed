@@ -4,16 +4,16 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/feedback/session_storage.dart';
-import 'package:muse_ml/src/monitor/monitor_controller.dart';
-import 'package:muse_ml/src/monitor/monitor_providers.dart';
-import 'package:muse_ml/src/monitor/monitor_state.dart';
-import 'package:muse_ml/src/monitor/recording/capture_lease.dart';
-import 'package:muse_ml/src/monitor/recording/crash_recovery.dart';
-import 'package:muse_ml/src/session_v5/models.dart';
-import 'package:muse_ml/src/session_v5/scratch_writer.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/monitor/monitor_controller.dart';
+import 'package:neurofeed/src/monitor/monitor_providers.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
+import 'package:neurofeed/src/monitor/recording/capture_lease.dart';
+import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
+import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -77,7 +77,7 @@ void main() {
 
   group('deleteLeftoverTmpCaptures', () {
     test('deletes tmp_ only', () async {
-      final dir = await Directory.systemTemp.createTemp('muse_tmp_glob_');
+      final dir = await Directory.systemTemp.createTemp('neurofeed_tmp_glob_');
       addTearDown(() => dir.delete(recursive: true));
       await File('${dir.path}/tmp_1.raw').writeAsString('x');
       await File('${dir.path}/tmp_1.computed').writeAsString('x');
@@ -104,7 +104,7 @@ void main() {
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
       settings = await Settings.load();
-      history = await Directory.systemTemp.createTemp('muse_hist_');
+      history = await Directory.systemTemp.createTemp('neurofeed_hist_');
       final storage = FileSystemSessionStorage(history);
       scratch = scratchDirectory(storage);
       app = AppStateNotifier.forTest(settings);

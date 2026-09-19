@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/monitor/device_montage.dart';
-import 'package:muse_ml/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
 
 export 'device_montage.dart';
 
@@ -23,7 +23,7 @@ class MonitorState {
   final int? captureStartedAtMs;
   final String? captureId;
 
-  /// Assembled `recording_$ts.muse.feedback` waiting for Save / Discard.
+  /// Assembled `recording_$ts.neurofeed` waiting for Save / Discard.
   final String? pendingScratchPath;
 
   Duration get captureElapsed {

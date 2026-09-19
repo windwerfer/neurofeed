@@ -6,9 +6,9 @@ workflow file**, so you can enable/disable them individually (rename a file to
 
 | Workflow | File | Trigger | Produces |
 |----------|------|---------|----------|
-| Android | `release-android.yml` | `release` (published) | signed `muse_ml-<ver>.apk` |
-| Linux | `release-linux.yml` | `release` (published) | `muse_ml-<ver>-linux-x86_64.tar.gz` + best-effort `.AppImage` |
-| Windows | `release-windows.yml` | `release` (published) | `muse_ml-<ver>-windows-x64.zip` |
+| Android | `release-android.yml` | `release` (published) | signed `neurofeed-<ver>.apk` |
+| Linux | `release-linux.yml` | `release` (published) | `neurofeed-<ver>-linux-x86_64.tar.gz` + best-effort `.AppImage` |
+| Windows | `release-windows.yml` | `release` (published) | `neurofeed-<ver>-windows-x64.zip` |
 | Reproducibility check | `repro-android.yml` | manual (`workflow_dispatch`) | byte-identical APK verification |
 | Shared Android build | `_build-apk.yml` | called by Android workflows (do not trigger) | — |
 
@@ -26,8 +26,8 @@ Release assets are named after the **release tag**, not `pubspec.yaml`:
 
 - The **base version** is everything before the first `-` or `_` in the tag
   (a leading `v` is stripped): tag `0.0.11-feedback-01` →
-  `muse_ml-0.0.11.apk`, `muse_ml-0.0.11-linux-x86_64.tar.gz`,
-  `muse_ml-0.0.11-windows-x64.zip`.
+  `neurofeed-0.0.11.apk`, `neurofeed-0.0.11-linux-x86_64.tar.gz`,
+  `neurofeed-0.0.11-windows-x64.zip`.
 - The **APK version code** (`--build-number`) is the trailing digits of the
   tag's channel suffix (`-feedback-01` → `1`), and the **version name**
   (`--build-name`) is the base version — both are baked into the APK by
@@ -154,7 +154,7 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
   in `android/app/build.gradle.kts` plus `--target-platform android-arm64` in the
   build workflow. A universal APK (all 3 ABIs) would be ~65 MB; arm64-only is
   ~27 MB. x86/x86_64 emulators and 32-bit (armeabi-v7a) devices are not supported.
-- The same job also produces `muse_ml-<ver>.aab` (arm64-only) for **Play Store**
+- The same job also produces `neurofeed-<ver>.aab` (arm64-only) for **Play Store**
   submission — Play serves per-device arm64 splits from it. F-Droid only accepts
   APKs (it builds from source), so the AAB is never submitted there; the APK is.
 - When you submit to F-Droid you will also need to request an app entry in
@@ -165,8 +165,8 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
 
 ## Linux
 
-- `muse_ml-<ver>-linux-x86_64.tar.gz` is a portable bundle of the Flutter
-  release output. Extract it anywhere and run `./muse_ml` from inside the
+- `neurofeed-<ver>-linux-x86_64.tar.gz` is a portable bundle of the Flutter
+  release output. Extract it anywhere and run `./neurofeed` from inside the
   extracted directory — no root, no install. It needs GTK3 system libraries
   (the usual desktop environment provides them).
 - The tarball is built deterministically (fixed mtime, sorted entries) so it is
@@ -200,8 +200,8 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
 - The Windows runner scaffolds the `windows/` platform folder itself
   (`flutter create --platforms=windows`), so nothing extra needs to be checked
   in to build it.
-- `muse_ml-<ver>-windows-x64.zip` contains the `Release/` folder — unzip and
-  run `muse_ml.exe`.
+- `neurofeed-<ver>-windows-x64.zip` contains the `Release/` folder — unzip and
+  run `neurofeed.exe`.
 - Audio moved to flutter_soloud; the just_audio/media_kit (`libmpv`) deps were
   removed from `pubspec.yaml`. If you do not care about Windows, delete
   `release-windows.yml`.

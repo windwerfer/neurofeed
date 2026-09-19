@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/audio/soloud_engine.dart';
+import 'package:neurofeed/src/audio/soloud_engine.dart';
 
 AudioSource _fakeSource(int hash) {
   // ignore: invalid_use_of_internal_member

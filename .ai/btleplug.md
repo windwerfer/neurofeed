@@ -13,8 +13,8 @@ JVM-attached Dart/UI thread. Without this patch, every BLE scan fails with
 **Published:** `github.com/windwerfer/btleplug` tag `0.12.0-muse-5`
 **Local copy:** `../third_party/btleplug/` — for development.
 
-Referenced from `muse_ml/rust/Cargo.toml` via `[patch.crates-io]`.
-Both `rust_lib_muse_ml` and `muse-rs` depend on `btleplug = "0.12.0"` from crates.io; the
+Referenced from `rust/Cargo.toml` via `[patch.crates-io]`.
+Both `rust_lib_neurofeed` and `muse-rs` depend on `btleplug = "0.12.0"` from crates.io; the
 `[patch.crates-io]` replaces ALL occurrences with our fork so there is only one copy
 of btleplug (and its `GLOBAL_JVM`/`GLOBAL_ADAPTER` statics) linked:
 
@@ -81,7 +81,7 @@ The upstream uses `.unwrap()` on `find_class()`, which panics (SIGABRT) when
 a Java class is missing from the classpath. Replaced with `?` so the error
 propagates as a proper `Result`.
 
-#### 1d. Java source files (`muse_ml/android/app/src/main/java/...`)
+#### 1d. Java source files (`android/app/src/main/java/...`)
 
 The Rust code is based on btleplug 0.12.0 but the bundled Java sources were
 from 0.11.8. Missing additions:
@@ -178,10 +178,9 @@ errors, so the loop exits after one retry.
 ## How to test
 
 ```bash
-cd muse_ml
 flutter run
 # In another terminal:
-adb logcat -s btleplug rust_lib_muse_ml RustError
+adb logcat -s btleplug rust_lib_neurofeed RustError
 ```
 
 Expected logcat output for a successful scan:

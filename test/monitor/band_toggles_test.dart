@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/charts/band_style.dart';
-import 'package:muse_ml/src/monitor/band_toggles.dart';
+import 'package:neurofeed/src/charts/band_style.dart';
+import 'package:neurofeed/src/monitor/band_toggles.dart';
 
 void main() {
   test('default all on; last one stays', () {

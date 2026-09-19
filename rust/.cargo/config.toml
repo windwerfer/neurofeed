@@ -1,0 +1,10 @@
+# Candle (CBraMod encoder) pulls gemm-f16, whose aarch64 NEON kernels use
+# half-precision asm that LLVM will not assemble without +fp16. Debug builds
+# fail with "instruction requires: fullfp16" otherwise. The kernels are still
+# runtime-gated with is_aarch64_feature_detected!("fp16").
+#
+# Android `flutter run` / Gradle goes through cargokit, which sets
+# CARGO_ENCODED_RUSTFLAGS and therefore ignores this file. The matching flag
+# for that path is in rust_builder/cargokit/build_tool/lib/src/android_environment.dart.
+[target.aarch64-linux-android]
+rustflags = ["-C", "target-feature=+fp16"]

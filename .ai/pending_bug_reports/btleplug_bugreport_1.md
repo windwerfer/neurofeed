@@ -53,7 +53,7 @@ the JVM permanently (it is never detached). This is appropriate because:
 
 Enable verbose JNI logging:
 ```bash
-adb logcat -s btleplug rust_lib_muse_ml '*:V'
+adb logcat -s btleplug rust_lib_neurofeed '*:V'
 ```
 
 A detached thread shows:
@@ -65,7 +65,7 @@ Without the patch, you see only:
 ```
 V/jni::wrapper::java_vm::vm: calling unchecked JavaVM method: GetEnv
 [no "attached OK" follows]
-E/rust_lib_muse_ml::api::muse: [muse] scan_all failed: JNI call failed
+E/rust_lib_neurofeed::api::muse: [muse] scan_all failed: JNI call failed
 ```
 
 ### `[patch]` version trap

@@ -16,7 +16,7 @@ muffle API, and stopped before editing Dart.
 
 ## What this project is doing
 
-Muse ML feedback audio is flutter_soloud 4.1.7 behind `AudioService`.
+NeuroFeed feedback audio is flutter_soloud 4.1.7 behind `AudioService`.
 PR 5 split background / reward / guard. The native backend
 (`SoLoudEngine`) and the controllers were not finished to match:
 
@@ -212,7 +212,7 @@ flutter test test/soloud_engine_test.dart test/output_ids_test.dart \
   test/feedback_pipeline_test.dart
 ```
 
-Plus any new unit files you added. Skill `muse-verify` if you touch
+Plus any new unit files you added. Skill `neurofeed-verify` if you touch
 more than audio.
 
 Update [architecture.md](architecture.md) Audio paragraph: engine

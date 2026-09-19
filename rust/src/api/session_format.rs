@@ -5,12 +5,12 @@ use flutter_rust_bridge::frb;
 
 use crate::api::muse::{ImuDto, MuseEventDto};
 
-// ── .muse body format (raw body section of v5 container) ─────────────────────────
+// ── raw body format (raw section of the v5 container) ─────────────────────────
 //
 // The raw frame body stored in the v5 container's "raw" section is a
 // zstd-compressed stream:
 //
-//   [ u64 LE "MUSEBIN\n" (reversed) ][ u32 LE version=5 ][ frames ]
+//   [ u64 LE "NFEDBIN\n" (reversed) ][ u32 LE version=5 ][ frames ]
 //
 //   frame   := [ u32 LE frame_size ][ zstd frame payload ]
 //   payload := record*                    (record := [ u8 tag ][ fields … ])
@@ -43,12 +43,9 @@ pub const FORMAT_TAG_MOVEMENT: u8 = 8;
 pub const FORMAT_TAG_PEAK_ALPHA: u8 = 9;
 pub const FORMAT_TAG_SPO2: u8 = 10;
 
-/// The 64-bit header sentinel. The legacy Dart writer stored it as a
-/// little-endian u64 (`setUint64(.. Endian.little)`), so the on-disk bytes are
-/// the reverse of the "MUSEBIN\n" string. We keep the same u64 and rewrite it
-/// as little-endian so byte-for-byte compatibility with existing files is
-/// preserved.
-pub const HEADER_MAGIC: u64 = 0x4D55_5345_4249_4E0A; // as u64 LE → "MUSEBIN\n" reversed on disk
+/// The 64-bit header sentinel. Stored as a little-endian u64, so the on-disk
+/// bytes are the reverse of the "NFEDBIN\n" string.
+pub const HEADER_MAGIC: u64 = 0x4E46_4544_4249_4E0A; // as u64 LE → "NFEDBIN\n" reversed on disk
 pub const FORMAT_VERSION: u32 = 5;
 
 /// The plaintext on-disk bytes of the sentinel (LE u64 of [HEADER_MAGIC]).
@@ -81,7 +78,7 @@ fn push_f32(out: &mut Vec<u8>, v: f32) {
     out.extend_from_slice(&v.to_le_bytes());
 }
 
-/// The 12-byte header that prefixes a `.muse` body.
+/// The 12-byte header that prefixes a raw body.
 #[frb(sync)]
 pub fn session_header_bytes() -> Vec<u8> {
     let mut out = Vec::with_capacity(12);
@@ -197,7 +194,7 @@ pub fn session_frame_bytes(data: &[u8]) -> Vec<u8> {
 
 // ── Decoded records (read side) ─────────────────────────────────────────────────
 
-/// Decoded records of a `.muse` body.
+/// Decoded records of a raw body.
 #[frb(dart_metadata = ("freezed",))]
 pub struct SessionData {
     pub bands: Vec<BandsRecord>,
@@ -418,14 +415,14 @@ fn parse_records(records: &[u8], out: &mut SessionData) {
     }
 }
 
-/// Decode a full `.muse` body (header + frames) into structured records.
+/// Decode a full raw body (header + frames) into structured records.
 #[frb(sync)]
 pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
     if bytes.len() < 12 {
-        return Err("Truncated .muse header".to_string());
+        return Err("Truncated raw-body header".to_string());
     }
     if &bytes[..8] != &HEADER_MAGIC_BYTES {
-        return Err("Not a .muse file".to_string());
+        return Err("Not a NeuroFeed raw body".to_string());
     }
     let version = u32::from_le_bytes(bytes[8..12].try_into().unwrap_or_default());
     if version != FORMAT_VERSION {
@@ -467,7 +464,7 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
 //   [68-byte fixed header][WebP thumbnail][metadata JSON (zstd)][computed 1Hz (zstd)][raw (zstd)]
 //
 // Header layout (68 bytes):
-//   [0..6]   magic: b"MUSE5\0"
+//   [0..6]   magic: b"NFED5\0"
 //   [6]      version: u8 = 5
 //   [7]      flags: u8 (reserved)
 //   [8..15]  thumbnail_offset: u64
@@ -479,7 +476,7 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
 //   [56..63] raw_offset: u64
 //   [64..67] crc32(header[0..63])
 
-pub const V5_MAGIC: [u8; 6] = *b"MUSE5\0";
+pub const V5_MAGIC: [u8; 6] = *b"NFED5\0";
 pub const V5_VERSION: u8 = 5;
 pub const V5_HEADER_SIZE: usize = 68;
 
@@ -801,12 +798,12 @@ mod tests {
 
     #[test]
     fn header_bytes_are_exact() {
-        // "MUSEBIN\n" stored as an LE u64 reads back as the byte-reversed
-        // string: LC-newline N I B E S U M, then v5 LE.
+        // "NFEDBIN\n" stored as an LE u64 reads back as the byte-reversed
+        // string: LC-newline N I B D E F N, then v5 LE.
         assert_eq!(
             session_header_bytes(),
             vec![
-                0x0A, 0x4E, 0x49, 0x42, 0x45, 0x53, 0x55, 0x4D, // magic (LE u64)
+                0x0A, 0x4E, 0x49, 0x42, 0x44, 0x45, 0x46, 0x4E, // magic (LE u64)
                 0x05, 0x00, 0x00, 0x00, // FORMAT_VERSION = 5 (LE u32)
             ]
         );
@@ -1115,7 +1112,7 @@ mod tests {
     #[test]
     fn rejects_bad_magic() {
         let mut data = vec![0u8; 64];
-        data[..8].copy_from_slice(b"NOTMUSE!");
+        data[..8].copy_from_slice(b"NOTNFED!");
         data[8..12].copy_from_slice(&FORMAT_VERSION.to_le_bytes());
         assert!(session_parse_body(&data).is_err());
     }

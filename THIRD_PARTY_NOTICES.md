@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-This application (`muse_ml`, the Muse ML headset companion) incorporates or
+This application (`neurofeed`, the NeuroFeed headset companion) incorporates or
 links against the following third-party components, plus attribution for the
 bundled audio. License terms for each component are included here so that
 redistribution complies with their terms.

@@ -347,7 +347,7 @@ with generated FRB. TUI is the largest single file (`tui.rs` is already
   still Ppg. `flutter analyze lib/src`.
 - Athena firmware in the app: no SpO₂/HR from optics (buffers empty is
   OK). Classic headset still pulse/SpO₂ from `Ppg`.
-- Old `.muse.feedback` without tag 11 still parses.
+- Old `.neurofeed` without tag 11 still parses.
 
 Hardware (Athena user, later, not a gate for merge): TUI `Optics4`
 traces move; compare lane shapes to Mind Monitor / OpenMuse. Names may

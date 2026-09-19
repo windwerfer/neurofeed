@@ -3,11 +3,11 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
-import 'package:muse_ml/src/rust/api/session_format.dart' as ffi;
-import 'package:muse_ml/src/session_v5/computed_frame.dart' as dart;
-import 'package:muse_ml/src/session_v5/placeholder_webp.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
+import 'package:neurofeed/src/session_v5/computed_frame.dart' as dart;
+import 'package:neurofeed/src/session_v5/placeholder_webp.dart';
 
-export 'package:muse_ml/src/session_v5/placeholder_webp.dart';
+export 'package:neurofeed/src/session_v5/placeholder_webp.dart';
 
 ffi.ComputedFrame toFfiFrame(dart.ComputedFrame frame) {
   return ffi.ComputedFrame(
@@ -93,7 +93,7 @@ Uint8List assembleV5Container({
   );
 }
 
-/// Write `${prefix}_<id>.muse.feedback` into [dir] via [assembleV5Container].
+/// Write `${prefix}_<id>.neurofeed` into [dir] via [assembleV5Container].
 /// [prefix] defaults to `session`.
 Future<File> writeScratchV5({
   required Directory dir,
@@ -115,7 +115,7 @@ Future<File> writeScratchV5({
   if (!await dir.exists()) {
     await dir.create(recursive: true);
   }
-  final file = File('${dir.path}/${prefix}_$id.muse.feedback');
+  final file = File('${dir.path}/${prefix}_$id.neurofeed');
   await file.writeAsBytes(v5, flush: true);
   return file;
 }

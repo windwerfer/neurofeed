@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:muse_ml/src/streaming/streaming_mixer.dart';
-import 'package:muse_ml/src/streaming/streaming_models.dart';
+import 'package:neurofeed/src/streaming/streaming_mixer.dart';
+import 'package:neurofeed/src/streaming/streaming_models.dart';
 
 /// Encodes an OSC 1.0 message: address + type tag + 4-byte aligned args.
 /// All arguments are float32 (our sample data is f32 on the wire).

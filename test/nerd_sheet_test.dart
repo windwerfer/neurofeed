@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/audio/guard_output.dart';
-import 'package:muse_ml/src/audio/reward_output.dart';
-import 'package:muse_ml/src/feedback/guard_lane.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/reward_lane.dart';
-import 'package:muse_ml/src/feedback/target_state.dart';
-import 'package:muse_ml/src/feedback/trust/nerd_model.dart';
-import 'package:muse_ml/src/feedback/trust/nerd_sheet.dart';
-import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
+import 'package:neurofeed/src/audio/guard_output.dart';
+import 'package:neurofeed/src/audio/reward_output.dart';
+import 'package:neurofeed/src/feedback/guard_lane.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/reward_lane.dart';
+import 'package:neurofeed/src/feedback/target_state.dart';
+import 'package:neurofeed/src/feedback/trust/nerd_model.dart';
+import 'package:neurofeed/src/feedback/trust/nerd_sheet.dart';
+import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 
 class _Out implements RewardOutput {
   @override

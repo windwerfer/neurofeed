@@ -14,7 +14,7 @@ part 'session_format.freezed.dart';
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `RecordParser`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
-/// The 12-byte header that prefixes a `.muse` body.
+/// The 12-byte header that prefixes a raw body.
 Uint8List sessionHeaderBytes() =>
     RustLib.instance.api.crateApiSessionFormatSessionHeaderBytes();
 
@@ -31,7 +31,7 @@ Uint8List encodeSessionEvent({required MuseEventDto event}) =>
 Uint8List sessionFrameBytes({required List<int> data}) =>
     RustLib.instance.api.crateApiSessionFormatSessionFrameBytes(data: data);
 
-/// Decode a full `.muse` body (header + frames) into structured records.
+/// Decode a full raw body (header + frames) into structured records.
 SessionData sessionParseBody({required List<int> bytes}) =>
     RustLib.instance.api.crateApiSessionFormatSessionParseBody(bytes: bytes);
 
@@ -174,7 +174,7 @@ sealed class PulseRecord with _$PulseRecord {
   }) = _PulseRecord;
 }
 
-/// Decoded records of a `.muse` body.
+/// Decoded records of a raw body.
 @freezed
 sealed class SessionData with _$SessionData {
   const factory SessionData({

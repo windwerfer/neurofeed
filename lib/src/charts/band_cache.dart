@@ -1,1 +1,1 @@
-export 'package:muse_ml/src/charts/band_style.dart';
+export 'package:neurofeed/src/charts/band_style.dart';

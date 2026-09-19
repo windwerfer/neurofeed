@@ -1,15 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/feedback/session_metadata.dart';
-import 'package:muse_ml/src/feedback/session_store_core.dart';
-import 'package:muse_ml/src/views/feedback_history.dart';
-import 'package:muse_ml/src/views/settings_view.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/feedback/session_store_core.dart';
+import 'package:neurofeed/src/views/feedback_history.dart';
+import 'package:neurofeed/src/views/settings_view.dart';
 
 SessionSummary _sum(String id, String kind) => SessionSummary(
   id: id,
   kind: kind,
   path: kind == 'recording'
-      ? 'recording_$id.muse.feedback'
-      : 'session_$id.muse.feedback',
+      ? 'recording_$id.neurofeed'
+      : 'session_$id.neurofeed',
   metadata: SessionMetadata(
     protocol: kind == 'recording' ? '' : 'drowsiness',
     durationMinutes: 1,
@@ -48,10 +48,10 @@ void main() {
 
   test('countHistoryContainers splits session_ and recording_ prefixes', () {
     final counted = countHistoryContainers([
-      'session_a.muse.feedback',
-      'recording_b.muse.feedback',
-      'recording_c.muse.feedback',
-      'tmp_d.muse.feedback',
+      'session_a.neurofeed',
+      'recording_b.neurofeed',
+      'recording_c.neurofeed',
+      'tmp_d.neurofeed',
       'notes.txt',
       'session_e.raw',
     ]);
@@ -68,9 +68,9 @@ void main() {
   });
 
   test('isHistoryContainerName accepts session_ and recording_ only', () {
-    expect(isHistoryContainerName('session_1.muse.feedback'), isTrue);
-    expect(isHistoryContainerName('recording_2.muse.feedback'), isTrue);
-    expect(isHistoryContainerName('tmp_3.muse.feedback'), isFalse);
+    expect(isHistoryContainerName('session_1.neurofeed'), isTrue);
+    expect(isHistoryContainerName('recording_2.neurofeed'), isTrue);
+    expect(isHistoryContainerName('tmp_3.neurofeed'), isFalse);
     expect(isHistoryContainerName('session_1.raw'), isFalse);
   });
 }

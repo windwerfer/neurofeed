@@ -1,9 +1,9 @@
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/charts/eeg_data_source.dart';
-import 'package:muse_ml/src/monitor/cache/frame_coalesced_notify.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/charts/eeg_data_source.dart';
+import 'package:neurofeed/src/monitor/cache/frame_coalesced_notify.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 /// Classic Muse PPG infrared channel index (ambient=0, IR=1, red=2).
 const int kPpgInfraredChannel = 1;

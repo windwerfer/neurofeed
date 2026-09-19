@@ -1,4 +1,4 @@
-package com.example.muse_ml
+package org.windwerfer.neurofeed
 
 import android.app.Activity
 import android.content.Context
@@ -21,18 +21,18 @@ import java.io.FileOutputStream
 
 class MainActivity : FlutterActivity() {
     companion object {
-        private const val CHANNEL = "muse_ml/saf"
-        private const val INIT_CHANNEL = "muse_ml/init"
+        private const val CHANNEL = "neurofeed/saf"
+        private const val INIT_CHANNEL = "neurofeed/init"
         private const val REQ_PICK_DIR = 7401
         private const val REQ_PICK_FILE = 7402
-        private const val TAG = "muse_saf"
+        private const val TAG = "neurofeed_saf"
 
         // Defined in Rust (rust/src/api/muse.rs) — initializes btleplug's
         // global Android adapter before any BLE operation.
         @JvmStatic external fun museAndroidInit(context: Context)
 
         init {
-            System.loadLibrary("rust_lib_muse_ml")
+            System.loadLibrary("rust_lib_neurofeed")
         }
     }
 

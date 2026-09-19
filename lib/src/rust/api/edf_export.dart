@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'edf_export.freezed.dart';
 
-/// Encodes the raw EEG of a `.muse` body as a complete EDF+ file.
+/// Encodes the raw EEG of a session raw body as a complete EDF+ file.
 ///
 /// `channel_labels` maps the i16 electrode index to a channel label (e.g.
 /// `["TP9", "AF7", "AF8", "TP10"]`); an empty string or out-of-range

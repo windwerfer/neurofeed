@@ -3,10 +3,10 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-import 'package:muse_ml/src/audio/guardrail_sound.dart';
-import 'package:muse_ml/src/audio/output_ids.dart';
-import 'package:muse_ml/src/feedback/feature_catalog.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
+import 'package:neurofeed/src/audio/guardrail_sound.dart';
+import 'package:neurofeed/src/audio/output_ids.dart';
+import 'package:neurofeed/src/feedback/feature_catalog.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
 
 /// Calibration ids the builder may pick (from `assets/calibrations.json` v2).
 const List<String> builderCalibrationIds = ['eyes-closed-01', 'eyes-open-01'];

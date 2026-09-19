@@ -1,6 +1,6 @@
-import 'package:muse_ml/src/connect_source.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/connect_source.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/settings.dart';
 
 class AgentHttpResult {
   const AgentHttpResult(this.status, this.body);

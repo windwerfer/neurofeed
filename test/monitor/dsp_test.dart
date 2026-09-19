@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/dsp.dart';
+import 'package:neurofeed/src/monitor/dsp.dart';
 
 void main() {
   test('Hamming 256-pt: ends 0.08, midpoint 1.0', () {

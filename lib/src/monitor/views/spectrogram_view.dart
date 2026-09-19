@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:muse_ml/src/connection_provider.dart';
-import 'package:muse_ml/src/monitor/cache/stft_ring.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_buffer.dart';
-import 'package:muse_ml/src/monitor/cache/sweep_mean.dart';
-import 'package:muse_ml/src/monitor/dsp.dart';
-import 'package:muse_ml/src/monitor/electrode_toggles.dart';
-import 'package:muse_ml/src/monitor/empty_state.dart';
-import 'package:muse_ml/src/monitor/graph_shell.dart';
-import 'package:muse_ml/src/monitor/monitor_controller.dart';
-import 'package:muse_ml/src/monitor/monitor_providers.dart';
-import 'package:muse_ml/src/monitor/panes/spectrogram_pane.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/monitor/cache/stft_ring.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_buffer.dart';
+import 'package:neurofeed/src/monitor/cache/sweep_mean.dart';
+import 'package:neurofeed/src/monitor/dsp.dart';
+import 'package:neurofeed/src/monitor/electrode_toggles.dart';
+import 'package:neurofeed/src/monitor/empty_state.dart';
+import 'package:neurofeed/src/monitor/graph_shell.dart';
+import 'package:neurofeed/src/monitor/monitor_controller.dart';
+import 'package:neurofeed/src/monitor/monitor_providers.dart';
+import 'package:neurofeed/src/monitor/panes/spectrogram_pane.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/settings.dart';
 
 class SpectrogramView extends ConsumerStatefulWidget {
   const SpectrogramView({super.key});

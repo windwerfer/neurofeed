@@ -286,7 +286,7 @@ pub fn init_app() {
         android_logger::init_once(
             android_logger::Config::default()
                 .with_max_level(log::LevelFilter::Debug)
-                .with_tag("muse_ml"),
+                .with_tag("neurofeed"),
         );
         // Ensure the max level takes effect even if android_logger was
         // already initialized (e.g. by flutter_rust_bridge). Without this,
@@ -309,7 +309,7 @@ pub fn init_app() {
 /// with "Droidplug has not been initialized".
 #[cfg(target_os = "android")]
 #[no_mangle]
-pub extern "C" fn Java_com_example_muse_1ml_MainActivity_museAndroidInit(
+pub extern "C" fn Java_org_windwerfer_neurofeed_MainActivity_museAndroidInit(
     env: *mut jni::sys::JNIEnv,
     _class: *mut jni::sys::jobject,
     _context: *mut jni::sys::jobject,

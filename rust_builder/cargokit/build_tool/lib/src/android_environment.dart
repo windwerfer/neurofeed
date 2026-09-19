@@ -190,6 +190,12 @@ class AndroidEnvironment {
       rustFlags = '$rustFlags\x1f';
     }
     rustFlags = '$rustFlags-L\x1f$workaroundDir';
+    // Candle/gemm-f16 NEON half-precision kernels need +fp16 at compile time
+    // (debug). Runtime dispatch still feature-detects fp16. CARGO_ENCODED_RUSTFLAGS
+    // replaces .cargo/config.toml rustflags, so this has to live here.
+    if (target.rust == 'aarch64-linux-android') {
+      rustFlags = '$rustFlags\x1f-C\x1ftarget-feature=+fp16';
+    }
     return rustFlags;
   }
 }

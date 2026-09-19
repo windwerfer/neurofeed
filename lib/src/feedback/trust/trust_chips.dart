@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:muse_ml/src/feedback/feedback_phase.dart';
+import 'package:neurofeed/src/feedback/feedback_phase.dart';
 
 class TrustLaneFlags {
   const TrustLaneFlags({required this.hasReward, required this.guardRunning});

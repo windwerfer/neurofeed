@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:muse_ml/src/charts/eeg_data_source.dart';
-import 'package:muse_ml/src/charts/smooth_path.dart';
-import 'package:muse_ml/src/monitor/panes/time_series_pane.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/charts/eeg_data_source.dart';
+import 'package:neurofeed/src/charts/smooth_path.dart';
+import 'package:neurofeed/src/monitor/panes/time_series_pane.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
 const Color kHrColor = Color(0xFFEC407A);
 const Color kSpo2Color = Color(0xFF26C6DA);

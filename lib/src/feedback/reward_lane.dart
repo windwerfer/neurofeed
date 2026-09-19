@@ -1,11 +1,11 @@
-import 'package:muse_ml/src/audio/reward_output.dart';
-import 'package:muse_ml/src/feedback/feature_bus.dart';
-import 'package:muse_ml/src/feedback/feedback_phase.dart';
-import 'package:muse_ml/src/feedback/gate_electrodes.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/target_state.dart';
-import 'package:muse_ml/src/feedback/trust/trust_trace.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/audio/reward_output.dart';
+import 'package:neurofeed/src/feedback/feature_bus.dart';
+import 'package:neurofeed/src/feedback/feedback_phase.dart';
+import 'package:neurofeed/src/feedback/gate_electrodes.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/target_state.dart';
+import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 /// Snapshot of orchestrator session state for one reward-lane tick.
 class RewardTick {

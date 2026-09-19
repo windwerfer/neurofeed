@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/monitor/cache/frame_coalesced_notify.dart';
-import 'package:muse_ml/src/rust/api/muse.dart';
+import 'package:neurofeed/src/monitor/cache/frame_coalesced_notify.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 
 class _ChannelBuf {
   final Float64List samples;

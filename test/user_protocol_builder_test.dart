@@ -4,10 +4,10 @@ import 'dart:io';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:muse_ml/src/feedback/feature_catalog.dart';
-import 'package:muse_ml/src/feedback/protocol.dart';
-import 'package:muse_ml/src/feedback/protocol_catalog.dart';
-import 'package:muse_ml/src/feedback/user_protocol_store.dart';
+import 'package:neurofeed/src/feedback/feature_catalog.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/feedback/user_protocol_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

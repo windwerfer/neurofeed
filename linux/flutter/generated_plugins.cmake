@@ -11,7 +11,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
   flutter_soloud
   jni
-  rust_lib_muse_ml
+  rust_lib_neurofeed
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

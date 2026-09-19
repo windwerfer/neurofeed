@@ -1,15 +1,16 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'package:muse_ml/src/feedback/guardrail_mode.dart';
-import 'package:muse_ml/src/reve/models.dart';
-import 'package:muse_ml/src/rust/api/reve.dart' as frb;
-import 'package:muse_ml/src/settings.dart';
+import 'package:neurofeed/src/feedback/guardrail_mode.dart';
+import 'package:neurofeed/src/reve/models.dart';
+import 'package:neurofeed/src/rust/api/reve.dart' as frb;
+import 'package:neurofeed/src/settings.dart';
 
 /// Thrown when an imported/downloaded file is not the expected weights file.
 class ModelChecksumException implements Exception {
@@ -76,10 +77,23 @@ class ModelCache {
     String? sessionFolder,
     ModelKind kind,
   ) async {
-    final base =
-        sessionFolder != null && !sessionFolder.startsWith('content://')
-        ? sessionFolder
-        : (await getApplicationDocumentsDirectory()).path;
+    String? base;
+    if (sessionFolder != null && !sessionFolder.startsWith('content://')) {
+      base = sessionFolder;
+    } else {
+      try {
+        base = (await getApplicationDocumentsDirectory()).path;
+      } catch (e) {
+        debugPrint('[models] getApplicationDocumentsDirectory failed: $e');
+        final home = Platform.environment['HOME'];
+        if (home != null && home.isNotEmpty) {
+          base = '$home${Platform.pathSeparator}Documents';
+        }
+      }
+    }
+    if (base == null || base.isEmpty) {
+      throw StateError('cannot resolve application documents directory');
+    }
     return Directory('$base/ai_models/${kind.folder}');
   }
 

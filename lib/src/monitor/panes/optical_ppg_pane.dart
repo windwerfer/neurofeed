@@ -2,10 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:muse_ml/src/charts/eeg_data_source.dart';
-import 'package:muse_ml/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/charts/eeg_data_source.dart';
+import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
-import 'package:muse_ml/src/monitor/cache/optical_cache.dart';
+import 'package:neurofeed/src/monitor/cache/optical_cache.dart';
 
 /// Sweep slot index in 0 .. slotCount-1 for an absolute elapsed time.
 int ppgSweepSlot({

@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:muse_ml/src/monitor/panes/sweep_pane.dart';
+import 'package:neurofeed/src/monitor/panes/sweep_pane.dart';
 
 int _countPoints({
   required int n,

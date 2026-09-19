@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:muse_ml/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
 
 enum TrustDirtyReason { movement, blink, jaw, pads }
 
