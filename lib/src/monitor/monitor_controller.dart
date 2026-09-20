@@ -447,10 +447,5 @@ class MonitorController extends Notifier<MonitorState> {
       default:
         break;
     }
-    if ((_lease.kind == CaptureKind.tmp ||
-            _lease.kind == CaptureKind.recording) &&
-        _capture?.usesRustCapture != true) {
-      _capture?.writeEvent(event);
-    }
   }
 }
