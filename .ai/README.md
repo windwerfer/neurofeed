@@ -31,7 +31,7 @@ Do **not** implement from archived Grokbot
 
 | File | Contents |
 |------|----------|
-| [spine/data-plane-contract_grok-build.md](spine/data-plane-contract_grok-build.md) | **Frozen / governing** — acquisition → capture → Flutter subscribe. D1–D3 accepted. Sibling to feedback/pipeline-contract.md; do not reopen feedback Key Decisions. |
+| [spine/data-plane-contract.md](spine/data-plane-contract.md) | **Frozen / governing** — acquisition → capture → Flutter subscribe. D1–D3 accepted. Sibling to feedback/pipeline-contract.md; do not reopen feedback Key Decisions. |
 | [spine/handoff-spine.md](spine/handoff-spine.md) | **Governing** coordinator handoff: sequential subagents, one commit per PR (1–7). |
 
 ## Feedback

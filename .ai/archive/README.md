@@ -5,7 +5,7 @@ Finished threads and historical notes. Not current orientation — see
 
 | File | What it was |
 |------|-------------|
-| `data-plane-contract.md` | Grokbot spine draft. **Not implementable.** Governing: [../spine/data-plane-contract_grok-build.md](../spine/data-plane-contract_grok-build.md) + [../spine/handoff-spine.md](../spine/handoff-spine.md). |
+| `data-plane-contract.md` | Grokbot spine draft. **Not implementable.** Governing: [../spine/data-plane-contract.md](../spine/data-plane-contract.md) + [../spine/handoff-spine.md](../spine/handoff-spine.md). |
 | `handoff-monitor.md` | Monitor series map (PRs 0–7). **Complete.** PR 8 cancelled. Follow-up: Bands PCHIP + 1 s Follow lead + in-pane chips. Live spec: [../monitor.md](../monitor.md). |
 | `handoff-monitor-perf.md` | Graph draw-path perf (PRs 1–7). **Complete.** PR 8 skipped. Live spec: [../monitor.md](../monitor.md). |
 | `monitor-rev6-design.md` | Pre-implementer monitor spec + PR plan. Superseded by [../monitor.md](../monitor.md). |

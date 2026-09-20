@@ -485,7 +485,7 @@ Doc-only until an explicit move PR. Do not create empty stub crates in the contr
 
 ```
 .ai/spine/
-  data-plane-contract_grok-build.md   ← this file (governing)
+  data-plane-contract.md   ← this file (governing)
   handoff-spine.md                    ← coordinator PRs 1–7
 
 .ai/archive/

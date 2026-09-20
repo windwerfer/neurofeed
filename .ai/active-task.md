@@ -4,7 +4,7 @@
 
 **Now:** Implement the frozen data-plane spine via a **coordinator
 thread**. Governing spec:
-[spine/data-plane-contract_grok-build.md](spine/data-plane-contract_grok-build.md).
+[spine/data-plane-contract.md](spine/data-plane-contract.md).
 Governing handoff (prompts, gates, one commit per PR):
 [spine/handoff-spine.md](spine/handoff-spine.md).
 Do not implement from archived Grokbot
