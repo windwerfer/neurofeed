@@ -1661,9 +1661,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   void _onEvent(MuseEventDto event) {
     event = _maybeOverrideFeature(event);
-    if (_recorder.isRecording && !_recorder.usesRustCapture) {
-      _recorder.writeEvent(event);
-    }
     _bus.publish(event);
     switch (event) {
       case MuseEventDto_Bands(:final field0):

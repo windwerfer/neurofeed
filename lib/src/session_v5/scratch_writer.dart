@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:neurofeed/src/session_v5/computed_frame.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
-import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 
@@ -22,13 +20,12 @@ enum SidecarMode { jsonl, snapshot }
 class SessionRecorder {
   SessionRecorder({List<int> Function()? headerBytes})
     : _useRust = headerBytes == null,
-      _headerBytes = headerBytes ?? ffi.sessionHeaderBytes;
+      _headerBytes = headerBytes;
 
   static const _flushInterval = Duration(seconds: 30);
-  static const _maxPendingBytes = 65536;
 
   final bool _useRust;
-  final List<int> Function() _headerBytes;
+  final List<int> Function()? _headerBytes;
 
   File? _rawFile;
   File? _computedFile;
@@ -36,7 +33,6 @@ class SessionRecorder {
   String? _sessionId;
   SidecarMode _sidecar = SidecarMode.jsonl;
 
-  final _rawPending = BytesBuilder();
   int _rawEvents = 0;
   int _computedFrames = 0;
   Timer? _flushTimer;
@@ -113,7 +109,7 @@ class SessionRecorder {
         rethrow;
       }
     } else {
-      await _rawFile!.writeAsBytes(_headerBytes(), mode: FileMode.write);
+      await _rawFile!.writeAsBytes(_headerBytes!(), mode: FileMode.write);
       await _computedFile!.writeAsBytes(const <int>[], mode: FileMode.write);
     }
 
@@ -145,9 +141,9 @@ class SessionRecorder {
     }
   }
 
-  /// Write a Muse event to the raw file (uncompressed records, framed on flush).
+  /// Test injector. Live EEG is forked in Rust; production does not call this.
   void writeEvent(MuseEventDto event) {
-    if (_rawFile == null) return;
+    if (_rawFile == null || !_useRust) return;
 
     final enabled = switch (event) {
       MuseEventDto_Eeg() => _enabled(RecordingStream.eeg),
@@ -173,20 +169,8 @@ class SessionRecorder {
         break;
     }
 
-    if (_useRust) {
-      spine.captureAppendEvent(event: event);
-      _rawEvents++;
-      return;
-    }
-
-    final encoded = ffi.encodeSessionEvent(event: event);
-    if (encoded.isEmpty) return;
-
+    spine.captureAppendEvent(event: event);
     _rawEvents++;
-    _rawPending.add(encoded);
-    if (_rawPending.length > _maxPendingBytes) {
-      unawaited(flushRaw());
-    }
   }
 
   /// Write a metadata event (calibration step, guardrail event, etc.) as JSON line.
@@ -213,22 +197,12 @@ class SessionRecorder {
     _computedFile!.writeAsBytesSync([0x0A], mode: FileMode.append);
   }
 
-  /// Flush raw pending bytes as one `sessionFrameBytes` frame.
   Future<void> flushRaw() async {
-    if (_useRust) {
-      if (_rawFile == null) return;
-      await spine.captureFlush();
-      if (_rawFile!.existsSync()) {
-        onRawFlushed?.call(_rawFile!.lengthSync());
-      }
-      return;
+    if (!_useRust || _rawFile == null) return;
+    await spine.captureFlush();
+    if (_rawFile!.existsSync()) {
+      onRawFlushed?.call(_rawFile!.lengthSync());
     }
-    if (_rawPending.isEmpty || _rawFile == null) return;
-    final raw = _rawPending.toBytes();
-    _rawPending.clear();
-    final framed = ffi.sessionFrameBytes(data: raw);
-    _rawFile!.writeAsBytesSync(framed, mode: FileMode.append);
-    onRawFlushed?.call(_rawFile!.lengthSync());
   }
 
   /// Flush all to disk.
