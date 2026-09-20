@@ -69,6 +69,7 @@ Pad quality (0–100) is computed **only in Dart**: `connection_provider._maybeC
 ### What stays
 
 - `.neurofeed` v5 byte layout (`rust/src/api/session_format.rs`).
+- Live capture encode/append: [../spine/data-plane-contract.md](../spine/data-plane-contract.md) (implemented). This file does not own the writer.
 - SQLite history cache **schema**, export, graph views, BLE/JNI, SoLoud internals.
 - Existing catalog **string IDs** (see [Catalog ID freeze](#catalog-id-freeze)).
 - Calibration snapshot pattern (`SessionCalibration.calibrationJson`) — protocols get the same treatment (`protocolJson`).
