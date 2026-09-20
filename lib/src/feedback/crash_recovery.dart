@@ -31,8 +31,7 @@ class RecoverableSession {
 
   /// Publish the scratch v5 into history, then delete it.
   Future<void> save(SessionStore store) async {
-    final bytes = Uint8List.fromList(await scratchV5.readAsBytes());
-    final head = ffi.v5ParseHead(bytes: bytes);
+    final head = await ffi.v5ParseHeadFromPath(path: scratchV5.path);
     final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ??
         SessionMetadata(
           protocol: protocol,
@@ -42,7 +41,7 @@ class RecoverableSession {
           savedAt: DateTime.now().toIso8601String(),
           sessionId: id,
         );
-    await store.publishSession(id, meta, encodedV5: bytes);
+    await store.publishSession(id, meta, encodedV5Path: scratchV5.path);
     await discard();
   }
 
@@ -144,8 +143,7 @@ Future<RecoverableSession?> _fromV5(File file, String id) async {
   var calibrationKind = '';
   SessionMetadata? meta;
   try {
-    final bytes = Uint8List.fromList(await file.readAsBytes());
-    final head = ffi.v5ParseHead(bytes: bytes);
+    final head = await ffi.v5ParseHeadFromPath(path: file.path);
     meta = SessionMetadata.fromJsonBytes(head.metadataJson);
     if (meta != null) {
       protocol = meta.protocol;
@@ -171,9 +169,6 @@ Future<RecoverableSession?> _assembleTemps({
   required _ScratchFiles files,
 }) async {
   try {
-    final raw = files.raw != null && await files.raw!.exists()
-        ? await files.raw!.readAsBytes()
-        : Uint8List(0);
     final computed = files.computed != null && await files.computed!.exists()
         ? await files.computed!.readAsBytes()
         : Uint8List(0);
@@ -191,8 +186,12 @@ Future<RecoverableSession?> _assembleTemps({
       dir: scratch,
       id: id,
       metadataJson: meta.toJson(),
-      rawBody: raw,
-      computedJsonl: computed,
+      rawPath: files.raw != null && await files.raw!.exists()
+          ? files.raw!.path
+          : '',
+      computedPath: files.computed != null && await files.computed!.exists()
+          ? files.computed!.path
+          : '',
     );
     await _deleteTemps(files);
     return RecoverableSession(

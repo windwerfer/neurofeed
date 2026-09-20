@@ -92,10 +92,10 @@ class FeedbackRecorder {
   Future<String?> assembleScratchV5(Map<String, Object?> metadataJson) async {
     await _recorder.flush();
     _recorder.stopPeriodicFlush();
-    final temps = await _recorder.readTemps();
     final id = _recorder.sessionId;
     final dir = _recorder.tempDir;
-    if (temps == null || id == null || dir == null) {
+    final rawPath = _recorder.rawPath;
+    if (id == null || dir == null || rawPath == null) {
       debugPrint('[feedback] assembleScratchV5: no active recording');
       return null;
     }
@@ -104,8 +104,8 @@ class FeedbackRecorder {
         dir: dir,
         id: id,
         metadataJson: metadataJson,
-        rawBody: temps.raw,
-        computedJsonl: temps.computed,
+        rawPath: rawPath,
+        computedPath: _recorder.computedPath,
       );
       await _recorder.cleanupTempFiles();
       _scratchV5Path = file.path;

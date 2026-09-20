@@ -171,10 +171,10 @@ class MonitorRecorder {
     _sidecarTimer = null;
     await _writer.flush();
     _writer.stopPeriodicFlush();
-    final temps = await _writer.readTemps();
     final id = _writer.sessionId;
     final dir = _writer.tempDir;
-    if (temps == null || id == null || dir == null) {
+    final rawPath = _writer.rawPath;
+    if (id == null || dir == null || rawPath == null) {
       debugPrint('[monitor] assemble: no active recording');
       return null;
     }
@@ -184,8 +184,8 @@ class MonitorRecorder {
         id: id,
         prefix: 'recording',
         metadataJson: metadataJson,
-        rawBody: temps.raw,
-        computedJsonl: temps.computed,
+        rawPath: rawPath,
+        computedPath: _writer.computedPath,
       );
       await _writer.cleanupTempFiles();
       _metadata = null;

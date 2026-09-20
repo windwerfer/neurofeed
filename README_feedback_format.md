@@ -1,7 +1,7 @@
 # NeuroFeed — `.neurofeed` v5
 
 **Format version:** 5
-**Container:** `[68-byte header][WebP thumbnail][metadata (zstd)][computed 1 Hz (zstd)][raw (zstd)]`
+**Container:** `[68-byte header][WebP thumbnail][metadata (zstd)][computed 1 Hz (zstd)][raw body]`
 
 Rust owns the byte layout (`rust/src/api/session_format.rs`). Dart only calls FFI.
 
@@ -39,7 +39,7 @@ Offset 0:        68-byte fixed header
 Offset thumbnail_offset: WebP thumbnail (placeholder at assemble; 640×360)
 Offset metadata_offset:  zstd-compressed metadata JSON
 Offset computed_offset:  zstd JSON Lines (one ComputedFrame per line)
-Offset raw_offset:       zstd-compressed raw body
+Offset raw_offset:       copy of live `.raw` (NFEDBIN + inner zstd frames)
 ```
 
 `v5ParseHead` returns opaque `metadataJson` bytes. It does **not** parse `kind`.
@@ -173,9 +173,10 @@ capture start.
 
 ---
 
-## Raw stream — own zstd section
+## Raw stream — NFEDBIN body (inner zstd frames)
 
-Original raw body (header + zstd frames, tags 1–10):
+The container raw section is a byte-for-byte copy of the live `.raw`
+(no outer zstd). Inner frames remain `[u32 length][zstd payload]`:
 
 | Tag | Stream | Typical rate | Payload |
 |-----|--------|--------------|---------|

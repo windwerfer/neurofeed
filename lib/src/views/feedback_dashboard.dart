@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -99,28 +100,27 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   }
 
   Future<_DashboardLoad> _loadSession() async {
-    late final Uint8List bytes;
+    late final String path;
     if (widget.readOnly && widget.sessionId != null) {
       final store = await ref.read(sessionStoreProvider.future);
-      final container = await store.readContainer(widget.sessionId!);
-      if (container == null) {
+      final resolved = await store.resolveContainerPath(widget.sessionId!);
+      if (resolved == null) {
         throw StateError('session file missing');
       }
-      bytes = container;
+      path = resolved;
     } else {
-      final path = widget.sessionPath ??
+      final scratch = widget.sessionPath ??
           ref.read(feedbackStateProvider.notifier).scratchV5Path;
-      if (path == null) {
+      if (scratch == null) {
         throw StateError('scratch v5 not assembled');
       }
-      final file = File(path);
-      if (!await file.exists()) {
+      if (!await File(scratch).exists()) {
         throw StateError('scratch v5 missing');
       }
-      bytes = await file.readAsBytes();
+      path = scratch;
     }
-    final frames = v5ExtractComputed(bytes: bytes);
-    final head = v5ParseHead(bytes: bytes);
+    final frames = await v5ExtractComputedFromPath(path: path);
+    final head = await v5ParseHeadFromPath(path: path);
     final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ??
         widget.metadata ??
         SessionMetadata(
@@ -132,13 +132,12 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         );
     final catalog = await ProtocolCatalog.load();
     final protocol = catalog.forName(meta.protocol);
-    final prepared = prepareChartDataFromV5(
-      frames: frames,
-      bytes: bytes,
+    final prepared = prepareChartDataFromComputed(
+      frames,
       trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
       metric: protocol?.reward?.feature ?? 'band.atr',
       conditions: protocol?.conditions ?? const [],
-      startedAt: meta.startedAt,
+      recordingStartMs: recordingStartMsFromIso(meta.startedAt),
     );
     return _DashboardLoad(
       prepared: prepared,
@@ -335,9 +334,6 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         debugPrint('[dashboard] save: no scratch v5 to publish');
         return;
       }
-      final bytes = await File(path).readAsBytes();
-      final frames = v5ExtractComputed(bytes: bytes);
-      final raw = v5ExtractRaw(bytes: bytes);
       final thumb = encodeThumbnailWebP(_thumbnail ?? Uint8List(0));
       final stats = _prepared?.stats;
       final metadata = _fileMeta?.withSaveFields(
@@ -358,14 +354,18 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
             notes: _notes.text,
             stats: stats,
           );
-      final v5 = assembleV5Container(
+      final patched = '${Directory.systemTemp.path}/nf_save_$id.neurofeed';
+      await v5RewriteHeadToPath(
+        srcPath: path,
+        destPath: patched,
+        metadataJson: utf8.encode(jsonEncode(metadata.toJson())),
         thumbnail: thumb,
-        metadataJson: metadata.toJson(),
-        computedFrames: frames,
-        rawBody: raw,
       );
       final store = await ref.read(sessionStoreProvider.future);
-      await store.publishSession(id, metadata, encodedV5: v5);
+      await store.publishSession(id, metadata, encodedV5Path: patched);
+      try {
+        await File(patched).delete();
+      } catch (_) {}
       await notifier.deleteScratchV5();
       notifier.reset();
       debugPrint('[dashboard] save: published session_$id.neurofeed');

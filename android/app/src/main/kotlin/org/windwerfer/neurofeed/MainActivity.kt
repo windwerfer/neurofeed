@@ -17,6 +17,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel.Result
 import android.util.Log
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 
 class MainActivity : FlutterActivity() {
@@ -119,6 +120,7 @@ class MainActivity : FlutterActivity() {
             "ensureDir" -> { result.success(null); }
             "writeFile" -> writeFile(call, result)
             "writeFileAtomic" -> writeFileAtomic(call, result)
+            "copyFromPath" -> copyFromPath(call, result)
             "readFile" -> readFile(call, result)
             "readFilePrefix" -> readFilePrefix(call, result)
             "deleteFile" -> deleteFile(call, result)
@@ -281,6 +283,69 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "writeFileAtomic $name failed", e)
             result.error("write_failed", e.toString(), null)
+        }
+    }
+
+    /// Stream [srcPath] into the SAF tree as [name] without pulling the file
+    /// across the platform channel. Same temp+rename as [writeFileAtomic].
+    private fun copyFromPath(call: MethodCall, result: Result) {
+        val tree = treeUri(call)
+        val name = call.argument<String>("name")
+        val srcPath = call.argument<String>("srcPath")
+        val dir = call.argument<String>("dir")
+        if (tree == null || name == null || srcPath == null) {
+            result.error("bad_args", "tree/name/srcPath required", null)
+            return
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val parent = writeParent(tree, dir) ?: run {
+                    withContext(Dispatchers.Main) {
+                        result.error("open_failed", "could not open $dir", null)
+                    }
+                    return@launch
+                }
+                val tmpName = "$name.mtmp"
+                var tmpDoc = resolveDoc(tree, parent, tmpName)
+                if (tmpDoc == null) {
+                    tmpDoc = DocumentsContract.createDocument(
+                        contentResolver, parent, "application/octet-stream", tmpName
+                    )
+                    if (tmpDoc == null) {
+                        withContext(Dispatchers.Main) {
+                            result.error("open_failed", "could not create $tmpName", null)
+                        }
+                        return@launch
+                    }
+                }
+                FileInputStream(File(srcPath)).use { input ->
+                    contentResolver.openOutputStream(tmpDoc, "wt")?.use { output ->
+                        input.copyTo(output, bufferSize = 64 * 1024)
+                    } ?: run {
+                        withContext(Dispatchers.Main) {
+                            result.error("open_failed", "could not open $tmpName for writing", null)
+                        }
+                        return@launch
+                    }
+                }
+                val oldDoc = resolveDoc(tree, parent, name)
+                if (oldDoc != null) {
+                    DocumentsContract.deleteDocument(contentResolver, oldDoc)
+                }
+                val renamed = DocumentsContract.renameDocument(contentResolver, tmpDoc, name)
+                if (renamed == null) {
+                    withContext(Dispatchers.Main) {
+                        result.error("rename_failed", "could not rename $tmpName -> $name", null)
+                    }
+                    return@launch
+                }
+                withContext(Dispatchers.Main) { result.success(null) }
+            } catch (e: Exception) {
+                Log.e(TAG, "copyFromPath $name failed", e)
+                withContext(Dispatchers.Main) {
+                    result.error("write_failed", e.toString(), null)
+                }
+            }
         }
     }
 

@@ -1,4 +1,5 @@
-use std::io::Cursor;
+use std::fs::File;
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use flutter_rust_bridge::frb;
@@ -7,8 +8,8 @@ use crate::api::muse::{ImuDto, MuseEventDto};
 
 // ── raw body format (raw section of the v5 container) ─────────────────────────
 //
-// The raw frame body stored in the v5 container's "raw" section is a
-// zstd-compressed stream:
+// The v5 container raw section is a byte-for-byte copy of the live `.raw`
+// body (NFEDBIN + inner zstd frames; no outer zstd):
 //
 //   [ u64 LE "NFEDBIN\n" (reversed) ][ u32 LE version=5 ][ frames ]
 //
@@ -166,12 +167,12 @@ pub fn encode_session_event(event: &MuseEventDto) -> Vec<u8> {
             push_f32(&mut out, d.frequency as f32);
             push_f32(&mut out, d.power as f32);
         }
-        MuseEventDto::Connected(_) |
-        MuseEventDto::Disconnected |
-        MuseEventDto::Control(_) |
-        MuseEventDto::Gestures(_) |
-        MuseEventDto::Reve(_) |
-        MuseEventDto::Feature(_) => {}
+        MuseEventDto::Connected(_)
+        | MuseEventDto::Disconnected
+        | MuseEventDto::Control(_)
+        | MuseEventDto::Gestures(_)
+        | MuseEventDto::Reve(_)
+        | MuseEventDto::Feature(_) => {}
     }
     out
 }
@@ -314,7 +315,7 @@ fn parse_records(records: &[u8], out: &mut SessionData) {
         match tag {
             FORMAT_TAG_EEG => {
                 let (Some(ts), Some(elec), Some(n)) = (p.f64(), p.i16(), p.u16()) else {
-                    break
+                    break;
                 };
                 let mut samples = Vec::with_capacity(n as usize);
                 for _ in 0..n {
@@ -332,17 +333,14 @@ fn parse_records(records: &[u8], out: &mut SessionData) {
                 });
             }
             FORMAT_TAG_TELEMETRY => {
-                if p.f64().is_none()
-                    || p.f32().is_none()
-                    || p.f32().is_none()
-                    || p.u16().is_none()
+                if p.f64().is_none() || p.f32().is_none() || p.f32().is_none() || p.u16().is_none()
                 {
                     break;
                 }
             }
             FORMAT_TAG_ACCELEROMETER | FORMAT_TAG_GYROSCOPE => {
                 let (Some(_), Some(_), Some(n)) = (p.f64(), p.u16(), p.u16()) else {
-                    break
+                    break;
                 };
                 if !p.skip(n as usize * 12) {
                     break;
@@ -350,18 +348,20 @@ fn parse_records(records: &[u8], out: &mut SessionData) {
             }
             FORMAT_TAG_PPG => {
                 let (Some(_), Some(_), Some(n)) = (p.f64(), p.i16(), p.u16()) else {
-                    break
+                    break;
                 };
                 if !p.skip(n as usize * 4) {
                     break;
                 }
             }
             FORMAT_TAG_BANDS => {
-                let (Some(ts), Some(e)) = (p.f64(), p.i16()) else { break };
+                let (Some(ts), Some(e)) = (p.f64(), p.i16()) else {
+                    break;
+                };
                 let (Some(delta), Some(theta), Some(alpha), Some(beta), Some(gamma)) =
                     (p.f32(), p.f32(), p.f32(), p.f32(), p.f32())
                 else {
-                    break
+                    break;
                 };
                 out.bands.push(BandsRecord {
                     timestamp: ts,
@@ -375,7 +375,7 @@ fn parse_records(records: &[u8], out: &mut SessionData) {
             }
             FORMAT_TAG_PULSE => {
                 let (Some(ts), Some(bpm), Some(conf)) = (p.f64(), p.f32(), p.f32()) else {
-                    break
+                    break;
                 };
                 out.pulses.push(PulseRecord {
                     timestamp: ts,
@@ -385,7 +385,7 @@ fn parse_records(records: &[u8], out: &mut SessionData) {
             }
             FORMAT_TAG_SPO2 => {
                 let (Some(ts), Some(spo2), Some(conf)) = (p.f64(), p.f32(), p.f32()) else {
-                    break
+                    break;
                 };
                 out.spo2s.push(SpO2Record {
                     timestamp: ts,
@@ -394,7 +394,9 @@ fn parse_records(records: &[u8], out: &mut SessionData) {
                 });
             }
             FORMAT_TAG_MOVEMENT => {
-                let (Some(ts), Some(score)) = (p.f64(), p.f32()) else { break };
+                let (Some(ts), Some(score)) = (p.f64(), p.f32()) else {
+                    break;
+                };
                 out.movements.push(MovementRecord {
                     timestamp: ts,
                     score: score as f64,
@@ -402,7 +404,7 @@ fn parse_records(records: &[u8], out: &mut SessionData) {
             }
             FORMAT_TAG_PEAK_ALPHA => {
                 let (Some(ts), Some(freq), Some(power)) = (p.f64(), p.f32(), p.f32()) else {
-                    break
+                    break;
                 };
                 out.peak_alphas.push(PeakAlphaRecord {
                     timestamp: ts,
@@ -461,7 +463,7 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
 
 // ── v5 Session Format ──────────────────────────────────────────────────────────
 //
-//   [68-byte fixed header][WebP thumbnail][metadata JSON (zstd)][computed 1Hz (zstd)][raw (zstd)]
+//   [68-byte fixed header][WebP thumbnail][metadata JSON (zstd)][computed 1Hz (zstd)][raw body]
 //
 // Header layout (68 bytes):
 //   [0..6]   magic: b"NFED5\0"
@@ -576,37 +578,17 @@ fn crc32(data: &[u8]) -> u32 {
     crc32fast::hash(data)
 }
 
-/// Encode a v5 container: header + thumbnail + metadata(zstd) + computed(zstd) + raw(zstd).
-#[frb(sync)]
-pub fn container_encode_v5(
-    thumbnail: &[u8],
-    metadata_json: &[u8],
-    computed_frames: &[ComputedFrame],
-    raw_body: &[u8],
+const COPY_BUF: usize = 64 * 1024;
+
+fn v5_header_bytes(
+    thumbnail_offset: u64,
+    thumbnail_length: u64,
+    metadata_offset: u64,
+    metadata_length: u64,
+    computed_offset: u64,
+    computed_length: u64,
+    raw_offset: u64,
 ) -> Vec<u8> {
-    // Compress metadata, computed, raw separately with zstd level 3.
-    let metadata_compressed = zstd::encode_all(std::io::Cursor::new(metadata_json), 3).unwrap_or_default();
-    let mut computed_json = Vec::new();
-    for f in computed_frames {
-        computed_json.extend_from_slice(&f.to_json_bytes());
-        computed_json.push(b'\n');
-    }
-    let computed_compressed = zstd::encode_all(std::io::Cursor::new(computed_json), 3).unwrap_or_default();
-    let raw_compressed = zstd::encode_all(std::io::Cursor::new(raw_body), 3).unwrap_or_default();
-
-    let mut offset = V5_HEADER_SIZE as u64 + thumbnail.len() as u64;
-    let thumbnail_offset = V5_HEADER_SIZE as u64;
-    let thumbnail_length = thumbnail.len() as u64;
-    let metadata_offset = offset;
-    let metadata_length = metadata_compressed.len() as u64;
-    offset += metadata_length;
-    let computed_offset = offset;
-    let computed_length = computed_compressed.len() as u64;
-    offset += computed_length;
-    let raw_offset = offset;
-    // raw_length not stored; compute from file size.
-
-    // Build header bytes (V5_HEADER_SIZE = 68).
     let mut header = Vec::with_capacity(V5_HEADER_SIZE);
     header.extend_from_slice(&V5_MAGIC);
     header.push(V5_VERSION);
@@ -618,19 +600,279 @@ pub fn container_encode_v5(
     header.extend_from_slice(&computed_offset.to_le_bytes());
     header.extend_from_slice(&computed_length.to_le_bytes());
     header.extend_from_slice(&raw_offset.to_le_bytes());
-    // CRC32 of first 64 bytes (header without CRC).
     let crc = crc32(&header);
     header.extend_from_slice(&crc.to_le_bytes());
-    assert_eq!(header.len(), V5_HEADER_SIZE);
+    debug_assert_eq!(header.len(), V5_HEADER_SIZE);
+    header
+}
 
-    // Assemble final file.
-    let mut out = Vec::with_capacity(header.len() + thumbnail.len() + metadata_compressed.len() + computed_compressed.len() + raw_compressed.len());
+fn copy_all<R: Read, W: Write>(src: &mut R, dest: &mut W) -> Result<u64, String> {
+    let mut buf = vec![0u8; COPY_BUF];
+    let mut total = 0u64;
+    loop {
+        let n = src.read(&mut buf).map_err(|e| format!("read: {e}"))?;
+        if n == 0 {
+            break;
+        }
+        dest.write_all(&buf[..n])
+            .map_err(|e| format!("write: {e}"))?;
+        total += n as u64;
+    }
+    Ok(total)
+}
+
+fn copy_file_range(path: &str, offset: u64, length: u64, dest: &mut File) -> Result<(), String> {
+    if length == 0 {
+        return Ok(());
+    }
+    let mut src = File::open(path).map_err(|e| format!("open {path}: {e}"))?;
+    src.seek(SeekFrom::Start(offset))
+        .map_err(|e| format!("seek {path}: {e}"))?;
+    let mut limited = src.take(length);
+    copy_all(&mut limited, dest)?;
+    Ok(())
+}
+
+fn read_file_range(path: &str, offset: u64, length: u64) -> Result<Vec<u8>, String> {
+    if length == 0 {
+        return Ok(Vec::new());
+    }
+    let mut src = File::open(path).map_err(|e| format!("open {path}: {e}"))?;
+    src.seek(SeekFrom::Start(offset))
+        .map_err(|e| format!("seek {path}: {e}"))?;
+    let mut buf = vec![0u8; length as usize];
+    src.read_exact(&mut buf)
+        .map_err(|e| format!("read {path}: {e}"))?;
+    Ok(buf)
+}
+
+fn zstd_compress_bytes(data: &[u8]) -> Result<Vec<u8>, String> {
+    zstd::encode_all(Cursor::new(data), 3).map_err(|e| format!("zstd encode: {e}"))
+}
+
+fn zstd_compress_file_or_empty(path: &str) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    {
+        let mut encoder =
+            zstd::stream::Encoder::new(&mut out, 3).map_err(|e| format!("zstd encoder: {e}"))?;
+        if !path.is_empty() {
+            let mut f = File::open(path).map_err(|e| format!("open computed {path}: {e}"))?;
+            std::io::copy(&mut f, &mut encoder).map_err(|e| format!("zstd computed: {e}"))?;
+        }
+        encoder.finish().map_err(|e| format!("zstd finish: {e}"))?;
+    }
+    Ok(out)
+}
+
+fn file_len(path: &str) -> Result<u64, String> {
+    std::fs::metadata(path)
+        .map(|m| m.len())
+        .map_err(|e| format!("stat {path}: {e}"))
+}
+
+/// Encode a v5 container: header + thumbnail + metadata(zstd) + computed(zstd)
+/// + raw body copy. The raw section is a byte-for-byte copy of [raw_body]
+/// (already inner-framed). Small fixtures only; keepable captures use
+/// [container_encode_v5_to_path].
+#[frb(sync)]
+pub fn container_encode_v5(
+    thumbnail: &[u8],
+    metadata_json: &[u8],
+    computed_frames: &[ComputedFrame],
+    raw_body: &[u8],
+) -> Vec<u8> {
+    let metadata_compressed = zstd::encode_all(Cursor::new(metadata_json), 3).unwrap_or_default();
+    let mut computed_json = Vec::new();
+    for f in computed_frames {
+        computed_json.extend_from_slice(&f.to_json_bytes());
+        computed_json.push(b'\n');
+    }
+    let computed_compressed = zstd::encode_all(Cursor::new(computed_json), 3).unwrap_or_default();
+
+    let thumbnail_offset = V5_HEADER_SIZE as u64;
+    let thumbnail_length = thumbnail.len() as u64;
+    let metadata_offset = thumbnail_offset + thumbnail_length;
+    let metadata_length = metadata_compressed.len() as u64;
+    let computed_offset = metadata_offset + metadata_length;
+    let computed_length = computed_compressed.len() as u64;
+    let raw_offset = computed_offset + computed_length;
+
+    let header = v5_header_bytes(
+        thumbnail_offset,
+        thumbnail_length,
+        metadata_offset,
+        metadata_length,
+        computed_offset,
+        computed_length,
+        raw_offset,
+    );
+
+    let mut out = Vec::with_capacity(
+        header.len()
+            + thumbnail.len()
+            + metadata_compressed.len()
+            + computed_compressed.len()
+            + raw_body.len(),
+    );
     out.extend_from_slice(&header);
     out.extend_from_slice(thumbnail);
     out.extend_from_slice(&metadata_compressed);
     out.extend_from_slice(&computed_compressed);
-    out.extend_from_slice(&raw_compressed);
+    out.extend_from_slice(raw_body);
     out
+}
+
+/// File-to-file assemble. Copies [raw_path] into the raw section (no outer
+/// zstd). Empty [computed_jsonl_path] or [raw_path] yields an empty section.
+/// Returns [dest_path].
+pub fn container_encode_v5_to_path(
+    dest_path: String,
+    thumbnail: Vec<u8>,
+    metadata_json: Vec<u8>,
+    computed_jsonl_path: String,
+    raw_path: String,
+) -> Result<String, String> {
+    let metadata_compressed = zstd_compress_bytes(&metadata_json)?;
+    let computed_compressed = zstd_compress_file_or_empty(&computed_jsonl_path)?;
+    if !raw_path.is_empty() {
+        let _ = file_len(&raw_path)?;
+    }
+
+    let thumbnail_offset = V5_HEADER_SIZE as u64;
+    let thumbnail_length = thumbnail.len() as u64;
+    let metadata_offset = thumbnail_offset + thumbnail_length;
+    let metadata_length = metadata_compressed.len() as u64;
+    let computed_offset = metadata_offset + metadata_length;
+    let computed_length = computed_compressed.len() as u64;
+    let raw_offset = computed_offset + computed_length;
+
+    let header = v5_header_bytes(
+        thumbnail_offset,
+        thumbnail_length,
+        metadata_offset,
+        metadata_length,
+        computed_offset,
+        computed_length,
+        raw_offset,
+    );
+
+    let mut dest = File::create(&dest_path).map_err(|e| format!("create {dest_path}: {e}"))?;
+    dest.write_all(&header)
+        .map_err(|e| format!("write header: {e}"))?;
+    dest.write_all(&thumbnail)
+        .map_err(|e| format!("write thumbnail: {e}"))?;
+    dest.write_all(&metadata_compressed)
+        .map_err(|e| format!("write metadata: {e}"))?;
+    dest.write_all(&computed_compressed)
+        .map_err(|e| format!("write computed: {e}"))?;
+    if !raw_path.is_empty() {
+        let mut raw = File::open(&raw_path).map_err(|e| format!("open raw {raw_path}: {e}"))?;
+        copy_all(&mut raw, &mut dest)?;
+    }
+    dest.flush()
+        .map_err(|e| format!("flush {dest_path}: {e}"))?;
+    Ok(dest_path)
+}
+
+/// Rewrite metadata (and optional thumbnail), copying computed and raw
+/// sections as opaque bytes. Empty [thumbnail] copies the source thumbnail.
+/// Returns [dest_path].
+pub fn v5_rewrite_head_to_path(
+    src_path: String,
+    dest_path: String,
+    metadata_json: Vec<u8>,
+    thumbnail: Vec<u8>,
+) -> Result<String, String> {
+    let src_len = file_len(&src_path)?;
+    let header_bytes = read_file_range(&src_path, 0, V5_HEADER_SIZE as u64)?;
+    let header = v5_parse_header(&header_bytes)?;
+    if header.raw_offset > src_len {
+        return Err("Truncated raw section".to_string());
+    }
+    let thumb = if thumbnail.is_empty() {
+        read_file_range(&src_path, header.thumbnail_offset, header.thumbnail_length)?
+    } else {
+        thumbnail
+    };
+    let metadata_compressed = zstd_compress_bytes(&metadata_json)?;
+    let computed_len = header.computed_length;
+    let raw_len = src_len.saturating_sub(header.raw_offset);
+
+    let thumbnail_offset = V5_HEADER_SIZE as u64;
+    let thumbnail_length = thumb.len() as u64;
+    let metadata_offset = thumbnail_offset + thumbnail_length;
+    let metadata_length = metadata_compressed.len() as u64;
+    let computed_offset = metadata_offset + metadata_length;
+    let computed_length = computed_len;
+    let raw_offset = computed_offset + computed_length;
+
+    let out_header = v5_header_bytes(
+        thumbnail_offset,
+        thumbnail_length,
+        metadata_offset,
+        metadata_length,
+        computed_offset,
+        computed_length,
+        raw_offset,
+    );
+
+    let mut dest = File::create(&dest_path).map_err(|e| format!("create {dest_path}: {e}"))?;
+    dest.write_all(&out_header)
+        .map_err(|e| format!("write header: {e}"))?;
+    dest.write_all(&thumb)
+        .map_err(|e| format!("write thumbnail: {e}"))?;
+    dest.write_all(&metadata_compressed)
+        .map_err(|e| format!("write metadata: {e}"))?;
+    copy_file_range(
+        &src_path,
+        header.computed_offset,
+        header.computed_length,
+        &mut dest,
+    )?;
+    copy_file_range(&src_path, header.raw_offset, raw_len, &mut dest)?;
+    dest.flush()
+        .map_err(|e| format!("flush {dest_path}: {e}"))?;
+    Ok(dest_path)
+}
+
+/// Parse v5 head from a file without reading the raw section.
+pub fn v5_parse_head_from_path(path: String) -> Result<V5ParsedHead, String> {
+    let header_bytes = read_file_range(&path, 0, V5_HEADER_SIZE as u64)?;
+    let header = v5_parse_header(&header_bytes)?;
+    let thumbnail = read_file_range(&path, header.thumbnail_offset, header.thumbnail_length)?;
+    let metadata_compressed =
+        read_file_range(&path, header.metadata_offset, header.metadata_length)?;
+    let metadata_json = zstd::decode_all(Cursor::new(metadata_compressed))
+        .map_err(|e| format!("Metadata zstd decode failed: {e}"))?;
+    Ok(V5ParsedHead {
+        header,
+        thumbnail,
+        metadata_json,
+    })
+}
+
+/// Extract computed frames from a file without reading the raw section.
+pub fn v5_extract_computed_from_path(path: String) -> Result<Vec<ComputedFrame>, String> {
+    let header_bytes = read_file_range(&path, 0, V5_HEADER_SIZE as u64)?;
+    let header = v5_parse_header(&header_bytes)?;
+    let computed_compressed =
+        read_file_range(&path, header.computed_offset, header.computed_length)?;
+    parse_computed_jsonl(&computed_compressed)
+}
+
+fn parse_computed_jsonl(computed_compressed: &[u8]) -> Result<Vec<ComputedFrame>, String> {
+    let computed_json = zstd::decode_all(Cursor::new(computed_compressed))
+        .map_err(|e| format!("Computed zstd decode failed: {e}"))?;
+    let mut frames = Vec::new();
+    for line in computed_json.split(|&b| b == b'\n') {
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(frame) = ComputedFrame::from_json_bytes(line) {
+            frames.push(frame);
+        }
+    }
+    Ok(frames)
 }
 
 /// Parse v5 header (first 68 bytes).
@@ -703,23 +945,10 @@ pub fn v5_extract_computed(bytes: &[u8]) -> Result<Vec<ComputedFrame>, String> {
         return Err("Truncated computed section".to_string());
     }
     let computed_compressed = &bytes[header.computed_offset as usize..comp_end as usize];
-    let computed_json = zstd::decode_all(std::io::Cursor::new(computed_compressed))
-        .map_err(|e| format!("Computed zstd decode failed: {e}"))?;
-
-    // Parse JSON lines (each frame is a JSON object, one per line).
-    let mut frames = Vec::new();
-    for line in computed_json.split(|&b| b == b'\n') {
-        if line.is_empty() {
-            continue;
-        }
-        if let Some(frame) = ComputedFrame::from_json_bytes(line) {
-            frames.push(frame);
-        }
-    }
-    Ok(frames)
+    parse_computed_jsonl(computed_compressed)
 }
 
-/// Extract raw section (decompressed body).
+/// Extract the raw section as the framed body (no outer zstd).
 #[frb(sync)]
 pub fn v5_extract_raw(bytes: &[u8]) -> Result<Vec<u8>, String> {
     let header = v5_parse_header(bytes)?;
@@ -728,18 +957,15 @@ pub fn v5_extract_raw(bytes: &[u8]) -> Result<Vec<u8>, String> {
     if raw_start > total_len {
         return Err("Truncated raw section".to_string());
     }
-    let raw_compressed = &bytes[raw_start as usize..];
-    let raw = zstd::decode_all(std::io::Cursor::new(raw_compressed))
-        .map_err(|e| format!("Raw zstd decode failed: {e}"))?;
-    Ok(raw)
+    Ok(bytes[raw_start as usize..].to_vec())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::api::muse::{
-        BandsDto, EegDto, ImuDto, MovementDto, PeakAlphaDto, PpgDto, PulseDto,
-        SpO2Dto, TelemetrySnapshot, XyzDto,
+        BandsDto, EegDto, ImuDto, MovementDto, PeakAlphaDto, PpgDto, PulseDto, SpO2Dto,
+        TelemetrySnapshot, XyzDto,
     };
 
     // ── Wire-builder helpers (independent of the production encoder) ──────────
@@ -787,7 +1013,10 @@ mod tests {
     /// Encode events to records and wrap them in the real header + zstd frame.
     fn body(events: &[MuseEventDto]) -> Vec<u8> {
         let mut body = session_header_bytes();
-        let records: Vec<u8> = events.iter().flat_map(|e| encode_session_event(e)).collect();
+        let records: Vec<u8> = events
+            .iter()
+            .flat_map(|e| encode_session_event(e))
+            .collect();
         if !records.is_empty() {
             body.extend_from_slice(&session_frame_bytes(&records));
         }
@@ -972,8 +1201,16 @@ mod tests {
             ImuDto {
                 sequence_id: 7,
                 samples: vec![
-                    XyzDto { x: 1.0, y: -2.0, z: 0.5 },
-                    XyzDto { x: 3.0, y: 4.0, z: 5.0 },
+                    XyzDto {
+                        x: 1.0,
+                        y: -2.0,
+                        z: 0.5,
+                    },
+                    XyzDto {
+                        x: 3.0,
+                        y: 4.0,
+                        z: 5.0,
+                    },
                 ],
             }
         }
@@ -1022,14 +1259,14 @@ mod tests {
             fields: Default::default(),
         }))
         .is_empty());
-        assert!(encode_session_event(&MuseEventDto::Feature(
-            crate::api::features::FeatureDto {
+        assert!(
+            encode_session_event(&MuseEventDto::Feature(crate::api::features::FeatureDto {
                 id: "band.atr".into(),
                 timestamp: 1.0,
                 value: 1.2,
-            }
-        ))
-        .is_empty());
+            }))
+            .is_empty()
+        );
     }
 
     // ── 3. parser reads a hand-built wire body, not just encoder output ────────
@@ -1061,8 +1298,16 @@ mod tests {
     fn parse_multiple_frames_in_order() {
         let mut file = session_header_bytes();
         // Two separate zstd frames must be decoded independently and in order.
-        file.extend(session_frame_bytes(&encoding::of(&[eeg(1.0, 0, vec![0.5, -1.5, 2.25])])));
-        file.extend(session_frame_bytes(&encoding::of(&[eeg(2.0, 1, vec![9.0])])));
+        file.extend(session_frame_bytes(&encoding::of(&[eeg(
+            1.0,
+            0,
+            vec![0.5, -1.5, 2.25],
+        )])));
+        file.extend(session_frame_bytes(&encoding::of(&[eeg(
+            2.0,
+            1,
+            vec![9.0],
+        )])));
         let out = session_parse_body(&file).unwrap();
         assert_eq!(out.eeg_samples, 4);
     }
@@ -1085,7 +1330,10 @@ mod tests {
             line_noise_ratio: 0.0,
         });
         // wire must carry the f32 value, not the full f64 mantissa
-        assert_eq!(&encode_session_event(&dto)[1 + 8 + 2..1 + 8 + 2 + 4], &0.1f32.to_le_bytes());
+        assert_eq!(
+            &encode_session_event(&dto)[1 + 8 + 2..1 + 8 + 2 + 4],
+            &0.1f32.to_le_bytes()
+        );
 
         let out = session_parse_body(&body(&[dto])).unwrap();
         assert_eq!(out.bands[0].delta, 0.1f32 as f64);
@@ -1169,11 +1417,19 @@ mod tests {
             }),
             MuseEventDto::Accelerometer(ImuDto {
                 sequence_id: 1,
-                samples: vec![XyzDto { x: 1.0, y: 2.0, z: 3.0 }],
+                samples: vec![XyzDto {
+                    x: 1.0,
+                    y: 2.0,
+                    z: 3.0,
+                }],
             }),
             MuseEventDto::Gyroscope(ImuDto {
                 sequence_id: 2,
-                samples: vec![XyzDto { x: 0.0, y: 0.0, z: 1.0 }],
+                samples: vec![XyzDto {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 1.0,
+                }],
             }),
             MuseEventDto::Ppg(PpgDto {
                 index: 0,
@@ -1181,7 +1437,7 @@ mod tests {
                 timestamp: 1.0,
                 samples: vec![1.0, 2.0],
             }),
-MuseEventDto::Bands(BandsDto {
+            MuseEventDto::Bands(BandsDto {
                 electrode: 3,
                 timestamp: 1.0,
                 delta: 0.5,
@@ -1265,12 +1521,25 @@ MuseEventDto::Bands(BandsDto {
                 bands: vec![vec![1.0, 2.0, 3.0, 4.0, 5.0]; 4],
                 pulse: Some(60.0),
                 movement: Some(0.1),
-                peak_alpha: Some(PeakAlphaInfo { freq: 10.0, power: 5.0 }),
+                peak_alpha: Some(PeakAlphaInfo {
+                    freq: 10.0,
+                    power: 5.0,
+                }),
                 spo2: Some(98.0),
                 line_noise: vec![0.01; 4],
                 signal_quality: vec![90; 4],
-                guardrail: GuardrailInfo { sleep_dir: 0.1, clarity: 0.9, warning: false, delta: 0.0 },
-                feedback: FeedbackInfo { ratio: 1.5, threshold: 1.0, in_target: true, pct: 0.6 },
+                guardrail: GuardrailInfo {
+                    sleep_dir: 0.1,
+                    clarity: 0.9,
+                    warning: false,
+                    delta: 0.0,
+                },
+                feedback: FeedbackInfo {
+                    ratio: 1.5,
+                    threshold: 1.0,
+                    in_target: true,
+                    pct: 0.6,
+                },
                 gestures: vec!["blink".to_string()],
             },
             ComputedFrame {
@@ -1278,12 +1547,25 @@ MuseEventDto::Bands(BandsDto {
                 bands: vec![vec![1.1, 2.1, 3.1, 4.1, 5.1]; 4],
                 pulse: Some(61.0),
                 movement: Some(0.2),
-                peak_alpha: Some(PeakAlphaInfo { freq: 10.2, power: 5.1 }),
+                peak_alpha: Some(PeakAlphaInfo {
+                    freq: 10.2,
+                    power: 5.1,
+                }),
                 spo2: Some(97.0),
                 line_noise: vec![0.02; 4],
                 signal_quality: vec![85; 4],
-                guardrail: GuardrailInfo { sleep_dir: 0.2, clarity: 0.8, warning: true, delta: 0.1 },
-                feedback: FeedbackInfo { ratio: 1.4, threshold: 1.1, in_target: false, pct: 0.4 },
+                guardrail: GuardrailInfo {
+                    sleep_dir: 0.2,
+                    clarity: 0.8,
+                    warning: true,
+                    delta: 0.1,
+                },
+                feedback: FeedbackInfo {
+                    ratio: 1.4,
+                    threshold: 1.1,
+                    in_target: false,
+                    pct: 0.4,
+                },
                 gestures: vec![],
             },
         ];
@@ -1365,12 +1647,25 @@ MuseEventDto::Bands(BandsDto {
             bands: vec![vec![1.0, 2.0, 3.0, 4.0, 5.0]; 4],
             pulse: Some(72.0),
             movement: Some(0.05),
-            peak_alpha: Some(PeakAlphaInfo { freq: 10.1, power: 4.5 }),
+            peak_alpha: Some(PeakAlphaInfo {
+                freq: 10.1,
+                power: 4.5,
+            }),
             spo2: Some(98.5),
             line_noise: vec![0.01, 0.02, 0.01, 0.03],
             signal_quality: vec![80, 85, 90, 95],
-            guardrail: GuardrailInfo { sleep_dir: 0.2, clarity: 0.8, warning: false, delta: 0.05 },
-            feedback: FeedbackInfo { ratio: 1.8, threshold: 1.3, in_target: true, pct: 0.65 },
+            guardrail: GuardrailInfo {
+                sleep_dir: 0.2,
+                clarity: 0.8,
+                warning: false,
+                delta: 0.05,
+            },
+            feedback: FeedbackInfo {
+                ratio: 1.8,
+                threshold: 1.3,
+                in_target: true,
+                pct: 0.65,
+            },
             gestures: vec!["blink".to_string(), "clench".to_string()],
         };
 
@@ -1381,5 +1676,112 @@ MuseEventDto::Bands(BandsDto {
         assert_eq!(decoded.bands, frame.bands);
         assert_eq!(decoded.pulse, frame.pulse);
         assert_eq!(decoded.gestures, frame.gestures);
+    }
+
+    #[test]
+    fn v5_raw_section_is_copy_not_outer_zstd() {
+        let thumbnail = min_png();
+        let metadata = b"{}";
+        let computed = vec![];
+        let mut raw = session_header_bytes();
+        raw.extend_from_slice(b"inner-framed");
+
+        let file = container_encode_v5(&thumbnail, metadata, &computed, &raw);
+        let header = v5_parse_header(&file).unwrap();
+        let section = &file[header.raw_offset as usize..];
+        assert_eq!(section, raw.as_slice());
+        assert_ne!(&section[..4], &[0x28, 0xB5, 0x2F, 0xFD]);
+        assert_eq!(v5_extract_raw(&file).unwrap(), raw);
+    }
+
+    #[test]
+    fn v5_encode_to_path_copies_raw() {
+        let dir = std::env::temp_dir().join(format!(
+            "nf_v5_path_{}_{}",
+            std::process::id(),
+            now_secs() as u64
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let raw_path = dir.join("in.raw");
+        let computed_path = dir.join("in.computed");
+        let dest_path = dir.join("out.neurofeed");
+        let mut raw = session_header_bytes();
+        raw.extend_from_slice(&[1, 2, 3, 4, 5]);
+        std::fs::write(&raw_path, &raw).unwrap();
+        std::fs::write(&computed_path, b"{\"t\":0}\n").unwrap();
+
+        let dest = container_encode_v5_to_path(
+            dest_path.to_string_lossy().into_owned(),
+            min_png(),
+            b"{\"k\":1}".to_vec(),
+            computed_path.to_string_lossy().into_owned(),
+            raw_path.to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        let file = std::fs::read(&dest).unwrap();
+        assert_eq!(v5_extract_raw(&file).unwrap(), raw);
+        let head = v5_parse_head(&file).unwrap();
+        assert_eq!(head.metadata_json, b"{\"k\":1}");
+
+        let patched = dir.join("patched.neurofeed");
+        v5_rewrite_head_to_path(
+            dest.clone(),
+            patched.to_string_lossy().into_owned(),
+            b"{\"notes\":\"hi\"}".to_vec(),
+            Vec::new(),
+        )
+        .unwrap();
+        let patched_bytes = std::fs::read(&patched).unwrap();
+        assert_eq!(v5_extract_raw(&patched_bytes).unwrap(), raw);
+        let patched_head = v5_parse_head_from_path(patched.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(patched_head.metadata_json, b"{\"notes\":\"hi\"}");
+        assert_eq!(patched_head.thumbnail, min_png());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn v5_encode_to_path_does_not_hold_whole_raw_vec() {
+        let dir = std::env::temp_dir().join(format!(
+            "nf_v5_big_{}_{}",
+            std::process::id(),
+            now_secs() as u64
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let raw_path = dir.join("big.raw");
+        let dest_path = dir.join("big.neurofeed");
+        let size = 8 * 1024 * 1024u64;
+        {
+            let mut f = File::create(&raw_path).unwrap();
+            f.set_len(size).unwrap();
+            f.seek(SeekFrom::Start(0)).unwrap();
+            let mut hdr = session_header_bytes();
+            hdr.extend_from_slice(b"HEADMARK");
+            f.write_all(&hdr).unwrap();
+            f.seek(SeekFrom::End(-16)).unwrap();
+            f.write_all(b"NFEDBIN-TAILMARK").unwrap();
+        }
+        let dest = container_encode_v5_to_path(
+            dest_path.to_string_lossy().into_owned(),
+            Vec::new(),
+            b"{}".to_vec(),
+            String::new(),
+            raw_path.to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        let dest_len = std::fs::metadata(&dest).unwrap().len();
+        assert!(dest_len >= size);
+        let mut f = File::open(&dest).unwrap();
+        let mut tail = [0u8; 16];
+        f.seek(SeekFrom::End(-16)).unwrap();
+        f.read_exact(&mut tail).unwrap();
+        assert_eq!(&tail, b"NFEDBIN-TAILMARK");
+        let header_bytes = read_file_range(&dest, 0, V5_HEADER_SIZE as u64).unwrap();
+        let header = v5_parse_header(&header_bytes).unwrap();
+        let mut raw_magic = [0u8; 8];
+        f.seek(SeekFrom::Start(header.raw_offset)).unwrap();
+        f.read_exact(&mut raw_magic).unwrap();
+        assert_eq!(raw_magic, HEADER_MAGIC_BYTES);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

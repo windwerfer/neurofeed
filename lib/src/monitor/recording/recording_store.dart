@@ -40,20 +40,21 @@ class RecordingStore {
       debugPrint('[monitor] publish: not a recording v5 ($name)');
       return;
     }
-    final bytes = Uint8List.fromList(await scratchV5.readAsBytes());
     await _storage.ensureDir();
-    await _storage.writeFileAtomic(name, bytes);
+    await _storage.copyFromPath(name, scratchV5.path);
 
     RecordingMetadata meta;
     Uint8List thumb;
     ComputedScalars scalars = const ComputedScalars();
     try {
-      final head = ffi.v5ParseHead(bytes: bytes);
+      final head = await ffi.v5ParseHeadFromPath(path: scratchV5.path);
       thumb = head.thumbnail;
       final decoded = jsonDecode(utf8.decode(head.metadataJson));
       meta = RecordingMetadata.fromJson(decoded as Map<String, dynamic>);
       try {
-        scalars = extractComputedScalars(ffi.v5ExtractComputed(bytes: bytes));
+        scalars = extractComputedScalars(
+          await ffi.v5ExtractComputedFromPath(path: scratchV5.path),
+        );
       } catch (_) {}
     } catch (e) {
       debugPrint('[monitor] publish: parse failed: $e');
@@ -97,7 +98,7 @@ class RecordingStore {
         notesPreview: meta.notes.isEmpty
             ? null
             : (meta.notes.length > 50 ? meta.notes.substring(0, 50) : meta.notes),
-        fileSize: bytes.length,
+        fileSize: await scratchV5.length(),
         mtime: now.millisecondsSinceEpoch,
         thumbnail: thumb.isNotEmpty ? thumb : null,
         createdAt: now,

@@ -160,9 +160,6 @@ Future<RecoverableRecording?> _assembleTemps({
   required _RecordingScratch files,
 }) async {
   try {
-    final raw = files.raw != null && await files.raw!.exists()
-        ? await files.raw!.readAsBytes()
-        : Uint8List(0);
     final computed = files.computed != null && await files.computed!.exists()
         ? await files.computed!.readAsBytes()
         : Uint8List(0);
@@ -172,8 +169,12 @@ Future<RecoverableRecording?> _assembleTemps({
       id: id,
       prefix: 'recording',
       metadataJson: metadataJson,
-      rawBody: raw,
-      computedJsonl: computed,
+      rawPath: files.raw != null && await files.raw!.exists()
+          ? files.raw!.path
+          : '',
+      computedPath: files.computed != null && await files.computed!.exists()
+          ? files.computed!.path
+          : '',
     );
     await _deleteTemps(files);
     debugPrint('[monitor-crash] assembled ${file.uri.pathSegments.last}');
