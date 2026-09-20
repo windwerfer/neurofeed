@@ -2,12 +2,17 @@
 
 **Branch:** `refactor/spine`
 
-**Now:** Data-plane **spine contract** first
-([spine/data-plane-contract.md](spine/data-plane-contract.md) — Draft /
-freeze-in-progress), then Rust-owned implementation (acquisition / DSP /
-feature registry / scratch writer; thin Dart views). Hybrid `MuseEventDto` +
-off-UI recorder is a short bridge only, not the end state. Do not reopen
-feedback pipeline Key Decisions.
+**Now:** Implement the frozen data-plane spine via a **coordinator
+thread**. Governing spec:
+[spine/data-plane-contract_grok-build.md](spine/data-plane-contract_grok-build.md).
+Governing handoff (prompts, gates, one commit per PR):
+[spine/handoff-spine.md](spine/handoff-spine.md).
+Do not implement from archived Grokbot
+[archive/data-plane-contract.md](archive/data-plane-contract.md).
+
+The coordinator does **not** code or review diffs. It spawns one
+subagent per PR (1→7), waits for `PASS` + matching commit, then the
+next. Do not reopen feedback pipeline Key Decisions.
 
 **Aside (not this branch):** Spur A / CBraMod encoder + A-vig guardrail lived
 on `feat/spur-a-cbramod-guardrail` — pack `assets/packs/cbramod-a-vig-full/`,
@@ -15,7 +20,8 @@ Candle CPU forward latency still TBD. Do not mix Spur A into spine PRs unless
 explicitly asked.
 
 Do not unlock Crown Start, reopen Connect UX, or change the v5 68-byte header
-in spine work. Bands Y is **dB display** (storage linear). Do not add
+**size** / tags 1–10. Outer zstd on the container raw section is **deleted**
+(PR 3), not dual-read. Bands Y is **dB display** (storage linear). Do not add
 averaging, a Bands strip on Spectrogram, Spectrogram FFT-window chrome, or
 `SMOOTH` / `REAL TIME` Bands chrome. Do not pause `SweepBuffer` / `BandCache`
 on view change.
@@ -24,12 +30,14 @@ on view change.
 
 - Crown *run* (quality vectors, computed frames, charts device-aware).
 - Making Crown / Notion OSC connect (or OSC discovery) work.
-- Android foreground service so recording survives app background.
 - On-device QA leftover boxes in [feedback/todos.md](feedback/todos.md).
 - Publish `third_party/edf_export` to git+tag once export proves out on device.
 - Athena optics raw stream (muse-rs `Optics`, session tag 11). Queued:
   [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md).
 - Spur A CBraMod mobile forward profiling / ship hardening (prior branch).
+- Replacing `MuseEventDto` (D3 declined for this series).
+
+Android FGS for overnight **is** spine PR 7 (not queued).
 
 ## How to verify BLE (still)
 

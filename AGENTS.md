@@ -78,7 +78,7 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   inhibit-out only (not dirty, not below-the-line without a failed
   inhibit); reward stroke stays series color; do not reuse monitor graph
   widgets.
-- Data-plane / recording spine: follow [`.ai/spine/data-plane-contract.md`](.ai/spine/data-plane-contract.md) (Key Decisions). Intentional deviations need a written why. Sibling to the feedback pipeline contract — do not reopen feedback Key Decisions for spine work.
+- Data-plane / recording spine: follow [`.ai/spine/data-plane-contract_grok-build.md`](.ai/spine/data-plane-contract_grok-build.md) (Frozen Key Decisions). Handoff: [`.ai/spine/handoff-spine.md`](.ai/spine/handoff-spine.md). Intentional deviations need a written why. Sibling to the feedback pipeline contract — do not reopen feedback Key Decisions for spine work.
 - If you change on-screen copy or primary chrome (status bar, sidebar, connect
   window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
   Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
@@ -95,7 +95,7 @@ Tests: [`.ai/test-matrix.md`](.ai/test-matrix.md). Audio engine:
 Format/cache: `README_feedback_format.md`, `README_history_cache.md`.
 Trust graphs: [`.ai/trust-graphs.md`](.ai/trust-graphs.md) (implemented).
 Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
-Data-plane spine: [`.ai/spine/data-plane-contract.md`](.ai/spine/data-plane-contract.md) (draft / freeze-in-progress).
+Data-plane spine: [`.ai/spine/data-plane-contract_grok-build.md`](.ai/spine/data-plane-contract_grok-build.md) (**Frozen**). Coordinator handoff: [`.ai/spine/handoff-spine.md`](.ai/spine/handoff-spine.md).
 
 ## Project layout
 ```

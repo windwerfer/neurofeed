@@ -24,9 +24,15 @@ do/don't, then this folder for maps.
 
 ## Spine
 
+Governing for branch `refactor/spine`. Implement from these files only.
+Do **not** implement from archived Grokbot
+[`archive/data-plane-contract.md`](archive/data-plane-contract.md)
+(gone from `spine/`; not live).
+
 | File | Contents |
 |------|----------|
-| [spine/data-plane-contract.md](spine/data-plane-contract.md) | **Draft / freeze-in-progress** — acquisition → Flutter subscribe → capture data plane (branch `refactor/spine`). Sibling to feedback/pipeline-contract.md; do not reopen feedback Key Decisions. |
+| [spine/data-plane-contract_grok-build.md](spine/data-plane-contract_grok-build.md) | **Frozen / governing** — acquisition → capture → Flutter subscribe. D1–D3 accepted. Sibling to feedback/pipeline-contract.md; do not reopen feedback Key Decisions. |
+| [spine/handoff-spine.md](spine/handoff-spine.md) | **Governing** coordinator handoff: sequential subagents, one commit per PR (1–7). |
 
 ## Feedback
 
