@@ -1,25 +1,24 @@
 # Active Task
 
-**Branch:** `feat/spur-a-cbramod-guardrail`
+**Branch:** `refactor/spine`
 
-**Now:** Spur A — frozen **CBraMod** encoder (Candle CPU) + A-vig HeadALinear
-guardrail path. Pack `assets/packs/cbramod-a-vig-full/`. Encoder weights are
-SHA-pinned Apache-2.0 (`pretrained_weights.pth`); **not** committed — load from
-model dir / `.local/cbramod-fixtures/` for tests. Ready gate: Rust
-`encoder_forward_ready` (Candle load must succeed; Dart
-`kCbramodEncoderForwardReady` is compile-time link only). **CPU/mobile Candle
-forward latency TBD** (not profiled). Feature IDs: `ai.a_vig`, `ai.wake_light`,
-deprecated alias `ai.drowsiness`. Optional REVE remains gated import (RLX CPU).
-**LUNA removed** from ship path.
+**Now:** Data-plane **spine contract** first
+([spine/data-plane-contract.md](spine/data-plane-contract.md) — Draft /
+freeze-in-progress), then Rust-owned implementation (acquisition / DSP /
+feature registry / scratch writer; thin Dart views). Hybrid `MuseEventDto` +
+off-UI recorder is a short bridge only, not the end state. Do not reopen
+feedback pipeline Key Decisions.
 
-Window: **2 s @ 256 Hz** (512 samples) Muse AF7/AF8/TP9/TP10 → resample/patch →
-mean-pool 200-d → head → FeatureDto **P(class 1)**.
+**Aside (not this branch):** Spur A / CBraMod encoder + A-vig guardrail lived
+on `feat/spur-a-cbramod-guardrail` — pack `assets/packs/cbramod-a-vig-full/`,
+Candle CPU forward latency still TBD. Do not mix Spur A into spine PRs unless
+explicitly asked.
 
-Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
-or the v5 68-byte header. Bands Y is **dB display** (storage linear).
-Do not add averaging, a Bands strip on Spectrogram, Spectrogram FFT-window
-chrome, or `SMOOTH` / `REAL TIME` Bands chrome. Do not pause `SweepBuffer`
-/ `BandCache` on view change.
+Do not unlock Crown Start, reopen Connect UX, or change the v5 68-byte header
+in spine work. Bands Y is **dB display** (storage linear). Do not add
+averaging, a Bands strip on Spectrogram, Spectrogram FFT-window chrome, or
+`SMOOTH` / `REAL TIME` Bands chrome. Do not pause `SweepBuffer` / `BandCache`
+on view change.
 
 ## Queued elsewhere (not this branch)
 
@@ -30,6 +29,7 @@ chrome, or `SMOOTH` / `REAL TIME` Bands chrome. Do not pause `SweepBuffer`
 - Publish `third_party/edf_export` to git+tag once export proves out on device.
 - Athena optics raw stream (muse-rs `Optics`, session tag 11). Queued:
   [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md).
+- Spur A CBraMod mobile forward profiling / ship hardening (prior branch).
 
 ## How to verify BLE (still)
 

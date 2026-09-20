@@ -22,6 +22,12 @@ do/don't, then this folder for maps.
 | [headset-fit.md](headset-fit.md) | Pad colors, Classic vs Athena, status-bar dots |
 | [export.md](export.md) | History export: PDF / PNG / CSV / EDF+ |
 
+## Spine
+
+| File | Contents |
+|------|----------|
+| [spine/data-plane-contract.md](spine/data-plane-contract.md) | **Draft / freeze-in-progress** — acquisition → Flutter subscribe → capture data plane (branch `refactor/spine`). Sibling to feedback/pipeline-contract.md; do not reopen feedback Key Decisions. |
+
 ## Feedback
 
 | File | Contents |
