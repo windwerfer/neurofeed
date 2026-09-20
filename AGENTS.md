@@ -123,6 +123,7 @@ lib/src/feedback/           session orchestrator + lanes
   trust/                    live Reward / Guard / inhibit graphs + nerd sheet
 lib/src/spine/              capture / assemble Dart adapters
   capture_client.dart       start/stop/assemble/sidecar FFI
+  capture_foreground.dart   Android FGS start/stop for keepable capture
   scratch_writer.dart       SessionRecorder (prefix default `session`)
   assemble.dart             assembleV5Container, writeScratchV5(prefix:)
 lib/src/session_v5/         interim FFI helpers / ComputedFrame / DeviceInfoV5
@@ -183,7 +184,9 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `session_v5/placeholder_webp.dart`. Scratch writer:
   `lib/src/spine/scratch_writer.dart` (`SessionRecorder`). Capture FFI:
   `lib/src/spine/capture_client.dart` over `rust/src/spine/capture.rs`
-  (FRB `rust/src/api/capture.rs`). Old paths (`session_v5/assemble.dart`,
+  (FRB `rust/src/api/capture.rs`). Android keepable-capture FGS:
+  `lib/src/spine/capture_foreground.dart` + `CaptureForegroundService`
+  (`connectedDevice`, same process; not `tmp_`). Old paths (`session_v5/assemble.dart`,
   `session_v5/scratch_writer.dart`, `feedback/session_assembler.dart`,
   `charts/session_recorder.dart`, `feedback/computed_frame.dart`,
   `feedback/session_v5_models.dart`) re-export.

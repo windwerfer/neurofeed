@@ -330,6 +330,7 @@ class MonitorController extends Notifier<MonitorState> {
       kind: CaptureKind.idle,
       electrodeNames: state.electrodeNames,
       channelCount: state.channelCount,
+      captureStartedAtMs: promptSave ? state.captureStartedAtMs : null,
       pendingScratchPath: promptSave ? file.path : null,
     );
     debugPrint('[monitor] recording stop ${file.path}');

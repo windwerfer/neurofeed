@@ -1313,15 +1313,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     } catch (e, st) {
       debugPrint('[feedback] end: scratch v5 assemble failed: $e\n$st');
     }
+    _setPhase(
+      FeedbackPhase.ended,
+      extra: 'scratch=${_recorder.scratchV5Path ?? 'null'}',
+    );
     if (!_recorder.isRecording) {
       await _ref
           .read(monitorControllerProvider.notifier)
           .releaseFeedbackLease();
     }
-    _setPhase(
-      FeedbackPhase.ended,
-      extra: 'scratch=${_recorder.scratchV5Path ?? 'null'}',
-    );
     await _audio.stop();
     await _audio.playEndChime();
   }

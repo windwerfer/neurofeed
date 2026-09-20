@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
+import 'package:neurofeed/src/spine/capture_foreground.dart';
 
 const kSaveRecordingTitle = 'Save recording?';
 const kIncompleteRecordingTitle = 'Incomplete recording detected';
@@ -68,14 +70,28 @@ Future<void> showRecordingCrashRecoveryDialog(
   final recovered = await scanRecoverableRecordings(scratchDirectory(storage));
   if (recovered.isEmpty) return;
   final store = await ref.read(recordingStoreProvider.future);
-  for (final rec in recovered) {
-    if (!context.mounted) return;
-    await showRecordingSaveDiscardDialog(
-      context: context,
-      title: kIncompleteRecordingTitle,
-      onSave: () => store.publish(rec.scratchV5),
-      onDiscard: () => store.discard(rec.scratchV5),
-    );
+  await CaptureForeground.setRecordingCrashHold(true);
+  await CaptureForeground.syncFromRef(ref);
+  try {
+    for (final rec in recovered) {
+      if (!context.mounted) return;
+      await showRecordingSaveDiscardDialog(
+        context: context,
+        title: kIncompleteRecordingTitle,
+        onSave: () => store.publish(rec.scratchV5),
+        onDiscard: () => store.discard(rec.scratchV5),
+      );
+    }
+  } finally {
+    await CaptureForeground.setRecordingCrashHold(false);
+    if (context.mounted) {
+      await CaptureForeground.syncFromRef(ref);
+    } else {
+      await CaptureForeground.sync(
+        captureKind: CaptureKind.idle,
+        unsavedSession: false,
+      );
+    }
   }
 }
 
