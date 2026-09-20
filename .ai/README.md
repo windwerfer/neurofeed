@@ -7,6 +7,7 @@ do/don't, then this folder for maps.
 
 | File | Contents |
 |------|----------|
+| [contracts/](contracts/) | **Frozen contracts** (pipeline, data-plane, session format). What must stay true. |
 | [active-task.md](active-task.md) | Current development focus |
 | [audio-engine.md](audio-engine.md) | **Implemented** SoLoud engine hardening (lifetime, loads, leftover muffle) |
 | [connect-simulator-ux.md](connect-simulator-ux.md) | **Frozen** connect UX: Muse / Neurosity / Simulator + `DeviceKind` Muse\|Neurosity |
@@ -22,23 +23,22 @@ do/don't, then this folder for maps.
 | [headset-fit.md](headset-fit.md) | Pad colors, Classic vs Athena, status-bar dots |
 | [export.md](export.md) | History export: PDF / PNG / CSV / EDF+ |
 
-## Spine
+## Contracts
 
-**Implemented.** Governing freeze:
-[spine/data-plane-contract.md](spine/data-plane-contract.md).
-Do **not** implement from archived Grokbot
-[`archive/data-plane-contract.md`](archive/data-plane-contract.md)
-or re-run [`archive/handoff-spine.md`](archive/handoff-spine.md).
+Landed freezes. Agents read these for what must stay true, not how the
+series was implemented. Queued specs stay under [TODO/](TODO/) until they
+land (Athena optics keeps its implementer detail there).
 
 | File | Contents |
 |------|----------|
-| [spine/data-plane-contract.md](spine/data-plane-contract.md) | **Implemented / governing** — acquisition → capture → Flutter subscribe. D1–D3 frozen. Capture fork, streaming assemble, soak, Android FGS landed. Sibling to feedback/pipeline-contract.md; do not reopen feedback Key Decisions. |
+| [contracts/pipeline-contract.md](contracts/pipeline-contract.md) | **Implemented.** Features, protocols, lanes. Crown Start refused. Do not reopen Key Decisions. |
+| [contracts/data-plane-contract.md](contracts/data-plane-contract.md) | **Implemented.** Capture fork, inner zstd, assemble, soak, Android FGS. D1–D3 frozen. Do not re-run [`archive/handoff-spine.md`](archive/handoff-spine.md). |
+| [contracts/session-format-contract.md](contracts/session-format-contract.md) | **Implemented.** `.neurofeed` v5 layout. Human spec: [../README_feedback_format.md](../README_feedback_format.md) (update it if the contract changes). |
 
 ## Feedback
 
 | File | Contents |
 |------|----------|
-| [feedback/pipeline-contract.md](feedback/pipeline-contract.md) | Frozen pipeline spec (PRs 1–7 implemented). Do not reopen Key Decisions. |
 | [feedback/architecture.md](feedback/architecture.md) | Lanes, protocol documents, calibration as implemented |
 | [feedback/todos.md](feedback/todos.md) | Checklist |
 
@@ -57,6 +57,9 @@ pipeline-contract work.
 | [TODO/README.md](TODO/README.md) | Index |
 | [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md) | Athena optical raw stream (muse-rs `Optics`, session tag 11) |
 | [TODO/handoff-athena-optics.md](TODO/handoff-athena-optics.md) | Implementer order, files, LOC |
+| [TODO/session_vs_recording_metadata.md](TODO/session_vs_recording_metadata.md) | Two metadata JSON dialects (mistake). Revisit soon. |
+| [TODO/history-dashboard-unification.md](TODO/history-dashboard-unification.md) | History chips + Feedback overview (locked design) |
+| [TODO/handoff-history-dashboard.md](TODO/handoff-history-dashboard.md) | PR manager: sequential subagents, one commit per PR |
 
 ## Archive
 
