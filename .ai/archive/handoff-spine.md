@@ -4,7 +4,7 @@
 |---|---|
 | Date | 2026-09-20 |
 | Status | **Ready to implement.** Contract frozen. This file is for a **new coordinator thread**, not an implementer. |
-| Spec | [data-plane-contract_grok-build.md](data-plane-contract_grok-build.md) — **Frozen.** D1–D3 accepted. |
+| Spec | [data-plane-contract.md](data-plane-contract.md) — **Frozen.** D1–D3 accepted. |
 | Branch | `refactor/spine` (continue; do **not** open a parallel git branch). |
 | Workflow | Coordinator spawns **one** subagent per PR, **sequential**. Subagent implements + tests + **one git commit** if PASS. Coordinator does **not** code and does **not** review diffs. |
 | Do not mix | Feedback pipeline Key Decisions, Crown Start, Connect UX, monitor graph freezes, Athena optics, Spur A, new `MuseEventDto` replacement (D3), `rust/src/spine/normalize/`. |
@@ -42,7 +42,7 @@ You are the spine coordinator on branch refactor/spine.
 
 Read, in order:
 1. .ai/spine/handoff-spine.md   (this workflow)
-2. .ai/spine/data-plane-contract_grok-build.md  (frozen spec)
+2. .ai/spine/data-plane-contract.md  (frozen spec)
 3. AGENTS.md (pins only; do not reopen freezes)
 
 You do not write application code. You do not review diffs. You do not
@@ -109,7 +109,7 @@ Copy into each prompt (already included below):
 
 **Goal:** Contract + handoff + indexes are the source of truth. Status Frozen.
 
-**In scope:** `.ai/spine/data-plane-contract_grok-build.md` (already Frozen), `.ai/spine/handoff-spine.md`, `.ai/active-task.md`, `.ai/README.md`. No product code.
+**In scope:** `.ai/spine/data-plane-contract.md` (already Frozen), `.ai/spine/handoff-spine.md`, `.ai/active-task.md`, `.ai/README.md`. No product code.
 
 **Pass:** indexes point at the grok-build contract + this handoff; Grokbot path not listed as implementable (file is gone); `git commit` with the frozen subject.
 
@@ -122,11 +122,11 @@ You implement spine PR 1 only on branch refactor/spine.
 
 Read:
 - .ai/spine/handoff-spine.md (PR 1 section)
-- .ai/spine/data-plane-contract_grok-build.md (already Frozen)
+- .ai/spine/data-plane-contract.md (already Frozen)
 - AGENTS.md
 
 Work: make .ai/README.md and .ai/active-task.md point at
-data-plane-contract_grok-build.md + handoff-spine.md as governing.
+data-plane-contract.md + handoff-spine.md as governing.
 Do not edit Rust/Dart product code. Do not start PR 2.
 
 Verify: the README spine table no longer treats a missing Grokbot
@@ -158,7 +158,7 @@ You implement spine PR 2 only on branch refactor/spine.
 
 Read:
 - .ai/spine/handoff-spine.md (PR 2)
-- .ai/spine/data-plane-contract_grok-build.md sections Design load and soak, Two layers
+- .ai/spine/data-plane-contract.md sections Design load and soak, Two layers
 - AGENTS.md
 - .grok/skills/neurofeed-verify/SKILL.md
 
@@ -201,7 +201,7 @@ You implement spine PR 3 only on branch refactor/spine.
 
 Read:
 - .ai/spine/handoff-spine.md (PR 3)
-- .ai/spine/data-plane-contract_grok-build.md (Two layers, Key Decision 3, RAM rules, purge table)
+- .ai/spine/data-plane-contract.md (Two layers, Key Decision 3, RAM rules, purge table)
 - AGENTS.md
 - .grok/skills/neurofeed-verify/SKILL.md
 
@@ -245,7 +245,7 @@ You implement spine PR 4 only on branch refactor/spine.
 
 Read:
 - .ai/spine/handoff-spine.md (PR 4)
-- .ai/spine/data-plane-contract_grok-build.md (Capture API, Threading, Key Decisions 1–2, 5, 9)
+- .ai/spine/data-plane-contract.md (Capture API, Threading, Key Decisions 1–2, 5, 9)
 - AGENTS.md
 - .grok/skills/neurofeed-verify/SKILL.md
 
@@ -283,7 +283,7 @@ You implement spine PR 5 only on branch refactor/spine.
 
 Read:
 - .ai/spine/handoff-spine.md (PR 5)
-- .ai/spine/data-plane-contract_grok-build.md
+- .ai/spine/data-plane-contract.md
 - AGENTS.md
 - .grok/skills/neurofeed-verify/SKILL.md
 
@@ -317,7 +317,7 @@ You implement spine PR 6 only on branch refactor/spine.
 
 Read:
 - .ai/spine/handoff-spine.md (PR 6)
-- .ai/spine/data-plane-contract_grok-build.md (Target tree)
+- .ai/spine/data-plane-contract.md (Target tree)
 - AGENTS.md
 - .grok/skills/neurofeed-verify/SKILL.md
 
@@ -351,7 +351,7 @@ You implement spine PR 7 only on branch refactor/spine.
 
 Read:
 - .ai/spine/handoff-spine.md (PR 7)
-- .ai/spine/data-plane-contract_grok-build.md (Android overnight addendum)
+- .ai/spine/data-plane-contract.md (Android overnight addendum)
 - AGENTS.md
 - .grok/skills/neurofeed-verify/SKILL.md
 
