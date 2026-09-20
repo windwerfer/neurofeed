@@ -1,3 +1,4 @@
+pub mod capture;
 pub mod device_config;
 pub mod edf_export;
 pub mod features;

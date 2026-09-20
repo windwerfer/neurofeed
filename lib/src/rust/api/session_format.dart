@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'session_format.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `crc32`, `encode_imu`, `f32`, `f64`, `finished`, `i16`, `new`, `now_secs`, `parse_records`, `push_f32`, `push_f64`, `push_i16`, `push_u16`, `push_u32`, `skip`, `u16`, `u8`
+// These functions are ignored because they are not marked as `pub`: `copy_all`, `copy_file_range`, `crc32`, `encode_imu`, `f32`, `f64`, `file_len`, `finished`, `i16`, `new`, `now_secs`, `parse_computed_jsonl`, `parse_records`, `push_f32`, `push_f64`, `push_i16`, `push_u16`, `push_u32`, `read_file_range`, `skip`, `u16`, `u8`, `v5_header_bytes`, `zstd_compress_bytes`, `zstd_compress_file_or_empty`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `RecordParser`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
@@ -35,7 +35,10 @@ Uint8List sessionFrameBytes({required List<int> data}) =>
 SessionData sessionParseBody({required List<int> bytes}) =>
     RustLib.instance.api.crateApiSessionFormatSessionParseBody(bytes: bytes);
 
-/// Encode a v5 container: header + thumbnail + metadata(zstd) + computed(zstd) + raw(zstd).
+/// Encode a v5 container: header + thumbnail + metadata(zstd) + computed(zstd)
+/// + raw body copy. The raw section is a byte-for-byte copy of [raw_body]
+/// (already inner-framed). Small fixtures only; keepable captures use
+/// [container_encode_v5_to_path].
 Uint8List containerEncodeV5({
   required List<int> thumbnail,
   required List<int> metadataJson,
@@ -47,6 +50,48 @@ Uint8List containerEncodeV5({
   computedFrames: computedFrames,
   rawBody: rawBody,
 );
+
+/// File-to-file assemble. Copies [raw_path] into the raw section (no outer
+/// zstd). Empty [computed_jsonl_path] or [raw_path] yields an empty section.
+/// Returns [dest_path].
+Future<String> containerEncodeV5ToPath({
+  required String destPath,
+  required List<int> thumbnail,
+  required List<int> metadataJson,
+  required String computedJsonlPath,
+  required String rawPath,
+}) => RustLib.instance.api.crateApiSessionFormatContainerEncodeV5ToPath(
+  destPath: destPath,
+  thumbnail: thumbnail,
+  metadataJson: metadataJson,
+  computedJsonlPath: computedJsonlPath,
+  rawPath: rawPath,
+);
+
+/// Rewrite metadata (and optional thumbnail), copying computed and raw
+/// sections as opaque bytes. Empty [thumbnail] copies the source thumbnail.
+/// Returns [dest_path].
+Future<String> v5RewriteHeadToPath({
+  required String srcPath,
+  required String destPath,
+  required List<int> metadataJson,
+  required List<int> thumbnail,
+}) => RustLib.instance.api.crateApiSessionFormatV5RewriteHeadToPath(
+  srcPath: srcPath,
+  destPath: destPath,
+  metadataJson: metadataJson,
+  thumbnail: thumbnail,
+);
+
+/// Parse v5 head from a file without reading the raw section.
+Future<V5ParsedHead> v5ParseHeadFromPath({required String path}) =>
+    RustLib.instance.api.crateApiSessionFormatV5ParseHeadFromPath(path: path);
+
+/// Extract computed frames from a file without reading the raw section.
+Future<List<ComputedFrame>> v5ExtractComputedFromPath({required String path}) =>
+    RustLib.instance.api.crateApiSessionFormatV5ExtractComputedFromPath(
+      path: path,
+    );
 
 /// Parse v5 header (first 68 bytes).
 V5Header v5ParseHeader({required List<int> bytes}) =>
@@ -60,7 +105,7 @@ V5ParsedHead v5ParseHead({required List<int> bytes}) =>
 List<ComputedFrame> v5ExtractComputed({required List<int> bytes}) =>
     RustLib.instance.api.crateApiSessionFormatV5ExtractComputed(bytes: bytes);
 
-/// Extract raw section (decompressed body).
+/// Extract the raw section as the framed body (no outer zstd).
 Uint8List v5ExtractRaw({required List<int> bytes}) =>
     RustLib.instance.api.crateApiSessionFormatV5ExtractRaw(bytes: bytes);
 

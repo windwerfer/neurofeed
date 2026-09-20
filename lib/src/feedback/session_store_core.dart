@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/feedback/session_sqlite.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
@@ -116,6 +117,22 @@ class SessionStore {
     return v5ExtractRaw(bytes: Uint8List.fromList(bytes));
   }
 
+  /// Filesystem path of a history container. SAF copies into cache first.
+  Future<String?> resolveContainerPath(String id) async {
+    final storage = await _storage;
+    final name = await _fileNameFor(id);
+    if (storage is FileSystemSessionStorage) {
+      final path = '${storage.location}/$name';
+      if (await File(path).exists()) return path;
+      return null;
+    }
+    if (storage is SafSessionStorage) {
+      if (!await storage.fileExists(name)) return null;
+      return storage.copySafFileToCache(name, 'view_$name');
+    }
+    return null;
+  }
+
   /// Full v5 container bytes from the history folder.
   Future<Uint8List?> readContainer(String id) async {
     final storage = await _storage;
@@ -171,26 +188,34 @@ class SessionStore {
       sha256.convert(utf8.encode(storage.location)).toString().substring(0, 16);
 
   /// Persist a finished session into the history folder as a single
-  /// `.neurofeed` container. Pass already-encoded [encodedV5] **or**
-  /// the (thumbnail, computed, raw) parts — both go through [assembleV5Container].
+  /// `.neurofeed` container. Prefer [encodedV5Path] (file copy). [encodedV5]
+  /// and part-wise assemble are small-fixture paths only.
   Future<SessionSummary> publishSession(
     String id,
     SessionMetadata metadata, {
     Uint8List? encodedV5,
+    String? encodedV5Path,
     List<int>? rawBody,
     List<int>? thumbnail,
     List<ComputedFrame>? computedFrames,
   }) async {
     final storage = await _storage;
     await storage.ensureDir();
-    late final Uint8List container;
+    late final int fileSize;
     late final Uint8List thumb;
     late final List<ComputedFrame> frames;
-    if (encodedV5 != null) {
-      container = encodedV5;
-      final head = v5ParseHead(bytes: container);
+    if (encodedV5Path != null) {
+      final head = await v5ParseHeadFromPath(path: encodedV5Path);
       thumb = head.thumbnail;
-      frames = v5ExtractComputed(bytes: container);
+      frames = await v5ExtractComputedFromPath(path: encodedV5Path);
+      await storage.copyFromPath(_containerName(id), encodedV5Path);
+      fileSize = await File(encodedV5Path).length();
+    } else if (encodedV5 != null) {
+      final head = v5ParseHead(bytes: encodedV5);
+      thumb = head.thumbnail;
+      frames = v5ExtractComputed(bytes: encodedV5);
+      await storage.writeFileAtomic(_containerName(id), encodedV5);
+      fileSize = encodedV5.length;
     } else {
       frames = computedFrames ?? const <ComputedFrame>[];
       thumb = Uint8List.fromList(
@@ -198,14 +223,15 @@ class SessionStore {
             ? thumbnail
             : placeholderWebP,
       );
-      container = assembleV5Container(
+      final container = assembleV5Container(
         thumbnail: thumb,
         metadataJson: metadata.toJson(),
         computedFrames: frames,
         rawBody: Uint8List.fromList(rawBody ?? const []),
       );
+      await storage.writeFileAtomic(_containerName(id), container);
+      fileSize = container.length;
     }
-    await storage.writeFileAtomic(_containerName(id), container);
     final scalars = extractComputedScalars(frames);
     final durationS = metadata.durationS != 0
         ? metadata.durationS
@@ -260,7 +286,7 @@ class SessionStore {
                   ? metadata.notes.substring(0, 50)
                   : metadata.notes)
             : null,
-        fileSize: container.length,
+        fileSize: fileSize,
         mtime: DateTime.now().millisecondsSinceEpoch,
         thumbnail: thumb.isNotEmpty ? thumb : null,
         createdAt: DateTime.now(),
@@ -277,89 +303,122 @@ class SessionStore {
   }
 
   /// Replace the free-text notes of an existing session and rewrite the
-  /// v5 container head in place, preserving the thumbnail, computed frames,
-  /// and the raw body. Returns false when the session file is missing
+  /// v5 container head in place, copying thumbnail, computed, and raw
+  /// sections as opaque bytes. Returns false when the session file is missing
   /// or unreadable.
   Future<bool> updateNotes(String id, String notes) async {
     final storage = await _storage;
     final name = await _fileNameFor(id);
-    final bytes = await storage.readFile(name);
-    if (bytes == null || bytes.isEmpty) {
+    if (!await storage.fileExists(name)) {
       debugPrint('[session] updateNotes($id): file not found ($name)');
       return false;
     }
-    final full = Uint8List.fromList(bytes);
-    final head = v5ParseHead(bytes: full);
-    final decoded =
-        jsonDecode(String.fromCharCodes(head.metadataJson))
-            as Map<String, Object?>;
-    decoded['notes'] = notes;
-    final jsonBytes = Uint8List.fromList(
-      const JsonEncoder().convert(decoded).codeUnits,
-    );
-    final rawBody = v5ExtractRaw(bytes: full);
-    final computedFrames = v5ExtractComputed(bytes: full);
-    final container = containerEncodeV5(
-      thumbnail: head.thumbnail,
-      metadataJson: jsonBytes,
-      computedFrames: computedFrames,
-      rawBody: rawBody,
-    );
-    await storage.writeFileAtomic(name, container);
-    final sqlite = await _sqlite;
-    final existing = await sqlite.getSession(id);
-    if (existing != null) {
-      await sqlite.upsertSession(
-        SessionRow(
-          id: existing.id,
-          path: existing.path,
-          formatVersion: existing.formatVersion,
-          appVersion: existing.appVersion,
-          savedAt: existing.savedAt,
-          startedAt: existing.startedAt,
-          durationS: existing.durationS,
-          protocol: existing.protocol,
-          kind: existing.kind,
-          protocolVersion: existing.protocolVersion,
-          deviceName: existing.deviceName,
-          deviceModel: existing.deviceModel,
-          deviceId: existing.deviceId,
-          calibrationProfile: existing.calibrationProfile,
-          recordedChannels: existing.recordedChannels,
-          recordedStreams: existing.recordedStreams,
-          offMeta: existing.offMeta,
-          lenMeta: existing.lenMeta,
-          offComputed: existing.offComputed,
-          lenComputed: existing.lenComputed,
-          offRaw: existing.offRaw,
-          lenRaw: existing.lenRaw,
-          avgHr: existing.avgHr,
-          avgSpo2: existing.avgSpo2,
-          peakAlphaHz: existing.peakAlphaHz,
-          peakAlphaPower: existing.peakAlphaPower,
-          pctInTarget: existing.pctInTarget,
-          avgMovement: existing.avgMovement,
-          guardrailWarnCount: existing.guardrailWarnCount,
-          avgSleepDir: existing.avgSleepDir,
-          signalQualityMean: existing.signalQualityMean,
-          pctQcOk: existing.pctQcOk,
-          markerCount: existing.markerCount,
-          guardrailEngine: existing.guardrailEngine,
-          modelKind: existing.modelKind,
-          modelSha256: existing.modelSha256,
-          feedbackEngine: existing.feedbackEngine,
-          userId: existing.userId,
-          sessionId: existing.sessionId,
-          notesPreview: notes.length > 50 ? notes.substring(0, 50) : notes,
-          fileSize: existing.fileSize,
-          mtime: DateTime.now().millisecondsSinceEpoch,
-          createdAt: existing.createdAt,
-          updatedAt: DateTime.now(),
-        ),
+    Directory? workDir;
+    late final String srcPath;
+    late final String destPath;
+    try {
+      if (storage is FileSystemSessionStorage) {
+        srcPath = '${storage.location}/$name';
+        destPath = '${storage.location}/.$name.notes.tmp';
+      } else if (storage is SafSessionStorage) {
+        workDir = await Directory.systemTemp.createTemp('nf_notes_');
+        srcPath = await storage.copySafFileToCache(name, 'notes_$name');
+        destPath = '${workDir.path}/dst.neurofeed';
+      } else {
+        debugPrint('[session] updateNotes($id): unsupported storage');
+        return false;
+      }
+      final head = await v5ParseHeadFromPath(path: srcPath);
+      final decoded =
+          jsonDecode(String.fromCharCodes(head.metadataJson))
+              as Map<String, Object?>;
+      decoded['notes'] = notes;
+      final jsonBytes = Uint8List.fromList(
+        const JsonEncoder().convert(decoded).codeUnits,
       );
+      await v5RewriteHeadToPath(
+        srcPath: srcPath,
+        destPath: destPath,
+        metadataJson: jsonBytes,
+        thumbnail: Uint8List(0),
+      );
+      final destLen = await File(destPath).length();
+      if (storage is FileSystemSessionStorage) {
+        final target = File(srcPath);
+        final tmp = File(destPath);
+        try {
+          await tmp.rename(target.path);
+        } on FileSystemException {
+          if (await target.exists()) {
+            await target.delete();
+          }
+          await tmp.rename(target.path);
+        }
+      } else {
+        await storage.copyFromPath(name, destPath);
+      }
+      final sqlite = await _sqlite;
+      final existing = await sqlite.getSession(id);
+      if (existing != null) {
+        await sqlite.upsertSession(
+          SessionRow(
+            id: existing.id,
+            path: existing.path,
+            formatVersion: existing.formatVersion,
+            appVersion: existing.appVersion,
+            savedAt: existing.savedAt,
+            startedAt: existing.startedAt,
+            durationS: existing.durationS,
+            protocol: existing.protocol,
+            kind: existing.kind,
+            protocolVersion: existing.protocolVersion,
+            deviceName: existing.deviceName,
+            deviceModel: existing.deviceModel,
+            deviceId: existing.deviceId,
+            calibrationProfile: existing.calibrationProfile,
+            recordedChannels: existing.recordedChannels,
+            recordedStreams: existing.recordedStreams,
+            offMeta: existing.offMeta,
+            lenMeta: existing.lenMeta,
+            offComputed: existing.offComputed,
+            lenComputed: existing.lenComputed,
+            offRaw: existing.offRaw,
+            lenRaw: existing.lenRaw,
+            avgHr: existing.avgHr,
+            avgSpo2: existing.avgSpo2,
+            peakAlphaHz: existing.peakAlphaHz,
+            peakAlphaPower: existing.peakAlphaPower,
+            pctInTarget: existing.pctInTarget,
+            avgMovement: existing.avgMovement,
+            guardrailWarnCount: existing.guardrailWarnCount,
+            avgSleepDir: existing.avgSleepDir,
+            signalQualityMean: existing.signalQualityMean,
+            pctQcOk: existing.pctQcOk,
+            markerCount: existing.markerCount,
+            guardrailEngine: existing.guardrailEngine,
+            modelKind: existing.modelKind,
+            modelSha256: existing.modelSha256,
+            feedbackEngine: existing.feedbackEngine,
+            userId: existing.userId,
+            sessionId: existing.sessionId,
+            notesPreview: notes.length > 50 ? notes.substring(0, 50) : notes,
+            fileSize: destLen,
+            mtime: DateTime.now().millisecondsSinceEpoch,
+            createdAt: existing.createdAt,
+            updatedAt: DateTime.now(),
+            thumbnail: existing.thumbnail,
+          ),
+        );
+      }
+      debugPrint('[session] updateNotes($id): notes saved ($name)');
+      return true;
+    } finally {
+      if (workDir != null) {
+        try {
+          await workDir.delete(recursive: true);
+        } catch (_) {}
+      }
     }
-    debugPrint('[session] updateNotes($id): notes saved ($name)');
-    return true;
   }
 
   /// Delete one session from history (the `.neurofeed` file). Returns

@@ -1,35 +1,43 @@
 # Active Task
 
-**Branch:** `feat/spur-a-cbramod-guardrail`
+**Branch:** `refactor/spine`
 
-**Now:** Spur A — frozen **CBraMod** encoder (Candle CPU) + A-vig HeadALinear
-guardrail path. Pack `assets/packs/cbramod-a-vig-full/`. Encoder weights are
-SHA-pinned Apache-2.0 (`pretrained_weights.pth`); **not** committed — load from
-model dir / `.local/cbramod-fixtures/` for tests. Ready gate: Rust
-`encoder_forward_ready` (Candle load must succeed; Dart
-`kCbramodEncoderForwardReady` is compile-time link only). **CPU/mobile Candle
-forward latency TBD** (not profiled). Feature IDs: `ai.a_vig`, `ai.wake_light`,
-deprecated alias `ai.drowsiness`. Optional REVE remains gated import (RLX CPU).
-**LUNA removed** from ship path.
+**Now:** Implement the frozen data-plane spine via a **coordinator
+thread**. Governing spec:
+[spine/data-plane-contract_grok-build.md](spine/data-plane-contract_grok-build.md).
+Governing handoff (prompts, gates, one commit per PR):
+[spine/handoff-spine.md](spine/handoff-spine.md).
+Do not implement from archived Grokbot
+[archive/data-plane-contract.md](archive/data-plane-contract.md).
 
-Window: **2 s @ 256 Hz** (512 samples) Muse AF7/AF8/TP9/TP10 → resample/patch →
-mean-pool 200-d → head → FeatureDto **P(class 1)**.
+The coordinator does **not** code or review diffs. It spawns one
+subagent per PR (1→7), waits for `PASS` + matching commit, then the
+next. Do not reopen feedback pipeline Key Decisions.
 
-Do not reopen pipeline-contract Key Decisions, Crown Start, Connect UX,
-or the v5 68-byte header. Bands Y is **dB display** (storage linear).
-Do not add averaging, a Bands strip on Spectrogram, Spectrogram FFT-window
-chrome, or `SMOOTH` / `REAL TIME` Bands chrome. Do not pause `SweepBuffer`
-/ `BandCache` on view change.
+**Aside (not this branch):** Spur A / CBraMod encoder + A-vig guardrail lived
+on `feat/spur-a-cbramod-guardrail` — pack `assets/packs/cbramod-a-vig-full/`,
+Candle CPU forward latency still TBD. Do not mix Spur A into spine PRs unless
+explicitly asked.
+
+Do not unlock Crown Start, reopen Connect UX, or change the v5 68-byte header
+**size** / tags 1–10. Outer zstd on the container raw section is **deleted**
+(PR 3), not dual-read. Bands Y is **dB display** (storage linear). Do not add
+averaging, a Bands strip on Spectrogram, Spectrogram FFT-window chrome, or
+`SMOOTH` / `REAL TIME` Bands chrome. Do not pause `SweepBuffer` / `BandCache`
+on view change.
 
 ## Queued elsewhere (not this branch)
 
 - Crown *run* (quality vectors, computed frames, charts device-aware).
 - Making Crown / Notion OSC connect (or OSC discovery) work.
-- Android foreground service so recording survives app background.
 - On-device QA leftover boxes in [feedback/todos.md](feedback/todos.md).
 - Publish `third_party/edf_export` to git+tag once export proves out on device.
 - Athena optics raw stream (muse-rs `Optics`, session tag 11). Queued:
   [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md).
+- Spur A CBraMod mobile forward profiling / ship hardening (prior branch).
+- Replacing `MuseEventDto` (D3 declined for this series).
+
+Android FGS for overnight **is** spine PR 7 (not queued).
 
 ## How to verify BLE (still)
 

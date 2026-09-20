@@ -15,6 +15,7 @@ import 'package:neurofeed/src/feedback/crash_recovery.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
+import 'package:neurofeed/src/spine/capture_foreground.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/status_bar.dart';
 import 'package:neurofeed/src/streaming/streaming_controller.dart';
@@ -314,6 +315,7 @@ Future<void> main() async {
   await AgentServer.start(container, agentCfg);
   final notifier = container.read(appStateProvider.notifier);
   container.read(monitorControllerProvider);
+  CaptureForeground.bind(container);
   runApp(
     UncontrolledProviderScope(
       container: container,

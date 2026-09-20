@@ -3,12 +3,12 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/session_v5/computed_frame.dart' as dart;
 import 'package:neurofeed/src/feedback/computed_sampler.dart';
 import 'package:neurofeed/src/feedback/crash_recovery.dart';
 import 'package:neurofeed/src/feedback/feedback_recorder.dart';
-import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/feedback/session_chart_data.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
@@ -128,7 +128,7 @@ void main() {
           ),
         ),
       );
-      rec.flushRaw();
+      await rec.flushRaw();
       final temps = await rec.readTemps();
       expect(temps, isNotNull);
       final parsed = sessionParseBody(bytes: temps!.raw);

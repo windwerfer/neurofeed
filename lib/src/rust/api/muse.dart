@@ -70,7 +70,7 @@ Stream<MuseEventDto> subscribeEvents() =>
     RustLib.instance.api.crateApiMuseSubscribeEvents();
 
 /// Connect to a Neurosity Crown/Notion device via BLE.
-/// Uses the neurosity-ble-rs crate. (Phase D: not yet implemented - returns placeholder)
+/// Stub: not implemented — returns a placeholder connection (Crown Start refused).
 Future<ConnectionStatus> crownConnect({required String deviceId}) =>
     RustLib.instance.api.crateApiMuseCrownConnect(deviceId: deviceId);
 

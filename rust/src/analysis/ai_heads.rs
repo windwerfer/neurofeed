@@ -18,6 +18,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
+use flutter_rust_bridge::frb;
+
 use anyhow::{bail, Context};
 
 /// Primary CBraMod A-vig (sleep/drowsy) score.
@@ -42,12 +44,23 @@ const N_CLASSES: usize = 2;
 
 /// Pinned SHA-256 for shipped f32bin heads (matches pack_manifest head_f32bin_sha256).
 const F32BIN_SHA256: &[(&str, &str)] = &[
-    ("head_a_vig_linear.f32bin", "2695ce91cc5e9cbb8d6f29fc4bfff9b6f1294c106cced6fa2657d4bf6c26ba96"),
-    ("head_c_wake_light_linear.f32bin", "cc0415bc1d3fac7c5f7113315b609185b9d1dbc30ffec77c4448c99b060dc925"),
-    ("head_a_vig_reve_linear.f32bin", "c032abbfa40fb148d3830b41bde4a65bc09144c99106b401872d080daa008256"),
-    ("head_c_wake_light_reve_linear.f32bin", "329ad140681ebe8354257bcb63d6d557596b71a3d41fcd4947001e494b825fe9"),
+    (
+        "head_a_vig_linear.f32bin",
+        "2695ce91cc5e9cbb8d6f29fc4bfff9b6f1294c106cced6fa2657d4bf6c26ba96",
+    ),
+    (
+        "head_c_wake_light_linear.f32bin",
+        "cc0415bc1d3fac7c5f7113315b609185b9d1dbc30ffec77c4448c99b060dc925",
+    ),
+    (
+        "head_a_vig_reve_linear.f32bin",
+        "c032abbfa40fb148d3830b41bde4a65bc09144c99106b401872d080daa008256",
+    ),
+    (
+        "head_c_wake_light_reve_linear.f32bin",
+        "329ad140681ebe8354257bcb63d6d557596b71a3d41fcd4947001e494b825fe9",
+    ),
 ];
-
 
 #[derive(Clone, Debug)]
 pub struct LinearHead {
@@ -137,13 +150,18 @@ fn expected_dim(feature_id: &str) -> Option<usize> {
     }
 }
 
+#[frb(ignore)]
 struct Registry {
     heads: HashMap<String, LinearHead>,
 }
 
 fn registry() -> &'static Mutex<Registry> {
     static REG: OnceLock<Mutex<Registry>> = OnceLock::new();
-    REG.get_or_init(|| Mutex::new(Registry { heads: HashMap::new() }))
+    REG.get_or_init(|| {
+        Mutex::new(Registry {
+            heads: HashMap::new(),
+        })
+    })
 }
 
 fn lock() -> std::sync::MutexGuard<'static, Registry> {
@@ -169,7 +187,8 @@ pub fn loaded_feature_ids() -> Vec<String> {
 /// Looks for `heads/*.f32bin` first, then `heads/*.pt` (zip storages).
 pub fn load_pack(feature_id: &str, pack_dir: &Path) -> anyhow::Result<String> {
     let id = canonical_feature_id(feature_id).to_string();
-    let in_dim = expected_dim(&id).with_context(|| format!("unknown AI feature id: {feature_id}"))?;
+    let in_dim =
+        expected_dim(&id).with_context(|| format!("unknown AI feature id: {feature_id}"))?;
     let (head_path, head) = load_head_from_dir(pack_dir, in_dim, N_CLASSES, &id)?;
     let pack_id = pack_dir
         .file_name()
@@ -286,7 +305,10 @@ fn try_load_named(
                 .unwrap_or("model")
                 .to_string();
             let id = canonical_feature_id(feature_id).to_string();
-            let desc = format!("{id} ← {pack_id} ({in_dim}→{N_CLASSES}) from {}", p.display());
+            let desc = format!(
+                "{id} ← {pack_id} ({in_dim}→{N_CLASSES}) from {}",
+                p.display()
+            );
             let mut head = head;
             head.pack_id = pack_id;
             head.feature_id = id.clone();
@@ -311,7 +333,11 @@ fn load_head_from_dir(
     let mut f32s = Vec::new();
     let mut pts = Vec::new();
     let heads = dir.join("heads");
-    let search = if heads.is_dir() { heads } else { dir.to_path_buf() };
+    let search = if heads.is_dir() {
+        heads
+    } else {
+        dir.to_path_buf()
+    };
     if search.is_dir() {
         for ent in fs::read_dir(&search)? {
             let ent = ent?;
@@ -389,7 +415,11 @@ fn load_head_pt_zip(path: &Path, in_dim: usize, n_classes: usize) -> anyhow::Res
     }
     let w = weight_bytes.context("head .pt missing data/0 (weight)")?;
     let b = bias_bytes.context("head .pt missing data/1 (bias)")?;
-    anyhow::ensure!(w.len() == in_dim * n_classes * 4, "weight bytes {}", w.len());
+    anyhow::ensure!(
+        w.len() == in_dim * n_classes * 4,
+        "weight bytes {}",
+        w.len()
+    );
     anyhow::ensure!(b.len() == n_classes * 4, "bias bytes {}", b.len());
     let mut weight = Vec::with_capacity(in_dim * n_classes);
     for chunk in w.chunks_exact(4) {
@@ -436,10 +466,7 @@ pub fn apply_feature(
 
 /// Whether [feature_id] is backed by the CBraMod encoder (needs native forward).
 pub fn is_cbramod_backed(feature_id: &str) -> bool {
-    matches!(
-        canonical_feature_id(feature_id),
-        ID_A_VIG | ID_WAKE_LIGHT
-    )
+    matches!(canonical_feature_id(feature_id), ID_A_VIG | ID_WAKE_LIGHT)
 }
 
 /// Whether [feature_id] is backed by REVE (gated base + subsample heads).
