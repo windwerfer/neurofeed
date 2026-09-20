@@ -3,11 +3,16 @@
 | Field | Value |
 |---|---|
 | Date | 2026-09-20 |
-| Status | **Ready to implement.** Contract frozen. This file is for a **new coordinator thread**, not an implementer. |
-| Spec | [data-plane-contract.md](data-plane-contract.md) — **Frozen.** D1–D3 accepted. |
-| Branch | `refactor/spine` (continue; do **not** open a parallel git branch). |
+| Status | **Complete.** Contract implemented. Do not re-run this coordinator. |
+| Spec | [../spine/data-plane-contract.md](../spine/data-plane-contract.md) — **Implemented.** D1–D3 frozen. |
+| Branch | landed on `refactor/spine` |
 | Workflow | Coordinator spawns **one** subagent per PR, **sequential**. Subagent implements + tests + **one git commit** if PASS. Coordinator does **not** code and does **not** review diffs. |
 | Do not mix | Feedback pipeline Key Decisions, Crown Start, Connect UX, monitor graph freezes, Athena optics, Spur A, new `MuseEventDto` replacement (D3), `rust/src/spine/normalize/`. |
+
+**Done.** Implementation landed. Live spec:
+[../spine/data-plane-contract.md](../spine/data-plane-contract.md).
+Do not spawn this coordinator. The rest of this file is historical
+order, gates, and prompts.
 
 Read the contract first. This file is order, gates, and paste-ready prompts. Do not relitigate Key Decisions here.
 

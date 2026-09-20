@@ -24,15 +24,15 @@ do/don't, then this folder for maps.
 
 ## Spine
 
-Governing for branch `refactor/spine`. Implement from these files only.
+**Implemented.** Governing freeze:
+[spine/data-plane-contract.md](spine/data-plane-contract.md).
 Do **not** implement from archived Grokbot
 [`archive/data-plane-contract.md`](archive/data-plane-contract.md)
-(gone from `spine/`; not live).
+or re-run [`archive/handoff-spine.md`](archive/handoff-spine.md).
 
 | File | Contents |
 |------|----------|
-| [spine/data-plane-contract.md](spine/data-plane-contract.md) | **Frozen / governing** — acquisition → capture → Flutter subscribe. D1–D3 accepted. Sibling to feedback/pipeline-contract.md; do not reopen feedback Key Decisions. |
-| [spine/handoff-spine.md](spine/handoff-spine.md) | **Governing** coordinator handoff: sequential subagents, one commit per PR (1–7). |
+| [spine/data-plane-contract.md](spine/data-plane-contract.md) | **Implemented / governing** — acquisition → capture → Flutter subscribe. D1–D3 frozen. Capture fork, streaming assemble, soak, Android FGS landed. Sibling to feedback/pipeline-contract.md; do not reopen feedback Key Decisions. |
 
 ## Feedback
 

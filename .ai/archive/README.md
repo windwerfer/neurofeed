@@ -5,7 +5,8 @@ Finished threads and historical notes. Not current orientation — see
 
 | File | What it was |
 |------|-------------|
-| `data-plane-contract.md` | Grokbot spine draft. **Not implementable.** Governing: [../spine/data-plane-contract.md](../spine/data-plane-contract.md) + [../spine/handoff-spine.md](../spine/handoff-spine.md). |
+| `data-plane-contract.md` | Grokbot spine draft. **Not implementable.** Live spec: [../spine/data-plane-contract.md](../spine/data-plane-contract.md) (**Implemented**). |
+| `handoff-spine.md` | Coordinator PR 1–7 for the data-plane spine. **Complete** on `refactor/spine`. Live spec: [../spine/data-plane-contract.md](../spine/data-plane-contract.md). |
 | `handoff-monitor.md` | Monitor series map (PRs 0–7). **Complete.** PR 8 cancelled. Follow-up: Bands PCHIP + 1 s Follow lead + in-pane chips. Live spec: [../monitor.md](../monitor.md). |
 | `handoff-monitor-perf.md` | Graph draw-path perf (PRs 1–7). **Complete.** PR 8 skipped. Live spec: [../monitor.md](../monitor.md). |
 | `monitor-rev6-design.md` | Pre-implementer monitor spec + PR plan. Superseded by [../monitor.md](../monitor.md). |
@@ -21,7 +22,7 @@ Finished threads and historical notes. Not current orientation — see
 | `btleplug_bugreport_1.md` | Upstream-shaped writeup: JNI `ThreadDetached` |
 | `btleplug_bugreport_2.md` | BLE notification death spiral (fixed in `0.12.0-muse-3`, still in `muse-5`) |
 | `lessons-learned.md` | JNI/btleplug attempts that failed before the fork |
-| `graph-todo.md` | July 2026 live-chart / recording plan (Phases 1/3/4 done). Leftover: Android foreground service. |
+| `graph-todo.md` | July 2026 live-chart / recording plan (Phases 1/3/4 done). Android FGS leftover landed in the spine contract. |
 | `muse-rs_batteryindicator.md` | Superseded by [../muse-rs.md](../muse-rs.md) |
 | `trust-graphs.md` | PR 1+2 plan (gray held-back stroke). **Superseded** by [../trust-graphs.md](../trust-graphs.md) (inhibit pane + gray wash). |
 | `handoff-trust-graphs.md` | PR 1+2 files. Inhibit pane is a later follow-up; live spec [../trust-graphs.md](../trust-graphs.md). |
