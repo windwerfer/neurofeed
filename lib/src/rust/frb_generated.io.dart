@@ -3,6 +3,7 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/capture.dart';
 import 'api/device_config.dart';
 import 'api/edf_export.dart';
 import 'api/features.dart';
@@ -114,6 +115,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_box_autoadd_usize(dynamic raw);
 
   @protected
+  CaptureFlushEntry dco_decode_capture_flush_entry(dynamic raw);
+
+  @protected
   ComputedFrame dco_decode_computed_frame(dynamic raw);
 
   @protected
@@ -189,6 +193,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<BandsRecord> dco_decode_list_bands_record(dynamic raw);
 
   @protected
+  List<CaptureFlushEntry> dco_decode_list_capture_flush_entry(dynamic raw);
+
+  @protected
   List<ComputedFrame> dco_decode_list_computed_frame(dynamic raw);
 
   @protected
@@ -223,6 +230,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
+
+  @protected
+  Int32List dco_decode_list_prim_i_32_strict(dynamic raw);
 
   @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
@@ -449,6 +459,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_box_autoadd_usize(SseDeserializer deserializer);
 
   @protected
+  CaptureFlushEntry sse_decode_capture_flush_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ComputedFrame sse_decode_computed_frame(SseDeserializer deserializer);
 
   @protected
@@ -526,6 +541,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<BandsRecord> sse_decode_list_bands_record(SseDeserializer deserializer);
 
   @protected
+  List<CaptureFlushEntry> sse_decode_list_capture_flush_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<ComputedFrame> sse_decode_list_computed_frame(
     SseDeserializer deserializer,
   );
@@ -572,6 +592,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
+
+  @protected
+  Int32List sse_decode_list_prim_i_32_strict(SseDeserializer deserializer);
 
   @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
@@ -842,6 +865,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_usize(BigInt self, SseSerializer serializer);
 
   @protected
+  void sse_encode_capture_flush_entry(
+    CaptureFlushEntry self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_computed_frame(ComputedFrame self, SseSerializer serializer);
 
   @protected
@@ -935,6 +964,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_capture_flush_entry(
+    List<CaptureFlushEntry> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_computed_frame(
     List<ComputedFrame> self,
     SseSerializer serializer,
@@ -1003,6 +1038,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_f_64_strict(
     Float64List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_i_32_strict(
+    Int32List self,
     SseSerializer serializer,
   );
 

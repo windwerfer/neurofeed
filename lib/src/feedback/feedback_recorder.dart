@@ -2,12 +2,13 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:neurofeed/src/session_v5/assemble.dart';
 import 'package:neurofeed/src/session_v5/computed_frame.dart';
-import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/spine/assemble.dart';
+import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 
 /// Wraps [SessionRecorder] with session-aware lifecycle.
 ///
@@ -16,7 +17,7 @@ import 'package:neurofeed/src/settings.dart';
 /// next to the temps, then deletes the temps on success.
 class FeedbackRecorder {
   FeedbackRecorder({Future<SessionStorage>? storage})
-      : _storage = storage ?? _defaultStorage();
+    : _storage = storage ?? _defaultStorage();
 
   final Future<SessionStorage> _storage;
   final SessionRecorder _recorder = SessionRecorder();
@@ -28,6 +29,8 @@ class FeedbackRecorder {
   }
 
   bool get isRecording => _recorder.isRecording;
+
+  bool get usesRustCapture => _recorder.usesRustCapture;
 
   String? get currentFilePath => _scratchV5Path ?? _recorder.currentFilePath;
 
@@ -42,7 +45,9 @@ class FeedbackRecorder {
   }
 
   /// Electrode indices that produced data in the current session recording.
-  Set<int> get recordedChannels => Set.unmodifiable(_recorder.channels);
+  Set<int> get recordedChannels => _recorder.usesRustCapture
+      ? spine.recordedChannelSet()
+      : Set.unmodifiable(_recorder.channels);
 
   /// Streams this recorder is set to persist.
   Set<RecordingStream> get streams => Set.unmodifiable(_recorder.recordStreams);
@@ -92,22 +97,28 @@ class FeedbackRecorder {
   Future<String?> assembleScratchV5(Map<String, Object?> metadataJson) async {
     await _recorder.flush();
     _recorder.stopPeriodicFlush();
-    final temps = await _recorder.readTemps();
     final id = _recorder.sessionId;
     final dir = _recorder.tempDir;
-    if (temps == null || id == null || dir == null) {
+    final rawPath = _recorder.rawPath;
+    if (id == null || dir == null || rawPath == null) {
       debugPrint('[feedback] assembleScratchV5: no active recording');
       return null;
     }
     try {
-      final file = await writeScratchV5(
-        dir: dir,
-        id: id,
-        metadataJson: metadataJson,
-        rawBody: temps.raw,
-        computedJsonl: temps.computed,
-      );
-      await _recorder.cleanupTempFiles();
+      final File file;
+      if (_recorder.usesRustCapture) {
+        file = await spine.assembleCaptureV5(metadataJson: metadataJson);
+        _recorder.detachAfterAssemble();
+      } else {
+        file = await writeScratchV5(
+          dir: dir,
+          id: id,
+          metadataJson: metadataJson,
+          rawPath: rawPath,
+          computedPath: _recorder.computedPath,
+        );
+        await _recorder.cleanupTempFiles();
+      }
       _scratchV5Path = file.path;
       debugPrint(
         '[feedback] assembleScratchV5: ${file.path} (${file.lengthSync()}B)',

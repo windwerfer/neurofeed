@@ -15,6 +15,8 @@ rust_lib_neurofeed
   simulator.rs       spawn_simulator: Eeg/Ppg/IMU/Telemetry (`sim:*`)
   reve.rs            model + guardrail FFI
   session_format.rs  raw body + .neurofeed v5 container
+  capture.rs         FRB re-exports of spine capture
+  spine/{capture,soak}.rs  writer thread + streaming assemble + soak
   analysis/{gesture,cbramod,cbramod_encoder,reve,guardrail,ai_heads}.rs
         │
         ├─ muse-rs 0.1.1 (patched fork of eugenehp 0.1.0)
@@ -86,12 +88,14 @@ Skip-cal on a sim seeds a synthetic baseline so percentile/`inTarget` work.
 `.neurofeed` v5, Rust-owned (`rust/src/api/session_format.rs`):
 
 ```
-[68-byte header][WebP thumb][metadata zstd][computed 1 Hz zstd][raw zstd]
+[68-byte header][WebP thumb][metadata zstd][computed 1 Hz zstd][raw body]
 ```
 
-Raw body is format v4 (f32 payloads, f64 timestamps), framed zstd. Dart
+Raw body is format v4 (f32 payloads, f64 timestamps), inner-framed zstd.
+The container raw section is a copy of that body (no outer zstd). Dart
 delegates: `encodeSessionEvent` / `sessionFrameBytes` / `sessionParseBody` /
-`containerEncodeV5` / `v5ParseHead` / `v5ExtractComputed`.
+`containerEncodeV5` / `containerEncodeV5ToPath` / `v5ParseHead` /
+`v5ExtractComputed`.
 
 History list: SQLite `session_metadata.db` (typed columns + thumbnail BLOB,
 `kind` `feedback` \| `recording`). `SessionStore.list()` is sqlite-only.
@@ -100,8 +104,9 @@ dashboard/history `v5ExtractComputed` → `prepareChartDataFromComputed`.
 Save publishes to the history folder. Feedback crash recovery scans
 `session_*` in `scratchDirectory`; recordings use a separate scanner.
 No `SessionOverview` / 400-bucket `metadata.summary`. The list preview is
-the WebP thumbnail. Assembler: `lib/src/session_v5/assemble.dart`
-(re-export `feedback/session_assembler.dart`).
+the WebP thumbnail. Assembler: `lib/src/spine/assemble.dart`
+(re-export `feedback/session_assembler.dart`). Capture writer:
+`rust/src/spine/capture.rs` with Dart adapters in `lib/src/spine/`.
 
 ## Monitor
 

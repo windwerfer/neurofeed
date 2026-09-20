@@ -1313,15 +1313,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     } catch (e, st) {
       debugPrint('[feedback] end: scratch v5 assemble failed: $e\n$st');
     }
+    _setPhase(
+      FeedbackPhase.ended,
+      extra: 'scratch=${_recorder.scratchV5Path ?? 'null'}',
+    );
     if (!_recorder.isRecording) {
       await _ref
           .read(monitorControllerProvider.notifier)
           .releaseFeedbackLease();
     }
-    _setPhase(
-      FeedbackPhase.ended,
-      extra: 'scratch=${_recorder.scratchV5Path ?? 'null'}',
-    );
     await _audio.stop();
     await _audio.playEndChime();
   }
@@ -1661,9 +1661,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   void _onEvent(MuseEventDto event) {
     event = _maybeOverrideFeature(event);
-    if (_recorder.isRecording) {
-      _recorder.writeEvent(event);
-    }
     _bus.publish(event);
     switch (event) {
       case MuseEventDto_Bands(:final field0):

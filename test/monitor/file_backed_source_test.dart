@@ -94,7 +94,7 @@ void main() {
     final rec = await _started(dir);
 
     rec.writeEvent(_eeg(5000));
-    rec.flushRaw();
+    await rec.flushRaw();
 
     expect(rec.index.entries, hasLength(1));
     final raw = File(rec.currentFilePath!);
@@ -121,7 +121,7 @@ void main() {
     );
 
     rec.writeEvent(_eeg(5000));
-    rec.flushRaw();
+    await rec.flushRaw();
 
     expect(rec.prefix, 'recording');
     expect(rec.currentFilePath, contains('recording_'));
@@ -141,7 +141,7 @@ void main() {
 
     rec.writeEvent(_eeg(5000));
     rec.writeEvent(_bands(5000));
-    rec.flushRaw();
+    await rec.flushRaw();
 
     final data = rec.source!.getRange(0, 10);
     expect(data.eeg, isNotEmpty);
@@ -160,7 +160,7 @@ void main() {
     final rec = await _started(dir);
 
     rec.writeEvent(_eeg(1000));
-    rec.flushRaw();
+    await rec.flushRaw();
     final raw = File(rec.currentFilePath!).readAsBytesSync();
     expect(raw.length, greaterThan(kRawBodyHeaderLength));
 
@@ -188,11 +188,11 @@ void main() {
       final rec = await _started(dir);
 
       rec.writeEvent(_eeg(1000));
-      rec.flushRaw();
+      await rec.flushRaw();
       final firstLen = rec.index.entries.single.fileLength;
 
       rec.writeEvent(_eeg(10000));
-      rec.flushRaw();
+      await rec.flushRaw();
       expect(rec.index.entries, hasLength(2));
 
       final span = rec.index.covering(8, 12);
@@ -225,7 +225,7 @@ void main() {
     final rec = await _started(dir);
 
     rec.writeEvent(_eeg(1000));
-    rec.flushRaw();
+    await rec.flushRaw();
     expect(rec.index.entries, hasLength(1));
     final oldPath = rec.currentFilePath;
 
@@ -243,7 +243,7 @@ void main() {
     expect(rec.currentFilePath, isNot(oldPath));
 
     rec.writeEvent(_eeg(2000));
-    rec.flushRaw();
+    await rec.flushRaw();
     expect(rec.index.entries, hasLength(1));
     expect(rec.index.entries.single.elapsedT, closeTo(2.0, 0.01));
     expect(rec.source!.getRange(0, 10).eeg, hasLength(1));
@@ -257,7 +257,7 @@ void main() {
     final rec = await _started(dir);
 
     rec.writeEvent(_eeg(5000));
-    rec.flushRaw();
+    await rec.flushRaw();
     final path = rec.currentFilePath!;
     final index = RecordingIndex()
       ..add(elapsedT: 5.0, fileLength: File(path).lengthSync());
@@ -281,15 +281,15 @@ void main() {
     final rec = await _started(dir);
 
     rec.writeEvent(_bands(1000));
-    rec.flushRaw();
+    await rec.flushRaw();
     expect(rec.index.isEmpty, isTrue);
 
     rec.writeEvent(_eeg(2000));
-    rec.flushRaw();
+    await rec.flushRaw();
     expect(rec.index.entries, hasLength(1));
 
     rec.writeEvent(_bands(3000));
-    rec.flushRaw();
+    await rec.flushRaw();
     expect(rec.index.entries, hasLength(2));
     expect(rec.index.entries.last.elapsedT, closeTo(2.0, 0.01));
 

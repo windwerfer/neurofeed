@@ -1,7 +1,7 @@
 # NeuroFeed — `.neurofeed` v5
 
 **Format version:** 5
-**Container:** `[68-byte header][WebP thumbnail][metadata (zstd)][computed 1 Hz (zstd)][raw (zstd)]`
+**Container:** `[68-byte header][WebP thumbnail][metadata (zstd)][computed 1 Hz (zstd)][raw body]`
 
 Rust owns the byte layout (`rust/src/api/session_format.rs`). Dart only calls FFI.
 
@@ -39,7 +39,7 @@ Offset 0:        68-byte fixed header
 Offset thumbnail_offset: WebP thumbnail (placeholder at assemble; 640×360)
 Offset metadata_offset:  zstd-compressed metadata JSON
 Offset computed_offset:  zstd JSON Lines (one ComputedFrame per line)
-Offset raw_offset:       zstd-compressed raw body
+Offset raw_offset:       copy of live `.raw` (NFEDBIN + inner zstd frames)
 ```
 
 `v5ParseHead` returns opaque `metadataJson` bytes. It does **not** parse `kind`.
@@ -173,9 +173,10 @@ capture start.
 
 ---
 
-## Raw stream — own zstd section
+## Raw stream — NFEDBIN body (inner zstd frames)
 
-Original raw body (header + zstd frames, tags 1–10):
+The container raw section is a byte-for-byte copy of the live `.raw`
+(no outer zstd). Inner frames remain `[u32 length][zstd payload]`:
 
 | Tag | Stream | Typical rate | Payload |
 |-----|--------|--------------|---------|
@@ -215,8 +216,9 @@ must not learn `session_`.
 | Piece | Where |
 |-------|--------|
 | Byte layout / FFI | `rust/src/api/session_format.rs` |
-| Assemble / scratch v5 | `lib/src/session_v5/assemble.dart` |
-| Scratch writer | `lib/src/session_v5/scratch_writer.dart` (`SessionRecorder`, `prefix`) |
+| Capture writer | `rust/src/spine/capture.rs` (FRB `rust/src/api/capture.rs`) |
+| Capture Dart adapters | `lib/src/spine/capture_client.dart`, `scratch_writer.dart` |
+| Assemble / scratch v5 | `lib/src/spine/assemble.dart` |
 | Feedback metadata | `lib/src/feedback/session_metadata.dart` |
 | Recording metadata | `lib/src/monitor/recording/recording_metadata.dart` |
 | ComputedFrame | `lib/src/session_v5/computed_frame.dart` |

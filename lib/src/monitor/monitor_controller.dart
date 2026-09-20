@@ -20,7 +20,7 @@ import 'package:neurofeed/src/monitor/recording/recording_store.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/session_v5/models.dart';
-import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/version.dart';
 
@@ -330,6 +330,7 @@ class MonitorController extends Notifier<MonitorState> {
       kind: CaptureKind.idle,
       electrodeNames: state.electrodeNames,
       channelCount: state.channelCount,
+      captureStartedAtMs: promptSave ? state.captureStartedAtMs : null,
       pendingScratchPath: promptSave ? file.path : null,
     );
     debugPrint('[monitor] recording stop ${file.path}');
@@ -446,10 +447,6 @@ class MonitorController extends Notifier<MonitorState> {
         _sampler?.updateGestures(event.field0);
       default:
         break;
-    }
-    if (_lease.kind == CaptureKind.tmp ||
-        _lease.kind == CaptureKind.recording) {
-      _capture?.writeEvent(event);
     }
   }
 }

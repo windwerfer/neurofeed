@@ -78,6 +78,7 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   inhibit-out only (not dirty, not below-the-line without a failed
   inhibit); reward stroke stays series color; do not reuse monitor graph
   widgets.
+- Data-plane / recording spine: follow [`.ai/spine/data-plane-contract_grok-build.md`](.ai/spine/data-plane-contract_grok-build.md) (Frozen Key Decisions). Handoff: [`.ai/spine/handoff-spine.md`](.ai/spine/handoff-spine.md). Intentional deviations need a written why. Sibling to the feedback pipeline contract — do not reopen feedback Key Decisions for spine work.
 - If you change on-screen copy or primary chrome (status bar, sidebar, connect
   window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
   Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
@@ -94,6 +95,7 @@ Tests: [`.ai/test-matrix.md`](.ai/test-matrix.md). Audio engine:
 Format/cache: `README_feedback_format.md`, `README_history_cache.md`.
 Trust graphs: [`.ai/trust-graphs.md`](.ai/trust-graphs.md) (implemented).
 Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
+Data-plane spine: [`.ai/spine/data-plane-contract_grok-build.md`](.ai/spine/data-plane-contract_grok-build.md) (**Frozen**). Coordinator handoff: [`.ai/spine/handoff-spine.md`](.ai/spine/handoff-spine.md).
 
 ## Project layout
 ```
@@ -113,17 +115,21 @@ lib/src/feedback/           session orchestrator + lanes
   protocol.dart / protocol_catalog.dart / user_protocol_store.dart
   feature_catalog.dart      assets/features.json copy
   computed_sampler.dart     1 Hz JSONL; Pulse/SpO₂/PeakAlpha from `_onEvent`
-  feedback_recorder.dart    scratch temps + assembleScratchV5
-  session_assembler.dart    re-export of session_v5/assemble.dart
+  feedback_recorder.dart    facade over spine SessionRecorder + assembleScratchV5
+  session_assembler.dart    re-export of spine/assemble.dart
   crash_recovery.dart       leftover `session_*` reopens session summary
   session_store*.dart / session_sqlite.dart / session_metadata.dart
   session_export.dart / session_pdf_export.dart / session_chart_data.dart
   trust/                    live Reward / Guard / inhibit graphs + nerd sheet
-lib/src/session_v5/         v5 writer / assemble / ComputedFrame / DeviceInfoV5
-  assemble.dart             assembleV5Container, writeScratchV5(prefix:), placeholderWebP
+lib/src/spine/              capture / assemble Dart adapters
+  capture_client.dart       start/stop/assemble/sidecar FFI
+  capture_foreground.dart   Android FGS start/stop for keepable capture
   scratch_writer.dart       SessionRecorder (prefix default `session`)
+  assemble.dart             assembleV5Container, writeScratchV5(prefix:)
+lib/src/session_v5/         interim FFI helpers / ComputedFrame / DeviceInfoV5
   computed_frame.dart       Dart ComputedFrame (+ .freezed.dart)
   models.dart               DeviceInfoV5, StreamsConfig
+  placeholder_webp.dart     placeholder WebP (re-exported from spine/assemble)
 lib/src/monitor/            live graphs + recording
   monitor_controller.dart   constructed in main(); hydrates if already connected
   graph_shell.dart          Follow/Inspect + Record / Stop
@@ -145,14 +151,16 @@ lib/src/monitor/            live graphs + recording
   views/spectrogram_view.dart heatmap; mag ▾; 256-pt FFT (no size chrome)
   views/recording_dashboard.dart  History row; Follow disabled
   dsp.dart                  Hamming FFT 1/N²; n parameterized (default 256)
-  recording/                lease, tmp_/recording_ writer, crash_recovery, store
+  recording/                lease, MonitorRecorder facade, crash_recovery, store
 lib/src/audio/              SoLoudEngine + AudioService, reward/guard/background
 lib/src/reve/               model download/import/load UI
 lib/src/streaming/          OSC / LSL / BrainFlow
-lib/src/charts/             band_style, SessionReader, smooth_path (writer is session_v5/)
+lib/src/charts/             band_style, SessionReader, smooth_path (writer is spine/)
 rust/src/api/
   muse.rs, features.rs, device_config.rs, neurosity_osc.rs, simulator.rs
-  reve.rs, session_format.rs, edf_export.rs
+  reve.rs, session_format.rs, edf_export.rs, capture.rs (FRB re-exports)
+rust/src/spine/             capture writer, assemble-on-temps, soak
+  capture.rs, soak.rs
 rust/src/analysis/          gesture, cbramod (+ cbramod_encoder), reve, guardrail, ai_heads
 assets/                     protocols.json, calibrations.json, features.json, audio/
 .ai/                        project docs (see .ai/README.md)
@@ -171,11 +179,17 @@ assets/                     protocols.json, calibrations.json, features.json, au
   (`#[frb(ignore)]`). Crown OSC: `neurosity_osc.rs` (no discovery API yet).
 - Feature registry: `rust/src/api/features.rs`. Dart bus/lanes as above.
 - Session byte layout: `rust/src/api/session_format.rs` only. Dart is FFI.
-- Session assemble: `lib/src/session_v5/assemble.dart`
-  (`assembleV5Container`, `writeScratchV5`, `placeholderWebP`).
-  Scratch writer: `lib/src/session_v5/scratch_writer.dart` (`SessionRecorder`).
-  Old paths (`feedback/session_assembler.dart`, `charts/session_recorder.dart`,
-  `feedback/computed_frame.dart`, `feedback/session_v5_models.dart`) re-export.
+- Session assemble: `lib/src/spine/assemble.dart`
+  (`assembleV5Container`, `writeScratchV5`). Placeholder WebP stays in
+  `session_v5/placeholder_webp.dart`. Scratch writer:
+  `lib/src/spine/scratch_writer.dart` (`SessionRecorder`). Capture FFI:
+  `lib/src/spine/capture_client.dart` over `rust/src/spine/capture.rs`
+  (FRB `rust/src/api/capture.rs`). Android keepable-capture FGS:
+  `lib/src/spine/capture_foreground.dart` + `CaptureForegroundService`
+  (`connectedDevice`, same process; not `tmp_`). Old paths (`session_v5/assemble.dart`,
+  `session_v5/scratch_writer.dart`, `feedback/session_assembler.dart`,
+  `charts/session_recorder.dart`, `feedback/computed_frame.dart`,
+  `feedback/session_v5_models.dart`) re-export.
 - Monitor: `lib/src/monitor/` — `MonitorController` is constructed in `main()`
   from the same `ProviderContainer` as `AppStateNotifier`, and hydrates if
   already connected. Band ring is `monitor/cache/band_cache.dart`. EEG RAM is
@@ -349,12 +363,12 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **Stale `rust/target/release/` lib breaks `flutter run`** (content-hash
   mismatch). Rebuild release after codegen; debug/cargokit rebuilds are not
   loaded. See `.ai/testing-guide.md`.
-- **`updateNotes` uses v5** (`containerEncodeV5`). There is no
+- **`updateNotes` uses v5** (`v5RewriteHeadToPath`; copies raw section). There is no
   `SessionContainer` Dart wrapper anymore.
 - **Assemble v5 at `end()`** into scratch (placeholder WebP) **before**
   `phase = ended`. Live summary cannot pop — Save `publishSession` to
   history or Discard deletes the scratch v5. One wrapper:
-  `session_v5/assemble.dart`.
+  `spine/assemble.dart`.
 - **Crash recovery** is prefix-strict. Feedback: leftover
   `session_*.neurofeed` and orphan `.raw` / `.computed` / `.metadata`
   reopen the session summary. Monitor: leftover `recording_*` (dialog

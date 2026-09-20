@@ -974,6 +974,7 @@ fn spawn_event_forwarder() {
                 if let MuseEventDto::Eeg(ref e) = dto {
                     gesture.feed_eeg(e.electrode, &e.samples);
                 }
+                crate::spine::capture::on_dto(&dto);
                 let should_stop = {
                     let mut guard =
                         state().inner.lock().unwrap_or_else(|e| e.into_inner());
@@ -1041,40 +1042,43 @@ fn spawn_event_forwarder() {
                                 line_noise_ratio: result[7],
                             },
                         );
+                        let bands_dto = MuseEventDto::Bands(BandsDto {
+                            electrode,
+                            timestamp,
+                            delta: result[0],
+                            theta: result[1],
+                            alpha: result[2],
+                            beta: result[3],
+                            gamma: result[4],
+                            line_noise_ratio: result[7],
+                        });
+                        crate::spine::capture::on_dto(&bands_dto);
+                        let peak_dto = if result[5] > 0.0 {
+                            let dto = MuseEventDto::PeakAlpha(PeakAlphaDto {
+                                timestamp,
+                                frequency: result[5],
+                                power: result[6],
+                            });
+                            crate::spine::capture::on_dto(&dto);
+                            Some(dto)
+                        } else {
+                            None
+                        };
                         let should_stop = {
                             let mut guard = state()
                                 .inner
                                 .lock()
                                 .unwrap_or_else(|e| e.into_inner());
                             let sink_ok = match guard.sink.as_ref() {
-                                Some(sink) => {
-                                    sink.add(MuseEventDto::Bands(BandsDto {
-                                        electrode,
-                                        timestamp,
-                                        delta: result[0],
-                                        theta: result[1],
-                                        alpha: result[2],
-                                        beta: result[3],
-                                        gamma: result[4],
-                                        line_noise_ratio: result[7],
-                                    }))
-                                    .is_ok()
-                                }
+                                Some(sink) => sink.add(bands_dto).is_ok(),
                                 None => false,
                             };
                             if !sink_ok {
                                 guard.sink = None;
                                 true
                             } else {
-                                // Emit peak alpha alongside bands
-                                if result[5] > 0.0 {
-                                    let _ = guard.sink.as_ref().map(|s| {
-                                        s.add(MuseEventDto::PeakAlpha(PeakAlphaDto {
-                                            timestamp,
-                                            frequency: result[5],
-                                            power: result[6],
-                                        }))
-                                    });
+                                if let Some(dto) = peak_dto {
+                                    let _ = guard.sink.as_ref().map(|s| s.add(dto));
                                 }
                                 false
                             }
@@ -1092,19 +1096,18 @@ fn spawn_event_forwarder() {
 
                         let (bpm, confidence) = compute_pulse(&ppg_ir_buffer);
                         if bpm > 0.0 {
+                            let dto = MuseEventDto::Pulse(PulseDto {
+                                timestamp: now_ms,
+                                bpm,
+                                confidence,
+                            });
+                            crate::spine::capture::on_dto(&dto);
                             let mut guard = state()
                                 .inner
                                 .lock()
                                 .unwrap_or_else(|e| e.into_inner());
                             if let Some(sink) = &guard.sink {
-                                if sink
-                                    .add(MuseEventDto::Pulse(PulseDto {
-                                        timestamp: now_ms,
-                                        bpm,
-                                        confidence,
-                                    }))
-                                    .is_err()
-                                {
+                                if sink.add(dto).is_err() {
                                     guard.sink = None;
                                 }
                             }
@@ -1113,19 +1116,18 @@ fn spawn_event_forwarder() {
                         // SpO2 from IR + Red (30 s window)
                         let (spo2, spo2_conf) = compute_spo2(&ppg_ir_buffer, &ppg_red_buffer);
                         if spo2 > 0.0 {
+                            let dto = MuseEventDto::SpO2(SpO2Dto {
+                                timestamp: now_ms,
+                                spo2,
+                                confidence: spo2_conf,
+                            });
+                            crate::spine::capture::on_dto(&dto);
                             let mut guard = state()
                                 .inner
                                 .lock()
                                 .unwrap_or_else(|e| e.into_inner());
                             if let Some(sink) = &guard.sink {
-                                if sink
-                                    .add(MuseEventDto::SpO2(SpO2Dto {
-                                        timestamp: now_ms,
-                                        spo2,
-                                        confidence: spo2_conf,
-                                    }))
-                                    .is_err()
-                                {
+                                if sink.add(dto).is_err() {
                                     guard.sink = None;
                                 }
                             }
@@ -1133,18 +1135,17 @@ fn spawn_event_forwarder() {
 
                         let movement_score = compute_movement(&accel_mag_buffer);
                         {
+                            let dto = MuseEventDto::Movement(MovementDto {
+                                timestamp: now_ms,
+                                score: movement_score,
+                            });
+                            crate::spine::capture::on_dto(&dto);
                             let mut guard = state()
                                 .inner
                                 .lock()
                                 .unwrap_or_else(|e| e.into_inner());
                             if let Some(sink) = &guard.sink {
-                                if sink
-                                    .add(MuseEventDto::Movement(MovementDto {
-                                        timestamp: now_ms,
-                                        score: movement_score,
-                                    }))
-                                    .is_err()
-                                {
+                                if sink.add(dto).is_err() {
                                     guard.sink = None;
                                 }
                             }

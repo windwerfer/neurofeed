@@ -6,10 +6,9 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-/// Load a model of [kind] (`cbramod_a_vig` | `reve_base`) from
-/// [model_dir] (must contain `config.json` and `model.safetensors`) and keep
-/// it ready for scoring. Returns a description of the loaded model (inference
-/// runs on CPU). Re-loads replace any prior model.
+/// Load a model of [kind] (`cbramod_a_vig` | `reve_base`) from [model_dir]
+/// and keep it ready for scoring. Returns a description of the loaded model
+/// (inference runs on CPU). Re-loads replace any prior model.
 Future<String> modelLoad({required String modelDir, required String kind}) =>
     RustLib.instance.api.crateApiReveModelLoad(modelDir: modelDir, kind: kind);
 
@@ -19,9 +18,7 @@ Future<void> modelUnload() => RustLib.instance.api.crateApiReveModelUnload();
 /// Whether a model is currently loaded.
 Future<bool> modelLoaded() => RustLib.instance.api.crateApiReveModelLoaded();
 
-/// JSON content of the app-generated `config.json` for [kind]. The app writes
-/// this file next to the weights so the loader can describe the graph without
-/// depending on the Hub's own (sometimes partial) config.
+/// JSON content of the app-generated `config.json` for [kind].
 Future<String> modelConfigJson({required String kind}) =>
     RustLib.instance.api.crateApiReveModelConfigJson(kind: kind);
 

@@ -27,7 +27,7 @@ Preferences persist across restarts.
 Finished sessions and recordings are a single `.neurofeed` file:
 
 ```
-[68-byte header][WebP thumbnail][metadata JSON (zstd)][computed 1 Hz (zstd)][raw (zstd)]
+[68-byte header][WebP thumbnail][metadata JSON (zstd)][computed 1 Hz (zstd)][raw body]
 ```
 
 History lists them from SQLite (`session_metadata.db`) so opening the list

@@ -7,7 +7,7 @@ How to use: pick a surface, then match **Spoken name**.
 
 Surfaces: Status bar · Sidebar · Connect · GraphShell · Raw EEG · Bands · HR+SpO2 ·
 Histogram · PSD · Spectrogram · HR+SpO2 · History · Recording dashboard · Feedback
-list · Session · Settings.
+list · Session · Settings · Android capture notification.
 
 ## Chrome
 
@@ -263,6 +263,19 @@ Guardrail AI engine, Audio (Android only), About, Debug mode.
 | Audio (Android) | `Audio` / `Reduce audio stutter` | `_AudioCard` | `settings_view.dart` | Hidden off Android. |
 | About | `About` | `_AboutCard` | `settings_view.dart` | |
 | Debug mode | `Debug mode` | `enableSimulatedDevices` | `settings_view.dart` | Last card. Shows Simulator. Also shows calibration `Skip`. |
+
+### Android capture notification — `lib/src/spine/capture_foreground.dart`
+
+Foreground service type `connectedDevice`, same process as Flutter/Rust.
+Shown while `CaptureKind` is `recording` or `feedback`, and until Save/Discard
+of an unsaved ended session or pending recording. **Not** for `tmp_`. Screen
+is allowed to sleep. Stop asks Dart to stop capture; it does not disconnect BLE.
+
+| Spoken name | On-screen text | Code symbol | File | Notes |
+|---|---|---|---|---|
+| Recording notification | `Recording` + elapsed | `CaptureForegroundKind.recording` | `capture_foreground.dart` | Live Record. Elapsed `m:ss` / `h:mm:ss`. Tap opens the app. |
+| Session notification | `Session` + elapsed | `CaptureForegroundKind.session` | `capture_foreground.dart` | Feedback keepable capture. |
+| Notification Stop | `Stop` | `ACTION_REQUEST_STOP` | `CaptureForegroundService.kt` | Live only, not while Save/Discard. Requests `stopRecording` / `end`. |
 
 ## Session internals
 
