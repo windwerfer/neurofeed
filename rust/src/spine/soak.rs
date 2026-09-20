@@ -1,9 +1,6 @@
-//! Max-rate filler that drives streaming assemble:
-//! [`container_encode_v5_to_path`](crate::api::session_format::container_encode_v5_to_path)
-//! copies the framed `.raw` into the container raw section (no outer zstd).
+//! Max-rate filler that drives the capture writer + streaming assemble.
 
 use std::fs::File;
-use std::io::Write;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -12,8 +9,11 @@ use crate::api::muse::{
     TelemetrySnapshot, XyzDto,
 };
 use crate::api::session_format::{
-    container_encode_v5_to_path, encode_session_event, session_frame_bytes, session_header_bytes,
-    ComputedFrame, FeedbackInfo, GuardrailInfo, PeakAlphaInfo, V5_MAGIC,
+    encode_session_event, ComputedFrame, FeedbackInfo, GuardrailInfo, PeakAlphaInfo, V5_MAGIC,
+};
+use crate::spine::capture::{
+    capture_append_computed_line, capture_assemble_v5, capture_discard, capture_drop_count,
+    capture_flush, capture_start, capture_write_errors, on_dto, test_lock,
 };
 
 const EEG_HZ: u64 = 256;
@@ -25,7 +25,6 @@ const PPG_SAMPLES: usize = 6;
 const IMU_HZ: u64 = 52;
 const DERIVED_HZ: u64 = 1;
 const DERIVED_CH: i32 = 4;
-const FLUSH_BYTES: usize = 64 * 1024;
 const DEFAULT_EQUIV_SECS: u64 = 60;
 const TWELVE_H_SECS: u64 = 12 * 3600;
 
@@ -78,7 +77,7 @@ impl SoakReport {
             self.assemble_path
         );
         eprintln!(
-            "[spine] soak drops={} write_errors={} (no capture writer yet; drops stay 0 until PR 4)",
+            "[spine] soak drops={} write_errors={} (writer thread + bounded try_send)",
             self.drops, self.write_errors
         );
     }
@@ -106,73 +105,22 @@ fn equiv_secs_from_env(default: u64) -> u64 {
         .unwrap_or(default)
 }
 
-struct RawSink {
-    file: File,
-    pending: Vec<u8>,
+struct FillStats {
     uncompressed_record_bytes: u64,
-    framed_raw_bytes: u64,
     events: u64,
-    flushes: u64,
-    write_errors: u64,
 }
 
-impl RawSink {
-    fn create(path: &std::path::Path) -> std::io::Result<Self> {
-        let mut file = File::create(path)?;
-        let header = session_header_bytes();
-        file.write_all(&header)?;
-        Ok(Self {
-            file,
-            pending: Vec::with_capacity(FLUSH_BYTES + 4096),
-            uncompressed_record_bytes: 0,
-            framed_raw_bytes: header.len() as u64,
-            events: 0,
-            flushes: 0,
-            write_errors: 0,
-        })
+fn push_dto(stats: &mut FillStats, dto: MuseEventDto) {
+    let rec = encode_session_event(&dto);
+    if rec.is_empty() {
+        return;
     }
-
-    fn push(&mut self, rec: &[u8]) {
-        if rec.is_empty() || self.write_errors > 0 {
-            return;
-        }
-        self.uncompressed_record_bytes += rec.len() as u64;
-        self.events += 1;
-        self.pending.extend_from_slice(rec);
-        if self.pending.len() >= FLUSH_BYTES {
-            self.flush();
-        }
-    }
-
-    fn flush(&mut self) {
-        if self.pending.is_empty() || self.write_errors > 0 {
-            return;
-        }
-        let frame = session_frame_bytes(&self.pending);
-        self.pending.clear();
-        match self.file.write_all(&frame) {
-            Ok(()) => {
-                self.flushes += 1;
-                self.framed_raw_bytes += frame.len() as u64;
-            }
-            Err(_) => {
-                self.write_errors += 1;
-            }
-        }
-    }
-
-    fn finish(mut self) -> Self {
-        self.flush();
-        if self.write_errors == 0 {
-            if self.file.flush().is_err() {
-                self.write_errors += 1;
-            }
-        }
-        self
-    }
+    stats.uncompressed_record_bytes += rec.len() as u64;
+    stats.events += 1;
+    on_dto(&dto);
 }
 
-fn fill_classic_muse(sink: &mut RawSink, equiv_secs: u64) {
+fn fill_classic_muse(stats: &mut FillStats, equiv_secs: u64) {
     let eeg_pkts = equiv_secs * EEG_HZ / EEG_SAMPLES as u64;
     let ppg_pkts = equiv_secs * PPG_HZ / PPG_SAMPLES as u64;
     let imu_pkts = equiv_secs * IMU_HZ;
@@ -184,26 +132,30 @@ fn fill_classic_muse(sink: &mut RawSink, equiv_secs: u64) {
     for pkt in 0..eeg_pkts {
         let ts = (pkt as f64) * (EEG_SAMPLES as f64) / (EEG_HZ as f64) * 1000.0;
         for ch in 0..EEG_CH {
-            let rec = encode_session_event(&MuseEventDto::Eeg(EegDto {
-                index: (pkt as u16).wrapping_add(ch as u16),
-                electrode: ch,
-                timestamp: ts,
-                samples: eeg_samples.clone(),
-            }));
-            sink.push(&rec);
+            push_dto(
+                stats,
+                MuseEventDto::Eeg(EegDto {
+                    index: (pkt as u16).wrapping_add(ch as u16),
+                    electrode: ch,
+                    timestamp: ts,
+                    samples: eeg_samples.clone(),
+                }),
+            );
         }
     }
 
     for pkt in 0..ppg_pkts {
         let ts = (pkt as f64) * (PPG_SAMPLES as f64) / (PPG_HZ as f64) * 1000.0;
         for ch in 0..PPG_CH {
-            let rec = encode_session_event(&MuseEventDto::Ppg(PpgDto {
-                index: pkt as u16,
-                channel: ch,
-                timestamp: ts,
-                samples: ppg_samples.clone(),
-            }));
-            sink.push(&rec);
+            push_dto(
+                stats,
+                MuseEventDto::Ppg(PpgDto {
+                    index: pkt as u16,
+                    channel: ch,
+                    timestamp: ts,
+                    samples: ppg_samples.clone(),
+                }),
+            );
         }
     }
 
@@ -213,67 +165,82 @@ fn fill_classic_muse(sink: &mut RawSink, equiv_secs: u64) {
             y: 0.0,
             z: 1.0,
         }];
-        let rec_a = encode_session_event(&MuseEventDto::Accelerometer(ImuDto {
-            sequence_id: pkt as u16,
-            samples: sample,
-        }));
-        sink.push(&rec_a);
-        let rec_g = encode_session_event(&MuseEventDto::Gyroscope(ImuDto {
-            sequence_id: pkt as u16,
-            samples: vec![XyzDto {
-                x: 0.0,
-                y: 0.0,
-                z: 1.0,
-            }],
-        }));
-        sink.push(&rec_g);
+        push_dto(
+            stats,
+            MuseEventDto::Accelerometer(ImuDto {
+                sequence_id: pkt as u16,
+                samples: sample,
+            }),
+        );
+        push_dto(
+            stats,
+            MuseEventDto::Gyroscope(ImuDto {
+                sequence_id: pkt as u16,
+                samples: vec![XyzDto {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 1.0,
+                }],
+            }),
+        );
     }
 
     for tick in 0..derived_ticks {
         let ts = tick as f64 * 1000.0;
         for ch in 0..DERIVED_CH {
-            let rec = encode_session_event(&MuseEventDto::Bands(BandsDto {
-                electrode: ch,
-                timestamp: ts,
-                delta: 1.0,
-                theta: 2.0,
-                alpha: 3.0,
-                beta: 4.0,
-                gamma: 5.0,
-                line_noise_ratio: 0.01,
-            }));
-            sink.push(&rec);
+            push_dto(
+                stats,
+                MuseEventDto::Bands(BandsDto {
+                    electrode: ch,
+                    timestamp: ts,
+                    delta: 1.0,
+                    theta: 2.0,
+                    alpha: 3.0,
+                    beta: 4.0,
+                    gamma: 5.0,
+                    line_noise_ratio: 0.01,
+                }),
+            );
         }
-        sink.push(&encode_session_event(&MuseEventDto::Pulse(PulseDto {
-            timestamp: ts,
-            bpm: 60.0,
-            confidence: 0.9,
-        })));
-        sink.push(&encode_session_event(&MuseEventDto::SpO2(SpO2Dto {
-            timestamp: ts,
-            spo2: 98.0,
-            confidence: 0.9,
-        })));
-        sink.push(&encode_session_event(&MuseEventDto::Movement(
-            MovementDto {
+        push_dto(
+            stats,
+            MuseEventDto::Pulse(PulseDto {
+                timestamp: ts,
+                bpm: 60.0,
+                confidence: 0.9,
+            }),
+        );
+        push_dto(
+            stats,
+            MuseEventDto::SpO2(SpO2Dto {
+                timestamp: ts,
+                spo2: 98.0,
+                confidence: 0.9,
+            }),
+        );
+        push_dto(
+            stats,
+            MuseEventDto::Movement(MovementDto {
                 timestamp: ts,
                 score: 0.1,
-            },
-        )));
-        sink.push(&encode_session_event(&MuseEventDto::PeakAlpha(
-            PeakAlphaDto {
+            }),
+        );
+        push_dto(
+            stats,
+            MuseEventDto::PeakAlpha(PeakAlphaDto {
                 timestamp: ts,
                 frequency: 10.0,
                 power: 1.0,
-            },
-        )));
-        sink.push(&encode_session_event(&MuseEventDto::Telemetry(
-            TelemetrySnapshot {
+            }),
+        );
+        push_dto(
+            stats,
+            MuseEventDto::Telemetry(TelemetrySnapshot {
                 battery_level: 85.0,
                 fuel_gauge_voltage: 0.0,
                 temperature: 0,
-            },
-        )));
+            }),
+        );
     }
 }
 
@@ -308,50 +275,56 @@ fn computed_frames(equiv_secs: u64) -> Vec<ComputedFrame> {
         .collect()
 }
 
-fn soak_raw_path() -> PathBuf {
+fn soak_dir() -> PathBuf {
     std::env::temp_dir().join(format!(
-        "neurofeed_spine_soak_{}_{}.raw",
+        "neurofeed_spine_soak_{}_{}",
         std::process::id(),
         Instant::now().elapsed().as_nanos()
     ))
 }
 
-fn write_computed_jsonl(path: &std::path::Path, frames: &[ComputedFrame]) {
-    let mut f = File::create(path).expect("soak create computed jsonl");
-    for frame in frames {
-        f.write_all(&frame.to_json_bytes())
-            .expect("soak write computed");
-        f.write_all(b"\n").expect("soak write computed nl");
-    }
-}
-
-/// Fill Classic Muse all-stream records at max rate and assemble with
-/// `container_encode_v5_to_path` (copy `.raw`, no outer zstd).
+/// Fill Classic Muse all-stream records at max rate through the capture writer.
 pub fn run_current_assemble_soak(equiv_secs: u64) -> SoakReport {
-    let path = soak_raw_path();
-    let dest = path.with_extension("neurofeed");
-    let computed_path = path.with_extension("computed");
+    let _lock = test_lock();
+    let _ = capture_discard();
+    let dir = soak_dir();
+    std::fs::create_dir_all(&dir).expect("soak dir");
+    let id = format!("soak_{equiv_secs}");
+    capture_start(
+        dir.to_string_lossy().into_owned(),
+        "recording".into(),
+        id.clone(),
+        Vec::new(),
+        0.0,
+    )
+    .expect("soak capture_start");
+
     let fill_t0 = Instant::now();
-    let mut sink = RawSink::create(&path).expect("soak create raw temp");
-    fill_classic_muse(&mut sink, equiv_secs);
-    let sink = sink.finish();
+    let mut stats = FillStats {
+        uncompressed_record_bytes: 0,
+        events: 0,
+    };
+    fill_classic_muse(&mut stats, equiv_secs);
+    let _ = capture_flush();
     let fill_ms = fill_t0.elapsed().as_millis();
     let rss_kb_after_fill = rss_kb();
     let rss_kb_after_read = rss_kb_after_fill;
 
+    let raw_path = dir.join(format!("recording_{id}.raw"));
+    let framed_raw_bytes = std::fs::metadata(&raw_path).map(|m| m.len()).unwrap_or(0);
+
+    for frame in computed_frames(equiv_secs) {
+        let _ = capture_append_computed_line(frame.to_json_bytes());
+    }
+    let _ = capture_flush();
+
+    let drops = capture_drop_count();
+    let mut write_errors = capture_write_errors();
     let metadata = br#"{"formatVersion":5,"kind":"recording","device":"classic-muse-soak"}"#;
-    write_computed_jsonl(&computed_path, &computed_frames(equiv_secs));
     let assemble_t0 = Instant::now();
-    let dest_out = container_encode_v5_to_path(
-        dest.to_string_lossy().into_owned(),
-        Vec::new(),
-        metadata.to_vec(),
-        computed_path.to_string_lossy().into_owned(),
-        path.to_string_lossy().into_owned(),
-    );
+    let dest_out = capture_assemble_v5(metadata.to_vec(), Vec::new());
     let assemble_ms = assemble_t0.elapsed().as_millis();
     let rss_kb_after_assemble = rss_kb();
-    let mut write_errors = sink.write_errors;
     let (container_bytes, container_magic_ok) = match dest_out {
         Ok(p) => {
             let len = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
@@ -364,6 +337,7 @@ pub fn run_current_assemble_soak(equiv_secs: u64) -> SoakReport {
                 })
                 .is_some()
                 && magic == V5_MAGIC;
+            let _ = std::fs::remove_file(&p);
             (len, ok)
         }
         Err(_) => {
@@ -371,26 +345,24 @@ pub fn run_current_assemble_soak(equiv_secs: u64) -> SoakReport {
             (0, false)
         }
     };
-    let framed_raw_bytes = sink.framed_raw_bytes;
-    let _ = std::fs::remove_file(&path);
-    let _ = std::fs::remove_file(&computed_path);
-    let _ = std::fs::remove_file(&dest);
+    let _ = capture_discard();
+    let _ = std::fs::remove_dir_all(&dir);
 
     SoakReport {
         equiv_secs,
-        uncompressed_record_bytes: sink.uncompressed_record_bytes,
+        uncompressed_record_bytes: stats.uncompressed_record_bytes,
         framed_raw_bytes,
         container_bytes,
-        events: sink.events,
-        flushes: sink.flushes,
-        drops: 0,
+        events: stats.events,
+        flushes: 0,
+        drops,
         write_errors,
         fill_ms,
         assemble_ms,
         rss_kb_after_fill,
         rss_kb_after_read,
         rss_kb_after_assemble,
-        assemble_path: "container_encode_v5_to_path copy .raw (no outer zstd)",
+        assemble_path: "capture_assemble_v5 copy .raw (writer thread, no outer zstd)",
         container_magic_ok,
     }
 }

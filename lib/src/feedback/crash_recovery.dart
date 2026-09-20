@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 import 'package:neurofeed/src/feedback/feedback_state.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
@@ -32,10 +33,13 @@ class RecoverableSession {
   /// Publish the scratch v5 into history, then delete it.
   Future<void> save(SessionStore store) async {
     final head = await ffi.v5ParseHeadFromPath(path: scratchV5.path);
-    final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ??
+    final meta =
+        SessionMetadata.fromJsonBytes(head.metadataJson) ??
         SessionMetadata(
           protocol: protocol,
-          durationMinutes: elapsedSeconds <= 0 ? 0 : (elapsedSeconds / 60).ceil(),
+          durationMinutes: elapsedSeconds <= 0
+              ? 0
+              : (elapsedSeconds / 60).ceil(),
           elapsedSeconds: elapsedSeconds,
           sound: '',
           savedAt: DateTime.now().toIso8601String(),
@@ -174,24 +178,19 @@ Future<RecoverableSession?> _assembleTemps({
         : Uint8List(0);
     final metadataBytes =
         files.metadata != null && await files.metadata!.exists()
-            ? await files.metadata!.readAsBytes()
-            : Uint8List(0);
+        ? await files.metadata!.readAsBytes()
+        : Uint8List(0);
     final frames = parseComputedJsonl(computed);
     final meta = _metadataFromTemps(
       id: id,
       jsonl: metadataBytes,
       frames: frames,
     );
-    final file = await writeScratchV5(
+    final file = await spine.assembleCaptureV5At(
       dir: scratch,
+      prefix: 'session',
       id: id,
       metadataJson: meta.toJson(),
-      rawPath: files.raw != null && await files.raw!.exists()
-          ? files.raw!.path
-          : '',
-      computedPath: files.computed != null && await files.computed!.exists()
-          ? files.computed!.path
-          : '',
     );
     await _deleteTemps(files);
     return RecoverableSession(
@@ -209,7 +208,7 @@ Future<RecoverableSession?> _assembleTemps({
 }
 
 /// Scan [scratchDirectory] for leftover `session_*.neurofeed` and orphan
-/// three-temps. Temps are assembled with [writeScratchV5] before return.
+/// three-temps. Temps are assembled with [spine.assembleCaptureV5At].
 /// Does not scan `getTemporaryDirectory()/sessions`.
 Future<List<RecoverableSession>> scanRecoverableSessions(
   SessionStorage storage,
@@ -268,15 +267,15 @@ Future<void> showCrashRecoveryDialog(
 
   for (final session in sessions) {
     if (!context.mounted) return;
-    ref.read(feedbackStateProvider.notifier).restoreEndedSession(
-      id: session.id,
-      scratchPath: session.scratchV5.path,
-      metadata: session.metadata,
-    );
+    ref
+        .read(feedbackStateProvider.notifier)
+        .restoreEndedSession(
+          id: session.id,
+          scratchPath: session.scratchV5.path,
+          metadata: session.metadata,
+        );
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const FeedbackDashboardView(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const FeedbackDashboardView()),
     );
   }
 }

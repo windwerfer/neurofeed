@@ -128,7 +128,7 @@ void main() {
           ),
         ),
       );
-      rec.flushRaw();
+      await rec.flushRaw();
       final temps = await rec.readTemps();
       expect(temps, isNotNull);
       final parsed = sessionParseBody(bytes: temps!.raw);

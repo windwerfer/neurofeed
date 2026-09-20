@@ -8,25 +8,26 @@ import 'package:neurofeed/src/session_v5/computed_frame.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
 import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 
 enum SidecarMode { jsonl, snapshot }
 
-/// v5 scratch writer — live temps:
-/// - raw: v5 raw body (`sessionHeaderBytes` + inner zstd frames via
-///   `sessionFrameBytes`)
-/// - computed: uncompressed JSON Lines (one Dart ComputedFrame per line)
-/// - sidecar: uncompressed JSONL `.metadata` (feedback) or atomic `.json`
-///   snapshot (monitor)
+/// v5 scratch writer. Production uses the Rust capture writer. Inject
+/// [headerBytes] to keep a local Dart writer (unit tests without FFI).
 ///
-/// Does not assemble the v5 container. Callers flush and pass temp **paths**
-/// to [writeScratchV5]. Prefix defaults to `session`.
+/// Live temps:
+/// - raw: v5 raw body (NFEDBIN + inner zstd frames)
+/// - computed: uncompressed JSON Lines
+/// - sidecar: uncompressed JSONL `.metadata` (feedback) or atomic `.json`
 class SessionRecorder {
   SessionRecorder({List<int> Function()? headerBytes})
-    : _headerBytes = headerBytes ?? ffi.sessionHeaderBytes;
+    : _useRust = headerBytes == null,
+      _headerBytes = headerBytes ?? ffi.sessionHeaderBytes;
 
   static const _flushInterval = Duration(seconds: 30);
   static const _maxPendingBytes = 65536;
 
+  final bool _useRust;
   final List<int> Function() _headerBytes;
 
   File? _rawFile;
@@ -51,6 +52,8 @@ class SessionRecorder {
 
   bool _enabled(RecordingStream s) => recordStreams.contains(s);
 
+  bool get usesRustCapture => _useRust;
+
   bool get isRecording => _rawFile != null;
 
   /// Timestamp id used in `${prefix}_<id>.raw` / `.neurofeed`.
@@ -74,6 +77,7 @@ class SessionRecorder {
     String prefix = 'session',
     String? id,
     SidecarMode sidecar = SidecarMode.jsonl,
+    int? startedAtMs,
   }) async {
     if (_rawFile != null) return;
 
@@ -92,8 +96,26 @@ class SessionRecorder {
     _computedFrames = 0;
     channels.clear();
 
-    await _rawFile!.writeAsBytes(_headerBytes(), mode: FileMode.write);
-    await _computedFile!.writeAsBytes(const <int>[], mode: FileMode.write);
+    if (_useRust) {
+      try {
+        await spine.startCapture(
+          dir: dir,
+          prefix: prefix,
+          id: ts,
+          streams: recordStreams,
+          startedAtMs: startedAtMs ?? DateTime.now().millisecondsSinceEpoch,
+        );
+      } catch (_) {
+        _rawFile = null;
+        _computedFile = null;
+        _metadataFile = null;
+        _sessionId = null;
+        rethrow;
+      }
+    } else {
+      await _rawFile!.writeAsBytes(_headerBytes(), mode: FileMode.write);
+      await _computedFile!.writeAsBytes(const <int>[], mode: FileMode.write);
+    }
 
     debugPrint(
       '[session] recorder v5 start: $_rawFile, $_computedFile, $_metadataFile',
@@ -106,6 +128,10 @@ class SessionRecorder {
   /// rename onto `prefix_$id.json`). No-op in JSONL mode.
   Future<void> writeSidecarSnapshot(Map<String, Object?> json) async {
     if (_sidecar != SidecarMode.snapshot || _metadataFile == null) return;
+    if (_useRust) {
+      spine.captureWriteSidecar(json: spine.metadataJsonBytes(json));
+      return;
+    }
     final target = _metadataFile!;
     final tmp = File('${target.path}.tmp');
     await tmp.writeAsBytes(utf8.encode(jsonEncode(json)), flush: true);
@@ -147,17 +173,29 @@ class SessionRecorder {
         break;
     }
 
+    if (_useRust) {
+      spine.captureAppendEvent(event: event);
+      _rawEvents++;
+      return;
+    }
+
     final encoded = ffi.encodeSessionEvent(event: event);
     if (encoded.isEmpty) return;
 
     _rawEvents++;
     _rawPending.add(encoded);
-    if (_rawPending.length > _maxPendingBytes) flushRaw();
+    if (_rawPending.length > _maxPendingBytes) {
+      unawaited(flushRaw());
+    }
   }
 
   /// Write a metadata event (calibration step, guardrail event, etc.) as JSON line.
   void writeMetadata(Map<String, dynamic> meta) {
     if (_metadataFile == null) return;
+    if (_useRust) {
+      spine.captureWriteSidecar(json: utf8.encode(jsonEncode(meta)));
+      return;
+    }
     final line = '${jsonEncode(meta)}\n';
     _metadataFile!.writeAsStringSync(line, mode: FileMode.append);
   }
@@ -166,13 +204,25 @@ class SessionRecorder {
   void appendComputed(ComputedFrame frame) {
     if (_computedFile == null) return;
     _computedFrames++;
+    if (_useRust) {
+      spine.captureAppendComputedLine(line: frame.toJsonBytes());
+      return;
+    }
     final line = frame.toJsonBytes();
     _computedFile!.writeAsBytesSync(line, mode: FileMode.append);
     _computedFile!.writeAsBytesSync([0x0A], mode: FileMode.append);
   }
 
   /// Flush raw pending bytes as one `sessionFrameBytes` frame.
-  void flushRaw() {
+  Future<void> flushRaw() async {
+    if (_useRust) {
+      if (_rawFile == null) return;
+      await spine.captureFlush();
+      if (_rawFile!.existsSync()) {
+        onRawFlushed?.call(_rawFile!.lengthSync());
+      }
+      return;
+    }
     if (_rawPending.isEmpty || _rawFile == null) return;
     final raw = _rawPending.toBytes();
     _rawPending.clear();
@@ -183,7 +233,7 @@ class SessionRecorder {
 
   /// Flush all to disk.
   Future<void> flush() async {
-    flushRaw();
+    await flushRaw();
   }
 
   void stopPeriodicFlush() {
@@ -205,9 +255,22 @@ class SessionRecorder {
     return (raw: raw, computed: computed, metadata: metadata);
   }
 
+  /// Drop local file handles after Rust assemble deleted the temps.
+  void detachAfterAssemble() {
+    stopPeriodicFlush();
+    _rawFile = null;
+    _computedFile = null;
+    _metadataFile = null;
+  }
+
   /// Clean up temp files after a successful assemble. Keeps [sessionId].
   Future<void> cleanupTempFiles() async {
     stopPeriodicFlush();
+    if (_useRust) {
+      await spine.captureDiscard();
+      detachAfterAssemble();
+      return;
+    }
     final sidecarTmp = _metadataFile != null && _sidecar == SidecarMode.snapshot
         ? File('${_metadataFile!.path}.tmp')
         : null;
