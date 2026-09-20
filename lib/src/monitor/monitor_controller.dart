@@ -20,7 +20,7 @@ import 'package:neurofeed/src/monitor/recording/recording_store.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/session_v5/models.dart';
-import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/version.dart';
 

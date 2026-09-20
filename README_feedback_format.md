@@ -216,8 +216,9 @@ must not learn `session_`.
 | Piece | Where |
 |-------|--------|
 | Byte layout / FFI | `rust/src/api/session_format.rs` |
-| Assemble / scratch v5 | `lib/src/session_v5/assemble.dart` |
-| Scratch writer | `lib/src/session_v5/scratch_writer.dart` (`SessionRecorder`, `prefix`) |
+| Capture writer | `rust/src/spine/capture.rs` (FRB `rust/src/api/capture.rs`) |
+| Capture Dart adapters | `lib/src/spine/capture_client.dart`, `scratch_writer.dart` |
+| Assemble / scratch v5 | `lib/src/spine/assemble.dart` |
 | Feedback metadata | `lib/src/feedback/session_metadata.dart` |
 | Recording metadata | `lib/src/monitor/recording/recording_metadata.dart` |
 | ComputedFrame | `lib/src/session_v5/computed_frame.dart` |

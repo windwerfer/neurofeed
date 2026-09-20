@@ -12,7 +12,7 @@ import 'package:neurofeed/src/monitor/monitor_controller.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
-import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
