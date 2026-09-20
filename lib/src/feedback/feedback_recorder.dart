@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:neurofeed/src/session_v5/assemble.dart';
 import 'package:neurofeed/src/session_v5/computed_frame.dart';
-import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/spine/assemble.dart';
+import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/settings.dart';

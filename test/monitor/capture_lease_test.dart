@@ -12,7 +12,7 @@ import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/monitor/recording/capture_lease.dart';
 import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
 import 'package:neurofeed/src/session_v5/models.dart';
-import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

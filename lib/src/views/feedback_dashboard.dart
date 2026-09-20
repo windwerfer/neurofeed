@@ -14,7 +14,7 @@ import 'package:neurofeed/src/charts/smooth_path.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
-import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/feedback/session_chart_data.dart';
 import 'package:neurofeed/src/audio/output_ids.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';

@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/feedback/session_sqlite.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';

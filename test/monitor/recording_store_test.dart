@@ -8,7 +8,7 @@ import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/monitor/recording/recording_store.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
-import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/session_v5/models.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:sqlite3/sqlite3.dart';

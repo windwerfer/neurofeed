@@ -15,6 +15,8 @@ rust_lib_neurofeed
   simulator.rs       spawn_simulator: Eeg/Ppg/IMU/Telemetry (`sim:*`)
   reve.rs            model + guardrail FFI
   session_format.rs  raw body + .neurofeed v5 container
+  capture.rs         FRB re-exports of spine capture
+  spine/{capture,soak}.rs  writer thread + streaming assemble + soak
   analysis/{gesture,cbramod,cbramod_encoder,reve,guardrail,ai_heads}.rs
         │
         ├─ muse-rs 0.1.1 (patched fork of eugenehp 0.1.0)
@@ -102,8 +104,9 @@ dashboard/history `v5ExtractComputed` → `prepareChartDataFromComputed`.
 Save publishes to the history folder. Feedback crash recovery scans
 `session_*` in `scratchDirectory`; recordings use a separate scanner.
 No `SessionOverview` / 400-bucket `metadata.summary`. The list preview is
-the WebP thumbnail. Assembler: `lib/src/session_v5/assemble.dart`
-(re-export `feedback/session_assembler.dart`).
+the WebP thumbnail. Assembler: `lib/src/spine/assemble.dart`
+(re-export `feedback/session_assembler.dart`). Capture writer:
+`rust/src/spine/capture.rs` with Dart adapters in `lib/src/spine/`.
 
 ## Monitor
 

@@ -6,9 +6,9 @@ import 'package:neurofeed/src/monitor/cache/file_backed_source.dart';
 import 'package:neurofeed/src/monitor/cache/recording_index.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
-import 'package:neurofeed/src/session_v5/assemble.dart';
 import 'package:neurofeed/src/session_v5/computed_frame.dart';
-import 'package:neurofeed/src/session_v5/scratch_writer.dart';
+import 'package:neurofeed/src/spine/assemble.dart';
+import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 
