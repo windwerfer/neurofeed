@@ -10,6 +10,7 @@ import 'package:neurofeed/src/session_v5/assemble.dart';
 import 'package:neurofeed/src/session_v5/computed_frame.dart';
 import 'package:neurofeed/src/session_v5/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 
 /// Connect-time `tmp_$ts` / explicit `recording_$ts` writer. tmp never
 /// assembles. 30 min silent rotate is owned by [MonitorController] via
@@ -42,6 +43,8 @@ class MonitorRecorder {
   String _prefix = 'tmp';
 
   bool get isOpen => _writer.isRecording;
+
+  bool get usesRustCapture => _writer.usesRustCapture;
 
   String? get captureId => _writer.sessionId;
 
@@ -110,7 +113,12 @@ class MonitorRecorder {
     _metadata = metadata;
     _prefix = prefix;
     _writer.recordStreams = recordStreams;
-    await _writer.start(dir, prefix: prefix, sidecar: SidecarMode.snapshot);
+    await _writer.start(
+      dir,
+      prefix: prefix,
+      sidecar: SidecarMode.snapshot,
+      startedAtMs: captureStartedAtMs,
+    );
     debugPrint(
       '[monitor] $prefix start id=${_writer.sessionId} '
       'recordStreams=${recordStreams.map((s) => s.name).toList()}',
@@ -133,6 +141,9 @@ class MonitorRecorder {
     _sidecarTimer?.cancel();
     _sidecarTimer = Timer.periodic(sidecarInterval, (_) {
       unawaited(writeSidecarNow());
+      if (_writer.usesRustCapture) {
+        _syncIndexFromRust();
+      }
     });
   }
 
@@ -156,7 +167,12 @@ class MonitorRecorder {
 
   void appendComputed(ComputedFrame frame) => _writer.appendComputed(frame);
 
-  void flushRaw() => _writer.flushRaw();
+  Future<void> flushRaw() async {
+    await _writer.flushRaw();
+    if (_writer.usesRustCapture) {
+      _syncIndexFromRust();
+    }
+  }
 
   /// Flush, write `recording_$id.neurofeed` with [placeholderWebP], delete
   /// temps on success. Returns null if there was nothing to assemble or encode
@@ -179,15 +195,21 @@ class MonitorRecorder {
       return null;
     }
     try {
-      final file = await writeScratchV5(
-        dir: dir,
-        id: id,
-        prefix: 'recording',
-        metadataJson: metadataJson,
-        rawPath: rawPath,
-        computedPath: _writer.computedPath,
-      );
-      await _writer.cleanupTempFiles();
+      final File file;
+      if (_writer.usesRustCapture) {
+        file = await spine.assembleCaptureV5(metadataJson: metadataJson);
+        _writer.detachAfterAssemble();
+      } else {
+        file = await writeScratchV5(
+          dir: dir,
+          id: id,
+          prefix: 'recording',
+          metadataJson: metadataJson,
+          rawPath: rawPath,
+          computedPath: _writer.computedPath,
+        );
+        await _writer.cleanupTempFiles();
+      }
       _metadata = null;
       index.clear();
       _lastEegTsMs = null;
@@ -218,9 +240,17 @@ class MonitorRecorder {
   }
 
   void _indexFlushedFrame(int fileLength) {
+    if (_writer.usesRustCapture) {
+      _syncIndexFromRust();
+      return;
+    }
     final started = captureStartedAtMs;
     final ts = _lastEegTsMs;
     if (started == null || ts == null) return;
     index.add(elapsedT: (ts - started) / 1000.0, fileLength: fileLength);
+  }
+
+  void _syncIndexFromRust() {
+    spine.syncRecordingIndex(clear: index.clear, add: index.add);
   }
 }

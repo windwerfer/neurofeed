@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
-import 'package:neurofeed/src/session_v5/assemble.dart';
+import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 import 'package:neurofeed/src/session_v5/models.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/version.dart';
@@ -164,17 +164,11 @@ Future<RecoverableRecording?> _assembleTemps({
         ? await files.computed!.readAsBytes()
         : Uint8List(0);
     final metadataJson = _metadataJsonFromSidecar(files.json, computed);
-    final file = await writeScratchV5(
+    final file = await spine.assembleCaptureV5At(
       dir: scratch,
-      id: id,
       prefix: 'recording',
+      id: id,
       metadataJson: metadataJson,
-      rawPath: files.raw != null && await files.raw!.exists()
-          ? files.raw!.path
-          : '',
-      computedPath: files.computed != null && await files.computed!.exists()
-          ? files.computed!.path
-          : '',
     );
     await _deleteTemps(files);
     debugPrint('[monitor-crash] assembled ${file.uri.pathSegments.last}');
@@ -187,7 +181,7 @@ Future<RecoverableRecording?> _assembleTemps({
 
 /// Scan [scratch] for leftover `recording_*` temps and assembled v5.
 /// Assembled v5 is returned as-is (temps deleted). Temps only are assembled
-/// with [writeScratchV5] (`prefix: recording`, placeholder WebP).
+/// with [spine.assembleCaptureV5At] (`prefix: recording`, placeholder WebP).
 /// Does not touch `tmp_*` or `session_*`.
 Future<List<RecoverableRecording>> scanRecoverableRecordings(
   Directory scratch,

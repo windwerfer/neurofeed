@@ -1,7 +1,6 @@
-//! Capture writer (PR 4) and max-rate soak (PR 2).
-//!
-//! PR 2 only lands the harness against **current** assemble. Do not "fix"
-//! O(n) RAM here.
+//! Capture writer and max-rate soak.
+
+pub(crate) mod capture;
 
 #[cfg(test)]
 mod soak;
