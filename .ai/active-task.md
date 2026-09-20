@@ -1,11 +1,9 @@
 # Active Task
 
 **Now:** Data-plane spine is **implemented**. Governing spec:
-[spine/data-plane-contract.md](spine/data-plane-contract.md).
+[contracts/data-plane-contract.md](contracts/data-plane-contract.md).
 Historical coordinator steps (done):
 [archive/handoff-spine.md](archive/handoff-spine.md).
-Do not implement from archived Grokbot
-[archive/data-plane-contract.md](archive/data-plane-contract.md).
 
 Do not reopen spine Key Decisions, feedback pipeline Key Decisions, Crown
 Start, Connect UX, or the v5 68-byte header **size** / tags 1–10. Outer zstd

@@ -29,7 +29,7 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   `MuseEventDto::Feature`; Dart `FeatureBus` → `RewardLane` / `GuardLane`.
   Copy in `assets/features.json`; electrodes in `rust/src/api/features.rs`.
   Guard **only warns**, never modulates reward. Frozen:
-  `.ai/feedback/pipeline-contract.md`. **Crown Start is refused.**
+  `.ai/contracts/pipeline-contract.md`. **Crown Start is refused.**
 - **Protocols** are JSON documents (`origin: catalog | user`). Catalog:
   `assets/protocols.json`. User: `user_protocol_store.dart` +
   `lib/src/views/protocol_builder.dart`. `ProtocolType` / `GuardrailMode`
@@ -60,7 +60,9 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   `flutter run`. See `.ai/testing-guide.md`.
 - `flutter analyze lib/src` must stay clean after edits.
 - Format changes land in `rust/src/api/session_format.rs`; keep
-  `cargo test --lib session_format` green.
+  `cargo test --lib session_format` green. Frozen law:
+  [`.ai/contracts/session-format-contract.md`](.ai/contracts/session-format-contract.md).
+  Update `README_feedback_format.md` in the same change.
 - Do not reopen pipeline-contract Key Decisions. Do not unlock Crown
   sessions. Connect UX is frozen (`.ai/connect-simulator-ux.md`) — do not
   mix OSC-connect or Crown Start into it. `DeviceKind` is Muse | Neurosity
@@ -78,7 +80,7 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   inhibit-out only (not dirty, not below-the-line without a failed
   inhibit); reward stroke stays series color; do not reuse monitor graph
   widgets.
-- Data-plane / recording spine: **implemented**. Follow [`.ai/spine/data-plane-contract.md`](.ai/spine/data-plane-contract.md) (Frozen Key Decisions). Do not restore Dart live encode, outer zstd on the container raw section, or whole-raw `readAsBytes` / `v5ExtractRaw` on keepable captures. Do not add `rust/src/spine/normalize/`. Intentional deviations need a written why. Sibling to the feedback pipeline contract — do not reopen feedback Key Decisions for spine work. Historical coordinator steps: [`.ai/archive/handoff-spine.md`](.ai/archive/handoff-spine.md).
+- Data-plane / recording spine: **implemented**. Follow [`.ai/contracts/data-plane-contract.md`](.ai/contracts/data-plane-contract.md) (Frozen Key Decisions). Do not restore Dart live encode, outer zstd on the container raw section, or whole-raw `readAsBytes` / `v5ExtractRaw` on keepable captures. Do not add `rust/src/spine/normalize/`. Intentional deviations need a written why. Sibling to the feedback pipeline contract — do not reopen feedback Key Decisions for spine work. Historical coordinator steps: [`.ai/archive/handoff-spine.md`](.ai/archive/handoff-spine.md).
 - If you change on-screen copy or primary chrome (status bar, sidebar, connect
   window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
   Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
@@ -95,7 +97,8 @@ Tests: [`.ai/test-matrix.md`](.ai/test-matrix.md). Audio engine:
 Format/cache: `README_feedback_format.md`, `README_history_cache.md`.
 Trust graphs: [`.ai/trust-graphs.md`](.ai/trust-graphs.md) (implemented).
 Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
-Data-plane spine: [`.ai/spine/data-plane-contract.md`](.ai/spine/data-plane-contract.md) (**Implemented**). Historical handoff: [`.ai/archive/handoff-spine.md`](.ai/archive/handoff-spine.md).
+Frozen contracts: [`.ai/contracts/`](.ai/contracts/) — pipeline, data-plane, session format.
+Historical spine handoff: [`.ai/archive/handoff-spine.md`](.ai/archive/handoff-spine.md).
 
 ## Project layout
 ```
@@ -179,6 +182,8 @@ assets/                     protocols.json, calibrations.json, features.json, au
   (`#[frb(ignore)]`). Crown OSC: `neurosity_osc.rs` (no discovery API yet).
 - Feature registry: `rust/src/api/features.rs`. Dart bus/lanes as above.
 - Session byte layout: `rust/src/api/session_format.rs` only. Dart is FFI.
+  Freeze: `.ai/contracts/session-format-contract.md`. Human spec:
+  `README_feedback_format.md`.
 - Session assemble: `lib/src/spine/assemble.dart`
   (`assembleV5Container`, `writeScratchV5`). Placeholder WebP stays in
   `session_v5/placeholder_webp.dart`. Scratch writer:

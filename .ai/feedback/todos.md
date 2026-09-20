@@ -7,7 +7,7 @@ pipeline-contract Key Decisions.
 
 - Crown *run* (quality vectors, computed frames, charts device-aware).
 - OSC connect / discovery for Crown / Notion.
-- Phone overnight QA of keepable-capture FGS (screen-off, hours). FGS itself landed; see [../spine/data-plane-contract.md](../spine/data-plane-contract.md).
+- Phone overnight QA of keepable-capture FGS (screen-off, hours). FGS itself landed; see [../contracts/data-plane-contract.md](../contracts/data-plane-contract.md).
 - EEG artifact flag for jaw-clench / blink EMG (accel gating only catches head motion).
 - Athena raw optical stream — [../TODO/athena-optics-contract.md](../TODO/athena-optics-contract.md).
 - Publish `third_party/edf_export` to git+tag after a device export pass.

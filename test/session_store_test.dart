@@ -36,7 +36,7 @@ void main() {
       savedAt: DateTime.now().toIso8601String(),
     );
 
-    // Use v5 format with empty computed frames (dummy body [1,2,3,4] is valid v4 raw body)
+    // v5 container; dummy raw bytes; empty computed frames.
     await store.publishSession(
       'test1234',
       metadata,

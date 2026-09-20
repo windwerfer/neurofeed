@@ -7,6 +7,10 @@ Crown-start / v5 layout threads.
 | Thread | Spec | Handoff |
 |--------|------|---------|
 | Athena optics (raw stream) | [athena-optics-contract.md](athena-optics-contract.md) | [handoff-athena-optics.md](handoff-athena-optics.md) |
+| History dashboard unification | [history-dashboard-unification.md](history-dashboard-unification.md) | [handoff-history-dashboard.md](handoff-history-dashboard.md) |
+| Session vs recording metadata | [session_vs_recording_metadata.md](session_vs_recording_metadata.md) | — |
 
-When a thread lands, move its spec to `.ai/` (live) or `archive/` and
-delete or stub the row here.
+When a thread lands, slim the spec to frozen law and move it to
+[`.ai/contracts/`](../contracts/). Keep the full implementer spec here
+until then (Athena still needs packet geometry, types, and work order).
+Delete or stub the row here after the move.
