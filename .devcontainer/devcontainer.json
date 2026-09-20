@@ -64,7 +64,11 @@
 
 
         // Mount host's PulseAudio / PipeWire-Pulse socket into the container
-        "-v", "${localEnv:XDG_RUNTIME_DIR}/pulse/native:/tmp/pulse-socket:ro"
+        "-v", "${localEnv:XDG_RUNTIME_DIR}/pulse/native:/tmp/pulse-socket:ro",
+
+        // respect timezone of host
+        "-v", "/etc/localtime:/etc/localtime:ro",
+        "-v", "/etc/timezone:/etc/timezone:ro"
 
     ],
     // use zsh as the default shell
