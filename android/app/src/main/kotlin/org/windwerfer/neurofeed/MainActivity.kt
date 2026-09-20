@@ -60,6 +60,43 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
+
+        CaptureForegroundBridge.messenger = flutterEngine.dartExecutor.binaryMessenger
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "neurofeed/capture_fgs")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "start" -> {
+                        val kind = call.argument<String>("kind") ?: "recording"
+                        val startedAtMs = (call.argument<Number>("startedAtMs") ?: 0).toLong()
+                        val elapsedSeconds = (call.argument<Number>("elapsedSeconds") ?: 0).toInt()
+                        val unsaved = call.argument<Boolean>("unsaved") ?: false
+                        CaptureForegroundService.apply(
+                            this,
+                            kind,
+                            startedAtMs,
+                            elapsedSeconds,
+                            unsaved,
+                        )
+                        result.success(null)
+                    }
+                    "stop" -> {
+                        CaptureForegroundService.stop(this)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    override fun onDestroy() {
+        try {
+            if (CaptureForegroundBridge.messenger === flutterEngine.dartExecutor.binaryMessenger) {
+                CaptureForegroundBridge.messenger = null
+            }
+        } catch (_: Exception) {
+            CaptureForegroundBridge.messenger = null
+        }
+        super.onDestroy()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

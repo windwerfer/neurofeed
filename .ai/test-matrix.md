@@ -57,7 +57,8 @@ flutter test \
   test/monitor/overshoot_hold_test.dart \
   test/monitor/recording_metadata_test.dart \
   test/history_filter_test.dart \
-  test/agent/agent_commands_test.dart
+  test/agent/agent_commands_test.dart \
+  test/capture_foreground_test.dart
 ```
 
 ## FFI (host lib first)
@@ -125,6 +126,7 @@ NEUROFEED_SOAK_EQUIV_SECS=43200 cargo test --manifest-path rust/Cargo.toml \
 | Real BLE Muse | **cannot** | — | phone + testing-guide logcat | Human | |
 | Real Crown OSC | **cannot** | — | — | Start refused | |
 | Android AAudio | **cannot** | — | — | — | |
+| Android FGS (keepable capture) | Dart unit | `test/capture_foreground_test.dart` | `flutter test test/capture_foreground_test.dart` | Policy: FGS for `recording` / `feedback` / unsaved Save-Discard, not `tmp_` | Phone overnight **cannot** (no adb device in CI). Manual: Record or Start Session, background, screen off, 10+ min still appending |
 | Pad fit | **cannot** | — | — | Sim pads are synthetic ≥ 80 | |
 
 ## Agent Linux smoke (HTTP)
