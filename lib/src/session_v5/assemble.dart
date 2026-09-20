@@ -76,8 +76,9 @@ Uint8List encodeThumbnailWebP(Uint8List pngBytes) {
   }
 }
 
-/// Single wrapper around `containerEncodeV5`. Empty thumbnails become the
-/// placeholder WebP so the decoder never sees `Uint8List(0)`.
+/// In-memory wrapper around `containerEncodeV5` for **small** fixtures.
+/// Empty thumbnails become the placeholder WebP so the decoder never sees
+/// `Uint8List(0)`. Keepable captures use [writeScratchV5] (file-to-file).
 Uint8List assembleV5Container({
   required List<int> thumbnail,
   required Map<String, Object?> metadataJson,
@@ -93,30 +94,54 @@ Uint8List assembleV5Container({
   );
 }
 
-/// Write `${prefix}_<id>.neurofeed` into [dir] via [assembleV5Container].
-/// [prefix] defaults to `session`.
+/// Write `${prefix}_<id>.neurofeed` into [dir] by copying the framed `.raw`
+/// into the container raw section (no outer zstd). [prefix] defaults to
+/// `session`. Pass [rawPath] / [computedPath] for keepable captures; [rawBody]
+/// / [computedJsonl] are small-fixture fallbacks that stage temp files.
 Future<File> writeScratchV5({
   required Directory dir,
   required String id,
   String prefix = 'session',
   required Map<String, Object?> metadataJson,
-  required List<int> rawBody,
-  required List<int> computedJsonl,
+  List<int>? rawBody,
+  List<int>? computedJsonl,
+  String? rawPath,
+  String? computedPath,
 }) async {
-  final computed = computedJsonl is Uint8List
-      ? computedJsonl
-      : Uint8List.fromList(computedJsonl);
-  final v5 = assembleV5Container(
-    thumbnail: placeholderWebP,
-    metadataJson: metadataJson,
-    computedFrames: parseComputedJsonl(computed),
-    rawBody: rawBody,
-  );
   if (!await dir.exists()) {
     await dir.create(recursive: true);
   }
   final file = File('${dir.path}/${prefix}_$id.neurofeed');
-  await file.writeAsBytes(v5, flush: true);
+  var raw = rawPath ?? '';
+  var computed = computedPath ?? '';
+  File? stagedRaw;
+  File? stagedComputed;
+  if (raw.isEmpty && rawBody != null && rawBody.isNotEmpty) {
+    stagedRaw = File('${dir.path}/.${prefix}_$id.assemble.raw');
+    await stagedRaw.writeAsBytes(rawBody, flush: true);
+    raw = stagedRaw.path;
+  }
+  if (computed.isEmpty && computedJsonl != null && computedJsonl.isNotEmpty) {
+    stagedComputed = File('${dir.path}/.${prefix}_$id.assemble.computed');
+    await stagedComputed.writeAsBytes(computedJsonl, flush: true);
+    computed = stagedComputed.path;
+  }
+  try {
+    await ffi.containerEncodeV5ToPath(
+      destPath: file.path,
+      thumbnail: Uint8List.fromList(placeholderWebP),
+      metadataJson: utf8.encode(jsonEncode(metadataJson)),
+      computedJsonlPath: computed,
+      rawPath: raw,
+    );
+  } finally {
+    if (stagedRaw != null && await stagedRaw.exists()) {
+      await stagedRaw.delete();
+    }
+    if (stagedComputed != null && await stagedComputed.exists()) {
+      await stagedComputed.delete();
+    }
+  }
   return file;
 }
 

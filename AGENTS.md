@@ -351,7 +351,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **Stale `rust/target/release/` lib breaks `flutter run`** (content-hash
   mismatch). Rebuild release after codegen; debug/cargokit rebuilds are not
   loaded. See `.ai/testing-guide.md`.
-- **`updateNotes` uses v5** (`containerEncodeV5`). There is no
+- **`updateNotes` uses v5** (`v5RewriteHeadToPath`; copies raw section). There is no
   `SessionContainer` Dart wrapper anymore.
 - **Assemble v5 at `end()`** into scratch (placeholder WebP) **before**
   `phase = ended`. Live summary cannot pop — Save `publishSession` to

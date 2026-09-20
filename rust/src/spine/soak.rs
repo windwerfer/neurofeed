@@ -1,13 +1,9 @@
-//! Max-rate filler that drives **today's** assemble: read whole framed `.raw`,
-//! then [`container_encode_v5`](crate::api::session_format::container_encode_v5)
-//! (`zstd::encode_all` of the entire raw body).
-//!
-//! This is the PR 2 baseline. Extra RSS during assemble is **O(n)** in filled
-//! volume (whole-file compress). That report is PASS, not a reason to change
-//! encode in this module. PR 3 kills the outer wrap.
+//! Max-rate filler that drives streaming assemble:
+//! [`container_encode_v5_to_path`](crate::api::session_format::container_encode_v5_to_path)
+//! copies the framed `.raw` into the container raw section (no outer zstd).
 
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -16,7 +12,7 @@ use crate::api::muse::{
     TelemetrySnapshot, XyzDto,
 };
 use crate::api::session_format::{
-    container_encode_v5, encode_session_event, session_frame_bytes, session_header_bytes,
+    container_encode_v5_to_path, encode_session_event, session_frame_bytes, session_header_bytes,
     ComputedFrame, FeedbackInfo, GuardrailInfo, PeakAlphaInfo, V5_MAGIC,
 };
 
@@ -78,7 +74,7 @@ impl SoakReport {
             extra_assemble
         );
         eprintln!(
-            "[spine] soak assemble_path={} ram=O(n) (whole-file encode_all; PR 2 baseline, not a fail)",
+            "[spine] soak assemble_path={} ram=O(1) extra (copy .raw, no outer zstd)",
             self.assemble_path
         );
         eprintln!(
@@ -320,39 +316,70 @@ fn soak_raw_path() -> PathBuf {
     ))
 }
 
-/// Fill Classic Muse all-stream records at max rate, `read_to_end` the framed
-/// `.raw`, and assemble with today's `container_encode_v5`.
+fn write_computed_jsonl(path: &std::path::Path, frames: &[ComputedFrame]) {
+    let mut f = File::create(path).expect("soak create computed jsonl");
+    for frame in frames {
+        f.write_all(&frame.to_json_bytes())
+            .expect("soak write computed");
+        f.write_all(b"\n").expect("soak write computed nl");
+    }
+}
+
+/// Fill Classic Muse all-stream records at max rate and assemble with
+/// `container_encode_v5_to_path` (copy `.raw`, no outer zstd).
 pub fn run_current_assemble_soak(equiv_secs: u64) -> SoakReport {
     let path = soak_raw_path();
+    let dest = path.with_extension("neurofeed");
+    let computed_path = path.with_extension("computed");
     let fill_t0 = Instant::now();
     let mut sink = RawSink::create(&path).expect("soak create raw temp");
     fill_classic_muse(&mut sink, equiv_secs);
     let sink = sink.finish();
     let fill_ms = fill_t0.elapsed().as_millis();
     let rss_kb_after_fill = rss_kb();
-
-    let mut raw_body = Vec::new();
-    let mut write_errors = sink.write_errors;
-    match File::open(&path).and_then(|mut f| f.read_to_end(&mut raw_body)) {
-        Ok(_) => {}
-        Err(_) => write_errors += 1,
-    }
-    let rss_kb_after_read = rss_kb();
+    let rss_kb_after_read = rss_kb_after_fill;
 
     let metadata = br#"{"formatVersion":5,"kind":"recording","device":"classic-muse-soak"}"#;
-    let computed = computed_frames(equiv_secs);
+    write_computed_jsonl(&computed_path, &computed_frames(equiv_secs));
     let assemble_t0 = Instant::now();
-    let container = container_encode_v5(&[], metadata, &computed, &raw_body);
+    let dest_out = container_encode_v5_to_path(
+        dest.to_string_lossy().into_owned(),
+        Vec::new(),
+        metadata.to_vec(),
+        computed_path.to_string_lossy().into_owned(),
+        path.to_string_lossy().into_owned(),
+    );
     let assemble_ms = assemble_t0.elapsed().as_millis();
     let rss_kb_after_assemble = rss_kb();
-    let container_bytes = container.len() as u64;
-    let container_magic_ok = container.len() >= 6 && container[..6] == V5_MAGIC;
+    let mut write_errors = sink.write_errors;
+    let (container_bytes, container_magic_ok) = match dest_out {
+        Ok(p) => {
+            let len = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+            let mut magic = [0u8; 6];
+            let ok = File::open(&p)
+                .ok()
+                .and_then(|mut f| {
+                    use std::io::Read;
+                    f.read_exact(&mut magic).ok()
+                })
+                .is_some()
+                && magic == V5_MAGIC;
+            (len, ok)
+        }
+        Err(_) => {
+            write_errors += 1;
+            (0, false)
+        }
+    };
+    let framed_raw_bytes = sink.framed_raw_bytes;
     let _ = std::fs::remove_file(&path);
+    let _ = std::fs::remove_file(&computed_path);
+    let _ = std::fs::remove_file(&dest);
 
     SoakReport {
         equiv_secs,
         uncompressed_record_bytes: sink.uncompressed_record_bytes,
-        framed_raw_bytes: raw_body.len() as u64,
+        framed_raw_bytes,
         container_bytes,
         events: sink.events,
         flushes: sink.flushes,
@@ -363,7 +390,7 @@ pub fn run_current_assemble_soak(equiv_secs: u64) -> SoakReport {
         rss_kb_after_fill,
         rss_kb_after_read,
         rss_kb_after_assemble,
-        assemble_path: "container_encode_v5 zstd::encode_all(whole raw_body) + read_to_end(.raw)",
+        assemble_path: "container_encode_v5_to_path copy .raw (no outer zstd)",
         container_magic_ok,
     }
 }
@@ -379,15 +406,15 @@ mod tests {
         assert!(report.events > 0);
         assert!(report.uncompressed_record_bytes > 0);
         assert!(report.framed_raw_bytes >= 12);
-        assert!(report.container_bytes > report.framed_raw_bytes / 4);
+        assert!(report.container_bytes >= report.framed_raw_bytes);
         assert!(report.container_magic_ok);
         assert!(
-            report.assemble_path.contains("encode_all"),
-            "PR 2 must document today's whole-file compress"
+            report.assemble_path.contains("copy"),
+            "assemble must copy .raw, not wrap it"
         );
         assert!(
-            report.assemble_path.contains("read_to_end"),
-            "PR 2 must drive today's whole-raw read"
+            !report.assemble_path.contains("encode_all"),
+            "assemble must not outer-zstd the raw section"
         );
     }
 
@@ -403,7 +430,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "12h-equivalent volume; extra RSS is O(n) (PR 2 baseline, not a fail)"]
+    #[ignore = "12h-equivalent volume; extra assemble RSS must not scale with filled raw"]
     fn soak_current_assemble_12h_equivalent() {
         let secs = equiv_secs_from_env(TWELVE_H_SECS);
         let report = run_current_assemble_soak(secs);

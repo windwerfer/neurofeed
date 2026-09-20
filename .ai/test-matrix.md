@@ -81,16 +81,15 @@ cargo test --lib session_format   # format edits
 cargo test --lib                  # features / simulator / device_config
 ```
 
-Spine soak (PR 2 baseline — **current** assemble, not the RAM fix):
+Spine soak (streaming assemble — copy `.raw`, no outer zstd):
 
 ```bash
-# Max-rate Classic Muse filler → read whole .raw → container_encode_v5
-# (outer zstd::encode_all of the framed body). Default 60 s equivalent.
-# Prints GB, RSS if /proc is available, drop counters. Today's assemble is
-# O(n) RAM / whole-file compress — that report is PASS (PR 3 kills the wrap).
+# Max-rate Classic Muse filler → container_encode_v5_to_path (copy framed .raw).
+# Default 60 s equivalent. Prints GB, RSS if /proc is available, drop counters.
+# Extra assemble RSS must not scale with filled volume.
 cargo test --manifest-path rust/Cargo.toml --lib spine::soak -- --nocapture
 
-# 12 h-equivalent volume (not wall-clock). Same O(n) RAM; do not "fix" here.
+# 12 h-equivalent volume (not wall-clock).
 NEUROFEED_SOAK_EQUIV_SECS=43200 cargo test --manifest-path rust/Cargo.toml \
   --lib spine::soak -- --ignored --nocapture
 ```
@@ -114,7 +113,7 @@ NEUROFEED_SOAK_EQUIV_SECS=43200 cargo test --manifest-path rust/Cargo.toml \
 | Guard pref migrate | Dart unit | `settings_guardrail_migrate_test.dart` | that file | Old enum → feature ids | Debug switch widget |
 | History / store | Dart+FFI | `session_store_test.dart`, `test/history_filter_test.dart` | FFI command above + `flutter test test/history_filter_test.dart` | List includes `kind=recording`; no orphan-file backfill; `moveAllTo` both prefixes; delete uses sqlite `path`; filter All/Feedback/Recordings | History widget |
 | Session format v5 | Rust + Dart+FFI | `session_format` + export/charts tests | rust + FFI | Roundtrip | Don't edit layout from Dart |
-| Spine soak (current assemble) | Rust | `rust/src/spine/soak.rs` | `cargo test --manifest-path rust/Cargo.toml --lib spine::soak -- --nocapture` | Max-rate fill; volume printed; assemble is whole-raw `read_to_end` + `container_encode_v5` `encode_all` (**O(n) RAM is today's baseline**, not a fail). Drops = 0 until the writer exists. Env `NEUROFEED_SOAK_EQUIV_SECS` (default 60). 12 h-equivalent: same command with `--ignored` (or env `43200`) | Phone overnight **cannot**; PR 3 streaming assemble |
+| Spine soak (streaming assemble) | Rust | `rust/src/spine/soak.rs` | `cargo test --manifest-path rust/Cargo.toml --lib spine::soak -- --nocapture` | Max-rate fill; volume printed; assemble is `container_encode_v5_to_path` copy of `.raw` (no outer zstd; extra RSS must not scale with filled volume). Drops = 0 until the writer exists. Env `NEUROFEED_SOAK_EQUIV_SECS` (default 60). 12 h-equivalent: same command with `--ignored` (or env `43200`) | Phone overnight **cannot** |
 | Simulator identity | Rust unit | `simulator.rs` | `cargo test --lib simulator` | name/firmware table | Live spawn needs tokio |
 | Streaming OSC/BF | Dart unit | `test/streaming_*.dart` | `flutter test test/streaming_*.dart` | Datagram shape | View untested |
 | Feature probe | Dart unit | `test/feature_override_test.dart` | that file | Latch replace; synthetic TAR/delta baseline | Ear-test is human |

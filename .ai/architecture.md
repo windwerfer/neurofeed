@@ -86,12 +86,14 @@ Skip-cal on a sim seeds a synthetic baseline so percentile/`inTarget` work.
 `.neurofeed` v5, Rust-owned (`rust/src/api/session_format.rs`):
 
 ```
-[68-byte header][WebP thumb][metadata zstd][computed 1 Hz zstd][raw zstd]
+[68-byte header][WebP thumb][metadata zstd][computed 1 Hz zstd][raw body]
 ```
 
-Raw body is format v4 (f32 payloads, f64 timestamps), framed zstd. Dart
+Raw body is format v4 (f32 payloads, f64 timestamps), inner-framed zstd.
+The container raw section is a copy of that body (no outer zstd). Dart
 delegates: `encodeSessionEvent` / `sessionFrameBytes` / `sessionParseBody` /
-`containerEncodeV5` / `v5ParseHead` / `v5ExtractComputed`.
+`containerEncodeV5` / `containerEncodeV5ToPath` / `v5ParseHead` /
+`v5ExtractComputed`.
 
 History list: SQLite `session_metadata.db` (typed columns + thumbnail BLOB,
 `kind` `feedback` \| `recording`). `SessionStore.list()` is sqlite-only.

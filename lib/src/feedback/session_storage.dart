@@ -107,6 +107,10 @@ abstract class SessionStorage {
   /// a single truncate+write call. [dir] behaves as in [writeFile].
   Future<void> writeFileAtomic(String name, List<int> bytes, {String? dir});
 
+  /// Copy [srcPath] into the history folder as [name] without loading the
+  /// file into Dart. Filesystem uses temp+rename; SAF streams natively.
+  Future<void> copyFromPath(String name, String srcPath, {String? dir});
+
   /// Bytes of [name], or null if it does not exist.
   Future<List<int>?> readFile(String name);
 
@@ -171,6 +175,22 @@ class FileSystemSessionStorage extends SessionStorage {
       // (e.g. Windows does not always let rename overwrite). Fall back to
       // delete-then-rename; the temp copy is already fsynced so worst case we
       // lose the target but never corrupt it.
+      if (await target.exists()) {
+        await target.delete();
+      }
+      await tmp.rename(target.path);
+    }
+  }
+
+  @override
+  Future<void> copyFromPath(String name, String srcPath, {String? dir}) async {
+    final target = File(_path(name, dir));
+    final tmp = File(_path('.$name.tmp', dir));
+    await target.parent.create(recursive: true);
+    await File(srcPath).copy(tmp.path);
+    try {
+      await tmp.rename(target.path);
+    } on FileSystemException {
       if (await target.exists()) {
         await target.delete();
       }
@@ -339,6 +359,16 @@ class SafSessionStorage extends SessionStorage {
       'tree': treeUri,
       'name': name,
       'bytes': bytes,
+      if (dir != null && dir.isNotEmpty) 'dir': dir,
+    });
+  }
+
+  @override
+  Future<void> copyFromPath(String name, String srcPath, {String? dir}) async {
+    await _invoke('copyFromPath', {
+      'tree': treeUri,
+      'name': name,
+      'srcPath': srcPath,
       if (dir != null && dir.isNotEmpty) 'dir': dir,
     });
   }

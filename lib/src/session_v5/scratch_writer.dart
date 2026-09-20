@@ -11,13 +11,15 @@ import 'package:neurofeed/src/settings.dart';
 
 enum SidecarMode { jsonl, snapshot }
 
-/// v5 scratch writer — writes three uncompressed temp files during recording:
-/// - raw: framed raw body (`sessionHeaderBytes` + `sessionFrameBytes`)
-/// - computed: JSON Lines (one Dart ComputedFrame per line)
-/// - sidecar: JSONL `.metadata` (feedback) or atomic `.json` snapshot (monitor)
+/// v5 scratch writer — live temps:
+/// - raw: v5 raw body (`sessionHeaderBytes` + inner zstd frames via
+///   `sessionFrameBytes`)
+/// - computed: uncompressed JSON Lines (one Dart ComputedFrame per line)
+/// - sidecar: uncompressed JSONL `.metadata` (feedback) or atomic `.json`
+///   snapshot (monitor)
 ///
-/// Does not assemble the v5 container. Callers flush, read temps, and pass
-/// bytes to [assembleV5Container]. Prefix defaults to `session`.
+/// Does not assemble the v5 container. Callers flush and pass temp **paths**
+/// to [writeScratchV5]. Prefix defaults to `session`.
 class SessionRecorder {
   SessionRecorder({List<int> Function()? headerBytes})
     : _headerBytes = headerBytes ?? ffi.sessionHeaderBytes;
@@ -55,6 +57,10 @@ class SessionRecorder {
   String? get sessionId => _sessionId;
 
   String? get currentFilePath => _rawFile?.path;
+
+  String? get rawPath => _rawFile?.path;
+
+  String? get computedPath => _computedFile?.path;
 
   /// Directory where temp files are being written.
   Directory? get tempDir => _rawFile?.parent;
