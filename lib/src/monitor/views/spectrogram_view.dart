@@ -44,7 +44,9 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
   void initState() {
     super.initState();
     _mon = ref.read(monitorControllerProvider.notifier);
-    final saved = ref.read(settingsProvider).monitorWindowSeconds('spectrogram');
+    final saved = ref
+        .read(settingsProvider)
+        .monitorWindowSeconds('spectrogram');
     if (saved != null && saved > 0) {
       _viewport.windowSeconds = saved;
     }
@@ -64,8 +66,7 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
     // Hop from absolute newest elapsed — sampleCount caps at capacity once
     // the ~5 min ring is full, which previously froze Follow.
     final newest = _newestElapsed();
-    final hop =
-        (newest * SweepBuffer.sampleRate).floor() ~/ kStftHopSamples;
+    final hop = (newest * SweepBuffer.sampleRate).floor() ~/ kStftHopSamples;
     if (hop == _lastHop) return;
     _lastHop = hop;
     _pingPlot();
@@ -140,10 +141,10 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
         zoomFloor: ViewportController.spectrogramZoomFloor,
         zoomCap: ViewportController.spectrogramZoomCap,
       );
-            ref
+      ref
           .read(settingsProvider)
           .setMonitorWindowSeconds('spectrogram', _viewport.windowSeconds);
-return;
+      return;
     }
     if (d.pointerCount != 1) return;
     final w = context.size?.width ?? 1;
@@ -247,6 +248,16 @@ return;
     ) {
       if (next != true) _follow();
     });
+    listenLiveGraphBoundary(
+      ref,
+      resetAnchors: _viewport.resetFollowAnchors,
+      resumeFollow: _follow,
+      onEpoch: () {
+        _ring.clear();
+        _lastHop = -1;
+        _pingPlot();
+      },
+    );
     final names = state.electrodeNames;
     _syncMontage(names);
 

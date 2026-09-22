@@ -57,8 +57,8 @@ Shared chrome for the five live graph views. Record is global
 | Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Not Live / History. Disabled on saved-recording dashboard. |
 | Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Drag/pinch on time-X graphs enters Inspect. |
 | Window length | `10s` / `30s` / … | `windowOptions` | `graph_shell.dart` | Per-view presets. Pinch-X on Bands/Spectrogram → `custom`. |
-| Record | `Record` | `_RecordControls` | `graph_shell.dart` | All five **live** views. Starts `recording_$ts`. |
-| Stop recording | `Stop recording` | `_RecordControls` | `graph_shell.dart` | Assemble + Save/Discard. Elapsed while recording. |
+| Record | `Record` | `_RecordControls` | `graph_shell.dart` | All five **live** views. Starts `recording_$ts`. Clears the live graph, new capture clock, enters Follow. |
+| Stop recording | `Stop recording` | `_RecordControls` | `graph_shell.dart` | Assemble + Save/Discard. Clears the live graph, keeps drawing new samples, enters Follow. Elapsed while recording. |
 | Record disabled | tooltip `Stop the feedback session to record` | `_RecordControls` | `graph_shell.dart` | `CaptureKind.feedback` or disconnected. |
 | Landscape cinema | — | `GraphCinema` | `graph_cinema.dart` | Graph views only. **Mobile:** landscape hides status bar, sidebar, GraphShell toolbar; portrait restores. **Desktop:** chrome stays; **F11** toggles the same hide. Not Settings / Feedback / Streaming / History. |
 | Chrome overflow | chevron | `_PannableChromeRow` | `graph_shell.dart` | Whole toolbar pans when Follow/Inspect + electrodes overflow; mouse/touch drag anywhere on the row (incl. over chips); chevron jumps to end. |

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/monitor/monitor_controller.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
@@ -352,6 +353,58 @@ void main() {
       expect(names.any((n) => n.endsWith('.computed')), isTrue);
       expect(names.any((n) => n.endsWith('.json')), isTrue);
       expect(names.every((n) => n.startsWith('recording_')), isTrue);
+    });
+
+    test('Record clears live graphs and asks views to Follow', () async {
+      container.read(monitorControllerProvider);
+      app.debugSetConnected();
+      await settle();
+      final ts = DateTime.now().millisecondsSinceEpoch.toDouble();
+      app.debugAddEvent(
+        MuseEventDto.eeg(
+          EegDto(
+            index: 0,
+            electrode: 0,
+            timestamp: ts,
+            samples: Float64List.fromList(const [1, 2, 3, 4]),
+          ),
+        ),
+      );
+      app.debugAddEvent(
+        MuseEventDto.bands(
+          BandsDto(
+            electrode: 0,
+            timestamp: ts,
+            delta: 1,
+            theta: 1,
+            alpha: 2,
+            beta: 1,
+            gamma: 1,
+            lineNoiseRatio: 0.1,
+          ),
+        ),
+      );
+      app.debugAddEvent(
+        MuseEventDto.pulse(PulseDto(timestamp: ts, bpm: 60, confidence: 1)),
+      );
+      await Future<void>.delayed(Duration.zero);
+      final notifier = container.read(monitorControllerProvider.notifier);
+      expect(notifier.bandCache.hasData, isTrue);
+      expect(notifier.sweepBuffer.hasData, isTrue);
+      expect(notifier.opticalCache.hasData, isTrue);
+
+      await notifier.startRecording();
+      await settle();
+
+      expect(notifier.bandCache.hasData, isFalse);
+      expect(notifier.sweepBuffer.hasData, isFalse);
+      expect(notifier.opticalCache.hasData, isFalse);
+      final mon = container.read(monitorControllerProvider);
+      expect(mon.kind, CaptureKind.recording);
+      expect(mon.graphEpoch, 1);
+      expect(mon.graphResumeFollow, isTrue);
+      expect(mon.graphResetAnchors, isTrue);
+      expect(mon.captureStartedAtMs, ts.round());
     });
 
     test('acquireFeedbackLease is false while recording', () async {

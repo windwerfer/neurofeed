@@ -138,9 +138,11 @@ class MonitorController extends Notifier<MonitorState> {
         await _stopTmpWriter();
       }
       final app = ref.read(appStateProvider);
-      state = MonitorState.idle(
-        deviceKind: app.lastConnectedKind,
-      ).copyWith(kind: CaptureKind.feedback);
+      state = _withGraphEpoch(
+        MonitorState.idle(
+          deviceKind: app.lastConnectedKind,
+        ).copyWith(kind: CaptureKind.feedback),
+      );
       debugPrint('[monitor] lease feedback');
       return true;
     });
@@ -151,7 +153,9 @@ class MonitorController extends Notifier<MonitorState> {
       if (!_lease.tryReleaseFeedback()) return;
       debugPrint('[monitor] lease release');
       final app = ref.read(appStateProvider);
-      state = MonitorState.idle(deviceKind: app.lastConnectedKind);
+      state = _withGraphEpoch(
+        MonitorState.idle(deviceKind: app.lastConnectedKind),
+      );
       if (app.status.connected) {
         await _startTmpUnlocked();
       }
@@ -212,6 +216,7 @@ class MonitorController extends Notifier<MonitorState> {
         electrodeNames: names,
         channelCount: names.length,
         captureStartedAtMs: startedAt,
+        graphEpoch: state.graphEpoch,
       );
       await _capture!.startTmp(
         dir: dir,
@@ -226,7 +231,9 @@ class MonitorController extends Notifier<MonitorState> {
       _lease.tryDiscardTmp();
       _stopSampler();
       final app = ref.read(appStateProvider);
-      state = MonitorState.idle(deviceKind: app.lastConnectedKind);
+      state = _withGraphEpoch(
+        MonitorState.idle(deviceKind: app.lastConnectedKind),
+      );
     }
   }
 
@@ -236,7 +243,9 @@ class MonitorController extends Notifier<MonitorState> {
     await _stopTmpWriter();
     _lease.tryDiscardTmp();
     final app = ref.read(appStateProvider);
-    state = MonitorState.idle(deviceKind: app.lastConnectedKind);
+    state = _withGraphEpoch(
+      MonitorState.idle(deviceKind: app.lastConnectedKind),
+    );
     await _startTmpUnlocked();
   }
 
@@ -244,23 +253,20 @@ class MonitorController extends Notifier<MonitorState> {
     if (_lease.kind == CaptureKind.recording) {
       await _assembleRecordingUnlocked(promptSave: true);
       _latestEegTsMs = null;
-      sweepBuffer.clear();
-      bandCache.clear();
-      opticalCache.clear();
+      _clearLiveGraphs();
       return;
     }
     if (_lease.kind != CaptureKind.tmp) return;
     await _stopTmpWriter();
     _lease.tryDiscardTmp();
     _latestEegTsMs = null;
-    sweepBuffer.clear();
-    bandCache.clear();
-    opticalCache.clear();
+    _clearLiveGraphs();
     state = MonitorState(
       kind: CaptureKind.idle,
       electrodeNames: state.electrodeNames,
       channelCount: state.channelCount,
       pendingScratchPath: state.pendingScratchPath,
+      graphEpoch: state.graphEpoch,
     );
   }
 
@@ -274,7 +280,6 @@ class MonitorController extends Notifier<MonitorState> {
       await _stopTmpWriter();
     }
     if (!_lease.tryBeginRecording()) return;
-    opticalCache.clear();
     try {
       final storage = await ref.read(sessionStorageProvider.future);
       await storage.ensureDir();
@@ -285,11 +290,15 @@ class MonitorController extends Notifier<MonitorState> {
       final settings = ref.read(settingsProvider);
       final names = electrodeNamesForKind(app.lastConnectedKind);
       final startedAt = _latestEegTsMs ?? DateTime.now().millisecondsSinceEpoch;
+      _clearLiveGraphs();
       state = MonitorState(
         kind: CaptureKind.recording,
         electrodeNames: names,
         channelCount: names.length,
         captureStartedAtMs: startedAt,
+        graphEpoch: state.graphEpoch + 1,
+        graphResumeFollow: true,
+        graphResetAnchors: true,
       );
       await _capture!.startRecording(
         dir: dir,
@@ -305,7 +314,9 @@ class MonitorController extends Notifier<MonitorState> {
       _lease.tryReleaseRecording();
       _stopSampler();
       final after = ref.read(appStateProvider);
-      state = MonitorState.idle(deviceKind: after.lastConnectedKind);
+      state = _withGraphEpoch(
+        MonitorState.idle(deviceKind: after.lastConnectedKind),
+      );
       if (after.status.connected) {
         await _startTmpUnlocked();
       }
@@ -325,16 +336,19 @@ class MonitorController extends Notifier<MonitorState> {
       return null;
     }
     _lease.tryReleaseRecording();
-    final app = ref.read(appStateProvider);
+    _clearLiveGraphs();
     state = MonitorState(
       kind: CaptureKind.idle,
       electrodeNames: state.electrodeNames,
       channelCount: state.channelCount,
       captureStartedAtMs: promptSave ? state.captureStartedAtMs : null,
       pendingScratchPath: promptSave ? file.path : null,
+      graphEpoch: state.graphEpoch + 1,
+      graphResumeFollow: true,
+      graphResetAnchors: false,
     );
     debugPrint('[monitor] recording stop ${file.path}');
-    if (restartTmp && app.status.connected) {
+    if (restartTmp && ref.read(appStateProvider).status.connected) {
       await _startTmpUnlocked();
     }
     return file;
@@ -367,7 +381,9 @@ class MonitorController extends Notifier<MonitorState> {
       state = state.copyWith(pendingScratchPath: null);
       return;
     }
-    state = MonitorState.idle(deviceKind: app.lastConnectedKind);
+    state = _withGraphEpoch(
+      MonitorState.idle(deviceKind: app.lastConnectedKind),
+    );
     if (app.status.connected) {
       await _startTmpUnlocked();
     }
@@ -377,6 +393,16 @@ class MonitorController extends Notifier<MonitorState> {
     _stopSampler();
     await _capture?.discard();
   }
+
+  void _clearLiveGraphs() {
+    sweepBuffer.clear();
+    bandCache.clear();
+    opticalCache.clear();
+    debugPrint('[monitor] live graph clear');
+  }
+
+  MonitorState _withGraphEpoch(MonitorState next) =>
+      next.copyWith(graphEpoch: state.graphEpoch);
 
   void _startSampler(int channelCount, int startedAtMs) {
     _stopSampler();
