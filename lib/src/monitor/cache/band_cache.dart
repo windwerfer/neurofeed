@@ -90,7 +90,9 @@ class BandCache extends ChangeNotifier
     final hi = buf.upperBound(endT);
     if (lo >= hi) return const [];
     return List.generate(
-        hi - lo, (i) => ChartSample(buf.timestampAt(lo + i), buf.valueAt(lo + i)));
+      hi - lo,
+      (i) => ChartSample(buf.timestampAt(lo + i), buf.valueAt(lo + i)),
+    );
   }
 
   @override
@@ -102,18 +104,24 @@ class BandCache extends ChangeNotifier
     final result = <SeriesSlice>[];
     for (final ch in channels) {
       final hidden = hiddenChannels.contains(ch);
-      result.add(SeriesSlice(
-        name: bandChannelName(ch),
-        color: bandChannelColor(ch),
-        unit: 'µV²/Hz',
-        samples: hidden ? const [] : getRange(ch, startT, endT),
-        visible: !hidden,
-      ));
+      result.add(
+        SeriesSlice(
+          name: bandChannelName(ch),
+          color: bandChannelColor(ch),
+          unit: 'µV²/Hz',
+          samples: hidden ? const [] : getRange(ch, startT, endT),
+          visible: !hidden,
+        ),
+      );
     }
     return result;
   }
 
-  void clear() => _channels.clear();
+  void clear() {
+    if (_channels.isEmpty) return;
+    _channels.clear();
+    notifyListeners();
+  }
 }
 
 class _BandRing {
@@ -123,8 +131,8 @@ class _BandRing {
   int _count = 0;
 
   _BandRing(int capacity)
-      : timestamps = Float64List(capacity),
-        values = Float64List(capacity);
+    : timestamps = Float64List(capacity),
+      values = Float64List(capacity);
 
   int get length => _count;
 

@@ -15,6 +15,9 @@ class MonitorState {
     this.captureStartedAtMs,
     this.captureId,
     this.pendingScratchPath,
+    this.graphEpoch = 0,
+    this.graphResumeFollow = false,
+    this.graphResetAnchors = false,
   });
 
   final CaptureKind kind;
@@ -25,6 +28,10 @@ class MonitorState {
 
   /// Assembled `recording_$ts.neurofeed` waiting for Save / Discard.
   final String? pendingScratchPath;
+
+  final int graphEpoch;
+  final bool graphResumeFollow;
+  final bool graphResetAnchors;
 
   Duration get captureElapsed {
     final start = captureStartedAtMs;
@@ -51,6 +58,9 @@ class MonitorState {
     Object? captureStartedAtMs = _sentinel,
     Object? captureId = _sentinel,
     Object? pendingScratchPath = _sentinel,
+    int? graphEpoch,
+    bool? graphResumeFollow,
+    bool? graphResetAnchors,
   }) => MonitorState(
     kind: kind ?? this.kind,
     electrodeNames: electrodeNames ?? this.electrodeNames,
@@ -64,6 +74,9 @@ class MonitorState {
     pendingScratchPath: identical(pendingScratchPath, _sentinel)
         ? this.pendingScratchPath
         : pendingScratchPath as String?,
+    graphEpoch: graphEpoch ?? this.graphEpoch,
+    graphResumeFollow: graphResumeFollow ?? this.graphResumeFollow,
+    graphResetAnchors: graphResetAnchors ?? this.graphResetAnchors,
   );
 
   static const Object _sentinel = Object();

@@ -9,6 +9,31 @@ import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
+void listenLiveGraphBoundary(
+  WidgetRef ref, {
+  required void Function() resetAnchors,
+  required void Function() resumeFollow,
+  void Function()? onEpoch,
+}) {
+  ref.listen(monitorControllerProvider.select((s) => s.captureStartedAtMs), (
+    prev,
+    next,
+  ) {
+    if (prev == next) return;
+    resetAnchors();
+  });
+  ref.listen(monitorControllerProvider.select((s) => s.graphEpoch), (
+    prev,
+    next,
+  ) {
+    if (prev == null || prev == next) return;
+    final st = ref.read(monitorControllerProvider);
+    if (st.graphResetAnchors) resetAnchors();
+    if (st.graphResumeFollow) resumeFollow();
+    onEpoch?.call();
+  });
+}
+
 /// Shared chrome for live monitor graphs. Record / Stop recording from PR 5a.
 class GraphShell extends ConsumerWidget {
   const GraphShell({
@@ -163,7 +188,6 @@ class GraphShell extends ConsumerWidget {
   }
 }
 
-
 /// Horizontally pannable GraphShell toolbar. When Follow/Inspect + electrodes
 /// (etc.) overflow the width, drag anywhere on the row (mouse or touch,
 /// including over electrode chips) pans the whole strip so electrodes slide
@@ -231,7 +255,9 @@ class _PannableChromeRowState extends State<_PannableChromeRow> {
     final theme = Theme.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _recomputeOverflow());
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _recomputeOverflow(),
+        );
         // Desktop defaults omit mouse from dragDevices, so Linux mouse-drag
         // never pans; touch/trackpad may still work. Enable mouse + touch.
         final scrollable = ScrollConfiguration(
@@ -274,11 +300,11 @@ class _ChromePanScrollBehavior extends MaterialScrollBehavior {
 
   @override
   Set<PointerDeviceKind> get dragDevices => const {
-        PointerDeviceKind.touch,
-        PointerDeviceKind.mouse,
-        PointerDeviceKind.stylus,
-        PointerDeviceKind.trackpad,
-      };
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.trackpad,
+  };
 }
 
 class _RecordControls extends ConsumerStatefulWidget {
