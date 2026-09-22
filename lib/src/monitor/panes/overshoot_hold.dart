@@ -15,12 +15,16 @@ Iterable<double> overshootScaleValues(
   }
 }
 
+/// Paint Y for a band sample. Dashed when sticky [unusable] (bad quality)
+/// **or** overshoot (value above current [yMax]). Sticky-unusable always
+/// holds last good Y; pure overshoot can become solid again if yMax grows.
 ({double y, bool dashed}) overshootPaintY({
   required double value,
   required double yMax,
   required double lastInRangeY,
+  bool unusable = false,
 }) {
-  if (kBandsOvershootHold && value > yMax) {
+  if (unusable || (kBandsOvershootHold && value > yMax)) {
     return (y: lastInRangeY, dashed: true);
   }
   return (y: value, dashed: false);

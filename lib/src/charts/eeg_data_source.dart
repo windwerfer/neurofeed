@@ -4,7 +4,12 @@ import 'package:flutter/foundation.dart';
 class ChartSample {
   final double t;
   final double v;
-  ChartSample(this.t, this.v);
+
+  /// Sticky "signal unusable" bit stamped at append (e.g. bad pad quality).
+  /// Historical samples keep this flag across y-scale changes.
+  final bool unusable;
+
+  ChartSample(this.t, this.v, {this.unusable = false});
 }
 
 class SeriesSlice {

@@ -13,9 +13,12 @@ const double kBandsLogEpsilon = 1e-12;
 const double kBandTickMergeSeconds = 0.25;
 
 class BandPoint {
-  const BandPoint(this.elapsed, this.db);
+  const BandPoint(this.elapsed, this.db, {this.unusable = false});
   final double elapsed;
   final double db;
+
+  /// Sticky quality-unusable bit from append; overshoot is paint-time only.
+  final bool unusable;
 }
 
 double linearToDb(double linear) {
@@ -47,7 +50,7 @@ List<List<BandPoint>> buildBandSeries({
   final selected = electrodes.toList();
   final series = <List<BandPoint>>[];
   for (var b = 0; b < bandNames.length; b++) {
-    final byT = <int, List<double>>{};
+    final byT = <int, List<({double db, bool unusable})>>{};
     for (final e in selected) {
       final samples = cache.getRange(
         bandChannelId(e, b),
@@ -56,43 +59,56 @@ List<List<BandPoint>> buildBandSeries({
       );
       for (final s in samples) {
         final key = (s.t * 1000).round();
-        (byT[key] ??= []).add(linearToDb(s.v));
+        (byT[key] ??= []).add((db: linearToDb(s.v), unusable: s.unusable));
       }
     }
     final keys = byT.keys.toList()..sort();
     series.add(
       mergeBandTickPoints([
-        for (final k in keys)
-          BandPoint(
-            k / 1000.0 - origin,
-            byT[k]!.reduce((a, b) => a + b) / byT[k]!.length,
-          ),
+        for (final k in keys) _aggregateBandTick(k / 1000.0 - origin, byT[k]!),
       ]),
     );
   }
   return series;
 }
 
+/// Prefer averaging usable pads (like feedback autodrop). If none of the
+/// selected contributions are clean, keep an average Y but mark unusable so
+/// paint holds last-good and dashes.
+BandPoint _aggregateBandTick(
+  double elapsed,
+  List<({double db, bool unusable})> entries,
+) {
+  final usable = [for (final e in entries) if (!e.unusable) e.db];
+  final src = usable.isEmpty ? [for (final e in entries) e.db] : usable;
+  final avg = src.reduce((a, b) => a + b) / src.length;
+  return BandPoint(elapsed, avg, unusable: usable.isEmpty);
+}
+
 List<BandPoint> mergeBandTickPoints(Iterable<BandPoint> pts) {
   final sorted = pts.toList()..sort((a, b) => a.elapsed.compareTo(b.elapsed));
   if (sorted.length <= 1) return sorted;
   final out = <BandPoint>[];
-  var sumT = sorted[0].elapsed;
-  var sumY = sorted[0].db;
-  var n = 1;
+
+  void flush(List<BandPoint> group) {
+    if (group.isEmpty) return;
+    final usable = [for (final p in group) if (!p.unusable) p];
+    final src = usable.isEmpty ? group : usable;
+    final t = src.map((p) => p.elapsed).reduce((a, b) => a + b) / src.length;
+    final y = src.map((p) => p.db).reduce((a, b) => a + b) / src.length;
+    out.add(BandPoint(t, y, unusable: usable.isEmpty));
+  }
+
+  var group = <BandPoint>[sorted[0]];
   for (var i = 1; i < sorted.length; i++) {
     if (sorted[i].elapsed - sorted[i - 1].elapsed <= kBandTickMergeSeconds) {
-      sumT += sorted[i].elapsed;
-      sumY += sorted[i].db;
-      n++;
+      group.add(sorted[i]);
     } else {
-      out.add(BandPoint(sumT / n, sumY / n));
-      sumT = sorted[i].elapsed;
-      sumY = sorted[i].db;
-      n = 1;
+      flush(group);
+      group = [sorted[i]];
     }
   }
-  out.add(BandPoint(sumT / n, sumY / n));
+  flush(group);
   return out;
 }
 
@@ -295,6 +311,8 @@ class _TimeSeriesPaneState extends State<TimeSeriesPane>
       if (!isBandVisible(i, widget.visibleBands)) continue;
       for (final p in widget.series[i]) {
         if (p.elapsed < start || p.elapsed > end) continue;
+        // Sticky quality-unusable must not feed auto-scale (same as overshoot).
+        if (p.unusable) continue;
         raw.add(p.db);
       }
     }
@@ -540,6 +558,7 @@ class TimeSeriesPanePainter extends CustomPainter {
         value: p.db,
         yMax: yMax,
         lastInRangeY: haveInRange ? lastInRange : yMax,
+        unusable: p.unusable,
       );
       if (!hold.dashed) {
         lastInRange = p.db;
