@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Fix landed in app-bundled Java on `bughunt/android_crashes`; mirror into `windwerfer/btleplug` tag still TODO |
+| Status | Fixed on `bughunt/android_crashes` in both neurofeed (app Java) and `windwerfer/btleplug` rev `327de2cda7634248175414da093b019462252855`; Cargo pin updated; no muse tag yet |
 | Date | 2026-09-22 |
 | Severity | Critical (native crash) |
 | Repro | Muse Classic + Record (sidebar → Bands); often within minutes; simulator unaffected |
@@ -34,7 +34,7 @@ waker = this.waker;
 this.waker = null;
 ```
 
-Applied in app sources. **Still required:** port the same two hunks into `github.com/windwerfer/btleplug` and cut a new muse tag so the fork and APK Java cannot drift.
+Applied in app sources and mirrored to `windwerfer/btleplug` branch `bughunt/android_crashes` (`327de2cd…`). neurofeed Cargo `[patch]` pins that rev. **Optional later:** cut a new muse tag once validated; do not merge to btleplug `main` yet.
 
 ## Why Record looked worse
 
