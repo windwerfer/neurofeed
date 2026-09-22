@@ -242,4 +242,49 @@ void main() {
       isTrue,
     );
   });
+
+  test('buildBandSeries dashes when all selected pads unusable', () {
+    final cache = BandCache();
+    cache.setSelectedElectrodes({0, 1});
+    cache.appendBands(
+      _bands(electrode: 0, timestamp: 1000, delta: 100),
+      signalQuality: [10, 10, 90, 90],
+    );
+    cache.appendBands(
+      _bands(electrode: 1, timestamp: 1000, delta: 10000),
+      signalQuality: [10, 10, 90, 90],
+    );
+    final series = buildBandSeries(
+      cache: cache,
+      electrodes: {0, 1},
+      startElapsed: 0,
+      endElapsed: 10,
+      captureStartedAtMs: 0,
+    );
+    expect(series[0].single.unusable, isTrue);
+    expect(series[0].single.db, closeTo(30, 1e-6));
+  });
+
+  test('buildBandSeries drops bad pad from average when one is clean', () {
+    final cache = BandCache();
+    cache.setSelectedElectrodes({0, 1});
+    cache.appendBands(
+      _bands(electrode: 0, timestamp: 1000, delta: 100),
+      signalQuality: [10, 90, 90, 90],
+    );
+    cache.appendBands(
+      _bands(electrode: 1, timestamp: 1000, delta: 10000),
+      signalQuality: [10, 90, 90, 90],
+    );
+    final series = buildBandSeries(
+      cache: cache,
+      electrodes: {0, 1},
+      startElapsed: 0,
+      endElapsed: 10,
+      captureStartedAtMs: 0,
+    );
+    // Only electrode 1 (10000 → 40 dB) contributes.
+    expect(series[0].single.unusable, isFalse);
+    expect(series[0].single.db, closeTo(40, 1e-6));
+  });
 }

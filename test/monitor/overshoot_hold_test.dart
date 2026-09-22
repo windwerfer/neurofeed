@@ -22,4 +22,26 @@ void main() {
     expect(inRange.y, 18);
     expect(inRange.dashed, isFalse);
   });
+
+  test('unusable holds last good Y even when value in range', () {
+    final hold = overshootPaintY(
+      value: 18,
+      yMax: 25,
+      lastInRangeY: 20,
+      unusable: true,
+    );
+    expect(hold.y, 20);
+    expect(hold.dashed, isTrue);
+  });
+
+  test('unusable plus overshoot stays dashed at last good Y', () {
+    final hold = overshootPaintY(
+      value: 100,
+      yMax: 25,
+      lastInRangeY: 12,
+      unusable: true,
+    );
+    expect(hold.y, 12);
+    expect(hold.dashed, isTrue);
+  });
 }

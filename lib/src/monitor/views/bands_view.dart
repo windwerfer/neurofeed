@@ -149,6 +149,7 @@ class _BandsViewState extends ConsumerState<BandsView> {
     );
     final names = state.electrodeNames;
     _syncMontage(names);
+    _mon.bandCache.setSelectedElectrodes(_selected);
 
     return GraphShell(
       title: 'Bands',
@@ -167,6 +168,7 @@ class _BandsViewState extends ConsumerState<BandsView> {
         onToggle: (i) {
           setState(() {
             _selected = toggleAverageElectrode(_selected, i);
+            _mon.bandCache.setSelectedElectrodes(_selected);
           });
         },
       ),
