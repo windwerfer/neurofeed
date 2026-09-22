@@ -13,6 +13,7 @@ import 'package:neurofeed/src/monitor/views/recording_save_discard.dart';
 import 'package:neurofeed/src/connect_window.dart';
 import 'package:neurofeed/src/feedback/crash_recovery.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/freeform_insets.dart';
 import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
 import 'package:neurofeed/src/spine/capture_foreground.dart';
@@ -321,6 +322,8 @@ Future<void> main() async {
       container: container,
       child: MaterialApp(
         title: 'NeuroFeed',
+        builder: (context, child) =>
+            FreeformInsetClamp(child: child ?? const SizedBox.shrink()),
         themeMode: ThemeMode.system,
         theme: ThemeData(
           useMaterial3: true,

@@ -90,7 +90,9 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         try {
-            if (CaptureForegroundBridge.messenger === flutterEngine.dartExecutor.binaryMessenger) {
+            val engine = flutterEngine
+            if (engine == null ||
+                CaptureForegroundBridge.messenger === engine.dartExecutor.binaryMessenger) {
                 CaptureForegroundBridge.messenger = null
             }
         } catch (_: Exception) {
