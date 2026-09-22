@@ -51,7 +51,11 @@ public class QueueStream<T> implements Stream<T> {
         synchronized (this.lock) {
             assert !this.finished;
             r.run();
+            // Take the waker under the lock. Leaving it set lets a later
+            // pollNext close() race a binder-thread wake() on the same
+            // FnOnce adapter (SIGSEGV on Android BLE notify).
             waker = this.waker;
+            this.waker = null;
         }
         if (waker != null) {
             waker.wake();

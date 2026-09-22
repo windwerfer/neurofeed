@@ -198,3 +198,7 @@ D/btleplug::droidplug::adapter: [btleplug] start_scan call_method OK
 - Other platform backends (BlueZ, CoreBluetooth, WinRT)
 - Java class structure or package names
 - JNI native method registration
+
+## Bug Report 3 — wake-after-close SIGSEGV (2026-09-22)
+
+Android Muse recording crash: binder-thread `SIGSEGV` via `QueueStream.doEvent` waking a `Waker` that a concurrent `pollNext` had already `close()`d. Fix: take-and-null `this.waker` under the lock before `wake()` (same for `SimpleFuture.wakeInternal`). App-bundled Java patched on `bughunt/android_crashes`. **Still TODO:** mirror into `windwerfer/btleplug` and cut a new muse tag so fork and APK cannot drift. Full write-up: `.ai/pending_bug_reports/btleplug_bugreport_3_queuestream_wake_race.md`.
