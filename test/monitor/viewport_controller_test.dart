@@ -277,6 +277,20 @@ void main() {
     expect(v.stripFollowNewest(81, wallNow: 1001), closeTo(80, 1e-9));
   });
 
+  test('resetFollowAnchors tracks the new capture clock', () {
+    final v = ViewportController()
+      ..windowSeconds = 30
+      ..followLeadSeconds = ViewportController.bandsFollowLeadSeconds;
+    v.noteStripSample(400, wallNow: 1000);
+    expect(v.stripFollowNewest(0, wallNow: 1000), closeTo(399, 1e-6));
+    v.resetFollowAnchors();
+    expect(v.stripFollowNewest(0, wallNow: 1000), closeTo(-1, 1e-9));
+    expect(
+      v.stripVisibleStart(newestElapsed: 0, wallNow: 1000),
+      closeTo(-31, 1e-9),
+    );
+  });
+
   test('Inspect freezes displayed window; wall clock does not slide', () {
     final v = ViewportController()
       ..windowSeconds = 30
@@ -381,25 +395,31 @@ void main() {
     expect(overview.stripVisibleStart(newestElapsed: 100), closeTo(70, 1e-9));
   });
 
-  test('panDetailWithinOverview from Follow enters Inspect without panning overview', () {
-    final overview = ViewportController()
-      ..windowSeconds = 30
-      ..followLeadSeconds = ViewportController.bandsFollowLeadSeconds;
-    final detail = ViewportController()..windowSeconds = 8;
-    overview.noteStripSample(80, wallNow: 1000);
-    expect(overview.mode, ViewportMode.follow);
-    panDetailWithinOverview(
-      detail: detail,
-      overview: overview,
-      deltaSeconds: -5,
-      newestElapsed: 80,
-      wallNow: 1000,
-      highlightEndElapsed: 79,
-    );
-    expect(overview.mode, ViewportMode.inspect);
-    expect(detail.mode, ViewportMode.inspect);
-    // Frozen overview start = follow start at enter (~49)
-    expect(overview.stripVisibleStart(newestElapsed: 80, wallNow: 1000), closeTo(49, 1e-9));
-    expect(detail.stripVisibleEnd(newestElapsed: 80), closeTo(74, 1e-9));
-  });
+  test(
+    'panDetailWithinOverview from Follow enters Inspect without panning overview',
+    () {
+      final overview = ViewportController()
+        ..windowSeconds = 30
+        ..followLeadSeconds = ViewportController.bandsFollowLeadSeconds;
+      final detail = ViewportController()..windowSeconds = 8;
+      overview.noteStripSample(80, wallNow: 1000);
+      expect(overview.mode, ViewportMode.follow);
+      panDetailWithinOverview(
+        detail: detail,
+        overview: overview,
+        deltaSeconds: -5,
+        newestElapsed: 80,
+        wallNow: 1000,
+        highlightEndElapsed: 79,
+      );
+      expect(overview.mode, ViewportMode.inspect);
+      expect(detail.mode, ViewportMode.inspect);
+      // Frozen overview start = follow start at enter (~49)
+      expect(
+        overview.stripVisibleStart(newestElapsed: 80, wallNow: 1000),
+        closeTo(49, 1e-9),
+      );
+      expect(detail.stripVisibleEnd(newestElapsed: 80), closeTo(74, 1e-9));
+    },
+  );
 }

@@ -222,6 +222,11 @@ class _RawEegViewState extends ConsumerState<RawEegView> {
     ) {
       if (next != true) _follow();
     });
+    listenLiveGraphBoundary(
+      ref,
+      resetAnchors: _viewport.resetFollowAnchors,
+      resumeFollow: _follow,
+    );
     final names = state.electrodeNames;
     final mon = _mon;
     final buffer = mon.sweepBuffer;

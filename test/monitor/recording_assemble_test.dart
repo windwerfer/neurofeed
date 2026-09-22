@@ -10,6 +10,7 @@ import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/monitor/monitor_controller.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/monitor_state.dart';
+import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
 import 'package:neurofeed/src/session_v5/placeholder_webp.dart';
@@ -136,5 +137,76 @@ void main() {
     final published = File('${history.path}/$name');
     expect(published.existsSync(), isTrue);
     expect(container.read(monitorControllerProvider).kind, CaptureKind.tmp);
+  });
+
+  test('Stop clears live graphs and keeps the recording clock', () async {
+    container.read(monitorControllerProvider);
+    app.debugSetConnected();
+    await settle();
+    final notifier = container.read(monitorControllerProvider.notifier);
+    final ts = DateTime.now().millisecondsSinceEpoch.toDouble();
+    app.debugAddEvent(
+      MuseEventDto.eeg(
+        EegDto(
+          index: 0,
+          electrode: 0,
+          timestamp: ts,
+          samples: Float64List.fromList(const [1, 2, 3, 4]),
+        ),
+      ),
+    );
+    app.debugAddEvent(
+      MuseEventDto.bands(
+        BandsDto(
+          electrode: 0,
+          timestamp: ts,
+          delta: 1,
+          theta: 1,
+          alpha: 2,
+          beta: 1,
+          gamma: 1,
+          lineNoiseRatio: 0.1,
+        ),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(notifier.bandCache.hasData, isTrue);
+
+    await notifier.startRecording();
+    await settle();
+    expect(notifier.bandCache.hasData, isFalse);
+    expect(notifier.sweepBuffer.hasData, isFalse);
+    final started = container
+        .read(monitorControllerProvider)
+        .captureStartedAtMs;
+
+    app.debugAddEvent(
+      MuseEventDto.bands(
+        BandsDto(
+          electrode: 0,
+          timestamp: ts + 1000,
+          delta: 1,
+          theta: 1,
+          alpha: 4,
+          beta: 1,
+          gamma: 1,
+          lineNoiseRatio: 0.1,
+        ),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(notifier.bandCache.hasData, isTrue);
+
+    final file = await notifier.stopRecording(promptSave: true);
+    await settle();
+    expect(file, isNotNull);
+    expect(notifier.bandCache.hasData, isFalse);
+    expect(notifier.sweepBuffer.hasData, isFalse);
+    final mon = container.read(monitorControllerProvider);
+    expect(mon.graphEpoch, 2);
+    expect(mon.graphResumeFollow, isTrue);
+    expect(mon.graphResetAnchors, isFalse);
+    expect(mon.captureStartedAtMs, started);
+    expect(mon.pendingScratchPath, file!.path);
   });
 }

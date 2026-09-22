@@ -255,6 +255,20 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
         _recomputeEeg();
       }
     });
+    listenLiveGraphBoundary(
+      ref,
+      resetAnchors: () {
+        _viewport.resetFollowAnchors();
+        _strip.resetFollowAnchors();
+      },
+      resumeFollow: _follow,
+      onEpoch: () {
+        _recomputeEeg();
+        _recomputeSeries();
+        _pingPrimary();
+        _pingStrip();
+      },
+    );
     final names = state.electrodeNames;
     final prevSelected = Set<int>.of(_selected);
     _syncMontage(names);

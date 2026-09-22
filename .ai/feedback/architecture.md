@@ -5,7 +5,7 @@ Spur A guardrail AI is **CBraMod** (Candle CPU; **mobile latency TBD**) + option
 # Feedback system (as implemented)
 
 Pipeline PRs 1–7 implemented. Frozen decisions:
-[pipeline-contract.md](pipeline-contract.md) — do not reopen them.
+[../contracts/pipeline-contract.md](../contracts/pipeline-contract.md) — do not reopen them.
 
 Session summary charts plot v5 computed 1 Hz
 (`v5ExtractComputed` → `prepareChartDataFromComputed`). Spec archive:

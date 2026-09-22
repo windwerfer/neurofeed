@@ -8,7 +8,7 @@
 | Not this | Pipeline-contract Key Decisions, Crown Start, connect UX, v5 layout, new reward/guard ids, on-device listening pass |
 
 Review findings 1–13 plus the leftover muffle API. Do not reopen
-[feedback/pipeline-contract.md](feedback/pipeline-contract.md). That series
+[contracts/pipeline-contract.md](contracts/pipeline-contract.md). That series
 listed SoLoud internals as a non-goal; this thread is allowed to change them.
 
 ---
@@ -532,7 +532,7 @@ above.
 ## References
 
 - Review (this thread): issues 1–13 on `lib/src/audio/*`
-- Frozen muffle / output split: [feedback/pipeline-contract.md](feedback/pipeline-contract.md)
+- Frozen muffle / output split: [contracts/pipeline-contract.md](contracts/pipeline-contract.md)
   Key Decision “Muffle is not a GuardOutputId”; PR 5 handoff
   [archive/handoff-pr5.md](archive/handoff-pr5.md)
 - AAudio toggle UX: [feedback/todos.md](feedback/todos.md) “On-device
