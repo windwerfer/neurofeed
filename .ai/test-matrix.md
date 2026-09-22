@@ -58,7 +58,8 @@ flutter test \
   test/monitor/recording_metadata_test.dart \
   test/history_filter_test.dart \
   test/agent/agent_commands_test.dart \
-  test/capture_foreground_test.dart
+  test/capture_foreground_test.dart \
+  test/freeform_insets_test.dart
 ```
 
 ## FFI (host lib first)
