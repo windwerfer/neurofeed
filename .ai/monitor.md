@@ -128,6 +128,15 @@ Streaming / History.
 Viewport domain is **elapsed seconds from capture start**. Follow default.
 Drag/pinch on a time-X graph enters Inspect.
 
+**Record** and **Stop recording** clear SweepBuffer, BandCache, and
+OpticalCache (Histogram / PSD / Spectrogram included) so the plot draws
+only the new stretch. Both enter Follow. Record starts a new capture
+clock and drops Follow-lead anchors. Stop keeps the recording clock
+(Save/Discard notification elapsed stays put) and keeps those anchors,
+so the cleared plot fills at the live edge. Save or Discard then opens
+a new tmp clock; anchors reset with it and RAM already collected after
+Stop stays.
+
 | View | Panes | Window | Notes |
 |------|-------|--------|-------|
 | Raw EEG | N stacked sweep | 2/4/8/**10 s** | Oscilloscope wipe. No chips. Shared Y. |

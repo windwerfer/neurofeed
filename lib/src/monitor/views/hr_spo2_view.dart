@@ -39,7 +39,8 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
   final ViewportController _detail = ViewportController()
     ..windowSeconds = ViewportController.opticalDetailDefaultWindowSeconds;
 
-  double _pinchWindowAtStart = ViewportController.opticalOverviewDefaultWindowSeconds;
+  double _pinchWindowAtStart =
+      ViewportController.opticalOverviewDefaultWindowSeconds;
   double _pinchFocalElapsed = 0;
   double _pinchFocalFraction = 0.5;
   bool _pinchOnDetail = false;
@@ -297,12 +298,12 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
     final w = context.size?.width ?? 1;
     if (w <= 0) return;
     if (_draggingHighlight) {
-      final chartW = (w -
-              OpticalOverviewPainter.leftGutter -
-              OpticalOverviewPainter.rightGutter)
-          .clamp(1.0, w);
-      final delta =
-          d.focalPointDelta.dx / chartW * _overview.windowSeconds;
+      final chartW =
+          (w -
+                  OpticalOverviewPainter.leftGutter -
+                  OpticalOverviewPainter.rightGutter)
+              .clamp(1.0, w);
+      final delta = d.focalPointDelta.dx / chartW * _overview.windowSeconds;
       panDetailWithinOverview(
         detail: _detail,
         overview: _overview,
@@ -319,11 +320,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
         _overview.enterInspectStrip(newestElapsed: newest);
       }
       // Pan overview so detail stays locked to its right edge.
-      _overview.panStrip(
-        delta,
-        newestElapsed: newest,
-        oldestElapsed: oldest,
-      );
+      _overview.panStrip(delta, newestElapsed: newest, oldestElapsed: oldest);
       alignDetailToOverview(
         detail: _detail,
         overview: _overview,
@@ -331,11 +328,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
         oldestElapsed: oldest,
       );
     } else {
-      _overview.panStrip(
-        delta,
-        newestElapsed: newest,
-        oldestElapsed: oldest,
-      );
+      _overview.panStrip(delta, newestElapsed: newest, oldestElapsed: oldest);
       alignDetailToOverview(
         detail: _detail,
         overview: _overview,
@@ -429,9 +422,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
   List<ChartSample> _elapsedSeries(
     List<ChartSample> unixSamples,
     double origin,
-  ) => [
-    for (final s in unixSamples) ChartSample(s.t - origin, s.v),
-  ];
+  ) => [for (final s in unixSamples) ChartSample(s.t - origin, s.v)];
 
   @override
   Widget build(BuildContext context) {
@@ -439,15 +430,21 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
     final connected = ref.watch(
       appStateProvider.select((s) => s.status.connected),
     );
-    final kind = ref.watch(
-      appStateProvider.select((s) => s.lastConnectedKind),
-    );
+    final kind = ref.watch(appStateProvider.select((s) => s.lastConnectedKind));
     ref.listen(appStateProvider.select((s) => s.status.connected), (
       prev,
       next,
     ) {
       if (next != true) _follow();
     });
+    listenLiveGraphBoundary(
+      ref,
+      resetAnchors: () {
+        _overview.resetFollowAnchors();
+        _detail.resetFollowAnchors();
+      },
+      resumeFollow: _follow,
+    );
 
     final hasPpg = deviceHasPpg(kind);
     final newest = _newestElapsed();
@@ -471,8 +468,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                 Expanded(
                   flex: kOpticalOverviewFlex,
                   child: Listener(
-                    onPointerSignal: (e) =>
-                        _onPointerSignal(e, detail: false),
+                    onPointerSignal: (e) => _onPointerSignal(e, detail: false),
                     child: GestureDetector(
                       onScaleStart: (d) => _beginPinch(d, detail: false),
                       onScaleUpdate: _updatePinch,
@@ -528,10 +524,12 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                   newestElapsed: n,
                                   connected: connected,
                                   avgHr: cache.avgHr,
-                                  highlightStartElapsed:
-                                      showHighlight ? detailStart : null,
-                                  highlightEndElapsed:
-                                      showHighlight ? detailEnd : null,
+                                  highlightStartElapsed: showHighlight
+                                      ? detailStart
+                                      : null,
+                                  highlightEndElapsed: showHighlight
+                                      ? detailEnd
+                                      : null,
                                   cursorElapsed: _cursorElapsed,
                                   onTapElapsed: (t) =>
                                       setState(() => _cursorElapsed = t),
@@ -557,8 +555,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                           onPointerSignal: (e) =>
                               _onPointerSignal(e, detail: true),
                           child: GestureDetector(
-                            onScaleStart: (d) =>
-                                _beginPinch(d, detail: true),
+                            onScaleStart: (d) => _beginPinch(d, detail: true),
                             onScaleUpdate: _updatePinch,
                             child: ListenableBuilder(
                               listenable: _mon.opticalCache,
@@ -579,9 +576,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                       );
                                 final end = sweep
                                     ? n
-                                    : _detail.stripVisibleEnd(
-                                        newestElapsed: n,
-                                      );
+                                    : _detail.stripVisibleEnd(newestElapsed: n);
                                 const pad = 0.25;
                                 final ppg = connected
                                     ? _elapsedSeries(
@@ -643,10 +638,12 @@ class _DetailWindowMenu extends StatelessWidget {
         if (s <= overviewSeconds + 1e-9) s,
     ];
     if (options.isEmpty) {
-      options.add(math.min(
-        ViewportController.opticalDetailDefaultWindowSeconds,
-        overviewSeconds,
-      ));
+      options.add(
+        math.min(
+          ViewportController.opticalDetailDefaultWindowSeconds,
+          overviewSeconds,
+        ),
+      );
     }
     return Tooltip(
       message: 'IR PPG window',

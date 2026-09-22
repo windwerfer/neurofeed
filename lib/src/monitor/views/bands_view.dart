@@ -142,6 +142,11 @@ class _BandsViewState extends ConsumerState<BandsView> {
     ) {
       if (next != true) _follow();
     });
+    listenLiveGraphBoundary(
+      ref,
+      resetAnchors: _viewport.resetFollowAnchors,
+      resumeFollow: _follow,
+    );
     final names = state.electrodeNames;
     _syncMontage(names);
 

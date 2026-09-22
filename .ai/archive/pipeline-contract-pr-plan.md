@@ -1,6 +1,6 @@
 # Feedback pipeline PR plan (archived)
 
-Implemented. Live contract: [../feedback/pipeline-contract.md](../feedback/pipeline-contract.md).
+Implemented. Live contract: [../contracts/pipeline-contract.md](../contracts/pipeline-contract.md).
 
 ## PR Plan
 

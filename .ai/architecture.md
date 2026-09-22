@@ -26,8 +26,10 @@ rust_lib_neurofeed
 ```
 
 `scan()` / `connect()` / `subscribe_events()` are the BLE FFI entry points.
-`subscribe_events()` returns `Stream<MuseEventDto>` that drives UI, recording,
-streaming, and the feedback orchestrator.
+`subscribe_events()` returns `Stream<MuseEventDto>` that drives UI, FeatureBus,
+streaming, and the feedback orchestrator. Capture forks in Rust after
+derivation (`spine::capture::on_dto`); EEG is not encoded from Dart.
+Spec: [contracts/data-plane-contract.md](contracts/data-plane-contract.md).
 
 Permissions: `requestBlePermissions()` in `app.dart`. BLE init:
 `main()` → `RustLib.init()` → MethodChannel `neurofeed/init` `ensureInitialized`
@@ -61,17 +63,19 @@ sampling rate, PPG/IMU flags.
 
 JSON names IDs; Rust owns `(device, feature)` electrodes and autodrop.
 Dart owns the session. Frozen decisions:
-[feedback/pipeline-contract.md](feedback/pipeline-contract.md).
+[contracts/pipeline-contract.md](contracts/pipeline-contract.md).
 Implemented map: [feedback/architecture.md](feedback/architecture.md).
 
 ```
 Headset / simulator
   → always-on Bands / Movement / Gestures
   → feature registry (subscribed ids only)
-  → MuseEventDto stream
-       ├─ FeatureDto → FeatureBus → RewardLane / GuardLane
-       ├─ always-on bands → inhibit (beta/delta ceiling) + pad quality UI
-       └─ SessionRecorder (v5 temps)
+  → fork
+       ├─ Rust capture writer (disk; prefixes tmp_ / recording_ / session_)
+       └─ MuseEventDto stream
+            ├─ FeatureDto → FeatureBus → RewardLane / GuardLane
+            ├─ always-on bands → inhibit (beta/delta ceiling) + pad quality UI
+            └─ bounded graph rings / OSC / LSL
 ```
 
 Copy for features: `assets/features.json` (`usableFor`: `reward` / `guard`).
@@ -85,13 +89,14 @@ Skip-cal on a sim seeds a synthetic baseline so percentile/`inTarget` work.
 
 ## Session files
 
-`.neurofeed` v5, Rust-owned (`rust/src/api/session_format.rs`):
+`.neurofeed` v5, Rust-owned (`rust/src/api/session_format.rs`).
+Spec: [contracts/session-format-contract.md](contracts/session-format-contract.md).
 
 ```
 [68-byte header][WebP thumb][metadata zstd][computed 1 Hz zstd][raw body]
 ```
 
-Raw body is format v4 (f32 payloads, f64 timestamps), inner-framed zstd.
+Raw body is NFEDBIN + inner zstd frames (f32 payloads, f64 timestamps).
 The container raw section is a copy of that body (no outer zstd). Dart
 delegates: `encodeSessionEvent` / `sessionFrameBytes` / `sessionParseBody` /
 `containerEncodeV5` / `containerEncodeV5ToPath` / `v5ParseHead` /

@@ -5,12 +5,16 @@
 
 Rust owns the byte layout (`rust/src/api/session_format.rs`). Dart only calls FFI.
 
+Agent freeze: [`.ai/contracts/session-format-contract.md`](.ai/contracts/session-format-contract.md). Update this README if that contract changes.
+
 Two filenames, same container type, same history folder:
 
 | Kind | Published name | Scratch temps | Metadata JSON |
 |------|----------------|---------------|---------------|
 | Feedback session | `session_$id.neurofeed` | `session_$id.{raw,computed,metadata}` | Flat `SessionMetadata` (`lib/src/feedback/session_metadata.dart`) |
 | Recording | `recording_$ts.neurofeed` | `recording_$ts.{raw,computed,json}` | Nested `RecordingMetadata` (`lib/src/monitor/recording/recording_metadata.dart`) |
+
+Two metadata JSON shapes is a leftover to revisit (`.ai/TODO/session_vs_recording_metadata.md`). Readers must accept both.
 
 `tmp_$ts.*` is a rolling connect-time capture. It is **never** assembled or published.
 
@@ -222,5 +226,3 @@ must not learn `session_`.
 | Feedback metadata | `lib/src/feedback/session_metadata.dart` |
 | Recording metadata | `lib/src/monitor/recording/recording_metadata.dart` |
 | ComputedFrame | `lib/src/session_v5/computed_frame.dart` |
-
-No v4 `.neurofeed` compatibility. Old v4 files are ignored by History.

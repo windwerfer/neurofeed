@@ -13,6 +13,14 @@ class StftRing {
   double _start = 0;
   double _end = 0;
 
+  void clear() {
+    _columns = const [];
+    _lastHopIndex = -1;
+    _electrodes = const {};
+    _start = 0;
+    _end = 0;
+  }
+
   static int _hopIndex(double elapsed) =>
       (elapsed * SweepBuffer.sampleRate).round() ~/ kStftHopSamples;
 
