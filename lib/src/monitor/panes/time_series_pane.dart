@@ -523,70 +523,30 @@ class TimeSeriesPanePainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round
       ..isAntiAlias = true;
 
-    var lastInRange = yMin;
-    var haveInRange = false;
-    final solid = <Offset>[];
-    final dashed = <Offset>[];
-
-    void flushSolid() {
-      if (solid.length < 2) {
-        solid.clear();
-        return;
-      }
-      final path = Path();
-      buildSmoothPath(path, solid);
-      canvas.drawPath(path, paint);
-      solid.clear();
-    }
-
-    void flushDashed() {
-      if (dashed.length >= 2) {
-        paintDashedPolyline(canvas, List<Offset>.from(dashed), paint);
-      }
-      dashed.clear();
-    }
-
     Offset pt(double elapsed, double db) {
       final x = chart.left + (elapsed - visStart) / span * chart.width;
       final y = _yToPx(chart, db);
       return Offset(x, y);
     }
 
-    var prevDashed = false;
-    for (final p in points) {
-      final hold = overshootPaintY(
-        value: p.db,
-        yMax: yMax,
-        lastInRangeY: haveInRange ? lastInRange : yMax,
-        unusable: p.unusable,
-      );
-      if (!hold.dashed) {
-        lastInRange = p.db;
-        haveInRange = true;
-      }
-      final o = pt(p.elapsed, hold.y);
-      if (hold.dashed != prevDashed &&
-          (solid.isNotEmpty || dashed.isNotEmpty)) {
-        final join = o;
-        if (prevDashed) {
-          dashed.add(join);
-          flushDashed();
-          solid.add(join);
-        } else {
-          solid.add(join);
-          flushSolid();
-          dashed.add(join);
-        }
-      }
-      if (hold.dashed) {
-        dashed.add(o);
+    final runs = buildOvershootPaintRuns(
+      [
+        for (final p in points)
+          (elapsed: p.elapsed, value: p.db, unusable: p.unusable),
+      ],
+      yMax: yMax,
+      fallbackLastInRangeY: yMax,
+    );
+    for (final run in runs) {
+      final pts = [for (final p in run.points) pt(p.elapsed, p.y)];
+      if (run.dashed) {
+        paintDashedPolyline(canvas, pts, paint);
       } else {
-        solid.add(o);
+        final path = Path();
+        buildSmoothPath(path, pts);
+        canvas.drawPath(path, paint);
       }
-      prevDashed = hold.dashed;
     }
-    flushSolid();
-    flushDashed();
   }
 
   double _yToPx(Rect chart, double v) =>

@@ -15,4 +15,15 @@ void main() {
     expect(drawLen, greaterThan(15));
     expect(gapLen + drawLen, closeTo(60, 1e-9));
   });
+
+  test('two-point collapsed hold still gets continuous dash gaps', () {
+    // Collapsed 1→3 span is a single long segment (e.g. 100px).
+    final parts = dashedIntervals(100, dash: 6, gap: 4);
+    final gapLen = parts
+        .where((p) => !p.draw)
+        .fold<double>(0, (a, p) => a + p.length);
+    expect(parts.length, greaterThan(2));
+    expect(gapLen, greaterThan(30));
+    expect(parts.first.draw, isTrue);
+  });
 }
