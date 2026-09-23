@@ -646,20 +646,14 @@ class _RecordingDashboardViewState
         if (loaded.data == null) return _rawLoadingPane();
         return _rawEeg(theme, loaded, start);
       case RecordingDashGraph.bands:
-        final series = loaded.frames.isNotEmpty
-            ? bandSeriesFromComputed(
-                frames: loaded.frames,
-                electrodes: _selected,
-                startElapsed: start,
-                endElapsed: end,
-              )
-            : bandSeriesFromRecords(
-                bands: loaded.data?.bands ?? const [],
-                electrodes: _selected,
-                startElapsed: start,
-                endElapsed: end,
-                originMs: loaded.originMs,
-              );
+        final series = recordingBandSeries(
+          frames: loaded.frames,
+          rawBands: loaded.data?.bands ?? const [],
+          electrodes: _selected,
+          startElapsed: start,
+          endElapsed: end,
+          originMs: loaded.originMs,
+        );
         return TimeSeriesPane(
           series: series,
           viewport: _viewport,
@@ -972,6 +966,35 @@ Float64List meanFromRecords({
     acc[i] = counts[i] == 0 ? double.nan : acc[i] / counts[i];
   }
   return acc;
+}
+
+/// Bands series for a History recording open.
+///
+/// Prefer the **computed** section when frames exist so Bands paints without
+/// loading raw EEG. Fall back to raw [BandsRecord]s only when computed is empty.
+List<List<BandPoint>> recordingBandSeries({
+  required List<ComputedFrame> frames,
+  required List<BandsRecord> rawBands,
+  required Iterable<int> electrodes,
+  required double startElapsed,
+  required double endElapsed,
+  required int originMs,
+}) {
+  if (frames.isNotEmpty) {
+    return bandSeriesFromComputed(
+      frames: frames,
+      electrodes: electrodes,
+      startElapsed: startElapsed,
+      endElapsed: endElapsed,
+    );
+  }
+  return bandSeriesFromRecords(
+    bands: rawBands,
+    electrodes: electrodes,
+    startElapsed: startElapsed,
+    endElapsed: endElapsed,
+    originMs: originMs,
+  );
 }
 
 List<List<BandPoint>> bandSeriesFromRecords({
