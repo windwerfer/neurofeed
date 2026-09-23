@@ -507,8 +507,12 @@ pub struct V5ParsedHead {
 
 /// Computed frame at 1 Hz for training/export.
 /// All bands are absolute power (not relative).
+///
+/// On-disk JSONL keys are **camelCase** (Dart `ComputedFrame.toJson`).
+/// Snake_case aliases keep older Rust-encoded fixtures readable.
 #[frb(dart_metadata = ("freezed",))]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComputedFrame {
     /// Seconds from recording start (0, 1, 2, ...).
     pub t: f64,
@@ -519,12 +523,15 @@ pub struct ComputedFrame {
     /// Movement score (0.0-1.0).
     pub movement: Option<f32>,
     /// Peak alpha frequency (Hz) and power (absolute).
+    #[serde(alias = "peak_alpha")]
     pub peak_alpha: Option<PeakAlphaInfo>,
     /// SpO2 percentage (0-100).
     pub spo2: Option<f32>,
     /// Line noise ratio per electrode (0.0-1.0).
+    #[serde(alias = "line_noise")]
     pub line_noise: Vec<f32>,
     /// Signal quality per electrode (0-100).
+    #[serde(alias = "signal_quality")]
     pub signal_quality: Vec<u8>,
     /// Guardrail (drowsiness) state.
     pub guardrail: GuardrailInfo,
@@ -537,6 +544,7 @@ pub struct ComputedFrame {
 /// Peak alpha frequency and power.
 #[frb(dart_metadata = ("freezed",))]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PeakAlphaInfo {
     pub freq: f32,
     pub power: f32,
@@ -545,7 +553,9 @@ pub struct PeakAlphaInfo {
 /// Guardrail (AI drowsiness) info.
 #[frb(dart_metadata = ("freezed",))]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GuardrailInfo {
+    #[serde(alias = "sleep_dir")]
     pub sleep_dir: f32,
     pub clarity: f32,
     pub warning: bool,
@@ -555,9 +565,11 @@ pub struct GuardrailInfo {
 /// Feedback (ATR) info.
 #[frb(dart_metadata = ("freezed",))]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FeedbackInfo {
     pub ratio: f32,
     pub threshold: f32,
+    #[serde(alias = "in_target")]
     pub in_target: bool,
     pub pct: f32,
 }
@@ -1676,6 +1688,70 @@ mod tests {
         assert_eq!(decoded.bands, frame.bands);
         assert_eq!(decoded.pulse, frame.pulse);
         assert_eq!(decoded.gestures, frame.gestures);
+    }
+
+    #[test]
+    fn v5_computed_frame_parses_dart_camel_case_jsonl() {
+        // Live recordings write Dart ComputedFrame.toJson() (camelCase).
+        // Before rename_all=camelCase, serde silently dropped every line.
+        let line = br#"{"t":1.0,"bands":[[100.0,80.0,220.0,50.0,30.0],[101.0,81.0,221.0,51.0,31.0],[102.0,82.0,222.0,52.0,32.0],[103.0,83.0,223.0,53.0,33.0]],"pulse":71.0,"movement":0.05,"peakAlpha":{"freq":10.0,"power":100.0},"spo2":98.0,"lineNoise":[0.05,0.04,0.06,0.05],"signalQuality":[80,85,90,75],"guardrail":{"sleepDir":0.3,"clarity":0.8,"warning":false,"delta":100.0},"feedback":{"ratio":1.5,"threshold":1.2,"inTarget":true,"pct":0.6},"gestures":[]}"#;
+        let frame = ComputedFrame::from_json_bytes(line).expect("camelCase Dart JSON must parse");
+        assert_eq!(frame.t, 1.0);
+        assert_eq!(frame.bands.len(), 4);
+        assert!((frame.bands[0][2] - 220.0).abs() < 1e-3);
+        assert_eq!(frame.line_noise.len(), 4);
+        assert_eq!(frame.signal_quality, vec![80, 85, 90, 75]);
+        assert!((frame.guardrail.sleep_dir - 0.3).abs() < 1e-3);
+        assert!(frame.feedback.in_target);
+        assert!(frame.peak_alpha.is_some());
+
+        let compressed = zstd::encode_all(std::io::Cursor::new(line), 3).unwrap();
+        let frames = parse_computed_jsonl(&compressed).unwrap();
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].t, 1.0);
+    }
+
+    #[test]
+    fn v5_computed_frame_json_writes_camel_case_keys() {
+        let frame = ComputedFrame {
+            t: 1.0,
+            bands: vec![vec![1.0, 2.0, 3.0, 4.0, 5.0]; 4],
+            pulse: Some(70.0),
+            movement: None,
+            peak_alpha: None,
+            spo2: None,
+            line_noise: vec![0.01; 4],
+            signal_quality: vec![90; 4],
+            guardrail: GuardrailInfo {
+                sleep_dir: 0.0,
+                clarity: 0.0,
+                warning: false,
+                delta: 0.0,
+            },
+            feedback: FeedbackInfo {
+                ratio: 0.0,
+                threshold: 0.0,
+                in_target: false,
+                pct: 0.0,
+            },
+            gestures: vec![],
+        };
+        let json = String::from_utf8(frame.to_json_bytes()).unwrap();
+        assert!(json.contains("\"lineNoise\""), "{json}");
+        assert!(json.contains("\"signalQuality\""), "{json}");
+        assert!(json.contains("\"inTarget\""), "{json}");
+        assert!(json.contains("\"sleepDir\""), "{json}");
+        assert!(!json.contains("\"line_noise\""), "{json}");
+    }
+
+    #[test]
+    fn v5_computed_frame_still_reads_legacy_snake_case() {
+        let line = br#"{"t":2.0,"bands":[[1.0,2.0,3.0,4.0,5.0]],"line_noise":[0.1],"signal_quality":[50],"guardrail":{"sleep_dir":0.1,"clarity":0.2,"warning":true,"delta":0.3},"feedback":{"ratio":1.0,"threshold":0.5,"in_target":false,"pct":0.1},"gestures":[]}"#;
+        let frame = ComputedFrame::from_json_bytes(line).expect("snake_case alias must parse");
+        assert_eq!(frame.t, 2.0);
+        assert!((frame.line_noise[0] - 0.1).abs() < 1e-6);
+        assert!(frame.guardrail.warning);
+        assert!(!frame.feedback.in_target);
     }
 
     #[test]
