@@ -180,12 +180,14 @@ Sidebar **History** (`AppView.feedbackHistory`). One sqlite list; no
 
 ### Recording dashboard — `lib/src/monitor/views/recording_dashboard.dart`
 
-History row `kind = recording`. Follow is visible but **disabled**. Inspect
-uses `v5ExtractRaw`. Histogram/PSD have **no** Bands strip.
+History row `kind = recording`. Follow is visible but **disabled**. Default
+chip is **Bands** (metadata + computed via two prefix reads). Raw body lazy-
+loads on Raw EEG / Histogram / PSD / Spectrogram. Histogram/PSD have **no**
+Bands strip.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Graph switcher | `Raw EEG` `Bands` `Histogram` `PSD` `Spectrogram` | `RecordingDashGraph` | `recording_dashboard.dart` | SegmentedButton under the shell. |
+| Graph switcher | `Bands` `Raw EEG` `Histogram` `PSD` `Spectrogram` | `RecordingDashGraph` | `recording_dashboard.dart` | SegmentedButton under the shell. Default Bands. |
 | Follow | `Follow` | `followEnabled: false` | `graph_shell.dart` | Shown, disabled. |
 | Magnitude | `mag ▾` | `_magMenu` | `recording_dashboard.dart` | Spectrogram graph only. Same as live. |
 | Hz range | `0–60 Hz` | `PsdHzRange` | `recording_dashboard.dart` | PSD graph. Overflow `0–100 Hz`. |

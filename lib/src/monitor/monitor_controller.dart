@@ -46,6 +46,7 @@ class MonitorController extends Notifier<MonitorState> {
   MonitorSampler? _sampler;
   Future<void> _op = Future.value();
   int? _latestEegTsMs;
+  Timer? _disconnectGapTimer;
 
   @visibleForTesting
   Future<void> get pendingOps => _op;
@@ -82,7 +83,7 @@ class MonitorController extends Notifier<MonitorState> {
       next,
     ) {
       if (next) {
-        unawaited(_serialized(_startTmpUnlocked));
+        unawaited(_serialized(_onReconnectedUnlocked));
       } else {
         unawaited(_serialized(_onDisconnectedUnlocked));
       }
@@ -98,6 +99,7 @@ class MonitorController extends Notifier<MonitorState> {
     ref.onDispose(() {
       _eventSub?.cancel();
       _eventSub = null;
+      _stopDisconnectGapFiller();
       _stopSampler();
       unawaited(_capture?.discard() ?? Future<void>.value());
     });
@@ -251,11 +253,13 @@ class MonitorController extends Notifier<MonitorState> {
 
   Future<void> _onDisconnectedUnlocked() async {
     if (_lease.kind == CaptureKind.recording) {
-      await _assembleRecordingUnlocked(promptSave: true);
-      _latestEegTsMs = null;
-      _clearLiveGraphs();
+      _stopSampler();
+      bandCache.setSignalQuality(null);
+      _startDisconnectGapFiller();
+      debugPrint('[monitor] recording hold across disconnect');
       return;
     }
+    _stopDisconnectGapFiller();
     if (_lease.kind != CaptureKind.tmp) return;
     await _stopTmpWriter();
     _lease.tryDiscardTmp();
@@ -268,6 +272,44 @@ class MonitorController extends Notifier<MonitorState> {
       pendingScratchPath: state.pendingScratchPath,
       graphEpoch: state.graphEpoch,
     );
+  }
+
+  Future<void> _onReconnectedUnlocked() async {
+    _stopDisconnectGapFiller();
+    if (_lease.kind == CaptureKind.recording) {
+      final started = state.captureStartedAtMs;
+      if (started != null && _sampler == null) {
+        _startSampler(state.channelCount, started);
+      }
+      debugPrint('[monitor] recording resume after reconnect');
+      return;
+    }
+    await _startTmpUnlocked();
+  }
+
+  void _startDisconnectGapFiller() {
+    _disconnectGapTimer?.cancel();
+    void tick() {
+      if (_lease.kind != CaptureKind.recording) {
+        _stopDisconnectGapFiller();
+        return;
+      }
+      if (ref.read(appStateProvider).status.connected) {
+        _stopDisconnectGapFiller();
+        return;
+      }
+      bandCache.appendHeldUnusableGap(
+        DateTime.now().millisecondsSinceEpoch.toDouble(),
+      );
+    }
+
+    tick();
+    _disconnectGapTimer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
+  }
+
+  void _stopDisconnectGapFiller() {
+    _disconnectGapTimer?.cancel();
+    _disconnectGapTimer = null;
   }
 
   Future<void> _startRecordingUnlocked() async {
@@ -328,6 +370,7 @@ class MonitorController extends Notifier<MonitorState> {
     bool restartTmp = false,
   }) async {
     if (_lease.kind != CaptureKind.recording) return null;
+    _stopDisconnectGapFiller();
     _stopSampler();
     final meta = _currentMetadata().toJson();
     final file = await _capture?.assemble(metadataJson: meta);
@@ -455,7 +498,10 @@ class MonitorController extends Notifier<MonitorState> {
         _latestEegTsMs = event.field0.timestamp.round();
         sweepBuffer.append(event.field0);
       case MuseEventDto_Bands():
-        bandCache.appendBands(event.field0);
+        bandCache.appendBands(
+          event.field0,
+          signalQuality: ref.read(appStateProvider).signalQuality,
+        );
         _sampler?.updateBands(event.field0.electrode, event.field0);
       case MuseEventDto_Pulse():
         opticalCache.appendPulse(event.field0);

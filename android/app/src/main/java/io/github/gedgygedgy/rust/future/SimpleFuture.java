@@ -44,7 +44,9 @@ public class SimpleFuture<T> implements Future<T> {
         synchronized (this.lock) {
             assert this.result == null;
             this.result = result;
+            // Same take-under-lock rule as QueueStream.doEvent.
             waker = this.waker;
+            this.waker = null;
         }
         if (waker != null) {
             waker.wake();

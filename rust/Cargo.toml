@@ -45,7 +45,7 @@ rustfft = "6"
 # with our JNI-fixed fork, so there is only ONE copy of btleplug
 # (and its GLOBAL_JVM / GLOBAL_ADAPTER statics) linked.
 [patch.crates-io]
-btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-5" }
+btleplug = { git = "https://github.com/windwerfer/btleplug.git", rev = "327de2cda7634248175414da093b019462252855" }  # bughunt/android_crashes wake-race fix
 rlx-cpu = { path = "../vendor/rlx-cpu-0.2.14" }
 
 [patch.'https://github.com/eugenehp/muse-rs.git']

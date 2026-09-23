@@ -216,6 +216,10 @@ class _RawEegViewState extends ConsumerState<RawEegView> {
     final connected = ref.watch(
       appStateProvider.select((s) => s.status.connected),
     );
+    final live = monitorGraphsLive(
+      kind: ref.watch(monitorControllerProvider.select((s) => s.kind)),
+      connected: connected,
+    );
     ref.listen(appStateProvider.select((s) => s.status.connected), (
       prev,
       next,
@@ -304,7 +308,7 @@ class _RawEegViewState extends ConsumerState<RawEegView> {
                       },
                     ),
                   ),
-                  if (connected && !buffer.hasData)
+                  if (live && !buffer.hasData)
                     const Positioned.fill(child: MonitorWaitingSignal()),
                 ],
               );

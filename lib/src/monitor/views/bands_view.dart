@@ -7,6 +7,7 @@ import 'package:neurofeed/src/monitor/electrode_toggles.dart';
 import 'package:neurofeed/src/monitor/empty_state.dart';
 import 'package:neurofeed/src/monitor/graph_shell.dart';
 import 'package:neurofeed/src/monitor/monitor_controller.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/panes/time_series_pane.dart';
 import 'package:neurofeed/src/monitor/viewport_controller.dart';
@@ -136,6 +137,7 @@ class _BandsViewState extends ConsumerState<BandsView> {
     final connected = ref.watch(
       appStateProvider.select((s) => s.status.connected),
     );
+    final live = monitorGraphsLive(kind: state.kind, connected: connected);
     ref.listen(appStateProvider.select((s) => s.status.connected), (
       prev,
       next,
@@ -149,6 +151,7 @@ class _BandsViewState extends ConsumerState<BandsView> {
     );
     final names = state.electrodeNames;
     _syncMontage(names);
+    _mon.bandCache.setSelectedElectrodes(_selected);
 
     return GraphShell(
       title: 'Bands',
@@ -167,6 +170,7 @@ class _BandsViewState extends ConsumerState<BandsView> {
         onToggle: (i) {
           setState(() {
             _selected = toggleAverageElectrode(_selected, i);
+            _mon.bandCache.setSelectedElectrodes(_selected);
           });
         },
       ),
@@ -181,7 +185,7 @@ class _BandsViewState extends ConsumerState<BandsView> {
                 builder: (context, _) {
                   final cache = _mon.bandCache;
                   final newest = _newestElapsed();
-                  if (connected && cache.hasData) {
+                  if (live && cache.hasData) {
                     _viewport.noteStripSample(newest);
                   }
                   final start = _viewport.stripVisibleStart(
@@ -189,7 +193,7 @@ class _BandsViewState extends ConsumerState<BandsView> {
                   );
                   // Fetch through cache tip so the Follow-lead ticker can
                   // slide new points in; paint domain stays ~1s behind.
-                  final series = connected
+                  final series = live
                       ? buildBandSeries(
                           cache: cache,
                           electrodes: _selected,
@@ -208,12 +212,12 @@ class _BandsViewState extends ConsumerState<BandsView> {
                           series: series,
                           viewport: _viewport,
                           newestElapsed: newest,
-                          connected: connected,
+                          connected: live,
                           visibleBands: _visibleBands,
                           drawLegend: false,
                         ),
                       ),
-                      if (connected && !cache.hasData)
+                      if (live && !cache.hasData)
                         const Positioned.fill(child: MonitorWaitingSignal()),
                     ],
                   );

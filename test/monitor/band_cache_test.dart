@@ -40,4 +40,86 @@ void main() {
     expect(crown.channelCount, 8);
     expect(crown.electrodeNames, kCrownElectrodeNames);
   });
+
+  test('sticky unusable stamped at append from quality', () {
+    final cache = BandCache();
+    cache.setSelectedElectrodes({0, 1});
+    cache.appendBands(
+      const BandsDto(
+        electrode: 0,
+        timestamp: 1000,
+        delta: 1,
+        theta: 1,
+        alpha: 1,
+        beta: 1,
+        gamma: 1,
+        lineNoiseRatio: 0,
+      ),
+      signalQuality: [10, 90, 90, 90],
+    );
+    cache.appendBands(
+      const BandsDto(
+        electrode: 1,
+        timestamp: 1000,
+        delta: 2,
+        theta: 2,
+        alpha: 2,
+        beta: 2,
+        gamma: 2,
+        lineNoiseRatio: 0,
+      ),
+      signalQuality: [10, 90, 90, 90],
+    );
+    final bad = cache.getRange(bandChannelId(0, 0), 0, 10);
+    final good = cache.getRange(bandChannelId(1, 0), 0, 10);
+    expect(bad.single.unusable, isTrue);
+    expect(good.single.unusable, isFalse);
+  });
+
+  test('all-selected-dirty stamps selected pads', () {
+    final cache = BandCache();
+    cache.setSelectedElectrodes({0, 1});
+    cache.appendBands(
+      const BandsDto(
+        electrode: 0,
+        timestamp: 2000,
+        delta: 1,
+        theta: 1,
+        alpha: 1,
+        beta: 1,
+        gamma: 1,
+        lineNoiseRatio: 0,
+      ),
+      signalQuality: [5, 5, 90, 90],
+    );
+    expect(cache.getRange(bandChannelId(0, 2), 0, 10).single.unusable, isTrue);
+  });
+
+
+  test('appendHeldUnusableGap holds last Y and stamps unusable', () {
+    final cache = BandCache();
+    cache.appendBands(
+      const BandsDto(
+        electrode: 0,
+        timestamp: 1000,
+        delta: 1,
+        theta: 2,
+        alpha: 3,
+        beta: 4,
+        gamma: 5,
+        lineNoiseRatio: 0,
+      ),
+      signalQuality: [90, 90, 90, 90],
+    );
+    final before = cache.getRange(bandChannelId(0, 2), 0, 10);
+    expect(before.single.unusable, isFalse);
+    expect(before.single.v, 3);
+
+    cache.appendHeldUnusableGap(2000);
+    final after = cache.getRange(bandChannelId(0, 2), 0, 10);
+    expect(after, hasLength(2));
+    expect(after.last.t, closeTo(2.0, 1e-9));
+    expect(after.last.v, 3);
+    expect(after.last.unusable, isTrue);
+  });
 }
