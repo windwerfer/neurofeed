@@ -97,12 +97,14 @@ keeps temps).
 idle → tmp          connect (or feedback writer closed, still connected)
 tmp  → recording    user Record (discards tmp; no pre-click bytes in the file)
 tmp  → feedback     Start Session (discards tmp, no prompt)
-recording → idle    Stop / in-app disconnect → assemble + Save/Discard
+recording → idle    Stop (only) → assemble + Save/Discard
 feedback  → tmp     writer actually closed, still connected
 ```
 
 Record during feedback: button disabled. Start during Record: dialog + agent
-409 `recording_active`. Disconnect while recording: assemble + Save/Discard.
+409 `recording_active`. Disconnect while recording: **keep** the same capture
+open (raw/computed pause; live Bands dashed hold-last gaps); reconnect
+resumes into the same file. Only Stop ends an explicit recording.
 Disconnect while tmp: discard, no prompt.
 
 `tmp_` silent-rotates at 30 min (new capture clock). Explicit `recording_` is

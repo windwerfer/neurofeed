@@ -7,6 +7,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neurofeed/src/connection_provider.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/monitor/cache/band_cache.dart';
 import 'package:neurofeed/src/monitor/monitor_controller.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/monitor_state.dart';
@@ -208,5 +209,64 @@ void main() {
     expect(mon.graphResetAnchors, isFalse);
     expect(mon.captureStartedAtMs, started);
     expect(mon.pendingScratchPath, file!.path);
+  });
+
+  test('keeps recording open across disconnect and resumes same capture', () async {
+    container.read(monitorControllerProvider);
+    app.debugSetConnected();
+    await settle();
+    final notifier = container.read(monitorControllerProvider.notifier);
+    await notifier.startRecording();
+    await settle();
+    final before = container.read(monitorControllerProvider);
+    expect(before.kind, CaptureKind.recording);
+    final captureId = before.captureId;
+    final started = before.captureStartedAtMs;
+    expect(captureId, isNotNull);
+    expect(started, isNotNull);
+
+    final ts = DateTime.now().millisecondsSinceEpoch.toDouble();
+    app.debugAddEvent(
+      MuseEventDto.bands(
+        BandsDto(
+          electrode: 0,
+          timestamp: ts,
+          delta: 1,
+          theta: 1,
+          alpha: 2,
+          beta: 1,
+          gamma: 1,
+          lineNoiseRatio: 0.1,
+        ),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(notifier.bandCache.hasData, isTrue);
+
+    app.debugSetConnected(connected: false);
+    await settle();
+    final held = container.read(monitorControllerProvider);
+    expect(held.kind, CaptureKind.recording);
+    expect(held.captureId, captureId);
+    expect(held.captureStartedAtMs, started);
+    expect(held.pendingScratchPath, isNull);
+    expect(notifier.bandCache.hasData, isTrue);
+
+    await Future<void>.delayed(Duration.zero);
+    final alpha = notifier.bandCache.getRange(bandChannelId(0, 2), 0, 1e12);
+    expect(alpha, isNotEmpty);
+    expect(alpha.last.unusable, isTrue);
+
+    app.debugSetConnected();
+    await settle();
+    final resumed = container.read(monitorControllerProvider);
+    expect(resumed.kind, CaptureKind.recording);
+    expect(resumed.captureId, captureId);
+    expect(resumed.captureStartedAtMs, started);
+
+    final file = await notifier.stopRecording(promptSave: true);
+    await settle();
+    expect(file, isNotNull);
+    expect(container.read(monitorControllerProvider).kind, CaptureKind.idle);
   });
 }

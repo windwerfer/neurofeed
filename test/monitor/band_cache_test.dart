@@ -94,4 +94,32 @@ void main() {
     );
     expect(cache.getRange(bandChannelId(0, 2), 0, 10).single.unusable, isTrue);
   });
+
+
+  test('appendHeldUnusableGap holds last Y and stamps unusable', () {
+    final cache = BandCache();
+    cache.appendBands(
+      const BandsDto(
+        electrode: 0,
+        timestamp: 1000,
+        delta: 1,
+        theta: 2,
+        alpha: 3,
+        beta: 4,
+        gamma: 5,
+        lineNoiseRatio: 0,
+      ),
+      signalQuality: [90, 90, 90, 90],
+    );
+    final before = cache.getRange(bandChannelId(0, 2), 0, 10);
+    expect(before.single.unusable, isFalse);
+    expect(before.single.v, 3);
+
+    cache.appendHeldUnusableGap(2000);
+    final after = cache.getRange(bandChannelId(0, 2), 0, 10);
+    expect(after, hasLength(2));
+    expect(after.last.t, closeTo(2.0, 1e-9));
+    expect(after.last.v, 3);
+    expect(after.last.unusable, isTrue);
+  });
 }
