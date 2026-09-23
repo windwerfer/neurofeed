@@ -6,6 +6,7 @@ import 'package:neurofeed/src/monitor/electrode_toggles.dart';
 import 'package:neurofeed/src/monitor/empty_state.dart';
 import 'package:neurofeed/src/monitor/graph_shell.dart';
 import 'package:neurofeed/src/monitor/monitor_controller.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/panes/bands_context_strip.dart';
 import 'package:neurofeed/src/monitor/panes/histogram_pane.dart';
@@ -246,6 +247,10 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
     final connected = ref.watch(
       appStateProvider.select((s) => s.status.connected),
     );
+    final live = monitorGraphsLive(
+      kind: ref.watch(monitorControllerProvider.select((s) => s.kind)),
+      connected: connected,
+    );
     ref.listen(appStateProvider.select((s) => s.status.connected), (
       prev,
       next,
@@ -316,7 +321,7 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
                   child: HistogramPane(
                     counts: _tick.counts,
                     halfRange: _halfRange,
-                    connected: connected,
+                    connected: live,
                     hairlineUv: _hairlineUv,
                     onTapUv: (uv) {
                       _hairlineUv = uv;
@@ -324,7 +329,7 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
                     },
                   ),
                 ),
-                if (connected && !buffer.hasData)
+                if (live && !buffer.hasData)
                   const Positioned.fill(child: MonitorWaitingSignal()),
               ],
             );
@@ -339,7 +344,7 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
             return BandsContextStrip(
               stripViewport: _strip,
               epochViewport: _viewport,
-              series: connected ? _tick.series : emptyBandSeries(),
+              series: live ? _tick.series : emptyBandSeries(),
               stripNewestElapsed: bandNewest,
               stripOldestElapsed: bandOldest,
               highlightStartElapsed: _viewport.stripVisibleStart(
@@ -348,8 +353,8 @@ class _HistogramViewState extends ConsumerState<HistogramView> {
               highlightEndElapsed: _viewport.stripVisibleEnd(
                 newestElapsed: newest,
               ),
-              connected: connected,
-              waiting: connected && !_mon.bandCache.hasData,
+              connected: live,
+              waiting: live && !_mon.bandCache.hasData,
               onStripWindowChanged: (s) => ref
                   .read(settingsProvider)
                   .setMonitorDetailWindowSeconds('histogram', s),

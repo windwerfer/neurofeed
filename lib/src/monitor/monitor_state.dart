@@ -81,3 +81,12 @@ class MonitorState {
 
   static const Object _sentinel = Object();
 }
+
+
+/// Live plot chrome while connected, or while an explicit recording is held
+/// open across a BLE drop (dashed gaps / Follow keep running).
+bool monitorGraphsLive({
+  required CaptureKind kind,
+  required bool connected,
+}) =>
+    connected || kind == CaptureKind.recording;

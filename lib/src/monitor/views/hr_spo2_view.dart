@@ -7,11 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/charts/eeg_data_source.dart';
 import 'package:neurofeed/src/connection_provider.dart';
 import 'package:neurofeed/src/monitor/cache/optical_cache.dart';
-import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/monitor/empty_state.dart';
 import 'package:neurofeed/src/monitor/graph_cinema.dart';
 import 'package:neurofeed/src/monitor/graph_shell.dart';
 import 'package:neurofeed/src/monitor/monitor_controller.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/panes/optical_overview_pane.dart';
 import 'package:neurofeed/src/monitor/panes/optical_ppg_pane.dart';
@@ -430,6 +430,10 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
     final connected = ref.watch(
       appStateProvider.select((s) => s.status.connected),
     );
+    final live = monitorGraphsLive(
+      kind: ref.watch(monitorControllerProvider.select((s) => s.kind)),
+      connected: connected,
+    );
     final kind = ref.watch(appStateProvider.select((s) => s.lastConnectedKind));
     ref.listen(appStateProvider.select((s) => s.status.connected), (
       prev,
@@ -488,7 +492,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                             newestElapsed: n,
                           );
                           const pad = 1.0;
-                          final hr = connected
+                          final hr = live
                               ? _elapsedSeries(
                                   cache.pulseRange(
                                     origin + start - pad,
@@ -497,7 +501,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                   origin,
                                 )
                               : const <ChartSample>[];
-                          final spo2 = connected
+                          final spo2 = live
                               ? _elapsedSeries(
                                   cache.spo2Range(
                                     origin + start - pad,
@@ -522,7 +526,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                   spo2: spo2,
                                   viewport: _overview,
                                   newestElapsed: n,
-                                  connected: connected,
+                                  connected: live,
                                   avgHr: cache.avgHr,
                                   highlightStartElapsed: showHighlight
                                       ? detailStart
@@ -535,7 +539,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                       setState(() => _cursorElapsed = t),
                                 ),
                               ),
-                              if (connected && !cache.hasData)
+                              if (live && !cache.hasData)
                                 const Positioned.fill(
                                   child: MonitorWaitingSignal(),
                                 ),
@@ -578,7 +582,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                     ? n
                                     : _detail.stripVisibleEnd(newestElapsed: n);
                                 const pad = 0.25;
-                                final ppg = connected
+                                final ppg = live
                                     ? _elapsedSeries(
                                         cache.ppgIrRange(
                                           origin + start - pad,
@@ -591,7 +595,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                   samples: ppg,
                                   viewport: _detail,
                                   newestElapsed: n,
-                                  connected: connected,
+                                  connected: live,
                                   cursorElapsed: _cursorElapsed,
                                   onTapElapsed: (t) =>
                                       setState(() => _cursorElapsed = t),

@@ -155,6 +155,22 @@ class BandCache extends ChangeNotifier
     return result;
   }
 
+  /// Hold-last-Y samples stamped unusable so live Bands draw a dashed gap
+  /// while the device is gone (disconnect) or quality is missing. Live-only —
+  /// does not feed the Rust capture writer.
+  void appendHeldUnusableGap(double timestampMs) {
+    if (_channels.isEmpty) return;
+    final ts = timestampMs / 1000.0;
+    final ids = _channels.keys.toList();
+    for (final id in ids) {
+      final buf = _channels[id];
+      if (buf == null || buf.length == 0) continue;
+      final v = buf.valueAt(buf.length - 1);
+      _insert(electrodeFromChannel(id), bandIndexFromChannel(id), ts, v, true);
+    }
+    notifyListenersCoalesced();
+  }
+
   void clear() {
     if (_channels.isEmpty) return;
     _channels.clear();

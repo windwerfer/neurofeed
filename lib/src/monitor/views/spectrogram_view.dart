@@ -9,6 +9,7 @@ import 'package:neurofeed/src/monitor/electrode_toggles.dart';
 import 'package:neurofeed/src/monitor/empty_state.dart';
 import 'package:neurofeed/src/monitor/graph_shell.dart';
 import 'package:neurofeed/src/monitor/monitor_controller.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/panes/spectrogram_pane.dart';
 import 'package:neurofeed/src/monitor/viewport_controller.dart';
@@ -242,6 +243,10 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
     final connected = ref.watch(
       appStateProvider.select((s) => s.status.connected),
     );
+    final live = monitorGraphsLive(
+      kind: ref.watch(monitorControllerProvider.select((s) => s.kind)),
+      connected: connected,
+    );
     ref.listen(appStateProvider.select((s) => s.status.connected), (
       prev,
       next,
@@ -291,13 +296,13 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
           builder: (context, _) {
             final buffer = _mon.sweepBuffer;
             final newest = _newestElapsed();
-            if (connected && buffer.hasData) {
+            if (live && buffer.hasData) {
               _viewport.noteStripSample(newest);
             }
             final start = _viewport.stripVisibleStart(newestElapsed: newest);
             // Fetch through tip so the Follow-lead ticker can slide new
             // columns in; paint domain stays ~1s behind (same as Bands).
-            final columns = connected && buffer.hasData
+            final columns = live && buffer.hasData
                 ? _stft(start, newest)
                 : const <StftColumn>[];
             var magMin = _magMin;
@@ -325,10 +330,10 @@ class _SpectrogramViewState extends ConsumerState<SpectrogramView> {
                     newestElapsed: newest,
                     magMin: magMin,
                     magMax: magMax,
-                    connected: connected,
+                    connected: live,
                   ),
                 ),
-                if (connected && !buffer.hasData)
+                if (live && !buffer.hasData)
                   const Positioned.fill(child: MonitorWaitingSignal()),
               ],
             );
