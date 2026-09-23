@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:neurofeed/src/charts/band_style.dart';
 import 'package:neurofeed/src/charts/eeg_data_source.dart';
 import 'package:neurofeed/src/monitor/cache/frame_coalesced_notify.dart';
+import 'package:neurofeed/src/monitor/signal_usable.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 
 export 'package:neurofeed/src/charts/band_style.dart';
@@ -35,23 +36,56 @@ class BandCache extends ChangeNotifier
 
   final Map<int, _BandRing> _channels = {};
 
+  /// Latest pad-quality scores (from ConnectionProvider). Used at append to
+  /// stamp sticky unusable bits; null means all pads treated as unusable.
+  List<double>? _signalQuality;
+
+  /// Electrodes currently selected in the Bands UI. Empty → only per-pad
+  /// quality stamps; non-empty enables the "all selected dirty → dash all
+  /// shown" append rule.
+  Set<int> _selectedElectrodes = const {};
+
   @override
   double get maxTimeWindowSecs => 1800.0;
 
-  void appendBands(BandsDto dto) {
+  /// Wire live pad quality for sticky unusable stamps on the next appends.
+  void setSignalQuality(List<double>? quality) {
+    _signalQuality = quality;
+  }
+
+  /// Wire Bands electrode selection for the all-selected-dirty stamp rule.
+  void setSelectedElectrodes(Set<int> electrodes) {
+    _selectedElectrodes = Set<int>.of(electrodes);
+  }
+
+  @visibleForTesting
+  List<double>? get debugSignalQuality => _signalQuality;
+
+  @visibleForTesting
+  Set<int> get debugSelectedElectrodes => _selectedElectrodes;
+
+  void appendBands(BandsDto dto, {List<double>? signalQuality}) {
+    if (signalQuality != null) {
+      _signalQuality = signalQuality;
+    }
+    final unusable = shouldStampBandUnusable(
+      electrode: dto.electrode,
+      quality: _signalQuality,
+      selectedElectrodes: _selectedElectrodes,
+    );
     final ts = dto.timestamp / 1000.0;
-    _insert(dto.electrode, 0, ts, dto.delta);
-    _insert(dto.electrode, 1, ts, dto.theta);
-    _insert(dto.electrode, 2, ts, dto.alpha);
-    _insert(dto.electrode, 3, ts, dto.beta);
-    _insert(dto.electrode, 4, ts, dto.gamma);
+    _insert(dto.electrode, 0, ts, dto.delta, unusable);
+    _insert(dto.electrode, 1, ts, dto.theta, unusable);
+    _insert(dto.electrode, 2, ts, dto.alpha, unusable);
+    _insert(dto.electrode, 3, ts, dto.beta, unusable);
+    _insert(dto.electrode, 4, ts, dto.gamma, unusable);
     notifyListenersCoalesced();
   }
 
-  void _insert(int electrode, int bandIdx, double t, double v) {
+  void _insert(int electrode, int bandIdx, double t, double v, bool unusable) {
     final id = bandChannelId(electrode, bandIdx);
     final buf = _channels.putIfAbsent(id, () => _BandRing(_capacityPerBand));
-    buf.add(t, v);
+    buf.add(t, v, unusable);
   }
 
   @override
@@ -91,7 +125,11 @@ class BandCache extends ChangeNotifier
     if (lo >= hi) return const [];
     return List.generate(
       hi - lo,
-      (i) => ChartSample(buf.timestampAt(lo + i), buf.valueAt(lo + i)),
+      (i) => ChartSample(
+        buf.timestampAt(lo + i),
+        buf.valueAt(lo + i),
+        unusable: buf.unusableAt(lo + i),
+      ),
     );
   }
 
@@ -117,6 +155,22 @@ class BandCache extends ChangeNotifier
     return result;
   }
 
+  /// Hold-last-Y samples stamped unusable so live Bands draw a dashed gap
+  /// while the device is gone (disconnect) or quality is missing. Live-only —
+  /// does not feed the Rust capture writer.
+  void appendHeldUnusableGap(double timestampMs) {
+    if (_channels.isEmpty) return;
+    final ts = timestampMs / 1000.0;
+    final ids = _channels.keys.toList();
+    for (final id in ids) {
+      final buf = _channels[id];
+      if (buf == null || buf.length == 0) continue;
+      final v = buf.valueAt(buf.length - 1);
+      _insert(electrodeFromChannel(id), bandIndexFromChannel(id), ts, v, true);
+    }
+    notifyListenersCoalesced();
+  }
+
   void clear() {
     if (_channels.isEmpty) return;
     _channels.clear();
@@ -127,18 +181,21 @@ class BandCache extends ChangeNotifier
 class _BandRing {
   final Float64List timestamps;
   final Float64List values;
+  final Uint8List unusable;
   int _head = 0;
   int _count = 0;
 
   _BandRing(int capacity)
     : timestamps = Float64List(capacity),
-      values = Float64List(capacity);
+      values = Float64List(capacity),
+      unusable = Uint8List(capacity);
 
   int get length => _count;
 
-  void add(double t, double v) {
+  void add(double t, double v, bool isUnusable) {
     timestamps[_head] = t;
     values[_head] = v;
+    unusable[_head] = isUnusable ? 1 : 0;
     _head = (_head + 1) % timestamps.length;
     if (_count < timestamps.length) _count++;
   }
@@ -148,6 +205,7 @@ class _BandRing {
 
   double timestampAt(int i) => timestamps[_physicalIndex(i)];
   double valueAt(int i) => values[_physicalIndex(i)];
+  bool unusableAt(int i) => unusable[_physicalIndex(i)] != 0;
 
   int lowerBound(double t) {
     int lo = 0, hi = _count;

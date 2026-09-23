@@ -6,6 +6,7 @@ import 'package:neurofeed/src/monitor/electrode_toggles.dart';
 import 'package:neurofeed/src/monitor/empty_state.dart';
 import 'package:neurofeed/src/monitor/graph_shell.dart';
 import 'package:neurofeed/src/monitor/monitor_controller.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/panes/bands_context_strip.dart';
 import 'package:neurofeed/src/monitor/panes/psd_pane.dart';
@@ -234,6 +235,10 @@ class _PsdViewState extends ConsumerState<PsdView> {
     final connected = ref.watch(
       appStateProvider.select((s) => s.status.connected),
     );
+    final live = monitorGraphsLive(
+      kind: ref.watch(monitorControllerProvider.select((s) => s.kind)),
+      connected: connected,
+    );
     ref.listen(appStateProvider.select((s) => s.status.connected), (
       prev,
       next,
@@ -302,10 +307,10 @@ class _PsdViewState extends ConsumerState<PsdView> {
               children: [
                 Positioned.fill(
                   child: PsdPane(
-                    spectrum: connected ? _tick.spectrum : null,
+                    spectrum: live ? _tick.spectrum : null,
                     maxHz: _maxHz,
-                    connected: connected,
-                    peakHz: connected ? _tick.peak : null,
+                    connected: live,
+                    peakHz: live ? _tick.peak : null,
                     hairlineHz: _hairlineHz,
                     onTapHz: (hz) {
                       _hairlineHz = hz;
@@ -313,7 +318,7 @@ class _PsdViewState extends ConsumerState<PsdView> {
                     },
                   ),
                 ),
-                if (connected && !buffer.hasData)
+                if (live && !buffer.hasData)
                   const Positioned.fill(child: MonitorWaitingSignal()),
               ],
             );
@@ -328,7 +333,7 @@ class _PsdViewState extends ConsumerState<PsdView> {
             return BandsContextStrip(
               stripViewport: _strip,
               epochViewport: _viewport,
-              series: connected ? _tick.series : emptyBandSeries(),
+              series: live ? _tick.series : emptyBandSeries(),
               stripNewestElapsed: bandNewest,
               stripOldestElapsed: bandOldest,
               highlightStartElapsed: _viewport.stripVisibleStart(
@@ -337,8 +342,8 @@ class _PsdViewState extends ConsumerState<PsdView> {
               highlightEndElapsed: _viewport.stripVisibleEnd(
                 newestElapsed: newest,
               ),
-              connected: connected,
-              waiting: connected && !_mon.bandCache.hasData,
+              connected: live,
+              waiting: live && !_mon.bandCache.hasData,
               onStripWindowChanged: (s) => ref
                   .read(settingsProvider)
                   .setMonitorDetailWindowSeconds('psd', s),
