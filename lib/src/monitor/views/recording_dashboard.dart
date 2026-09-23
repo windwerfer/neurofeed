@@ -28,22 +28,38 @@ enum RecordingDashGraph { rawEeg, bands, histogram, psd, spectrogram }
 
 class _LoadedRecording {
   const _LoadedRecording({
-    required this.data,
+    required this.frames,
     required this.originMs,
     required this.newestElapsed,
     required this.labels,
     this.meta,
+    this.data,
   });
 
-  final SessionData data;
+  /// 1 Hz computed frames — enough for Bands without the raw body.
+  final List<ComputedFrame> frames;
+
+  /// Parsed raw body; null until an EEG-dependent chip triggers lazy load.
+  final SessionData? data;
   final int originMs;
   final double newestElapsed;
   final List<String> labels;
   final RecordingMetadata? meta;
+
+  _LoadedRecording withRaw(SessionData data, double newestElapsed) =>
+      _LoadedRecording(
+        frames: frames,
+        data: data,
+        originMs: originMs,
+        newestElapsed: newestElapsed,
+        labels: labels,
+        meta: meta,
+      );
 }
 
-/// History row for `kind = recording`. Follow is disabled; Inspect uses
-/// in-memory `v5ExtractRaw` (body already includes the 12-byte header).
+/// History row for `kind = recording`. Follow is disabled. Opens on **Bands**
+/// from metadata + computed (two prefix reads); raw EEG loads lazily on the
+/// Raw EEG / Histogram / PSD / Spectrogram chips.
 class RecordingDashboardView extends ConsumerStatefulWidget {
   const RecordingDashboardView({super.key, required this.sessionId, this.path});
 
@@ -60,11 +76,11 @@ class _RecordingDashboardViewState
   final ViewportController _viewport = ViewportController()
     ..mode = ViewportMode.inspect
     ..inspectStartElapsed = 0
-    ..windowSeconds = ViewportController.defaultWindowSeconds;
+    ..windowSeconds = ViewportController.bandsDefaultWindowSeconds;
   final SweepBuffer _buffer = SweepBuffer();
   final SharedYScale _yScale = SharedYScale();
 
-  RecordingDashGraph _graph = RecordingDashGraph.rawEeg;
+  RecordingDashGraph _graph = RecordingDashGraph.bands;
   Set<int> _selected = {};
   Set<int> _visibleBands = allBandIndices();
   int _montageLen = 0;
@@ -75,13 +91,21 @@ class _RecordingDashboardViewState
   double _magMin = -40;
   double _magMax = 0;
   bool _magLocked = false;
-  double _pinchWindowAtStart = ViewportController.defaultWindowSeconds;
+  double _pinchWindowAtStart = ViewportController.bandsDefaultWindowSeconds;
   double _pinchFocalElapsed = 0;
   double _pinchFocalFraction = 0.5;
+
+  /// v5 fixed header size; [V5Header.rawOffset] ends metadata+computed.
+  /// raw_length is not stored (file_size - raw_offset).
+  static const int _v5HeaderSize = 68;
 
   Future<_LoadedRecording>? _load;
   _LoadedRecording? _loaded;
   Object? _error;
+  String? _fileName;
+  Future<void>? _rawLoad;
+  bool _rawLoading = false;
+  Object? _rawError;
 
   @override
   void initState() {
@@ -123,31 +147,116 @@ class _RecordingDashboardViewState
   Future<_LoadedRecording> _open() async {
     final storage = await ref.read(sessionStorageProvider.future);
     final name = widget.path ?? 'recording_${widget.sessionId}.neurofeed';
-    final bytes = await storage.readFile(name);
-    if (bytes == null || bytes.isEmpty) {
+    _fileName = name;
+
+    // Phase 1: leading 68 bytes → section offsets (raw_length = file_size -
+    // raw_offset; not stored in the header).
+    final headerBytes = await storage.readPrefix(name, _v5HeaderSize);
+    if (headerBytes == null || headerBytes.isEmpty) {
       throw StateError('Recording file not found ($name)');
     }
-    final full = Uint8List.fromList(bytes);
+    final header = v5ParseHeader(bytes: Uint8List.fromList(headerBytes));
+    final rawOffset = header.rawOffset.toInt();
+    if (rawOffset < _v5HeaderSize) {
+      throw StateError('Invalid v5 raw_offset ($rawOffset) in $name');
+    }
+
+    // Phase 2: prefix through raw_offset → metadata + computed (no raw body).
+    final headBytes = await storage.readPrefix(name, rawOffset);
+    if (headBytes == null || headBytes.length < rawOffset) {
+      throw StateError('Truncated recording head ($name)');
+    }
+    final prefix = Uint8List.fromList(headBytes);
     RecordingMetadata? meta;
     try {
-      final head = v5ParseHead(bytes: full);
+      final head = v5ParseHead(bytes: prefix);
       final decoded = jsonDecode(utf8.decode(head.metadataJson));
       if (decoded is Map<String, dynamic>) {
         meta = RecordingMetadata.fromJson(decoded);
       }
     } catch (_) {}
-    final raw = v5ExtractRaw(bytes: full);
-    final data = sessionParseBody(bytes: raw);
-    final origin = _originMs(data, meta);
-    final newest = _newestElapsed(data, origin, meta);
-    final n = _channelCount(data, meta);
+    final frames = v5ExtractComputed(bytes: prefix);
+    final origin = _originMs(null, meta);
+    final newest = _newestElapsedFromComputed(frames, meta);
+    final n = _channelCount(null, meta, frames);
     final labels = _labelsFor(n, meta);
     return _LoadedRecording(
-      data: data,
+      frames: frames,
       originMs: origin,
       newestElapsed: newest,
       labels: labels,
       meta: meta,
+    );
+  }
+
+  bool _needsRaw(RecordingDashGraph g) => switch (g) {
+    RecordingDashGraph.rawEeg ||
+    RecordingDashGraph.histogram ||
+    RecordingDashGraph.psd ||
+    RecordingDashGraph.spectrogram => true,
+    RecordingDashGraph.bands => false,
+  };
+
+  /// Third read: full file → raw body only when an EEG-dependent chip is
+  /// selected. Reuses the compact strokeWidth:2 spinner from History notes /
+  /// status bar.
+  Future<void> _ensureRaw() {
+    return _rawLoad ??= _loadRaw();
+  }
+
+  Future<void> _loadRaw() async {
+    final loaded = _loaded;
+    final name = _fileName;
+    if (loaded == null || loaded.data != null || name == null) {
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _rawLoading = true;
+        _rawError = null;
+      });
+    }
+    try {
+      final storage = await ref.read(sessionStorageProvider.future);
+      final bytes = await storage.readFile(name);
+      if (bytes == null || bytes.isEmpty) {
+        throw StateError('Recording file not found ($name)');
+      }
+      final full = Uint8List.fromList(bytes);
+      final raw = v5ExtractRaw(bytes: full);
+      final data = sessionParseBody(bytes: raw);
+      final newest = math.max(
+        loaded.newestElapsed,
+        _newestElapsed(data, loaded.originMs, loaded.meta),
+      );
+      if (!mounted) return;
+      setState(() {
+        _loaded = loaded.withRaw(data, newest);
+        _rawLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _rawLoading = false;
+        _rawError = e;
+      });
+    }
+  }
+
+  Widget _rawLoadingPane() {
+    if (_rawError != null) {
+      return Center(child: Text('Could not load raw EEG: $_rawError'));
+    }
+    // Same small spinner as feedback notes / status-bar progress.
+    if (!_rawLoading && _rawLoad == null) {
+      return const SizedBox.shrink();
+    }
+    return const Center(
+      child: SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
     );
   }
 
@@ -184,6 +293,9 @@ class _RecordingDashboardViewState
         _viewport.setStripWindowSeconds(def, newestElapsed: newest);
       }
     });
+    if (_needsRaw(next)) {
+      _ensureRaw();
+    }
   }
 
   List<double> get _windowOptions => switch (_graph) {
@@ -261,11 +373,11 @@ class _RecordingDashboardViewState
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: SegmentedButton<RecordingDashGraph>(
         segments: const [
+          ButtonSegment(value: RecordingDashGraph.bands, label: Text('Bands')),
           ButtonSegment(
             value: RecordingDashGraph.rawEeg,
             label: Text('Raw EEG'),
           ),
-          ButtonSegment(value: RecordingDashGraph.bands, label: Text('Bands')),
           ButtonSegment(
             value: RecordingDashGraph.histogram,
             label: Text('Histogram'),
@@ -531,16 +643,25 @@ class _RecordingDashboardViewState
   ) {
     switch (_graph) {
       case RecordingDashGraph.rawEeg:
+        if (loaded.data == null) return _rawLoadingPane();
         return _rawEeg(theme, loaded, start);
       case RecordingDashGraph.bands:
+        final series = loaded.frames.isNotEmpty
+            ? bandSeriesFromComputed(
+                frames: loaded.frames,
+                electrodes: _selected,
+                startElapsed: start,
+                endElapsed: end,
+              )
+            : bandSeriesFromRecords(
+                bands: loaded.data?.bands ?? const [],
+                electrodes: _selected,
+                startElapsed: start,
+                endElapsed: end,
+                originMs: loaded.originMs,
+              );
         return TimeSeriesPane(
-          series: bandSeriesFromRecords(
-            bands: loaded.data.bands,
-            electrodes: _selected,
-            startElapsed: start,
-            endElapsed: end,
-            originMs: loaded.originMs,
-          ),
+          series: series,
           viewport: _viewport,
           newestElapsed: loaded.newestElapsed,
           connected: true,
@@ -548,13 +669,14 @@ class _RecordingDashboardViewState
           drawLegend: false,
         );
       case RecordingDashGraph.histogram:
+        if (loaded.data == null) return _rawLoadingPane();
         final half = switch (_uv) {
           HistogramUvRange.uv50 => 50.0,
           HistogramUvRange.uv100 => 100.0,
           HistogramUvRange.uv200 => 200.0,
         };
         final samples = meanFromRecords(
-          eeg: loaded.data.eeg,
+          eeg: loaded.data!.eeg,
           electrodes: _selected,
           startElapsed: start,
           endElapsed: end,
@@ -574,8 +696,9 @@ class _RecordingDashboardViewState
           ],
         );
       case RecordingDashGraph.psd:
+        if (loaded.data == null) return _rawLoadingPane();
         final samples = meanFromRecords(
-          eeg: loaded.data.eeg,
+          eeg: loaded.data!.eeg,
           electrodes: _selected,
           startElapsed: start,
           endElapsed: end,
@@ -597,9 +720,10 @@ class _RecordingDashboardViewState
           ],
         );
       case RecordingDashGraph.spectrogram:
+        if (loaded.data == null) return _rawLoadingPane();
         final pad = kDefaultFftN / SweepBuffer.sampleRate;
         final samples = meanFromRecords(
-          eeg: loaded.data.eeg,
+          eeg: loaded.data!.eeg,
           electrodes: _selected,
           startElapsed: start - pad,
           endElapsed: end,
@@ -661,7 +785,7 @@ class _RecordingDashboardViewState
           traceColor: trace,
           wipeColor: wipe,
           fileSamples: channelFromRecords(
-            eeg: loaded.data.eeg,
+            eeg: loaded.data!.eeg,
             electrode: i,
             startElapsed: start,
             n: _viewport.windowSamples,
@@ -691,7 +815,7 @@ class _RecordingDashboardViewState
     final n = _viewport.windowSamples;
     for (var ch = 0; ch < loaded.labels.length; ch++) {
       final samples = channelFromRecords(
-        eeg: loaded.data.eeg,
+        eeg: loaded.data!.eeg,
         electrode: ch,
         startElapsed: start,
         n: n,
@@ -713,10 +837,11 @@ class _RecordingDashboardViewState
   }
 }
 
-int _originMs(SessionData data, RecordingMetadata? meta) {
-  if (data.eeg.isNotEmpty) {
-    var minTs = data.eeg.first.timestamp;
-    for (final rec in data.eeg) {
+int _originMs(SessionData? data, RecordingMetadata? meta) {
+  final eeg = data?.eeg;
+  if (eeg != null && eeg.isNotEmpty) {
+    var minTs = eeg.first.timestamp;
+    for (final rec in eeg) {
       if (rec.timestamp < minTs) minTs = rec.timestamp;
     }
     return minTs.round();
@@ -742,10 +867,35 @@ double _newestElapsed(SessionData data, int originMs, RecordingMetadata? meta) {
   return newest;
 }
 
-int _channelCount(SessionData data, RecordingMetadata? meta) {
+double _newestElapsedFromComputed(
+  List<ComputedFrame> frames,
+  RecordingMetadata? meta,
+) {
+  var newest = 0.0;
+  for (final f in frames) {
+    if (f.t > newest) newest = f.t;
+  }
+  if (newest <= 0 && meta != null) {
+    newest = (meta.durationS != 0 ? meta.durationS : meta.elapsedSeconds)
+        .toDouble();
+  }
+  return newest;
+}
+
+int _channelCount(
+  SessionData? data,
+  RecordingMetadata? meta,
+  List<ComputedFrame> frames,
+) {
   var maxCh = -1;
-  for (final rec in data.eeg) {
-    if (rec.electrode > maxCh) maxCh = rec.electrode;
+  final eeg = data?.eeg;
+  if (eeg != null) {
+    for (final rec in eeg) {
+      if (rec.electrode > maxCh) maxCh = rec.electrode;
+    }
+  }
+  for (final f in frames) {
+    if (f.bands.length - 1 > maxCh) maxCh = f.bands.length - 1;
   }
   final fromEeg = maxCh + 1;
   final fromMeta = meta?.device.channelCount ?? 0;
@@ -843,6 +993,47 @@ List<List<BandPoint>> bandSeriesFromRecords({
     (byT[2][key] ??= []).add(linearToDb(b.alpha));
     (byT[3][key] ??= []).add(linearToDb(b.beta));
     (byT[4][key] ??= []).add(linearToDb(b.gamma));
+  }
+  return [
+    for (final map in byT)
+      mergeBandTickPoints([
+        for (final k in (map.keys.toList()..sort()))
+          BandPoint(
+            k / 1000.0,
+            map[k]!.reduce((a, b) => a + b) / map[k]!.length,
+          ),
+      ]),
+  ];
+}
+
+/// Bands from computed 1 Hz frames ([ComputedFrame.t] is already elapsed s).
+/// Absolute powers → [linearToDb], same as [bandSeriesFromRecords].
+List<List<BandPoint>> bandSeriesFromComputed({
+  required List<ComputedFrame> frames,
+  required Iterable<int> electrodes,
+  required double startElapsed,
+  required double endElapsed,
+}) {
+  final selected = electrodes.toSet();
+  final byT = List.generate(bandNames.length, (_) => <int, List<double>>{});
+  for (final f in frames) {
+    if (f.t < startElapsed - 1 || f.t > endElapsed + 1) continue;
+    final key = (f.t * 1000).round();
+    final acc = List<double>.filled(bandNames.length, 0);
+    var n = 0;
+    for (final ei in selected) {
+      if (ei < 0 || ei >= f.bands.length) continue;
+      final b = f.bands[ei];
+      if (b.length < bandNames.length) continue;
+      for (var i = 0; i < bandNames.length; i++) {
+        acc[i] += linearToDb(b[i]);
+      }
+      n++;
+    }
+    if (n == 0) continue;
+    for (var i = 0; i < bandNames.length; i++) {
+      (byT[i][key] ??= []).add(acc[i] / n);
+    }
   }
   return [
     for (final map in byT)

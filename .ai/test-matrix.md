@@ -50,6 +50,7 @@ flutter test \
   test/monitor/electrode_toggles_test.dart \
   test/monitor/band_toggles_test.dart \
   test/monitor/time_series_pane_test.dart \
+  test/monitor/recording_bands_computed_test.dart \
   test/smooth_path_test.dart \
   test/monitor/bands_context_strip_test.dart \
   test/monitor/plot_isolation_test.dart \
