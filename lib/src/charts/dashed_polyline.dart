@@ -1,40 +1,56 @@
 import 'dart:ui';
 
-/// Segment-wise dashed polyline. Independent of Bands Y-overshoot dash.
+/// Contiguous [draw, gap, draw, gap, ...] lengths that cover [totalLength].
+///
+/// Exposed for tests: dense polylines still leave gaps when the phase is
+/// continuous along the whole path (not restarted per short segment).
+List<({bool draw, double length})> dashedIntervals(
+  double totalLength, {
+  double dash = 6,
+  double gap = 4,
+}) {
+  if (totalLength <= 0) return const [];
+  final out = <({bool draw, double length})>[];
+  var distance = 0.0;
+  var draw = true;
+  while (distance < totalLength) {
+    final len = draw ? dash : gap;
+    final next = distance + len > totalLength ? totalLength : distance + len;
+    out.add((draw: draw, length: next - distance));
+    draw = !draw;
+    distance = next;
+  }
+  return out;
+}
+
+/// Dashed polyline with a **continuous** dash phase along the whole path.
+///
+/// Per-segment restarting looks solid when consecutive points are closer
+/// than [dash] (common on flat hold-last-Y stretches at band sample rates).
 void paintDashedPolyline(
   Canvas canvas,
   List<Offset> pts,
   Paint paint, {
-  double dash = 5,
+  double dash = 6,
   double gap = 4,
 }) {
   if (pts.length < 2) return;
-  for (var i = 0; i < pts.length - 1; i++) {
-    _dashSegment(canvas, pts[i], pts[i + 1], paint, dash, gap);
+  final path = Path()..moveTo(pts.first.dx, pts.first.dy);
+  for (var i = 1; i < pts.length; i++) {
+    path.lineTo(pts[i].dx, pts[i].dy);
   }
-}
-
-void _dashSegment(
-  Canvas canvas,
-  Offset a,
-  Offset b,
-  Paint paint,
-  double dash,
-  double gap,
-) {
-  final d = b - a;
-  final len = d.distance;
-  if (len <= 0) return;
-  final dir = Offset(d.dx / len, d.dy / len);
-  var t = 0.0;
-  var draw = true;
-  while (t < len) {
-    final step = draw ? dash : gap;
-    final next = t + step > len ? len : t + step;
-    if (draw) {
-      canvas.drawLine(a + dir * t, a + dir * next, paint);
+  for (final metric in path.computeMetrics()) {
+    var distance = 0.0;
+    for (final part in dashedIntervals(
+      metric.length,
+      dash: dash,
+      gap: gap,
+    )) {
+      final next = distance + part.length;
+      if (part.draw) {
+        canvas.drawPath(metric.extractPath(distance, next), paint);
+      }
+      distance = next;
     }
-    draw = !draw;
-    t = next;
   }
 }
