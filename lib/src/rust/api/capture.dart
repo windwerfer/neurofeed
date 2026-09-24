@@ -83,6 +83,14 @@ BigInt captureWriteErrors() =>
 
 bool captureIsActive() => RustLib.instance.api.crateApiCaptureCaptureIsActive();
 
+/// Pause/resume raw fork without tearing down the session (no FRB yet —
+/// Dart also drives this via `__capture_pause` sidecar control).
+Future<void> captureSetPaused({required bool paused}) =>
+    RustLib.instance.api.crateApiCaptureCaptureSetPaused(paused: paused);
+
+Future<bool> captureIsPaused() =>
+    RustLib.instance.api.crateApiCaptureCaptureIsPaused();
+
 /// Flush-boundary index entry: elapsed seconds from capture start and the
 /// exclusive end offset of the inner zstd frame in the live `.raw`.
 class CaptureFlushEntry {

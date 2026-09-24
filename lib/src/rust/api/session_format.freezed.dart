@@ -905,6 +905,14 @@ mixin _$FeedbackInfo {
   double get threshold => throw _privateConstructorUsedError;
   bool get inTarget => throw _privateConstructorUsedError;
   double get pct => throw _privateConstructorUsedError;
+  double? get percentile => throw _privateConstructorUsedError;
+  double? get thresholdPercentile => throw _privateConstructorUsedError;
+  bool? get heldBack => throw _privateConstructorUsedError;
+  List<String>? get inhibitTags => throw _privateConstructorUsedError;
+  bool? get clean => throw _privateConstructorUsedError;
+  String? get dirtyReason => throw _privateConstructorUsedError;
+  double? get betaRel => throw _privateConstructorUsedError;
+  double? get deltaRel => throw _privateConstructorUsedError;
 
   /// Create a copy of FeedbackInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -920,7 +928,20 @@ abstract class $FeedbackInfoCopyWith<$Res> {
     $Res Function(FeedbackInfo) then,
   ) = _$FeedbackInfoCopyWithImpl<$Res, FeedbackInfo>;
   @useResult
-  $Res call({double ratio, double threshold, bool inTarget, double pct});
+  $Res call({
+    double ratio,
+    double threshold,
+    bool inTarget,
+    double pct,
+    double? percentile,
+    double? thresholdPercentile,
+    bool? heldBack,
+    List<String>? inhibitTags,
+    bool? clean,
+    String? dirtyReason,
+    double? betaRel,
+    double? deltaRel,
+  });
 }
 
 /// @nodoc
@@ -942,6 +963,14 @@ class _$FeedbackInfoCopyWithImpl<$Res, $Val extends FeedbackInfo>
     Object? threshold = null,
     Object? inTarget = null,
     Object? pct = null,
+    Object? percentile = freezed,
+    Object? thresholdPercentile = freezed,
+    Object? heldBack = freezed,
+    Object? inhibitTags = freezed,
+    Object? clean = freezed,
+    Object? dirtyReason = freezed,
+    Object? betaRel = freezed,
+    Object? deltaRel = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -961,6 +990,38 @@ class _$FeedbackInfoCopyWithImpl<$Res, $Val extends FeedbackInfo>
                 ? _value.pct
                 : pct // ignore: cast_nullable_to_non_nullable
                       as double,
+            percentile: freezed == percentile
+                ? _value.percentile
+                : percentile // ignore: cast_nullable_to_non_nullable
+                      as double?,
+            thresholdPercentile: freezed == thresholdPercentile
+                ? _value.thresholdPercentile
+                : thresholdPercentile // ignore: cast_nullable_to_non_nullable
+                      as double?,
+            heldBack: freezed == heldBack
+                ? _value.heldBack
+                : heldBack // ignore: cast_nullable_to_non_nullable
+                      as bool?,
+            inhibitTags: freezed == inhibitTags
+                ? _value.inhibitTags
+                : inhibitTags // ignore: cast_nullable_to_non_nullable
+                      as List<String>?,
+            clean: freezed == clean
+                ? _value.clean
+                : clean // ignore: cast_nullable_to_non_nullable
+                      as bool?,
+            dirtyReason: freezed == dirtyReason
+                ? _value.dirtyReason
+                : dirtyReason // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            betaRel: freezed == betaRel
+                ? _value.betaRel
+                : betaRel // ignore: cast_nullable_to_non_nullable
+                      as double?,
+            deltaRel: freezed == deltaRel
+                ? _value.deltaRel
+                : deltaRel // ignore: cast_nullable_to_non_nullable
+                      as double?,
           )
           as $Val,
     );
@@ -976,7 +1037,20 @@ abstract class _$$FeedbackInfoImplCopyWith<$Res>
   ) = __$$FeedbackInfoImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({double ratio, double threshold, bool inTarget, double pct});
+  $Res call({
+    double ratio,
+    double threshold,
+    bool inTarget,
+    double pct,
+    double? percentile,
+    double? thresholdPercentile,
+    bool? heldBack,
+    List<String>? inhibitTags,
+    bool? clean,
+    String? dirtyReason,
+    double? betaRel,
+    double? deltaRel,
+  });
 }
 
 /// @nodoc
@@ -997,6 +1071,14 @@ class __$$FeedbackInfoImplCopyWithImpl<$Res>
     Object? threshold = null,
     Object? inTarget = null,
     Object? pct = null,
+    Object? percentile = freezed,
+    Object? thresholdPercentile = freezed,
+    Object? heldBack = freezed,
+    Object? inhibitTags = freezed,
+    Object? clean = freezed,
+    Object? dirtyReason = freezed,
+    Object? betaRel = freezed,
+    Object? deltaRel = freezed,
   }) {
     return _then(
       _$FeedbackInfoImpl(
@@ -1016,6 +1098,38 @@ class __$$FeedbackInfoImplCopyWithImpl<$Res>
             ? _value.pct
             : pct // ignore: cast_nullable_to_non_nullable
                   as double,
+        percentile: freezed == percentile
+            ? _value.percentile
+            : percentile // ignore: cast_nullable_to_non_nullable
+                  as double?,
+        thresholdPercentile: freezed == thresholdPercentile
+            ? _value.thresholdPercentile
+            : thresholdPercentile // ignore: cast_nullable_to_non_nullable
+                  as double?,
+        heldBack: freezed == heldBack
+            ? _value.heldBack
+            : heldBack // ignore: cast_nullable_to_non_nullable
+                  as bool?,
+        inhibitTags: freezed == inhibitTags
+            ? _value._inhibitTags
+            : inhibitTags // ignore: cast_nullable_to_non_nullable
+                  as List<String>?,
+        clean: freezed == clean
+            ? _value.clean
+            : clean // ignore: cast_nullable_to_non_nullable
+                  as bool?,
+        dirtyReason: freezed == dirtyReason
+            ? _value.dirtyReason
+            : dirtyReason // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        betaRel: freezed == betaRel
+            ? _value.betaRel
+            : betaRel // ignore: cast_nullable_to_non_nullable
+                  as double?,
+        deltaRel: freezed == deltaRel
+            ? _value.deltaRel
+            : deltaRel // ignore: cast_nullable_to_non_nullable
+                  as double?,
       ),
     );
   }
@@ -1023,13 +1137,22 @@ class __$$FeedbackInfoImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$FeedbackInfoImpl implements _FeedbackInfo {
+class _$FeedbackInfoImpl extends _FeedbackInfo {
   const _$FeedbackInfoImpl({
     required this.ratio,
     required this.threshold,
     required this.inTarget,
     required this.pct,
-  });
+    this.percentile,
+    this.thresholdPercentile,
+    this.heldBack,
+    final List<String>? inhibitTags,
+    this.clean,
+    this.dirtyReason,
+    this.betaRel,
+    this.deltaRel,
+  }) : _inhibitTags = inhibitTags,
+       super._();
 
   @override
   final double ratio;
@@ -1039,10 +1162,34 @@ class _$FeedbackInfoImpl implements _FeedbackInfo {
   final bool inTarget;
   @override
   final double pct;
+  @override
+  final double? percentile;
+  @override
+  final double? thresholdPercentile;
+  @override
+  final bool? heldBack;
+  final List<String>? _inhibitTags;
+  @override
+  List<String>? get inhibitTags {
+    final value = _inhibitTags;
+    if (value == null) return null;
+    if (_inhibitTags is EqualUnmodifiableListView) return _inhibitTags;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(value);
+  }
+
+  @override
+  final bool? clean;
+  @override
+  final String? dirtyReason;
+  @override
+  final double? betaRel;
+  @override
+  final double? deltaRel;
 
   @override
   String toString() {
-    return 'FeedbackInfo(ratio: $ratio, threshold: $threshold, inTarget: $inTarget, pct: $pct)';
+    return 'FeedbackInfo(ratio: $ratio, threshold: $threshold, inTarget: $inTarget, pct: $pct, percentile: $percentile, thresholdPercentile: $thresholdPercentile, heldBack: $heldBack, inhibitTags: $inhibitTags, clean: $clean, dirtyReason: $dirtyReason, betaRel: $betaRel, deltaRel: $deltaRel)';
   }
 
   @override
@@ -1055,11 +1202,41 @@ class _$FeedbackInfoImpl implements _FeedbackInfo {
                 other.threshold == threshold) &&
             (identical(other.inTarget, inTarget) ||
                 other.inTarget == inTarget) &&
-            (identical(other.pct, pct) || other.pct == pct));
+            (identical(other.pct, pct) || other.pct == pct) &&
+            (identical(other.percentile, percentile) ||
+                other.percentile == percentile) &&
+            (identical(other.thresholdPercentile, thresholdPercentile) ||
+                other.thresholdPercentile == thresholdPercentile) &&
+            (identical(other.heldBack, heldBack) ||
+                other.heldBack == heldBack) &&
+            const DeepCollectionEquality().equals(
+              other._inhibitTags,
+              _inhibitTags,
+            ) &&
+            (identical(other.clean, clean) || other.clean == clean) &&
+            (identical(other.dirtyReason, dirtyReason) ||
+                other.dirtyReason == dirtyReason) &&
+            (identical(other.betaRel, betaRel) || other.betaRel == betaRel) &&
+            (identical(other.deltaRel, deltaRel) ||
+                other.deltaRel == deltaRel));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, ratio, threshold, inTarget, pct);
+  int get hashCode => Object.hash(
+    runtimeType,
+    ratio,
+    threshold,
+    inTarget,
+    pct,
+    percentile,
+    thresholdPercentile,
+    heldBack,
+    const DeepCollectionEquality().hash(_inhibitTags),
+    clean,
+    dirtyReason,
+    betaRel,
+    deltaRel,
+  );
 
   /// Create a copy of FeedbackInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -1070,13 +1247,22 @@ class _$FeedbackInfoImpl implements _FeedbackInfo {
       __$$FeedbackInfoImplCopyWithImpl<_$FeedbackInfoImpl>(this, _$identity);
 }
 
-abstract class _FeedbackInfo implements FeedbackInfo {
+abstract class _FeedbackInfo extends FeedbackInfo {
   const factory _FeedbackInfo({
     required final double ratio,
     required final double threshold,
     required final bool inTarget,
     required final double pct,
+    final double? percentile,
+    final double? thresholdPercentile,
+    final bool? heldBack,
+    final List<String>? inhibitTags,
+    final bool? clean,
+    final String? dirtyReason,
+    final double? betaRel,
+    final double? deltaRel,
   }) = _$FeedbackInfoImpl;
+  const _FeedbackInfo._() : super._();
 
   @override
   double get ratio;
@@ -1086,6 +1272,22 @@ abstract class _FeedbackInfo implements FeedbackInfo {
   bool get inTarget;
   @override
   double get pct;
+  @override
+  double? get percentile;
+  @override
+  double? get thresholdPercentile;
+  @override
+  bool? get heldBack;
+  @override
+  List<String>? get inhibitTags;
+  @override
+  bool? get clean;
+  @override
+  String? get dirtyReason;
+  @override
+  double? get betaRel;
+  @override
+  double? get deltaRel;
 
   /// Create a copy of FeedbackInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -1101,6 +1303,11 @@ mixin _$GuardrailInfo {
   double get clarity => throw _privateConstructorUsedError;
   bool get warning => throw _privateConstructorUsedError;
   double get delta => throw _privateConstructorUsedError;
+  double? get featurePercentile => throw _privateConstructorUsedError;
+  bool? get warnOver => throw _privateConstructorUsedError;
+  bool? get ceilingOver => throw _privateConstructorUsedError;
+  bool? get clean => throw _privateConstructorUsedError;
+  String? get dirtyReason => throw _privateConstructorUsedError;
 
   /// Create a copy of GuardrailInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -1116,7 +1323,17 @@ abstract class $GuardrailInfoCopyWith<$Res> {
     $Res Function(GuardrailInfo) then,
   ) = _$GuardrailInfoCopyWithImpl<$Res, GuardrailInfo>;
   @useResult
-  $Res call({double sleepDir, double clarity, bool warning, double delta});
+  $Res call({
+    double sleepDir,
+    double clarity,
+    bool warning,
+    double delta,
+    double? featurePercentile,
+    bool? warnOver,
+    bool? ceilingOver,
+    bool? clean,
+    String? dirtyReason,
+  });
 }
 
 /// @nodoc
@@ -1138,6 +1355,11 @@ class _$GuardrailInfoCopyWithImpl<$Res, $Val extends GuardrailInfo>
     Object? clarity = null,
     Object? warning = null,
     Object? delta = null,
+    Object? featurePercentile = freezed,
+    Object? warnOver = freezed,
+    Object? ceilingOver = freezed,
+    Object? clean = freezed,
+    Object? dirtyReason = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -1157,6 +1379,26 @@ class _$GuardrailInfoCopyWithImpl<$Res, $Val extends GuardrailInfo>
                 ? _value.delta
                 : delta // ignore: cast_nullable_to_non_nullable
                       as double,
+            featurePercentile: freezed == featurePercentile
+                ? _value.featurePercentile
+                : featurePercentile // ignore: cast_nullable_to_non_nullable
+                      as double?,
+            warnOver: freezed == warnOver
+                ? _value.warnOver
+                : warnOver // ignore: cast_nullable_to_non_nullable
+                      as bool?,
+            ceilingOver: freezed == ceilingOver
+                ? _value.ceilingOver
+                : ceilingOver // ignore: cast_nullable_to_non_nullable
+                      as bool?,
+            clean: freezed == clean
+                ? _value.clean
+                : clean // ignore: cast_nullable_to_non_nullable
+                      as bool?,
+            dirtyReason: freezed == dirtyReason
+                ? _value.dirtyReason
+                : dirtyReason // ignore: cast_nullable_to_non_nullable
+                      as String?,
           )
           as $Val,
     );
@@ -1172,7 +1414,17 @@ abstract class _$$GuardrailInfoImplCopyWith<$Res>
   ) = __$$GuardrailInfoImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({double sleepDir, double clarity, bool warning, double delta});
+  $Res call({
+    double sleepDir,
+    double clarity,
+    bool warning,
+    double delta,
+    double? featurePercentile,
+    bool? warnOver,
+    bool? ceilingOver,
+    bool? clean,
+    String? dirtyReason,
+  });
 }
 
 /// @nodoc
@@ -1193,6 +1445,11 @@ class __$$GuardrailInfoImplCopyWithImpl<$Res>
     Object? clarity = null,
     Object? warning = null,
     Object? delta = null,
+    Object? featurePercentile = freezed,
+    Object? warnOver = freezed,
+    Object? ceilingOver = freezed,
+    Object? clean = freezed,
+    Object? dirtyReason = freezed,
   }) {
     return _then(
       _$GuardrailInfoImpl(
@@ -1212,6 +1469,26 @@ class __$$GuardrailInfoImplCopyWithImpl<$Res>
             ? _value.delta
             : delta // ignore: cast_nullable_to_non_nullable
                   as double,
+        featurePercentile: freezed == featurePercentile
+            ? _value.featurePercentile
+            : featurePercentile // ignore: cast_nullable_to_non_nullable
+                  as double?,
+        warnOver: freezed == warnOver
+            ? _value.warnOver
+            : warnOver // ignore: cast_nullable_to_non_nullable
+                  as bool?,
+        ceilingOver: freezed == ceilingOver
+            ? _value.ceilingOver
+            : ceilingOver // ignore: cast_nullable_to_non_nullable
+                  as bool?,
+        clean: freezed == clean
+            ? _value.clean
+            : clean // ignore: cast_nullable_to_non_nullable
+                  as bool?,
+        dirtyReason: freezed == dirtyReason
+            ? _value.dirtyReason
+            : dirtyReason // ignore: cast_nullable_to_non_nullable
+                  as String?,
       ),
     );
   }
@@ -1219,13 +1496,18 @@ class __$$GuardrailInfoImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$GuardrailInfoImpl implements _GuardrailInfo {
+class _$GuardrailInfoImpl extends _GuardrailInfo {
   const _$GuardrailInfoImpl({
     required this.sleepDir,
     required this.clarity,
     required this.warning,
     required this.delta,
-  });
+    this.featurePercentile,
+    this.warnOver,
+    this.ceilingOver,
+    this.clean,
+    this.dirtyReason,
+  }) : super._();
 
   @override
   final double sleepDir;
@@ -1235,10 +1517,20 @@ class _$GuardrailInfoImpl implements _GuardrailInfo {
   final bool warning;
   @override
   final double delta;
+  @override
+  final double? featurePercentile;
+  @override
+  final bool? warnOver;
+  @override
+  final bool? ceilingOver;
+  @override
+  final bool? clean;
+  @override
+  final String? dirtyReason;
 
   @override
   String toString() {
-    return 'GuardrailInfo(sleepDir: $sleepDir, clarity: $clarity, warning: $warning, delta: $delta)';
+    return 'GuardrailInfo(sleepDir: $sleepDir, clarity: $clarity, warning: $warning, delta: $delta, featurePercentile: $featurePercentile, warnOver: $warnOver, ceilingOver: $ceilingOver, clean: $clean, dirtyReason: $dirtyReason)';
   }
 
   @override
@@ -1250,12 +1542,31 @@ class _$GuardrailInfoImpl implements _GuardrailInfo {
                 other.sleepDir == sleepDir) &&
             (identical(other.clarity, clarity) || other.clarity == clarity) &&
             (identical(other.warning, warning) || other.warning == warning) &&
-            (identical(other.delta, delta) || other.delta == delta));
+            (identical(other.delta, delta) || other.delta == delta) &&
+            (identical(other.featurePercentile, featurePercentile) ||
+                other.featurePercentile == featurePercentile) &&
+            (identical(other.warnOver, warnOver) ||
+                other.warnOver == warnOver) &&
+            (identical(other.ceilingOver, ceilingOver) ||
+                other.ceilingOver == ceilingOver) &&
+            (identical(other.clean, clean) || other.clean == clean) &&
+            (identical(other.dirtyReason, dirtyReason) ||
+                other.dirtyReason == dirtyReason));
   }
 
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, sleepDir, clarity, warning, delta);
+  int get hashCode => Object.hash(
+    runtimeType,
+    sleepDir,
+    clarity,
+    warning,
+    delta,
+    featurePercentile,
+    warnOver,
+    ceilingOver,
+    clean,
+    dirtyReason,
+  );
 
   /// Create a copy of GuardrailInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -1266,13 +1577,19 @@ class _$GuardrailInfoImpl implements _GuardrailInfo {
       __$$GuardrailInfoImplCopyWithImpl<_$GuardrailInfoImpl>(this, _$identity);
 }
 
-abstract class _GuardrailInfo implements GuardrailInfo {
+abstract class _GuardrailInfo extends GuardrailInfo {
   const factory _GuardrailInfo({
     required final double sleepDir,
     required final double clarity,
     required final bool warning,
     required final double delta,
+    final double? featurePercentile,
+    final bool? warnOver,
+    final bool? ceilingOver,
+    final bool? clean,
+    final String? dirtyReason,
   }) = _$GuardrailInfoImpl;
+  const _GuardrailInfo._() : super._();
 
   @override
   double get sleepDir;
@@ -1282,6 +1599,16 @@ abstract class _GuardrailInfo implements GuardrailInfo {
   bool get warning;
   @override
   double get delta;
+  @override
+  double? get featurePercentile;
+  @override
+  bool? get warnOver;
+  @override
+  bool? get ceilingOver;
+  @override
+  bool? get clean;
+  @override
+  String? get dirtyReason;
 
   /// Create a copy of GuardrailInfo
   /// with the given fields replaced by the non-null parameter values.

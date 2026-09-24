@@ -124,6 +124,9 @@ sealed class BandsRecord with _$BandsRecord {
 
 /// Computed frame at 1 Hz for training/export.
 /// All bands are absolute power (not relative).
+///
+/// On-disk JSONL keys are **camelCase** (Dart `ComputedFrame.toJson`).
+/// Snake_case aliases keep older Rust-encoded fixtures readable.
 @freezed
 sealed class ComputedFrame with _$ComputedFrame {
   const ComputedFrame._();
@@ -167,23 +170,42 @@ sealed class EegSampleRecord with _$EegSampleRecord {
 /// Feedback (ATR) info.
 @freezed
 sealed class FeedbackInfo with _$FeedbackInfo {
+  const FeedbackInfo._();
   const factory FeedbackInfo({
     required double ratio,
     required double threshold,
     required bool inTarget,
     required double pct,
+    double? percentile,
+    double? thresholdPercentile,
+    bool? heldBack,
+    List<String>? inhibitTags,
+    bool? clean,
+    String? dirtyReason,
+    double? betaRel,
+    double? deltaRel,
   }) = _FeedbackInfo;
+  static Future<FeedbackInfo> default_() =>
+      RustLib.instance.api.crateApiSessionFormatFeedbackInfoDefault();
 }
 
 /// Guardrail (AI drowsiness) info.
 @freezed
 sealed class GuardrailInfo with _$GuardrailInfo {
+  const GuardrailInfo._();
   const factory GuardrailInfo({
     required double sleepDir,
     required double clarity,
     required bool warning,
     required double delta,
+    double? featurePercentile,
+    bool? warnOver,
+    bool? ceilingOver,
+    bool? clean,
+    String? dirtyReason,
   }) = _GuardrailInfo;
+  static Future<GuardrailInfo> default_() =>
+      RustLib.instance.api.crateApiSessionFormatGuardrailInfoDefault();
 }
 
 @freezed
