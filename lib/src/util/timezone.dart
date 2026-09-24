@@ -101,3 +101,78 @@ bool _looksIana(String z) {
 }
 
 String _p2(int n) => n.toString().padLeft(2, '0');
+
+/// Wall-clock display for History / list / detail.
+///
+/// Prefers the numeric offset already written on [iso] (contract: local offset
+/// on `savedAt`/`startedAt`). If the stamp is `Z`-only, applies [timeZone] when
+/// it is an `Etc/GMT±N` / `Etc/UTC` id; otherwise falls back to device local.
+String formatSessionWallClock(
+  String? iso, {
+  String? timeZone,
+  bool includeMinutes = true,
+}) {
+  final wall = sessionWallClock(iso: iso, timeZone: timeZone);
+  final y = wall.year.toString().padLeft(4, '0');
+  final mo = _p2(wall.month);
+  final d = _p2(wall.day);
+  final h = _p2(wall.hour);
+  final mi = _p2(wall.minute);
+  if (!includeMinutes) return '$y-$mo-$d';
+  return '$y-$mo-$d $h:$mi';
+}
+
+/// Naive local [DateTime] whose Y-M-D H:M:S match the session wall clock.
+DateTime sessionWallClock({String? iso, String? timeZone}) {
+  final raw = iso?.trim() ?? '';
+  if (raw.isNotEmpty) {
+    final m = RegExp(
+      r'^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?',
+    ).firstMatch(raw);
+    final hasOffset = RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(raw);
+    final isZulu = raw.endsWith('Z');
+    if (m != null && hasOffset && !isZulu) {
+      // Offset-bearing stamp: wall digits are already site-local.
+      return DateTime(
+        int.parse(m.group(1)!),
+        int.parse(m.group(2)!),
+        int.parse(m.group(3)!),
+        int.parse(m.group(4)!),
+        int.parse(m.group(5)!),
+        int.parse(m.group(6) ?? '0'),
+      );
+    }
+    final parsed = DateTime.tryParse(raw);
+    if (parsed != null) {
+      return _wallFromUtc(parsed.toUtc(), timeZone);
+    }
+  }
+  return _wallFromUtc(DateTime.now().toUtc(), timeZone);
+}
+
+DateTime _wallFromUtc(DateTime utc, String? timeZone) {
+  final tz = timeZone?.trim();
+  if (tz == null || tz.isEmpty) {
+    return utc.toLocal();
+  }
+  if (tz == 'Etc/UTC' || tz == 'UTC' || tz == 'Zulu') {
+    return DateTime.utc(
+      utc.year, utc.month, utc.day, utc.hour, utc.minute, utc.second, utc.millisecond,
+    );
+  }
+  final etc = RegExp(r'^Etc/GMT([+-])?(\d{1,2})$').firstMatch(tz);
+  if (etc != null) {
+    // Etc/GMT ids invert civil sign: Etc/GMT-7 == UTC+7.
+    final n = int.parse(etc.group(2)!);
+    final signChar = etc.group(1);
+    final civilHours = signChar == '+' ? -n : n;
+    final local = utc.add(Duration(hours: civilHours));
+    return DateTime(
+      local.year, local.month, local.day, local.hour, local.minute, local.second,
+      local.millisecond,
+    );
+  }
+  // Full IANA without a TZ DB: device local is the honest fallback.
+  return utc.toLocal();
+}
+

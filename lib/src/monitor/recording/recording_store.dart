@@ -94,6 +94,9 @@ class RecordingStore {
         guardrailWarnCount: scalars.guardrailWarnCount,
         avgSleepDir: scalars.avgSleepDir,
         markerCount: 0,
+        userId: meta.subject?.id,
+        timeZone: meta.timeZone,
+        savedAtMs: meta.savedAt.toUtc().millisecondsSinceEpoch,
         sessionId: id,
         notesPreview: meta.notes.isEmpty
             ? null
