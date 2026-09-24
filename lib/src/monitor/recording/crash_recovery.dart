@@ -68,7 +68,7 @@ class _RecordingScratch {
   File? jsonTmp;
 }
 
-/// Delete `recording_$id` scratch v5 and leftover temps (not history-root files).
+/// Delete `recording_$id` scratch `.neurofeed` and leftover temps (not history-root files).
 Future<void> deleteRecordingScratch(Directory dir, String id) async {
   for (final suffix in const [
     '.neurofeed',
@@ -183,9 +183,9 @@ Future<RecoverableRecording?> _assembleTemps({
   }
 }
 
-/// Scan [scratch] for leftover `recording_*` temps and assembled v5.
-/// Assembled v5 is returned as-is (temps deleted). Temps only are assembled
-/// with [spine.assembleCaptureV5At] (`prefix: recording`, placeholder WebP).
+/// Scan [scratch] for leftover `recording_*` temps and assembled `.neurofeed`.
+/// Assembled file is returned as-is (temps deleted). Temps only are assembled
+/// with [spine.assembleCaptureV5At] (FFI name kept; `prefix: recording`, placeholder WebP).
 /// Does not touch `tmp_*` or `session_*`.
 Future<List<RecoverableRecording>> scanRecoverableRecordings(
   Directory scratch,

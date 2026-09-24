@@ -6,9 +6,9 @@ use flutter_rust_bridge::frb;
 
 use crate::api::muse::{ImuDto, MuseEventDto};
 
-// ── raw body format (raw section of the v5 container) ─────────────────────────
+// ── raw body format (raw section of the .neurofeed / NFED6 container) ──────────
 //
-// The v5 container raw section is a byte-for-byte copy of the live `.raw`
+// The container raw section is a byte-for-byte copy of the live `.raw`
 // body (NFEDBIN + inner zstd frames; no outer zstd):
 //
 //   [ u64 LE "NFEDBIN\n" (reversed) ][ u32 LE version=5 ][ frames ]
@@ -461,7 +461,7 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
     Ok(out)
 }
 
-// ── v5 Session Format ──────────────────────────────────────────────────────────
+// ── Session Format (NFED6; FFI / type names still *v5*) ─────────────────────────
 //
 //   [68-byte fixed header][WebP thumbnail][metadata JSON (zstd)][computed 1Hz (zstd)][raw body]
 //
@@ -482,7 +482,7 @@ pub const V6_MAGIC: [u8; 6] = *b"NFED6\0";
 pub const V6_VERSION: u8 = 6;
 pub const V5_HEADER_SIZE: usize = 68;
 
-/// v5 container header with fixed 68-byte layout.
+/// `.neurofeed` container header with fixed 68-byte layout (NFED6; type `V5Header` name kept).
 /// raw_length is not stored; compute as file_size - raw_offset.
 #[frb(dart_metadata = ("freezed",))]
 #[derive(Debug, Clone, PartialEq)]
@@ -496,7 +496,7 @@ pub struct V5Header {
     pub raw_offset: u64,
 }
 
-/// Parsed v5 head - header + thumbnail + metadata (decompressed).
+/// Parsed container head (NFED6) - header + thumbnail + metadata (decompressed).
 #[frb(dart_metadata = ("freezed",))]
 #[derive(Debug, Clone)]
 pub struct V5ParsedHead {
@@ -745,7 +745,8 @@ fn file_len(path: &str) -> Result<u64, String> {
         .map_err(|e| format!("stat {path}: {e}"))
 }
 
-/// Encode a v5 container: header + thumbnail + metadata(zstd) + computed(zstd)
+/// Encode a `.neurofeed` container (NFED6; fn name `container_encode_v5` kept):
+/// header + thumbnail + metadata(zstd) + computed(zstd)
 /// + raw body copy. The raw section is a byte-for-byte copy of [raw_body]
 /// (already inner-framed). Small fixtures only; keepable captures use
 /// [container_encode_v5_to_path].
@@ -910,7 +911,7 @@ pub fn v5_rewrite_head_to_path(
     Ok(dest_path)
 }
 
-/// Parse v5 head from a file without reading the raw section.
+/// Parse container head from a file without reading the raw section (FFI name `v5_*` kept; NFED6).
 pub fn v5_parse_head_from_path(path: String) -> Result<V5ParsedHead, String> {
     let header_bytes = read_file_range(&path, 0, V5_HEADER_SIZE as u64)?;
     let header = v5_parse_header(&header_bytes)?;
@@ -950,7 +951,7 @@ fn parse_computed_jsonl(computed_compressed: &[u8]) -> Result<Vec<ComputedFrame>
     Ok(frames)
 }
 
-/// Parse v5 header (first 68 bytes).
+/// Parse container header (first 68 bytes; NFED6 magic/version).
 #[frb(sync)]
 pub fn v5_parse_header(bytes: &[u8]) -> Result<V5Header, String> {
     if bytes.len() < V5_HEADER_SIZE {
@@ -981,7 +982,7 @@ pub fn v5_parse_header(bytes: &[u8]) -> Result<V5Header, String> {
     })
 }
 
-/// Parse v5 head (header + thumbnail + metadata).
+/// Parse container head (header + thumbnail + metadata; NFED6).
 #[frb(sync)]
 pub fn v5_parse_head(bytes: &[u8]) -> Result<V5ParsedHead, String> {
     let header = v5_parse_header(bytes)?;
@@ -1584,7 +1585,7 @@ mod tests {
         }
     }
 
-    // ── 6. v5 container format ──────────────────────────────────────────────────
+    // ── 6. .neurofeed container format (NFED6) ───────────────────────────────────
 
     #[test]
     fn v5_container_encode_decode_roundtrip() {

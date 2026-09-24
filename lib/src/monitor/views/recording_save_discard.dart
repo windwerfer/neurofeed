@@ -95,7 +95,7 @@ Future<void> showRecordingCrashRecoveryDialog(
   }
 }
 
-/// Shows [RecordingSaveDiscardDialog] when a pending scratch v5 appears.
+/// Shows [RecordingSaveDiscardDialog] when a pending scratch `.neurofeed` appears.
 /// Host once on [AppShell] so GraphShell Stop and in-app disconnect share it.
 class RecordingSaveHost extends ConsumerStatefulWidget {
   const RecordingSaveHost({super.key, required this.child});

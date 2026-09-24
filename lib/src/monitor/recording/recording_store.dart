@@ -34,12 +34,12 @@ class RecordingStore {
   final SessionSqlite _sqlite;
 
   /// Copy [scratchV5] into the history root and upsert sqlite `kind = recording`.
-  /// Then delete the scratch v5 and leftover temps. Protocol is empty.
+  /// Then delete the scratch `.neurofeed` and leftover temps. Protocol is empty.
   Future<void> publish(File scratchV5) async {
     final name = scratchV5.uri.pathSegments.last;
     final id = recordingIdFrom(name, '.neurofeed');
     if (id == null) {
-      debugPrint('[monitor] publish: not a recording v5 ($name)');
+      debugPrint('[monitor] publish: not a recording .neurofeed ($name)');
       return;
     }
     await _storage.ensureDir();
@@ -146,7 +146,7 @@ class RecordingStore {
     await discard(scratchV5);
   }
 
-  /// Delete scratch v5 and leftover `recording_$id` temps. Does not upsert.
+  /// Delete scratch `.neurofeed` and leftover `recording_$id` temps. Does not upsert.
   Future<void> discard(File scratchV5) async {
     final name = scratchV5.uri.pathSegments.last;
     final id = recordingIdFrom(name, '.neurofeed');

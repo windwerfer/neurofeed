@@ -13,7 +13,7 @@ import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
 import 'package:neurofeed/src/views/feedback_dashboard.dart';
 import 'package:neurofeed/src/util/timezone.dart';
 
-/// An assembled scratch v5 left over from a crash or an interrupted save.
+/// An assembled scratch `.neurofeed` left over from a crash or an interrupted save.
 class RecoverableSession {
   RecoverableSession({
     required this.id,
@@ -31,7 +31,7 @@ class RecoverableSession {
   final String calibrationKind;
   final SessionMetadata? metadata;
 
-  /// Publish the scratch v5 into history, then delete it.
+  /// Publish the scratch `.neurofeed` into history, then delete it.
   Future<void> save(SessionStore store) async {
     final head = await ffi.v5ParseHeadFromPath(path: scratchV5.path);
     final meta =
@@ -51,7 +51,7 @@ class RecoverableSession {
     await discard();
   }
 
-  /// Delete the scratch v5. Temps are already gone after assemble.
+  /// Delete the scratch `.neurofeed`. Temps are already gone after assemble.
   Future<void> discard() async {
     if (await scratchV5.exists()) {
       await scratchV5.delete();

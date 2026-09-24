@@ -5,8 +5,8 @@
 
 Rust owns the byte layout (`rust/src/api/session_format.rs`). Dart only calls FFI.
 
-Schema authority: [`.ai/contracts/fileformat_v6.md`](.ai/contracts/fileformat_v6.md) (LOCKED sections).  
-Agent freeze for the container: [`.ai/contracts/session-format-contract.md`](.ai/contracts/session-format-contract.md).
+Schema authority: [`.ai/contracts/fileformat_v6.md`](.ai/contracts/fileformat_v6.md) (**Implemented / LOCKED**).  
+Historical v5 freeze (archived): [`.ai/archive/session-format-contract-v5.md`](.ai/archive/session-format-contract-v5.md).
 
 Two filenames, **one metadata dialect**:
 
@@ -45,12 +45,13 @@ Offset computed_offset:  zstd JSON Lines (one ComputedFrame per line)
 Offset raw_offset:       copy of live `.raw` (NFEDBIN + inner zstd frames)
 ```
 
-`v5ParseHead` / head parse returns opaque `metadataJson` bytes. It does **not** parse `kind`.
+`v5ParseHead` / head parse (FFI name kept; container is **NFED6**) returns opaque
+`metadataJson` bytes. It does **not** parse `kind`.
 
 There is no `metadata.summary` / `SessionOverview` and no 400-bucket series.
 Dashboard, history, PDF, and PNG charts plot computed 1 Hz:
-`v5ExtractComputed` → `prepareChartDataFromComputed`. The history-list
-preview is the WebP thumbnail.
+`v5ExtractComputed` (FFI name kept; parses the **v6** container) →
+`prepareChartDataFromComputed`. The history-list preview is the WebP thumbnail.
 
 ---
 

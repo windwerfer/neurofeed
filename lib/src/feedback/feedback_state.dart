@@ -280,7 +280,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// the guardrail is armed). Persisted as [SessionDrowsiness] metadata.
   final List<DrowsinessSample> _drowsinessSeries = [];
 
-  /// Computed frame sampler (1 Hz) for v5 session format.
+  /// Computed frame sampler (1 Hz) for `.neurofeed` session format (NFED6).
   ComputedSampler? _computedSampler;
 
   /// Wall-clock anchors for the calibration timeline. [_sessionStartAt] is set
@@ -1366,7 +1366,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _pauseWallBegan = null;
   }
 
-  /// End the session: assemble a scratch v5 **before** `phase = ended` (the
+  /// End the session: assemble a scratch `.neurofeed` **before** `phase = ended` (the
   /// session view navigates on that transition), then stop audio.
   void _closeOpenInterruptAnnotation() {
     final onset = _interruptOnsetContent;
@@ -1416,10 +1416,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         ),
       );
       if (path == null) {
-        debugPrint('[feedback] end: scratch v5 assemble failed; temps kept');
+        debugPrint('[feedback] end: scratch .neurofeed assemble failed; temps kept');
       }
     } catch (e, st) {
-      debugPrint('[feedback] end: scratch v5 assemble failed: $e\n$st');
+      debugPrint('[feedback] end: scratch .neurofeed assemble failed: $e\n$st');
     }
     _setPhase(
       FeedbackPhase.ended,
@@ -1490,11 +1490,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   String? get sessionId => _recorder.sessionId;
 
-  /// Ended session with a scratch v5 that has not been saved or discarded.
+  /// Ended session with a scratch `.neurofeed` that has not been saved or discarded.
   bool get hasUnsavedSession =>
       state.phase == FeedbackPhase.ended && scratchV5Path != null;
 
-  /// Re-attach an assembled scratch v5 after a process restart so the
+  /// Re-attach an assembled scratch `.neurofeed` after a process restart so the
   /// summary can Save / Discard. Does not discard existing files.
   void restoreEndedSession({
     required String id,
@@ -1545,7 +1545,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   Future<void> deleteScratchV5() => _recorder.deleteScratchV5();
 
-  /// Snapshot metadata for the scratch v5 at end() and the rewritten file
+  /// Snapshot metadata for the scratch `.neurofeed` at end() and the rewritten file
   /// on Save. No `summary` / 400-bucket fields. Drowsiness is scalars only.
   SessionMetadata buildSessionMetadata({
     String notes = '',

@@ -1,3 +1,5 @@
+Archived 2026-09-24 — superseded by `.ai/contracts/fileformat_v6.md` (NFED6 / formatVersion 6). Historical v5 (NFED5) contract retained for reference only; do not treat as current law.
+
 # Session format contract (`.neurofeed` v5)
 
 | Field | Value |

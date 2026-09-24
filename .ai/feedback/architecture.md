@@ -115,14 +115,14 @@ finished baseline always calls `startPlaying()`.
 ## Recording
 
 Three temps under scratch while playing (`.raw` / `.computed` / `.metadata`).
-At `end()`, assemble a v5 container into scratch (placeholder WebP), then
+At `end()`, assemble a `.neurofeed` (NFED6) into scratch (placeholder WebP), then
 set `phase = ended`. Dashboard and history both
-`v5ExtractComputed` → `prepareChartDataFromComputed`. Save publishes to the
-history folder; Discard deletes the scratch v5.
+`v5ExtractComputed` (FFI name kept; container is NFED6) → `prepareChartDataFromComputed`.
+Save publishes to the history folder; Discard deletes the scratch file.
 
 Crash recovery (`crash_recovery.dart`) scans `scratchDirectory` for leftover
-scratch v5 and orphan three-temps, assembles via `writeScratchV5`, then
-Save → `publishSession` or Discard → delete.
+scratch `.neurofeed` and orphan three-temps, assembles via `writeScratchV5`
+(FFI/helper name kept), then Save → `publishSession` or Discard → delete.
 
 One assembler: `lib/src/session_v5/assemble.dart` (re-export
 `session_assembler.dart`). Exclusive with Monitor: acquire/release the

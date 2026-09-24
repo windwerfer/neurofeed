@@ -10,11 +10,11 @@ import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 
 enum SidecarMode { jsonl, snapshot }
 
-/// v5 scratch writer. Production uses the Rust capture writer. Inject
+/// Scratch writer for `.neurofeed` temps (NFED6). Production uses the Rust capture writer. Inject
 /// [headerBytes] to keep a local Dart writer (unit tests without FFI).
 ///
 /// Live temps:
-/// - raw: v5 raw body (NFEDBIN + inner zstd frames)
+/// - raw: container raw body (NFEDBIN + inner zstd frames)
 /// - computed: uncompressed JSON Lines
 /// - sidecar: uncompressed JSONL `.metadata` (feedback) or atomic `.json`
 class SessionRecorder {
@@ -277,9 +277,9 @@ class SessionRecorder {
     _sessionId = null;
   }
 
-  /// Get the collected computed frames (not available in v5 until assemble reads from disk).
+  /// Get the collected computed frames (not available until assemble reads from disk).
   List<ComputedFrame> get computedFrames => const [];
 
-  /// Clear computed frames (no-op in v5).
+  /// Clear computed frames (no-op on the disk-backed path).
   void clearComputedFrames() {}
 }

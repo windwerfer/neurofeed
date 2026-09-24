@@ -1,4 +1,4 @@
-/// Snapshot of the guardrail AI model at session time (v5).
+/// Snapshot of the guardrail AI model at session time.
 class ModelSnapshot {
   const ModelSnapshot({
     required this.engine,
@@ -37,7 +37,7 @@ class ModelSnapshot {
   }
 }
 
-/// Full device information (v5).
+/// Full device information (folder `session_v5/` name is historical; format is NFED6).
 class DeviceInfoV5 {
   const DeviceInfoV5({
     required this.name,
@@ -117,7 +117,7 @@ class StreamInfo {
   }
 }
 
-/// Stream configuration: what was recorded and at what rate (v5).
+/// Stream configuration: what was recorded and at what rate.
 class StreamsConfig {
   const StreamsConfig({
     required this.eeg,

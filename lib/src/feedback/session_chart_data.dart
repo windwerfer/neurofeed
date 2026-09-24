@@ -240,7 +240,7 @@ double? recordingStartMsFromIso(String? startedAt) {
   return DateTime.tryParse(startedAt)?.millisecondsSinceEpoch.toDouble();
 }
 
-/// Chart data from a v5 container: computed frames, with pulse/SpO₂ filled
+/// Chart data from a `.neurofeed` container (NFED6): computed frames, with pulse/SpO₂ filled
 /// from the raw body when the 1 Hz frames omitted them.
 SessionChartData prepareChartDataFromV5({
   required List<ffi.ComputedFrame> frames,
