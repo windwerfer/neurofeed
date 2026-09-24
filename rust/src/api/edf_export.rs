@@ -141,6 +141,76 @@ pub fn encode_edf_export(
     edf_export::encode_edf_plus(&signals, &spec).map_err(|e| e.to_string())
 }
 
+
+/// One decoded continuous signal (EEG or other).
+#[frb(dart_metadata = ("freezed",))]
+pub struct EdfDecodedSignal {
+    pub label: String,
+    /// Samples per 1-second data record (== nominal Hz for EDF+C).
+    pub samples_per_record: u32,
+    pub physical_min: f64,
+    pub physical_max: f64,
+    /// Physical-domain samples (µV for EEG).
+    pub data: Vec<f32>,
+}
+
+/// Result of decoding an EDF / EDF+ file for import.
+#[frb(dart_metadata = ("freezed",))]
+pub struct EdfImportResult {
+    pub patient_id: String,
+    pub recording_id: String,
+    pub year: u16,
+    pub month: u16,
+    pub day: u16,
+    pub hour: u16,
+    pub minute: u16,
+    pub second: u16,
+    /// Header reserved field (`EDF+C` / `EDF+D` / empty for plain EDF).
+    pub reserved: String,
+    pub signals: Vec<EdfDecodedSignal>,
+    pub annotations: Vec<EdfExportAnnotation>,
+}
+
+/// Decode an EDF / EDF+ file into signals + TAL annotations.
+///
+/// Mirrors [`edf_export::decode_edf_plus`]. Returns an error string when the
+/// bytes are truncated or not a version-0 EDF header.
+#[frb(sync)]
+pub fn decode_edf_import(bytes: &[u8]) -> Result<EdfImportResult, String> {
+    let dec = edf_export::decode_edf_plus(bytes).map_err(|e| e.to_string())?;
+    let (year, month, day, hour, minute, second) = dec.start;
+    Ok(EdfImportResult {
+        patient_id: dec.patient_id,
+        recording_id: dec.recording_id,
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        second,
+        reserved: dec.reserved,
+        signals: dec
+            .signals
+            .into_iter()
+            .map(|s| EdfDecodedSignal {
+                label: s.label,
+                samples_per_record: s.samples_per_record as u32,
+                physical_min: s.physical_min,
+                physical_max: s.physical_max,
+                data: s.data,
+            })
+            .collect(),
+        annotations: dec
+            .annotations
+            .into_iter()
+            .map(|a| EdfExportAnnotation {
+                onset_seconds: a.onset_seconds,
+                text: a.text,
+            })
+            .collect(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,5 +288,69 @@ mod tests {
         assert!(encode_edf_export(&session_header_bytes(), vec!["TP9".to_string()], &params())
             .unwrap_err()
             .contains("no raw EEG"));
+    }
+}
+
+
+#[cfg(test)]
+mod decode_tests {
+    use super::*;
+
+    #[test]
+    fn ffi_decode_round_trip_via_encode() {
+        use crate::api::muse::{EegDto, MuseEventDto};
+        use crate::api::session_format::{
+            encode_session_event, session_frame_bytes, session_header_bytes,
+        };
+        let mk = |ts: f64, electrode: i32, samples: Vec<f64>| {
+            MuseEventDto::Eeg(EegDto {
+                index: 0,
+                electrode,
+                timestamp: ts,
+                samples,
+            })
+        };
+        let events = vec![
+            mk(1000.0, 0, vec![10.0; 12]),
+            mk(1000.0 + 12.0 * 1000.0 / 256.0, 0, vec![10.0; 12]),
+            mk(1000.0, 1, vec![-10.0; 12]),
+            mk(1000.0 + 12.0 * 1000.0 / 256.0, 1, vec![-10.0; 12]),
+        ];
+        let mut body = session_header_bytes();
+        let records: Vec<u8> = events.iter().flat_map(|e| encode_session_event(e)).collect();
+        body.extend_from_slice(&session_frame_bytes(&records));
+        let edf = encode_edf_export(
+            &body,
+            vec!["TP9".to_string(), "AF7".to_string()],
+            &EdfExportParams {
+                patient_id: "subj1 X X X".to_string(),
+                recording_id: "rec-test".to_string(),
+                year: 2026,
+                month: 9,
+                day: 25,
+                hour: 3,
+                minute: 50,
+                second: 0,
+                annotations: vec![EdfExportAnnotation {
+                    onset_seconds: 0.1,
+                    text: "double_blink".to_string(),
+                }],
+            },
+        )
+        .unwrap();
+        let imported = decode_edf_import(&edf).unwrap();
+        assert_eq!(imported.patient_id.trim(), "subj1 X X X");
+        assert_eq!(imported.year, 2026);
+        assert_eq!(imported.signals.len(), 2);
+        assert_eq!(imported.signals[0].label, "TP9");
+        assert_eq!(imported.signals[1].label, "AF7");
+        assert!(imported.signals[0].data.len() >= 12);
+        assert!(
+            imported
+                .annotations
+                .iter()
+                .any(|a| a.text == "double_blink"),
+            "missing annotation"
+        );
     }
 }

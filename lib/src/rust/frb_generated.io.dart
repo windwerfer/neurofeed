@@ -145,10 +145,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DeviceKind dco_decode_device_kind(dynamic raw);
 
   @protected
+  EdfDecodedSignal dco_decode_edf_decoded_signal(dynamic raw);
+
+  @protected
   EdfExportAnnotation dco_decode_edf_export_annotation(dynamic raw);
 
   @protected
   EdfExportParams dco_decode_edf_export_params(dynamic raw);
+
+  @protected
+  EdfImportResult dco_decode_edf_import_result(dynamic raw);
 
   @protected
   EegDto dco_decode_eeg_dto(dynamic raw);
@@ -206,6 +212,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<DeviceInfo> dco_decode_list_device_info(dynamic raw);
+
+  @protected
+  List<EdfDecodedSignal> dco_decode_list_edf_decoded_signal(dynamic raw);
 
   @protected
   List<EdfExportAnnotation> dco_decode_list_edf_export_annotation(dynamic raw);
@@ -500,12 +509,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DeviceKind sse_decode_device_kind(SseDeserializer deserializer);
 
   @protected
+  EdfDecodedSignal sse_decode_edf_decoded_signal(SseDeserializer deserializer);
+
+  @protected
   EdfExportAnnotation sse_decode_edf_export_annotation(
     SseDeserializer deserializer,
   );
 
   @protected
   EdfExportParams sse_decode_edf_export_params(SseDeserializer deserializer);
+
+  @protected
+  EdfImportResult sse_decode_edf_import_result(SseDeserializer deserializer);
 
   @protected
   EegDto sse_decode_eeg_dto(SseDeserializer deserializer);
@@ -567,6 +582,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<DeviceInfo> sse_decode_list_device_info(SseDeserializer deserializer);
+
+  @protected
+  List<EdfDecodedSignal> sse_decode_list_edf_decoded_signal(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<EdfExportAnnotation> sse_decode_list_edf_export_annotation(
@@ -925,6 +945,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_device_kind(DeviceKind self, SseSerializer serializer);
 
   @protected
+  void sse_encode_edf_decoded_signal(
+    EdfDecodedSignal self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_edf_export_annotation(
     EdfExportAnnotation self,
     SseSerializer serializer,
@@ -933,6 +959,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_edf_export_params(
     EdfExportParams self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_edf_import_result(
+    EdfImportResult self,
     SseSerializer serializer,
   );
 
@@ -1005,6 +1037,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_device_info(
     List<DeviceInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_edf_decoded_signal(
+    List<EdfDecodedSignal> self,
     SseSerializer serializer,
   );
 
