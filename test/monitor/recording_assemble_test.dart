@@ -114,13 +114,13 @@ void main() {
     final notifier = container.read(monitorControllerProvider.notifier);
     await notifier.startRecording();
     await settle();
-    final scratchV5 = await notifier.stopRecording(promptSave: true);
+    final scratchFile = await notifier.stopRecording(promptSave: true);
     await settle();
-    expect(scratchV5, isNotNull);
+    expect(scratchFile, isNotNull);
 
     await notifier.discardPendingRecording();
     await settle();
-    expect(scratchV5!.existsSync(), isFalse);
+    expect(scratchFile!.existsSync(), isFalse);
     expect(
       container.read(monitorControllerProvider).pendingScratchPath,
       isNull,

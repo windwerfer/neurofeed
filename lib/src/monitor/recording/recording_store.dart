@@ -33,24 +33,24 @@ class RecordingStore {
   final SessionStorage _storage;
   final SessionSqlite _sqlite;
 
-  /// Copy [scratchV5] into the history root and upsert sqlite `kind = recording`.
+  /// Copy [scratch] into the history root and upsert sqlite `kind = recording`.
   /// Then delete the scratch `.neurofeed` and leftover temps. Protocol is empty.
-  Future<void> publish(File scratchV5) async {
-    final name = scratchV5.uri.pathSegments.last;
+  Future<void> publish(File scratch) async {
+    final name = scratch.uri.pathSegments.last;
     final id = recordingIdFrom(name, '.neurofeed');
     if (id == null) {
       debugPrint('[monitor] publish: not a recording .neurofeed ($name)');
       return;
     }
     await _storage.ensureDir();
-    await _storage.copyFromPath(name, scratchV5.path);
+    await _storage.copyFromPath(name, scratch.path);
 
     RecordingMetadata meta;
     Uint8List thumb;
     SessionRowScalars rowScalars = const SessionRowScalars();
     ComputedScalars legacy = const ComputedScalars();
     try {
-      final head = await ffi.parseHeadFromPath(path: scratchV5.path);
+      final head = await ffi.parseHeadFromPath(path: scratch.path);
       thumb = head.thumbnail;
       final decoded = jsonDecode(utf8.decode(head.metadataJson));
       final decodedMap = decoded as Map<String, dynamic>;
@@ -59,7 +59,7 @@ class RecordingStore {
         <String, Object?>{for (final e in decodedMap.entries) e.key: e.value},
       );
       try {
-        final frames = await ffi.extractComputedFromPath(path: scratchV5.path);
+        final frames = await ffi.extractComputedFromPath(path: scratch.path);
         legacy = extractComputedScalars(frames);
         if (rowScalars.avgHr == null &&
             rowScalars.peakAlphaHz == null &&
@@ -135,7 +135,7 @@ class RecordingStore {
         notesPreview: meta.notes.isEmpty
             ? null
             : (meta.notes.length > 50 ? meta.notes.substring(0, 50) : meta.notes),
-        fileSize: await scratchV5.length(),
+        fileSize: await scratch.length(),
         mtime: now.millisecondsSinceEpoch,
         thumbnail: thumb.isNotEmpty ? thumb : null,
         createdAt: now,
@@ -143,22 +143,22 @@ class RecordingStore {
       ),
     );
     debugPrint('[monitor] recording publish $name kind=recording');
-    await discard(scratchV5);
+    await discard(scratch);
   }
 
   /// Delete scratch `.neurofeed` and leftover `recording_$id` temps. Does not upsert.
-  Future<void> discard(File scratchV5) async {
-    final name = scratchV5.uri.pathSegments.last;
+  Future<void> discard(File scratch) async {
+    final name = scratch.uri.pathSegments.last;
     final id = recordingIdFrom(name, '.neurofeed');
     if (id != null) {
-      await deleteRecordingScratch(scratchV5.parent, id);
+      await deleteRecordingScratch(scratch.parent, id);
       return;
     }
-    if (await scratchV5.exists()) {
+    if (await scratch.exists()) {
       try {
-        await scratchV5.delete();
+        await scratch.delete();
       } catch (e) {
-        debugPrint('[monitor] discard failed ${scratchV5.path}: $e');
+        debugPrint('[monitor] discard failed ${scratch.path}: $e');
       }
     }
   }

@@ -94,7 +94,7 @@ void main() {
   test('publish upserts kind=recording; existing rows stay feedback', () async {
     await sqlite.upsertSession(_feedbackRow('oldfb'));
 
-    final scratchV5 = await writeScratchV5(
+    final scratchFile = await writeScratch(
       dir: scratch,
       id: '3003',
       prefix: 'recording',
@@ -104,9 +104,9 @@ void main() {
     );
     await File('${scratch.path}/recording_3003.raw').writeAsBytes([9]);
 
-    await store.publish(scratchV5);
+    await store.publish(scratchFile);
 
-    expect(scratchV5.existsSync(), isFalse);
+    expect(scratchFile.existsSync(), isFalse);
     expect(File('${scratch.path}/recording_3003.raw').existsSync(), isFalse);
     final published = File('${history.path}/recording_3003.neurofeed');
     expect(published.existsSync(), isTrue);
@@ -125,7 +125,7 @@ void main() {
   });
 
   test('discard deletes scratch and does not upsert', () async {
-    final scratchV5 = await writeScratchV5(
+    final scratchFile = await writeScratch(
       dir: scratch,
       id: '4004',
       prefix: 'recording',
@@ -135,9 +135,9 @@ void main() {
     );
     await File('${scratch.path}/recording_4004.json').writeAsString('{}');
 
-    await store.discard(scratchV5);
+    await store.discard(scratchFile);
 
-    expect(scratchV5.existsSync(), isFalse);
+    expect(scratchFile.existsSync(), isFalse);
     expect(File('${scratch.path}/recording_4004.json').existsSync(), isFalse);
     expect(await sqlite.getSession('4004'), isNull);
     expect(

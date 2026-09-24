@@ -37,7 +37,7 @@ const _webp1x1 = [
 ];
 
 /// Build a `.neurofeed` (NFED6) container with test data: 3 seconds of bands + EEG + computed frames.
-Uint8List _buildV5Container({
+Uint8List _buildContainer({
   required Map<String, dynamic> metadataJson,
   required List<ComputedFrame> computedFrames,
 }) {
@@ -407,7 +407,7 @@ void main() {
     final entries = await exportDirEntries('');
     expect(entries, hasLength(1));
     final png = await File('${tmp.path}/export/${entries.single}').readAsBytes();
-    expect(png, _webp1x1); // Note: thumbnail is stored as WebP in v5
+    expect(png, _webp1x1); // Note: thumbnail is stored as WebP in the container
   });
 
   test('PNG all export rasterizes every chart into a per-session folder',

@@ -121,7 +121,7 @@ set `phase = ended`. Dashboard and history both
 Save publishes to the history folder; Discard deletes the scratch file.
 
 Crash recovery (`crash_recovery.dart`) scans `scratchDirectory` for leftover
-scratch `.neurofeed` and orphan three-temps, assembles via `writeScratchV5`
+scratch `.neurofeed` and orphan three-temps, assembles via `writeScratch`
 (FFI/helper name kept), then Save → `publishSession` or Discard → delete.
 
 One assembler: `lib/src/session_format/assemble.dart` (re-export

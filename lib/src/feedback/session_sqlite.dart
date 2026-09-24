@@ -1,4 +1,4 @@
-/// SQLite implementation for v5/v6 session metadata cache.
+/// SQLite implementation for session metadata cache (NFED6).
 ///
 /// Replaces the file-based cache with a proper SQLite database.
 /// Sessions table has typed columns for fast sort/filter without JSON parsing.

@@ -10,7 +10,7 @@ import 'package:neurofeed/src/version.dart';
 const int kFormatVersionV6 = 6;
 
 /// Build the locked **base** recording metadata object (no `feedback` key).
-Map<String, Object?> buildRecordingMetadataV6({
+Map<String, Object?> buildRecordingMetadata({
   required RecordingMetadata meta,
   required SubjectInfo subject,
   String? sessionId,
@@ -44,7 +44,7 @@ Map<String, Object?> buildRecordingMetadataV6({
 
 /// Build locked feedback metadata: base + `feedback{}` only (no parallel
 /// `gestures[]`, no shared-stats duplicates under feedback).
-Map<String, Object?> buildFeedbackMetadataV6({
+Map<String, Object?> buildFeedbackMetadata({
   required SessionMetadata meta,
   required SubjectInfo subject,
   DeviceInfo? device,

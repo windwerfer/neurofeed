@@ -47,6 +47,7 @@ pub const FORMAT_TAG_SPO2: u8 = 10;
 /// The 64-bit header sentinel. Stored as a little-endian u64, so the on-disk
 /// bytes are the reverse of the "NFEDBIN\n" string.
 pub const HEADER_MAGIC: u64 = 0x4E46_4544_4249_4E0A; // as u64 LE → "NFEDBIN\n" reversed on disk
+// NFEDBIN raw-body wire version (not container NFED6 magic).
 pub const FORMAT_VERSION: u32 = 5;
 
 /// The plaintext on-disk bytes of the sentinel (LE u64 of [HEADER_MAGIC]).
@@ -1104,7 +1105,7 @@ mod tests {
     #[test]
     fn header_bytes_are_exact() {
         // "NFEDBIN\n" stored as an LE u64 reads back as the byte-reversed
-        // string: LC-newline N I B D E F N, then v5 LE.
+        // string: LC-newline N I B D E F N, then FORMAT_VERSION LE.
         assert_eq!(
             session_header_bytes(),
             vec![

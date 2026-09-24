@@ -477,7 +477,7 @@ class SessionExporter {
     }
     final frames = extractComputed(bytes: container);
     return (
-      data: prepareChartDataFromV5(
+      data: prepareChartDataFromContainer(
         frames: frames,
         bytes: container,
         trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,

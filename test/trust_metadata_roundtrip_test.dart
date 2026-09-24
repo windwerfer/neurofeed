@@ -55,7 +55,7 @@ void main() {
       ],
     );
 
-    final json = buildFeedbackMetadataV6(
+    final json = buildFeedbackMetadata(
       meta: meta,
       subject: const SubjectInfo(id: 'anon'),
     );

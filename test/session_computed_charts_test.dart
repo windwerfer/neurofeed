@@ -98,7 +98,7 @@ void main() {
         path: '/tmp/session_abc.neurofeed',
       );
       expect(rec.sessionId, 'abc');
-      expect(rec.scratchV5Path, '/tmp/session_abc.neurofeed');
+      expect(rec.scratchPath, '/tmp/session_abc.neurofeed');
     });
   });
 
@@ -140,13 +140,13 @@ void main() {
         () {
       final dartFrames = [_dartFrame(0), _dartFrame(1), _dartFrame(2)];
       final ffiFrames = dartFrames.map(toFfiFrame).toList();
-      final v5 = assembleV5Container(
+      final container = assembleContainer(
         thumbnail: placeholderWebP,
         metadataJson: {'protocol': 'drowsiness'},
         computedFrames: ffiFrames,
         rawBody: sessionHeaderBytes(),
       );
-      final extracted = extractComputed(bytes: v5);
+      final extracted = extractComputed(bytes: container);
       expect(extracted.map((f) => f.t), [0, 1, 2]);
       expect(extracted.first.bands, hasLength(4));
       expect(extracted.first.bands[1][2], closeTo(221.0, 0.01));
@@ -197,13 +197,13 @@ void main() {
     });
 
     test('empty thumbnail assemble does not throw; magic is NFED6\\0', () {
-      final v5 = assembleV5Container(
+      final container = assembleContainer(
         thumbnail: const [],
         metadataJson: {'protocol': 'drowsiness'},
         computedFrames: const [],
         rawBody: sessionHeaderBytes(),
       );
-      expect(v5.sublist(0, 6), [0x4E, 0x46, 0x45, 0x44, 0x36, 0x00]);
+      expect(container.sublist(0, 6), [0x4E, 0x46, 0x45, 0x44, 0x36, 0x00]);
     });
 
     test('publishSession writes history not scratch; SQLite row; no summary',
@@ -303,7 +303,7 @@ void main() {
       await scratch.create(recursive: true);
 
       const id = '222';
-      final v5 = assembleV5Container(
+      final container = assembleContainer(
         thumbnail: placeholderWebP,
         metadataJson: {
           'protocol': 'drowsiness',
@@ -315,7 +315,7 @@ void main() {
         computedFrames: [toFfiFrame(_dartFrame(0))],
         rawBody: sessionHeaderBytes(),
       );
-      await File('${scratch.path}/session_$id.neurofeed').writeAsBytes(v5);
+      await File('${scratch.path}/session_$id.neurofeed').writeAsBytes(container);
       await File('${scratch.path}/session_$id.raw').writeAsBytes([1, 2, 3]);
 
       final recovered = await scanRecoverableSessions(storage);

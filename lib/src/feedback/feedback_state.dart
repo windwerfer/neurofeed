@@ -1410,7 +1410,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     await _recorder.flushSession();
     try {
       final path = await _recorder.assembleScratch(
-        buildFeedbackMetadataV6(
+        buildFeedbackMetadata(
           meta: buildSessionMetadata(),
           subject: _ref.read(settingsProvider).subjectInfo,
         ),
@@ -1423,7 +1423,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     _setPhase(
       FeedbackPhase.ended,
-      extra: 'scratch=${_recorder.scratchV5Path ?? 'null'}',
+      extra: 'scratch=${_recorder.scratchPath ?? 'null'}',
     );
     if (!_recorder.isRecording) {
       await _ref
@@ -1484,15 +1484,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     debugPrint('[feedback] phase=idle');
   }
 
-  String? get sessionFilePath => _recorder.scratchV5Path;
+  String? get sessionFilePath => _recorder.scratchPath;
 
-  String? get scratchV5Path => _recorder.scratchV5Path;
+  String? get scratchPath => _recorder.scratchPath;
 
   String? get sessionId => _recorder.sessionId;
 
   /// Ended session with a scratch `.neurofeed` that has not been saved or discarded.
   bool get hasUnsavedSession =>
-      state.phase == FeedbackPhase.ended && scratchV5Path != null;
+      state.phase == FeedbackPhase.ended && scratchPath != null;
 
   /// Re-attach an assembled scratch `.neurofeed` after a process restart so the
   /// summary can Save / Discard. Does not discard existing files.
@@ -1543,7 +1543,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     await _ref.read(monitorControllerProvider.notifier).releaseFeedbackLease();
   }
 
-  Future<void> deleteScratchV5() => _recorder.deleteScratchV5();
+  Future<void> deleteScratch() => _recorder.deleteScratch();
 
   /// Snapshot metadata for the scratch `.neurofeed` at end() and the rewritten file
   /// on Save. No `summary` / 400-bucket fields. Drowsiness is scalars only.

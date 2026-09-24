@@ -939,7 +939,7 @@ class SessionMetadata {
     return SessionMetadata.fromJson(json)!;
   }
 
-  /// Parse metadata JSON bytes from a v5 head (`jsonDecode` maps are
+  /// Parse metadata JSON bytes from a container head (`jsonDecode` maps are
   /// `Map<String, dynamic>`; [fromJson] expects `Map<String, Object?>`).
   static SessionMetadata? fromJsonBytes(List<int> bytes) {
     if (bytes.isEmpty) return null;

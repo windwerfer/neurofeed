@@ -112,7 +112,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       path = resolved;
     } else {
       final scratch = widget.sessionPath ??
-          ref.read(feedbackStateProvider.notifier).scratchV5Path;
+          ref.read(feedbackStateProvider.notifier).scratchPath;
       if (scratch == null) {
         throw StateError('scratch .neurofeed not assembled');
       }
@@ -329,9 +329,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     setState(() => _busy = true);
     final notifier = ref.read(feedbackStateProvider.notifier);
     try {
-      final path = notifier.scratchV5Path;
+      final path = notifier.scratchPath;
       final id = notifier.sessionId;
-      debugPrint('[dashboard] save: scratchV5Path=$path id=$id');
+      debugPrint('[dashboard] save: scratchPath=$path id=$id');
       if (path == null || id == null) {
         debugPrint('[dashboard] save: no scratch .neurofeed to publish');
         return;
@@ -362,7 +362,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         destPath: patched,
                 metadataJson: utf8.encode(
           jsonEncode(
-            buildFeedbackMetadataV6(
+            buildFeedbackMetadata(
               meta: metadata,
               subject: ref.read(settingsProvider).subjectInfo,
             ),
@@ -380,7 +380,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       try {
         await File(patched).delete();
       } catch (_) {}
-      await notifier.deleteScratchV5();
+      await notifier.deleteScratch();
       notifier.reset();
       debugPrint('[dashboard] save: published session_$id.neurofeed');
       if (mounted) {

@@ -57,8 +57,8 @@ Dashboard, history, PDF, and PNG charts plot computed 1 Hz:
 
 ## Base metadata (both kinds)
 
-Writers: `lib/src/session_format/metadata.dart` (`buildRecordingMetadataV6` /
-`buildFeedbackMetadataV6`). Single nested dialect — **no** flat
+Writers: `lib/src/session_format/metadata.dart` (`buildRecordingMetadata` /
+`buildFeedbackMetadata`). Single nested dialect — **no** flat
 `deviceName` / dual-shape accept path for new files.
 
 ```json

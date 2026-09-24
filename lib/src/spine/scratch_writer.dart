@@ -114,7 +114,7 @@ class SessionRecorder {
     }
 
     debugPrint(
-      '[session] recorder v5 start: $_rawFile, $_computedFile, $_metadataFile',
+      '[session] recorder start: $_rawFile, $_computedFile, $_metadataFile',
     );
 
     _flushTimer = Timer.periodic(_flushInterval, (_) => flush());

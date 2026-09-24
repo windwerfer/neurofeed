@@ -78,8 +78,8 @@ Uint8List encodeThumbnailWebP(Uint8List pngBytes) {
 
 /// In-memory wrapper around `containerEncode` for **small** fixtures.
 /// Empty thumbnails become the placeholder WebP so the decoder never sees
-/// `Uint8List(0)`. Keepable captures use [writeScratchV5] (file-to-file).
-Uint8List assembleV5Container({
+/// `Uint8List(0)`. Keepable captures use [writeScratch] (file-to-file).
+Uint8List assembleContainer({
   required List<int> thumbnail,
   required Map<String, Object?> metadataJson,
   required List<ffi.ComputedFrame> computedFrames,
@@ -98,7 +98,7 @@ Uint8List assembleV5Container({
 /// into the container raw section (no outer zstd). [prefix] defaults to
 /// `session`. Pass [rawPath] / [computedPath] for keepable captures; [rawBody]
 /// / [computedJsonl] are small-fixture fallbacks that stage temp files.
-Future<File> writeScratchV5({
+Future<File> writeScratch({
   required Directory dir,
   required String id,
   String prefix = 'session',

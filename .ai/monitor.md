@@ -204,7 +204,7 @@ and not tappable. Recording-dashboard Bands uses the same chips.
 ## Recording files
 
 Temps: `recording_$ts.{raw,computed,json}` (`.json` is an atomic snapshot,
-not JSONL). Assemble `writeScratchV5(prefix: recording)` with placeholder
+not JSONL). Assemble `writeScratch(prefix: recording)` with placeholder
 WebP **before** Save/Discard.
 
 Dialog (`Save recording?` / `Incomplete recording detected`): Save publishes

@@ -197,10 +197,10 @@ class MonitorRecorder {
     try {
       final File file;
       if (_writer.usesRustCapture) {
-        file = await spine.assembleCaptureV5(metadataJson: metadataJson);
+        file = await spine.assembleCapture(metadataJson: metadataJson);
         _writer.detachAfterAssemble();
       } else {
-        file = await writeScratchV5(
+        file = await writeScratch(
           dir: dir,
           id: id,
           prefix: 'recording',
