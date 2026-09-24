@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Draft** (writers/readers not implemented). **Annotations model = LOCKED.** **Base metadata vocabulary = LOCKED** (see Locked vocabulary). **`subject` object = PREPARED** (anonymous-first; see Subject model). **Feedback extension = DRAFTED** (Q1–Q3 resolved: generic `feedback.outcomeScalars`, engine under `sessionSettings`, sleepDir deduped; see Feedback extension + Open questions). |
+| Status | **Draft** (writers/readers not implemented). **Annotations model = LOCKED.** **Base metadata vocabulary = LOCKED** (see Locked vocabulary). **`subject` object = PREPARED** (anonymous-first; see Subject model). **Feedback extension = LOCKED** (see Feedback extension). **`stats.experimental.bands` formulas = LOCKED** (see Experimental band metrics). |
 | Scope | Unify recording + feedback **metadata JSON**; prepare a **v6 clean cut** (container magic/version + writers/readers). |
 | Not this | Implement Rust/Dart writers yet; rename Dart/Rust identifiers yet; Athena tag 11; History UI chrome; pipeline Key Decisions. |
 | Supersedes (when landed) | Dual dialects in [session-format-contract.md](session-format-contract.md) § Metadata; [../TODO/session_vs_recording_metadata.md](../TODO/session_vs_recording_metadata.md). |
@@ -19,7 +19,7 @@ Agents: adhere to **Design rules** and **Locked vocabulary** below. Inventory is
 2. **One base schema for both kinds.** Identity + `subject` + `device` + `streams` + `stats` (+ quality/`annotations`) always present. Optional top-level `feedback` object **only** when `kind == "feedback"`; omit (or null) for recordings.
 3. **Two layers of stats.** (a) **Computed 1 Hz** — charts / AI time series (`ComputedFrame`). (b) **Session summary** — scalars/short structs on metadata, computed at assemble/save (later: a small set as sqlite columns).
 4. **Do not duplicate time series into metadata.** Metadata = scalars + short structs + compact interval lists. Computed = second-by-second.
-5. **Band aggregates are named metrics** (e.g. mean α, α/θ, frontal–temporal α asymmetry, cross-channel α variance). Never vague "spread".
+5. **Band aggregates are named metrics** under `stats.experimental.bands` (LOCKED formulas — see Experimental band metrics). Never vague "spread".
 6. **Recordings keep zeroed `guardrail` / `feedback` on computed frames** if charts expect keys. Session-level top-level `feedback` object is **absent** on recordings.
 7. **No backward compatibility with v5.** Clean cut: new magic/version (`NFED6` / `formatVersion: 6`), delete dual-dialect readers, dead comments, and leftover "accept both shapes" code **in the same effort**.
 8. **Collect all useful + cheap session stats at save.** Promote a small set into sqlite later. Mark uncertain metrics `experimental: true` or nest under `stats.experimental` (may be removed if unused).
@@ -126,7 +126,7 @@ Compute from computed JSONL (and raw telemetry if needed) at assemble/save. Pref
 | Battery start / end | First/last telemetry samples in raw (tag 2) when stream enabled | no |
 | Fit / contact summary | Derive from quality fractions + channel labels | no |
 | Session duration | Already have `durationS` / `elapsedSeconds` | — |
-| Named band stats | mean α (abs), mean α/θ, frontal–temporal α asymmetry, cross-ch α variance — over **usable** seconds only | **yes** (tune formulas) |
+| Named band stats | `stats.experimental.bands` — **formulas LOCKED** (see Experimental band metrics); over **usable** seconds only | **yes** (nest may be dropped later if unused) |
 | `% overshoot` / held | Needs a defined yMax policy; overshoot today is **paint-time** on Monitor Bands | **yes** |
 | Compact `annotations` timeline | Single `{onset,duration,type}` list for pause / bad_quality / disconnect **and** gesture instants (`duration: 0`) (see Annotations model) | no; list is canonical, `stats.annotationSeconds` optional |
 | Feedback-only: `% in target`, guard warn count/pct, mean sleepDir, guard threshold | Already extracted / in `SessionDrowsiness`; home = **`feedback.outcomeScalars`** only (not base `stats`) | no |
@@ -218,8 +218,14 @@ Uses **Locked vocabulary** keys (no synonyms).
       "bands": {
         "meanAlphaAbs": 4.6,
         "meanAlphaTheta": 1.7,
-        "frontalTemporalAlphaAsym": 0.12,
-        "crossChannelAlphaVar": 0.08
+        "frontalAlphaAsym": 0.12,
+        "crossChannelAlphaVar": 0.08,
+        "meanAlphaRel": 0.31,
+        "frontalTemporalAlphaAsym": 0.05,
+        "meanBetaTheta": 0.9,
+        "meanThetaAbs": 2.7,
+        "meanBetaAbs": 2.4,
+        "temporalAlphaAsym": -0.03
       }
     }
   },
@@ -245,14 +251,14 @@ Notes:
 
 ## Subject model — **PREPARED** (anonymous-first)
 
-> **PREPARED.** Root key `subject` and required anonymous `id` are locked naming. Voluntary demographic / experience fields are **schema-ready but omitted until collected**. Do not reopen the root key without a format PR; adding a new optional voluntary field is OK with a table update.
+> **PREPARED.** Root key `subject` and required anonymous `id` are locked naming. Voluntary demographic / experience fields are **schema-ready but omitted until collected**. Do not reopen the root key without a format PR; adding a new optional voluntary field is OK with a table update. **Generation + Settings UI:** see [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md) (UUID v4 offline on app start; nickname user-settable).
 
 **Decision:** nested root object **`subject`** (BIDS `participants.tsv` / `participant_id` terminology). Prefer `subject` over EDF’s packed “Local Patient Identification” string as the JSON shape; map components to EDF on **export**. Do **not** use a parallel root `patient` key.
 
 ### Privacy rule (locked intent)
 
 1. **Anonymous by default.** Never write real legal name, full birthdate, national ID, email, or other direct PII into metadata unless the product later adds an explicit user opt-in for that field.
-2. **`subject.id` is a stable anonymous code** (app-generated), not a real-world name. Suitable as EDF patient **code** and as the bare token behind BIDS `participant_id` (`sub-{id}` on export).
+2. **`subject.id` is a stable anonymous code** (app-generated UUID v4 in Settings on first launch — offline; see implementation TODO), not a real-world name. Suitable as EDF patient **code** and as the bare token behind BIDS `participant_id` (`sub-{id}` on export).
 3. **`nickname` is display-only.** Shown in History / UI. On EDF export, Local Patient Identification **name** subfield stays **`X`** unless the user has opted to export nickname as the name token. Never treat nickname as a verified identity.
 4. **Omit unknown voluntary fields** — do not write `null`, empty string, or `"X"` placeholders into JSON for fields the user never provided. EDF export fills unknown subfields with `X` at export time.
 5. **Prefer age-at-recording over birthdate** for any age-related voluntary data (BIDS `age`; privacy: cap at 89 per BIDS). Full `dd-MMM-yyyy` birthdate is EDF’s native form — we do **not** store it by default.
@@ -498,7 +504,7 @@ Discipline: rename only when EDF / BIDS / common EEG has a **clearly better** te
 | `stats.quality` `{mean,pctGood,channelUsable}` | Pad / usable-signal summary |
 | `stats.annotationSeconds` `{pause,bad_quality,disconnect}` | Derived seconds-by-type from interval annotations only |
 | `stats.battery` `{startPct,endPct}` | Telemetry bookends when available |
-| `stats.experimental` | Tunable / removable band aggregates |
+| `stats.experimental.bands` | Named band session scalars — **formulas LOCKED**; whole nest may still be dropped later if unused |
 
 ### Also locked (identity / subject / streams / feedback shells)
 
@@ -537,9 +543,63 @@ Future agents: change locked names only with a format PR and an updated table. P
 
 **Confirm from code:** raw does **not** drop unusable-quality samples; BandCache sticky is live-only. Computed is where holds / quality gaps matter most for charts; metadata gets the compact `annotations` timeline for agents. v5 `GestureMarker` / `feedback.gestures` → v6 `annotations` rows with `duration: 0`.
 
-## Feedback extension — **DRAFTED**
+## Experimental band metrics — **LOCKED** (formulas)
 
-> **DRAFTED** (not fully LOCKED). Shape and field homes below are the working contract for implementers. **Q1–Q3 resolved** (generic `feedback.outcomeScalars`, engine under `sessionSettings`, sleepDir deduped). Non-blocking leftovers remain under **Open questions**. Do not invent a parallel root schema or a second gesture list.
+> **LOCKED** — which scalars we compute under `stats.experimental.bands`, and how. Coding details (exact Dart helper) are implementation. The whole `stats.experimental` nest may still be **omitted** from a file if there are no usable seconds, or **dropped in a later minor** if unused for labeling — that is not a format-version bump (experimental branch).
+
+### Gate (all metrics)
+
+Compute only over **usable** computed seconds: mean pad `signalQuality ≥ 80` (same gate as `stats.quality` / sticky unusable). Skip seconds with missing `bands`. If fewer than **30** usable seconds, **omit** `stats.experimental` entirely (do not write NaNs / zeros pretending to be data).
+
+Band order on `ComputedFrame.bands` is locked elsewhere: per channel `[delta, theta, alpha, beta, gamma]` absolute power (µV²/Hz). Channel order follows `device.channelLabels` (Muse: `TP9`, `AF7`, `AF8`, `TP10`).
+
+Relative power for a channel-second: `band / (delta+theta+alpha+beta+gamma)` with total `> 0`; else skip that channel-second.
+
+### Locked keys under `stats.experimental.bands`
+
+| Tier | Key | Formula (usable seconds only) | Why |
+|---|---|---|---|
+| **Must** | `meanAlphaAbs` | Mean of per-second **all-channel mean** absolute α | Core spectral level; cheap; labeling prior |
+| **Must** | `meanAlphaTheta` | Mean of per-second `(mean_α / mean_θ)` across channels (skip sec if mean_θ ≤ 0) | Classic relaxation / meditation ratio (= ATR on abs); already a reward feature family |
+| **Must** | `frontalAlphaAsym` | Mean over usable secs of `ln(α_AF8) − ln(α_AF7)` (skip sec if either α ≤ 0 or label missing) | Muse-validated FAA (whole α band); literature standard |
+| **Must** | `crossChannelAlphaVar` | Variance across channels of each channel’s **session-mean** absolute α (population variance, N = channel count with ≥1 usable sample) | Spatial spread / montage imbalance; never call this “spread” |
+| **Sensible** | `meanAlphaRel` | Mean of per-second all-channel-mean **relative** α | Scale-free companion to `meanAlphaAbs`; recordings lack `feedback.outcomeScalars.avgAlphaRel` |
+| **Sensible** | `frontalTemporalAlphaAsym` | Mean over secs of `ln(mean(α_AF7,α_AF8)) − ln(mean(α_TP9,α_TP10))` (skip if any side ≤ 0) | Frontal vs temporal α contrast on Muse 4-ch |
+| **Sensible** | `meanBetaTheta` | Mean of per-second `(mean_β / mean_θ)` (skip if mean_θ ≤ 0) | Classic alertness / cognitive-load companion (BTR) |
+| **Cool / cheap** | `meanThetaAbs` | Mean all-channel absolute θ | Cheap; pairs with α/θ |
+| **Cool / cheap** | `meanBetaAbs` | Mean all-channel absolute β | Cheap |
+| **Cool / cheap** | `temporalAlphaAsym` | Mean of `ln(α_TP10) − ln(α_TP9)` (skip if either ≤ 0) | Temporal twin of FAA; optional labeling feature |
+
+**Do not** also write duplicate ratio keys (`meanAtr` / `meanTar`) — `meanAlphaTheta` is ATR; TAR = `1/meanAlphaTheta` when needed downstream.
+
+**Do not** put these under `feedback.outcomeScalars` (that bag is reward/guard outcomes only). Peak-α stays in base `stats.peakAlpha` (not experimental).
+
+### Example (unchanged shape)
+
+```json
+"experimental": {
+  "bands": {
+    "meanAlphaAbs": 4.6,
+    "meanAlphaTheta": 1.7,
+    "frontalAlphaAsym": 0.12,
+    "crossChannelAlphaVar": 0.08,
+    "meanAlphaRel": 0.31,
+    "frontalTemporalAlphaAsym": 0.05,
+    "meanBetaTheta": 0.9,
+    "meanThetaAbs": 2.7,
+    "meanBetaAbs": 2.4,
+    "temporalAlphaAsym": -0.03
+  }
+}
+```
+
+A writer may emit only the **Must** keys first and add Sensible/Cool in the same PR or a follow-up — keys above are the allowed set; do not invent synonyms (`alphaMean`, `faa`, `spread`, …).
+
+---
+
+## Feedback extension — **LOCKED**
+
+> **LOCKED.** Shape and field homes below are the contract for implementers. **Q1–Q3 resolved** (generic `feedback.outcomeScalars`, engine under `sessionSettings`, sleepDir deduped). Implementation leftovers live in [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md). Do not invent a parallel root schema or a second gesture list.
 
 **Rule:** when `kind == "feedback"`, attach a single top-level `feedback: { … }` object. Omit (or null) for `kind == "recording"`. Everything already covered by **base** (`subject`, `device`, `streams`, `stats`, `annotations`, identity/timing) stays **out** of `feedback` — no duplicates.
 
@@ -794,7 +854,7 @@ Agents implementing writers/readers must **not** keep these under `feedback` or 
 6. **`metadataDescription` stays under `feedback`** (protocol copy, not file-level `notes`).
 7. **SleepDir single home:** `feedback.outcomeScalars.avgSleepDir` only (no `drowsiness.meanSleepDir` twin).
 
-Status of this section: **DRAFTED** — Q1–Q3 resolved below; remaining open items are non-blocking / implementation.
+Status of this section: **LOCKED** — Q1–Q3 resolved below; remaining items are implementation (see [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md)).
 
 ---
 
@@ -822,13 +882,14 @@ Not coded in this draft; checklist for the implementation PR:
 7. **Locked JSON keys are the source of truth.** When implementing writers/readers, and when renaming Dart/Rust identifiers in a later PR, prefer the keys in **Locked vocabulary** and the **Annotations model — LOCKED** section. Do not invent synonyms (`sfreq`, `ch_names`, `sao2` as a JSON key, `SamplingFrequency` in neurofeed JSON, parallel `feedback.gestures[]`, …). Map EDF+/BIDS/MNE spellings on export only. Do **not** rename app source in the same change as a contract-only edit unless the task says so.
 8. **Annotations model is LOCKED** — do not reopen shape, nominators, or initial `type` strings without a format PR.
 9. **`subject` is PREPARED (anonymous-first).** Always write `subject.id` on new v6 files; omit voluntary fields until collected; never put PII by default; keep `sessionId` at root. See Subject model.
-10. **Feedback extension is DRAFTED.** When `kind=="feedback"`, write top-level `feedback` per **Feedback extension**; never duplicate base/annotations/stats fields into it; never write `feedback.gestures[]` or `feedback.drowsiness`. Guard/reward outcome scalars → `feedback.outcomeScalars` only. See migrated-away table + Open questions.
+10. **Feedback extension is LOCKED.** When `kind=="feedback"`, write top-level `feedback` per **Feedback extension**; never duplicate base/annotations/stats fields into it; never write `feedback.gestures[]` or `feedback.drowsiness`. Guard/reward outcome scalars → `feedback.outcomeScalars` only. See migrated-away table.
+11. **`stats.experimental.bands` formulas are LOCKED.** Compute only the keys in **Experimental band metrics**; usable-seconds gate; omit the nest if < 30 usable seconds; do not invent synonym keys.
 
 ---
 
 ## Open questions
 
-Feedback extension + base vocabulary are **schema-complete enough to implement**. Former Q1–Q3 are **resolved** (see below). No blocking product/schema undecideds remain for the feedback object shape.
+Feedback extension + experimental band formulas + base vocabulary are **LOCKED / implementable**. Former Q1–Q3 are **resolved** (see below). Remaining work is tracked in [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md).
 
 ### Resolved (Q1–Q3)
 
@@ -858,15 +919,13 @@ Feedback extension + base vocabulary are **schema-complete enough to implement**
 - `music` / `calibration` shapes → keep as-is under `feedback`.
 - No `feedback.gestures[]`; shared stats (incl. `stillnessPct`) → base `stats` only.
 
-**Basically done for schema design; remaining work is implementation** (writers/readers, `NFED6`, delete dual-dialect, update `README_feedback_format.md`).
+**Schema design finished.** Feedback extension + experimental band formulas are **LOCKED**. Remaining work is **implementation** — tracked in [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md) (writers/readers, `NFED6`, `subject.id` app settings, delete dual-dialect, README update, etc.).
 
-Non-schema leftovers (unchanged; do not block feedback draft):
+Deferred outside this format PR (do not block v6 metadata):
 
-- Exact named-band formulas under `stats.experimental`.
-- Whether `% overshoot` / overshoot intervals are worth persisting later.
-- Per-record length prefix / Athena tag 11.
-- Whether feedback pause should stop the computed sampler.
-- `subject.id` generation scheme and BIDS `sub-` normalization.
+- Whether `% overshoot` / overshoot intervals are worth persisting (today paint-only on Monitor Bands — **not** a v6 key until product-defined).
+- Per-record length prefix / Athena tag 11 (separate optics series — see [../TODO/athena-optics-contract.md](../TODO/athena-optics-contract.md)).
+- Whether feedback pause should stop the computed sampler (behavior PR, not schema).
 - Nickname export-as-EDF-name product toggle (default EDF name = `X`).
 
 ---
@@ -892,7 +951,7 @@ Gap check of **v6 BASE** (+ locked annotations / subject / stats / streams / dev
 
 ### B) Belongs under `feedback` (not base)
 
-Full draft + example + migrated-away table: **Feedback extension — DRAFTED** above. Do **not** treat these as base gaps:
+Full example + migrated-away table: **Feedback extension — LOCKED** above. Do **not** treat these as base gaps:
 
 | Field(s) | Notes |
 |---|---|
@@ -922,13 +981,14 @@ No other current feedback/recording JSON keys need new base keys.
 
 ### D) Missing / deferred OK
 
-- `stats.experimental.bands` formulas; `% overshoot` / overshoot annotations (paint-time today).
+- `% overshoot` / overshoot annotations (paint-time today; not a v6 key until product-defined).
 - Voluntary `subject` demographics; `yearOfBirth`; BIDS `handedness`; separate `device.manufacturer`.
 - Per-stream `StreamInfo.electrodes` / `channels` / `sensors` (on Dart model, never written by `streamsConfig`).
 - Session means for `lineNoise` / guardrail `clarity`; telemetry `fuel` / `temp` bookends (battery `%` only).
 - Sqlite-only: section offsets, `file_size` / `mtime`, `thumbnail` BLOB, `notes_preview`, `marker_count` (derive from `annotations`), `state_markers` label/confidence table.
 - Scratch `kind: "tmp"` (connect-time sidecar; never published — v6 `kind` remains `recording` \| `feedback`).
-- Athena tag 11; per-record length prefix; pause stopping computed sampler.
+- Athena tag 11; per-record length prefix; pause stopping computed sampler (see implementation TODO + optics contract).
+- `stats.experimental.bands` **formulas are LOCKED** (see Experimental band metrics); implementing the writer is a TODO, not a formula open.
 
 ### E) Code has it but specs forgot (callouts)
 
