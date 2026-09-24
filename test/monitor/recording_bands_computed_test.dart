@@ -215,7 +215,7 @@ void main() {
         jsonl.addByte(0x0a);
       }
 
-      final file = await writeScratchV5(
+      final file = await writeScratch(
         dir: dir,
         id: 'bands_hist',
         prefix: 'recording',

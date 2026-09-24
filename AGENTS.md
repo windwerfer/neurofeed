@@ -136,7 +136,7 @@ lib/src/spine/              capture / assemble Dart adapters
   capture_client.dart       start/stop/assemble/sidecar FFI
   capture_foreground.dart   Android FGS start/stop for keepable capture
   scratch_writer.dart       SessionRecorder (prefix default `session`)
-  assemble.dart             assembleV5Container, writeScratchV5(prefix:)
+  assemble.dart             assembleContainer, writeScratch(prefix:)
 lib/src/session_format/         interim FFI helpers / ComputedFrame / DeviceInfo
   computed_frame.dart       Dart ComputedFrame (+ .freezed.dart)
   models.dart               DeviceInfo, StreamsConfig
@@ -193,7 +193,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
   Freeze: `.ai/contracts/fileformat_v6.md` (NFED6). Human spec:
   `README_feedback_format.md`.
 - Session assemble: `lib/src/spine/assemble.dart`
-  (`assembleV5Container`, `writeScratchV5`). Placeholder WebP stays in
+  (`assembleContainer`, `writeScratch`). Placeholder WebP stays in
   `session_format/placeholder_webp.dart`. Scratch writer:
   `lib/src/spine/scratch_writer.dart` (`SessionRecorder`). Capture FFI:
   `lib/src/spine/capture_client.dart` over `rust/src/spine/capture.rs`
@@ -382,18 +382,18 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **Assemble `.neurofeed` at `end()`** into scratch (placeholder WebP) **before**
   `phase = ended`. Live summary cannot pop — Save `publishSession` to
   history or Discard deletes the scratch file. One wrapper:
-  `spine/assemble.dart` (`writeScratchV5` / `assembleV5Container`).
+  `spine/assemble.dart` (`writeScratch` / `assembleContainer`).
 - **Crash recovery** is prefix-strict. Feedback: leftover
   `session_*.neurofeed` and orphan `.raw` / `.computed` / `.metadata`
   reopen the session summary. Monitor: leftover `recording_*` (dialog
   **Incomplete recording detected**).
-  `tmp_*` is deleted, never assembled. Temps go through `writeScratchV5`.
+  `tmp_*` is deleted, never assembled. Temps go through `writeScratch`.
   Never `decodeImage` on empty bytes.
 - **ComputedSampler.t** is seconds from recording start, not unix epoch.
   `_onEvent` must latch Pulse / SpO₂ / PeakAlpha (same as the monitor
   sampler). Do not leave those cases as `default`.
 - **Charts** plot computed 1 Hz (`extractComputed`; NFED6 →
-  `prepareChartDataFromV5` / `prepareChartDataFromComputed`). Pulse/SpO₂
+  `prepareChartDataFromContainer` / `prepareChartDataFromComputed`). Pulse/SpO₂
   fall back to the raw body when computed frames omitted them. There is
   no `SessionOverview` / 400-bucket `metadata.summary`. The list sparkline
   is the WebP thumbnail.

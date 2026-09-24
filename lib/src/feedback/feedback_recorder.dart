@@ -21,7 +21,7 @@ class FeedbackRecorder {
 
   final Future<SessionStorage> _storage;
   final SessionRecorder _recorder = SessionRecorder();
-  String? _scratchV5Path;
+  String? _scratchPath;
   String? _attachedId;
 
   static Future<SessionStorage> _defaultStorage() async {
@@ -32,16 +32,16 @@ class FeedbackRecorder {
 
   bool get usesRustCapture => _recorder.usesRustCapture;
 
-  String? get currentFilePath => _scratchV5Path ?? _recorder.currentFilePath;
+  String? get currentFilePath => _scratchPath ?? _recorder.currentFilePath;
 
-  String? get scratchV5Path => _scratchV5Path;
+  String? get scratchPath => _scratchPath;
 
   String? get sessionId => _recorder.sessionId ?? _attachedId;
 
   /// Point at an already-assembled scratch `.neurofeed` (process restart / leftover).
   void attachAssembledScratch({required String id, required String path}) {
     _attachedId = id;
-    _scratchV5Path = path;
+    _scratchPath = path;
   }
 
   /// Electrode indices that produced data in the current session recording.
@@ -110,10 +110,10 @@ class FeedbackRecorder {
     try {
       final File file;
       if (_recorder.usesRustCapture) {
-        file = await spine.assembleCaptureV5(metadataJson: metadataJson);
+        file = await spine.assembleCapture(metadataJson: metadataJson);
         _recorder.detachAfterAssemble();
       } else {
-        file = await writeScratchV5(
+        file = await writeScratch(
           dir: dir,
           id: id,
           metadataJson: metadataJson,
@@ -122,7 +122,7 @@ class FeedbackRecorder {
         );
         await _recorder.cleanupTempFiles();
       }
-      _scratchV5Path = file.path;
+      _scratchPath = file.path;
       debugPrint(
         '[feedback] assembleScratch: ${file.path} (${file.lengthSync()}B)',
       );
@@ -134,9 +134,9 @@ class FeedbackRecorder {
   }
 
   /// Delete the scratch `.neurofeed` (after a successful publish, or on discard).
-  Future<void> deleteScratchV5() async {
-    final path = _scratchV5Path;
-    _scratchV5Path = null;
+  Future<void> deleteScratch() async {
+    final path = _scratchPath;
+    _scratchPath = null;
     _attachedId = null;
     if (path == null) return;
     final file = File(path);
@@ -144,7 +144,7 @@ class FeedbackRecorder {
       try {
         await file.delete();
       } catch (e) {
-        debugPrint('[feedback] deleteScratchV5 failed: $e');
+        debugPrint('[feedback] deleteScratch failed: $e');
       }
     }
   }
@@ -152,12 +152,12 @@ class FeedbackRecorder {
   /// Discard the session (delete temps and any scratch `.neurofeed`).
   Future<void> discardSession() async {
     await _recorder.stop();
-    await deleteScratchV5();
+    await deleteScratch();
   }
 
-  /// Get collected computed frames for v5 format assembly.
+  /// Get collected computed frames for container assembly.
   List<ComputedFrame> get computedFrames => _recorder.computedFrames;
 
-  /// Clear computed frames after v5 assembly.
+  /// Clear computed frames after container assembly.
   void clearComputedFrames() => _recorder.clearComputedFrames();
 }

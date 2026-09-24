@@ -15,7 +15,7 @@ import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/version.dart';
 
-/// History-root v5 names: `session_*.neurofeed` and
+/// History-root container names: `session_*.neurofeed` and
 /// `recording_*.neurofeed`. Not `tmp_`.
 bool isHistoryContainerName(String name) {
   if (!name.endsWith('.neurofeed')) return false;
@@ -504,9 +504,9 @@ class SessionStore {
             ? const ['TP9', 'AF7', 'AF8', 'TP10']
             : metadata.recordedChannels,
       );
-      final container = assembleV5Container(
+      final container = assembleContainer(
         thumbnail: thumb,
-        metadataJson: buildFeedbackMetadataV6(
+        metadataJson: buildFeedbackMetadata(
           meta: metadata,
           subject: subjectInfo,
           stats: assembleStats,

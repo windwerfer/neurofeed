@@ -72,9 +72,9 @@ void main() {
     final recovered = await scanRecoverableRecordings(scratch);
     expect(recovered, hasLength(1));
     expect(recovered.single.id, '1001');
-    expect(recovered.single.scratchV5.existsSync(), isTrue);
+    expect(recovered.single.scratch.existsSync(), isTrue);
     expect(
-      recovered.single.scratchV5.uri.pathSegments.last,
+      recovered.single.scratch.uri.pathSegments.last,
       'recording_1001.neurofeed',
     );
     expect(File('${scratch.path}/recording_1001.raw').existsSync(), isFalse);
@@ -82,14 +82,14 @@ void main() {
     expect(File('${scratch.path}/recording_1001.json').existsSync(), isFalse);
 
     final head = parseHead(
-      bytes: Uint8List.fromList(recovered.single.scratchV5.readAsBytesSync()),
+      bytes: Uint8List.fromList(recovered.single.scratch.readAsBytesSync()),
     );
     final meta = jsonDecode(utf8.decode(head.metadataJson)) as Map;
     expect(meta['kind'], 'recording');
   });
 
   test('leftover assembled .neurofeed is returned without a second assemble', () async {
-    final v5 = await writeScratchV5(
+    final scratchFile = await writeScratch(
       dir: scratch,
       id: '2002',
       prefix: 'recording',
@@ -98,13 +98,13 @@ void main() {
       computedJsonl: const [],
     );
     await File('${scratch.path}/recording_2002.raw').writeAsBytes([9, 9]);
-    final before = v5.lengthSync();
+    final before = scratchFile.lengthSync();
 
     final recovered = await scanRecoverableRecordings(scratch);
     expect(recovered, hasLength(1));
     expect(recovered.single.id, '2002');
-    expect(recovered.single.scratchV5.path, v5.path);
-    expect(v5.lengthSync(), before);
+    expect(recovered.single.scratch.path, scratchFile.path);
+    expect(scratchFile.lengthSync(), before);
     expect(File('${scratch.path}/recording_2002.raw').existsSync(), isFalse);
   });
 

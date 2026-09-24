@@ -31,7 +31,7 @@ Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) asyn
     return null;
   }
   final frames = extractComputed(bytes: container);
-  final prepared = prepareChartDataFromV5(
+  final prepared = prepareChartDataFromContainer(
     frames: frames,
     bytes: container,
     trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,

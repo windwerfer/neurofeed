@@ -17,7 +17,7 @@ import 'package:neurofeed/src/util/timezone.dart';
 class RecoverableSession {
   RecoverableSession({
     required this.id,
-    required this.scratchV5,
+    required this.scratch,
     required this.protocol,
     required this.elapsedSeconds,
     required this.calibrationKind,
@@ -25,7 +25,7 @@ class RecoverableSession {
   });
 
   final String id;
-  final File scratchV5;
+  final File scratch;
   final String protocol;
   final int elapsedSeconds;
   final String calibrationKind;
@@ -33,7 +33,7 @@ class RecoverableSession {
 
   /// Publish the scratch `.neurofeed` into history, then delete it.
   Future<void> save(SessionStore store) async {
-    final head = await ffi.parseHeadFromPath(path: scratchV5.path);
+    final head = await ffi.parseHeadFromPath(path: scratch.path);
     final meta =
         SessionMetadata.fromJsonBytes(head.metadataJson) ??
         SessionMetadata(
@@ -47,20 +47,20 @@ class RecoverableSession {
     timeZone: captureIanaTimeZone(),
           sessionId: id,
         );
-    await store.publishSession(id, meta, encodedPath: scratchV5.path);
+    await store.publishSession(id, meta, encodedPath: scratch.path);
     await discard();
   }
 
   /// Delete the scratch `.neurofeed`. Temps are already gone after assemble.
   Future<void> discard() async {
-    if (await scratchV5.exists()) {
-      await scratchV5.delete();
+    if (await scratch.exists()) {
+      await scratch.delete();
     }
   }
 }
 
 class _ScratchFiles {
-  File? v5;
+  File? container;
   File? raw;
   File? computed;
   File? metadata;
@@ -144,7 +144,7 @@ SessionMetadata _metadataFromTemps({
   );
 }
 
-Future<RecoverableSession?> _fromV5(File file, String id) async {
+Future<RecoverableSession?> _fromContainer(File file, String id) async {
   var protocol = '';
   var elapsed = 0;
   var calibrationKind = '';
@@ -162,7 +162,7 @@ Future<RecoverableSession?> _fromV5(File file, String id) async {
   }
   return RecoverableSession(
     id: id,
-    scratchV5: file,
+    scratch: file,
     protocol: protocol,
     elapsedSeconds: elapsed,
     calibrationKind: calibrationKind,
@@ -189,7 +189,7 @@ Future<RecoverableSession?> _assembleTemps({
       jsonl: metadataBytes,
       frames: frames,
     );
-    final file = await spine.assembleCaptureV5At(
+    final file = await spine.assembleCaptureAt(
       dir: scratch,
       prefix: 'session',
       id: id,
@@ -198,7 +198,7 @@ Future<RecoverableSession?> _assembleTemps({
     await _deleteTemps(files);
     return RecoverableSession(
       id: id,
-      scratchV5: file,
+      scratch: file,
       protocol: meta.protocol,
       elapsedSeconds: meta.elapsedSeconds,
       calibrationKind: meta.calibration?.kind ?? '',
@@ -211,7 +211,7 @@ Future<RecoverableSession?> _assembleTemps({
 }
 
 /// Scan [scratchDirectory] for leftover `session_*.neurofeed` and orphan
-/// three-temps. Temps are assembled with [spine.assembleCaptureV5At].
+/// three-temps. Temps are assembled with [spine.assembleCaptureAt].
 /// Does not scan `getTemporaryDirectory()/sessions`.
 Future<List<RecoverableSession>> scanRecoverableSessions(
   SessionStorage storage,
@@ -228,7 +228,7 @@ Future<List<RecoverableSession>> scanRecoverableSessions(
       set(byId.putIfAbsent(id, _ScratchFiles.new));
     }
 
-    take(_idFrom(name, '.neurofeed'), (f) => f.v5 = entity);
+    take(_idFrom(name, '.neurofeed'), (f) => f.container = entity);
     take(_idFrom(name, '.raw'), (f) => f.raw = entity);
     take(_idFrom(name, '.computed'), (f) => f.computed = entity);
     take(_idFrom(name, '.metadata'), (f) => f.metadata = entity);
@@ -238,9 +238,9 @@ Future<List<RecoverableSession>> scanRecoverableSessions(
   for (final entry in byId.entries) {
     final id = entry.key;
     final files = entry.value;
-    if (files.v5 != null) {
+    if (files.container != null) {
       await _deleteTemps(files);
-      final session = await _fromV5(files.v5!, id);
+      final session = await _fromContainer(files.container!, id);
       if (session != null) recovered.add(session);
       continue;
     }
@@ -274,7 +274,7 @@ Future<void> showCrashRecoveryDialog(
         .read(feedbackStateProvider.notifier)
         .restoreEndedSession(
           id: session.id,
-          scratchPath: session.scratchV5.path,
+          scratchPath: session.scratch.path,
           metadata: session.metadata,
         );
     await Navigator.of(context).push(

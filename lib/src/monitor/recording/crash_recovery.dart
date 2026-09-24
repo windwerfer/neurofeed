@@ -54,14 +54,14 @@ Future<int> deleteLeftoverTmpCaptures(Directory scratch) async {
 }
 
 class RecoverableRecording {
-  RecoverableRecording({required this.id, required this.scratchV5});
+  RecoverableRecording({required this.id, required this.scratch});
 
   final String id;
-  final File scratchV5;
+  final File scratch;
 }
 
 class _RecordingScratch {
-  File? v5;
+  File? container;
   File? raw;
   File? computed;
   File? json;
@@ -168,7 +168,7 @@ Future<RecoverableRecording?> _assembleTemps({
         ? await files.computed!.readAsBytes()
         : Uint8List(0);
     final metadataJson = _metadataJsonFromSidecar(files.json, computed);
-    final file = await spine.assembleCaptureV5At(
+    final file = await spine.assembleCaptureAt(
       dir: scratch,
       prefix: 'recording',
       id: id,
@@ -176,7 +176,7 @@ Future<RecoverableRecording?> _assembleTemps({
     );
     await _deleteTemps(files);
     debugPrint('[monitor-crash] assembled ${file.uri.pathSegments.last}');
-    return RecoverableRecording(id: id, scratchV5: file);
+    return RecoverableRecording(id: id, scratch: file);
   } catch (e, st) {
     debugPrint('[monitor-crash] assemble temps for $id failed: $e\n$st');
     return null;
@@ -185,7 +185,7 @@ Future<RecoverableRecording?> _assembleTemps({
 
 /// Scan [scratch] for leftover `recording_*` temps and assembled `.neurofeed`.
 /// Assembled file is returned as-is (temps deleted). Temps only are assembled
-/// with [spine.assembleCaptureV5At] (FFI name kept; `prefix: recording`, placeholder WebP).
+/// with [spine.assembleCaptureAt] (`prefix: recording`, placeholder WebP).
 /// Does not touch `tmp_*` or `session_*`.
 Future<List<RecoverableRecording>> scanRecoverableRecordings(
   Directory scratch,
@@ -201,7 +201,7 @@ Future<List<RecoverableRecording>> scanRecoverableRecordings(
       set(byId.putIfAbsent(id, _RecordingScratch.new));
     }
 
-    take(recordingIdFrom(name, '.neurofeed'), (f) => f.v5 = entity);
+    take(recordingIdFrom(name, '.neurofeed'), (f) => f.container = entity);
     take(recordingIdFrom(name, '.raw'), (f) => f.raw = entity);
     take(recordingIdFrom(name, '.computed'), (f) => f.computed = entity);
     take(recordingIdFrom(name, '.json'), (f) => f.json = entity);
@@ -212,9 +212,9 @@ Future<List<RecoverableRecording>> scanRecoverableRecordings(
   for (final entry in byId.entries) {
     final id = entry.key;
     final files = entry.value;
-    if (files.v5 != null) {
+    if (files.container != null) {
       await _deleteTemps(files);
-      recovered.add(RecoverableRecording(id: id, scratchV5: files.v5!));
+      recovered.add(RecoverableRecording(id: id, scratch: files.container!));
       continue;
     }
     if (files.raw == null && files.computed == null) {

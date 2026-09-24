@@ -672,7 +672,7 @@ sequenceDiagram
   Raw->>Shell: SessionData for Sweep/Bands/FFT panes
 ```
 
-Live unsaved: same, from `scratchV5Path` (already assembled **before** `phase = ended`).
+Live unsaved: same, from `scratchPath` (already assembled **before** `phase = ended`).
 
 `prepareChartDataFromComputed` stays for export + stats that still need relative-band series (PDF Bands page, stillness from movement). Training-outcome stats (Target time) move to `prepareTrainingOutcome`.
 

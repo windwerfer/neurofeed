@@ -78,8 +78,8 @@ Future<void> showRecordingCrashRecoveryDialog(
       await showRecordingSaveDiscardDialog(
         context: context,
         title: kIncompleteRecordingTitle,
-        onSave: () => store.publish(rec.scratchV5),
-        onDiscard: () => store.discard(rec.scratchV5),
+        onSave: () => store.publish(rec.scratch),
+        onDiscard: () => store.discard(rec.scratch),
       );
     }
   } finally {

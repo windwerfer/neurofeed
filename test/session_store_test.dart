@@ -65,7 +65,7 @@ void main() {
 
       final scratch = scratchDirectory(storage);
       await scratch.create(recursive: true);
-      final scratchV5 = await writeScratchV5(
+      final scratchFile = await writeScratch(
         dir: scratch,
         id: '9001',
         prefix: 'recording',
@@ -73,7 +73,7 @@ void main() {
         rawBody: const [1, 2, 3, 4],
         computedJsonl: const [],
       );
-      await recStore.publish(scratchV5);
+      await recStore.publish(scratchFile);
       sqlite.close();
 
       await File(
@@ -114,7 +114,7 @@ void main() {
 
     final scratch = scratchDirectory(storage);
     await scratch.create(recursive: true);
-    final scratchV5 = await writeScratchV5(
+    final scratchFile = await writeScratch(
       dir: scratch,
       id: '8008',
       prefix: 'recording',
@@ -122,7 +122,7 @@ void main() {
       rawBody: const [1, 2, 3, 4],
       computedJsonl: const [],
     );
-    await recStore.publish(scratchV5);
+    await recStore.publish(scratchFile);
     sqlite.close();
 
     final published = File('${tmp.path}/recording_8008.neurofeed');

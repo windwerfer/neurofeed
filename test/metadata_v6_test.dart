@@ -7,7 +7,7 @@ import 'package:neurofeed/src/settings.dart';
 
 void main() {
   test('recording v6 metadata has NFED6 identity fields', () {
-    final json = buildRecordingMetadataV6(
+    final json = buildRecordingMetadata(
       meta: RecordingMetadata(
         formatVersion: 6,
         appVersion: 'dev',
@@ -41,7 +41,7 @@ void main() {
   });
 
   test('feedback v6 nests protocol under feedback{}', () {
-    final json = buildFeedbackMetadataV6(
+    final json = buildFeedbackMetadata(
       meta: SessionMetadata(
         protocol: 'drowsiness',
         durationMinutes: 15,
@@ -63,7 +63,7 @@ void main() {
   });
 
   test('fromJson reads nested feedback{} dialect (History/export)', () {
-    final built = buildFeedbackMetadataV6(
+    final built = buildFeedbackMetadata(
       meta: SessionMetadata(
         protocol: 'drowsiness',
         durationMinutes: 15,
