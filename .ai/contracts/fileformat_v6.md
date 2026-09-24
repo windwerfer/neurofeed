@@ -110,7 +110,7 @@ Compute from computed JSONL (and raw telemetry if needed) at assemble/save. Pref
 | Session duration | Already have `durationS` / `elapsedSeconds` | — |
 | Named band stats | mean α (abs), mean α/θ, frontal–temporal α asymmetry, cross-ch α variance — over **usable** seconds only | **yes** (tune formulas) |
 | `% overshoot` / held | Needs a defined yMax policy; overshoot today is **paint-time** on Monitor Bands | **yes** |
-| Compact `unusable` intervals | Collapse runs of bad quality / pause / disconnect for AI | no (summary); interval list OK if compact |
+| Compact `gaps` intervals | Single `{from,to,event}` list for pause / unusable / disconnect (see Gaps model) | no; list is canonical, `stats.gapSeconds` optional |
 | Feedback-only: `% in target`, guard warn count, mean sleepDir | Already extracted for sqlite; put in `feedback` / shared `stats` cleanly | no |
 
 Do **not** dump full 1 Hz series into metadata.
@@ -138,8 +138,8 @@ Shared root for `kind: "recording"` and (with `feedback` attached) for feedback.
 identity: formatVersion, appVersion, kind, savedAt, startedAt, elapsedSeconds, durationS, notes
 device:   { name, id, firmware, model, sensors, channelCount, channelLabels }
 streams:  { ten keys… }   // gestures enablement stub; see Gestures
-stats:    { … aggregates; experimental?: { … } }
-unusable: { summary + optional compact intervals }   // see recommendation below
+stats:    { … aggregates; gapSeconds?: { pause, unusable, disconnect }; experimental?: { … } }
+gaps:     [ { from, to, event }, … ]   // canonical timeline; see Gaps model
 feedback: { … }   // ONLY when kind == "feedback"
 ```
 
@@ -186,6 +186,7 @@ feedback: { … }   // ONLY when kind == "feedback"
       "pctGood": 92.0,
       "channelUsable": { "TP9": 0.94, "AF7": 0.88, "AF8": 0.91, "TP10": 0.95 }
     },
+    "gapSeconds": { "pause": 10.0, "unusable": 15.0, "disconnect": 8.0 },
     "battery": { "startPct": 81.0, "endPct": 76.0 },
     "experimental": {
       "bands": {
@@ -196,36 +197,59 @@ feedback: { … }   // ONLY when kind == "feedback"
       }
     }
   },
-  "unusable": {
-    "seconds": { "quality": 42, "disconnect": 8, "pause": 0, "overshoot": 0 },
-    "intervals": [
-      { "t0": 120.0, "t1": 135.0, "reason": "quality" },
-      { "t0": 400.0, "t1": 408.0, "reason": "disconnect" }
-    ]
-  }
+  "gaps": [
+    { "from": 120.0, "to": 135.0, "event": "unusable" },
+    { "from": 200.0, "to": 210.0, "event": "pause" },
+    { "from": 400.0, "to": 408.0, "event": "disconnect" }
+  ]
 }
 ```
 
 Notes:
 
 - Omit top-level `feedback` on recordings.
-- `unusable.intervals` is optional and must stay compact (merge adjacent same-reason runs). Not a 1 Hz dump.
+- Root `gaps` is the **canonical** timeline. Optional `stats.gapSeconds` is derived from that list (sum of `to - from` per `event`); never a second source of truth.
+- `gaps` must stay compact (merge adjacent same-`event` runs). Not a 1 Hz dump.
 - `streams.gestures.enabled` remains false until a real stream exists; gesture **markers** (feedback) live under `feedback.gestures` or base `events` if shared later.
 
 ---
 
-## Unusable / pause / bad signal — recommendation
+## Gaps model (locked)
 
-**Prefer one model: `unusable` (with `reason`), not parallel `bad_signal` + `unusable`.**
+**Decision:** one extensible root array `gaps[]` of interval objects. **Not** three parallel top-level bags `paused{}` / `unusable{}` / `disconnected{}` (anti-pattern — rejected as the primary model).
 
-Reasons enum (extensible): `quality` | `overshoot` | `disconnect` | `pause` | …  
-(Product may map feedback `badSignal` interrupt → `quality`, user pause → `pause`.)
+### Canonical shape
 
-**Why one vocabulary:** Monitor sticky-unusable, feedback interrupt, and disconnect gaps are all “this stretch should not drive charts/training.” Parallel names force every reader to merge synonyms. Keep intentional pause as a **reason**, not a second object.
+```json
+"gaps": [
+  { "from": 120.0, "to": 135.0, "event": "unusable" },
+  { "from": 200.0, "to": 210.0, "event": "pause" },
+  { "from": 400.0, "to": 408.0, "event": "disconnect" }
+]
+```
 
-**Layers:**
+Field names: camelCase to match the rest of the format (`from`, `to`, `event`).
 
-1. **Metadata summary** — `unusable.seconds` counts (and optional compact `intervals`) for AI / History.
+### Rules
+
+1. **Single array** of `{ from, to, event }`. Extend later by adding new `event` strings — no new root keys.
+2. **`event` enum (initial):** `pause` | `unusable` | `disconnect`.
+   - Do **not** invent `overshoot` gaps in metadata until overshoot is product-defined as a persisted interval. Overshoot today is paint-only / experimental on Monitor Bands; sticky bad pads are already covered by quality-driven `unusable`.
+3. **Times** are seconds from capture start (same clock as computed `t`).
+4. **Merge** adjacent same-`event` runs; keep the list compact. Not a 1 Hz dump.
+5. **Reject** parallel top-level `paused` / `unusable` / `disconnected` objects as the primary model. Readers and writers use `gaps` only.
+6. **Product → event mapping:**
+   - Feedback `badSignal` interrupt → `event: "unusable"`
+   - User pause → `event: "pause"`
+   - BLE loss / disconnect → `event: "disconnect"`
+
+### Optional summary nesting
+
+Canonical source: `gaps`. Optional derived counts live under **`stats.gapSeconds`** (seconds-by-event), e.g. `{ "pause": 10.0, "unusable": 15.0, "disconnect": 8.0 }`. Do not use a separate root `gapsSummary` object; keep aggregates under `stats`.
+
+### Layers (unchanged intent)
+
+1. **Metadata** — `gaps` (+ optional `stats.gapSeconds`) for AI / History.
 2. **Computed** — keep per-second `signalQuality` (+ sticky semantics in live BandCache). Do not copy every second into metadata.
 3. **Raw** — continues to store samples while the device streams, including low-quality epochs. Disconnect simply yields silence (no packets). Optional later: raw index hints via the same interval list (byte offsets are a separate PR; metadata times are enough for v6 draft).
 
@@ -292,6 +316,6 @@ Not coded in this draft; checklist for the implementation PR:
 ## Leftovers / open (not blocking this draft)
 
 - Exact named-band formulas (experimental until product locks them).
-- Whether `% overshoot` is worth persisting (paint-time today).
+- Whether `% overshoot` / overshoot intervals are worth persisting later (paint-time today; **not** a `gaps.event` until defined — see Gaps model).
 - Per-record length prefix / Athena tag 11 (separate format PRs).
-- Whether feedback pause should stop the computed sampler (today it does not until `end()`).
+- Whether feedback pause should stop the computed sampler (today it does not until `end()`). Pause **does** get a `gaps` entry with `event: "pause"` when support lands.
