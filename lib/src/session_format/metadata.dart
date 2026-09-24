@@ -1,7 +1,7 @@
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
-import 'package:neurofeed/src/session_v5/models.dart';
-import 'package:neurofeed/src/session_v5/stats_assemble.dart';
+import 'package:neurofeed/src/session_format/models.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/util/timezone.dart';
 import 'package:neurofeed/src/version.dart';
@@ -47,7 +47,7 @@ Map<String, Object?> buildRecordingMetadataV6({
 Map<String, Object?> buildFeedbackMetadataV6({
   required SessionMetadata meta,
   required SubjectInfo subject,
-  DeviceInfoV5? device,
+  DeviceInfo? device,
   StreamsConfig? streams,
   Map<String, Object?>? stats,
 }) {
@@ -78,7 +78,7 @@ Map<String, Object?> buildFeedbackMetadataV6({
     if (meta.sessionId != null) 'sessionId': meta.sessionId,
     'subject': subject.toJson(),
     'device': (device ??
-            DeviceInfoV5(
+            DeviceInfo(
               name: meta.deviceName ?? '',
               id: meta.deviceId ?? '',
               firmware: meta.deviceModel ?? '',

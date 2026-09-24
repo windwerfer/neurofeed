@@ -75,7 +75,7 @@ Pad-quality dots are a 4-ch 1 s ring in `connection_provider.dart`.
 ## Isolation
 
 **May import:** `rust/api/{muse,session_format,device_config}.dart`,
-`connection_provider.dart`, `settings.dart`, `session_v5/`,
+`connection_provider.dart`, `settings.dart`, `session_format/`,
 `charts/{smooth_path,band_style}.dart`, `version.dart`,
 `feedback/session_storage.dart`, `feedback/session_sqlite.dart`.
 

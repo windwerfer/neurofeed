@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
-import 'package:neurofeed/src/session_v5/metadata_v6.dart';
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_format/metadata.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/settings.dart';
 
 void main() {
@@ -18,7 +18,7 @@ void main() {
         sessionId: 'sess-1',
         elapsedSeconds: 600,
         durationS: 600,
-        device: const DeviceInfoV5(
+        device: const DeviceInfo(
           name: 'Muse',
           id: 'id',
           firmware: 'f',

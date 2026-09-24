@@ -143,7 +143,7 @@ Otherwise `FAIL` — stop.
 
 **Frozen subject:** `feat(session): extend computed FeedbackInfo/GuardrailInfo for live-trust fields`
 
-**Files:** `rust/src/api/session_format.rs`; `lib/src/session_v5/computed_frame.dart`; `lib/src/spine/assemble.dart` `toFfiFrame`; generated `rust/src/frb_generated.rs` + `lib/src/rust/`; `lib/src/monitor/recording/monitor_sampler.dart`; `test/session_computed_charts_test.dart`; `cargo test --lib session_format`.
+**Files:** `rust/src/api/session_format.rs`; `lib/src/session_format/computed_frame.dart`; `lib/src/spine/assemble.dart` `toFfiFrame`; generated `rust/src/frb_generated.rs` + `lib/src/rust/`; `lib/src/monitor/recording/monitor_sampler.dart`; `test/session_computed_charts_test.dart`; `cargo test --lib session_format`.
 
 **Do:** Keep existing `ratio` / `threshold` / `inTarget` / `pct` and `guardrail.{sleepDir,clarity,warning,delta}`. Add the 1 Hz fields from spec § "Add at 1 Hz". On `ComputedFrame`, `FeedbackInfo`, `GuardrailInfo`, `PeakAlphaInfo`:
 
@@ -159,7 +159,7 @@ plus snake_case **aliases** on existing fields so in-memory Rust fixtures still 
 
 `#[serde(default)]` on new fields. **Do not store `plotPercentile`.** `MonitorSampler` leaves `feedback.percentile`, `feedback.clean`, `guardrail.featurePercentile`, `guardrail.clean` as **`None`** — never `0` / `false`. FRB generate **both** sides. No emit-behavior change. No UI.
 
-**Must-pass test:** Dart `toJsonBytes()` line → `v5ExtractComputed` → `feedback.percentile` and `feedback.clean` are `Some`, not `None`.
+**Must-pass test:** Dart `toJsonBytes()` line → `extractComputed` → `feedback.percentile` and `feedback.clean` are `Some`, not `None`.
 
 **Verify:** `flutter_rust_bridge_codegen generate`; `cargo test --manifest-path rust/Cargo.toml --lib session_format`; `cargo build --manifest-path rust/Cargo.toml`; `flutter analyze lib/src`; `flutter test --concurrency=1 test/session_computed_charts_test.dart`.
 
@@ -225,7 +225,7 @@ plus snake_case **aliases** on existing fields so in-memory Rust fixtures still 
 
 **Files:** `lib/src/views/feedback_dashboard.dart`; `RecordingGraphBody` from PR 1; `lib/src/history/hr_spo2_history_pane.dart`; `.ai/ui-map.md`; `.ai/test-matrix.md`.
 
-**Do:** Compose `RecordingGraphBody` under session chips Raw EEG / Bands / Histogram / PSD / Spectrogram. Lazy `v5ExtractRaw` on first monitor-chip tap. Empty `recordedData` = assume all streams; hide a chip only when the list is **non-empty** and lacks that name. Bands computed fallback uses `linearToDb`. Follow disabled; `cinemaEnabled: false`. Independent viewports: Feedback keeps last full-span zoom; monitor chips keep last per-kind Inspect window (10 s at t=0 jump is OK; ui-map it). **HR+SpO2** chip: new dual-axis computed pane (40–200 bpm / 50–100 SpO₂), existing empty copy, **not** live `HrSpo2View`. `recordOnly` default chip = Bands. Do not ship a chip that errors.
+**Do:** Compose `RecordingGraphBody` under session chips Raw EEG / Bands / Histogram / PSD / Spectrogram. Lazy `extractRaw` on first monitor-chip tap. Empty `recordedData` = assume all streams; hide a chip only when the list is **non-empty** and lacks that name. Bands computed fallback uses `linearToDb`. Follow disabled; `cinemaEnabled: false`. Independent viewports: Feedback keeps last full-span zoom; monitor chips keep last per-kind Inspect window (10 s at t=0 jump is OK; ui-map it). **HR+SpO2** chip: new dual-axis computed pane (40–200 bpm / 50–100 SpO₂), existing empty copy, **not** live `HrSpo2View`. `recordOnly` default chip = Bands. Do not ship a chip that errors.
 
 **Verify:** `flutter analyze lib/src`; tests that the Feedback-chip path does not load raw; file-backed source tests if touched (`cargo build` first for FFI).
 

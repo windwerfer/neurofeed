@@ -16,7 +16,7 @@ import 'package:neurofeed/src/rust/api/session_format.dart'
         FeedbackInfo,
         GuardrailInfo,
         PeakAlphaInfo,
-        containerEncodeV5,
+        containerEncode,
         sessionHeaderBytes,
         sessionFrameBytes,
         encodeSessionEvent;
@@ -87,8 +87,8 @@ Uint8List _buildV5Container({
   // Encode metadata JSON to bytes
   final metadataBytes = utf8.encode(jsonEncode(metadataJson));
 
-  // Assemble .neurofeed container using Rust FFI (`containerEncodeV5` name kept)
-  return containerEncodeV5(
+  // Assemble .neurofeed container using Rust FFI (`containerEncode` name kept)
+  return containerEncode(
     thumbnail: _webp1x1,
     metadataJson: metadataBytes,
     computedFrames: computedFrames,

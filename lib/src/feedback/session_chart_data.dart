@@ -252,7 +252,7 @@ SessionChartData prepareChartDataFromV5({
 }) {
   ffi.SessionData? raw;
   try {
-    final body = ffi.v5ExtractRaw(bytes: bytes);
+    final body = ffi.extractRaw(bytes: bytes);
     if (body.isNotEmpty) {
       raw = ffi.sessionParseBody(bytes: body);
     }

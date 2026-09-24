@@ -461,7 +461,7 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
     Ok(out)
 }
 
-// ── Session Format (NFED6; FFI / type names still *v5*) ─────────────────────────
+// ── Session Format (NFED6 container) ───────────────────────────────────────────
 //
 //   [68-byte fixed header][WebP thumbnail][metadata JSON (zstd)][computed 1Hz (zstd)][raw body]
 //
@@ -480,13 +480,13 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
 
 pub const V6_MAGIC: [u8; 6] = *b"NFED6\0";
 pub const V6_VERSION: u8 = 6;
-pub const V5_HEADER_SIZE: usize = 68;
+pub const HEADER_SIZE: usize = 68;
 
-/// `.neurofeed` container header with fixed 68-byte layout (NFED6; type `V5Header` name kept).
+/// `.neurofeed` container header with fixed 68-byte layout (NFED6).
 /// raw_length is not stored; compute as file_size - raw_offset.
 #[frb(dart_metadata = ("freezed",))]
 #[derive(Debug, Clone, PartialEq)]
-pub struct V5Header {
+pub struct ContainerHeader {
     pub thumbnail_offset: u64,
     pub thumbnail_length: u64,
     pub metadata_offset: u64,
@@ -499,8 +499,8 @@ pub struct V5Header {
 /// Parsed container head (NFED6) - header + thumbnail + metadata (decompressed).
 #[frb(dart_metadata = ("freezed",))]
 #[derive(Debug, Clone)]
-pub struct V5ParsedHead {
-    pub header: V5Header,
+pub struct ParsedHead {
+    pub header: ContainerHeader,
     pub thumbnail: Vec<u8>,
     pub metadata_json: Vec<u8>,
 }
@@ -655,7 +655,7 @@ fn crc32(data: &[u8]) -> u32 {
 
 const COPY_BUF: usize = 64 * 1024;
 
-fn v5_header_bytes(
+fn header_bytes(
     thumbnail_offset: u64,
     thumbnail_length: u64,
     metadata_offset: u64,
@@ -664,7 +664,7 @@ fn v5_header_bytes(
     computed_length: u64,
     raw_offset: u64,
 ) -> Vec<u8> {
-    let mut header = Vec::with_capacity(V5_HEADER_SIZE);
+    let mut header = Vec::with_capacity(HEADER_SIZE);
     header.extend_from_slice(&V6_MAGIC);
     header.push(V6_VERSION);
     header.push(0); // flags
@@ -677,7 +677,7 @@ fn v5_header_bytes(
     header.extend_from_slice(&raw_offset.to_le_bytes());
     let crc = crc32(&header);
     header.extend_from_slice(&crc.to_le_bytes());
-    debug_assert_eq!(header.len(), V5_HEADER_SIZE);
+    debug_assert_eq!(header.len(), HEADER_SIZE);
     header
 }
 
@@ -745,13 +745,13 @@ fn file_len(path: &str) -> Result<u64, String> {
         .map_err(|e| format!("stat {path}: {e}"))
 }
 
-/// Encode a `.neurofeed` container (NFED6; fn name `container_encode_v5` kept):
+/// Encode a `.neurofeed` container (NFED6):
 /// header + thumbnail + metadata(zstd) + computed(zstd)
 /// + raw body copy. The raw section is a byte-for-byte copy of [raw_body]
 /// (already inner-framed). Small fixtures only; keepable captures use
-/// [container_encode_v5_to_path].
+/// [container_encode_to_path].
 #[frb(sync)]
-pub fn container_encode_v5(
+pub fn container_encode(
     thumbnail: &[u8],
     metadata_json: &[u8],
     computed_frames: &[ComputedFrame],
@@ -765,7 +765,7 @@ pub fn container_encode_v5(
     }
     let computed_compressed = zstd::encode_all(Cursor::new(computed_json), 3).unwrap_or_default();
 
-    let thumbnail_offset = V5_HEADER_SIZE as u64;
+    let thumbnail_offset = HEADER_SIZE as u64;
     let thumbnail_length = thumbnail.len() as u64;
     let metadata_offset = thumbnail_offset + thumbnail_length;
     let metadata_length = metadata_compressed.len() as u64;
@@ -773,7 +773,7 @@ pub fn container_encode_v5(
     let computed_length = computed_compressed.len() as u64;
     let raw_offset = computed_offset + computed_length;
 
-    let header = v5_header_bytes(
+    let header = header_bytes(
         thumbnail_offset,
         thumbnail_length,
         metadata_offset,
@@ -801,7 +801,7 @@ pub fn container_encode_v5(
 /// File-to-file assemble. Copies [raw_path] into the raw section (no outer
 /// zstd). Empty [computed_jsonl_path] or [raw_path] yields an empty section.
 /// Returns [dest_path].
-pub fn container_encode_v5_to_path(
+pub fn container_encode_to_path(
     dest_path: String,
     thumbnail: Vec<u8>,
     metadata_json: Vec<u8>,
@@ -814,7 +814,7 @@ pub fn container_encode_v5_to_path(
         let _ = file_len(&raw_path)?;
     }
 
-    let thumbnail_offset = V5_HEADER_SIZE as u64;
+    let thumbnail_offset = HEADER_SIZE as u64;
     let thumbnail_length = thumbnail.len() as u64;
     let metadata_offset = thumbnail_offset + thumbnail_length;
     let metadata_length = metadata_compressed.len() as u64;
@@ -822,7 +822,7 @@ pub fn container_encode_v5_to_path(
     let computed_length = computed_compressed.len() as u64;
     let raw_offset = computed_offset + computed_length;
 
-    let header = v5_header_bytes(
+    let header = header_bytes(
         thumbnail_offset,
         thumbnail_length,
         metadata_offset,
@@ -853,15 +853,15 @@ pub fn container_encode_v5_to_path(
 /// Rewrite metadata (and optional thumbnail), copying computed and raw
 /// sections as opaque bytes. Empty [thumbnail] copies the source thumbnail.
 /// Returns [dest_path].
-pub fn v5_rewrite_head_to_path(
+pub fn rewrite_head_to_path(
     src_path: String,
     dest_path: String,
     metadata_json: Vec<u8>,
     thumbnail: Vec<u8>,
 ) -> Result<String, String> {
     let src_len = file_len(&src_path)?;
-    let header_bytes = read_file_range(&src_path, 0, V5_HEADER_SIZE as u64)?;
-    let header = v5_parse_header(&header_bytes)?;
+    let header_buf = read_file_range(&src_path, 0, HEADER_SIZE as u64)?;
+    let header = parse_header(&header_buf)?;
     if header.raw_offset > src_len {
         return Err("Truncated raw section".to_string());
     }
@@ -874,7 +874,7 @@ pub fn v5_rewrite_head_to_path(
     let computed_len = header.computed_length;
     let raw_len = src_len.saturating_sub(header.raw_offset);
 
-    let thumbnail_offset = V5_HEADER_SIZE as u64;
+    let thumbnail_offset = HEADER_SIZE as u64;
     let thumbnail_length = thumb.len() as u64;
     let metadata_offset = thumbnail_offset + thumbnail_length;
     let metadata_length = metadata_compressed.len() as u64;
@@ -882,7 +882,7 @@ pub fn v5_rewrite_head_to_path(
     let computed_length = computed_len;
     let raw_offset = computed_offset + computed_length;
 
-    let out_header = v5_header_bytes(
+    let out_header = header_bytes(
         thumbnail_offset,
         thumbnail_length,
         metadata_offset,
@@ -911,16 +911,16 @@ pub fn v5_rewrite_head_to_path(
     Ok(dest_path)
 }
 
-/// Parse container head from a file without reading the raw section (FFI name `v5_*` kept; NFED6).
-pub fn v5_parse_head_from_path(path: String) -> Result<V5ParsedHead, String> {
-    let header_bytes = read_file_range(&path, 0, V5_HEADER_SIZE as u64)?;
-    let header = v5_parse_header(&header_bytes)?;
+/// Parse container head from a file without reading the raw section (NFED6).
+pub fn parse_head_from_path(path: String) -> Result<ParsedHead, String> {
+    let header_buf = read_file_range(&path, 0, HEADER_SIZE as u64)?;
+    let header = parse_header(&header_buf)?;
     let thumbnail = read_file_range(&path, header.thumbnail_offset, header.thumbnail_length)?;
     let metadata_compressed =
         read_file_range(&path, header.metadata_offset, header.metadata_length)?;
     let metadata_json = zstd::decode_all(Cursor::new(metadata_compressed))
         .map_err(|e| format!("Metadata zstd decode failed: {e}"))?;
-    Ok(V5ParsedHead {
+    Ok(ParsedHead {
         header,
         thumbnail,
         metadata_json,
@@ -928,9 +928,9 @@ pub fn v5_parse_head_from_path(path: String) -> Result<V5ParsedHead, String> {
 }
 
 /// Extract computed frames from a file without reading the raw section.
-pub fn v5_extract_computed_from_path(path: String) -> Result<Vec<ComputedFrame>, String> {
-    let header_bytes = read_file_range(&path, 0, V5_HEADER_SIZE as u64)?;
-    let header = v5_parse_header(&header_bytes)?;
+pub fn extract_computed_from_path(path: String) -> Result<Vec<ComputedFrame>, String> {
+    let header_buf = read_file_range(&path, 0, HEADER_SIZE as u64)?;
+    let header = parse_header(&header_buf)?;
     let computed_compressed =
         read_file_range(&path, header.computed_offset, header.computed_length)?;
     parse_computed_jsonl(&computed_compressed)
@@ -953,12 +953,12 @@ fn parse_computed_jsonl(computed_compressed: &[u8]) -> Result<Vec<ComputedFrame>
 
 /// Parse container header (first 68 bytes; NFED6 magic/version).
 #[frb(sync)]
-pub fn v5_parse_header(bytes: &[u8]) -> Result<V5Header, String> {
-    if bytes.len() < V5_HEADER_SIZE {
-        return Err("Truncated v5 header".to_string());
+pub fn parse_header(bytes: &[u8]) -> Result<ContainerHeader, String> {
+    if bytes.len() < HEADER_SIZE {
+        return Err("Truncated NFED6 container header".to_string());
     }
     if &bytes[0..6] != &V6_MAGIC {
-        return Err("Not a v5 file (bad magic)".to_string());
+        return Err("Not an NFED6 container (bad magic)".to_string());
     }
     let version = bytes[6];
     if version != V6_VERSION {
@@ -968,10 +968,10 @@ pub fn v5_parse_header(bytes: &[u8]) -> Result<V5Header, String> {
     let expected_crc = u32::from_le_bytes(bytes[64..68].try_into().unwrap());
     let actual_crc = crc32(&bytes[..64]);
     if expected_crc != actual_crc {
-        return Err("v5 header CRC32 mismatch".to_string());
+        return Err("container header CRC32 mismatch".to_string());
     }
 
-    Ok(V5Header {
+    Ok(ContainerHeader {
         thumbnail_offset: u64::from_le_bytes(bytes[8..16].try_into().unwrap()),
         thumbnail_length: u64::from_le_bytes(bytes[16..24].try_into().unwrap()),
         metadata_offset: u64::from_le_bytes(bytes[24..32].try_into().unwrap()),
@@ -984,8 +984,8 @@ pub fn v5_parse_header(bytes: &[u8]) -> Result<V5Header, String> {
 
 /// Parse container head (header + thumbnail + metadata; NFED6).
 #[frb(sync)]
-pub fn v5_parse_head(bytes: &[u8]) -> Result<V5ParsedHead, String> {
-    let header = v5_parse_header(bytes)?;
+pub fn parse_head(bytes: &[u8]) -> Result<ParsedHead, String> {
+    let header = parse_header(bytes)?;
     let total_len = bytes.len() as u64;
 
     // Extract thumbnail.
@@ -1004,7 +1004,7 @@ pub fn v5_parse_head(bytes: &[u8]) -> Result<V5ParsedHead, String> {
     let metadata_json = zstd::decode_all(std::io::Cursor::new(metadata_compressed))
         .map_err(|e| format!("Metadata zstd decode failed: {e}"))?;
 
-    Ok(V5ParsedHead {
+    Ok(ParsedHead {
         header,
         thumbnail,
         metadata_json,
@@ -1013,8 +1013,8 @@ pub fn v5_parse_head(bytes: &[u8]) -> Result<V5ParsedHead, String> {
 
 /// Extract computed section (decompressed JSON lines).
 #[frb(sync)]
-pub fn v5_extract_computed(bytes: &[u8]) -> Result<Vec<ComputedFrame>, String> {
-    let header = v5_parse_header(bytes)?;
+pub fn extract_computed(bytes: &[u8]) -> Result<Vec<ComputedFrame>, String> {
+    let header = parse_header(bytes)?;
     let total_len = bytes.len() as u64;
     let comp_end = header.computed_offset + header.computed_length;
     if comp_end > total_len {
@@ -1026,8 +1026,8 @@ pub fn v5_extract_computed(bytes: &[u8]) -> Result<Vec<ComputedFrame>, String> {
 
 /// Extract the raw section as the framed body (no outer zstd).
 #[frb(sync)]
-pub fn v5_extract_raw(bytes: &[u8]) -> Result<Vec<u8>, String> {
-    let header = v5_parse_header(bytes)?;
+pub fn extract_raw(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    let header = parse_header(bytes)?;
     let total_len = bytes.len() as u64;
     let raw_start = header.raw_offset;
     if raw_start > total_len {
@@ -1588,7 +1588,7 @@ mod tests {
     // ── 6. .neurofeed container format (NFED6) ───────────────────────────────────
 
     #[test]
-    fn v5_container_encode_decode_roundtrip() {
+    fn container_encode_decode_roundtrip() {
         let thumbnail = min_png();
         let metadata = br#"{"protocol":"drowsiness","duration":3600}"#;
         let computed = vec![
@@ -1651,16 +1651,16 @@ mod tests {
         ];
         let raw = b"raw body data";
 
-        let file = container_encode_v5(&thumbnail, metadata, &computed, raw);
+        let file = container_encode(&thumbnail, metadata, &computed, raw);
         assert!(!file.is_empty());
 
         // Parse header.
-        let head = v5_parse_head(&file).unwrap();
+        let head = parse_head(&file).unwrap();
         assert_eq!(head.thumbnail, thumbnail);
         assert_eq!(head.metadata_json, metadata);
 
         // Extract computed.
-        let frames = v5_extract_computed(&file).unwrap();
+        let frames = extract_computed(&file).unwrap();
         assert_eq!(frames.len(), 2);
         assert_eq!(frames[0].t, 0.0);
         assert_eq!(frames[1].t, 1.0);
@@ -1670,39 +1670,39 @@ mod tests {
         assert!(frames[1].guardrail.warning == true);
 
         // Extract raw.
-        let raw_out = v5_extract_raw(&file).unwrap();
+        let raw_out = extract_raw(&file).unwrap();
         assert_eq!(raw_out, raw);
     }
 
     #[test]
-    fn v5_header_crc32_validation() {
+    fn header_crc32_validation() {
         let thumbnail = min_png();
         let metadata = b"{}";
         let computed = vec![];
         let raw = b"x";
 
-        let mut file = container_encode_v5(&thumbnail, metadata, &computed, raw);
+        let mut file = container_encode(&thumbnail, metadata, &computed, raw);
 
         // Corrupt the CRC32 (last 4 bytes of header, at 64..68).
         file[64] ^= 0xFF;
 
         // Should fail to parse.
-        assert!(v5_parse_header(&file).is_err());
+        assert!(parse_header(&file).is_err());
     }
 
     #[test]
-    fn v5_header_magic_validation() {
+    fn header_magic_validation() {
         let thumbnail = min_png();
         let metadata = b"{}";
         let computed = vec![];
         let raw = b"x";
 
-        let mut file = container_encode_v5(&thumbnail, metadata, &computed, raw);
+        let mut file = container_encode(&thumbnail, metadata, &computed, raw);
 
         // Corrupt magic.
         file[0] = 0xFF;
 
-        assert!(v5_parse_header(&file).is_err());
+        assert!(parse_header(&file).is_err());
     }
 
     #[test]
@@ -1712,16 +1712,16 @@ mod tests {
         let computed = vec![];
         let raw = b"x";
 
-        let mut file = container_encode_v5(&thumbnail, metadata, &computed, raw);
+        let mut file = container_encode(&thumbnail, metadata, &computed, raw);
 
         // Corrupt version.
         file[6] = 99;
 
-        assert!(v5_parse_header(&file).is_err());
+        assert!(parse_header(&file).is_err());
     }
 
     #[test]
-    fn v5_computed_frame_json_roundtrip() {
+    fn computed_frame_json_roundtrip() {
         let frame = ComputedFrame {
             t: 123.0,
             bands: vec![vec![1.0, 2.0, 3.0, 4.0, 5.0]; 4],
@@ -1761,7 +1761,7 @@ mod tests {
     }
 
     #[test]
-    fn v5_computed_frame_parses_dart_camel_case_jsonl() {
+    fn computed_frame_parses_dart_camel_case_jsonl() {
         // Live recordings write Dart ComputedFrame.toJson() (camelCase).
         // Before rename_all=camelCase, serde silently dropped every line.
         let line = br#"{"t":1.0,"bands":[[100.0,80.0,220.0,50.0,30.0],[101.0,81.0,221.0,51.0,31.0],[102.0,82.0,222.0,52.0,32.0],[103.0,83.0,223.0,53.0,33.0]],"pulse":71.0,"movement":0.05,"peakAlpha":{"freq":10.0,"power":100.0},"spo2":98.0,"lineNoise":[0.05,0.04,0.06,0.05],"signalQuality":[80,85,90,75],"guardrail":{"sleepDir":0.3,"clarity":0.8,"warning":false,"delta":100.0},"feedback":{"ratio":1.5,"threshold":1.2,"inTarget":true,"pct":0.6},"gestures":[]}"#;
@@ -1803,7 +1803,7 @@ mod tests {
     }
 
     #[test]
-    fn v5_computed_frame_json_writes_camel_case_keys() {
+    fn computed_frame_json_writes_camel_case_keys() {
         let frame = ComputedFrame {
             t: 1.0,
             bands: vec![vec![1.0, 2.0, 3.0, 4.0, 5.0]; 4],
@@ -1838,7 +1838,7 @@ mod tests {
     }
 
     #[test]
-    fn v5_computed_frame_still_reads_legacy_snake_case() {
+    fn computed_frame_still_reads_legacy_snake_case() {
         let line = br#"{"t":2.0,"bands":[[1.0,2.0,3.0,4.0,5.0]],"line_noise":[0.1],"signal_quality":[50],"guardrail":{"sleep_dir":0.1,"clarity":0.2,"warning":true,"delta":0.3},"feedback":{"ratio":1.0,"threshold":0.5,"in_target":false,"pct":0.1},"gestures":[]}"#;
         let frame = ComputedFrame::from_json_bytes(line).expect("snake_case alias must parse");
         assert_eq!(frame.t, 2.0);
@@ -1848,25 +1848,25 @@ mod tests {
     }
 
     #[test]
-    fn v5_raw_section_is_copy_not_outer_zstd() {
+    fn raw_section_is_copy_not_outer_zstd() {
         let thumbnail = min_png();
         let metadata = b"{}";
         let computed = vec![];
         let mut raw = session_header_bytes();
         raw.extend_from_slice(b"inner-framed");
 
-        let file = container_encode_v5(&thumbnail, metadata, &computed, &raw);
-        let header = v5_parse_header(&file).unwrap();
+        let file = container_encode(&thumbnail, metadata, &computed, &raw);
+        let header = parse_header(&file).unwrap();
         let section = &file[header.raw_offset as usize..];
         assert_eq!(section, raw.as_slice());
         assert_ne!(&section[..4], &[0x28, 0xB5, 0x2F, 0xFD]);
-        assert_eq!(v5_extract_raw(&file).unwrap(), raw);
+        assert_eq!(extract_raw(&file).unwrap(), raw);
     }
 
     #[test]
-    fn v5_encode_to_path_copies_raw() {
+    fn encode_to_path_copies_raw() {
         let dir = std::env::temp_dir().join(format!(
-            "nf_v5_path_{}_{}",
+            "nf_container_path_{}_{}",
             std::process::id(),
             now_secs() as u64
         ));
@@ -1879,7 +1879,7 @@ mod tests {
         std::fs::write(&raw_path, &raw).unwrap();
         std::fs::write(&computed_path, b"{\"t\":0}\n").unwrap();
 
-        let dest = container_encode_v5_to_path(
+        let dest = container_encode_to_path(
             dest_path.to_string_lossy().into_owned(),
             min_png(),
             b"{\"k\":1}".to_vec(),
@@ -1888,12 +1888,12 @@ mod tests {
         )
         .unwrap();
         let file = std::fs::read(&dest).unwrap();
-        assert_eq!(v5_extract_raw(&file).unwrap(), raw);
-        let head = v5_parse_head(&file).unwrap();
+        assert_eq!(extract_raw(&file).unwrap(), raw);
+        let head = parse_head(&file).unwrap();
         assert_eq!(head.metadata_json, b"{\"k\":1}");
 
         let patched = dir.join("patched.neurofeed");
-        v5_rewrite_head_to_path(
+        rewrite_head_to_path(
             dest.clone(),
             patched.to_string_lossy().into_owned(),
             b"{\"notes\":\"hi\"}".to_vec(),
@@ -1901,8 +1901,8 @@ mod tests {
         )
         .unwrap();
         let patched_bytes = std::fs::read(&patched).unwrap();
-        assert_eq!(v5_extract_raw(&patched_bytes).unwrap(), raw);
-        let patched_head = v5_parse_head_from_path(patched.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(extract_raw(&patched_bytes).unwrap(), raw);
+        let patched_head = parse_head_from_path(patched.to_string_lossy().into_owned()).unwrap();
         assert_eq!(patched_head.metadata_json, b"{\"notes\":\"hi\"}");
         assert_eq!(patched_head.thumbnail, min_png());
 
@@ -1910,9 +1910,9 @@ mod tests {
     }
 
     #[test]
-    fn v5_encode_to_path_does_not_hold_whole_raw_vec() {
+    fn encode_to_path_does_not_hold_whole_raw_vec() {
         let dir = std::env::temp_dir().join(format!(
-            "nf_v5_big_{}_{}",
+            "nf_container_big_{}_{}",
             std::process::id(),
             now_secs() as u64
         ));
@@ -1930,7 +1930,7 @@ mod tests {
             f.seek(SeekFrom::End(-16)).unwrap();
             f.write_all(b"NFEDBIN-TAILMARK").unwrap();
         }
-        let dest = container_encode_v5_to_path(
+        let dest = container_encode_to_path(
             dest_path.to_string_lossy().into_owned(),
             Vec::new(),
             b"{}".to_vec(),
@@ -1945,8 +1945,8 @@ mod tests {
         f.seek(SeekFrom::End(-16)).unwrap();
         f.read_exact(&mut tail).unwrap();
         assert_eq!(&tail, b"NFEDBIN-TAILMARK");
-        let header_bytes = read_file_range(&dest, 0, V5_HEADER_SIZE as u64).unwrap();
-        let header = v5_parse_header(&header_bytes).unwrap();
+        let header_buf = read_file_range(&dest, 0, HEADER_SIZE as u64).unwrap();
+        let header = parse_header(&header_buf).unwrap();
         let mut raw_magic = [0u8; 8];
         f.seek(SeekFrom::Start(header.raw_offset)).unwrap();
         f.read_exact(&mut raw_magic).unwrap();

@@ -76,7 +76,7 @@ Assemble **copies** `.raw` byte-for-byte. Flags byte stays `0`. Header size unch
 3. **Live inner zstd frames; no outer zstd on raw.** Metadata + computed still zstd at assemble. No dual-read. Do not restore the second wrap in code or docs.
 4. **Assemble writes a path.** FFI does not return the container `Vec<u8>` for keepable captures. In-memory helpers are for **small** fixtures only.
 5. **Computed + sidecar go through the same writer.** Two Dart facades (`FeedbackRecorder` / `MonitorRecorder`) are fine; two disk owners are not.
-6. **Save / notes / thumbnail patch never decode raw.** Copy thumbnail, computed, and raw **sections as opaque bytes**. Only metadata JSON is decompressed. Charts stay on computed 1 Hz. CSV/EDF may stream-parse raw on a worker, never `v5ExtractRaw` of 12 h on the UI isolate.
+6. **Save / notes / thumbnail patch never decode raw.** Copy thumbnail, computed, and raw **sections as opaque bytes**. Only metadata JSON is decompressed. Charts stay on computed 1 Hz. CSV/EDF may stream-parse raw on a worker, never `extractRaw` of 12 h on the UI isolate.
 7. **`MuseEventDto` remains the Dart view pipe** (D3). Capture must not depend on it.
 8. **Dart rings stay bounded.** `SweepBuffer` 5 min, `BandCache` 1800 s. No “keep every event in Dart for 12 h.” Inspect beyond RAM uses live `.raw` + flush index.
 9. **Drop policy.** Disk full or write error: **stop capture, keep temps, surface an error** — do not clear the BLE sink. View-pipe overflow may drop **view** samples only. Soak fails on capture drops > 0.
@@ -99,8 +99,8 @@ FRB re-exports in `rust/src/api/capture.rs`. Prefer path-returning Dart `Future`
 | `capture_stop()` | flush; temps stay |
 | `capture_append_computed_line(line)` | Dart posts one JSONL line |
 | `capture_write_sidecar(json)` | JSONL append (session) or atomic snapshot (monitor) |
-| `capture_assemble_v5(metadata_json, thumbnail)` | file-to-file; returns path; deletes temps on success |
-| `capture_assemble_v5_at(...)` | leftover temps, no live session |
+| `capture_assemble(metadata_json, thumbnail)` | file-to-file; returns path; deletes temps on success |
+| `capture_assemble_at(...)` | leftover temps, no live session |
 | `capture_discard()` | delete temps |
 | `capture_flush_index()` | Inspect: `(elapsed_s, exclusive_end_offset)` |
 
@@ -127,7 +127,7 @@ Channel: already-encoded record bytes, **not** DTOs. Cap **`MAX_PENDING_BYTES=4M
 
 Extra RSS for assemble / Save / notes / thumbnail patch **does not grow with session length.** Budget: a few streaming buffers, cap **64 MB** extra vs idle on a 12 h file.
 
-**Forbidden on the live / keepable path:** Dart `encodeSessionEvent` / `sessionFrameBytes`; Dart `readAsBytes` of a keepable `.raw`; `containerEncodeV5` / `v5ExtractRaw` of a whole keepable capture on the UI isolate.
+**Forbidden on the live / keepable path:** Dart `encodeSessionEvent` / `sessionFrameBytes`; Dart `readAsBytes` of a keepable `.raw`; `containerEncode` / `extractRaw` of a whole keepable capture on the UI isolate.
 
 **Allowed one-way posts:** computed JSONL line; sidecar JSON; start/stop/assemble commands.
 
@@ -178,8 +178,8 @@ lib/src/spine/{capture_client,capture_foreground,scratch_writer,assemble}.dart
 ## 10 leftovers (not a reopen)
 
 - Literal 12 h phone night (FGS itself landed).
-- Leftover import re-exports under `session_v5/` / `feedback/` / `charts/`.
-- History recording Inspect still `v5ExtractRaw`s a published file.
+- Leftover import re-exports under `session_format/` / `feedback/` / `charts/`.
+- History recording Inspect still `extractRaw`s a published file.
 - Optional view-API series (D3 declined).
 
 ---
@@ -187,6 +187,6 @@ lib/src/spine/{capture_client,capture_foreground,scratch_writer,assemble}.dart
 ## Agent rules
 
 - Read **this** file before data-plane / recording / scratch / assemble / overnight work.
-- Do not restore Dart live encode, outer zstd on the container raw section, or whole-raw `readAsBytes` / `v5ExtractRaw` on keepable captures.
+- Do not restore Dart live encode, outer zstd on the container raw section, or whole-raw `readAsBytes` / `extractRaw` on keepable captures.
 - Do not add `rust/src/spine/normalize/`.
 - Do not claim 12 h from a 30 s Record, or Android overnight from Linux soak.

@@ -43,22 +43,22 @@ Future<void> captureFlush() =>
 
 /// Stream-assemble into `{dir}/{prefix}_{id}.neurofeed`. Deletes temps on success.
 /// Returns the destination path. Never returns file bytes.
-Future<String> captureAssembleV5({
+Future<String> captureAssemble({
   required List<int> metadataJson,
   required List<int> thumbnail,
-}) => RustLib.instance.api.crateApiCaptureCaptureAssembleV5(
+}) => RustLib.instance.api.crateApiCaptureCaptureAssemble(
   metadataJson: metadataJson,
   thumbnail: thumbnail,
 );
 
 /// Assemble leftover temps with no live session (crash recovery).
-Future<String> captureAssembleV5At({
+Future<String> captureAssembleAt({
   required String dir,
   required String prefix,
   required String id,
   required List<int> metadataJson,
   required List<int> thumbnail,
-}) => RustLib.instance.api.crateApiCaptureCaptureAssembleV5At(
+}) => RustLib.instance.api.crateApiCaptureCaptureAssembleAt(
   dir: dir,
   prefix: prefix,
   id: id,

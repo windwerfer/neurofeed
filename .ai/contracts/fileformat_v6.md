@@ -58,8 +58,8 @@ Honest 1–10 match of v6 names/shapes to EDF+, BIDS-EEG, and common annotation 
 |---|---|
 | Recording metadata | `lib/src/monitor/recording/recording_metadata.dart` |
 | Feedback metadata | `lib/src/feedback/session_metadata.dart` |
-| Device / streams models | `lib/src/session_v5/models.dart` (`DeviceInfoV5`, `StreamsConfig`) |
-| Computed frame | `lib/src/session_v5/computed_frame.dart` |
+| Device / streams models | `lib/src/session_format/models.dart` (`DeviceInfo`, `StreamsConfig`) |
+| Computed frame | `lib/src/session_format/computed_frame.dart` |
 | Monitor 1 Hz writer | `lib/src/monitor/recording/monitor_sampler.dart` (N-ch; zeroed guard/feedback) |
 | Feedback 1 Hz writer | `lib/src/feedback/computed_sampler.dart` (4-ch; live guard/feedback) |
 | Scalar extract at publish | `lib/src/spine/assemble.dart` → `extractComputedScalars` |
@@ -1095,7 +1095,7 @@ Gap check of **v6 BASE** (+ locked annotations / subject / stats / streams / dev
 | Source | Fields → v6 |
 |---|---|
 | `RecordingMetadata` | `formatVersion`, `appVersion`, `kind`, `savedAt`, `startedAt`, `elapsedSeconds`, `durationS`, `notes`, nested `device.*`, ten-key `streams` |
-| `DeviceInfoV5` | `name`, `id`, `firmware`, `model`, `sensors`, `channelCount`, `channelLabels` |
+| `DeviceInfo` | `name`, `id`, `firmware`, `model`, `sensors`, `channelCount`, `channelLabels` |
 | `StreamsConfig` | `eeg`…`gestures` as `{enabled,rateHz}` (gestures stub) |
 | Feedback flat device / channels | `deviceName`/`deviceModel`/`deviceId` → `device`; `recordedChannels` → `device.channelLabels`; `recordedData` → `streams` |
 | `extractComputedScalars` / sqlite physio | `avgHr`→`stats.hr.mean`; `avgSpo2`→`stats.spo2.mean`; `peakAlphaHz/Power`→`stats.peakAlpha` (max-power pair; `meanHz` is new); `avgMovement`→`stats.movement.mean` |

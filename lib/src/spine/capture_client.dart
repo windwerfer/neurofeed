@@ -46,7 +46,7 @@ Future<File> assembleCaptureV5({
   required Map<String, Object?> metadataJson,
   List<int> thumbnail = const [],
 }) async {
-  final path = await captureAssembleV5(
+  final path = await captureAssemble(
     metadataJson: metadataJsonBytes(metadataJson),
     thumbnail: thumbnail,
   );
@@ -60,7 +60,7 @@ Future<File> assembleCaptureV5At({
   required Map<String, Object?> metadataJson,
   List<int> thumbnail = const [],
 }) async {
-  final path = await captureAssembleV5At(
+  final path = await captureAssembleAt(
     dir: dir.path,
     prefix: prefix,
     id: id,

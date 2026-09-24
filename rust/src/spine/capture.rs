@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use crate::api::muse::MuseEventDto;
 use crate::api::session_format::{
-    container_encode_v5_to_path, encode_session_event, session_frame_bytes, session_header_bytes,
+    container_encode_to_path, encode_session_event, session_frame_bytes, session_header_bytes,
 };
 
 const MAX_PENDING_BYTES: usize = 4 * 1024 * 1024;
@@ -543,7 +543,7 @@ fn delete_temps(dir: &Path, prefix: &str, id: &str) {
     }
 }
 
-pub fn capture_assemble_v5(metadata_json: Vec<u8>, thumbnail: Vec<u8>) -> anyhow::Result<String> {
+pub fn capture_assemble(metadata_json: Vec<u8>, thumbnail: Vec<u8>) -> anyhow::Result<String> {
     let (dir, prefix, id) = {
         let mut g = lock_session();
         let sess = g
@@ -575,7 +575,7 @@ pub fn capture_assemble_v5(metadata_json: Vec<u8>, thumbnail: Vec<u8>) -> anyhow
         String::new()
     };
     let t0 = Instant::now();
-    let dest_s = container_encode_v5_to_path(
+    let dest_s = container_encode_to_path(
         dest.to_string_lossy().into_owned(),
         thumb,
         metadata_json,
@@ -615,7 +615,7 @@ pub fn capture_discard() -> anyhow::Result<()> {
 }
 
 /// Assemble leftover temps with no live session (crash recovery).
-pub fn capture_assemble_v5_at(
+pub fn capture_assemble_at(
     dir: String,
     prefix: String,
     id: String,
@@ -629,7 +629,7 @@ pub fn capture_assemble_v5_at(
         if let Some(sess) = g.as_ref() {
             if sess.dir == Path::new(&dir) && sess.prefix == prefix && sess.id == id {
                 drop(g);
-                return capture_assemble_v5(metadata_json, thumbnail);
+                return capture_assemble(metadata_json, thumbnail);
             }
         }
     }
@@ -652,7 +652,7 @@ pub fn capture_assemble_v5_at(
     } else {
         String::new()
     };
-    let dest_s = container_encode_v5_to_path(
+    let dest_s = container_encode_to_path(
         dest.to_string_lossy().into_owned(),
         thumb,
         metadata_json,
@@ -1004,7 +1004,7 @@ mod tests {
         assert_eq!(capture_drop_count(), 0);
         assert_eq!(capture_write_errors(), 0);
 
-        let dest = capture_assemble_v5(
+        let dest = capture_assemble(
             br#"{"formatVersion":5,"kind":"recording"}"#.to_vec(),
             Vec::new(),
         )
@@ -1127,7 +1127,7 @@ mod tests {
         let id2 = unique_id("left2");
         fs::write(raw_path(&dir2, "recording", &id2), session_header_bytes()).unwrap();
         fs::write(computed_path(&dir2, "recording", &id2), b"{\"t\":1}\n").unwrap();
-        let dest = capture_assemble_v5_at(
+        let dest = capture_assemble_at(
             dir2.to_string_lossy().into_owned(),
             "recording".into(),
             id2.clone(),

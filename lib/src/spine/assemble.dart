@@ -4,10 +4,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
-import 'package:neurofeed/src/session_v5/computed_frame.dart' as dart;
-import 'package:neurofeed/src/session_v5/placeholder_webp.dart';
+import 'package:neurofeed/src/session_format/computed_frame.dart' as dart;
+import 'package:neurofeed/src/session_format/placeholder_webp.dart';
 
-export 'package:neurofeed/src/session_v5/placeholder_webp.dart';
+export 'package:neurofeed/src/session_format/placeholder_webp.dart';
 
 ffi.ComputedFrame toFfiFrame(dart.ComputedFrame frame) {
   return ffi.ComputedFrame(
@@ -76,7 +76,7 @@ Uint8List encodeThumbnailWebP(Uint8List pngBytes) {
   }
 }
 
-/// In-memory wrapper around `containerEncodeV5` for **small** fixtures.
+/// In-memory wrapper around `containerEncode` for **small** fixtures.
 /// Empty thumbnails become the placeholder WebP so the decoder never sees
 /// `Uint8List(0)`. Keepable captures use [writeScratchV5] (file-to-file).
 Uint8List assembleV5Container({
@@ -86,7 +86,7 @@ Uint8List assembleV5Container({
   required List<int> rawBody,
 }) {
   final thumb = thumbnail.isEmpty ? placeholderWebP : thumbnail;
-  return ffi.containerEncodeV5(
+  return ffi.containerEncode(
     thumbnail: Uint8List.fromList(thumb),
     metadataJson: utf8.encode(jsonEncode(metadataJson)),
     computedFrames: computedFrames,
@@ -127,7 +127,7 @@ Future<File> writeScratchV5({
     computed = stagedComputed.path;
   }
   try {
-    await ffi.containerEncodeV5ToPath(
+    await ffi.containerEncodeToPath(
       destPath: file.path,
       thumbnail: Uint8List.fromList(placeholderWebP),
       metadataJson: utf8.encode(jsonEncode(metadataJson)),

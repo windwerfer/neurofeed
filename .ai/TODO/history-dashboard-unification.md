@@ -63,7 +63,7 @@ GraphShell(followEnabled: false, showRecord: false)
   pane (SweepPane / TimeSeriesPane / HistogramPane / PsdPane / SpectrogramPane)
 ```
 
-Default chip: **Raw EEG** (unchanged). Follow is visible but disabled. Inspect uses in-memory `v5ExtractRaw` → `sessionParseBody`. Histogram/PSD have **no** Bands context strip (unlike live). No notes, no Save/Discard (already published). **This series adds an HR+SpO2 chip** on the recording row (same dual-axis computed pane as sessions; empty copy if no pulse/spo2). Not a GraphShell optical live view.
+Default chip: **Raw EEG** (unchanged). Follow is visible but disabled. Inspect uses in-memory `extractRaw` → `sessionParseBody`. Histogram/PSD have **no** Bands context strip (unlike live). No notes, no Save/Discard (already published). **This series adds an HR+SpO2 chip** on the recording row (same dual-axis computed pane as sessions; empty copy if no pulse/spo2). Not a GraphShell optical live view.
 
 ### Session summary (the visual language we are leaving)
 
@@ -83,7 +83,7 @@ That is why the current graph feels like a monitor dump, not a training debrief.
 
 ### What is stored today vs what we will store
 
-Computed capture is a **1 Hz full JSONL snapshot**, Dart-originated (`ComputedSampler` → `capture_append_computed_line`). History **reads** it through Rust `v5_extract_computed` → serde `FeedbackInfo` / `GuardrailInfo`. Extra JSON keys Dart writes are **dropped on extract** unless they exist on `rust/src/api/session_format.rs`. Dart’s parallel writer is `lib/src/session_v5/computed_frame.dart`, mapped in `lib/src/spine/assemble.dart` `toFfiFrame`. Changing those structs **is** a computed-JSONL schema change and **does** need FRB codegen both sides + `cargo test --lib session_format`. It is **not** a v5 68-byte header / tags 1–10 change.
+Computed capture is a **1 Hz full JSONL snapshot**, Dart-originated (`ComputedSampler` → `capture_append_computed_line`). History **reads** it through Rust `extract_computed` → serde `FeedbackInfo` / `GuardrailInfo`. Extra JSON keys Dart writes are **dropped on extract** unless they exist on `rust/src/api/session_format.rs`. Dart’s parallel writer is `lib/src/session_format/computed_frame.dart`, mapped in `lib/src/spine/assemble.dart` `toFfiFrame`. Changing those structs **is** a computed-JSONL schema change and **does** need FRB codegen both sides + `cargo test --lib session_format`. It is **not** a v5 68-byte header / tags 1–10 change.
 
 Live Reward Y is `RatioEngine.percentileOf(native)` = rank vs calibration **`_baseline`**, fallback **50** if empty. Spec text “session’s reward pile” does **not** match the code. Recalibration re-anchors `_threshold` from `_recent` but **`percentileOf` still uses `_baseline`**. `feedback.pct` today is `successRate` (75 s in-target fraction), **not** that Y.
 
@@ -106,7 +106,7 @@ You **can** recompute percentile from native + the frozen `_baseline` vector. Yo
 
 #### Add at 1 Hz (exact names)
 
-**JSON wire names (PR 2, critical).** Capture writes **Dart** `ComputedFrame.toJson()` as opaque bytes (`inTarget`, `peakAlpha`, `lineNoise`, `sleepDir`, …). `v5_extract_computed` serde-deserializes **Rust** field names (`in_target`, `peak_alpha`, `sleep_dir`). There is **no** `rename_all` today. New `Option` fields with `#[serde(default)]` become `None` if the key does not match — then every post-schema session looks pre-schema.
+**JSON wire names (PR 2, critical).** Capture writes **Dart** `ComputedFrame.toJson()` as opaque bytes (`inTarget`, `peakAlpha`, `lineNoise`, `sleepDir`, …). `extract_computed` serde-deserializes **Rust** field names (`in_target`, `peak_alpha`, `sleep_dir`). There is **no** `rename_all` today. New `Option` fields with `#[serde(default)]` become `None` if the key does not match — then every post-schema session looks pre-schema.
 
 Lock on `ComputedFrame`, `FeedbackInfo`, `GuardrailInfo`, `PeakAlphaInfo`:
 
@@ -118,7 +118,7 @@ plus snake_case **aliases** on existing fields so in-memory Rust fixtures still 
 
 `t`, `bands`, `pulse`, `movement`, `peakAlpha`, `spo2`, `lineNoise`, `signalQuality`, `gestures`, `guardrail`, `feedback`; inside feedback: `ratio`, `threshold`, `inTarget`, `pct`, `percentile`, `thresholdPercentile`, `heldBack`, `inhibitTags`, `clean`, `dirtyReason`, `betaRel`, `deltaRel`; inside guardrail: `sleepDir`, `clarity`, `warning`, `delta`, `featurePercentile`, `warnOver`, `ceilingOver`, `clean`, `dirtyReason`.
 
-PR 2 test: Dart `toJsonBytes()` line → `v5ExtractComputed` → `feedback.percentile` and `feedback.clean` are `Some`, not `None`. `cargo test --lib session_format` plus that Dart JSONL → extract test next to `session_computed_charts_test.dart`.
+PR 2 test: Dart `toJsonBytes()` line → `extractComputed` → `feedback.percentile` and `feedback.clean` are `Some`, not `None`. `cargo test --lib session_format` plus that Dart JSONL → extract test next to `session_computed_charts_test.dart`.
 
 Rust `FeedbackInfo` (`session_format.rs`; serde `rename_all = "camelCase"` + `#[serde(default)]` on new fields; Dart names match the **wire** keys):
 
@@ -579,7 +579,7 @@ Copy the **semantics** (verdict priority, wash meaning, dirty texture, label voc
 | `_ZoomableChart` in `feedback_dashboard.dart` | **Retire** from the default surface once chips exist | Keep line-chart export for Bands / Movement / Heart rate / SpO₂ |
 | `BandToggles` / `ElectrodeToggles` | Share | Unchanged last-one-stays |
 
-**Lazy load raw.** Today `FeedbackDashboardView._loadSession` only calls `v5ExtractComputedFromPath`. Raw EEG for a 20-minute Muse-4 session is ~20×60×256×4×8 ≈ 10 MB of doubles plus record overhead — fine, but don’t pay it on the Feedback chip. Load `v5ExtractRaw` on first tap of a monitor chip; cache in the State. Recordings already load raw up front (they default to Raw EEG).
+**Lazy load raw.** Today `FeedbackDashboardView._loadSession` only calls `extractComputedFromPath`. Raw EEG for a 20-minute Muse-4 session is ~20×60×256×4×8 ≈ 10 MB of doubles plus record overhead — fine, but don’t pay it on the Feedback chip. Load `extractRaw` on first tap of a monitor chip; cache in the State. Recordings already load raw up front (they default to Raw EEG).
 
 **Memory:** do not hydrate `SweepBuffer` RAM rings for History except as the recording dashboard already does (display window only, `freeze()`). Keep using `fileSamples:` / `channelFromRecords`.
 
@@ -657,9 +657,9 @@ Width/alpha as an alternative is **rejected for v1** (easy to misread as confide
 sequenceDiagram
   participant Hist as History list
   participant Dash as FeedbackDashboardView
-  participant Comp as v5ExtractComputed
+  participant Comp as extractComputed
   participant Out as prepareTrainingOutcome
-  participant Raw as v5ExtractRaw (lazy)
+  participant Raw as extractRaw (lazy)
   participant Shell as HistoryDashboardShell
 
   Hist->>Dash: push sessionId / scratch path
@@ -705,7 +705,7 @@ Add every new `test/history/*` path to `.ai/test-matrix.md` **in the same PR tha
 Pure Dart (no `.so`):
 
 - `prepareTrainingOutcome`: stored bits; last-clean scan (dirty 12 after clean 80 → plot 80); `!hasReward` + `guardrail.clean` → `schemaReady`; all-playing `percentile == null` → not ready; leading playing `None` then clean `Some` → `schemaReady`, no throw, Target time ignores `None`; `inZonePercent` null if denom 0 or `!hasReward`. Pause-interval samples omitted; Target time ignores pause. Bucket helper: `n ≤ widthPx` → identity; `n > widthPx` → one bucket/pixel, mean of `plotPercentile`, stddev, noisy-wins, skip pause/cal/`None`.
-- Schema: `cargo test --lib session_format`; **Dart `toJsonBytes` → `v5ExtractComputed` → `percentile`/`clean` are Some** (camelCase wire).
+- Schema: `cargo test --lib session_format`; **Dart `toJsonBytes` → `extractComputed` → `percentile`/`clean` are Some** (camelCase wire).
 - Emit: dirty JSONL has `clean: false`, `inTarget: false`, `heldBack: false`, `inhibitTags: []`, finite `percentile` (dirty rank, not last-clean).
 - Pause: `pause()` / `resume()` / `end()` stamp `pauseIntervals` in `t` domain; painter draws a dashed gap; bucket helper skips those seconds; Target time ignores them.
 - `HistoryChipBar`: feedback session shows leading Feedback; recording does not; `recordOnly` omits Feedback; recording row includes HR+SpO2 and still defaults to Raw EEG.
@@ -713,7 +713,7 @@ Pure Dart (no `.so`):
 
 FFI (existing neighborhood):
 
-- Optional: fixture with known `feedback.inTarget` sequence → `prepareTrainingOutcome` after `v5ExtractComputed`.
+- Optional: fixture with known `feedback.inTarget` sequence → `prepareTrainingOutcome` after `extractComputed`.
 
 Linux agent HTTP is **not** required (these are pushed routes, not `AppView`s).
 
@@ -887,7 +887,7 @@ Raw EEG already min/max-downsamples; no error bars there in this series.
 - `lib/src/monitor/views/recording_dashboard.dart` — chip shell to extract
 - `lib/src/feedback/session_chart_data.dart` — `prepareChartDataFromComputed`, unused `feedback.*`
 - `lib/src/feedback/computed_sampler.dart` — 1 Hz snapshot
-- `lib/src/session_v5/computed_frame.dart` / `rust/src/api/session_format.rs` — `FeedbackInfo`
+- `lib/src/session_format/computed_frame.dart` / `rust/src/api/session_format.rs` — `FeedbackInfo`
 - `lib/src/feedback/reward_lane.dart` — dirty skips `_emit` **today**; PR 3 makes dirty call `onComputedFeedback`
 - `lib/src/feedback/target_state.dart` — `percentileOf` vs `_baseline` (not `_recent`)
 - `lib/src/feedback/trust/` — live-only ring
@@ -905,7 +905,7 @@ Raw EEG already min/max-downsamples; no error bars there in this series.
 2. **Default chip:** Feedback on sessions when a reward or guard lane ran; Raw EEG on recordings; Bands on `recordOnly` (`!hasReward && guard == null` on parsed `protocolJson`, with catalog fallback).
 3. **Feedback chip is a new session-length overview**, not live `RewardTrustPane`, not GraphShell, not Alpha vs Theta (**locked** replace). **Not** the live 1–4 pane stack. X includes calibration. Stroke = **`plotPercentile`** (read-time last-clean; **mean per pixel** when zoomed out); line = `thresholdPercentile`; Y fixed 0–100; **stddev error bars** at ~8–12 columns when `n > widthPx`. Playing `None` and pause seconds omitted. Pause = dashed unvalued gaps. Ribbon from stored `clean` / `heldBack` / `inTarget`. Inhibit = gray wash + stored tags. History `below` = live `Below the line`. Thumbnail = this pane.
 4. **Keep existing JSONL keys; add live-graph fields; FRB in ship path.** **Wire = camelCase** (`rename_all` + snake aliases). Copy `last*` into the sampler after `pushReward` / `pushGuard`. Dirty skips audio/`recordEpoch` but JSONL gets `clean: false` and the dirty `percentile`. History hold-last-clean is **read-time**. `schemaReady` is reward- vs guard-specific. Persist `baselineSamples` + `inhibitCeilingOverrides` + **`pauseIntervals`**. Pre-schema → empty copy. v5 header/tags 1–10 still out.
-5. **Monitor chips on sessions reuse recording panes** (`SweepPane` etc.) with **lazy** `v5ExtractRaw`, starting in **PR 5** (hidden until then). Empty `recordedData` = assume all streams; hide only when the list is non-empty and lacks the name. Histogram/PSD stay one-pane (no Bands strip). No new Spectrogram chrome. **HR+SpO2** is a **new** dual-axis computed 1 Hz pane on **sessions and recordings** (this series; PR 5 / 5b), not live optical GraphShell. Recordings default chip stays Raw EEG.
+5. **Monitor chips on sessions reuse recording panes** (`SweepPane` etc.) with **lazy** `extractRaw`, starting in **PR 5** (hidden until then). Empty `recordedData` = assume all streams; hide only when the list is non-empty and lacks the name. Histogram/PSD stay one-pane (no Bands strip). No new Spectrogram chrome. **HR+SpO2** is a **new** dual-axis computed 1 Hz pane on **sessions and recordings** (this series; PR 5 / 5b), not live optical GraphShell. Recordings default chip stays Raw EEG.
 6. **Independent viewports.** GraphShell Follow stays disabled on History monitor chips. Feedback chip uses `_ChartViewport`-style full-span zoom. Switching Feedback → Raw EEG jumps to 10 s at t=0 (ui-map). **`GraphShell.cinemaEnabled: false` on History (OQ 7 locked).**
 7. **Save/Discard/notes/`canPop: false` are a merge gate on the painter PR**, not deferred to export polish. **Notes expanded on live, collapsed on History (OQ 9 locked).** **History thumbnail is the overview graph** (owner-locked): PR 4 `_thumbKey` wraps `TrainingOutcomePane` (or offscreen same painter). First Save after PR 4 writes that WebP, not the stats card. Placeholder until Save / when there is no overview.
 8. **Export:** `TrainingExportChart` (not `ExportChartLine`) as page 0; keep Bands / Movement / Heart rate / SpO₂ as separate line pages; **drop Alpha vs Theta** from the default PDF (**locked**). Recordings still non-exportable. Export Training page uses the same reduced mean + optional error bars as the on-screen default (full-span).
@@ -937,7 +937,7 @@ Each PR is independently reviewable and mergeable. **No spine. No v5 header/tags
 
 **Title:** Extend `FeedbackInfo` / `GuardrailInfo` for live-trust fields
 
-**Files:** `rust/src/api/session_format.rs`; `lib/src/session_v5/computed_frame.dart`; `lib/src/spine/assemble.dart` `toFfiFrame`; generated `rust/src/frb_generated.rs` + `lib/src/rust/`; `lib/src/monitor/recording/monitor_sampler.dart` (None/false/[] defaults); `cargo test --lib session_format`; FFI JSONL round-trip in `test/session_computed_charts_test.dart`.
+**Files:** `rust/src/api/session_format.rs`; `lib/src/session_format/computed_frame.dart`; `lib/src/spine/assemble.dart` `toFfiFrame`; generated `rust/src/frb_generated.rs` + `lib/src/rust/`; `lib/src/monitor/recording/monitor_sampler.dart` (None/false/[] defaults); `cargo test --lib session_format`; FFI JSONL round-trip in `test/session_computed_charts_test.dart`.
 
 **Depends on:** nothing.
 
@@ -976,13 +976,13 @@ Each PR is independently reviewable and mergeable. **No spine. No v5 header/tags
 
 ### PR 5 — Session monitor chips (lazy raw) + HR+SpO2 pane
 
-**Title:** Session summary monitor chips via lazy `v5ExtractRaw`; HR+SpO2 dual-axis chip
+**Title:** Session summary monitor chips via lazy `extractRaw`; HR+SpO2 dual-axis chip
 
 **Files:** `lib/src/views/feedback_dashboard.dart`; `RecordingGraphBody` from PR 1; `lib/src/history/hr_spo2_history_pane.dart`; `.ai/ui-map.md`; `.ai/test-matrix.md`.
 
 **Depends on:** PR 1, PR 4.
 
-**Description:** Compose `RecordingGraphBody` under session chips. Lazy `v5ExtractRaw`. Empty `recordedData` = assume all streams. **HR+SpO2** dual-axis computed 1 Hz pane (not live `HrSpo2View`). `recordOnly` gets Bands default.
+**Description:** Compose `RecordingGraphBody` under session chips. Lazy `extractRaw`. Empty `recordedData` = assume all streams. **HR+SpO2** dual-axis computed 1 Hz pane (not live `HrSpo2View`). `recordOnly` gets Bands default.
 
 ### PR 5b — HR+SpO2 chip on recordings
 

@@ -9,7 +9,7 @@ import 'package:neurofeed/src/feedback/session_store_core.dart';
 export 'session_store_core.dart'
     show SessionStore, countHistoryContainers, isHistoryContainerName;
 export 'session_metadata.dart';
-export 'session_v5_models.dart';
+export 'package:neurofeed/src/session_format/models.dart';
 
 /// Storage-backed store that derives its [SessionStorage] from the active
 /// [Settings]. Reading [sessionStorageProvider] here keeps history and the

@@ -10,7 +10,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/settings.dart';
-import 'package:neurofeed/src/session_v5/metadata_v6.dart';
+import 'package:neurofeed/src/session_format/metadata.dart';
 import 'package:neurofeed/src/charts/band_style.dart' show bandColors, bandNames;
 import 'package:neurofeed/src/charts/smooth_path.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
@@ -121,8 +121,8 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       }
       path = scratch;
     }
-    final frames = await v5ExtractComputedFromPath(path: path);
-    final head = await v5ParseHeadFromPath(path: path);
+    final frames = await extractComputedFromPath(path: path);
+    final head = await parseHeadFromPath(path: path);
     final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ??
         widget.metadata ??
         SessionMetadata(
@@ -357,7 +357,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
             stats: stats,
           );
       final patched = '${Directory.systemTemp.path}/nf_save_$id.neurofeed';
-      await v5RewriteHeadToPath(
+      await rewriteHeadToPath(
         srcPath: path,
         destPath: patched,
                 metadataJson: utf8.encode(
@@ -374,7 +374,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       await store.publishSession(
         id,
         metadata,
-        encodedV5Path: patched,
+        encodedPath: patched,
         subject: ref.read(settingsProvider).subjectInfo,
       );
       try {

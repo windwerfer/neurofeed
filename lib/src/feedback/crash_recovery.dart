@@ -33,7 +33,7 @@ class RecoverableSession {
 
   /// Publish the scratch `.neurofeed` into history, then delete it.
   Future<void> save(SessionStore store) async {
-    final head = await ffi.v5ParseHeadFromPath(path: scratchV5.path);
+    final head = await ffi.parseHeadFromPath(path: scratchV5.path);
     final meta =
         SessionMetadata.fromJsonBytes(head.metadataJson) ??
         SessionMetadata(
@@ -47,7 +47,7 @@ class RecoverableSession {
     timeZone: captureIanaTimeZone(),
           sessionId: id,
         );
-    await store.publishSession(id, meta, encodedV5Path: scratchV5.path);
+    await store.publishSession(id, meta, encodedPath: scratchV5.path);
     await discard();
   }
 
@@ -150,7 +150,7 @@ Future<RecoverableSession?> _fromV5(File file, String id) async {
   var calibrationKind = '';
   SessionMetadata? meta;
   try {
-    final head = await ffi.v5ParseHeadFromPath(path: file.path);
+    final head = await ffi.parseHeadFromPath(path: file.path);
     meta = SessionMetadata.fromJsonBytes(head.metadataJson);
     if (meta != null) {
       protocol = meta.protocol;

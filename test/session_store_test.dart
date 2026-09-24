@@ -10,7 +10,7 @@ import 'package:neurofeed/src/monitor/recording/recording_store.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/settings.dart';
 
 void main() {
@@ -169,7 +169,7 @@ RecordingMetadata _recordingMeta() => RecordingMetadata(
   startedAt: DateTime.utc(2026, 9, 12, 11, 50),
   elapsedSeconds: 12,
   durationS: 12,
-  device: const DeviceInfoV5(
+  device: const DeviceInfo(
     name: 'Muse 2 (Simulated)',
     id: 'sim:muse-2',
     firmware: 'Classic',

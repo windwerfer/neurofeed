@@ -6,12 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/feedback/session_scalars.dart';
 import 'package:neurofeed/src/feedback/session_sqlite.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
-import 'package:neurofeed/src/session_v5/stats_assemble.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
 import 'package:neurofeed/src/spine/assemble.dart';
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/version.dart';
 
 final recordingStoreProvider = FutureProvider<RecordingStore>((ref) async {
@@ -50,7 +50,7 @@ class RecordingStore {
     SessionRowScalars rowScalars = const SessionRowScalars();
     ComputedScalars legacy = const ComputedScalars();
     try {
-      final head = await ffi.v5ParseHeadFromPath(path: scratchV5.path);
+      final head = await ffi.parseHeadFromPath(path: scratchV5.path);
       thumb = head.thumbnail;
       final decoded = jsonDecode(utf8.decode(head.metadataJson));
       final decodedMap = decoded as Map<String, dynamic>;
@@ -59,7 +59,7 @@ class RecordingStore {
         <String, Object?>{for (final e in decodedMap.entries) e.key: e.value},
       );
       try {
-        final frames = await ffi.v5ExtractComputedFromPath(path: scratchV5.path);
+        final frames = await ffi.extractComputedFromPath(path: scratchV5.path);
         legacy = extractComputedScalars(frames);
         if (rowScalars.avgHr == null &&
             rowScalars.peakAlphaHz == null &&

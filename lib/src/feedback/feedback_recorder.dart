@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:neurofeed/src/session_v5/computed_frame.dart';
+import 'package:neurofeed/src/session_format/computed_frame.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
@@ -13,7 +13,7 @@ import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 /// Wraps [SessionRecorder] with session-aware lifecycle.
 ///
 /// Live writes always go to the fast scratch directory — SAF is only touched
-/// on Save. At session end, [assembleScratchV5] writes a real `.neurofeed` (NFED6; helper name kept)
+/// on Save. At session end, [assembleScratch] writes a real `.neurofeed` (NFED6)
 /// next to the temps, then deletes the temps on success.
 class FeedbackRecorder {
   FeedbackRecorder({Future<SessionStorage>? storage})
@@ -97,14 +97,14 @@ class FeedbackRecorder {
   /// Flush temps, encode a `.neurofeed` (NFED6) into scratch, delete temps on success.
   /// Returns the scratch path, or null if there was nothing to assemble or
   /// encoding failed (temps are kept so crash recovery can retry).
-  Future<String?> assembleScratchV5(Map<String, Object?> metadataJson) async {
+  Future<String?> assembleScratch(Map<String, Object?> metadataJson) async {
     await _recorder.flush();
     _recorder.stopPeriodicFlush();
     final id = _recorder.sessionId;
     final dir = _recorder.tempDir;
     final rawPath = _recorder.rawPath;
     if (id == null || dir == null || rawPath == null) {
-      debugPrint('[feedback] assembleScratchV5: no active recording');
+      debugPrint('[feedback] assembleScratch: no active recording');
       return null;
     }
     try {
@@ -124,11 +124,11 @@ class FeedbackRecorder {
       }
       _scratchV5Path = file.path;
       debugPrint(
-        '[feedback] assembleScratchV5: ${file.path} (${file.lengthSync()}B)',
+        '[feedback] assembleScratch: ${file.path} (${file.lengthSync()}B)',
       );
       return file.path;
     } catch (e, st) {
-      debugPrint('[feedback] assembleScratchV5 failed: $e\n$st');
+      debugPrint('[feedback] assembleScratch failed: $e\n$st');
       return null;
     }
   }
