@@ -54,6 +54,22 @@ void main() {
     });
   });
 
+  testWidgets('tablet landscape keeps chrome', (tester) async {
+    await _withPlatform(TargetPlatform.android, () async {
+      // shortestSide 768 >= 600 → Material medium+, not phone-like
+      _size(tester, const Size(1024, 768));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) =>
+                Text(GraphCinema.of(context) ? 'cinema' : 'chrome'),
+          ),
+        ),
+      );
+      expect(find.text('chrome'), findsOneWidget);
+    });
+  });
+
   testWidgets('desktop landscape keeps chrome', (tester) async {
     await _withPlatform(TargetPlatform.linux, () async {
       _size(tester, const Size(1600, 900));
