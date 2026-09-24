@@ -15,7 +15,7 @@ Agents: adhere to **Design rules** below. Inventory is from code (cited), not gu
 
 ## Design rules (must adhere)
 
-1. **One base schema for both kinds.** Identity + `device` + `streams` + `stats` (+ quality/gaps) always present. Optional top-level `feedback` object **only** when `kind == "feedback"`; omit (or null) for recordings.
+1. **One base schema for both kinds.** Identity + `device` + `streams` + `stats` (+ quality/`annotations`) always present. Optional top-level `feedback` object **only** when `kind == "feedback"`; omit (or null) for recordings.
 2. **Two layers of stats.** (a) **Computed 1 Hz** — charts / AI time series (`ComputedFrame`). (b) **Session summary** — scalars/short structs on metadata, computed at assemble/save (later: a small set as sqlite columns).
 3. **Do not duplicate time series into metadata.** Metadata = scalars + short structs + compact interval lists. Computed = second-by-second.
 4. **Band aggregates are named metrics** (e.g. mean α, α/θ, frontal–temporal α asymmetry, cross-channel α variance). Never vague "spread".
@@ -65,7 +65,7 @@ Always nested:
 - `device`: `name`, `id`, `firmware`, `model`, `sensors`, `channelCount`, `channelLabels`
 - `streams`: complete ten keys (`eeg`…`gestures`); disabled = `{enabled:false, rateHz:0}` (never omitted)
 
-**Not in recording metadata today:** any `stats`, quality/gaps, battery, gestures list, protocol/calibration/music.
+**Not in recording metadata today:** any `stats`, quality/`annotations`, battery, gestures list, protocol/calibration/music.
 
 #### Feedback metadata JSON (`SessionMetadata`) — flat dialect
 
@@ -110,7 +110,7 @@ Compute from computed JSONL (and raw telemetry if needed) at assemble/save. Pref
 | Session duration | Already have `durationS` / `elapsedSeconds` | — |
 | Named band stats | mean α (abs), mean α/θ, frontal–temporal α asymmetry, cross-ch α variance — over **usable** seconds only | **yes** (tune formulas) |
 | `% overshoot` / held | Needs a defined yMax policy; overshoot today is **paint-time** on Monitor Bands | **yes** |
-| Compact `gaps` intervals | Single `{from,to,event}` list for pause / unusable / disconnect (see Gaps model) | no; list is canonical, `stats.gapSeconds` optional |
+| Compact `annotations` intervals | Single `{onset,duration,type}` list for pause / bad_quality / disconnect (see Annotations model) | no; list is canonical, `stats.annotationSeconds` optional |
 | Feedback-only: `% in target`, guard warn count, mean sleepDir | Already extracted for sqlite; put in `feedback` / shared `stats` cleanly | no |
 
 Do **not** dump full 1 Hz series into metadata.
@@ -138,8 +138,8 @@ Shared root for `kind: "recording"` and (with `feedback` attached) for feedback.
 identity: formatVersion, appVersion, kind, savedAt, startedAt, elapsedSeconds, durationS, notes
 device:   { name, id, firmware, model, sensors, channelCount, channelLabels }
 streams:  { ten keys… }   // gestures enablement stub; see Gestures
-stats:    { … aggregates; gapSeconds?: { pause, unusable, disconnect }; experimental?: { … } }
-gaps:     [ { from, to, event }, … ]   // canonical timeline; see Gaps model
+stats:    { … aggregates; annotationSeconds?: { pause, bad_quality, disconnect }; experimental?: { … } }
+annotations: [ { onset, duration, type }, … ]   // canonical timeline; see Annotations model
 feedback: { … }   // ONLY when kind == "feedback"
 ```
 
@@ -186,7 +186,7 @@ feedback: { … }   // ONLY when kind == "feedback"
       "pctGood": 92.0,
       "channelUsable": { "TP9": 0.94, "AF7": 0.88, "AF8": 0.91, "TP10": 0.95 }
     },
-    "gapSeconds": { "pause": 10.0, "unusable": 15.0, "disconnect": 8.0 },
+    "annotationSeconds": { "pause": 10.0, "bad_quality": 15.0, "disconnect": 8.0 },
     "battery": { "startPct": 81.0, "endPct": 76.0 },
     "experimental": {
       "bands": {
@@ -197,10 +197,10 @@ feedback: { … }   // ONLY when kind == "feedback"
       }
     }
   },
-  "gaps": [
-    { "from": 120.0, "to": 135.0, "event": "unusable" },
-    { "from": 200.0, "to": 210.0, "event": "pause" },
-    { "from": 400.0, "to": 408.0, "event": "disconnect" }
+  "annotations": [
+    { "onset": 120.0, "duration": 15.0, "type": "bad_quality" },
+    { "onset": 200.0, "duration": 10.0, "type": "pause" },
+    { "onset": 400.0, "duration": 8.0, "type": "disconnect" }
   ]
 }
 ```
@@ -208,52 +208,92 @@ feedback: { … }   // ONLY when kind == "feedback"
 Notes:
 
 - Omit top-level `feedback` on recordings.
-- Root `gaps` is the **canonical** timeline. Optional `stats.gapSeconds` is derived from that list (sum of `to - from` per `event`); never a second source of truth.
-- `gaps` must stay compact (merge adjacent same-`event` runs). Not a 1 Hz dump.
-- `streams.gestures.enabled` remains false until a real stream exists; gesture **markers** (feedback) live under `feedback.gestures` or base `events` if shared later.
+- Root `annotations` is the **canonical** timeline. Optional `stats.annotationSeconds` is derived from that list (sum of `duration` per `type`); never a second source of truth.
+- `annotations` must stay compact (merge adjacent same-`type` runs). Not a 1 Hz dump.
+- `streams.gestures.enabled` remains false until a real stream exists; gesture **markers** (feedback) live under `feedback.gestures` (may later fold into the same `annotations` list with other `type` values).
 
 ---
 
-## Gaps model (locked)
+## Annotations model (locked)
 
-**Decision:** one extensible root array `gaps[]` of interval objects. **Not** three parallel top-level bags `paused{}` / `unusable{}` / `disconnected{}` (anti-pattern — rejected as the primary model).
+**Decision:** one extensible root array `annotations[]` of interval objects. **Not** three parallel top-level bags `paused{}` / `unusable{}` / `disconnected{}` (anti-pattern — rejected as the primary model). **Not** `gaps` as the root key (jargon; does not map to EDF+/BIDS).
 
 ### Canonical shape
 
 ```json
-"gaps": [
-  { "from": 120.0, "to": 135.0, "event": "unusable" },
-  { "from": 200.0, "to": 210.0, "event": "pause" },
-  { "from": 400.0, "to": 408.0, "event": "disconnect" }
+"annotations": [
+  { "onset": 120.0, "duration": 15.0, "type": "bad_quality" },
+  { "onset": 200.0, "duration": 10.0, "type": "pause" },
+  { "onset": 400.0, "duration": 8.0, "type": "disconnect" }
 ]
 ```
 
-Field names: camelCase to match the rest of the format (`from`, `to`, `event`).
+Field names: camelCase JSON style of neurofeed. Interval keys intentionally match EDF+/BIDS nominators (`onset`, `duration`) so they are single-token camelCase already.
+
+### Locked names
+
+| Role | Locked name | Rejected / why |
+|---|---|---|
+| Root array | `annotations` | `gaps` (app jargon); `events` (BIDS file name — keep for export, not JSON root; overlaps task/gesture language); `segments` / `bad_segments` (BrainVision-ish but implies only rejectable spans; pause is intentional) |
+| Interval start | `onset` | `from` / `start` — not EDF+/BIDS |
+| Interval length | `duration` | `to` / `end` — EDF+ TAL and BIDS `events.tsv` both use duration, not exclusive end |
+| Discriminator | `type` | `event` (vague; clashes with “events file”); `label` (EDF free text is the *value*); `trial_type` (BIDS task-condition column — wrong semantic for quality/pause) |
+| User pause | `pause` | Keep; no universal EDF string. EEGLAB `boundary` / BrainVision `New Segment` mean *discontinuity after cut or resume* — different product meaning |
+| Low pad quality | `bad_quality` | `unusable` (neurofeed-only); `artifact` (usually blink/muscle); bare `BAD` (MNE convention is a *prefix*). Value **starts with `bad`** so MNE `reject_by_annotation` works if exported as description |
+| BLE / link loss | `disconnect` | `disconnected` (adjective; Muse sample string “Disconnected”); `signal_lost` (clearer clinically but farther from product `FeedbackInterruptKind.disconnect`) |
 
 ### Rules
 
-1. **Single array** of `{ from, to, event }`. Extend later by adding new `event` strings — no new root keys.
-2. **`event` enum (initial):** `pause` | `unusable` | `disconnect`.
-   - Do **not** invent `overshoot` gaps in metadata until overshoot is product-defined as a persisted interval. Overshoot today is paint-only / experimental on Monitor Bands; sticky bad pads are already covered by quality-driven `unusable`.
-3. **Times** are seconds from capture start (same clock as computed `t`).
-4. **Merge** adjacent same-`event` runs; keep the list compact. Not a 1 Hz dump.
-5. **Reject** parallel top-level `paused` / `unusable` / `disconnected` objects as the primary model. Readers and writers use `gaps` only.
-6. **Product → event mapping:**
-   - Feedback `badSignal` interrupt → `event: "unusable"`
-   - User pause → `event: "pause"`
-   - BLE loss / disconnect → `event: "disconnect"`
+1. **Single array** of `{ onset, duration, type }`. Extend later by adding new `type` strings — no new root keys.
+2. **`type` enum (initial):** `pause` | `bad_quality` | `disconnect`.
+   - Do **not** invent `overshoot` annotations in metadata until overshoot is product-defined as a persisted interval. Overshoot today is paint-only / experimental on Monitor Bands; sticky bad pads are already covered by quality-driven `bad_quality`.
+3. **Times:** `onset` and `duration` are seconds from capture start (same clock as computed `t`). Matches EDF+ TAL onset (seconds from file startdate/time) and BIDS `events.tsv` onset/duration.
+4. **Merge** adjacent same-`type` runs; keep the list compact. Not a 1 Hz dump.
+5. **Reject** parallel top-level `paused` / `unusable` / `disconnected` objects as the primary model. Readers and writers use `annotations` only.
+6. **Product → type mapping:**
+   - Feedback `badSignal` interrupt → `type: "bad_quality"`
+   - User pause → `type: "pause"`
+   - BLE loss / disconnect → `type: "disconnect"`
 
 ### Optional summary nesting
 
-Canonical source: `gaps`. Optional derived counts live under **`stats.gapSeconds`** (seconds-by-event), e.g. `{ "pause": 10.0, "unusable": 15.0, "disconnect": 8.0 }`. Do not use a separate root `gapsSummary` object; keep aggregates under `stats`.
+Canonical source: `annotations`. Optional derived counts live under **`stats.annotationSeconds`** (seconds-by-type), e.g. `{ "pause": 10.0, "bad_quality": 15.0, "disconnect": 8.0 }`. Do not use a separate root summary object; keep aggregates under `stats`.
+
+### EDF+ / BIDS / MNE export mapping
+
+When exporting (see `.ai/export.md` EDF+ path), map as follows:
+
+| neurofeed JSON | EDF+ TAL | BIDS `*_events.tsv` | MNE `Annotations` |
+|---|---|---|---|
+| `onset` | TAL Onset (`+{onset}` seconds from file start) | `onset` | `onset` |
+| `duration` | TAL Duration (unsigned seconds; byte `0x15` prefix) | `duration` | `duration` |
+| `type` | annotation text (UTF-8 between `0x14` separators) | `trial_type` (or a sidecared custom column if preferred) | `description` |
+| `pause` | text `pause` | `trial_type=pause` | `description="pause"` |
+| `bad_quality` | text `bad_quality` | `trial_type=bad_quality` | `description="bad_quality"` (rejected when `reject_by_annotation=True`) |
+| `disconnect` | text `disconnect` | `trial_type=disconnect` | `description="disconnect"`; treat like acquisition skip / discontinuity |
+
+EDF+ timekeeping TALs (empty text, per-data-record start) are **container** mechanics — not rows in `annotations[]`.
+
+### Naming rationale (do not rename casually)
+
+Cited conventions that locked the names above:
+
+1. **EDF+ TALs** ([edfplus.info/specs/edfplus.html](https://www.edfplus.info/specs/edfplus.html)): annotations use **Onset** + optional **Duration** in seconds from recording startdate/time; free-text annotation strings (e.g. `Lights off`, `Apnea`). Root concept = *annotations*, not “gaps”.
+2. **BIDS events** ([bids-specification — Events](https://bids-specification.readthedocs.io/en/stable/modality-agnostic-files/events.html)): required columns **`onset`**, **`duration`** (seconds from first stored sample); optional **`trial_type`** for categorization. EEG recordings with acquisition pauses use `RecordingType: discontinuous` and still document intervals in `events.tsv`.
+3. **MNE-Python**: `mne.Annotations(onset, duration, description)`; spans meant for rejection should have descriptions starting with **`bad`** / `BAD` (e.g. `bad_quality`) so `reject_by_annotation` works.
+4. **BrainVision Analyzer**: **Bad Interval** markers (duration > 0) for rejectable spans; **New Segment** for pause/resume discontinuities — informed `bad_quality` vs keeping product `pause` / `disconnect` rather than overloading `boundary`.
+5. **EEGLAB**: discontinuity / cut markers as event **`type: "boundary"`** — reserved for *removed or non-contiguous data*, not user pause while the file keeps a continuous timeline; do not rename our `pause` to `boundary`.
+6. **Muse / LibMuse**: `MuseFileWriter.addAnnotationString` (arbitrary strings; sample “Disconnected”) — free text, so stable short tokens (`pause`, `bad_quality`, `disconnect`) export cleanly.
+
+Future agents: change these names only with a format PR and an updated mapping table. Prefer adding a new `type` string over renaming existing ones.
 
 ### Layers (unchanged intent)
 
-1. **Metadata** — `gaps` (+ optional `stats.gapSeconds`) for AI / History.
+1. **Metadata** — `annotations` (+ optional `stats.annotationSeconds`) for AI / History.
 2. **Computed** — keep per-second `signalQuality` (+ sticky semantics in live BandCache). Do not copy every second into metadata.
 3. **Raw** — continues to store samples while the device streams, including low-quality epochs. Disconnect simply yields silence (no packets). Optional later: raw index hints via the same interval list (byte offsets are a separate PR; metadata times are enough for v6 draft).
 
-**Confirm from code:** raw does **not** drop unusable-quality samples; BandCache sticky is live-only. Computed is where holds/gaps matter most for charts; metadata gets the compact timeline for agents.
+**Confirm from code:** raw does **not** drop unusable-quality samples; BandCache sticky is live-only. Computed is where holds / quality gaps matter most for charts; metadata gets the compact `annotations` timeline for agents.
 
 ---
 
@@ -316,6 +356,6 @@ Not coded in this draft; checklist for the implementation PR:
 ## Leftovers / open (not blocking this draft)
 
 - Exact named-band formulas (experimental until product locks them).
-- Whether `% overshoot` / overshoot intervals are worth persisting later (paint-time today; **not** a `gaps.event` until defined — see Gaps model).
+- Whether `% overshoot` / overshoot intervals are worth persisting later (paint-time today; **not** an `annotations.type` until defined — see Annotations model).
 - Per-record length prefix / Athena tag 11 (separate format PRs).
-- Whether feedback pause should stop the computed sampler (today it does not until `end()`). Pause **does** get a `gaps` entry with `event: "pause"` when support lands.
+- Whether feedback pause should stop the computed sampler (today it does not until `end()`). Pause **does** get an `annotations` entry with `type: "pause"` when support lands.
