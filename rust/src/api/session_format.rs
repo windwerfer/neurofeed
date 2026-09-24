@@ -560,6 +560,17 @@ pub struct GuardrailInfo {
     pub clarity: f32,
     pub warning: bool,
     pub delta: f32,
+    /// Guard feature percentile this second (feedback sessions).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feature_percentile: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warn_over: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ceiling_over: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clean: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dirty_reason: Option<String>,
 }
 
 /// Feedback (ATR) info.
@@ -572,6 +583,58 @@ pub struct FeedbackInfo {
     #[serde(alias = "in_target")]
     pub in_target: bool,
     pub pct: f32,
+    /// percentileOf(native) this second including dirty rank.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub percentile: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub threshold_percentile: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub held_back: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inhibit_tags: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clean: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dirty_reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub beta_rel: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delta_rel: Option<f32>,
+}
+
+impl Default for GuardrailInfo {
+    fn default() -> Self {
+        Self {
+            sleep_dir: 0.0,
+            clarity: 0.0,
+            warning: false,
+            delta: 0.0,
+            feature_percentile: None,
+            warn_over: None,
+            ceiling_over: None,
+            clean: None,
+            dirty_reason: None,
+        }
+    }
+}
+
+impl Default for FeedbackInfo {
+    fn default() -> Self {
+        Self {
+            ratio: 0.0,
+            threshold: 0.0,
+            in_target: false,
+            pct: 0.0,
+            percentile: None,
+            threshold_percentile: None,
+            held_back: None,
+            inhibit_tags: None,
+            clean: None,
+            dirty_reason: None,
+            beta_rel: None,
+            delta_rel: None,
+        }
+    }
 }
 
 impl ComputedFrame {
@@ -1545,12 +1608,14 @@ mod tests {
                     clarity: 0.9,
                     warning: false,
                     delta: 0.0,
+                                    ..Default::default()
                 },
                 feedback: FeedbackInfo {
                     ratio: 1.5,
                     threshold: 1.0,
                     in_target: true,
                     pct: 0.6,
+                                    ..Default::default()
                 },
                 gestures: vec!["blink".to_string()],
             },
@@ -1571,12 +1636,14 @@ mod tests {
                     clarity: 0.8,
                     warning: true,
                     delta: 0.1,
+                                    ..Default::default()
                 },
                 feedback: FeedbackInfo {
                     ratio: 1.4,
                     threshold: 1.1,
                     in_target: false,
                     pct: 0.4,
+                                    ..Default::default()
                 },
                 gestures: vec![],
             },
@@ -1671,13 +1738,15 @@ mod tests {
                 clarity: 0.8,
                 warning: false,
                 delta: 0.05,
-            },
+                                ..Default::default()
+                },
             feedback: FeedbackInfo {
                 ratio: 1.8,
                 threshold: 1.3,
                 in_target: true,
                 pct: 0.65,
-            },
+                                ..Default::default()
+                },
             gestures: vec!["blink".to_string(), "clench".to_string()],
         };
 
@@ -1711,6 +1780,27 @@ mod tests {
         assert_eq!(frames[0].t, 1.0);
     }
 
+
+    #[test]
+    fn v6_computed_trust_extras_parse_from_dart_jsonl() {
+        // Feedback Trust extras (camelCase) must deserialize; recordings omit them.
+        let with_trust = br#"{"t":2.0,"bands":[[1.0,1.0,1.0,1.0,1.0],[1.0,1.0,1.0,1.0,1.0],[1.0,1.0,1.0,1.0,1.0],[1.0,1.0,1.0,1.0,1.0]],"pulse":null,"movement":null,"peakAlpha":null,"spo2":null,"lineNoise":[0.0,0.0,0.0,0.0],"signalQuality":[90,90,90,90],"guardrail":{"sleepDir":0.2,"clarity":0.8,"warning":false,"delta":0.1,"featurePercentile":55.0,"warnOver":false,"ceilingOver":false,"clean":false,"dirtyReason":"movement"},"feedback":{"ratio":1.5,"threshold":1.2,"inTarget":false,"pct":0.4,"percentile":42.5,"thresholdPercentile":60.0,"heldBack":false,"inhibitTags":[],"clean":false,"dirtyReason":"movement","betaRel":0.2,"deltaRel":0.15},"gestures":[]}"#;
+        let frame = ComputedFrame::from_json_bytes(with_trust).expect("trust extras parse");
+        assert_eq!(frame.feedback.clean, Some(false));
+        assert!((frame.feedback.percentile.unwrap() - 42.5).abs() < 1e-3);
+        assert_eq!(frame.feedback.dirty_reason.as_deref(), Some("movement"));
+        assert_eq!(frame.feedback.in_target, false);
+        assert_eq!(frame.guardrail.clean, Some(false));
+        assert!((frame.guardrail.feature_percentile.unwrap() - 55.0).abs() < 1e-3);
+
+        let recording = br#"{"t":1.0,"bands":[[1.0,2.0,3.0,4.0,5.0],[1.0,2.0,3.0,4.0,5.0],[1.0,2.0,3.0,4.0,5.0],[1.0,2.0,3.0,4.0,5.0]],"pulse":70.0,"movement":0.05,"peakAlpha":null,"spo2":null,"lineNoise":[0.01,0.01,0.01,0.01],"signalQuality":[80,80,80,80],"guardrail":{"sleepDir":0.0,"clarity":0.0,"warning":false,"delta":0.0},"feedback":{"ratio":0.0,"threshold":0.0,"inTarget":false,"pct":0.0},"gestures":[]}"#;
+        let rec = ComputedFrame::from_json_bytes(recording).expect("recording omit extras");
+        assert!(rec.feedback.percentile.is_none());
+        assert!(rec.feedback.clean.is_none());
+        assert!(rec.guardrail.feature_percentile.is_none());
+        assert!(rec.guardrail.clean.is_none());
+    }
+
     #[test]
     fn v5_computed_frame_json_writes_camel_case_keys() {
         let frame = ComputedFrame {
@@ -1727,13 +1817,15 @@ mod tests {
                 clarity: 0.0,
                 warning: false,
                 delta: 0.0,
-            },
+                                ..Default::default()
+                },
             feedback: FeedbackInfo {
                 ratio: 0.0,
                 threshold: 0.0,
                 in_target: false,
                 pct: 0.0,
-            },
+                                ..Default::default()
+                },
             gestures: vec![],
         };
         let json = String::from_utf8(frame.to_json_bytes()).unwrap();

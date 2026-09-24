@@ -195,6 +195,11 @@ void main() {
               required delta,
               required warning,
               threshold,
+              featurePercentile,
+              warnOver,
+              ceilingOver,
+              clean,
+              dirtyReason,
             }) {},
       );
 

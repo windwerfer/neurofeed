@@ -179,12 +179,28 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             required threshold,
             required inTarget,
             required inTargetPct,
+            percentile,
+            thresholdPercentile,
+            heldBack,
+            inhibitTags,
+            clean,
+            dirtyReason,
+            betaRel,
+            deltaRel,
           }) {
             _computedSampler?.updateFeedback(
               ratio: ratio,
               threshold: threshold,
               inTarget: inTarget,
               inTargetPct: inTargetPct,
+              percentile: percentile,
+              thresholdPercentile: thresholdPercentile,
+              heldBack: heldBack,
+              inhibitTags: inhibitTags,
+              clean: clean,
+              dirtyReason: dirtyReason,
+              betaRel: betaRel,
+              deltaRel: deltaRel,
             );
           },
       onThresholdChanged: () {
@@ -1930,6 +1946,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             required delta,
             required warning,
             threshold,
+            featurePercentile,
+            warnOver,
+            ceilingOver,
+            clean,
+            dirtyReason,
           }) {
             _computedSampler?.updateGuardrail(
               sleepDir: sleepDir,
@@ -1937,6 +1958,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
               delta: delta,
               warning: warning,
               threshold: threshold,
+              featurePercentile: featurePercentile,
+              warnOver: warnOver,
+              ceilingOver: ceilingOver,
+              clean: clean,
+              dirtyReason: dirtyReason,
             );
           },
     );
@@ -1978,18 +2004,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       }
       if (state.phase == FeedbackPhase.playing) {
         final native = _guard.bandMath ? _guard.lastDelta : _guard.lastSleepDir;
-        _trust.pushGuard(
-          TrustGuardSample(
-            t: _trustElapsed(),
-            featurePercentile: _guard.percentileOf(native) ?? 50,
-            warningActive: _guard.warningActive,
-            warnOver: _guard.warnOver,
-            ceilingOver: _guard.ceilingOver,
-            lastDelta: _guard.lastDelta,
-            clean:
-                _sampleIsClean &&
-                _reward.padsUsable(_ref.read(appStateProvider).signalQuality),
-            dirtyReason: _reward.lastDirty
+        final guardClean =
+            _sampleIsClean &&
+            _reward.padsUsable(_ref.read(appStateProvider).signalQuality);
+        final guardDirtyReason = guardClean
+            ? null
+            : (_reward.lastDirty
                 ? _reward.lastDirtyReason
                 : artifactDirtyReason(
                     now: DateTime.now(),
@@ -1997,8 +2017,31 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
                     lastJawAt: _lastClenchDirtyAt,
                     lastBlinkAt: _lastBlinkDirtyAt,
                     buffer: movementBuffer,
-                  ),
+                  ));
+        final featurePct = _guard.percentileOf(native) ?? 50.0;
+        _trust.pushGuard(
+          TrustGuardSample(
+            t: _trustElapsed(),
+            featurePercentile: featurePct,
+            warningActive: _guard.warningActive,
+            warnOver: _guard.warnOver,
+            ceilingOver: _guard.ceilingOver,
+            lastDelta: _guard.lastDelta,
+            clean: guardClean,
+            dirtyReason: guardDirtyReason,
           ),
+        );
+        _computedSampler?.updateGuardrail(
+          sleepDir: _guard.lastSleepDir,
+          clarity: _guard.lastClarity,
+          delta: _guard.lastDelta,
+          warning: _guard.warningActive,
+          threshold: _guard.threshold,
+          featurePercentile: featurePct,
+          warnOver: _guard.warnOver,
+          ceilingOver: _guard.ceilingOver,
+          clean: guardClean,
+          dirtyReason: guardDirtyReason?.name,
         );
       }
     }

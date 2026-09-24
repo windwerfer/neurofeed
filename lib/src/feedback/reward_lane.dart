@@ -47,6 +47,14 @@ class RewardLane {
     required double? threshold,
     required bool inTarget,
     required double inTargetPct,
+    double? percentile,
+    double? thresholdPercentile,
+    bool? heldBack,
+    List<String>? inhibitTags,
+    bool? clean,
+    String? dirtyReason,
+    double? betaRel,
+    double? deltaRel,
   })
   onComputedFeedback;
   final void Function() onThresholdChanged;
@@ -132,6 +140,21 @@ class RewardLane {
       lastInhibitTags = const [];
       engine.recordSessionSample(sample.value, clean: false);
       onStats(sample.value);
+      // Trust fileformat: still update computed sampler (no audio / no recordEpoch).
+      onComputedFeedback(
+        ratio: sample.value,
+        threshold: engine.threshold,
+        inTarget: false,
+        inTargetPct: engine.successRate ?? 0.0,
+        percentile: lastPercentile,
+        thresholdPercentile: lastThresholdPercentile,
+        heldBack: false,
+        inhibitTags: const [],
+        clean: false,
+        dirtyReason: lastDirtyReason?.name,
+        betaRel: lastRelative?.betaRel,
+        deltaRel: lastRelative?.deltaRel,
+      );
       return;
     }
     final bands = rel;
@@ -177,6 +200,14 @@ class RewardLane {
       threshold: engine.threshold,
       inTarget: inTarget,
       inTargetPct: engine.successRate ?? 0.0,
+      percentile: pct,
+      thresholdPercentile: lastThresholdPercentile,
+      heldBack: lastHeldBack,
+      inhibitTags: List<String>.of(lastInhibitTags),
+      clean: true,
+      dirtyReason: null,
+      betaRel: lastRelative?.betaRel,
+      deltaRel: lastRelative?.deltaRel,
     );
   }
 
