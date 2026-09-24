@@ -120,7 +120,7 @@ Compute from computed JSONL (and raw telemetry if needed) at assemble/save. Pref
 | HR mean / min / max | From computed `pulse` | no |
 | SpO₂ mean / min / max | From computed `spo2` | no |
 | Peak-alpha summary | mean freq; max-power freq/power (today extract keeps max-power pair only) | no |
-| Movement mean (+ optional stillness %) | From computed `movement` | no |
+| Movement mean (+ optional `stillnessPct`) | From computed `movement`; **`stillnessPct` locked** under `stats.movement` | no |
 | `% usable` / `% good quality` | Seconds where mean (or gate) `signalQuality ≥ 80` | no |
 | Channel usable fractions | Per-label fraction of seconds pad ≥ 80 | no |
 | Battery start / end | First/last telemetry samples in raw (tag 2) when stream enabled | no |
@@ -206,7 +206,7 @@ Uses **Locked vocabulary** keys (no synonyms).
     "hr": { "mean": 68.2, "min": 54.0, "max": 91.0 },
     "spo2": { "mean": 98.1, "min": 96.0, "max": 99.0 },
     "peakAlpha": { "meanHz": 10.1, "maxPowerHz": 10.4, "maxPower": 5.2 },
-    "movement": { "mean": 0.018 },
+    "movement": { "mean": 0.018, "stillnessPct": 71.0 },
     "quality": {
       "mean": 86.4,
       "pctGood": 92.0,
@@ -494,7 +494,7 @@ Discipline: rename only when EDF / BIDS / common EEG has a **clearly better** te
 | `stats.hr` `{mean,min,max}` | Heart-rate summary from computed `pulse` |
 | `stats.spo2` `{mean,min,max}` | SpO₂ summary from computed `spo2` |
 | `stats.peakAlpha` `{meanHz,maxPowerHz,maxPower}` | Peak-alpha summary |
-| `stats.movement` `{mean}` (+ optional stillness later) | Movement summary |
+| `stats.movement` `{mean,stillnessPct?}` | Movement summary; optional `stillnessPct` (% seconds below stillness gate — shared physiology, not training-only) |
 | `stats.quality` `{mean,pctGood,channelUsable}` | Pad / usable-signal summary |
 | `stats.annotationSeconds` `{pause,bad_quality,disconnect}` | Derived seconds-by-type from interval annotations only |
 | `stats.battery` `{startPct,endPct}` | Telemetry bookends when available |
@@ -546,15 +546,16 @@ Same base. When `kind == "feedback"`, attach:
   "protocol": "drowsiness",
   "protocolVersion": "1",
   "protocolJson": { },
+  "durationMinutes": 15,
   "sound": "Ambient Drone",
   "feedbackSound": "bowlChimes",
+  "metadataDescription": "…",
   "calibration": { },
   "sessionSettings": { },
   "drowsiness": { },
   "music": { },
   "training": {
     "pctInTarget": 62.0,
-    "stillnessPct": 71.0,
     "avgAlphaRel": 0.42,
     "guardrailWarnCount": 3,
     "avgSleepDir": 0.34
@@ -564,7 +565,7 @@ Same base. When `kind == "feedback"`, attach:
 
 Migrate flat `SessionMetadata` fields into nested `device` / `streams` / `stats` / `feedback` — do not keep a second root schema. Full feedback redesign is out of scope for this file; enough that agents do not invent a parallel tree.
 
-Shared physiological aggregates stay in base `stats` (HR, SpO₂, movement, quality, battery, experimental bands). Training-only scalars stay under `feedback.training` (or equivalent).
+Shared physiological aggregates stay in base `stats` (HR, SpO₂, movement incl. optional `stillnessPct`, quality, battery, experimental bands). Training-only scalars stay under `feedback.training` (or equivalent). **Fit / contact** is not a separate object — use `stats.quality.channelUsable` (+ `mean` / `pctGood`). Prefer not duplicating `stillnessPct` under `feedback.training` once base writers land.
 
 **Gestures:** do **not** put `feedback.gestures[]` here. Double blink / jaw clench / eye markers are rows in root `annotations[]` with `duration: 0` (see Annotations model). v5 `gestures: [{ "type": "doubleBlink", "at": 45 }]` migrates to `{ "onset": 45.0, "duration": 0, "type": "double_blink" }` on the base object.
 
@@ -605,3 +606,77 @@ Not coded in this draft; checklist for the implementation PR:
 - Whether feedback pause should stop the computed sampler (today it does not until `end()`). Pause **does** get an `annotations` entry with `type: "pause"` when support lands.
 - `subject.id` generation scheme (UUID vs `anon_`+hex) and BIDS `sub-` normalization — decide in the writer/export PR.
 - Whether nickname export-as-EDF-name ever becomes a product toggle (default remains EDF name = `X`).
+
+---
+
+## Coverage / leftover checklist (gap check vs code)
+
+Gap check of **v6 BASE** (+ locked annotations / subject / stats / streams / device) against current writers, models, sqlite, and docs. Categories: **A** covered · **B** belongs under `feedback` · **C** missing from base (should add) · **D** deferred/optional OK · **E** code has it / spec forgot.
+
+### A) Covered by v6 base (OK)
+
+| Source | Fields → v6 |
+|---|---|
+| `RecordingMetadata` | `formatVersion`, `appVersion`, `kind`, `savedAt`, `startedAt`, `elapsedSeconds`, `durationS`, `notes`, nested `device.*`, ten-key `streams` |
+| `DeviceInfoV5` | `name`, `id`, `firmware`, `model`, `sensors`, `channelCount`, `channelLabels` |
+| `StreamsConfig` | `eeg`…`gestures` as `{enabled,rateHz}` (gestures stub) |
+| Feedback flat device / channels | `deviceName`/`deviceModel`/`deviceId` → `device`; `recordedChannels` → `device.channelLabels`; `recordedData` → `streams` |
+| `extractComputedScalars` / sqlite physio | `avgHr`→`stats.hr.mean`; `avgSpo2`→`stats.spo2.mean`; `peakAlphaHz/Power`→`stats.peakAlpha` (max-power pair; `meanHz` is new); `avgMovement`→`stats.movement.mean` |
+| Model/sqlite quality (rarely filled) | `signalQualityMean`/`pctQcOk` → `stats.quality.{mean,pctGood}` (+ new `channelUsable`) |
+| Feedback `gestures[]` `{type,at}` | → root `annotations[]` `{onset,duration:0,type}` (snake_case types) |
+| Sqlite `user_id` | → `subject.id` (anonymous-first) |
+| Sqlite / feedback `session_id` | → root `sessionId` |
+| New (not in v5 file JSON) | `subject`, `stats.*` (hr/spo2/peakAlpha/movement/quality/battery/annotationSeconds/experimental), `annotations`, recording `sessionId` |
+
+### B) Belongs under `feedback` (not base)
+
+Do **not** treat these as base gaps:
+
+| Field(s) | Notes |
+|---|---|
+| `protocol`, `protocolVersion`, `protocolJson` | Training protocol |
+| `durationMinutes` | Planned session length (distinct from `durationS` / `elapsedSeconds`) |
+| `sound`, `feedbackSound` | Ambient / reward audio |
+| `metadataDescription` | Protocol copy; written by `buildSessionMetadata` today |
+| `calibration` (+ optional `calibrationProfile`) | Nested calibration blob |
+| `drowsiness` | Session drowsiness summary |
+| `music` | Tracks / cutoff series |
+| `sessionSettings` | Incl. `guardFeature` / `guardModel` / `guardrailEngine`, markers flags, music/binaural knobs; optional `modelSnapshot` |
+| `training.pctInTarget` (← `targetPct` / `pctInTarget`) | Feedback-only |
+| `training.avgAlphaRel` | Feedback chart relative-α |
+| `training.guardrailWarnCount`, `training.avgSleepDir` | From `extractComputedScalars` / drowsiness |
+| Top-level `modelKind` / `modelSha256` / `feedbackEngine` / `guardrailEngine` | On `SessionMetadata` + sqlite; migrate into `sessionSettings` / `modelSnapshot` — **not** base |
+| Parallel `feedback.gestures[]` | **Rejected** — use root `annotations` only |
+
+### C) Missing from v6 — should add to base
+
+| Gap | Suggested key | Resolution in this pass |
+|---|---|---|
+| `stillnessPct` written today in `SessionStatsData` but locked vocab said “optional later”; also duplicated under `feedback.training` | `stats.movement.stillnessPct` (optional) | **Locked** above — shared movement-derived scalar; drop training duplicate when writers land |
+| Design rule “fit / contact summary” vs no `stats.fit` | *(none)* — use `stats.quality.channelUsable` | **Clarified** above — no separate fit object |
+| Recording files: v6 example has root `sessionId`; `RecordingMetadata` never writes it (sqlite only gets capture `id`) | root `sessionId` | Vocab already allows it — **writer must emit** (not a new key) |
+
+No other current feedback/recording JSON keys need new base keys.
+
+### D) Missing / deferred OK
+
+- `stats.experimental.bands` formulas; `% overshoot` / overshoot annotations (paint-time today).
+- Voluntary `subject` demographics; `yearOfBirth`; BIDS `handedness`; separate `device.manufacturer`.
+- Per-stream `StreamInfo.electrodes` / `channels` / `sensors` (on Dart model, never written by `streamsConfig`).
+- Session means for `lineNoise` / guardrail `clarity`; telemetry `fuel` / `temp` bookends (battery `%` only).
+- Sqlite-only: section offsets, `file_size` / `mtime`, `thumbnail` BLOB, `notes_preview`, `marker_count` (derive from `annotations`), `state_markers` label/confidence table.
+- Scratch `kind: "tmp"` (connect-time sidecar; never published — v6 `kind` remains `recording` \| `feedback`).
+- Athena tag 11; per-record length prefix; pause stopping computed sampler.
+
+### E) Code has it but specs forgot (callouts)
+
+| Item | Where | Notes |
+|---|---|---|
+| `durationMinutes`, `metadataDescription` | `buildSessionMetadata()` | Were omitted from the brief `feedback` example — **added** above |
+| `stillnessPct` dual home | `SessionStatsData` + draft `feedback.training` | Spec had it under training while candidates put stillness on movement — **resolved** → base `stats.movement` |
+| Fit vs `stats.quality` | Design rules + candidates vs locked `stats` | Candidates listed “fit” as non-experimental; locked table had no `stats.fit` — **resolved** as quality map |
+| Rarely filled `SessionMetadata` fields | Model + sqlite | Inventory already lists `signalQualityMean`, `pctQcOk`, `avgMovement`, `guardrailWarnCount`, `modelKind` / `modelSha256` / `feedbackEngine` / `userId`; also **`calibrationProfile`** and top-level **`guardrailEngine`** are almost never set by `buildSessionMetadata` (engine lives under `sessionSettings`) |
+| `extractComputedScalars` incomplete vs locked `stats` | `assemble.dart` | Today: means + max-power peak-α + training counters only. **Does not** yet compute hr/spo2 min/max, `peakAlpha.meanHz`, `stillnessPct`, `stats.quality.*`, `stats.battery.*`, `annotationSeconds` — writers must when implementing v6 |
+| Recording `sessionId` | `RecordingMetadata` vs `RecordingStore` | Store upserts `sessionId: id`; file JSON lacks the key |
+| Feedback `deviceModel` = firmware string | `buildSessionMetadata` | Flat dialect has no `firmware`; nested `device` will carry both |
+
