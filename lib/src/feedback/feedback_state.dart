@@ -30,6 +30,7 @@ import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/feedback/target_state.dart';
 import 'package:neurofeed/src/feedback/trust/trust_gestures.dart';
 import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/reve/model_engine.dart';
 import 'package:neurofeed/src/reve/models.dart';
@@ -277,6 +278,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   /// In-flight recalibrations that re-anchored the threshold mid-session.
   final List<SessionRecalibration> _recalibrations = [];
+
+  /// Root annotations assembled during the session (pause intervals, etc.).
+  final List<SessionAnnotation> _sessionAnnotations = [];
+  double? _pauseOnsetContent;
+  DateTime? _pauseWallBegan;
 
   /// Music feedback: per-second cutoff trace + track transitions recorded
   /// while playing. Persisted as [SessionMusic] metadata (tracks + 1 Hz series).
@@ -702,6 +708,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _skipCalibrationRequested = false;
     _calibrationRecord = null;
     _recalibrations.clear();
+    _sessionAnnotations.clear();
+    _pauseOnsetContent = null;
+    _pauseWallBegan = null;
     _calibration.reset();
     _collectionEyes = null;
     _drowsinessSeries.clear();
@@ -1281,15 +1290,46 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   Future<void> pause() async {
+    if (state.phase != FeedbackPhase.playing) {
+      return;
+    }
+    _pauseOnsetContent = state.elapsedSeconds.toDouble();
+    _pauseWallBegan = DateTime.now();
     _setPhase(FeedbackPhase.paused);
     _ticker?.cancel();
+    _computedSampler?.pause();
+    _recorder.setRawPaused(true);
     await _audio.pause();
   }
 
   Future<void> resume() async {
+    if (state.phase != FeedbackPhase.paused) {
+      return;
+    }
+    _closeOpenPauseAnnotation();
+    _recorder.setRawPaused(false);
+    _computedSampler?.resume();
     _setPhase(FeedbackPhase.playing);
     await _audio.resume();
     _startTicker();
+  }
+
+  void _closeOpenPauseAnnotation() {
+    final onset = _pauseOnsetContent;
+    final began = _pauseWallBegan;
+    if (onset == null || began == null) {
+      return;
+    }
+    final duration = DateTime.now().difference(began).inMilliseconds / 1000.0;
+    _sessionAnnotations.add(
+      SessionAnnotation(
+        onset: onset,
+        duration: duration < 0 ? 0 : duration,
+        type: 'pause',
+      ),
+    );
+    _pauseOnsetContent = null;
+    _pauseWallBegan = null;
   }
 
   /// End the session: assemble a scratch v5 **before** `phase = ended` (the
@@ -1297,6 +1337,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   Future<void> end() async {
     if (state.phase == FeedbackPhase.ended) {
       return;
+    }
+    if (state.phase == FeedbackPhase.paused) {
+      _closeOpenPauseAnnotation();
+      _recorder.setRawPaused(false);
     }
     _ticker?.cancel();
     _interruptTimer?.cancel();
@@ -1368,6 +1412,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _skipCalibrationRequested = false;
     _calibrationRecord = null;
     _recalibrations.clear();
+    _sessionAnnotations.clear();
+    _pauseOnsetContent = null;
+    _pauseWallBegan = null;
     _collectionEyes = null;
     _gateElectrodes = List.of(defaultGateElectrodes);
     _featureOverride.clear();
@@ -1466,6 +1513,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       timeZone: _sessionTimeZone ?? captureIanaTimeZone(),
       notes: notes,
       sessionId: sessionId,
+      annotations: List.of(_sessionAnnotations),
       stats: stats == null
           ? null
           : SessionStatsData(

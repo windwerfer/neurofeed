@@ -173,6 +173,14 @@ class SessionRecorder {
     _rawEvents++;
   }
 
+  /// Pause/resume the Rust raw fork (no samples written while paused).
+  void setRawPaused(bool paused) {
+    if (!_useRust || _rawFile == null) return;
+    spine.captureWriteSidecar(
+      json: utf8.encode(jsonEncode({'type': '__capture_pause', 'paused': paused})),
+    );
+  }
+
   /// Write a metadata event (calibration step, guardrail event, etc.) as JSON line.
   void writeMetadata(Map<String, dynamic> meta) {
     if (_metadataFile == null) return;
