@@ -101,7 +101,9 @@ class SessionSqlite {
         mtime INTEGER NOT NULL,
         thumbnail BLOB,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
-        updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
+        time_zone TEXT,
+        saved_at_ms INTEGER
       )
     ''');
 
@@ -128,6 +130,7 @@ class SessionSqlite {
     ''');
 
     _ensureKindColumn();
+    _ensureTimeZoneColumns();
 
     _db.execute('''
       CREATE TABLE IF NOT EXISTS state_markers (
@@ -156,6 +159,17 @@ class SessionSqlite {
       "ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'feedback'",
     );
   }
+  void _ensureTimeZoneColumns() {
+    final cols = _db.select('PRAGMA table_info(sessions)');
+    final names = <String>{for (final r in cols) r['name'] as String};
+    if (!names.contains('time_zone')) {
+      _db.execute('ALTER TABLE sessions ADD COLUMN time_zone TEXT');
+    }
+    if (!names.contains('saved_at_ms')) {
+      _db.execute('ALTER TABLE sessions ADD COLUMN saved_at_ms INTEGER');
+    }
+  }
+
 
   /// Insert or replace a session row.
   Future<void> upsertSession(SessionRow row) async {
@@ -170,8 +184,9 @@ class SessionSqlite {
         signal_quality_mean, pct_qc_ok, marker_count,
         guardrail_engine, model_kind, model_sha256, feedback_engine,
         user_id, session_id, notes_preview,
-        file_size, mtime, thumbnail, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        file_size, mtime, thumbnail, created_at, updated_at,
+        time_zone, saved_at_ms
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         path = excluded.path,
         format_version = excluded.format_version,
@@ -215,7 +230,9 @@ class SessionSqlite {
         file_size = excluded.file_size,
         mtime = excluded.mtime,
         thumbnail = excluded.thumbnail,
-        updated_at = excluded.updated_at
+        updated_at = excluded.updated_at,
+        time_zone = excluded.time_zone,
+        saved_at_ms = excluded.saved_at_ms
     ''', row.toList());
   }
 
@@ -228,7 +245,7 @@ class SessionSqlite {
 
   /// List all sessions, newest first.
   Future<List<SessionRow>> listSessions() async {
-    final result = _db.select('SELECT * FROM sessions ORDER BY saved_at DESC');
+    final result = _db.select('SELECT * FROM sessions ORDER BY COALESCE(saved_at_ms, 0) DESC, saved_at DESC');
     return result.map((r) => SessionRow.fromRow(r)).toList();
   }
 
@@ -320,6 +337,10 @@ class SessionRow {
   final Uint8List? thumbnail;
   final DateTime createdAt;
   final DateTime updatedAt;
+  /// IANA id for wall-clock display (v6).
+  final String? timeZone;
+  /// UTC epoch ms for list sorting (v6).
+  final int? savedAtMs;
 
   SessionRow({
     required this.id,
@@ -367,11 +388,13 @@ class SessionRow {
     this.thumbnail,
     required this.createdAt,
     required this.updatedAt,
+    this.timeZone,
+    this.savedAtMs,
   });
 
   List<Object?> toList() => [
     id, path, formatVersion, appVersion,
-    savedAt.toIso8601String(), startedAt.toIso8601String(),
+    savedAt.toUtc().toIso8601String(), startedAt.toUtc().toIso8601String(),
     durationS, protocol, kind, protocolVersion, deviceName, deviceModel, deviceId,
     calibrationProfile, recordedChannels, recordedStreams,
     offMeta, lenMeta, offComputed, lenComputed, offRaw, lenRaw,
@@ -382,6 +405,7 @@ class SessionRow {
     userId, sessionId, notesPreview,
     fileSize, mtime, thumbnail,
     createdAt.millisecondsSinceEpoch, updatedAt.millisecondsSinceEpoch,
+    timeZone, savedAtMs,
   ];
 
   static SessionRow fromRow(Row row) {
@@ -435,6 +459,8 @@ class SessionRow {
       thumbnail: row['thumbnail'] as Uint8List?,
       createdAt: parseDt(row['created_at']),
       updatedAt: parseDt(row['updated_at']),
+      timeZone: row['time_zone'] as String?,
+      savedAtMs: (row['saved_at_ms'] as num?)?.toInt(),
     );
   }
 }

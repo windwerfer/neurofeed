@@ -88,4 +88,22 @@ void main() {
     final back = RecordingMetadata.fromJson(Map<String, dynamic>.from(json));
     expect(back.timeZone, 'Asia/Bangkok');
   });
+
+  group('formatSessionWallClock', () {
+    test('uses offset digits from ISO (not device local)', () {
+      final s = formatSessionWallClock(
+        '2026-09-24T17:20:00.000+07:00',
+        timeZone: 'Asia/Bangkok',
+      );
+      expect(s, '2026-09-24 17:20');
+    });
+
+    test('Etc/GMT-7 converts Zulu to UTC+7 wall clock', () {
+      final s = formatSessionWallClock(
+        '2026-09-24T10:20:00.000Z',
+        timeZone: 'Etc/GMT-7',
+      );
+      expect(s, '2026-09-24 17:20');
+    });
+  });
 }
