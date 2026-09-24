@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Draft** (writers/readers not implemented). **Annotations / base vocab / feedback / experimental bands = LOCKED.** **`subject` = PREPARED.** **Overshoot = chart-only; pause = stop raw+computed + annotate (LOCKED).** **Timezone-aware `startedAt`/`savedAt` + `timeZone` = LOCKED** (see Timing + time zones). |
+| Status | **Draft** (writers/readers not implemented). **Annotations / base vocab / feedback / experimental bands = LOCKED.** **`subject` = PREPARED.** **Overshoot = chart-only; pause = stop raw+computed + annotate (LOCKED).** **Timezone-aware `startedAt`/`savedAt` + `timeZone` = LOCKED** (see Timing + time zones). **Computed Trust extras + sparse `feedback.audioEvents` + `calibration.baselineSamples` / `sessionSettings.inhibitCeilingOverrides` = LOCKED** (see Computed feedback extras). |
 | Scope | Unify recording + feedback **metadata JSON**; prepare a **v6 clean cut** (container magic/version + writers/readers). |
 | Not this | Implement Rust/Dart writers yet; rename Dart/Rust identifiers yet; Athena tag 11; History UI chrome; pipeline Key Decisions. |
 | Supersedes (when landed) | Dual dialects in [session-format-contract.md](session-format-contract.md) § Metadata; [../TODO/session_vs_recording_metadata.md](../TODO/session_vs_recording_metadata.md). |
@@ -103,9 +103,17 @@ Written by `buildSessionMetadata()`:
 
 #### Computed 1 Hz (both kinds) — not metadata
 
-`ComputedFrame`: `t`, `bands` (N×5 abs), `lineNoise`, `signalQuality`, optional `pulse` / `movement` / `peakAlpha` / `spo2`, `guardrail{sleepDir,clarity,warning,delta}`, `feedback{ratio,threshold,inTarget,pct}`, `gestures[]` (string ids that second).
+`ComputedFrame`: `t`, `bands` (N×5 abs), `lineNoise`, `signalQuality`, optional `pulse` / `movement` / `peakAlpha` / `spo2`, `gestures[]` (string ids that second).
 
-Recordings: zeroed `guardrail`/`feedback` keys still present.
+**`feedback{}` per second (LOCKED keep + add)** — see **Computed feedback extras**:
+- **KEEP:** `ratio`, `threshold`, `inTarget`, `pct`
+- **ADD:** `percentile`, `thresholdPercentile`, `heldBack`, `inhibitTags`, `clean`, `dirtyReason`, `betaRel`, `deltaRel`
+
+**`guardrail{}` per second (LOCKED keep + add):**
+- **KEEP:** `sleepDir`, `clarity`, `warning`, `delta`
+- **ADD:** `featurePercentile`, `warnOver`, `ceilingOver`, `clean`, `dirtyReason`
+
+Recordings: zeroed legacy `guardrail`/`feedback` keys may still be present for chart shape; **omit/null the NEW Trust extras** (never fake `percentile:0` / `clean:false`). Wire = camelCase JSONL (Dart `ComputedFrame.toJson`); Rust extract must accept those keys (serde rename).
 
 #### Sqlite (publish-time; not always in metadata JSON)
 
@@ -668,6 +676,9 @@ A writer may emit only the **Must** keys first and add Sensible/Cool in the same
 | `sessionSettings` (+ optional `modelSnapshot`, `guardFeature`, `guardModel`) | `feedback.sessionSettings` | → `feedback{}` |
 | Top-level `guardrailEngine` / `modelKind` / `modelSha256` / `feedbackEngine` | fold into `feedback.sessionSettings` / `modelSnapshot` | → `feedback{}`; **drop** flat root mirrors |
 | `targetPct` / `pctInTarget`, `avgAlphaRel`, `guardrailWarnCount`, `avgSleepDir` (+ folded `scoreTotalPct`→`guardWarnPct`, `threshold`→`guardThreshold`) | `feedback.outcomeScalars.*` | → `feedback{}` (reward + guard outcome scalars; feedback-only) |
+| `calibration.baselineSamples` (+ per-recal) | `feedback.calibration.baselineSamples` / `recalibrations[].baselineSamples` | → `feedback{}` — raw native reward samples for `percentileOf` (~50 doubles); keep existing `baseline` stats summary |
+| `sessionSettings.inhibitCeilingOverrides` | `feedback.sessionSettings.inhibitCeilingOverrides` | → `feedback{}` — optional `{ "beta"?: number, "delta"?: number }` slider overlays (only set keys) |
+| `audioEvents[]` `{onset,type}` | `feedback.audioEvents` | → `feedback{}` — sparse one-shot play log (`reward_chime`\|`guard_chime`); **not** root `annotations[]` |
 | Parallel `feedback.gestures[]` | — | **Rejected** (annotations SoT) |
 | `stillnessPct` under outcomeScalars | — | **Drop** — base `stats.movement.stillnessPct` only |
 
@@ -754,6 +765,7 @@ Uses locked base vocabulary. `feedback` holds only what base does not.
       "trainingStartSecs": 90.0,
       "usedStartAnyway": false,
       "baseline": { "percentile": 60, "count": 45, "mean": 1.2, "stddev": 0.3 },
+      "baselineSamples": [0.82, 0.91, 1.05, 1.12, 0.98],
       "phases": [
         {
           "name": "eyesClosed",
@@ -775,6 +787,7 @@ Uses locked base vocabulary. `feedback` holds only what base does not.
       "guardModel": "cbramod_a_vig",
       "warningThresholdPercentile": 80,
       "warningSound": "softBell",
+      "inhibitCeilingOverrides": { "beta": 0.35, "delta": 0.40 },
       "musicFolder": null,
       "musicMinCutoffHz": 200.0,
       "musicMaxCutoffHz": 8000.0,
@@ -795,6 +808,10 @@ Uses locked base vocabulary. `feedback` holds only what base does not.
         "loadedAt": "2026-09-24T10:14:50.000Z"
       }
     },
+    "audioEvents": [
+      { "onset": 142.0, "type": "reward_chime" },
+      { "onset": 410.0, "type": "guard_chime" }
+    ],
     "music": {
       "trackCount": 2,
       "minCutoffHz": 200.0,
@@ -831,6 +848,9 @@ Notes on the example:
 - `music` / `calibration` shapes match today’s nested writers (keep as-is).
 - `modelSnapshot` stays **inside** `sessionSettings` (matches v5 README / `SessionSettings`); do not also mirror `modelKind` / `modelSha256` / `feedbackEngine` at `feedback` root. **Engine home locked** — see Locks.
 - No `feedback.drowsiness` nest. Guard session scalars (`guardWarnPct`, `avgSleepDir`, `guardThreshold`) live under `feedback.outcomeScalars` with reward outcomes — protocol id stays in `feedback.protocol` / `protocolJson`.
+- `calibration.baselineSamples` is the raw native reward vector used by `percentileOf` after initial calibration (~50 doubles typical; example truncated). Keep existing `baseline` stats summary as-is. Each `recalibrations[]` entry may carry its own `baselineSamples` alongside `atSecs` + `baseline` stats.
+- `sessionSettings.inhibitCeilingOverrides` holds only set slider keys (`beta` / `delta`); omit the object when none.
+- `audioEvents` is a sparse one-shot play log (`reward_chime` | `guard_chime`); `onset` = seconds from capture start (same clock as computed `t` / annotations). Omit array or empty when none fired. Continuous outputs (musicFilter / rain / binaural) do **not** get per-second audio events — they ride on stored percentile / existing `feedback.music.series`. Do **not** put chimes in root `annotations[]`.
 
 ### Field table — `feedback` object
 
@@ -844,10 +864,11 @@ Notes on the example:
 | `feedbackSound` | string? | Reward / feedback output name (e.g. `bowlChimes`). |
 | `metadataDescription` | string? | Human protocol blurb from catalog (`ProtocolDocument.metadataDescription`). |
 | `calibrationProfile` | string? | Optional profile id string; rarely set today — keep if writers populate it. |
-| `calibration` | object? | Nested calibration blob — **keep shape as-is** (`version`, `kind`=`single`\|`staged`, `calibrationId`, timing, `baseline`, `phases[]`, `recalibrations[]`, …). |
-| `sessionSettings` | object | **Locked engine home.** Training knobs at save: adaptivity, baseline percentile, guardrail on/off + `guardFeature` / `guardModel` / `guardrailEngine`, warning sound, music/binaural knobs, marker flags. Optional nested `modelSnapshot` `{engine, weightsSha256?, configJson?, repoRevision?, loadedAt}`. No parallel `feedback.engine` / flat `modelKind` / `modelSha256` / `feedbackEngine`. |
+| `calibration` | object? | Nested calibration blob — **keep shape as-is** (`version`, `kind`=`single`\|`staged`, `calibrationId`, timing, `baseline` stats summary, `phases[]`, `recalibrations[]`, …). **ADD (LOCKED):** `baselineSamples: number[]` — raw native reward samples used by `percentileOf` after initial calibration (~50 doubles). Each `recalibrations[]` entry may include `baselineSamples` alongside existing `atSecs` + `baseline` stats when present. |
+| `sessionSettings` | object | **Locked engine home.** Training knobs at save: adaptivity, baseline percentile, guardrail on/off + `guardFeature` / `guardModel` / `guardrailEngine`, warning sound, music/binaural knobs, marker flags. Optional nested `modelSnapshot` `{engine, weightsSha256?, configJson?, repoRevision?, loadedAt}`. **ADD (LOCKED):** optional `inhibitCeilingOverrides?: { "beta"?: number, "delta"?: number }` — Settings slider overlays (Map may have only set keys). No parallel `feedback.engine` / flat `modelKind` / `modelSha256` / `feedbackEngine`. |
 | ~~`drowsiness`~~ | — | **Forbidden as a nest.** Fold scalars into `feedback.outcomeScalars` (`guardWarnPct`, `avgSleepDir`, `guardThreshold`). Protocol id is `feedback.protocol`, not a key name. |
 | `music` | object? | Playback summary — **keep shape as-is** (`trackCount`, cutoff min/max, `invert`, `shuffle`, `tracks[]` `{at,name}`, `series[]` `{at,hz}`). |
+| `audioEvents` | array? | Sparse one-shot play log: `[{ "onset": number, "type": string }]`. Locked types: `reward_chime` \| `guard_chime`. `onset` = seconds from capture start (same clock as computed `t` / annotations). Omit array or empty when none fired. Records **actual** play times (product constants today: reward hold 2.5s + 8s cooldown via `FeedbackAudioController`; guard warning chime 20s cooldown) so History does not reconstruct from constants. Continuous musicFilter / rain / binaural do **not** emit per-second audio events. **Forbidden** in root `annotations[]`. |
 | `outcomeScalars` | object | Generic feedback **outcome** scalars (reward + guard; see below). Not protocol-named. Prefer this over `feedback.stats` (collides with base `stats`) or per-protocol nests. |
 | ~~`gestures[]`~~ | — | **Forbidden.** Use root `annotations[]`. |
 
@@ -894,8 +915,96 @@ Agents implementing writers/readers must **not** keep these under `feedback` or 
 5. **`durationMinutes` stays under `feedback`** as planned length (distinct from root `durationS`).
 6. **`metadataDescription` stays under `feedback`** (protocol copy, not file-level `notes`).
 7. **SleepDir single home:** `feedback.outcomeScalars.avgSleepDir` only (no `drowsiness.meanSleepDir` twin).
+8. **`calibration.baselineSamples` (LOCKED):** persist the raw native reward vector after initial calibration; keep `baseline` stats summary. Recalibrations may carry `baselineSamples` when present.
+9. **`sessionSettings.inhibitCeilingOverrides` (LOCKED):** optional `{ beta?, delta? }` slider overlays; omit when unset.
+10. **`feedback.audioEvents` (LOCKED):** sparse `{onset,type}` play log (`reward_chime`\|`guard_chime` only). Not annotations. Continuous audio rides on percentile / `music.series`.
 
-Status of this section: **LOCKED** — Q1–Q3 resolved below; remaining items are implementation (see [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md)).
+Status of this section: **LOCKED** — Q1–Q3 resolved below; Trust metadata extras (`baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`) locked with computed Trust extras. Remaining items are implementation (see [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md)).
+
+---
+
+## Computed feedback extras — **LOCKED**
+
+> **LOCKED.** Trust live-graph fields on the 1 Hz computed JSONL + sparse `feedback.audioEvents` + calibration/inhibit metadata prerequisites. Field names align with History OQ 8 field list ([../TODO/history-dashboard-unification.md](../TODO/history-dashboard-unification.md)); **History UI series remains out of scope** for this contract. Implement **metadata first**, then computed (see [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md)). Do not invent alternatives.
+
+### Purpose
+
+- **Trust graph replay:** History Feedback overview reconstructs the live reward/guard trust pane from stored 1 Hz fields (percentile Y, clean / heldBack / inTarget, inhibit tags, guard extras) — no inference from constants.
+- **Audio audit:** sparse `feedback.audioEvents` records actual one-shot chime play times so History does not reconstruct from product cooldowns.
+
+### Wire / FRB note
+
+Dart writes **camelCase** JSONL (`ComputedFrame.toJson` dialect). Rust extract must accept those keys (serde `rename` / `rename_all = "camelCase"` + snake aliases as needed). This is implementation detail, not an open design question.
+
+### `feedback{}` per second — keep + add
+
+| Key | Action | Semantics |
+|---|---|---|
+| `ratio` | **KEEP** | Native reward scalar (ATR = relative α/θ FeatureDto; AI = model score). Adaptive/AI/inhibit make honest recompute wrong — keep even if partially derivable. |
+| `threshold` | **KEEP** | Native threshold this second. |
+| `inTarget` | **KEEP** | In-target flag (dirty seconds force `false`). |
+| `pct` | **KEEP** | Existing success-rate / in-target fraction field (not plot Y). |
+| `percentile` | **ADD** | `percentileOf(native)` this second **including dirty rank**; **not** last-clean plot Y. Omit/null on recordings. |
+| `thresholdPercentile` | **ADD** | `percentileOf(threshold)`. |
+| `heldBack` | **ADD** | bool — inhibit held the reward out. |
+| `inhibitTags` | **ADD** | `string[]` — `"beta"` / `"delta"`. |
+| `clean` | **ADD** | bool — quality clean this second. |
+| `dirtyReason` | **ADD** | One of `movement` \| `blink` \| `jaw` \| `pads`; omit/null when clean. |
+| `betaRel` | **ADD** | Inhibit pane series (relative β). |
+| `deltaRel` | **ADD** | Inhibit pane series (relative δ). |
+
+### `guardrail{}` per second — keep + add
+
+| Key | Action | Semantics |
+|---|---|---|
+| `sleepDir` | **KEEP** | Guard sleep-direction / score (adaptive/AI — keep). |
+| `clarity` | **KEEP** | Existing clarity scalar. |
+| `warning` | **KEEP** | Live warning active (= `warningActive`). |
+| `delta` | **KEEP** | Guard delta (= `lastDelta`). |
+| `featurePercentile` | **ADD** | Guard feature percentile this second. |
+| `warnOver` | **ADD** | Warn-threshold overshoot flag / value as implemented in live Trust. |
+| `ceilingOver` | **ADD** | Ceiling-overshoot flag / value as implemented in live Trust. |
+| `clean` | **ADD** | bool — guard sample quality clean. |
+| `dirtyReason` | **ADD** | Same vocab as feedback (`movement`\|`blink`\|`jaw`\|`pads`); omit/null when clean. |
+
+### Dirty-latch fix (LOCKED)
+
+Dirty seconds **MUST** write `clean: false`, `inTarget: false`, and a **finite dirty `percentile`** (do **not** skip the sampler update / latch last-clean into JSONL). Do **not** store `plotPercentile` / hold-last-clean Y — reconstruct at **read time** from `percentile` + `clean` (same idea as live `TrustTrace.pushReward`).
+
+### Recordings
+
+Omit/null the **NEW** feedback/guard Trust extras (never write fake `percentile: 0` or `clean: false`). Zeroed **legacy** keys (`ratio`/`threshold`/`inTarget`/`pct`, guard `sleepDir`/`clarity`/`warning`/`delta`) may still exist for chart shape.
+
+### Do NOT store (redundant / rejected)
+
+| Rejected | Why |
+|---|---|
+| Full relative-band time series | Rebuild from abs `bands` at read time. |
+| `plotPercentile` / hold-last-clean Y | Reconstruct from `percentile` + `clean`. |
+| Parallel `feedback.gestures[]` | Annotations SoT; per-second frame `gestures[]` string ids remain OK. |
+| Per-second audio events for musicFilter / rain / binaural | Continuous outputs ride on stored percentile / `feedback.music.series`. |
+| Chimes in root `annotations[]` | Annotations stay quality intervals + gesture instants only. |
+
+### Keep even if partially derivable
+
+`ratio`, `threshold`, `inTarget`, guard `sleepDir` / `delta` / `warning` — adaptive / AI / inhibit make recompute wrong.
+
+### Metadata prerequisites (implement FIRST)
+
+Before writing Trust extras on computed frames, metadata writers must persist:
+
+1. `feedback.calibration.baselineSamples: number[]` (+ optional per-recal `baselineSamples`)
+2. `feedback.sessionSettings.inhibitCeilingOverrides?: { "beta"?: number, "delta"?: number }`
+3. `feedback.audioEvents: [{ "onset": number, "type": string }]` (`reward_chime` \| `guard_chime`)
+
+See **Feedback extension** for field homes and example. Product audio constants (reward hold 2.5s + 8s cooldown; guard chime 20s cooldown) are **not** the schema — events store **actual** play times.
+
+### Implement order
+
+1. **Metadata** — `baselineSamples`, `inhibitCeilingOverrides`, `audioEvents` writers/readers.
+2. **Computed** — Dart `ComputedFrame` keep+add fields, sampler dirty-latch fix, Rust `FeedbackInfo`/`GuardrailInfo` + FRB + extract tests.
+
+Status of this section: **LOCKED**. No remaining schema openers for this computed lock.
 
 ---
 
@@ -908,7 +1017,7 @@ Not coded in this draft; checklist for the implementation PR:
 - One writer path for base metadata; feedback adds `feedback` object.
 - Update `README_feedback_format.md` + this contract status → Implemented in the same change.
 - Sqlite: keep reading `kind`; bump `format_version` to 6; promote only the small agreed scalar set.
-- Computed field set: keep frozen unless a separate format PR adds columns; recordings still write zeroed guard/feedback keys.
+- Computed field set: **LOCKED Trust extras** (keep existing keys + add fields in **Computed feedback extras**); recordings still write zeroed **legacy** guard/feedback keys and omit/null NEW Trust extras.
 
 ---
 
@@ -928,12 +1037,13 @@ Not coded in this draft; checklist for the implementation PR:
 12. **Pause stops raw + computed (LOCKED).** No samples during pause; `annotations` `pause` interval required; `elapsedSeconds` does not advance.
 13. **Timezone-aware timestamps (LOCKED).** Write `startedAt`/`savedAt` with offset or `Z`; always write IANA `timeZone`; EDF export uses local wall clock. See **Timing + time zones**.
 14. **Overshoot is chart-only (LOCKED).** Never persist as computed/annotation/stats.
+15. **Computed Trust extras + `feedback.audioEvents` are LOCKED.** Keep existing computed `feedback`/`guardrail` keys; add the Trust fields in **Computed feedback extras**; stop dirty-latch (dirty seconds write `clean:false` + finite dirty `percentile`). Persist `calibration.baselineSamples`, `sessionSettings.inhibitCeilingOverrides`, and sparse `feedback.audioEvents` (`reward_chime`|`guard_chime` only — not annotations). Recordings omit/null NEW extras. Wire = camelCase JSONL; Rust extract must accept. Implement metadata first, then computed. History UI series remains out of scope (names may align with History OQ 8).
 
 ---
 
 ## Open questions
 
-Feedback extension + experimental band formulas + base vocabulary are **LOCKED / implementable**. Former Q1–Q3 are **resolved** (see below). Remaining work is tracked in [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md).
+Feedback extension + experimental band formulas + base vocabulary + **computed Trust extras** + sparse `feedback.audioEvents` / `baselineSamples` / `inhibitCeilingOverrides` are **LOCKED / implementable**. Former Q1–Q3 are **resolved** (see below). **No remaining schema openers** for this computed lock. Remaining work is **implementation** — tracked in [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md).
 
 ### Resolved (Q1–Q3)
 
@@ -963,7 +1073,7 @@ Feedback extension + experimental band formulas + base vocabulary are **LOCKED /
 - `music` / `calibration` shapes → keep as-is under `feedback`.
 - No `feedback.gestures[]`; shared stats (incl. `stillnessPct`) → base `stats` only.
 
-**Schema design finished.** Feedback extension + experimental band formulas are **LOCKED**. Remaining work is **implementation** — tracked in [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md) (writers/readers, `NFED6`, `subject.id` app settings, delete dual-dialect, README update, etc.).
+**Schema design finished.** Feedback extension + experimental band formulas + **computed Trust extras** (keep+add fields, dirty-latch fix, recordings omit) + Trust metadata extras (`baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`) are **LOCKED**. **No design openers remain for Trust/audio.** Remaining work is **implementation** (metadata writers first, then computed) — tracked in [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md) (writers/readers, `NFED6`, `subject.id` app settings, delete dual-dialect, README update, Trust extras, etc.).
 
 Deferred outside this format PR (do not block v6 metadata):
 
@@ -971,6 +1081,8 @@ Deferred outside this format PR (do not block v6 metadata):
 - Nickname export-as-EDF-name product toggle (default EDF name = `X`).
 
 **Resolved this pass:** overshoot = chart-only; pause = stop raw+computed + `pause` annotation; timing fields + `timeZone` locked (see Timing + time zones).
+
+**Resolved (computed Trust lock):** keep existing 1 Hz feedback/guard keys; add Trust live-graph fields (camelCase wire); stop dirty-latch; recordings omit NEW extras; no `plotPercentile` / relative-band series / chime annotations; metadata prerequisites `baselineSamples` + `inhibitCeilingOverrides` + sparse `audioEvents`. Names aligned with History OQ 8 field list; History UI series remains out of scope. See **Computed feedback extras**. 
 
 ---
 
@@ -1006,7 +1118,9 @@ Full example + migrated-away table: **Feedback extension — LOCKED** above. Do 
 | `calibration` (+ optional `calibrationProfile`) | Nested calibration blob |
 | ~~`drowsiness`~~ → `outcomeScalars.guardWarnPct` / `avgSleepDir` / `guardThreshold` | Folded; no protocol-named nest |
 | `music` | Tracks / cutoff series |
-| `sessionSettings` | Incl. `guardFeature` / `guardModel` / `guardrailEngine`, markers flags, music/binaural knobs; optional `modelSnapshot` |
+| `sessionSettings` | Incl. `guardFeature` / `guardModel` / `guardrailEngine`, markers flags, music/binaural knobs; optional `modelSnapshot`; **`inhibitCeilingOverrides?`** (`beta`/`delta` slider overlays) |
+| `calibration.baselineSamples` (+ per-recal) | Raw native reward samples for `percentileOf` (~50 doubles); keep `baseline` stats summary |
+| `audioEvents[]` `{onset,type}` | Sparse one-shot play log (`reward_chime`\|`guard_chime`); not annotations |
 | `outcomeScalars.pctInTarget` (← `targetPct` / `pctInTarget`) | Feedback-only reward outcome |
 | `outcomeScalars.avgAlphaRel` | Feedback chart relative-α |
 | `outcomeScalars.guardrailWarnCount`, `outcomeScalars.guardWarnPct`, `outcomeScalars.avgSleepDir`, `outcomeScalars.guardThreshold` | Guard outcomes (← extract + folded `SessionDrowsiness`) |
