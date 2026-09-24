@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Draft** (writers/readers not implemented). **Annotations model = LOCKED.** **Base metadata vocabulary = LOCKED** (see Locked vocabulary). **`subject` object = PREPARED** (anonymous-first; see Subject model). **Feedback extension = DRAFTED** (Q1–Q3 resolved: generic `feedback.training`, engine under `sessionSettings`, sleepDir deduped; see Feedback extension + Open questions). |
+| Status | **Draft** (writers/readers not implemented). **Annotations model = LOCKED.** **Base metadata vocabulary = LOCKED** (see Locked vocabulary). **`subject` object = PREPARED** (anonymous-first; see Subject model). **Feedback extension = DRAFTED** (Q1–Q3 resolved: generic `feedback.outcomeScalars`, engine under `sessionSettings`, sleepDir deduped; see Feedback extension + Open questions). |
 | Scope | Unify recording + feedback **metadata JSON**; prepare a **v6 clean cut** (container magic/version + writers/readers). |
 | Not this | Implement Rust/Dart writers yet; rename Dart/Rust identifiers yet; Athena tag 11; History UI chrome; pipeline Key Decisions. |
 | Supersedes (when landed) | Dual dialects in [session-format-contract.md](session-format-contract.md) § Metadata; [../TODO/session_vs_recording_metadata.md](../TODO/session_vs_recording_metadata.md). |
@@ -27,7 +27,7 @@ Agents: adhere to **Design rules** and **Locked vocabulary** below. Inventory is
 Also:
 
 - Every file carries explicit `kind`, `formatVersion`, `appVersion`.
-- Shared nested `stats` for both kinds (feedback-only reward/guard scalars live under `feedback` or under `stats` only when meaningful for both — prefer `feedback.*` for training-only).
+- Shared nested `stats` for both kinds (feedback-only reward/guard scalars live under `feedback` or under `stats` only when meaningful for both — prefer `feedback.*` for feedback-only).
 - Fit / usable-signal summary and battery start/end when cheap.
 - **Gestures:** instant user-interaction events live in root `annotations[]` (same timeline as pause / bad_quality / disconnect). `streams.gestures` remains an enablement stub (`enabled: false`) until a raw gesture stream exists — not a duplicate event list. Do not invent a raw tag without a format PR.
 - **Subject (anonymous-first):** every file carries a nested root `subject` object (BIDS naming). Always include stable anonymous `subject.id`. Optional display `nickname` and voluntary demographics (`sex`, `ageAtRecording`, `meditationExperience`, …) are **omitted until the user provides them** — never invent placeholders that look like PII. File/session identity (`sessionId` when present) stays at **root**, not under `subject`. See **Subject model**.
@@ -129,7 +129,7 @@ Compute from computed JSONL (and raw telemetry if needed) at assemble/save. Pref
 | Named band stats | mean α (abs), mean α/θ, frontal–temporal α asymmetry, cross-ch α variance — over **usable** seconds only | **yes** (tune formulas) |
 | `% overshoot` / held | Needs a defined yMax policy; overshoot today is **paint-time** on Monitor Bands | **yes** |
 | Compact `annotations` timeline | Single `{onset,duration,type}` list for pause / bad_quality / disconnect **and** gesture instants (`duration: 0`) (see Annotations model) | no; list is canonical, `stats.annotationSeconds` optional |
-| Feedback-only: `% in target`, guard warn count/pct, mean sleepDir, guard threshold | Already extracted / in `SessionDrowsiness`; home = **`feedback.training`** only (not base `stats`) | no |
+| Feedback-only: `% in target`, guard warn count/pct, mean sleepDir, guard threshold | Already extracted / in `SessionDrowsiness`; home = **`feedback.outcomeScalars`** only (not base `stats`) | no |
 
 Do **not** dump full 1 Hz series into metadata.
 
@@ -389,7 +389,7 @@ This matches EDF+ practice: one Annotations signal holds lights on/off, sleep st
 - EDF+ TAL allows *omitting* Duration when irrelevant; exporters may drop the `\x15Duration` segment when `duration == 0`.
 - One JSON shape for all rows keeps parsers simple.
 
-**B) Single source of truth — annotations only.** Do **not** also store a full `feedback.gestures[]` array of `{type, at}`. Optional feedback-only extras (protocol, training scalars, music, calibration) stay under `feedback.*`. If a UI needs a gesture count, derive it by filtering `annotations` where `type` ∈ gesture set, or add a cheap scalar later under `feedback.training` — never a second event list.
+**B) Single source of truth — annotations only.** Do **not** also store a full `feedback.gestures[]` array of `{type, at}`. Optional feedback-only extras (protocol, outcome scalars, music, calibration) stay under `feedback.*`. If a UI needs a gesture count, derive it by filtering `annotations` where `type` ∈ gesture set, or add a cheap scalar later under `feedback.outcomeScalars` — never a second event list.
 
 `streams.gestures` remains `{ enabled, rateHz }` enablement for a future raw stream; it is **not** the marker list.
 
@@ -494,7 +494,7 @@ Discipline: rename only when EDF / BIDS / common EEG has a **clearly better** te
 | `stats.hr` `{mean,min,max}` | Heart-rate summary from computed `pulse` |
 | `stats.spo2` `{mean,min,max}` | SpO₂ summary from computed `spo2` |
 | `stats.peakAlpha` `{meanHz,maxPowerHz,maxPower}` | Peak-alpha summary |
-| `stats.movement` `{mean,stillnessPct?}` | Movement summary; optional `stillnessPct` (% seconds below stillness gate — shared physiology, not training-only) |
+| `stats.movement` `{mean,stillnessPct?}` | Movement summary; optional `stillnessPct` (% seconds below stillness gate — shared physiology, not feedback-only) |
 | `stats.quality` `{mean,pctGood,channelUsable}` | Pad / usable-signal summary |
 | `stats.annotationSeconds` `{pause,bad_quality,disconnect}` | Derived seconds-by-type from interval annotations only |
 | `stats.battery` `{startPct,endPct}` | Telemetry bookends when available |
@@ -539,9 +539,11 @@ Future agents: change locked names only with a format PR and an updated table. P
 
 ## Feedback extension — **DRAFTED**
 
-> **DRAFTED** (not fully LOCKED). Shape and field homes below are the working contract for implementers. **Q1–Q3 resolved** (generic `feedback.training`, engine under `sessionSettings`, sleepDir deduped). Non-blocking leftovers remain under **Open questions**. Do not invent a parallel root schema or a second gesture list.
+> **DRAFTED** (not fully LOCKED). Shape and field homes below are the working contract for implementers. **Q1–Q3 resolved** (generic `feedback.outcomeScalars`, engine under `sessionSettings`, sleepDir deduped). Non-blocking leftovers remain under **Open questions**. Do not invent a parallel root schema or a second gesture list.
 
 **Rule:** when `kind == "feedback"`, attach a single top-level `feedback: { … }` object. Omit (or null) for `kind == "recording"`. Everything already covered by **base** (`subject`, `device`, `streams`, `stats`, `annotations`, identity/timing) stays **out** of `feedback` — no duplicates.
+
+**Naming note:** `outcomeScalars` is chosen over `training` to avoid reading as machine learning, and over bare `outcomes` to stress that this bag contains session scalars, not time series.
 
 ### Field classification (from `SessionMetadata` / `buildSessionMetadata`)
 
@@ -561,13 +563,13 @@ Future agents: change locked names only with a format PR and an updated table. P
 | `sound`, `feedbackSound` | `feedback.sound` / `feedback.feedbackSound` | → `feedback{}` |
 | `metadataDescription` | `feedback.metadataDescription` | → `feedback{}` (protocol copy) |
 | `calibration`, `calibrationProfile` | `feedback.calibration` (+ optional profile id/string) | → `feedback{}` |
-| `drowsiness` `{scoreTotalPct,meanSleepDir,threshold?}` | `feedback.training` (fold; drop named nest) | → generic training outcomes — **not** protocol-keyed `drowsiness` |
+| `drowsiness` `{scoreTotalPct,meanSleepDir,threshold?}` | `feedback.outcomeScalars` (fold; drop named nest) | → generic outcome scalars — **not** protocol-keyed `drowsiness` |
 | `music` | `feedback.music` | → `feedback{}` (shape keep as-is) |
 | `sessionSettings` (+ optional `modelSnapshot`, `guardFeature`, `guardModel`) | `feedback.sessionSettings` | → `feedback{}` |
 | Top-level `guardrailEngine` / `modelKind` / `modelSha256` / `feedbackEngine` | fold into `feedback.sessionSettings` / `modelSnapshot` | → `feedback{}`; **drop** flat root mirrors |
-| `targetPct` / `pctInTarget`, `avgAlphaRel`, `guardrailWarnCount`, `avgSleepDir` (+ folded `scoreTotalPct`→`guardWarnPct`, `threshold`→`guardThreshold`) | `feedback.training.*` | → `feedback{}` (reward + guard outcome scalars; training-only) |
+| `targetPct` / `pctInTarget`, `avgAlphaRel`, `guardrailWarnCount`, `avgSleepDir` (+ folded `scoreTotalPct`→`guardWarnPct`, `threshold`→`guardThreshold`) | `feedback.outcomeScalars.*` | → `feedback{}` (reward + guard outcome scalars; feedback-only) |
 | Parallel `feedback.gestures[]` | — | **Rejected** (annotations SoT) |
-| `stillnessPct` under training | — | **Drop** — base `stats.movement.stillnessPct` only |
+| `stillnessPct` under outcomeScalars | — | **Drop** — base `stats.movement.stillnessPct` only |
 
 ### Example — `kind: "feedback"` (base + `feedback` block)
 
@@ -707,7 +709,7 @@ Uses locked base vocabulary. `feedback` holds only what base does not.
         { "at": 300.0, "hz": 2400.0 }
       ]
     },
-    "training": {
+    "outcomeScalars": {
       "pctInTarget": 62.0,
       "avgAlphaRel": 0.42,
       "guardrailWarnCount": 3,
@@ -727,7 +729,7 @@ Notes on the example:
 - `durationMinutes` (15) is the **planned** length the user selected; `durationS` / `elapsedSeconds` (900) are **actual** elapsed store time — different meanings.
 - `music` / `calibration` shapes match today’s nested writers (keep as-is).
 - `modelSnapshot` stays **inside** `sessionSettings` (matches v5 README / `SessionSettings`); do not also mirror `modelKind` / `modelSha256` / `feedbackEngine` at `feedback` root. **Engine home locked** — see Locks.
-- No `feedback.drowsiness` nest. Guard session scalars (`guardWarnPct`, `avgSleepDir`, `guardThreshold`) live under `feedback.training` with reward outcomes — protocol id stays in `feedback.protocol` / `protocolJson`.
+- No `feedback.drowsiness` nest. Guard session scalars (`guardWarnPct`, `avgSleepDir`, `guardThreshold`) live under `feedback.outcomeScalars` with reward outcomes — protocol id stays in `feedback.protocol` / `protocolJson`.
 
 ### Field table — `feedback` object
 
@@ -743,12 +745,12 @@ Notes on the example:
 | `calibrationProfile` | string? | Optional profile id string; rarely set today — keep if writers populate it. |
 | `calibration` | object? | Nested calibration blob — **keep shape as-is** (`version`, `kind`=`single`\|`staged`, `calibrationId`, timing, `baseline`, `phases[]`, `recalibrations[]`, …). |
 | `sessionSettings` | object | **Locked engine home.** Training knobs at save: adaptivity, baseline percentile, guardrail on/off + `guardFeature` / `guardModel` / `guardrailEngine`, warning sound, music/binaural knobs, marker flags. Optional nested `modelSnapshot` `{engine, weightsSha256?, configJson?, repoRevision?, loadedAt}`. No parallel `feedback.engine` / flat `modelKind` / `modelSha256` / `feedbackEngine`. |
-| ~~`drowsiness`~~ | — | **Forbidden as a nest.** Fold scalars into `feedback.training` (`guardWarnPct`, `avgSleepDir`, `guardThreshold`). Protocol id is `feedback.protocol`, not a key name. |
+| ~~`drowsiness`~~ | — | **Forbidden as a nest.** Fold scalars into `feedback.outcomeScalars` (`guardWarnPct`, `avgSleepDir`, `guardThreshold`). Protocol id is `feedback.protocol`, not a key name. |
 | `music` | object? | Playback summary — **keep shape as-is** (`trackCount`, cutoff min/max, `invert`, `shuffle`, `tracks[]` `{at,name}`, `series[]` `{at,hz}`). |
-| `training` | object | Generic feedback **outcome** scalars (reward + guard; see below). Not protocol-named. Prefer this over `feedback.stats` (collides with base `stats`) or per-protocol nests. |
+| `outcomeScalars` | object | Generic feedback **outcome** scalars (reward + guard; see below). Not protocol-named. Prefer this over `feedback.stats` (collides with base `stats`) or per-protocol nests. |
 | ~~`gestures[]`~~ | — | **Forbidden.** Use root `annotations[]`. |
 
-#### `feedback.training` (feedback-only outcome scalars)
+#### `feedback.outcomeScalars` (feedback-only outcome scalars)
 
 Generic bag for **reward (+ inhibit) and guard** session outcomes. Present only when `kind == "feedback"`. Not named after any protocol (`drowsiness`, …). Inhibit has no separate summary today — it already AND-gates `pctInTarget` (pipeline: inhibit ≠ guard).
 
@@ -761,7 +763,7 @@ Generic bag for **reward (+ inhibit) and guard** session outcomes. Present only 
 | `avgSleepDir` | number? | Mean guardrail `sleepDir` over session (← `meanSleepDir` / flat `avgSleepDir`). **Single home** — do not also nest under a protocol key. Meaningful for AI guard (`ai.drowsiness` / `ai.a_vig`); often ~0 for band-math guard. |
 | `guardThreshold` | number? | Guard warn threshold used at session end (← `SessionDrowsiness.threshold`). |
 
-Do **not** put under `training`: `stillnessPct`, HR/SpO₂/peak-α/quality/battery (base `stats` only). Do **not** invent `feedback.drowsiness` / `feedback.protocolResults` for these scalars.
+Do **not** put under `outcomeScalars`: `stillnessPct`, HR/SpO₂/peak-α/quality/battery (base `stats` only). Do **not** invent `feedback.drowsiness` / `feedback.protocolResults` for these scalars.
 
 ### Migrated away from `feedback` / flat dialect (do not leave duplicates)
 
@@ -778,19 +780,19 @@ Agents implementing writers/readers must **not** keep these under `feedback` or 
 | `signalQualityMean` / `pctQcOk` | `stats.quality` | Shared stats |
 | Root timing already on base (`savedAt`, `startedAt`, `elapsedSeconds`, `durationS`, `notes`, `sessionId`) | base identity | Not under `feedback` |
 | Top-level `modelKind` / `modelSha256` / `feedbackEngine` / lone `guardrailEngine` | `sessionSettings.modelSnapshot` + `sessionSettings.guard*` | Single engine nest |
-| `training.stillnessPct` | `stats.movement.stillnessPct` | Shared physiology |
-| Named `drowsiness` nest / `protocolResults.drowsiness` | `feedback.training.{guardWarnPct,avgSleepDir,guardThreshold}` | Generic outcomes; protocol id is `feedback.protocol` |
-| Dual `drowsiness.meanSleepDir` | `feedback.training.avgSleepDir` only | Dedupe sleepDir |
+| `outcomeScalars.stillnessPct` | `stats.movement.stillnessPct` | Shared physiology |
+| Named `drowsiness` nest / `protocolResults.drowsiness` | `feedback.outcomeScalars.{guardWarnPct,avgSleepDir,guardThreshold}` | Generic outcomes; protocol id is `feedback.protocol` |
+| Dual `drowsiness.meanSleepDir` | `feedback.outcomeScalars.avgSleepDir` only | Dedupe sleepDir |
 
 ### Locks inside this draft
 
 1. **No `feedback.gestures[]`** — annotations are the only marker timeline.
-2. **Training-only outcome scalars** live under **`feedback.training`** (generic reward + guard bag); shared physio stays in base `stats` only. **No** `feedback.drowsiness` / `feedback.protocolResults` / `feedback.stats` nest for these scalars.
+2. **Feedback-only outcome scalars** live under **`feedback.outcomeScalars`** (generic reward + guard bag); shared physio stays in base `stats` only. **No** `feedback.drowsiness` / `feedback.protocolResults` / `feedback.stats` nest for these scalars.
 3. **`music` and `calibration` shapes** keep today’s nested field names (no rename pass in this draft).
 4. **Engine home (LOCKED):** `sessionSettings.guardFeature` / `guardModel` / `guardrailEngine` + optional `sessionSettings.modelSnapshot`. No parallel `feedback.engine` object and no flat `modelKind` / `modelSha256` / `feedbackEngine` on `feedback` root. `modelSnapshot` is not a second top-level `feedback.modelSnapshot` mirror.
 5. **`durationMinutes` stays under `feedback`** as planned length (distinct from root `durationS`).
 6. **`metadataDescription` stays under `feedback`** (protocol copy, not file-level `notes`).
-7. **SleepDir single home:** `feedback.training.avgSleepDir` only (no `drowsiness.meanSleepDir` twin).
+7. **SleepDir single home:** `feedback.outcomeScalars.avgSleepDir` only (no `drowsiness.meanSleepDir` twin).
 
 Status of this section: **DRAFTED** — Q1–Q3 resolved below; remaining open items are non-blocking / implementation.
 
@@ -820,7 +822,7 @@ Not coded in this draft; checklist for the implementation PR:
 7. **Locked JSON keys are the source of truth.** When implementing writers/readers, and when renaming Dart/Rust identifiers in a later PR, prefer the keys in **Locked vocabulary** and the **Annotations model — LOCKED** section. Do not invent synonyms (`sfreq`, `ch_names`, `sao2` as a JSON key, `SamplingFrequency` in neurofeed JSON, parallel `feedback.gestures[]`, …). Map EDF+/BIDS/MNE spellings on export only. Do **not** rename app source in the same change as a contract-only edit unless the task says so.
 8. **Annotations model is LOCKED** — do not reopen shape, nominators, or initial `type` strings without a format PR.
 9. **`subject` is PREPARED (anonymous-first).** Always write `subject.id` on new v6 files; omit voluntary fields until collected; never put PII by default; keep `sessionId` at root. See Subject model.
-10. **Feedback extension is DRAFTED.** When `kind=="feedback"`, write top-level `feedback` per **Feedback extension**; never duplicate base/annotations/stats fields into it; never write `feedback.gestures[]` or `feedback.drowsiness`. Guard/reward outcome scalars → `feedback.training` only. See migrated-away table + Open questions.
+10. **Feedback extension is DRAFTED.** When `kind=="feedback"`, write top-level `feedback` per **Feedback extension**; never duplicate base/annotations/stats fields into it; never write `feedback.gestures[]` or `feedback.drowsiness`. Guard/reward outcome scalars → `feedback.outcomeScalars` only. See migrated-away table + Open questions.
 
 ---
 
@@ -830,7 +832,7 @@ Feedback extension + base vocabulary are **schema-complete enough to implement**
 
 ### Resolved (Q1–Q3)
 
-1. **`drowsiness` nest → generic `feedback.training` (RESOLVED).**  
+1. **`drowsiness` nest → generic `feedback.outcomeScalars` (RESOLVED).**
    **What code stores today** (`SessionDrowsiness` / `sessionDrowsiness` getter): only `{ scoreTotalPct, meanSleepDir, threshold? }`. `scoreTotalPct` = `% of guard samples with warning` (not a separate “drowsiness score”). Live `DrowsinessSample` series `{at,sleepDir,delta,warning}` is **not** written to metadata (“scalars only”). Flat `avgSleepDir` on `SessionMetadata` already mirrors `meanSleepDir`. Product lanes are **reward (+ inhibit) / guard** — a protocol-named nest is wrong.
 
    | Opt | Shape | Pros | Cons |
@@ -838,16 +840,16 @@ Feedback extension + base vocabulary are **schema-complete enough to implement**
    | A | Keep `feedback.drowsiness` | Matches today’s JSON key | Protocol-specific forever; useless for concentration / guardrailOnly / future protocols |
    | B | `feedback.protocolResults` / `results` | Extensible bag | Overkill for three guard scalars that apply whenever guard ran; invites per-protocol key sprawl |
    | C | `feedback.stats` | Generic name | Collides mentally with base `stats`; agents confuse recording vs feedback aggregates |
-   | D | Fold into base `stats` (or `stats.feedback`) | One stats tree | Blurs “any recording” physio with training-only outcomes; recordings forever empty/null |
-   | **E** | **Split:** base `stats` = physio/quality/movement; **`feedback.training`** = reward + guard outcomes | Clear separation; already drafted; generic across protocols; inhibit already folded into `pctInTarget` | Rename/fold writers (`drowsiness` → training fields) |
+   | D | Fold into base `stats` (or `stats.feedback`) | One stats tree | Blurs “any recording” physio with feedback-only outcomes; recordings forever empty/null |
+   | **E** | **Split:** base `stats` = physio/quality/movement; **`feedback.outcomeScalars`** = reward + guard outcomes | Clear separation; already drafted; generic across protocols; inhibit already folded into `pctInTarget` | Rename/fold writers (`drowsiness` → outcome scalar fields) |
 
-   **Chosen: E.** Fold `scoreTotalPct`→`guardWarnPct`, `threshold`→`guardThreshold`; drop the `drowsiness` key. Prefer `feedback.training` over `feedback.stats` (avoid base-stats name clash). No `protocolResults` until a protocol truly needs a non-scalar blob.
+   **Chosen: E.** Fold `scoreTotalPct`→`guardWarnPct`, `threshold`→`guardThreshold`; drop the `drowsiness` key. Prefer `feedback.outcomeScalars` over `feedback.stats` (avoid base-stats name clash). No `protocolResults` until a protocol truly needs a non-scalar blob.
 
-2. **Engine field surface (RESOLVED / LOCKED).**  
+2. **Engine field surface (RESOLVED / LOCKED).**
    Single home: `sessionSettings.guardFeature` / `guardModel` / `guardrailEngine` + optional `sessionSettings.modelSnapshot`. No parallel `feedback.engine` and no flat `modelKind` / `modelSha256` / `feedbackEngine` on `feedback` root.
 
-3. **`avgSleepDir` dual home (RESOLVED — depends on Q1).**  
-   With `drowsiness` gone, the twin disappears. **Keep only** `feedback.training.avgSleepDir`. Do not put under base `stats`.
+3. **`avgSleepDir` dual home (RESOLVED — depends on Q1).**
+   With `drowsiness` gone, the twin disappears. **Keep only** `feedback.outcomeScalars.avgSleepDir`. Do not put under base `stats`.
 
 **Also resolved earlier (not open):**
 
@@ -899,12 +901,12 @@ Full draft + example + migrated-away table: **Feedback extension — DRAFTED** a
 | `sound`, `feedbackSound` | Ambient / reward audio |
 | `metadataDescription` | Protocol copy; written by `buildSessionMetadata` today |
 | `calibration` (+ optional `calibrationProfile`) | Nested calibration blob |
-| ~~`drowsiness`~~ → `training.guardWarnPct` / `avgSleepDir` / `guardThreshold` | Folded; no protocol-named nest |
+| ~~`drowsiness`~~ → `outcomeScalars.guardWarnPct` / `avgSleepDir` / `guardThreshold` | Folded; no protocol-named nest |
 | `music` | Tracks / cutoff series |
 | `sessionSettings` | Incl. `guardFeature` / `guardModel` / `guardrailEngine`, markers flags, music/binaural knobs; optional `modelSnapshot` |
-| `training.pctInTarget` (← `targetPct` / `pctInTarget`) | Feedback-only reward outcome |
-| `training.avgAlphaRel` | Feedback chart relative-α |
-| `training.guardrailWarnCount`, `training.guardWarnPct`, `training.avgSleepDir`, `training.guardThreshold` | Guard outcomes (← extract + folded `SessionDrowsiness`) |
+| `outcomeScalars.pctInTarget` (← `targetPct` / `pctInTarget`) | Feedback-only reward outcome |
+| `outcomeScalars.avgAlphaRel` | Feedback chart relative-α |
+| `outcomeScalars.guardrailWarnCount`, `outcomeScalars.guardWarnPct`, `outcomeScalars.avgSleepDir`, `outcomeScalars.guardThreshold` | Guard outcomes (← extract + folded `SessionDrowsiness`) |
 | Top-level `modelKind` / `modelSha256` / `feedbackEngine` / `guardrailEngine` | On `SessionMetadata` + sqlite; migrate into `sessionSettings` / `modelSnapshot` — **not** base |
 | Parallel `feedback.gestures[]` | **Rejected** — use root `annotations` only |
 
@@ -912,7 +914,7 @@ Full draft + example + migrated-away table: **Feedback extension — DRAFTED** a
 
 | Gap | Suggested key | Resolution in this pass |
 |---|---|---|
-| `stillnessPct` written today in `SessionStatsData` but locked vocab said “optional later”; also duplicated under `feedback.training` | `stats.movement.stillnessPct` (optional) | **Locked** above — shared movement-derived scalar; drop training duplicate when writers land |
+| `stillnessPct` written today in `SessionStatsData` but locked vocab said “optional later”; also duplicated under `feedback.outcomeScalars` | `stats.movement.stillnessPct` (optional) | **Locked** above — shared movement-derived scalar; drop outcomeScalars duplicate when writers land |
 | Design rule “fit / contact summary” vs no `stats.fit` | *(none)* — use `stats.quality.channelUsable` | **Clarified** above — no separate fit object |
 | Recording files: v6 example has root `sessionId`; `RecordingMetadata` never writes it (sqlite only gets capture `id`) | root `sessionId` | Vocab already allows it — **writer must emit** (not a new key) |
 
@@ -933,10 +935,10 @@ No other current feedback/recording JSON keys need new base keys.
 | Item | Where | Notes |
 |---|---|---|
 | `durationMinutes`, `metadataDescription` | `buildSessionMetadata()` | Were omitted from the brief `feedback` example — **added** above |
-| `stillnessPct` dual home | `SessionStatsData` + draft `feedback.training` | Spec had it under training while candidates put stillness on movement — **resolved** → base `stats.movement` |
+| `stillnessPct` dual home | `SessionStatsData` + draft `feedback.outcomeScalars` | Spec had it under outcomeScalars while candidates put stillness on movement — **resolved** → base `stats.movement` |
 | Fit vs `stats.quality` | Design rules + candidates vs locked `stats` | Candidates listed “fit” as non-experimental; locked table had no `stats.fit` — **resolved** as quality map |
 | Rarely filled `SessionMetadata` fields | Model + sqlite | Inventory already lists `signalQualityMean`, `pctQcOk`, `avgMovement`, `guardrailWarnCount`, `modelKind` / `modelSha256` / `feedbackEngine` / `userId`; also **`calibrationProfile`** and top-level **`guardrailEngine`** are almost never set by `buildSessionMetadata` (engine lives under `sessionSettings`) |
-| `extractComputedScalars` incomplete vs locked `stats` | `assemble.dart` | Today: means + max-power peak-α + training counters only. **Does not** yet compute hr/spo2 min/max, `peakAlpha.meanHz`, `stillnessPct`, `stats.quality.*`, `stats.battery.*`, `annotationSeconds` — writers must when implementing v6 |
+| `extractComputedScalars` incomplete vs locked `stats` | `assemble.dart` | Today: means + max-power peak-α + outcome scalar counters only. **Does not** yet compute hr/spo2 min/max, `peakAlpha.meanHz`, `stillnessPct`, `stats.quality.*`, `stats.battery.*`, `annotationSeconds` — writers must when implementing v6 |
 | Recording `sessionId` | `RecordingMetadata` vs `RecordingStore` | Store upserts `sessionId: id`; file JSON lacks the key |
 | Feedback `deviceModel` = firmware string | `buildSessionMetadata` | Flat dialect has no `firmware`; nested `device` will carry both |
 
