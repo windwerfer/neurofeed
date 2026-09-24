@@ -1636,6 +1636,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       peakAlphaPower: stats?.peakAlphaPower,
       pctInTarget: stats?.targetPct,
       avgSleepDir: drowsy?.meanSleepDir,
+      userId: settings.subjectInfo.id.isEmpty ? null : settings.subjectInfo.id
     );
   }
 

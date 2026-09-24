@@ -765,16 +765,99 @@ class SessionMetadata {
   };
 
   static SessionMetadata? fromJson(Object? json) {
-    if (json is! Map<String, Object?>) {
+    final root = _asStringKeyedMap(json);
+    if (root == null) {
       return null;
     }
-    final protocol = json['protocol'] as String? ?? '';
+    final feedback = root['feedback'];
+    if (feedback is Map) {
+      // v6 file dialect: nested feedback{} only (History / export / assemble).
+      return _fromV6Nested(root, _asStringKeyedMap(feedback)!);
+    }
+    // In-memory / unit-test flat model shape (not a dual file dialect).
+    return _fromFlatModel(root);
+  }
+
+  static SessionMetadata _fromV6Nested(
+    Map<String, Object?> root,
+    Map<String, Object?> fb,
+  ) {
+    final device = _asStringKeyedMap(root['device']);
+    final subject = _asStringKeyedMap(root['subject']);
+    final outcome = _asStringKeyedMap(fb['outcomeScalars']) ?? const {};
+    final recordedChannels = () {
+      final labels = device?['channelLabels'];
+      if (labels is List) {
+        return labels.whereType<String>().toList();
+      }
+      return const <String>[];
+    }();
+    final recordedData = _enabledStreamNames(root['streams']);
+    final subjectId = subject?['id'] as String?;
     return SessionMetadata(
-      protocol: protocol,
+      protocol: fb['protocol'] as String? ?? '',
+      durationMinutes: (fb['durationMinutes'] as num?)?.toInt() ?? 0,
+      elapsedSeconds: (root['elapsedSeconds'] as num?)?.toInt() ?? 0,
+      sound: (fb['sound'] as String?) ?? 'Ambient Drone',
+      savedAt: (root['savedAt'] as String?) ??
+          formatIso8601WithOffset(DateTime.now()),
+      notes: (root['notes'] as String?) ?? '',
+      stats: SessionStatsData.fromJson(root['stats']),
+      deviceName: device?['name'] as String?,
+      deviceModel: (device?['model'] as String?) ??
+          (device?['firmware'] as String?),
+      deviceId: device?['id'] as String?,
+      recordedChannels: recordedChannels,
+      recordedData: recordedData,
+      gestures: const [],
+      calibration: SessionCalibration.fromJson(fb['calibration']),
+      drowsiness: null,
+      feedbackSound: fb['feedbackSound'] as String?,
+      music: SessionMusic.fromJson(fb['music']),
+      metadataDescription: fb['metadataDescription'] as String?,
+      sessionSettings: SessionSettings.fromJson(fb['sessionSettings']),
+      durationS: (root['durationS'] as num?)?.toInt() ?? 0,
+      startedAt: root['startedAt'] as String?,
+      timeZone: root['timeZone'] as String?,
+      protocolVersion: _protocolVersionFromJson(fb['protocolVersion']),
+      calibrationProfile: fb['calibrationProfile'] as String?,
+      avgSpo2: (root['avgSpo2'] as num?)?.toDouble(),
+      peakAlphaHz: (root['peakAlphaHz'] as num?)?.toDouble(),
+      peakAlphaPower: (root['peakAlphaPower'] as num?)?.toDouble(),
+      pctInTarget: (outcome['pctInTarget'] as num?)?.toDouble() ??
+          (fb['pctInTarget'] as num?)?.toDouble(),
+      avgMovement: (root['avgMovement'] as num?)?.toDouble(),
+      guardrailWarnCount: (outcome['guardrailWarnCount'] as num?)?.toInt(),
+      avgSleepDir: (outcome['avgSleepDir'] as num?)?.toDouble(),
+      signalQualityMean: (root['signalQualityMean'] as num?)?.toDouble(),
+      pctQcOk: (root['pctQcOk'] as num?)?.toDouble(),
+      guardrailEngine: root['guardrailEngine'] as String?,
+      modelKind: root['modelKind'] as String?,
+      modelSha256: root['modelSha256'] as String?,
+      feedbackEngine: root['feedbackEngine'] as String?,
+      userId: subjectId ?? root['userId'] as String?,
+      sessionId: root['sessionId'] as String?,
+      protocolJson: fb['protocolJson'] is Map
+          ? Map<String, Object?>.from(fb['protocolJson'] as Map)
+          : null,
+      annotations:
+          (root['annotations'] as List<Object?>?)
+              ?.map(SessionAnnotation.fromJson)
+              .whereType<SessionAnnotation>()
+              .toList() ??
+          const [],
+      audioEvents: _audioEventsFromJson(fb['audioEvents']),
+    );
+  }
+
+  static SessionMetadata _fromFlatModel(Map<String, Object?> json) {
+    return SessionMetadata(
+      protocol: json['protocol'] as String? ?? '',
       durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
       elapsedSeconds: (json['elapsedSeconds'] as num?)?.toInt() ?? 0,
       sound: (json['sound'] as String?) ?? 'Ambient Drone',
-      savedAt: (json['savedAt'] as String?) ?? formatIso8601WithOffset(DateTime.now()),
+      savedAt: (json['savedAt'] as String?) ??
+          formatIso8601WithOffset(DateTime.now()),
       notes: (json['notes'] as String?) ?? '',
       stats: SessionStatsData.fromJson(json['stats']),
       deviceName: json['deviceName'] as String?,
@@ -831,7 +914,7 @@ class SessionMetadata {
               .whereType<SessionAnnotation>()
               .toList() ??
           const [],
-      audioEvents: const [],
+      audioEvents: _audioEventsFromJson(json['audioEvents']),
     );
   }
 
@@ -867,6 +950,44 @@ class SessionMetadata {
       return null;
     }
   }
+}
+
+
+Map<String, Object?>? _asStringKeyedMap(Object? value) {
+  if (value is Map<String, Object?>) {
+    return value;
+  }
+  if (value is Map) {
+    return <String, Object?>{
+      for (final e in value.entries) e.key.toString(): e.value,
+    };
+  }
+  return null;
+}
+
+List<String> _enabledStreamNames(Object? streams) {
+  final map = _asStringKeyedMap(streams);
+  if (map == null) {
+    return const [];
+  }
+  final out = <String>[];
+  for (final e in map.entries) {
+    final v = e.value;
+    if (v is Map && v['enabled'] == true) {
+      out.add(e.key);
+    }
+  }
+  return out;
+}
+
+List<Map<String, Object?>> _audioEventsFromJson(Object? raw) {
+  if (raw is! List) {
+    return const [];
+  }
+  return [
+    for (final e in raw)
+      if (e is Map) Map<String, Object?>.from(e),
+  ];
 }
 
 String? _protocolVersionFromJson(Object? value) {
