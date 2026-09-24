@@ -1,3 +1,4 @@
+import 'package:uuid/uuid.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -90,12 +91,13 @@ Future<void> deleteRecordingScratch(Directory dir, String id) async {
 RecordingMetadata recoveredRecordingMetadata({required int elapsedSeconds}) {
   final now = DateTime.now();
   return RecordingMetadata(
-    formatVersion: 5,
+    formatVersion: 6,
     appVersion: appVersion,
     kind: 'recording',
     savedAt: now,
     startedAt: now.subtract(Duration(seconds: elapsedSeconds)),
     timeZone: captureIanaTimeZone(),
+    sessionId: const Uuid().v4(),
     elapsedSeconds: elapsedSeconds,
     durationS: elapsedSeconds,
     device: const DeviceInfoV5(

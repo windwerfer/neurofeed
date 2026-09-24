@@ -32,6 +32,7 @@ import 'package:neurofeed/src/feedback/trust/trust_gestures.dart';
 import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/session_v5/stats_assemble.dart';
+import 'package:neurofeed/src/session_v5/metadata_v6.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/reve/model_engine.dart';
 import 'package:neurofeed/src/reve/models.dart';
@@ -1382,7 +1383,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     await _recorder.flushSession();
     try {
       final path = await _recorder.assembleScratchV5(
-        buildSessionMetadata().toJson(),
+        buildFeedbackMetadataV6(
+          meta: buildSessionMetadata(),
+          subject: _ref.read(settingsProvider).subjectInfo,
+        ),
       );
       if (path == null) {
         debugPrint('[feedback] end: scratch v5 assemble failed; temps kept');
