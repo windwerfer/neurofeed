@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Status | **Ready to implement** (schema design finished 2026-09-24). |
-| Spec | [../contracts/fileformat_v6.md](../contracts/fileformat_v6.md) — annotations / base vocab / feedback / `stats.experimental.bands` = **LOCKED**; `subject` = PREPARED. |
+| Spec | [../contracts/fileformat_v6.md](../contracts/fileformat_v6.md) — annotations / base vocab / feedback / experimental bands / pause / overshoot-chart-only / timezone = **LOCKED**; `subject` = PREPARED. |
 | Branch | `refactor/fileformat` |
 | Do not mix | Athena tag 11 / optics; pipeline Key Decisions; History dashboard UI series; live device testing without windwerfer OK. |
 
@@ -57,9 +57,28 @@ Track coding work here. Schema decisions go in the contract, not this list.
 
 ---
 
-## Feedback behavior (not schema — schedule when touching sampler)
+## Pause (LOCKED behavior — implement)
 
-- [ ] Decide whether feedback **pause** should stop the computed sampler (today pause keeps sampling; document outcome in contract note if behavior changes).
+Contract: pause **stops raw + computed**; metadata gets `annotations` `pause` interval; `elapsedSeconds` does not advance.
+
+- [ ] Feedback pause/resume: stop/restart computed sampler (today pause keeps sampling — change).
+- [ ] Recording pause (if exposed): stop/restart raw capture writer the same way.
+- [ ] Write/extend `annotations[]` `{ type: "pause", onset, duration }` on pause/resume/end.
+- [ ] Ensure no fabricated computed/raw samples during pause; History charts treat pause as a gap via annotations (not chart-overshoot logic).
+
+---
+
+## Timezone awareness (LOCKED — implement)
+
+Contract: **Timing + time zones**. Today recording metadata forces UTC `…Z` (loses site zone); feedback often writes **naive local** ISO strings (no offset).
+
+- [ ] Always write `startedAt` / `savedAt` as ISO-8601 with **explicit offset or `Z`** (never naive).
+- [ ] Always write root **`timeZone`** (IANA from device at session start, e.g. `Asia/Bangkok`).
+- [ ] Prefer local offset on the timestamp for History-friendly display; `Z` + `timeZone` also OK.
+- [ ] App UI: render session times in `timeZone` (fallback: timestamp offset).
+- [ ] EDF export: pack **local** `startdate`/`starttime` from `startedAt` in `timeZone` (EDF FAQ Q17); never put UTC digits into EDF starttime as if local. Include EDF+ `Startdate dd-MMM-yyyy` in Local Recording Identification.
+- [ ] Sqlite / list queries: store instant in a sortable form; keep `timeZone` available for display.
+- [ ] Fix both recording + feedback writer paths in the same effort.
 
 ---
 
@@ -69,7 +88,7 @@ Track coding work here. Schema decisions go in the contract, not this list.
 |---|---|
 | Athena raw optical stream / session **tag 11** | [athena-optics-contract.md](athena-optics-contract.md) |
 | Per-record length prefix (skip unknown tags) | [../contracts/session-format-contract.md](../contracts/session-format-contract.md) |
-| Persist Monitor Bands **overshoot** as metadata / annotations | Product decision first — today paint-only (`overshoot_hold.dart`); do **not** invent keys until defined |
+| Monitor Bands **overshoot** | **LOCKED chart-only** — do not persist |
 | Nickname → EDF name export toggle | Product; default EDF name = `X` |
 | History dashboard UI | [history-dashboard-unification.md](history-dashboard-unification.md) |
 
@@ -78,7 +97,9 @@ Track coding work here. Schema decisions go in the contract, not this list.
 ## Suggested order
 
 1. `subjectId` / nickname in app settings (unblocks labeled uploads even before full v6 writers).
-2. Annotations + base `stats` assemble helpers.
-3. `NFED6` writers/readers + delete dual dialect + README.
-4. `stats.experimental.bands` Must set.
-5. Feedback `outcomeScalars` / `sessionSettings` migration from flat v5 fields.
+2. Timezone-aware `startedAt`/`savedAt`/`timeZone` helpers (used by all writers).
+3. Pause stops raw+computed + `pause` annotations.
+4. Annotations + base `stats` assemble helpers.
+5. `NFED6` writers/readers + delete dual dialect + README.
+6. `stats.experimental.bands` Must set.
+7. Feedback `outcomeScalars` / `sessionSettings` migration from flat v5 fields.

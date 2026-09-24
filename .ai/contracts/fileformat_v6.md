@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Draft** (writers/readers not implemented). **Annotations model = LOCKED.** **Base metadata vocabulary = LOCKED** (see Locked vocabulary). **`subject` object = PREPARED** (anonymous-first; see Subject model). **Feedback extension = LOCKED** (see Feedback extension). **`stats.experimental.bands` formulas = LOCKED** (see Experimental band metrics). |
+| Status | **Draft** (writers/readers not implemented). **Annotations / base vocab / feedback / experimental bands = LOCKED.** **`subject` = PREPARED.** **Overshoot = chart-only; pause = stop raw+computed + annotate (LOCKED).** **Timezone-aware `startedAt`/`savedAt` + `timeZone` = LOCKED** (see Timing + time zones). |
 | Scope | Unify recording + feedback **metadata JSON**; prepare a **v6 clean cut** (container magic/version + writers/readers). |
 | Not this | Implement Rust/Dart writers yet; rename Dart/Rust identifiers yet; Athena tag 11; History UI chrome; pipeline Key Decisions. |
 | Supersedes (when landed) | Dual dialects in [session-format-contract.md](session-format-contract.md) § Metadata; [../TODO/session_vs_recording_metadata.md](../TODO/session_vs_recording_metadata.md). |
@@ -139,10 +139,11 @@ Do **not** dump full 1 Hz series into metadata.
 |---|---|
 | Pad quality threshold | 80 (`kUsableSignalThreshold` / `signalGoodThreshold`). Critical interrupt at 40 for 10 s (`badSignalPauseSeconds`). |
 | BandCache sticky unusable | Stamped at append when pad bad; **live chart only** — comment: does **not** feed Rust capture writer. |
-| Overshoot hold | Paint-time (`overshoot_hold.dart`); not a persisted sample bit. |
-| Disconnect during recording | Sampler stopped; `appendHeldUnusableGap` 1 Hz into BandCache for UI; raw gets no new BLE events. Capture lease held open. |
-| Feedback disconnect / badSignal | Phase → `interrupted`; audio/ticker pause. Computed sampler is **not** stopped until `end()`. |
-| Raw during bad quality | **Still records** whatever Muse events arrive. Unusable ≠ dropped. Disconnect is the exception (no packets). |
+| Overshoot hold | **Chart-only (LOCKED).** Paint-time (`overshoot_hold.dart`); never a computed field or annotation. Absolute band power already lives in computed `bands`. |
+| User **pause** | **LOCKED:** stop **raw** capture and **computed** sampler for the pause span; write `annotations[]` `{type:"pause", onset, duration}`; do not invent samples. `elapsedSeconds` / content clocks do not advance during pause (wall clock may). Resume restarts both streams. |
+| Disconnect during recording | No BLE packets → no new raw; UI may hold BandCache gaps. Capture lease policy unchanged until implementers touch it. Annotate `disconnect`. |
+| Feedback disconnect / badSignal | Phase → `interrupted`; annotate `bad_quality` / `disconnect` as appropriate. Distinct from user pause. |
+| Raw / computed during bad quality | **Still record** whatever arrives (raw samples + computed frames with `signalQuality`). Unusable ≠ dropped. Gate aggregates on usable seconds. |
 
 ---
 
@@ -153,7 +154,7 @@ Shared root for `kind: "recording"` and (with `feedback` attached) for feedback.
 ### Shape
 
 ```
-identity: formatVersion, appVersion, kind, savedAt, startedAt, elapsedSeconds, durationS, notes, sessionId?
+identity: formatVersion, appVersion, kind, savedAt, startedAt, timeZone, elapsedSeconds, durationS, notes, sessionId?
 subject:  { id, nickname?, sex?, ageAtRecording?, meditationExperience?, … }  // anonymous-first; omit voluntary until collected
 device:   { name, id, firmware, model, sensors, channelCount, channelLabels }
 streams:  { ten keys… }   // gestures enablement stub only; markers → annotations
@@ -171,8 +172,9 @@ Uses **Locked vocabulary** keys (no synonyms).
   "formatVersion": 6,
   "appVersion": "dev",
   "kind": "recording",
-  "savedAt": "2026-09-24T10:30:00.000Z",
-  "startedAt": "2026-09-24T10:20:00.000Z",
+  "savedAt": "2026-09-24T17:30:00.000+07:00",
+  "startedAt": "2026-09-24T17:20:00.000+07:00",
+  "timeZone": "Asia/Bangkok",
   "elapsedSeconds": 600,
   "durationS": 600,
   "notes": "",
@@ -246,6 +248,42 @@ Notes:
 - Root `annotations` is the **canonical** timeline (quality/pause/disconnect **and** gesture / interaction events). Optional `stats.annotationSeconds` is derived from interval types only (sum of `duration` per `type` for types with `duration > 0`); never a second source of truth. Instant gestures (`duration: 0`) do not contribute seconds.
 - `annotations` must stay compact (merge adjacent same-`type` interval runs). Instant events are not merged across time. Not a 1 Hz dump.
 - `streams.gestures.enabled` remains false until a real raw gesture stream exists. Gesture **markers** are rows in `annotations[]` — **not** a parallel `feedback.gestures` array (single source of truth).
+
+---
+
+## Timing + time zones — **LOCKED**
+
+> **LOCKED.** Session length and wall-clock start/save are already first-class. New: timezone awareness for file + app, aligned with EDF+ practice.
+
+### What every file already carries (keep)
+
+| Field | Meaning |
+|---|---|
+| `startedAt` | When capture/session **started** (wall-clock instant) |
+| `savedAt` | When the file was **assembled/saved** |
+| `elapsedSeconds` | Active session length in seconds (**does not advance during pause**) |
+| `durationS` | Same content-length idea as `elapsedSeconds` for recordings (writers: keep consistent; prefer one source of truth at write time) |
+| `feedback.durationMinutes` | Planned length only (feedback); not actual |
+
+Annotation `onset` / `duration` and computed `t` stay **seconds from capture start** (timezone-free), matching EDF+ TAL onset.
+
+### Timezone rules (LOCKED)
+
+1. **`startedAt` / `savedAt` must be ISO-8601 with an explicit offset or `Z`.** Never write Dart’s naive local `DateTime.toIso8601String()` (no offset). Prefer the device’s **local offset at that instant** (e.g. `2026-09-24T17:20:00.000+07:00`) so History shows local clock without a second lookup; `Z` (UTC) is also valid if paired with `timeZone`.
+2. **`timeZone` (IANA)** is **required** on new v6 files (e.g. `Asia/Bangkok`). Captured from the device/OS at session start. Survives DST history better than offset alone for later display/export.
+3. **EDF+ export:** header `startdate` / `starttime` = **local wall clock at the recording site** (EDF FAQ Q17 — everyone uses local; EDF has **no** timezone field). Derive local components from `startedAt` interpreted in `timeZone`. Put the unambiguous `Startdate dd-MMM-yyyy` in Local Recording Identification as EDF+ requires. Do not write UTC into EDF starttime pretending it is local.
+4. **App UI:** show local times using `timeZone` (fallback: offset on the timestamp). List/sort may use the absolute instant.
+5. **Today’s code debt:** recording metadata already forces UTC (`toUtc().toIso8601String()` → `…Z`) but **drops** the site zone; feedback metadata often writes **naive local** strings. v6 writers must fix both — see implementation TODO.
+
+### Pause vs clocks (LOCKED)
+
+- User **pause** → stop **raw** and **computed**; append/extend `annotations` `pause` interval; no new samples.
+- `elapsedSeconds` / computed `t` / annotation timeline = **active** time (pause gaps excluded from the ticking content clock, or represented only via the pause annotation span — implementers pick one consistent model and document it in the writer; preferred: content clock freezes, pause annotation covers wall-gap in onset/duration on the content timeline as contiguous freeze, matching “no samples”).
+- Bad quality / disconnect ≠ pause (streams may continue or go silent; still annotate).
+
+### Overshoot (LOCKED)
+
+Chart Y-max hold only. Not computed, not annotations, not stats.
 
 ---
 
@@ -425,7 +463,7 @@ EDF+ stores arbitrary UTF-8 annotation texts in TALs (`Onset` [`\x15` `Duration`
 2. **`type` enum (initial):**
    - Intervals: `pause` | `bad_quality` | `disconnect`
    - Instants (`duration: 0`): `double_blink` | `double_jaw_clench` | `eye_up` | `eye_down`
-   - Do **not** invent `overshoot` annotations in metadata until overshoot is product-defined as a persisted interval. Overshoot today is paint-only / experimental on Monitor Bands; sticky bad pads are already covered by quality-driven `bad_quality`.
+   - **Overshoot is chart-only (LOCKED).** Do **not** invent `overshoot` annotations or computed fields. Sticky bad pads → `bad_quality` only.
 3. **Times:** `onset` and `duration` are seconds from capture start (same clock as computed `t`). Matches EDF+ TAL onset (seconds from file startdate/time) and BIDS `events.tsv` onset/duration. `duration` is always present; use `0` for instants.
 4. **Merge** adjacent same-`type` **interval** runs (`duration > 0`); keep the list compact. Do not merge distinct instant events. Not a 1 Hz dump.
 5. **Reject** parallel top-level `paused` / `unusable` / `disconnected` objects and parallel `feedback.gestures[]` as primary models. Readers and writers use `annotations` only.
@@ -469,8 +507,9 @@ Discipline: rename only when EDF / BIDS / common EEG has a **clearly better** te
 | Old (v5 / draft candidate) | New (locked JSON) | Standard basis / rationale |
 |---|---|---|
 | `spo2` / `SpO2` / `sao2` / `SaO2` | **`spo2`** | EDF+ standard signal text is **`SaO2`**; Muse measures **SpO₂** (pulse oximetry via PPG), not arterial SaO₂. Keep product-accurate `spo2` (consistent all-lowercase acronym camelCase). Export may label EDF `SaO2`. Reject `spO2` (ugly) and `sao2` (wrong physiology as JSON id). |
-| `startedAt` | **`startedAt`** | EDF `startdate`+`starttime`; BIDS often `AcquisitionTime`. One ISO-8601 field beats EDF’s split. Keep. |
-| `savedAt` | **`savedAt`** | No EDF/BIDS file-write timestamp analogue. Keep — assemble/save time. |
+| `startedAt` | **`startedAt`** | Capture start instant — ISO-8601 **with explicit offset or `Z`** (never timezone-naive). EDF export → local `startdate`+`starttime` in `timeZone`. BIDS `AcquisitionTime`. |
+| `savedAt` | **`savedAt`** | Assemble/save instant — same ISO-8601 rule as `startedAt`. No EDF analogue. |
+| *(none today)* | **`timeZone`** | IANA id at recording site (e.g. `Asia/Bangkok`). Required on new v6 files. EDF+ has no TZ field (FAQ: header clock = **local**); we keep IANA in JSON so export/UI can recover local wall time. |
 | `durationS` | **`durationS`** | BIDS `RecordingDuration` (seconds). Keep unit suffix; do **not** adopt PascalCase `recordingDuration`. |
 | `elapsedSeconds` | **`elapsedSeconds`** | No direct EDF analogue (wall/session elapsed may differ from stored samples). Keep — product timing. |
 | `channelLabels` / `ch_names` / electrode names | **`channelLabels`** | EDF signal **label**; BIDS `channels.tsv` `name`; MNE `ch_names`. Keep `channelLabels` (EDF “label” sense) as array on `device`. |
@@ -511,6 +550,7 @@ Discipline: rename only when EDF / BIDS / common EEG has a **clearly better** te
 | Locked key | Notes |
 |---|---|
 | `formatVersion`, `appVersion`, `kind` | Container / app identity; `kind` = `recording` \| `feedback` |
+| `startedAt`, `savedAt`, `timeZone`, `elapsedSeconds`, `durationS` | Timing — see **Timing + time zones**; `timeZone` IANA required on new v6 files |
 | `sessionId` | Optional root file/capture id (feedback today); **not** under `subject` |
 | `subject` (+ `id` required; voluntary fields omit-until-collected) | Anonymous-first person object — see Subject model |
 | `streams` ten keys | `eeg`, `bands`, `pulse`, `spo2`, `movement`, `peakAlpha`, `imu`, `ppg`, `telemetry`, `gestures` — enablement `{enabled,rateHz}`; `gestures` stub only |
@@ -640,8 +680,9 @@ Uses locked base vocabulary. `feedback` holds only what base does not.
   "formatVersion": 6,
   "appVersion": "dev",
   "kind": "feedback",
-  "savedAt": "2026-09-24T10:30:00.000Z",
-  "startedAt": "2026-09-24T10:15:00.000Z",
+  "savedAt": "2026-09-24T17:30:00.000+07:00",
+  "startedAt": "2026-09-24T17:15:00.000+07:00",
+  "timeZone": "Asia/Bangkok",
   "elapsedSeconds": 900,
   "durationS": 900,
   "notes": "",
@@ -884,6 +925,9 @@ Not coded in this draft; checklist for the implementation PR:
 9. **`subject` is PREPARED (anonymous-first).** Always write `subject.id` on new v6 files; omit voluntary fields until collected; never put PII by default; keep `sessionId` at root. See Subject model.
 10. **Feedback extension is LOCKED.** When `kind=="feedback"`, write top-level `feedback` per **Feedback extension**; never duplicate base/annotations/stats fields into it; never write `feedback.gestures[]` or `feedback.drowsiness`. Guard/reward outcome scalars → `feedback.outcomeScalars` only. See migrated-away table.
 11. **`stats.experimental.bands` formulas are LOCKED.** Compute only the keys in **Experimental band metrics**; usable-seconds gate; omit the nest if < 30 usable seconds; do not invent synonym keys.
+12. **Pause stops raw + computed (LOCKED).** No samples during pause; `annotations` `pause` interval required; `elapsedSeconds` does not advance.
+13. **Timezone-aware timestamps (LOCKED).** Write `startedAt`/`savedAt` with offset or `Z`; always write IANA `timeZone`; EDF export uses local wall clock. See **Timing + time zones**.
+14. **Overshoot is chart-only (LOCKED).** Never persist as computed/annotation/stats.
 
 ---
 
@@ -923,10 +967,10 @@ Feedback extension + experimental band formulas + base vocabulary are **LOCKED /
 
 Deferred outside this format PR (do not block v6 metadata):
 
-- Whether `% overshoot` / overshoot intervals are worth persisting (today paint-only on Monitor Bands — **not** a v6 key until product-defined).
 - Per-record length prefix / Athena tag 11 (separate optics series — see [../TODO/athena-optics-contract.md](../TODO/athena-optics-contract.md)).
-- Whether feedback pause should stop the computed sampler (behavior PR, not schema).
 - Nickname export-as-EDF-name product toggle (default EDF name = `X`).
+
+**Resolved this pass:** overshoot = chart-only; pause = stop raw+computed + `pause` annotation; timing fields + `timeZone` locked (see Timing + time zones).
 
 ---
 
@@ -947,7 +991,7 @@ Gap check of **v6 BASE** (+ locked annotations / subject / stats / streams / dev
 | Feedback `gestures[]` `{type,at}` | → root `annotations[]` `{onset,duration:0,type}` (snake_case types) |
 | Sqlite `user_id` | → `subject.id` (anonymous-first) |
 | Sqlite / feedback `session_id` | → root `sessionId` |
-| New (not in v5 file JSON) | `subject`, `stats.*` (hr/spo2/peakAlpha/movement/quality/battery/annotationSeconds/experimental), `annotations`, recording `sessionId` |
+| New (not in v5 file JSON) | `subject`, `timeZone`, `stats.*` (hr/spo2/peakAlpha/movement/quality/battery/annotationSeconds/experimental), `annotations`, recording `sessionId` |
 
 ### B) Belongs under `feedback` (not base)
 
@@ -981,14 +1025,13 @@ No other current feedback/recording JSON keys need new base keys.
 
 ### D) Missing / deferred OK
 
-- `% overshoot` / overshoot annotations (paint-time today; not a v6 key until product-defined).
 - Voluntary `subject` demographics; `yearOfBirth`; BIDS `handedness`; separate `device.manufacturer`.
 - Per-stream `StreamInfo.electrodes` / `channels` / `sensors` (on Dart model, never written by `streamsConfig`).
 - Session means for `lineNoise` / guardrail `clarity`; telemetry `fuel` / `temp` bookends (battery `%` only).
 - Sqlite-only: section offsets, `file_size` / `mtime`, `thumbnail` BLOB, `notes_preview`, `marker_count` (derive from `annotations`), `state_markers` label/confidence table.
 - Scratch `kind: "tmp"` (connect-time sidecar; never published — v6 `kind` remains `recording` \| `feedback`).
-- Athena tag 11; per-record length prefix; pause stopping computed sampler (see implementation TODO + optics contract).
-- `stats.experimental.bands` **formulas are LOCKED** (see Experimental band metrics); implementing the writer is a TODO, not a formula open.
+- Athena tag 11; per-record length prefix (optics contract — separate series).
+- Overshoot / pause / timezone **decisions are LOCKED** above; implementing pause-stops-streams + timezone writers is TODO work, not open design.
 
 ### E) Code has it but specs forgot (callouts)
 
