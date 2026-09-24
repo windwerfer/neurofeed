@@ -2,14 +2,14 @@
 
 | Field | Value |
 |---|---|
-| Status | **Draft.** Contract only. Not implemented. |
+| Status | **Draft** (writers/readers not implemented). **Annotations model = LOCKED.** **Base metadata vocabulary = LOCKED** (see Locked vocabulary). |
 | Scope | Unify recording + feedback **metadata JSON**; prepare a **v6 clean cut** (container magic/version + writers/readers). |
-| Not this | Implement Rust/Dart writers yet; Athena tag 11; History UI chrome; pipeline Key Decisions. |
+| Not this | Implement Rust/Dart writers yet; rename Dart/Rust identifiers yet; Athena tag 11; History UI chrome; pipeline Key Decisions. |
 | Supersedes (when landed) | Dual dialects in [session-format-contract.md](session-format-contract.md) § Metadata; [../TODO/session_vs_recording_metadata.md](../TODO/session_vs_recording_metadata.md). |
 | Human layout (today) | [../../README_feedback_format.md](../../README_feedback_format.md) — update **in the same PR** that implements v6. |
 | History cache | [../../README_history_cache.md](../../README_history_cache.md) — promote a small scalar set into sqlite later. |
 
-Agents: adhere to **Design rules** below. Inventory is from code (cited), not guesswork.
+Agents: adhere to **Design rules** and **Locked vocabulary** below. Inventory is from code (cited), not guesswork. JSON keys in this contract are the **source of truth** — prefer them when implementing writers/readers and when renaming Dart/Rust identifiers in a later PR; do not invent synonyms.
 
 ---
 
@@ -40,12 +40,12 @@ Honest 1–10 match of v6 names/shapes to EDF+, BIDS-EEG, and common annotation 
 | Area | Score | Overall | Why (one line) |
 |---|---:|---|---|
 | Identity / timing (`startedAt`, `durationS`, …) | 7 | **equal** | `startedAt` / `durationS` map cleanly to EDF start + BIDS `RecordingDuration`; we invent `kind` / `formatVersion` / `appVersion` / `savedAt` / `elapsedSeconds` (no EDF analogue — better for app); **weaker** — no Patient ID / sex / birthdate fields EDF carries. |
-| Device / channels | 7 | **equal** | Nested `device` + `channelLabels` ≈ EDF labels / BIDS `channels.tsv` / `ManufacturersModelName`; **weaker** — `spo2` not EDF `SaO2`, no separate Manufacturer, `channelCount` is generic not `EEGChannelCount`. |
+| Device / channels | 7 | **equal** | Nested `device` + `channelLabels` ≈ EDF labels / BIDS `channels.tsv` / `ManufacturersModelName`; **weaker** — no separate Manufacturer, `channelCount` is generic not `EEGChannelCount`; stream key `spo2` (SpO₂) maps to EDF label `SaO2` on export. |
 | Streams / sampling rates | 6 | **better for app** | `rateHz` ≈ BIDS `SamplingFrequency`; the ten-key `streams` enablement map has **no EDF analogue** (equal/better for app product config). |
 | Annotations (onset/duration/type + gesture + gap) | 9 | **better** | Locks to EDF+ TAL / BIDS `events.tsv` nominators; unified quality + gesture timeline matches real EDF+ practice; `bad_quality` MNE-friendly. |
 | Session stats aggregates | 6 | **better for app** | Nested `stats` (HR/SpO₂/quality/battery/experimental) — **no EDF metadata analogue** (closest: analysis-result files / BIDS derivatives); correct invent for History/AI. |
 | Feedback extension (protocol, calibration, music) | 8 | **better for app** | Neurofeedback-specific; **no EDF/BIDS analogue** (protocol loosely ↔ `TaskName`); invent is documented and scoped under `feedback` only. |
-| **Overall composite** | **7** | **equal → better** | Strong on annotations + timing; honest invent for `stats` / `streams` / `kind` / `feedback`; remaining gaps: Patient demographics, SaO2 naming, and PascalCase sidecar keys (map on export, not in JSON). |
+| **Overall composite** | **7** | **equal → better** | Strong on annotations + timing; honest invent for `stats` / `streams` / `kind` / `feedback`; remaining gaps: Patient demographics; PascalCase sidecar keys and EDF `SaO2` label map on **export** (JSON keeps `spo2`). |
 
 ---
 
@@ -162,6 +162,8 @@ feedback: { … }   // ONLY when kind == "feedback"; NO gestures[] list
 
 ### Example — `kind: "recording"`
 
+Uses **Locked vocabulary** keys (no synonyms).
+
 ```json
 {
   "formatVersion": 6,
@@ -233,7 +235,9 @@ Notes:
 
 ---
 
-## Annotations model (locked)
+## Annotations model — **LOCKED**
+
+> **LOCKED.** Not draft-open. Shape `{ onset, duration, type }`, interval types `pause` | `bad_quality` | `disconnect`, gesture types snake_case with `duration: 0` for instants, **single source of truth** at root `annotations[]`. Do not reopen without a format PR.
 
 **Decision:** one extensible root array `annotations[]` of `{ onset, duration, type }` objects. **Not** three parallel top-level bags `paused{}` / `unusable{}` / `disconnected{}` (anti-pattern — rejected as the primary model). **Not** `gaps` as the root key (jargon; does not map to EDF+/BIDS). **Not** a separate `feedback.gestures[]` list (duplicate timeline — rejected; see Gestures / interactions).
 
@@ -344,78 +348,71 @@ When exporting (see `.ai/export.md` EDF+ path), map as follows:
 
 EDF+ timekeeping TALs (empty text, per-data-record start) are **container** mechanics — not rows in `annotations[]`.
 
-## Metadata field naming — EDF/BIDS check (locked)
+## Locked vocabulary (base metadata JSON keys)
 
-Same discipline as the annotations nominators: prefer a widely used EEG/EDF/BIDS term when it is clearly better; **keep** neurofeed names when already clear or when EDF/BIDS has no analogue. neurofeed JSON stays **camelCase** keys; snake_case is reserved for `annotations[].type` string values (and similar enums). Do **not** adopt BIDS PascalCase (`SamplingFrequency`, `RecordingDuration`) as JSON keys.
+> **LOCKED.** camelCase JSON keys below are the contract source of truth. Prefer them in writers/readers and when renaming Dart/Rust identifiers in a later PR. Do **not** invent synonyms (`sfreq`, `ch_names`, `SaO2` as a JSON key, PascalCase BIDS sidecar spellings, parallel gesture lists, …). Map to EDF+/BIDS/MNE names on **export**, not inside neurofeed JSON. snake_case is reserved for `annotations[].type` values (and similar enums).
 
-### Table — Current → Proposed → Analogue
+Discipline: rename only when EDF / BIDS / common EEG has a **clearly better** term that does not break product meaning. Otherwise keep.
 
-| Current (v5 / v6 draft) | Proposed | EDF / BIDS analogue | Decision |
-|---|---|---|---|
-| `formatVersion` | **keep** | EDF header “version” is always `0 `; BIDS has dataset/schema versions, not this | keep — neurofeed container version |
-| `appVersion` | **keep** | BIDS `SoftwareVersions` (recommended) | keep — clear; map on export |
-| `kind` | **keep** | no EDF analogue; BIDS `RecordingType` = continuous/discontinuous/epoched (different) | keep — `recording` \| `feedback` |
-| `savedAt` | **keep** | no standard file-write timestamp in EDF/BIDS sidecars | keep — ISO-8601 assemble/save time |
-| `startedAt` | **keep** | EDF `startdate`+`starttime`; BIDS often `AcquisitionTime` / scan time | keep — one ISO-8601 field is clearer than EDF’s split |
-| `elapsedSeconds` | **keep** | no direct; wall/session elapsed may differ from stored samples | keep — product timing |
-| `durationS` | **keep** | BIDS `RecordingDuration` (seconds); EDF records×duration | keep — unit suffix beats renaming to PascalCase `recordingDuration` |
-| `notes` | **keep** | EDF free-text annotations / technician notes; no sidecar standard | keep — file-level comment |
-| `device` | **keep** | EDF equipment code in recording id; BIDS `Manufacturer*` | keep — nest |
-| `device.name` | **keep** | EDF local recording equipment subfield; BIDS no exact | keep |
-| `device.id` | **keep** | — | keep — BLE / sim id |
-| `device.firmware` | **keep** | BIDS `SoftwareVersions` (device FW) | keep |
-| `device.model` | **keep** | BIDS `ManufacturersModelName` | keep — nested under `device` already scopes it |
-| `device.sensors` | **keep** | EDF signal types (EEG/PPG/…); BIDS channel counts by type | keep |
-| `device.channelCount` | **keep** | BIDS `EEGChannelCount` (EEG-specific) | keep — generic N for Muse pads |
-| `device.channelLabels` | **keep** | EDF signal `label`; BIDS `channels.tsv` `name` | keep — array on device |
-| `streams` | **keep** | EDF ns signals; BIDS `channels.tsv` + SamplingFrequency | keep — enablement map |
-| `streams.*.enabled` | **keep** | — | keep |
-| `streams.*.rateHz` | **keep** | BIDS `SamplingFrequency`; EDF `nr of samples` / record duration | keep — unit in name |
-| `streams.eeg` … `telemetry` | **keep** keys | EDF labels `EEG …`, `SaO2`, etc. | keep — product stream ids (`spo2` not `SaO2`; `peakAlpha` matches ComputedFrame) |
-| `streams.gestures` | **keep** stub | EDF Annotations ≠ a sample stream | keep enablement only; markers → `annotations` |
-| `stats` | **keep** | EDF analysis-result files; BIDS derivatives | keep — session aggregates |
-| `stats.hr` `{mean,min,max}` | **keep** | clinical HR summary; no EDF metadata field | keep |
-| `stats.spo2` | **keep** | EDF label `SaO2` | keep `spo2` (common spelling); export may say SaO2 |
-| `stats.peakAlpha` | **keep** | — | keep — matches computed |
-| `stats.movement` | **keep** | — | keep |
-| `stats.quality` | **keep** | — | keep — pad / usable summary |
-| `stats.annotationSeconds` | **keep** | — | keep — derived from `annotations` |
-| `stats.battery` | **keep** | — | keep |
-| `stats.experimental` | **keep** | — | keep — may be removed |
-| `annotations` | **keep** | EDF+ Annotations / TAL; BIDS `events.tsv` | keep — already locked |
-| `annotations[].onset` | **keep** | EDF+ Onset; BIDS `onset` | keep |
-| `annotations[].duration` | **keep** | EDF+ Duration; BIDS `duration` | keep; `0` for instants |
-| `annotations[].type` | **keep** key; **snake_case values** | EDF free text; BIDS `trial_type` on export | keep key; rename v5 gesture *values* |
-| `feedback` | **keep** | no EDF/BIDS analogue | keep — only when `kind=="feedback"` |
-| `feedback.protocol` | **keep** | BIDS `TaskName` (loose) | keep |
-| `feedback.protocolVersion` / `protocolJson` | **keep** | — | keep |
-| `feedback.sound` / `feedbackSound` | **keep** | — | keep |
-| `feedback.calibration` / `sessionSettings` / `drowsiness` / `music` | **keep** | — | keep |
-| `feedback.gestures[]` | **remove as SoT** | EDF Annotations / BIDS events | **fold into `annotations[]`**; do not duplicate |
-| `feedback.training.*` | **keep** | — | keep — training-only scalars |
-| v5 flat `deviceName` / `deviceModel` / `deviceId` | nested `device.*` | — | already planned migrate |
-| v5 `recordedChannels` | `device.channelLabels` | — | migrate |
-| v5 gesture `at` | `onset` | BIDS/EDF onset | migrate via annotations |
-| v5 `doubleBlink` / `doubleClench` / `eyeUp` / `eyeDown` | `double_blink` / `double_jaw_clench` / `eye_up` / `eye_down` | free-text events | **rename** type strings |
+### Locked vocabulary table — old → new → standard basis
 
-**Renames recommended (summary):** gesture `type` strings → snake_case with explicit `jaw`; gesture time key `at` → `onset` via annotations; drop parallel `feedback.gestures[]`. **Everything else in the identity / device / streams / stats / feedback training tree: keep.**
+| Old (v5 / draft candidate) | New (locked JSON) | Standard basis / rationale |
+|---|---|---|
+| `spo2` / `SpO2` / `sao2` / `SaO2` | **`spo2`** | EDF+ standard signal text is **`SaO2`**; Muse measures **SpO₂** (pulse oximetry via PPG), not arterial SaO₂. Keep product-accurate `spo2` (consistent all-lowercase acronym camelCase). Export may label EDF `SaO2`. Reject `spO2` (ugly) and `sao2` (wrong physiology as JSON id). |
+| `startedAt` | **`startedAt`** | EDF `startdate`+`starttime`; BIDS often `AcquisitionTime`. One ISO-8601 field beats EDF’s split. Keep. |
+| `savedAt` | **`savedAt`** | No EDF/BIDS file-write timestamp analogue. Keep — assemble/save time. |
+| `durationS` | **`durationS`** | BIDS `RecordingDuration` (seconds). Keep unit suffix; do **not** adopt PascalCase `recordingDuration`. |
+| `elapsedSeconds` | **`elapsedSeconds`** | No direct EDF analogue (wall/session elapsed may differ from stored samples). Keep — product timing. |
+| `channelLabels` / `ch_names` / electrode names | **`channelLabels`** | EDF signal **label**; BIDS `channels.tsv` `name`; MNE `ch_names`. Keep `channelLabels` (EDF “label” sense) as array on `device`. |
+| `rateHz` / `sfreq` / `SamplingFrequency` | **`rateHz`** | BIDS `SamplingFrequency`; EDF samples/record ÷ duration. Keep unit-in-name; map on export. Reject `sfreq` (MNE-only jargon in product JSON). |
+| `pulse` / HR / bpm / `heartRate` | **`pulse`** (stream) | Computed 1 Hz stream id; PPG-derived pulse rate. Keep to match `ComputedFrame`. Session aggregates use **`stats.hr`** `{mean,min,max}` (clinical HR summary — no EDF metadata field). |
+| `peakAlpha` | **`peakAlpha`** | No EDF/BIDS analogue. Keep — matches computed frame / stream enablement. |
+| `device` (+ `name`,`id`,`firmware`,`model`,`sensors`,`channelCount`,`channelLabels`) | **`device`** nest | EDF equipment subfield; BIDS `Manufacturer*` / `ManufacturersModelName`. Keep nest; map manufacturer fields on export. No Patient ID/sex/birthdate in v6 (documented gap). |
+| `notes` / Comments | **`notes`** | EDF free-text / technician notes live in Annotations; BIDS `Comments` is dataset-level. Keep file-level `notes` (product copy). |
+| `annotations` | **`annotations`** | EDF+ Annotations / TAL; BIDS `events.tsv`. **Already LOCKED** — see Annotations model. |
+| `annotations[]` shape | **`{onset,duration,type}`** | EDF+ Onset/Duration; BIDS required `onset`/`duration` (0 = instant). Locked. |
+| Gesture `type` strings (`doubleBlink`, …) | **`double_blink`**, **`double_jaw_clench`**, **`eye_up`**, **`eye_down`** | snake_case locked; free UTF-8 TAL text / BIDS `trial_type` on export. |
+| Interval `type` strings | **`pause`**, **`bad_quality`**, **`disconnect`** | Locked; `bad_*` prefix is MNE-friendly. |
+| `stats` (+ nested) | **`stats`** | No EDF metadata analogue (analysis / BIDS derivatives). Keep. Nested clarity locked below. |
+| `feedback.gestures[]` / v5 `at` | **fold into `annotations[]`**; time key **`onset`** | Single SoT; v5 `at` → `onset`. |
+
+### Nested `stats` field names (locked; no EDF analogue)
+
+| Locked key | Meaning |
+|---|---|
+| `stats.hr` `{mean,min,max}` | Heart-rate summary from computed `pulse` |
+| `stats.spo2` `{mean,min,max}` | SpO₂ summary from computed `spo2` |
+| `stats.peakAlpha` `{meanHz,maxPowerHz,maxPower}` | Peak-alpha summary |
+| `stats.movement` `{mean}` (+ optional stillness later) | Movement summary |
+| `stats.quality` `{mean,pctGood,channelUsable}` | Pad / usable-signal summary |
+| `stats.annotationSeconds` `{pause,bad_quality,disconnect}` | Derived seconds-by-type from interval annotations only |
+| `stats.battery` `{startPct,endPct}` | Telemetry bookends when available |
+| `stats.experimental` | Tunable / removable band aggregates |
+
+### Also locked (identity / streams / feedback shells)
+
+| Locked key | Notes |
+|---|---|
+| `formatVersion`, `appVersion`, `kind` | Container / app identity; `kind` = `recording` \| `feedback` |
+| `streams` ten keys | `eeg`, `bands`, `pulse`, `spo2`, `movement`, `peakAlpha`, `imu`, `ppg`, `telemetry`, `gestures` — enablement `{enabled,rateHz}`; `gestures` stub only |
+| `feedback` | Only when `kind=="feedback"`; no `gestures[]` list |
 
 ### Naming rationale (expanded)
 
-Cited conventions that locked annotations **and** the metadata check above:
+Cited conventions that locked annotations **and** the vocabulary table above:
 
-1. **EDF+ TALs** ([edfplus.info/specs/edfplus.html](https://www.edfplus.info/specs/edfplus.html)): annotations use **Onset** + optional **Duration** in seconds from recording startdate/time; free-text UTF-8 strings (stimuli, responses, sleep stages, lights, technician notes, button-like events). Root concept = *annotations*, not “gaps”. Duration may be omitted in the wire TAL when irrelevant — our JSON still stores `duration: 0` for instants.
-2. **EDF+ standard texts** ([edftexts.html](https://www.edfplus.info/specs/edftexts.html)): obligatory PSG strings (`Lights off`, `Sleep stage N2`, `Apnea`, …) plus general `Recording starts/ends`. No standard blink/clench tokens — custom snake_case types are appropriate and export as the TAL text.
-3. **BIDS events** ([bids-specification — Events](https://bids-specification.readthedocs.io/en/stable/modality-agnostic-files/events.html)): required columns **`onset`**, **`duration`** (seconds; **zero = instantaneous**); optional **`trial_type`**. EEG sidecars use PascalCase (`SamplingFrequency`, `RecordingDuration`, `ManufacturersModelName`) — map on **export**, do not force those spellings into neurofeed camelCase JSON.
-4. **BIDS EEG sidecar** ([electroencephalography](https://bids-specification.readthedocs.io/en/stable/modality-specific-files/electroencephalography.html)): equipment and sampling metadata live beside the recording; our nested `device` + `streams.*.rateHz` + `durationS` carry the same ideas under clearer product names.
-5. **MNE-Python**: `mne.Annotations(onset, duration, description)`; spans meant for rejection should have descriptions starting with **`bad`** / `BAD` (e.g. `bad_quality`). Gesture descriptions must **not** start with `bad` so they are not auto-rejected.
-6. **BrainVision Analyzer**: **Bad Interval** markers (duration > 0) for rejectable spans; **New Segment** for pause/resume discontinuities — informed `bad_quality` vs keeping product `pause` / `disconnect` rather than overloading `boundary`.
-7. **EEGLAB**: discontinuity / cut markers as event **`type: "boundary"`** — reserved for *removed or non-contiguous data*, not user pause while the file keeps a continuous timeline; do not rename our `pause` to `boundary`.
-8. **Muse / LibMuse**: `MuseFileWriter.addAnnotationString` (arbitrary strings; sample “Disconnected”) — free text, so stable short tokens export cleanly.
-9. **PhysioNet**: ERP-BCI EDF+ annotations mix run bounds, stimulus intensifications, and counted responses in one annotation channel; Sleep-EDF stores hypnogram stages and marker-button style events — supports treating gestures as peer rows beside quality intervals.
-10. **JSON style:** neurofeed metadata keys stay camelCase (`formatVersion`, `rateHz`, `channelLabels`). Enumerated annotation **values** use snake_case (`bad_quality`, `double_blink`) for stable cross-language tokens and EDF/BIDS text export.
+1. **EDF+ TALs** ([edfplus.info/specs/edfplus.html](https://www.edfplus.info/specs/edfplus.html)): annotations use **Onset** + optional **Duration** in seconds from recording startdate/time; free-text UTF-8 strings. Root concept = *annotations*, not “gaps”. Duration may be omitted in the wire TAL when irrelevant — our JSON still stores `duration: 0` for instants.
+2. **EDF+ standard texts** ([edftexts.html](https://www.edfplus.info/specs/edftexts.html)): includes signal label **`SaO2`**; obligatory PSG strings; no standard blink/clench tokens — custom snake_case types export as TAL text. JSON stream id stays `spo2` (SpO₂).
+3. **BIDS events** ([bids-specification — Events](https://bids-specification.readthedocs.io/en/stable/modality-agnostic-files/events.html)): required **`onset`**, **`duration`** (zero = instantaneous); optional **`trial_type`**. EEG sidecars use PascalCase (`SamplingFrequency`, `RecordingDuration`, `ManufacturersModelName`) — map on **export**.
+4. **BIDS EEG sidecar** ([electroencephalography](https://bids-specification.readthedocs.io/en/stable/modality-specific-files/electroencephalography.html)): equipment and sampling beside the recording; our nested `device` + `streams.*.rateHz` + `durationS` carry the same ideas under product camelCase.
+5. **MNE-Python**: `mne.Annotations(onset, duration, description)`; rejection descriptions start with **`bad`** / `BAD`. Gesture descriptions must **not** start with `bad`.
+6. **BrainVision Analyzer**: **Bad Interval** vs **New Segment** — informed `bad_quality` vs product `pause` / `disconnect` (do not overload EEGLAB `boundary`).
+7. **EEGLAB**: `type: "boundary"` = discontinuity/cut — not user pause on a continuous timeline.
+8. **Muse / LibMuse**: `addAnnotationString` free text — stable short tokens export cleanly.
+9. **PhysioNet**: ERP-BCI / Sleep-EDF mix stimuli, responses, and stages in one annotation channel — gestures are peer rows beside quality intervals.
+10. **JSON style:** metadata keys camelCase; annotation **values** snake_case.
 
-Future agents: change these names only with a format PR and an updated mapping table. Prefer adding a new `annotations[].type` string over renaming existing ones. Prefer keeping identity/device/streams/stats keys unless a standard term is *clearly* better (bar was not met for `durationS`, `rateHz`, `model`, `spo2`, etc.).
+Future agents: change locked names only with a format PR and an updated table. Prefer adding a new `annotations[].type` over renaming existing ones.
 
 ### Layers (unchanged intent)
 
@@ -479,10 +476,12 @@ Not coded in this draft; checklist for the implementation PR:
 4. Do not stuff 1 Hz series into metadata; do not invent vague band "spread" names.
 5. Do not unify History UI chrome as a side effect of this format work.
 6. Deviations need a written why before merge.
+7. **Locked JSON keys are the source of truth.** When implementing writers/readers, and when renaming Dart/Rust identifiers in a later PR, prefer the keys in **Locked vocabulary** and the **Annotations model — LOCKED** section. Do not invent synonyms (`sfreq`, `ch_names`, `sao2` as a JSON key, `SamplingFrequency` in neurofeed JSON, parallel `feedback.gestures[]`, …). Map EDF+/BIDS/MNE spellings on export only. Do **not** rename app source in the same change as a contract-only edit unless the task says so.
+8. **Annotations model is LOCKED** — do not reopen shape, nominators, or initial `type` strings without a format PR.
 
 ---
 
-## Leftovers / open (not blocking this draft)
+## Leftovers / open (not blocking; vocabulary + annotations locked)
 
 - Exact named-band formulas (experimental until product locks them).
 - Whether `% overshoot` / overshoot intervals are worth persisting later (paint-time today; **not** an `annotations.type` until defined — see Annotations model).

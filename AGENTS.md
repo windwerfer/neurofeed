@@ -63,6 +63,13 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   `cargo test --lib session_format` green. Frozen law:
   [`.ai/contracts/session-format-contract.md`](.ai/contracts/session-format-contract.md).
   Update `README_feedback_format.md` in the same change.
+- **File format v6 (draft, contract-only):**
+  [`.ai/contracts/fileformat_v6.md`](.ai/contracts/fileformat_v6.md) —
+  **Annotations model LOCKED** (`{onset,duration,type}`; pause/bad_quality/disconnect +
+  snake_case gestures; `duration: 0` instants; single SoT). **Base metadata vocabulary
+  LOCKED** — prefer those JSON keys when implementing writers/readers and when renaming
+  Dart/Rust identifiers in a later PR; do not invent synonyms. Do not rename app source
+  until a task says so.
 - Do not reopen pipeline-contract Key Decisions. Do not unlock Crown
   sessions. Connect UX is frozen (`.ai/connect-simulator-ux.md`) — do not
   mix OSC-connect or Crown Start into it. `DeviceKind` is Muse | Neurosity
