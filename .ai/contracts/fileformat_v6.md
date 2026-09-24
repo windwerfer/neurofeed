@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Draft** (writers/readers not implemented). **Annotations model = LOCKED.** **Base metadata vocabulary = LOCKED** (see Locked vocabulary). |
+| Status | **Draft** (writers/readers not implemented). **Annotations model = LOCKED.** **Base metadata vocabulary = LOCKED** (see Locked vocabulary). **`subject` object = PREPARED** (anonymous-first; see Subject model). |
 | Scope | Unify recording + feedback **metadata JSON**; prepare a **v6 clean cut** (container magic/version + writers/readers). |
 | Not this | Implement Rust/Dart writers yet; rename Dart/Rust identifiers yet; Athena tag 11; History UI chrome; pipeline Key Decisions. |
 | Supersedes (when landed) | Dual dialects in [session-format-contract.md](session-format-contract.md) § Metadata; [../TODO/session_vs_recording_metadata.md](../TODO/session_vs_recording_metadata.md). |
@@ -16,7 +16,7 @@ Agents: adhere to **Design rules** and **Locked vocabulary** below. Inventory is
 ## Design rules (must adhere)
 
 1. **Base names and objects on EDF / standard EEG recording formats** (EDF+, BIDS-EEG, common annotation practice). Do not reinvent what those already have, except when they don’t fit our product (document why).
-2. **One base schema for both kinds.** Identity + `device` + `streams` + `stats` (+ quality/`annotations`) always present. Optional top-level `feedback` object **only** when `kind == "feedback"`; omit (or null) for recordings.
+2. **One base schema for both kinds.** Identity + `subject` + `device` + `streams` + `stats` (+ quality/`annotations`) always present. Optional top-level `feedback` object **only** when `kind == "feedback"`; omit (or null) for recordings.
 3. **Two layers of stats.** (a) **Computed 1 Hz** — charts / AI time series (`ComputedFrame`). (b) **Session summary** — scalars/short structs on metadata, computed at assemble/save (later: a small set as sqlite columns).
 4. **Do not duplicate time series into metadata.** Metadata = scalars + short structs + compact interval lists. Computed = second-by-second.
 5. **Band aggregates are named metrics** (e.g. mean α, α/θ, frontal–temporal α asymmetry, cross-channel α variance). Never vague "spread".
@@ -30,6 +30,7 @@ Also:
 - Shared nested `stats` for both kinds (feedback-only reward/guard scalars live under `feedback` or under `stats` only when meaningful for both — prefer `feedback.*` for training-only).
 - Fit / usable-signal summary and battery start/end when cheap.
 - **Gestures:** instant user-interaction events live in root `annotations[]` (same timeline as pause / bad_quality / disconnect). `streams.gestures` remains an enablement stub (`enabled: false`) until a raw gesture stream exists — not a duplicate event list. Do not invent a raw tag without a format PR.
+- **Subject (anonymous-first):** every file carries a nested root `subject` object (BIDS naming). Always include stable anonymous `subject.id`. Optional display `nickname` and voluntary demographics (`sex`, `ageAtRecording`, `meditationExperience`, …) are **omitted until the user provides them** — never invent placeholders that look like PII. File/session identity (`sessionId` when present) stays at **root**, not under `subject`. See **Subject model**.
 
 ---
 
@@ -39,13 +40,13 @@ Honest 1–10 match of v6 names/shapes to EDF+, BIDS-EEG, and common annotation 
 
 | Area | Score | Overall | Why (one line) |
 |---|---:|---|---|
-| Identity / timing (`startedAt`, `durationS`, …) | 7 | **equal** | `startedAt` / `durationS` map cleanly to EDF start + BIDS `RecordingDuration`; we invent `kind` / `formatVersion` / `appVersion` / `savedAt` / `elapsedSeconds` (no EDF analogue — better for app); **weaker** — no Patient ID / sex / birthdate fields EDF carries. |
+| Identity / timing (`startedAt`, `durationS`, `subject`, …) | 8 | **equal → better** | `startedAt` / `durationS` map cleanly to EDF start + BIDS `RecordingDuration`; nested `subject.id` → EDF Local Patient Identification **code** / BIDS `participant_id` (anonymous-first); optional `sex` / `ageAtRecording` omit until collected (EDF sex/birthdate → `X` when unknown); `nickname` display-only (EDF **name** stays `X` unless user opts into export); invent `kind` / `formatVersion` / `appVersion` / `savedAt` / `elapsedSeconds` / root `sessionId` (file identity, not under `subject`). |
 | Device / channels | 7 | **equal** | Nested `device` + `channelLabels` ≈ EDF labels / BIDS `channels.tsv` / `ManufacturersModelName`; **weaker** — no separate Manufacturer, `channelCount` is generic not `EEGChannelCount`; stream key `spo2` (SpO₂) maps to EDF label `SaO2` on export. |
 | Streams / sampling rates | 6 | **better for app** | `rateHz` ≈ BIDS `SamplingFrequency`; the ten-key `streams` enablement map has **no EDF analogue** (equal/better for app product config). |
 | Annotations (onset/duration/type + gesture + gap) | 9 | **better** | Locks to EDF+ TAL / BIDS `events.tsv` nominators; unified quality + gesture timeline matches real EDF+ practice; `bad_quality` MNE-friendly. |
 | Session stats aggregates | 6 | **better for app** | Nested `stats` (HR/SpO₂/quality/battery/experimental) — **no EDF metadata analogue** (closest: analysis-result files / BIDS derivatives); correct invent for History/AI. |
 | Feedback extension (protocol, calibration, music) | 8 | **better for app** | Neurofeedback-specific; **no EDF/BIDS analogue** (protocol loosely ↔ `TaskName`); invent is documented and scoped under `feedback` only. |
-| **Overall composite** | **7** | **equal → better** | Strong on annotations + timing; honest invent for `stats` / `streams` / `kind` / `feedback`; remaining gaps: Patient demographics; PascalCase sidecar keys and EDF `SaO2` label map on **export** (JSON keeps `spo2`). |
+| **Overall composite** | **8** | **equal → better** | Strong on annotations + timing + anonymous `subject`; honest invent for `stats` / `streams` / `kind` / `feedback`; remaining gaps: PascalCase sidecar keys and EDF `SaO2` label map on **export** (JSON keeps `spo2`); voluntary demographics stay omit-until-collected (privacy). |
 
 ---
 
@@ -152,7 +153,8 @@ Shared root for `kind: "recording"` and (with `feedback` attached) for feedback.
 ### Shape
 
 ```
-identity: formatVersion, appVersion, kind, savedAt, startedAt, elapsedSeconds, durationS, notes
+identity: formatVersion, appVersion, kind, savedAt, startedAt, elapsedSeconds, durationS, notes, sessionId?
+subject:  { id, nickname?, sex?, ageAtRecording?, meditationExperience?, … }  // anonymous-first; omit voluntary until collected
 device:   { name, id, firmware, model, sensors, channelCount, channelLabels }
 streams:  { ten keys… }   // gestures enablement stub only; markers → annotations
 stats:    { … aggregates; annotationSeconds?: { pause, bad_quality, disconnect }; experimental?: { … } }
@@ -174,6 +176,11 @@ Uses **Locked vocabulary** keys (no synonyms).
   "elapsedSeconds": 600,
   "durationS": 600,
   "notes": "",
+  "sessionId": "cap_20260924_102000_a1b2",
+  "subject": {
+    "id": "anon_a1b2c3d4e5f6",
+    "nickname": "River"
+  },
   "device": {
     "name": "Muse 2 (Simulated)",
     "id": "sim:muse-2",
@@ -229,11 +236,108 @@ Uses **Locked vocabulary** keys (no synonyms).
 Notes:
 
 - Omit top-level `feedback` on recordings.
+- Minimal anonymous `subject`: always `id`; optional `nickname` for UI. Do **not** invent `sex` / `ageAtRecording` / `meditationExperience` until the user volunteers them (omit keys). Root `sessionId` identifies **this capture/file**, not the person — do not nest it under `subject`.
 - Root `annotations` is the **canonical** timeline (quality/pause/disconnect **and** gesture / interaction events). Optional `stats.annotationSeconds` is derived from interval types only (sum of `duration` per `type` for types with `duration > 0`); never a second source of truth. Instant gestures (`duration: 0`) do not contribute seconds.
 - `annotations` must stay compact (merge adjacent same-`type` interval runs). Instant events are not merged across time. Not a 1 Hz dump.
 - `streams.gestures.enabled` remains false until a real raw gesture stream exists. Gesture **markers** are rows in `annotations[]` — **not** a parallel `feedback.gestures` array (single source of truth).
 
 ---
+
+## Subject model — **PREPARED** (anonymous-first)
+
+> **PREPARED.** Root key `subject` and required anonymous `id` are locked naming. Voluntary demographic / experience fields are **schema-ready but omitted until collected**. Do not reopen the root key without a format PR; adding a new optional voluntary field is OK with a table update.
+
+**Decision:** nested root object **`subject`** (BIDS `participants.tsv` / `participant_id` terminology). Prefer `subject` over EDF’s packed “Local Patient Identification” string as the JSON shape; map components to EDF on **export**. Do **not** use a parallel root `patient` key.
+
+### Privacy rule (locked intent)
+
+1. **Anonymous by default.** Never write real legal name, full birthdate, national ID, email, or other direct PII into metadata unless the product later adds an explicit user opt-in for that field.
+2. **`subject.id` is a stable anonymous code** (app-generated), not a real-world name. Suitable as EDF patient **code** and as the bare token behind BIDS `participant_id` (`sub-{id}` on export).
+3. **`nickname` is display-only.** Shown in History / UI. On EDF export, Local Patient Identification **name** subfield stays **`X`** unless the user has opted to export nickname as the name token. Never treat nickname as a verified identity.
+4. **Omit unknown voluntary fields** — do not write `null`, empty string, or `"X"` placeholders into JSON for fields the user never provided. EDF export fills unknown subfields with `X` at export time.
+5. **Prefer age-at-recording over birthdate** for any age-related voluntary data (BIDS `age`; privacy: cap at 89 per BIDS). Full `dd-MMM-yyyy` birthdate is EDF’s native form — we do **not** store it by default.
+6. **`sessionId` is file identity**, not subject identity. When present (feedback today; recordings when capture ids exist), keep it at **root** beside timing fields. Same person (`subject.id`) may have many `sessionId`s.
+
+### Canonical minimal shape (always)
+
+```json
+"subject": {
+  "id": "anon_a1b2c3d4e5f6",
+  "nickname": "River"
+}
+```
+
+`nickname` itself is optional — if the user never set a display name, omit it:
+
+```json
+"subject": {
+  "id": "anon_a1b2c3d4e5f6"
+}
+```
+
+### Optional voluntary fields (omit until collected)
+
+| Field | Type | When | Notes |
+|---|---|---|---|
+| `nickname` | string | User set a display name | UI only; EDF name → `X` unless export opt-in |
+| `sex` | `"F"` \| `"M"` \| `"X"` \| `"other"` | User volunteered | EDF Local Patient ID uses `F`/`M`/`X` only — map `"other"` → `X` on EDF export; BIDS `sex` accepts male/female/other (map on export) |
+| `ageAtRecording` | number (years) | User volunteered age (or derived with consent) | BIDS `age`; prefer over DOB. Cap at 89 for privacy (BIDS). EDF **birthdate** subfield stays `X` unless a future opt-in stores DOB |
+| `yearOfBirth` | integer | Only if product later collects year (not full DOB) | Still weaker PII than full birthdate; prefer `ageAtRecording`. Omit by default |
+| `meditationExperience` | string or short struct | User volunteered | Neurofeed-specific; no EDF/BIDS column — BIDS extra column / sidecar on export if needed. Nest under `subject` (not `stats.experimental`) so it stays person-level |
+
+No other PII columns in v6. Future voluntary fields require a format PR + table row.
+
+### EDF+ Local Patient Identification ↔ `subject`
+
+EDF+ packs an 80-byte ASCII field as space-separated subfields ([EDF+ additional specs](https://www.edfplus.info/specs/edfplus.html)):
+
+`code` `sex` `birthdate` `name` [optional additional…]
+
+Unknown / anonymized subfields are a single **`X`**. Spaces inside a subfield become underscores.
+
+| EDF+ subfield | neurofeed JSON | Default anonymous export | Notes |
+|---|---|---|---|
+| **code** (hospital / admin code) | `subject.id` | `subject.id` (spaces → `_`) | Stable anonymous subject code |
+| **sex** (`F` / `M` / `X`) | `subject.sex` | `X` if omitted | `"other"` → `X` on EDF wire |
+| **birthdate** (`dd-MMM-yyyy`) | *(none by default)*; optional future DOB / derive from `yearOfBirth` only with opt-in | `X` | Prefer `ageAtRecording` in JSON; do not invent a fake birthdate from age |
+| **name** | `subject.nickname` (display) | `X` | Export nickname as name **only** with explicit user opt-in; otherwise always `X` |
+| additional subfields | optional later | — | e.g. experience tokens — only if export needs them |
+
+Example anonymous EDF patient field: `{id} X X X` (e.g. `anon_a1b2c3d4e5f6 X X X`).
+
+EDF+ **Local Recording Identification** (Startdate / investigation code / technician / equipment) maps from **file** identity + `device` + `startedAt` — **not** from `subject`. Investigation / EEG number ≈ root `sessionId` when present.
+
+### BIDS `participants.tsv` ↔ `subject`
+
+| BIDS column | neurofeed JSON | Notes |
+|---|---|---|
+| `participant_id` (REQUIRED) | `subject.id` | Export as `sub-{id}` (BIDS entity); strip or normalize `anon_` prefix policy in the export PR |
+| `age` (RECOMMENDED) | `subject.ageAtRecording` | Omit column/value if unknown; cap 89 |
+| `sex` (RECOMMENDED) | `subject.sex` | Map `F`/`M`/`other` ↔ BIDS allowed spellings on export |
+| `handedness` etc. | *(not in v6)* | Add only with a format PR |
+| custom columns | `meditationExperience` etc. | Allowed as extra TSV columns + `participants.json` sidecar defs |
+
+One row per `subject.id` across a BIDS dataset; many recordings/sessions share that participant.
+
+### Locked names (subject)
+
+| Role | Locked name | Rejected / why |
+|---|---|---|
+| Root object | `subject` | `patient` (EDF wording — keep for export docs only); `participant` (BIDS file jargon; `subject` matches BIDS `sub-` entity + common EEG code) |
+| Anonymous code | `subject.id` | `patientId` / `patientCode` / `userId` — `userId` collides with accounts; EDF “code” becomes export mapping, not JSON key |
+| Display name | `subject.nickname` | `name` / `patientName` — too easy to confuse with legal name / EDF name subfield |
+| Sex | `subject.sex` | Keep EDF-friendly tokens in JSON (`F`/`M`/`X`) plus `"other"`; map to BIDS on export |
+| Age | `subject.ageAtRecording` | `age` alone is ambiguous (now vs at recording); `birthdate` / `dateOfBirth` rejected as default (PII) |
+| Experience | `subject.meditationExperience` | Product-specific voluntary; not under `stats` |
+| Session / capture id | root `sessionId` | Not under `subject` — file identity (EDF recording / investigation code) |
+
+### Rules
+
+1. Always write `subject` with at least `id` for new v6 files.
+2. Omit voluntary keys until collected (no null stubs).
+3. Do not put `sessionId` inside `subject`.
+4. Do not put device fields inside `subject` (device stays nested `device`).
+5. Export mappers own EDF `X` padding and BIDS `sub-` prefix — JSON stays product camelCase.
 
 ## Annotations model — **LOCKED**
 
@@ -367,8 +471,15 @@ Discipline: rename only when EDF / BIDS / common EEG has a **clearly better** te
 | `rateHz` / `sfreq` / `SamplingFrequency` | **`rateHz`** | BIDS `SamplingFrequency`; EDF samples/record ÷ duration. Keep unit-in-name; map on export. Reject `sfreq` (MNE-only jargon in product JSON). |
 | `pulse` / HR / bpm / `heartRate` | **`pulse`** (stream) | Computed 1 Hz stream id; PPG-derived pulse rate. Keep to match `ComputedFrame`. Session aggregates use **`stats.hr`** `{mean,min,max}` (clinical HR summary — no EDF metadata field). |
 | `peakAlpha` | **`peakAlpha`** | No EDF/BIDS analogue. Keep — matches computed frame / stream enablement. |
-| `device` (+ `name`,`id`,`firmware`,`model`,`sensors`,`channelCount`,`channelLabels`) | **`device`** nest | EDF equipment subfield; BIDS `Manufacturer*` / `ManufacturersModelName`. Keep nest; map manufacturer fields on export. No Patient ID/sex/birthdate in v6 (documented gap). |
+| `device` (+ `name`,`id`,`firmware`,`model`,`sensors`,`channelCount`,`channelLabels`) | **`device`** nest | EDF equipment subfield; BIDS `Manufacturer*` / `ManufacturersModelName`. Keep nest; map manufacturer fields on export. Person demographics live under **`subject`**, not `device`. |
 | `notes` / Comments | **`notes`** | EDF free-text / technician notes live in Annotations; BIDS `Comments` is dataset-level. Keep file-level `notes` (product copy). |
+| *(none / flat userId)* | **`subject`** nest | BIDS participant / `participants.tsv`; EDF Local Patient Identification unpacked. **PREPARED** — see Subject model. |
+| `userId` / patient code / hospital code | **`subject.id`** | EDF patient **code**; BIDS `participant_id` (`sub-{id}` on export). Anonymous stable id — not legal name. |
+| display name / patient name | **`subject.nickname`** (optional) | UI only; EDF **name** subfield → `X` unless export opt-in. Reject JSON key `name` on subject. |
+| sex / gender | **`subject.sex`** (optional, omit until collected) | EDF `F`/`M`/`X`; add `"other"` for product; map to BIDS on export. |
+| age / DOB | **`subject.ageAtRecording`** (optional) | BIDS `age`; prefer over birthdate. EDF birthdate → `X` by default. Reject default `birthdate` / `dateOfBirth`. |
+| meditation / practice history | **`subject.meditationExperience`** (optional) | Voluntary; no EDF field. BIDS extra column on export if needed. |
+| `sessionId` (feedback dialect) | **`sessionId`** (root, optional) | File/capture identity — EDF Local **Recording** Identification investigation code, **not** patient code. Do not nest under `subject`. |
 | `annotations` | **`annotations`** | EDF+ Annotations / TAL; BIDS `events.tsv`. **Already LOCKED** — see Annotations model. |
 | `annotations[]` shape | **`{onset,duration,type}`** | EDF+ Onset/Duration; BIDS required `onset`/`duration` (0 = instant). Locked. |
 | Gesture `type` strings (`doubleBlink`, …) | **`double_blink`**, **`double_jaw_clench`**, **`eye_up`**, **`eye_down`** | snake_case locked; free UTF-8 TAL text / BIDS `trial_type` on export. |
@@ -389,11 +500,13 @@ Discipline: rename only when EDF / BIDS / common EEG has a **clearly better** te
 | `stats.battery` `{startPct,endPct}` | Telemetry bookends when available |
 | `stats.experimental` | Tunable / removable band aggregates |
 
-### Also locked (identity / streams / feedback shells)
+### Also locked (identity / subject / streams / feedback shells)
 
 | Locked key | Notes |
 |---|---|
 | `formatVersion`, `appVersion`, `kind` | Container / app identity; `kind` = `recording` \| `feedback` |
+| `sessionId` | Optional root file/capture id (feedback today); **not** under `subject` |
+| `subject` (+ `id` required; voluntary fields omit-until-collected) | Anonymous-first person object — see Subject model |
 | `streams` ten keys | `eeg`, `bands`, `pulse`, `spo2`, `movement`, `peakAlpha`, `imu`, `ppg`, `telemetry`, `gestures` — enablement `{enabled,rateHz}`; `gestures` stub only |
 | `feedback` | Only when `kind=="feedback"`; no `gestures[]` list |
 
@@ -405,6 +518,8 @@ Cited conventions that locked annotations **and** the vocabulary table above:
 2. **EDF+ standard texts** ([edftexts.html](https://www.edfplus.info/specs/edftexts.html)): includes signal label **`SaO2`**; obligatory PSG strings; no standard blink/clench tokens — custom snake_case types export as TAL text. JSON stream id stays `spo2` (SpO₂).
 3. **BIDS events** ([bids-specification — Events](https://bids-specification.readthedocs.io/en/stable/modality-agnostic-files/events.html)): required **`onset`**, **`duration`** (zero = instantaneous); optional **`trial_type`**. EEG sidecars use PascalCase (`SamplingFrequency`, `RecordingDuration`, `ManufacturersModelName`) — map on **export**.
 4. **BIDS EEG sidecar** ([electroencephalography](https://bids-specification.readthedocs.io/en/stable/modality-specific-files/electroencephalography.html)): equipment and sampling beside the recording; our nested `device` + `streams.*.rateHz` + `durationS` carry the same ideas under product camelCase.
+4b. **EDF+ Local Patient Identification** ([edfplus.info](https://www.edfplus.info/specs/edfplus.html)): packed `code sex birthdate name` (unknown → `X`). neurofeed keeps a nested `subject` object and packs this string on export — anonymous-first (`code` = `subject.id`, others `X` until volunteered).
+4c. **BIDS `participants.tsv`** ([data summary files](https://bids-specification.readthedocs.io/en/stable/modality-agnostic-files/data-summary-files.html)): required `participant_id`; recommended `age`, `sex`. Maps from `subject.*`; age privacy cap 89.
 5. **MNE-Python**: `mne.Annotations(onset, duration, description)`; rejection descriptions start with **`bad`** / `BAD`. Gesture descriptions must **not** start with `bad`.
 6. **BrainVision Analyzer**: **Bad Interval** vs **New Segment** — informed `bad_quality` vs product `pause` / `disconnect` (do not overload EEGLAB `boundary`).
 7. **EEGLAB**: `type: "boundary"` = discontinuity/cut — not user pause on a continuous timeline.
@@ -478,12 +593,15 @@ Not coded in this draft; checklist for the implementation PR:
 6. Deviations need a written why before merge.
 7. **Locked JSON keys are the source of truth.** When implementing writers/readers, and when renaming Dart/Rust identifiers in a later PR, prefer the keys in **Locked vocabulary** and the **Annotations model — LOCKED** section. Do not invent synonyms (`sfreq`, `ch_names`, `sao2` as a JSON key, `SamplingFrequency` in neurofeed JSON, parallel `feedback.gestures[]`, …). Map EDF+/BIDS/MNE spellings on export only. Do **not** rename app source in the same change as a contract-only edit unless the task says so.
 8. **Annotations model is LOCKED** — do not reopen shape, nominators, or initial `type` strings without a format PR.
+9. **`subject` is PREPARED (anonymous-first).** Always write `subject.id` on new v6 files; omit voluntary fields until collected; never put PII by default; keep `sessionId` at root. See Subject model.
 
 ---
 
-## Leftovers / open (not blocking; vocabulary + annotations locked)
+## Leftovers / open (not blocking; vocabulary + annotations locked; subject prepared)
 
 - Exact named-band formulas (experimental until product locks them).
 - Whether `% overshoot` / overshoot intervals are worth persisting later (paint-time today; **not** an `annotations.type` until defined — see Annotations model).
 - Per-record length prefix / Athena tag 11 (separate format PRs).
 - Whether feedback pause should stop the computed sampler (today it does not until `end()`). Pause **does** get an `annotations` entry with `type: "pause"` when support lands.
+- `subject.id` generation scheme (UUID vs `anon_`+hex) and BIDS `sub-` normalization — decide in the writer/export PR.
+- Whether nickname export-as-EDF-name ever becomes a product toggle (default remains EDF name = `X`).
