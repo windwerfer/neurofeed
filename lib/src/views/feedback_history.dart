@@ -1,10 +1,16 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:neurofeed/src/util/timezone.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:neurofeed/src/feedback/session_export.dart';
+import 'package:neurofeed/src/feedback/session_import.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/monitor/recording/recording_store.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/monitor/views/recording_dashboard.dart';
 import 'package:neurofeed/src/views/feedback_dashboard.dart';
@@ -73,6 +79,63 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
     for (final s in all)
       if (_selected.contains(s.id)) s,
   ];
+
+
+  static const _importTypes = [
+    XTypeGroup(label: 'EEG / CSV', extensions: ['edf', 'csv']),
+  ];
+
+  Future<void> _importRecording() async {
+    late final String path;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final uri = await SafSessionStorage.pickFile();
+      if (uri == null) return;
+      path = await SafSessionStorage.copyUriToCache(uri, 'import_recording');
+    } else {
+      final file = await openFile(acceptedTypeGroups: _importTypes);
+      if (file == null) return;
+      path = file.path;
+    }
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Expanded(child: Text('Importing…')),
+          ],
+        ),
+      ),
+    );
+    try {
+      final store = await ref.read(recordingStoreProvider.future);
+      final storage = await ref.read(sessionStorageProvider.future);
+      final settings = ref.read(settingsProvider);
+      final result = await importAndPublishFile(
+        path: path,
+        store: store,
+        storage: storage,
+        subject: settings.subjectInfo,
+      );
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ref.invalidate(sessionListProvider);
+      final msg = result.warnings.isEmpty
+          ? 'Imported recording_${result.id}.neurofeed'
+          : 'Imported recording_${result.id}.neurofeed — '
+              '${result.warnings.map((w) => w.message).join('; ')}';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: $e')),
+      );
+    }
+  }
 
   Future<void> _export(List<SessionSummary> sessions, ExportKind kind) async {
     final store = await ref.read(sessionStoreProvider.future);
@@ -296,12 +359,18 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
                   tooltip: 'Cancel selection',
                   onPressed: _clearSelection,
                 )
-              else
+              else ...[
+                IconButton(
+                  icon: const Icon(Icons.file_upload_outlined),
+                  tooltip: 'Import…',
+                  onPressed: _importRecording,
+                ),
                 IconButton(
                   icon: const Icon(Icons.refresh),
                   tooltip: 'Refresh',
                   onPressed: () => ref.invalidate(sessionListProvider),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 8),

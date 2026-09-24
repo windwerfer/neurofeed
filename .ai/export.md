@@ -40,5 +40,17 @@ silently run the same path on recordings without a dedicated pass.
 
 ## Import
 
-Design + options matrix: [TODO/import-export.md](TODO/import-export.md).
-Import lands as `kind: recording` NFED6 + sqlite; not implemented yet.
+**Implemented (partial).** History app bar **Import…** (next to Refresh)
+picks `.edf` / `.csv` → NFED6 `kind: recording` + `RecordingStore.publish`
+(sqlite lists it). Progress dialog + snackbar warnings.
+
+| Input | Behaviour |
+|-------|-----------|
+| EDF / EDF+ | `decodeEdfImport` → raw EEG packets; patient code → `subject.id` when not `X`; TALs mapped to locked annotation types when possible; computed empty; placeholder thumb |
+| Mind Monitor / neurofeed CSV | 1 Hz path fully; Constant RAW→EEG packets; optional ACC/Gyro/PPG/Elements columns parsed/detected but not yet streamed |
+
+No invented `feedback{}`. Design matrix + remaining gaps:
+[TODO/import-export.md](TODO/import-export.md).
+
+Code: `lib/src/feedback/session_import.dart`, `lib/src/feedback/import/`.
+Tests: `test/session_import_test.dart`.
