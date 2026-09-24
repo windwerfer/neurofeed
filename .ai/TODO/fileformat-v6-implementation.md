@@ -15,6 +15,8 @@ Track coding work here. Schema decisions go in the contract, not this list.
 
 **Goal:** every published file can carry a stable anonymous `subject.id` for later labeled uploads.
 
+- [x] Settings keys `subjectId` / `subjectNickname`; generate UUID v4 on load when empty; Settings UI nickname; `SubjectInfo` helper (writers wire later).
+
 1. **App settings** (`lib/src/settings.dart` / SharedPreferences):
    - Keys: `subjectId` (required once generated), `subjectNickname` (optional, user-editable).
    - **On app start** (settings load): if `subjectId` is missing/empty → generate and persist immediately.

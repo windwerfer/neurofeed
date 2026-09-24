@@ -12,6 +12,7 @@ import 'package:neurofeed/src/agent/agent_flags.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 /// Default warning threshold for the REVE sleep guardrail: the percent rank of
 /// the eyes-closed (rest) sleep-direction distribution above which a warning
@@ -104,6 +105,25 @@ AppView _viewFromName(String? name) {
   }
 }
 
+
+/// Anonymous subject identity for file metadata (`subject.id` / optional nickname).
+/// Writers map [SubjectInfo.toJson] into root `subject` when v6 metadata lands.
+class SubjectInfo {
+  const SubjectInfo({required this.id, this.nickname});
+
+  final String id;
+  final String? nickname;
+
+  Map<String, dynamic> toJson() {
+    final out = <String, dynamic>{'id': id};
+    final nick = nickname?.trim();
+    if (nick != null && nick.isNotEmpty) {
+      out['nickname'] = nick;
+    }
+    return out;
+  }
+}
+
 /// Persistent app settings backed by SharedPreferences.
 class Settings extends ChangeNotifier {
   Settings._(this._prefs, this._catalog);
@@ -112,6 +132,8 @@ class Settings extends ChangeNotifier {
   final ProtocolCatalog _catalog;
 
   static const String _lastViewKey = 'last_view';
+  static const String _subjectIdKey = 'subjectId';
+  static const String _subjectNicknameKey = 'subjectNickname';
   static const String _monitorWindowPrefix = 'monitor_window_';
   static const String _monitorDetailWindowPrefix = 'monitor_detail_window_';
   static const String _lastDeviceKey = 'last_device_id';
@@ -177,7 +199,18 @@ class Settings extends ChangeNotifier {
     final catalog = await ProtocolCatalog.load();
     await _migrateGuardrailPrefs(prefs, catalog);
     await _migrateFeedbackModePref(prefs);
+    await _ensureSubjectId(prefs);
     return Settings._(prefs, catalog);
+  }
+
+  /// Offline UUID v4 for [subjectId]. Persists immediately when missing/empty.
+  static Future<void> _ensureSubjectId(SharedPreferences prefs) async {
+    final existing = prefs.getString(_subjectIdKey);
+    if (existing != null && existing.isNotEmpty) {
+      return;
+    }
+    final id = const Uuid().v4();
+    await prefs.setString(_subjectIdKey, id);
   }
 
   /// Rewrite stored `feedback_mode` from old FeedbackMode names
@@ -317,6 +350,31 @@ class Settings extends ChangeNotifier {
     await _prefs.setString(_lastDeviceKey, id);
     notifyListeners();
   }
+
+  /// Stable anonymous subject code (UUID v4). Generated on first [load].
+  String get subjectId => _prefs.getString(_subjectIdKey) ?? '';
+
+  /// Optional display nickname; never auto-filled from [subjectId].
+  String? get subjectNickname {
+    final v = _prefs.getString(_subjectNicknameKey);
+    if (v == null || v.isEmpty) return null;
+    return v;
+  }
+
+  Future<void> setSubjectNickname(String? value) async {
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      await _prefs.remove(_subjectNicknameKey);
+    } else {
+      await _prefs.setString(_subjectNicknameKey, trimmed);
+    }
+    notifyListeners();
+  }
+
+  /// Snapshot for metadata writers (`subject: { id, nickname? }`).
+  SubjectInfo get subjectInfo =>
+      SubjectInfo(id: subjectId, nickname: subjectNickname);
+
 
   double? get masterVolume => _prefs.getDouble(_masterVolumeKey);
 
