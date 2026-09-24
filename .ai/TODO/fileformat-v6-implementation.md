@@ -54,9 +54,9 @@ Track coding work here. Schema decisions go in the contract, not this list.
 
 ## `stats.experimental.bands`
 
-- [ ] Implement locked formulas from contract **Experimental band metrics** (usable-seconds gate; omit nest if < 30 usable secs).
-- [ ] Ship **Must** keys first; add Sensible / Cool in same or follow-up PR — do not invent synonym keys.
-- [ ] Unit tests with synthetic `ComputedFrame` bands (known α/θ, AF7/AF8 asymmetry).
+- [x] Implement locked formulas from contract **Experimental band metrics** (usable-seconds gate; omit nest if < 30 usable secs).
+- [x] Ship **Must** keys first; add Sensible / Cool in same or follow-up PR — do not invent synonym keys.
+- [x] Unit tests with synthetic `ComputedFrame` bands (known α/θ, AF7/AF8 asymmetry).
 
 ---
 

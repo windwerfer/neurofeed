@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/feedback/target_state.dart';
 import 'package:neurofeed/src/monitor/signal_usable.dart';
@@ -196,5 +197,235 @@ Map<String, Object?>? assembleBaseStats({
       ?'endPct': batteryEndPct,
     };
   }
+  final experimental = assembleExperimentalBands(frames);
+  if (experimental != null) {
+    stats.addAll(experimental);
+  }
   return stats.isEmpty ? null : stats;
 }
+
+/// Band indices on [ComputedFrame.bands] rows: δ θ α β γ.
+const int kBandDelta = 0;
+const int kBandTheta = 1;
+const int kBandAlpha = 2;
+const int kBandBeta = 3;
+const int kBandGamma = 4;
+
+const int kMinUsableSecondsForExperimentalBands = 30;
+
+/// Muse channel indices matching default `device.channelLabels`.
+const int kChTp9 = 0;
+const int kChAf7 = 1;
+const int kChAf8 = 2;
+const int kChTp10 = 3;
+
+bool _frameUsable(ffi.ComputedFrame f) {
+  if (f.signalQuality.isEmpty) return false;
+  final mean =
+      f.signalQuality.map((e) => e.toDouble()).reduce((a, b) => a + b) /
+      f.signalQuality.length;
+  return mean >= kUsableSignalThreshold;
+}
+
+double? _channelMeanBand(List<List<num>> bands, int bandIdx) {
+  if (bands.isEmpty) return null;
+  var sum = 0.0;
+  var n = 0;
+  for (final ch in bands) {
+    if (bandIdx >= ch.length) continue;
+    final v = ch[bandIdx].toDouble();
+    if (v.isNaN) continue;
+    sum += v;
+    n++;
+  }
+  return n == 0 ? null : sum / n;
+}
+
+double? _relAlpha(List<num> ch) {
+  if (ch.length < 5) return null;
+  final total = ch[0] + ch[1] + ch[2] + ch[3] + ch[4];
+  if (total <= 0) return null;
+  return ch[2] / total;
+}
+
+/// Locked `stats.experimental.bands` (Must + Sensible + Cool). Omits the nest
+/// when fewer than [kMinUsableSecondsForExperimentalBands] usable seconds.
+Map<String, Object?>? assembleExperimentalBands(
+  List<ffi.ComputedFrame> frames, {
+  bool includeSensible = true,
+  bool includeCool = true,
+}) {
+  final usable = <ffi.ComputedFrame>[];
+  for (final f in frames) {
+    if (!_frameUsable(f)) continue;
+    if (f.bands.isEmpty) continue;
+    usable.add(f);
+  }
+  if (usable.length < kMinUsableSecondsForExperimentalBands) {
+    return null;
+  }
+
+  var meanAlphaAbsSum = 0.0;
+  var meanAlphaAbsN = 0;
+  var meanAlphaThetaSum = 0.0;
+  var meanAlphaThetaN = 0;
+  var faaSum = 0.0;
+  var faaN = 0;
+  var meanAlphaRelSum = 0.0;
+  var meanAlphaRelN = 0;
+  var ftaaSum = 0.0;
+  var ftaaN = 0;
+  var meanBetaThetaSum = 0.0;
+  var meanBetaThetaN = 0;
+  var meanThetaAbsSum = 0.0;
+  var meanThetaAbsN = 0;
+  var meanBetaAbsSum = 0.0;
+  var meanBetaAbsN = 0;
+  var taaSum = 0.0;
+  var taaN = 0;
+
+  // Per-channel session-mean absolute α for crossChannelAlphaVar.
+  final chAlphaSum = <double>[];
+  final chAlphaN = <int>[];
+
+  for (final f in usable) {
+    final bands = [
+      for (final row in f.bands) List<num>.from(row),
+    ];
+    // Ensure channel sum lists sized
+    while (chAlphaSum.length < bands.length) {
+      chAlphaSum.add(0);
+      chAlphaN.add(0);
+    }
+    for (var i = 0; i < bands.length; i++) {
+      if (bands[i].length > kBandAlpha) {
+        final a = bands[i][kBandAlpha].toDouble();
+        if (!a.isNaN && a > 0) {
+          chAlphaSum[i] += a;
+          chAlphaN[i]++;
+        }
+      }
+    }
+
+    final meanA = _channelMeanBand(bands, kBandAlpha);
+    final meanT = _channelMeanBand(bands, kBandTheta);
+    final meanB = _channelMeanBand(bands, kBandBeta);
+    if (meanA != null) {
+      meanAlphaAbsSum += meanA;
+      meanAlphaAbsN++;
+    }
+    if (meanA != null && meanT != null && meanT > 0) {
+      meanAlphaThetaSum += meanA / meanT;
+      meanAlphaThetaN++;
+    }
+    if (meanT != null) {
+      meanThetaAbsSum += meanT;
+      meanThetaAbsN++;
+    }
+    if (meanB != null) {
+      meanBetaAbsSum += meanB;
+      meanBetaAbsN++;
+    }
+    if (meanB != null && meanT != null && meanT > 0) {
+      meanBetaThetaSum += meanB / meanT;
+      meanBetaThetaN++;
+    }
+
+    // Relative α: all-channel mean of per-channel relative α
+    var relSum = 0.0;
+    var relN = 0;
+    for (final ch in bands) {
+      final r = _relAlpha(ch);
+      if (r == null) continue;
+      relSum += r;
+      relN++;
+    }
+    if (relN > 0) {
+      meanAlphaRelSum += relSum / relN;
+      meanAlphaRelN++;
+    }
+
+    if (bands.length > kChAf8) {
+      final a7 = bands[kChAf7].length > kBandAlpha
+          ? bands[kChAf7][kBandAlpha].toDouble()
+          : 0.0;
+      final a8 = bands[kChAf8].length > kBandAlpha
+          ? bands[kChAf8][kBandAlpha].toDouble()
+          : 0.0;
+      if (a7 > 0 && a8 > 0) {
+        faaSum += _ln(a8) - _ln(a7);
+        faaN++;
+      }
+      if (bands.length > kChTp10) {
+        final t9 = bands[kChTp9][kBandAlpha].toDouble();
+        final t10 = bands[kChTp10][kBandAlpha].toDouble();
+        if (a7 > 0 && a8 > 0 && t9 > 0 && t10 > 0) {
+          final frontal = (a7 + a8) / 2;
+          final temporal = (t9 + t10) / 2;
+          ftaaSum += _ln(frontal) - _ln(temporal);
+          ftaaN++;
+        }
+        if (t9 > 0 && t10 > 0) {
+          taaSum += _ln(t10) - _ln(t9);
+          taaN++;
+        }
+      }
+    }
+  }
+
+  final bandsOut = <String, Object?>{};
+  if (meanAlphaAbsN > 0) {
+    bandsOut['meanAlphaAbs'] = meanAlphaAbsSum / meanAlphaAbsN;
+  }
+  if (meanAlphaThetaN > 0) {
+    bandsOut['meanAlphaTheta'] = meanAlphaThetaSum / meanAlphaThetaN;
+  }
+  if (faaN > 0) {
+    bandsOut['frontalAlphaAsym'] = faaSum / faaN;
+  }
+
+  // crossChannelAlphaVar: population variance of per-channel session-mean α
+  final means = <double>[];
+  for (var i = 0; i < chAlphaSum.length; i++) {
+    if (chAlphaN[i] > 0) means.add(chAlphaSum[i] / chAlphaN[i]);
+  }
+  if (means.length >= 2) {
+    final m = means.reduce((a, b) => a + b) / means.length;
+    var varSum = 0.0;
+    for (final v in means) {
+      final d = v - m;
+      varSum += d * d;
+    }
+    bandsOut['crossChannelAlphaVar'] = varSum / means.length;
+  }
+
+  if (includeSensible) {
+    if (meanAlphaRelN > 0) {
+      bandsOut['meanAlphaRel'] = meanAlphaRelSum / meanAlphaRelN;
+    }
+    if (ftaaN > 0) {
+      bandsOut['frontalTemporalAlphaAsym'] = ftaaSum / ftaaN;
+    }
+    if (meanBetaThetaN > 0) {
+      bandsOut['meanBetaTheta'] = meanBetaThetaSum / meanBetaThetaN;
+    }
+  }
+  if (includeCool) {
+    if (meanThetaAbsN > 0) {
+      bandsOut['meanThetaAbs'] = meanThetaAbsSum / meanThetaAbsN;
+    }
+    if (meanBetaAbsN > 0) {
+      bandsOut['meanBetaAbs'] = meanBetaAbsSum / meanBetaAbsN;
+    }
+    if (taaN > 0) {
+      bandsOut['temporalAlphaAsym'] = taaSum / taaN;
+    }
+  }
+
+  if (bandsOut.isEmpty) return null;
+  return {
+    'experimental': {'bands': bandsOut},
+  };
+}
+
+double _ln(double x) => math.log(x);
