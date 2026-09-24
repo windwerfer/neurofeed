@@ -4,7 +4,7 @@
 |---|---|
 | Status | **Implemented** (PRs 1–7). |
 | Scope | Feature IDs, protocol documents, lane semantics, FFI, catalog mapping, Crown Start refused. |
-| Not this | Capture writer ([data-plane-contract.md](data-plane-contract.md)); v5 header / computed field set ([session-format-contract.md](session-format-contract.md)); Connect UX; SoLoud internals ([../audio-engine.md](../audio-engine.md)); Crown *session run*. |
+| Not this | Capture writer ([data-plane-contract.md](data-plane-contract.md)); `.neurofeed` header / computed field set ([fileformat_v6.md](fileformat_v6.md)); Connect UX; SoLoud internals ([../audio-engine.md](../audio-engine.md)); Crown *session run*. |
 
 Do not reopen [Key Decisions](#key-decisions). **Crown Start stays refused.**
 
@@ -267,7 +267,7 @@ Clips stay those in `calibrations.json` (artifacts 15 s, challenge 30 s, rest 45
 
 ## Feature FFI (names frozen)
 
-`FeatureDto` is defined **once** in `rust/src/api/features.rs`. On `MuseEventDto`, not a side stream, **not** written to the v5 body (`encode_session_event` no-ops `Feature` the same as `Reve` / Gestures).
+`FeatureDto` is defined **once** in `rust/src/api/features.rs`. On `MuseEventDto`, not a side stream, **not** written to the `.neurofeed` raw body (`encode_session_event` no-ops `Feature` the same as `Reve` / Gestures).
 
 | Fn | Rules |
 |---|---|
@@ -293,7 +293,7 @@ Reconnect does not re-enable; the orchestrator re-calls on session start.
 10. **`ProtocolType` stays gone.** Keep the nine current IDs. Unknown IDs do not become `drowsiness`. Snapshot `protocolJson` for detail/export/replay.
 11. **`GuardrailMode` stays split** into guard feature vs **global** model. Document with `guard` defaults ON (`band.delta`); without `guard` → none. `guardrailEngine` **keeps writing `GuardrailMode.name`**.
 12. **Availability is derived.** Catalog **may list** band protocols on Crown; **running them is out of scope**. List filter = connected/last `DeviceKind`, else show all.
-13. **`FeatureDto` on `MuseEventDto`**, type in `features.rs`, not a side stream, not written to the v5 body.
+13. **`FeatureDto` on `MuseEventDto`**, type in `features.rs`, not a side stream, not written to the `.neurofeed` raw body.
 14. **v1 feature IDs frozen** (all eight rows); add more via registry + JSON, no Dart enum.
 15. **Custom builder is a form over the document.** Catalog and a hand-built user JSON run the same path (on Muse).
 16. **`epochWindowSeconds = 75`.** Not 30 s.
@@ -306,7 +306,7 @@ Reconnect does not re-enable; the orchestrator re-calls on session start.
 ## Still out of scope
 
 - Unlocking Crown sessions (quality length, `ComputedFrame.bands` length, name-based chart electrodes).
-- Changing the v5 container / raw body / computed columnar layout.
+- Changing the `.neurofeed` (NFED6) container / raw body / computed columnar layout.
 - SQLite schema redesign.
 - Medical-device claims.
 - Silently switching `guardrailDeltaCeiling` to relative-δ.

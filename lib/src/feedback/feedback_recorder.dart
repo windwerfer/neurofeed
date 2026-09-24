@@ -13,7 +13,7 @@ import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 /// Wraps [SessionRecorder] with session-aware lifecycle.
 ///
 /// Live writes always go to the fast scratch directory — SAF is only touched
-/// on Save. At session end, [assembleScratchV5] writes a real v5 container
+/// on Save. At session end, [assembleScratchV5] writes a real `.neurofeed` (NFED6; helper name kept)
 /// next to the temps, then deletes the temps on success.
 class FeedbackRecorder {
   FeedbackRecorder({Future<SessionStorage>? storage})
@@ -38,7 +38,7 @@ class FeedbackRecorder {
 
   String? get sessionId => _recorder.sessionId ?? _attachedId;
 
-  /// Point at an already-assembled scratch v5 (process restart / leftover).
+  /// Point at an already-assembled scratch `.neurofeed` (process restart / leftover).
   void attachAssembledScratch({required String id, required String path}) {
     _attachedId = id;
     _scratchV5Path = path;
@@ -94,7 +94,7 @@ class FeedbackRecorder {
   /// Flush pending data to disk without assembling the container.
   Future<void> flushSession() => _recorder.flush();
 
-  /// Flush temps, encode a v5 container into scratch, delete temps on success.
+  /// Flush temps, encode a `.neurofeed` (NFED6) into scratch, delete temps on success.
   /// Returns the scratch path, or null if there was nothing to assemble or
   /// encoding failed (temps are kept so crash recovery can retry).
   Future<String?> assembleScratchV5(Map<String, Object?> metadataJson) async {
@@ -133,7 +133,7 @@ class FeedbackRecorder {
     }
   }
 
-  /// Delete the scratch v5 (after a successful publish, or on discard).
+  /// Delete the scratch `.neurofeed` (after a successful publish, or on discard).
   Future<void> deleteScratchV5() async {
     final path = _scratchV5Path;
     _scratchV5Path = null;
@@ -149,7 +149,7 @@ class FeedbackRecorder {
     }
   }
 
-  /// Discard the session (delete temps and any scratch v5).
+  /// Discard the session (delete temps and any scratch `.neurofeed`).
   Future<void> discardSession() async {
     await _recorder.stop();
     await deleteScratchV5();

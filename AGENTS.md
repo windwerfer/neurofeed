@@ -61,15 +61,16 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
 - `flutter analyze lib/src` must stay clean after edits.
 - Format changes land in `rust/src/api/session_format.rs`; keep
   `cargo test --lib session_format` green. Frozen law:
-  [`.ai/contracts/session-format-contract.md`](.ai/contracts/session-format-contract.md).
+  [`.ai/contracts/fileformat_v6.md`](.ai/contracts/fileformat_v6.md)
+  (NFED6 / formatVersion 6). Historical v5:
+  [`.ai/archive/session-format-contract-v5.md`](.ai/archive/session-format-contract-v5.md).
   Update `README_feedback_format.md` in the same change.
-- **File format v6 (draft, contract-only):**
+- **File format v6 (Implemented / LOCKED):**
   [`.ai/contracts/fileformat_v6.md`](.ai/contracts/fileformat_v6.md) —
-  **Annotations model LOCKED** (`{onset,duration,type}`; pause/bad_quality/disconnect +
+  NFED6 / `formatVersion: 6`. **Annotations model LOCKED** (`{onset,duration,type}`; pause/bad_quality/disconnect +
   snake_case gestures; `duration: 0` instants; single SoT). **Base metadata vocabulary
-  LOCKED** — prefer those JSON keys when implementing writers/readers and when renaming
-  Dart/Rust identifiers in a later PR; do not invent synonyms. Do not rename app source
-  until a task says so.
+  LOCKED**. Prefer those JSON keys; do not invent synonyms. Do not rename FFI/`session_v5`
+  identifiers until a task says so (names are historical; container is NFED6).
 - Do not reopen pipeline-contract Key Decisions. Do not unlock Crown
   sessions. Connect UX is frozen (`.ai/connect-simulator-ux.md`) — do not
   mix OSC-connect or Crown Start into it. `DeviceKind` is Muse | Neurosity
@@ -104,7 +105,7 @@ Tests: [`.ai/test-matrix.md`](.ai/test-matrix.md). Audio engine:
 Format/cache: `README_feedback_format.md`, `README_history_cache.md`.
 Trust graphs: [`.ai/trust-graphs.md`](.ai/trust-graphs.md) (implemented).
 Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
-Frozen contracts: [`.ai/contracts/`](.ai/contracts/) — pipeline, data-plane, session format.
+Frozen contracts: [`.ai/contracts/`](.ai/contracts/) — pipeline, data-plane, fileformat v6.
 Historical spine handoff: [`.ai/archive/handoff-spine.md`](.ai/archive/handoff-spine.md).
 
 ## Project layout
@@ -189,7 +190,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
   (`#[frb(ignore)]`). Crown OSC: `neurosity_osc.rs` (no discovery API yet).
 - Feature registry: `rust/src/api/features.rs`. Dart bus/lanes as above.
 - Session byte layout: `rust/src/api/session_format.rs` only. Dart is FFI.
-  Freeze: `.ai/contracts/session-format-contract.md`. Human spec:
+  Freeze: `.ai/contracts/fileformat_v6.md` (NFED6). Human spec:
   `README_feedback_format.md`.
 - Session assemble: `lib/src/spine/assemble.dart`
   (`assembleV5Container`, `writeScratchV5`). Placeholder WebP stays in
@@ -375,12 +376,13 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **Stale `rust/target/release/` lib breaks `flutter run`** (content-hash
   mismatch). Rebuild release after codegen; debug/cargokit rebuilds are not
   loaded. See `.ai/testing-guide.md`.
-- **`updateNotes` uses v5** (`v5RewriteHeadToPath`; copies raw section). There is no
+- **`updateNotes` rewrites the container head** via `v5RewriteHeadToPath`
+  (FFI name kept; container is NFED6; copies raw section). There is no
   `SessionContainer` Dart wrapper anymore.
-- **Assemble v5 at `end()`** into scratch (placeholder WebP) **before**
+- **Assemble `.neurofeed` at `end()`** into scratch (placeholder WebP) **before**
   `phase = ended`. Live summary cannot pop — Save `publishSession` to
-  history or Discard deletes the scratch v5. One wrapper:
-  `spine/assemble.dart`.
+  history or Discard deletes the scratch file. One wrapper:
+  `spine/assemble.dart` (`writeScratchV5` / `assembleV5Container` names kept).
 - **Crash recovery** is prefix-strict. Feedback: leftover
   `session_*.neurofeed` and orphan `.raw` / `.computed` / `.metadata`
   reopen the session summary. Monitor: leftover `recording_*` (dialog
@@ -390,7 +392,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **ComputedSampler.t** is seconds from recording start, not unix epoch.
   `_onEvent` must latch Pulse / SpO₂ / PeakAlpha (same as the monitor
   sampler). Do not leave those cases as `default`.
-- **Charts** plot computed 1 Hz (`v5ExtractComputed` →
+- **Charts** plot computed 1 Hz (`v5ExtractComputed` — FFI name kept; NFED6 →
   `prepareChartDataFromV5` / `prepareChartDataFromComputed`). Pulse/SpO₂
   fall back to the raw body when computed frames omitted them. There is
   no `SessionOverview` / 400-bucket `metadata.summary`. The list sparkline

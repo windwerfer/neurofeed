@@ -6,7 +6,9 @@ Historical coordinator steps (done):
 [archive/handoff-spine.md](archive/handoff-spine.md).
 
 Do not reopen spine Key Decisions, feedback pipeline Key Decisions, Crown
-Start, Connect UX, or the v5 68-byte header **size** / tags 1–10. Outer zstd
+Start, Connect UX, or the 68-byte `.neurofeed` header **size** / tags 1–10
+(current container is NFED6 / formatVersion 6 — see
+[contracts/fileformat_v6.md](contracts/fileformat_v6.md)). Outer zstd
 on the container raw section stays **deleted**, not dual-read. Bands Y is
 **dB display** (storage linear). Do not add averaging, a Bands strip on
 Spectrogram, Spectrogram FFT-window chrome, or `SMOOTH` / `REAL TIME` Bands

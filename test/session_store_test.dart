@@ -36,7 +36,7 @@ void main() {
       savedAt: DateTime.now().toIso8601String(),
     );
 
-    // v5 container; dummy raw bytes; empty computed frames.
+    // .neurofeed container (NFED6); dummy raw bytes; empty computed frames.
     await store.publishSession(
       'test1234',
       metadata,

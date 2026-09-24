@@ -4,7 +4,7 @@
 |---|---|
 | Status | **Implemented.** D1–D3 frozen. |
 | Scope | Acquisition → capture → Flutter subscribe. Ownership, compression, RAM, soak, folders, Android process survival. |
-| Not this | Feedback pipeline; Crown *session run*; Connect UX; Athena optics; v5 68-byte header **size** / tags 1–10 ([session-format-contract.md](session-format-contract.md)); SoLoud; BLE/JNI internals. **Did** unwrap the container raw *section* (no outer zstd). |
+| Not this | Feedback pipeline; Crown *session run*; Connect UX; Athena optics; 68-byte `.neurofeed` header **size** / tags 1–10 ([fileformat_v6.md](fileformat_v6.md)); SoLoud; BLE/JNI internals. **Did** unwrap the container raw *section* (no outer zstd). |
 | Packages | App `neurofeed`; Rust crate `rust_lib_neurofeed`. |
 | Codec | On-disk compression is **zstd**, level **3**. Do not switch codecs. |
 
@@ -42,7 +42,7 @@ Headset / OSC / sim
 
 ### Prefixes (one writer)
 
-| Prefix | Live temps | Becomes `.neurofeed` v5? |
+| Prefix | Live temps | Becomes `.neurofeed` (NFED6)? |
 |---|---|---|
 | `tmp_$ts` | `.raw` + `.computed` + `.json` | **Never.** 30 min rotate; launch glob-deletes. |
 | `recording_$ts` | same | **Yes**, on Stop / crash recovery Save. |
@@ -52,14 +52,14 @@ Dart `SessionRecorder` is a facade. `writeEvent` is a **test injector**; product
 
 ### Two layers
 
-Live `.raw` **is** the v5 raw body (`NFEDBIN` + inner zstd frames). It is **not** the 68-byte container.
+Live `.raw` **is** the container raw body (`NFEDBIN` + inner zstd frames). It is **not** the 68-byte NFED6 header.
 
 ```
 live .raw      = NFEDBIN header + [u32][zstd frame]…   ← first zstd
 live .computed = uncompressed JSONL
 live sidecar   = uncompressed JSON / JSONL
 
-assemble → [68-byte NFED5 header][WebP]
+assemble → [68-byte NFED6 header][WebP]
            [zstd(metadata JSON)]
            [zstd(computed JSONL)]
            copy of entire .raw file                    ← no second zstd
@@ -85,7 +85,7 @@ Assemble **copies** `.raw` byte-for-byte. Flags byte stays `0`. Header size unch
 12. **Android overnight is specified here; FGS landed.** Linux volume proof does not wait on a phone night.
 13. **New capture/assemble/soak code stays under `spine/`.** Do not add a third writer under `monitor/` or `feedback/`.
 14. **Agents follow this file.** Deviations: written why before merge.
-15. **Do not reopen** feedback Key Decisions, Crown Start, Connect UX, monitor graph freezes, or the v5 header **size** / tag set. Do not restore outer zstd.
+15. **Do not reopen** feedback Key Decisions, Crown Start, Connect UX, monitor graph freezes, or the container header **size** / tag set (NFED6). Do not restore outer zstd.
 
 ---
 

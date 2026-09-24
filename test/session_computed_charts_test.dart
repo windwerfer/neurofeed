@@ -102,7 +102,7 @@ void main() {
     });
   });
 
-  group('v5 assemble + charts', () {
+  group('.neurofeed assemble + charts', () {
     setUpAll(() async {
       await RustLib.init(
         externalLibrary: ExternalLibrary.open(_rustLibPath),
@@ -196,14 +196,14 @@ void main() {
       expect(filled.stats.avgBpm, closeTo(72, 0.01));
     });
 
-    test('empty thumbnail assemble does not throw; magic is NFED5\\0', () {
+    test('empty thumbnail assemble does not throw; magic is NFED6\\0', () {
       final v5 = assembleV5Container(
         thumbnail: const [],
         metadataJson: {'protocol': 'drowsiness'},
         computedFrames: const [],
         rawBody: sessionHeaderBytes(),
       );
-      expect(v5.sublist(0, 6), [0x4E, 0x46, 0x45, 0x44, 0x35, 0x00]);
+      expect(v5.sublist(0, 6), [0x4E, 0x46, 0x45, 0x44, 0x36, 0x00]);
     });
 
     test('publishSession writes history not scratch; SQLite row; no summary',
@@ -294,7 +294,7 @@ void main() {
       );
     });
 
-    test('crash recovery leftover v5 save publishes to history not scratch',
+    test('crash recovery leftover .neurofeed save publishes to history not scratch',
         () async {
       final tmp = await Directory.systemTemp.createTemp('neurofeed_crash2_');
       addTearDown(() => tmp.delete(recursive: true));

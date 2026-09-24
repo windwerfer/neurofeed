@@ -114,10 +114,10 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       final scratch = widget.sessionPath ??
           ref.read(feedbackStateProvider.notifier).scratchV5Path;
       if (scratch == null) {
-        throw StateError('scratch v5 not assembled');
+        throw StateError('scratch .neurofeed not assembled');
       }
       if (!await File(scratch).exists()) {
-        throw StateError('scratch v5 missing');
+        throw StateError('scratch .neurofeed missing');
       }
       path = scratch;
     }
@@ -333,7 +333,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       final id = notifier.sessionId;
       debugPrint('[dashboard] save: scratchV5Path=$path id=$id');
       if (path == null || id == null) {
-        debugPrint('[dashboard] save: no scratch v5 to publish');
+        debugPrint('[dashboard] save: no scratch .neurofeed to publish');
         return;
       }
       final thumb = encodeThumbnailWebP(_thumbnail ?? Uint8List(0));

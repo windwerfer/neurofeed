@@ -4,7 +4,7 @@ import 'package:neurofeed/src/feedback/target_state.dart';
 import 'package:neurofeed/src/monitor/signal_usable.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
 
-/// Map v5 [GestureType] → locked snake_case annotation `type`.
+/// Map [GestureType] → locked snake_case annotation `type`.
 String gestureAnnotationType(GestureType type) => switch (type) {
   GestureType.doubleBlink => 'double_blink',
   GestureType.doubleClench => 'double_jaw_clench',

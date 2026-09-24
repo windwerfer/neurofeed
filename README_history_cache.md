@@ -2,6 +2,9 @@
 
 ## Overview
 
+File format authority: [`.ai/contracts/fileformat_v6.md`](.ai/contracts/fileformat_v6.md) (NFED6 / `formatVersion: 6`). Human layout: [README_feedback_format.md](README_feedback_format.md).
+
+
 The history cache is SQLite (`session_metadata.db`) so History does not
 re-read every `.neurofeed` file on each list/open. It is **not** written
 into the SAF history folder. Thumbnails live as a **BLOB** on the `sessions`
@@ -57,7 +60,7 @@ scalar columns wipe and recreate the table (see wipe + reindex above);
 | `id` | TEXT PK | Id in the filename (`session_$id` / `recording_$id`) |
 | `path` | TEXT | History-root filename (`session_….neurofeed` or `recording_….neurofeed`) |
 | `kind` | TEXT | `feedback` (default) or `recording` |
-| `format_version` | INTEGER | Container format version (5) |
+| `format_version` | INTEGER | Container format version (6 = NFED6) |
 | `app_version` | TEXT | App version that wrote the file |
 | `saved_at` | TEXT | ISO8601 when saved |
 | `started_at` | TEXT | ISO8601 when capture started |

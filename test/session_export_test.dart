@@ -36,7 +36,7 @@ const _webp1x1 = [
   0x2A, 0x01, 0x00, 0x03, 0x13, 0x1F, 0x03,
 ];
 
-/// Build a v5 container with test data: 3 seconds of bands + EEG + computed frames.
+/// Build a `.neurofeed` (NFED6) container with test data: 3 seconds of bands + EEG + computed frames.
 Uint8List _buildV5Container({
   required Map<String, dynamic> metadataJson,
   required List<ComputedFrame> computedFrames,
@@ -87,7 +87,7 @@ Uint8List _buildV5Container({
   // Encode metadata JSON to bytes
   final metadataBytes = utf8.encode(jsonEncode(metadataJson));
 
-  // Assemble v5 container using Rust FFI
+  // Assemble .neurofeed container using Rust FFI (`containerEncodeV5` name kept)
   return containerEncodeV5(
     thumbnail: _webp1x1,
     metadataJson: metadataBytes,
@@ -312,7 +312,7 @@ void main() {
       ...sessionFrameBytes(data: events),
     ]);
 
-    // Publish session with raw body (publishSession will wrap in v5 container)
+    // Publish session with raw body (publishSession will wrap in .neurofeed container)
     final meta = _metadata(
       withCalibration: true,
       withDrowsiness: true,

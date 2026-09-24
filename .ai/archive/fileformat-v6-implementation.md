@@ -1,3 +1,5 @@
+Archived 2026-09-24 — implementation complete; authority is `.ai/contracts/fileformat_v6.md` (NFED6 / formatVersion 6).
+
 # TODO — File format v6 implementation
 
 | Field | Value |

@@ -1,3 +1,5 @@
+Archived 2026-09-24 — superseded by unified v6 metadata dialect in `.ai/contracts/fileformat_v6.md` (NFED6).
+
 # Session vs recording metadata JSON
 
 | Field | Value |

@@ -1,12 +1,12 @@
-# File format v6 — unified metadata (draft)
+# File format v6 — unified metadata
 
 | Field | Value |
 |---|---|
-| Status | **Draft** (writers/readers not implemented). **Annotations / base vocab / feedback / experimental bands = LOCKED.** **`subject` = PREPARED.** **Overshoot = chart-only; pause = stop raw+computed + annotate (LOCKED).** **Timezone-aware `startedAt`/`savedAt` + `timeZone` = LOCKED** (see Timing + time zones). **Computed Trust extras + sparse `feedback.audioEvents` + `calibration.baselineSamples` / `sessionSettings.inhibitCeilingOverrides` = LOCKED** (see Computed feedback extras). |
-| Scope | Unify recording + feedback **metadata JSON**; prepare a **v6 clean cut** (container magic/version + writers/readers). |
-| Not this | Implement Rust/Dart writers yet; rename Dart/Rust identifiers yet; Athena tag 11; History UI chrome; pipeline Key Decisions. |
-| Supersedes (when landed) | Dual dialects in [session-format-contract.md](session-format-contract.md) § Metadata; [../TODO/session_vs_recording_metadata.md](../TODO/session_vs_recording_metadata.md). |
-| Human layout (today) | [../../README_feedback_format.md](../../README_feedback_format.md) — update **in the same PR** that implements v6. |
+| Status | **Implemented / LOCKED.** Authority for `.neurofeed` v6 (NFED6 / `formatVersion: 6`). **Annotations / base vocab / feedback / experimental bands / subject / overshoot / pause / timezone / computed Trust extras / `feedback.audioEvents` / `baselineSamples` / `inhibitCeilingOverrides` = LOCKED.** |
+| Scope | Unified recording + feedback **metadata JSON** and **v6 container** (NFED6 magic/version + writers/readers). |
+| Not this | Rename Dart/Rust FFI identifiers (historical `v5*` / `*V5` names kept); Athena tag 11; History UI chrome; pipeline Key Decisions. |
+| Supersedes | Dual dialects formerly in [../archive/session-format-contract-v5.md](../archive/session-format-contract-v5.md); [../archive/session_vs_recording_metadata.md](../archive/session_vs_recording_metadata.md). |
+| Human layout | [../../README_feedback_format.md](../../README_feedback_format.md) — keep in sync with this contract. |
 | History cache | [../../README_history_cache.md](../../README_history_cache.md) — promote a small scalar set into sqlite later. |
 
 Agents: adhere to **Design rules** and **Locked vocabulary** below. Inventory is from code (cited), not guesswork. JSON keys in this contract are the **source of truth** — prefer them when implementing writers/readers and when renaming Dart/Rust identifiers in a later PR; do not invent synonyms.
@@ -69,17 +69,17 @@ Honest 1–10 match of v6 names/shapes to EDF+, BIDS-EEG, and common annotation 
 | Sticky BandCache | `lib/src/monitor/cache/band_cache.dart` (`appendHeldUnusableGap` = **live-only**) |
 | Disconnect-during-recording | `lib/src/monitor/monitor_controller.dart` (`_onDisconnectedUnlocked` / gap filler) |
 | Feedback interrupt | `lib/src/feedback/feedback_state.dart` (`FeedbackInterruptKind.disconnect` \| `badSignal`) |
-| Format freeze (v5) | `.ai/contracts/session-format-contract.md`, `README_feedback_format.md` |
-| Dialect TODO | `.ai/TODO/session_vs_recording_metadata.md` |
+| Format freeze (v6) | this file, `README_feedback_format.md` |
+| Dialect (archived) | `.ai/archive/session_vs_recording_metadata.md` (superseded by unified dialect) |
 | Sqlite columns | `README_history_cache.md`, `lib/src/feedback/session_sqlite.dart` |
 
-### A) Already recorded
+### A) Already recorded *(pre-v6 inventory; current writers use formatVersion 6 / locked vocab above)*
 
 #### Recording metadata JSON (`RecordingMetadata`)
 
 Always nested:
 
-- Identity: `formatVersion` (5), `appVersion`, `kind: "recording"`, `savedAt`, `startedAt`, `elapsedSeconds`, `durationS`, `notes`
+- Identity: `formatVersion` (was 5 at inventory time), `appVersion`, `kind: "recording"`, `savedAt`, `startedAt`, `elapsedSeconds`, `durationS`, `notes`
 - `device`: `name`, `id`, `firmware`, `model`, `sensors`, `channelCount`, `channelLabels`
 - `streams`: complete ten keys (`eeg`…`gestures`); disabled = `{enabled:false, rateHz:0}` (never omitted)
 
@@ -297,7 +297,7 @@ Chart Y-max hold only. Not computed, not annotations, not stats.
 
 ## Subject model — **PREPARED** (anonymous-first)
 
-> **PREPARED.** Root key `subject` and required anonymous `id` are locked naming. Voluntary demographic / experience fields are **schema-ready but omitted until collected**. Do not reopen the root key without a format PR; adding a new optional voluntary field is OK with a table update. **Generation + Settings UI:** see [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md) (UUID v4 offline on app start; nickname user-settable).
+> **PREPARED.** Root key `subject` and required anonymous `id` are locked naming. Voluntary demographic / experience fields are **schema-ready but omitted until collected**. Do not reopen the root key without a format PR; adding a new optional voluntary field is OK with a table update. **Generation + Settings UI:** see [../archive/fileformat-v6-implementation.md](../archive/fileformat-v6-implementation.md) (UUID v4 offline on app start; nickname user-settable).
 
 **Decision:** nested root object **`subject`** (BIDS `participants.tsv` / `participant_id` terminology). Prefer `subject` over EDF’s packed “Local Patient Identification” string as the JSON shape; map components to EDF on **export**. Do **not** use a parallel root `patient` key.
 
@@ -647,7 +647,7 @@ A writer may emit only the **Must** keys first and add Sensible/Cool in the same
 
 ## Feedback extension — **LOCKED**
 
-> **LOCKED.** Shape and field homes below are the contract for implementers. **Q1–Q3 resolved** (generic `feedback.outcomeScalars`, engine under `sessionSettings`, sleepDir deduped). Implementation leftovers live in [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md). Do not invent a parallel root schema or a second gesture list.
+> **LOCKED.** Shape and field homes below are the contract for implementers. **Q1–Q3 resolved** (generic `feedback.outcomeScalars`, engine under `sessionSettings`, sleepDir deduped). Implementation leftovers live in [../archive/fileformat-v6-implementation.md](../archive/fileformat-v6-implementation.md). Do not invent a parallel root schema or a second gesture list.
 
 **Rule:** when `kind == "feedback"`, attach a single top-level `feedback: { … }` object. Omit (or null) for `kind == "recording"`. Everything already covered by **base** (`subject`, `device`, `streams`, `stats`, `annotations`, identity/timing) stays **out** of `feedback` — no duplicates.
 
@@ -919,13 +919,13 @@ Agents implementing writers/readers must **not** keep these under `feedback` or 
 9. **`sessionSettings.inhibitCeilingOverrides` (LOCKED):** optional `{ beta?, delta? }` slider overlays; omit when unset.
 10. **`feedback.audioEvents` (LOCKED):** sparse `{onset,type}` play log (`reward_chime`\|`guard_chime` only). Not annotations. Continuous audio rides on percentile / `music.series`.
 
-Status of this section: **LOCKED** — Q1–Q3 resolved below; Trust metadata extras (`baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`) locked with computed Trust extras. Remaining items are implementation (see [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md)).
+Status of this section: **LOCKED** — Q1–Q3 resolved below; Trust metadata extras (`baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`) locked with computed Trust extras. Implementation checklist archived: [../archive/fileformat-v6-implementation.md](../archive/fileformat-v6-implementation.md).
 
 ---
 
 ## Computed feedback extras — **LOCKED**
 
-> **LOCKED.** Trust live-graph fields on the 1 Hz computed JSONL + sparse `feedback.audioEvents` + calibration/inhibit metadata prerequisites. Field names align with History OQ 8 field list ([../TODO/history-dashboard-unification.md](../TODO/history-dashboard-unification.md)); **History UI series remains out of scope** for this contract. Implement **metadata first**, then computed (see [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md)). Do not invent alternatives.
+> **LOCKED.** Trust live-graph fields on the 1 Hz computed JSONL + sparse `feedback.audioEvents` + calibration/inhibit metadata prerequisites. Field names align with History OQ 8 field list ([../TODO/history-dashboard-unification.md](../TODO/history-dashboard-unification.md)); **History UI series remains out of scope** for this contract. Implement **metadata first**, then computed (see [../archive/fileformat-v6-implementation.md](../archive/fileformat-v6-implementation.md)). Do not invent alternatives.
 
 ### Purpose
 
@@ -1043,7 +1043,7 @@ Not coded in this draft; checklist for the implementation PR:
 
 ## Open questions
 
-Feedback extension + experimental band formulas + base vocabulary + **computed Trust extras** + sparse `feedback.audioEvents` / `baselineSamples` / `inhibitCeilingOverrides` are **LOCKED / implementable**. Former Q1–Q3 are **resolved** (see below). **No remaining schema openers** for this computed lock. Remaining work is **implementation** — tracked in [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md).
+Feedback extension + experimental band formulas + base vocabulary + **computed Trust extras** + sparse `feedback.audioEvents` / `baselineSamples` / `inhibitCeilingOverrides` are **LOCKED / implementable**. Former Q1–Q3 are **resolved** (see below). **No remaining schema openers** for this computed lock. Implementation checklist (archived): [../archive/fileformat-v6-implementation.md](../archive/fileformat-v6-implementation.md).
 
 ### Resolved (Q1–Q3)
 
@@ -1073,7 +1073,7 @@ Feedback extension + experimental band formulas + base vocabulary + **computed T
 - `music` / `calibration` shapes → keep as-is under `feedback`.
 - No `feedback.gestures[]`; shared stats (incl. `stillnessPct`) → base `stats` only.
 
-**Schema design finished.** Feedback extension + experimental band formulas + **computed Trust extras** (keep+add fields, dirty-latch fix, recordings omit) + Trust metadata extras (`baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`) are **LOCKED**. **No design openers remain for Trust/audio.** Remaining work is **implementation** (metadata writers first, then computed) — tracked in [../TODO/fileformat-v6-implementation.md](../TODO/fileformat-v6-implementation.md) (writers/readers, `NFED6`, `subject.id` app settings, delete dual-dialect, README update, Trust extras, etc.).
+**Schema design finished and landed.** Feedback extension + experimental band formulas + **computed Trust extras** (keep+add fields, dirty-latch fix, recordings omit) + Trust metadata extras (`baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`) are **LOCKED**. **No design openers remain for Trust/audio.** Implementation checklist: [../archive/fileformat-v6-implementation.md](../archive/fileformat-v6-implementation.md).
 
 Deferred outside this format PR (do not block v6 metadata):
 

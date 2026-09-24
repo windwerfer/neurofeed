@@ -401,7 +401,7 @@ class SessionStore {
     return null;
   }
 
-  /// Full v5 container bytes from the history folder.
+  /// Full `.neurofeed` container bytes from the history folder.
   Future<Uint8List?> readContainer(String id) async {
     final storage = await _storage;
     final bytes = await storage.readFile(await _fileNameFor(id));
@@ -653,7 +653,7 @@ class SessionStore {
   }
 
   /// Replace the free-text notes of an existing session and rewrite the
-  /// v5 container head in place, copying thumbnail, computed, and raw
+  /// Container head in place (via `v5RewriteHeadToPath`; NFED6), copying thumbnail, computed, and raw
   /// sections as opaque bytes. Returns false when the session file is missing
   /// or unreadable.
   Future<bool> updateNotes(String id, String notes) async {

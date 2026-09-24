@@ -62,7 +62,7 @@ void main() {
     expect(recordingIdFrom('recording_.raw', '.raw'), isNull);
   });
 
-  test('leftover recording_ temps assemble to scratch v5', () async {
+  test('leftover recording_ temps assemble to scratch .neurofeed', () async {
     await File('${scratch.path}/recording_1001.raw').writeAsBytes([1, 2, 3, 4]);
     await File('${scratch.path}/recording_1001.computed').writeAsString('');
     await File(
@@ -88,7 +88,7 @@ void main() {
     expect(meta['kind'], 'recording');
   });
 
-  test('leftover assembled v5 is returned without a second assemble', () async {
+  test('leftover assembled .neurofeed is returned without a second assemble', () async {
     final v5 = await writeScratchV5(
       dir: scratch,
       id: '2002',
