@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Draft** (writers/readers not implemented). **Annotations model = LOCKED.** **Base metadata vocabulary = LOCKED** (see Locked vocabulary). **`subject` object = PREPARED** (anonymous-first; see Subject model). |
+| Status | **Draft** (writers/readers not implemented). **Annotations model = LOCKED.** **Base metadata vocabulary = LOCKED** (see Locked vocabulary). **`subject` object = PREPARED** (anonymous-first; see Subject model). **Feedback extension = DRAFTED** (schema mostly locked; see Feedback extension + Open questions). |
 | Scope | Unify recording + feedback **metadata JSON**; prepare a **v6 clean cut** (container magic/version + writers/readers). |
 | Not this | Implement Rust/Dart writers yet; rename Dart/Rust identifiers yet; Athena tag 11; History UI chrome; pipeline Key Decisions. |
 | Supersedes (when landed) | Dual dialects in [session-format-contract.md](session-format-contract.md) § Metadata; [../TODO/session_vs_recording_metadata.md](../TODO/session_vs_recording_metadata.md). |
@@ -537,37 +537,257 @@ Future agents: change locked names only with a format PR and an updated table. P
 
 **Confirm from code:** raw does **not** drop unusable-quality samples; BandCache sticky is live-only. Computed is where holds / quality gaps matter most for charts; metadata gets the compact `annotations` timeline for agents. v5 `GestureMarker` / `feedback.gestures` → v6 `annotations` rows with `duration: 0`.
 
-## Feedback extension (brief)
+## Feedback extension — **DRAFTED**
 
-Same base. When `kind == "feedback"`, attach:
+> **DRAFTED** (not fully LOCKED). Shape and field homes below are the working contract for implementers. Most nesting choices are decided; remaining product/schema choices are listed under **Open questions** at the end of this file. Do not invent a parallel root schema or a second gesture list.
+
+**Rule:** when `kind == "feedback"`, attach a single top-level `feedback: { … }` object. Omit (or null) for `kind == "recording"`. Everything already covered by **base** (`subject`, `device`, `streams`, `stats`, `annotations`, identity/timing) stays **out** of `feedback` — no duplicates.
+
+### Field classification (from `SessionMetadata` / `buildSessionMetadata`)
+
+| Current field(s) | v6 home | Action |
+|---|---|---|
+| `savedAt`, `startedAt`, `elapsedSeconds`, `durationS`, `notes` | base identity | → base |
+| `sessionId` | root `sessionId` | → base |
+| `userId` | `subject.id` | → base (anonymous-first) |
+| `deviceName` / `deviceModel` / `deviceId` | nested `device` | → base (`deviceModel` today often = firmware string; nested `device` carries both `model` + `firmware`) |
+| `recordedChannels` | `device.channelLabels` | → base |
+| `recordedData` | `streams` ten-key enablement | → base |
+| `gestures[]` `{type,at}` | root `annotations[]` `{onset,duration:0,type}` | → annotations SoT; **drop** parallel list |
+| `stats.peakAlphaFreq/Power`, flat `peakAlphaHz`/`peakAlphaPower`, `avgBpm`, `avgSpo2`, `avgMovement`, `stillnessPct` | `stats.peakAlpha` / `stats.hr` / `stats.spo2` / `stats.movement` | → base `stats` only |
+| `signalQualityMean`, `pctQcOk` | `stats.quality.{mean,pctGood}` | → base |
+| `protocol`, `protocolVersion`, `protocolJson` | `feedback.*` | → `feedback{}` |
+| `durationMinutes` | `feedback.durationMinutes` | → `feedback{}` (planned length; **not** a duplicate of `durationS`) |
+| `sound`, `feedbackSound` | `feedback.sound` / `feedback.feedbackSound` | → `feedback{}` |
+| `metadataDescription` | `feedback.metadataDescription` | → `feedback{}` (protocol copy) |
+| `calibration`, `calibrationProfile` | `feedback.calibration` (+ optional profile id/string) | → `feedback{}` |
+| `drowsiness` | `feedback.drowsiness` (for now) | → `feedback{}` — see Open questions vs `protocolResults` |
+| `music` | `feedback.music` | → `feedback{}` (shape keep as-is) |
+| `sessionSettings` (+ optional `modelSnapshot`, `guardFeature`, `guardModel`) | `feedback.sessionSettings` | → `feedback{}` |
+| Top-level `guardrailEngine` / `modelKind` / `modelSha256` / `feedbackEngine` | fold into `feedback.sessionSettings` / `modelSnapshot` | → `feedback{}`; **drop** flat root mirrors |
+| `targetPct` / `pctInTarget`, `avgAlphaRel`, `guardrailWarnCount`, `avgSleepDir` | `feedback.training.*` | → `feedback{}` (training-only) |
+| Parallel `feedback.gestures[]` | — | **Rejected** (annotations SoT) |
+| `stillnessPct` under training | — | **Drop** — base `stats.movement.stillnessPct` only |
+
+### Example — `kind: "feedback"` (base + `feedback` block)
+
+Uses locked base vocabulary. `feedback` holds only what base does not.
 
 ```json
-"feedback": {
-  "protocol": "drowsiness",
-  "protocolVersion": "1",
-  "protocolJson": { },
-  "durationMinutes": 15,
-  "sound": "Ambient Drone",
-  "feedbackSound": "bowlChimes",
-  "metadataDescription": "…",
-  "calibration": { },
-  "sessionSettings": { },
-  "drowsiness": { },
-  "music": { },
-  "training": {
-    "pctInTarget": 62.0,
-    "avgAlphaRel": 0.42,
-    "guardrailWarnCount": 3,
-    "avgSleepDir": 0.34
+{
+  "formatVersion": 6,
+  "appVersion": "dev",
+  "kind": "feedback",
+  "savedAt": "2026-09-24T10:30:00.000Z",
+  "startedAt": "2026-09-24T10:15:00.000Z",
+  "elapsedSeconds": 900,
+  "durationS": 900,
+  "notes": "",
+  "sessionId": "sess_20260924_101500_c3d4",
+  "subject": {
+    "id": "anon_a1b2c3d4e5f6",
+    "nickname": "River"
+  },
+  "device": {
+    "name": "Muse 2",
+    "id": "AA:BB:CC:DD:EE:FF",
+    "firmware": "Classic",
+    "model": "Classic",
+    "sensors": ["EEG", "PPG", "IMU"],
+    "channelCount": 4,
+    "channelLabels": ["TP9", "AF7", "AF8", "TP10"]
+  },
+  "streams": {
+    "eeg": { "enabled": true, "rateHz": 256 },
+    "bands": { "enabled": true, "rateHz": 1 },
+    "pulse": { "enabled": true, "rateHz": 1 },
+    "spo2": { "enabled": true, "rateHz": 1 },
+    "movement": { "enabled": true, "rateHz": 1 },
+    "peakAlpha": { "enabled": true, "rateHz": 1 },
+    "imu": { "enabled": true, "rateHz": 52 },
+    "ppg": { "enabled": true, "rateHz": 64 },
+    "telemetry": { "enabled": true, "rateHz": 1 },
+    "gestures": { "enabled": false, "rateHz": 0 }
+  },
+  "stats": {
+    "hr": { "mean": 68.2, "min": 54.0, "max": 91.0 },
+    "spo2": { "mean": 98.1, "min": 96.0, "max": 99.0 },
+    "peakAlpha": { "meanHz": 10.1, "maxPowerHz": 10.4, "maxPower": 5.2 },
+    "movement": { "mean": 0.018, "stillnessPct": 71.0 },
+    "quality": {
+      "mean": 86.4,
+      "pctGood": 92.0,
+      "channelUsable": { "TP9": 0.94, "AF7": 0.88, "AF8": 0.91, "TP10": 0.95 }
+    },
+    "annotationSeconds": { "pause": 10.0, "bad_quality": 15.0, "disconnect": 0.0 },
+    "battery": { "startPct": 81.0, "endPct": 76.0 }
+  },
+  "annotations": [
+    { "onset": 45.0, "duration": 0, "type": "double_blink" },
+    { "onset": 120.0, "duration": 15.0, "type": "bad_quality" },
+    { "onset": 200.0, "duration": 10.0, "type": "pause" },
+    { "onset": 312.0, "duration": 0, "type": "double_jaw_clench" }
+  ],
+  "feedback": {
+    "protocol": "drowsiness",
+    "protocolVersion": "1",
+    "protocolJson": {
+      "id": "drowsiness",
+      "version": 1,
+      "reward": { "feature": "alpha_rel" },
+      "guard": { "feature": "ai.drowsiness" }
+    },
+    "durationMinutes": 15,
+    "sound": "Ambient Drone",
+    "feedbackSound": "bowlChimes",
+    "metadataDescription": "Eyes-closed alpha uptrain with drowsiness guard.",
+    "calibrationProfile": "eyes-closed-01",
+    "calibration": {
+      "version": 2,
+      "kind": "staged",
+      "calibrationId": "eyes-closed-01",
+      "calibrationStartSecs": 0.0,
+      "calibrationEndSecs": 90.0,
+      "trainingStartSecs": 90.0,
+      "usedStartAnyway": false,
+      "baseline": { "percentile": 60, "count": 45, "mean": 1.2, "stddev": 0.3 },
+      "phases": [
+        {
+          "name": "eyesClosed",
+          "durationSecs": 60.0,
+          "sampleCount": 55,
+          "eyes": "closed",
+          "kind": "baseline"
+        }
+      ],
+      "recalibrations": []
+    },
+    "sessionSettings": {
+      "dynamicAdapt": true,
+      "responsiveness": 0.5,
+      "baselinePercentile": 60,
+      "guardrailEnabled": true,
+      "guardrailEngine": "ai.drowsiness:cbramod_a_vig",
+      "guardFeature": "ai.drowsiness",
+      "guardModel": "cbramod_a_vig",
+      "warningThresholdPercentile": 80,
+      "warningSound": "softBell",
+      "musicFolder": null,
+      "musicMinCutoffHz": 200.0,
+      "musicMaxCutoffHz": 8000.0,
+      "musicInvert": false,
+      "musicShuffle": true,
+      "binauralPresetId": "none",
+      "binauralCarrierHz": 200.0,
+      "binauralBeatHz": 0.0,
+      "backgroundBinauralPresetId": "none",
+      "backgroundBinauralCarrierHz": 200.0,
+      "backgroundBinauralBeatHz": 0.0,
+      "markersInFeedbackEnabled": true,
+      "eyeMarkersEnabled": false,
+      "modelSnapshot": {
+        "engine": "cbramod_a_vig",
+        "weightsSha256": "0792cb808c14e6b7a2bb2ce1dff379bc47bc54c49a779825bdfeb33bf8157178",
+        "repoRevision": null,
+        "loadedAt": "2026-09-24T10:14:50.000Z"
+      }
+    },
+    "drowsiness": {
+      "scoreTotalPct": 12.5,
+      "meanSleepDir": 0.34,
+      "threshold": 0.55
+    },
+    "music": {
+      "trackCount": 2,
+      "minCutoffHz": 200.0,
+      "maxCutoffHz": 8000.0,
+      "invert": false,
+      "shuffle": true,
+      "tracks": [
+        { "at": 90.0, "name": "track01.opus" },
+        { "at": 450.0, "name": "track02.opus" }
+      ],
+      "series": [
+        { "at": 120.0, "hz": 1200.0 },
+        { "at": 300.0, "hz": 2400.0 }
+      ]
+    },
+    "training": {
+      "pctInTarget": 62.0,
+      "avgAlphaRel": 0.42,
+      "guardrailWarnCount": 3,
+      "avgSleepDir": 0.34
+    }
   }
 }
 ```
 
-Migrate flat `SessionMetadata` fields into nested `device` / `streams` / `stats` / `feedback` — do not keep a second root schema. Full feedback redesign is out of scope for this file; enough that agents do not invent a parallel tree.
+Notes on the example:
 
-Shared physiological aggregates stay in base `stats` (HR, SpO₂, movement incl. optional `stillnessPct`, quality, battery, experimental bands). Training-only scalars stay under `feedback.training` (or equivalent). **Fit / contact** is not a separate object — use `stats.quality.channelUsable` (+ `mean` / `pctGood`). Prefer not duplicating `stillnessPct` under `feedback.training` once base writers land.
+- Root has **no** `gestures[]`, flat device keys, or flat physio mirrors.
+- `feedback` has **no** `gestures[]` (annotations SoT).
+- Shared physio (`stillnessPct`, HR, SpO₂, peak-α, quality, battery) lives only under base `stats`.
+- `durationMinutes` (15) is the **planned** length the user selected; `durationS` / `elapsedSeconds` (900) are **actual** elapsed store time — different meanings.
+- `music` / `calibration` shapes match today’s nested writers (keep as-is).
+- `modelSnapshot` stays **inside** `sessionSettings` (matches v5 README / `SessionSettings`); do not also mirror `modelKind` / `modelSha256` / `feedbackEngine` at `feedback` root.
 
-**Gestures:** do **not** put `feedback.gestures[]` here. Double blink / jaw clench / eye markers are rows in root `annotations[]` with `duration: 0` (see Annotations model). v5 `gestures: [{ "type": "doubleBlink", "at": 45 }]` migrates to `{ "onset": 45.0, "duration": 0, "type": "double_blink" }` on the base object.
+### Field table — `feedback` object
+
+| Field | Type | Notes |
+|---|---|---|
+| `protocol` | string | Protocol id / catalog name (e.g. `"drowsiness"`). Loosely ↔ BIDS `TaskName` on export. |
+| `protocolVersion` | string | Catalog / document version token (today often `"1"`). |
+| `protocolJson` | object? | Snapshot of resolved `ProtocolDocument` at save; omit if unavailable. |
+| `durationMinutes` | number (int) | **Planned** session length in minutes (UI picker). Not redundant with root `durationS`. |
+| `sound` | string | Ambient / background sound name. |
+| `feedbackSound` | string? | Reward / feedback output name (e.g. `bowlChimes`). |
+| `metadataDescription` | string? | Human protocol blurb from catalog (`ProtocolDocument.metadataDescription`). |
+| `calibrationProfile` | string? | Optional profile id string; rarely set today — keep if writers populate it. |
+| `calibration` | object? | Nested calibration blob — **keep shape as-is** (`version`, `kind`=`single`\|`staged`, `calibrationId`, timing, `baseline`, `phases[]`, `recalibrations[]`, …). |
+| `sessionSettings` | object | Training knobs at save: adaptivity, baseline percentile, guardrail on/off + `guardFeature` / `guardModel` / `guardrailEngine`, warning sound, music/binaural knobs, marker flags. Optional nested `modelSnapshot` `{engine, weightsSha256?, configJson?, repoRevision?, loadedAt}`. |
+| `drowsiness` | object? | Protocol session summary `{scoreTotalPct, meanSleepDir, threshold?}`. See Open questions for generic `protocolResults`. |
+| `music` | object? | Playback summary — **keep shape as-is** (`trackCount`, cutoff min/max, `invert`, `shuffle`, `tracks[]` `{at,name}`, `series[]` `{at,hz}`). |
+| `training` | object | Feedback-only training scalars (see below). |
+| ~~`gestures[]`~~ | — | **Forbidden.** Use root `annotations[]`. |
+
+#### `feedback.training` (feedback-only scalars)
+
+| Field | Type | Notes |
+|---|---|---|
+| `pctInTarget` | number | % seconds in reward target (← `targetPct` / `pctInTarget`). |
+| `avgAlphaRel` | number | Mean relative-α used by feedback charts. |
+| `guardrailWarnCount` | number (int) | Count of guardrail warning seconds / events from assemble extract. |
+| `avgSleepDir` | number | Mean guardrail `sleepDir` over session (also mirrored inside `drowsiness.meanSleepDir` when that nest is present — OK as protocol summary vs training scalar; do not also put under base `stats`). |
+
+Do **not** put under `training`: `stillnessPct`, HR/SpO₂/peak-α/quality/battery (base `stats` only).
+
+### Migrated away from `feedback` / flat dialect (do not leave duplicates)
+
+Agents implementing writers/readers must **not** keep these under `feedback` or as flat root keys once v6 lands:
+
+| Old location | New location | Why |
+|---|---|---|
+| Flat `deviceName` / `deviceModel` / `deviceId` | `device.{name,model/firmware,id}` | Base device nest |
+| `recordedChannels` | `device.channelLabels` | Base |
+| `recordedData` | `streams` | Base enablement map |
+| `gestures[]` / any `feedback.gestures[]` | root `annotations[]` | Annotations SoT |
+| `userId` | `subject.id` | Anonymous-first subject |
+| Flat / nested save `stats` physio (`avgBpm`, `avgSpo2`, `peakAlpha*`, `avgMovement`, `stillnessPct`) | `stats.hr` / `spo2` / `peakAlpha` / `movement` | Shared stats |
+| `signalQualityMean` / `pctQcOk` | `stats.quality` | Shared stats |
+| Root timing already on base (`savedAt`, `startedAt`, `elapsedSeconds`, `durationS`, `notes`, `sessionId`) | base identity | Not under `feedback` |
+| Top-level `modelKind` / `modelSha256` / `feedbackEngine` / lone `guardrailEngine` | `sessionSettings.modelSnapshot` + `sessionSettings.guard*` | Single engine nest |
+| `training.stillnessPct` | `stats.movement.stillnessPct` | Shared physiology |
+
+### Locks inside this draft
+
+1. **No `feedback.gestures[]`** — annotations are the only marker timeline.
+2. **Training-only scalars** live under `feedback.training` (or equivalent nest under `feedback`); shared physio stays in base `stats` only.
+3. **`music` and `calibration` shapes** keep today’s nested field names (no rename pass in this draft).
+4. **`modelSnapshot` nests under `sessionSettings`**, not as a second top-level `feedback.modelSnapshot` mirror.
+5. **`durationMinutes` stays under `feedback`** as planned length (distinct from root `durationS`).
+6. **`metadataDescription` stays under `feedback`** (protocol copy, not file-level `notes`).
+
+Status of this section: **DRAFTED** — implementable as written; not stamped LOCKED until Open questions below are answered or explicitly deferred.
 
 ---
 
@@ -595,17 +815,35 @@ Not coded in this draft; checklist for the implementation PR:
 7. **Locked JSON keys are the source of truth.** When implementing writers/readers, and when renaming Dart/Rust identifiers in a later PR, prefer the keys in **Locked vocabulary** and the **Annotations model — LOCKED** section. Do not invent synonyms (`sfreq`, `ch_names`, `sao2` as a JSON key, `SamplingFrequency` in neurofeed JSON, parallel `feedback.gestures[]`, …). Map EDF+/BIDS/MNE spellings on export only. Do **not** rename app source in the same change as a contract-only edit unless the task says so.
 8. **Annotations model is LOCKED** — do not reopen shape, nominators, or initial `type` strings without a format PR.
 9. **`subject` is PREPARED (anonymous-first).** Always write `subject.id` on new v6 files; omit voluntary fields until collected; never put PII by default; keep `sessionId` at root. See Subject model.
+10. **Feedback extension is DRAFTED.** When `kind=="feedback"`, write top-level `feedback` per **Feedback extension**; never duplicate base/annotations/stats fields into it; never write `feedback.gestures[]`. See migrated-away table + Open questions.
 
 ---
 
-## Leftovers / open (not blocking; vocabulary + annotations locked; subject prepared)
+## Open questions
 
-- Exact named-band formulas (experimental until product locks them).
-- Whether `% overshoot` / overshoot intervals are worth persisting later (paint-time today; **not** an `annotations.type` until defined — see Annotations model).
-- Per-record length prefix / Athena tag 11 (separate format PRs).
-- Whether feedback pause should stop the computed sampler (today it does not until `end()`). Pause **does** get an `annotations` entry with `type: "pause"` when support lands.
-- `subject.id` generation scheme (UUID vs `anon_`+hex) and BIDS `sub-` normalization — decide in the writer/export PR.
-- Whether nickname export-as-EDF-name ever becomes a product toggle (default remains EDF name = `X`).
+Feedback extension + base vocabulary are **schema-complete enough to implement**. Only real undecided product/schema choices remain:
+
+1. **`drowsiness` nest vs generic `protocolResults`** — Today only the drowsiness protocol writes a named session summary (`feedback.drowsiness`). Keep the protocol-specific key (simple, matches code), or introduce `feedback.protocolResults: { "drowsiness": {…}, … }` so future protocols do not each mint a new root key under `feedback`? **Lean:** keep `drowsiness` for v6; revisit when a second protocol summary appears.
+2. **Engine field surface** — Confirm single home: `sessionSettings.guardFeature` / `guardModel` / `guardrailEngine` + optional `sessionSettings.modelSnapshot`. No parallel `feedback.engine` object and no flat `modelKind` / `modelSha256` / `feedbackEngine` on `feedback` root. *(If agreed, this ceases to be open and can move to Locks.)*
+3. **`avgSleepDir` dual home** — `feedback.training.avgSleepDir` and `feedback.drowsiness.meanSleepDir` can both be present. Accept as training scalar vs protocol summary, or drop one? **Lean:** keep both for now (different readers); do not put under base `stats`.
+
+**Resolved in this draft (not open):**
+
+- `durationMinutes` → `feedback` only (planned); root `durationS` / `elapsedSeconds` = actual.
+- `metadataDescription` → `feedback`.
+- `music` / `calibration` shapes → keep as-is under `feedback`.
+- No `feedback.gestures[]`; shared stats (incl. `stillnessPct`) → base `stats` only.
+
+**Basically done for schema design; remaining work is implementation** (writers/readers, `NFED6`, delete dual-dialect, update `README_feedback_format.md`) plus answering #1–#3 above if product wants them locked before code.
+
+Non-schema leftovers (unchanged; do not block feedback draft):
+
+- Exact named-band formulas under `stats.experimental`.
+- Whether `% overshoot` / overshoot intervals are worth persisting later.
+- Per-record length prefix / Athena tag 11.
+- Whether feedback pause should stop the computed sampler.
+- `subject.id` generation scheme and BIDS `sub-` normalization.
+- Nickname export-as-EDF-name product toggle (default EDF name = `X`).
 
 ---
 
@@ -630,7 +868,7 @@ Gap check of **v6 BASE** (+ locked annotations / subject / stats / streams / dev
 
 ### B) Belongs under `feedback` (not base)
 
-Do **not** treat these as base gaps:
+Full draft + example + migrated-away table: **Feedback extension — DRAFTED** above. Do **not** treat these as base gaps:
 
 | Field(s) | Notes |
 |---|---|
