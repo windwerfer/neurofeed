@@ -1,4 +1,4 @@
-/// SQLite implementation for v5 session metadata cache.
+/// SQLite implementation for v5/v6 session metadata cache.
 ///
 /// Replaces the file-based cache with a proper SQLite database.
 /// Sessions table has typed columns for fast sort/filter without JSON parsing.
@@ -34,6 +34,8 @@ Future<Directory> resolveSessionCacheDir(SessionStorage history) async {
 class SessionSqlite {
   SessionSqlite._(this._db);
 
+  static const int kSchemaUserVersion = 2;
+
   static Future<SessionSqlite> open({required Directory cacheDirectory}) async {
     // Initialize native sqlite3 for Flutter (workaround for old Android versions)
     await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
@@ -55,17 +57,52 @@ class SessionSqlite {
 
   Database get db => _db;
 
+  /// Set when open wiped the sessions table for a schema bump. SessionStore
+  /// consumes this to trigger a one-shot reindex from disk.
+  bool _needsReindex = false;
+
+  bool get needsReindex => _needsReindex;
+
+  /// Clear the one-shot reindex flag (after SessionStore schedules backfill).
+  bool consumeNeedsReindex() {
+    final v = _needsReindex;
+    _needsReindex = false;
+    return v;
+  }
+
   Future<void> _initSchema() async {
-    _db.execute('''
+    // Wipe before CREATE INDEX — a legacy sessions table may lack new columns.
+    final existing = _db.select(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'",
+    );
+    if (existing.isNotEmpty && !_hasColumn('experimental_scalars')) {
+      // Clean cut: wipe and recreate full schema (no ALTER-add migration).
+      _db.execute('DROP TABLE IF EXISTS state_markers');
+      _db.execute('DROP TABLE IF EXISTS sessions');
+      _needsReindex = true;
+    }
+    _createTables();
+    _db.execute('PRAGMA user_version = $kSchemaUserVersion');
+  }
+
+  bool _hasColumn(String name) {
+    final cols = _db.select('PRAGMA table_info(sessions)');
+    return cols.any((r) => r['name'] == name);
+  }
+
+  void _createTables() {
+    _db.execute(
+      r"""
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY NOT NULL,
         path TEXT NOT NULL UNIQUE,
-        format_version INTEGER NOT NULL DEFAULT 5,
+        format_version INTEGER NOT NULL DEFAULT 6,
         app_version TEXT NOT NULL,
         saved_at TEXT NOT NULL,
         started_at TEXT NOT NULL,
         duration_s INTEGER NOT NULL,
         protocol TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'feedback',
         protocol_version TEXT,
         device_name TEXT,
         device_model TEXT,
@@ -80,15 +117,31 @@ class SessionSqlite {
         off_raw INTEGER NOT NULL,
         len_raw INTEGER NOT NULL,
         avg_hr REAL,
+        hr_min REAL,
+        hr_max REAL,
         avg_spo2 REAL,
+        spo2_min REAL,
+        spo2_max REAL,
         peak_alpha_hz REAL,
         peak_alpha_power REAL,
+        peak_alpha_mean_hz REAL,
         pct_in_target REAL,
         avg_movement REAL,
+        stillness_pct REAL,
         guardrail_warn_count INTEGER,
         avg_sleep_dir REAL,
+        avg_alpha_rel REAL,
+        guard_warn_pct REAL,
+        guard_threshold REAL,
         signal_quality_mean REAL,
         pct_qc_ok REAL,
+        quality_channel_usable TEXT,
+        annotation_pause_s REAL,
+        annotation_bad_quality_s REAL,
+        annotation_disconnect_s REAL,
+        battery_start_pct REAL,
+        battery_end_pct REAL,
+        experimental_scalars TEXT,
         marker_count INTEGER DEFAULT 0,
         guardrail_engine TEXT,
         model_kind TEXT,
@@ -105,34 +158,18 @@ class SessionSqlite {
         time_zone TEXT,
         saved_at_ms INTEGER
       )
-    ''');
+""",
+    );
+    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_saved_at ON sessions(saved_at DESC)');
+    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC)');
+    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_protocol ON sessions(protocol)');
+    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_device_id ON sessions(device_id)');
+    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)');
+    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_guardrail_engine ON sessions(guardrail_engine)');
+    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id)');
 
-    _db.execute('''
-      CREATE INDEX IF NOT EXISTS idx_sessions_saved_at ON sessions(saved_at DESC)
-    ''');
-    _db.execute('''
-      CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC)
-    ''');
-    _db.execute('''
-      CREATE INDEX IF NOT EXISTS idx_sessions_protocol ON sessions(protocol)
-    ''');
-    _db.execute('''
-      CREATE INDEX IF NOT EXISTS idx_sessions_device_id ON sessions(device_id)
-    ''');
-    _db.execute('''
-      CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)
-    ''');
-    _db.execute('''
-      CREATE INDEX IF NOT EXISTS idx_sessions_guardrail_engine ON sessions(guardrail_engine)
-    ''');
-    _db.execute('''
-      CREATE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id)
-    ''');
-
-    _ensureKindColumn();
-    _ensureTimeZoneColumns();
-
-    _db.execute('''
+    _db.execute(
+      r"""
       CREATE TABLE IF NOT EXISTS state_markers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -144,33 +181,10 @@ class SessionSqlite {
         created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
         updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
       )
-    ''');
-
-    _db.execute('''
-      CREATE INDEX IF NOT EXISTS idx_state_markers_session_t ON state_markers(session_id, t)
-    ''');
-  }
-
-  /// Existing DBs created before recordings: `kind` defaults to `feedback`.
-  void _ensureKindColumn() {
-    final cols = _db.select('PRAGMA table_info(sessions)');
-    if (cols.any((r) => r['name'] == 'kind')) return;
-    _db.execute(
-      "ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'feedback'",
+""",
     );
+    _db.execute('CREATE INDEX IF NOT EXISTS idx_state_markers_session_t ON state_markers(session_id, t)');
   }
-  void _ensureTimeZoneColumns() {
-    final cols = _db.select('PRAGMA table_info(sessions)');
-    final names = <String>{for (final r in cols) r['name'] as String};
-    if (!names.contains('time_zone')) {
-      _db.execute('ALTER TABLE sessions ADD COLUMN time_zone TEXT');
-    }
-    if (!names.contains('saved_at_ms')) {
-      _db.execute('ALTER TABLE sessions ADD COLUMN saved_at_ms INTEGER');
-    }
-  }
-
-
   /// Insert or replace a session row.
   Future<void> upsertSession(SessionRow row) async {
     _db.execute('''
@@ -179,14 +193,19 @@ class SessionSqlite {
         protocol, kind, protocol_version, device_name, device_model, device_id,
         calibration_profile, recorded_channels, recorded_streams,
         off_meta, len_meta, off_computed, len_computed, off_raw, len_raw,
-        avg_hr, avg_spo2, peak_alpha_hz, peak_alpha_power,
-        pct_in_target, avg_movement, guardrail_warn_count, avg_sleep_dir,
-        signal_quality_mean, pct_qc_ok, marker_count,
+        avg_hr, hr_min, hr_max, avg_spo2, spo2_min, spo2_max,
+        peak_alpha_hz, peak_alpha_power, peak_alpha_mean_hz,
+        pct_in_target, avg_movement, stillness_pct,
+        guardrail_warn_count, avg_sleep_dir, avg_alpha_rel, guard_warn_pct, guard_threshold,
+        signal_quality_mean, pct_qc_ok, quality_channel_usable,
+        annotation_pause_s, annotation_bad_quality_s, annotation_disconnect_s,
+        battery_start_pct, battery_end_pct, experimental_scalars,
+        marker_count,
         guardrail_engine, model_kind, model_sha256, feedback_engine,
         user_id, session_id, notes_preview,
         file_size, mtime, thumbnail, created_at, updated_at,
         time_zone, saved_at_ms
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         path = excluded.path,
         format_version = excluded.format_version,
@@ -210,15 +229,31 @@ class SessionSqlite {
         off_raw = excluded.off_raw,
         len_raw = excluded.len_raw,
         avg_hr = excluded.avg_hr,
+        hr_min = excluded.hr_min,
+        hr_max = excluded.hr_max,
         avg_spo2 = excluded.avg_spo2,
+        spo2_min = excluded.spo2_min,
+        spo2_max = excluded.spo2_max,
         peak_alpha_hz = excluded.peak_alpha_hz,
         peak_alpha_power = excluded.peak_alpha_power,
+        peak_alpha_mean_hz = excluded.peak_alpha_mean_hz,
         pct_in_target = excluded.pct_in_target,
         avg_movement = excluded.avg_movement,
+        stillness_pct = excluded.stillness_pct,
         guardrail_warn_count = excluded.guardrail_warn_count,
         avg_sleep_dir = excluded.avg_sleep_dir,
+        avg_alpha_rel = excluded.avg_alpha_rel,
+        guard_warn_pct = excluded.guard_warn_pct,
+        guard_threshold = excluded.guard_threshold,
         signal_quality_mean = excluded.signal_quality_mean,
         pct_qc_ok = excluded.pct_qc_ok,
+        quality_channel_usable = excluded.quality_channel_usable,
+        annotation_pause_s = excluded.annotation_pause_s,
+        annotation_bad_quality_s = excluded.annotation_bad_quality_s,
+        annotation_disconnect_s = excluded.annotation_disconnect_s,
+        battery_start_pct = excluded.battery_start_pct,
+        battery_end_pct = excluded.battery_end_pct,
+        experimental_scalars = excluded.experimental_scalars,
         marker_count = excluded.marker_count,
         guardrail_engine = excluded.guardrail_engine,
         model_kind = excluded.model_kind,
@@ -288,7 +323,6 @@ class SessionSqlite {
 
   void close() => _db.dispose();
 }
-
 /// Row for sessions table.
 class SessionRow {
   final String id;
@@ -315,15 +349,31 @@ class SessionRow {
   final int offRaw;
   final int lenRaw;
   final double? avgHr;
+  final double? hrMin;
+  final double? hrMax;
   final double? avgSpo2;
+  final double? spo2Min;
+  final double? spo2Max;
   final double? peakAlphaHz;
   final double? peakAlphaPower;
+  final double? peakAlphaMeanHz;
   final double? pctInTarget;
   final double? avgMovement;
+  final double? stillnessPct;
   final int? guardrailWarnCount;
   final double? avgSleepDir;
+  final double? avgAlphaRel;
+  final double? guardWarnPct;
+  final double? guardThreshold;
   final double? signalQualityMean;
   final double? pctQcOk;
+  final String? qualityChannelUsable;
+  final double? annotationPauseS;
+  final double? annotationBadQualityS;
+  final double? annotationDisconnectS;
+  final double? batteryStartPct;
+  final double? batteryEndPct;
+  final String? experimentalScalars;
   final int markerCount;
   final String? guardrailEngine;
   final String? modelKind;
@@ -366,15 +416,31 @@ class SessionRow {
     required this.offRaw,
     required this.lenRaw,
     this.avgHr,
+    this.hrMin,
+    this.hrMax,
     this.avgSpo2,
+    this.spo2Min,
+    this.spo2Max,
     this.peakAlphaHz,
     this.peakAlphaPower,
+    this.peakAlphaMeanHz,
     this.pctInTarget,
     this.avgMovement,
+    this.stillnessPct,
     this.guardrailWarnCount,
     this.avgSleepDir,
+    this.avgAlphaRel,
+    this.guardWarnPct,
+    this.guardThreshold,
     this.signalQualityMean,
     this.pctQcOk,
+    this.qualityChannelUsable,
+    this.annotationPauseS,
+    this.annotationBadQualityS,
+    this.annotationDisconnectS,
+    this.batteryStartPct,
+    this.batteryEndPct,
+    this.experimentalScalars,
     required this.markerCount,
     this.guardrailEngine,
     this.modelKind,
@@ -392,15 +458,94 @@ class SessionRow {
     this.savedAtMs,
   });
 
+  SessionRow copyWith({
+    String? notesPreview,
+    int? fileSize,
+    int? mtime,
+    DateTime? updatedAt,
+    Uint8List? thumbnail,
+  }) {
+    return SessionRow(
+      id: id,
+      path: path,
+      formatVersion: formatVersion,
+      appVersion: appVersion,
+      savedAt: savedAt,
+      startedAt: startedAt,
+      durationS: durationS,
+      protocol: protocol,
+      kind: kind,
+      protocolVersion: protocolVersion,
+      deviceName: deviceName,
+      deviceModel: deviceModel,
+      deviceId: deviceId,
+      calibrationProfile: calibrationProfile,
+      recordedChannels: recordedChannels,
+      recordedStreams: recordedStreams,
+      offMeta: offMeta,
+      lenMeta: lenMeta,
+      offComputed: offComputed,
+      lenComputed: lenComputed,
+      offRaw: offRaw,
+      lenRaw: lenRaw,
+      avgHr: avgHr,
+      hrMin: hrMin,
+      hrMax: hrMax,
+      avgSpo2: avgSpo2,
+      spo2Min: spo2Min,
+      spo2Max: spo2Max,
+      peakAlphaHz: peakAlphaHz,
+      peakAlphaPower: peakAlphaPower,
+      peakAlphaMeanHz: peakAlphaMeanHz,
+      pctInTarget: pctInTarget,
+      avgMovement: avgMovement,
+      stillnessPct: stillnessPct,
+      guardrailWarnCount: guardrailWarnCount,
+      avgSleepDir: avgSleepDir,
+      avgAlphaRel: avgAlphaRel,
+      guardWarnPct: guardWarnPct,
+      guardThreshold: guardThreshold,
+      signalQualityMean: signalQualityMean,
+      pctQcOk: pctQcOk,
+      qualityChannelUsable: qualityChannelUsable,
+      annotationPauseS: annotationPauseS,
+      annotationBadQualityS: annotationBadQualityS,
+      annotationDisconnectS: annotationDisconnectS,
+      batteryStartPct: batteryStartPct,
+      batteryEndPct: batteryEndPct,
+      experimentalScalars: experimentalScalars,
+      markerCount: markerCount,
+      guardrailEngine: guardrailEngine,
+      modelKind: modelKind,
+      modelSha256: modelSha256,
+      feedbackEngine: feedbackEngine,
+      userId: userId,
+      sessionId: sessionId,
+      notesPreview: notesPreview ?? this.notesPreview,
+      fileSize: fileSize ?? this.fileSize,
+      mtime: mtime ?? this.mtime,
+      thumbnail: thumbnail ?? this.thumbnail,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      timeZone: timeZone,
+      savedAtMs: savedAtMs,
+    );
+  }
+
   List<Object?> toList() => [
     id, path, formatVersion, appVersion,
     savedAt.toUtc().toIso8601String(), startedAt.toUtc().toIso8601String(),
     durationS, protocol, kind, protocolVersion, deviceName, deviceModel, deviceId,
     calibrationProfile, recordedChannels, recordedStreams,
     offMeta, lenMeta, offComputed, lenComputed, offRaw, lenRaw,
-    avgHr, avgSpo2, peakAlphaHz, peakAlphaPower,
-    pctInTarget, avgMovement, guardrailWarnCount, avgSleepDir,
-    signalQualityMean, pctQcOk, markerCount,
+    avgHr, hrMin, hrMax, avgSpo2, spo2Min, spo2Max,
+    peakAlphaHz, peakAlphaPower, peakAlphaMeanHz,
+    pctInTarget, avgMovement, stillnessPct,
+    guardrailWarnCount, avgSleepDir, avgAlphaRel, guardWarnPct, guardThreshold,
+    signalQualityMean, pctQcOk, qualityChannelUsable,
+    annotationPauseS, annotationBadQualityS, annotationDisconnectS,
+    batteryStartPct, batteryEndPct, experimentalScalars,
+    markerCount,
     guardrailEngine, modelKind, modelSha256, feedbackEngine,
     userId, sessionId, notesPreview,
     fileSize, mtime, thumbnail,
@@ -437,15 +582,31 @@ class SessionRow {
       offRaw: row['off_raw'] as int,
       lenRaw: row['len_raw'] as int,
       avgHr: (row['avg_hr'] as num?)?.toDouble(),
+      hrMin: (row['hr_min'] as num?)?.toDouble(),
+      hrMax: (row['hr_max'] as num?)?.toDouble(),
       avgSpo2: (row['avg_spo2'] as num?)?.toDouble(),
+      spo2Min: (row['spo2_min'] as num?)?.toDouble(),
+      spo2Max: (row['spo2_max'] as num?)?.toDouble(),
       peakAlphaHz: (row['peak_alpha_hz'] as num?)?.toDouble(),
       peakAlphaPower: (row['peak_alpha_power'] as num?)?.toDouble(),
+      peakAlphaMeanHz: (row['peak_alpha_mean_hz'] as num?)?.toDouble(),
       pctInTarget: (row['pct_in_target'] as num?)?.toDouble(),
       avgMovement: (row['avg_movement'] as num?)?.toDouble(),
+      stillnessPct: (row['stillness_pct'] as num?)?.toDouble(),
       guardrailWarnCount: (row['guardrail_warn_count'] as num?)?.toInt(),
       avgSleepDir: (row['avg_sleep_dir'] as num?)?.toDouble(),
+      avgAlphaRel: (row['avg_alpha_rel'] as num?)?.toDouble(),
+      guardWarnPct: (row['guard_warn_pct'] as num?)?.toDouble(),
+      guardThreshold: (row['guard_threshold'] as num?)?.toDouble(),
       signalQualityMean: (row['signal_quality_mean'] as num?)?.toDouble(),
       pctQcOk: (row['pct_qc_ok'] as num?)?.toDouble(),
+      qualityChannelUsable: row['quality_channel_usable'] as String?,
+      annotationPauseS: (row['annotation_pause_s'] as num?)?.toDouble(),
+      annotationBadQualityS: (row['annotation_bad_quality_s'] as num?)?.toDouble(),
+      annotationDisconnectS: (row['annotation_disconnect_s'] as num?)?.toDouble(),
+      batteryStartPct: (row['battery_start_pct'] as num?)?.toDouble(),
+      batteryEndPct: (row['battery_end_pct'] as num?)?.toDouble(),
+      experimentalScalars: row['experimental_scalars'] as String?,
       markerCount: row['marker_count'] as int,
       guardrailEngine: row['guardrail_engine'] as String?,
       modelKind: row['model_kind'] as String?,

@@ -10,13 +10,20 @@ row.
 One database lists **both** feedback sessions and recordings (`kind`).
 
 **List path:** `SessionStore.list()` is **sqlite-only**
-(`listSessions()` ordered by `saved_at DESC`). There is no directory scan
-and no background backfill of orphan files. A history-folder file with no
-row is invisible until something upserts it (`publishSession` /
-`RecordingStore.publish`).
+(`listSessions()` ordered by `COALESCE(saved_at_ms, 0) DESC, saved_at DESC`).
+A history-folder file with no row is invisible until something upserts it
+(`publishSession` / `RecordingStore.publish` / `reindexFromFiles`).
 
 **Write path:** `publishSession` / `RecordingStore.publish` / `updateNotes` /
-`delete` / `moveAllTo` upsert or delete rows. `backfillPending()` is a no-op.
+`delete` / `moveAllTo` upsert or delete rows.
+
+**Schema wipe + reindex:** On open, if `sessions` lacks `experimental_scalars`,
+SQLite **drops** `sessions` + `state_markers` and recreates the full schema
+(clean cut — no ALTER-add). That sets a one-shot `needsReindex` flag;
+`SessionStore.list()` schedules `backfillPending()` → `reindexFromFiles()`,
+which lists history `.neurofeed` files, parses metadata (+ assembles stats
+from computed frames when the file lacks `stats`), and upserts full scalar
+columns. The same reindex runs when the DB is empty but files exist on disk.
 
 ---
 
@@ -41,9 +48,9 @@ opens the destination cache dir.
 
 ### Table: `sessions`
 
-One row per published file. `kind` is added with
-`ALTER TABLE … DEFAULT 'feedback'` (`_ensureKindColumn`) so older DBs keep
-working.
+One row per published file. Schema bumps that add default
+scalar columns wipe and recreate the table (see wipe + reindex above);
+`PRAGMA user_version = 2` marks the promoted-scalar schema.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -66,17 +73,32 @@ working.
 | `off_meta` / `len_meta` | INTEGER | Byte offset/length of metadata section |
 | `off_computed` / `len_computed` | INTEGER | Computed 1 Hz section |
 | `off_raw` / `len_raw` | INTEGER | Raw body section |
-| `avg_hr` | REAL | Average heart rate (BPM) |
-| `avg_spo2` | REAL | Average SpO₂ (%) |
-| `peak_alpha_hz` | REAL | Average peak alpha frequency (Hz) |
-| `peak_alpha_power` | REAL | Average peak alpha power |
-| `pct_in_target` | REAL | % of feedback seconds in target (feedback) |
-| `avg_movement` | REAL | Average movement score |
-| `guardrail_warn_count` | INTEGER | Seconds with guard warning |
-| `avg_sleep_dir` | REAL | Mean sleep-direction score |
-| `signal_quality_mean` | REAL | Mean pad quality (0–100) |
-| `pct_qc_ok` | REAL | % of seconds with good quality |
+| `avg_hr` | REAL | `stats.hr.mean` |
+| `hr_min` / `hr_max` | REAL | `stats.hr.min` / `max` |
+| `avg_spo2` | REAL | `stats.spo2.mean` |
+| `spo2_min` / `spo2_max` | REAL | `stats.spo2.min` / `max` |
+| `peak_alpha_hz` | REAL | `stats.peakAlpha.maxPowerHz` |
+| `peak_alpha_power` | REAL | `stats.peakAlpha.maxPower` |
+| `peak_alpha_mean_hz` | REAL | `stats.peakAlpha.meanHz` |
+| `pct_in_target` | REAL | `feedback.outcomeScalars.pctInTarget` (null on recordings) |
+| `avg_movement` | REAL | `stats.movement.mean` |
+| `stillness_pct` | REAL | `stats.movement.stillnessPct` |
+| `guardrail_warn_count` | INTEGER | `feedback.outcomeScalars.guardrailWarnCount` |
+| `avg_sleep_dir` | REAL | `feedback.outcomeScalars.avgSleepDir` |
+| `avg_alpha_rel` | REAL | `feedback.outcomeScalars.avgAlphaRel` |
+| `guard_warn_pct` | REAL | `feedback.outcomeScalars.guardWarnPct` |
+| `guard_threshold` | REAL | `feedback.outcomeScalars.guardThreshold` |
+| `signal_quality_mean` | REAL | `stats.quality.mean` |
+| `pct_qc_ok` | REAL | `stats.quality.pctGood` |
+| `quality_channel_usable` | TEXT | JSON map of `stats.quality.channelUsable` |
+| `annotation_pause_s` | REAL | `stats.annotationSeconds.pause` |
+| `annotation_bad_quality_s` | REAL | `stats.annotationSeconds.bad_quality` |
+| `annotation_disconnect_s` | REAL | `stats.annotationSeconds.disconnect` |
+| `battery_start_pct` / `battery_end_pct` | REAL | `stats.battery.startPct` / `endPct` |
+| `experimental_scalars` | TEXT | JSON of `stats.experimental` (or null) |
 | `marker_count` | INTEGER | Gesture markers (feedback) |
+| `time_zone` | TEXT | IANA id at session start |
+| `saved_at_ms` | INTEGER | UTC epoch ms sort key |
 | `guardrail_engine` | TEXT | Engine id or empty |
 | `model_kind` | TEXT | Model kind if any |
 | `model_sha256` | TEXT | SHA-256 of weights |
@@ -123,7 +145,8 @@ crashing. Thumbnails are never written to SAF as sidecar PNGs.
 
 | File | Purpose |
 |------|---------|
-| `lib/src/feedback/session_sqlite.dart` | Schema, CRUD, thumbnail BLOB, `kind` |
+| `lib/src/feedback/session_sqlite.dart` | Schema, CRUD, wipe+reindex flag, scalar columns |
+| `lib/src/feedback/session_scalars.dart` | Fill row scalars from v6 `stats` / `outcomeScalars` |
 | `lib/src/feedback/session_store_core.dart` | Feedback publish / list / move / delete |
 | `lib/src/monitor/recording/recording_store.dart` | Recording publish upserts `kind=recording` |
 | `android/app/src/main/kotlin/…/MainActivity.kt` | SAF `listFilesMeta()` (tree root only) |
