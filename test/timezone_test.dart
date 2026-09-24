@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/util/timezone.dart';
 
@@ -68,7 +68,7 @@ void main() {
       timeZone: 'Asia/Bangkok',
       elapsedSeconds: 600,
       durationS: 600,
-      device: const DeviceInfoV5(
+      device: const DeviceInfo(
         name: 'Muse 2',
         id: 'sim:muse-2',
         firmware: 'Classic',

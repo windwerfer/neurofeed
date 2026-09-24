@@ -1,4 +1,4 @@
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/util/timezone.dart';
 
@@ -28,7 +28,7 @@ class RecordingMetadata {
   final int elapsedSeconds;
   final int durationS;
   final String notes;
-  final DeviceInfoV5 device;
+  final DeviceInfo device;
   final StreamsConfig streams;
 
   /// IANA id at capture start (e.g. `Asia/Bangkok`). Required on new writes.
@@ -69,7 +69,7 @@ class RecordingMetadata {
       elapsedSeconds: (json['elapsedSeconds'] as num?)?.toInt() ?? 0,
       durationS: (json['durationS'] as num?)?.toInt() ?? 0,
       notes: json['notes'] as String? ?? '',
-      device: DeviceInfoV5.fromJson(json['device'] as Map<String, dynamic>?)!,
+      device: DeviceInfo.fromJson(json['device'] as Map<String, dynamic>?)!,
       streams: StreamsConfig.fromJson(
         json['streams'] as Map<String, dynamic>?,
       )!,

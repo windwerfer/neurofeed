@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
-import 'package:neurofeed/src/session_v5/computed_frame.dart' as dart;
+import 'package:neurofeed/src/session_format/computed_frame.dart' as dart;
 import 'package:neurofeed/src/feedback/computed_sampler.dart';
 import 'package:neurofeed/src/feedback/crash_recovery.dart';
 import 'package:neurofeed/src/feedback/feedback_recorder.dart';
@@ -136,7 +136,7 @@ void main() {
       await rec.stop();
     });
 
-    test('JSONL → FFI → containerEncodeV5 → v5ExtractComputed round-trips t',
+    test('JSONL → FFI → containerEncode → extractComputed round-trips t',
         () {
       final dartFrames = [_dartFrame(0), _dartFrame(1), _dartFrame(2)];
       final ffiFrames = dartFrames.map(toFfiFrame).toList();
@@ -146,7 +146,7 @@ void main() {
         computedFrames: ffiFrames,
         rawBody: sessionHeaderBytes(),
       );
-      final extracted = v5ExtractComputed(bytes: v5);
+      final extracted = extractComputed(bytes: v5);
       expect(extracted.map((f) => f.t), [0, 1, 2]);
       expect(extracted.first.bands, hasLength(4));
       expect(extracted.first.bands[1][2], closeTo(221.0, 0.01));
@@ -241,7 +241,7 @@ void main() {
       expect(list.first.id, 'abc123');
       final bytes = await store.readContainer('abc123');
       expect(bytes, isNotNull);
-      final head = v5ParseHead(bytes: bytes!);
+      final head = parseHead(bytes: bytes!);
       final decoded = SessionMetadata.fromJsonBytes(head.metadataJson)!;
       expect(decoded.toJson().containsKey('summary'), isFalse);
       expect(decoded.music?.series, isNotEmpty);

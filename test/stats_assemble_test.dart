@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
-import 'package:neurofeed/src/session_v5/stats_assemble.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
 
 Float32List _f32(List<double> v) => Float32List.fromList(v);
 

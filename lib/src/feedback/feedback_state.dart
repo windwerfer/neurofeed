@@ -31,8 +31,8 @@ import 'package:neurofeed/src/feedback/target_state.dart';
 import 'package:neurofeed/src/feedback/trust/trust_gestures.dart';
 import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
-import 'package:neurofeed/src/session_v5/stats_assemble.dart';
-import 'package:neurofeed/src/session_v5/metadata_v6.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
+import 'package:neurofeed/src/session_format/metadata.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/reve/model_engine.dart';
 import 'package:neurofeed/src/reve/models.dart';
@@ -1409,7 +1409,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     unawaited(_clearEnabledFeatures());
     await _recorder.flushSession();
     try {
-      final path = await _recorder.assembleScratchV5(
+      final path = await _recorder.assembleScratch(
         buildFeedbackMetadataV6(
           meta: buildSessionMetadata(),
           subject: _ref.read(settingsProvider).subjectInfo,

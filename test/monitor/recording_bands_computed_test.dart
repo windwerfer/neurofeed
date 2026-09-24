@@ -8,7 +8,7 @@ import 'package:neurofeed/src/monitor/panes/time_series_pane.dart';
 import 'package:neurofeed/src/monitor/views/recording_dashboard.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
-import 'package:neurofeed/src/session_v5/computed_frame.dart' as dart;
+import 'package:neurofeed/src/session_format/computed_frame.dart' as dart;
 import 'package:neurofeed/src/spine/assemble.dart';
 
 final String _rustLibPath =
@@ -201,7 +201,7 @@ void main() {
       await RustLib.init(externalLibrary: ExternalLibrary.open(_rustLibPath));
     });
 
-    test('Dart toJsonBytes → assemble → v5ExtractComputed keeps bands',
+    test('Dart toJsonBytes → assemble → extractComputed keeps bands',
         () async {
       final dir = await Directory.systemTemp.createTemp('nf_bands_hist_');
       addTearDown(() async {
@@ -224,7 +224,7 @@ void main() {
         rawBody: sessionHeaderBytes(),
       );
 
-      final frames = await v5ExtractComputedFromPath(path: file.path);
+      final frames = await extractComputedFromPath(path: file.path);
       expect(frames, hasLength(3));
       expect(frames.first.bands, hasLength(4));
       expect(frames.first.bands[0][2], closeTo(220.0, 0.01));
@@ -233,9 +233,9 @@ void main() {
 
       // Prefix-only extract (History Bands-first open path).
       final bytes = await file.readAsBytes();
-      final header = v5ParseHeader(bytes: bytes);
+      final header = parseHeader(bytes: bytes);
       final prefix = bytes.sublist(0, header.rawOffset.toInt());
-      final fromPrefix = v5ExtractComputed(bytes: prefix);
+      final fromPrefix = extractComputed(bytes: prefix);
       expect(fromPrefix, hasLength(3));
 
       final series = recordingBandSeries(

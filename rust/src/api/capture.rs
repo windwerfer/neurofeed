@@ -52,19 +52,19 @@ pub fn capture_flush() -> anyhow::Result<()> {
 
 /// Stream-assemble into `{dir}/{prefix}_{id}.neurofeed`. Deletes temps on success.
 /// Returns the destination path. Never returns file bytes.
-pub fn capture_assemble_v5(metadata_json: Vec<u8>, thumbnail: Vec<u8>) -> anyhow::Result<String> {
-    capture::capture_assemble_v5(metadata_json, thumbnail)
+pub fn capture_assemble(metadata_json: Vec<u8>, thumbnail: Vec<u8>) -> anyhow::Result<String> {
+    capture::capture_assemble(metadata_json, thumbnail)
 }
 
 /// Assemble leftover temps with no live session (crash recovery).
-pub fn capture_assemble_v5_at(
+pub fn capture_assemble_at(
     dir: String,
     prefix: String,
     id: String,
     metadata_json: Vec<u8>,
     thumbnail: Vec<u8>,
 ) -> anyhow::Result<String> {
-    capture::capture_assemble_v5_at(dir, prefix, id, metadata_json, thumbnail)
+    capture::capture_assemble_at(dir, prefix, id, metadata_json, thumbnail)
 }
 
 pub fn capture_discard() -> anyhow::Result<()> {

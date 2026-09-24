@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/spine/capture_client.dart' as spine;
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/version.dart';
 import 'package:neurofeed/src/util/timezone.dart';
@@ -100,7 +100,7 @@ RecordingMetadata recoveredRecordingMetadata({required int elapsedSeconds}) {
     sessionId: const Uuid().v4(),
     elapsedSeconds: elapsedSeconds,
     durationS: elapsedSeconds,
-    device: const DeviceInfoV5(
+    device: const DeviceInfo(
       name: '',
       id: '',
       firmware: '',

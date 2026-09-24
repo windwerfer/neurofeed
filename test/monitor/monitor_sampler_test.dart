@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neurofeed/src/monitor/recording/monitor_sampler.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
-import 'package:neurofeed/src/session_v5/computed_frame.dart';
+import 'package:neurofeed/src/session_format/computed_frame.dart';
 
 void main() {
   test(

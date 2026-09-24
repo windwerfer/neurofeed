@@ -99,13 +99,13 @@ Spec: [contracts/fileformat_v6.md](contracts/fileformat_v6.md).
 Raw body is NFEDBIN + inner zstd frames (f32 payloads, f64 timestamps).
 The container raw section is a copy of that body (no outer zstd). Dart
 delegates: `encodeSessionEvent` / `sessionFrameBytes` / `sessionParseBody` /
-`containerEncodeV5` / `containerEncodeV5ToPath` / `v5ParseHead` /
-`v5ExtractComputed`.
+`containerEncode` / `containerEncodeToPath` / `parseHead` /
+`extractComputed`.
 
 History list: SQLite `session_metadata.db` (typed columns + thumbnail BLOB,
 `kind` `feedback` \| `recording`). `SessionStore.list()` is sqlite-only.
 At session `end()`, assemble a real `.neurofeed` into scratch (placeholder WebP);
-dashboard/history `v5ExtractComputed` (FFI name kept; container is NFED6) → `prepareChartDataFromComputed`.
+dashboard/history `extractComputed` (container is NFED6) → `prepareChartDataFromComputed`.
 Save publishes to the history folder. Feedback crash recovery scans
 `session_*` in `scratchDirectory`; recordings use a separate scanner.
 No `SessionOverview` / 400-bucket `metadata.summary`. The list preview is

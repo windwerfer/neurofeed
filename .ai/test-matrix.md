@@ -89,7 +89,7 @@ cargo test --lib                  # features / simulator / device_config
 Spine soak (capture writer + streaming assemble — copy `.raw`, no outer zstd):
 
 ```bash
-# Max-rate Classic Muse filler → capture writer try_send + capture_assemble_v5.
+# Max-rate Classic Muse filler → capture writer try_send + capture_assemble.
 # Default 60 s equivalent. Prints GB, RSS if /proc is available, drop counters.
 # Extra assemble RSS must not scale with filled volume. Drops must be 0.
 cargo test --manifest-path rust/Cargo.toml --lib spine::soak -- --nocapture
@@ -118,7 +118,7 @@ NEUROFEED_SOAK_EQUIV_SECS=43200 cargo test --manifest-path rust/Cargo.toml \
 | Guard pref migrate | Dart unit | `settings_guardrail_migrate_test.dart` | that file | Old enum → feature ids | Debug switch widget |
 | History / store | Dart+FFI | `session_store_test.dart`, `test/history_filter_test.dart` | FFI command above + `flutter test test/history_filter_test.dart` | List includes `kind=recording`; no orphan-file backfill; `moveAllTo` both prefixes; delete uses sqlite `path`; filter All/Feedback/Recordings | History widget |
 | Session format v6 (NFED6) | Rust + Dart+FFI | `session_format` + export/charts tests | rust + FFI | Roundtrip | Don't edit layout from Dart |
-| Spine soak (capture writer) | Rust | `rust/src/spine/soak.rs` | `cargo test --manifest-path rust/Cargo.toml --lib spine::soak -- --nocapture` | Max-rate fill through writer `try_send`; volume printed; assemble is `capture_assemble_v5` copy of `.raw` (no outer zstd; extra RSS must not scale with filled volume). Drops = 0. Env `NEUROFEED_SOAK_EQUIV_SECS` (default 60). 12 h-equivalent: same command with `--ignored` (or env `43200`) | Phone overnight **cannot** |
+| Spine soak (capture writer) | Rust | `rust/src/spine/soak.rs` | `cargo test --manifest-path rust/Cargo.toml --lib spine::soak -- --nocapture` | Max-rate fill through writer `try_send`; volume printed; assemble is `capture_assemble` copy of `.raw` (no outer zstd; extra RSS must not scale with filled volume). Drops = 0. Env `NEUROFEED_SOAK_EQUIV_SECS` (default 60). 12 h-equivalent: same command with `--ignored` (or env `43200`) | Phone overnight **cannot** |
 | Simulator identity | Rust unit | `simulator.rs` | `cargo test --lib simulator` | name/firmware table | Live spawn needs tokio |
 | Streaming OSC/BF | Dart unit | `test/streaming_*.dart` | `flutter test test/streaming_*.dart` | Datagram shape | View untested |
 | Feature probe | Dart unit | `test/feature_override_test.dart` | that file | Latch replace; synthetic TAR/delta baseline | Ear-test is human |

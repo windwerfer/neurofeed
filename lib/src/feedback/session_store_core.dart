@@ -6,12 +6,12 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
-import 'package:neurofeed/src/session_v5/metadata_v6.dart';
+import 'package:neurofeed/src/session_format/metadata.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/feedback/session_scalars.dart';
 import 'package:neurofeed/src/feedback/session_sqlite.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
-import 'package:neurofeed/src/session_v5/stats_assemble.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/version.dart';
 
@@ -198,7 +198,7 @@ class SessionStore {
         return false;
       }
 
-      final head = await v5ParseHeadFromPath(path: path);
+      final head = await parseHeadFromPath(path: path);
       final decoded = jsonDecode(utf8.decode(head.metadataJson));
       if (decoded is! Map) return false;
       final meta = <String, Object?>{
@@ -212,7 +212,7 @@ class SessionStore {
           scalars.peakAlphaHz == null &&
           scalars.signalQualityMean == null) {
         try {
-          final frames = await v5ExtractComputedFromPath(path: path);
+          final frames = await extractComputedFromPath(path: path);
           final labels = () {
             final device = meta['device'];
             if (device is Map && device['channelLabels'] is List) {
@@ -382,7 +382,7 @@ class SessionStore {
     final storage = await _storage;
     final bytes = await storage.readFile(await _fileNameFor(id));
     if (bytes == null) return null;
-    return v5ExtractRaw(bytes: Uint8List.fromList(bytes));
+    return extractRaw(bytes: Uint8List.fromList(bytes));
   }
 
   /// Filesystem path of a history container. SAF copies into cache first.
@@ -422,7 +422,7 @@ class SessionStore {
     final bytes = await storage.readFile(await _fileNameFor(id));
     if (bytes == null) return null;
     try {
-      final head = v5ParseHead(bytes: Uint8List.fromList(bytes));
+      final head = parseHead(bytes: Uint8List.fromList(bytes));
       return head.thumbnail;
     } catch (_) {
       return null;
@@ -456,14 +456,14 @@ class SessionStore {
       sha256.convert(utf8.encode(storage.location)).toString().substring(0, 16);
 
   /// Persist a finished session into the history folder as a single
-  /// `.neurofeed` container. Prefer [encodedV5Path] (file copy). [encodedV5]
+  /// `.neurofeed` container. Prefer [encodedPath] (file copy). [encoded]
   /// and part-wise assemble are small-fixture paths only.
   Future<SessionSummary> publishSession(
     String id,
     SessionMetadata metadata, {
     SubjectInfo? subject,
-    Uint8List? encodedV5,
-    String? encodedV5Path,
+    Uint8List? encoded,
+    String? encodedPath,
     List<int>? rawBody,
     List<int>? thumbnail,
     List<ComputedFrame>? computedFrames,
@@ -473,18 +473,18 @@ class SessionStore {
     late final int fileSize;
     late final Uint8List thumb;
     late final List<ComputedFrame> frames;
-    if (encodedV5Path != null) {
-      final head = await v5ParseHeadFromPath(path: encodedV5Path);
+    if (encodedPath != null) {
+      final head = await parseHeadFromPath(path: encodedPath);
       thumb = head.thumbnail;
-      frames = await v5ExtractComputedFromPath(path: encodedV5Path);
-      await storage.copyFromPath(_containerName(id), encodedV5Path);
-      fileSize = await File(encodedV5Path).length();
-    } else if (encodedV5 != null) {
-      final head = v5ParseHead(bytes: encodedV5);
+      frames = await extractComputedFromPath(path: encodedPath);
+      await storage.copyFromPath(_containerName(id), encodedPath);
+      fileSize = await File(encodedPath).length();
+    } else if (encoded != null) {
+      final head = parseHead(bytes: encoded);
       thumb = head.thumbnail;
-      frames = v5ExtractComputed(bytes: encodedV5);
-      await storage.writeFileAtomic(_containerName(id), encodedV5);
-      fileSize = encodedV5.length;
+      frames = extractComputed(bytes: encoded);
+      await storage.writeFileAtomic(_containerName(id), encoded);
+      fileSize = encoded.length;
     } else {
       frames = computedFrames ?? const <ComputedFrame>[];
       thumb = Uint8List.fromList(
@@ -653,7 +653,7 @@ class SessionStore {
   }
 
   /// Replace the free-text notes of an existing session and rewrite the
-  /// Container head in place (via `v5RewriteHeadToPath`; NFED6), copying thumbnail, computed, and raw
+  /// Container head in place (via `rewriteHeadToPath`; NFED6), copying thumbnail, computed, and raw
   /// sections as opaque bytes. Returns false when the session file is missing
   /// or unreadable.
   Future<bool> updateNotes(String id, String notes) async {
@@ -678,7 +678,7 @@ class SessionStore {
         debugPrint('[session] updateNotes($id): unsupported storage');
         return false;
       }
-      final head = await v5ParseHeadFromPath(path: srcPath);
+      final head = await parseHeadFromPath(path: srcPath);
       final decoded =
           jsonDecode(String.fromCharCodes(head.metadataJson))
               as Map<String, Object?>;
@@ -686,7 +686,7 @@ class SessionStore {
       final jsonBytes = Uint8List.fromList(
         const JsonEncoder().convert(decoded).codeUnits,
       );
-      await v5RewriteHeadToPath(
+      await rewriteHeadToPath(
         srcPath: srcPath,
         destPath: destPath,
         metadataJson: jsonBytes,

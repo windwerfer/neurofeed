@@ -18,8 +18,8 @@ import 'package:neurofeed/src/monitor/recording/monitor_sampler.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/monitor/recording/recording_store.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
-import 'package:neurofeed/src/rust/api/muse.dart';
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/rust/api/muse.dart' hide DeviceInfo;
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/version.dart';
@@ -487,7 +487,7 @@ class MonitorController extends Notifier<MonitorState> {
       subject: settings.subjectInfo,
       elapsedSeconds: elapsed,
       durationS: elapsed,
-      device: DeviceInfoV5(
+      device: DeviceInfo(
         name: app.status.name,
         id: app.status.id,
         firmware: app.status.firmware,

@@ -37,9 +37,9 @@ class ModelSnapshot {
   }
 }
 
-/// Full device information (folder `session_v5/` name is historical; format is NFED6).
-class DeviceInfoV5 {
-  const DeviceInfoV5({
+/// Full device information (NFED6 container metadata).
+class DeviceInfo {
+  const DeviceInfo({
     required this.name,
     required this.id,
     required this.firmware,
@@ -67,9 +67,9 @@ class DeviceInfoV5 {
     'channelLabels': channelLabels,
   };
 
-  static DeviceInfoV5? fromJson(Map<String, dynamic>? json) {
+  static DeviceInfo? fromJson(Map<String, dynamic>? json) {
     if (json == null) return null;
-    return DeviceInfoV5(
+    return DeviceInfo(
       name: json['name'] as String? ?? '',
       id: json['id'] as String? ?? '',
       firmware: json['firmware'] as String? ?? '',

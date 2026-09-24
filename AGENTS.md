@@ -69,8 +69,8 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   [`.ai/contracts/fileformat_v6.md`](.ai/contracts/fileformat_v6.md) —
   NFED6 / `formatVersion: 6`. **Annotations model LOCKED** (`{onset,duration,type}`; pause/bad_quality/disconnect +
   snake_case gestures; `duration: 0` instants; single SoT). **Base metadata vocabulary
-  LOCKED**. Prefer those JSON keys; do not invent synonyms. Do not rename FFI/`session_v5`
-  identifiers until a task says so (names are historical; container is NFED6).
+  LOCKED**. Prefer those JSON keys; do not invent synonyms. Session-format FFI
+  identifiers are unversioned (`containerEncode`, `parseHead`, …; container is NFED6).
 - Do not reopen pipeline-contract Key Decisions. Do not unlock Crown
   sessions. Connect UX is frozen (`.ai/connect-simulator-ux.md`) — do not
   mix OSC-connect or Crown Start into it. `DeviceKind` is Muse | Neurosity
@@ -88,7 +88,7 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   inhibit-out only (not dirty, not below-the-line without a failed
   inhibit); reward stroke stays series color; do not reuse monitor graph
   widgets.
-- Data-plane / recording spine: **implemented**. Follow [`.ai/contracts/data-plane-contract.md`](.ai/contracts/data-plane-contract.md) (Frozen Key Decisions). Do not restore Dart live encode, outer zstd on the container raw section, or whole-raw `readAsBytes` / `v5ExtractRaw` on keepable captures. Do not add `rust/src/spine/normalize/`. Intentional deviations need a written why. Sibling to the feedback pipeline contract — do not reopen feedback Key Decisions for spine work. Historical coordinator steps: [`.ai/archive/handoff-spine.md`](.ai/archive/handoff-spine.md).
+- Data-plane / recording spine: **implemented**. Follow [`.ai/contracts/data-plane-contract.md`](.ai/contracts/data-plane-contract.md) (Frozen Key Decisions). Do not restore Dart live encode, outer zstd on the container raw section, or whole-raw `readAsBytes` / `extractRaw` on keepable captures. Do not add `rust/src/spine/normalize/`. Intentional deviations need a written why. Sibling to the feedback pipeline contract — do not reopen feedback Key Decisions for spine work. Historical coordinator steps: [`.ai/archive/handoff-spine.md`](.ai/archive/handoff-spine.md).
 - If you change on-screen copy or primary chrome (status bar, sidebar, connect
   window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
   Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
@@ -126,7 +126,7 @@ lib/src/feedback/           session orchestrator + lanes
   protocol.dart / protocol_catalog.dart / user_protocol_store.dart
   feature_catalog.dart      assets/features.json copy
   computed_sampler.dart     1 Hz JSONL; Pulse/SpO₂/PeakAlpha from `_onEvent`
-  feedback_recorder.dart    facade over spine SessionRecorder + assembleScratchV5
+  feedback_recorder.dart    facade over spine SessionRecorder + assembleScratch
   session_assembler.dart    re-export of spine/assemble.dart
   crash_recovery.dart       leftover `session_*` reopens session summary
   session_store*.dart / session_sqlite.dart / session_metadata.dart
@@ -137,9 +137,9 @@ lib/src/spine/              capture / assemble Dart adapters
   capture_foreground.dart   Android FGS start/stop for keepable capture
   scratch_writer.dart       SessionRecorder (prefix default `session`)
   assemble.dart             assembleV5Container, writeScratchV5(prefix:)
-lib/src/session_v5/         interim FFI helpers / ComputedFrame / DeviceInfoV5
+lib/src/session_format/         interim FFI helpers / ComputedFrame / DeviceInfo
   computed_frame.dart       Dart ComputedFrame (+ .freezed.dart)
-  models.dart               DeviceInfoV5, StreamsConfig
+  models.dart               DeviceInfo, StreamsConfig
   placeholder_webp.dart     placeholder WebP (re-exported from spine/assemble)
 lib/src/monitor/            live graphs + recording
   monitor_controller.dart   constructed in main(); hydrates if already connected
@@ -194,15 +194,15 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `README_feedback_format.md`.
 - Session assemble: `lib/src/spine/assemble.dart`
   (`assembleV5Container`, `writeScratchV5`). Placeholder WebP stays in
-  `session_v5/placeholder_webp.dart`. Scratch writer:
+  `session_format/placeholder_webp.dart`. Scratch writer:
   `lib/src/spine/scratch_writer.dart` (`SessionRecorder`). Capture FFI:
   `lib/src/spine/capture_client.dart` over `rust/src/spine/capture.rs`
   (FRB `rust/src/api/capture.rs`). Android keepable-capture FGS:
   `lib/src/spine/capture_foreground.dart` + `CaptureForegroundService`
-  (`connectedDevice`, same process; not `tmp_`). Old paths (`session_v5/assemble.dart`,
-  `session_v5/scratch_writer.dart`, `feedback/session_assembler.dart`,
-  `charts/session_recorder.dart`, `feedback/computed_frame.dart`,
-  `feedback/session_v5_models.dart`) re-export.
+  (`connectedDevice`, same process; not `tmp_`). Legacy re-exports:
+  `session_format/assemble.dart`, `session_format/scratch_writer.dart`,
+  `feedback/session_assembler.dart`, `charts/session_recorder.dart`,
+  `feedback/computed_frame.dart` (canonical models: `session_format/models.dart`).
 - Monitor: `lib/src/monitor/` — `MonitorController` is constructed in `main()`
   from the same `ProviderContainer` as `AppStateNotifier`, and hydrates if
   already connected. Band ring is `monitor/cache/band_cache.dart`. EEG RAM is
@@ -376,13 +376,13 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **Stale `rust/target/release/` lib breaks `flutter run`** (content-hash
   mismatch). Rebuild release after codegen; debug/cargokit rebuilds are not
   loaded. See `.ai/testing-guide.md`.
-- **`updateNotes` rewrites the container head** via `v5RewriteHeadToPath`
-  (FFI name kept; container is NFED6; copies raw section). There is no
+- **`updateNotes` rewrites the container head** via `rewriteHeadToPath`
+  (container is NFED6; copies raw section). There is no
   `SessionContainer` Dart wrapper anymore.
 - **Assemble `.neurofeed` at `end()`** into scratch (placeholder WebP) **before**
   `phase = ended`. Live summary cannot pop — Save `publishSession` to
   history or Discard deletes the scratch file. One wrapper:
-  `spine/assemble.dart` (`writeScratchV5` / `assembleV5Container` names kept).
+  `spine/assemble.dart` (`writeScratchV5` / `assembleV5Container`).
 - **Crash recovery** is prefix-strict. Feedback: leftover
   `session_*.neurofeed` and orphan `.raw` / `.computed` / `.metadata`
   reopen the session summary. Monitor: leftover `recording_*` (dialog
@@ -392,7 +392,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **ComputedSampler.t** is seconds from recording start, not unix epoch.
   `_onEvent` must latch Pulse / SpO₂ / PeakAlpha (same as the monitor
   sampler). Do not leave those cases as `default`.
-- **Charts** plot computed 1 Hz (`v5ExtractComputed` — FFI name kept; NFED6 →
+- **Charts** plot computed 1 Hz (`extractComputed`; NFED6 →
   `prepareChartDataFromV5` / `prepareChartDataFromComputed`). Pulse/SpO₂
   fall back to the raw body when computed frames omitted them. There is
   no `SessionOverview` / 400-bucket `metadata.summary`. The list sparkline

@@ -45,19 +45,19 @@ Offset computed_offset:  zstd JSON Lines (one ComputedFrame per line)
 Offset raw_offset:       copy of live `.raw` (NFEDBIN + inner zstd frames)
 ```
 
-`v5ParseHead` / head parse (FFI name kept; container is **NFED6**) returns opaque
+`parseHead` / head parse (container is **NFED6**) returns opaque
 `metadataJson` bytes. It does **not** parse `kind`.
 
 There is no `metadata.summary` / `SessionOverview` and no 400-bucket series.
 Dashboard, history, PDF, and PNG charts plot computed 1 Hz:
-`v5ExtractComputed` (FFI name kept; parses the **v6** container) →
+`extractComputed` (parses the **v6** container) →
 `prepareChartDataFromComputed`. The history-list preview is the WebP thumbnail.
 
 ---
 
 ## Base metadata (both kinds)
 
-Writers: `lib/src/session_v5/metadata_v6.dart` (`buildRecordingMetadataV6` /
+Writers: `lib/src/session_format/metadata.dart` (`buildRecordingMetadataV6` /
 `buildFeedbackMetadataV6`). Single nested dialect — **no** flat
 `deviceName` / dual-shape accept path for new files.
 
@@ -129,8 +129,8 @@ inner frames. Outer container magic is **NFED6**.
 | Concern | Path |
 |---------|------|
 | Assemble / scratch | `lib/src/spine/assemble.dart` |
-| v6 metadata writers | `lib/src/session_v5/metadata_v6.dart` |
-| Annotations / base stats | `lib/src/session_v5/stats_assemble.dart` |
-| ComputedFrame (Dart) | `lib/src/session_v5/computed_frame.dart` |
+| v6 metadata writers | `lib/src/session_format/metadata.dart` |
+| Annotations / base stats | `lib/src/session_format/stats_assemble.dart` |
+| ComputedFrame (Dart) | `lib/src/session_format/computed_frame.dart` |
 | Container encode/parse | `rust/src/api/session_format.rs` |
 | Settings subject id | `lib/src/settings.dart` |

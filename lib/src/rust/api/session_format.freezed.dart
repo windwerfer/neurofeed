@@ -714,6 +714,289 @@ abstract class _ComputedFrame extends ComputedFrame {
 }
 
 /// @nodoc
+mixin _$ContainerHeader {
+  BigInt get thumbnailOffset => throw _privateConstructorUsedError;
+  BigInt get thumbnailLength => throw _privateConstructorUsedError;
+  BigInt get metadataOffset => throw _privateConstructorUsedError;
+  BigInt get metadataLength => throw _privateConstructorUsedError;
+  BigInt get computedOffset => throw _privateConstructorUsedError;
+  BigInt get computedLength => throw _privateConstructorUsedError;
+  BigInt get rawOffset => throw _privateConstructorUsedError;
+
+  /// Create a copy of ContainerHeader
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $ContainerHeaderCopyWith<ContainerHeader> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ContainerHeaderCopyWith<$Res> {
+  factory $ContainerHeaderCopyWith(
+    ContainerHeader value,
+    $Res Function(ContainerHeader) then,
+  ) = _$ContainerHeaderCopyWithImpl<$Res, ContainerHeader>;
+  @useResult
+  $Res call({
+    BigInt thumbnailOffset,
+    BigInt thumbnailLength,
+    BigInt metadataOffset,
+    BigInt metadataLength,
+    BigInt computedOffset,
+    BigInt computedLength,
+    BigInt rawOffset,
+  });
+}
+
+/// @nodoc
+class _$ContainerHeaderCopyWithImpl<$Res, $Val extends ContainerHeader>
+    implements $ContainerHeaderCopyWith<$Res> {
+  _$ContainerHeaderCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ContainerHeader
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? thumbnailOffset = null,
+    Object? thumbnailLength = null,
+    Object? metadataOffset = null,
+    Object? metadataLength = null,
+    Object? computedOffset = null,
+    Object? computedLength = null,
+    Object? rawOffset = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            thumbnailOffset: null == thumbnailOffset
+                ? _value.thumbnailOffset
+                : thumbnailOffset // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+            thumbnailLength: null == thumbnailLength
+                ? _value.thumbnailLength
+                : thumbnailLength // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+            metadataOffset: null == metadataOffset
+                ? _value.metadataOffset
+                : metadataOffset // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+            metadataLength: null == metadataLength
+                ? _value.metadataLength
+                : metadataLength // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+            computedOffset: null == computedOffset
+                ? _value.computedOffset
+                : computedOffset // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+            computedLength: null == computedLength
+                ? _value.computedLength
+                : computedLength // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+            rawOffset: null == rawOffset
+                ? _value.rawOffset
+                : rawOffset // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$ContainerHeaderImplCopyWith<$Res>
+    implements $ContainerHeaderCopyWith<$Res> {
+  factory _$$ContainerHeaderImplCopyWith(
+    _$ContainerHeaderImpl value,
+    $Res Function(_$ContainerHeaderImpl) then,
+  ) = __$$ContainerHeaderImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({
+    BigInt thumbnailOffset,
+    BigInt thumbnailLength,
+    BigInt metadataOffset,
+    BigInt metadataLength,
+    BigInt computedOffset,
+    BigInt computedLength,
+    BigInt rawOffset,
+  });
+}
+
+/// @nodoc
+class __$$ContainerHeaderImplCopyWithImpl<$Res>
+    extends _$ContainerHeaderCopyWithImpl<$Res, _$ContainerHeaderImpl>
+    implements _$$ContainerHeaderImplCopyWith<$Res> {
+  __$$ContainerHeaderImplCopyWithImpl(
+    _$ContainerHeaderImpl _value,
+    $Res Function(_$ContainerHeaderImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of ContainerHeader
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? thumbnailOffset = null,
+    Object? thumbnailLength = null,
+    Object? metadataOffset = null,
+    Object? metadataLength = null,
+    Object? computedOffset = null,
+    Object? computedLength = null,
+    Object? rawOffset = null,
+  }) {
+    return _then(
+      _$ContainerHeaderImpl(
+        thumbnailOffset: null == thumbnailOffset
+            ? _value.thumbnailOffset
+            : thumbnailOffset // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+        thumbnailLength: null == thumbnailLength
+            ? _value.thumbnailLength
+            : thumbnailLength // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+        metadataOffset: null == metadataOffset
+            ? _value.metadataOffset
+            : metadataOffset // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+        metadataLength: null == metadataLength
+            ? _value.metadataLength
+            : metadataLength // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+        computedOffset: null == computedOffset
+            ? _value.computedOffset
+            : computedOffset // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+        computedLength: null == computedLength
+            ? _value.computedLength
+            : computedLength // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+        rawOffset: null == rawOffset
+            ? _value.rawOffset
+            : rawOffset // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$ContainerHeaderImpl implements _ContainerHeader {
+  const _$ContainerHeaderImpl({
+    required this.thumbnailOffset,
+    required this.thumbnailLength,
+    required this.metadataOffset,
+    required this.metadataLength,
+    required this.computedOffset,
+    required this.computedLength,
+    required this.rawOffset,
+  });
+
+  @override
+  final BigInt thumbnailOffset;
+  @override
+  final BigInt thumbnailLength;
+  @override
+  final BigInt metadataOffset;
+  @override
+  final BigInt metadataLength;
+  @override
+  final BigInt computedOffset;
+  @override
+  final BigInt computedLength;
+  @override
+  final BigInt rawOffset;
+
+  @override
+  String toString() {
+    return 'ContainerHeader(thumbnailOffset: $thumbnailOffset, thumbnailLength: $thumbnailLength, metadataOffset: $metadataOffset, metadataLength: $metadataLength, computedOffset: $computedOffset, computedLength: $computedLength, rawOffset: $rawOffset)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ContainerHeaderImpl &&
+            (identical(other.thumbnailOffset, thumbnailOffset) ||
+                other.thumbnailOffset == thumbnailOffset) &&
+            (identical(other.thumbnailLength, thumbnailLength) ||
+                other.thumbnailLength == thumbnailLength) &&
+            (identical(other.metadataOffset, metadataOffset) ||
+                other.metadataOffset == metadataOffset) &&
+            (identical(other.metadataLength, metadataLength) ||
+                other.metadataLength == metadataLength) &&
+            (identical(other.computedOffset, computedOffset) ||
+                other.computedOffset == computedOffset) &&
+            (identical(other.computedLength, computedLength) ||
+                other.computedLength == computedLength) &&
+            (identical(other.rawOffset, rawOffset) ||
+                other.rawOffset == rawOffset));
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    runtimeType,
+    thumbnailOffset,
+    thumbnailLength,
+    metadataOffset,
+    metadataLength,
+    computedOffset,
+    computedLength,
+    rawOffset,
+  );
+
+  /// Create a copy of ContainerHeader
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ContainerHeaderImplCopyWith<_$ContainerHeaderImpl> get copyWith =>
+      __$$ContainerHeaderImplCopyWithImpl<_$ContainerHeaderImpl>(
+        this,
+        _$identity,
+      );
+}
+
+abstract class _ContainerHeader implements ContainerHeader {
+  const factory _ContainerHeader({
+    required final BigInt thumbnailOffset,
+    required final BigInt thumbnailLength,
+    required final BigInt metadataOffset,
+    required final BigInt metadataLength,
+    required final BigInt computedOffset,
+    required final BigInt computedLength,
+    required final BigInt rawOffset,
+  }) = _$ContainerHeaderImpl;
+
+  @override
+  BigInt get thumbnailOffset;
+  @override
+  BigInt get thumbnailLength;
+  @override
+  BigInt get metadataOffset;
+  @override
+  BigInt get metadataLength;
+  @override
+  BigInt get computedOffset;
+  @override
+  BigInt get computedLength;
+  @override
+  BigInt get rawOffset;
+
+  /// Create a copy of ContainerHeader
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ContainerHeaderImplCopyWith<_$ContainerHeaderImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
 mixin _$EegSampleRecord {
   double get timestamp => throw _privateConstructorUsedError;
   int get electrode => throw _privateConstructorUsedError;
@@ -1772,6 +2055,213 @@ abstract class _MovementRecord implements MovementRecord {
 }
 
 /// @nodoc
+mixin _$ParsedHead {
+  ContainerHeader get header => throw _privateConstructorUsedError;
+  Uint8List get thumbnail => throw _privateConstructorUsedError;
+  Uint8List get metadataJson => throw _privateConstructorUsedError;
+
+  /// Create a copy of ParsedHead
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $ParsedHeadCopyWith<ParsedHead> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ParsedHeadCopyWith<$Res> {
+  factory $ParsedHeadCopyWith(
+    ParsedHead value,
+    $Res Function(ParsedHead) then,
+  ) = _$ParsedHeadCopyWithImpl<$Res, ParsedHead>;
+  @useResult
+  $Res call({
+    ContainerHeader header,
+    Uint8List thumbnail,
+    Uint8List metadataJson,
+  });
+
+  $ContainerHeaderCopyWith<$Res> get header;
+}
+
+/// @nodoc
+class _$ParsedHeadCopyWithImpl<$Res, $Val extends ParsedHead>
+    implements $ParsedHeadCopyWith<$Res> {
+  _$ParsedHeadCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ParsedHead
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? header = null,
+    Object? thumbnail = null,
+    Object? metadataJson = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            header: null == header
+                ? _value.header
+                : header // ignore: cast_nullable_to_non_nullable
+                      as ContainerHeader,
+            thumbnail: null == thumbnail
+                ? _value.thumbnail
+                : thumbnail // ignore: cast_nullable_to_non_nullable
+                      as Uint8List,
+            metadataJson: null == metadataJson
+                ? _value.metadataJson
+                : metadataJson // ignore: cast_nullable_to_non_nullable
+                      as Uint8List,
+          )
+          as $Val,
+    );
+  }
+
+  /// Create a copy of ParsedHead
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $ContainerHeaderCopyWith<$Res> get header {
+    return $ContainerHeaderCopyWith<$Res>(_value.header, (value) {
+      return _then(_value.copyWith(header: value) as $Val);
+    });
+  }
+}
+
+/// @nodoc
+abstract class _$$ParsedHeadImplCopyWith<$Res>
+    implements $ParsedHeadCopyWith<$Res> {
+  factory _$$ParsedHeadImplCopyWith(
+    _$ParsedHeadImpl value,
+    $Res Function(_$ParsedHeadImpl) then,
+  ) = __$$ParsedHeadImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({
+    ContainerHeader header,
+    Uint8List thumbnail,
+    Uint8List metadataJson,
+  });
+
+  @override
+  $ContainerHeaderCopyWith<$Res> get header;
+}
+
+/// @nodoc
+class __$$ParsedHeadImplCopyWithImpl<$Res>
+    extends _$ParsedHeadCopyWithImpl<$Res, _$ParsedHeadImpl>
+    implements _$$ParsedHeadImplCopyWith<$Res> {
+  __$$ParsedHeadImplCopyWithImpl(
+    _$ParsedHeadImpl _value,
+    $Res Function(_$ParsedHeadImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of ParsedHead
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? header = null,
+    Object? thumbnail = null,
+    Object? metadataJson = null,
+  }) {
+    return _then(
+      _$ParsedHeadImpl(
+        header: null == header
+            ? _value.header
+            : header // ignore: cast_nullable_to_non_nullable
+                  as ContainerHeader,
+        thumbnail: null == thumbnail
+            ? _value.thumbnail
+            : thumbnail // ignore: cast_nullable_to_non_nullable
+                  as Uint8List,
+        metadataJson: null == metadataJson
+            ? _value.metadataJson
+            : metadataJson // ignore: cast_nullable_to_non_nullable
+                  as Uint8List,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$ParsedHeadImpl implements _ParsedHead {
+  const _$ParsedHeadImpl({
+    required this.header,
+    required this.thumbnail,
+    required this.metadataJson,
+  });
+
+  @override
+  final ContainerHeader header;
+  @override
+  final Uint8List thumbnail;
+  @override
+  final Uint8List metadataJson;
+
+  @override
+  String toString() {
+    return 'ParsedHead(header: $header, thumbnail: $thumbnail, metadataJson: $metadataJson)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ParsedHeadImpl &&
+            (identical(other.header, header) || other.header == header) &&
+            const DeepCollectionEquality().equals(other.thumbnail, thumbnail) &&
+            const DeepCollectionEquality().equals(
+              other.metadataJson,
+              metadataJson,
+            ));
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    runtimeType,
+    header,
+    const DeepCollectionEquality().hash(thumbnail),
+    const DeepCollectionEquality().hash(metadataJson),
+  );
+
+  /// Create a copy of ParsedHead
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ParsedHeadImplCopyWith<_$ParsedHeadImpl> get copyWith =>
+      __$$ParsedHeadImplCopyWithImpl<_$ParsedHeadImpl>(this, _$identity);
+}
+
+abstract class _ParsedHead implements ParsedHead {
+  const factory _ParsedHead({
+    required final ContainerHeader header,
+    required final Uint8List thumbnail,
+    required final Uint8List metadataJson,
+  }) = _$ParsedHeadImpl;
+
+  @override
+  ContainerHeader get header;
+  @override
+  Uint8List get thumbnail;
+  @override
+  Uint8List get metadataJson;
+
+  /// Create a copy of ParsedHead
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ParsedHeadImplCopyWith<_$ParsedHeadImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
 mixin _$PeakAlphaInfo {
   double get freq => throw _privateConstructorUsedError;
   double get power => throw _privateConstructorUsedError;
@@ -2774,482 +3264,5 @@ abstract class _SpO2Record implements SpO2Record {
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$SpO2RecordImplCopyWith<_$SpO2RecordImpl> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-mixin _$V5Header {
-  BigInt get thumbnailOffset => throw _privateConstructorUsedError;
-  BigInt get thumbnailLength => throw _privateConstructorUsedError;
-  BigInt get metadataOffset => throw _privateConstructorUsedError;
-  BigInt get metadataLength => throw _privateConstructorUsedError;
-  BigInt get computedOffset => throw _privateConstructorUsedError;
-  BigInt get computedLength => throw _privateConstructorUsedError;
-  BigInt get rawOffset => throw _privateConstructorUsedError;
-
-  /// Create a copy of V5Header
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  $V5HeaderCopyWith<V5Header> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-abstract class $V5HeaderCopyWith<$Res> {
-  factory $V5HeaderCopyWith(V5Header value, $Res Function(V5Header) then) =
-      _$V5HeaderCopyWithImpl<$Res, V5Header>;
-  @useResult
-  $Res call({
-    BigInt thumbnailOffset,
-    BigInt thumbnailLength,
-    BigInt metadataOffset,
-    BigInt metadataLength,
-    BigInt computedOffset,
-    BigInt computedLength,
-    BigInt rawOffset,
-  });
-}
-
-/// @nodoc
-class _$V5HeaderCopyWithImpl<$Res, $Val extends V5Header>
-    implements $V5HeaderCopyWith<$Res> {
-  _$V5HeaderCopyWithImpl(this._value, this._then);
-
-  // ignore: unused_field
-  final $Val _value;
-  // ignore: unused_field
-  final $Res Function($Val) _then;
-
-  /// Create a copy of V5Header
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? thumbnailOffset = null,
-    Object? thumbnailLength = null,
-    Object? metadataOffset = null,
-    Object? metadataLength = null,
-    Object? computedOffset = null,
-    Object? computedLength = null,
-    Object? rawOffset = null,
-  }) {
-    return _then(
-      _value.copyWith(
-            thumbnailOffset: null == thumbnailOffset
-                ? _value.thumbnailOffset
-                : thumbnailOffset // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-            thumbnailLength: null == thumbnailLength
-                ? _value.thumbnailLength
-                : thumbnailLength // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-            metadataOffset: null == metadataOffset
-                ? _value.metadataOffset
-                : metadataOffset // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-            metadataLength: null == metadataLength
-                ? _value.metadataLength
-                : metadataLength // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-            computedOffset: null == computedOffset
-                ? _value.computedOffset
-                : computedOffset // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-            computedLength: null == computedLength
-                ? _value.computedLength
-                : computedLength // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-            rawOffset: null == rawOffset
-                ? _value.rawOffset
-                : rawOffset // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-          )
-          as $Val,
-    );
-  }
-}
-
-/// @nodoc
-abstract class _$$V5HeaderImplCopyWith<$Res>
-    implements $V5HeaderCopyWith<$Res> {
-  factory _$$V5HeaderImplCopyWith(
-    _$V5HeaderImpl value,
-    $Res Function(_$V5HeaderImpl) then,
-  ) = __$$V5HeaderImplCopyWithImpl<$Res>;
-  @override
-  @useResult
-  $Res call({
-    BigInt thumbnailOffset,
-    BigInt thumbnailLength,
-    BigInt metadataOffset,
-    BigInt metadataLength,
-    BigInt computedOffset,
-    BigInt computedLength,
-    BigInt rawOffset,
-  });
-}
-
-/// @nodoc
-class __$$V5HeaderImplCopyWithImpl<$Res>
-    extends _$V5HeaderCopyWithImpl<$Res, _$V5HeaderImpl>
-    implements _$$V5HeaderImplCopyWith<$Res> {
-  __$$V5HeaderImplCopyWithImpl(
-    _$V5HeaderImpl _value,
-    $Res Function(_$V5HeaderImpl) _then,
-  ) : super(_value, _then);
-
-  /// Create a copy of V5Header
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? thumbnailOffset = null,
-    Object? thumbnailLength = null,
-    Object? metadataOffset = null,
-    Object? metadataLength = null,
-    Object? computedOffset = null,
-    Object? computedLength = null,
-    Object? rawOffset = null,
-  }) {
-    return _then(
-      _$V5HeaderImpl(
-        thumbnailOffset: null == thumbnailOffset
-            ? _value.thumbnailOffset
-            : thumbnailOffset // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-        thumbnailLength: null == thumbnailLength
-            ? _value.thumbnailLength
-            : thumbnailLength // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-        metadataOffset: null == metadataOffset
-            ? _value.metadataOffset
-            : metadataOffset // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-        metadataLength: null == metadataLength
-            ? _value.metadataLength
-            : metadataLength // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-        computedOffset: null == computedOffset
-            ? _value.computedOffset
-            : computedOffset // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-        computedLength: null == computedLength
-            ? _value.computedLength
-            : computedLength // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-        rawOffset: null == rawOffset
-            ? _value.rawOffset
-            : rawOffset // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-      ),
-    );
-  }
-}
-
-/// @nodoc
-
-class _$V5HeaderImpl implements _V5Header {
-  const _$V5HeaderImpl({
-    required this.thumbnailOffset,
-    required this.thumbnailLength,
-    required this.metadataOffset,
-    required this.metadataLength,
-    required this.computedOffset,
-    required this.computedLength,
-    required this.rawOffset,
-  });
-
-  @override
-  final BigInt thumbnailOffset;
-  @override
-  final BigInt thumbnailLength;
-  @override
-  final BigInt metadataOffset;
-  @override
-  final BigInt metadataLength;
-  @override
-  final BigInt computedOffset;
-  @override
-  final BigInt computedLength;
-  @override
-  final BigInt rawOffset;
-
-  @override
-  String toString() {
-    return 'V5Header(thumbnailOffset: $thumbnailOffset, thumbnailLength: $thumbnailLength, metadataOffset: $metadataOffset, metadataLength: $metadataLength, computedOffset: $computedOffset, computedLength: $computedLength, rawOffset: $rawOffset)';
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is _$V5HeaderImpl &&
-            (identical(other.thumbnailOffset, thumbnailOffset) ||
-                other.thumbnailOffset == thumbnailOffset) &&
-            (identical(other.thumbnailLength, thumbnailLength) ||
-                other.thumbnailLength == thumbnailLength) &&
-            (identical(other.metadataOffset, metadataOffset) ||
-                other.metadataOffset == metadataOffset) &&
-            (identical(other.metadataLength, metadataLength) ||
-                other.metadataLength == metadataLength) &&
-            (identical(other.computedOffset, computedOffset) ||
-                other.computedOffset == computedOffset) &&
-            (identical(other.computedLength, computedLength) ||
-                other.computedLength == computedLength) &&
-            (identical(other.rawOffset, rawOffset) ||
-                other.rawOffset == rawOffset));
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    runtimeType,
-    thumbnailOffset,
-    thumbnailLength,
-    metadataOffset,
-    metadataLength,
-    computedOffset,
-    computedLength,
-    rawOffset,
-  );
-
-  /// Create a copy of V5Header
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @override
-  @pragma('vm:prefer-inline')
-  _$$V5HeaderImplCopyWith<_$V5HeaderImpl> get copyWith =>
-      __$$V5HeaderImplCopyWithImpl<_$V5HeaderImpl>(this, _$identity);
-}
-
-abstract class _V5Header implements V5Header {
-  const factory _V5Header({
-    required final BigInt thumbnailOffset,
-    required final BigInt thumbnailLength,
-    required final BigInt metadataOffset,
-    required final BigInt metadataLength,
-    required final BigInt computedOffset,
-    required final BigInt computedLength,
-    required final BigInt rawOffset,
-  }) = _$V5HeaderImpl;
-
-  @override
-  BigInt get thumbnailOffset;
-  @override
-  BigInt get thumbnailLength;
-  @override
-  BigInt get metadataOffset;
-  @override
-  BigInt get metadataLength;
-  @override
-  BigInt get computedOffset;
-  @override
-  BigInt get computedLength;
-  @override
-  BigInt get rawOffset;
-
-  /// Create a copy of V5Header
-  /// with the given fields replaced by the non-null parameter values.
-  @override
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  _$$V5HeaderImplCopyWith<_$V5HeaderImpl> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-mixin _$V5ParsedHead {
-  V5Header get header => throw _privateConstructorUsedError;
-  Uint8List get thumbnail => throw _privateConstructorUsedError;
-  Uint8List get metadataJson => throw _privateConstructorUsedError;
-
-  /// Create a copy of V5ParsedHead
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  $V5ParsedHeadCopyWith<V5ParsedHead> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-abstract class $V5ParsedHeadCopyWith<$Res> {
-  factory $V5ParsedHeadCopyWith(
-    V5ParsedHead value,
-    $Res Function(V5ParsedHead) then,
-  ) = _$V5ParsedHeadCopyWithImpl<$Res, V5ParsedHead>;
-  @useResult
-  $Res call({V5Header header, Uint8List thumbnail, Uint8List metadataJson});
-
-  $V5HeaderCopyWith<$Res> get header;
-}
-
-/// @nodoc
-class _$V5ParsedHeadCopyWithImpl<$Res, $Val extends V5ParsedHead>
-    implements $V5ParsedHeadCopyWith<$Res> {
-  _$V5ParsedHeadCopyWithImpl(this._value, this._then);
-
-  // ignore: unused_field
-  final $Val _value;
-  // ignore: unused_field
-  final $Res Function($Val) _then;
-
-  /// Create a copy of V5ParsedHead
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? header = null,
-    Object? thumbnail = null,
-    Object? metadataJson = null,
-  }) {
-    return _then(
-      _value.copyWith(
-            header: null == header
-                ? _value.header
-                : header // ignore: cast_nullable_to_non_nullable
-                      as V5Header,
-            thumbnail: null == thumbnail
-                ? _value.thumbnail
-                : thumbnail // ignore: cast_nullable_to_non_nullable
-                      as Uint8List,
-            metadataJson: null == metadataJson
-                ? _value.metadataJson
-                : metadataJson // ignore: cast_nullable_to_non_nullable
-                      as Uint8List,
-          )
-          as $Val,
-    );
-  }
-
-  /// Create a copy of V5ParsedHead
-  /// with the given fields replaced by the non-null parameter values.
-  @override
-  @pragma('vm:prefer-inline')
-  $V5HeaderCopyWith<$Res> get header {
-    return $V5HeaderCopyWith<$Res>(_value.header, (value) {
-      return _then(_value.copyWith(header: value) as $Val);
-    });
-  }
-}
-
-/// @nodoc
-abstract class _$$V5ParsedHeadImplCopyWith<$Res>
-    implements $V5ParsedHeadCopyWith<$Res> {
-  factory _$$V5ParsedHeadImplCopyWith(
-    _$V5ParsedHeadImpl value,
-    $Res Function(_$V5ParsedHeadImpl) then,
-  ) = __$$V5ParsedHeadImplCopyWithImpl<$Res>;
-  @override
-  @useResult
-  $Res call({V5Header header, Uint8List thumbnail, Uint8List metadataJson});
-
-  @override
-  $V5HeaderCopyWith<$Res> get header;
-}
-
-/// @nodoc
-class __$$V5ParsedHeadImplCopyWithImpl<$Res>
-    extends _$V5ParsedHeadCopyWithImpl<$Res, _$V5ParsedHeadImpl>
-    implements _$$V5ParsedHeadImplCopyWith<$Res> {
-  __$$V5ParsedHeadImplCopyWithImpl(
-    _$V5ParsedHeadImpl _value,
-    $Res Function(_$V5ParsedHeadImpl) _then,
-  ) : super(_value, _then);
-
-  /// Create a copy of V5ParsedHead
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? header = null,
-    Object? thumbnail = null,
-    Object? metadataJson = null,
-  }) {
-    return _then(
-      _$V5ParsedHeadImpl(
-        header: null == header
-            ? _value.header
-            : header // ignore: cast_nullable_to_non_nullable
-                  as V5Header,
-        thumbnail: null == thumbnail
-            ? _value.thumbnail
-            : thumbnail // ignore: cast_nullable_to_non_nullable
-                  as Uint8List,
-        metadataJson: null == metadataJson
-            ? _value.metadataJson
-            : metadataJson // ignore: cast_nullable_to_non_nullable
-                  as Uint8List,
-      ),
-    );
-  }
-}
-
-/// @nodoc
-
-class _$V5ParsedHeadImpl implements _V5ParsedHead {
-  const _$V5ParsedHeadImpl({
-    required this.header,
-    required this.thumbnail,
-    required this.metadataJson,
-  });
-
-  @override
-  final V5Header header;
-  @override
-  final Uint8List thumbnail;
-  @override
-  final Uint8List metadataJson;
-
-  @override
-  String toString() {
-    return 'V5ParsedHead(header: $header, thumbnail: $thumbnail, metadataJson: $metadataJson)';
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is _$V5ParsedHeadImpl &&
-            (identical(other.header, header) || other.header == header) &&
-            const DeepCollectionEquality().equals(other.thumbnail, thumbnail) &&
-            const DeepCollectionEquality().equals(
-              other.metadataJson,
-              metadataJson,
-            ));
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    runtimeType,
-    header,
-    const DeepCollectionEquality().hash(thumbnail),
-    const DeepCollectionEquality().hash(metadataJson),
-  );
-
-  /// Create a copy of V5ParsedHead
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @override
-  @pragma('vm:prefer-inline')
-  _$$V5ParsedHeadImplCopyWith<_$V5ParsedHeadImpl> get copyWith =>
-      __$$V5ParsedHeadImplCopyWithImpl<_$V5ParsedHeadImpl>(this, _$identity);
-}
-
-abstract class _V5ParsedHead implements V5ParsedHead {
-  const factory _V5ParsedHead({
-    required final V5Header header,
-    required final Uint8List thumbnail,
-    required final Uint8List metadataJson,
-  }) = _$V5ParsedHeadImpl;
-
-  @override
-  V5Header get header;
-  @override
-  Uint8List get thumbnail;
-  @override
-  Uint8List get metadataJson;
-
-  /// Create a copy of V5ParsedHead
-  /// with the given fields replaced by the non-null parameter values.
-  @override
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  _$$V5ParsedHeadImplCopyWith<_$V5ParsedHeadImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

@@ -8,7 +8,7 @@ Pipeline PRs 1–7 implemented. Frozen decisions:
 [../contracts/pipeline-contract.md](../contracts/pipeline-contract.md) — do not reopen them.
 
 Session summary charts plot v5 computed 1 Hz
-(`v5ExtractComputed` → `prepareChartDataFromComputed`). Spec archive:
+(`extractComputed` → `prepareChartDataFromComputed`). Spec archive:
 [../archive/session-computed-charts.md](../archive/session-computed-charts.md).
 
 ## Pipeline
@@ -117,14 +117,14 @@ finished baseline always calls `startPlaying()`.
 Three temps under scratch while playing (`.raw` / `.computed` / `.metadata`).
 At `end()`, assemble a `.neurofeed` (NFED6) into scratch (placeholder WebP), then
 set `phase = ended`. Dashboard and history both
-`v5ExtractComputed` (FFI name kept; container is NFED6) → `prepareChartDataFromComputed`.
+`extractComputed` (FFI name kept; container is NFED6) → `prepareChartDataFromComputed`.
 Save publishes to the history folder; Discard deletes the scratch file.
 
 Crash recovery (`crash_recovery.dart`) scans `scratchDirectory` for leftover
 scratch `.neurofeed` and orphan three-temps, assembles via `writeScratchV5`
 (FFI/helper name kept), then Save → `publishSession` or Discard → delete.
 
-One assembler: `lib/src/session_v5/assemble.dart` (re-export
+One assembler: `lib/src/session_format/assemble.dart` (re-export
 `session_assembler.dart`). Exclusive with Monitor: acquire/release the
 capture lease; leftover `session_*` only in this crash scanner. Spec
 archive:

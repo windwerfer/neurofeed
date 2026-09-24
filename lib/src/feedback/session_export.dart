@@ -468,14 +468,14 @@ class SessionExporter {
       warnings.add(ExportWarning(s.id, 'could not read session file'));
       return null;
     }
-    final head = v5ParseHead(bytes: container);
+    final head = parseHead(bytes: container);
     final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ?? s.metadata;
     final protocol = await _loadProtocolInfo(meta.protocol);
     if (protocol == null) {
       warnings.add(ExportWarning(s.id, 'protocol not found in catalog'));
       return null;
     }
-    final frames = v5ExtractComputed(bytes: container);
+    final frames = extractComputed(bytes: container);
     return (
       data: prepareChartDataFromV5(
         frames: frames,
