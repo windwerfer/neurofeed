@@ -59,6 +59,14 @@ RewardLane _lane(RatioEngine engine, RewardOutput out) {
           required threshold,
           required inTarget,
           required inTargetPct,
+          percentile,
+          thresholdPercentile,
+          heldBack,
+          inhibitTags,
+          clean,
+          dirtyReason,
+          betaRel,
+          deltaRel,
         }) {},
     onThresholdChanged: () {},
   );
@@ -210,6 +218,11 @@ void main() {
             required delta,
             required warning,
             threshold,
+            featurePercentile,
+            warnOver,
+            ceilingOver,
+            clean,
+            dirtyReason,
           }) {},
     );
     GuardTick dirtyTick() => GuardTick(
@@ -233,6 +246,11 @@ void main() {
             required delta,
             required warning,
             threshold,
+            featurePercentile,
+            warnOver,
+            ceilingOver,
+            clean,
+            dirtyReason,
           }) {},
     );
     expect(
@@ -269,6 +287,14 @@ void main() {
             required threshold,
             required inTarget,
             required inTargetPct,
+            percentile,
+            thresholdPercentile,
+            heldBack,
+            inhibitTags,
+            clean,
+            dirtyReason,
+            betaRel,
+            deltaRel,
           }) {},
       onThresholdChanged: () {},
     );

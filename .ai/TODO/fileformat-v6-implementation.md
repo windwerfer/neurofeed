@@ -102,13 +102,13 @@ Contract: **Feedback extension** + **Computed feedback extras** (metadata prereq
 
 Contract: **Computed feedback extras — LOCKED**. Wire = camelCase JSONL (Dart `ComputedFrame.toJson`); Rust extract must accept (serde rename). Names aligned with History OQ 8 field list; History UI series remains out of scope.
 
-- [ ] Dart `ComputedFrame` / feedback sampler: **KEEP** `ratio`, `threshold`, `inTarget`, `pct`; **ADD** `percentile`, `thresholdPercentile`, `heldBack`, `inhibitTags`, `clean`, `dirtyReason`, `betaRel`, `deltaRel`.
-- [ ] Dart guardrail on same tick: **KEEP** `sleepDir`, `clarity`, `warning`, `delta`; **ADD** `featurePercentile`, `warnOver`, `ceilingOver`, `clean`, `dirtyReason`.
-- [ ] **Dirty-latch fix:** dirty seconds MUST write `clean:false`, `inTarget:false`, finite dirty `percentile` (do not skip sampler update). Do **not** store `plotPercentile` / hold-last-clean Y.
-- [ ] Recordings (`MonitorSampler`): omit/null NEW feedback/guard Trust extras (never fake `percentile:0` or `clean:false`). Zeroed legacy keys OK for chart shape.
-- [ ] Rust `FeedbackInfo` / `GuardrailInfo` + FRB: accept camelCase wire keys; extract tests (`toJsonBytes` → extract → `percentile`/`clean` are `Some` on feedback).
-- [ ] Do **not** store: full relative-band series, `plotPercentile`, parallel `feedback.gestures[]`. Per-second frame `gestures[]` string ids OK.
-- [ ] Unit tests: dirty playing second has `clean:false` + finite dirty `percentile`; recordings leave NEW fields null/absent.
+- [x] Dart `ComputedFrame` / feedback sampler: **KEEP** `ratio`, `threshold`, `inTarget`, `pct`; **ADD** `percentile`, `thresholdPercentile`, `heldBack`, `inhibitTags`, `clean`, `dirtyReason`, `betaRel`, `deltaRel`.
+- [x] Dart guardrail on same tick: **KEEP** `sleepDir`, `clarity`, `warning`, `delta`; **ADD** `featurePercentile`, `warnOver`, `ceilingOver`, `clean`, `dirtyReason`.
+- [x] **Dirty-latch fix:** dirty seconds MUST write `clean:false`, `inTarget:false`, finite dirty `percentile` (do not skip sampler update). Do **not** store `plotPercentile` / hold-last-clean Y.
+- [x] Recordings (`MonitorSampler`): omit/null NEW feedback/guard Trust extras (never fake `percentile:0` or `clean:false`). Zeroed legacy keys OK for chart shape.
+- [x] Rust `FeedbackInfo` / `GuardrailInfo`: Option Trust fields + camelCase serde + extract tests (`percentile`/`clean` are `Some`). **FRB Dart regen deferred** — `flutter_rust_bridge_codegen` not on PATH; extract path is Rust-side.
+- [x] Do **not** store: full relative-band series, `plotPercentile`, parallel `feedback.gestures[]`. Per-second frame `gestures[]` string ids OK.
+- [x] Unit tests: dirty playing second has `clean:false` + finite dirty `percentile`; recordings leave NEW fields null/absent.
 
 ---
 

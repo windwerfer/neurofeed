@@ -18,6 +18,11 @@ abstract class GuardrailInfo with _$GuardrailInfo {
     required double clarity,
     required bool warning,
     required double delta,
+    double? featurePercentile,
+    bool? warnOver,
+    bool? ceilingOver,
+    bool? clean,
+    String? dirtyReason,
   }) = _GuardrailInfo;
 }
 
@@ -28,6 +33,14 @@ abstract class FeedbackInfo with _$FeedbackInfo {
     required double threshold,
     required bool inTarget,
     required double pct,
+    double? percentile,
+    double? thresholdPercentile,
+    bool? heldBack,
+    List<String>? inhibitTags,
+    bool? clean,
+    String? dirtyReason,
+    double? betaRel,
+    double? deltaRel,
   }) = _FeedbackInfo;
 }
 
@@ -47,7 +60,8 @@ abstract class ComputedFrame with _$ComputedFrame {
     required List<String> gestures,
   }) = _ComputedFrame;
 
-  static ComputedFrame fromJson(Map<String, dynamic> json) => _computedFrameFromJson(json);
+  static ComputedFrame fromJson(Map<String, dynamic> json) =>
+      _computedFrameFromJson(json);
 }
 
 extension ComputedFrameJson on ComputedFrame {
@@ -70,13 +84,19 @@ extension ComputedFrameJson on ComputedFrame {
 
 ComputedFrame _computedFrameFromJson(Map<String, dynamic> json) => ComputedFrame(
       t: (json['t'] as num).toDouble(),
-      bands: (json['bands'] as List).map((e) => (e as List).map((v) => (v as num).toDouble()).toList()).toList(),
+      bands: (json['bands'] as List)
+          .map((e) => (e as List).map((v) => (v as num).toDouble()).toList())
+          .toList(),
       pulse: (json['pulse'] as num?)?.toDouble(),
       movement: (json['movement'] as num?)?.toDouble(),
-      peakAlpha: json['peakAlpha'] != null ? _peakAlphaInfoFromJson(json['peakAlpha'] as Map<String, dynamic>) : null,
+      peakAlpha: json['peakAlpha'] != null
+          ? _peakAlphaInfoFromJson(json['peakAlpha'] as Map<String, dynamic>)
+          : null,
       spo2: (json['spo2'] as num?)?.toDouble(),
-      lineNoise: (json['lineNoise'] as List).map((e) => (e as num).toDouble()).toList(),
-      signalQuality: (json['signalQuality'] as List).map((e) => (e as num).toInt()).toList(),
+      lineNoise:
+          (json['lineNoise'] as List).map((e) => (e as num).toDouble()).toList(),
+      signalQuality:
+          (json['signalQuality'] as List).map((e) => (e as num).toInt()).toList(),
       guardrail: _guardrailInfoFromJson(json['guardrail'] as Map<String, dynamic>),
       feedback: _feedbackInfoFromJson(json['feedback'] as Map<String, dynamic>),
       gestures: (json['gestures'] as List).map((e) => e as String).toList(),
@@ -92,6 +112,11 @@ GuardrailInfo _guardrailInfoFromJson(Map<String, dynamic> json) => GuardrailInfo
       clarity: (json['clarity'] as num).toDouble(),
       warning: json['warning'] as bool,
       delta: (json['delta'] as num).toDouble(),
+      featurePercentile: (json['featurePercentile'] as num?)?.toDouble(),
+      warnOver: json['warnOver'] as bool?,
+      ceilingOver: json['ceilingOver'] as bool?,
+      clean: json['clean'] as bool?,
+      dirtyReason: json['dirtyReason'] as String?,
     );
 
 FeedbackInfo _feedbackInfoFromJson(Map<String, dynamic> json) => FeedbackInfo(
@@ -99,6 +124,14 @@ FeedbackInfo _feedbackInfoFromJson(Map<String, dynamic> json) => FeedbackInfo(
       threshold: (json['threshold'] as num).toDouble(),
       inTarget: json['inTarget'] as bool,
       pct: (json['pct'] as num).toDouble(),
+      percentile: (json['percentile'] as num?)?.toDouble(),
+      thresholdPercentile: (json['thresholdPercentile'] as num?)?.toDouble(),
+      heldBack: json['heldBack'] as bool?,
+      inhibitTags: (json['inhibitTags'] as List?)?.map((e) => e as String).toList(),
+      clean: json['clean'] as bool?,
+      dirtyReason: json['dirtyReason'] as String?,
+      betaRel: (json['betaRel'] as num?)?.toDouble(),
+      deltaRel: (json['deltaRel'] as num?)?.toDouble(),
     );
 
 extension PeakAlphaInfoJson on PeakAlphaInfo {
@@ -106,11 +139,6 @@ extension PeakAlphaInfoJson on PeakAlphaInfo {
         'freq': freq,
         'power': power,
       };
-
-  static PeakAlphaInfo fromJson(Map<String, dynamic> json) => PeakAlphaInfo(
-        freq: (json['freq'] as num).toDouble(),
-        power: (json['power'] as num).toDouble(),
-      );
 }
 
 extension GuardrailInfoJson on GuardrailInfo {
@@ -119,14 +147,12 @@ extension GuardrailInfoJson on GuardrailInfo {
         'clarity': clarity,
         'warning': warning,
         'delta': delta,
+        if (featurePercentile != null) 'featurePercentile': featurePercentile,
+        if (warnOver != null) 'warnOver': warnOver,
+        if (ceilingOver != null) 'ceilingOver': ceilingOver,
+        if (clean != null) 'clean': clean,
+        if (dirtyReason != null) 'dirtyReason': dirtyReason,
       };
-
-  static GuardrailInfo fromJson(Map<String, dynamic> json) => GuardrailInfo(
-        sleepDir: (json['sleepDir'] as num).toDouble(),
-        clarity: (json['clarity'] as num).toDouble(),
-        warning: json['warning'] as bool,
-        delta: (json['delta'] as num).toDouble(),
-      );
 }
 
 extension FeedbackInfoJson on FeedbackInfo {
@@ -135,12 +161,14 @@ extension FeedbackInfoJson on FeedbackInfo {
         'threshold': threshold,
         'inTarget': inTarget,
         'pct': pct,
+        if (percentile != null) 'percentile': percentile,
+        if (thresholdPercentile != null)
+          'thresholdPercentile': thresholdPercentile,
+        if (heldBack != null) 'heldBack': heldBack,
+        if (inhibitTags != null) 'inhibitTags': inhibitTags,
+        if (clean != null) 'clean': clean,
+        if (dirtyReason != null) 'dirtyReason': dirtyReason,
+        if (betaRel != null) 'betaRel': betaRel,
+        if (deltaRel != null) 'deltaRel': deltaRel,
       };
-
-  static FeedbackInfo fromJson(Map<String, dynamic> json) => FeedbackInfo(
-        ratio: (json['ratio'] as num).toDouble(),
-        threshold: (json['threshold'] as num).toDouble(),
-        inTarget: json['inTarget'] as bool,
-        pct: (json['pct'] as num).toDouble(),
-      );
 }

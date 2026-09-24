@@ -263,12 +263,14 @@ fn computed_frames(equiv_secs: u64) -> Vec<ComputedFrame> {
                 clarity: 1.0,
                 warning: false,
                 delta: 0.0,
+                            ..Default::default()
             },
             feedback: FeedbackInfo {
                 ratio: 1.0,
                 threshold: 1.0,
                 in_target: true,
                 pct: 0.5,
+                            ..Default::default()
             },
             gestures: Vec::new(),
         })

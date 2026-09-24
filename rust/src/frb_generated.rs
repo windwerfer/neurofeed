@@ -2698,6 +2698,7 @@ impl SseDecode for crate::api::session_format::FeedbackInfo {
             threshold: var_threshold,
             in_target: var_inTarget,
             pct: var_pct,
+            ..Default::default()
         };
     }
 }
@@ -2730,6 +2731,7 @@ impl SseDecode for crate::api::session_format::GuardrailInfo {
             clarity: var_clarity,
             warning: var_warning,
             delta: var_delta,
+            ..Default::default()
         };
     }
 }

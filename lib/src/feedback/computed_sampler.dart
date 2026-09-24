@@ -39,6 +39,19 @@ class ComputedSampler {
   double? _feedbackThreshold;
   bool _lastInTarget = false;
   double _inTargetPct = 0.0;
+  double? _feedbackPercentile;
+  double? _feedbackThresholdPercentile;
+  bool? _feedbackHeldBack;
+  List<String>? _feedbackInhibitTags;
+  bool? _feedbackClean;
+  String? _feedbackDirtyReason;
+  double? _feedbackBetaRel;
+  double? _feedbackDeltaRel;
+  double? _guardFeaturePercentile;
+  bool? _guardWarnOver;
+  bool? _guardCeilingOver;
+  bool? _guardClean;
+  String? _guardDirtyReason;
   final List<String> _latestGestures = [];
 
   void updateBands(int electrode, BandsDto bands) {
@@ -74,11 +87,35 @@ class ComputedSampler {
     required double delta,
     required bool warning,
     double? threshold,
+    double? featurePercentile,
+    bool? warnOver,
+    bool? ceilingOver,
+    bool? clean,
+    String? dirtyReason,
   }) {
     _lastSleepDir = sleepDir;
     _lastClarity = clarity;
     _lastDelta = delta;
     _warningActive = warning;
+    if (featurePercentile != null) {
+      _guardFeaturePercentile = featurePercentile;
+    }
+    if (warnOver != null) {
+      _guardWarnOver = warnOver;
+    }
+    if (ceilingOver != null) {
+      _guardCeilingOver = ceilingOver;
+    }
+    if (clean != null) {
+      _guardClean = clean;
+      if (clean) {
+        _guardDirtyReason = null;
+      } else if (dirtyReason != null) {
+        _guardDirtyReason = dirtyReason;
+      }
+    } else if (dirtyReason != null) {
+      _guardDirtyReason = dirtyReason;
+    }
   }
 
   void updateFeedback({
@@ -86,11 +123,27 @@ class ComputedSampler {
     required double? threshold,
     required bool inTarget,
     required double inTargetPct,
+    double? percentile,
+    double? thresholdPercentile,
+    bool? heldBack,
+    List<String>? inhibitTags,
+    bool? clean,
+    String? dirtyReason,
+    double? betaRel,
+    double? deltaRel,
   }) {
     _lastRatio = ratio;
     _feedbackThreshold = threshold;
     _lastInTarget = inTarget;
     _inTargetPct = inTargetPct;
+    _feedbackPercentile = percentile;
+    _feedbackThresholdPercentile = thresholdPercentile;
+    _feedbackHeldBack = heldBack;
+    _feedbackInhibitTags = inhibitTags;
+    _feedbackClean = clean;
+    _feedbackDirtyReason = dirtyReason;
+    _feedbackBetaRel = betaRel;
+    _feedbackDeltaRel = deltaRel;
   }
 
   void updateGestures(List<String> gestures) {
@@ -159,12 +212,25 @@ class ComputedSampler {
         clarity: _lastClarity,
         warning: _warningActive,
         delta: _lastDelta,
+        featurePercentile: _guardFeaturePercentile,
+        warnOver: _guardWarnOver,
+        ceilingOver: _guardCeilingOver,
+        clean: _guardClean,
+        dirtyReason: _guardDirtyReason,
       ),
       feedback: FeedbackInfo(
         ratio: _lastRatio,
         threshold: _feedbackThreshold ?? 0.0,
         inTarget: _lastInTarget,
         pct: _inTargetPct,
+        percentile: _feedbackPercentile,
+        thresholdPercentile: _feedbackThresholdPercentile,
+        heldBack: _feedbackHeldBack,
+        inhibitTags: _feedbackInhibitTags,
+        clean: _feedbackClean,
+        dirtyReason: _feedbackDirtyReason,
+        betaRel: _feedbackBetaRel,
+        deltaRel: _feedbackDeltaRel,
       ),
       gestures: List.from(_latestGestures),
     );

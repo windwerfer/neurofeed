@@ -67,6 +67,11 @@ class GuardTick {
     required double delta,
     required bool warning,
     double? threshold,
+    double? featurePercentile,
+    bool? warnOver,
+    bool? ceilingOver,
+    bool? clean,
+    String? dirtyReason,
   })
   updateComputed;
   final bool sampleIsClean;
@@ -179,12 +184,18 @@ class GuardLane {
   /// Computed-frame extras only. Does not drive the warn decision.
   void onReveExtras(ReveDto r, GuardTick tick) {
     lastClarity = r.clarity;
+    final native = bandMath ? lastDelta : lastSleepDir;
     tick.updateComputed(
       sleepDir: r.sleepDir,
       clarity: r.clarity,
       delta: r.delta,
       warning: warningActive,
       threshold: threshold,
+      featurePercentile: percentileOf(native),
+      warnOver: warnOver,
+      ceilingOver: ceilingOver,
+      clean: tick.sampleIsClean,
+      dirtyReason: null,
     );
   }
 
