@@ -2,10 +2,10 @@
 
 | Field | Value |
 |---|---|
-| Status | **Ready to implement** (schema design finished 2026-09-24). |
-| Spec | [../contracts/fileformat_v6.md](../contracts/fileformat_v6.md) — annotations / base vocab / feedback / experimental bands / pause / overshoot-chart-only / timezone = **LOCKED**; `subject` = PREPARED. |
+| Status | **Ready to implement** (schema design finished 2026-09-24). **Computed Trust extras + sparse `feedback.audioEvents` + `baselineSamples` / `inhibitCeilingOverrides` = LOCKED.** Implement **metadata first**, then computed. |
+| Spec | [../contracts/fileformat_v6.md](../contracts/fileformat_v6.md) — annotations / base vocab / feedback / experimental bands / pause / overshoot-chart-only / timezone / **computed Trust extras** / **`feedback.audioEvents`** / **`calibration.baselineSamples`** / **`sessionSettings.inhibitCeilingOverrides`** = **LOCKED**; `subject` = PREPARED. |
 | Branch | `refactor/fileformat` |
-| Do not mix | Athena tag 11 / optics; pipeline Key Decisions; History dashboard UI series; live device testing without windwerfer OK. |
+| Do not mix | Athena tag 11 / optics; pipeline Key Decisions; History dashboard UI series (field names may be reused from History OQ 8 — UI remains out of scope); live device testing without windwerfer OK. |
 
 Track coding work here. Schema decisions go in the contract, not this list.
 
@@ -42,6 +42,7 @@ Track coding work here. Schema decisions go in the contract, not this list.
 
 - [ ] Base recording metadata writer (identity, `subject`, `device`, `streams`, `stats`, `annotations`).
 - [ ] Feedback writer: base + locked `feedback{}` only (no `gestures[]`, no `drowsiness` nest, no shared-stats duplicates).
+- [ ] Feedback Trust metadata extras (see dedicated section below — **implement before computed Trust extras**): `baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`.
 - [ ] Readers for History / export / assemble paths — single dialect.
 - [ ] `extractComputedScalars` (and assemble): fill locked `stats.*` gaps vs today (hr/spo2 min/max, `peakAlpha.meanHz`, `stillnessPct`, `quality.*`, `battery.*`, `annotationSeconds`).
 - [ ] Build `annotations[]` from pause / bad_quality / disconnect intervals + gesture instants (`duration: 0`, snake_case types).
@@ -82,6 +83,33 @@ Contract: **Timing + time zones**. Today recording metadata forces UTC `…Z` (l
 
 ---
 
+## Feedback Trust metadata extras (implement FIRST)
+
+Contract: **Feedback extension** + **Computed feedback extras** (metadata prerequisites). Do this **before** computed Trust extras.
+
+- [ ] Persist `feedback.calibration.baselineSamples: number[]` — raw native reward samples used by `percentileOf` after initial calibration (~50 doubles). Keep existing `baseline` stats summary as-is.
+- [ ] Persist `feedback.calibration.recalibrations[].baselineSamples: number[]` when present (alongside existing `atSecs` + `baseline` stats).
+- [ ] Persist `feedback.sessionSettings.inhibitCeilingOverrides?: { "beta"?: number, "delta"?: number }` — Settings slider overlays (only set keys).
+- [ ] Writer for sparse `feedback.audioEvents: [{ "onset": number, "type": string }]` — types locked: `reward_chime` | `guard_chime`. `onset` = seconds from capture start (same clock as computed `t` / annotations). Omit array or empty when none fired. Record **actual** play times from `FeedbackAudioController` (do not reconstruct from reward 2.5s hold + 8s cooldown / guard 20s cooldown constants).
+- [ ] Do **not** put chimes in root `annotations[]`. Continuous musicFilter / rain / binaural do **not** get per-second audio events.
+- [ ] Round-trip tests: `baselineSamples`, `inhibitCeilingOverrides`, `audioEvents` in metadata JSON.
+
+---
+
+## Computed Trust extras (implement SECOND)
+
+Contract: **Computed feedback extras — LOCKED**. Wire = camelCase JSONL (Dart `ComputedFrame.toJson`); Rust extract must accept (serde rename). Names aligned with History OQ 8 field list; History UI series remains out of scope.
+
+- [ ] Dart `ComputedFrame` / feedback sampler: **KEEP** `ratio`, `threshold`, `inTarget`, `pct`; **ADD** `percentile`, `thresholdPercentile`, `heldBack`, `inhibitTags`, `clean`, `dirtyReason`, `betaRel`, `deltaRel`.
+- [ ] Dart guardrail on same tick: **KEEP** `sleepDir`, `clarity`, `warning`, `delta`; **ADD** `featurePercentile`, `warnOver`, `ceilingOver`, `clean`, `dirtyReason`.
+- [ ] **Dirty-latch fix:** dirty seconds MUST write `clean:false`, `inTarget:false`, finite dirty `percentile` (do not skip sampler update). Do **not** store `plotPercentile` / hold-last-clean Y.
+- [ ] Recordings (`MonitorSampler`): omit/null NEW feedback/guard Trust extras (never fake `percentile:0` or `clean:false`). Zeroed legacy keys OK for chart shape.
+- [ ] Rust `FeedbackInfo` / `GuardrailInfo` + FRB: accept camelCase wire keys; extract tests (`toJsonBytes` → extract → `percentile`/`clean` are `Some` on feedback).
+- [ ] Do **not** store: full relative-band series, `plotPercentile`, parallel `feedback.gestures[]`. Per-second frame `gestures[]` string ids OK.
+- [ ] Unit tests: dirty playing second has `clean:false` + finite dirty `percentile`; recordings leave NEW fields null/absent.
+
+---
+
 ## Explicitly out of this list
 
 | Item | Where it lives |
@@ -103,3 +131,7 @@ Contract: **Timing + time zones**. Today recording metadata forces UTC `…Z` (l
 5. `NFED6` writers/readers + delete dual dialect + README.
 6. `stats.experimental.bands` Must set.
 7. Feedback `outcomeScalars` / `sessionSettings` migration from flat v5 fields.
+8. **Metadata first — Trust metadata extras:** `calibration.baselineSamples` (+ per-recal), `sessionSettings.inhibitCeilingOverrides`, sparse `feedback.audioEvents` writer (with feedback migration / metadata writers).
+9. **Then computed — Trust extras:** Dart `ComputedFrame` keep+add + sampler dirty-latch fix + Rust `FeedbackInfo`/`GuardrailInfo` + FRB + extract tests.
+
+**User-stated order (crystal clear):** implement **metadata** Trust extras (`baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`) **first**, then **computed** Trust extras + dirty-latch + FRB.
