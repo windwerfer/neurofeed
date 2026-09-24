@@ -38,6 +38,7 @@ import 'package:neurofeed/src/rust/api/features.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/reve.dart' as frb;
 import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/util/timezone.dart';
 
 export 'package:neurofeed/src/feedback/feedback_phase.dart';
 export 'package:neurofeed/src/feedback/gate_electrodes.dart'
@@ -268,6 +269,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// training/feedback begins. Their difference is the training-boundary
   /// offset used to trim the displayed window.
   DateTime? _sessionStartAt;
+  String? _sessionTimeZone;
   DateTime? _trainingStartAt;
   bool _usedStartAnyway = false;
   bool _skipCalibrationRequested = false;
@@ -694,6 +696,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _lastClenchDirtyAt = DateTime.fromMillisecondsSinceEpoch(0);
     _prevEyeState = 0;
     _sessionStartAt = DateTime.now();
+    _sessionTimeZone = captureIanaTimeZone();
     _trainingStartAt = null;
     _usedStartAnyway = false;
     _skipCalibrationRequested = false;
@@ -1359,6 +1362,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _reward.reset();
     _bus.reset();
     _sessionStartAt = null;
+    _sessionTimeZone = null;
     _trainingStartAt = null;
     _usedStartAnyway = false;
     _skipCalibrationRequested = false;
@@ -1455,8 +1459,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       durationS: fb.elapsedSeconds,
       sound: fb.soundName,
       feedbackSound: fb.rewardOutput.name,
-      savedAt: DateTime.now().toIso8601String(),
-      startedAt: _sessionStartAt?.toIso8601String(),
+      savedAt: formatIso8601WithOffset(DateTime.now()),
+      startedAt: _sessionStartAt == null
+          ? null
+          : formatIso8601WithOffset(_sessionStartAt!),
+      timeZone: _sessionTimeZone ?? captureIanaTimeZone(),
       notes: notes,
       sessionId: sessionId,
       stats: stats == null

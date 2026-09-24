@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/util/timezone.dart';
 
 enum GestureType { doubleBlink, doubleClench, eyeUp, eyeDown }
 
@@ -580,6 +581,7 @@ class SessionMetadata {
     this.sessionSettings,
     this.durationS = 0,
     this.startedAt,
+    this.timeZone,
     this.protocolVersion,
     this.calibrationProfile,
     this.avgSpo2,
@@ -621,6 +623,8 @@ class SessionMetadata {
   final SessionSettings? sessionSettings;
   final int durationS;
   final String? startedAt;
+  /// IANA id at session start (e.g. `Asia/Bangkok`).
+  final String? timeZone;
   final String? protocolVersion;
   final String? calibrationProfile;
   final double? avgSpo2;
@@ -664,6 +668,7 @@ class SessionMetadata {
     if (sessionSettings != null) 'sessionSettings': sessionSettings!.toJson(),
     'durationS': durationS,
     if (startedAt != null) 'startedAt': startedAt,
+    if (timeZone != null) 'timeZone': timeZone,
     if (protocolVersion != null) 'protocolVersion': protocolVersion,
     if (calibrationProfile != null) 'calibrationProfile': calibrationProfile,
     if (avgSpo2 != null) 'avgSpo2': avgSpo2,
@@ -694,7 +699,7 @@ class SessionMetadata {
       durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
       elapsedSeconds: (json['elapsedSeconds'] as num?)?.toInt() ?? 0,
       sound: (json['sound'] as String?) ?? 'Ambient Drone',
-      savedAt: (json['savedAt'] as String?) ?? DateTime.now().toIso8601String(),
+      savedAt: (json['savedAt'] as String?) ?? formatIso8601WithOffset(DateTime.now()),
       notes: (json['notes'] as String?) ?? '',
       stats: SessionStatsData.fromJson(json['stats']),
       deviceName: json['deviceName'] as String?,
@@ -724,6 +729,7 @@ class SessionMetadata {
       sessionSettings: SessionSettings.fromJson(json['sessionSettings']),
       durationS: (json['durationS'] as num?)?.toInt() ?? 0,
       startedAt: json['startedAt'] as String?,
+      timeZone: json['timeZone'] as String?,
       protocolVersion: _protocolVersionFromJson(json['protocolVersion']),
       calibrationProfile: json['calibrationProfile'] as String?,
       avgSpo2: (json['avgSpo2'] as num?)?.toDouble(),
@@ -755,7 +761,7 @@ class SessionMetadata {
   }) {
     final json = Map<String, Object?>.from(toJson());
     json['notes'] = notes;
-    json['savedAt'] = DateTime.now().toIso8601String();
+    json['savedAt'] = formatIso8601WithOffset(DateTime.now());
     if (stats != null) {
       json['stats'] = stats.toJson();
       json['peakAlphaHz'] = stats.peakAlphaFreq;

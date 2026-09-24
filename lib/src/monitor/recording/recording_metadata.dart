@@ -1,5 +1,6 @@
 import 'package:neurofeed/src/session_v5/models.dart';
 import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/util/timezone.dart';
 
 /// Snapshot sidecar for monitor tmp / recording captures. Not [SessionMetadata].
 class RecordingMetadata {
@@ -14,6 +15,7 @@ class RecordingMetadata {
     this.notes = '',
     required this.device,
     required this.streams,
+    this.timeZone,
   });
 
   final int formatVersion;
@@ -27,18 +29,25 @@ class RecordingMetadata {
   final DeviceInfoV5 device;
   final StreamsConfig streams;
 
-  Map<String, Object?> toJson() => {
-    'formatVersion': formatVersion,
-    'appVersion': appVersion,
-    'kind': kind,
-    'savedAt': savedAt.toUtc().toIso8601String(),
-    'startedAt': startedAt.toUtc().toIso8601String(),
-    'elapsedSeconds': elapsedSeconds,
-    'durationS': durationS,
-    'notes': notes,
-    'device': device.toJson(),
-    'streams': streams.toJson(),
-  };
+  /// IANA id at capture start (e.g. `Asia/Bangkok`). Required on new writes.
+  final String? timeZone;
+
+  Map<String, Object?> toJson() {
+    final tz = timeZone ?? captureIanaTimeZone();
+    return {
+      'formatVersion': formatVersion,
+      'appVersion': appVersion,
+      'kind': kind,
+      'savedAt': formatIso8601WithOffset(savedAt),
+      'startedAt': formatIso8601WithOffset(startedAt),
+      'timeZone': tz,
+      'elapsedSeconds': elapsedSeconds,
+      'durationS': durationS,
+      'notes': notes,
+      'device': device.toJson(),
+      'streams': streams.toJson(),
+    };
+  }
 
   static RecordingMetadata fromJson(Map<String, dynamic> json) {
     return RecordingMetadata(
@@ -58,6 +67,7 @@ class RecordingMetadata {
       streams: StreamsConfig.fromJson(
         json['streams'] as Map<String, dynamic>?,
       )!,
+      timeZone: json['timeZone'] as String?,
     );
   }
 
