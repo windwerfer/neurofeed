@@ -937,7 +937,7 @@ fn writer_main(
 mod tests {
     use super::*;
     use crate::api::muse::{BandsDto, EegDto};
-    use crate::api::session_format::{session_parse_body, V5_MAGIC};
+    use crate::api::session_format::{session_parse_body, V6_MAGIC};
     use std::io::Read;
 
     fn unique_id(tag: &str) -> String {
@@ -1012,7 +1012,7 @@ mod tests {
         assert!(dest.ends_with(&format!("recording_{id}.neurofeed")));
         let mut magic = [0u8; 6];
         File::open(&dest).unwrap().read_exact(&mut magic).unwrap();
-        assert_eq!(magic, V5_MAGIC);
+        assert_eq!(magic, V6_MAGIC);
         assert!(!raw_path(&dir, "recording", &id).exists());
         let _ = fs::remove_dir_all(&dir);
     }

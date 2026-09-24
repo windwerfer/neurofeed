@@ -16,6 +16,8 @@ class RecordingMetadata {
     required this.device,
     required this.streams,
     this.timeZone,
+    this.sessionId,
+    this.subject,
   });
 
   final int formatVersion;
@@ -31,6 +33,8 @@ class RecordingMetadata {
 
   /// IANA id at capture start (e.g. `Asia/Bangkok`). Required on new writes.
   final String? timeZone;
+  final String? sessionId;
+  final SubjectInfo? subject;
 
   Map<String, Object?> toJson() {
     final tz = timeZone ?? captureIanaTimeZone();
@@ -41,6 +45,8 @@ class RecordingMetadata {
       'savedAt': formatIso8601WithOffset(savedAt),
       'startedAt': formatIso8601WithOffset(startedAt),
       'timeZone': tz,
+      if (sessionId != null && sessionId!.isNotEmpty) 'sessionId': sessionId,
+      if (subject != null && subject!.id.isNotEmpty) 'subject': subject!.toJson(),
       'elapsedSeconds': elapsedSeconds,
       'durationS': durationS,
       'notes': notes,
@@ -68,6 +74,13 @@ class RecordingMetadata {
         json['streams'] as Map<String, dynamic>?,
       )!,
       timeZone: json['timeZone'] as String?,
+      sessionId: json['sessionId'] as String?,
+      subject: json['subject'] is Map
+          ? SubjectInfo(
+              id: (json['subject'] as Map)['id'] as String? ?? '',
+              nickname: (json['subject'] as Map)['nickname'] as String?,
+            )
+          : null,
     );
   }
 

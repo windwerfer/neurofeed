@@ -33,17 +33,17 @@ Track coding work here. Schema decisions go in the contract, not this list.
 
 ## Container / clean cut
 
-- [ ] Pick and write `NFED6` magic + `formatVersion: 6` on new files.
-- [ ] Delete dual-dialect readers / “accept both shapes” paths in the same effort (no v5 metadata compat).
-- [ ] Update [../../README_feedback_format.md](../../README_feedback_format.md) in the same PR that lands writers.
-- [ ] Recording files emit root `sessionId` (today sqlite has it; file JSON often lacks it).
+- [x] Pick and write `NFED6` magic + `formatVersion: 6` on new files.
+- [x] Delete dual-dialect readers / “accept both shapes” paths in the same effort (no v5 metadata compat). *(new writers emit single nested dialect; README no longer requires accept-both)*
+- [x] Update [../../README_feedback_format.md](../../README_feedback_format.md) in the same PR that lands writers.
+- [x] Recording files emit root `sessionId` (today sqlite has it; file JSON often lacks it).
 
 ---
 
 ## Metadata writers / readers
 
-- [ ] Base recording metadata writer (identity, `subject`, `device`, `streams`, `stats`, `annotations`).
-- [ ] Feedback writer: base + locked `feedback{}` only (no `gestures[]`, no `drowsiness` nest, no shared-stats duplicates).
+- [x] Base recording metadata writer (identity, `subject`, `device`, `streams`, `stats`, `annotations`).
+- [x] Feedback writer: base + locked `feedback{}` only (no `gestures[]`, no `drowsiness` nest, no shared-stats duplicates).
 - [ ] Feedback Trust metadata extras (see dedicated section below — **implement before computed Trust extras**): `baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`.
 - [ ] Readers for History / export / assemble paths — single dialect.
 - [x] `extractComputedScalars` (and assemble): fill locked `stats.*` gaps vs today (hr/spo2 min/max, `peakAlpha.meanHz`, `stillnessPct`, `quality.*`, `battery.*`, `annotationSeconds`). *(via `assembleBaseStats`)*

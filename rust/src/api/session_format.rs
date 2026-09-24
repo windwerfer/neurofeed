@@ -466,8 +466,8 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
 //   [68-byte fixed header][WebP thumbnail][metadata JSON (zstd)][computed 1Hz (zstd)][raw body]
 //
 // Header layout (68 bytes):
-//   [0..6]   magic: b"NFED5\0"
-//   [6]      version: u8 = 5
+//   [0..6]   magic: b"NFED6\0"
+//   [6]      version: u8 = 6
 //   [7]      flags: u8 (reserved)
 //   [8..15]  thumbnail_offset: u64
 //   [16..23] thumbnail_length: u64
@@ -478,8 +478,8 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
 //   [56..63] raw_offset: u64
 //   [64..67] crc32(header[0..63])
 
-pub const V5_MAGIC: [u8; 6] = *b"NFED5\0";
-pub const V5_VERSION: u8 = 5;
+pub const V6_MAGIC: [u8; 6] = *b"NFED6\0";
+pub const V6_VERSION: u8 = 6;
 pub const V5_HEADER_SIZE: usize = 68;
 
 /// v5 container header with fixed 68-byte layout.
@@ -602,8 +602,8 @@ fn v5_header_bytes(
     raw_offset: u64,
 ) -> Vec<u8> {
     let mut header = Vec::with_capacity(V5_HEADER_SIZE);
-    header.extend_from_slice(&V5_MAGIC);
-    header.push(V5_VERSION);
+    header.extend_from_slice(&V6_MAGIC);
+    header.push(V6_VERSION);
     header.push(0); // flags
     header.extend_from_slice(&thumbnail_offset.to_le_bytes());
     header.extend_from_slice(&thumbnail_length.to_le_bytes());
@@ -893,12 +893,12 @@ pub fn v5_parse_header(bytes: &[u8]) -> Result<V5Header, String> {
     if bytes.len() < V5_HEADER_SIZE {
         return Err("Truncated v5 header".to_string());
     }
-    if &bytes[0..6] != &V5_MAGIC {
+    if &bytes[0..6] != &V6_MAGIC {
         return Err("Not a v5 file (bad magic)".to_string());
     }
     let version = bytes[6];
-    if version != V5_VERSION {
-        return Err(format!("Unsupported v5 format version {version}"));
+    if version != V6_VERSION {
+        return Err(format!("Unsupported NFED format version {version}"));
     }
     // Verify CRC32 of first 64 bytes.
     let expected_crc = u32::from_le_bytes(bytes[64..68].try_into().unwrap());
@@ -1638,7 +1638,7 @@ mod tests {
     }
 
     #[test]
-    fn v5_header_version_validation() {
+    fn v6_header_version_validation() {
         let thumbnail = min_png();
         let metadata = b"{}";
         let computed = vec![];

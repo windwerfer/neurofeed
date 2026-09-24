@@ -9,7 +9,7 @@ use crate::api::muse::{
     TelemetrySnapshot, XyzDto,
 };
 use crate::api::session_format::{
-    encode_session_event, ComputedFrame, FeedbackInfo, GuardrailInfo, PeakAlphaInfo, V5_MAGIC,
+    encode_session_event, ComputedFrame, FeedbackInfo, GuardrailInfo, PeakAlphaInfo, V6_MAGIC,
 };
 use crate::spine::capture::{
     capture_append_computed_line, capture_assemble_v5, capture_discard, capture_drop_count,
@@ -336,7 +336,7 @@ pub fn run_current_assemble_soak(equiv_secs: u64) -> SoakReport {
                     f.read_exact(&mut magic).ok()
                 })
                 .is_some()
-                && magic == V5_MAGIC;
+                && magic == V6_MAGIC;
             let _ = std::fs::remove_file(&p);
             (len, ok)
         }

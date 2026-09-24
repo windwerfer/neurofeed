@@ -1,35 +1,34 @@
-# NeuroFeed — `.neurofeed` v5
+# NeuroFeed — `.neurofeed` v6
 
-**Format version:** 5
+**Format version:** 6  
 **Container:** `[68-byte header][WebP thumbnail][metadata (zstd)][computed 1 Hz (zstd)][raw body]`
 
 Rust owns the byte layout (`rust/src/api/session_format.rs`). Dart only calls FFI.
 
-Agent freeze: [`.ai/contracts/session-format-contract.md`](.ai/contracts/session-format-contract.md). Update this README if that contract changes.
+Schema authority: [`.ai/contracts/fileformat_v6.md`](.ai/contracts/fileformat_v6.md) (LOCKED sections).  
+Agent freeze for the container: [`.ai/contracts/session-format-contract.md`](.ai/contracts/session-format-contract.md).
 
-Two filenames, same container type, same history folder:
+Two filenames, **one metadata dialect**:
 
 | Kind | Published name | Scratch temps | Metadata JSON |
 |------|----------------|---------------|---------------|
-| Feedback session | `session_$id.neurofeed` | `session_$id.{raw,computed,metadata}` | Flat `SessionMetadata` (`lib/src/feedback/session_metadata.dart`) |
-| Recording | `recording_$ts.neurofeed` | `recording_$ts.{raw,computed,json}` | Nested `RecordingMetadata` (`lib/src/monitor/recording/recording_metadata.dart`) |
-
-Two metadata JSON shapes is a leftover to revisit (`.ai/TODO/session_vs_recording_metadata.md`). Readers must accept both.
+| Feedback session | `session_$id.neurofeed` | `session_$id.{raw,computed,metadata}` | Base + top-level `feedback{}` |
+| Recording | `recording_$ts.neurofeed` | `recording_$ts.{raw,computed,json}` | Base only (no `feedback`) |
 
 `tmp_$ts.*` is a rolling connect-time capture. It is **never** assembled or published.
 
 History list is sqlite `kind` (`feedback` \| `recording`), not a directory scan. See [README_history_cache.md](README_history_cache.md).
 
-**Timestamps:** computed `t` and gesture offsets are seconds from **this capture’s start**. Raw EEG/band timestamps in the raw body are **ms epochs**.
+**Timestamps:** computed `t`, annotation `onset`/`duration`, and gesture offsets are seconds from **this capture’s start** (content clock; does not advance during pause). Raw EEG/band timestamps in the raw body are **ms epochs**. Wall-clock `startedAt` / `savedAt` are ISO-8601 **with explicit offset or `Z`**; root `timeZone` is IANA (e.g. `Asia/Bangkok`).
 
 ---
 
-## v5 container layout
+## v6 container layout
 
 ```
 Offset 0:        68-byte fixed header
-  [0..5]     = b"NFED5\0"
-  [6]        = 5 (version)
+  [0..5]     = b"NFED6\0"
+  [6]        = 6 (version)
   [7]        = flags (reserved)
   [8..15]    = thumbnail_offset (u64 LE)
   [16..23]   = thumbnail_length (u64 LE)
@@ -46,7 +45,7 @@ Offset computed_offset:  zstd JSON Lines (one ComputedFrame per line)
 Offset raw_offset:       copy of live `.raw` (NFEDBIN + inner zstd frames)
 ```
 
-`v5ParseHead` returns opaque `metadataJson` bytes. It does **not** parse `kind`.
+`v5ParseHead` / head parse returns opaque `metadataJson` bytes. It does **not** parse `kind`.
 
 There is no `metadata.summary` / `SessionOverview` and no 400-bucket series.
 Dashboard, history, PDF, and PNG charts plot computed 1 Hz:
@@ -55,71 +54,28 @@ preview is the WebP thumbnail.
 
 ---
 
-## Feedback metadata (`SessionMetadata`)
+## Base metadata (both kinds)
 
-This is what `SessionMetadata.toJson()` actually writes. It is **flat**
-(device fields are `deviceName` / `deviceModel` / `deviceId`, not a nested
-`device` object). It does **not** write `formatVersion`, `appVersion`,
-`kind`, or `streams`. Sqlite stores `kind = 'feedback'` on publish.
-
-```json
-{
-  "protocol": "drowsiness",
-  "durationMinutes": 15,
-  "elapsedSeconds": 900,
-  "durationS": 900,
-  "sound": "Ambient Drone",
-  "savedAt": "2026-08-22T14:30:00.000Z",
-  "startedAt": "2026-08-22T14:15:00.000Z",
-  "notes": "",
-  "deviceName": "Muse 0ABC",
-  "deviceModel": "Classic",
-  "deviceId": "AA:BB:CC:DD:EE:FF",
-  "recordedChannels": ["TP9", "AF7", "AF8", "TP10"],
-  "feedbackSound": "bowlChimes",
-  "metadataDescription": "…",
-  "protocolVersion": "1",
-  "calibrationProfile": "eyes-closed-01",
-  "calibration": { "version": 2, "kind": "staged", "calibrationId": "eyes-closed-01" },
-  "sessionSettings": { "dynamicAdapt": true, "guardFeature": "ai.drowsiness" },
-  "gestures": [{ "type": "doubleBlink", "at": 45 }],
-  "drowsiness": { "scoreTotalPct": 12.5, "meanSleepDir": 0.34 },
-  "music": { "tracks": [{ "at": 150.0, "name": "track01.opus" }] }
-}
-```
-
-Gesture JSON key is **`at`** (seconds from recording start, stored as int),
-not `offsetSeconds`. Music track/cutoff samples also use `at`.
-
-`sessionSettings` includes `guardFeature` (`band.delta` / `ai.drowsiness` /
-`none`) and optional `modelSnapshot` **inside** settings, not at the top
-level.
-
-Calibration `kind` is `"single"` or `"staged"`. Phases and recalibrations
-are present when that calibration ran.
-
----
-
-## Recording metadata (`RecordingMetadata`)
-
-Written for `recording_*` (and the tmp sidecar snapshot). Nested `device`
-and a complete ten-key `streams` object. Disabled streams stay in the map
-as `{ "enabled": false, "rateHz": 0 }` — never omitted (`StreamsConfig.fromJson`
-requires all ten keys).
+Writers: `lib/src/session_v5/metadata_v6.dart` (`buildRecordingMetadataV6` /
+`buildFeedbackMetadataV6`). Single nested dialect — **no** flat
+`deviceName` / dual-shape accept path for new files.
 
 ```json
 {
-  "formatVersion": 5,
-  "appVersion": "dev",
+  "formatVersion": 6,
+  "appVersion": "…",
   "kind": "recording",
-  "savedAt": "2026-09-07T12:00:00.000Z",
-  "startedAt": "2026-09-07T11:50:00.000Z",
+  "savedAt": "2026-09-24T17:30:00.000+07:00",
+  "startedAt": "2026-09-24T17:20:00.000+07:00",
+  "timeZone": "Asia/Bangkok",
   "elapsedSeconds": 600,
   "durationS": 600,
   "notes": "",
+  "sessionId": "…",
+  "subject": { "id": "…", "nickname": "River" },
   "device": {
-    "name": "Muse 2 (Simulated)",
-    "id": "sim:muse-2",
+    "name": "Muse 2",
+    "id": "…",
     "firmware": "Classic",
     "model": "Classic",
     "sensors": ["EEG", "PPG", "IMU"],
@@ -137,92 +93,43 @@ requires all ten keys).
     "ppg": { "enabled": true, "rateHz": 64 },
     "telemetry": { "enabled": true, "rateHz": 1 },
     "gestures": { "enabled": false, "rateHz": 0 }
-  }
+  },
+  "stats": { "hr": { "mean": 68.2, "min": 54.0, "max": 91.0 } },
+  "annotations": [
+    { "onset": 45.0, "duration": 0, "type": "double_blink" },
+    { "onset": 200.0, "duration": 10.0, "type": "pause" }
+  ]
 }
 ```
 
-Omit on recordings: `protocol`, `calibration`, `music`, `feedbackSound`,
-`drowsiness`, `modelSnapshot`, `sessionSettings`. Gestures are not a
-`RecordingStream`. Enablement follows Settings → **Session recording**
-(also applies to tmp and feedback).
+- `subject.id` = stable anonymous UUID v4 from Settings; optional `nickname`.
+- Root `sessionId` = **file** identity (new per capture), not the person.
+- `annotations[]` is the single timeline (pause / bad_quality / disconnect + gesture instants). No parallel `feedback.gestures[]`.
 
 ---
 
-## Computed stream (1 Hz) — own zstd section
+## Feedback extension
 
-JSON Lines, one `ComputedFrame` per line. `t` is seconds from **this**
-capture start.
-
-```json
-{
-  "t": 123.0,
-  "bands": [[1.2, 2.5, 4.8, 3.1, 1.9], [1.1, 2.4, 5.0, 3.0, 1.8], [1.3, 2.6, 4.7, 3.2, 2.0], [1.0, 2.3, 4.9, 3.1, 1.7]],
-  "pulse": 72.3,
-  "movement": 0.012,
-  "peakAlpha": { "freq": 10.2, "power": 4.5 },
-  "spo2": 98.5,
-  "lineNoise": [0.01, 0.02, 0.01, 0.03],
-  "signalQuality": [85, 90, 60, 70],
-  "guardrail": { "sleepDir": 0.34, "clarity": 0.78, "warning": false, "delta": 0.12 },
-  "feedback": { "ratio": 1.85, "threshold": 1.2, "inTarget": true, "pct": 0.62 },
-  "gestures": ["blink"]
-}
-```
-
-| Field | Notes |
-|-------|--------|
-| `bands` | `N × 5` absolute powers `[δ, θ, α, β, γ]`. Feedback sampler is **4-ch**. Monitor sampler is `channelCount`. |
-| `lineNoise` / `signalQuality` | Same `N`. |
-| `guardrail` / `feedback` | Recordings write zeroed structs. |
+When `kind == "feedback"`, also write top-level `feedback: { … }` (protocol,
+durationMinutes, calibration, sessionSettings, outcomeScalars, music, …).
+Shared physio stays under base `stats` only. See contract **Feedback extension**.
 
 ---
 
 ## Raw stream — NFEDBIN body (inner zstd frames)
 
-The container raw section is a byte-for-byte copy of the live `.raw`
-(no outer zstd). Inner frames remain `[u32 length][zstd payload]`:
-
-| Tag | Stream | Typical rate | Payload |
-|-----|--------|--------------|---------|
-| 1 | EEG | 256 Hz | [ts, electrode, n, n×f32] |
-| 2 | Telemetry | 1 Hz | [ts, battery, fuel, temp] |
-| 3 | Accelerometer | 52 Hz | [ts, seq, n, n×(x,y,z)] |
-| 4 | Gyroscope | 52 Hz | [ts, seq, n, n×(x,y,z)] |
-| 5 | PPG | 64 Hz | [ts, channel, n, n×f32] |
-| 6 | Bands | ~10 Hz on the wire | [ts, electrode, δ,θ,α,β,γ] |
-| 7 | Pulse | 1 Hz | [ts, bpm, conf] |
-| 8 | Movement | 1 Hz | [ts, score] |
-| 9 | PeakAlpha | ~10 Hz on the wire | [ts, freq, power] |
-| 10 | SpO₂ | 1 Hz | [ts, spo2, conf] |
-
-`ts` in this body is a **ms epoch**. CSV export divides by 1000 before flooring.
+Unchanged framing vs prior releases: live `.raw` is `NFEDBIN` + versioned
+inner frames. Outer container magic is **NFED6**.
 
 ---
 
-## Scratch and crash recovery
+## Code map
 
-Live writes always go to `scratchDirectory()`, not the history folder (SAF
-is history-only).
-
-| Prefix | Temps | On crash / leftover |
-|--------|-------|---------------------|
-| `session_$id` | `.raw` `.computed` `.metadata` (JSONL) | Reopens the session summary (`FeedbackDashboardView`) → Save / Discard. Assembles via `writeScratchV5`. Back is blocked; must Save or Discard. |
-| `recording_$ts` | `.raw` `.computed` `.json` (atomic snapshot) | **Incomplete recording detected** → Save / Discard. Same History folder, sqlite `kind=recording`. |
-| `tmp_$ts` | `.raw` `.computed` `.json` | Launch **glob-deletes**. Never assembled. |
-
-Feedback recovery must not learn `tmp_` / `recording_`. Monitor recovery
-must not learn `session_`.
-
----
-
-## Implementation
-
-| Piece | Where |
-|-------|--------|
-| Byte layout / FFI | `rust/src/api/session_format.rs` |
-| Capture writer | `rust/src/spine/capture.rs` (FRB `rust/src/api/capture.rs`) |
-| Capture Dart adapters | `lib/src/spine/capture_client.dart`, `scratch_writer.dart` |
-| Assemble / scratch v5 | `lib/src/spine/assemble.dart` |
-| Feedback metadata | `lib/src/feedback/session_metadata.dart` |
-| Recording metadata | `lib/src/monitor/recording/recording_metadata.dart` |
-| ComputedFrame | `lib/src/session_v5/computed_frame.dart` |
+| Concern | Path |
+|---------|------|
+| Assemble / scratch | `lib/src/spine/assemble.dart` |
+| v6 metadata writers | `lib/src/session_v5/metadata_v6.dart` |
+| Annotations / base stats | `lib/src/session_v5/stats_assemble.dart` |
+| ComputedFrame (Dart) | `lib/src/session_v5/computed_frame.dart` |
+| Container encode/parse | `rust/src/api/session_format.rs` |
+| Settings subject id | `lib/src/settings.dart` |
