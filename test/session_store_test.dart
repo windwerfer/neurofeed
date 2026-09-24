@@ -10,7 +10,7 @@ import 'package:neurofeed/src/monitor/recording/recording_store.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/settings.dart';
 
 void main() {
@@ -36,7 +36,7 @@ void main() {
       savedAt: DateTime.now().toIso8601String(),
     );
 
-    // v5 container; dummy raw bytes; empty computed frames.
+    // .neurofeed container (NFED6); dummy raw bytes; empty computed frames.
     await store.publishSession(
       'test1234',
       metadata,
@@ -65,7 +65,7 @@ void main() {
 
       final scratch = scratchDirectory(storage);
       await scratch.create(recursive: true);
-      final scratchV5 = await writeScratchV5(
+      final scratchFile = await writeScratch(
         dir: scratch,
         id: '9001',
         prefix: 'recording',
@@ -73,7 +73,7 @@ void main() {
         rawBody: const [1, 2, 3, 4],
         computedJsonl: const [],
       );
-      await recStore.publish(scratchV5);
+      await recStore.publish(scratchFile);
       sqlite.close();
 
       await File(
@@ -114,7 +114,7 @@ void main() {
 
     final scratch = scratchDirectory(storage);
     await scratch.create(recursive: true);
-    final scratchV5 = await writeScratchV5(
+    final scratchFile = await writeScratch(
       dir: scratch,
       id: '8008',
       prefix: 'recording',
@@ -122,7 +122,7 @@ void main() {
       rawBody: const [1, 2, 3, 4],
       computedJsonl: const [],
     );
-    await recStore.publish(scratchV5);
+    await recStore.publish(scratchFile);
     sqlite.close();
 
     final published = File('${tmp.path}/recording_8008.neurofeed');
@@ -169,7 +169,7 @@ RecordingMetadata _recordingMeta() => RecordingMetadata(
   startedAt: DateTime.utc(2026, 9, 12, 11, 50),
   elapsedSeconds: 12,
   durationS: 12,
-  device: const DeviceInfoV5(
+  device: const DeviceInfo(
     name: 'Muse 2 (Simulated)',
     id: 'sim:muse-2',
     firmware: 'Classic',

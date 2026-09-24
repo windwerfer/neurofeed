@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use crate::api::muse::MuseEventDto;
 use crate::api::session_format::{
-    container_encode_v5_to_path, encode_session_event, session_frame_bytes, session_header_bytes,
+    container_encode_to_path, encode_session_event, session_frame_bytes, session_header_bytes,
 };
 
 const MAX_PENDING_BYTES: usize = 4 * 1024 * 1024;
@@ -91,6 +91,7 @@ struct CaptureSession {
 }
 
 static STARTED: AtomicBool = AtomicBool::new(false);
+static PAUSED: AtomicBool = AtomicBool::new(false);
 static CTL: Mutex<Option<Arc<CaptureCtl>>> = Mutex::new(None);
 static SESSION: Mutex<Option<CaptureSession>> = Mutex::new(None);
 
@@ -238,6 +239,9 @@ pub fn on_dto(dto: &MuseEventDto) {
     if !STARTED.load(Ordering::Relaxed) {
         return;
     }
+    if PAUSED.load(Ordering::Relaxed) {
+        return;
+    }
     let ctl = {
         let g = lock_ctl();
         match g.as_ref() {
@@ -355,6 +359,7 @@ pub fn capture_start(
 
     *lock_ctl() = Some(Arc::clone(&ctl));
     STARTED.store(true, Ordering::Release);
+    PAUSED.store(false, Ordering::SeqCst);
     *sess_g = Some(CaptureSession {
         ctl,
         thread: Some(thread),
@@ -411,6 +416,9 @@ pub fn capture_append_event(event: MuseEventDto) -> anyhow::Result<()> {
 }
 
 pub fn capture_append_computed_line(line: Vec<u8>) -> anyhow::Result<()> {
+    if PAUSED.load(Ordering::Relaxed) {
+        return Ok(());
+    }
     let ctl = current_ctl()?;
     let n = line.len();
     if !try_send(&ctl, Msg::Computed(line), n) {
@@ -420,6 +428,14 @@ pub fn capture_append_computed_line(line: Vec<u8>) -> anyhow::Result<()> {
 }
 
 pub fn capture_write_sidecar(json: Vec<u8>) -> anyhow::Result<()> {
+    if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&json) {
+        if v.get("type").and_then(|t| t.as_str()) == Some("__capture_pause") {
+            let paused = v.get("paused").and_then(|p| p.as_bool()).unwrap_or(true);
+            PAUSED.store(paused, Ordering::SeqCst);
+            return Ok(());
+        }
+    }
+
     let ctl = current_ctl()?;
     let n = json.len();
     if !try_send(&ctl, Msg::Sidecar(json), n) {
@@ -499,6 +515,15 @@ pub fn capture_write_errors() -> u64 {
         .unwrap_or(0)
 }
 
+
+/// Pause/resume raw (and Dart-gated computed) capture without tearing down the session.
+pub fn capture_set_paused(paused: bool) {
+    PAUSED.store(paused, Ordering::SeqCst);
+}
+
+pub fn capture_is_paused() -> bool {
+    PAUSED.load(Ordering::Relaxed)
+}
 pub fn capture_is_active() -> bool {
     STARTED.load(Ordering::Relaxed)
 }
@@ -518,7 +543,7 @@ fn delete_temps(dir: &Path, prefix: &str, id: &str) {
     }
 }
 
-pub fn capture_assemble_v5(metadata_json: Vec<u8>, thumbnail: Vec<u8>) -> anyhow::Result<String> {
+pub fn capture_assemble(metadata_json: Vec<u8>, thumbnail: Vec<u8>) -> anyhow::Result<String> {
     let (dir, prefix, id) = {
         let mut g = lock_session();
         let sess = g
@@ -550,7 +575,7 @@ pub fn capture_assemble_v5(metadata_json: Vec<u8>, thumbnail: Vec<u8>) -> anyhow
         String::new()
     };
     let t0 = Instant::now();
-    let dest_s = container_encode_v5_to_path(
+    let dest_s = container_encode_to_path(
         dest.to_string_lossy().into_owned(),
         thumb,
         metadata_json,
@@ -590,7 +615,7 @@ pub fn capture_discard() -> anyhow::Result<()> {
 }
 
 /// Assemble leftover temps with no live session (crash recovery).
-pub fn capture_assemble_v5_at(
+pub fn capture_assemble_at(
     dir: String,
     prefix: String,
     id: String,
@@ -604,7 +629,7 @@ pub fn capture_assemble_v5_at(
         if let Some(sess) = g.as_ref() {
             if sess.dir == Path::new(&dir) && sess.prefix == prefix && sess.id == id {
                 drop(g);
-                return capture_assemble_v5(metadata_json, thumbnail);
+                return capture_assemble(metadata_json, thumbnail);
             }
         }
     }
@@ -627,7 +652,7 @@ pub fn capture_assemble_v5_at(
     } else {
         String::new()
     };
-    let dest_s = container_encode_v5_to_path(
+    let dest_s = container_encode_to_path(
         dest.to_string_lossy().into_owned(),
         thumb,
         metadata_json,
@@ -912,7 +937,7 @@ fn writer_main(
 mod tests {
     use super::*;
     use crate::api::muse::{BandsDto, EegDto};
-    use crate::api::session_format::{session_parse_body, V5_MAGIC};
+    use crate::api::session_format::{session_parse_body, V6_MAGIC};
     use std::io::Read;
 
     fn unique_id(tag: &str) -> String {
@@ -979,7 +1004,7 @@ mod tests {
         assert_eq!(capture_drop_count(), 0);
         assert_eq!(capture_write_errors(), 0);
 
-        let dest = capture_assemble_v5(
+        let dest = capture_assemble(
             br#"{"formatVersion":5,"kind":"recording"}"#.to_vec(),
             Vec::new(),
         )
@@ -987,7 +1012,7 @@ mod tests {
         assert!(dest.ends_with(&format!("recording_{id}.neurofeed")));
         let mut magic = [0u8; 6];
         File::open(&dest).unwrap().read_exact(&mut magic).unwrap();
-        assert_eq!(magic, V5_MAGIC);
+        assert_eq!(magic, V6_MAGIC);
         assert!(!raw_path(&dir, "recording", &id).exists());
         let _ = fs::remove_dir_all(&dir);
     }
@@ -1102,7 +1127,7 @@ mod tests {
         let id2 = unique_id("left2");
         fs::write(raw_path(&dir2, "recording", &id2), session_header_bytes()).unwrap();
         fs::write(computed_path(&dir2, "recording", &id2), b"{\"t\":1}\n").unwrap();
-        let dest = capture_assemble_v5_at(
+        let dest = capture_assemble_at(
             dir2.to_string_lossy().into_owned(),
             "recording".into(),
             id2.clone(),
@@ -1115,4 +1140,42 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         let _ = fs::remove_dir_all(&dir2);
     }
+    #[test]
+    fn pause_blocks_raw_on_dto() {
+        let _lock = test_lock();
+        let _ = capture_discard();
+        let dir = temp_dir();
+        let id = unique_id("pause");
+        let started = 1_700_000_000_000.0;
+        capture_start(
+            dir.to_string_lossy().into_owned(),
+            "session".into(),
+            id.clone(),
+            vec![],
+            started,
+        )
+        .unwrap();
+        on_dto(&eeg(started + 1000.0, 0));
+        capture_flush().unwrap();
+        let before = fs::metadata(raw_path(&dir, "session", &id)).unwrap().len();
+
+        capture_set_paused(true);
+        assert!(capture_is_paused());
+        on_dto(&eeg(started + 2000.0, 1));
+        capture_flush().unwrap();
+        let mid = fs::metadata(raw_path(&dir, "session", &id)).unwrap().len();
+        assert_eq!(mid, before, "paused capture must not grow raw");
+
+        // Sidecar control channel
+        capture_write_sidecar(br#"{"type":"__capture_pause","paused":false}"#.to_vec()).unwrap();
+        assert!(!capture_is_paused());
+        on_dto(&eeg(started + 3000.0, 2));
+        capture_flush().unwrap();
+        let after = fs::metadata(raw_path(&dir, "session", &id)).unwrap().len();
+        assert!(after > mid, "resume must accept raw again");
+
+        capture_discard().unwrap();
+        let _ = fs::remove_dir_all(&dir);
+    }
+
 }

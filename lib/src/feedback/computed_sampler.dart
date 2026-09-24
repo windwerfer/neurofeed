@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
-import 'package:neurofeed/src/session_v5/computed_frame.dart';
+import 'package:neurofeed/src/session_format/computed_frame.dart';
 
 class ComputedSampler {
   ComputedSampler({
@@ -19,6 +19,8 @@ class ComputedSampler {
   final DateTime Function() _now;
 
   Timer? _timer;
+  Duration _pauseAccumulated = Duration.zero;
+  DateTime? _pauseBegan;
 
   // Latest values from event stream (updated by FeedbackStateNotifier)
   // Bands per electrode (4 electrodes × 5 bands)
@@ -37,6 +39,19 @@ class ComputedSampler {
   double? _feedbackThreshold;
   bool _lastInTarget = false;
   double _inTargetPct = 0.0;
+  double? _feedbackPercentile;
+  double? _feedbackThresholdPercentile;
+  bool? _feedbackHeldBack;
+  List<String>? _feedbackInhibitTags;
+  bool? _feedbackClean;
+  String? _feedbackDirtyReason;
+  double? _feedbackBetaRel;
+  double? _feedbackDeltaRel;
+  double? _guardFeaturePercentile;
+  bool? _guardWarnOver;
+  bool? _guardCeilingOver;
+  bool? _guardClean;
+  String? _guardDirtyReason;
   final List<String> _latestGestures = [];
 
   void updateBands(int electrode, BandsDto bands) {
@@ -72,11 +87,35 @@ class ComputedSampler {
     required double delta,
     required bool warning,
     double? threshold,
+    double? featurePercentile,
+    bool? warnOver,
+    bool? ceilingOver,
+    bool? clean,
+    String? dirtyReason,
   }) {
     _lastSleepDir = sleepDir;
     _lastClarity = clarity;
     _lastDelta = delta;
     _warningActive = warning;
+    if (featurePercentile != null) {
+      _guardFeaturePercentile = featurePercentile;
+    }
+    if (warnOver != null) {
+      _guardWarnOver = warnOver;
+    }
+    if (ceilingOver != null) {
+      _guardCeilingOver = ceilingOver;
+    }
+    if (clean != null) {
+      _guardClean = clean;
+      if (clean) {
+        _guardDirtyReason = null;
+      } else if (dirtyReason != null) {
+        _guardDirtyReason = dirtyReason;
+      }
+    } else if (dirtyReason != null) {
+      _guardDirtyReason = dirtyReason;
+    }
   }
 
   void updateFeedback({
@@ -84,11 +123,27 @@ class ComputedSampler {
     required double? threshold,
     required bool inTarget,
     required double inTargetPct,
+    double? percentile,
+    double? thresholdPercentile,
+    bool? heldBack,
+    List<String>? inhibitTags,
+    bool? clean,
+    String? dirtyReason,
+    double? betaRel,
+    double? deltaRel,
   }) {
     _lastRatio = ratio;
     _feedbackThreshold = threshold;
     _lastInTarget = inTarget;
     _inTargetPct = inTargetPct;
+    _feedbackPercentile = percentile;
+    _feedbackThresholdPercentile = thresholdPercentile;
+    _feedbackHeldBack = heldBack;
+    _feedbackInhibitTags = inhibitTags;
+    _feedbackClean = clean;
+    _feedbackDirtyReason = dirtyReason;
+    _feedbackBetaRel = betaRel;
+    _feedbackDeltaRel = deltaRel;
   }
 
   void updateGestures(List<String> gestures) {
@@ -106,12 +161,37 @@ class ComputedSampler {
     _timer = null;
   }
 
+  /// Stop emitting frames; content clock freezes (wall pause accumulates).
+  void pause() {
+    if (_pauseBegan != null) {
+      return;
+    }
+    stop();
+    _pauseBegan = _now();
+  }
+
+  /// Resume emitting; [t] continues from the pre-pause content clock.
+  void resume() {
+    if (_pauseBegan != null) {
+      _pauseAccumulated += _now().difference(_pauseBegan!);
+      _pauseBegan = null;
+    }
+    start();
+  }
+
+  /// Seconds of wall time excluded from the content clock so far.
+  @visibleForTesting
+  double get pauseAccumulatedSeconds =>
+      _pauseAccumulated.inMilliseconds / 1000.0;
+
   /// Seconds from [recordingStart] using the injected clock.
   @visibleForTesting
   void emitFrame() => _emitFrame();
 
   void _emitFrame() {
-    final t = _now().difference(_recordingStart).inMilliseconds / 1000.0;
+    final wall = _now().difference(_recordingStart);
+    final content = wall - _pauseAccumulated;
+    final t = content.inMilliseconds / 1000.0;
 
     final frame = ComputedFrame(
       t: t,
@@ -132,12 +212,25 @@ class ComputedSampler {
         clarity: _lastClarity,
         warning: _warningActive,
         delta: _lastDelta,
+        featurePercentile: _guardFeaturePercentile,
+        warnOver: _guardWarnOver,
+        ceilingOver: _guardCeilingOver,
+        clean: _guardClean,
+        dirtyReason: _guardDirtyReason,
       ),
       feedback: FeedbackInfo(
         ratio: _lastRatio,
         threshold: _feedbackThreshold ?? 0.0,
         inTarget: _lastInTarget,
         pct: _inTargetPct,
+        percentile: _feedbackPercentile,
+        thresholdPercentile: _feedbackThresholdPercentile,
+        heldBack: _feedbackHeldBack,
+        inhibitTags: _feedbackInhibitTags,
+        clean: _feedbackClean,
+        dirtyReason: _feedbackDirtyReason,
+        betaRel: _feedbackBetaRel,
+        deltaRel: _feedbackDeltaRel,
       ),
       gestures: List.from(_latestGestures),
     );

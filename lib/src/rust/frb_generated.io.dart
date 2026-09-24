@@ -55,6 +55,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BandsDto dco_decode_box_autoadd_bands_dto(dynamic raw);
 
   @protected
+  bool dco_decode_box_autoadd_bool(dynamic raw);
+
+  @protected
   ComputedFrame dco_decode_box_autoadd_computed_frame(dynamic raw);
 
   @protected
@@ -122,6 +125,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ConnectionStatus dco_decode_connection_status(dynamic raw);
+
+  @protected
+  ContainerHeader dco_decode_container_header(dynamic raw);
 
   @protected
   ControlDto dco_decode_control_dto(dynamic raw);
@@ -271,6 +277,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
+
+  @protected
   ComputedFrame? dco_decode_opt_box_autoadd_computed_frame(dynamic raw);
 
   @protected
@@ -284,6 +293,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_usize(dynamic raw);
+
+  @protected
+  List<String>? dco_decode_opt_list_String(dynamic raw);
+
+  @protected
+  ParsedHead dco_decode_parsed_head(dynamic raw);
 
   @protected
   PeakAlphaDto dco_decode_peak_alpha_dto(dynamic raw);
@@ -343,12 +358,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_usize(dynamic raw);
 
   @protected
-  V5Header dco_decode_v_5_header(dynamic raw);
-
-  @protected
-  V5ParsedHead dco_decode_v_5_parsed_head(dynamic raw);
-
-  @protected
   XyzDto dco_decode_xyz_dto(dynamic raw);
 
   @protected
@@ -383,6 +392,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BandsDto sse_decode_box_autoadd_bands_dto(SseDeserializer deserializer);
+
+  @protected
+  bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
   ComputedFrame sse_decode_box_autoadd_computed_frame(
@@ -468,6 +480,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ConnectionStatus sse_decode_connection_status(SseDeserializer deserializer);
+
+  @protected
+  ContainerHeader sse_decode_container_header(SseDeserializer deserializer);
 
   @protected
   ControlDto sse_decode_control_dto(SseDeserializer deserializer);
@@ -637,6 +652,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
+
+  @protected
   ComputedFrame? sse_decode_opt_box_autoadd_computed_frame(
     SseDeserializer deserializer,
   );
@@ -654,6 +672,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_usize(SseDeserializer deserializer);
+
+  @protected
+  List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
+
+  @protected
+  ParsedHead sse_decode_parsed_head(SseDeserializer deserializer);
 
   @protected
   PeakAlphaDto sse_decode_peak_alpha_dto(SseDeserializer deserializer);
@@ -715,12 +739,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_usize(SseDeserializer deserializer);
 
   @protected
-  V5Header sse_decode_v_5_header(SseDeserializer deserializer);
-
-  @protected
-  V5ParsedHead sse_decode_v_5_parsed_head(SseDeserializer deserializer);
-
-  @protected
   XyzDto sse_decode_xyz_dto(SseDeserializer deserializer);
 
   @protected
@@ -764,6 +782,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     BandsDto self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_computed_frame(
@@ -876,6 +897,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_connection_status(
     ConnectionStatus self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_container_header(
+    ContainerHeader self,
     SseSerializer serializer,
   );
 
@@ -1105,6 +1132,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_computed_frame(
     ComputedFrame? self,
     SseSerializer serializer,
@@ -1124,6 +1154,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_usize(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_parsed_head(ParsedHead self, SseSerializer serializer);
 
   @protected
   void sse_encode_peak_alpha_dto(PeakAlphaDto self, SseSerializer serializer);
@@ -1193,12 +1229,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_v_5_header(V5Header self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_v_5_parsed_head(V5ParsedHead self, SseSerializer serializer);
 
   @protected
   void sse_encode_xyz_dto(XyzDto self, SseSerializer serializer);

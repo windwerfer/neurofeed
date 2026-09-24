@@ -7,11 +7,15 @@ bool graphCinemaIsMobile([TargetPlatform? platform]) {
   return p == TargetPlatform.android || p == TargetPlatform.iOS;
 }
 
-/// Hide graph chrome: mobile landscape, or desktop F11 fullscreen.
+/// Hide graph chrome: phone landscape, or desktop F11 fullscreen.
 bool graphCinema(BuildContext context, {required bool fullscreen}) {
   if (fullscreen) return true;
   if (!graphCinemaIsMobile()) return false;
-  return MediaQuery.orientationOf(context) == Orientation.landscape;
+  if (MediaQuery.orientationOf(context) != Orientation.landscape) {
+    return false;
+  }
+  // Phone-like only (Material compact): tablets (shortestSide >= 600) keep chrome in landscape.
+  return MediaQuery.sizeOf(context).shortestSide < 600;
 }
 
 class GraphCinema extends StatefulWidget {

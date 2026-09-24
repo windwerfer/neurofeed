@@ -9,7 +9,7 @@ import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/settings.dart';
 
 final String _rustLibPath =
@@ -23,7 +23,7 @@ RecordingMetadata _meta() => RecordingMetadata(
   startedAt: DateTime.utc(2026, 9, 12, 11, 50),
   elapsedSeconds: 12,
   durationS: 12,
-  device: const DeviceInfoV5(
+  device: const DeviceInfo(
     name: 'Muse 2 (Simulated)',
     id: 'sim:muse-2',
     firmware: 'Classic',
@@ -62,7 +62,7 @@ void main() {
     expect(recordingIdFrom('recording_.raw', '.raw'), isNull);
   });
 
-  test('leftover recording_ temps assemble to scratch v5', () async {
+  test('leftover recording_ temps assemble to scratch .neurofeed', () async {
     await File('${scratch.path}/recording_1001.raw').writeAsBytes([1, 2, 3, 4]);
     await File('${scratch.path}/recording_1001.computed').writeAsString('');
     await File(
@@ -72,24 +72,24 @@ void main() {
     final recovered = await scanRecoverableRecordings(scratch);
     expect(recovered, hasLength(1));
     expect(recovered.single.id, '1001');
-    expect(recovered.single.scratchV5.existsSync(), isTrue);
+    expect(recovered.single.scratch.existsSync(), isTrue);
     expect(
-      recovered.single.scratchV5.uri.pathSegments.last,
+      recovered.single.scratch.uri.pathSegments.last,
       'recording_1001.neurofeed',
     );
     expect(File('${scratch.path}/recording_1001.raw').existsSync(), isFalse);
     expect(File('${scratch.path}/recording_1001.computed').existsSync(), isFalse);
     expect(File('${scratch.path}/recording_1001.json').existsSync(), isFalse);
 
-    final head = v5ParseHead(
-      bytes: Uint8List.fromList(recovered.single.scratchV5.readAsBytesSync()),
+    final head = parseHead(
+      bytes: Uint8List.fromList(recovered.single.scratch.readAsBytesSync()),
     );
     final meta = jsonDecode(utf8.decode(head.metadataJson)) as Map;
     expect(meta['kind'], 'recording');
   });
 
-  test('leftover assembled v5 is returned without a second assemble', () async {
-    final v5 = await writeScratchV5(
+  test('leftover assembled .neurofeed is returned without a second assemble', () async {
+    final scratchFile = await writeScratch(
       dir: scratch,
       id: '2002',
       prefix: 'recording',
@@ -98,13 +98,13 @@ void main() {
       computedJsonl: const [],
     );
     await File('${scratch.path}/recording_2002.raw').writeAsBytes([9, 9]);
-    final before = v5.lengthSync();
+    final before = scratchFile.lengthSync();
 
     final recovered = await scanRecoverableRecordings(scratch);
     expect(recovered, hasLength(1));
     expect(recovered.single.id, '2002');
-    expect(recovered.single.scratchV5.path, v5.path);
-    expect(v5.lengthSync(), before);
+    expect(recovered.single.scratch.path, scratchFile.path);
+    expect(scratchFile.lengthSync(), before);
     expect(File('${scratch.path}/recording_2002.raw').existsSync(), isFalse);
   });
 

@@ -10,7 +10,11 @@ Athena optics stays there: [../TODO/athena-optics-contract.md](../TODO/athena-op
 |------|--------|------|
 | [pipeline-contract.md](pipeline-contract.md) | **Implemented** | Feedback pipeline: features, protocols, lanes, Crown Start refused |
 | [data-plane-contract.md](data-plane-contract.md) | **Implemented** | Capture fork, inner zstd, assemble, soak, Android FGS |
-| [session-format-contract.md](session-format-contract.md) | **Implemented** | `.neurofeed` v5 bytes. Human spec: [../../README_feedback_format.md](../../README_feedback_format.md) |
+| [fileformat_v6.md](fileformat_v6.md) | **Implemented / LOCKED** | `.neurofeed` v6 (NFED6): unified recording+feedback metadata, container layout, computed Trust extras. Human spec: [../../README_feedback_format.md](../../README_feedback_format.md) |
+
+Archived (historical v5 / NFED5):
+[../archive/session-format-contract-v5.md](../archive/session-format-contract-v5.md).
+Do not treat it as current law.
 
 Do not reopen Key Decisions. Intentional deviations need a written why
 before merge.

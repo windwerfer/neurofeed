@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
-import 'package:neurofeed/src/session_v5/computed_frame.dart' as dart;
+import 'package:neurofeed/src/session_format/computed_frame.dart' as dart;
 import 'package:neurofeed/src/feedback/computed_sampler.dart';
 import 'package:neurofeed/src/feedback/crash_recovery.dart';
 import 'package:neurofeed/src/feedback/feedback_recorder.dart';
@@ -98,11 +98,11 @@ void main() {
         path: '/tmp/session_abc.neurofeed',
       );
       expect(rec.sessionId, 'abc');
-      expect(rec.scratchV5Path, '/tmp/session_abc.neurofeed');
+      expect(rec.scratchPath, '/tmp/session_abc.neurofeed');
     });
   });
 
-  group('v5 assemble + charts', () {
+  group('.neurofeed assemble + charts', () {
     setUpAll(() async {
       await RustLib.init(
         externalLibrary: ExternalLibrary.open(_rustLibPath),
@@ -136,17 +136,17 @@ void main() {
       await rec.stop();
     });
 
-    test('JSONL → FFI → containerEncodeV5 → v5ExtractComputed round-trips t',
+    test('JSONL → FFI → containerEncode → extractComputed round-trips t',
         () {
       final dartFrames = [_dartFrame(0), _dartFrame(1), _dartFrame(2)];
       final ffiFrames = dartFrames.map(toFfiFrame).toList();
-      final v5 = assembleV5Container(
+      final container = assembleContainer(
         thumbnail: placeholderWebP,
         metadataJson: {'protocol': 'drowsiness'},
         computedFrames: ffiFrames,
         rawBody: sessionHeaderBytes(),
       );
-      final extracted = v5ExtractComputed(bytes: v5);
+      final extracted = extractComputed(bytes: container);
       expect(extracted.map((f) => f.t), [0, 1, 2]);
       expect(extracted.first.bands, hasLength(4));
       expect(extracted.first.bands[1][2], closeTo(221.0, 0.01));
@@ -196,14 +196,14 @@ void main() {
       expect(filled.stats.avgBpm, closeTo(72, 0.01));
     });
 
-    test('empty thumbnail assemble does not throw; magic is NFED5\\0', () {
-      final v5 = assembleV5Container(
+    test('empty thumbnail assemble does not throw; magic is NFED6\\0', () {
+      final container = assembleContainer(
         thumbnail: const [],
         metadataJson: {'protocol': 'drowsiness'},
         computedFrames: const [],
         rawBody: sessionHeaderBytes(),
       );
-      expect(v5.sublist(0, 6), [0x4E, 0x46, 0x45, 0x44, 0x35, 0x00]);
+      expect(container.sublist(0, 6), [0x4E, 0x46, 0x45, 0x44, 0x36, 0x00]);
     });
 
     test('publishSession writes history not scratch; SQLite row; no summary',
@@ -241,7 +241,7 @@ void main() {
       expect(list.first.id, 'abc123');
       final bytes = await store.readContainer('abc123');
       expect(bytes, isNotNull);
-      final head = v5ParseHead(bytes: bytes!);
+      final head = parseHead(bytes: bytes!);
       final decoded = SessionMetadata.fromJsonBytes(head.metadataJson)!;
       expect(decoded.toJson().containsKey('summary'), isFalse);
       expect(decoded.music?.series, isNotEmpty);
@@ -294,7 +294,7 @@ void main() {
       );
     });
 
-    test('crash recovery leftover v5 save publishes to history not scratch',
+    test('crash recovery leftover .neurofeed save publishes to history not scratch',
         () async {
       final tmp = await Directory.systemTemp.createTemp('neurofeed_crash2_');
       addTearDown(() => tmp.delete(recursive: true));
@@ -303,7 +303,7 @@ void main() {
       await scratch.create(recursive: true);
 
       const id = '222';
-      final v5 = assembleV5Container(
+      final container = assembleContainer(
         thumbnail: placeholderWebP,
         metadataJson: {
           'protocol': 'drowsiness',
@@ -315,7 +315,7 @@ void main() {
         computedFrames: [toFfiFrame(_dartFrame(0))],
         rawBody: sessionHeaderBytes(),
       );
-      await File('${scratch.path}/session_$id.neurofeed').writeAsBytes(v5);
+      await File('${scratch.path}/session_$id.neurofeed').writeAsBytes(container);
       await File('${scratch.path}/session_$id.raw').writeAsBytes([1, 2, 3]);
 
       final recovered = await scanRecoverableSessions(storage);

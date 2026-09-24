@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:neurofeed/src/util/timezone.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:neurofeed/src/feedback/session_export.dart';
@@ -528,12 +529,10 @@ class _HistoryTileState extends ConsumerState<_HistoryTile>
     final meta = widget.summary.metadata;
     final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
     final stats = meta.stats;
-    final dateTime = DateTime.tryParse(meta.savedAt);
-    final date =
-        '${dateTime?.year ?? 0}-${dateTime?.month.toString().padLeft(2, '0') ?? '00'}-'
-        '${dateTime?.day.toString().padLeft(2, '0') ?? '00'} '
-        '${dateTime?.hour.toString().padLeft(2, '0') ?? '00'}:'
-        '${dateTime?.minute.toString().padLeft(2, '0') ?? '00'}';
+    final date = formatSessionWallClock(
+      meta.savedAt,
+      timeZone: meta.timeZone,
+    );
 
     final detailParts = <String>[
       if (meta.deviceModel != null && meta.deviceModel!.isNotEmpty)

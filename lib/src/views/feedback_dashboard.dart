@@ -9,6 +9,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/session_format/metadata.dart';
 import 'package:neurofeed/src/charts/band_style.dart' show bandColors, bandNames;
 import 'package:neurofeed/src/charts/smooth_path.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
@@ -110,17 +112,17 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       path = resolved;
     } else {
       final scratch = widget.sessionPath ??
-          ref.read(feedbackStateProvider.notifier).scratchV5Path;
+          ref.read(feedbackStateProvider.notifier).scratchPath;
       if (scratch == null) {
-        throw StateError('scratch v5 not assembled');
+        throw StateError('scratch .neurofeed not assembled');
       }
       if (!await File(scratch).exists()) {
-        throw StateError('scratch v5 missing');
+        throw StateError('scratch .neurofeed missing');
       }
       path = scratch;
     }
-    final frames = await v5ExtractComputedFromPath(path: path);
-    final head = await v5ParseHeadFromPath(path: path);
+    final frames = await extractComputedFromPath(path: path);
+    final head = await parseHeadFromPath(path: path);
     final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ??
         widget.metadata ??
         SessionMetadata(
@@ -327,11 +329,11 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     setState(() => _busy = true);
     final notifier = ref.read(feedbackStateProvider.notifier);
     try {
-      final path = notifier.scratchV5Path;
+      final path = notifier.scratchPath;
       final id = notifier.sessionId;
-      debugPrint('[dashboard] save: scratchV5Path=$path id=$id');
+      debugPrint('[dashboard] save: scratchPath=$path id=$id');
       if (path == null || id == null) {
-        debugPrint('[dashboard] save: no scratch v5 to publish');
+        debugPrint('[dashboard] save: no scratch .neurofeed to publish');
         return;
       }
       final thumb = encodeThumbnailWebP(_thumbnail ?? Uint8List(0));
@@ -355,18 +357,30 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
             stats: stats,
           );
       final patched = '${Directory.systemTemp.path}/nf_save_$id.neurofeed';
-      await v5RewriteHeadToPath(
+      await rewriteHeadToPath(
         srcPath: path,
         destPath: patched,
-        metadataJson: utf8.encode(jsonEncode(metadata.toJson())),
+                metadataJson: utf8.encode(
+          jsonEncode(
+            buildFeedbackMetadata(
+              meta: metadata,
+              subject: ref.read(settingsProvider).subjectInfo,
+            ),
+          ),
+        ),
         thumbnail: thumb,
       );
       final store = await ref.read(sessionStoreProvider.future);
-      await store.publishSession(id, metadata, encodedV5Path: patched);
+      await store.publishSession(
+        id,
+        metadata,
+        encodedPath: patched,
+        subject: ref.read(settingsProvider).subjectInfo,
+      );
       try {
         await File(patched).delete();
       } catch (_) {}
-      await notifier.deleteScratchV5();
+      await notifier.deleteScratch();
       notifier.reset();
       debugPrint('[dashboard] save: published session_$id.neurofeed');
       if (mounted) {

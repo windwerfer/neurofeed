@@ -5,6 +5,9 @@ Finished threads and historical notes. Not current orientation — see
 
 | File | What it was |
 |------|-------------|
+| `fileformat-v6-implementation.md` | v6 implementation checklist. **Complete.** Live law: [../contracts/fileformat_v6.md](../contracts/fileformat_v6.md) (NFED6). |
+| `session_vs_recording_metadata.md` | Dual metadata dialects (mistake). **Superseded** by unified v6 dialect in [../contracts/fileformat_v6.md](../contracts/fileformat_v6.md). |
+| `session-format-contract-v5.md` | Historical `.neurofeed` **v5 / NFED5** freeze. **Superseded** by [../contracts/fileformat_v6.md](../contracts/fileformat_v6.md). |
 | `handoff-spine.md` | Coordinator PR 1–7 for the data-plane spine. **Complete** on `refactor/spine`. Live spec: [../contracts/data-plane-contract.md](../contracts/data-plane-contract.md). |
 | `handoff-monitor.md` | Monitor series map (PRs 0–7). **Complete.** PR 8 cancelled. Follow-up: Bands PCHIP + 1 s Follow lead + in-pane chips. Live spec: [../monitor.md](../monitor.md). |
 | `handoff-monitor-perf.md` | Graph draw-path perf (PRs 1–7). **Complete.** PR 8 skipped. Live spec: [../monitor.md](../monitor.md). |

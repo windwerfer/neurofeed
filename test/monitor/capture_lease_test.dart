@@ -5,14 +5,14 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neurofeed/src/connection_provider.dart';
-import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/rust/api/muse.dart' hide DeviceInfo;
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/monitor/monitor_controller.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/monitor/recording/capture_lease.dart';
 import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -223,7 +223,7 @@ void main() {
       },
     );
 
-    test('assembleScratchV5 returns null → stays feedback, no tmp_*', () async {
+    test('assembleScratch returns null → stays feedback, no tmp_*', () async {
       container.read(monitorControllerProvider);
       app.debugSetConnected();
       await settle();

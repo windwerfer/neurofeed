@@ -30,6 +30,9 @@ import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/feedback/target_state.dart';
 import 'package:neurofeed/src/feedback/trust/trust_gestures.dart';
 import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
+import 'package:neurofeed/src/session_format/metadata.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/reve/model_engine.dart';
 import 'package:neurofeed/src/reve/models.dart';
@@ -38,6 +41,7 @@ import 'package:neurofeed/src/rust/api/features.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/reve.dart' as frb;
 import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/util/timezone.dart';
 
 export 'package:neurofeed/src/feedback/feedback_phase.dart';
 export 'package:neurofeed/src/feedback/gate_electrodes.dart'
@@ -175,12 +179,28 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             required threshold,
             required inTarget,
             required inTargetPct,
+            percentile,
+            thresholdPercentile,
+            heldBack,
+            inhibitTags,
+            clean,
+            dirtyReason,
+            betaRel,
+            deltaRel,
           }) {
             _computedSampler?.updateFeedback(
               ratio: ratio,
               threshold: threshold,
               inTarget: inTarget,
               inTargetPct: inTargetPct,
+              percentile: percentile,
+              thresholdPercentile: thresholdPercentile,
+              heldBack: heldBack,
+              inhibitTags: inhibitTags,
+              clean: clean,
+              dirtyReason: dirtyReason,
+              betaRel: betaRel,
+              deltaRel: deltaRel,
             );
           },
       onThresholdChanged: () {
@@ -260,7 +280,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// the guardrail is armed). Persisted as [SessionDrowsiness] metadata.
   final List<DrowsinessSample> _drowsinessSeries = [];
 
-  /// Computed frame sampler (1 Hz) for v5 session format.
+  /// Computed frame sampler (1 Hz) for `.neurofeed` session format (NFED6).
   ComputedSampler? _computedSampler;
 
   /// Wall-clock anchors for the calibration timeline. [_sessionStartAt] is set
@@ -268,6 +288,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// training/feedback begins. Their difference is the training-boundary
   /// offset used to trim the displayed window.
   DateTime? _sessionStartAt;
+  String? _sessionTimeZone;
   DateTime? _trainingStartAt;
   bool _usedStartAnyway = false;
   bool _skipCalibrationRequested = false;
@@ -275,6 +296,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   /// In-flight recalibrations that re-anchored the threshold mid-session.
   final List<SessionRecalibration> _recalibrations = [];
+
+  /// Root annotations assembled during the session (pause intervals, etc.).
+  final List<SessionAnnotation> _sessionAnnotations = [];
+  double? _pauseOnsetContent;
+  DateTime? _pauseWallBegan;
+  double? _interruptOnsetContent;
+  DateTime? _interruptWallBegan;
+  String? _interruptAnnType;
+  final List<Map<String, Object?>> _audioEvents = [];
 
   /// Music feedback: per-second cutoff trace + track transitions recorded
   /// while playing. Persisted as [SessionMusic] metadata (tracks + 1 Hz series).
@@ -694,11 +724,19 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _lastClenchDirtyAt = DateTime.fromMillisecondsSinceEpoch(0);
     _prevEyeState = 0;
     _sessionStartAt = DateTime.now();
+    _sessionTimeZone = captureIanaTimeZone();
     _trainingStartAt = null;
     _usedStartAnyway = false;
     _skipCalibrationRequested = false;
     _calibrationRecord = null;
     _recalibrations.clear();
+    _sessionAnnotations.clear();
+    _pauseOnsetContent = null;
+    _pauseWallBegan = null;
+    _interruptOnsetContent = null;
+    _interruptWallBegan = null;
+    _interruptAnnType = null;
+    _audioEvents.clear();
     _calibration.reset();
     _collectionEyes = null;
     _drowsinessSeries.clear();
@@ -950,6 +988,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           mean: _engine.baselineMean,
           stddev: _engine.baselineStddev,
         ),
+        baselineSamples: List.of(_engine.baselineSamples),
       ),
     );
     if (_sessionStartAt != null) {
@@ -1226,6 +1265,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         mean: _engine.baselineMean,
         stddev: _engine.baselineStddev,
       ),
+      baselineSamples: List.of(_engine.baselineSamples),
       phases: List.of(_calibration.clipPhases),
       recalibrations: List.of(_recalibrations),
     );
@@ -1256,6 +1296,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _reward.resetBands();
     _adaptTick = 0;
     _trainingStartAt ??= DateTime.now();
+    _audio.onSparseAudioEvent = _onSparseAudioEvent;
     _startTicker();
     _syncOutputs();
     try {
@@ -1277,23 +1318,87 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
+  void _onSparseAudioEvent(String type) {
+    final onset = state.elapsedSeconds.toDouble();
+    _audioEvents.add({'onset': onset, 'type': type});
+  }
+
   Future<void> pause() async {
+    if (state.phase != FeedbackPhase.playing) {
+      return;
+    }
+    _pauseOnsetContent = state.elapsedSeconds.toDouble();
+    _pauseWallBegan = DateTime.now();
     _setPhase(FeedbackPhase.paused);
     _ticker?.cancel();
+    _computedSampler?.pause();
+    _recorder.setRawPaused(true);
     await _audio.pause();
   }
 
   Future<void> resume() async {
+    if (state.phase != FeedbackPhase.paused) {
+      return;
+    }
+    _closeOpenPauseAnnotation();
+    _recorder.setRawPaused(false);
+    _computedSampler?.resume();
     _setPhase(FeedbackPhase.playing);
     await _audio.resume();
     _startTicker();
   }
 
-  /// End the session: assemble a scratch v5 **before** `phase = ended` (the
+  void _closeOpenPauseAnnotation() {
+    final onset = _pauseOnsetContent;
+    final began = _pauseWallBegan;
+    if (onset == null || began == null) {
+      return;
+    }
+    final duration = DateTime.now().difference(began).inMilliseconds / 1000.0;
+    _sessionAnnotations.add(
+      SessionAnnotation(
+        onset: onset,
+        duration: duration < 0 ? 0 : duration,
+        type: 'pause',
+      ),
+    );
+    _pauseOnsetContent = null;
+    _pauseWallBegan = null;
+  }
+
+  /// End the session: assemble a scratch `.neurofeed` **before** `phase = ended` (the
   /// session view navigates on that transition), then stop audio.
+  void _closeOpenInterruptAnnotation() {
+    final onset = _interruptOnsetContent;
+    final began = _interruptWallBegan;
+    final type = _interruptAnnType;
+    if (onset == null || began == null || type == null) {
+      return;
+    }
+    final duration = DateTime.now().difference(began).inMilliseconds / 1000.0;
+    _sessionAnnotations.add(
+      SessionAnnotation(
+        onset: onset,
+        duration: duration < 0 ? 0 : duration,
+        type: type,
+      ),
+    );
+    _interruptOnsetContent = null;
+    _interruptWallBegan = null;
+    _interruptAnnType = null;
+  }
+
   Future<void> end() async {
     if (state.phase == FeedbackPhase.ended) {
       return;
+    }
+    _audio.onSparseAudioEvent = null;
+    if (state.phase == FeedbackPhase.paused) {
+      _closeOpenPauseAnnotation();
+      _recorder.setRawPaused(false);
+    }
+    if (state.phase == FeedbackPhase.interrupted) {
+      _closeOpenInterruptAnnotation();
     }
     _ticker?.cancel();
     _interruptTimer?.cancel();
@@ -1304,18 +1409,21 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     unawaited(_clearEnabledFeatures());
     await _recorder.flushSession();
     try {
-      final path = await _recorder.assembleScratchV5(
-        buildSessionMetadata().toJson(),
+      final path = await _recorder.assembleScratch(
+        buildFeedbackMetadata(
+          meta: buildSessionMetadata(),
+          subject: _ref.read(settingsProvider).subjectInfo,
+        ),
       );
       if (path == null) {
-        debugPrint('[feedback] end: scratch v5 assemble failed; temps kept');
+        debugPrint('[feedback] end: scratch .neurofeed assemble failed; temps kept');
       }
     } catch (e, st) {
-      debugPrint('[feedback] end: scratch v5 assemble failed: $e\n$st');
+      debugPrint('[feedback] end: scratch .neurofeed assemble failed: $e\n$st');
     }
     _setPhase(
       FeedbackPhase.ended,
-      extra: 'scratch=${_recorder.scratchV5Path ?? 'null'}',
+      extra: 'scratch=${_recorder.scratchPath ?? 'null'}',
     );
     if (!_recorder.isRecording) {
       await _ref
@@ -1359,11 +1467,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _reward.reset();
     _bus.reset();
     _sessionStartAt = null;
+    _sessionTimeZone = null;
     _trainingStartAt = null;
     _usedStartAnyway = false;
     _skipCalibrationRequested = false;
     _calibrationRecord = null;
     _recalibrations.clear();
+    _sessionAnnotations.clear();
+    _pauseOnsetContent = null;
+    _pauseWallBegan = null;
     _collectionEyes = null;
     _gateElectrodes = List.of(defaultGateElectrodes);
     _featureOverride.clear();
@@ -1372,17 +1484,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     debugPrint('[feedback] phase=idle');
   }
 
-  String? get sessionFilePath => _recorder.scratchV5Path;
+  String? get sessionFilePath => _recorder.scratchPath;
 
-  String? get scratchV5Path => _recorder.scratchV5Path;
+  String? get scratchPath => _recorder.scratchPath;
 
   String? get sessionId => _recorder.sessionId;
 
-  /// Ended session with a scratch v5 that has not been saved or discarded.
+  /// Ended session with a scratch `.neurofeed` that has not been saved or discarded.
   bool get hasUnsavedSession =>
-      state.phase == FeedbackPhase.ended && scratchV5Path != null;
+      state.phase == FeedbackPhase.ended && scratchPath != null;
 
-  /// Re-attach an assembled scratch v5 after a process restart so the
+  /// Re-attach an assembled scratch `.neurofeed` after a process restart so the
   /// summary can Save / Discard. Does not discard existing files.
   void restoreEndedSession({
     required String id,
@@ -1431,9 +1543,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     await _ref.read(monitorControllerProvider.notifier).releaseFeedbackLease();
   }
 
-  Future<void> deleteScratchV5() => _recorder.deleteScratchV5();
+  Future<void> deleteScratch() => _recorder.deleteScratch();
 
-  /// Snapshot metadata for the scratch v5 at end() and the rewritten file
+  /// Snapshot metadata for the scratch `.neurofeed` at end() and the rewritten file
   /// on Save. No `summary` / 400-bucket fields. Drowsiness is scalars only.
   SessionMetadata buildSessionMetadata({
     String notes = '',
@@ -1455,10 +1567,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       durationS: fb.elapsedSeconds,
       sound: fb.soundName,
       feedbackSound: fb.rewardOutput.name,
-      savedAt: DateTime.now().toIso8601String(),
-      startedAt: _sessionStartAt?.toIso8601String(),
+      savedAt: formatIso8601WithOffset(DateTime.now()),
+      startedAt: _sessionStartAt == null
+          ? null
+          : formatIso8601WithOffset(_sessionStartAt!),
+      timeZone: _sessionTimeZone ?? captureIanaTimeZone(),
       notes: notes,
       sessionId: sessionId,
+      annotations: assembleAnnotations(
+        intervals: _sessionAnnotations,
+        gestures: settings.markersInFeedbackEnabled ? gestureMarkers : const [],
+      ),
+      audioEvents: List.of(_audioEvents),
       stats: stats == null
           ? null
           : SessionStatsData(
@@ -1506,12 +1626,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         backgroundBinauralBeatHz: settings.backgroundBinauralBeatHz,
         markersInFeedbackEnabled: settings.markersInFeedbackEnabled,
         eyeMarkersEnabled: settings.eyeMarkersEnabled,
+        inhibitCeilingOverrides: () {
+          final o = settings.inhibitCeilingOverrides(fb.protocol);
+          return o.isEmpty ? null : o;
+        }(),
       ),
       avgSpo2: stats?.avgSpo2,
       peakAlphaHz: stats?.peakAlphaFreq,
       peakAlphaPower: stats?.peakAlphaPower,
       pctInTarget: stats?.targetPct,
       avgSleepDir: drowsy?.meanSleepDir,
+      userId: settings.subjectInfo.id.isEmpty ? null : settings.subjectInfo.id
     );
   }
 
@@ -1566,11 +1691,22 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     if (state.phase != FeedbackPhase.interrupted) {
       _interruptWasPlaying = state.phase == FeedbackPhase.playing;
+      _interruptOnsetContent = state.elapsedSeconds.toDouble();
+      _interruptWallBegan = DateTime.now();
+      _interruptAnnType = kind == FeedbackInterruptKind.disconnect
+          ? 'disconnect'
+          : 'bad_quality';
       _ticker?.cancel();
       _audio.pause();
       if (kind == FeedbackInterruptKind.disconnect) {
         _startInterruptTimer();
       }
+    } else if (_interruptAnnType != null &&
+        kind == FeedbackInterruptKind.disconnect &&
+        _interruptAnnType != 'disconnect') {
+      // Escalate bad_quality → disconnect without closing the open span yet;
+      // keep onset, retarget type.
+      _interruptAnnType = 'disconnect';
     }
     _interruptKind = kind;
     final showCountdown = kind == FeedbackInterruptKind.disconnect;
@@ -1611,6 +1747,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// running when interrupted it resumes playing; a user-initiated pause is
   /// restored otherwise.
   void _recoverInterruption() {
+    _closeOpenInterruptAnnotation();
     final wasPlaying = _interruptWasPlaying;
     _clearInterruption();
     if (wasPlaying) {
@@ -1810,6 +1947,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             required delta,
             required warning,
             threshold,
+            featurePercentile,
+            warnOver,
+            ceilingOver,
+            clean,
+            dirtyReason,
           }) {
             _computedSampler?.updateGuardrail(
               sleepDir: sleepDir,
@@ -1817,6 +1959,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
               delta: delta,
               warning: warning,
               threshold: threshold,
+              featurePercentile: featurePercentile,
+              warnOver: warnOver,
+              ceilingOver: ceilingOver,
+              clean: clean,
+              dirtyReason: dirtyReason,
             );
           },
     );
@@ -1858,18 +2005,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       }
       if (state.phase == FeedbackPhase.playing) {
         final native = _guard.bandMath ? _guard.lastDelta : _guard.lastSleepDir;
-        _trust.pushGuard(
-          TrustGuardSample(
-            t: _trustElapsed(),
-            featurePercentile: _guard.percentileOf(native) ?? 50,
-            warningActive: _guard.warningActive,
-            warnOver: _guard.warnOver,
-            ceilingOver: _guard.ceilingOver,
-            lastDelta: _guard.lastDelta,
-            clean:
-                _sampleIsClean &&
-                _reward.padsUsable(_ref.read(appStateProvider).signalQuality),
-            dirtyReason: _reward.lastDirty
+        final guardClean =
+            _sampleIsClean &&
+            _reward.padsUsable(_ref.read(appStateProvider).signalQuality);
+        final guardDirtyReason = guardClean
+            ? null
+            : (_reward.lastDirty
                 ? _reward.lastDirtyReason
                 : artifactDirtyReason(
                     now: DateTime.now(),
@@ -1877,8 +2018,31 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
                     lastJawAt: _lastClenchDirtyAt,
                     lastBlinkAt: _lastBlinkDirtyAt,
                     buffer: movementBuffer,
-                  ),
+                  ));
+        final featurePct = _guard.percentileOf(native) ?? 50.0;
+        _trust.pushGuard(
+          TrustGuardSample(
+            t: _trustElapsed(),
+            featurePercentile: featurePct,
+            warningActive: _guard.warningActive,
+            warnOver: _guard.warnOver,
+            ceilingOver: _guard.ceilingOver,
+            lastDelta: _guard.lastDelta,
+            clean: guardClean,
+            dirtyReason: guardDirtyReason,
           ),
+        );
+        _computedSampler?.updateGuardrail(
+          sleepDir: _guard.lastSleepDir,
+          clarity: _guard.lastClarity,
+          delta: _guard.lastDelta,
+          warning: _guard.warningActive,
+          threshold: _guard.threshold,
+          featurePercentile: featurePct,
+          warnOver: _guard.warnOver,
+          ceilingOver: _guard.ceilingOver,
+          clean: guardClean,
+          dirtyReason: guardDirtyReason?.name,
         );
       }
     }

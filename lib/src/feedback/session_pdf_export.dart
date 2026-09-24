@@ -24,14 +24,14 @@ Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) asyn
   if (container == null) {
     return null;
   }
-  final head = v5ParseHead(bytes: container);
+  final head = parseHead(bytes: container);
   final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ?? session.metadata;
   final protocol = await _loadProtocolInfo(meta.protocol);
   if (protocol == null) {
     return null;
   }
-  final frames = v5ExtractComputed(bytes: container);
-  final prepared = prepareChartDataFromV5(
+  final frames = extractComputed(bytes: container);
+  final prepared = prepareChartDataFromContainer(
     frames: frames,
     bytes: container,
     trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,

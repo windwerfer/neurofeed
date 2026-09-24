@@ -95,7 +95,7 @@ class _RecordingDashboardViewState
   double _pinchFocalElapsed = 0;
   double _pinchFocalFraction = 0.5;
 
-  /// v5 fixed header size; [V5Header.rawOffset] ends metadata+computed.
+  /// NFED6 fixed header size; [ContainerHeader.rawOffset] ends metadata+computed.
   /// raw_length is not stored (file_size - raw_offset).
   static const int _v5HeaderSize = 68;
 
@@ -155,10 +155,10 @@ class _RecordingDashboardViewState
     if (headerBytes == null || headerBytes.isEmpty) {
       throw StateError('Recording file not found ($name)');
     }
-    final header = v5ParseHeader(bytes: Uint8List.fromList(headerBytes));
+    final header = parseHeader(bytes: Uint8List.fromList(headerBytes));
     final rawOffset = header.rawOffset.toInt();
     if (rawOffset < _v5HeaderSize) {
-      throw StateError('Invalid v5 raw_offset ($rawOffset) in $name');
+      throw StateError('Invalid container raw_offset ($rawOffset) in $name');
     }
 
     // Phase 2: prefix through raw_offset → metadata + computed (no raw body).
@@ -169,13 +169,13 @@ class _RecordingDashboardViewState
     final prefix = Uint8List.fromList(headBytes);
     RecordingMetadata? meta;
     try {
-      final head = v5ParseHead(bytes: prefix);
+      final head = parseHead(bytes: prefix);
       final decoded = jsonDecode(utf8.decode(head.metadataJson));
       if (decoded is Map<String, dynamic>) {
         meta = RecordingMetadata.fromJson(decoded);
       }
     } catch (_) {}
-    final frames = v5ExtractComputed(bytes: prefix);
+    final frames = extractComputed(bytes: prefix);
     final origin = _originMs(null, meta);
     final newest = _newestElapsedFromComputed(frames, meta);
     final n = _channelCount(null, meta, frames);
@@ -223,7 +223,7 @@ class _RecordingDashboardViewState
         throw StateError('Recording file not found ($name)');
       }
       final full = Uint8List.fromList(bytes);
-      final raw = v5ExtractRaw(bytes: full);
+      final raw = extractRaw(bytes: full);
       final data = sessionParseBody(bytes: raw);
       final newest = math.max(
         loaded.newestElapsed,

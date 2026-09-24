@@ -9,10 +9,10 @@ use crate::api::muse::{
     TelemetrySnapshot, XyzDto,
 };
 use crate::api::session_format::{
-    encode_session_event, ComputedFrame, FeedbackInfo, GuardrailInfo, PeakAlphaInfo, V5_MAGIC,
+    encode_session_event, ComputedFrame, FeedbackInfo, GuardrailInfo, PeakAlphaInfo, V6_MAGIC,
 };
 use crate::spine::capture::{
-    capture_append_computed_line, capture_assemble_v5, capture_discard, capture_drop_count,
+    capture_append_computed_line, capture_assemble, capture_discard, capture_drop_count,
     capture_flush, capture_start, capture_write_errors, on_dto, test_lock,
 };
 
@@ -263,12 +263,14 @@ fn computed_frames(equiv_secs: u64) -> Vec<ComputedFrame> {
                 clarity: 1.0,
                 warning: false,
                 delta: 0.0,
+                            ..Default::default()
             },
             feedback: FeedbackInfo {
                 ratio: 1.0,
                 threshold: 1.0,
                 in_target: true,
                 pct: 0.5,
+                            ..Default::default()
             },
             gestures: Vec::new(),
         })
@@ -322,7 +324,7 @@ pub fn run_current_assemble_soak(equiv_secs: u64) -> SoakReport {
     let mut write_errors = capture_write_errors();
     let metadata = br#"{"formatVersion":5,"kind":"recording","device":"classic-muse-soak"}"#;
     let assemble_t0 = Instant::now();
-    let dest_out = capture_assemble_v5(metadata.to_vec(), Vec::new());
+    let dest_out = capture_assemble(metadata.to_vec(), Vec::new());
     let assemble_ms = assemble_t0.elapsed().as_millis();
     let rss_kb_after_assemble = rss_kb();
     let (container_bytes, container_magic_ok) = match dest_out {
@@ -336,7 +338,7 @@ pub fn run_current_assemble_soak(equiv_secs: u64) -> SoakReport {
                     f.read_exact(&mut magic).ok()
                 })
                 .is_some()
-                && magic == V5_MAGIC;
+                && magic == V6_MAGIC;
             let _ = std::fs::remove_file(&p);
             (len, ok)
         }
@@ -362,7 +364,7 @@ pub fn run_current_assemble_soak(equiv_secs: u64) -> SoakReport {
         rss_kb_after_fill,
         rss_kb_after_read,
         rss_kb_after_assemble,
-        assemble_path: "capture_assemble_v5 copy .raw (writer thread, no outer zstd)",
+        assemble_path: "capture_assemble copy .raw (writer thread, no outer zstd)",
         container_magic_ok,
     }
 }

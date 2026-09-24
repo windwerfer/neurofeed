@@ -14,7 +14,7 @@ import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
-import 'package:neurofeed/src/session_v5/placeholder_webp.dart';
+import 'package:neurofeed/src/session_format/placeholder_webp.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -90,7 +90,7 @@ void main() {
       );
       expect(file.lengthSync(), greaterThan(placeholderWebP.length));
 
-      final head = v5ParseHead(
+      final head = parseHead(
         bytes: Uint8List.fromList(file.readAsBytesSync()),
       );
       final meta = jsonDecode(utf8.decode(head.metadataJson)) as Map;
@@ -114,13 +114,13 @@ void main() {
     final notifier = container.read(monitorControllerProvider.notifier);
     await notifier.startRecording();
     await settle();
-    final scratchV5 = await notifier.stopRecording(promptSave: true);
+    final scratchFile = await notifier.stopRecording(promptSave: true);
     await settle();
-    expect(scratchV5, isNotNull);
+    expect(scratchFile, isNotNull);
 
     await notifier.discardPendingRecording();
     await settle();
-    expect(scratchV5!.existsSync(), isFalse);
+    expect(scratchFile!.existsSync(), isFalse);
     expect(
       container.read(monitorControllerProvider).pendingScratchPath,
       isNull,

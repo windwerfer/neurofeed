@@ -7,10 +7,10 @@ import 'package:neurofeed/src/monitor/cache/file_backed_source.dart';
 import 'package:neurofeed/src/monitor/cache/recording_index.dart';
 import 'package:neurofeed/src/monitor/recording/monitor_recorder.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
-import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/rust/api/muse.dart' hide DeviceInfo;
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/settings.dart';
 
 final String _rustLibPath =
@@ -26,7 +26,7 @@ RecordingMetadata _meta() => RecordingMetadata(
   startedAt: DateTime.utc(2026, 9, 7),
   elapsedSeconds: 0,
   durationS: 0,
-  device: const DeviceInfoV5(
+  device: const DeviceInfo(
     name: 'test',
     id: 'sim:muse-2',
     firmware: 'Classic',
