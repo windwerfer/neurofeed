@@ -61,4 +61,30 @@ void main() {
     expect(fb['durationMinutes'], 15);
     expect(json.containsKey('protocol'), isFalse);
   });
+
+  test('fromJson reads nested feedback{} dialect (History/export)', () {
+    final built = buildFeedbackMetadataV6(
+      meta: SessionMetadata(
+        protocol: 'drowsiness',
+        durationMinutes: 15,
+        elapsedSeconds: 100,
+        sound: 'Ambient',
+        savedAt: '2026-09-24T17:30:00.000+07:00',
+        startedAt: '2026-09-24T17:20:00.000+07:00',
+        timeZone: 'Asia/Bangkok',
+        sessionId: 'fb-1',
+        pctInTarget: 42.5,
+        userId: 'should-be-overridden-by-subject',
+      ),
+      subject: const SubjectInfo(id: 'anon-1', nickname: 'River'),
+    );
+    final restored = SessionMetadata.fromJson(built)!;
+    expect(restored.protocol, 'drowsiness');
+    expect(restored.durationMinutes, 15);
+    expect(restored.timeZone, 'Asia/Bangkok');
+    expect(restored.userId, 'anon-1');
+    expect(restored.pctInTarget, 42.5);
+    expect(restored.sessionId, 'fb-1');
+    expect(built.containsKey('protocol'), isFalse);
+  });
 }

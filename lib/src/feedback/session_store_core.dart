@@ -6,6 +6,8 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/session_v5/metadata_v6.dart';
+import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/feedback/session_sqlite.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
@@ -103,6 +105,7 @@ class SessionStore {
             feedbackEngine: r.feedbackEngine,
             userId: r.userId,
             sessionId: r.sessionId,
+            timeZone: r.timeZone,
           ),
         ),
     ];
@@ -193,6 +196,7 @@ class SessionStore {
   Future<SessionSummary> publishSession(
     String id,
     SessionMetadata metadata, {
+    SubjectInfo? subject,
     Uint8List? encodedV5,
     String? encodedV5Path,
     List<int>? rawBody,
@@ -223,9 +227,14 @@ class SessionStore {
             ? thumbnail
             : placeholderWebP,
       );
+      final subjectInfo = subject ??
+          SubjectInfo(id: metadata.userId ?? '');
       final container = assembleV5Container(
         thumbnail: thumb,
-        metadataJson: metadata.toJson(),
+        metadataJson: buildFeedbackMetadataV6(
+          meta: metadata,
+          subject: subjectInfo,
+        ),
         computedFrames: frames,
         rawBody: Uint8List.fromList(rawBody ?? const []),
       );
@@ -236,17 +245,25 @@ class SessionStore {
     final durationS = metadata.durationS != 0
         ? metadata.durationS
         : metadata.elapsedSeconds;
+    final subjectInfoForRow = subject ??
+        SubjectInfo(id: metadata.userId ?? '');
+    final userId = subjectInfoForRow.id.isNotEmpty
+        ? subjectInfoForRow.id
+        : metadata.userId;
+    final savedAtDt =
+        DateTime.tryParse(metadata.savedAt)?.toUtc() ?? DateTime.now().toUtc();
+    final startedAtDt =
+        DateTime.tryParse(metadata.startedAt ?? metadata.savedAt)?.toUtc() ??
+            savedAtDt;
     final sqlite = await _sqlite;
     await sqlite.upsertSession(
       SessionRow(
         id: id,
         path: _containerName(id),
-        formatVersion: 5,
+        formatVersion: 6,
         appVersion: appVersion,
-        savedAt: DateTime.tryParse(metadata.savedAt) ?? DateTime.now(),
-        startedAt:
-            DateTime.tryParse(metadata.startedAt ?? metadata.savedAt) ??
-            DateTime.now(),
+        savedAt: savedAtDt,
+        startedAt: startedAtDt,
         durationS: durationS,
         protocol: metadata.protocol,
         kind: 'feedback',
@@ -279,7 +296,9 @@ class SessionStore {
         modelKind: metadata.modelKind,
         modelSha256: metadata.modelSha256,
         feedbackEngine: metadata.feedbackEngine,
-        userId: metadata.userId,
+        userId: userId,
+        timeZone: metadata.timeZone,
+        savedAtMs: savedAtDt.millisecondsSinceEpoch,
         sessionId: metadata.sessionId,
         notesPreview: metadata.notes.isNotEmpty
             ? (metadata.notes.length > 50
@@ -401,6 +420,8 @@ class SessionStore {
             feedbackEngine: existing.feedbackEngine,
             userId: existing.userId,
             sessionId: existing.sessionId,
+            timeZone: existing.timeZone,
+            savedAtMs: existing.savedAtMs,
             notesPreview: notes.length > 50 ? notes.substring(0, 50) : notes,
             fileSize: destLen,
             mtime: DateTime.now().millisecondsSinceEpoch,

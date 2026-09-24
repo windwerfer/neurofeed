@@ -9,6 +9,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/session_v5/metadata_v6.dart';
 import 'package:neurofeed/src/charts/band_style.dart' show bandColors, bandNames;
 import 'package:neurofeed/src/charts/smooth_path.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
@@ -358,11 +360,23 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       await v5RewriteHeadToPath(
         srcPath: path,
         destPath: patched,
-        metadataJson: utf8.encode(jsonEncode(metadata.toJson())),
+                metadataJson: utf8.encode(
+          jsonEncode(
+            buildFeedbackMetadataV6(
+              meta: metadata,
+              subject: ref.read(settingsProvider).subjectInfo,
+            ),
+          ),
+        ),
         thumbnail: thumb,
       );
       final store = await ref.read(sessionStoreProvider.future);
-      await store.publishSession(id, metadata, encodedV5Path: patched);
+      await store.publishSession(
+        id,
+        metadata,
+        encodedV5Path: patched,
+        subject: ref.read(settingsProvider).subjectInfo,
+      );
       try {
         await File(patched).delete();
       } catch (_) {}
