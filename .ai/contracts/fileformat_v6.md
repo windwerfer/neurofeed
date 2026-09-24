@@ -28,7 +28,7 @@ Also:
 - Every file carries explicit `kind`, `formatVersion`, `appVersion`.
 - Shared nested `stats` for both kinds (feedback-only reward/guard scalars live under `feedback` or under `stats` only when meaningful for both — prefer `feedback.*` for training-only).
 - Fit / usable-signal summary and battery start/end when cheap.
-- **Gestures:** metadata/session event markers today (`GestureMarker.at`); `streams.gestures` is a stub (`enabled: false`). Do not invent a raw tag without a format PR. Clarify stream enablement vs event list.
+- **Gestures:** instant user-interaction events live in root `annotations[]` (same timeline as pause / bad_quality / disconnect). `streams.gestures` remains an enablement stub (`enabled: false`) until a raw gesture stream exists — not a duplicate event list. Do not invent a raw tag without a format PR.
 
 ---
 
@@ -74,7 +74,7 @@ Written by `buildSessionMetadata()`:
 - Timing / notes: `protocol`, `durationMinutes`, `elapsedSeconds`, `durationS`, `sound`, `savedAt`, `startedAt`, `notes`, `sessionId`
 - Flat device: `deviceName`, `deviceModel`, `deviceId` (not nested `device`)
 - `recordedChannels`, `recordedData` (stream name list)
-- `gestures[]` (`type`, `at` seconds) when markers enabled
+- `gestures[]` (`type`, `at` seconds) when markers enabled — **v6:** fold into root `annotations[]` (see Annotations model); do not keep a parallel `feedback.gestures` list
 - Nested: `calibration`, `drowsiness`, `music`, `sessionSettings` (incl. `guardFeature` / `guardModel`), optional `protocolJson`
 - Optional save-time `stats` blob: `peakAlphaFreq/Power`, `targetPct`, `stillnessPct`, `avgBpm`, `avgAlphaRel`
 - Flat mirrors (when stats present): `avgSpo2`, `peakAlphaHz`, `peakAlphaPower`, `pctInTarget`, `avgSleepDir`
@@ -110,7 +110,7 @@ Compute from computed JSONL (and raw telemetry if needed) at assemble/save. Pref
 | Session duration | Already have `durationS` / `elapsedSeconds` | — |
 | Named band stats | mean α (abs), mean α/θ, frontal–temporal α asymmetry, cross-ch α variance — over **usable** seconds only | **yes** (tune formulas) |
 | `% overshoot` / held | Needs a defined yMax policy; overshoot today is **paint-time** on Monitor Bands | **yes** |
-| Compact `annotations` intervals | Single `{onset,duration,type}` list for pause / bad_quality / disconnect (see Annotations model) | no; list is canonical, `stats.annotationSeconds` optional |
+| Compact `annotations` timeline | Single `{onset,duration,type}` list for pause / bad_quality / disconnect **and** gesture instants (`duration: 0`) (see Annotations model) | no; list is canonical, `stats.annotationSeconds` optional |
 | Feedback-only: `% in target`, guard warn count, mean sleepDir | Already extracted for sqlite; put in `feedback` / shared `stats` cleanly | no |
 
 Do **not** dump full 1 Hz series into metadata.
@@ -137,10 +137,10 @@ Shared root for `kind: "recording"` and (with `feedback` attached) for feedback.
 ```
 identity: formatVersion, appVersion, kind, savedAt, startedAt, elapsedSeconds, durationS, notes
 device:   { name, id, firmware, model, sensors, channelCount, channelLabels }
-streams:  { ten keys… }   // gestures enablement stub; see Gestures
+streams:  { ten keys… }   // gestures enablement stub only; markers → annotations
 stats:    { … aggregates; annotationSeconds?: { pause, bad_quality, disconnect }; experimental?: { … } }
-annotations: [ { onset, duration, type }, … ]   // canonical timeline; see Annotations model
-feedback: { … }   // ONLY when kind == "feedback"
+annotations: [ { onset, duration, type }, … ]   // unified timeline: quality intervals + gesture instants
+feedback: { … }   // ONLY when kind == "feedback"; NO gestures[] list
 ```
 
 ### Example — `kind: "recording"`
@@ -198,8 +198,10 @@ feedback: { … }   // ONLY when kind == "feedback"
     }
   },
   "annotations": [
+    { "onset": 45.0, "duration": 0, "type": "double_blink" },
     { "onset": 120.0, "duration": 15.0, "type": "bad_quality" },
     { "onset": 200.0, "duration": 10.0, "type": "pause" },
+    { "onset": 312.0, "duration": 0, "type": "double_jaw_clench" },
     { "onset": 400.0, "duration": 8.0, "type": "disconnect" }
   ]
 }
@@ -208,56 +210,105 @@ feedback: { … }   // ONLY when kind == "feedback"
 Notes:
 
 - Omit top-level `feedback` on recordings.
-- Root `annotations` is the **canonical** timeline. Optional `stats.annotationSeconds` is derived from that list (sum of `duration` per `type`); never a second source of truth.
-- `annotations` must stay compact (merge adjacent same-`type` runs). Not a 1 Hz dump.
-- `streams.gestures.enabled` remains false until a real stream exists; gesture **markers** (feedback) live under `feedback.gestures` (may later fold into the same `annotations` list with other `type` values).
+- Root `annotations` is the **canonical** timeline (quality/pause/disconnect **and** gesture / interaction events). Optional `stats.annotationSeconds` is derived from interval types only (sum of `duration` per `type` for types with `duration > 0`); never a second source of truth. Instant gestures (`duration: 0`) do not contribute seconds.
+- `annotations` must stay compact (merge adjacent same-`type` interval runs). Instant events are not merged across time. Not a 1 Hz dump.
+- `streams.gestures.enabled` remains false until a real raw gesture stream exists. Gesture **markers** are rows in `annotations[]` — **not** a parallel `feedback.gestures` array (single source of truth).
 
 ---
 
 ## Annotations model (locked)
 
-**Decision:** one extensible root array `annotations[]` of interval objects. **Not** three parallel top-level bags `paused{}` / `unusable{}` / `disconnected{}` (anti-pattern — rejected as the primary model). **Not** `gaps` as the root key (jargon; does not map to EDF+/BIDS).
+**Decision:** one extensible root array `annotations[]` of `{ onset, duration, type }` objects. **Not** three parallel top-level bags `paused{}` / `unusable{}` / `disconnected{}` (anti-pattern — rejected as the primary model). **Not** `gaps` as the root key (jargon; does not map to EDF+/BIDS). **Not** a separate `feedback.gestures[]` list (duplicate timeline — rejected; see Gestures / interactions).
 
 ### Canonical shape
 
 ```json
 "annotations": [
+  { "onset": 45.0, "duration": 0, "type": "double_blink" },
   { "onset": 120.0, "duration": 15.0, "type": "bad_quality" },
   { "onset": 200.0, "duration": 10.0, "type": "pause" },
+  { "onset": 312.0, "duration": 0, "type": "double_jaw_clench" },
   { "onset": 400.0, "duration": 8.0, "type": "disconnect" }
 ]
 ```
 
-Field names: camelCase JSON style of neurofeed. Interval keys intentionally match EDF+/BIDS nominators (`onset`, `duration`) so they are single-token camelCase already.
+Field names: camelCase JSON style of neurofeed. Interval keys intentionally match EDF+/BIDS nominators (`onset`, `duration`) so they are single-token camelCase already. `type` values are **snake_case** strings (quality + gesture alike).
 
 ### Locked names
 
 | Role | Locked name | Rejected / why |
 |---|---|---|
 | Root array | `annotations` | `gaps` (app jargon); `events` (BIDS file name — keep for export, not JSON root; overlaps task/gesture language); `segments` / `bad_segments` (BrainVision-ish but implies only rejectable spans; pause is intentional) |
-| Interval start | `onset` | `from` / `start` — not EDF+/BIDS |
+| Interval start | `onset` | `from` / `start` / `at` — not EDF+/BIDS; v5 gesture JSON used `at` — migrate to `onset` |
 | Interval length | `duration` | `to` / `end` — EDF+ TAL and BIDS `events.tsv` both use duration, not exclusive end |
-| Discriminator | `type` | `event` (vague; clashes with “events file”); `label` (EDF free text is the *value*); `trial_type` (BIDS task-condition column — wrong semantic for quality/pause) |
+| Discriminator | `type` | `event` (vague; clashes with “events file”); `label` (EDF free text is the *value*); `trial_type` (BIDS task-condition column — wrong semantic for quality/pause; OK as **export** column) |
 | User pause | `pause` | Keep; no universal EDF string. EEGLAB `boundary` / BrainVision `New Segment` mean *discontinuity after cut or resume* — different product meaning |
 | Low pad quality | `bad_quality` | `unusable` (neurofeed-only); `artifact` (usually blink/muscle); bare `BAD` (MNE convention is a *prefix*). Value **starts with `bad`** so MNE `reject_by_annotation` works if exported as description |
 | BLE / link loss | `disconnect` | `disconnected` (adjective; Muse sample string “Disconnected”); `signal_lost` (clearer clinically but farther from product `FeedbackInterruptKind.disconnect`) |
+| Double blink | `double_blink` | v5 `doubleBlink` camelCase — snake_case to match other `type` tokens; not EDF standard text (EDF has no blink token; free UTF-8 OK) |
+| Double jaw clench | `double_jaw_clench` | v5 `doubleClench` — spell out *jaw* (product/trust UI already says Jaw); `jaw_clench` reserved if single-clench detection is added later |
+| Eye up / down | `eye_up` / `eye_down` | v5 `eyeUp` / `eyeDown` — snake_case |
+
+### Gestures / interactions in `annotations` (locked)
+
+**A) Unified timeline — YES.** Root `annotations[]` holds:
+
+- Interval quality / session control: `pause` | `bad_quality` | `disconnect`
+- Instant user-interaction / gesture events: `double_blink` | `double_jaw_clench` | `eye_up` | `eye_down` (extensible)
+
+This matches EDF+ practice: one Annotations signal holds lights on/off, sleep stages, stimuli, responses, technician notes, button presses, and free-text events in the same TAL stream ([EDF+ §2.2](https://www.edfplus.info/specs/edfplus.html), [standard texts](https://www.edfplus.info/specs/edftexts.html); PhysioNet ERP-BCI / Sleep-EDF examples).
+
+**Instant events — `duration: 0` (locked).** Always include `duration` (never omit, never `null`):
+
+- BIDS `events.tsv` requires `duration`; **zero** means an impulse / instantaneous event.
+- EDF+ TAL allows *omitting* Duration when irrelevant; exporters may drop the `\x15Duration` segment when `duration == 0`.
+- One JSON shape for all rows keeps parsers simple.
+
+**B) Single source of truth — annotations only.** Do **not** also store a full `feedback.gestures[]` array of `{type, at}`. Optional feedback-only extras (protocol, training scalars, music, calibration) stay under `feedback.*`. If a UI needs a gesture count, derive it by filtering `annotations` where `type` ∈ gesture set, or add a cheap scalar later under `feedback.training` — never a second event list.
+
+`streams.gestures` remains `{ enabled, rateHz }` enablement for a future raw stream; it is **not** the marker list.
+
+### What EDF+ annotations typically hold (research summary)
+
+EDF+ stores arbitrary UTF-8 annotation texts in TALs (`Onset` [`\x15` `Duration`] `\x14` text… `\x00`). Common contents:
+
+| Category | Examples (EDF standard texts or practice) | neurofeed analogue |
+|---|---|---|
+| Time-keeping | Empty first TAL per data record (`+onset\x14\x14\x00`) | Container only — **not** rows in `annotations[]` |
+| Recording bounds | `Recording starts`, `Recording ends` | Implied by file; optional later |
+| Lights / environment | `Lights off`, `Lights on` | Free-text / future `type` if product needs |
+| Sleep staging | `Sleep stage W/N1/N2/N3/R/…` (duration required) | Out of scope for monitor/feedback v6 |
+| Respiratory / cardiac / movement scoring | `Apnea`, `Hypopnea`, `Limb movement`, `EEG arousal`, `Desaturation`, … | Out of scope |
+| Stimuli / responses / EP | Unique repeated texts e.g. `Stimulus click…`, `Response…`, pre-stimulus beeps (auditory EP example) | Gesture / interaction `type`s |
+| Technician / free notes | Turning in bed, door close, arbitrary UTF-8 | `notes` is **file-level**; per-time notes could be future `type: "note"` + text field (not v6) |
+| Routine EEG events | `Eyes Closed`, `Hyperventilation` | Closest to our blink/eye gestures |
+| Button / marker | EDF Event signal / marker channel; PhysioNet button presses | Gestures as instant annotations |
+| Bad / rejectable spans | (free text; MNE uses `bad*` descriptions) | `bad_quality` |
+| Acquisition gaps | Discontinuous EDF+D + timekeeping TALs | `disconnect` / `pause` as product intervals on a continuous timeline |
+
+**Yes — blink / jaw-clench belong in the same `annotations` array.** Shape: `{ "onset": <seconds>, "duration": 0, "type": "double_blink" }` (etc.). Export to EDF+ as TAL text = `type`; to BIDS as `onset`/`duration`/`trial_type`.
 
 ### Rules
 
 1. **Single array** of `{ onset, duration, type }`. Extend later by adding new `type` strings — no new root keys.
-2. **`type` enum (initial):** `pause` | `bad_quality` | `disconnect`.
+2. **`type` enum (initial):**
+   - Intervals: `pause` | `bad_quality` | `disconnect`
+   - Instants (`duration: 0`): `double_blink` | `double_jaw_clench` | `eye_up` | `eye_down`
    - Do **not** invent `overshoot` annotations in metadata until overshoot is product-defined as a persisted interval. Overshoot today is paint-only / experimental on Monitor Bands; sticky bad pads are already covered by quality-driven `bad_quality`.
-3. **Times:** `onset` and `duration` are seconds from capture start (same clock as computed `t`). Matches EDF+ TAL onset (seconds from file startdate/time) and BIDS `events.tsv` onset/duration.
-4. **Merge** adjacent same-`type` runs; keep the list compact. Not a 1 Hz dump.
-5. **Reject** parallel top-level `paused` / `unusable` / `disconnected` objects as the primary model. Readers and writers use `annotations` only.
+3. **Times:** `onset` and `duration` are seconds from capture start (same clock as computed `t`). Matches EDF+ TAL onset (seconds from file startdate/time) and BIDS `events.tsv` onset/duration. `duration` is always present; use `0` for instants.
+4. **Merge** adjacent same-`type` **interval** runs (`duration > 0`); keep the list compact. Do not merge distinct instant events. Not a 1 Hz dump.
+5. **Reject** parallel top-level `paused` / `unusable` / `disconnected` objects and parallel `feedback.gestures[]` as primary models. Readers and writers use `annotations` only.
 6. **Product → type mapping:**
    - Feedback `badSignal` interrupt → `type: "bad_quality"`
    - User pause → `type: "pause"`
    - BLE loss / disconnect → `type: "disconnect"`
+   - v5 `GestureType.doubleBlink` → `double_blink`
+   - v5 `GestureType.doubleClench` → `double_jaw_clench`
+   - v5 `GestureType.eyeUp` / `eyeDown` → `eye_up` / `eye_down`
 
 ### Optional summary nesting
 
-Canonical source: `annotations`. Optional derived counts live under **`stats.annotationSeconds`** (seconds-by-type), e.g. `{ "pause": 10.0, "bad_quality": 15.0, "disconnect": 8.0 }`. Do not use a separate root summary object; keep aggregates under `stats`.
+Canonical source: `annotations`. Optional derived counts live under **`stats.annotationSeconds`** (seconds-by-type for interval types only), e.g. `{ "pause": 10.0, "bad_quality": 15.0, "disconnect": 8.0 }`. Instant types are omitted from that map (or counted under a future `stats.annotationCounts` if needed). Do not use a separate root summary object; keep aggregates under `stats`.
 
 ### EDF+ / BIDS / MNE export mapping
 
@@ -266,36 +317,96 @@ When exporting (see `.ai/export.md` EDF+ path), map as follows:
 | neurofeed JSON | EDF+ TAL | BIDS `*_events.tsv` | MNE `Annotations` |
 |---|---|---|---|
 | `onset` | TAL Onset (`+{onset}` seconds from file start) | `onset` | `onset` |
-| `duration` | TAL Duration (unsigned seconds; byte `0x15` prefix) | `duration` | `duration` |
+| `duration` (> 0) | TAL Duration (unsigned seconds; byte `0x15` prefix) | `duration` | `duration` |
+| `duration` (== 0) | Omit Duration segment (EDF+ allows skip) **or** encode `0` | `duration` = `0` | `duration` = `0` |
 | `type` | annotation text (UTF-8 between `0x14` separators) | `trial_type` (or a sidecared custom column if preferred) | `description` |
 | `pause` | text `pause` | `trial_type=pause` | `description="pause"` |
 | `bad_quality` | text `bad_quality` | `trial_type=bad_quality` | `description="bad_quality"` (rejected when `reject_by_annotation=True`) |
 | `disconnect` | text `disconnect` | `trial_type=disconnect` | `description="disconnect"`; treat like acquisition skip / discontinuity |
+| `double_blink` etc. | text = `type` string | `trial_type` = `type` | `description` = `type` (not `bad*` — do not auto-reject) |
 
 EDF+ timekeeping TALs (empty text, per-data-record start) are **container** mechanics — not rows in `annotations[]`.
 
-### Naming rationale (do not rename casually)
+## Metadata field naming — EDF/BIDS check (locked)
 
-Cited conventions that locked the names above:
+Same discipline as the annotations nominators: prefer a widely used EEG/EDF/BIDS term when it is clearly better; **keep** neurofeed names when already clear or when EDF/BIDS has no analogue. neurofeed JSON stays **camelCase** keys; snake_case is reserved for `annotations[].type` string values (and similar enums). Do **not** adopt BIDS PascalCase (`SamplingFrequency`, `RecordingDuration`) as JSON keys.
 
-1. **EDF+ TALs** ([edfplus.info/specs/edfplus.html](https://www.edfplus.info/specs/edfplus.html)): annotations use **Onset** + optional **Duration** in seconds from recording startdate/time; free-text annotation strings (e.g. `Lights off`, `Apnea`). Root concept = *annotations*, not “gaps”.
-2. **BIDS events** ([bids-specification — Events](https://bids-specification.readthedocs.io/en/stable/modality-agnostic-files/events.html)): required columns **`onset`**, **`duration`** (seconds from first stored sample); optional **`trial_type`** for categorization. EEG recordings with acquisition pauses use `RecordingType: discontinuous` and still document intervals in `events.tsv`.
-3. **MNE-Python**: `mne.Annotations(onset, duration, description)`; spans meant for rejection should have descriptions starting with **`bad`** / `BAD` (e.g. `bad_quality`) so `reject_by_annotation` works.
-4. **BrainVision Analyzer**: **Bad Interval** markers (duration > 0) for rejectable spans; **New Segment** for pause/resume discontinuities — informed `bad_quality` vs keeping product `pause` / `disconnect` rather than overloading `boundary`.
-5. **EEGLAB**: discontinuity / cut markers as event **`type: "boundary"`** — reserved for *removed or non-contiguous data*, not user pause while the file keeps a continuous timeline; do not rename our `pause` to `boundary`.
-6. **Muse / LibMuse**: `MuseFileWriter.addAnnotationString` (arbitrary strings; sample “Disconnected”) — free text, so stable short tokens (`pause`, `bad_quality`, `disconnect`) export cleanly.
+### Table — Current → Proposed → Analogue
 
-Future agents: change these names only with a format PR and an updated mapping table. Prefer adding a new `type` string over renaming existing ones.
+| Current (v5 / v6 draft) | Proposed | EDF / BIDS analogue | Decision |
+|---|---|---|---|
+| `formatVersion` | **keep** | EDF header “version” is always `0 `; BIDS has dataset/schema versions, not this | keep — neurofeed container version |
+| `appVersion` | **keep** | BIDS `SoftwareVersions` (recommended) | keep — clear; map on export |
+| `kind` | **keep** | no EDF analogue; BIDS `RecordingType` = continuous/discontinuous/epoched (different) | keep — `recording` \| `feedback` |
+| `savedAt` | **keep** | no standard file-write timestamp in EDF/BIDS sidecars | keep — ISO-8601 assemble/save time |
+| `startedAt` | **keep** | EDF `startdate`+`starttime`; BIDS often `AcquisitionTime` / scan time | keep — one ISO-8601 field is clearer than EDF’s split |
+| `elapsedSeconds` | **keep** | no direct; wall/session elapsed may differ from stored samples | keep — product timing |
+| `durationS` | **keep** | BIDS `RecordingDuration` (seconds); EDF records×duration | keep — unit suffix beats renaming to PascalCase `recordingDuration` |
+| `notes` | **keep** | EDF free-text annotations / technician notes; no sidecar standard | keep — file-level comment |
+| `device` | **keep** | EDF equipment code in recording id; BIDS `Manufacturer*` | keep — nest |
+| `device.name` | **keep** | EDF local recording equipment subfield; BIDS no exact | keep |
+| `device.id` | **keep** | — | keep — BLE / sim id |
+| `device.firmware` | **keep** | BIDS `SoftwareVersions` (device FW) | keep |
+| `device.model` | **keep** | BIDS `ManufacturersModelName` | keep — nested under `device` already scopes it |
+| `device.sensors` | **keep** | EDF signal types (EEG/PPG/…); BIDS channel counts by type | keep |
+| `device.channelCount` | **keep** | BIDS `EEGChannelCount` (EEG-specific) | keep — generic N for Muse pads |
+| `device.channelLabels` | **keep** | EDF signal `label`; BIDS `channels.tsv` `name` | keep — array on device |
+| `streams` | **keep** | EDF ns signals; BIDS `channels.tsv` + SamplingFrequency | keep — enablement map |
+| `streams.*.enabled` | **keep** | — | keep |
+| `streams.*.rateHz` | **keep** | BIDS `SamplingFrequency`; EDF `nr of samples` / record duration | keep — unit in name |
+| `streams.eeg` … `telemetry` | **keep** keys | EDF labels `EEG …`, `SaO2`, etc. | keep — product stream ids (`spo2` not `SaO2`; `peakAlpha` matches ComputedFrame) |
+| `streams.gestures` | **keep** stub | EDF Annotations ≠ a sample stream | keep enablement only; markers → `annotations` |
+| `stats` | **keep** | EDF analysis-result files; BIDS derivatives | keep — session aggregates |
+| `stats.hr` `{mean,min,max}` | **keep** | clinical HR summary; no EDF metadata field | keep |
+| `stats.spo2` | **keep** | EDF label `SaO2` | keep `spo2` (common spelling); export may say SaO2 |
+| `stats.peakAlpha` | **keep** | — | keep — matches computed |
+| `stats.movement` | **keep** | — | keep |
+| `stats.quality` | **keep** | — | keep — pad / usable summary |
+| `stats.annotationSeconds` | **keep** | — | keep — derived from `annotations` |
+| `stats.battery` | **keep** | — | keep |
+| `stats.experimental` | **keep** | — | keep — may be removed |
+| `annotations` | **keep** | EDF+ Annotations / TAL; BIDS `events.tsv` | keep — already locked |
+| `annotations[].onset` | **keep** | EDF+ Onset; BIDS `onset` | keep |
+| `annotations[].duration` | **keep** | EDF+ Duration; BIDS `duration` | keep; `0` for instants |
+| `annotations[].type` | **keep** key; **snake_case values** | EDF free text; BIDS `trial_type` on export | keep key; rename v5 gesture *values* |
+| `feedback` | **keep** | no EDF/BIDS analogue | keep — only when `kind=="feedback"` |
+| `feedback.protocol` | **keep** | BIDS `TaskName` (loose) | keep |
+| `feedback.protocolVersion` / `protocolJson` | **keep** | — | keep |
+| `feedback.sound` / `feedbackSound` | **keep** | — | keep |
+| `feedback.calibration` / `sessionSettings` / `drowsiness` / `music` | **keep** | — | keep |
+| `feedback.gestures[]` | **remove as SoT** | EDF Annotations / BIDS events | **fold into `annotations[]`**; do not duplicate |
+| `feedback.training.*` | **keep** | — | keep — training-only scalars |
+| v5 flat `deviceName` / `deviceModel` / `deviceId` | nested `device.*` | — | already planned migrate |
+| v5 `recordedChannels` | `device.channelLabels` | — | migrate |
+| v5 gesture `at` | `onset` | BIDS/EDF onset | migrate via annotations |
+| v5 `doubleBlink` / `doubleClench` / `eyeUp` / `eyeDown` | `double_blink` / `double_jaw_clench` / `eye_up` / `eye_down` | free-text events | **rename** type strings |
+
+**Renames recommended (summary):** gesture `type` strings → snake_case with explicit `jaw`; gesture time key `at` → `onset` via annotations; drop parallel `feedback.gestures[]`. **Everything else in the identity / device / streams / stats / feedback training tree: keep.**
+
+### Naming rationale (expanded)
+
+Cited conventions that locked annotations **and** the metadata check above:
+
+1. **EDF+ TALs** ([edfplus.info/specs/edfplus.html](https://www.edfplus.info/specs/edfplus.html)): annotations use **Onset** + optional **Duration** in seconds from recording startdate/time; free-text UTF-8 strings (stimuli, responses, sleep stages, lights, technician notes, button-like events). Root concept = *annotations*, not “gaps”. Duration may be omitted in the wire TAL when irrelevant — our JSON still stores `duration: 0` for instants.
+2. **EDF+ standard texts** ([edftexts.html](https://www.edfplus.info/specs/edftexts.html)): obligatory PSG strings (`Lights off`, `Sleep stage N2`, `Apnea`, …) plus general `Recording starts/ends`. No standard blink/clench tokens — custom snake_case types are appropriate and export as the TAL text.
+3. **BIDS events** ([bids-specification — Events](https://bids-specification.readthedocs.io/en/stable/modality-agnostic-files/events.html)): required columns **`onset`**, **`duration`** (seconds; **zero = instantaneous**); optional **`trial_type`**. EEG sidecars use PascalCase (`SamplingFrequency`, `RecordingDuration`, `ManufacturersModelName`) — map on **export**, do not force those spellings into neurofeed camelCase JSON.
+4. **BIDS EEG sidecar** ([electroencephalography](https://bids-specification.readthedocs.io/en/stable/modality-specific-files/electroencephalography.html)): equipment and sampling metadata live beside the recording; our nested `device` + `streams.*.rateHz` + `durationS` carry the same ideas under clearer product names.
+5. **MNE-Python**: `mne.Annotations(onset, duration, description)`; spans meant for rejection should have descriptions starting with **`bad`** / `BAD` (e.g. `bad_quality`). Gesture descriptions must **not** start with `bad` so they are not auto-rejected.
+6. **BrainVision Analyzer**: **Bad Interval** markers (duration > 0) for rejectable spans; **New Segment** for pause/resume discontinuities — informed `bad_quality` vs keeping product `pause` / `disconnect` rather than overloading `boundary`.
+7. **EEGLAB**: discontinuity / cut markers as event **`type: "boundary"`** — reserved for *removed or non-contiguous data*, not user pause while the file keeps a continuous timeline; do not rename our `pause` to `boundary`.
+8. **Muse / LibMuse**: `MuseFileWriter.addAnnotationString` (arbitrary strings; sample “Disconnected”) — free text, so stable short tokens export cleanly.
+9. **PhysioNet**: ERP-BCI EDF+ annotations mix run bounds, stimulus intensifications, and counted responses in one annotation channel; Sleep-EDF stores hypnogram stages and marker-button style events — supports treating gestures as peer rows beside quality intervals.
+10. **JSON style:** neurofeed metadata keys stay camelCase (`formatVersion`, `rateHz`, `channelLabels`). Enumerated annotation **values** use snake_case (`bad_quality`, `double_blink`) for stable cross-language tokens and EDF/BIDS text export.
+
+Future agents: change these names only with a format PR and an updated mapping table. Prefer adding a new `annotations[].type` string over renaming existing ones. Prefer keeping identity/device/streams/stats keys unless a standard term is *clearly* better (bar was not met for `durationS`, `rateHz`, `model`, `spo2`, etc.).
 
 ### Layers (unchanged intent)
 
 1. **Metadata** — `annotations` (+ optional `stats.annotationSeconds`) for AI / History.
-2. **Computed** — keep per-second `signalQuality` (+ sticky semantics in live BandCache). Do not copy every second into metadata.
+2. **Computed** — keep per-second `signalQuality` (+ sticky semantics in live BandCache) and per-second `gestures[]` string ids on the frame for charts. Do not copy every second into metadata; session marker list is `annotations` only.
 3. **Raw** — continues to store samples while the device streams, including low-quality epochs. Disconnect simply yields silence (no packets). Optional later: raw index hints via the same interval list (byte offsets are a separate PR; metadata times are enough for v6 draft).
 
-**Confirm from code:** raw does **not** drop unusable-quality samples; BandCache sticky is live-only. Computed is where holds / quality gaps matter most for charts; metadata gets the compact `annotations` timeline for agents.
-
----
+**Confirm from code:** raw does **not** drop unusable-quality samples; BandCache sticky is live-only. Computed is where holds / quality gaps matter most for charts; metadata gets the compact `annotations` timeline for agents. v5 `GestureMarker` / `feedback.gestures` → v6 `annotations` rows with `duration: 0`.
 
 ## Feedback extension (brief)
 
@@ -312,7 +423,6 @@ Same base. When `kind == "feedback"`, attach:
   "sessionSettings": { },
   "drowsiness": { },
   "music": { },
-  "gestures": [{ "type": "doubleBlink", "at": 45 }],
   "training": {
     "pctInTarget": 62.0,
     "stillnessPct": 71.0,
@@ -326,6 +436,8 @@ Same base. When `kind == "feedback"`, attach:
 Migrate flat `SessionMetadata` fields into nested `device` / `streams` / `stats` / `feedback` — do not keep a second root schema. Full feedback redesign is out of scope for this file; enough that agents do not invent a parallel tree.
 
 Shared physiological aggregates stay in base `stats` (HR, SpO₂, movement, quality, battery, experimental bands). Training-only scalars stay under `feedback.training` (or equivalent).
+
+**Gestures:** do **not** put `feedback.gestures[]` here. Double blink / jaw clench / eye markers are rows in root `annotations[]` with `duration: 0` (see Annotations model). v5 `gestures: [{ "type": "doubleBlink", "at": 45 }]` migrates to `{ "onset": 45.0, "duration": 0, "type": "double_blink" }` on the base object.
 
 ---
 
