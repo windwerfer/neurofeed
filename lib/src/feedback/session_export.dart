@@ -237,8 +237,20 @@ class SessionExporter {
     for (final sec in eegLastPerSec.keys) {
       if (sec > maxSec) maxSec = sec;
     }
-    final savedDt = DateTime.tryParse(meta.savedAt) ?? DateTime.now();
-    final anchor = savedDt.subtract(Duration(seconds: meta.elapsedSeconds));
+    // Prefer startedAt (v6); fall back to savedAt - elapsedSeconds.
+    final DateTime anchor;
+    if (meta.startedAt != null && meta.startedAt!.isNotEmpty) {
+      anchor = sessionWallClock(
+        iso: meta.startedAt,
+        timeZone: meta.timeZone,
+      );
+    } else {
+      final savedWall = sessionWallClock(
+        iso: meta.savedAt,
+        timeZone: meta.timeZone,
+      );
+      anchor = savedWall.subtract(Duration(seconds: meta.elapsedSeconds));
+    }
     for (var sec = 0; sec <= maxSec; sec++) {
       final ts = anchor.add(Duration(seconds: sec));
       buf.write(
@@ -296,7 +308,8 @@ class SessionExporter {
       warnings.add(ExportWarning(s.id, 'could not read session file'));
       return 0;
     }
-    final meta = s.metadata;
+    // History list summaries omit calibration / annotations — reload from file.
+    final meta = await _loadFileMetadata(s) ?? s.metadata;
     final labels = List<String>.filled(8, '');
     for (var e = 0; e < meta.recordedChannels.length && e < labels.length; e++) {
       labels[e] = meta.recordedChannels[e];
@@ -319,16 +332,22 @@ class SessionExporter {
           onsetSeconds: cal.trainingStartSecs! - cal.calibrationStartSecs!,
           text: 'Training start',
         ),
-      for (final g in meta.gestures)
-        EdfExportAnnotation(
-          onsetSeconds: g.offsetSeconds.toDouble(),
-          text: switch (g.type) {
-            GestureType.doubleBlink => 'Double blink',
-            GestureType.doubleClench => 'Double clench',
-            GestureType.eyeUp => 'Eye up',
-            GestureType.eyeDown => 'Eye down',
-          },
-        ),
+      // v6 annotations SoT (gestures + pause/bad_quality/disconnect).
+      // TAL duration encoding is not yet in edf_export; onset + type text only.
+      for (final a in meta.annotations)
+        EdfExportAnnotation(onsetSeconds: a.onset, text: a.type),
+      // Legacy in-memory gestures (unit tests / pre-publish flat model).
+      if (meta.annotations.isEmpty)
+        for (final g in meta.gestures)
+          EdfExportAnnotation(
+            onsetSeconds: g.offsetSeconds.toDouble(),
+            text: switch (g.type) {
+              GestureType.doubleBlink => 'double_blink',
+              GestureType.doubleClench => 'double_jaw_clench',
+              GestureType.eyeUp => 'eye_up',
+              GestureType.eyeDown => 'eye_down',
+            },
+          ),
     ]..sort((a, b) => a.onsetSeconds.compareTo(b.onsetSeconds));
 
     // EDF FAQ Q17: header startdate/starttime = local wall clock at site.
@@ -337,15 +356,16 @@ class SessionExporter {
       savedAt: meta.savedAt,
       timeZone: meta.timeZone,
     );
+    final patientId = edfLocalPatientIdentification(meta.userId);
+    final recordingId = edfLocalRecordingIdentification(meta);
     final Uint8List edf;
     try {
       edf = encodeEdfExport(
         body: body,
         channelLabels: labels,
         params: EdfExportParams(
-          patientId: 'NeuroFeed',
-          recordingId:
-              '${meta.protocol} ${meta.startedAt ?? meta.savedAt}',
+          patientId: patientId,
+          recordingId: recordingId,
           year: edfStart.year,
           month: edfStart.month,
           day: edfStart.day,
@@ -446,6 +466,18 @@ class SessionExporter {
   }
 
   // ── shared helpers ─────────────────────────────────────────────────────
+
+
+  /// Full metadata from the `.neurofeed` head (calibration, annotations, subject).
+  /// History list rows are sqlite scalars only — too thin for EDF markers.
+  Future<SessionMetadata?> _loadFileMetadata(SessionSummary s) async {
+    final container = await _store.readContainer(s.id);
+    if (container == null) {
+      return null;
+    }
+    final head = parseHead(bytes: container);
+    return SessionMetadata.fromJsonBytes(head.metadataJson);
+  }
 
   Future<SessionData?> _readBody(
     SessionSummary s,
@@ -600,6 +632,29 @@ class SessionExporter {
     }
     return charts;
   }
+}
+
+
+/// EDF+ Local Patient Identification: `code sex birthdate name`.
+/// Anonymous-first: [subjectId] → code; sex/birthdate/name stay `X`
+/// (nickname-as-name export opt-in is deferred).
+String edfLocalPatientIdentification(String? subjectId) {
+  final raw = subjectId?.trim() ?? '';
+  final code = raw.isEmpty ? 'X' : raw.replaceAll(' ', '_');
+  return '$code X X X';
+}
+
+/// EDF+ Local Recording Identification fragment for the recording-id field.
+/// Includes protocol + start instant (startdate subfield is written by the
+/// EDF writer from the numeric start components).
+String edfLocalRecordingIdentification(SessionMetadata meta) {
+  final protocol = meta.protocol.isEmpty ? 'session' : meta.protocol;
+  final when = meta.startedAt ?? meta.savedAt;
+  final id = meta.sessionId;
+  if (id != null && id.isNotEmpty) {
+    return '$protocol $id $when';
+  }
+  return '$protocol $when';
 }
 
 /// Resolve where an export should land:

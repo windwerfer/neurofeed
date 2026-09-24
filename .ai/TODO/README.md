@@ -8,6 +8,7 @@ Crown-start threads.
 |--------|------|---------|
 | Athena optics (raw stream) | [athena-optics-contract.md](athena-optics-contract.md) | [handoff-athena-optics.md](handoff-athena-optics.md) |
 | History dashboard unification | [history-dashboard-unification.md](history-dashboard-unification.md) | [handoff-history-dashboard.md](handoff-history-dashboard.md) |
+| Import / export (EDF · Mind Monitor CSV) | [import-export.md](import-export.md) | — |
 | GitHub Actions AppImage | [github actions appimage.md](github%20actions%20appimage.md) | — |
 
 When a thread lands, slim the spec to frozen law and move it to

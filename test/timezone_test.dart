@@ -45,16 +45,28 @@ void main() {
   });
 
   group('localWallClockFromIso', () {
-    test('prefers startedAt over savedAt', () {
+    test('prefers startedAt over savedAt (offset digits = site local)', () {
       final wall = localWallClockFromIso(
         startedAt: '2026-09-24T17:20:00.000+07:00',
         savedAt: '2026-09-24T18:00:00.000+07:00',
+        timeZone: 'Asia/Bangkok',
       );
-      final expected =
-          DateTime.parse('2026-09-24T17:20:00.000+07:00').toLocal();
-      expect(wall.toUtc(), expected.toUtc());
-      expect(wall.hour, expected.hour);
-      expect(wall.minute, expected.minute);
+      // Offset-bearing stamp: wall Y-M-D H:M are site-local digits.
+      expect(wall.year, 2026);
+      expect(wall.month, 9);
+      expect(wall.day, 24);
+      expect(wall.hour, 17);
+      expect(wall.minute, 20);
+      expect(wall.second, 0);
+    });
+
+    test('Zulu + Etc/GMT-7 recovers site local for EDF header', () {
+      final wall = localWallClockFromIso(
+        startedAt: '2026-09-24T10:20:00.000Z',
+        timeZone: 'Etc/GMT-7',
+      );
+      expect(wall.hour, 17);
+      expect(wall.minute, 20);
     });
   });
 

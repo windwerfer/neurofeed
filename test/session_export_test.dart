@@ -104,12 +104,16 @@ SessionMetadata _metadata({
   bool withGestures = false,
 }) {
   final now = DateTime.utc(2026, 8, 19, 10, 30);
+  final started = now.subtract(const Duration(seconds: 3));
   final meta = SessionMetadata(
     protocol: 'drowsiness',
     durationMinutes: 15,
     elapsedSeconds: 3,
     sound: 'Bowl Chimes',
     savedAt: now.toIso8601String(),
+    startedAt: started.toIso8601String(),
+    timeZone: 'Etc/UTC',
+    userId: 'anon_test_subject',
     recordedChannels: const ['TP9', 'AF7', 'AF8', 'TP10'],
     recordedData: const ['eeg', 'bands', 'pulse', 'movement'],
     sessionSettings: SessionSettings(
@@ -207,6 +211,14 @@ SessionMetadata _metadata({
             GestureMarker(type: GestureType.doubleBlink, offsetSeconds: 1),
             GestureMarker(type: GestureType.doubleClench, offsetSeconds: 2),
             GestureMarker(type: GestureType.eyeUp, offsetSeconds: 3),
+          ]
+        : const [],
+    annotations: withGestures
+        ? const [
+            SessionAnnotation(onset: 1, duration: 0, type: 'double_blink'),
+            SessionAnnotation(onset: 2, duration: 0, type: 'double_jaw_clench'),
+            SessionAnnotation(onset: 3, duration: 0, type: 'eye_up'),
+            SessionAnnotation(onset: 1.5, duration: 0.5, type: 'bad_quality'),
           ]
         : const [],
   );
@@ -380,7 +392,7 @@ void main() {
 
   test('EDF export produces an EDF+ header with one annotated signal', () async {
     final result = await SessionExporter(store, storage).exportSessions(
-      sessions: [SessionSummary(id: id, metadata: _metadata())],
+      sessions: [SessionSummary(id: id, metadata: _metadata(withCalibration: true, withGestures: true))],
       kind: ExportKind.edf,
     );
     expect(result.warnings, isEmpty);
@@ -395,6 +407,22 @@ void main() {
     expect(String.fromCharCodes(edf.sublist(256, 260)), 'AF7 ');
     // 3 full seconds + trailing partial second = 4 records.
     expect(String.fromCharCodes(edf.sublist(236, 244)).trim(), '4');
+    // Patient id = subject.id + X X X (anonymous EDF Local Patient ID).
+    final patient = String.fromCharCodes(edf.sublist(8, 88)).trim();
+    expect(patient, 'anon_test_subject X X X');
+    // Startdate/starttime from startedAt (UTC).
+    expect(String.fromCharCodes(edf.sublist(168, 176)).trim(), '19.08.26');
+    expect(String.fromCharCodes(edf.sublist(176, 184)).trim(), '10.29.57');
+    // v6 annotation types appear as TAL text (reload from published file).
+    final hay = String.fromCharCodes(edf);
+    expect(hay.contains('double_blink'), isTrue);
+    expect(hay.contains('Calibration start'), isTrue);
+  });
+
+  test('edfLocalPatientIdentification packs anonymous code', () {
+    expect(edfLocalPatientIdentification(null), 'X X X X');
+    expect(edfLocalPatientIdentification(''), 'X X X X');
+    expect(edfLocalPatientIdentification('anon_ab cd'), 'anon_ab_cd X X X');
   });
 
   test('PNG thumbnail export writes the stored thumbnail', () async {

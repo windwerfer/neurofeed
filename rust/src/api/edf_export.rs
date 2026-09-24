@@ -199,7 +199,7 @@ mod tests {
         assert_eq!(&header[8..88], format!("{:<80}", "NeuroFeed").as_bytes());
         assert_eq!(&header[192..236], format!("{:<44}", "EDF+C").as_bytes());
         assert_eq!(&header[236..244], b"       2");
-        // First TP9 sample = 1.0 µV → 16 int16 LE.
+        // First TP9 sample = 1.0 µV on ±2000 range → ~16 digital LSB.
         let first = i16::from_le_bytes([out[1024], out[1025]]);
         assert_eq!(first, 16);
         // The "+0.25 s" annotation TAL must land in record 0.
