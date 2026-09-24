@@ -5,6 +5,36 @@ import 'package:neurofeed/src/util/timezone.dart';
 
 enum GestureType { doubleBlink, doubleClench, eyeUp, eyeDown }
 
+/// Root `annotations[]` row (v6). Interval types use duration > 0; gestures use 0.
+class SessionAnnotation {
+  const SessionAnnotation({
+    required this.onset,
+    required this.duration,
+    required this.type,
+  });
+
+  final double onset;
+  final double duration;
+  final String type;
+
+  Map<String, Object?> toJson() => {
+    'onset': onset,
+    'duration': duration,
+    'type': type,
+  };
+
+  static SessionAnnotation? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final type = json['type'] as String?;
+    if (type == null || type.isEmpty) return null;
+    return SessionAnnotation(
+      onset: (json['onset'] as num?)?.toDouble() ?? 0,
+      duration: (json['duration'] as num?)?.toDouble() ?? 0,
+      type: type,
+    );
+  }
+}
+
 class GestureMarker {
   const GestureMarker({required this.type, required this.offsetSeconds});
 
@@ -600,6 +630,7 @@ class SessionMetadata {
     this.userId,
     this.sessionId,
     this.protocolJson,
+    this.annotations = const [],
   });
 
   final String protocol;
@@ -646,6 +677,9 @@ class SessionMetadata {
   /// Snapshot of the resolved protocol document at save time.
   final Map<String, Object?>? protocolJson;
 
+  /// Root annotations timeline (pause / bad_quality / disconnect / gestures).
+  final List<SessionAnnotation> annotations;
+
   Map<String, Object?> toJson() => {
     'protocol': protocol,
     'durationMinutes': durationMinutes,
@@ -687,6 +721,8 @@ class SessionMetadata {
     if (userId != null) 'userId': userId,
     if (sessionId != null) 'sessionId': sessionId,
     if (protocolJson != null) 'protocolJson': protocolJson,
+    if (annotations.isNotEmpty)
+      'annotations': [for (final a in annotations) a.toJson()],
   };
 
   static SessionMetadata? fromJson(Object? json) {
@@ -750,6 +786,12 @@ class SessionMetadata {
       protocolJson: json['protocolJson'] is Map
           ? Map<String, Object?>.from(json['protocolJson'] as Map)
           : null,
+      annotations:
+          (json['annotations'] as List<Object?>?)
+              ?.map(SessionAnnotation.fromJson)
+              .whereType<SessionAnnotation>()
+              .toList() ??
+          const [],
     );
   }
 

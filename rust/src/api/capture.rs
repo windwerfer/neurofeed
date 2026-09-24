@@ -101,3 +101,13 @@ pub fn capture_write_errors() -> u64 {
 pub fn capture_is_active() -> bool {
     capture::capture_is_active()
 }
+
+/// Pause/resume raw fork without tearing down the session (no FRB yet —
+/// Dart also drives this via `__capture_pause` sidecar control).
+pub fn capture_set_paused(paused: bool) {
+    capture::capture_set_paused(paused)
+}
+
+pub fn capture_is_paused() -> bool {
+    capture::capture_is_paused()
+}

@@ -19,6 +19,8 @@ class ComputedSampler {
   final DateTime Function() _now;
 
   Timer? _timer;
+  Duration _pauseAccumulated = Duration.zero;
+  DateTime? _pauseBegan;
 
   // Latest values from event stream (updated by FeedbackStateNotifier)
   // Bands per electrode (4 electrodes × 5 bands)
@@ -106,12 +108,37 @@ class ComputedSampler {
     _timer = null;
   }
 
+  /// Stop emitting frames; content clock freezes (wall pause accumulates).
+  void pause() {
+    if (_pauseBegan != null) {
+      return;
+    }
+    stop();
+    _pauseBegan = _now();
+  }
+
+  /// Resume emitting; [t] continues from the pre-pause content clock.
+  void resume() {
+    if (_pauseBegan != null) {
+      _pauseAccumulated += _now().difference(_pauseBegan!);
+      _pauseBegan = null;
+    }
+    start();
+  }
+
+  /// Seconds of wall time excluded from the content clock so far.
+  @visibleForTesting
+  double get pauseAccumulatedSeconds =>
+      _pauseAccumulated.inMilliseconds / 1000.0;
+
   /// Seconds from [recordingStart] using the injected clock.
   @visibleForTesting
   void emitFrame() => _emitFrame();
 
   void _emitFrame() {
-    final t = _now().difference(_recordingStart).inMilliseconds / 1000.0;
+    final wall = _now().difference(_recordingStart);
+    final content = wall - _pauseAccumulated;
+    final t = content.inMilliseconds / 1000.0;
 
     final frame = ComputedFrame(
       t: t,

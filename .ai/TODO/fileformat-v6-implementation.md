@@ -64,10 +64,10 @@ Track coding work here. Schema decisions go in the contract, not this list.
 
 Contract: pause **stops raw + computed**; metadata gets `annotations` `pause` interval; `elapsedSeconds` does not advance.
 
-- [ ] Feedback pause/resume: stop/restart computed sampler (today pause keeps sampling — change).
-- [ ] Recording pause (if exposed): stop/restart raw capture writer the same way.
-- [ ] Write/extend `annotations[]` `{ type: "pause", onset, duration }` on pause/resume/end.
-- [ ] Ensure no fabricated computed/raw samples during pause; History charts treat pause as a gap via annotations (not chart-overshoot logic).
+- [x] Feedback pause/resume: stop/restart computed sampler (today pause keeps sampling — change).
+- [x] Recording pause (if exposed): stop/restart raw capture writer the same way. *(not exposed in UI; Rust `PAUSED` + `__capture_pause` sidecar ready for when it is)*
+- [x] Write/extend `annotations[]` `{ type: "pause", onset, duration }` on pause/resume/end.
+- [x] Ensure no fabricated computed/raw samples during pause; History charts treat pause as a gap via annotations (not chart-overshoot logic).
 
 ---
 

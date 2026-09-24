@@ -83,6 +83,9 @@ class FeedbackRecorder {
     _recorder.appendComputed(frame);
   }
 
+  /// Pause/resume Rust raw capture for this session.
+  void setRawPaused(bool paused) => _recorder.setRawPaused(paused);
+
   /// Write a metadata event (calibration step, guardrail event, etc.) as JSON line.
   void writeMetadata(Map<String, dynamic> meta) {
     _recorder.writeMetadata(meta);
