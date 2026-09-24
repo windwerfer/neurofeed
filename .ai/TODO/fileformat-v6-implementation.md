@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Ready to implement** (schema design finished 2026-09-24). **Computed Trust extras + sparse `feedback.audioEvents` + `baselineSamples` / `inhibitCeilingOverrides` = LOCKED.** Implement **metadata first**, then computed. |
+| Status | **Implementation largely complete** (schema design finished 2026-09-24). **Computed Trust extras + sparse `feedback.audioEvents` + `baselineSamples` / `inhibitCeilingOverrides` = LOCKED.** Implement **metadata first**, then computed. |
 | Spec | [../contracts/fileformat_v6.md](../contracts/fileformat_v6.md) — annotations / base vocab / feedback / experimental bands / pause / overshoot-chart-only / timezone / **computed Trust extras** / **`feedback.audioEvents`** / **`calibration.baselineSamples`** / **`sessionSettings.inhibitCeilingOverrides`** = **LOCKED**; `subject` = PREPARED. |
 | Branch | `refactor/fileformat` |
 | Do not mix | Athena tag 11 / optics; pipeline Key Decisions; History dashboard UI series (field names may be reused from History OQ 8 — UI remains out of scope); live device testing without windwerfer OK. |
@@ -45,10 +45,10 @@ Track coding work here. Schema decisions go in the contract, not this list.
 - [x] Base recording metadata writer (identity, `subject`, `device`, `streams`, `stats`, `annotations`).
 - [x] Feedback writer: base + locked `feedback{}` only (no `gestures[]`, no `drowsiness` nest, no shared-stats duplicates).
 - [x] Feedback Trust metadata extras (see dedicated section below — **implement before computed Trust extras**): `baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`.
-- [ ] Readers for History / export / assemble paths — single dialect.
+- [x] Readers for History / export / assemble paths — single dialect.
 - [x] `extractComputedScalars` (and assemble): fill locked `stats.*` gaps vs today (hr/spo2 min/max, `peakAlpha.meanHz`, `stillnessPct`, `quality.*`, `battery.*`, `annotationSeconds`). *(via `assembleBaseStats`)*
 - [x] Build `annotations[]` from pause / bad_quality / disconnect intervals + gesture instants (`duration: 0`, snake_case types).
-- [ ] Map sqlite `user_id` ←→ `subject.id`; keep promoting a small scalar set into sqlite later (not blocking first writer PR).
+- [x] Map sqlite `user_id` ←→ `subject.id`; keep promoting a small scalar set into sqlite later (not blocking first writer PR).
 
 ---
 
@@ -78,9 +78,9 @@ Contract: **Timing + time zones**. Today recording metadata forces UTC `…Z` (l
 - [x] Always write `startedAt` / `savedAt` as ISO-8601 with **explicit offset or `Z`** (never naive).
 - [x] Always write root **`timeZone`** (IANA from device at session start, e.g. `Asia/Bangkok`).
 - [x] Prefer local offset on the timestamp for History-friendly display; `Z` + `timeZone` also OK.
-- [ ] App UI: render session times in `timeZone` (fallback: timestamp offset).
+- [x] App UI: render session times in `timeZone` (fallback: timestamp offset).
 - [x] EDF export: pack **local** `startdate`/`starttime` from `startedAt` in `timeZone` (EDF FAQ Q17); never put UTC digits into EDF starttime as if local. Include EDF+ `Startdate dd-MMM-yyyy` in Local Recording Identification.
-- [ ] Sqlite / list queries: store instant in a sortable form; keep `timeZone` available for display.
+- [x] Sqlite / list queries: store instant in a sortable form; keep `timeZone` available for display.
 - [x] Fix both recording + feedback writer paths in the same effort.
 
 ---
@@ -106,7 +106,7 @@ Contract: **Computed feedback extras — LOCKED**. Wire = camelCase JSONL (Dart 
 - [x] Dart guardrail on same tick: **KEEP** `sleepDir`, `clarity`, `warning`, `delta`; **ADD** `featurePercentile`, `warnOver`, `ceilingOver`, `clean`, `dirtyReason`.
 - [x] **Dirty-latch fix:** dirty seconds MUST write `clean:false`, `inTarget:false`, finite dirty `percentile` (do not skip sampler update). Do **not** store `plotPercentile` / hold-last-clean Y.
 - [x] Recordings (`MonitorSampler`): omit/null NEW feedback/guard Trust extras (never fake `percentile:0` or `clean:false`). Zeroed legacy keys OK for chart shape.
-- [x] Rust `FeedbackInfo` / `GuardrailInfo`: Option Trust fields + camelCase serde + extract tests (`percentile`/`clean` are `Some`). **FRB Dart regen deferred** — `flutter_rust_bridge_codegen` not on PATH; extract path is Rust-side.
+- [x] Rust `FeedbackInfo` / `GuardrailInfo`: Option Trust fields + camelCase serde + extract tests (`percentile`/`clean` are `Some`). **FRB Dart regen done** — Trust Option fields mirrored in Dart FRB types.
 - [x] Do **not** store: full relative-band series, `plotPercentile`, parallel `feedback.gestures[]`. Per-second frame `gestures[]` string ids OK.
 - [x] Unit tests: dirty playing second has `clean:false` + finite dirty `percentile`; recordings leave NEW fields null/absent.
 
