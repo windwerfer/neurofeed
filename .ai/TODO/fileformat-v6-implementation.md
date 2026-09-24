@@ -46,8 +46,8 @@ Track coding work here. Schema decisions go in the contract, not this list.
 - [ ] Feedback writer: base + locked `feedback{}` only (no `gestures[]`, no `drowsiness` nest, no shared-stats duplicates).
 - [ ] Feedback Trust metadata extras (see dedicated section below — **implement before computed Trust extras**): `baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`.
 - [ ] Readers for History / export / assemble paths — single dialect.
-- [ ] `extractComputedScalars` (and assemble): fill locked `stats.*` gaps vs today (hr/spo2 min/max, `peakAlpha.meanHz`, `stillnessPct`, `quality.*`, `battery.*`, `annotationSeconds`).
-- [ ] Build `annotations[]` from pause / bad_quality / disconnect intervals + gesture instants (`duration: 0`, snake_case types).
+- [x] `extractComputedScalars` (and assemble): fill locked `stats.*` gaps vs today (hr/spo2 min/max, `peakAlpha.meanHz`, `stillnessPct`, `quality.*`, `battery.*`, `annotationSeconds`). *(via `assembleBaseStats`)*
+- [x] Build `annotations[]` from pause / bad_quality / disconnect intervals + gesture instants (`duration: 0`, snake_case types).
 - [ ] Map sqlite `user_id` ←→ `subject.id`; keep promoting a small scalar set into sqlite later (not blocking first writer PR).
 
 ---

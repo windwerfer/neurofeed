@@ -31,6 +31,7 @@ import 'package:neurofeed/src/feedback/target_state.dart';
 import 'package:neurofeed/src/feedback/trust/trust_gestures.dart';
 import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/session_v5/stats_assemble.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/reve/model_engine.dart';
 import 'package:neurofeed/src/reve/models.dart';
@@ -283,6 +284,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   final List<SessionAnnotation> _sessionAnnotations = [];
   double? _pauseOnsetContent;
   DateTime? _pauseWallBegan;
+  double? _interruptOnsetContent;
+  DateTime? _interruptWallBegan;
+  String? _interruptAnnType;
 
   /// Music feedback: per-second cutoff trace + track transitions recorded
   /// while playing. Persisted as [SessionMusic] metadata (tracks + 1 Hz series).
@@ -711,6 +715,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _sessionAnnotations.clear();
     _pauseOnsetContent = null;
     _pauseWallBegan = null;
+    _interruptOnsetContent = null;
+    _interruptWallBegan = null;
+    _interruptAnnType = null;
     _calibration.reset();
     _collectionEyes = null;
     _drowsinessSeries.clear();
@@ -1334,6 +1341,26 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   /// End the session: assemble a scratch v5 **before** `phase = ended` (the
   /// session view navigates on that transition), then stop audio.
+  void _closeOpenInterruptAnnotation() {
+    final onset = _interruptOnsetContent;
+    final began = _interruptWallBegan;
+    final type = _interruptAnnType;
+    if (onset == null || began == null || type == null) {
+      return;
+    }
+    final duration = DateTime.now().difference(began).inMilliseconds / 1000.0;
+    _sessionAnnotations.add(
+      SessionAnnotation(
+        onset: onset,
+        duration: duration < 0 ? 0 : duration,
+        type: type,
+      ),
+    );
+    _interruptOnsetContent = null;
+    _interruptWallBegan = null;
+    _interruptAnnType = null;
+  }
+
   Future<void> end() async {
     if (state.phase == FeedbackPhase.ended) {
       return;
@@ -1341,6 +1368,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (state.phase == FeedbackPhase.paused) {
       _closeOpenPauseAnnotation();
       _recorder.setRawPaused(false);
+    }
+    if (state.phase == FeedbackPhase.interrupted) {
+      _closeOpenInterruptAnnotation();
     }
     _ticker?.cancel();
     _interruptTimer?.cancel();
@@ -1513,7 +1543,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       timeZone: _sessionTimeZone ?? captureIanaTimeZone(),
       notes: notes,
       sessionId: sessionId,
-      annotations: List.of(_sessionAnnotations),
+      annotations: assembleAnnotations(
+        intervals: _sessionAnnotations,
+        gestures: settings.markersInFeedbackEnabled ? gestureMarkers : const [],
+      ),
       stats: stats == null
           ? null
           : SessionStatsData(
@@ -1621,11 +1654,22 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     if (state.phase != FeedbackPhase.interrupted) {
       _interruptWasPlaying = state.phase == FeedbackPhase.playing;
+      _interruptOnsetContent = state.elapsedSeconds.toDouble();
+      _interruptWallBegan = DateTime.now();
+      _interruptAnnType = kind == FeedbackInterruptKind.disconnect
+          ? 'disconnect'
+          : 'bad_quality';
       _ticker?.cancel();
       _audio.pause();
       if (kind == FeedbackInterruptKind.disconnect) {
         _startInterruptTimer();
       }
+    } else if (_interruptAnnType != null &&
+        kind == FeedbackInterruptKind.disconnect &&
+        _interruptAnnType != 'disconnect') {
+      // Escalate bad_quality → disconnect without closing the open span yet;
+      // keep onset, retarget type.
+      _interruptAnnType = 'disconnect';
     }
     _interruptKind = kind;
     final showCountdown = kind == FeedbackInterruptKind.disconnect;
@@ -1666,6 +1710,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// running when interrupted it resumes playing; a user-initiated pause is
   /// restored otherwise.
   void _recoverInterruption() {
+    _closeOpenInterruptAnnotation();
     final wasPlaying = _interruptWasPlaying;
     _clearInterruption();
     if (wasPlaying) {
