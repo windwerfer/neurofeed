@@ -11,6 +11,7 @@ import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
 import 'package:neurofeed/src/views/feedback_dashboard.dart';
+import 'package:neurofeed/src/util/timezone.dart';
 
 /// An assembled scratch v5 left over from a crash or an interrupted save.
 class RecoverableSession {
@@ -42,7 +43,8 @@ class RecoverableSession {
               : (elapsedSeconds / 60).ceil(),
           elapsedSeconds: elapsedSeconds,
           sound: '',
-          savedAt: DateTime.now().toIso8601String(),
+          savedAt: formatIso8601WithOffset(DateTime.now()),
+    timeZone: captureIanaTimeZone(),
           sessionId: id,
         );
     await store.publishSession(id, meta, encodedV5Path: scratchV5.path);
@@ -115,7 +117,8 @@ SessionMetadata _metadataFromTemps({
     elapsedSeconds: elapsed,
     durationS: elapsed,
     sound: '',
-    savedAt: DateTime.now().toIso8601String(),
+    savedAt: formatIso8601WithOffset(DateTime.now()),
+    timeZone: captureIanaTimeZone(),
     sessionId: id,
     calibration: calibrationId == null && calibrationKind.isEmpty
         ? null

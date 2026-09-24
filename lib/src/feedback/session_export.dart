@@ -15,6 +15,7 @@ import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/rust/api/edf_export.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/util/timezone.dart';
 
 /// What an export produces.
 enum ExportKind { pdf, pngThumbnail, pngAll, csv, edf }
@@ -330,6 +331,12 @@ class SessionExporter {
         ),
     ]..sort((a, b) => a.onsetSeconds.compareTo(b.onsetSeconds));
 
+    // EDF FAQ Q17: header startdate/starttime = local wall clock at site.
+    final edfStart = localWallClockFromIso(
+      startedAt: meta.startedAt,
+      savedAt: meta.savedAt,
+      timeZone: meta.timeZone,
+    );
     final Uint8List edf;
     try {
       edf = encodeEdfExport(
@@ -338,13 +345,13 @@ class SessionExporter {
         params: EdfExportParams(
           patientId: 'NeuroFeed',
           recordingId:
-              '${meta.protocol} ${meta.savedAt}',
-          year: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).year,
-          month: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).month,
-          day: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).day,
-          hour: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).hour,
-          minute: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).minute,
-          second: (DateTime.tryParse(meta.savedAt) ?? DateTime.now()).second,
+              '${meta.protocol} ${meta.startedAt ?? meta.savedAt}',
+          year: edfStart.year,
+          month: edfStart.month,
+          day: edfStart.day,
+          hour: edfStart.hour,
+          minute: edfStart.minute,
+          second: edfStart.second,
           annotations: annotations,
         ),
       );

@@ -7,6 +7,7 @@ import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 import 'package:neurofeed/src/session_v5/models.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/version.dart';
+import 'package:neurofeed/src/util/timezone.dart';
 
 const _recordingPrefix = 'recording_';
 
@@ -87,13 +88,14 @@ Future<void> deleteRecordingScratch(Directory dir, String id) async {
 }
 
 RecordingMetadata recoveredRecordingMetadata({required int elapsedSeconds}) {
-  final now = DateTime.now().toUtc();
+  final now = DateTime.now();
   return RecordingMetadata(
     formatVersion: 5,
     appVersion: appVersion,
     kind: 'recording',
     savedAt: now,
     startedAt: now.subtract(Duration(seconds: elapsedSeconds)),
+    timeZone: captureIanaTimeZone(),
     elapsedSeconds: elapsedSeconds,
     durationS: elapsedSeconds,
     device: const DeviceInfoV5(

@@ -23,6 +23,7 @@ import 'package:neurofeed/src/session_v5/models.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/version.dart';
+import 'package:neurofeed/src/util/timezone.dart';
 
 class MonitorController extends Notifier<MonitorState> {
   MonitorController({
@@ -473,8 +474,9 @@ class MonitorController extends Notifier<MonitorState> {
       formatVersion: 5,
       appVersion: appVersion,
       kind: _lease.kind == CaptureKind.recording ? 'recording' : 'tmp',
-      savedAt: DateTime.now().toUtc(),
-      startedAt: DateTime.fromMillisecondsSinceEpoch(started, isUtc: true),
+      savedAt: DateTime.now(),
+      startedAt: DateTime.fromMillisecondsSinceEpoch(started),
+      timeZone: captureIanaTimeZone(),
       elapsedSeconds: elapsed,
       durationS: elapsed,
       device: DeviceInfoV5(

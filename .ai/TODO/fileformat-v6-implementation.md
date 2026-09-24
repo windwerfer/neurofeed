@@ -75,13 +75,13 @@ Contract: pause **stops raw + computed**; metadata gets `annotations` `pause` in
 
 Contract: **Timing + time zones**. Today recording metadata forces UTC `…Z` (loses site zone); feedback often writes **naive local** ISO strings (no offset).
 
-- [ ] Always write `startedAt` / `savedAt` as ISO-8601 with **explicit offset or `Z`** (never naive).
-- [ ] Always write root **`timeZone`** (IANA from device at session start, e.g. `Asia/Bangkok`).
-- [ ] Prefer local offset on the timestamp for History-friendly display; `Z` + `timeZone` also OK.
+- [x] Always write `startedAt` / `savedAt` as ISO-8601 with **explicit offset or `Z`** (never naive).
+- [x] Always write root **`timeZone`** (IANA from device at session start, e.g. `Asia/Bangkok`).
+- [x] Prefer local offset on the timestamp for History-friendly display; `Z` + `timeZone` also OK.
 - [ ] App UI: render session times in `timeZone` (fallback: timestamp offset).
-- [ ] EDF export: pack **local** `startdate`/`starttime` from `startedAt` in `timeZone` (EDF FAQ Q17); never put UTC digits into EDF starttime as if local. Include EDF+ `Startdate dd-MMM-yyyy` in Local Recording Identification.
+- [x] EDF export: pack **local** `startdate`/`starttime` from `startedAt` in `timeZone` (EDF FAQ Q17); never put UTC digits into EDF starttime as if local. Include EDF+ `Startdate dd-MMM-yyyy` in Local Recording Identification.
 - [ ] Sqlite / list queries: store instant in a sortable form; keep `timeZone` available for display.
-- [ ] Fix both recording + feedback writer paths in the same effort.
+- [x] Fix both recording + feedback writer paths in the same effort.
 
 ---
 
