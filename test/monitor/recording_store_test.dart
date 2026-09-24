@@ -4,7 +4,6 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neurofeed/src/feedback/session_sqlite.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
-import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/monitor/recording/recording_store.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
@@ -147,7 +146,7 @@ void main() {
     );
   });
 
-  test('ALTER TABLE migrates existing rows to kind=feedback', () async {
+  test('schema bump without experimental_scalars wipes and recreates', () async {
     final dir = await Directory.systemTemp.createTemp('neurofeed_kind_mig_');
     addTearDown(() => dir.delete(recursive: true));
     final dbPath = '${dir.path}/session_metadata.db';
@@ -218,9 +217,12 @@ void main() {
 
     final migrated = await SessionSqlite.open(cacheDirectory: dir);
     addTearDown(migrated.close);
-    final row = await migrated.getSession('legacy');
-    expect(row, isNotNull);
-    expect(row!.kind, 'feedback');
-    expect(row.protocol, 'drowsiness');
+    expect(migrated.needsReindex, isTrue);
+    // Clean-cut wipe — legacy partial row discarded; reindex rebuilds from files.
+    expect(await migrated.getSession('legacy'), isNull);
+    final cols = migrated.db.select('PRAGMA table_info(sessions)');
+    final names = {for (final r in cols) r['name'] as String};
+    expect(names.contains('experimental_scalars'), isTrue);
+    expect(names.contains('kind'), isTrue);
   });
 }

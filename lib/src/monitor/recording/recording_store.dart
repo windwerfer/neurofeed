@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neurofeed/src/feedback/session_scalars.dart';
 import 'package:neurofeed/src/feedback/session_sqlite.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/session_v5/stats_assemble.dart';
 import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
@@ -45,16 +47,29 @@ class RecordingStore {
 
     RecordingMetadata meta;
     Uint8List thumb;
-    ComputedScalars scalars = const ComputedScalars();
+    SessionRowScalars rowScalars = const SessionRowScalars();
+    ComputedScalars legacy = const ComputedScalars();
     try {
       final head = await ffi.v5ParseHeadFromPath(path: scratchV5.path);
       thumb = head.thumbnail;
       final decoded = jsonDecode(utf8.decode(head.metadataJson));
-      meta = RecordingMetadata.fromJson(decoded as Map<String, dynamic>);
+      final decodedMap = decoded as Map<String, dynamic>;
+      meta = RecordingMetadata.fromJson(decodedMap);
+      rowScalars = SessionRowScalars.fromV6Metadata(
+        <String, Object?>{for (final e in decodedMap.entries) e.key: e.value},
+      );
       try {
-        scalars = extractComputedScalars(
-          await ffi.v5ExtractComputedFromPath(path: scratchV5.path),
-        );
+        final frames = await ffi.v5ExtractComputedFromPath(path: scratchV5.path);
+        legacy = extractComputedScalars(frames);
+        if (rowScalars.avgHr == null &&
+            rowScalars.peakAlphaHz == null &&
+            rowScalars.signalQualityMean == null) {
+          final assembled = assembleBaseStats(
+            frames: frames,
+            channelLabels: meta.device.channelLabels,
+          );
+          rowScalars = SessionRowScalars.fromStatsAndOutcome(stats: assembled);
+        }
       } catch (_) {}
     } catch (e) {
       debugPrint('[monitor] publish: parse failed: $e');
@@ -85,14 +100,33 @@ class RecordingStore {
         lenComputed: 0,
         offRaw: 0,
         lenRaw: 0,
-        avgHr: scalars.avgHr,
-        avgSpo2: scalars.avgSpo2,
-        peakAlphaHz: scalars.peakAlphaHz,
-        peakAlphaPower: scalars.peakAlphaPower,
-        pctInTarget: scalars.pctInTarget,
-        avgMovement: scalars.avgMovement,
-        guardrailWarnCount: scalars.guardrailWarnCount,
-        avgSleepDir: scalars.avgSleepDir,
+        avgHr: rowScalars.avgHr ?? legacy.avgHr,
+        hrMin: rowScalars.hrMin,
+        hrMax: rowScalars.hrMax,
+        avgSpo2: rowScalars.avgSpo2 ?? legacy.avgSpo2,
+        spo2Min: rowScalars.spo2Min,
+        spo2Max: rowScalars.spo2Max,
+        peakAlphaHz: rowScalars.peakAlphaHz ?? legacy.peakAlphaHz,
+        peakAlphaPower: rowScalars.peakAlphaPower ?? legacy.peakAlphaPower,
+        peakAlphaMeanHz: rowScalars.peakAlphaMeanHz,
+        pctInTarget: rowScalars.pctInTarget ?? legacy.pctInTarget,
+        avgMovement: rowScalars.avgMovement ?? legacy.avgMovement,
+        stillnessPct: rowScalars.stillnessPct,
+        guardrailWarnCount:
+            rowScalars.guardrailWarnCount ?? legacy.guardrailWarnCount,
+        avgSleepDir: rowScalars.avgSleepDir ?? legacy.avgSleepDir,
+        avgAlphaRel: rowScalars.avgAlphaRel,
+        guardWarnPct: rowScalars.guardWarnPct,
+        guardThreshold: rowScalars.guardThreshold,
+        signalQualityMean: rowScalars.signalQualityMean,
+        pctQcOk: rowScalars.pctQcOk,
+        qualityChannelUsable: rowScalars.qualityChannelUsable,
+        annotationPauseS: rowScalars.annotationPauseS,
+        annotationBadQualityS: rowScalars.annotationBadQualityS,
+        annotationDisconnectS: rowScalars.annotationDisconnectS,
+        batteryStartPct: rowScalars.batteryStartPct,
+        batteryEndPct: rowScalars.batteryEndPct,
+        experimentalScalars: rowScalars.experimentalScalars,
         markerCount: 0,
         userId: meta.subject?.id,
         timeZone: meta.timeZone,

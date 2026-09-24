@@ -117,14 +117,18 @@ Map<String, Object?> buildFeedbackMetadataV6({
 Map<String, Object?> _feedbackExtensionV6(SessionMetadata meta) {
   final outcome = <String, Object?>{};
   if (meta.pctInTarget != null) outcome['pctInTarget'] = meta.pctInTarget;
+  if (meta.stats != null) outcome['avgAlphaRel'] = meta.stats!.avgAlphaRel;
   if (meta.avgSleepDir != null) outcome['avgSleepDir'] = meta.avgSleepDir;
   if (meta.guardrailWarnCount != null) {
     outcome['guardrailWarnCount'] = meta.guardrailWarnCount;
   }
   if (meta.drowsiness != null) {
-    outcome['scoreTotalPct'] = meta.drowsiness!.scoreTotalPct;
+    outcome['guardWarnPct'] = meta.drowsiness!.scoreTotalPct;
     if (meta.drowsiness!.meanSleepDir != 0) {
-      outcome['meanSleepDir'] = meta.drowsiness!.meanSleepDir;
+      outcome['avgSleepDir'] ??= meta.drowsiness!.meanSleepDir;
+    }
+    if (meta.drowsiness!.threshold != null) {
+      outcome['guardThreshold'] = meta.drowsiness!.threshold;
     }
   }
 

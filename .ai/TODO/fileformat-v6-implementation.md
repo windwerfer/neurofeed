@@ -49,6 +49,7 @@ Track coding work here. Schema decisions go in the contract, not this list.
 - [x] `extractComputedScalars` (and assemble): fill locked `stats.*` gaps vs today (hr/spo2 min/max, `peakAlpha.meanHz`, `stillnessPct`, `quality.*`, `battery.*`, `annotationSeconds`). *(via `assembleBaseStats`)*
 - [x] Build `annotations[]` from pause / bad_quality / disconnect intervals + gesture instants (`duration: 0`, snake_case types).
 - [x] Map sqlite `user_id` ←→ `subject.id`; keep promoting a small scalar set into sqlite later (not blocking first writer PR).
+- [x] **Broader scalar promotion (done):** all default (non-experimental) session scalars are native sqlite columns; `experimental_scalars TEXT` holds `jsonEncode(stats.experimental)` (or null). Schema bump wipes DB and reindexes from real `.neurofeed` files (no row-by-row ALTER). See `README_history_cache.md` + `session_scalars.dart`.
 
 ---
 
