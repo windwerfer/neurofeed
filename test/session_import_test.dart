@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neurofeed/src/feedback/import/csv_import.dart';
+import 'package:neurofeed/src/feedback/session_chart_data.dart';
 import 'package:neurofeed/src/feedback/import/edf_import.dart';
 import 'package:neurofeed/src/feedback/import/import_types.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
@@ -211,21 +212,94 @@ TimeStamp,Delta_TP9,Delta_AF7,Delta_AF8,Delta_TP10,Theta_TP9,Theta_AF7,Theta_AF8
       expect(samples, 26);
     });
 
-    test('optional fuller headers parse without requiring ACC/Gyro', () {
+    test('1 Hz CSV with bands fills computed section', () {
+      final imported = importCsvText(
+        csvText: oneHzCsv,
+        subject: subject,
+        recordingId: 'csv_computed',
+      );
+      final frames = extractComputed(bytes: imported.containerBytes);
+      expect(frames, isNotEmpty);
+      expect(frames.first.bands.length, 4);
+      // Bel 3.1 → linear 10^3.1
+      expect(frames.first.bands[0][2], closeTo(1258.925, 1.0));
+      final prepared = prepareChartDataFromComputed(frames);
+      expect(prepared.alphaRel, isNotEmpty);
+      expect(imported.metadataJson.containsKey('feedback'), isFalse);
+    });
+
+    test('optional fuller headers stream ACC/Gyro and map Elements doubles', () {
       final csv = '''
-TimeStamp,Delta_TP9,Theta_TP9,Alpha_TP9,Beta_TP9,Gamma_TP9,RAW_TP9,Accelerometer_X,Gyro_X,Battery,Elements
-2026-09-25 10:00:00.000,1,2,3,4,5,100,0.1,0.2,0.9,Blink
-2026-09-25 10:00:01.000,1,2,3,4,5,101,0.1,0.2,0.9,
+TimeStamp,Delta_TP9,Theta_TP9,Alpha_TP9,Beta_TP9,Gamma_TP9,RAW_TP9,Accelerometer_X,Accelerometer_Y,Accelerometer_Z,Gyro_X,Gyro_Y,Gyro_Z,Battery,Elements
+2026-09-25 10:00:00.000,1,2,3,4,5,100,0.1,0.2,0.9,1.0,2.0,3.0,0.9,Blink
+2026-09-25 10:00:01.000,1,2,3,4,5,101,0.1,0.2,0.9,1.0,2.0,3.0,0.9,Blink
+2026-09-25 10:00:02.000,1,2,3,4,5,102,0.1,0.2,0.9,1.0,2.0,3.0,0.9,
 ''';
       final parsed = parseMindMonitorCsv(csv);
       expect(parsed.hasAcc, isTrue);
       expect(parsed.hasGyro, isTrue);
       expect(parsed.hasBattery, isTrue);
       expect(parsed.hasElements, isTrue);
-      final imported = importCsvText(csvText: csv, subject: subject);
-      expect(imported.warnings.any((w) => w.message.contains('ACC')), isTrue);
+      final imported = importCsvText(
+        csvText: csv,
+        subject: subject,
+        recordingId: 'csv_imu_el',
+      );
+      expect(
+        imported.warnings.any((w) => w.message.contains('not yet imported')),
+        isFalse,
+      );
+      final streams = imported.metadataJson['streams'] as Map;
+      expect((streams['imu'] as Map)['enabled'], isTrue);
+      final anns = imported.metadataJson['annotations'] as List;
+      expect(
+        anns.any((a) => (a as Map)['type'] == 'double_blink'),
+        isTrue,
+      );
+    });
+
+    test('Constant CSV with ACC enables imu stream', () {
+      final buf = StringBuffer(
+        'TimeStamp,RAW_TP9,Accelerometer_X,Accelerometer_Y,Accelerometer_Z,'
+        'Delta_TP9,Theta_TP9,Alpha_TP9,Beta_TP9,Gamma_TP9\n',
+      );
+      final start = DateTime(2026, 9, 25, 10, 0, 0);
+      for (var i = 0; i < 26; i++) {
+        final t = start.add(Duration(microseconds: (i * 1e6 / 256).round()));
+        final ts =
+            '${t.year.toString().padLeft(4, '0')}-'
+            '${t.month.toString().padLeft(2, '0')}-'
+            '${t.day.toString().padLeft(2, '0')} '
+            '${t.hour.toString().padLeft(2, '0')}:'
+            '${t.minute.toString().padLeft(2, '0')}:'
+            '${t.second.toString().padLeft(2, '0')}.'
+            '${t.millisecond.toString().padLeft(3, '0')}';
+        final band = i % 10 == 0 ? '1.0,2.0,3.0,4.0,5.0' : ',,,,';
+        buf.writeln('$ts,${800 + i}.0,0.1,0.2,0.98,$band');
+      }
+      final imported = importCsvText(
+        csvText: buf.toString(),
+        subject: subject,
+        recordingId: 'csv_const_acc',
+      );
+      final streams = imported.metadataJson['streams'] as Map;
+      expect((streams['imu'] as Map)['enabled'], isTrue);
+      final frames = extractComputed(bytes: imported.containerBytes);
+      expect(frames, isNotEmpty);
+    });
+
+    test('Elements singles warn; markers skipped', () {
+      final mapped = mapElementsToAnnotations([
+        const ElementMark(onsetSeconds: 0.0, raw: 'Blink'),
+        const ElementMark(onsetSeconds: 5.0, raw: 'Jaw_Clench'),
+        const ElementMark(onsetSeconds: 6.0, raw: '1'),
+      ]);
+      expect(mapped.annotations, isEmpty);
+      expect(mapped.warnings.any((w) => w.message.contains('single')), isTrue);
+      expect(mapped.warnings.any((w) => w.message.contains('marker')), isTrue);
     });
   });
+
 
   group('publish', () {
     test('writes recording_*.neurofeed and sqlite row', () async {

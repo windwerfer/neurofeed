@@ -108,3 +108,99 @@ List<int> encodeBandEvents(List<BandInstant> rows) {
   }
   return events;
 }
+
+/// Muse-ish PPG samples per packet (simulator / Classic).
+const int kPpgPacketSamples = 6;
+
+/// One XYZ sample at [timestampMs] (recording-relative).
+class ImuSample {
+  const ImuSample({
+    required this.timestampMs,
+    required this.x,
+    required this.y,
+    required this.z,
+  });
+  final double timestampMs;
+  final double x;
+  final double y;
+  final double z;
+}
+
+/// Encode accelerometer samples as Muse raw tag 3 (one sample per event).
+///
+/// Note: [encodeSessionEvent] for IMU stamps wall-clock `now` (live-capture
+/// quirk); relative [ImuSample.timestampMs] is not on the wire today.
+List<int> encodeAccelerometerEvents(List<ImuSample> samples) {
+  final events = <int>[];
+  for (var i = 0; i < samples.length; i++) {
+    final s = samples[i];
+    events.addAll(
+      encodeSessionEvent(
+        event: MuseEventDto.accelerometer(
+          ImuDto(
+            sequenceId: i & 0xffff,
+            samples: [XyzDto(x: s.x, y: s.y, z: s.z)],
+          ),
+        ),
+      ),
+    );
+  }
+  return events;
+}
+
+/// Encode gyroscope samples as Muse raw tag 4.
+List<int> encodeGyroscopeEvents(List<ImuSample> samples) {
+  final events = <int>[];
+  for (var i = 0; i < samples.length; i++) {
+    final s = samples[i];
+    events.addAll(
+      encodeSessionEvent(
+        event: MuseEventDto.gyroscope(
+          ImuDto(
+            sequenceId: i & 0xffff,
+            samples: [XyzDto(x: s.x, y: s.y, z: s.z)],
+          ),
+        ),
+      ),
+    );
+  }
+  return events;
+}
+
+/// Pack continuous per-channel PPG samples into Muse-shaped PPG packets.
+List<int> encodePpgPackets({
+  required Map<int, List<double>> samplesByChannel,
+  required List<double> timestampsMs,
+  int packetSamples = kPpgPacketSamples,
+}) {
+  final events = <int>[];
+  final channels = samplesByChannel.keys.toList()..sort();
+  for (final ch in channels) {
+    final samples = samplesByChannel[ch]!;
+    if (samples.isEmpty) continue;
+    var index = 0;
+    for (var i = 0; i < samples.length; i += packetSamples) {
+      final end = i + packetSamples > samples.length
+          ? samples.length
+          : i + packetSamples;
+      final chunk = samples.sublist(i, end);
+      final tsMs = i < timestampsMs.length
+          ? timestampsMs[i]
+          : (timestampsMs.isEmpty ? 0.0 : timestampsMs.last);
+      events.addAll(
+        encodeSessionEvent(
+          event: MuseEventDto.ppg(
+            PpgDto(
+              index: index,
+              channel: ch,
+              timestamp: tsMs,
+              samples: Float64List.fromList(chunk),
+            ),
+          ),
+        ),
+      );
+      index++;
+    }
+  }
+  return events;
+}

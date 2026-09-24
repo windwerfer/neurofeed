@@ -2,15 +2,12 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented (partial)** — EDF+ decode FFI + CSV 1 Hz/Constant → NFED6 + History Import |
+| Status | **Implemented (partial)** — EDF+ decode FFI + CSV 1 Hz/Constant → NFED6 + History Import; computed 1 Hz; ACC/Gyro/PPG streams; Elements doubles; recording CSV/EDF/thumb export |
 | Branch | `feature/import_export` |
 | Related | [../export.md](../export.md), [../contracts/fileformat_v6.md](../contracts/fileformat_v6.md) |
 | Out of scope | History UI chrome redesign; nickname→EDF name product toggle; live-device pass |
 
 ## Export audit (post fileformat v6) — findings
-
-History export remains **feedback sessions only** (recordings: snackbar
-`Export is not available for recordings.`). Documented; not a silent break.
 
 | Check | Result | Fix |
 |---|---|---|
@@ -18,11 +15,11 @@ History export remains **feedback sessions only** (recordings: snackbar
 | EDF+ patient code = `subject.id` | Was hardcoded `NeuroFeed`. | Pack EDF Local Patient ID `{code} X X X` from `meta.userId` / `subject.id`. Nickname→name deferred. |
 | EDF+ startdate/starttime local (FAQ Q17) | `localWallClockFromIso` ignored `timeZone` (`toLocal()` only). | Delegate to `sessionWallClock` (offset digits / `Etc/GMT±N`). |
 | Annotations / markers vs v6 | History list summaries omit calibration + `annotations[]`. Exporter used `meta.gestures` (emptied on v6 file read). | Reload file head metadata; emit calibration free-text + root `annotations[].type` as TAL text. Legacy gestures only if annotations empty. |
-| TAL `duration` for intervals | TALs still omit Duration segment. | **TODO** — optional `duration_seconds` on crate + FFI. |
+| TAL `duration` for intervals | Crate encodes/decodes Duration segment when `duration_seconds > 0`. | **Partial** — crate round-trip done; Dart `EdfExportAnnotation` still onset+text only (needs FRB regen to wire `SessionAnnotation.duration`). |
 | Annotation channel record size | Was variable-length (non-EDF+). | Fixed: pad to max TAL size; header `nsamples` matches. |
 | Signal header layout | Was signal-major 256-byte blocks (non-spec). | Fixed: **field-major** (`ns` labels, then transducers, …). |
 | Sample scaling | Near-midpoint ≈ same; now exact EDF linear map. | `phys↔dig` uses `(phys-pmin)/(pmax-pmin)*(dmax-dmin)+dmin`. |
-| Session vs recording | Session-only today. | Keep; document in `.ai/export.md`. |
+| Session vs recording | Was session-only. | **Done for CSV/EDF+/PNG thumb**; PDF / PNG charts remain feedback-only (protocol charts). |
 | Decode API | Started in crate. | **Done:** `decode_edf_plus` + FFI `decodeEdfImport` + Dart NFED6 builder. |
 
 Tests: `test/session_export_test.dart`, `test/timezone_test.dart`,
@@ -49,12 +46,12 @@ Do **not** invent `feedback{}` Trust extras, protocol, calibration, or
 | Constant-rate CSV RAW→EEG packets | [x] |
 | `RecordingStore.publish` wire-up | [x] |
 | History **Import…** (`.edf`/`.csv`, progress, snackbar) | [x] |
-| IMU/PPG raw streams from CSV columns | [ ] parse-detect only; warn |
-| Elements → annotations (single blink/jaw) | [ ] deferred (locked types are doubles) |
-| EDF+D discontinuous gaps | [ ] phase 2 |
-| TAL duration on export | [ ] |
-| Computed 1 Hz rebuild from bands on import | [ ] raw `bands` tags written; computed empty |
-| Export recordings (not only feedback) | [ ] separate task |
+| IMU/PPG raw streams from CSV columns | [x] ACC/Gyro/PPG → raw tags + `streams.imu`/`ppg` |
+| Elements → annotations (double blink/jaw) | [x] consecutive within 2 s → `double_*`; singles/markers warn+skip |
+| EDF+D discontinuous gaps | [ ] decode lacks per-record timekeeping jumps; warn on `EDF+D` |
+| TAL duration on export | [~] crate yes; Dart FFI still onset+text (FRB regen) |
+| Computed 1 Hz rebuild from bands on import | [x] Bel→linear heuristic; charts via `extractComputed` |
+| Export recordings (CSV / EDF+ / PNG thumb) | [x] PDF/PNG charts stay feedback-only |
 
 ## Code map
 
@@ -63,8 +60,9 @@ Do **not** invent `feedback{}` Trust extras, protocol, calibration, or
 | Crate decode | `third_party/edf_export` `decode_edf_plus` |
 | FFI | `rust/src/api/edf_export.rs` `decode_edf_import` |
 | Dart builders | `lib/src/feedback/import/` |
+| Computed rebuild | `lib/src/feedback/import/computed_rebuild.dart` |
 | Facade | `lib/src/feedback/session_import.dart` |
-| UI | `lib/src/views/feedback_history.dart` Import… |
+| UI | `lib/src/views/feedback_history.dart` Import… / Export |
 | Tests | `test/session_import_test.dart` |
 
 ## Options matrix
@@ -83,20 +81,27 @@ Sources: [Mind Monitor FAQ — Recorded Data](https://mind-monitor.com/FAQ.php),
 
 | Setting / variant | Effect on file | Import implication |
 |---|---|---|
-| **Recording interval ≈ 1 s (default)** | One row / ~s; RAW = one sample that second | **Implemented** — row → 1 Hz bands + 1-sample/s EEG packets |
-| **Recording interval = Constant** | Rows at device rate (~256 Hz EEG, 10 Hz bands, …) | **Implemented** — median Δt detect; RAW → 12-sample EEG packets; bands last-of-second |
-| **Band columns present** | `Delta|Theta|Alpha|Beta|Gamma_{TP9,…}` in **Bels** | → raw `bands` tags |
+| **Recording interval ≈ 1 s (default)** | One row / ~s; RAW = one sample that second | **Implemented** — row → 1 Hz bands + 1-sample/s EEG packets + computed |
+| **Recording interval = Constant** | Rows at device rate (~256 Hz EEG, 10 Hz bands, …) | **Implemented** — median Δt detect; RAW → 12-sample EEG packets; bands last-of-second + computed |
+| **Band columns present** | `Delta|Theta|Alpha|Beta|Gamma_{TP9,…}` in **Bels** | → raw `bands` tags + computed (Bel→linear when values look like Bels) |
 | **RAW columns present** | `RAW_{TP9,…}` µV | → raw EEG stream |
-| **Accelerometer / Gyro / PPG** | optional columns | Detected; warn; not yet written to raw IMU/PPG |
-| **Elements** | Blink, Jaw_Clench, markers | Detected; warn; doubles-only locked types |
+| **Accelerometer / Gyro / PPG** | optional columns | → raw IMU/PPG tags; `streams.imu` / `streams.ppg` |
+| **Elements** | Blink, Jaw_Clench, markers | Doubles within 2 s → locked types; singles/markers warn+skip |
 | **TimeStamp** | `YYYY-MM-DD HH:MM:SS.mmm` (local wall) | → `startedAt`; `timeZone` = capture IANA at import |
 
 **Neurofeed’s own CSV export** is a **subset**: TimeStamp + bands + RAW only, 1 Hz.
 Importer accepts that subset and fuller Mind Monitor files.
 
-## Export session-only limit
+## Export recordings
 
-CSV/EDF/PDF/PNG export APIs take `SessionSummary` feedback metadata
-(protocol, calibration). Recordings share NFED6 raw/computed but History
-deliberately disables Export for `kind == recording`. Import always creates
-recordings; exporting those remains a separate future task.
+History Export sheet:
+
+| Kind | Feedback | Recording |
+|---|---|---|
+| PDF report | yes | no (protocol charts) |
+| PNG charts | yes | no |
+| PNG thumbnail | yes | yes |
+| CSV (Mind Monitor) | yes | yes |
+| EDF+ raw EEG | yes | yes |
+
+No invented `feedback{}` on import. Design matrix + remaining gaps above.

@@ -523,7 +523,7 @@ class SessionExporter {
 
   static String _num(double v) => v.toStringAsPrecision(6);
 
-  /// File stem for one session: `yyyyMMdd_HHmmss_protocol_id8`.
+  /// File stem: `yyyyMMdd_HHmmss_<protocol|recording>_id8`.
   static String _stem(SessionMetadata meta, String id) {
     final t = DateTime.tryParse(meta.savedAt) ?? DateTime.now();
     final date = '${t.year.toString().padLeft(4, '0')}'
@@ -533,7 +533,8 @@ class SessionExporter {
         '${t.minute.toString().padLeft(2, '0')}'
         '${t.second.toString().padLeft(2, '0')}';
     final shortId = id.length > 8 ? id.substring(id.length - 8) : id;
-    return '${date}_${time}_${meta.protocol}_$shortId';
+    final label = meta.protocol.trim().isEmpty ? 'recording' : meta.protocol;
+    return '${date}_${time}_${label}_$shortId';
   }
 
   /// The same charts the detail view shows: bands, alpha-vs-theta, movement,

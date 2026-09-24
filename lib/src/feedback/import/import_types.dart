@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:neurofeed/src/feedback/session_metadata.dart';
+
 /// Non-fatal note from an import (shown in snackbar / logged).
 class ImportWarning {
   const ImportWarning(this.message);
@@ -71,4 +73,155 @@ String? edfPatientCode(String patientId) {
   final code = parts.first.trim();
   if (code.isEmpty || code.toUpperCase() == 'X') return null;
   return code;
+}
+
+/// Window used to promote consecutive Mind Monitor Blink / Jaw_Clench into
+/// locked double_* annotation types (matches [TrustGestureTracker]).
+const Duration kElementsDoubleWindow = Duration(seconds: 2);
+
+/// One Elements cell with recording-relative onset.
+class ElementMark {
+  const ElementMark({required this.onsetSeconds, required this.raw});
+  final double onsetSeconds;
+  final String raw;
+}
+
+/// Map Mind Monitor Elements column values onto locked annotation types.
+///
+/// Prefer (a) consecutive Blink / Jaw_Clench within [kElementsDoubleWindow] →
+/// `double_blink` / `double_jaw_clench`; (b) skip singles with a warning;
+/// numbered markers and unknown tokens get warnings. Never invent types
+/// outside [kLockedAnnotationTypes].
+({List<SessionAnnotation> annotations, List<ImportWarning> warnings})
+    mapElementsToAnnotations(List<ElementMark> marks) {
+  final warnings = <ImportWarning>[];
+  final annotations = <SessionAnnotation>[];
+  double? pendingBlinkAt;
+  double? pendingJawAt;
+  var skippedSingles = 0;
+  var skippedMarkers = 0;
+  var skippedUnknown = 0;
+
+  void flushBlink({required bool asDouble, required double at}) {
+    if (asDouble) {
+      annotations.add(
+        SessionAnnotation(onset: at, duration: 0, type: 'double_blink'),
+      );
+    } else {
+      skippedSingles++;
+    }
+  }
+
+  void flushJaw({required bool asDouble, required double at}) {
+    if (asDouble) {
+      annotations.add(
+        SessionAnnotation(
+          onset: at,
+          duration: 0,
+          type: 'double_jaw_clench',
+        ),
+      );
+    } else {
+      skippedSingles++;
+    }
+  }
+
+  for (final m in marks) {
+    final token = m.raw.trim();
+    if (token.isEmpty) continue;
+    final locked = mapImportAnnotationType(token);
+    if (locked != null) {
+      // Already a locked type (e.g. exported double_blink string).
+      if (pendingBlinkAt != null) {
+        flushBlink(asDouble: false, at: pendingBlinkAt!);
+        pendingBlinkAt = null;
+      }
+      if (pendingJawAt != null) {
+        flushJaw(asDouble: false, at: pendingJawAt!);
+        pendingJawAt = null;
+      }
+      annotations.add(
+        SessionAnnotation(onset: m.onsetSeconds, duration: 0, type: locked),
+      );
+      continue;
+    }
+    final lower = token.toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_');
+    final isBlink = lower == 'blink' || lower == '/muse/elements/blink';
+    final isJaw = lower == 'jaw_clench' ||
+        lower == 'jawclench' ||
+        lower == '/muse/elements/jaw_clench';
+    final isMarker = RegExp(r'^(/marker/)?\d+$').hasMatch(lower) ||
+        lower.startsWith('/marker/') ||
+        lower.startsWith('marker_');
+
+    if (isBlink) {
+      if (pendingJawAt != null) {
+        flushJaw(asDouble: false, at: pendingJawAt!);
+        pendingJawAt = null;
+      }
+      if (pendingBlinkAt != null &&
+          (m.onsetSeconds - pendingBlinkAt!) <=
+              kElementsDoubleWindow.inMilliseconds / 1000.0) {
+        flushBlink(asDouble: true, at: m.onsetSeconds);
+        pendingBlinkAt = null;
+      } else {
+        if (pendingBlinkAt != null) {
+          flushBlink(asDouble: false, at: pendingBlinkAt!);
+        }
+        pendingBlinkAt = m.onsetSeconds;
+      }
+      continue;
+    }
+    if (isJaw) {
+      if (pendingBlinkAt != null) {
+        flushBlink(asDouble: false, at: pendingBlinkAt!);
+        pendingBlinkAt = null;
+      }
+      if (pendingJawAt != null &&
+          (m.onsetSeconds - pendingJawAt!) <=
+              kElementsDoubleWindow.inMilliseconds / 1000.0) {
+        flushJaw(asDouble: true, at: m.onsetSeconds);
+        pendingJawAt = null;
+      } else {
+        if (pendingJawAt != null) {
+          flushJaw(asDouble: false, at: pendingJawAt!);
+        }
+        pendingJawAt = m.onsetSeconds;
+      }
+      continue;
+    }
+    if (isMarker) {
+      skippedMarkers++;
+      continue;
+    }
+    skippedUnknown++;
+  }
+  if (pendingBlinkAt != null) {
+    flushBlink(asDouble: false, at: pendingBlinkAt!);
+  }
+  if (pendingJawAt != null) {
+    flushJaw(asDouble: false, at: pendingJawAt!);
+  }
+  if (skippedSingles > 0) {
+    warnings.add(
+      ImportWarning(
+        'skipped $skippedSingles single Blink/Jaw_Clench '
+        '(locked types are doubles only)',
+      ),
+    );
+  }
+  if (skippedMarkers > 0) {
+    warnings.add(
+      ImportWarning(
+        'skipped $skippedMarkers numbered Elements markers '
+        '(no locked note type)',
+      ),
+    );
+  }
+  if (skippedUnknown > 0) {
+    warnings.add(
+      ImportWarning('skipped $skippedUnknown unknown Elements values'),
+    );
+  }
+  return (annotations: annotations, warnings: warnings);
 }

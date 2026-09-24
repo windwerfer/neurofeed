@@ -54,6 +54,8 @@ impl EdfSignal {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EdfAnnotation {
     pub onset_seconds: f64,
+    /// Seconds; `0` omits the TAL Duration segment (instant / unknown).
+    pub duration_seconds: f64,
     pub text: String,
 }
 
@@ -300,8 +302,15 @@ fn record_annotations(spec: &EdfFileSpec, record: usize) -> Vec<u8> {
         if a.onset_seconds >= start && a.onset_seconds < start + 1.0 {
             let onset = format!("+{}", a.onset_seconds - start);
             buf.extend_from_slice(onset.as_bytes());
-            buf.push(0x14);
-            buf.push(0x14); // empty duration
+            if a.duration_seconds > 0.0 {
+                // EDF+ TAL: Onset \x15 Duration \x14 text \x14 \x00
+                buf.push(0x15);
+                let dur = format!("{}", a.duration_seconds);
+                buf.extend_from_slice(dur.as_bytes());
+                buf.push(0x14);
+            } else {
+                buf.push(0x14); // no duration segment
+            }
             buf.extend_from_slice(a.text.as_bytes());
             buf.push(0x14);
             buf.push(0x00);
@@ -599,9 +608,9 @@ fn parse_tals(buf: &[u8], record_start: f64, out: &mut Vec<EdfAnnotation>) {
         let onset = record_start + onset_rel;
         // Skip empty timekeeping TALs (no text).
         for t in texts {
-            let _ = duration; // reserved for future duration field
             out.push(EdfAnnotation {
                 onset_seconds: onset,
+                duration_seconds: duration.unwrap_or(0.0),
                 text: t,
             });
         }
@@ -687,19 +696,19 @@ mod tests {
     #[test]
     fn annotation_tals_land_in_their_record() {
         let annotations = vec![
-            EdfAnnotation { onset_seconds: 0.5, text: "Double blink".to_string() },
-            EdfAnnotation { onset_seconds: 1.25, text: "Eye up".to_string() },
+            EdfAnnotation { onset_seconds: 0.5, duration_seconds: 0.0, text: "Double blink".to_string() },
+            EdfAnnotation { onset_seconds: 1.25, duration_seconds: 0.0, text: "Eye up".to_string() },
         ];
         let signals = vec![EdfSignal::eeg("TP9", 256, vec![0.0; 400])];
         let bytes = encode_edf_plus(&signals, &spec(&annotations)).unwrap();
         let header_len = 256 + 2 * 256;
-        // Record 0 needs 3 + 20 = 23 TAL bytes → pad to 24 (12 samples).
-        let ann_bytes = 24;
-        let rec0 = &bytes[header_len + 512..header_len + 512 + 23];
-        assert_eq!(rec0, b"0\x14\x00+0.5\x14\x14Double blink\x14\x00");
+        // Record 0 needs 3 + 19 = 22 TAL bytes → 11 int16 samples (even).
+        let ann_bytes = 22;
+        let rec0 = &bytes[header_len + 512..header_len + 512 + 22];
+        assert_eq!(rec0, b"0\x14\x00+0.5\x14Double blink\x14\x00");
         let rec1_start = header_len + 512 + ann_bytes + 512;
-        let rec1 = &bytes[rec1_start..rec1_start + 15];
-        assert_eq!(rec1, b"+0.25\x14\x14Eye up\x14\x00");
+        let rec1 = &bytes[rec1_start..rec1_start + 14];
+        assert_eq!(rec1, b"+0.25\x14Eye up\x14\x00");
         // Constant record size.
         let n_records = 2;
         assert_eq!(
@@ -771,8 +780,8 @@ mod tests {
     #[test]
     fn encode_decode_round_trip() {
         let annotations = vec![
-            EdfAnnotation { onset_seconds: 0.5, text: "double_blink".to_string() },
-            EdfAnnotation { onset_seconds: 1.25, text: "eye_up".to_string() },
+            EdfAnnotation { onset_seconds: 0.5, duration_seconds: 0.0, text: "double_blink".to_string() },
+            EdfAnnotation { onset_seconds: 1.25, duration_seconds: 0.0, text: "eye_up".to_string() },
         ];
         let signals = vec![
             EdfSignal::eeg("TP9", 256, vec![1.0; 400]),
@@ -795,4 +804,35 @@ mod tests {
         assert!(texts.contains(&"eye_up"));
     }
 
+
+    #[test]
+    fn duration_round_trip_in_tal() {
+        let signals = two_signals();
+        let annotations = [
+            EdfAnnotation {
+                onset_seconds: 0.5,
+                duration_seconds: 15.0,
+                text: "bad_quality".to_string(),
+            },
+            EdfAnnotation {
+                onset_seconds: 1.25,
+                duration_seconds: 0.0,
+                text: "double_blink".to_string(),
+            },
+        ];
+        let bytes = encode_edf_plus(&signals, &spec(&annotations)).unwrap();
+        let dec = decode_edf_plus(&bytes).unwrap();
+        let bq = dec
+            .annotations
+            .iter()
+            .find(|a| a.text == "bad_quality")
+            .expect("bad_quality");
+        assert!((bq.duration_seconds - 15.0).abs() < 1e-9, "got {}", bq.duration_seconds);
+        let db = dec
+            .annotations
+            .iter()
+            .find(|a| a.text == "double_blink")
+            .expect("double_blink");
+        assert!((db.duration_seconds).abs() < 1e-9);
+    }
 }

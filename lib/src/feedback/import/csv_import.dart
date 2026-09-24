@@ -1,9 +1,13 @@
 import 'dart:math' as math;
+
+import 'package:neurofeed/src/feedback/import/computed_rebuild.dart';
 import 'package:neurofeed/src/feedback/import/import_types.dart';
 import 'package:neurofeed/src/feedback/import/raw_body.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
 import 'package:neurofeed/src/session_format/models.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/util/timezone.dart';
@@ -11,6 +15,22 @@ import 'package:neurofeed/src/version.dart';
 
 const _defaultChannels = ['TP9', 'AF7', 'AF8', 'TP10'];
 const _bandNames = ['Delta', 'Theta', 'Alpha', 'Beta', 'Gamma'];
+
+/// Preferred PPG channel name → Muse channel index.
+const _ppgNameToChannel = {
+  'PPG_Ambient': 0,
+  'PPG_Green': 0,
+  'PPG_IR': 1,
+  'PPG_IR-H16': 1,
+  'PPG_Red': 2,
+  'PPG_1': 0,
+  'PPG_2': 1,
+  'PPG_3': 2,
+  'Optics1': 0,
+  'Optics2': 1,
+  'Optics3': 2,
+  'Optics4': 3,
+};
 
 enum CsvRecordingRate {
   /// ~1 row / second (Mind Monitor default / neurofeed CSV export).
@@ -30,6 +50,15 @@ class ParsedMindMonitorCsv {
     required this.rawByChannel,
     required this.bandsByChannel,
     required this.channelLabels,
+    required this.accX,
+    required this.accY,
+    required this.accZ,
+    required this.gyroX,
+    required this.gyroY,
+    required this.gyroZ,
+    required this.ppgByChannel,
+    required this.ppgChannelLabels,
+    required this.elements,
     required this.hasAcc,
     required this.hasGyro,
     required this.hasPpg,
@@ -50,6 +79,22 @@ class ParsedMindMonitorCsv {
   final Map<String, Map<String, List<double?>>> bandsByChannel;
 
   final List<String> channelLabels;
+
+  /// Aligned with rows; null = empty.
+  final List<double?> accX;
+  final List<double?> accY;
+  final List<double?> accZ;
+  final List<double?> gyroX;
+  final List<double?> gyroY;
+  final List<double?> gyroZ;
+
+  /// Muse PPG channel index → row-aligned values.
+  final Map<int, List<double?>> ppgByChannel;
+  final List<String> ppgChannelLabels;
+
+  /// Row-aligned Elements cell (empty string when absent).
+  final List<String> elements;
+
   final bool hasAcc;
   final bool hasGyro;
   final bool hasPpg;
@@ -85,7 +130,6 @@ ParsedMindMonitorCsv parseMindMonitorCsv(String text) {
     final hasBand = _bandNames.any((b) => col.containsKey('${b}_$ch'));
     if (hasRaw || hasBand) channelLabels.add(ch);
   }
-  // Also pick up any RAW_* not in the default Muse set.
   for (final h in headers) {
     if (h.startsWith('RAW_')) {
       final ch = h.substring(4);
@@ -96,6 +140,29 @@ ParsedMindMonitorCsv parseMindMonitorCsv(String text) {
     throw FormatException('CSV has no RAW_* or band columns');
   }
 
+  final ppgCols = <String, int>{};
+  for (final h in headers) {
+    if (_ppgNameToChannel.containsKey(h) ||
+        h.startsWith('PPG_') ||
+        h.startsWith('Optics')) {
+      ppgCols[h] = col[h]!;
+    }
+  }
+  // Assign unknown PPG_/Optics* names by sorted order after known ones.
+  final ppgChannelLabels = ppgCols.keys.toList()
+    ..sort((a, b) {
+      final ia = _ppgNameToChannel[a] ?? 100;
+      final ib = _ppgNameToChannel[b] ?? 100;
+      if (ia != ib) return ia.compareTo(ib);
+      return a.compareTo(b);
+    });
+  final ppgIndexByName = <String, int>{};
+  var nextUnknown = 0;
+  for (final name in ppgChannelLabels) {
+    ppgIndexByName[name] =
+        _ppgNameToChannel[name] ?? (10 + nextUnknown++);
+  }
+
   final timestamps = <DateTime>[];
   final rawByChannel = {
     for (final ch in channelLabels) ch: <double?>[],
@@ -104,6 +171,16 @@ ParsedMindMonitorCsv parseMindMonitorCsv(String text) {
     for (final b in _bandNames)
       b: {for (final ch in channelLabels) ch: <double?>[]},
   };
+  final accX = <double?>[];
+  final accY = <double?>[];
+  final accZ = <double?>[];
+  final gyroX = <double?>[];
+  final gyroY = <double?>[];
+  final gyroZ = <double?>[];
+  final ppgByChannel = {
+    for (final name in ppgChannelLabels) ppgIndexByName[name]!: <double?>[],
+  };
+  final elements = <String>[];
 
   for (var li = 1; li < lines.length; li++) {
     final cells = _splitCsvLine(lines[li]);
@@ -119,6 +196,22 @@ ParsedMindMonitorCsv parseMindMonitorCsv(String text) {
         bandsByChannel[b]![ch]!.add(_cellDouble(cells, col['${b}_$ch']));
       }
     }
+    accX.add(_cellDouble(cells, col['Accelerometer_X']));
+    accY.add(_cellDouble(cells, col['Accelerometer_Y']));
+    accZ.add(_cellDouble(cells, col['Accelerometer_Z']));
+    gyroX.add(_cellDouble(cells, col['Gyro_X']));
+    gyroY.add(_cellDouble(cells, col['Gyro_Y']));
+    gyroZ.add(_cellDouble(cells, col['Gyro_Z']));
+    for (final name in ppgChannelLabels) {
+      final idx = ppgIndexByName[name]!;
+      ppgByChannel[idx]!.add(_cellDouble(cells, ppgCols[name]));
+    }
+    final elIdx = col['Elements'];
+    if (elIdx != null && elIdx < cells.length) {
+      elements.add(cells[elIdx].trim());
+    } else {
+      elements.add('');
+    }
   }
   if (timestamps.length < 2) {
     throw FormatException('CSV needs at least two data rows');
@@ -132,11 +225,13 @@ ParsedMindMonitorCsv parseMindMonitorCsv(String text) {
   }
   deltas.sort();
   final medianDt = deltas[deltas.length ~/ 2];
-  // ~1 s → oneHz; much faster → Constant. Mid-range (~0.1 s bands-only) also
-  // treated as Constant so RAW packing still works when present.
-  final rate = medianDt >= 0.5 ? CsvRecordingRate.oneHz : CsvRecordingRate.constant;
+  final rate =
+      medianDt >= 0.5 ? CsvRecordingRate.oneHz : CsvRecordingRate.constant;
 
   bool hasPrefix(String p) => headers.any((h) => h.startsWith(p));
+  final hasAcc = hasPrefix('Accelerometer_');
+  final hasGyro = hasPrefix('Gyro_');
+  final hasPpg = ppgChannelLabels.isNotEmpty;
 
   return ParsedMindMonitorCsv(
     headers: headers,
@@ -146,9 +241,18 @@ ParsedMindMonitorCsv parseMindMonitorCsv(String text) {
     rawByChannel: rawByChannel,
     bandsByChannel: bandsByChannel,
     channelLabels: channelLabels,
-    hasAcc: hasPrefix('Accelerometer_'),
-    hasGyro: hasPrefix('Gyro_'),
-    hasPpg: hasPrefix('PPG_') || hasPrefix('Optics'),
+    accX: accX,
+    accY: accY,
+    accZ: accZ,
+    gyroX: gyroX,
+    gyroY: gyroY,
+    gyroZ: gyroZ,
+    ppgByChannel: ppgByChannel,
+    ppgChannelLabels: ppgChannelLabels,
+    elements: elements,
+    hasAcc: hasAcc,
+    hasGyro: hasGyro,
+    hasPpg: hasPpg,
     hasHsi: headers.any((h) => h.startsWith('HSI_') || h == 'HeadBandOn'),
     hasBattery: headers.contains('Battery'),
     hasElements: headers.contains('Elements'),
@@ -165,27 +269,14 @@ ImportResult importCsvText({
   final warnings = <ImportWarning>[];
   final parsed = parseMindMonitorCsv(csvText);
 
-  if (parsed.hasAcc || parsed.hasGyro || parsed.hasPpg) {
-    warnings.add(
-      const ImportWarning(
-        'ACC/Gyro/PPG columns present but not yet imported into raw streams',
-      ),
-    );
-  }
-  if (parsed.hasElements) {
-    warnings.add(
-      const ImportWarning(
-        'Elements column present — single blink/jaw not mapped (locked types are doubles only)',
-      ),
-    );
-  }
-
   final startedAt = parsed.timestamps.first;
   final endedAt = parsed.timestamps.last;
-  final durationS = math.max(
-    1,
-    endedAt.difference(startedAt).inMilliseconds / 1000.0,
-  ).ceil();
+  final durationS = math
+      .max(
+        1,
+        endedAt.difference(startedAt).inMilliseconds / 1000.0,
+      )
+      .ceil();
   final savedAt = DateTime.now();
   final tz = timeZone ?? captureIanaTimeZone();
   final id = recordingId ??
@@ -210,22 +301,99 @@ ImportResult importCsvText({
     warnings.add(const ImportWarning('no band columns — raw only'));
   }
 
+  final bandRows = <BandInstant>[];
   final events = <int>[];
   if (parsed.rate == CsvRecordingRate.oneHz) {
-    events.addAll(_encodeOneHz(parsed));
+    final packed = _encodeOneHz(parsed, bandRows);
+    events.addAll(packed);
   } else {
-    events.addAll(_encodeConstant(parsed, warnings));
+    final packed = _encodeConstant(parsed, warnings, bandRows);
+    events.addAll(packed);
   }
+
+  // ACC / Gyro / PPG → raw streams.
+  final accSamples = _collectImu(
+    parsed.timestamps,
+    parsed.accX,
+    parsed.accY,
+    parsed.accZ,
+  );
+  final gyroSamples = _collectImu(
+    parsed.timestamps,
+    parsed.gyroX,
+    parsed.gyroY,
+    parsed.gyroZ,
+  );
+  if (accSamples.isNotEmpty) {
+    events.addAll(encodeAccelerometerEvents(accSamples));
+    enabled.add(RecordingStream.imu);
+  } else if (parsed.hasAcc) {
+    warnings.add(
+      const ImportWarning('Accelerometer columns present but all empty'),
+    );
+  }
+  if (gyroSamples.isNotEmpty) {
+    events.addAll(encodeGyroscopeEvents(gyroSamples));
+    enabled.add(RecordingStream.imu);
+  } else if (parsed.hasGyro) {
+    warnings.add(const ImportWarning('Gyro columns present but all empty'));
+  }
+
+  final ppgPacked = _collectPpg(parsed);
+  if (ppgPacked != null) {
+    events.addAll(
+      encodePpgPackets(
+        samplesByChannel: ppgPacked.samples,
+        timestampsMs: ppgPacked.timestampsMs,
+      ),
+    );
+    enabled.add(RecordingStream.ppg);
+  } else if (parsed.hasPpg) {
+    warnings.add(const ImportWarning('PPG/Optics columns present but all empty'));
+  }
+
   final rawBody = assembleRawBody(events);
 
+  // Elements → locked annotations (doubles only).
+  final annotations = <SessionAnnotation>[];
+  if (parsed.hasElements) {
+    final marks = <ElementMark>[];
+    for (var i = 0; i < parsed.elements.length; i++) {
+      final raw = parsed.elements[i];
+      if (raw.isEmpty) continue;
+      final onset = parsed.timestamps[i]
+              .difference(parsed.timestamps.first)
+              .inMicroseconds /
+          1e6;
+      marks.add(ElementMark(onsetSeconds: onset, raw: raw));
+    }
+    final mapped = mapElementsToAnnotations(marks);
+    annotations.addAll(mapped.annotations);
+    warnings.addAll(mapped.warnings);
+  }
+
+  // Computed 1 Hz from bands (linear power for charts).
+  final computed = rebuildComputedFromBands(
+    bandRows: bandRows,
+    channelCount: parsed.channelLabels.length,
+  );
+  final stats = assembleBaseStats(
+    frames: computed,
+    annotations: annotations,
+    channelLabels: parsed.channelLabels,
+  );
+
+  final sensors = <String>[
+    if (hasAnyRaw) 'EEG',
+    if (enabled.contains(RecordingStream.ppg)) 'PPG',
+    if (enabled.contains(RecordingStream.imu)) 'IMU',
+  ];
   final device = DeviceInfo(
     name: 'imported',
     id: '',
     firmware: '',
     model: 'imported',
-    sensors: [
-      if (hasAnyRaw) 'EEG',
-    ],
+    sensors: sensors,
     channelCount: parsed.channelLabels.length,
     channelLabels: List<String>.from(parsed.channelLabels),
   );
@@ -249,12 +417,14 @@ ImportResult importCsvText({
     meta: meta,
     subject: subject,
     sessionId: id,
+    annotations: annotations,
+    stats: stats,
   );
 
   final container = assembleContainer(
     thumbnail: const [],
     metadataJson: metadataJson,
-    computedFrames: const [],
+    computedFrames: computed,
     rawBody: rawBody,
   );
 
@@ -266,11 +436,11 @@ ImportResult importCsvText({
   );
 }
 
-List<int> _encodeOneHz(ParsedMindMonitorCsv parsed) {
-  final bandRows = <BandInstant>[];
+List<int> _encodeOneHz(
+  ParsedMindMonitorCsv parsed,
+  List<BandInstant> bandRowsOut,
+) {
   final samplesByElectrode = <int, List<double>>{};
-  // Keep row-aligned RAW so encodeEegPackets @ 1 Hz matches wall seconds
-  // even when a cell is empty (empty → NaN placeholder, filtered below).
   for (var e = 0; e < parsed.channelLabels.length; e++) {
     samplesByElectrode[e] = [];
   }
@@ -297,7 +467,6 @@ List<int> _encodeOneHz(ParsedMindMonitorCsv parsed) {
         );
       }
       final raw = parsed.rawByChannel[ch]![i];
-      // Hold last sample across empty 1 Hz cells so packet index == second.
       final prev = samplesByElectrode[e]!;
       if (raw != null) {
         prev.add(raw);
@@ -308,16 +477,15 @@ List<int> _encodeOneHz(ParsedMindMonitorCsv parsed) {
       }
     }
     if (byEl.isNotEmpty) {
-      bandRows.add(BandInstant(timestampMs: tMs, byElectrode: byEl));
+      bandRowsOut.add(BandInstant(timestampMs: tMs, byElectrode: byEl));
     }
   }
-  // Drop electrodes that never had a real RAW value.
   samplesByElectrode.removeWhere((e, samples) {
     final ch = parsed.channelLabels[e];
     return !parsed.rawByChannel[ch]!.any((v) => v != null);
   });
   return [
-    ...encodeBandEvents(bandRows),
+    ...encodeBandEvents(bandRowsOut),
     ...encodeEegPackets(
       samplesByElectrode: samplesByElectrode,
       sampleRateHz: 1.0,
@@ -329,8 +497,8 @@ List<int> _encodeOneHz(ParsedMindMonitorCsv parsed) {
 List<int> _encodeConstant(
   ParsedMindMonitorCsv parsed,
   List<ImportWarning> warnings,
+  List<BandInstant> bandRowsOut,
 ) {
-  // Infer EEG rate from median Δt when RAW present; else nominal 256.
   final dt = parsed.medianDeltaSeconds;
   final rateHz = dt > 0 && dt < 0.05 ? (1.0 / dt) : 256.0;
 
@@ -347,12 +515,11 @@ List<int> _encodeConstant(
     }
   }
 
-  // Bands at Constant are sparse (~10 Hz); keep last-of-second as 1 Hz tags.
   final bandBySec = <int, Map<int, BandValues>>{};
   for (var i = 0; i < parsed.timestamps.length; i++) {
     final sec = parsed.timestamps[i]
-        .difference(parsed.timestamps.first)
-        .inMilliseconds ~/
+            .difference(parsed.timestamps.first)
+            .inMilliseconds ~/
         1000;
     for (var e = 0; e < parsed.channelLabels.length; e++) {
       final ch = parsed.channelLabels[e];
@@ -373,13 +540,14 @@ List<int> _encodeConstant(
       );
     }
   }
-  final bandRows = [
-    for (final sec in (bandBySec.keys.toList()..sort()))
+  for (final sec in (bandBySec.keys.toList()..sort())) {
+    bandRowsOut.add(
       BandInstant(
         timestampMs: sec * 1000.0,
         byElectrode: bandBySec[sec]!,
       ),
-  ];
+    );
+  }
 
   if (samplesByElectrode.isEmpty) {
     warnings.add(
@@ -390,7 +558,7 @@ List<int> _encodeConstant(
   }
 
   return [
-    ...encodeBandEvents(bandRows),
+    ...encodeBandEvents(bandRowsOut),
     ...encodeEegPackets(
       samplesByElectrode: samplesByElectrode,
       sampleRateHz: rateHz,
@@ -398,14 +566,63 @@ List<int> _encodeConstant(
   ];
 }
 
+List<ImuSample> _collectImu(
+  List<DateTime> timestamps,
+  List<double?> x,
+  List<double?> y,
+  List<double?> z,
+) {
+  final out = <ImuSample>[];
+  final t0 = timestamps.first;
+  for (var i = 0; i < timestamps.length; i++) {
+    final xv = x[i];
+    final yv = y[i];
+    final zv = z[i];
+    if (xv == null && yv == null && zv == null) continue;
+    out.add(
+      ImuSample(
+        timestampMs:
+            timestamps[i].difference(t0).inMicroseconds / 1000.0,
+        x: xv ?? 0,
+        y: yv ?? 0,
+        z: zv ?? 0,
+      ),
+    );
+  }
+  return out;
+}
+
+({Map<int, List<double>> samples, List<double> timestampsMs})? _collectPpg(
+  ParsedMindMonitorCsv parsed,
+) {
+  if (parsed.ppgByChannel.isEmpty) return null;
+  final t0 = parsed.timestamps.first;
+  final aligned = <int, List<double>>{};
+  final alignedTs = <double>[];
+  for (var i = 0; i < parsed.timestamps.length; i++) {
+    final present = <MapEntry<int, double>>[];
+    for (final e in parsed.ppgByChannel.entries) {
+      final v = e.value[i];
+      if (v != null) present.add(MapEntry(e.key, v));
+    }
+    if (present.isEmpty) continue;
+    alignedTs.add(
+      parsed.timestamps[i].difference(t0).inMicroseconds / 1000.0,
+    );
+    for (final e in present) {
+      aligned.putIfAbsent(e.key, () => []).add(e.value);
+    }
+  }
+  if (aligned.isEmpty) return null;
+  return (samples: aligned, timestampsMs: alignedTs);
+}
+
 List<String> _splitCsvLine(String line) {
-  // Mind Monitor / Excel CSV: plain commas, no quoted commas in our dialect.
   return line.split(',');
 }
 
 DateTime? _parseTimeStamp(String raw) {
   final s = raw.trim();
-  // YYYY-MM-DD HH:MM:SS.mmm (Mind Monitor local wall).
   final m = RegExp(
     r'^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$',
   ).firstMatch(s);

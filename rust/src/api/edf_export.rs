@@ -128,6 +128,8 @@ pub fn encode_edf_export(
         .iter()
         .map(|a| edf_export::EdfAnnotation {
             onset_seconds: a.onset_seconds,
+            // TAL duration not yet on EdfExportAnnotation (needs FRB regen).
+            duration_seconds: 0.0,
             text: a.text.clone(),
         })
         .collect();
@@ -274,7 +276,7 @@ mod tests {
         assert_eq!(first, 16);
         // The "+0.25 s" annotation TAL must land in record 0.
         assert!(
-            out.windows(21).any(|w| w == b"+0.25\x14\x14Double blink\x14\x00".as_slice()),
+            out.windows(20).any(|w| w == b"+0.25\x14Double blink\x14\x00".as_slice()),
             "annotation TAL missing from output"
         );
     }

@@ -257,19 +257,13 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
   }
 
   void _openExportSheet(List<SessionSummary> sessions) {
-    final exportable = [
+    if (sessions.isEmpty) return;
+    final feedbackOnly = [
       for (final s in sessions)
         if (!s.isRecording) s,
     ];
-    if (exportable.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Export is not available for recordings.'),
-        ),
-      );
-      return;
-    }
-    sessions = exportable;
+    final hasRecording = sessions.any((s) => s.isRecording);
+    final hasFeedback = feedbackOnly.isNotEmpty;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -279,37 +273,50 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
           children: [
             ListTile(
               title: Text(
-                'Export ${sessions.length} session(s)',
+                'Export ${sessions.length} item(s)',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
+              subtitle: hasRecording && !hasFeedback
+                  ? const Text(
+                      'Recordings: CSV, EDF+, PNG thumbnail. '
+                      'PDF / PNG charts are feedback-session only.',
+                    )
+                  : hasRecording
+                      ? const Text(
+                          'PDF / PNG charts apply to feedback sessions only; '
+                          'CSV / EDF+ / thumbnail include recordings.',
+                        )
+                      : null,
             ),
-            _ExportOption(
-              icon: Icons.picture_as_pdf,
-              title: 'PDF report',
-              subtitle: 'One vector page per session',
-              onTap: () {
-                Navigator.of(context).pop();
-                _export(sessions, ExportKind.pdf);
-              },
-            ),
+            if (hasFeedback)
+              _ExportOption(
+                icon: Icons.picture_as_pdf,
+                title: 'PDF report',
+                subtitle: 'Feedback sessions only · one vector page each',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _export(feedbackOnly, ExportKind.pdf);
+                },
+              ),
             _ExportOption(
               icon: Icons.photo,
               title: 'PNG thumbnail',
-              subtitle: 'Single thumbnail image per session',
+              subtitle: 'Single thumbnail image per item',
               onTap: () {
                 Navigator.of(context).pop();
                 _export(sessions, ExportKind.pngThumbnail);
               },
             ),
-            _ExportOption(
-              icon: Icons.photo_library,
-              title: 'PNG charts',
-              subtitle: 'Thumbnail + every chart, one image each',
-              onTap: () {
-                Navigator.of(context).pop();
-                _export(sessions, ExportKind.pngAll);
-              },
-            ),
+            if (hasFeedback)
+              _ExportOption(
+                icon: Icons.photo_library,
+                title: 'PNG charts',
+                subtitle: 'Feedback sessions only · thumbnail + charts',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _export(feedbackOnly, ExportKind.pngAll);
+                },
+              ),
             _ExportOption(
               icon: Icons.table_chart,
               title: 'CSV (Mind Monitor)',
@@ -322,7 +329,7 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
             _ExportOption(
               icon: Icons.bolt,
               title: 'EDF+ raw EEG',
-              subtitle: 'Standard EEG file with calibration/gesture markers',
+              subtitle: 'Standard EEG file with markers when present',
               onTap: () {
                 Navigator.of(context).pop();
                 _export(sessions, ExportKind.edf);
