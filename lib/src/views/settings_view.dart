@@ -185,6 +185,8 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
           ),
         ),
         const SizedBox(height: 16),
+        RepaintBoundary(child: _SubjectCard(settings: settings)),
+        const SizedBox(height: 16),
         RepaintBoundary(
           child: _RecordingCard(streams: streams, onToggle: toggle),
         ),
@@ -203,6 +205,107 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         const SizedBox(height: 16),
         RepaintBoundary(child: _DebugCard(settings: settings)),
       ],
+    );
+  }
+}
+
+
+/// Anonymous subject identity: stable id (read-only) + optional nickname.
+class _SubjectCard extends StatefulWidget {
+  const _SubjectCard({required this.settings});
+
+  final Settings settings;
+
+  @override
+  State<_SubjectCard> createState() => _SubjectCardState();
+}
+
+class _SubjectCardState extends State<_SubjectCard> {
+  late final TextEditingController _nickname;
+
+  @override
+  void initState() {
+    super.initState();
+    _nickname = TextEditingController(
+      text: widget.settings.subjectNickname ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _nickname.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveNickname() async {
+    await widget.settings.setSubjectNickname(_nickname.text);
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final id = widget.settings.subjectId;
+
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.badge_outlined,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Text('Subject', style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Anonymous id used in saved session files. Nickname is optional '
+              'and never filled from the id.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const Divider(height: 24),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.fingerprint),
+              title: const Text('Subject id'),
+              subtitle: SelectableText(
+                id.isEmpty ? '(not generated)' : id,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+            TextField(
+              controller: _nickname,
+              decoration: const InputDecoration(
+                labelText: 'Nickname (optional)',
+                hintText: 'Display name for this device',
+                border: OutlineInputBorder(),
+              ),
+              textInputAction: TextInputAction.done,
+              onEditingComplete: _saveNickname,
+              onSubmitted: (_) => _saveNickname(),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _saveNickname,
+                child: const Text('Save nickname'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
