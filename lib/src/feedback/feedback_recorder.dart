@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:neurofeed/src/session_v5/computed_frame.dart';
+import 'package:neurofeed/src/session_format/computed_frame.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
@@ -13,7 +13,7 @@ import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 /// Wraps [SessionRecorder] with session-aware lifecycle.
 ///
 /// Live writes always go to the fast scratch directory — SAF is only touched
-/// on Save. At session end, [assembleScratchV5] writes a real v5 container
+/// on Save. At session end, [assembleScratch] writes a real `.neurofeed` (NFED6)
 /// next to the temps, then deletes the temps on success.
 class FeedbackRecorder {
   FeedbackRecorder({Future<SessionStorage>? storage})
@@ -21,7 +21,7 @@ class FeedbackRecorder {
 
   final Future<SessionStorage> _storage;
   final SessionRecorder _recorder = SessionRecorder();
-  String? _scratchV5Path;
+  String? _scratchPath;
   String? _attachedId;
 
   static Future<SessionStorage> _defaultStorage() async {
@@ -32,16 +32,16 @@ class FeedbackRecorder {
 
   bool get usesRustCapture => _recorder.usesRustCapture;
 
-  String? get currentFilePath => _scratchV5Path ?? _recorder.currentFilePath;
+  String? get currentFilePath => _scratchPath ?? _recorder.currentFilePath;
 
-  String? get scratchV5Path => _scratchV5Path;
+  String? get scratchPath => _scratchPath;
 
   String? get sessionId => _recorder.sessionId ?? _attachedId;
 
-  /// Point at an already-assembled scratch v5 (process restart / leftover).
+  /// Point at an already-assembled scratch `.neurofeed` (process restart / leftover).
   void attachAssembledScratch({required String id, required String path}) {
     _attachedId = id;
-    _scratchV5Path = path;
+    _scratchPath = path;
   }
 
   /// Electrode indices that produced data in the current session recording.
@@ -83,6 +83,9 @@ class FeedbackRecorder {
     _recorder.appendComputed(frame);
   }
 
+  /// Pause/resume Rust raw capture for this session.
+  void setRawPaused(bool paused) => _recorder.setRawPaused(paused);
+
   /// Write a metadata event (calibration step, guardrail event, etc.) as JSON line.
   void writeMetadata(Map<String, dynamic> meta) {
     _recorder.writeMetadata(meta);
@@ -91,26 +94,26 @@ class FeedbackRecorder {
   /// Flush pending data to disk without assembling the container.
   Future<void> flushSession() => _recorder.flush();
 
-  /// Flush temps, encode a v5 container into scratch, delete temps on success.
+  /// Flush temps, encode a `.neurofeed` (NFED6) into scratch, delete temps on success.
   /// Returns the scratch path, or null if there was nothing to assemble or
   /// encoding failed (temps are kept so crash recovery can retry).
-  Future<String?> assembleScratchV5(Map<String, Object?> metadataJson) async {
+  Future<String?> assembleScratch(Map<String, Object?> metadataJson) async {
     await _recorder.flush();
     _recorder.stopPeriodicFlush();
     final id = _recorder.sessionId;
     final dir = _recorder.tempDir;
     final rawPath = _recorder.rawPath;
     if (id == null || dir == null || rawPath == null) {
-      debugPrint('[feedback] assembleScratchV5: no active recording');
+      debugPrint('[feedback] assembleScratch: no active recording');
       return null;
     }
     try {
       final File file;
       if (_recorder.usesRustCapture) {
-        file = await spine.assembleCaptureV5(metadataJson: metadataJson);
+        file = await spine.assembleCapture(metadataJson: metadataJson);
         _recorder.detachAfterAssemble();
       } else {
-        file = await writeScratchV5(
+        file = await writeScratch(
           dir: dir,
           id: id,
           metadataJson: metadataJson,
@@ -119,21 +122,21 @@ class FeedbackRecorder {
         );
         await _recorder.cleanupTempFiles();
       }
-      _scratchV5Path = file.path;
+      _scratchPath = file.path;
       debugPrint(
-        '[feedback] assembleScratchV5: ${file.path} (${file.lengthSync()}B)',
+        '[feedback] assembleScratch: ${file.path} (${file.lengthSync()}B)',
       );
       return file.path;
     } catch (e, st) {
-      debugPrint('[feedback] assembleScratchV5 failed: $e\n$st');
+      debugPrint('[feedback] assembleScratch failed: $e\n$st');
       return null;
     }
   }
 
-  /// Delete the scratch v5 (after a successful publish, or on discard).
-  Future<void> deleteScratchV5() async {
-    final path = _scratchV5Path;
-    _scratchV5Path = null;
+  /// Delete the scratch `.neurofeed` (after a successful publish, or on discard).
+  Future<void> deleteScratch() async {
+    final path = _scratchPath;
+    _scratchPath = null;
     _attachedId = null;
     if (path == null) return;
     final file = File(path);
@@ -141,20 +144,20 @@ class FeedbackRecorder {
       try {
         await file.delete();
       } catch (e) {
-        debugPrint('[feedback] deleteScratchV5 failed: $e');
+        debugPrint('[feedback] deleteScratch failed: $e');
       }
     }
   }
 
-  /// Discard the session (delete temps and any scratch v5).
+  /// Discard the session (delete temps and any scratch `.neurofeed`).
   Future<void> discardSession() async {
     await _recorder.stop();
-    await deleteScratchV5();
+    await deleteScratch();
   }
 
-  /// Get collected computed frames for v5 format assembly.
+  /// Get collected computed frames for container assembly.
   List<ComputedFrame> get computedFrames => _recorder.computedFrames;
 
-  /// Clear computed frames after v5 assembly.
+  /// Clear computed frames after container assembly.
   void clearComputedFrames() => _recorder.clearComputedFrames();
 }

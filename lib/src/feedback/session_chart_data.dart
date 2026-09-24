@@ -13,7 +13,7 @@ const int electrodeAf8 = 2;
 
 /// Display-ready chart series for one session: per-second band-relative powers
 /// of the frontal AF7/AF8 average, movement, heart rate, SpO2, and derived
-/// stats. Built by [prepareChartDataFromComputed] (v5 computed 1 Hz) or
+/// stats. Built by [prepareChartDataFromComputed] (computed 1 Hz) or
 /// [prepareChartData] (raw body, CSV/EDF only).
 class SessionChartData {
   final List<double> x;
@@ -240,9 +240,9 @@ double? recordingStartMsFromIso(String? startedAt) {
   return DateTime.tryParse(startedAt)?.millisecondsSinceEpoch.toDouble();
 }
 
-/// Chart data from a v5 container: computed frames, with pulse/SpO₂ filled
+/// Chart data from a `.neurofeed` container (NFED6): computed frames, with pulse/SpO₂ filled
 /// from the raw body when the 1 Hz frames omitted them.
-SessionChartData prepareChartDataFromV5({
+SessionChartData prepareChartDataFromContainer({
   required List<ffi.ComputedFrame> frames,
   required List<int> bytes,
   double? trainingStartOffset,
@@ -252,7 +252,7 @@ SessionChartData prepareChartDataFromV5({
 }) {
   ffi.SessionData? raw;
   try {
-    final body = ffi.v5ExtractRaw(bytes: bytes);
+    final body = ffi.extractRaw(bytes: bytes);
     if (body.isNotEmpty) {
       raw = ffi.sessionParseBody(bytes: body);
     }
@@ -267,7 +267,7 @@ SessionChartData prepareChartDataFromV5({
   );
 }
 
-/// Build chart data from v5 computed 1 Hz frames. X is elapsed seconds from
+/// Build chart data from computed 1 Hz frames. X is elapsed seconds from
 /// the displayed window start. Pads with `total <= 0` are autodropped.
 ///
 /// When computed frames have no pulse/SpO₂ (older sessions, or a sampler

@@ -714,6 +714,289 @@ abstract class _ComputedFrame extends ComputedFrame {
 }
 
 /// @nodoc
+mixin _$ContainerHeader {
+  BigInt get thumbnailOffset => throw _privateConstructorUsedError;
+  BigInt get thumbnailLength => throw _privateConstructorUsedError;
+  BigInt get metadataOffset => throw _privateConstructorUsedError;
+  BigInt get metadataLength => throw _privateConstructorUsedError;
+  BigInt get computedOffset => throw _privateConstructorUsedError;
+  BigInt get computedLength => throw _privateConstructorUsedError;
+  BigInt get rawOffset => throw _privateConstructorUsedError;
+
+  /// Create a copy of ContainerHeader
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $ContainerHeaderCopyWith<ContainerHeader> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ContainerHeaderCopyWith<$Res> {
+  factory $ContainerHeaderCopyWith(
+    ContainerHeader value,
+    $Res Function(ContainerHeader) then,
+  ) = _$ContainerHeaderCopyWithImpl<$Res, ContainerHeader>;
+  @useResult
+  $Res call({
+    BigInt thumbnailOffset,
+    BigInt thumbnailLength,
+    BigInt metadataOffset,
+    BigInt metadataLength,
+    BigInt computedOffset,
+    BigInt computedLength,
+    BigInt rawOffset,
+  });
+}
+
+/// @nodoc
+class _$ContainerHeaderCopyWithImpl<$Res, $Val extends ContainerHeader>
+    implements $ContainerHeaderCopyWith<$Res> {
+  _$ContainerHeaderCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ContainerHeader
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? thumbnailOffset = null,
+    Object? thumbnailLength = null,
+    Object? metadataOffset = null,
+    Object? metadataLength = null,
+    Object? computedOffset = null,
+    Object? computedLength = null,
+    Object? rawOffset = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            thumbnailOffset: null == thumbnailOffset
+                ? _value.thumbnailOffset
+                : thumbnailOffset // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+            thumbnailLength: null == thumbnailLength
+                ? _value.thumbnailLength
+                : thumbnailLength // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+            metadataOffset: null == metadataOffset
+                ? _value.metadataOffset
+                : metadataOffset // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+            metadataLength: null == metadataLength
+                ? _value.metadataLength
+                : metadataLength // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+            computedOffset: null == computedOffset
+                ? _value.computedOffset
+                : computedOffset // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+            computedLength: null == computedLength
+                ? _value.computedLength
+                : computedLength // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+            rawOffset: null == rawOffset
+                ? _value.rawOffset
+                : rawOffset // ignore: cast_nullable_to_non_nullable
+                      as BigInt,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$ContainerHeaderImplCopyWith<$Res>
+    implements $ContainerHeaderCopyWith<$Res> {
+  factory _$$ContainerHeaderImplCopyWith(
+    _$ContainerHeaderImpl value,
+    $Res Function(_$ContainerHeaderImpl) then,
+  ) = __$$ContainerHeaderImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({
+    BigInt thumbnailOffset,
+    BigInt thumbnailLength,
+    BigInt metadataOffset,
+    BigInt metadataLength,
+    BigInt computedOffset,
+    BigInt computedLength,
+    BigInt rawOffset,
+  });
+}
+
+/// @nodoc
+class __$$ContainerHeaderImplCopyWithImpl<$Res>
+    extends _$ContainerHeaderCopyWithImpl<$Res, _$ContainerHeaderImpl>
+    implements _$$ContainerHeaderImplCopyWith<$Res> {
+  __$$ContainerHeaderImplCopyWithImpl(
+    _$ContainerHeaderImpl _value,
+    $Res Function(_$ContainerHeaderImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of ContainerHeader
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? thumbnailOffset = null,
+    Object? thumbnailLength = null,
+    Object? metadataOffset = null,
+    Object? metadataLength = null,
+    Object? computedOffset = null,
+    Object? computedLength = null,
+    Object? rawOffset = null,
+  }) {
+    return _then(
+      _$ContainerHeaderImpl(
+        thumbnailOffset: null == thumbnailOffset
+            ? _value.thumbnailOffset
+            : thumbnailOffset // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+        thumbnailLength: null == thumbnailLength
+            ? _value.thumbnailLength
+            : thumbnailLength // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+        metadataOffset: null == metadataOffset
+            ? _value.metadataOffset
+            : metadataOffset // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+        metadataLength: null == metadataLength
+            ? _value.metadataLength
+            : metadataLength // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+        computedOffset: null == computedOffset
+            ? _value.computedOffset
+            : computedOffset // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+        computedLength: null == computedLength
+            ? _value.computedLength
+            : computedLength // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+        rawOffset: null == rawOffset
+            ? _value.rawOffset
+            : rawOffset // ignore: cast_nullable_to_non_nullable
+                  as BigInt,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$ContainerHeaderImpl implements _ContainerHeader {
+  const _$ContainerHeaderImpl({
+    required this.thumbnailOffset,
+    required this.thumbnailLength,
+    required this.metadataOffset,
+    required this.metadataLength,
+    required this.computedOffset,
+    required this.computedLength,
+    required this.rawOffset,
+  });
+
+  @override
+  final BigInt thumbnailOffset;
+  @override
+  final BigInt thumbnailLength;
+  @override
+  final BigInt metadataOffset;
+  @override
+  final BigInt metadataLength;
+  @override
+  final BigInt computedOffset;
+  @override
+  final BigInt computedLength;
+  @override
+  final BigInt rawOffset;
+
+  @override
+  String toString() {
+    return 'ContainerHeader(thumbnailOffset: $thumbnailOffset, thumbnailLength: $thumbnailLength, metadataOffset: $metadataOffset, metadataLength: $metadataLength, computedOffset: $computedOffset, computedLength: $computedLength, rawOffset: $rawOffset)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ContainerHeaderImpl &&
+            (identical(other.thumbnailOffset, thumbnailOffset) ||
+                other.thumbnailOffset == thumbnailOffset) &&
+            (identical(other.thumbnailLength, thumbnailLength) ||
+                other.thumbnailLength == thumbnailLength) &&
+            (identical(other.metadataOffset, metadataOffset) ||
+                other.metadataOffset == metadataOffset) &&
+            (identical(other.metadataLength, metadataLength) ||
+                other.metadataLength == metadataLength) &&
+            (identical(other.computedOffset, computedOffset) ||
+                other.computedOffset == computedOffset) &&
+            (identical(other.computedLength, computedLength) ||
+                other.computedLength == computedLength) &&
+            (identical(other.rawOffset, rawOffset) ||
+                other.rawOffset == rawOffset));
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    runtimeType,
+    thumbnailOffset,
+    thumbnailLength,
+    metadataOffset,
+    metadataLength,
+    computedOffset,
+    computedLength,
+    rawOffset,
+  );
+
+  /// Create a copy of ContainerHeader
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ContainerHeaderImplCopyWith<_$ContainerHeaderImpl> get copyWith =>
+      __$$ContainerHeaderImplCopyWithImpl<_$ContainerHeaderImpl>(
+        this,
+        _$identity,
+      );
+}
+
+abstract class _ContainerHeader implements ContainerHeader {
+  const factory _ContainerHeader({
+    required final BigInt thumbnailOffset,
+    required final BigInt thumbnailLength,
+    required final BigInt metadataOffset,
+    required final BigInt metadataLength,
+    required final BigInt computedOffset,
+    required final BigInt computedLength,
+    required final BigInt rawOffset,
+  }) = _$ContainerHeaderImpl;
+
+  @override
+  BigInt get thumbnailOffset;
+  @override
+  BigInt get thumbnailLength;
+  @override
+  BigInt get metadataOffset;
+  @override
+  BigInt get metadataLength;
+  @override
+  BigInt get computedOffset;
+  @override
+  BigInt get computedLength;
+  @override
+  BigInt get rawOffset;
+
+  /// Create a copy of ContainerHeader
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ContainerHeaderImplCopyWith<_$ContainerHeaderImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
 mixin _$EegSampleRecord {
   double get timestamp => throw _privateConstructorUsedError;
   int get electrode => throw _privateConstructorUsedError;
@@ -905,6 +1188,14 @@ mixin _$FeedbackInfo {
   double get threshold => throw _privateConstructorUsedError;
   bool get inTarget => throw _privateConstructorUsedError;
   double get pct => throw _privateConstructorUsedError;
+  double? get percentile => throw _privateConstructorUsedError;
+  double? get thresholdPercentile => throw _privateConstructorUsedError;
+  bool? get heldBack => throw _privateConstructorUsedError;
+  List<String>? get inhibitTags => throw _privateConstructorUsedError;
+  bool? get clean => throw _privateConstructorUsedError;
+  String? get dirtyReason => throw _privateConstructorUsedError;
+  double? get betaRel => throw _privateConstructorUsedError;
+  double? get deltaRel => throw _privateConstructorUsedError;
 
   /// Create a copy of FeedbackInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -920,7 +1211,20 @@ abstract class $FeedbackInfoCopyWith<$Res> {
     $Res Function(FeedbackInfo) then,
   ) = _$FeedbackInfoCopyWithImpl<$Res, FeedbackInfo>;
   @useResult
-  $Res call({double ratio, double threshold, bool inTarget, double pct});
+  $Res call({
+    double ratio,
+    double threshold,
+    bool inTarget,
+    double pct,
+    double? percentile,
+    double? thresholdPercentile,
+    bool? heldBack,
+    List<String>? inhibitTags,
+    bool? clean,
+    String? dirtyReason,
+    double? betaRel,
+    double? deltaRel,
+  });
 }
 
 /// @nodoc
@@ -942,6 +1246,14 @@ class _$FeedbackInfoCopyWithImpl<$Res, $Val extends FeedbackInfo>
     Object? threshold = null,
     Object? inTarget = null,
     Object? pct = null,
+    Object? percentile = freezed,
+    Object? thresholdPercentile = freezed,
+    Object? heldBack = freezed,
+    Object? inhibitTags = freezed,
+    Object? clean = freezed,
+    Object? dirtyReason = freezed,
+    Object? betaRel = freezed,
+    Object? deltaRel = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -961,6 +1273,38 @@ class _$FeedbackInfoCopyWithImpl<$Res, $Val extends FeedbackInfo>
                 ? _value.pct
                 : pct // ignore: cast_nullable_to_non_nullable
                       as double,
+            percentile: freezed == percentile
+                ? _value.percentile
+                : percentile // ignore: cast_nullable_to_non_nullable
+                      as double?,
+            thresholdPercentile: freezed == thresholdPercentile
+                ? _value.thresholdPercentile
+                : thresholdPercentile // ignore: cast_nullable_to_non_nullable
+                      as double?,
+            heldBack: freezed == heldBack
+                ? _value.heldBack
+                : heldBack // ignore: cast_nullable_to_non_nullable
+                      as bool?,
+            inhibitTags: freezed == inhibitTags
+                ? _value.inhibitTags
+                : inhibitTags // ignore: cast_nullable_to_non_nullable
+                      as List<String>?,
+            clean: freezed == clean
+                ? _value.clean
+                : clean // ignore: cast_nullable_to_non_nullable
+                      as bool?,
+            dirtyReason: freezed == dirtyReason
+                ? _value.dirtyReason
+                : dirtyReason // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            betaRel: freezed == betaRel
+                ? _value.betaRel
+                : betaRel // ignore: cast_nullable_to_non_nullable
+                      as double?,
+            deltaRel: freezed == deltaRel
+                ? _value.deltaRel
+                : deltaRel // ignore: cast_nullable_to_non_nullable
+                      as double?,
           )
           as $Val,
     );
@@ -976,7 +1320,20 @@ abstract class _$$FeedbackInfoImplCopyWith<$Res>
   ) = __$$FeedbackInfoImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({double ratio, double threshold, bool inTarget, double pct});
+  $Res call({
+    double ratio,
+    double threshold,
+    bool inTarget,
+    double pct,
+    double? percentile,
+    double? thresholdPercentile,
+    bool? heldBack,
+    List<String>? inhibitTags,
+    bool? clean,
+    String? dirtyReason,
+    double? betaRel,
+    double? deltaRel,
+  });
 }
 
 /// @nodoc
@@ -997,6 +1354,14 @@ class __$$FeedbackInfoImplCopyWithImpl<$Res>
     Object? threshold = null,
     Object? inTarget = null,
     Object? pct = null,
+    Object? percentile = freezed,
+    Object? thresholdPercentile = freezed,
+    Object? heldBack = freezed,
+    Object? inhibitTags = freezed,
+    Object? clean = freezed,
+    Object? dirtyReason = freezed,
+    Object? betaRel = freezed,
+    Object? deltaRel = freezed,
   }) {
     return _then(
       _$FeedbackInfoImpl(
@@ -1016,6 +1381,38 @@ class __$$FeedbackInfoImplCopyWithImpl<$Res>
             ? _value.pct
             : pct // ignore: cast_nullable_to_non_nullable
                   as double,
+        percentile: freezed == percentile
+            ? _value.percentile
+            : percentile // ignore: cast_nullable_to_non_nullable
+                  as double?,
+        thresholdPercentile: freezed == thresholdPercentile
+            ? _value.thresholdPercentile
+            : thresholdPercentile // ignore: cast_nullable_to_non_nullable
+                  as double?,
+        heldBack: freezed == heldBack
+            ? _value.heldBack
+            : heldBack // ignore: cast_nullable_to_non_nullable
+                  as bool?,
+        inhibitTags: freezed == inhibitTags
+            ? _value._inhibitTags
+            : inhibitTags // ignore: cast_nullable_to_non_nullable
+                  as List<String>?,
+        clean: freezed == clean
+            ? _value.clean
+            : clean // ignore: cast_nullable_to_non_nullable
+                  as bool?,
+        dirtyReason: freezed == dirtyReason
+            ? _value.dirtyReason
+            : dirtyReason // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        betaRel: freezed == betaRel
+            ? _value.betaRel
+            : betaRel // ignore: cast_nullable_to_non_nullable
+                  as double?,
+        deltaRel: freezed == deltaRel
+            ? _value.deltaRel
+            : deltaRel // ignore: cast_nullable_to_non_nullable
+                  as double?,
       ),
     );
   }
@@ -1023,13 +1420,22 @@ class __$$FeedbackInfoImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$FeedbackInfoImpl implements _FeedbackInfo {
+class _$FeedbackInfoImpl extends _FeedbackInfo {
   const _$FeedbackInfoImpl({
     required this.ratio,
     required this.threshold,
     required this.inTarget,
     required this.pct,
-  });
+    this.percentile,
+    this.thresholdPercentile,
+    this.heldBack,
+    final List<String>? inhibitTags,
+    this.clean,
+    this.dirtyReason,
+    this.betaRel,
+    this.deltaRel,
+  }) : _inhibitTags = inhibitTags,
+       super._();
 
   @override
   final double ratio;
@@ -1039,10 +1445,34 @@ class _$FeedbackInfoImpl implements _FeedbackInfo {
   final bool inTarget;
   @override
   final double pct;
+  @override
+  final double? percentile;
+  @override
+  final double? thresholdPercentile;
+  @override
+  final bool? heldBack;
+  final List<String>? _inhibitTags;
+  @override
+  List<String>? get inhibitTags {
+    final value = _inhibitTags;
+    if (value == null) return null;
+    if (_inhibitTags is EqualUnmodifiableListView) return _inhibitTags;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(value);
+  }
+
+  @override
+  final bool? clean;
+  @override
+  final String? dirtyReason;
+  @override
+  final double? betaRel;
+  @override
+  final double? deltaRel;
 
   @override
   String toString() {
-    return 'FeedbackInfo(ratio: $ratio, threshold: $threshold, inTarget: $inTarget, pct: $pct)';
+    return 'FeedbackInfo(ratio: $ratio, threshold: $threshold, inTarget: $inTarget, pct: $pct, percentile: $percentile, thresholdPercentile: $thresholdPercentile, heldBack: $heldBack, inhibitTags: $inhibitTags, clean: $clean, dirtyReason: $dirtyReason, betaRel: $betaRel, deltaRel: $deltaRel)';
   }
 
   @override
@@ -1055,11 +1485,41 @@ class _$FeedbackInfoImpl implements _FeedbackInfo {
                 other.threshold == threshold) &&
             (identical(other.inTarget, inTarget) ||
                 other.inTarget == inTarget) &&
-            (identical(other.pct, pct) || other.pct == pct));
+            (identical(other.pct, pct) || other.pct == pct) &&
+            (identical(other.percentile, percentile) ||
+                other.percentile == percentile) &&
+            (identical(other.thresholdPercentile, thresholdPercentile) ||
+                other.thresholdPercentile == thresholdPercentile) &&
+            (identical(other.heldBack, heldBack) ||
+                other.heldBack == heldBack) &&
+            const DeepCollectionEquality().equals(
+              other._inhibitTags,
+              _inhibitTags,
+            ) &&
+            (identical(other.clean, clean) || other.clean == clean) &&
+            (identical(other.dirtyReason, dirtyReason) ||
+                other.dirtyReason == dirtyReason) &&
+            (identical(other.betaRel, betaRel) || other.betaRel == betaRel) &&
+            (identical(other.deltaRel, deltaRel) ||
+                other.deltaRel == deltaRel));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, ratio, threshold, inTarget, pct);
+  int get hashCode => Object.hash(
+    runtimeType,
+    ratio,
+    threshold,
+    inTarget,
+    pct,
+    percentile,
+    thresholdPercentile,
+    heldBack,
+    const DeepCollectionEquality().hash(_inhibitTags),
+    clean,
+    dirtyReason,
+    betaRel,
+    deltaRel,
+  );
 
   /// Create a copy of FeedbackInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -1070,13 +1530,22 @@ class _$FeedbackInfoImpl implements _FeedbackInfo {
       __$$FeedbackInfoImplCopyWithImpl<_$FeedbackInfoImpl>(this, _$identity);
 }
 
-abstract class _FeedbackInfo implements FeedbackInfo {
+abstract class _FeedbackInfo extends FeedbackInfo {
   const factory _FeedbackInfo({
     required final double ratio,
     required final double threshold,
     required final bool inTarget,
     required final double pct,
+    final double? percentile,
+    final double? thresholdPercentile,
+    final bool? heldBack,
+    final List<String>? inhibitTags,
+    final bool? clean,
+    final String? dirtyReason,
+    final double? betaRel,
+    final double? deltaRel,
   }) = _$FeedbackInfoImpl;
+  const _FeedbackInfo._() : super._();
 
   @override
   double get ratio;
@@ -1086,6 +1555,22 @@ abstract class _FeedbackInfo implements FeedbackInfo {
   bool get inTarget;
   @override
   double get pct;
+  @override
+  double? get percentile;
+  @override
+  double? get thresholdPercentile;
+  @override
+  bool? get heldBack;
+  @override
+  List<String>? get inhibitTags;
+  @override
+  bool? get clean;
+  @override
+  String? get dirtyReason;
+  @override
+  double? get betaRel;
+  @override
+  double? get deltaRel;
 
   /// Create a copy of FeedbackInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -1101,6 +1586,11 @@ mixin _$GuardrailInfo {
   double get clarity => throw _privateConstructorUsedError;
   bool get warning => throw _privateConstructorUsedError;
   double get delta => throw _privateConstructorUsedError;
+  double? get featurePercentile => throw _privateConstructorUsedError;
+  bool? get warnOver => throw _privateConstructorUsedError;
+  bool? get ceilingOver => throw _privateConstructorUsedError;
+  bool? get clean => throw _privateConstructorUsedError;
+  String? get dirtyReason => throw _privateConstructorUsedError;
 
   /// Create a copy of GuardrailInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -1116,7 +1606,17 @@ abstract class $GuardrailInfoCopyWith<$Res> {
     $Res Function(GuardrailInfo) then,
   ) = _$GuardrailInfoCopyWithImpl<$Res, GuardrailInfo>;
   @useResult
-  $Res call({double sleepDir, double clarity, bool warning, double delta});
+  $Res call({
+    double sleepDir,
+    double clarity,
+    bool warning,
+    double delta,
+    double? featurePercentile,
+    bool? warnOver,
+    bool? ceilingOver,
+    bool? clean,
+    String? dirtyReason,
+  });
 }
 
 /// @nodoc
@@ -1138,6 +1638,11 @@ class _$GuardrailInfoCopyWithImpl<$Res, $Val extends GuardrailInfo>
     Object? clarity = null,
     Object? warning = null,
     Object? delta = null,
+    Object? featurePercentile = freezed,
+    Object? warnOver = freezed,
+    Object? ceilingOver = freezed,
+    Object? clean = freezed,
+    Object? dirtyReason = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -1157,6 +1662,26 @@ class _$GuardrailInfoCopyWithImpl<$Res, $Val extends GuardrailInfo>
                 ? _value.delta
                 : delta // ignore: cast_nullable_to_non_nullable
                       as double,
+            featurePercentile: freezed == featurePercentile
+                ? _value.featurePercentile
+                : featurePercentile // ignore: cast_nullable_to_non_nullable
+                      as double?,
+            warnOver: freezed == warnOver
+                ? _value.warnOver
+                : warnOver // ignore: cast_nullable_to_non_nullable
+                      as bool?,
+            ceilingOver: freezed == ceilingOver
+                ? _value.ceilingOver
+                : ceilingOver // ignore: cast_nullable_to_non_nullable
+                      as bool?,
+            clean: freezed == clean
+                ? _value.clean
+                : clean // ignore: cast_nullable_to_non_nullable
+                      as bool?,
+            dirtyReason: freezed == dirtyReason
+                ? _value.dirtyReason
+                : dirtyReason // ignore: cast_nullable_to_non_nullable
+                      as String?,
           )
           as $Val,
     );
@@ -1172,7 +1697,17 @@ abstract class _$$GuardrailInfoImplCopyWith<$Res>
   ) = __$$GuardrailInfoImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({double sleepDir, double clarity, bool warning, double delta});
+  $Res call({
+    double sleepDir,
+    double clarity,
+    bool warning,
+    double delta,
+    double? featurePercentile,
+    bool? warnOver,
+    bool? ceilingOver,
+    bool? clean,
+    String? dirtyReason,
+  });
 }
 
 /// @nodoc
@@ -1193,6 +1728,11 @@ class __$$GuardrailInfoImplCopyWithImpl<$Res>
     Object? clarity = null,
     Object? warning = null,
     Object? delta = null,
+    Object? featurePercentile = freezed,
+    Object? warnOver = freezed,
+    Object? ceilingOver = freezed,
+    Object? clean = freezed,
+    Object? dirtyReason = freezed,
   }) {
     return _then(
       _$GuardrailInfoImpl(
@@ -1212,6 +1752,26 @@ class __$$GuardrailInfoImplCopyWithImpl<$Res>
             ? _value.delta
             : delta // ignore: cast_nullable_to_non_nullable
                   as double,
+        featurePercentile: freezed == featurePercentile
+            ? _value.featurePercentile
+            : featurePercentile // ignore: cast_nullable_to_non_nullable
+                  as double?,
+        warnOver: freezed == warnOver
+            ? _value.warnOver
+            : warnOver // ignore: cast_nullable_to_non_nullable
+                  as bool?,
+        ceilingOver: freezed == ceilingOver
+            ? _value.ceilingOver
+            : ceilingOver // ignore: cast_nullable_to_non_nullable
+                  as bool?,
+        clean: freezed == clean
+            ? _value.clean
+            : clean // ignore: cast_nullable_to_non_nullable
+                  as bool?,
+        dirtyReason: freezed == dirtyReason
+            ? _value.dirtyReason
+            : dirtyReason // ignore: cast_nullable_to_non_nullable
+                  as String?,
       ),
     );
   }
@@ -1219,13 +1779,18 @@ class __$$GuardrailInfoImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$GuardrailInfoImpl implements _GuardrailInfo {
+class _$GuardrailInfoImpl extends _GuardrailInfo {
   const _$GuardrailInfoImpl({
     required this.sleepDir,
     required this.clarity,
     required this.warning,
     required this.delta,
-  });
+    this.featurePercentile,
+    this.warnOver,
+    this.ceilingOver,
+    this.clean,
+    this.dirtyReason,
+  }) : super._();
 
   @override
   final double sleepDir;
@@ -1235,10 +1800,20 @@ class _$GuardrailInfoImpl implements _GuardrailInfo {
   final bool warning;
   @override
   final double delta;
+  @override
+  final double? featurePercentile;
+  @override
+  final bool? warnOver;
+  @override
+  final bool? ceilingOver;
+  @override
+  final bool? clean;
+  @override
+  final String? dirtyReason;
 
   @override
   String toString() {
-    return 'GuardrailInfo(sleepDir: $sleepDir, clarity: $clarity, warning: $warning, delta: $delta)';
+    return 'GuardrailInfo(sleepDir: $sleepDir, clarity: $clarity, warning: $warning, delta: $delta, featurePercentile: $featurePercentile, warnOver: $warnOver, ceilingOver: $ceilingOver, clean: $clean, dirtyReason: $dirtyReason)';
   }
 
   @override
@@ -1250,12 +1825,31 @@ class _$GuardrailInfoImpl implements _GuardrailInfo {
                 other.sleepDir == sleepDir) &&
             (identical(other.clarity, clarity) || other.clarity == clarity) &&
             (identical(other.warning, warning) || other.warning == warning) &&
-            (identical(other.delta, delta) || other.delta == delta));
+            (identical(other.delta, delta) || other.delta == delta) &&
+            (identical(other.featurePercentile, featurePercentile) ||
+                other.featurePercentile == featurePercentile) &&
+            (identical(other.warnOver, warnOver) ||
+                other.warnOver == warnOver) &&
+            (identical(other.ceilingOver, ceilingOver) ||
+                other.ceilingOver == ceilingOver) &&
+            (identical(other.clean, clean) || other.clean == clean) &&
+            (identical(other.dirtyReason, dirtyReason) ||
+                other.dirtyReason == dirtyReason));
   }
 
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, sleepDir, clarity, warning, delta);
+  int get hashCode => Object.hash(
+    runtimeType,
+    sleepDir,
+    clarity,
+    warning,
+    delta,
+    featurePercentile,
+    warnOver,
+    ceilingOver,
+    clean,
+    dirtyReason,
+  );
 
   /// Create a copy of GuardrailInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -1266,13 +1860,19 @@ class _$GuardrailInfoImpl implements _GuardrailInfo {
       __$$GuardrailInfoImplCopyWithImpl<_$GuardrailInfoImpl>(this, _$identity);
 }
 
-abstract class _GuardrailInfo implements GuardrailInfo {
+abstract class _GuardrailInfo extends GuardrailInfo {
   const factory _GuardrailInfo({
     required final double sleepDir,
     required final double clarity,
     required final bool warning,
     required final double delta,
+    final double? featurePercentile,
+    final bool? warnOver,
+    final bool? ceilingOver,
+    final bool? clean,
+    final String? dirtyReason,
   }) = _$GuardrailInfoImpl;
+  const _GuardrailInfo._() : super._();
 
   @override
   double get sleepDir;
@@ -1282,6 +1882,16 @@ abstract class _GuardrailInfo implements GuardrailInfo {
   bool get warning;
   @override
   double get delta;
+  @override
+  double? get featurePercentile;
+  @override
+  bool? get warnOver;
+  @override
+  bool? get ceilingOver;
+  @override
+  bool? get clean;
+  @override
+  String? get dirtyReason;
 
   /// Create a copy of GuardrailInfo
   /// with the given fields replaced by the non-null parameter values.
@@ -1441,6 +2051,213 @@ abstract class _MovementRecord implements MovementRecord {
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$MovementRecordImplCopyWith<_$MovementRecordImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+mixin _$ParsedHead {
+  ContainerHeader get header => throw _privateConstructorUsedError;
+  Uint8List get thumbnail => throw _privateConstructorUsedError;
+  Uint8List get metadataJson => throw _privateConstructorUsedError;
+
+  /// Create a copy of ParsedHead
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $ParsedHeadCopyWith<ParsedHead> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ParsedHeadCopyWith<$Res> {
+  factory $ParsedHeadCopyWith(
+    ParsedHead value,
+    $Res Function(ParsedHead) then,
+  ) = _$ParsedHeadCopyWithImpl<$Res, ParsedHead>;
+  @useResult
+  $Res call({
+    ContainerHeader header,
+    Uint8List thumbnail,
+    Uint8List metadataJson,
+  });
+
+  $ContainerHeaderCopyWith<$Res> get header;
+}
+
+/// @nodoc
+class _$ParsedHeadCopyWithImpl<$Res, $Val extends ParsedHead>
+    implements $ParsedHeadCopyWith<$Res> {
+  _$ParsedHeadCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ParsedHead
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? header = null,
+    Object? thumbnail = null,
+    Object? metadataJson = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            header: null == header
+                ? _value.header
+                : header // ignore: cast_nullable_to_non_nullable
+                      as ContainerHeader,
+            thumbnail: null == thumbnail
+                ? _value.thumbnail
+                : thumbnail // ignore: cast_nullable_to_non_nullable
+                      as Uint8List,
+            metadataJson: null == metadataJson
+                ? _value.metadataJson
+                : metadataJson // ignore: cast_nullable_to_non_nullable
+                      as Uint8List,
+          )
+          as $Val,
+    );
+  }
+
+  /// Create a copy of ParsedHead
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $ContainerHeaderCopyWith<$Res> get header {
+    return $ContainerHeaderCopyWith<$Res>(_value.header, (value) {
+      return _then(_value.copyWith(header: value) as $Val);
+    });
+  }
+}
+
+/// @nodoc
+abstract class _$$ParsedHeadImplCopyWith<$Res>
+    implements $ParsedHeadCopyWith<$Res> {
+  factory _$$ParsedHeadImplCopyWith(
+    _$ParsedHeadImpl value,
+    $Res Function(_$ParsedHeadImpl) then,
+  ) = __$$ParsedHeadImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({
+    ContainerHeader header,
+    Uint8List thumbnail,
+    Uint8List metadataJson,
+  });
+
+  @override
+  $ContainerHeaderCopyWith<$Res> get header;
+}
+
+/// @nodoc
+class __$$ParsedHeadImplCopyWithImpl<$Res>
+    extends _$ParsedHeadCopyWithImpl<$Res, _$ParsedHeadImpl>
+    implements _$$ParsedHeadImplCopyWith<$Res> {
+  __$$ParsedHeadImplCopyWithImpl(
+    _$ParsedHeadImpl _value,
+    $Res Function(_$ParsedHeadImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of ParsedHead
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? header = null,
+    Object? thumbnail = null,
+    Object? metadataJson = null,
+  }) {
+    return _then(
+      _$ParsedHeadImpl(
+        header: null == header
+            ? _value.header
+            : header // ignore: cast_nullable_to_non_nullable
+                  as ContainerHeader,
+        thumbnail: null == thumbnail
+            ? _value.thumbnail
+            : thumbnail // ignore: cast_nullable_to_non_nullable
+                  as Uint8List,
+        metadataJson: null == metadataJson
+            ? _value.metadataJson
+            : metadataJson // ignore: cast_nullable_to_non_nullable
+                  as Uint8List,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$ParsedHeadImpl implements _ParsedHead {
+  const _$ParsedHeadImpl({
+    required this.header,
+    required this.thumbnail,
+    required this.metadataJson,
+  });
+
+  @override
+  final ContainerHeader header;
+  @override
+  final Uint8List thumbnail;
+  @override
+  final Uint8List metadataJson;
+
+  @override
+  String toString() {
+    return 'ParsedHead(header: $header, thumbnail: $thumbnail, metadataJson: $metadataJson)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ParsedHeadImpl &&
+            (identical(other.header, header) || other.header == header) &&
+            const DeepCollectionEquality().equals(other.thumbnail, thumbnail) &&
+            const DeepCollectionEquality().equals(
+              other.metadataJson,
+              metadataJson,
+            ));
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    runtimeType,
+    header,
+    const DeepCollectionEquality().hash(thumbnail),
+    const DeepCollectionEquality().hash(metadataJson),
+  );
+
+  /// Create a copy of ParsedHead
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ParsedHeadImplCopyWith<_$ParsedHeadImpl> get copyWith =>
+      __$$ParsedHeadImplCopyWithImpl<_$ParsedHeadImpl>(this, _$identity);
+}
+
+abstract class _ParsedHead implements ParsedHead {
+  const factory _ParsedHead({
+    required final ContainerHeader header,
+    required final Uint8List thumbnail,
+    required final Uint8List metadataJson,
+  }) = _$ParsedHeadImpl;
+
+  @override
+  ContainerHeader get header;
+  @override
+  Uint8List get thumbnail;
+  @override
+  Uint8List get metadataJson;
+
+  /// Create a copy of ParsedHead
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ParsedHeadImplCopyWith<_$ParsedHeadImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 
@@ -2447,482 +3264,5 @@ abstract class _SpO2Record implements SpO2Record {
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$SpO2RecordImplCopyWith<_$SpO2RecordImpl> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-mixin _$V5Header {
-  BigInt get thumbnailOffset => throw _privateConstructorUsedError;
-  BigInt get thumbnailLength => throw _privateConstructorUsedError;
-  BigInt get metadataOffset => throw _privateConstructorUsedError;
-  BigInt get metadataLength => throw _privateConstructorUsedError;
-  BigInt get computedOffset => throw _privateConstructorUsedError;
-  BigInt get computedLength => throw _privateConstructorUsedError;
-  BigInt get rawOffset => throw _privateConstructorUsedError;
-
-  /// Create a copy of V5Header
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  $V5HeaderCopyWith<V5Header> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-abstract class $V5HeaderCopyWith<$Res> {
-  factory $V5HeaderCopyWith(V5Header value, $Res Function(V5Header) then) =
-      _$V5HeaderCopyWithImpl<$Res, V5Header>;
-  @useResult
-  $Res call({
-    BigInt thumbnailOffset,
-    BigInt thumbnailLength,
-    BigInt metadataOffset,
-    BigInt metadataLength,
-    BigInt computedOffset,
-    BigInt computedLength,
-    BigInt rawOffset,
-  });
-}
-
-/// @nodoc
-class _$V5HeaderCopyWithImpl<$Res, $Val extends V5Header>
-    implements $V5HeaderCopyWith<$Res> {
-  _$V5HeaderCopyWithImpl(this._value, this._then);
-
-  // ignore: unused_field
-  final $Val _value;
-  // ignore: unused_field
-  final $Res Function($Val) _then;
-
-  /// Create a copy of V5Header
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? thumbnailOffset = null,
-    Object? thumbnailLength = null,
-    Object? metadataOffset = null,
-    Object? metadataLength = null,
-    Object? computedOffset = null,
-    Object? computedLength = null,
-    Object? rawOffset = null,
-  }) {
-    return _then(
-      _value.copyWith(
-            thumbnailOffset: null == thumbnailOffset
-                ? _value.thumbnailOffset
-                : thumbnailOffset // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-            thumbnailLength: null == thumbnailLength
-                ? _value.thumbnailLength
-                : thumbnailLength // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-            metadataOffset: null == metadataOffset
-                ? _value.metadataOffset
-                : metadataOffset // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-            metadataLength: null == metadataLength
-                ? _value.metadataLength
-                : metadataLength // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-            computedOffset: null == computedOffset
-                ? _value.computedOffset
-                : computedOffset // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-            computedLength: null == computedLength
-                ? _value.computedLength
-                : computedLength // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-            rawOffset: null == rawOffset
-                ? _value.rawOffset
-                : rawOffset // ignore: cast_nullable_to_non_nullable
-                      as BigInt,
-          )
-          as $Val,
-    );
-  }
-}
-
-/// @nodoc
-abstract class _$$V5HeaderImplCopyWith<$Res>
-    implements $V5HeaderCopyWith<$Res> {
-  factory _$$V5HeaderImplCopyWith(
-    _$V5HeaderImpl value,
-    $Res Function(_$V5HeaderImpl) then,
-  ) = __$$V5HeaderImplCopyWithImpl<$Res>;
-  @override
-  @useResult
-  $Res call({
-    BigInt thumbnailOffset,
-    BigInt thumbnailLength,
-    BigInt metadataOffset,
-    BigInt metadataLength,
-    BigInt computedOffset,
-    BigInt computedLength,
-    BigInt rawOffset,
-  });
-}
-
-/// @nodoc
-class __$$V5HeaderImplCopyWithImpl<$Res>
-    extends _$V5HeaderCopyWithImpl<$Res, _$V5HeaderImpl>
-    implements _$$V5HeaderImplCopyWith<$Res> {
-  __$$V5HeaderImplCopyWithImpl(
-    _$V5HeaderImpl _value,
-    $Res Function(_$V5HeaderImpl) _then,
-  ) : super(_value, _then);
-
-  /// Create a copy of V5Header
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? thumbnailOffset = null,
-    Object? thumbnailLength = null,
-    Object? metadataOffset = null,
-    Object? metadataLength = null,
-    Object? computedOffset = null,
-    Object? computedLength = null,
-    Object? rawOffset = null,
-  }) {
-    return _then(
-      _$V5HeaderImpl(
-        thumbnailOffset: null == thumbnailOffset
-            ? _value.thumbnailOffset
-            : thumbnailOffset // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-        thumbnailLength: null == thumbnailLength
-            ? _value.thumbnailLength
-            : thumbnailLength // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-        metadataOffset: null == metadataOffset
-            ? _value.metadataOffset
-            : metadataOffset // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-        metadataLength: null == metadataLength
-            ? _value.metadataLength
-            : metadataLength // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-        computedOffset: null == computedOffset
-            ? _value.computedOffset
-            : computedOffset // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-        computedLength: null == computedLength
-            ? _value.computedLength
-            : computedLength // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-        rawOffset: null == rawOffset
-            ? _value.rawOffset
-            : rawOffset // ignore: cast_nullable_to_non_nullable
-                  as BigInt,
-      ),
-    );
-  }
-}
-
-/// @nodoc
-
-class _$V5HeaderImpl implements _V5Header {
-  const _$V5HeaderImpl({
-    required this.thumbnailOffset,
-    required this.thumbnailLength,
-    required this.metadataOffset,
-    required this.metadataLength,
-    required this.computedOffset,
-    required this.computedLength,
-    required this.rawOffset,
-  });
-
-  @override
-  final BigInt thumbnailOffset;
-  @override
-  final BigInt thumbnailLength;
-  @override
-  final BigInt metadataOffset;
-  @override
-  final BigInt metadataLength;
-  @override
-  final BigInt computedOffset;
-  @override
-  final BigInt computedLength;
-  @override
-  final BigInt rawOffset;
-
-  @override
-  String toString() {
-    return 'V5Header(thumbnailOffset: $thumbnailOffset, thumbnailLength: $thumbnailLength, metadataOffset: $metadataOffset, metadataLength: $metadataLength, computedOffset: $computedOffset, computedLength: $computedLength, rawOffset: $rawOffset)';
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is _$V5HeaderImpl &&
-            (identical(other.thumbnailOffset, thumbnailOffset) ||
-                other.thumbnailOffset == thumbnailOffset) &&
-            (identical(other.thumbnailLength, thumbnailLength) ||
-                other.thumbnailLength == thumbnailLength) &&
-            (identical(other.metadataOffset, metadataOffset) ||
-                other.metadataOffset == metadataOffset) &&
-            (identical(other.metadataLength, metadataLength) ||
-                other.metadataLength == metadataLength) &&
-            (identical(other.computedOffset, computedOffset) ||
-                other.computedOffset == computedOffset) &&
-            (identical(other.computedLength, computedLength) ||
-                other.computedLength == computedLength) &&
-            (identical(other.rawOffset, rawOffset) ||
-                other.rawOffset == rawOffset));
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    runtimeType,
-    thumbnailOffset,
-    thumbnailLength,
-    metadataOffset,
-    metadataLength,
-    computedOffset,
-    computedLength,
-    rawOffset,
-  );
-
-  /// Create a copy of V5Header
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @override
-  @pragma('vm:prefer-inline')
-  _$$V5HeaderImplCopyWith<_$V5HeaderImpl> get copyWith =>
-      __$$V5HeaderImplCopyWithImpl<_$V5HeaderImpl>(this, _$identity);
-}
-
-abstract class _V5Header implements V5Header {
-  const factory _V5Header({
-    required final BigInt thumbnailOffset,
-    required final BigInt thumbnailLength,
-    required final BigInt metadataOffset,
-    required final BigInt metadataLength,
-    required final BigInt computedOffset,
-    required final BigInt computedLength,
-    required final BigInt rawOffset,
-  }) = _$V5HeaderImpl;
-
-  @override
-  BigInt get thumbnailOffset;
-  @override
-  BigInt get thumbnailLength;
-  @override
-  BigInt get metadataOffset;
-  @override
-  BigInt get metadataLength;
-  @override
-  BigInt get computedOffset;
-  @override
-  BigInt get computedLength;
-  @override
-  BigInt get rawOffset;
-
-  /// Create a copy of V5Header
-  /// with the given fields replaced by the non-null parameter values.
-  @override
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  _$$V5HeaderImplCopyWith<_$V5HeaderImpl> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-mixin _$V5ParsedHead {
-  V5Header get header => throw _privateConstructorUsedError;
-  Uint8List get thumbnail => throw _privateConstructorUsedError;
-  Uint8List get metadataJson => throw _privateConstructorUsedError;
-
-  /// Create a copy of V5ParsedHead
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  $V5ParsedHeadCopyWith<V5ParsedHead> get copyWith =>
-      throw _privateConstructorUsedError;
-}
-
-/// @nodoc
-abstract class $V5ParsedHeadCopyWith<$Res> {
-  factory $V5ParsedHeadCopyWith(
-    V5ParsedHead value,
-    $Res Function(V5ParsedHead) then,
-  ) = _$V5ParsedHeadCopyWithImpl<$Res, V5ParsedHead>;
-  @useResult
-  $Res call({V5Header header, Uint8List thumbnail, Uint8List metadataJson});
-
-  $V5HeaderCopyWith<$Res> get header;
-}
-
-/// @nodoc
-class _$V5ParsedHeadCopyWithImpl<$Res, $Val extends V5ParsedHead>
-    implements $V5ParsedHeadCopyWith<$Res> {
-  _$V5ParsedHeadCopyWithImpl(this._value, this._then);
-
-  // ignore: unused_field
-  final $Val _value;
-  // ignore: unused_field
-  final $Res Function($Val) _then;
-
-  /// Create a copy of V5ParsedHead
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? header = null,
-    Object? thumbnail = null,
-    Object? metadataJson = null,
-  }) {
-    return _then(
-      _value.copyWith(
-            header: null == header
-                ? _value.header
-                : header // ignore: cast_nullable_to_non_nullable
-                      as V5Header,
-            thumbnail: null == thumbnail
-                ? _value.thumbnail
-                : thumbnail // ignore: cast_nullable_to_non_nullable
-                      as Uint8List,
-            metadataJson: null == metadataJson
-                ? _value.metadataJson
-                : metadataJson // ignore: cast_nullable_to_non_nullable
-                      as Uint8List,
-          )
-          as $Val,
-    );
-  }
-
-  /// Create a copy of V5ParsedHead
-  /// with the given fields replaced by the non-null parameter values.
-  @override
-  @pragma('vm:prefer-inline')
-  $V5HeaderCopyWith<$Res> get header {
-    return $V5HeaderCopyWith<$Res>(_value.header, (value) {
-      return _then(_value.copyWith(header: value) as $Val);
-    });
-  }
-}
-
-/// @nodoc
-abstract class _$$V5ParsedHeadImplCopyWith<$Res>
-    implements $V5ParsedHeadCopyWith<$Res> {
-  factory _$$V5ParsedHeadImplCopyWith(
-    _$V5ParsedHeadImpl value,
-    $Res Function(_$V5ParsedHeadImpl) then,
-  ) = __$$V5ParsedHeadImplCopyWithImpl<$Res>;
-  @override
-  @useResult
-  $Res call({V5Header header, Uint8List thumbnail, Uint8List metadataJson});
-
-  @override
-  $V5HeaderCopyWith<$Res> get header;
-}
-
-/// @nodoc
-class __$$V5ParsedHeadImplCopyWithImpl<$Res>
-    extends _$V5ParsedHeadCopyWithImpl<$Res, _$V5ParsedHeadImpl>
-    implements _$$V5ParsedHeadImplCopyWith<$Res> {
-  __$$V5ParsedHeadImplCopyWithImpl(
-    _$V5ParsedHeadImpl _value,
-    $Res Function(_$V5ParsedHeadImpl) _then,
-  ) : super(_value, _then);
-
-  /// Create a copy of V5ParsedHead
-  /// with the given fields replaced by the non-null parameter values.
-  @pragma('vm:prefer-inline')
-  @override
-  $Res call({
-    Object? header = null,
-    Object? thumbnail = null,
-    Object? metadataJson = null,
-  }) {
-    return _then(
-      _$V5ParsedHeadImpl(
-        header: null == header
-            ? _value.header
-            : header // ignore: cast_nullable_to_non_nullable
-                  as V5Header,
-        thumbnail: null == thumbnail
-            ? _value.thumbnail
-            : thumbnail // ignore: cast_nullable_to_non_nullable
-                  as Uint8List,
-        metadataJson: null == metadataJson
-            ? _value.metadataJson
-            : metadataJson // ignore: cast_nullable_to_non_nullable
-                  as Uint8List,
-      ),
-    );
-  }
-}
-
-/// @nodoc
-
-class _$V5ParsedHeadImpl implements _V5ParsedHead {
-  const _$V5ParsedHeadImpl({
-    required this.header,
-    required this.thumbnail,
-    required this.metadataJson,
-  });
-
-  @override
-  final V5Header header;
-  @override
-  final Uint8List thumbnail;
-  @override
-  final Uint8List metadataJson;
-
-  @override
-  String toString() {
-    return 'V5ParsedHead(header: $header, thumbnail: $thumbnail, metadataJson: $metadataJson)';
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other.runtimeType == runtimeType &&
-            other is _$V5ParsedHeadImpl &&
-            (identical(other.header, header) || other.header == header) &&
-            const DeepCollectionEquality().equals(other.thumbnail, thumbnail) &&
-            const DeepCollectionEquality().equals(
-              other.metadataJson,
-              metadataJson,
-            ));
-  }
-
-  @override
-  int get hashCode => Object.hash(
-    runtimeType,
-    header,
-    const DeepCollectionEquality().hash(thumbnail),
-    const DeepCollectionEquality().hash(metadataJson),
-  );
-
-  /// Create a copy of V5ParsedHead
-  /// with the given fields replaced by the non-null parameter values.
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  @override
-  @pragma('vm:prefer-inline')
-  _$$V5ParsedHeadImplCopyWith<_$V5ParsedHeadImpl> get copyWith =>
-      __$$V5ParsedHeadImplCopyWithImpl<_$V5ParsedHeadImpl>(this, _$identity);
-}
-
-abstract class _V5ParsedHead implements V5ParsedHead {
-  const factory _V5ParsedHead({
-    required final V5Header header,
-    required final Uint8List thumbnail,
-    required final Uint8List metadataJson,
-  }) = _$V5ParsedHeadImpl;
-
-  @override
-  V5Header get header;
-  @override
-  Uint8List get thumbnail;
-  @override
-  Uint8List get metadataJson;
-
-  /// Create a copy of V5ParsedHead
-  /// with the given fields replaced by the non-null parameter values.
-  @override
-  @JsonKey(includeFromJson: false, includeToJson: false)
-  _$$V5ParsedHeadImplCopyWith<_$V5ParsedHeadImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }

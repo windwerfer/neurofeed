@@ -18,11 +18,13 @@ import 'package:neurofeed/src/monitor/recording/monitor_sampler.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/monitor/recording/recording_store.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
-import 'package:neurofeed/src/rust/api/muse.dart';
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/rust/api/muse.dart' hide DeviceInfo;
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/version.dart';
+import 'package:neurofeed/src/util/timezone.dart';
+import 'package:uuid/uuid.dart';
 
 class MonitorController extends Notifier<MonitorState> {
   MonitorController({
@@ -213,6 +215,7 @@ class MonitorController extends Notifier<MonitorState> {
       final settings = ref.read(settingsProvider);
       final names = electrodeNamesForKind(app.lastConnectedKind);
       final startedAt = _latestEegTsMs ?? DateTime.now().millisecondsSinceEpoch;
+      _recordingSessionId = const Uuid().v4();
       state = MonitorState(
         kind: CaptureKind.tmp,
         electrodeNames: names,
@@ -332,6 +335,7 @@ class MonitorController extends Notifier<MonitorState> {
       final settings = ref.read(settingsProvider);
       final names = electrodeNamesForKind(app.lastConnectedKind);
       final startedAt = _latestEegTsMs ?? DateTime.now().millisecondsSinceEpoch;
+      _recordingSessionId = const Uuid().v4();
       _clearLiveGraphs();
       state = MonitorState(
         kind: CaptureKind.recording,
@@ -349,6 +353,7 @@ class MonitorController extends Notifier<MonitorState> {
         captureStartedAtMs: startedAt,
       );
       state = state.copyWith(captureId: _capture!.captureId);
+      _recordingSessionId ??= _capture!.captureId;
       _startSampler(names.length, startedAt);
       debugPrint('[monitor] recording start id=${_capture!.captureId}');
     } catch (e, st) {
@@ -461,6 +466,8 @@ class MonitorController extends Notifier<MonitorState> {
     _sampler = null;
   }
 
+  String? _recordingSessionId;
+
   RecordingMetadata _currentMetadata() {
     final app = ref.read(appStateProvider);
     final settings = ref.read(settingsProvider);
@@ -470,14 +477,17 @@ class MonitorController extends Notifier<MonitorState> {
         .round();
     final kind = app.lastConnectedKind;
     return RecordingMetadata(
-      formatVersion: 5,
+      formatVersion: 6,
       appVersion: appVersion,
       kind: _lease.kind == CaptureKind.recording ? 'recording' : 'tmp',
-      savedAt: DateTime.now().toUtc(),
-      startedAt: DateTime.fromMillisecondsSinceEpoch(started, isUtc: true),
+      savedAt: DateTime.now(),
+      startedAt: DateTime.fromMillisecondsSinceEpoch(started),
+      timeZone: captureIanaTimeZone(),
+      sessionId: _recordingSessionId,
+      subject: settings.subjectInfo,
       elapsedSeconds: elapsed,
       durationS: elapsed,
-      device: DeviceInfoV5(
+      device: DeviceInfo(
         name: app.status.name,
         id: app.status.id,
         firmware: app.status.firmware,

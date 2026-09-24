@@ -1,4 +1,4 @@
-/// Snapshot of the guardrail AI model at session time (v5).
+/// Snapshot of the guardrail AI model at session time.
 class ModelSnapshot {
   const ModelSnapshot({
     required this.engine,
@@ -37,9 +37,9 @@ class ModelSnapshot {
   }
 }
 
-/// Full device information (v5).
-class DeviceInfoV5 {
-  const DeviceInfoV5({
+/// Full device information (NFED6 container metadata).
+class DeviceInfo {
+  const DeviceInfo({
     required this.name,
     required this.id,
     required this.firmware,
@@ -67,9 +67,9 @@ class DeviceInfoV5 {
     'channelLabels': channelLabels,
   };
 
-  static DeviceInfoV5? fromJson(Map<String, dynamic>? json) {
+  static DeviceInfo? fromJson(Map<String, dynamic>? json) {
     if (json == null) return null;
-    return DeviceInfoV5(
+    return DeviceInfo(
       name: json['name'] as String? ?? '',
       id: json['id'] as String? ?? '',
       firmware: json['firmware'] as String? ?? '',
@@ -117,7 +117,7 @@ class StreamInfo {
   }
 }
 
-/// Stream configuration: what was recorded and at what rate (v5).
+/// Stream configuration: what was recorded and at what rate.
 class StreamsConfig {
   const StreamsConfig({
     required this.eeg,

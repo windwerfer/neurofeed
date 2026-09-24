@@ -215,6 +215,14 @@ void main() {
               required threshold,
               required inTarget,
               required inTargetPct,
+              percentile,
+              thresholdPercentile,
+              heldBack,
+              inhibitTags,
+              clean,
+              dirtyReason,
+              betaRel,
+              deltaRel,
             }) {},
         onThresholdChanged: () {},
       );
@@ -357,6 +365,11 @@ void main() {
             required delta,
             required warning,
             threshold,
+            featurePercentile,
+            warnOver,
+            ceilingOver,
+            clean,
+            dirtyReason,
           }) {},
     );
 

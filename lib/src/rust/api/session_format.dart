@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'session_format.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `copy_all`, `copy_file_range`, `crc32`, `encode_imu`, `f32`, `f64`, `file_len`, `finished`, `i16`, `new`, `now_secs`, `parse_computed_jsonl`, `parse_records`, `push_f32`, `push_f64`, `push_i16`, `push_u16`, `push_u32`, `read_file_range`, `skip`, `u16`, `u8`, `v5_header_bytes`, `zstd_compress_bytes`, `zstd_compress_file_or_empty`
+// These functions are ignored because they are not marked as `pub`: `copy_all`, `copy_file_range`, `crc32`, `encode_imu`, `f32`, `f64`, `file_len`, `finished`, `header_bytes`, `i16`, `new`, `now_secs`, `parse_computed_jsonl`, `parse_records`, `push_f32`, `push_f64`, `push_i16`, `push_u16`, `push_u32`, `read_file_range`, `skip`, `u16`, `u8`, `zstd_compress_bytes`, `zstd_compress_file_or_empty`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `RecordParser`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
@@ -35,16 +35,17 @@ Uint8List sessionFrameBytes({required List<int> data}) =>
 SessionData sessionParseBody({required List<int> bytes}) =>
     RustLib.instance.api.crateApiSessionFormatSessionParseBody(bytes: bytes);
 
-/// Encode a v5 container: header + thumbnail + metadata(zstd) + computed(zstd)
+/// Encode a `.neurofeed` container (NFED6):
+/// header + thumbnail + metadata(zstd) + computed(zstd)
 /// + raw body copy. The raw section is a byte-for-byte copy of [raw_body]
 /// (already inner-framed). Small fixtures only; keepable captures use
-/// [container_encode_v5_to_path].
-Uint8List containerEncodeV5({
+/// [container_encode_to_path].
+Uint8List containerEncode({
   required List<int> thumbnail,
   required List<int> metadataJson,
   required List<ComputedFrame> computedFrames,
   required List<int> rawBody,
-}) => RustLib.instance.api.crateApiSessionFormatContainerEncodeV5(
+}) => RustLib.instance.api.crateApiSessionFormatContainerEncode(
   thumbnail: thumbnail,
   metadataJson: metadataJson,
   computedFrames: computedFrames,
@@ -54,13 +55,13 @@ Uint8List containerEncodeV5({
 /// File-to-file assemble. Copies [raw_path] into the raw section (no outer
 /// zstd). Empty [computed_jsonl_path] or [raw_path] yields an empty section.
 /// Returns [dest_path].
-Future<String> containerEncodeV5ToPath({
+Future<String> containerEncodeToPath({
   required String destPath,
   required List<int> thumbnail,
   required List<int> metadataJson,
   required String computedJsonlPath,
   required String rawPath,
-}) => RustLib.instance.api.crateApiSessionFormatContainerEncodeV5ToPath(
+}) => RustLib.instance.api.crateApiSessionFormatContainerEncodeToPath(
   destPath: destPath,
   thumbnail: thumbnail,
   metadataJson: metadataJson,
@@ -71,43 +72,43 @@ Future<String> containerEncodeV5ToPath({
 /// Rewrite metadata (and optional thumbnail), copying computed and raw
 /// sections as opaque bytes. Empty [thumbnail] copies the source thumbnail.
 /// Returns [dest_path].
-Future<String> v5RewriteHeadToPath({
+Future<String> rewriteHeadToPath({
   required String srcPath,
   required String destPath,
   required List<int> metadataJson,
   required List<int> thumbnail,
-}) => RustLib.instance.api.crateApiSessionFormatV5RewriteHeadToPath(
+}) => RustLib.instance.api.crateApiSessionFormatRewriteHeadToPath(
   srcPath: srcPath,
   destPath: destPath,
   metadataJson: metadataJson,
   thumbnail: thumbnail,
 );
 
-/// Parse v5 head from a file without reading the raw section.
-Future<V5ParsedHead> v5ParseHeadFromPath({required String path}) =>
-    RustLib.instance.api.crateApiSessionFormatV5ParseHeadFromPath(path: path);
+/// Parse container head from a file without reading the raw section (NFED6).
+Future<ParsedHead> parseHeadFromPath({required String path}) =>
+    RustLib.instance.api.crateApiSessionFormatParseHeadFromPath(path: path);
 
 /// Extract computed frames from a file without reading the raw section.
-Future<List<ComputedFrame>> v5ExtractComputedFromPath({required String path}) =>
-    RustLib.instance.api.crateApiSessionFormatV5ExtractComputedFromPath(
+Future<List<ComputedFrame>> extractComputedFromPath({required String path}) =>
+    RustLib.instance.api.crateApiSessionFormatExtractComputedFromPath(
       path: path,
     );
 
-/// Parse v5 header (first 68 bytes).
-V5Header v5ParseHeader({required List<int> bytes}) =>
-    RustLib.instance.api.crateApiSessionFormatV5ParseHeader(bytes: bytes);
+/// Parse container header (first 68 bytes; NFED6 magic/version).
+ContainerHeader parseHeader({required List<int> bytes}) =>
+    RustLib.instance.api.crateApiSessionFormatParseHeader(bytes: bytes);
 
-/// Parse v5 head (header + thumbnail + metadata).
-V5ParsedHead v5ParseHead({required List<int> bytes}) =>
-    RustLib.instance.api.crateApiSessionFormatV5ParseHead(bytes: bytes);
+/// Parse container head (header + thumbnail + metadata; NFED6).
+ParsedHead parseHead({required List<int> bytes}) =>
+    RustLib.instance.api.crateApiSessionFormatParseHead(bytes: bytes);
 
 /// Extract computed section (decompressed JSON lines).
-List<ComputedFrame> v5ExtractComputed({required List<int> bytes}) =>
-    RustLib.instance.api.crateApiSessionFormatV5ExtractComputed(bytes: bytes);
+List<ComputedFrame> extractComputed({required List<int> bytes}) =>
+    RustLib.instance.api.crateApiSessionFormatExtractComputed(bytes: bytes);
 
 /// Extract the raw section as the framed body (no outer zstd).
-Uint8List v5ExtractRaw({required List<int> bytes}) =>
-    RustLib.instance.api.crateApiSessionFormatV5ExtractRaw(bytes: bytes);
+Uint8List extractRaw({required List<int> bytes}) =>
+    RustLib.instance.api.crateApiSessionFormatExtractRaw(bytes: bytes);
 
 @freezed
 sealed class BandsRecord with _$BandsRecord {
@@ -124,6 +125,9 @@ sealed class BandsRecord with _$BandsRecord {
 
 /// Computed frame at 1 Hz for training/export.
 /// All bands are absolute power (not relative).
+///
+/// On-disk JSONL keys are **camelCase** (Dart `ComputedFrame.toJson`).
+/// Snake_case aliases keep older Rust-encoded fixtures readable.
 @freezed
 sealed class ComputedFrame with _$ComputedFrame {
   const ComputedFrame._();
@@ -152,6 +156,21 @@ sealed class ComputedFrame with _$ComputedFrame {
       .crateApiSessionFormatComputedFrameToJsonBytes(that: this);
 }
 
+/// `.neurofeed` container header with fixed 68-byte layout (NFED6).
+/// raw_length is not stored; compute as file_size - raw_offset.
+@freezed
+sealed class ContainerHeader with _$ContainerHeader {
+  const factory ContainerHeader({
+    required BigInt thumbnailOffset,
+    required BigInt thumbnailLength,
+    required BigInt metadataOffset,
+    required BigInt metadataLength,
+    required BigInt computedOffset,
+    required BigInt computedLength,
+    required BigInt rawOffset,
+  }) = _ContainerHeader;
+}
+
 /// One raw EEG packet: per-sample values are in µV, `timestamp` is the
 /// wall-clock ms epoch of the FIRST sample, and consecutive samples are
 /// `rate` apart (nominal 256 Hz on Muse headsets).
@@ -167,23 +186,42 @@ sealed class EegSampleRecord with _$EegSampleRecord {
 /// Feedback (ATR) info.
 @freezed
 sealed class FeedbackInfo with _$FeedbackInfo {
+  const FeedbackInfo._();
   const factory FeedbackInfo({
     required double ratio,
     required double threshold,
     required bool inTarget,
     required double pct,
+    double? percentile,
+    double? thresholdPercentile,
+    bool? heldBack,
+    List<String>? inhibitTags,
+    bool? clean,
+    String? dirtyReason,
+    double? betaRel,
+    double? deltaRel,
   }) = _FeedbackInfo;
+  static Future<FeedbackInfo> default_() =>
+      RustLib.instance.api.crateApiSessionFormatFeedbackInfoDefault();
 }
 
 /// Guardrail (AI drowsiness) info.
 @freezed
 sealed class GuardrailInfo with _$GuardrailInfo {
+  const GuardrailInfo._();
   const factory GuardrailInfo({
     required double sleepDir,
     required double clarity,
     required bool warning,
     required double delta,
+    double? featurePercentile,
+    bool? warnOver,
+    bool? ceilingOver,
+    bool? clean,
+    String? dirtyReason,
   }) = _GuardrailInfo;
+  static Future<GuardrailInfo> default_() =>
+      RustLib.instance.api.crateApiSessionFormatGuardrailInfoDefault();
 }
 
 @freezed
@@ -192,6 +230,16 @@ sealed class MovementRecord with _$MovementRecord {
     required double timestamp,
     required double score,
   }) = _MovementRecord;
+}
+
+/// Parsed container head (NFED6) - header + thumbnail + metadata (decompressed).
+@freezed
+sealed class ParsedHead with _$ParsedHead {
+  const factory ParsedHead({
+    required ContainerHeader header,
+    required Uint8List thumbnail,
+    required Uint8List metadataJson,
+  }) = _ParsedHead;
 }
 
 /// Peak alpha frequency and power.
@@ -240,29 +288,4 @@ sealed class SpO2Record with _$SpO2Record {
     required double spo2,
     required double confidence,
   }) = _SpO2Record;
-}
-
-/// v5 container header with fixed 68-byte layout.
-/// raw_length is not stored; compute as file_size - raw_offset.
-@freezed
-sealed class V5Header with _$V5Header {
-  const factory V5Header({
-    required BigInt thumbnailOffset,
-    required BigInt thumbnailLength,
-    required BigInt metadataOffset,
-    required BigInt metadataLength,
-    required BigInt computedOffset,
-    required BigInt computedLength,
-    required BigInt rawOffset,
-  }) = _V5Header;
-}
-
-/// Parsed v5 head - header + thumbnail + metadata (decompressed).
-@freezed
-sealed class V5ParsedHead with _$V5ParsedHead {
-  const factory V5ParsedHead({
-    required V5Header header,
-    required Uint8List thumbnail,
-    required Uint8List metadataJson,
-  }) = _V5ParsedHead;
 }

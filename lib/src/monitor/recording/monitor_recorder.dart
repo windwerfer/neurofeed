@@ -6,7 +6,7 @@ import 'package:neurofeed/src/monitor/cache/file_backed_source.dart';
 import 'package:neurofeed/src/monitor/cache/recording_index.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
-import 'package:neurofeed/src/session_v5/computed_frame.dart';
+import 'package:neurofeed/src/session_format/computed_frame.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
@@ -197,10 +197,10 @@ class MonitorRecorder {
     try {
       final File file;
       if (_writer.usesRustCapture) {
-        file = await spine.assembleCaptureV5(metadataJson: metadataJson);
+        file = await spine.assembleCapture(metadataJson: metadataJson);
         _writer.detachAfterAssemble();
       } else {
-        file = await writeScratchV5(
+        file = await writeScratch(
           dir: dir,
           id: id,
           prefix: 'recording',

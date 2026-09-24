@@ -5,7 +5,7 @@
 | Status | Implemented on `fix/soloud-engine-hardening` |
 | Date | 2026-09-05 (implemented 2026-09-06) |
 | Scope | `lib/src/audio/*` + session wiring that already calls it. One PR. |
-| Not this | Pipeline-contract Key Decisions, Crown Start, connect UX, v5 layout, new reward/guard ids, on-device listening pass |
+| Not this | Pipeline-contract Key Decisions, Crown Start, connect UX, `.neurofeed` layout, new reward/guard ids, on-device listening pass |
 
 Review findings 1–13 plus the leftover muffle API. Do not reopen
 [contracts/pipeline-contract.md](contracts/pipeline-contract.md). That series
@@ -516,7 +516,7 @@ epoch/cache.
 8. **Calibration await uses `getLength + 2s` (floor 15, cap 90, zero
    length → 60).** Timeout stops the voice.
 9. **Alarm starts immediately** and follows session pause.
-10. **One PR**, order above. Do not mix Crown / connect / v5 / new
+10. **One PR**, order above. Do not mix Crown / connect / file-format / new
     output ids.
 
 ---

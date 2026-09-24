@@ -78,8 +78,8 @@ Future<void> showRecordingCrashRecoveryDialog(
       await showRecordingSaveDiscardDialog(
         context: context,
         title: kIncompleteRecordingTitle,
-        onSave: () => store.publish(rec.scratchV5),
-        onDiscard: () => store.discard(rec.scratchV5),
+        onSave: () => store.publish(rec.scratch),
+        onDiscard: () => store.discard(rec.scratch),
       );
     }
   } finally {
@@ -95,7 +95,7 @@ Future<void> showRecordingCrashRecoveryDialog(
   }
 }
 
-/// Shows [RecordingSaveDiscardDialog] when a pending scratch v5 appears.
+/// Shows [RecordingSaveDiscardDialog] when a pending scratch `.neurofeed` appears.
 /// Host once on [AppShell] so GraphShell Stop and in-app disconnect share it.
 class RecordingSaveHost extends ConsumerStatefulWidget {
   const RecordingSaveHost({super.key, required this.child});

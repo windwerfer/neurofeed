@@ -14,7 +14,7 @@ rust_lib_neurofeed
   neurosity_osc.rs   Crown/Notion OSC
   simulator.rs       spawn_simulator: Eeg/Ppg/IMU/Telemetry (`sim:*`)
   reve.rs            model + guardrail FFI
-  session_format.rs  raw body + .neurofeed v5 container
+  session_format.rs  raw body + .neurofeed v6 container (NFED6; FFI names still *v5*)
   capture.rs         FRB re-exports of spine capture
   spine/{capture,soak}.rs  writer thread + streaming assemble + soak
   analysis/{gesture,cbramod,cbramod_encoder,reve,guardrail,ai_heads}.rs
@@ -89,8 +89,8 @@ Skip-cal on a sim seeds a synthetic baseline so percentile/`inTarget` work.
 
 ## Session files
 
-`.neurofeed` v5, Rust-owned (`rust/src/api/session_format.rs`).
-Spec: [contracts/session-format-contract.md](contracts/session-format-contract.md).
+`.neurofeed` v6 (NFED6), Rust-owned (`rust/src/api/session_format.rs`).
+Spec: [contracts/fileformat_v6.md](contracts/fileformat_v6.md).
 
 ```
 [68-byte header][WebP thumb][metadata zstd][computed 1 Hz zstd][raw body]
@@ -99,13 +99,13 @@ Spec: [contracts/session-format-contract.md](contracts/session-format-contract.m
 Raw body is NFEDBIN + inner zstd frames (f32 payloads, f64 timestamps).
 The container raw section is a copy of that body (no outer zstd). Dart
 delegates: `encodeSessionEvent` / `sessionFrameBytes` / `sessionParseBody` /
-`containerEncodeV5` / `containerEncodeV5ToPath` / `v5ParseHead` /
-`v5ExtractComputed`.
+`containerEncode` / `containerEncodeToPath` / `parseHead` /
+`extractComputed`.
 
 History list: SQLite `session_metadata.db` (typed columns + thumbnail BLOB,
 `kind` `feedback` \| `recording`). `SessionStore.list()` is sqlite-only.
-At session `end()`, assemble a real v5 into scratch (placeholder WebP);
-dashboard/history `v5ExtractComputed` → `prepareChartDataFromComputed`.
+At session `end()`, assemble a real `.neurofeed` into scratch (placeholder WebP);
+dashboard/history `extractComputed` (container is NFED6) → `prepareChartDataFromComputed`.
 Save publishes to the history folder. Feedback crash recovery scans
 `session_*` in `scratchDirectory`; recordings use a separate scanner.
 No `SessionOverview` / 400-bucket `metadata.summary`. The list preview is

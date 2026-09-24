@@ -4,12 +4,11 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neurofeed/src/feedback/session_sqlite.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
-import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/monitor/recording/recording_store.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
-import 'package:neurofeed/src/session_v5/models.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -24,7 +23,7 @@ RecordingMetadata _meta() => RecordingMetadata(
   startedAt: DateTime.utc(2026, 9, 12, 11, 50),
   elapsedSeconds: 12,
   durationS: 12,
-  device: const DeviceInfoV5(
+  device: const DeviceInfo(
     name: 'Muse 2 (Simulated)',
     id: 'sim:muse-2',
     firmware: 'Classic',
@@ -95,7 +94,7 @@ void main() {
   test('publish upserts kind=recording; existing rows stay feedback', () async {
     await sqlite.upsertSession(_feedbackRow('oldfb'));
 
-    final scratchV5 = await writeScratchV5(
+    final scratchFile = await writeScratch(
       dir: scratch,
       id: '3003',
       prefix: 'recording',
@@ -105,9 +104,9 @@ void main() {
     );
     await File('${scratch.path}/recording_3003.raw').writeAsBytes([9]);
 
-    await store.publish(scratchV5);
+    await store.publish(scratchFile);
 
-    expect(scratchV5.existsSync(), isFalse);
+    expect(scratchFile.existsSync(), isFalse);
     expect(File('${scratch.path}/recording_3003.raw').existsSync(), isFalse);
     final published = File('${history.path}/recording_3003.neurofeed');
     expect(published.existsSync(), isTrue);
@@ -126,7 +125,7 @@ void main() {
   });
 
   test('discard deletes scratch and does not upsert', () async {
-    final scratchV5 = await writeScratchV5(
+    final scratchFile = await writeScratch(
       dir: scratch,
       id: '4004',
       prefix: 'recording',
@@ -136,9 +135,9 @@ void main() {
     );
     await File('${scratch.path}/recording_4004.json').writeAsString('{}');
 
-    await store.discard(scratchV5);
+    await store.discard(scratchFile);
 
-    expect(scratchV5.existsSync(), isFalse);
+    expect(scratchFile.existsSync(), isFalse);
     expect(File('${scratch.path}/recording_4004.json').existsSync(), isFalse);
     expect(await sqlite.getSession('4004'), isNull);
     expect(
@@ -147,7 +146,7 @@ void main() {
     );
   });
 
-  test('ALTER TABLE migrates existing rows to kind=feedback', () async {
+  test('schema bump without experimental_scalars wipes and recreates', () async {
     final dir = await Directory.systemTemp.createTemp('neurofeed_kind_mig_');
     addTearDown(() => dir.delete(recursive: true));
     final dbPath = '${dir.path}/session_metadata.db';
@@ -218,9 +217,12 @@ void main() {
 
     final migrated = await SessionSqlite.open(cacheDirectory: dir);
     addTearDown(migrated.close);
-    final row = await migrated.getSession('legacy');
-    expect(row, isNotNull);
-    expect(row!.kind, 'feedback');
-    expect(row.protocol, 'drowsiness');
+    expect(migrated.needsReindex, isTrue);
+    // Clean-cut wipe — legacy partial row discarded; reindex rebuilds from files.
+    expect(await migrated.getSession('legacy'), isNull);
+    final cols = migrated.db.select('PRAGMA table_info(sessions)');
+    final names = {for (final r in cols) r['name'] as String};
+    expect(names.contains('experimental_scalars'), isTrue);
+    expect(names.contains('kind'), isTrue);
   });
 }

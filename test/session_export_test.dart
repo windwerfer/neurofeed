@@ -16,7 +16,7 @@ import 'package:neurofeed/src/rust/api/session_format.dart'
         FeedbackInfo,
         GuardrailInfo,
         PeakAlphaInfo,
-        containerEncodeV5,
+        containerEncode,
         sessionHeaderBytes,
         sessionFrameBytes,
         encodeSessionEvent;
@@ -36,8 +36,8 @@ const _webp1x1 = [
   0x2A, 0x01, 0x00, 0x03, 0x13, 0x1F, 0x03,
 ];
 
-/// Build a v5 container with test data: 3 seconds of bands + EEG + computed frames.
-Uint8List _buildV5Container({
+/// Build a `.neurofeed` (NFED6) container with test data: 3 seconds of bands + EEG + computed frames.
+Uint8List _buildContainer({
   required Map<String, dynamic> metadataJson,
   required List<ComputedFrame> computedFrames,
 }) {
@@ -87,8 +87,8 @@ Uint8List _buildV5Container({
   // Encode metadata JSON to bytes
   final metadataBytes = utf8.encode(jsonEncode(metadataJson));
 
-  // Assemble v5 container using Rust FFI
-  return containerEncodeV5(
+  // Assemble .neurofeed container using Rust FFI (`containerEncode` name kept)
+  return containerEncode(
     thumbnail: _webp1x1,
     metadataJson: metadataBytes,
     computedFrames: computedFrames,
@@ -312,7 +312,7 @@ void main() {
       ...sessionFrameBytes(data: events),
     ]);
 
-    // Publish session with raw body (publishSession will wrap in v5 container)
+    // Publish session with raw body (publishSession will wrap in .neurofeed container)
     final meta = _metadata(
       withCalibration: true,
       withDrowsiness: true,
@@ -407,7 +407,7 @@ void main() {
     final entries = await exportDirEntries('');
     expect(entries, hasLength(1));
     final png = await File('${tmp.path}/export/${entries.single}').readAsBytes();
-    expect(png, _webp1x1); // Note: thumbnail is stored as WebP in v5
+    expect(png, _webp1x1); // Note: thumbnail is stored as WebP in the container
   });
 
   test('PNG all export rasterizes every chart into a per-session folder',

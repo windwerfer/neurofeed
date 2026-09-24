@@ -89,7 +89,7 @@ cargo test --lib                  # features / simulator / device_config
 Spine soak (capture writer + streaming assemble — copy `.raw`, no outer zstd):
 
 ```bash
-# Max-rate Classic Muse filler → capture writer try_send + capture_assemble_v5.
+# Max-rate Classic Muse filler → capture writer try_send + capture_assemble.
 # Default 60 s equivalent. Prints GB, RSS if /proc is available, drop counters.
 # Extra assemble RSS must not scale with filled volume. Drops must be 0.
 cargo test --manifest-path rust/Cargo.toml --lib spine::soak -- --nocapture
@@ -108,7 +108,7 @@ NEUROFEED_SOAK_EQUIV_SECS=43200 cargo test --manifest-path rust/Cargo.toml \
 | View switch | agent-linux | HTTP | `POST /view` `bands` / `rawEeg` / `histogram` / `spectrogram` / `psd` / `settings` | `GET /state` → `view=` that name | Button wiring untested |
 | Sidebar / connect window | agent-linux | HTTP | `POST /sidebar`, `POST /connect-window` | `sidebarOpen` / `connectWindowOpen` | Overlay chrome untested |
 | Session start Crown | Dart + HTTP | notifier refuse | `POST /session/start` after `sim:crown-osc` | HTTP 409 `crown_refused` | Dialog UI untested |
-| Record / Stop | Dart + FFI | `test/monitor/capture_lease_test.dart`, `recording_assemble_test.dart`, `test/agent/agent_commands_test.dart` | `POST /record/start` after `sim:muse-2`; `GET /state` `captureKind=recording`; `POST /record/stop` scratch v5 | 412 `disconnected`; 409 `feedback_active`; 409 `recording_active` on `/session/start` | Save/Discard widget untested |
+| Record / Stop | Dart + FFI | `test/monitor/capture_lease_test.dart`, `recording_assemble_test.dart`, `test/agent/agent_commands_test.dart` | `POST /record/start` after `sim:muse-2`; `GET /state` `captureKind=recording`; `POST /record/stop` scratch `.neurofeed` | 412 `disconnected`; 409 `feedback_active`; 409 `recording_active` on `/session/start` | Save/Discard widget untested |
 | Recording crash recovery | Dart + FFI | `test/monitor/crash_recovery_test.dart`, `recording_store_test.dart` | `flutter test test/monitor/crash_recovery_test.dart test/monitor/recording_store_test.dart` | Leftover `recording_*` assemble; `tmp_`/`session_*` untouched; publish `kind=recording`; existing rows `feedback`; discard no sqlite row | Dialog widget untested |
 | Feedback leftover / unsaved summary | Dart + FFI | `test/session_computed_charts_test.dart`, `test/agent/agent_commands_test.dart` | those files | Leftover `session_*` assemble; attach scratch id/path; 409 `unsaved_session` on `/session/start` and `/session/reset`; computed pulse/SpO₂ + raw fallback | Summary Back/`PopScope` widget untested |
 | Session start Muse sim | agent-linux | HTTP | `recordOnly` + skip-cal | `[feedback] phase=playing` | 50 s cal too slow — always skip |
@@ -117,8 +117,8 @@ NEUROFEED_SOAK_EQUIV_SECS=43200 cargo test --manifest-path rust/Cargo.toml \
 | Protocol JSON | Dart unit | `user_protocol_builder_test.dart`, `calibration_assets_test.dart` | those files | Catalog copy, clip files | Builder UI |
 | Guard pref migrate | Dart unit | `settings_guardrail_migrate_test.dart` | that file | Old enum → feature ids | Debug switch widget |
 | History / store | Dart+FFI | `session_store_test.dart`, `test/history_filter_test.dart` | FFI command above + `flutter test test/history_filter_test.dart` | List includes `kind=recording`; no orphan-file backfill; `moveAllTo` both prefixes; delete uses sqlite `path`; filter All/Feedback/Recordings | History widget |
-| Session format v5 | Rust + Dart+FFI | `session_format` + export/charts tests | rust + FFI | Roundtrip | Don't edit layout from Dart |
-| Spine soak (capture writer) | Rust | `rust/src/spine/soak.rs` | `cargo test --manifest-path rust/Cargo.toml --lib spine::soak -- --nocapture` | Max-rate fill through writer `try_send`; volume printed; assemble is `capture_assemble_v5` copy of `.raw` (no outer zstd; extra RSS must not scale with filled volume). Drops = 0. Env `NEUROFEED_SOAK_EQUIV_SECS` (default 60). 12 h-equivalent: same command with `--ignored` (or env `43200`) | Phone overnight **cannot** |
+| Session format v6 (NFED6) | Rust + Dart+FFI | `session_format` + export/charts tests | rust + FFI | Roundtrip | Don't edit layout from Dart |
+| Spine soak (capture writer) | Rust | `rust/src/spine/soak.rs` | `cargo test --manifest-path rust/Cargo.toml --lib spine::soak -- --nocapture` | Max-rate fill through writer `try_send`; volume printed; assemble is `capture_assemble` copy of `.raw` (no outer zstd; extra RSS must not scale with filled volume). Drops = 0. Env `NEUROFEED_SOAK_EQUIV_SECS` (default 60). 12 h-equivalent: same command with `--ignored` (or env `43200`) | Phone overnight **cannot** |
 | Simulator identity | Rust unit | `simulator.rs` | `cargo test --lib simulator` | name/firmware table | Live spawn needs tokio |
 | Streaming OSC/BF | Dart unit | `test/streaming_*.dart` | `flutter test test/streaming_*.dart` | Datagram shape | View untested |
 | Feature probe | Dart unit | `test/feature_override_test.dart` | that file | Latch replace; synthetic TAR/delta baseline | Ear-test is human |

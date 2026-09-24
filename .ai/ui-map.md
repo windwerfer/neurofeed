@@ -245,8 +245,8 @@ Pushed after End (`pushReplacement` from the session route). Leftover
 |---|---|---|---|---|
 | Session summary | `{protocol} — Session` | `FeedbackDashboardView` | `feedback_dashboard.dart` | Live (`readOnly: false`) or History (`readOnly: true`). |
 | Back | AppBar leading / system back | `PopScope` | `feedback_dashboard.dart` | **Blocked** on live unsaved summary. Must Save or Discard. History: warn if notes dirty. |
-| Save | `Save` | `_save` | `feedback_dashboard.dart` | Publishes scratch v5 to History. Live only. |
-| Discard | `Discard` | `_discard` | `feedback_dashboard.dart` | Deletes scratch v5. Live only. |
+| Save | `Save` | `_save` | `feedback_dashboard.dart` | Publishes scratch `.neurofeed` to History. Live only. |
+| Discard | `Discard` | `_discard` | `feedback_dashboard.dart` | Deletes scratch `.neurofeed`. Live only. |
 | Heart rate / SpO₂ | `Heart rate / SpO₂` | `prepared.bpm` / `prepared.spo2` | `feedback_dashboard.dart` | From computed 1 Hz pulse/SpO₂; raw body fallback if those fields were omitted. Empty copy: `No reliable heart-rate or SpO₂ data was captured for this session.` |
 
 ### Settings cards — `lib/src/views/settings_view.dart`

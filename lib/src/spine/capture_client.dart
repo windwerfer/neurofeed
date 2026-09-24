@@ -42,25 +42,25 @@ Set<int> recordedChannelSet() => captureRecordedChannels().toSet();
 Uint8List metadataJsonBytes(Map<String, Object?> json) =>
     Uint8List.fromList(utf8.encode(jsonEncode(json)));
 
-Future<File> assembleCaptureV5({
+Future<File> assembleCapture({
   required Map<String, Object?> metadataJson,
   List<int> thumbnail = const [],
 }) async {
-  final path = await captureAssembleV5(
+  final path = await captureAssemble(
     metadataJson: metadataJsonBytes(metadataJson),
     thumbnail: thumbnail,
   );
   return File(path);
 }
 
-Future<File> assembleCaptureV5At({
+Future<File> assembleCaptureAt({
   required Directory dir,
   required String prefix,
   required String id,
   required Map<String, Object?> metadataJson,
   List<int> thumbnail = const [],
 }) async {
-  final path = await captureAssembleV5At(
+  final path = await captureAssembleAt(
     dir: dir.path,
     prefix: prefix,
     id: id,
