@@ -313,14 +313,20 @@ class SessionCalibrationPhase {
 }
 
 class SessionRecalibration {
-  const SessionRecalibration({required this.atSecs, required this.baseline});
+  const SessionRecalibration({
+    required this.atSecs,
+    required this.baseline,
+    this.baselineSamples = const [],
+  });
 
   final double atSecs;
   final SessionBaselineStats baseline;
+  final List<double> baselineSamples;
 
   Map<String, Object?> toJson() => {
     'atSecs': atSecs,
     'baseline': baseline.toJson(),
+    if (baselineSamples.isNotEmpty) 'baselineSamples': baselineSamples,
   };
 
   static SessionRecalibration? fromJson(Object? json) {
@@ -331,6 +337,11 @@ class SessionRecalibration {
     return SessionRecalibration(
       atSecs: (json['atSecs'] as num?)?.toDouble() ?? 0,
       baseline: baseline ?? const SessionBaselineStats(percentile: 0, count: 0),
+      baselineSamples:
+          (json['baselineSamples'] as List?)
+              ?.map((e) => (e as num).toDouble())
+              .toList() ??
+          const [],
     );
   }
 }
@@ -350,6 +361,7 @@ class SessionCalibration {
     this.baseline,
     this.phases = const [],
     this.recalibrations = const [],
+    this.baselineSamples = const [],
   });
 
   final int version;
@@ -365,6 +377,8 @@ class SessionCalibration {
   final SessionBaselineStats? baseline;
   final List<SessionCalibrationPhase> phases;
   final List<SessionRecalibration> recalibrations;
+  /// Raw native reward samples used by percentileOf after calibration.
+  final List<double> baselineSamples;
 
   double? get trainingStartOffsetSecs {
     final start = calibrationStartSecs;
@@ -389,6 +403,7 @@ class SessionCalibration {
     if (greenStableSeconds != null) 'greenStableSeconds': greenStableSeconds,
     if (faultyPadSeconds != null) 'faultyPadSeconds': faultyPadSeconds,
     if (baseline != null) 'baseline': baseline!.toJson(),
+    if (baselineSamples.isNotEmpty) 'baselineSamples': baselineSamples,
     if (phases.isNotEmpty) 'phases': [for (final p in phases) p.toJson()],
     if (recalibrations.isNotEmpty)
       'recalibrations': [for (final r in recalibrations) r.toJson()],
@@ -422,6 +437,11 @@ class SessionCalibration {
               .whereType<SessionRecalibration>()
               .toList() ??
           const [],
+      baselineSamples:
+          (json['baselineSamples'] as List?)
+              ?.map((e) => (e as num).toDouble())
+              .toList() ??
+          const [],
     );
   }
 }
@@ -451,6 +471,7 @@ class SessionSettings {
     this.modelSnapshot,
     this.guardFeature,
     this.guardModel,
+    this.inhibitCeilingOverrides,
   });
 
   final bool dynamicAdapt;
@@ -482,6 +503,9 @@ class SessionSettings {
   /// `cbramod_a_vig` / `reve_base`.
   final String? guardModel;
 
+  /// Settings slider overlays (`beta` / `delta`); omit when empty.
+  final Map<String, double>? inhibitCeilingOverrides;
+
   Map<String, Object?> toJson() => {
     'dynamicAdapt': dynamicAdapt,
     'responsiveness': responsiveness,
@@ -506,6 +530,8 @@ class SessionSettings {
     if (modelSnapshot != null) 'modelSnapshot': modelSnapshot!.toJson(),
     if (guardFeature != null) 'guardFeature': guardFeature,
     if (guardModel != null) 'guardModel': guardModel,
+    if (inhibitCeilingOverrides != null && inhibitCeilingOverrides!.isNotEmpty)
+      'inhibitCeilingOverrides': inhibitCeilingOverrides,
   };
 
   static SessionSettings? fromJson(Object? json) {
@@ -543,6 +569,15 @@ class SessionSettings {
       ),
       guardFeature: json['guardFeature'] as String?,
       guardModel: json['guardModel'] as String?,
+      inhibitCeilingOverrides: () {
+        final raw = json['inhibitCeilingOverrides'];
+        if (raw is! Map) return null;
+        final out = <String, double>{};
+        for (final e in raw.entries) {
+          if (e.value is num) out[e.key.toString()] = (e.value as num).toDouble();
+        }
+        return out.isEmpty ? null : out;
+      }(),
     );
   }
 }
@@ -631,6 +666,7 @@ class SessionMetadata {
     this.sessionId,
     this.protocolJson,
     this.annotations = const [],
+    this.audioEvents = const [],
   });
 
   final String protocol;
@@ -679,6 +715,9 @@ class SessionMetadata {
 
   /// Root annotations timeline (pause / bad_quality / disconnect / gestures).
   final List<SessionAnnotation> annotations;
+
+  /// Sparse feedback one-shot chimes (`reward_chime` / `guard_chime`).
+  final List<Map<String, Object?>> audioEvents;
 
   Map<String, Object?> toJson() => {
     'protocol': protocol,
@@ -792,6 +831,7 @@ class SessionMetadata {
               .whereType<SessionAnnotation>()
               .toList() ??
           const [],
+      audioEvents: const [],
     );
   }
 

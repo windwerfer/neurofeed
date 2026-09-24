@@ -42,6 +42,9 @@ class FeedbackAudioController {
 
   DateTime? _inTargetSince;
   DateTime _lastRewardAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Fired when a one-shot reward/guard chime actually plays (Trust metadata).
+  void Function(String type)? onSparseAudioEvent;
   DateTime _movingUntil = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Selected guardrail warning sound (bell variants / alarm / none).
@@ -342,6 +345,7 @@ class FeedbackAudioController {
       return;
     }
     _lastRewardAt = now;
+    onSparseAudioEvent?.call('reward_chime');
     _triggerChime();
   }
 
@@ -382,6 +386,7 @@ class FeedbackAudioController {
     await SoLoudEngine.ensureInit();
     final source = await _sourceFor(asset, stream: false);
     SoLoud.instance.play(source, volume: _guardrailVolumeTotal);
+    onSparseAudioEvent?.call('guard_chime');
   }
 
   /// Starts the continuous alarm: repeats the alarm sound with a volume ramp

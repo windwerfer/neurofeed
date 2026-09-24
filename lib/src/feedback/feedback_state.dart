@@ -288,6 +288,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   double? _interruptOnsetContent;
   DateTime? _interruptWallBegan;
   String? _interruptAnnType;
+  final List<Map<String, Object?>> _audioEvents = [];
 
   /// Music feedback: per-second cutoff trace + track transitions recorded
   /// while playing. Persisted as [SessionMusic] metadata (tracks + 1 Hz series).
@@ -719,6 +720,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _interruptOnsetContent = null;
     _interruptWallBegan = null;
     _interruptAnnType = null;
+    _audioEvents.clear();
     _calibration.reset();
     _collectionEyes = null;
     _drowsinessSeries.clear();
@@ -970,6 +972,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           mean: _engine.baselineMean,
           stddev: _engine.baselineStddev,
         ),
+        baselineSamples: List.of(_engine.baselineSamples),
       ),
     );
     if (_sessionStartAt != null) {
@@ -1246,6 +1249,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         mean: _engine.baselineMean,
         stddev: _engine.baselineStddev,
       ),
+      baselineSamples: List.of(_engine.baselineSamples),
       phases: List.of(_calibration.clipPhases),
       recalibrations: List.of(_recalibrations),
     );
@@ -1276,6 +1280,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _reward.resetBands();
     _adaptTick = 0;
     _trainingStartAt ??= DateTime.now();
+    _audio.onSparseAudioEvent = _onSparseAudioEvent;
     _startTicker();
     _syncOutputs();
     try {
@@ -1295,6 +1300,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _replaceBaselineForProbe();
       _emitOverrideTicks();
     }
+  }
+
+  void _onSparseAudioEvent(String type) {
+    final onset = state.elapsedSeconds.toDouble();
+    _audioEvents.add({'onset': onset, 'type': type});
   }
 
   Future<void> pause() async {
@@ -1366,6 +1376,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (state.phase == FeedbackPhase.ended) {
       return;
     }
+    _audio.onSparseAudioEvent = null;
     if (state.phase == FeedbackPhase.paused) {
       _closeOpenPauseAnnotation();
       _recorder.setRawPaused(false);
@@ -1551,6 +1562,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         intervals: _sessionAnnotations,
         gestures: settings.markersInFeedbackEnabled ? gestureMarkers : const [],
       ),
+      audioEvents: List.of(_audioEvents),
       stats: stats == null
           ? null
           : SessionStatsData(
@@ -1598,6 +1610,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         backgroundBinauralBeatHz: settings.backgroundBinauralBeatHz,
         markersInFeedbackEnabled: settings.markersInFeedbackEnabled,
         eyeMarkersEnabled: settings.eyeMarkersEnabled,
+        inhibitCeilingOverrides: () {
+          final o = settings.inhibitCeilingOverrides(fb.protocol);
+          return o.isEmpty ? null : o;
+        }(),
       ),
       avgSpo2: stats?.avgSpo2,
       peakAlphaHz: stats?.peakAlphaFreq,

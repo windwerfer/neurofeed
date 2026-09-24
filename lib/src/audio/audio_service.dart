@@ -320,6 +320,9 @@ class AudioService {
 
   Future<void> playWarningChime() => _controller.playWarningChime();
 
+  set onSparseAudioEvent(void Function(String type)? cb) =>
+      _controller.onSparseAudioEvent = cb;
+
   /// Selects the guardrail warning sound (bell variants / alarm / none) and
   /// restarts a running alarm with it.
   void setWarningSound(GuardrailSound sound) =>

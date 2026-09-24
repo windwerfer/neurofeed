@@ -44,7 +44,7 @@ Track coding work here. Schema decisions go in the contract, not this list.
 
 - [x] Base recording metadata writer (identity, `subject`, `device`, `streams`, `stats`, `annotations`).
 - [x] Feedback writer: base + locked `feedback{}` only (no `gestures[]`, no `drowsiness` nest, no shared-stats duplicates).
-- [ ] Feedback Trust metadata extras (see dedicated section below — **implement before computed Trust extras**): `baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`.
+- [x] Feedback Trust metadata extras (see dedicated section below — **implement before computed Trust extras**): `baselineSamples`, `inhibitCeilingOverrides`, `audioEvents`.
 - [ ] Readers for History / export / assemble paths — single dialect.
 - [x] `extractComputedScalars` (and assemble): fill locked `stats.*` gaps vs today (hr/spo2 min/max, `peakAlpha.meanHz`, `stillnessPct`, `quality.*`, `battery.*`, `annotationSeconds`). *(via `assembleBaseStats`)*
 - [x] Build `annotations[]` from pause / bad_quality / disconnect intervals + gesture instants (`duration: 0`, snake_case types).
@@ -89,12 +89,12 @@ Contract: **Timing + time zones**. Today recording metadata forces UTC `…Z` (l
 
 Contract: **Feedback extension** + **Computed feedback extras** (metadata prerequisites). Do this **before** computed Trust extras.
 
-- [ ] Persist `feedback.calibration.baselineSamples: number[]` — raw native reward samples used by `percentileOf` after initial calibration (~50 doubles). Keep existing `baseline` stats summary as-is.
-- [ ] Persist `feedback.calibration.recalibrations[].baselineSamples: number[]` when present (alongside existing `atSecs` + `baseline` stats).
-- [ ] Persist `feedback.sessionSettings.inhibitCeilingOverrides?: { "beta"?: number, "delta"?: number }` — Settings slider overlays (only set keys).
-- [ ] Writer for sparse `feedback.audioEvents: [{ "onset": number, "type": string }]` — types locked: `reward_chime` | `guard_chime`. `onset` = seconds from capture start (same clock as computed `t` / annotations). Omit array or empty when none fired. Record **actual** play times from `FeedbackAudioController` (do not reconstruct from reward 2.5s hold + 8s cooldown / guard 20s cooldown constants).
-- [ ] Do **not** put chimes in root `annotations[]`. Continuous musicFilter / rain / binaural do **not** get per-second audio events.
-- [ ] Round-trip tests: `baselineSamples`, `inhibitCeilingOverrides`, `audioEvents` in metadata JSON.
+- [x] Persist `feedback.calibration.baselineSamples: number[]` — raw native reward samples used by `percentileOf` after initial calibration (~50 doubles). Keep existing `baseline` stats summary as-is.
+- [x] Persist `feedback.calibration.recalibrations[].baselineSamples: number[]` when present (alongside existing `atSecs` + `baseline` stats).
+- [x] Persist `feedback.sessionSettings.inhibitCeilingOverrides?: { "beta"?: number, "delta"?: number }` — Settings slider overlays (only set keys).
+- [x] Writer for sparse `feedback.audioEvents` — actual play times from FeedbackAudioController (`reward_chime`|`guard_chime`).
+- [x] Do **not** put chimes in root `annotations[]`. Continuous musicFilter / rain / binaural do **not** get per-second audio events.
+- [x] Round-trip tests: `baselineSamples`, `inhibitCeilingOverrides`, `audioEvents` in metadata JSON.
 
 ---
 

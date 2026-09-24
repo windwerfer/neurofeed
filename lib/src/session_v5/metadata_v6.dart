@@ -149,5 +149,6 @@ Map<String, Object?> _feedbackExtensionV6(SessionMetadata meta) {
     if (meta.music != null) 'music': meta.music!.toJson(),
     if (sessionSettings.isNotEmpty) 'sessionSettings': sessionSettings,
     if (outcome.isNotEmpty) 'outcomeScalars': outcome,
+    if (meta.audioEvents.isNotEmpty) 'audioEvents': meta.audioEvents,
   };
 }
