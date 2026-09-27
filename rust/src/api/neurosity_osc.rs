@@ -1,3 +1,4 @@
+use crate::analysis::eeg_filter;
 use crate::api::device_config::DeviceKind;
 use crate::api::features::{self, FeatureDto};
 use crate::api::muse::{ConnectionStatus, DeviceInfo, EegDto, MuseEventDto, TelemetrySnapshot};
@@ -22,7 +23,6 @@ const CROWN_SAMPLE_RATE: f64 = 256.0;
 const CROWN_OSC_PORT: u16 = 9000;
 const SEEN_TTL: Duration = Duration::from_secs(5);
 const EEG_BATCH_SAMPLES: usize = 16;
-const EEG_GAP_MS: f64 = 100.0;
 const WARN_INTERVAL: Duration = Duration::from_secs(10);
 const ROUTE_CAPACITY: usize = 1024;
 
@@ -81,6 +81,14 @@ fn floats(args: &[OscType]) -> Vec<f32> {
     let mut out = Vec::new();
     collect_floats(args, &mut out);
     out
+}
+
+/// The first top-level int argument (`/raw`: the sample counter).
+fn sample_counter(args: &[OscType]) -> Option<i32> {
+    args.iter().find_map(|a| match a {
+        OscType::Int(i) => Some(*i),
+        _ => None,
+    })
 }
 
 fn flatten_packet(packet: OscPacket, out: &mut Vec<OscMessage>) {
@@ -451,6 +459,64 @@ impl SignalQuality {
     }
 }
 
+/// Sample-accurate Crown timeline. Timestamps advance 1/256 s per frame
+/// from the first arrival; the per-sample `/raw` counter (`i` after the
+/// timestamp string) adds lost samples, so a short loss is a timestamp gap
+/// the conditioner fills. Re-anchors on the arrival time when it drifts
+/// more than [eeg_filter::GAP_MS] from the timeline (dropout, reset).
+#[frb(ignore)]
+#[derive(Default)]
+struct SampleClock {
+    next_ms: Option<f64>,
+    last_count: Option<i32>,
+    wrap: Option<i32>,
+}
+
+impl SampleClock {
+    const PERIOD_MS: f64 = 1000.0 / CROWN_SAMPLE_RATE;
+
+    /// Timestamp of the next frame and whether the timeline broke (lost
+    /// samples or a re-anchor) before it.
+    fn place(&mut self, arrival_ms: f64, count: Option<i32>) -> (f64, bool) {
+        let lost = match (count, self.last_count) {
+            (Some(c), Some(l)) => self.lost(l, c),
+            _ => 0,
+        };
+        if count.is_some() {
+            self.last_count = count;
+        }
+        let expected = self.next_ms.map(|n| n + lost as f64 * Self::PERIOD_MS);
+        let (t, broke) = match expected {
+            Some(e) if (arrival_ms - e).abs() <= eeg_filter::GAP_MS => (e, lost > 0),
+            _ => (arrival_ms, self.next_ms.is_some()),
+        };
+        self.next_ms = Some(t + Self::PERIOD_MS);
+        (t, broke)
+    }
+
+    /// Samples lost between counters `last` and `cur`. The counter wraps
+    /// (the sim and BrainFlow-style senders use `n % 256`); the wrap is
+    /// learned from the first fall to 0, assumed the next power of two
+    /// before that. A duplicate or implausible jump counts as none.
+    fn lost(&mut self, last: i32, cur: i32) -> usize {
+        if cur == 0 && last > 0 && self.wrap.is_none() {
+            self.wrap = Some(last + 1);
+        }
+        let wrap = self
+            .wrap
+            .unwrap_or_else(|| ((last.max(0) as u32) + 1).next_power_of_two() as i32);
+        let step = if cur > last {
+            cur - last
+        } else {
+            (cur - last).rem_euclid(wrap.max(1))
+        };
+        match step {
+            1..=64 => (step - 1) as usize,
+            _ => 0,
+        }
+    }
+}
+
 struct ChannelClosed;
 
 struct CrownStream {
@@ -462,6 +528,7 @@ struct CrownStream {
     raw_warn: LogLimiter,
     quality_warn: LogLimiter,
     layout: RawLayoutDetector,
+    clock: SampleClock,
 }
 
 impl CrownStream {
@@ -475,6 +542,7 @@ impl CrownStream {
             raw_warn: LogLimiter::default(),
             quality_warn: LogLimiter::default(),
             layout: RawLayoutDetector::default(),
+            clock: SampleClock::default(),
         }
     }
 
@@ -532,15 +600,15 @@ impl CrownStream {
             });
             return Ok(());
         }
-        let period_ms = 1000.0 / CROWN_SAMPLE_RATE;
+        let period_ms = SampleClock::PERIOD_MS;
         let frames = self.layout.frames(&values);
-        let count = frames.len();
+        let n = frames.len();
+        // The sample counter is only read on one-sample packets.
+        let counter = if n == 1 { sample_counter(args) } else { None };
         for (i, frame) in frames.iter().enumerate() {
-            let sample_ms = arrival_ms - (count - 1 - i) as f64 * period_ms;
-            let queued = self.pending[0].len();
-            if queued > 0
-                && sample_ms - (self.pending_start_ms + queued as f64 * period_ms) > EEG_GAP_MS
-            {
+            let (sample_ms, broke) =
+                self.clock.place(arrival_ms - (n - 1 - i) as f64 * period_ms, counter);
+            if broke && !self.pending[0].is_empty() {
                 self.flush().await?;
             }
             if self.pending[0].is_empty() {
@@ -970,6 +1038,57 @@ mod tests {
         assert_eq!(eeg[0].timestamp, 0.0);
         assert_eq!(stream.pending[0], vec![3.0]);
         assert_eq!(stream.pending_start_ms, 500.0);
+    }
+
+    #[test]
+    fn sample_clock_counts_lost_samples_and_wraps() {
+        let p = SampleClock::PERIOD_MS;
+        let mut c = SampleClock::default();
+        let mut at = |arrival: f64, count: i32| c.place(arrival, Some(count));
+        assert_eq!(at(1000.0, 250), (1000.0, false));
+        // Arrival jitter does not move the timeline.
+        assert_eq!(at(1000.0 + p + 3.0, 251), (1000.0 + p, false));
+        // Lost 252: one period gap.
+        assert_eq!(at(1000.0 + 3.0 * p, 253), (1000.0 + 3.0 * p, true));
+        // 255 → 0 wrap is continuous; 0 learns wrap 256; 254 → 1 loses 255 and 0.
+        assert_eq!(at(1000.0 + 4.0 * p, 254).1, false);
+        assert_eq!(at(1000.0 + 5.0 * p, 255).1, false);
+        assert_eq!(at(1000.0 + 6.0 * p, 0), (1000.0 + 6.0 * p, false));
+        assert_eq!(at(1000.0 + 9.0 * p, 3), (1000.0 + 9.0 * p, true));
+        // A dropout past GAP_MS re-anchors on the arrival.
+        assert_eq!(at(5000.0, 40), (5000.0, true));
+    }
+
+    #[tokio::test]
+    async fn lost_sample_is_a_timeline_gap_not_a_raw_sample() {
+        let (tx, mut rx) = mpsc::channel(64);
+        let mut stream = CrownStream::new(tx);
+        let p = SampleClock::PERIOD_MS;
+        // Counters 0..20 with 7 lost; arrivals jittered by up to 2 ms.
+        for n in (0..20).filter(|&n| n != 7) {
+            let m = decode(&node_raw_packet(ID, [n as f32; 8], "1", n));
+            let jitter = (n % 3) as f64 * 1.0;
+            assert!(stream.on_raw(&m.args, 1000.0 + n as f64 * p + jitter).await.is_ok());
+        }
+        let eeg = drain(&mut rx).await;
+        // The loss flushes the first 7 samples; RAW holds only what arrived.
+        assert_eq!(eeg.len(), CROWN_CHANNELS);
+        assert_eq!(eeg[0].samples, (0..7).map(f64::from).collect::<Vec<_>>());
+        assert_eq!(eeg[0].timestamp, 1000.0);
+        assert_eq!(stream.pending_start_ms, 1000.0 + 8.0 * p);
+        assert_eq!(stream.pending[0][0], 8.0);
+        // The conditioner sees exactly one whole sample missing.
+        let mut c = crate::analysis::eeg_filter::EegConditioner::new(
+            crate::analysis::eeg_filter::NotchMode::Fixed(
+                crate::analysis::eeg_filter::Mains::Absent,
+            ),
+        );
+        let warm: Vec<f64> = vec![0.0; 128];
+        c.process(0, 1000.0 - 128.0 * p, &warm);
+        c.process(0, eeg[0].timestamp, &eeg[0].samples);
+        let chunks = c.process(0, stream.pending_start_ms, &stream.pending[0]);
+        assert_eq!(c.last_fill(), 1);
+        assert_eq!(chunks[0].1.len(), 1);
     }
 
     #[test]

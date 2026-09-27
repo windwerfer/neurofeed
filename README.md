@@ -51,6 +51,8 @@ band-stop, so small mains drift is still removed). Mains is detected
 automatically as 50, 60 or none (no notch) and saved per headset, so the next
 connect starts with the right notch. Each recording or session keeps the notch
 it started with; if nothing is known yet, it notches both 50 and 60 Hz.
+Lost samples up to 47 ms (a dropped Crown OSC sample, a lost Muse packet) are
+linearly interpolated in the conditioned signal; longer gaps restart the filter.
 RAW is saved unfiltered so anyone can reprocess it with their own pipeline.
 The file records both (`device.rawFiltering`, `device.conditioning`; see
 [fileformat_v6](.ai/contracts/fileformat_v6.md)).

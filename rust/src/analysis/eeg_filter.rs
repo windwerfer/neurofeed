@@ -17,7 +17,9 @@
 //! block is then emitted conditioned. What is left is EEG-scale (drift and
 //! non-periodic EEG across the repeat seam) and fades with the high-pass
 //! within about a second. A new segment starts on the first packet and after
-//! any timestamp gap over [GAP_MS].
+//! any timestamp gap over [GAP_MS]. Shorter gaps of 1..=[FILL_MAX_SAMPLES]
+//! whole samples (lost Crown OSC samples, a lost Muse packet) are filled by
+//! linear interpolation in the conditioned path only; RAW keeps the gap.
 //!
 //! Mains detection ([MainsDetector]): every 256 unfiltered samples per
 //! channel vote 50 Hz, 60 Hz or none. A frequency gets the vote when its
@@ -47,6 +49,7 @@ pub const MAINS_CANDIDATES_HZ: [f64; 2] = [50.0, 60.0];
 pub const WARMUP_SAMPLES: usize = 128;
 pub const PRIME_PASSES: usize = 4;
 pub const GAP_MS: f64 = 200.0;
+pub const FILL_MAX_SAMPLES: usize = 12;
 pub const DETECT_WINDOW: usize = 256;
 pub const PEAK_RATIO: f64 = 5.0;
 pub const LOCK_VOTES: u32 = 8;
@@ -337,6 +340,8 @@ enum Stage {
 struct Channel {
     stage: Stage,
     next_ms: f64,
+    /// Last unfiltered input sample (fill anchor).
+    last: f64,
 }
 
 /// Which notch a conditioner applies.
@@ -360,6 +365,7 @@ pub struct EegConditioner {
     mains: MainsDetector,
     mode: NotchMode,
     applied: Option<Mains>,
+    filled: usize,
 }
 
 impl EegConditioner {
@@ -390,7 +396,9 @@ impl EegConditioner {
     /// Condition one packet of unfiltered samples starting at
     /// `timestamp_ms`. Returns conditioned chunks `(start_ms, samples)` in
     /// order: none while a segment's first samples are held, the held block
-    /// once it is complete, else the packet itself.
+    /// once it is complete, else the packet itself. A running channel whose
+    /// packet starts 1..=[FILL_MAX_SAMPLES] whole samples late gets those
+    /// samples linearly interpolated as a first chunk ([Self::last_fill]).
     pub fn process(
         &mut self,
         electrode: i32,
@@ -410,13 +418,31 @@ impl EegConditioner {
             }
         }
         let mut out = Vec::new();
+        self.filled = 0;
         let ch = self.channels.entry(electrode).or_insert_with(|| Channel {
             stage: Stage::Warmup { start_ms: timestamp_ms, held: Vec::new() },
             next_ms: timestamp_ms,
+            last: 0.0,
         });
-        if (timestamp_ms - ch.next_ms).abs() > GAP_MS {
+        let gap = timestamp_ms - ch.next_ms;
+        if gap.abs() > GAP_MS {
             out.extend(flush(&mut ch.stage, mains));
             ch.stage = Stage::Warmup { start_ms: timestamp_ms, held: Vec::new() };
+        } else if let (Stage::Running(filter), Some(&b)) = (&mut ch.stage, samples.first()) {
+            // Whole lost samples on a sample-accurate timeline: linear fill.
+            let period = 1000.0 / SAMPLE_RATE_HZ;
+            let k = (gap / period).round();
+            if (1.0..=FILL_MAX_SAMPLES as f64).contains(&k) && (gap - k * period).abs() < 0.1 * period {
+                let (a, n) = (ch.last, k as usize);
+                let fill = (1..=n)
+                    .map(|j| filter.process(a + (b - a) * j as f64 / (n + 1) as f64))
+                    .collect();
+                out.push((ch.next_ms, fill));
+                self.filled = n;
+            }
+        }
+        if let Some(&x) = samples.last() {
+            ch.last = x;
         }
         ch.next_ms = timestamp_ms + samples.len() as f64 * 1000.0 / SAMPLE_RATE_HZ;
         match &mut ch.stage {
@@ -431,6 +457,11 @@ impl EegConditioner {
             }
         }
         out
+    }
+
+    /// Interpolated samples leading the last [Self::process] output.
+    pub fn last_fill(&self) -> usize {
+        self.filled
     }
 
     /// Release every held block (end of a recording).
@@ -531,7 +562,10 @@ pub fn condition_packets(
     let mut conditioner = EegConditioner::new(NotchMode::Fixed(mains));
     let mut per_electrode: HashMap<i32, Vec<f64>> = HashMap::new();
     for (electrode, ts, samples) in packets {
-        for (_, block) in conditioner.process(*electrode, *ts, samples) {
+        let chunks = conditioner.process(*electrode, *ts, samples);
+        // Fills keep the filter continuous but are not packet samples.
+        let skip = usize::from(conditioner.last_fill() > 0);
+        for (_, block) in chunks.into_iter().skip(skip) {
             per_electrode.entry(*electrode).or_default().extend(block);
         }
     }
@@ -675,6 +709,73 @@ mod tests {
             .skip(skip)
             .map(|(a, b)| (a - b).abs())
             .fold(0.0, f64::max)
+    }
+
+    #[test]
+    fn short_timeline_gaps_are_filled_in_the_conditioned_path_only() {
+        let period = 1000.0 / FS;
+        // 16-sample packets of a clean alpha sine; after 2 s the packets
+        // lose 1, then 3, then 12 samples; a jittered start is not a loss.
+        let mut packets = Vec::new();
+        let mut n = 0usize;
+        let mut lost_at = Vec::new();
+        for p in 0..64 {
+            let skip = match p {
+                31 => 1,
+                40 => 3,
+                48 => FILL_MAX_SAMPLES,
+                _ => 0,
+            };
+            if skip > 0 {
+                lost_at.push((n, skip));
+            }
+            n += skip;
+            let jitter = if p == 56 { 0.4 * period } else { 0.0 };
+            let samples: Vec<f64> = (n..n + 16).map(alpha).collect();
+            packets.push((0, n as f64 * period + jitter, samples));
+            n += 16;
+        }
+        let mut c = EegConditioner::new(NotchMode::Fixed(Mains::Absent));
+        let mut live = Vec::new();
+        let mut fills = Vec::new();
+        for (e, ts, s) in &packets {
+            let chunks = c.process(*e, *ts, s);
+            if c.last_fill() > 0 {
+                fills.push((chunks[0].0, c.last_fill()));
+            }
+            for (_, b) in chunks {
+                live.extend(b);
+            }
+        }
+        // Each loss is filled once, starting where the samples went missing.
+        assert_eq!(fills.len(), 3);
+        for ((t, k), (at, skip)) in fills.iter().zip(&lost_at) {
+            assert_eq!(k, skip);
+            assert!((t - *at as f64 * period).abs() < 1e-9);
+        }
+        // Live output is gapless: one conditioned sample per timeline sample,
+        // tracking the sine through every fill (≤ one fill's linear error).
+        assert_eq!(live.len(), n);
+        let reference: Vec<f64> = {
+            let mut r = EegConditioner::new(NotchMode::Fixed(Mains::Absent));
+            let all: Vec<f64> = (0..n).map(alpha).collect();
+            all.chunks(16)
+                .enumerate()
+                .flat_map(|(i, s)| r.process(0, (i * 16) as f64 * period, s))
+                .flat_map(|(_, b)| b)
+                .collect()
+        };
+        let after_first = lost_at[0].0;
+        let err = |to: usize| {
+            (after_first..to).map(|i| (live[i] - reference[i]).abs()).fold(0.0, f64::max)
+        };
+        eprintln!("fill: max err after 1-sample fill {:.3} µV", err(lost_at[1].0));
+        assert!(err(lost_at[1].0) < 0.5);
+        // Offline: fills drop out, every packet keeps its length.
+        let (out, _) = condition_packets(&packets, Some(Mains::Absent));
+        for ((_, _, s), o) in packets.iter().zip(&out) {
+            assert_eq!(s.len(), o.len());
+        }
     }
 
     #[test]
