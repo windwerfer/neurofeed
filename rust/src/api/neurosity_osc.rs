@@ -119,6 +119,65 @@ impl LogLimiter {
     }
 }
 
+/// Channel order inside a multi-sample `/raw` packet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RawLayout {
+    /// ch0_s0, ch1_s0, …, ch7_s0, ch0_s1, …
+    SampleMajor,
+    /// ch0_s0, ch0_s1, …, ch0_sN, ch1_s0, …
+    ChannelMajor,
+}
+
+const LAYOUT_AGREE_PACKETS: u32 = 3;
+
+/// The real Crown `/raw` layout is unverified: Neurosity's OSC docs describe
+/// 16-sample epochs, while Neurosity's simulator and BrainFlow send one
+/// sample per packet. Multi-sample packets are read whichever way gives the
+/// smoother per-channel signal (256 Hz EEG moves little between samples);
+/// the choice sticks once [LAYOUT_AGREE_PACKETS] packets in a row agree.
+#[frb(ignore)]
+#[derive(Default)]
+struct RawLayoutDetector {
+    locked: Option<RawLayout>,
+    streak: Option<(RawLayout, u32)>,
+}
+
+impl RawLayoutDetector {
+    /// Sample-major frames of 8 channels. `values.len()` is a multiple of 8.
+    fn frames(&mut self, values: &[f32]) -> Vec<[f32; CROWN_CHANNELS]> {
+        let n = values.len() / CROWN_CHANNELS;
+        let at = |layout, s: usize, ch: usize| match layout {
+            RawLayout::SampleMajor => values[s * CROWN_CHANNELS + ch],
+            RawLayout::ChannelMajor => values[ch * n + s],
+        };
+        let jumps = |layout| -> f64 {
+            (0..CROWN_CHANNELS)
+                .flat_map(|ch| (1..n).map(move |s| (ch, s)))
+                .map(|(ch, s)| (at(layout, s, ch) as f64 - at(layout, s - 1, ch) as f64).abs())
+                .sum()
+        };
+        let layout = match self.locked {
+            Some(l) => l,
+            None if n < 2 => RawLayout::SampleMajor,
+            None => {
+                let (sm, cm) = (jumps(RawLayout::SampleMajor), jumps(RawLayout::ChannelMajor));
+                let vote = if cm < sm { RawLayout::ChannelMajor } else { RawLayout::SampleMajor };
+                let count = match self.streak {
+                    Some((l, c)) if l == vote => c + 1,
+                    _ => 1,
+                };
+                self.streak = Some((vote, count));
+                if count >= LAYOUT_AGREE_PACKETS {
+                    self.locked = Some(vote);
+                    log::info!("[crown_osc] /raw layout: {n} samples per packet, {vote:?}");
+                }
+                vote
+            }
+        };
+        (0..n).map(|s| std::array::from_fn(|ch| at(layout, s, ch))).collect()
+    }
+}
+
 struct SeenCrown {
     nickname: Option<String>,
     model: Option<String>,
@@ -402,6 +461,7 @@ struct CrownStream {
     battery: Option<f32>,
     raw_warn: LogLimiter,
     quality_warn: LogLimiter,
+    layout: RawLayoutDetector,
 }
 
 impl CrownStream {
@@ -414,6 +474,7 @@ impl CrownStream {
             battery: None,
             raw_warn: LogLimiter::default(),
             quality_warn: LogLimiter::default(),
+            layout: RawLayoutDetector::default(),
         }
     }
 
@@ -472,9 +533,10 @@ impl CrownStream {
             return Ok(());
         }
         let period_ms = 1000.0 / CROWN_SAMPLE_RATE;
-        let frames = values.len() / CROWN_CHANNELS;
-        for (i, frame) in values.chunks_exact(CROWN_CHANNELS).enumerate() {
-            let sample_ms = arrival_ms - (frames - 1 - i) as f64 * period_ms;
+        let frames = self.layout.frames(&values);
+        let count = frames.len();
+        for (i, frame) in frames.iter().enumerate() {
+            let sample_ms = arrival_ms - (count - 1 - i) as f64 * period_ms;
             let queued = self.pending[0].len();
             if queued > 0
                 && sample_ms - (self.pending_start_ms + queued as f64 * period_ms) > EEG_GAP_MS
@@ -746,6 +808,75 @@ mod tests {
             .is_for(ID));
         assert!(CrownAddr::parse("/crown/signalQuality").is_none());
         assert!(CrownAddr::parse("/crownabc").is_none());
+    }
+
+    /// Smooth 256 Hz EEG with per-channel DC offsets and mains hum, like an
+    /// unfiltered Crown pad.
+    fn smooth_sample(s: usize, ch: usize) -> f32 {
+        let t = s as f64 / CROWN_SAMPLE_RATE;
+        let alpha = 10.0 * (2.0 * std::f64::consts::PI * 10.0 * t + ch as f64).sin();
+        let hum = 60.0 * (2.0 * std::f64::consts::PI * 50.0 * t).sin();
+        (-2000.0 - 300.0 * ch as f64 + alpha + hum) as f32
+    }
+
+    fn epoch(first: usize, n: usize, layout: RawLayout) -> Vec<f32> {
+        let mut out = vec![0.0; n * CROWN_CHANNELS];
+        for s in 0..n {
+            for ch in 0..CROWN_CHANNELS {
+                let i = match layout {
+                    RawLayout::SampleMajor => s * CROWN_CHANNELS + ch,
+                    RawLayout::ChannelMajor => ch * n + s,
+                };
+                out[i] = smooth_sample(first + s, ch);
+            }
+        }
+        out
+    }
+
+    fn expected(first: usize, n: usize) -> Vec<[f32; CROWN_CHANNELS]> {
+        (0..n)
+            .map(|s| std::array::from_fn(|ch| smooth_sample(first + s, ch)))
+            .collect()
+    }
+
+    #[test]
+    fn raw_layout_detects_both_epoch_orders() {
+        for layout in [RawLayout::SampleMajor, RawLayout::ChannelMajor] {
+            let mut det = RawLayoutDetector::default();
+            for p in 0..LAYOUT_AGREE_PACKETS as usize {
+                let frames = det.frames(&epoch(p * 16, 16, layout));
+                assert_eq!(frames, expected(p * 16, 16), "{layout:?} packet {p}");
+            }
+            assert_eq!(det.locked, Some(layout));
+        }
+    }
+
+    #[test]
+    fn raw_layout_single_sample_packets_do_not_vote() {
+        let mut det = RawLayoutDetector::default();
+        for s in 0..10 {
+            let frames = det.frames(&epoch(s, 1, RawLayout::SampleMajor));
+            assert_eq!(frames, expected(s, 1));
+        }
+        assert_eq!(det.locked, None);
+        assert_eq!(det.streak, None);
+    }
+
+    #[test]
+    fn raw_layout_is_sticky_once_locked() {
+        let mut det = RawLayoutDetector::default();
+        det.frames(&epoch(0, 16, RawLayout::ChannelMajor));
+        det.frames(&epoch(16, 16, RawLayout::SampleMajor));
+        assert_eq!(det.locked, None, "a disagreeing packet resets the streak");
+        for p in 2..2 + LAYOUT_AGREE_PACKETS as usize {
+            det.frames(&epoch(p * 16, 16, RawLayout::ChannelMajor));
+        }
+        assert_eq!(det.locked, Some(RawLayout::ChannelMajor));
+        let odd = epoch(100, 16, RawLayout::SampleMajor);
+        let frames = det.frames(&odd);
+        assert_ne!(frames, expected(100, 16), "no flip after lock");
+        assert_eq!(frames[0][1], odd[16]);
+        assert_eq!(det.locked, Some(RawLayout::ChannelMajor));
     }
 
     #[test]
@@ -1091,6 +1222,35 @@ mod sim_loopback_tests {
         assert!(got.samples[5].iter().all(|v| *v == 0.0));
         drop(handle);
         stop_crown_discovery();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn crown_osc_sim_epoch_packets_both_layouts() {
+        for extra in [&[][..], &["--channel-major"][..]] {
+            let mut args = vec!["--duration", "3", "--epoch", "16", "--bad-pads", "3"];
+            args.extend_from_slice(extra);
+            let _main = sim(&args);
+            let (handle, _status, mut rx) = connect(0.2).await;
+            let secs = 2.0;
+            let got = collect(&mut rx, secs).await;
+            for (ch, s) in got.samples.iter().enumerate() {
+                let rate = s.len() as f64 / secs;
+                println!(
+                    "epoch16 {extra:?} ch{ch}: {rate:.1} samples/s std={:.2} max|v|={:.1}",
+                    std_dev(s),
+                    max_abs(s)
+                );
+                assert!((rate - 256.0).abs() < 256.0 * 0.08, "ch{ch} rate {rate}");
+                if ch == 3 {
+                    assert!(std_dev(s) > 100.0);
+                } else {
+                    assert!(max_abs(s) < 12.0, "ch{ch}: bad pad leaked (wrong layout?)");
+                }
+            }
+            drop(handle);
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]

@@ -8,11 +8,11 @@ import 'device_config.dart';
 import 'muse.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `bind_socket`, `collect_floats`, `dispatch`, `emit_battery`, `ensure_socket`, `flatten_packet`, `floats`, `flush`, `hub`, `is_for`, `leaf`, `new`, `now_ms`, `observe`, `on_feature`, `on_message`, `on_raw`, `on_signal_quality`, `parse`, `parse`, `release_route`, `run_socket`, `run`, `send`, `start_crown_receiver`, `stop_socket_if_idle`, `visible`, `warn`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ChannelClosed`, `CrownAddr`, `CrownOscHandle`, `CrownRegistry`, `CrownStream`, `Hub`, `LogLimiter`, `Route`, `SeenCrown`, `SignalQuality`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `eq`, `eq`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `bind_socket`, `collect_floats`, `dispatch`, `emit_battery`, `ensure_socket`, `flatten_packet`, `floats`, `flush`, `frames`, `hub`, `is_for`, `leaf`, `new`, `now_ms`, `observe`, `on_feature`, `on_message`, `on_raw`, `on_signal_quality`, `parse`, `parse`, `release_route`, `run_socket`, `run`, `send`, `start_crown_receiver`, `stop_socket_if_idle`, `visible`, `warn`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ChannelClosed`, `CrownAddr`, `CrownOscHandle`, `CrownRegistry`, `CrownStream`, `Hub`, `LogLimiter`, `RawLayoutDetector`, `RawLayout`, `Route`, `SeenCrown`, `SignalQuality`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `connect_crown_osc`
-// These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `default`, `default`, `default`, `disconnect`
+// These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `default`, `default`, `default`, `default`, `disconnect`
 
 /// Start listening for Crowns broadcasting OSC on the local network
 /// (UDP port 9000). Poll [discovered_crowns] for the list.

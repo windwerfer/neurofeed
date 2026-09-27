@@ -24,6 +24,10 @@ The default signal is NeuroFeed's in-app simulator model
 sub-uV hash noise, at 256 Hz. --noise switches to Neurosity's uniform
 -50..50 uV noise.
 
+--epoch N packs N samples per /raw packet (8*N floats; Neurosity's docs
+describe 16-sample epochs for the Crown), sample-major (ch0_s0, ch1_s0, ...)
+unless --channel-major (ch0_s0, ch0_s1, ...).
+
 --dropout EVERY:SECONDS stops /raw for SECONDS once every EVERY seconds while
 /info keeps going (the Crown stays visible on the network; samples in the
 gap are lost, the sample clock keeps running).
@@ -34,6 +38,7 @@ Usage, from any computer on the same LAN as the app:
   python3 tools/crown_osc_sim.py --bad-pads 3,5 --line-noise 50 --quality
   python3 tools/crown_osc_sim.py --quality-overall                # app fallback
   python3 tools/crown_osc_sim.py --dropout 10:3 --duration 60
+  python3 tools/crown_osc_sim.py --epoch 16 --channel-major
 """
 import argparse
 import math
@@ -170,6 +175,10 @@ def build_args(argv):
     quality.add_argument("--quality-overall", action="store_const", const="overall",
                          dest="quality",
                          help="send one overall /crown{id}/signalQuality float at 4 Hz")
+    p.add_argument("--epoch", type=int, default=1, metavar="N",
+                   help="samples per /raw packet (default 1)")
+    p.add_argument("--channel-major", action="store_true",
+                   help="with --epoch: all of ch0, then ch1, ... (default sample-major)")
     p.add_argument("--duration", type=float, help="seconds to run (default: forever)")
     return p.parse_args(argv)
 
@@ -198,7 +207,12 @@ class Crown:
 
     def raw(self, n, start_ms):
         timestamp = repr((start_ms + n * 1000.0 / SAMPLE_RATE) / 1000.0)
-        return osc_message(f"{self.base}/raw", [self.sample(n), timestamp, n % SAMPLE_RATE, ""])
+        frames = [self.sample(n + i) for i in range(self.args.epoch)]
+        if self.args.channel_major:
+            floats = [f[ch] for ch in range(CHANNELS) for f in frames]
+        else:
+            floats = [v for f in frames for v in f]
+        return osc_message(f"{self.base}/raw", [floats, timestamp, n % SAMPLE_RATE, ""])
 
     def quality(self):
         per_channel = [random.uniform(*(BAD_QUALITY if ch in self.args.bad_pads else GOOD_QUALITY))
@@ -244,11 +258,11 @@ def main(argv=None):
                 window["quality"] += 1
                 next_quality += 0.25
             due = int(elapsed * SAMPLE_RATE)
-            while sent_samples < due:
+            while sent_samples + args.epoch <= due:
                 if not crown.in_dropout(sent_samples / SAMPLE_RATE):
                     sock.sendto(crown.raw(sent_samples, start_ms), dest)
                     window["raw"] += 1
-                sent_samples += 1
+                sent_samples += args.epoch
             if elapsed >= next_report + 5.0:
                 next_report += 5.0
                 print(f"crown_osc_sim: t={next_report:.0f}s last 5 s: raw={window['raw']} "
