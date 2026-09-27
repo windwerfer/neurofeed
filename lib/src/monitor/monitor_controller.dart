@@ -113,7 +113,8 @@ class MonitorController extends Notifier<MonitorState> {
       _eventSub = null;
       _stopDisconnectGapFiller();
       _stopSampler();
-      unawaited(_capture?.discard() ?? Future<void>.value());
+      // Queued behind pending ops so pendingOps covers the delete.
+      unawaited(_serialized(() => _capture?.discard() ?? Future<void>.value()));
     });
     final current = ref.read(appStateProvider);
     if (current.status.connected) {
