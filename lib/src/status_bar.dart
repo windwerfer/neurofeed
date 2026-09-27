@@ -1,14 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/streaming/streaming_indicator.dart';
 
-const _kSignalSymbols = ['/', '‾', '‾', '\\'];
+const _kMuseSignalSymbols = ['/', '‾', '‾', '\\'];
 
-Widget _signalQualityRow(List<double>? qualities) {
+/// One glyph per head pad: the Muse head outline for 4 pads, dots otherwise.
+@visibleForTesting
+List<String> padSymbols(int count) => count == _kMuseSignalSymbols.length
+    ? _kMuseSignalSymbols
+    : List.filled(count, '•');
+
+/// Pad quality glyphs for the connected device's [padCount] head pads.
+@visibleForTesting
+Widget signalQualityRow(List<double>? qualities, int padCount) {
   if (qualities == null) return const SizedBox.shrink();
+  final symbols = padSymbols(padCount);
   final children = <Widget>[];
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < symbols.length; i++) {
     final score = i < qualities.length ? qualities[i] : 0.0;
     final color = score >= 80
         ? const Color(0xFF4CAF50)
@@ -17,7 +27,7 @@ Widget _signalQualityRow(List<double>? qualities) {
         : const Color(0xFFF44336);
     children.add(
       Text(
-        _kSignalSymbols[i],
+        symbols[i],
         style: TextStyle(
           color: color,
           fontSize: 18,
@@ -26,7 +36,7 @@ Widget _signalQualityRow(List<double>? qualities) {
         ),
       ),
     );
-    if (i < 3) children.add(const SizedBox(width: 2));
+    if (i < symbols.length - 1) children.add(const SizedBox(width: 2));
   }
   return Row(mainAxisSize: MainAxisSize.min, children: children);
 }
@@ -106,7 +116,10 @@ class StatusBar extends ConsumerWidget {
                             '${(state.batteryLevel < 1 ? state.batteryLevel * 100 : state.batteryLevel).toInt()}%',
                           ),
                           const SizedBox(width: 12),
-                          _signalQualityRow(state.signalQuality),
+                          signalQualityRow(
+                            state.signalQuality,
+                            channelCountForKind(state.lastConnectedKind),
+                          ),
                           const SizedBox(width: 12),
                           const StreamIndicator(),
                         ],
