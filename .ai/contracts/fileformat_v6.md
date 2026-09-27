@@ -128,9 +128,11 @@ Recordings: zeroed legacy `guardrail`/`feedback` keys may still be present for c
 
 **EEG conditioning (LOCKED):** RAW EEG is stored exactly as the device sent it, for every device; the app never filters stored RAW. Everything computed from EEG — the app signal quality (std score and line-noise ratio), FFT bands / `lineNoise` / peak alpha, band features, gestures (blink bins; the eye estimate uses the RAW level), the guardrail window — and the live and History EEG charts use the same conditioned signal, per channel (AUX included):
 - 2nd-order Butterworth high-pass at **0.5 Hz** (`highPassHz`), which removes the DC offset and slow drift but keeps delta (−0.26 dB at 1 Hz).
-- Mains notch, **Q = 30** (`notchQ`), at the mains frequency and its 2nd harmonic (50/100 or 60/120 Hz). Mains is detected per connection: every 256 unfiltered samples per channel vote 50, 60 or none, and a frequency gets the vote when its bins (±1) average ≥ 5× the median of the neighbouring non-mains bins (±8 Hz). 8 consecutive agreeing votes decide 50, 60 or none. From none, 16 consecutive votes for one frequency switch to it (hum appearing later). 50/60 never flips. Until the first decision both pairs are notched; "none" means no notch.
+- Mains notch, **Q = 10** (`notchQ`; −3 dB width 3.8 Hz at 50 Hz), at the mains frequency and its 2nd harmonic (50/100 or 60/120 Hz). The width tolerates mains drift (≤ −20 dB at ±0.2 Hz) and costs ≤ 0.6 dB below 45 Hz. Mains is detected per connection: every 256 unfiltered samples per channel vote 50, 60 or none, and a frequency gets the vote when its bins (±1) average ≥ 5× the median of the neighbouring non-mains bins (±8 Hz). 8 consecutive agreeing votes decide 50, 60 or none. From none, 16 consecutive votes for one frequency switch to it (hum appearing later). 50/60 never flips. "None" means no notch.
+- Saved decision: every detected decision is saved per device id in app settings. At connect the live notch starts from the device's saved decision (both pairs when nothing is saved) and follows detection once it decides; the live view may change notch until a recording starts.
+- Locked per recording: when a recording or feedback session capture starts, the live notch is frozen for the whole capture — detection's decision if made, else the device's saved decision, else both 50/100 and 60/120 Hz. A reconnect during the capture restarts the filter with the same notch; detection keeps running (and keeps updating the saved value) but does not change the capture's notch.
 - Start-up and after any timestamp gap > 200 ms: the first 128 samples are held, the high-pass is seeded at their mean and the chain is primed on them, so a large offset (Crown RAW ≈ −2e5 µV) settles within the first samples.
-- Offline paths (History charts, Inspect, EDF / RAW-only CSV import bands) run the same conditioning on the stored RAW.
+- Offline paths run the same chain with one notch for the whole file: History charts use the recording's `device.conditioning.notchHz`; Inspect of the running capture uses the live notch; EDF / RAW-only CSV imports scan the whole RAW first and use the result.
 - `device.rawFiltering` / `device.conditioning` record both sides — see **Raw filtering and conditioning**.
 
 #### Sqlite (publish-time; not always in metadata JSON)
@@ -211,11 +213,11 @@ AUX channels are present only when the user enabled **Record AUX channels**. The
 | `rawFiltering.highPassHz` | number \| null | High-pass the device itself applied; null = none |
 | `rawFiltering.notchHz` | number \| null | Mains notch the device itself applied; null = none |
 | `conditioning.highPassHz` | number | App high-pass cutoff (0.5) |
-| `conditioning.notchQ` | number | App notch Q (30) |
-| `conditioning.notchHz` | 50 \| 60 \| null | Mains notch in effect at the end; null = none, or undecided when `notchChanges` is empty (then both pairs were notched) |
-| `conditioning.notchChanges` | `{onset, notchHz}[]` | Every mains decision of the connection; `onset` in seconds from `startedAt`, negative = decided before the recording started |
+| `conditioning.notchQ` | number | App notch Q (10) |
+| `conditioning.notchHz` | number[] | Mains notched for the whole recording, each with its 2nd harmonic: `[50]`, `[60]`, `[]` (no hum, no notch) or `[50, 60]` (undecided at start) |
+| `conditioning.notchSource` | `"detected"` \| `"saved"` \| `"undecided"` | Where `notchHz` came from: this connection's detection (imports: the scan of the file), the device's saved decision, or neither (`[50, 60]`) |
 
-Device-side filtering of live devices is none: Crown OSC RAW is unfiltered (crown-reader, Neurosity's BrainFlow tutorial), Muse MU-02 and later have no hardware filtering (Interaxon LibMuse `NotchFrequency`); Athena is assumed the same. Imported recordings have no `rawFiltering`; an EDF's own per-signal Prefiltering text goes to `import.prefiltering`. Their `conditioning` is present when the file has RAW (bands from that RAW, charts), with `notchChanges` relative to the file start. Crash-recovered feedback sessions have `rawFiltering` from the sidecar but no `conditioning`.
+Device-side filtering of live devices is none: Crown OSC RAW is unfiltered (crown-reader, Neurosity's BrainFlow tutorial), Muse MU-02 and later have no hardware filtering (Interaxon LibMuse `NotchFrequency`); Athena is assumed the same. Imported recordings have no `rawFiltering`; an EDF's own per-signal Prefiltering text goes to `import.prefiltering`. Their `conditioning` is present when the file has RAW (bands from that RAW, charts). The capture's sidecar carries both blocks from the first write, so crash-recovered recordings and feedback sessions have them too.
 
 ```json
 "device": {
@@ -229,9 +231,9 @@ Device-side filtering of live devices is none: Crown OSC RAW is unfiltered (crow
   "rawFiltering": { "storedAsReceived": true, "highPassHz": null, "notchHz": null },
   "conditioning": {
     "highPassHz": 0.5,
-    "notchQ": 30,
-    "notchHz": 50,
-    "notchChanges": [{ "onset": -3.2, "notchHz": 50 }]
+    "notchQ": 10,
+    "notchHz": [50],
+    "notchSource": "detected"
   }
 }
 ```

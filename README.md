@@ -45,9 +45,12 @@ Headsets send RAW EEG unfiltered: it carries a DC offset (Crown ≈ −200 000 �
 slow drift and mains hum. Left in, they would inflate the spread-based pad
 quality score and leak into the bands. So before quality, bands, features and
 charts, every channel of every device goes through the same filter: a 0.5 Hz
-high-pass (2nd-order Butterworth; keeps delta) and a Q 30 mains notch at
-50/100 or 60/120 Hz. Mains is detected automatically as 50, 60 or none (no
-notch), from how far the mains bins stand out from the neighbouring spectrum.
+high-pass (2nd-order Butterworth; keeps delta) and a Q 10 mains notch at
+50/100 or 60/120 Hz (−3 dB width ≈ 4 Hz, close to BrainFlow's 4 Hz-wide
+band-stop, so small mains drift is still removed). Mains is detected
+automatically as 50, 60 or none (no notch) and saved per headset, so the next
+connect starts with the right notch. Each recording or session keeps the notch
+it started with; if nothing is known yet, it notches both 50 and 60 Hz.
 RAW is saved unfiltered so anyone can reprocess it with their own pipeline.
 The file records both (`device.rawFiltering`, `device.conditioning`; see
 [fileformat_v6](.ai/contracts/fileformat_v6.md)).
@@ -78,8 +81,9 @@ conditioned signal.
 Android 10+ **arm64-v8a only** (no x86 emulator, no 32-bit). Linux and
 Windows builds exist in CI; iOS/macOS are not a current target.
 
-Live monitor + connect-time recording is implemented. Crown *sessions*,
-OSC discovery, and Athena extra optical channels are not.
+Muse (Classic, Athena) and Crown (OSC, with LAN discovery) work for the live
+monitor, recordings and feedback sessions. Athena's extra optical channels are
+not implemented.
 
 ## Quick start
 

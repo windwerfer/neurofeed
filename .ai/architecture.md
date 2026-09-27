@@ -180,14 +180,20 @@ EEG is resampled to 256 Hz in Rust (`import_dsp.rs`, `rubato`). Details:
 ## EEG conditioning
 
 `analysis/eeg_filter.rs` (`EegConditioner`): per channel, every device, 0.5 Hz
-Butterworth high-pass + Q 30 notch at 50/100 or 60/120 Hz, mains
+Butterworth high-pass + Q 10 notch at 50/100 or 60/120 Hz, mains
 auto-detected per connection as 50 / 60 / none (sticky; none → 50/60 allowed,
-50 ↔ 60 never). The forwarder records the RAW dto (`capture::on_dto`) and
+50 ↔ 60 never). Dart saves each decision per device id (settings
+`mains_by_device`) and hands it back at connect (`set_saved_mains`), which
+seeds the live notch. `capture_start` for `recording` / `session` freezes the
+notch (`lock_for_recording`: detected, else saved, else both) until the
+capture stops; the forwarder's `NotchMode::Live` conditioner follows the lock,
+also after a reconnect. The forwarder records the RAW dto (`capture::on_dto`) and
 feeds quality rings, FFT, features, gesture blink bins, the guardrail window
 and the Dart sink with the conditioned signal (gesture eye level uses RAW).
-`api/eeg_conditioning.rs`: `live_eeg_conditioning()` (decisions for
-`device.conditioning`) and `condition_eeg()` for offline RAW (History charts,
-Inspect, import FFT bands). Contract: fileformat_v6 **EEG conditioning**.
+`api/eeg_conditioning.rs`: `live_eeg_conditioning()` (the frozen notch for
+`device.conditioning`), `live_mains_decision()` (for saving) and
+`condition_eeg()` for offline RAW with one notch per file (History: the
+recording's; imports: scanned). Contract: fileformat_v6 **EEG conditioning**.
 
 ## Signal quality + gate
 
