@@ -11,6 +11,7 @@ import 'package:neurofeed/src/feedback/last_calibration_baseline.dart';
 import 'package:neurofeed/src/agent/agent_flags.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -137,6 +138,7 @@ class Settings extends ChangeNotifier {
   static const String _monitorWindowPrefix = 'monitor_window_';
   static const String _monitorDetailWindowPrefix = 'monitor_detail_window_';
   static const String _lastDeviceKey = 'last_device_id';
+  static const String _lastDeviceKindKey = 'last_device_kind';
   static const String _masterVolumeKey = 'master_volume';
   static const String _backgroundVolumeKey = 'background_volume';
   static const String _feedbackVolumeKey = 'feedback_volume';
@@ -347,8 +349,16 @@ class Settings extends ChangeNotifier {
 
   String? get lastDeviceId => _prefs.getString(_lastDeviceKey);
 
-  Future<void> setLastDeviceId(String id) async {
+  /// Headset family of [lastDeviceId]: Muse is found by BLE scan, Neurosity
+  /// by OSC LAN discovery.
+  DeviceKind get lastDeviceKind =>
+      _prefs.getString(_lastDeviceKindKey) == DeviceKind.neurosity.name
+      ? DeviceKind.neurosity
+      : DeviceKind.muse;
+
+  Future<void> setLastDevice(String id, DeviceKind kind) async {
     await _prefs.setString(_lastDeviceKey, id);
+    await _prefs.setString(_lastDeviceKindKey, kind.name);
     notifyListeners();
   }
 

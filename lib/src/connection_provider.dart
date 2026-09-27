@@ -9,10 +9,18 @@ import 'package:neurofeed/src/app.dart';
 import 'package:neurofeed/src/connect_source.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/neurosity_osc.dart';
 import 'package:neurofeed/src/settings.dart';
 
 /// Duration of each scan chunk when scanning continuously.
 const _scanChunkSecs = 3;
+
+/// Crown LAN list refresh while the connect window is open.
+const _crownPollInterval = Duration(seconds: 1);
+
+/// Show the spinner this long before the empty-list copy. Crowns send
+/// `/info` every second.
+const _crownListenGrace = Duration(seconds: 3);
 
 /// Number of connect attempts before giving up.  The first BLE connect after
 /// a cold start / recent re-connect often times out even when the scan just
@@ -87,6 +95,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   bool _scanEnabled = false;
   bool _allowAutoReconnect = true;
   bool _reconnectInFlight = false;
+  int _crownDiscoveryGeneration = 0;
   final Completer<void> _initDone = Completer<void>();
   final StreamController<MuseEventDto> _eventController =
       StreamController<MuseEventDto>.broadcast();
@@ -141,6 +150,9 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         if (isSimDeviceId(lastId!)) {
           final found = await _tryAutoconnectSim(lastId);
           if (found) return;
+        } else if (_settings.lastDeviceKind == DeviceKind.neurosity) {
+          unawaited(_runCrownDiscovery(lookFor: lastId));
+          return;
         } else {
           // Unbounded scan for lastDeviceId; do not block initDone on it.
           unawaited(_tryAutoconnect(lastId));
@@ -239,13 +251,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       case ConnectSource.muse:
         unawaited(_startContinuousScan());
       case ConnectSource.neurosity:
-        _scanEnabled = false;
-        state = state.copyWith(
-          connectWindowOpen: true,
-          scanning: false,
-          devices: const [],
-          scanMessage: null,
-        );
+        unawaited(_runCrownDiscovery());
       case ConnectSource.simulator:
         _scanEnabled = false;
         state = state.copyWith(
@@ -319,6 +325,73 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       debugPrint('[neurofeed] continuous scan error: $e');
       state = state.copyWith(scanning: false, scanMessage: 'Scan error: $e');
     }
+  }
+
+  /// OSC LAN discovery for the Neurosity source. Lists Crowns seen on the
+  /// network until the window closes, the source changes, or a device
+  /// connects. With [lookFor], connects that Crown id when it appears.
+  Future<bool> _runCrownDiscovery({String? lookFor}) async {
+    final generation = ++_crownDiscoveryGeneration;
+    _scanEnabled = true;
+    state = state.copyWith(
+      connectSource: ConnectSource.neurosity,
+      connectWindowOpen: true,
+      scanning: true,
+      devices: const [],
+      scanMessage: lookFor == null ? null : 'Looking for last device…',
+    );
+    bool active() =>
+        _scanEnabled &&
+        generation == _crownDiscoveryGeneration &&
+        state.connectSource == ConnectSource.neurosity &&
+        !state.status.connected &&
+        (lookFor == null || _allowAutoReconnect);
+    final started = DateTime.now();
+    try {
+      await startCrownDiscovery();
+      while (active()) {
+        final crowns = await discoveredCrowns();
+        if (!active()) break;
+        final match = crowns.where((d) => d.id == lookFor).firstOrNull;
+        if (match != null) {
+          await connectTo(match);
+          if (state.status.connected || !_allowAutoReconnect) break;
+          _scanEnabled = true;
+        }
+        final elapsed = DateTime.now().difference(started);
+        state = state.copyWith(
+          devices: crowns,
+          scanning:
+              lookFor != null ||
+              (crowns.isEmpty && elapsed < _crownListenGrace),
+          scanMessage: lookFor == null
+              ? state.scanMessage
+              : 'Searching… (${elapsed.inSeconds}s)',
+        );
+        await Future<void>.delayed(_crownPollInterval);
+      }
+    } catch (e) {
+      debugPrint('[neurofeed] crown discovery error: $e');
+      if (generation == _crownDiscoveryGeneration) {
+        state = state.copyWith(
+          scanning: false,
+          scanMessage: 'Discovery error: $e',
+        );
+      }
+    } finally {
+      if (generation == _crownDiscoveryGeneration) {
+        try {
+          await stopCrownDiscovery();
+        } catch (e) {
+          debugPrint('[neurofeed] stop crown discovery: $e');
+        }
+        if (!state.status.connected &&
+            state.connectSource == ConnectSource.neurosity) {
+          state = state.copyWith(scanning: false);
+        }
+      }
+    }
+    return state.status.connected;
   }
 
   void _onEvent(MuseEventDto event) {
@@ -492,7 +565,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           recordAux: _settings.recordAux,
         );
         debugPrint('[neurofeed] connect returned: connected=${status.connected}');
-        if (persist) await _settings.setLastDeviceId(id);
+        if (persist) await _settings.setLastDevice(id, kind);
         state = state.copyWith(
           status: status,
           connectingTo: null,
@@ -505,7 +578,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         debugPrint('[neurofeed] connect attempt $attempt failed: $e');
         if (!simulate && attempt < attempts) {
           await Future<void>.delayed(const Duration(milliseconds: 800));
-          await _refreshDevice(id);
+          if (kind == DeviceKind.muse) await _refreshDevice(id);
         }
       }
     }
@@ -552,6 +625,9 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       )) {
         if (isSimDeviceId(lastId!)) {
           final ok = await _tryAutoconnectSim(lastId);
+          if (ok || !_allowAutoReconnect) return;
+        } else if (_settings.lastDeviceKind == DeviceKind.neurosity) {
+          final ok = await _runCrownDiscovery(lookFor: lastId);
           if (ok || !_allowAutoReconnect) return;
         } else {
           final ok = await _tryAutoconnect(lastId);

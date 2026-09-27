@@ -72,8 +72,9 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   LOCKED**. Prefer those JSON keys; do not invent synonyms. Session-format FFI
   identifiers are unversioned (`containerEncode`, `parseHead`, …; container is NFED6).
 - Do not reopen pipeline-contract Key Decisions. Do not unlock Crown
-  sessions. Connect UX is frozen (`.ai/connect-simulator-ux.md`) — do not
-  mix OSC-connect or Crown Start into it. `DeviceKind` is Muse | Neurosity
+  sessions. Connect UX is frozen (`.ai/connect-simulator-ux.md`) — Neurosity
+  is OSC LAN discovery only (`neurosity_osc.rs`, sim `tools/crown_osc_sim.py`);
+  do not mix Crown Start into it. `DeviceKind` is Muse | Neurosity
   only; do not restore Simulated*. Audio-engine Key Decisions
   (`.ai/audio-engine.md`) are frozen: do not duck unmodulated background;
   do not deinit SoLoud from a controller; do not restore

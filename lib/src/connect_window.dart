@@ -148,7 +148,7 @@ class ConnectWindow extends ConsumerWidget {
                           ? Icons.science_outlined
                           : d.kind == DeviceKind.muse
                           ? Icons.bluetooth
-                          : Icons.headphones,
+                          : Icons.wifi,
                     ),
                     title: Text(d.name),
                     subtitle: Text(d.id),

@@ -36,9 +36,9 @@ the protocol builder) and a scroll hitch on the way down (music RangeSlider).
    generated sides.
 3. **Muse discovery is BLE only.** Filter out anything that is not Muse.
 4. **Neurosity discovery is OSC only, never BLE.** Do not call BLE `scan()`
-   while the source is Neurosity. There is no OSC scan API today — the list
-   may be empty. Do **not** implement working OSC connect or OSC discovery in
-   this thread. Empty copy must not say “enable Bluetooth”.
+   while the source is Neurosity. The list comes from OSC LAN discovery
+   (`neurosity_osc.rs` `discovered_crowns`) and may be empty. Empty copy must
+   not say “enable Bluetooth”.
 5. **Simulator list is a static catalog** (no BLE, no OSC). Tapping a row
    calls `connectWithOptions(..., simulate: true)` and runs `DeviceSimulator`
    locally. Crown/Notion simulator rows do **not** open a UDP socket.

@@ -52,7 +52,7 @@ sampling rate, PPG/IMU flags.
 | Source | Kind | Transport | Notes |
 |------|-----------|--------|--------|
 | Muse | muse | btleplug via muse-rs | BLE scan, Muse only. 4 pads TP9/AF7/AF8/TP10 @ 256 Hz |
-| Neurosity | neurosity | OSC (`neurosity_osc.rs`) | Never BLE. Empty list OK (no OSC discovery yet). 8 ch. Forwards `/raw`, `/signalQuality`, battery, focus/calm; `/brainwaves/*` ignored (bands come only from the forwarder FFT) |
+| Neurosity | neurosity | OSC (`neurosity_osc.rs`) | Never BLE. One UDP socket on 0.0.0.0:9000 (SO_REUSEADDR, broadcast) shared by LAN discovery (`start_crown_discovery` / `discovered_crowns`, from `/info` or any `/neurosity/notion/{id}/…`) and the receiver. Device id matched exactly in `/neurosity/notion/{id}/…`; `/crown{prefix}/…` when prefix-of-id. `/raw` floats flattened from OSC arrays (8 per frame, sample-major), re-batched to 16-sample `Eeg` events. `/signalQuality` 8 floats per pad, 1 float overall (not mapped to pads). Android holds a `MulticastLock` (`neurofeed/wifi`) while discovering/streaming. Band messages ignored (bands come only from the forwarder FFT). Test stream: `tools/crown_osc_sim.py`. |
 | Simulator | muse or neurosity from the row | `simulator.rs` locally | Static catalog; Crown (OSC) / Notion (OSC) are 8-ch sim, no UDP. Emits headset events only (`Eeg` / `Ppg` / IMU / `Telemetry`); the forwarder derives bands, features, pulse, SpO2, quality. |
 
 **Crown Start is refused** (`crownSessionUnsupportedMessage` in

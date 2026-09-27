@@ -75,6 +75,8 @@ Must exist in every view with a status bar (`AppShell` + session). Frozen:
 | Connect status copy | `Connecting… (attempt N)`, scan results | `scanMessage` | `connect_window.dart` | Cleared to null after a successful connect. |
 | Device type dropdown | `Device type` | `ConnectSource` | `connect_source.dart` | Muse \| Neurosity; + Simulator iff Debug. |
 | Rescan | `Rescan` | `openConnectWindowAndScan` | `connect_window.dart` | **Hidden** on Simulator. |
+| Neurosity list | Crown nickname (e.g. `Crown-LOC`), device id below | `_runCrownDiscovery` / `discoveredCrowns` | `connection_provider.dart` | OSC LAN discovery on UDP 9000 (`/info` or any `/neurosity/notion/{id}/…`), refreshed 1 s, entries drop after 5 s silence. No BLE. |
+| Neurosity empty copy | `No Crown found on this Wi-Fi. The Crown must be on the same network and have OSC streaming turned on.` | `emptyDevicesCopy` | `connect_source.dart` | Shown after a 3 s listening spinner; discovery keeps running. |
 | Simulator · Muse 2 | `Muse 2` | `sim:muse-2` | `connect_source.dart` | Startable. Connected name `Muse 2 (Simulated)`. |
 | Simulator · Muse S | `Muse S` | `sim:muse-s` | `connect_source.dart` | Startable. |
 | Simulator · Muse S Athena | `Muse S Athena` | `sim:muse-s-athena` | `connect_source.dart` | Classic 3-ch PPG only. |
