@@ -6,7 +6,8 @@ import 'package:neurofeed/src/rust/api/session_format.dart';
 /// Muse-native EEG packet size used when packing continuous samples.
 const int kEegPacketSamples = 12;
 
-/// Absolute Muse band powers for one electrode at one instant (Bels).
+/// Absolute band powers for one electrode at one instant: Mind Monitor
+/// Bels, or linear µV²/Hz from our own FFT.
 class BandValues {
   const BandValues({
     required this.delta,
@@ -14,12 +15,14 @@ class BandValues {
     required this.alpha,
     required this.beta,
     required this.gamma,
+    this.lineNoise = 0,
   });
   final double delta;
   final double theta;
   final double alpha;
   final double beta;
   final double gamma;
+  final double lineNoise;
 }
 
 /// One timestamped set of per-electrode bands.
@@ -85,7 +88,7 @@ List<int> encodeEegPackets({
   return events;
 }
 
-/// Encode absolute band rows (Bels) as raw `bands` tags.
+/// Encode absolute band rows as raw `bands` tags.
 List<int> encodeBandEvents(List<BandInstant> rows) {
   final events = <int>[];
   for (final row in rows) {
@@ -102,7 +105,7 @@ List<int> encodeBandEvents(List<BandInstant> rows) {
               alpha: b.alpha,
               beta: b.beta,
               gamma: b.gamma,
-              lineNoiseRatio: 0,
+              lineNoiseRatio: b.lineNoise,
             ),
           ),
         ),

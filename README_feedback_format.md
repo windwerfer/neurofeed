@@ -110,6 +110,7 @@ Writers: `lib/src/session_format/metadata.dart` (`buildRecordingMetadata` /
 - `subject.id` = stable anonymous UUID v4 from Settings; optional `nickname`.
 - Root `sessionId` = **file** identity (new per capture), not the person.
 - `annotations[]` is the single timeline (pause / bad_quality / disconnect + gesture instants). No parallel `feedback.gestures[]`.
+- Imported recordings (EDF/EDF+/Mind Monitor CSV) carry a root `import` provenance object (`sourceFormat`, `sourceFileName`, `originalChannels`, `droppedChannels`, `resampled`, `rawPresent`, `lossy`, `warnings`, …); see `.ai/contracts/fileformat_v6.md` **Import provenance**.
 
 ---
 

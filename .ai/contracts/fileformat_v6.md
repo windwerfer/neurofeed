@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented / LOCKED.** Authority for `.neurofeed` v6 (NFED6 / `formatVersion: 6`). **Annotations / base vocab / feedback / experimental bands / subject / overshoot / pause / timezone / computed Trust extras / `feedback.audioEvents` / `baselineSamples` / `inhibitCeilingOverrides` = LOCKED.** |
+| Status | **Implemented / LOCKED.** Authority for `.neurofeed` v6 (NFED6 / `formatVersion: 6`). **Annotations / base vocab / feedback / experimental bands / subject / overshoot / pause / timezone / computed Trust extras / `feedback.audioEvents` / `baselineSamples` / `inhibitCeilingOverrides` / `import` provenance = LOCKED.** |
 | Scope | Unified recording + feedback **metadata JSON** and **v6 container** (NFED6 magic/version + writers/readers). |
 | Not this | Rename Dart/Rust FFI identifiers (historical `v5*` / `*V5` names kept); Athena tag 11; History UI chrome; pipeline Key Decisions. |
 | Supersedes | Dual dialects formerly in [../archive/session-format-contract-v5.md](../archive/session-format-contract-v5.md); [../archive/session_vs_recording_metadata.md](../archive/session_vs_recording_metadata.md). |
@@ -105,7 +105,9 @@ Written by `buildSessionMetadata()`:
 
 `ComputedFrame`: `t`, `bands` (N×5 abs), `lineNoise`, `signalQuality`, optional `pulse` / `movement` / `peakAlpha` / `spo2`, `gestures[]` (string ids that second).
 
-**Band source (LOCKED):** every band value — raw `bands` records and computed `bands` / `lineNoise` — comes from the app's own 256-point FFT of 256 Hz raw EEG, for every device. Headset-supplied band powers (e.g. Crown `/brainwaves/*`) are never recorded or used. Computed frames are exactly 1 Hz; `bands[e]` / `lineNoise[e]` are the **mean of every band update for electrode `e` within that second**; an electrode with no update repeats its previous value.
+**Band source (LOCKED):** every band value — raw `bands` records and computed `bands` / `lineNoise` — comes from the app's own 256-point FFT of 256 Hz raw EEG, for every device. Headset-supplied band powers (e.g. Crown `/brainwaves/*`) are never recorded or used. The one exception is an imported Mind Monitor CSV (`import.sourceFormat == "mind_monitor_csv"`) that carries band columns: its bands are Mind Monitor's, converted from Bels. Computed frames are exactly 1 Hz; `bands[e]` / `lineNoise[e]` are the **mean of every band update for electrode `e` within that second**; an electrode with no update repeats its previous value.
+
+**Sparse computed (LOCKED):** frame `t` is always on the 1 Hz grid, but seconds may be absent (disconnects; interval-mode CSV imports write one frame per source row, e.g. every 60 s). Stats never count frames as seconds: each frame weighs `frameSeconds` = gap to the next frame, capped at the median gap (the last frame gets the median gap). Weighted seconds feed `stats.quality`, `stats.movement.stillnessPct`, the 30 usable-second experimental gate and feedback target seconds.
 
 **`feedback{}` per second (LOCKED keep + add)** — see **Computed feedback extras**:
 - **KEEP:** `ratio`, `threshold`, `inTarget`, `pct`
@@ -170,6 +172,7 @@ device:   { name, id, firmware, model, sensors, channelCount, channelLabels }
 streams:  { ten keys… }   // gestures enablement stub only; markers → annotations
 stats:    { … aggregates; annotationSeconds?: { pause, bad_quality, disconnect }; experimental?: { … } }
 annotations: [ { onset, duration, type }, … ]   // unified timeline: quality intervals + gesture instants
+import:   { sourceFormat, sourceFileName, originalChannels, … }   // ONLY on imported recordings
 feedback: { … }   // ONLY when kind == "feedback"; NO gestures[] list
 ```
 
@@ -183,6 +186,42 @@ feedback: { … }   // ONLY when kind == "feedback"; NO gestures[] list
 | Crown | `CP3`, `C3`, `F5`, `PO3`, `PO4`, `F6`, `C4`, `CP4` | — |
 
 AUX channels are present only when the user enabled **Record AUX channels**. They get raw EEG, computed bands and `stats.quality.channelUsable`, but are excluded from `stats.quality.mean`, `pctGood`, the usable-second gate and `stats.experimental`.
+
+### Import provenance (LOCKED)
+
+Recordings created by **History → Import…** (EDF/EDF+ or Mind Monitor CSV) are always `kind: "recording"` with `device.model == "imported"`, never a `feedback` block, and carry a root `import` object. Recorded sessions never have it.
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `sourceFormat` | `"edf"` \| `"edf+"` \| `"mind_monitor_csv"` | Source file kind (`edf+` = EDF+C or EDF+D) |
+| `sourceFileName` | string | File name as picked (no path) |
+| `originalChannels` | string[] | Source channel labels, as written in the file |
+| `originalRateHz` | number \| null | Source EEG rate; null when the file has no RAW EEG |
+| `droppedChannels` | string[] | Source channels not imported (outside the montage, EDF band signals next to EEG, Optics, interval-mode AUX) |
+| `resampled` | bool | EEG resampled to 256 Hz |
+| `rawPresent` | bool | Raw EEG is in the file (false = bands only) |
+| `recordingInterval` | number \| null | Mind Monitor recording interval in seconds; null for Constant CSVs and EDF |
+| `reference` | string? | Reference if known (EDF label suffix such as `REF`/`LE`/`AVG`; `FPz` for Muse CSVs); omitted when unknown |
+| `lossy` | bool | Something was dropped, resampled or reduced to bands only |
+| `warnings` | string[] | Short human-readable loss reasons / skipped content |
+
+Import policy: channels are matched to a supported montage (Muse `TP9 AF7 AF8 TP10` + optional contiguous `AUX1…AUX4`, else Crown 8) after case-folding, stripping an `EEG ` prefix and `-REF`/`-LE`/`-AVG` suffixes. Extra channels are dropped; missing electrodes are never interpolated; a file without a complete montage is refused. EEG is stored at 256 Hz. Interval-mode Mind Monitor CSVs (not Constant) contain bands only.
+
+```json
+"import": {
+  "sourceFormat": "edf+",
+  "sourceFileName": "cap64.edf",
+  "originalChannels": ["EEG Fp1-REF", "…", "EEG TP10-REF"],
+  "originalRateHz": 512,
+  "droppedChannels": ["EEG Fp1-REF", "…"],
+  "resampled": true,
+  "rawPresent": true,
+  "recordingInterval": null,
+  "reference": "REF",
+  "lossy": true,
+  "warnings": ["dropped 60 channel(s) outside the Muse/Crown montage: …", "EEG resampled from 512 Hz to 256 Hz"]
+}
+```
 
 ### Example — `kind: "recording"`
 
@@ -576,6 +615,7 @@ Discipline: rename only when EDF / BIDS / common EEG has a **clearly better** te
 | `subject` (+ `id` required; voluntary fields omit-until-collected) | Anonymous-first person object — see Subject model |
 | `streams` ten keys | `eeg`, `bands`, `pulse`, `spo2`, `movement`, `peakAlpha`, `imu`, `ppg`, `telemetry`, `gestures` — enablement `{enabled,rateHz}`; `gestures` stub only |
 | `feedback` | Only when `kind=="feedback"`; no `gestures[]` list |
+| `import` | Only on imported recordings — see Import provenance |
 
 ### Naming rationale (expanded)
 
@@ -610,7 +650,7 @@ Future agents: change locked names only with a format PR and an updated table. P
 
 ### Gate (all metrics)
 
-Compute only over **usable** computed seconds: mean pad `signalQuality ≥ 80` (same gate as `stats.quality` / sticky unusable). Skip seconds with missing `bands`. If fewer than **30** usable seconds, **omit** `stats.experimental` entirely (do not write NaNs / zeros pretending to be data).
+Compute only over **usable** computed seconds: mean pad `signalQuality ≥ 80` (same gate as `stats.quality` / sticky unusable). Skip seconds with missing `bands`. Seconds are weighted by `frameSeconds` (see Sparse computed). If fewer than **30** usable seconds, **omit** `stats.experimental` entirely (do not write NaNs / zeros pretending to be data).
 
 Band order on `ComputedFrame.bands` is locked elsewhere: per channel `[delta, theta, alpha, beta, gamma]` absolute power (µV²/Hz). Channel order follows `device.channelLabels` (Muse: `TP9`, `AF7`, `AF8`, `TP10`). Channels are found **by label**, never by index; a key whose labels are absent (e.g. asymmetry keys on Crown) is omitted. AUX channels are excluded.
 

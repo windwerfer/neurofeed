@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1695705065;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -766672519;
 
 // Section: executor
 
@@ -1389,6 +1389,37 @@ fn wire__crate__api__muse__disconnect_impl(
         },
     )
 }
+fn wire__crate__api__import_dsp__eeg_second_bands_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "eeg_second_bands",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_samples = <Vec<f64>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::import_dsp::eeg_second_bands(api_samples))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__edf_export__encode_edf_export_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -2110,6 +2141,39 @@ fn wire__crate__api__session_format__parse_header_impl(
             deserializer.end();
             transform_result_sse::<_, String>((move || {
                 let output_ok = crate::api::session_format::parse_header(&api_bytes)?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__import_dsp__resample_eeg_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "resample_eeg",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_samples = <Vec<f64>>::sse_decode(&mut deserializer);
+            let api_from_hz = <u32>::sse_decode(&mut deserializer);
+            let api_to_hz = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, String>((move || {
+                let output_ok =
+                    crate::api::import_dsp::resample_eeg(api_samples, api_from_hz, api_to_hz)?;
                 Ok(output_ok)
             })())
         },
@@ -3894,67 +3958,67 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         38 => wire__crate__api__muse__disconnect_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__session_format__extract_computed_from_path_impl(
+        43 => wire__crate__api__session_format__extract_computed_from_path_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__session_format__feedback_info_default_impl(
+        45 => wire__crate__api__session_format__feedback_info_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__api__muse__get_status_impl(port, ptr, rust_vec_len, data_len),
-        46 => {
+        46 => wire__crate__api__muse__get_status_impl(port, ptr, rust_vec_len, data_len),
+        47 => {
             wire__crate__api__reve__guardrail_capture_anchor_impl(port, ptr, rust_vec_len, data_len)
         }
-        47 => wire__crate__api__reve__guardrail_disable_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__reve__guardrail_enable_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__session_format__guardrail_info_default_impl(
+        48 => wire__crate__api__reve__guardrail_disable_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__reve__guardrail_enable_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__session_format__guardrail_info_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => wire__crate__api__reve__guardrail_live_dim_impl(port, ptr, rust_vec_len, data_len),
-        51 => {
+        51 => wire__crate__api__reve__guardrail_live_dim_impl(port, ptr, rust_vec_len, data_len),
+        52 => {
             wire__crate__api__reve__guardrail_reset_anchors_impl(port, ptr, rust_vec_len, data_len)
         }
-        52 => wire__crate__api__muse__init_app_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__muse__is_connected_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__reve__model_config_json_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__reve__model_load_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__reve__model_loaded_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__reve__model_unload_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__session_format__parse_head_from_path_impl(
+        53 => wire__crate__api__muse__init_app_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__muse__is_connected_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__reve__model_config_json_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__reve__model_load_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__reve__model_loaded_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__reve__model_unload_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__session_format__parse_head_from_path_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__session_format__rewrite_head_to_path_impl(
+        63 => wire__crate__api__session_format__rewrite_head_to_path_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => wire__crate__api__muse__scan_impl(port, ptr, rust_vec_len, data_len),
-        66 => {
+        64 => wire__crate__api__muse__scan_impl(port, ptr, rust_vec_len, data_len),
+        68 => {
             wire__crate__api__features__set_enabled_features_impl(port, ptr, rust_vec_len, data_len)
         }
-        67 => wire__crate__api__features__set_feature_electrodes_impl(
+        69 => wire__crate__api__features__set_feature_electrodes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => {
+        70 => {
             wire__crate__api__simulator__simulated_identity_impl(port, ptr, rust_vec_len, data_len)
         }
-        69 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__muse__telemetry_snapshot_default_impl(
+        71 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__muse__telemetry_snapshot_default_impl(
             port,
             ptr,
             rust_vec_len,
@@ -3988,21 +4052,23 @@ fn pde_ffi_dispatcher_sync_impl(
         17 => wire__crate__api__capture__capture_write_sidecar_impl(ptr, rust_vec_len, data_len),
         23 => wire__crate__api__session_format__container_encode_impl(ptr, rust_vec_len, data_len),
         26 => wire__crate__api__edf_export__decode_edf_import_impl(ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__edf_export__encode_edf_export_impl(ptr, rust_vec_len, data_len),
-        40 => {
+        39 => wire__crate__api__import_dsp__eeg_second_bands_impl(ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__edf_export__encode_edf_export_impl(ptr, rust_vec_len, data_len),
+        41 => {
             wire__crate__api__session_format__encode_session_event_impl(ptr, rust_vec_len, data_len)
         }
-        41 => wire__crate__api__session_format__extract_computed_impl(ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__session_format__extract_raw_impl(ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__session_format__parse_head_impl(ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__session_format__parse_header_impl(ptr, rust_vec_len, data_len),
-        63 => {
+        42 => wire__crate__api__session_format__extract_computed_impl(ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__session_format__extract_raw_impl(ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__session_format__parse_head_impl(ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__session_format__parse_header_impl(ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__import_dsp__resample_eeg_impl(ptr, rust_vec_len, data_len),
+        65 => {
             wire__crate__api__session_format__session_frame_bytes_impl(ptr, rust_vec_len, data_len)
         }
-        64 => {
+        66 => {
             wire__crate__api__session_format__session_header_bytes_impl(ptr, rust_vec_len, data_len)
         }
-        65 => {
+        67 => {
             wire__crate__api__session_format__session_parse_body_impl(ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),

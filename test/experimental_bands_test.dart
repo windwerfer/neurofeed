@@ -48,6 +48,20 @@ List<List<double>> _symBands({double af7A = 1.0, double af8A = 1.0}) {
 }
 
 void main() {
+  test('frameSeconds weights by gap to next frame, capped at the median', () {
+    expect(frameSecondsFromTimes(const [0, 1, 2, 3]), [1, 1, 1, 1]);
+    expect(frameSecondsFromTimes(const [0, 1, 2, 100, 101]), [1, 1, 1, 1, 1]);
+    expect(frameSecondsFromTimes(const [0, 60, 120]), [60, 60, 60]);
+  });
+
+  test('sparse 60 s frames count as usable seconds', () {
+    final frames = [
+      for (var i = 0; i < 3; i++)
+        _frame(t: i * 60.0, bands: _symBands()),
+    ];
+    expect(assembleExperimentalBands(frames), isNotNull);
+  });
+
   test('omit experimental when fewer than 30 usable seconds', () {
     final frames = [
       for (var i = 0; i < 10; i++)

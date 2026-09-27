@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -7,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:neurofeed/src/charts/band_style.dart';
 import 'package:neurofeed/src/charts/session_reader.dart';
+import 'package:neurofeed/src/feedback/import/import_summary.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:neurofeed/src/feedback/session_chart_data.dart';
@@ -38,11 +40,15 @@ class SessionExportResult {
     required this.fileCount,
     required this.warnings,
     required this.location,
+    this.notices = const [],
   });
 
   final int fileCount;
   final List<ExportWarning> warnings;
   final String location;
+
+  /// Informational lines, e.g. a recording that came from a lossy import.
+  final List<ExportWarning> notices;
 }
 
 /// One value line of an exported chart. Samples are evenly spaced on the
@@ -149,8 +155,11 @@ class SessionExporter {
     required ExportKind kind,
   }) async {
     final warnings = <ExportWarning>[];
+    final notices = <ExportWarning>[];
     var files = 0;
     for (final s in sessions) {
+      final notice = s.isRecording ? await _importNotice(s) : null;
+      if (notice != null) notices.add(ExportWarning(s.id, notice));
       switch (kind) {
         case ExportKind.csv:
           files += await _exportCsv(s, warnings);
@@ -168,6 +177,7 @@ class SessionExporter {
       fileCount: files,
       warnings: warnings,
       location: '${_storage.displayName}/$exportDirName',
+      notices: notices,
     );
   }
 
@@ -480,6 +490,18 @@ class SessionExporter {
 
   /// Full metadata from the `.neurofeed` head (calibration, annotations, subject).
   /// History list rows are sqlite scalars only — too thin for EDF markers.
+  /// One-line notice when [s] came from a lossy import (`import` block).
+  Future<String?> _importNotice(SessionSummary s) async {
+    try {
+      final container = await _store.readContainer(s.id);
+      if (container == null) return null;
+      final json = jsonDecode(utf8.decode(parseHead(bytes: container).metadataJson));
+      return json is Map ? importLossNotice(ImportProvenance.fromJson(json['import'])) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<SessionMetadata?> _loadFileMetadata(SessionSummary s) async {
     final container = await _store.readContainer(s.id);
     if (container == null) {

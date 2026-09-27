@@ -37,6 +37,7 @@ Map<String, Object?> buildRecordingMetadata({
     'subject': subject.toJson(),
     'device': meta.device.toJson(),
     'streams': meta.streams.toJson(),
+    if (meta.provenance != null) 'import': meta.provenance!.toJson(),
     if (stats != null) 'stats': stats,
     if (annotations.isNotEmpty)
       'annotations': [for (final a in annotations) a.toJson()],

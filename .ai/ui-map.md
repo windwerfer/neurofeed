@@ -175,7 +175,9 @@ Sidebar **History** (`AppView.feedbackHistory`). One sqlite list; no
 | Filter Feedback | `Feedback` | `HistoryKindFilter.feedback` | `feedback_history.dart` | `kind = feedback` → `FeedbackDashboardView`. |
 | Filter Recordings | `Recordings` | `HistoryKindFilter.recordings` | `feedback_history.dart` | `kind = recording` → `RecordingDashboardView`. |
 | Recording row | `Recording • {date}` | `SessionSummary.isRecording` | `feedback_history.dart` | Opens `monitor/views/recording_dashboard.dart`. Follow disabled. |
-| Export | `PDF report` / `PNG thumbnail` / `PNG charts` / `CSV (Mind Monitor)` / `EDF+ raw EEG` | `ExportKind` | `feedback_history.dart` | Feedback sessions only. Recordings: `Export is not available for recordings.` [export.md](export.md). |
+| Export | `PDF report` / `PNG thumbnail` / `PNG charts` / `CSV (Mind Monitor)` / `EDF+ raw EEG` | `ExportKind` | `feedback_history.dart` | PDF / PNG charts feedback only; thumbnail / CSV / EDF+ also for recordings. Lossy imports add `Imported from … — already lost on import: …` to the result. [export.md](export.md). |
+| Import | `Import…` | `_importRecording` | `feedback_history.dart` | App bar next to Refresh; picks `.edf` / `.csv`. |
+| Import summary | `Import recording?` / `Import with losses?` · `Kept` · `Lost or changed` · `Cancel` / `Import` | `_confirmImport` | `feedback_history.dart` | Shown before every import is saved; lost list = `import.warnings`. |
 | Folder-change dialog | `Move {s} session(s) and {r} recording(s) into the new folder? Choosing No leaves them in the current folder.` | `folderChangeMoveBody` | `settings_view.dart` | Counts both prefixes. |
 | Record AUX channels | `Record AUX channels` | `Settings.recordAux` / `_RecordingCard` | `settings_view.dart` | Session recording card. Default off. Muse AUX inputs → `AUX1`…`AUX4` (Classic AUX1; Athena AUX1–AUX4). Applies on next connect (`connectWithOptions(recordAux:)`). |
 

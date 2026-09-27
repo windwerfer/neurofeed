@@ -11,6 +11,7 @@ import 'package:neurofeed/src/settings.dart';
 
 export 'package:neurofeed/src/feedback/import/csv_import.dart';
 export 'package:neurofeed/src/feedback/import/edf_import.dart';
+export 'package:neurofeed/src/feedback/import/import_summary.dart';
 export 'package:neurofeed/src/feedback/import/import_types.dart';
 
 /// Detect format from path / bytes and build an [ImportResult].
@@ -22,12 +23,18 @@ ImportResult importRecordingBytes({
 }) {
   final lower = fileName.toLowerCase();
   if (lower.endsWith('.edf')) {
-    return importEdfBytes(bytes: bytes, fallbackSubject: subject, timeZone: timeZone);
+    return importEdfBytes(
+      bytes: bytes,
+      fallbackSubject: subject,
+      sourceFileName: fileName,
+      timeZone: timeZone,
+    );
   }
   if (lower.endsWith('.csv')) {
     return importCsvText(
       csvText: utf8.decode(bytes),
       subject: subject,
+      sourceFileName: fileName,
       timeZone: timeZone,
     );
   }
@@ -35,12 +42,22 @@ ImportResult importRecordingBytes({
   if (bytes.length >= 8 &&
       bytes[0] == 0x30 /* '0' */ &&
       bytes.sublist(1, 8).every((b) => b == 0x20)) {
-    return importEdfBytes(bytes: bytes, fallbackSubject: subject, timeZone: timeZone);
+    return importEdfBytes(
+      bytes: bytes,
+      fallbackSubject: subject,
+      sourceFileName: fileName,
+      timeZone: timeZone,
+    );
   }
   // Fallback: try CSV text.
   final text = utf8.decode(bytes);
   if (text.startsWith('TimeStamp')) {
-    return importCsvText(csvText: text, subject: subject, timeZone: timeZone);
+    return importCsvText(
+      csvText: text,
+      subject: subject,
+      sourceFileName: fileName,
+      timeZone: timeZone,
+    );
   }
   throw FormatException('Unsupported import format: $fileName');
 }
@@ -66,6 +83,26 @@ Future<ImportResult> publishImportResult({
   return result;
 }
 
+/// Read [path] and convert (nothing is saved yet). [fileName] is the
+/// user-visible source name when [path] is a cache copy.
+Future<ImportResult> importFile({
+  required String path,
+  required SubjectInfo subject,
+  String? fileName,
+  String? timeZone,
+}) async {
+  final file = File(path);
+  final bytes = await file.readAsBytes();
+  final name = fileName ??
+      (file.uri.pathSegments.isNotEmpty ? file.uri.pathSegments.last : path);
+  return importRecordingBytes(
+    bytes: bytes,
+    fileName: name,
+    subject: subject,
+    timeZone: timeZone,
+  );
+}
+
 /// Read [path], convert, and publish into History.
 Future<ImportResult> importAndPublishFile({
   required String path,
@@ -74,14 +111,8 @@ Future<ImportResult> importAndPublishFile({
   required SubjectInfo subject,
   String? timeZone,
 }) async {
-  final file = File(path);
-  final bytes = await file.readAsBytes();
-  final name = file.uri.pathSegments.isNotEmpty
-      ? file.uri.pathSegments.last
-      : path;
-  final result = importRecordingBytes(
-    bytes: bytes,
-    fileName: name,
+  final result = await importFile(
+    path: path,
     subject: subject,
     timeZone: timeZone,
   );

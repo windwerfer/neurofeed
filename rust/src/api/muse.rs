@@ -1350,7 +1350,7 @@ fn spawn_event_forwarder() {
     });
 }
 
-fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
+pub(crate) fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
     let n = samples.len();
     if n < 2 {
         return [0.0; 8];

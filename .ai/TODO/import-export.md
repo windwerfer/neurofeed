@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented (partial)** — EDF+ decode FFI + CSV 1 Hz/Constant → NFED6 + History Import; computed 1 Hz; ACC/Gyro/PPG streams; Elements doubles; recording CSV/EDF/thumb export |
+| Status | **Implemented** — EDF/EDF+ and Mind Monitor CSV → NFED6 `kind: recording` with montage policy A (native / subset / refuse), rubato resampling to 256 Hz, interval CSV = bands only, `import` provenance, import summary + export loss notice; recording CSV/EDF/thumb export |
 | Branch | `feature/import_export` |
 | Related | [../export.md](../export.md), [../contracts/fileformat_v6.md](../contracts/fileformat_v6.md) |
 | Out of scope | History UI chrome redesign; nickname→EDF name product toggle; live-device pass |
@@ -34,6 +34,47 @@ neurofeed feedback protocol (none of EDF / Mind Monitor CSV do).
 Do **not** invent `feedback{}` Trust extras, protocol, calibration, or
 `outcomeScalars` on import.
 
+## Import policy A
+
+| Case | Result |
+|---|---|
+| Channels = a supported montage at 256 Hz | Native import (`lossy: false` unless other content is dropped) |
+| Supported montage among other channels (e.g. 64-ch 10-10 cap) | Keep only the montage channels, others → `droppedChannels`; `lossy: true` |
+| EEG rate ≠ 256 Hz (EDF, MU-01 CSV at 220 Hz) | Resample each contiguous run in Rust (`rubato` FFT resampler, anti-aliased) → `resampled: true`, `lossy: true` |
+| No complete supported montage | Refused (`ImportRefused`, "No supported headset montage …"); missing electrodes are never interpolated |
+
+Supported montages (`montage_match.dart`): Muse `TP9 AF7 AF8 TP10` + optional
+contiguous `AUX1…AUX4` (checked first), else Crown `CP3 C3 F5 PO3 PO4 F6 C4 CP4`.
+Labels match case-insensitively after stripping an `EEG ` prefix and
+`-REF`/`-LE`/`-AVG` suffixes; a consistent suffix becomes `import.reference`.
+
+EDF: bands on import always come from our own FFT of the 256 Hz EEG (same
+source as live recording); EDF band-named signals next to EEG are dropped.
+A band-signal-only EDF imports those bands. EDF+D record gaps → `disconnect`
+annotations; raw EEG is placed at the real record times.
+
+Mind Monitor CSV:
+
+| Recording interval | Import |
+|---|---|
+| **Constant** (median row Δt ≤ 0.25 s) | RAW (+ AUX) at native rate (256, or 220 → resampled); **every** band value kept at native rate in raw band records; computed = per-second mean; IMU/PPG kept. No band columns → bands from our FFT of RAW (warning). |
+| **Interval** (0.5 s, 1 s default, … 60 s) | Rows are snapshots → **bands only**: no RAW/AUX/IMU/PPG (warning). Raw band record at each row time; computed frames on the 1 Hz grid at the row times (0.5 s rows averaged per second; > 1 s intervals are sparse). No band columns → refused. `import.recordingInterval` = median Δt. |
+
+AUX columns (`AUX*`, max 4) → `AUX1…AUXn`. Optics (Athena fNIRS) → dropped with
+a warning. Elements doubles → annotations; singles/markers skipped (warning).
+
+Stats weight each computed frame by `frameSeconds` (gap to next frame, capped
+at the median gap) so sparse interval imports count their real duration.
+
+Provenance: root `import` object (see fileformat_v6 **Import provenance**).
+No sqlite column — the export notice reads the file's `import` block; imports
+are also identifiable by `device.model == "imported"`.
+
+UI (History): Import… → progress → **summary dialog** ("Import recording?" /
+"Import with losses?", Kept vs Lost or changed, Cancel / Import) → publish.
+Exporting a lossy import appends a one-line notice ("Imported from … — already
+lost on import: …") to the export result.
+
 ## Implementation status
 
 | Step | Status |
@@ -42,15 +83,18 @@ Do **not** invent `feedback{}` Trust extras, protocol, calibration, or
 | `edf_export` decode + Rust round-trip | [x] |
 | FFI `decodeEdfImport` + FRB regen | [x] |
 | Dart EDF → NFED6 (recording, placeholder thumb, TAL→locked types) | [x] |
-| Mind Monitor CSV 1 Hz path (neurofeed subset + fuller headers) | [x] |
-| Constant-rate CSV RAW→EEG packets | [x] |
+| Mind Monitor CSV interval path (bands only, real row times) | [x] |
+| Constant-rate CSV RAW→EEG packets, all band values | [x] |
+| Montage policy A (native / subset / refuse) | [x] |
+| Resampling to 256 Hz (`rubato`, `rust/src/api/import_dsp.rs`) | [x] |
+| `import` provenance + summary dialog + export loss notice | [x] |
 | `RecordingStore.publish` wire-up | [x] |
 | History **Import…** (`.edf`/`.csv`, progress, snackbar) | [x] |
-| IMU/PPG raw streams from CSV columns | [x] ACC/Gyro/PPG → raw tags + `streams.imu`/`ppg` |
+| IMU/PPG raw streams from CSV columns | [x] Constant only: ACC/Gyro/PPG → raw tags + `streams.imu`/`ppg` |
 | Elements → annotations (double blink/jaw) | [x] consecutive within 2 s → `double_*`; singles/markers warn+skip |
 | EDF+D discontinuous gaps | [x] timekeeping TAL jumps → `disconnect` annotations (crate); warn if EDF+D with no recoverable gaps |
 | TAL duration on export | [x] FRB `durationSeconds` + Dart export/import |
-| Computed 1 Hz rebuild from bands on import | [x] Bel→linear heuristic; charts via `extractComputed` |
+| Computed 1 Hz rebuild from bands on import | [x] per-second mean in linear power (Bel→linear for CSV bands); charts via `extractComputed` |
 | Export recordings (CSV / EDF+ / PNG thumb) | [x] PDF/PNG charts stay feedback-only |
 
 ## Code map
@@ -59,7 +103,8 @@ Do **not** invent `feedback{}` Trust extras, protocol, calibration, or
 |---|---|
 | Crate decode | `third_party/edf_export` `decode_edf_plus` |
 | FFI | `rust/src/api/edf_export.rs` `decode_edf_import` |
-| Dart builders | `lib/src/feedback/import/` |
+| Dart builders | `lib/src/feedback/import/` (`edf_import`, `csv_import`, `montage_match`, `native_eeg`, `import_summary`) |
+| Resample / FFT bands FFI | `rust/src/api/import_dsp.rs` (`resample_eeg`, `eeg_second_bands`) |
 | Computed rebuild | `lib/src/feedback/import/computed_rebuild.dart` |
 | Facade | `lib/src/feedback/session_import.dart` |
 | UI | `lib/src/views/feedback_history.dart` Import… / Export |
@@ -81,16 +126,18 @@ Sources: [Mind Monitor FAQ — Recorded Data](https://mind-monitor.com/FAQ.php),
 
 | Setting / variant | Effect on file | Import implication |
 |---|---|---|
-| **Recording interval ≈ 1 s (default)** | One row / ~s; RAW = one sample that second | **Implemented** — row → 1 Hz bands + 1-sample/s EEG packets + computed |
-| **Recording interval = Constant** | Rows at device rate (~256 Hz EEG, 10 Hz bands, …) | **Implemented** — median Δt detect; RAW → 12-sample EEG packets; bands last-of-second + computed |
+| **Recording interval 0.5 s / 1 s (default) / … 60 s** | One snapshot row per interval; RAW = one sample | Bands only at the real row times; RAW/AUX/IMU/PPG skipped; computed on the 1 Hz grid (0.5 s averaged, longer sparse) |
+| **Recording interval = Constant** | Rows at device rate (RAW 256 Hz, 220 Hz on MU-01; bands ~10 Hz) | RAW → EEG packets (220 → 256 resampled); every band value kept; computed = per-second mean |
+| **AUX columns** | 1/2/4 by model | → `AUX1…AUXn` channels (Constant only) |
+| **Optics** | Athena fNIRS | Dropped with warning |
 | **Band columns present** | `Delta|Theta|Alpha|Beta|Gamma_{TP9,…}` in **Bels** | → raw `bands` tags + computed (Bel→linear when values look like Bels) |
 | **RAW columns present** | `RAW_{TP9,…}` µV | → raw EEG stream |
-| **Accelerometer / Gyro / PPG** | optional columns | → raw IMU/PPG tags; `streams.imu` / `streams.ppg` |
+| **Accelerometer / Gyro / PPG** | optional columns | Constant: → raw IMU/PPG tags; `streams.imu` / `streams.ppg`. Interval: skipped |
 | **Elements** | Blink, Jaw_Clench, markers | Doubles within 2 s → locked types; singles/markers warn+skip |
 | **TimeStamp** | `YYYY-MM-DD HH:MM:SS.mmm` (local wall) | → `startedAt`; `timeZone` = capture IANA at import |
 
 **Neurofeed’s own CSV export** is a **subset**: TimeStamp + bands + RAW only, 1 Hz.
-Importer accepts that subset and fuller Mind Monitor files.
+It re-imports as a 1 s interval file (bands only).
 
 ## Export recordings
 

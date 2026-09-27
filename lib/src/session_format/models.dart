@@ -81,6 +81,74 @@ class DeviceInfo {
   }
 }
 
+/// Base-metadata `import` block: where an imported recording came from and
+/// what was lost on the way. Present only on imported recordings.
+class ImportProvenance {
+  const ImportProvenance({
+    required this.sourceFormat,
+    required this.sourceFileName,
+    required this.originalChannels,
+    required this.originalRateHz,
+    this.droppedChannels = const [],
+    this.resampled = false,
+    required this.rawPresent,
+    this.recordingInterval,
+    this.reference,
+    required this.lossy,
+    this.warnings = const [],
+  });
+
+  /// `edf` | `edf+` | `mind_monitor_csv`.
+  final String sourceFormat;
+  final String sourceFileName;
+  final List<String> originalChannels;
+
+  /// EEG rate in the source file (Hz); null when the source had no RAW.
+  final double? originalRateHz;
+  final List<String> droppedChannels;
+  final bool resampled;
+  final bool rawPresent;
+
+  /// Mind Monitor recording interval (s); null for Constant / non-CSV.
+  final double? recordingInterval;
+  final String? reference;
+  final bool lossy;
+  final List<String> warnings;
+
+  Map<String, Object?> toJson() => {
+    'sourceFormat': sourceFormat,
+    'sourceFileName': sourceFileName,
+    'originalChannels': originalChannels,
+    'originalRateHz': originalRateHz,
+    'droppedChannels': droppedChannels,
+    'resampled': resampled,
+    'rawPresent': rawPresent,
+    'recordingInterval': recordingInterval,
+    if (reference != null) 'reference': reference,
+    'lossy': lossy,
+    'warnings': warnings,
+  };
+
+  static ImportProvenance? fromJson(Object? json) {
+    if (json is! Map) return null;
+    List<String> strings(Object? v) =>
+        v is List ? v.whereType<String>().toList() : const [];
+    return ImportProvenance(
+      sourceFormat: json['sourceFormat'] as String? ?? '',
+      sourceFileName: json['sourceFileName'] as String? ?? '',
+      originalChannels: strings(json['originalChannels']),
+      originalRateHz: (json['originalRateHz'] as num?)?.toDouble(),
+      droppedChannels: strings(json['droppedChannels']),
+      resampled: json['resampled'] == true,
+      rawPresent: json['rawPresent'] == true,
+      recordingInterval: (json['recordingInterval'] as num?)?.toDouble(),
+      reference: json['reference'] as String?,
+      lossy: json['lossy'] == true,
+      warnings: strings(json['warnings']),
+    );
+  }
+}
+
 /// Individual stream info: enabled + rate.
 class StreamInfo {
   const StreamInfo({

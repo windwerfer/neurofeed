@@ -6,6 +6,7 @@ import 'package:neurofeed/src/feedback/target_state.dart'
     show movementGateThreshold;
 import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
+import 'package:neurofeed/src/session_format/stats_assemble.dart' show frameSeconds;
 
 /// Muse AF7/AF8 indices for raw-body charts (CSV/EDF bodies are Muse-only).
 const int electrodeAf7 = 1;
@@ -318,11 +319,14 @@ SessionChartData prepareChartDataFromComputed(
   final deltaRel = <double>[];
   final betaRel = <double>[];
   final gammaRel = <double>[];
-  var targetSeconds = 0;
+  final weights = frameSeconds(kept);
+  var targetSeconds = 0.0;
+  var bandSeconds = 0.0;
   var alphaRelSum = 0.0;
   var bandsCount = 0;
 
-  for (final f in kept) {
+  for (var fi = 0; fi < kept.length; fi++) {
+    final f = kept[fi];
     final all = pair == null
         ? null
         : _relativeAll(
@@ -333,6 +337,7 @@ SessionChartData prepareChartDataFromComputed(
       continue;
     }
     bandsCount++;
+    bandSeconds += weights[fi];
     final aRel = all.$3;
     final tRel = all.$2;
     final dRel = all.$1;
@@ -346,20 +351,22 @@ SessionChartData prepareChartDataFromComputed(
     gammaRel.add(gRel);
     alphaRelSum += aRel;
     if (_inTarget(dRel, tRel, aRel, bRel, metric, conditions)) {
-      targetSeconds++;
+      targetSeconds += weights[fi];
     }
   }
 
   final movementX = <double>[];
   final movement = <double>[];
-  var still = 0;
-  for (final f in kept) {
-    final m = f.movement;
+  var still = 0.0;
+  var movementSeconds = 0.0;
+  for (var fi = 0; fi < kept.length; fi++) {
+    final m = kept[fi].movement;
     if (m == null) continue;
-    movementX.add(f.t - startTs);
+    movementX.add(kept[fi].t - startTs);
     movement.add(m);
+    movementSeconds += weights[fi];
     if (m <= movementGateThreshold) {
-      still++;
+      still += weights[fi];
     }
   }
 
@@ -441,8 +448,8 @@ SessionChartData prepareChartDataFromComputed(
     stats: SessionChartStats(
       peakAlphaFreq: peakFreq,
       peakAlphaPower: peakPower,
-      targetPct: x.isEmpty ? 0 : targetSeconds / x.length * 100,
-      stillnessPct: movement.isEmpty ? 0 : still / movement.length * 100,
+      targetPct: bandSeconds <= 0 ? 0 : targetSeconds / bandSeconds * 100,
+      stillnessPct: movementSeconds <= 0 ? 0 : still / movementSeconds * 100,
       avgBpm: bpm.isEmpty ? null : bpmSum / bpm.length,
       avgSpo2: spo2.isEmpty ? null : spo2Sum / spo2.length,
       avgAlphaRel: alphaRel.isEmpty ? 0 : alphaRelSum / alphaRel.length,

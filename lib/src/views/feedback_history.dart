@@ -87,10 +87,12 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
 
   Future<void> _importRecording() async {
     late final String path;
+    String? fileName;
     if (defaultTargetPlatform == TargetPlatform.android) {
       final uri = await SafSessionStorage.pickFile();
       if (uri == null) return;
       path = await SafSessionStorage.copyUriToCache(uri, 'import_recording');
+      fileName = Uri.decodeComponent(uri).split(RegExp(r'[/:]')).last;
     } else {
       final file = await openFile(acceptedTypeGroups: _importTypes);
       if (file == null) return;
@@ -110,31 +112,87 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
         ),
       ),
     );
+    final ImportResult result;
     try {
-      final store = await ref.read(recordingStoreProvider.future);
-      final storage = await ref.read(sessionStorageProvider.future);
-      final settings = ref.read(settingsProvider);
-      final result = await importAndPublishFile(
+      result = await importFile(
         path: path,
-        store: store,
-        storage: storage,
-        subject: settings.subjectInfo,
+        fileName: fileName,
+        subject: ref.read(settingsProvider).subjectInfo,
       );
-      if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).pop();
-      ref.invalidate(sessionListProvider);
-      final msg = result.warnings.isEmpty
-          ? 'Imported recording_${result.id}.neurofeed'
-          : 'Imported recording_${result.id}.neurofeed — '
-              '${result.warnings.map((w) => w.message).join('; ')}';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Import failed: $e')),
       );
+      return;
     }
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+    if (!await _confirmImport(result) || !mounted) return;
+    try {
+      final store = await ref.read(recordingStoreProvider.future);
+      final storage = await ref.read(sessionStorageProvider.future);
+      await publishImportResult(
+        result: result,
+        store: store,
+        storage: storage,
+      );
+      if (!mounted) return;
+      ref.invalidate(sessionListProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Imported recording_${result.id}.neurofeed')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: $e')),
+      );
+    }
+  }
+
+  /// Kept-vs-lost summary before an import is saved.
+  Future<bool> _confirmImport(ImportResult result) async {
+    final summary = importSummary(result);
+    final p = result.provenance;
+    final theme = Theme.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(p.lossy ? 'Import with losses?' : 'Import recording?'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                p.sourceFileName.isEmpty ? p.sourceFormat : p.sourceFileName,
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              Text('Kept', style: theme.textTheme.titleSmall),
+              for (final line in summary.kept) Text('• $line'),
+              if (summary.lost.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text('Lost or changed', style: theme.textTheme.titleSmall),
+                for (final line in summary.lost) Text('• $line'),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
   }
 
   Future<void> _export(List<SessionSummary> sessions, ExportKind kind) async {
@@ -183,17 +241,21 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
 
   void _showExportResult(SessionExportResult result) {
     final messenger = ScaffoldMessenger.of(context);
+    final notices = [for (final n in result.notices) n.message].join('\n');
     if (result.warnings.isEmpty) {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'Exported ${result.fileCount} file(s) to ${result.location}',
+            'Exported ${result.fileCount} file(s) to ${result.location}'
+            '${notices.isEmpty ? '' : '\n$notices'}',
           ),
+          duration: Duration(seconds: notices.isEmpty ? 4 : 8),
         ),
       );
       return;
     }
-    final files = '${result.fileCount} file(s) exported to ${result.location}.';
+    final files = '${result.fileCount} file(s) exported to ${result.location}.'
+        '${notices.isEmpty ? '' : '\n$notices'}';
     final problems = [
       for (final w in result.warnings) '• ${w.sessionId}: ${w.message}',
     ].join('\n');

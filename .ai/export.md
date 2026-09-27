@@ -43,17 +43,20 @@ the limit when mixed.
 - EDF+D timekeeping jumps decode to `disconnect` annotations; raw EEG is
   placed at each record's start (gaps stay gaps).
 - CSV TimeStamp prefers `startedAt` wall clock.
+- Exporting a recording whose `import.lossy` is true adds a one-line notice
+  to the result ("Imported from … — already lost on import: …").
 
 ## Import
 
-**Implemented (partial).** History app bar **Import…** (next to Refresh)
-picks `.edf` / `.csv` → NFED6 `kind: recording` + `RecordingStore.publish`
-(sqlite lists it). Progress dialog + snackbar warnings.
+History app bar **Import…** (next to Refresh) picks `.edf` / `.csv` →
+`importFile` (convert only) → summary dialog (Kept / Lost or changed,
+Cancel / Import) → NFED6 `kind: recording` + `RecordingStore.publish`.
+Every import carries the root `import` provenance object.
 
 | Input | Behaviour |
 |-------|-----------|
-| EDF / EDF+ | `decodeEdfImport` → raw EEG packets; optional band-named signals → tags + computed; patient code → `subject.id` when not `X`; TALs (with duration) mapped to locked annotation types; EDF+D timekeeping jumps → `disconnect`; placeholder thumb |
-| Mind Monitor / neurofeed CSV | 1 Hz + Constant; bands → tags + computed 1 Hz; RAW → EEG; ACC/Gyro/PPG → raw streams; Elements doubles → annotations |
+| EDF / EDF+ | Montage policy A: Muse 4 (+AUX) or Crown 8 kept, other channels dropped, no complete montage → refused; EEG resampled to 256 Hz (`rubato`); bands from our FFT; patient code → `subject.id` when not `X`; TALs (with duration) → locked annotation types; EDF+D gaps → `disconnect`; placeholder thumb |
+| Mind Monitor / neurofeed CSV | Same montage rule. Constant: RAW (+AUX) at 256 Hz (220 Hz resampled), every band value, IMU/PPG. Interval (0.5–60 s): bands only at the real row times. Optics dropped; Elements doubles → annotations |
 
 No invented `feedback{}`. Design matrix + remaining gaps:
 [TODO/import-export.md](TODO/import-export.md).

@@ -18,6 +18,7 @@ class RecordingMetadata {
     this.timeZone,
     this.sessionId,
     this.subject,
+    this.provenance,
   });
 
   final int formatVersion;
@@ -36,6 +37,9 @@ class RecordingMetadata {
   final String? sessionId;
   final SubjectInfo? subject;
 
+  /// `import` block; only on imported recordings.
+  final ImportProvenance? provenance;
+
   Map<String, Object?> toJson() {
     final tz = timeZone ?? captureIanaTimeZone();
     return {
@@ -52,6 +56,7 @@ class RecordingMetadata {
       'notes': notes,
       'device': device.toJson(),
       'streams': streams.toJson(),
+      if (provenance != null) 'import': provenance!.toJson(),
     };
   }
 
@@ -81,6 +86,7 @@ class RecordingMetadata {
               nickname: (json['subject'] as Map)['nickname'] as String?,
             )
           : null,
+      provenance: ImportProvenance.fromJson(json['import']),
     );
   }
 

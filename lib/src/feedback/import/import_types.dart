@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:neurofeed/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 
 /// Non-fatal note from an import (shown in snackbar / logged).
 class ImportWarning {
@@ -17,6 +18,7 @@ class ImportResult {
     required this.id,
     required this.containerBytes,
     required this.metadataJson,
+    required this.provenance,
     this.warnings = const [],
   });
 
@@ -29,7 +31,19 @@ class ImportResult {
   /// Metadata map that was encoded (for tests / diagnostics).
   final Map<String, Object?> metadataJson;
 
+  /// The `import` block written into the metadata.
+  final ImportProvenance provenance;
+
   final List<ImportWarning> warnings;
+}
+
+/// Import refused with a user-facing reason (no supported montage, …).
+class ImportRefused implements Exception {
+  const ImportRefused(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 /// Locked v6 annotation `type` tokens we accept from EDF TAL / CSV Elements.

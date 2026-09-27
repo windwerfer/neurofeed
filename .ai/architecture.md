@@ -169,6 +169,14 @@ Wire-format reference: `third_party/brainflow/` (tag 5.9.0), not a build dep.
 `prepareChartDataFromComputed` with the dashboard. CSV/EDF use the framed
 raw body. Destination `<root>/export/`.
 
+## Import
+
+History **Import…**: EDF/EDF+ (`decodeEdfImport`) or Mind Monitor CSV →
+NFED6 `kind: recording` with a root `import` provenance object. Channels
+must contain a full Muse or Crown montage (extras dropped, else refused);
+EEG is resampled to 256 Hz in Rust (`import_dsp.rs`, `rubato`). Details:
+[export.md](export.md), [TODO/import-export.md](TODO/import-export.md).
+
 ## Signal quality + gate
 
 Pad quality 0–100: EEG std + `BandsDto.line_noise_ratio` (Dart UI dots) and
