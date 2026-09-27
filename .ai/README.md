@@ -33,6 +33,7 @@ land (Athena optics keeps its implementer detail there).
 |------|----------|
 | [contracts/pipeline-contract.md](contracts/pipeline-contract.md) | **Implemented.** Features, protocols, lanes. Do not reopen Key Decisions. |
 | [contracts/data-plane-contract.md](contracts/data-plane-contract.md) | **Implemented.** Capture fork, inner zstd, assemble, soak, Android FGS. D1–D3 frozen. Do not re-run [`archive/handoff-spine.md`](archive/handoff-spine.md). |
+| [contracts/protocols_and_features.md](contracts/protocols_and_features.md) | **Implemented.** Electrode workflow: Rust defaults per device × feature, `DeviceConfig` role pairs, protocol overrides, gate pads in Rust. |
 | [contracts/fileformat_v6.md](contracts/fileformat_v6.md) | **Implemented / LOCKED.** `.neurofeed` v6 (NFED6). Human spec: [../README_feedback_format.md](../README_feedback_format.md) (update it if the contract changes). Historical v5: [archive/session-format-contract-v5.md](archive/session-format-contract-v5.md). |
 
 ## Feedback

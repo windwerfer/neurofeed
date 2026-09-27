@@ -46,8 +46,10 @@ Crown-start-refused). Simulation is not a kind — it is `connect_with_options`
 Debug mode only (`enable_simulated_devices`). Spec:
 [connect-simulator-ux.md](connect-simulator-ux.md).
 
-`DeviceConfig` owns channel count, electrode **names**, gate electrodes,
-sampling rate, PPG/IMU flags.
+`DeviceConfig` owns channel count, electrode **names**, role pairs
+(target / needed / frontal / temporal), sampling rate, PPG/IMU flags. Gate
+pads are resolved in Rust (`features::session_gate_electrodes`); see
+[contracts/protocols_and_features.md](contracts/protocols_and_features.md).
 
 | Source | Kind | Transport | Notes |
 |------|-----------|--------|--------|

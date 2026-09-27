@@ -128,9 +128,10 @@ Add a feature later: register producer in Rust, add a copy row to `features.json
 
 Do **not** union every subscribed feature’s channels into one `needed_electrodes` (that would pause on TP9/TP10 whenever `ai.drowsiness` is on).
 
-1. Reward lane on → gate = that feature’s **montage** producer electrodes (`device.*` have none — Crown run is OOS).
-2. Else guard lane on → gate = that feature’s montage electrodes if it has them. **`ai.drowsiness` does not add TP9/TP10**; fall back to AF7/AF8 on Muse.
-3. Else (`recordOnly`) → gate = AF7/AF8 on Muse.
+Rust resolves the gate pads (`session_gate_electrodes`, see [protocols_and_features.md](protocols_and_features.md)):
+1. Reward lane on → the reward feature's resolved electrodes (protocol override, else registry default).
+2. Else a `band.*` guard on → that feature's resolved electrodes. **AI guards do not add TP9/TP10.**
+3. Else → `DeviceConfig.needed_electrodes` (Muse AF7/AF8, Crown PO3/PO4).
 
 Playing pause: **all gate pads** below `signal_critical_threshold` (40) for `badSignalPauseSeconds` (10). Rear pads never pause a frontal-gated session.
 
@@ -284,7 +285,7 @@ Reconnect does not re-enable; the orchestrator re-calls on session start.
 1. **Inhibit ≠ guard.** Inhibit AND-gates the reward verdict. Guard never changes `inTarget` or the reward scalar.
 2. **Background ≠ reward output ≠ guard output.** `muffleReward` is a guard-document bool; live muffle is `RewardOutput.setMuffle`.
 3. **JSON names IDs; code owns behavior.** Protocols may say `band.atr` / `musicFilter` / `percentileUptrain`. They may not say FFT bins, biquads, or percentile math.
-4. **Rust owns `(device, feature)` producer electrodes / rate / existence.** Protocol override is names. Gate electrodes are a second list: reward montage, else guard montage; **`ai.drowsiness` does not add TP9/TP10 to the gate.** `DeviceConfig` montage is the index authority. Do not change `DeviceConfig` FFI fields (`targetElectrodes` / `neededElectrodes` / `DeviceFeatures`) for Crown run.
+4. **Rust owns `(device, feature)` producer electrodes / rate / existence.** Protocol override is names. Gate electrodes are a second list, resolved in Rust: reward feature, else `band.*` guard, else device needed pads; **AI guards do not add TP9/TP10 to the gate.** `DeviceConfig` montage is the index authority. Do not change `DeviceConfig` FFI fields (`targetElectrodes` / `neededElectrodes` / `DeviceFeatures`) for Crown run.
 5. **Always-on vs subscribed.** Bands, movement, gestures always-on. Pad quality 0–100 for autodrop is in the Rust forwarder; null/short quality skips the sample. Subscribe only `FeatureDto` producers. Default enabled set is empty.
 6. **Band-derived features computed in Rust** from the FFT already running, autodropped there. Do not restore Dart `scalarForFeature` or `electrodeAf7` on the reward path. Charts may keep 4-ch names until the Crown-run series.
 7. **Missing sample = no sample**, not 0.
