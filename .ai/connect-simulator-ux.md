@@ -29,7 +29,7 @@ the protocol builder) and a scroll hitch on the way down (music RangeSlider).
    Dart `ConnectSource`, not a `DeviceKind`. Simulator appears only when
    Settings **Debug mode** is on (`enable_simulated_devices`, default false).
 2. **`DeviceKind` is two values: `Muse` and `Neurosity`.** Kind is the headset
-   family (montage / features / Crown-start-refused). Simulation is the
+   family (montage / features). Simulation is the
    existing `simulate` flag on `connect_with_options`, plus synthetic `sim:*`
    device ids. Drop `SimulatedMuse` / `SimulatedNeurosity`, `is_simulated`,
    `base_kind`. This **does** change the FFI enum → FRB codegen, commit both
@@ -52,8 +52,8 @@ the protocol builder) and a scroll hitch on the way down (music RangeSlider).
    the current one. Both simulator rows use `DeviceConfig::neurosity_crown()`.
    Variants differ by display name / firmware only — not Athena fNIRS packets
    or extra Muse channels.
-8. **Crown Start stays refused** whenever `kind == DeviceKind.neurosity`
-   (real or simulated). Muse simulator rows stay startable.
+8. **Crown sessions start** for real and simulated Crown/Notion (8-ch,
+   PO3/PO4 default). Muse simulator rows stay startable.
 9. **Remove the Settings card titled “AI sleep guardrail”** (per-protocol
    on/off). Keep `AiEngineCard` (model download/import). Keep
    `Settings.guardFeatureFor` and migration tests.
@@ -137,7 +137,7 @@ Hide Rescan while source is Simulator.
 - Debug on: Simulator appears. List is the five catalog rows; Rescan hidden;
   tap Muse S connects without BLE; tap Crown (OSC) connects the 8-ch
   simulator (no UDP); status name/firmware match the table; Start on
-  simulated Crown/Notion is still refused.
+  simulated Crown/Notion runs an 8-ch session.
 - Muse: BLE list, no Crown/Notion rows from BLE names.
 - Neurosity: no BLE scan; list is OSC-only (empty is OK); banner still shown;
   tapping a real OSC row is allowed to fail.
@@ -147,7 +147,7 @@ Hide Rescan while source is Simulator.
   features/device_config/simulator.
 - Simulator tap: log `[muse] simulator started` then `pkt/s: eeg=` and
   `ppg=` non-zero; battery ~85%; four green pads; Muse protocol Start
-  clears the 3 s gate. Crown/Notion Start still refused.
+  clears the 3 s gate.
 
 ---
 

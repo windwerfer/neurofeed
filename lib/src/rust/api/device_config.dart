@@ -162,7 +162,7 @@ class DeviceFeatures {
           gesture == other.gesture;
 }
 
-/// Headset family (montage / features / Crown-start-refused).
+/// Headset family (montage / features).
 /// Simulation is the `simulate` flag on connect, not a kind.
 enum DeviceKind {
   muse,

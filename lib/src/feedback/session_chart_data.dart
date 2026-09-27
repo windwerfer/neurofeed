@@ -6,7 +6,8 @@ import 'package:neurofeed/src/feedback/target_state.dart'
     show movementGateThreshold;
 import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
-import 'package:neurofeed/src/session_format/stats_assemble.dart' show frameSeconds;
+import 'package:neurofeed/src/session_format/stats_assemble.dart'
+    show frameSeconds;
 
 /// Muse AF7/AF8 indices for raw-body charts (CSV/EDF bodies are Muse-only).
 const int electrodeAf7 = 1;
@@ -24,7 +25,7 @@ const int electrodeAf8 = 2;
 }
 
 /// Display-ready chart series for one session: per-second band-relative powers
-/// of the frontal AF7/AF8 average, movement, heart rate, SpO2, and derived
+/// of the [chartElectrodePair] average, movement, heart rate, SpO2, and derived
 /// stats. Built by [prepareChartDataFromComputed] (computed 1 Hz) or
 /// [prepareChartData] (raw body, CSV/EDF only).
 class SessionChartData {
@@ -45,6 +46,9 @@ class SessionChartData {
   final SessionChartStats stats;
   final int bandsCount;
 
+  /// The averaged pair, e.g. `AF7/AF8` or `PO3/PO4`, for chart captions.
+  final String electrodePairLabel;
+
   const SessionChartData({
     required this.x,
     required this.alphaRel,
@@ -62,6 +66,7 @@ class SessionChartData {
     this.guardrailSleepDir = const [],
     required this.stats,
     required this.bandsCount,
+    this.electrodePairLabel = 'AF7/AF8',
   });
 }
 
@@ -298,10 +303,9 @@ SessionChartData prepareChartDataFromComputed(
   List<String> channelLabels = kMuseElectrodeNames,
 }) {
   final pair = chartElectrodePair(channelLabels);
-  final cut =
-      (trainingStartOffset != null && trainingStartOffset > 0)
-          ? trainingStartOffset
-          : null;
+  final cut = (trainingStartOffset != null && trainingStartOffset > 0)
+      ? trainingStartOffset
+      : null;
 
   final kept = [
     for (final f in frames)
@@ -445,6 +449,9 @@ SessionChartData prepareChartDataFromComputed(
     guardrailX: guardrailX,
     guardrailSleepDir: guardrailSleepDir,
     bandsCount: bandsCount,
+    electrodePairLabel: pair == null
+        ? 'AF7/AF8'
+        : '${channelLabels[pair.$1]}/${channelLabels[pair.$2]}',
     stats: SessionChartStats(
       peakAlphaFreq: peakFreq,
       peakAlphaPower: peakPower,
@@ -464,7 +471,8 @@ SessionChartData prepareChartDataFromComputed(
   List<double> spo2,
   List<double> spo2X,
   double spo2Sum,
-}) _physioFromRaw(
+})
+_physioFromRaw(
   ffi.SessionData data, {
   required double? cut,
   required double startTs,

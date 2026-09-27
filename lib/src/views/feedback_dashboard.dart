@@ -925,7 +925,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
         const SizedBox(height: 16),
         if (prepared.x.isNotEmpty) ...[
           chart(
-              'Alpha vs Theta (relative power, AF7/AF8 avg)',
+              'Alpha vs Theta (relative power, ${prepared.electrodePairLabel} avg)',
               'rel. power',
               [
                 _Series(
@@ -1010,7 +1010,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
         const SizedBox(height: 16),
         if (prepared.x.isNotEmpty) ...[
           chart(
-            'Bands (relative power, AF7/AF8 avg)',
+            'Bands (relative power, ${prepared.electrodePairLabel} avg)',
             'rel. power',
             [
               _Series(

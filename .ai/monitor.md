@@ -190,7 +190,7 @@ uses the Follow wipe ring; leaving that view calls `setDisplayWindow(0)` so
 
 `lastConnectedKind` → `DeviceConfig.forKind` → `channelCount` / names.
 Muse: TP9 AF7 AF8 TP10. Crown/Notion: 8 names. Simulator Crown is 8-ch
-for graphs; Start Session stays refused. Status-bar pads stay 4-ch.
+for graphs and sessions. Status-bar pads follow the kind (4 Muse, 8 Crown).
 
 Non-EEG electrode toggles: top-right text, depressed = in the mean, default
 all on, last one stays. Raw EEG has no chips.
@@ -237,5 +237,5 @@ Not `SessionMetadata.toJson()`. Format: [README_feedback_format.md](../README_fe
   Spectrogram `mag ▾` is color, not Hz.
 - No averaging, no hold-finger readout, no FFT-window chrome (256-pt only).
 - Histogram/PSD: no time slider; Bands strip is the time map. No strip on Spectrogram.
-- Crown graphs + recording allowed; Crown Start refused.
+- Crown graphs, recording and sessions allowed.
 - No Android foreground service in this surface (recording dies if the app is backgrounded).

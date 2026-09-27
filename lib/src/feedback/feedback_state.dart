@@ -680,11 +680,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
       return;
     }
-    if (app.lastConnectedKind != null &&
-        deviceKindIsCrown(app.lastConnectedKind!)) {
-      debugPrint('[feedback] refusing Start on Crown');
-      return;
-    }
     final leased = await _ref
         .read(monitorControllerProvider.notifier)
         .acquireFeedbackLease();
@@ -798,9 +793,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final app = _ref.read(appStateProvider);
     final kind = app.lastConnectedKind ?? DeviceKind.muse;
     var montage = museMontageNames;
+    var deviceGate = museGateElectrodeNames;
     try {
       final config = await DeviceConfig.forKind(kind: kind);
       montage = config.electrodeNames;
+      deviceGate = deviceGateElectrodeNames(config);
     } catch (e) {
       debugPrint('[feature] DeviceConfig.forKind failed: $e');
     }
@@ -835,6 +832,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       guardFeature: guardFeature,
       rewardElectrodes: spec?.reward?.electrodes ?? rewardDefault,
       guardElectrodes: spec?.guard?.electrodes ?? guardDefault,
+      deviceDefault: deviceGate,
     );
     final resolved = electrodeIndicesFor(gateNames, montageNames: montage);
     _gateElectrodes = resolved.isEmpty
@@ -886,7 +884,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
 
     final rewardNames =
-        spec?.reward?.electrodes ?? rewardDefault ?? museGateElectrodeNames;
+        spec?.reward?.electrodes ?? rewardDefault ?? deviceGate;
     _reward.configure(
       hasReward: spec?.hasReward ?? false,
       featureId: spec?.reward?.feature,
@@ -897,10 +895,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       electrodeNames: rewardNames,
       montageNames: montage,
     );
-    final deltaIdx = electrodeIndicesFor(
-      museGateElectrodeNames,
-      montageNames: montage,
-    );
+    final deltaIdx = electrodeIndicesFor(deviceGate, montageNames: montage);
     _guard.configure(
       enabled: false,
       bandMath: settings.guardrailIsBandMathFor(state.protocol),

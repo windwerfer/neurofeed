@@ -582,7 +582,7 @@ class SessionExporter {
     final charts = <ExportChart>[
       ExportChart(
         title: 'Bands',
-        subtitle: 'AF7/AF8 average · relative power',
+        subtitle: '${prepared.electrodePairLabel} average · relative power',
         lines: [
           for (var i = 0; i < bandNames.length; i++)
             ExportChartLine(
@@ -602,7 +602,7 @@ class SessionExporter {
       ),
       ExportChart(
         title: 'Alpha vs Theta',
-        subtitle: 'AF7/AF8 average · relative power',
+        subtitle: '${prepared.electrodePairLabel} average · relative power',
         lines: [
           ExportChartLine('alpha', bandColors[2], prepared.alphaRel),
           ExportChartLine('theta', bandColors[1], prepared.thetaRel),

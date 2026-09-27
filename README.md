@@ -7,8 +7,8 @@ Companion app for Interaxon Muse EEG headsets. Flutter UI, Rust BLE stack
 ## What it does
 
 - **Connect** a Muse over BLE (Android). Debug mode adds a Simulator catalog.
-  Neurosity Crown/Notion appear in the connect UI (OSC); **Start Session**
-  for Crown is refused.
+  Neurosity Crown/Notion appear in the connect UI (OSC) and run feedback
+  sessions on the 8-channel montage (PO3/PO4 reward default).
 - **Live monitor** while connected: Bands, Raw EEG, Histogram, Spectrogram,
   PSD. Follow the live signal or Inspect recent history.
 - **Record** from the graph bar. Saved recordings sit in the same History

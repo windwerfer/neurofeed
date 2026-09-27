@@ -54,7 +54,7 @@ Pulse, X, Wayland, adb, or the Dart language-server.
 | `POST /disconnect` | `{}` | User disconnect: stays down this process. Keeps `lastDeviceId` for next-launch autoconnect. |
 | `POST /session/select` | `{protocol}` | 412 `unknown_protocol`. |
 | `POST /session/duration` | `{minutes}` | `persist: false`. Smoke uses `1`. |
-| `POST /session/start` | `{skipCalibration}` | 412 `not_connected`; 409 `crown_refused`; 409 `recording_active`. Order: not_connected → crown_refused → recording_active. Distinct from `crown_refused`. |
+| `POST /session/start` | `{skipCalibration}` | 412 `not_connected`; 409 `recording_active`. Order: not_connected → recording_active. Crown and Muse behave the same. |
 | `POST /record/start` | `{}` | 412 `disconnected`; 409 `feedback_active`; else start `recording_$ts`. `persist: false`. |
 | `POST /record/stop` | `{}` | 200; assemble scratch `recording_$ts.neurofeed`. Does not publish. `persist: false`. |
 | `POST /session/pause\|resume\|end\|reset` | `{}` | end/reset are 200 no-ops if idle / not connected. **Always end+reset** after a smoke. |
@@ -75,7 +75,7 @@ Pulse, X, Wayland, adb, or the Dart language-server.
 - `persist: false` means a human `lastDeviceId` (including Crown) can
   still autoconnect on the next launch.
 - Widget / `integration_test` / Patrol / goldens stay deferred.
-- Frozen: Crown Start refused; `DeviceKind` Muse\|Neurosity;
+- Frozen: `DeviceKind` Muse\|Neurosity;
   connect-simulator-ux names.
 
 ## Environment

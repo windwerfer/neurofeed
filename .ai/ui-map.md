@@ -26,6 +26,7 @@ toggles the same hide. Not Settings / Feedback / Streaming / History.
 | Connecting | `Connecting to {name}…` | `connectingTo` | `status_bar.dart` | |
 | Disconnecting | `Disconnecting…` | `disconnecting` | `status_bar.dart` | |
 | Device name | `status.name` (e.g. `Muse 2 (Simulated)`) | `ConnectionStatus.name` | `status_bar.dart` | After connect. Elides when chrome is tight; **signal pads keep priority**. |
+| Signal pads | `/‾‾\` (Muse 4) or 8 × `•` (Crown) | `signalQualityRow` | `status_bar.dart` | One glyph per head pad of `lastConnectedKind`; green ≥ 80, orange ≥ 40, red below. |
 | Battery | `{n}%` | `batteryLevel` | `status_bar.dart` | From `bp`, not fuel gauge. |
 | Signal pads | `/ ‾ ‾ \` | `_signalQualityRow` | `status_bar.dart` | TP9 AF7 AF8 TP10. Green ≥80, amber ≥40, red <40. Never elided for a long device name. [headset-fit.md](headset-fit.md). |
 | Disconnect | tooltip `Disconnect` | `disconnectDevice` | `status_bar.dart` | Icon `link_off`. |
@@ -80,8 +81,8 @@ Must exist in every view with a status bar (`AppShell` + session). Frozen:
 | Simulator · Muse 2 | `Muse 2` | `sim:muse-2` | `connect_source.dart` | Startable. Connected name `Muse 2 (Simulated)`. |
 | Simulator · Muse S | `Muse S` | `sim:muse-s` | `connect_source.dart` | Startable. |
 | Simulator · Muse S Athena | `Muse S Athena` | `sim:muse-s-athena` | `connect_source.dart` | Classic 3-ch PPG only. |
-| Simulator · Crown (OSC) | `Crown (OSC)` | `sim:crown-osc` | `connect_source.dart` | Kind Neurosity. **Start refused.** |
-| Simulator · Notion (OSC) | `Notion (OSC)` | `sim:notion-osc` | `connect_source.dart` | Kind Neurosity. **Start refused.** |
+| Simulator · Crown (OSC) | `Crown (OSC)` | `sim:crown-osc` | `connect_source.dart` | Kind Neurosity. 8-ch sessions. |
+| Simulator · Notion (OSC) | `Notion (OSC)` | `sim:notion-osc` | `connect_source.dart` | Kind Neurosity. 8-ch sessions. |
 
 ## Views
 
@@ -219,7 +220,6 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 | Start Session | `Start Session` | `_PhaseControls.startSession` | `feedback_session.dart` | Crown → dialog. Recording → dialog. |
 | Start skip-cal | `Start (skip calibration)` | `startCalibration(skipCalibration: true)` | `feedback_session.dart` | recordOnly. |
 | Calibration Skip | `Skip` | `skipCalibration` | `feedback_session.dart` | Next to `Cancel`. Debug mode only. Simulator: canned baseline. Real device: last baseline for this device id; hidden until one exists. |
-| Crown refused dialog | `Crown sessions are not available yet…` | `crownSessionUnsupportedMessage` | `protocol.dart` | Real and sim Crown. |
 | Recording refused dialog | `Recording in progress` / `Stop the recording before starting a session.` | `_refuseRecordingStart` | `feedback_session.dart` | Actions `Cancel` / `Stop recording`. Start is not auto-continued. |
 | Save recording | `Save recording?` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | Body `Save this recording to History, or discard it.` Actions `Save` / `Discard`. `barrierDismissible: false`. GraphShell Stop, session-view Stop, in-app disconnect. |
 | Incomplete recording | `Incomplete recording detected` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | Launch leftover `recording_*`. Same widget; title only. |
@@ -311,5 +311,5 @@ Not a screen. `kDebugMode && --dart-define=NEUROFEED_AGENT=true`. See
 | Switch view | `POST /view` | `histogram` / `spectrogram` / `psd` / `feedbackHistory` / … |
 | Record | `POST /record/start` | 412 `disconnected`; 409 `feedback_active`. |
 | Stop recording | `POST /record/stop` | Assembles scratch; does not publish. |
-| Start during Record | `POST /session/start` | 409 `recording_active` (after `not_connected` / `crown_refused`). |
+| Start during Record | `POST /session/start` | 409 `recording_active` (after `not_connected`). |
 | Start with unsaved summary | `POST /session/start` | 409 `unsaved_session`. Same for `POST /session/reset`. |

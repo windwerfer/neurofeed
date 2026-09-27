@@ -2,7 +2,7 @@ use flutter_rust_bridge::frb;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Headset family (montage / features / Crown-start-refused).
+/// Headset family (montage / features).
 /// Simulation is the `simulate` flag on connect, not a kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

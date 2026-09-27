@@ -21,11 +21,6 @@ final RegExp userProtocolIdPattern = RegExp(r'^user\.[a-z0-9-]{3,64}$');
 Map<String, Object?> jsonObject(Object? value) =>
     value is Map ? Map<String, Object?>.from(value) : const <String, Object?>{};
 
-/// Clear error when Start is refused on Crown (real or simulated).
-const String crownSessionUnsupportedMessage =
-    'Crown sessions are not available yet. You can browse band protocols, '
-    'but running a session on Crown is a later update. Connect a Muse to start.';
-
 /// A per-sample condition a composite protocol applies on top of the scalar
 /// reward metric. The scalar must beat the baseline threshold AND every
 /// condition must pass for the sample to count as in-target. All values are

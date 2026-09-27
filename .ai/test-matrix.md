@@ -107,7 +107,7 @@ NEUROFEED_SOAK_EQUIV_SECS=43200 cargo test --manifest-path rust/Cargo.toml \
 | Connect live (sim) | agent-linux | HTTP | `POST /connect` `sim:muse-2` or `sim:muse-s` | `connected=true`; `scanMessage` **null** | Real BLE **cannot** |
 | View switch | agent-linux | HTTP | `POST /view` `bands` / `rawEeg` / `histogram` / `spectrogram` / `psd` / `settings` | `GET /state` → `view=` that name | Button wiring untested |
 | Sidebar / connect window | agent-linux | HTTP | `POST /sidebar`, `POST /connect-window` | `sidebarOpen` / `connectWindowOpen` | Overlay chrome untested |
-| Session start Crown | Dart + HTTP | notifier refuse | `POST /session/start` after `sim:crown-osc` | HTTP 409 `crown_refused` | Dialog UI untested |
+| Session start Crown | Dart + FFI + HTTP | `test/agent/agent_commands_test.dart`, `test/session_computed_charts_test.dart` | `POST /session/start {"skipCalibration":true}` after `sim:crown-osc` | Start passes to the recording check; `DeviceConfig` gate PO3/PO4 → indices 3/4; 8-ch charts average PO3/PO4 and caption `PO3/PO4` | Full Crown session on device untested |
 | Record / Stop | Dart + FFI | `test/monitor/capture_lease_test.dart`, `recording_assemble_test.dart`, `test/agent/agent_commands_test.dart` | `POST /record/start` after `sim:muse-2`; `GET /state` `captureKind=recording`; `POST /record/stop` scratch `.neurofeed` | 412 `disconnected`; 409 `feedback_active`; 409 `recording_active` on `/session/start` | Save/Discard widget untested |
 | Recording crash recovery | Dart + FFI | `test/monitor/crash_recovery_test.dart`, `recording_store_test.dart` | `flutter test test/monitor/crash_recovery_test.dart test/monitor/recording_store_test.dart` | Leftover `recording_*` assemble; `tmp_`/`session_*` untouched; publish `kind=recording`; existing rows `feedback`; discard no sqlite row | Dialog widget untested |
 | Feedback leftover / unsaved summary | Dart + FFI | `test/session_computed_charts_test.dart`, `test/agent/agent_commands_test.dart` | those files | Leftover `session_*` assemble; attach scratch id/path; 409 `unsaved_session` on `/session/start` and `/session/reset`; computed pulse/SpO₂ + raw fallback | Summary Back/`PopScope` widget untested |
@@ -128,7 +128,7 @@ NEUROFEED_SOAK_EQUIV_SECS=43200 cargo test --manifest-path rust/Cargo.toml \
 | Real BLE Muse | **cannot** | — | phone + testing-guide logcat | Human | |
 | Crown OSC decode / match | Rust unit | `neurosity_osc.rs` | `cargo test --manifest-path rust/Cargo.toml --lib neurosity_osc` | Node-`osc` byte layout (`/raw` `[ffffffff]sis`, `/info`), exact id segment, `/crown{prefix}`, array flatten, 16-sample batching, signalQuality 8/1 floats | |
 | Crown OSC loopback sim | Rust `#[ignore]` + Python | `tools/crown_osc_sim.py` | `cargo test --manifest-path rust/Cargo.toml --lib crown_osc_sim -- --ignored --nocapture --test-threads=1` | Binds UDP 9000. Discovery id/nickname, 256 samples/s × 8 ch, µV range, bad pad, decoy device not routed, dropout keeps listing, per-pad `--quality` → Crown 1 Hz source, `--quality-overall` → app fallback, `--epoch 16` sample- and `--channel-major` epochs decode at 256 samples/s without bad-pad leakage | Real Wi-Fi / Android broadcast **cannot** |
-| Real Crown OSC | **cannot** | — | — | Start refused | |
+| Real Crown OSC | **cannot** | — | — | Unfiltered raw vs app pad quality unverified | |
 | Android AAudio | **cannot** | — | — | — | |
 | Android FGS (keepable capture) | Dart unit | `test/capture_foreground_test.dart` | `flutter test test/capture_foreground_test.dart` | Policy: FGS for `recording` / `feedback` / unsaved Save-Discard, not `tmp_` | Phone overnight **cannot** (no adb device in CI). Manual: Record or Start Session, background, screen off, 10+ min still appending |
 | Pad fit | **cannot** | — | — | Sim pads are synthetic ≥ 80 | |
@@ -151,7 +151,7 @@ Pure Dart first (`flutter analyze lib/src` + `test/agent/*` +
 7. `POST /session/duration {"minutes":1}`
 8. `POST /session/start {"skipCalibration":true}` → `phase=playing`.
 9. `POST /session/end` then `/session/reset` → `ended` then `idle`.
-10. Optional: disconnect, `POST /connect {"id":"sim:crown-osc"}`, `POST /session/start` → HTTP **409** `crown_refused`. Then disconnect.
+10. Optional: disconnect, `POST /connect {"id":"sim:crown-osc"}`, repeat steps 6–9 on the Crown simulator. Then disconnect.
 11. Never `publishSession`. Audio silence is N/A; `audioInitFailed` is a real fail to note, not a reason to skip end+reset.
 
 Always end+reset, even on failure.

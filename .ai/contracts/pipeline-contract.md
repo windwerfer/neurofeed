@@ -3,10 +3,10 @@
 | Field | Value |
 |---|---|
 | Status | **Implemented** (PRs 1–7). |
-| Scope | Feature IDs, protocol documents, lane semantics, FFI, catalog mapping, Crown Start refused. |
+| Scope | Feature IDs, protocol documents, lane semantics, FFI, catalog mapping, Crown sessions. |
 | Not this | Capture writer ([data-plane-contract.md](data-plane-contract.md)); `.neurofeed` header / computed field set ([fileformat_v6.md](fileformat_v6.md)); Connect UX; SoLoud internals ([../audio-engine.md](../audio-engine.md)); Crown *session run*. |
 
-Do not reopen [Key Decisions](#key-decisions). **Crown Start stays refused.**
+Do not reopen [Key Decisions](#key-decisions).
 
 Implemented map: [../feedback/architecture.md](../feedback/architecture.md).
 Catalog copy: `assets/features.json`, `assets/protocols.json` (file version **4**).
@@ -38,9 +38,9 @@ JSON names IDs. Code owns behavior. Availability is derived from the
 last-connected / selected device + installed models, not copied into every
 protocol row.
 
-The catalog **may list** band protocols when the selected kind is Crown.
-**Running** a catalog protocol on Crown is out of scope. The orchestrator
-refuses Start on Crown (`DeviceKind.neurosity`, real or simulated).
+The catalog lists band protocols when the selected kind is Crown and they
+run on it (`DeviceKind.neurosity`, real or simulated) with the Crown
+default electrodes (PO3/PO4) unless the protocol names its own.
 
 ---
 
@@ -138,7 +138,7 @@ Playing pause: **all gate pads** below `signal_critical_threshold` (40) for `bad
 
 `DeviceConfig` montage is the index authority (`muse()` / `neurosity_crown()`). Protocol override: optional `reward.electrodes` / `guard.electrodes` as **names**, never indices. Rust rejects unknown names. Do not restore `const electrodeAf7 = 1` on the reward path.
 
-Autodrop: 0–100 in the Rust forwarder (Muse: 1.0 **second** EEG ring, same std/noise formula as the Dart UI dots). Null/short quality → skip the sample. Crown `/signalQuality` 0–1 → 0–100 is defined for `band.*` computation; Crown **run** stays refused.
+Autodrop: 0–100 in the Rust forwarder (Muse: 1.0 **second** EEG ring, same std/noise formula as the Dart UI dots). Null/short quality → skip the sample. Crown `/signalQuality` 0–1 → 0–100 is defined for `band.*` computation.
 
 ---
 
@@ -184,7 +184,7 @@ Any document **with** a `guard` object defaults ON (`band.delta`) when no pref e
 
 ### Listing vs running
 
-List filter = last-connected / currently connected `DeviceKind` this process; if none, show all catalog rows. Band protocols **list** on Crown; **Start is refused**. `ai.drowsiness` stays unavailable on Crown. `recordOnly` lists on every known kind; Start on Crown is still refused.
+List filter = last-connected / currently connected `DeviceKind` this process; if none, show all catalog rows. Band protocols list and run on Crown. `ai.drowsiness` stays unavailable on Crown. `recordOnly` lists on every known kind.
 
 ---
 

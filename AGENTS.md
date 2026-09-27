@@ -29,7 +29,7 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   `MuseEventDto::Feature`; Dart `FeatureBus` → `RewardLane` / `GuardLane`.
   Copy in `assets/features.json`; electrodes in `rust/src/api/features.rs`.
   Guard **only warns**, never modulates reward. Frozen:
-  `.ai/contracts/pipeline-contract.md`. **Crown Start is refused.**
+  `.ai/contracts/pipeline-contract.md`. Crown sessions use PO3/PO4 by default.
 - **Protocols** are JSON documents (`origin: catalog | user`). Catalog:
   `assets/protocols.json`. User: `user_protocol_store.dart` +
   `lib/src/views/protocol_builder.dart`. `ProtocolType` / `GuardrailMode`
@@ -282,7 +282,8 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `sim:*` `lastDeviceId` when debug is off.
 - **`DeviceKind` is two values** (Muse, Neurosity). FFI enum — regenerate
   FRB if it changes. `deviceKindIsCrown` is `kind == neurosity`. Crown
-  Start is refused for real and simulated Crown/Notion.
+  sessions (real and simulated) record 8 channels; gate/reward default is
+  `DeviceConfig.targetElectrodes` (PO3/PO4).
 - **Settings has no “AI sleep guardrail” card.** Guard is per-protocol in
   the builder + `Settings.guardFeatureFor`. Debug mode is the last card
   (after About).
