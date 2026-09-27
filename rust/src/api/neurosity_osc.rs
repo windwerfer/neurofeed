@@ -901,3 +901,213 @@ mod tests {
         assert_eq!(hub.registry.visible(Instant::now()).len(), 2);
     }
 }
+
+/// End-to-end over loopback with `tools/crown_osc_sim.py` (binds UDP 9000).
+/// `cargo test --lib crown_osc_sim -- --ignored --nocapture --test-threads=1`
+#[cfg(test)]
+mod sim_loopback_tests {
+    use super::*;
+    use std::process::{Child, Command};
+
+    const ID: &str = "local7cca794fb5f4675a69371e949b2";
+
+    struct Sim(Child);
+
+    impl Drop for Sim {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    fn sim(args: &[&str]) -> Sim {
+        let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../tools/crown_osc_sim.py");
+        Sim(Command::new("python3")
+            .arg(script)
+            .args(["--target", "127.0.0.1"])
+            .args(args)
+            .spawn()
+            .expect("python3 tools/crown_osc_sim.py"))
+    }
+
+    #[derive(Default)]
+    struct Collected {
+        samples: Vec<Vec<f64>>,
+        batches: Vec<(f64, usize)>,
+    }
+
+    async fn collect(rx: &mut mpsc::Receiver<MuseEventDto>, secs: f64) -> Collected {
+        let mut out = Collected {
+            samples: vec![Vec::new(); CROWN_CHANNELS],
+            ..Default::default()
+        };
+        let deadline = tokio::time::Instant::now() + Duration::from_secs_f64(secs);
+        while let Ok(Some(ev)) = tokio::time::timeout_at(deadline, rx.recv()).await {
+            if let MuseEventDto::Eeg(e) = ev {
+                if e.electrode == 0 {
+                    out.batches.push((e.timestamp, e.samples.len()));
+                }
+                out.samples[e.electrode as usize].extend(e.samples);
+            }
+        }
+        out
+    }
+
+    fn std_dev(v: &[f64]) -> f64 {
+        let mean = v.iter().sum::<f64>() / v.len() as f64;
+        (v.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / v.len() as f64).sqrt()
+    }
+
+    fn max_abs(v: &[f64]) -> f64 {
+        v.iter().fold(0.0, |m, x| m.max(x.abs()))
+    }
+
+    async fn connect(
+        secs_after_start: f64,
+    ) -> (
+        CrownOscHandle,
+        ConnectionStatus,
+        mpsc::Receiver<MuseEventDto>,
+    ) {
+        tokio::time::sleep(Duration::from_secs_f64(secs_after_start)).await;
+        let (tx, rx) = mpsc::channel(4096);
+        let (handle, status) = connect_crown_osc(ID.to_string(), tx)
+            .await
+            .expect("connect");
+        (handle, status, rx)
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn crown_osc_sim_discovery_rate_bad_pads_and_decoy() {
+        start_crown_discovery().await.expect("bind 9000");
+        let decoy_id = format!("{ID}ff");
+        let _main = sim(&[
+            "--duration",
+            "6",
+            "--bad-pads",
+            "3",
+            "--quality",
+            "channels",
+        ]);
+        let _decoy = sim(&[
+            "--duration",
+            "6",
+            "--device-id",
+            &decoy_id,
+            "--noise",
+            "--quality",
+            "channels",
+        ]);
+        let (handle, status, mut rx) = connect(1.5).await;
+        let crowns = discovered_crowns();
+        println!(
+            "discovered: {:?}",
+            crowns.iter().map(|d| (&d.name, &d.id)).collect::<Vec<_>>()
+        );
+        assert!(crowns
+            .iter()
+            .any(|d| d.id == ID && d.name == "Crown-LOC" && d.kind == DeviceKind::Neurosity));
+        assert!(crowns
+            .iter()
+            .any(|d| d.id == decoy_id && d.name == "Crown-LOC"));
+        assert_eq!(
+            (status.name.as_str(), status.firmware.as_str()),
+            ("Crown-LOC", "Crown 3")
+        );
+
+        let secs = 3.0;
+        let got = collect(&mut rx, secs).await;
+        for (ch, s) in got.samples.iter().enumerate() {
+            let rate = s.len() as f64 / secs;
+            println!(
+                "ch{ch}: {:.1} samples/s std={:.2} uV max|v|={:.1} uV",
+                rate,
+                std_dev(s),
+                max_abs(s)
+            );
+            assert!((rate - 256.0).abs() < 256.0 * 0.06, "ch{ch} rate {rate}");
+            if ch == 3 {
+                assert!(std_dev(s) > 100.0, "bad pad should be huge noise");
+            } else {
+                assert!(
+                    max_abs(s) < 12.0,
+                    "ch{ch} out of the app-model range (decoy leaked?)"
+                );
+                let sd = std_dev(s);
+                assert!(sd > 1.0 && sd < 15.0);
+            }
+        }
+        assert!(got.batches.iter().all(|(_, n)| *n == EEG_BATCH_SAMPLES));
+        assert_eq!(features::crown_quality(3), Some(0.0));
+        assert_eq!(features::crown_quality(0), Some(100.0));
+        drop(handle);
+        stop_crown_discovery();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn crown_osc_sim_dropout_keeps_discovery() {
+        start_crown_discovery().await.expect("bind 9000");
+        let _main = sim(&[
+            "--duration",
+            "7",
+            "--dropout",
+            "2:1",
+            "--bad-pads",
+            "5",
+            "--bad-mode",
+            "flat",
+        ]);
+        let (handle, _status, mut rx) = connect(0.5).await;
+        let secs = 6.0;
+        let collector = tokio::spawn(async move { collect(&mut rx, secs).await });
+        let mut visible_polls = 0;
+        for _ in 0..12 {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            if discovered_crowns().iter().any(|d| d.id == ID) {
+                visible_polls += 1;
+            }
+        }
+        let got = collector.await.unwrap();
+        let rate = got.samples[0].len() as f64 / secs;
+        let gaps: Vec<f64> = got
+            .batches
+            .windows(2)
+            .map(|w| w[1].0 - w[0].0)
+            .filter(|dt| *dt > 500.0)
+            .collect();
+        println!(
+            "dropout: {rate:.1} samples/s, gaps(ms)={gaps:?}, visible {visible_polls}/12 polls"
+        );
+        assert!((rate - 128.0).abs() < 25.0, "rate {rate}");
+        assert!(gaps.len() >= 2 && gaps.iter().all(|g| (*g - 1000.0).abs() < 150.0));
+        assert_eq!(
+            visible_polls, 12,
+            "info keeps the Crown listed during dropout"
+        );
+        assert!(got.samples[5].iter().all(|v| *v == 0.0));
+        drop(handle);
+        stop_crown_discovery();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn crown_osc_sim_neurosity_noise_mode() {
+        let _main = sim(&["--duration", "3", "--noise"]);
+        let (handle, status, mut rx) = connect(0.2).await;
+        let got = collect(&mut rx, 2.0).await;
+        let all: Vec<f64> = got.samples.concat();
+        let (lo, hi) = all
+            .iter()
+            .fold((f64::MAX, f64::MIN), |(l, h), v| (l.min(*v), h.max(*v)));
+        println!(
+            "noise: {} samples, range {lo:.2}..{hi:.2} uV, name={}",
+            all.len(),
+            status.name
+        );
+        assert!(lo >= -50.0 && hi <= 51.0 && lo < -40.0 && hi > 40.0);
+        assert!(all.len() > 8 * 400);
+        drop(handle);
+    }
+}

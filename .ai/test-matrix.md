@@ -126,6 +126,8 @@ NEUROFEED_SOAK_EQUIV_SECS=43200 cargo test --manifest-path rust/Cargo.toml \
 | Live charts | Dart unit | `test/monitor/*` | dsp / panes / graph_shell / strip / plot_isolation / sweep_pane / sliding_spectrum | FFT 256-pt, strip highlight, window presets, plot `RepaintBoundary`, GraphShell isolated from plot ticks, Raw EEG min/max downsample, Follow sliding Welch / histogram | Visual **cannot** without goldens |
 | REVE/LUNA | Rust `#[ignore]` | analysis tests | `cargo test --lib -- --ignored` | If `.local/` weights | Never CI |
 | Real BLE Muse | **cannot** | — | phone + testing-guide logcat | Human | |
+| Crown OSC decode / match | Rust unit | `neurosity_osc.rs` | `cargo test --manifest-path rust/Cargo.toml --lib neurosity_osc` | Node-`osc` byte layout (`/raw` `[ffffffff]sis`, `/info`), exact id segment, `/crown{prefix}`, array flatten, 16-sample batching, signalQuality 8/1 floats | |
+| Crown OSC loopback sim | Rust `#[ignore]` + Python | `tools/crown_osc_sim.py` | `cargo test --manifest-path rust/Cargo.toml --lib crown_osc_sim -- --ignored --nocapture --test-threads=1` | Binds UDP 9000. Discovery id/nickname, 256 samples/s × 8 ch, µV range, bad pad, decoy device not routed, dropout keeps listing | Real Wi-Fi / Android broadcast **cannot** |
 | Real Crown OSC | **cannot** | — | — | Start refused | |
 | Android AAudio | **cannot** | — | — | — | |
 | Android FGS (keepable capture) | Dart unit | `test/capture_foreground_test.dart` | `flutter test test/capture_foreground_test.dart` | Policy: FGS for `recording` / `feedback` / unsaved Save-Discard, not `tmp_` | Phone overnight **cannot** (no adb device in CI). Manual: Record or Start Session, background, screen off, 10+ min still appending |
