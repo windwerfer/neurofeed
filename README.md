@@ -39,6 +39,40 @@ History cache: [README_history_cache.md](README_history_cache.md).
 Export: [`.ai/export.md`](.ai/export.md). Pad fit:
 [`.ai/headset-fit.md`](.ai/headset-fit.md).
 
+## EEG signal conditioning
+
+Headsets send RAW EEG unfiltered: it carries a DC offset (Crown ≈ −200 000 µV),
+slow drift and mains hum. Left in, they would inflate the spread-based pad
+quality score and leak into the bands. So before quality, bands, features and
+charts, every channel of every device goes through the same filter: a 0.5 Hz
+high-pass (2nd-order Butterworth; keeps delta) and a Q 30 mains notch at
+50/100 or 60/120 Hz. Mains is detected automatically as 50, 60 or none (no
+notch), from how far the mains bins stand out from the neighbouring spectrum.
+RAW is saved unfiltered so anyone can reprocess it with their own pipeline.
+The file records both (`device.rawFiltering`, `device.conditioning`; see
+[fileformat_v6](.ai/contracts/fileformat_v6.md)).
+
+| Source | Stored RAW | Quality, bands, features | Charts |
+|--------|------------|--------------------------|--------|
+| Muse Classic / Athena | as received; no device filter¹ | conditioned | conditioned |
+| Crown (OSC) | as received; unfiltered² | conditioned³ | conditioned |
+| EDF / EDF+ import | as in file (resampled to 256 Hz if needed) | bands from conditioned RAW | conditioned |
+| Mind Monitor CSV import | as in file⁴ (resampled to 256 Hz if needed) | Mind Monitor's band columns; from conditioned RAW only if the CSV has none | conditioned |
+
+¹ Interaxon: only the 2014 Muse (MU-01) had a hardware notch, and only in some
+presets; MU-02, and MU-01 in research presets, have no hardware filtering
+([LibMuse NotchFrequency](https://siddhantattavar.com/libmuse/enumcom_1_1choosemuse_1_1libmuse_1_1_notch_frequency.html));
+the Muse app / Muse-IO notch was an option. Muse 2 / Muse S are not listed.
+Athena is not documented there and is assumed the same. The app uses presets
+p21/p20/p50 (Classic) and p1045 (Athena). ADC anti-alias filtering is not
+documented. ² [crown-reader](https://github.com/dmty/crown-reader) and
+Neurosity's BrainFlow tutorial filter the OSC RAW themselves. ³ Unless pad
+quality is set to the Crown's own values. ⁴ Whether Mind Monitor's notch
+setting affects its recorded RAW is not documented. EDF export writes the
+stored RAW with Prefiltering `HP:DC N:none`; an imported EDF's Prefiltering
+is kept in `import.prefiltering`. OSC/LSL/BrainFlow streaming sends the
+conditioned signal.
+
 ## Status
 
 Android 10+ **arm64-v8a only** (no x86 emulator, no 32-bit). Linux and

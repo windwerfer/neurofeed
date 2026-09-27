@@ -126,6 +126,13 @@ Recordings: zeroed legacy `guardrail`/`feedback` keys may still be present for c
 - A single overall Crown quality value is never used. Muse frames omit both keys.
 - `feedback.sessionSettings.crownQualitySource` (`"crown"` | `"app"`) records the setting the Crown connection used; omitted for Muse.
 
+**EEG conditioning (LOCKED):** RAW EEG is stored exactly as the device sent it, for every device; the app never filters stored RAW. Everything computed from EEG — the app signal quality (std score and line-noise ratio), FFT bands / `lineNoise` / peak alpha, band features, gestures (blink bins; the eye estimate uses the RAW level), the guardrail window — and the live and History EEG charts use the same conditioned signal, per channel (AUX included):
+- 2nd-order Butterworth high-pass at **0.5 Hz** (`highPassHz`), which removes the DC offset and slow drift but keeps delta (−0.26 dB at 1 Hz).
+- Mains notch, **Q = 30** (`notchQ`), at the mains frequency and its 2nd harmonic (50/100 or 60/120 Hz). Mains is detected per connection: every 256 unfiltered samples per channel vote 50, 60 or none, and a frequency gets the vote when its bins (±1) average ≥ 5× the median of the neighbouring non-mains bins (±8 Hz). 8 consecutive agreeing votes decide 50, 60 or none. From none, 16 consecutive votes for one frequency switch to it (hum appearing later). 50/60 never flips. Until the first decision both pairs are notched; "none" means no notch.
+- Start-up and after any timestamp gap > 200 ms: the first 128 samples are held, the high-pass is seeded at their mean and the chain is primed on them, so a large offset (Crown RAW ≈ −2e5 µV) settles within the first samples.
+- Offline paths (History charts, Inspect, EDF / RAW-only CSV import bands) run the same conditioning on the stored RAW.
+- `device.rawFiltering` / `device.conditioning` record both sides — see **Raw filtering and conditioning**.
+
 #### Sqlite (publish-time; not always in metadata JSON)
 
 From `extractComputedScalars` + row upsert: `avg_hr`, `avg_spo2`, `peak_alpha_hz/power`, `pct_in_target`, `avg_movement`, `guardrail_warn_count`, `avg_sleep_dir`, plus identity/device columns. `signal_quality_mean` / `pct_qc_ok` columns exist but are usually unset from metadata.
@@ -175,7 +182,7 @@ Shared root for `kind: "recording"` and (with `feedback` attached) for feedback.
 ```
 identity: formatVersion, appVersion, kind, savedAt, startedAt, timeZone, elapsedSeconds, durationS, notes, sessionId?
 subject:  { id, nickname?, sex?, ageAtRecording?, meditationExperience?, … }  // anonymous-first; omit voluntary until collected
-device:   { name, id, firmware, model, sensors, channelCount, channelLabels }
+device:   { name, id, firmware, model, sensors, channelCount, channelLabels, rawFiltering?, conditioning? }
 streams:  { ten keys… }   // gestures enablement stub only; markers → annotations
 stats:    { … aggregates; annotationSeconds?: { pause, bad_quality, disconnect }; experimental?: { … } }
 annotations: [ { onset, duration, type }, … ]   // unified timeline: quality intervals + gesture instants
@@ -194,6 +201,43 @@ feedback: { … }   // ONLY when kind == "feedback"; NO gestures[] list
 
 AUX channels are present only when the user enabled **Record AUX channels**. They get raw EEG, computed bands and `stats.quality.channelUsable`, but are excluded from `stats.quality.mean`, `pctGood`, the usable-second gate and `stats.experimental`.
 
+### Raw filtering and conditioning (LOCKED)
+
+`device.rawFiltering` says how the stored RAW was filtered; `device.conditioning` says what the app applied on top for computed values and charts (see **EEG conditioning**). Every live recording and feedback session has both.
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `rawFiltering.storedAsReceived` | bool | `true`: RAW is the device output as received; the app never filters it |
+| `rawFiltering.highPassHz` | number \| null | High-pass the device itself applied; null = none |
+| `rawFiltering.notchHz` | number \| null | Mains notch the device itself applied; null = none |
+| `conditioning.highPassHz` | number | App high-pass cutoff (0.5) |
+| `conditioning.notchQ` | number | App notch Q (30) |
+| `conditioning.notchHz` | 50 \| 60 \| null | Mains notch in effect at the end; null = none, or undecided when `notchChanges` is empty (then both pairs were notched) |
+| `conditioning.notchChanges` | `{onset, notchHz}[]` | Every mains decision of the connection; `onset` in seconds from `startedAt`, negative = decided before the recording started |
+
+Device-side filtering of live devices is none: Crown OSC RAW is unfiltered (crown-reader, Neurosity's BrainFlow tutorial), Muse MU-02 and later have no hardware filtering (Interaxon LibMuse `NotchFrequency`); Athena is assumed the same. Imported recordings have no `rawFiltering`; an EDF's own per-signal Prefiltering text goes to `import.prefiltering`. Their `conditioning` is present when the file has RAW (bands from that RAW, charts), with `notchChanges` relative to the file start. Crash-recovered feedback sessions have `rawFiltering` from the sidecar but no `conditioning`.
+
+```json
+"device": {
+  "name": "Crown-A1B",
+  "id": "a1b2c3…",
+  "firmware": "Crown 3",
+  "model": "Crown 3",
+  "sensors": ["EEG", "IMU"],
+  "channelCount": 8,
+  "channelLabels": ["CP3", "C3", "F5", "PO3", "PO4", "F6", "C4", "CP4"],
+  "rawFiltering": { "storedAsReceived": true, "highPassHz": null, "notchHz": null },
+  "conditioning": {
+    "highPassHz": 0.5,
+    "notchQ": 30,
+    "notchHz": 50,
+    "notchChanges": [{ "onset": -3.2, "notchHz": 50 }]
+  }
+}
+```
+
+EDF export writes the stored RAW with Prefiltering `HP:DC N:none` from `rawFiltering` (no high-pass, no notch; no low-pass is stated because none is documented); files without `rawFiltering` (imports) leave it blank.
+
 ### Import provenance (LOCKED)
 
 Recordings created by **History → Import…** (EDF/EDF+ or Mind Monitor CSV) are always `kind: "recording"` with `device.model == "imported"`, never a `feedback` block, and carry a root `import` object. Recorded sessions never have it.
@@ -210,6 +254,7 @@ Recordings created by **History → Import…** (EDF/EDF+ or Mind Monitor CSV) a
 | `recordingInterval` | number \| null | Mind Monitor recording interval in seconds (median gap between band rows, 0.1 s); null for Constant CSVs and EDF |
 | `intervalCoverage` | number \| null | Share of the session the interval rows cover: `min(1, 1 s band window / recordingInterval)` (2 s → 0.5, 10 s → 0.1); null when `recordingInterval` is null |
 | `reference` | string? | Reference if known (EDF label suffix such as `REF`/`LE`/`AVG`; `FPz` for Muse CSVs); omitted when unknown |
+| `prefiltering` | object? | EDF per-signal Prefiltering header, source label → text (e.g. `"HP:0.1Hz LP:75Hz N:50Hz"`), only signals that state one; omitted when none do. Mind Monitor CSVs have none (whether Mind Monitor's notch setting affects its recorded RAW is not documented) |
 | `lossy` | bool | Something was dropped, resampled or reduced to bands only |
 | `warnings` | string[] | Short human-readable loss reasons / skipped content |
 

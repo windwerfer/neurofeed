@@ -177,9 +177,21 @@ must contain a full Muse or Crown montage (extras dropped, else refused);
 EEG is resampled to 256 Hz in Rust (`import_dsp.rs`, `rubato`). Details:
 [export.md](export.md), [TODO/import-export.md](TODO/import-export.md).
 
+## EEG conditioning
+
+`analysis/eeg_filter.rs` (`EegConditioner`): per channel, every device, 0.5 Hz
+Butterworth high-pass + Q 30 notch at 50/100 or 60/120 Hz, mains
+auto-detected per connection as 50 / 60 / none (sticky; none → 50/60 allowed,
+50 ↔ 60 never). The forwarder records the RAW dto (`capture::on_dto`) and
+feeds quality rings, FFT, features, gesture blink bins, the guardrail window
+and the Dart sink with the conditioned signal (gesture eye level uses RAW).
+`api/eeg_conditioning.rs`: `live_eeg_conditioning()` (decisions for
+`device.conditioning`) and `condition_eeg()` for offline RAW (History charts,
+Inspect, import FFT bands). Contract: fileformat_v6 **EEG conditioning**.
+
 ## Signal quality + gate
 
-Pad quality 0–100: EEG std + `BandsDto.line_noise_ratio` (Dart UI dots) and
+Pad quality 0–100 on the conditioned EEG: std + `BandsDto.line_noise_ratio` (Dart UI dots) and
 the same formula in Rust for autodrop (`pad_quality_from_std_and_noise`).
 Neurosity: Rust is the single source (`features::resolve_neurosity_second`,
 `analysis/crown_quality.rs`). Each 1 Hz forwarder tick it resolves one score

@@ -207,7 +207,7 @@ Bands strip.
 |---|---|---|---|---|
 | Feedback list | `Biofeedback Protocols` | `FeedbackListView` | `feedback_list.dart` | |
 | Create program | `Create program` | `ProtocolBuilderView` | `protocol_builder.dart` | |
-| Protocol card | catch phrase (e.g. `Sleep-Edge Rest`) | `ProtocolDocument` | `feedback_list.dart` | Tap → session route. |
+| Protocol card | catch phrase (e.g. `Sleep-Edge Rest`) | `ProtocolDocument` | `feedback_list.dart` | Tap → session route. Catalog copy names the reward electrodes as `the target electrode pair (Muse AF7/AF8, Crown PO3/PO4)`. |
 | recordOnly | catalog copy | id `recordOnly` | `assets/protocols.json` | Skip-cal button. Agent smoke protocol. |
 
 ### Feedback session — `lib/src/views/feedback_session.dart`

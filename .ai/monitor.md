@@ -50,7 +50,7 @@ lib/src/monitor/
     sweep_buffer.dart         5 min EEG RAM + display ring
     band_cache.dart           1 Hz bands, 30 min cap
     recording_index.dart      (elapsedT, fileLength) at frame boundaries
-    file_backed_source.dart   Inspect beyond RAM (tmp / recording .raw)
+    file_backed_source.dart   Inspect beyond RAM (tmp / recording .raw), conditioned like live
     sweep_mean.dart
     optical_cache.dart       Pulse / SpO2 / IR PPG rings (HR+SpO2)
     stft_ring.dart            Follow STFT column ring (Inspect / electrodes / window = full)
