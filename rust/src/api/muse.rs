@@ -1,6 +1,6 @@
 use flutter_rust_bridge::frb;
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::api::device_config::DeviceKind;
+use crate::api::device_config::{DeviceKind, QualitySource};
 use crate::api::features::{self, FeatureDto};
 use crate::frb_generated::StreamSink;
 use muse_rs::prelude::*;
@@ -271,6 +271,17 @@ pub struct ReveDto {
     pub dim: u32,
 }
 
+/// Neurosity pad signal quality for one second — the single source for the
+/// UI pads, recording and the band-feature gate.
+#[frb(dart_metadata = ("freezed",))]
+pub struct PadQualityDto {
+    /// Per pad, 0–100 (usable >= 80).
+    pub values: Vec<f64>,
+    pub source: QualitySource,
+    /// Crown per-pad means (0..1) for this second when [source] is Crown.
+    pub crown: Option<Vec<f64>>,
+}
+
 /// All events streamed from the headset to the UI.
 #[frb(dart_metadata = ("freezed",))]
 pub enum MuseEventDto {
@@ -290,6 +301,7 @@ pub enum MuseEventDto {
     Gestures(GestureDto),
     Reve(ReveDto),
     Feature(FeatureDto),
+    PadQuality(PadQualityDto),
 }
 
 // ── Bridge API ─────────────────────────────────────────────────────────────────
@@ -533,13 +545,16 @@ pub fn get_status() -> ConnectionStatus {
 /// - `simulate`: if true, runs the built-in simulator instead of a headset
 /// - `record_aux`: Muse only — stream AUX inputs as electrodes 4.. (Classic:
 ///   AUX characteristic; Athena: keep electrodes 4..7). Off drops them.
+/// - `quality_source`: Neurosity only — pad quality from the Crown or the app.
 #[frb]
 pub async fn connect_with_options(
     device_id: String,
     kind: DeviceKind,
     simulate: bool,
     record_aux: bool,
+    quality_source: QualitySource,
 ) -> anyhow::Result<ConnectionStatus> {
+    features::set_quality_source(quality_source);
     {
         let old = state().inner.lock().unwrap().active.take();
         if let Some(old) = old {
@@ -1091,6 +1106,7 @@ fn spawn_event_forwarder() {
                     if last_metrics.elapsed() >= std::time::Duration::from_secs(1) {
                         let now_ms = now_ms();
                         last_metrics = tokio::time::Instant::now();
+                        emit_neurosity_pad_quality(&latest_bands, &quality_rings);
                         emit_enabled_band_features(now_ms, &latest_bands, &quality_rings);
 
                         let (bpm, confidence) = compute_pulse(&ppg_ir_buffer);
@@ -1590,6 +1606,32 @@ fn compute_peak_alpha(re: &[f64], im: &[f64], hz_per_bin: f64) -> (f64, f64) {
         / (2.0 * (2.0 * max_power - prev_power - next_power));
     let frequency = (max_bin as f64 + offset) * hz_per_bin;
     (frequency, max_power)
+}
+
+fn emit_neurosity_pad_quality(
+    latest_bands: &std::collections::HashMap<i32, features::ChannelBands>,
+    rings: &std::collections::HashMap<i32, features::EegRing>,
+) {
+    if !features::active_kind().is_some_and(|k| k.is_neurosity()) {
+        return;
+    }
+    let app: [Option<f64>; crate::analysis::crown_quality::CROWN_PADS] = std::array::from_fn(|pad| {
+        let el = pad as i32;
+        let noise = latest_bands.get(&el).map_or(-1.0, |b| b.line_noise_ratio);
+        rings.get(&el).and_then(|r| r.quality(noise))
+    });
+    let resolved = features::resolve_neurosity_second(&app);
+    let dto = MuseEventDto::PadQuality(PadQualityDto {
+        values: resolved.scores.iter().map(|q| q.unwrap_or(0.0)).collect(),
+        source: resolved.source,
+        crown: resolved.crown.map(|c| c.to_vec()),
+    });
+    let mut guard = state().inner.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(sink) = &guard.sink {
+        if sink.add(dto).is_err() {
+            guard.sink = None;
+        }
+    }
 }
 
 fn emit_enabled_band_features(

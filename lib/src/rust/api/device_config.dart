@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// Device configuration — electrode layout, target electrodes for ATR, gate electrodes, enabled features
 class DeviceConfig {
@@ -174,3 +174,9 @@ enum DeviceKind {
   Future<bool> isNeurosity() => RustLib.instance.api
       .crateApiDeviceConfigDeviceKindIsNeurosity(that: this);
 }
+
+/// Where Neurosity pad signal quality comes from. `Crown`: the headset's
+/// per-pad `/signalQuality` averaged per second, falling back to the in-app
+/// score for seconds without a complete in-range message. `App`: always the
+/// in-app score (raw std + line-noise penalty).
+enum QualitySource { crown, app }

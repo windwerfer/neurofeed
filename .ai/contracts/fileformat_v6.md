@@ -103,7 +103,7 @@ Written by `buildSessionMetadata()`:
 
 #### Computed 1 Hz (both kinds) — not metadata
 
-`ComputedFrame`: `t`, `bands` (N×5 abs), `lineNoise`, `signalQuality`, optional `pulse` / `movement` / `peakAlpha` / `spo2`, `gestures[]` (string ids that second).
+`ComputedFrame`: `t`, `bands` (N×5 abs), `lineNoise`, `signalQuality`, optional `pulse` / `movement` / `peakAlpha` / `spo2`, `gestures[]` (string ids that second); Crown only: `signalQualitySource`, optional `crownSignalQuality` (see Neurosity signal quality).
 
 **Band source (LOCKED):** every band value — raw `bands` records and computed `bands` / `lineNoise` — comes from the app's own 256-point FFT of 256 Hz raw EEG, for every device. Headset-supplied band powers (e.g. Crown `/brainwaves/*`) are never recorded or used. The one exception is an imported Mind Monitor CSV (`import.sourceFormat == "mind_monitor_csv"`) that carries band columns: its bands are Mind Monitor's, converted from Bels. Computed frames are exactly 1 Hz; `bands[e]` / `lineNoise[e]` are the **mean of every band update for electrode `e` within that second**; an electrode with no update repeats its previous value.
 
@@ -118,6 +118,13 @@ Written by `buildSessionMetadata()`:
 - **ADD:** `featurePercentile`, `warnOver`, `ceilingOver`, `clean`, `dirtyReason`
 
 Recordings: zeroed legacy `guardrail`/`feedback` keys may still be present for chart shape; **omit/null the NEW Trust extras** (never fake `percentile:0` / `clean:false`). Wire = camelCase JSONL (Dart `ComputedFrame.toJson`); Rust extract must accept those keys (serde rename).
+
+**Neurosity signal quality (LOCKED):** on Crown sessions one per-second source fills `signalQuality` and drives everything derived from it (live pads, quality annotations, `stats.quality`, the band-feature gate). Each frame names it:
+- `signalQualitySource`: `"crown"` | `"app"`.
+- `"crown"`: the Crown's own per-pad signal quality (Neurosity SignalQuality V2: 0..1 per pad, ≥ 0.75 adequate), mean of that second's messages. Used only when the second has at least one message with all 8 pads and every value within 0..1 is present; any out-of-range value makes the second missing. Mapped to 0–100 piecewise linear (0→0, 0.75→80, 1→100) so "adequate" is the usable threshold 80. `crownSignalQuality` (8 numbers, 0..1, `device.channelLabels` order) holds the per-pad means; they cannot be recomputed from RAW.
+- `"app"`: the app's score from raw std + line-noise penalty (same formula as Muse), used when the setting is `app` or the second has no valid Crown values. `crownSignalQuality` is omitted.
+- A single overall Crown quality value is never used. Muse frames omit both keys.
+- `feedback.sessionSettings.crownQualitySource` (`"crown"` | `"app"`) records the setting the Crown connection used; omitted for Muse.
 
 #### Sqlite (publish-time; not always in metadata JSON)
 
@@ -918,7 +925,7 @@ Notes on the example:
 | `metadataDescription` | string? | Human protocol blurb from catalog (`ProtocolDocument.metadataDescription`). |
 | `calibrationProfile` | string? | Optional profile id string; rarely set today — keep if writers populate it. |
 | `calibration` | object? | Nested calibration blob — **keep shape as-is** (`version`, `kind`=`single`\|`staged`, `calibrationId`, timing, `baseline` stats summary, `phases[]`, `recalibrations[]`, …). **ADD (LOCKED):** `baselineSamples: number[]` — raw native reward samples used by `percentileOf` after initial calibration (~50 doubles). Each `recalibrations[]` entry may include `baselineSamples` alongside existing `atSecs` + `baseline` stats when present. |
-| `sessionSettings` | object | **Locked engine home.** Training knobs at save: adaptivity, baseline percentile, guardrail on/off + `guardFeature` / `guardModel` / `guardrailEngine`, warning sound, music/binaural knobs, marker flags. Optional nested `modelSnapshot` `{engine, weightsSha256?, configJson?, repoRevision?, loadedAt}`. **ADD (LOCKED):** optional `inhibitCeilingOverrides?: { "beta"?: number, "delta"?: number }` — Settings slider overlays (Map may have only set keys). No parallel `feedback.engine` / flat `modelKind` / `modelSha256` / `feedbackEngine`. |
+| `sessionSettings` | object | **Locked engine home.** Training knobs at save: adaptivity, baseline percentile, guardrail on/off + `guardFeature` / `guardModel` / `guardrailEngine`, warning sound, music/binaural knobs, marker flags. Optional nested `modelSnapshot` `{engine, weightsSha256?, configJson?, repoRevision?, loadedAt}`. **ADD (LOCKED):** optional `inhibitCeilingOverrides?: { "beta"?: number, "delta"?: number }` — Settings slider overlays (Map may have only set keys). **ADD (LOCKED):** optional `crownQualitySource?: "crown" | "app"` — Crown pad quality source (see Neurosity signal quality); omitted for Muse. No parallel `feedback.engine` / flat `modelKind` / `modelSha256` / `feedbackEngine`. |
 | ~~`drowsiness`~~ | — | **Forbidden as a nest.** Fold scalars into `feedback.outcomeScalars` (`guardWarnPct`, `avgSleepDir`, `guardThreshold`). Protocol id is `feedback.protocol`, not a key name. |
 | `music` | object? | Playback summary — **keep shape as-is** (`trackCount`, cutoff min/max, `invert`, `shuffle`, `tracks[]` `{at,name}`, `series[]` `{at,hz}`). |
 | `audioEvents` | array? | Sparse one-shot play log: `[{ "onset": number, "type": string }]`. Locked types: `reward_chime` \| `guard_chime`. `onset` = seconds from capture start (same clock as computed `t` / annotations). Omit array or empty when none fired. Records **actual** play times (product constants today: reward hold 2.5s + 8s cooldown via `FeedbackAudioController`; guard warning chime 20s cooldown) so History does not reconstruct from constants. Continuous musicFilter / rain / binaural do **not** emit per-second audio events. **Forbidden** in root `annotations[]`. |
@@ -1171,7 +1178,7 @@ Full example + migrated-away table: **Feedback extension — LOCKED** above. Do 
 | `calibration` (+ optional `calibrationProfile`) | Nested calibration blob |
 | ~~`drowsiness`~~ → `outcomeScalars.guardWarnPct` / `avgSleepDir` / `guardThreshold` | Folded; no protocol-named nest |
 | `music` | Tracks / cutoff series |
-| `sessionSettings` | Incl. `guardFeature` / `guardModel` / `guardrailEngine`, markers flags, music/binaural knobs; optional `modelSnapshot`; **`inhibitCeilingOverrides?`** (`beta`/`delta` slider overlays) |
+| `sessionSettings` | Incl. `guardFeature` / `guardModel` / `guardrailEngine`, markers flags, music/binaural knobs; optional `modelSnapshot`; **`inhibitCeilingOverrides?`** (`beta`/`delta` slider overlays); **`crownQualitySource?`** (Crown only) |
 | `calibration.baselineSamples` (+ per-recal) | Raw native reward samples for `percentileOf` (~50 doubles); keep `baseline` stats summary |
 | `audioEvents[]` `{onset,type}` | Sparse one-shot play log (`reward_chime`\|`guard_chime`); not annotations |
 | `outcomeScalars.pctInTarget` (← `targetPct` / `pctInTarget`) | Feedback-only reward outcome |

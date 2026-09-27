@@ -754,6 +754,8 @@ fn wire__crate__api__muse__connect_with_options_impl(
             let api_kind = <crate::api::device_config::DeviceKind>::sse_decode(&mut deserializer);
             let api_simulate = <bool>::sse_decode(&mut deserializer);
             let api_record_aux = <bool>::sse_decode(&mut deserializer);
+            let api_quality_source =
+                <crate::api::device_config::QualitySource>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
@@ -763,6 +765,7 @@ fn wire__crate__api__muse__connect_with_options_impl(
                             api_kind,
                             api_simulate,
                             api_record_aux,
+                            api_quality_source,
                         )
                         .await?;
                         Ok(output_ok)
@@ -2719,6 +2722,8 @@ impl SseDecode for crate::api::session_format::ComputedFrame {
             <crate::api::session_format::GuardrailInfo>::sse_decode(deserializer);
         let mut var_feedback = <crate::api::session_format::FeedbackInfo>::sse_decode(deserializer);
         let mut var_gestures = <Vec<String>>::sse_decode(deserializer);
+        let mut var_signalQualitySource = <Option<String>>::sse_decode(deserializer);
+        let mut var_crownSignalQuality = <Option<Vec<f32>>>::sse_decode(deserializer);
         return crate::api::session_format::ComputedFrame {
             t: var_t,
             bands: var_bands,
@@ -2731,6 +2736,8 @@ impl SseDecode for crate::api::session_format::ComputedFrame {
             guardrail: var_guardrail,
             feedback: var_feedback,
             gestures: var_gestures,
+            signal_quality_source: var_signalQualitySource,
+            crown_signal_quality: var_crownSignalQuality,
         };
     }
 }
@@ -3553,6 +3560,10 @@ impl SseDecode for crate::api::muse::MuseEventDto {
                 let mut var_field0 = <crate::api::features::FeatureDto>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::Feature(var_field0);
             }
+            16 => {
+                let mut var_field0 = <crate::api::muse::PadQualityDto>::sse_decode(deserializer);
+                return crate::api::muse::MuseEventDto::PadQuality(var_field0);
+            }
             _ => {
                 unimplemented!("");
             }
@@ -3652,6 +3663,42 @@ impl SseDecode for Option<Vec<String>> {
     }
 }
 
+impl SseDecode for Option<Vec<f32>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<Vec<f32>>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<Vec<f64>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<Vec<f64>>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for crate::api::muse::PadQualityDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_values = <Vec<f64>>::sse_decode(deserializer);
+        let mut var_source = <crate::api::device_config::QualitySource>::sse_decode(deserializer);
+        let mut var_crown = <Option<Vec<f64>>>::sse_decode(deserializer);
+        return crate::api::muse::PadQualityDto {
+            values: var_values,
+            source: var_source,
+            crown: var_crown,
+        };
+    }
+}
+
 impl SseDecode for crate::api::session_format::ParsedHead {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3747,6 +3794,18 @@ impl SseDecode for crate::api::session_format::PulseRecord {
             timestamp: var_timestamp,
             bpm: var_bpm,
             confidence: var_confidence,
+        };
+    }
+}
+
+impl SseDecode for crate::api::device_config::QualitySource {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::device_config::QualitySource::Crown,
+            1 => crate::api::device_config::QualitySource::App,
+            _ => unreachable!("Invalid variant for QualitySource: {}", inner),
         };
     }
 }
@@ -4244,6 +4303,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::session_format::ComputedFrame
             self.guardrail.into_into_dart().into_dart(),
             self.feedback.into_into_dart().into_dart(),
             self.gestures.into_into_dart().into_dart(),
+            self.signal_quality_source.into_into_dart().into_dart(),
+            self.crown_signal_quality.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4841,6 +4902,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::muse::MuseEventDto {
             crate::api::muse::MuseEventDto::Feature(field0) => {
                 [15.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
+            crate::api::muse::MuseEventDto::PadQuality(field0) => {
+                [16.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
             _ => {
                 unimplemented!("");
             }
@@ -4855,6 +4919,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::MuseEventDto>
     for crate::api::muse::MuseEventDto
 {
     fn into_into_dart(self) -> crate::api::muse::MuseEventDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::muse::PadQualityDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.values.into_into_dart().into_dart(),
+            self.source.into_into_dart().into_dart(),
+            self.crown.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::muse::PadQualityDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::PadQualityDto>
+    for crate::api::muse::PadQualityDto
+{
+    fn into_into_dart(self) -> crate::api::muse::PadQualityDto {
         self
     }
 }
@@ -4999,6 +5085,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::session_format::PulseRecord>
     for crate::api::session_format::PulseRecord
 {
     fn into_into_dart(self) -> crate::api::session_format::PulseRecord {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::device_config::QualitySource {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Crown => 0.into_dart(),
+            Self::App => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::device_config::QualitySource
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::device_config::QualitySource>
+    for crate::api::device_config::QualitySource
+{
+    fn into_into_dart(self) -> crate::api::device_config::QualitySource {
         self
     }
 }
@@ -5223,6 +5330,8 @@ impl SseEncode for crate::api::session_format::ComputedFrame {
         <crate::api::session_format::GuardrailInfo>::sse_encode(self.guardrail, serializer);
         <crate::api::session_format::FeedbackInfo>::sse_encode(self.feedback, serializer);
         <Vec<String>>::sse_encode(self.gestures, serializer);
+        <Option<String>>::sse_encode(self.signal_quality_source, serializer);
+        <Option<Vec<f32>>>::sse_encode(self.crown_signal_quality, serializer);
     }
 }
 
@@ -5836,6 +5945,10 @@ impl SseEncode for crate::api::muse::MuseEventDto {
                 <i32>::sse_encode(15, serializer);
                 <crate::api::features::FeatureDto>::sse_encode(field0, serializer);
             }
+            crate::api::muse::MuseEventDto::PadQuality(field0) => {
+                <i32>::sse_encode(16, serializer);
+                <crate::api::muse::PadQualityDto>::sse_encode(field0, serializer);
+            }
             _ => {
                 unimplemented!("");
             }
@@ -5923,6 +6036,35 @@ impl SseEncode for Option<Vec<String>> {
     }
 }
 
+impl SseEncode for Option<Vec<f32>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <Vec<f32>>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<Vec<f64>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <Vec<f64>>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for crate::api::muse::PadQualityDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<f64>>::sse_encode(self.values, serializer);
+        <crate::api::device_config::QualitySource>::sse_encode(self.source, serializer);
+        <Option<Vec<f64>>>::sse_encode(self.crown, serializer);
+    }
+}
+
 impl SseEncode for crate::api::session_format::ParsedHead {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5983,6 +6125,22 @@ impl SseEncode for crate::api::session_format::PulseRecord {
         <f64>::sse_encode(self.timestamp, serializer);
         <f64>::sse_encode(self.bpm, serializer);
         <f64>::sse_encode(self.confidence, serializer);
+    }
+}
+
+impl SseEncode for crate::api::device_config::QualitySource {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::device_config::QualitySource::Crown => 0,
+                crate::api::device_config::QualitySource::App => 1,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 

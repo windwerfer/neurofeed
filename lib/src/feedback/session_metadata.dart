@@ -472,6 +472,7 @@ class SessionSettings {
     this.guardFeature,
     this.guardModel,
     this.inhibitCeilingOverrides,
+    this.crownQualitySource,
   });
 
   final bool dynamicAdapt;
@@ -506,6 +507,9 @@ class SessionSettings {
   /// Settings slider overlays (`beta` / `delta`); omit when empty.
   final Map<String, double>? inhibitCeilingOverrides;
 
+  /// Neurosity only: `crown` | `app` — pad quality source used this session.
+  final String? crownQualitySource;
+
   Map<String, Object?> toJson() => {
     'dynamicAdapt': dynamicAdapt,
     'responsiveness': responsiveness,
@@ -532,6 +536,7 @@ class SessionSettings {
     if (guardModel != null) 'guardModel': guardModel,
     if (inhibitCeilingOverrides != null && inhibitCeilingOverrides!.isNotEmpty)
       'inhibitCeilingOverrides': inhibitCeilingOverrides,
+    if (crownQualitySource != null) 'crownQualitySource': crownQualitySource,
   };
 
   static SessionSettings? fromJson(Object? json) {
@@ -578,6 +583,7 @@ class SessionSettings {
         }
         return out.isEmpty ? null : out;
       }(),
+      crownQualitySource: json['crownQualitySource'] as String?,
     );
   }
 }

@@ -182,6 +182,7 @@ Sidebar **History** (`AppView.feedbackHistory`). One sqlite list; no
 | Import summary | `Import recording?` / `Import with losses?` · `Kept` · `Lost or changed` · `Cancel` / `Import` | `_confirmImport` | `feedback_history.dart` | Shown before every import is saved; lost list = `import.warnings`. |
 | Folder-change dialog | `Move {s} session(s) and {r} recording(s) into the new folder? Choosing No leaves them in the current folder.` | `folderChangeMoveBody` | `settings_view.dart` | Counts both prefixes. |
 | Record AUX channels | `Record AUX channels` | `Settings.recordAux` / `_RecordingCard` | `settings_view.dart` | Session recording card. Default off. Muse AUX inputs → `AUX1`…`AUX4` (Classic AUX1; Athena AUX1–AUX4). Applies on next connect (`connectWithOptions(recordAux:)`). |
+| Crown quality source | `Crown` card: `Crown` / `App` radios | `Settings.crownQualitySource` / `_CrownCard` | `settings_view.dart` | Card below Session recording. Default `Crown` (Crown per-pad quality averaged per second, app score for seconds without it); `App` = app score only. Pref `crown_quality_source`. Applies on next connect (`connectWithOptions(qualitySource:)`). |
 
 ### Recording dashboard — `lib/src/monitor/views/recording_dashboard.dart`
 

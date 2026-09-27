@@ -104,6 +104,10 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       StreamController<MuseEventDto>.broadcast();
   double _lastQualityCheck = 0;
 
+  /// Rust sends resolved Neurosity pad quality ([MuseEventDto_PadQuality]);
+  /// while it does, the Dart score below is not computed.
+  bool _rustPadQuality = false;
+
   /// Lost-link and launch auto-reconnect. Cleared by a user disconnect
   /// (status bar / agent) until the next [connectTo].
   bool get allowAutoReconnect => _allowAutoReconnect;
@@ -439,6 +443,14 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         if (idx >= 0 && idx < _lineNoise.length) {
           _lineNoise[idx] = event.field0.lineNoiseRatio;
         }
+      case MuseEventDto_PadQuality():
+        _rustPadQuality = true;
+        final q = event.field0;
+        state = state.copyWith(
+          signalQuality: q.values.toList(),
+          signalQualitySource: q.source,
+          crownSignalQuality: q.crown?.toList(),
+        );
       case MuseEventDto_Gestures():
         state = state.copyWith(gestures: event.field0);
       case MuseEventDto_Telemetry():
@@ -461,6 +473,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     _lineNoise.fillRange(0, _lineNoise.length, -1);
     _padQuality.clear();
     _lastQualityCheck = 0;
+    _rustPadQuality = false;
     const idle = ConnectionStatus(
       connected: false,
       name: '',
@@ -478,6 +491,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         status: idle,
         batteryLevel: 0,
         signalQuality: null,
+        signalQualitySource: null,
+        crownSignalQuality: null,
         gestures: null,
         telemetry: telemetry,
         connectWindowOpen: false,
@@ -493,6 +508,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       status: idle,
       batteryLevel: 0,
       signalQuality: null,
+      signalQualitySource: null,
+      crownSignalQuality: null,
       gestures: null,
       telemetry: telemetry,
       connectWindowOpen: true,
@@ -505,9 +522,10 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     unawaited(_tryReconnect());
   }
 
-  /// Keep in sync with Rust `features::pad_quality_from_std_and_noise` until
-  /// the Crown-run series deletes this Dart copy.
+  /// Muse pad quality. Keep in sync with Rust
+  /// `features::pad_quality_from_std_and_noise`, which also scores Neurosity.
   void _maybeComputeSignalQuality() {
+    if (_rustPadQuality) return;
     final now = _padQuality.latestTimestamp;
     if (now - _lastQualityCheck < 0.9) return;
     _lastQualityCheck = now;
@@ -583,11 +601,14 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       );
       state = state.copyWith(scanMessage: 'Connecting… (attempt $attempt)');
       try {
+        _rustPadQuality = false;
+        final qualitySource = _settings.crownQualitySource;
         final status = await connectWithOptions(
           deviceId: id,
           kind: kind,
           simulate: simulate,
           recordAux: _settings.recordAux,
+          qualitySource: qualitySource,
         );
         debugPrint('[neurofeed] connect returned: connected=${status.connected}');
         if (persist) await _settings.setLastDevice(id, kind);
@@ -595,6 +616,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           status: status,
           connectingTo: null,
           lastConnectedKind: kind,
+          crownQualitySource: kind == DeviceKind.neurosity ? qualitySource : null,
           scanMessage: status.connected ? null : state.scanMessage,
         );
         _syncMulticastLock();
@@ -837,12 +859,15 @@ class AppUiState {
     required this.batteryLevel,
     required this.telemetry,
     this.signalQuality,
+    this.signalQualitySource,
+    this.crownSignalQuality,
     this.gestures,
     this.scanMessage,
     this.connectingTo,
     this.disconnecting = false,
     this.connectSource = ConnectSource.muse,
     this.lastConnectedKind,
+    this.crownQualitySource,
   });
 
   final ConnectionStatus status;
@@ -854,6 +879,12 @@ class AppUiState {
   final double batteryLevel;
   final TelemetrySnapshot telemetry;
   final List<double>? signalQuality;
+
+  /// Neurosity only: which score filled [signalQuality] this second.
+  final QualitySource? signalQualitySource;
+
+  /// Neurosity only: Crown per-pad 1 Hz means (0..1) when the source is Crown.
+  final List<double>? crownSignalQuality;
 
   /// Latest 1 Hz gesture report (blinks / clench / eye position).
   final GestureDto? gestures;
@@ -873,6 +904,10 @@ class AppUiState {
   /// Null when no device has been connected.
   DeviceKind? get listingDeviceKind => lastConnectedKind;
 
+  /// Pad quality source the last Neurosity connect used ([lastConnectedKind]
+  /// Neurosity). Null after a Muse connect or before any connect.
+  final QualitySource? crownQualitySource;
+
   static const _sentinel = Object();
 
   AppUiState copyWith({
@@ -885,12 +920,15 @@ class AppUiState {
     double? batteryLevel,
     TelemetrySnapshot? telemetry,
     Object? signalQuality = _sentinel,
+    Object? signalQualitySource = _sentinel,
+    Object? crownSignalQuality = _sentinel,
     Object? gestures = _sentinel,
     Object? scanMessage = _sentinel,
     Object? connectingTo = _sentinel,
     bool? disconnecting,
     ConnectSource? connectSource,
     Object? lastConnectedKind = _sentinel,
+    Object? crownQualitySource = _sentinel,
   }) => AppUiState(
     status: status ?? this.status,
     currentView: currentView ?? this.currentView,
@@ -903,6 +941,12 @@ class AppUiState {
     signalQuality: identical(signalQuality, _sentinel)
         ? this.signalQuality
         : signalQuality as List<double>?,
+    signalQualitySource: identical(signalQualitySource, _sentinel)
+        ? this.signalQualitySource
+        : signalQualitySource as QualitySource?,
+    crownSignalQuality: identical(crownSignalQuality, _sentinel)
+        ? this.crownSignalQuality
+        : crownSignalQuality as List<double>?,
     gestures: identical(gestures, _sentinel)
         ? this.gestures
         : gestures as GestureDto?,
@@ -919,6 +963,9 @@ class AppUiState {
     lastConnectedKind: identical(lastConnectedKind, _sentinel)
         ? this.lastConnectedKind
         : lastConnectedKind as DeviceKind?,
+    crownQualitySource: identical(crownQualitySource, _sentinel)
+        ? this.crownQualitySource
+        : crownQualitySource as QualitySource?,
   );
 }
 

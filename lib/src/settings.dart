@@ -153,6 +153,7 @@ class Settings extends ChangeNotifier {
   static const String _sessionFolderKey = 'session_folder';
   static const String _recordStreamsKey = 'record_streams';
   static const String _recordAuxKey = 'record_aux_channels';
+  static const String _crownQualitySourceKey = 'crown_quality_source';
   static const String _eyeMarkersKey = 'gesture_eye_markers';
   static const String _markersInFeedbackKey = 'gesture_markers_in_feedback';
   static const String _trustRewardVisibleKey = 'trust_reward_visible';
@@ -530,6 +531,18 @@ class Settings extends ChangeNotifier {
 
   Future<void> setRecordAux(bool value) async {
     await _prefs.setBool(_recordAuxKey, value);
+    notifyListeners();
+  }
+
+  /// Where Neurosity pad signal quality comes from (UI pads, recording and
+  /// the feature gate). Default [QualitySource.crown]. Applies on connect.
+  QualitySource get crownQualitySource =>
+      _prefs.getString(_crownQualitySourceKey) == QualitySource.app.name
+          ? QualitySource.app
+          : QualitySource.crown;
+
+  Future<void> setCrownQualitySource(QualitySource value) async {
+    await _prefs.setString(_crownQualitySourceKey, value.name);
     notifyListeners();
   }
 

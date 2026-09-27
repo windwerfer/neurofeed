@@ -7,6 +7,7 @@ import 'package:neurofeed/src/connection_provider.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/reve/reve_card.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/views/about_view.dart';
 import 'package:neurofeed/src/views/music_settings_panel.dart';
@@ -194,6 +195,18 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
             recordAux: settings.recordAux,
             onRecordAux: (on) async {
               await settings.setRecordAux(on);
+              if (mounted) {
+                setState(() {});
+              }
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+        RepaintBoundary(
+          child: _CrownCard(
+            qualitySource: settings.crownQualitySource,
+            onQualitySource: (source) async {
+              await settings.setCrownQualitySource(source);
               if (mounted) {
                 setState(() {});
               }
@@ -657,6 +670,78 @@ class _DebugCard extends ConsumerWidget {
                 await settings.setEnableSimulatedDevices(on);
                 ref.read(appStateProvider.notifier).onDebugModeChanged(on);
               },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Neurosity Crown options.
+class _CrownCard extends StatelessWidget {
+  const _CrownCard({required this.qualitySource, required this.onQualitySource});
+
+  final QualitySource qualitySource;
+  final void Function(QualitySource source) onQualitySource;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.wifi, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 8),
+                Text('Crown', style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Signal quality source for the pad dots, recordings and which '
+              'pads feed the training features. Applies on the next connect.',
+              style: muted,
+            ),
+            const Divider(height: 24),
+            RadioGroup<QualitySource>(
+              groupValue: qualitySource,
+              onChanged: (v) {
+                if (v != null) onQualitySource(v);
+              },
+              child: Column(
+                children: [
+                  RadioListTile<QualitySource>(
+                    key: const Key('crown_quality_source_crown'),
+                    contentPadding: EdgeInsets.zero,
+                    value: QualitySource.crown,
+                    title: const Text('Crown'),
+                    subtitle: Text(
+                      "The Crown's own per-pad signal quality, averaged each "
+                      'second. Seconds without it use the app score.',
+                      style: muted,
+                    ),
+                  ),
+                  RadioListTile<QualitySource>(
+                    key: const Key('crown_quality_source_app'),
+                    contentPadding: EdgeInsets.zero,
+                    value: QualitySource.app,
+                    title: const Text('App'),
+                    subtitle: Text(
+                      "NeuroFeed's own score from the raw signal (same as Muse).",
+                      style: muted,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

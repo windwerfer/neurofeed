@@ -173,7 +173,8 @@ pub fn encode_session_event(event: &MuseEventDto) -> Vec<u8> {
         | MuseEventDto::Control(_)
         | MuseEventDto::Gestures(_)
         | MuseEventDto::Reve(_)
-        | MuseEventDto::Feature(_) => {}
+        | MuseEventDto::Feature(_)
+        | MuseEventDto::PadQuality(_) => {}
     }
     out
 }
@@ -540,6 +541,12 @@ pub struct ComputedFrame {
     pub feedback: FeedbackInfo,
     /// Gestures detected in this second.
     pub gestures: Vec<String>,
+    /// Neurosity only: `crown` | `app` — which score filled [signal_quality].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signal_quality_source: Option<String>,
+    /// Neurosity only: Crown per-pad 1 Hz means (0..1) when the source is `crown`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crown_signal_quality: Option<Vec<f32>>,
 }
 
 /// Peak alpha frequency and power.
@@ -1620,6 +1627,8 @@ mod tests {
                                     ..Default::default()
                 },
                 gestures: vec!["blink".to_string()],
+                signal_quality_source: None,
+                crown_signal_quality: None,
             },
             ComputedFrame {
                 t: 1.0,
@@ -1648,6 +1657,8 @@ mod tests {
                                     ..Default::default()
                 },
                 gestures: vec![],
+                signal_quality_source: None,
+                crown_signal_quality: None,
             },
         ];
         let raw = b"raw body data";
@@ -1750,6 +1761,8 @@ mod tests {
                                 ..Default::default()
                 },
             gestures: vec!["blink".to_string(), "clench".to_string()],
+            signal_quality_source: None,
+            crown_signal_quality: None,
         };
 
         let json = frame.to_json_bytes();
@@ -1829,6 +1842,8 @@ mod tests {
                                 ..Default::default()
                 },
             gestures: vec![],
+            signal_quality_source: None,
+            crown_signal_quality: None,
         };
         let json = String::from_utf8(frame.to_json_bytes()).unwrap();
         assert!(json.contains("\"lineNoise\""), "{json}");

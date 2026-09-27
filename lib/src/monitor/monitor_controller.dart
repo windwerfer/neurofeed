@@ -514,13 +514,18 @@ class MonitorController extends Notifier<MonitorState> {
         _latestEegTsMs = event.field0.timestamp.round();
         sweepBuffer.append(event.field0);
       case MuseEventDto_Bands():
-        final quality = ref.read(appStateProvider).signalQuality;
+        final app = ref.read(appStateProvider);
+        final quality = app.signalQuality;
         bandCache.appendBands(event.field0, signalQuality: quality);
         _sampler?.updateBands(event.field0.electrode, event.field0);
         final e = event.field0.electrode;
         if (quality != null && e >= 0 && e < quality.length) {
           _sampler?.updateSignalQuality(e, quality[e].round());
         }
+        _sampler?.updateSignalQualitySource(
+          app.signalQualitySource,
+          app.crownSignalQuality,
+        );
       case MuseEventDto_Pulse():
         opticalCache.appendPulse(event.field0);
         _sampler?.updatePulse(event.field0);

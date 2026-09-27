@@ -513,12 +513,10 @@ impl CrownStream {
 
     fn on_signal_quality(&mut self, args: &[OscType]) {
         match SignalQuality::parse(args) {
-            SignalQuality::PerChannel(values) => {
-                for (ch, q) in values.iter().enumerate() {
-                    features::set_crown_quality(ch, *q);
-                }
+            SignalQuality::PerChannel(values) => features::add_crown_quality(&values),
+            SignalQuality::Overall(q) => {
+                log::trace!("[crown_osc] overall signalQuality {q} (not used for pads)")
             }
-            SignalQuality::Overall(q) => log::trace!("[crown_osc] overall signalQuality {q}"),
             SignalQuality::Unexpected(n) => self
                 .quality_warn
                 .warn(|| format!("unexpected signalQuality float count {n}")),
@@ -907,6 +905,7 @@ mod tests {
 #[cfg(test)]
 mod sim_loopback_tests {
     use super::*;
+    use crate::api::device_config::QualitySource;
     use std::process::{Child, Command};
 
     const ID: &str = "local7cca794fb5f4675a69371e949b2";
@@ -988,7 +987,6 @@ mod sim_loopback_tests {
             "--bad-pads",
             "3",
             "--quality",
-            "channels",
         ]);
         let _decoy = sim(&[
             "--duration",
@@ -997,7 +995,6 @@ mod sim_loopback_tests {
             &decoy_id,
             "--noise",
             "--quality",
-            "channels",
         ]);
         let (handle, status, mut rx) = connect(1.5).await;
         let crowns = discovered_crowns();
@@ -1039,8 +1036,13 @@ mod sim_loopback_tests {
             }
         }
         assert!(got.batches.iter().all(|(_, n)| *n == EEG_BATCH_SAMPLES));
-        assert_eq!(features::crown_quality(3), Some(0.0));
-        assert_eq!(features::crown_quality(0), Some(100.0));
+        features::set_quality_source(QualitySource::Crown);
+        let second = features::resolve_neurosity_second(&[Some(50.0); CROWN_CHANNELS]);
+        println!("crown quality second: {:?}", second.crown);
+        assert_eq!(second.source, QualitySource::Crown);
+        let crown = second.crown.expect("per-pad Crown quality");
+        assert!(crown[3] < 0.3 && crown[0] > 0.75);
+        assert!(second.scores[3].unwrap() < 80.0 && second.scores[0].unwrap() >= 80.0);
         drop(handle);
         stop_crown_discovery();
     }
@@ -1089,6 +1091,23 @@ mod sim_loopback_tests {
         assert!(got.samples[5].iter().all(|v| *v == 0.0));
         drop(handle);
         stop_crown_discovery();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn crown_osc_sim_overall_quality_falls_back_to_app() {
+        let _main = sim(&["--duration", "3", "--quality-overall"]);
+        let (handle, _status, mut rx) = connect(0.2).await;
+        let got = collect(&mut rx, 2.0).await;
+        assert!(got.samples[0].len() > 400);
+        features::set_quality_source(QualitySource::Crown);
+        let app = [Some(42.0); CROWN_CHANNELS];
+        let second = features::resolve_neurosity_second(&app);
+        println!("overall-only: source={:?} scores={:?}", second.source, second.scores);
+        assert_eq!(second.source, QualitySource::App);
+        assert_eq!(second.crown, None);
+        assert_eq!(second.scores, app);
+        drop(handle);
     }
 
     #[tokio::test(flavor = "multi_thread")]

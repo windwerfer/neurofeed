@@ -37,6 +37,10 @@ ffi.ComputedFrame toFfiFrame(dart.ComputedFrame frame) {
       pct: frame.feedback.pct,
     ),
     gestures: frame.gestures,
+    signalQualitySource: frame.signalQualitySource,
+    crownSignalQuality: frame.crownSignalQuality == null
+        ? null
+        : Float32List.fromList(frame.crownSignalQuality!),
   );
 }
 

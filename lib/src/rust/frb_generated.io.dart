@@ -93,6 +93,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MuseEventDto dco_decode_box_autoadd_muse_event_dto(dynamic raw);
 
   @protected
+  PadQualityDto dco_decode_box_autoadd_pad_quality_dto(dynamic raw);
+
+  @protected
   PeakAlphaDto dco_decode_box_autoadd_peak_alpha_dto(dynamic raw);
 
   @protected
@@ -312,6 +315,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String>? dco_decode_opt_list_String(dynamic raw);
 
   @protected
+  Float32List? dco_decode_opt_list_prim_f_32_strict(dynamic raw);
+
+  @protected
+  Float64List? dco_decode_opt_list_prim_f_64_strict(dynamic raw);
+
+  @protected
+  PadQualityDto dco_decode_pad_quality_dto(dynamic raw);
+
+  @protected
   ParsedHead dco_decode_parsed_head(dynamic raw);
 
   @protected
@@ -331,6 +343,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PulseRecord dco_decode_pulse_record(dynamic raw);
+
+  @protected
+  QualitySource dco_decode_quality_source(dynamic raw);
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
@@ -448,6 +463,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MuseEventDto sse_decode_box_autoadd_muse_event_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PadQualityDto sse_decode_box_autoadd_pad_quality_dto(
     SseDeserializer deserializer,
   );
 
@@ -705,6 +725,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
+  Float32List? sse_decode_opt_list_prim_f_32_strict(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  Float64List? sse_decode_opt_list_prim_f_64_strict(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PadQualityDto sse_decode_pad_quality_dto(SseDeserializer deserializer);
+
+  @protected
   ParsedHead sse_decode_parsed_head(SseDeserializer deserializer);
 
   @protected
@@ -724,6 +757,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PulseRecord sse_decode_pulse_record(SseDeserializer deserializer);
+
+  @protected
+  QualitySource sse_decode_quality_source(SseDeserializer deserializer);
 
   @protected
   (String, String) sse_decode_record_string_string(
@@ -868,6 +904,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_muse_event_dto(
     MuseEventDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_pad_quality_dto(
+    PadQualityDto self,
     SseSerializer serializer,
   );
 
@@ -1211,6 +1253,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_list_prim_f_32_strict(
+    Float32List? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_list_prim_f_64_strict(
+    Float64List? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_pad_quality_dto(PadQualityDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_parsed_head(ParsedHead self, SseSerializer serializer);
 
   @protected
@@ -1233,6 +1290,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_pulse_record(PulseRecord self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_quality_source(QualitySource self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_string_string(

@@ -303,6 +303,8 @@ mixin _$ComputedFrame {
   GuardrailInfo get guardrail => throw _privateConstructorUsedError;
   FeedbackInfo get feedback => throw _privateConstructorUsedError;
   List<String> get gestures => throw _privateConstructorUsedError;
+  String? get signalQualitySource => throw _privateConstructorUsedError;
+  Float32List? get crownSignalQuality => throw _privateConstructorUsedError;
 
   /// Create a copy of ComputedFrame
   /// with the given fields replaced by the non-null parameter values.
@@ -330,6 +332,8 @@ abstract class $ComputedFrameCopyWith<$Res> {
     GuardrailInfo guardrail,
     FeedbackInfo feedback,
     List<String> gestures,
+    String? signalQualitySource,
+    Float32List? crownSignalQuality,
   });
 
   $PeakAlphaInfoCopyWith<$Res>? get peakAlpha;
@@ -363,6 +367,8 @@ class _$ComputedFrameCopyWithImpl<$Res, $Val extends ComputedFrame>
     Object? guardrail = null,
     Object? feedback = null,
     Object? gestures = null,
+    Object? signalQualitySource = freezed,
+    Object? crownSignalQuality = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -410,6 +416,14 @@ class _$ComputedFrameCopyWithImpl<$Res, $Val extends ComputedFrame>
                 ? _value.gestures
                 : gestures // ignore: cast_nullable_to_non_nullable
                       as List<String>,
+            signalQualitySource: freezed == signalQualitySource
+                ? _value.signalQualitySource
+                : signalQualitySource // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            crownSignalQuality: freezed == crownSignalQuality
+                ? _value.crownSignalQuality
+                : crownSignalQuality // ignore: cast_nullable_to_non_nullable
+                      as Float32List?,
           )
           as $Val,
     );
@@ -471,6 +485,8 @@ abstract class _$$ComputedFrameImplCopyWith<$Res>
     GuardrailInfo guardrail,
     FeedbackInfo feedback,
     List<String> gestures,
+    String? signalQualitySource,
+    Float32List? crownSignalQuality,
   });
 
   @override
@@ -506,6 +522,8 @@ class __$$ComputedFrameImplCopyWithImpl<$Res>
     Object? guardrail = null,
     Object? feedback = null,
     Object? gestures = null,
+    Object? signalQualitySource = freezed,
+    Object? crownSignalQuality = freezed,
   }) {
     return _then(
       _$ComputedFrameImpl(
@@ -553,6 +571,14 @@ class __$$ComputedFrameImplCopyWithImpl<$Res>
             ? _value._gestures
             : gestures // ignore: cast_nullable_to_non_nullable
                   as List<String>,
+        signalQualitySource: freezed == signalQualitySource
+            ? _value.signalQualitySource
+            : signalQualitySource // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        crownSignalQuality: freezed == crownSignalQuality
+            ? _value.crownSignalQuality
+            : crownSignalQuality // ignore: cast_nullable_to_non_nullable
+                  as Float32List?,
       ),
     );
   }
@@ -573,6 +599,8 @@ class _$ComputedFrameImpl extends _ComputedFrame {
     required this.guardrail,
     required this.feedback,
     required final List<String> gestures,
+    this.signalQualitySource,
+    this.crownSignalQuality,
   }) : _bands = bands,
        _gestures = gestures,
        super._();
@@ -612,8 +640,13 @@ class _$ComputedFrameImpl extends _ComputedFrame {
   }
 
   @override
+  final String? signalQualitySource;
+  @override
+  final Float32List? crownSignalQuality;
+
+  @override
   String toString() {
-    return 'ComputedFrame(t: $t, bands: $bands, pulse: $pulse, movement: $movement, peakAlpha: $peakAlpha, spo2: $spo2, lineNoise: $lineNoise, signalQuality: $signalQuality, guardrail: $guardrail, feedback: $feedback, gestures: $gestures)';
+    return 'ComputedFrame(t: $t, bands: $bands, pulse: $pulse, movement: $movement, peakAlpha: $peakAlpha, spo2: $spo2, lineNoise: $lineNoise, signalQuality: $signalQuality, guardrail: $guardrail, feedback: $feedback, gestures: $gestures, signalQualitySource: $signalQualitySource, crownSignalQuality: $crownSignalQuality)';
   }
 
   @override
@@ -638,7 +671,13 @@ class _$ComputedFrameImpl extends _ComputedFrame {
                 other.guardrail == guardrail) &&
             (identical(other.feedback, feedback) ||
                 other.feedback == feedback) &&
-            const DeepCollectionEquality().equals(other._gestures, _gestures));
+            const DeepCollectionEquality().equals(other._gestures, _gestures) &&
+            (identical(other.signalQualitySource, signalQualitySource) ||
+                other.signalQualitySource == signalQualitySource) &&
+            const DeepCollectionEquality().equals(
+              other.crownSignalQuality,
+              crownSignalQuality,
+            ));
   }
 
   @override
@@ -655,6 +694,8 @@ class _$ComputedFrameImpl extends _ComputedFrame {
     guardrail,
     feedback,
     const DeepCollectionEquality().hash(_gestures),
+    signalQualitySource,
+    const DeepCollectionEquality().hash(crownSignalQuality),
   );
 
   /// Create a copy of ComputedFrame
@@ -679,6 +720,8 @@ abstract class _ComputedFrame extends ComputedFrame {
     required final GuardrailInfo guardrail,
     required final FeedbackInfo feedback,
     required final List<String> gestures,
+    final String? signalQualitySource,
+    final Float32List? crownSignalQuality,
   }) = _$ComputedFrameImpl;
   const _ComputedFrame._() : super._();
 
@@ -704,6 +747,10 @@ abstract class _ComputedFrame extends ComputedFrame {
   FeedbackInfo get feedback;
   @override
   List<String> get gestures;
+  @override
+  String? get signalQualitySource;
+  @override
+  Float32List? get crownSignalQuality;
 
   /// Create a copy of ComputedFrame
   /// with the given fields replaced by the non-null parameter values.

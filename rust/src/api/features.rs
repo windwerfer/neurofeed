@@ -9,7 +9,10 @@ use std::sync::{Mutex, OnceLock};
 
 use flutter_rust_bridge::frb;
 
-use crate::api::device_config::{DeviceConfig, DeviceKind};
+use crate::api::device_config::{DeviceConfig, DeviceKind, QualitySource};
+use crate::analysis::crown_quality::{
+    resolve_pad_quality, CrownQualitySecond, ResolvedPadQuality, CROWN_PADS,
+};
 
 pub(crate) const ID_ATR: &str = "band.atr";
 pub(crate) const ID_TAR: &str = "band.tar";
@@ -256,8 +259,11 @@ struct Registry {
     enabled: HashSet<String>,
     electrode_overrides: HashMap<String, Vec<String>>,
     active_kind: Option<DeviceKind>,
-    /// Crown `/signalQuality` mapped 0–1 → 0–100. `None` until the first packet.
-    crown_quality: [Option<f64>; 8],
+    quality_source: QualitySource,
+    /// Crown `/signalQuality` per-pad messages since the last 1 Hz resolve.
+    crown_second: CrownQualitySecond,
+    /// Neurosity pad quality (0–100) resolved once per second. `None` = no score.
+    pad_quality: [Option<f64>; CROWN_PADS],
 }
 
 impl Default for Registry {
@@ -266,7 +272,9 @@ impl Default for Registry {
             enabled: HashSet::new(),
             electrode_overrides: HashMap::new(),
             active_kind: None,
-            crown_quality: [None; 8],
+            quality_source: QualitySource::Crown,
+            crown_second: CrownQualitySecond::default(),
+            pad_quality: [None; CROWN_PADS],
         }
     }
 }
@@ -426,13 +434,22 @@ pub(crate) fn enabled_ids() -> Vec<String> {
 pub(crate) fn set_active_kind(kind: DeviceKind) {
     let mut reg = registry().lock().unwrap_or_else(|e| e.into_inner());
     reg.active_kind = Some(kind);
-    reg.crown_quality = [None; 8];
+    reg.crown_second = CrownQualitySecond::default();
+    reg.pad_quality = [None; CROWN_PADS];
 }
 
 pub(crate) fn clear_active_kind() {
     let mut reg = registry().lock().unwrap_or_else(|e| e.into_inner());
     reg.active_kind = None;
-    reg.crown_quality = [None; 8];
+    reg.crown_second = CrownQualitySecond::default();
+    reg.pad_quality = [None; CROWN_PADS];
+}
+
+pub(crate) fn set_quality_source(source: QualitySource) {
+    registry()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .quality_source = source;
 }
 
 pub(crate) fn active_kind() -> Option<DeviceKind> {
@@ -442,23 +459,34 @@ pub(crate) fn active_kind() -> Option<DeviceKind> {
         .active_kind
 }
 
-/// Store Crown `/signalQuality` (0–1) as 0–100 for band-feature autodrop.
-pub(crate) fn set_crown_quality(channel: usize, q_0_1: f32) {
-    if channel >= 8 {
-        return;
-    }
-    let mut reg = registry().lock().unwrap_or_else(|e| e.into_inner());
-    reg.crown_quality[channel] = Some((q_0_1 as f64).clamp(0.0, 1.0) * 100.0);
-}
-
-pub(crate) fn crown_quality(channel: usize) -> Option<f64> {
-    if channel >= 8 {
-        return None;
-    }
+/// Queue one Crown per-pad `/signalQuality` message for the current second.
+pub(crate) fn add_crown_quality(values: &[f32; CROWN_PADS]) {
     registry()
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .crown_quality[channel]
+        .crown_second
+        .add(values);
+}
+
+/// Resolve this second's Neurosity pad quality from the queued Crown values
+/// and the in-app [app] scores, store it for the band-feature gate, and
+/// return it for the UI / recording.
+pub(crate) fn resolve_neurosity_second(app: &[Option<f64>; CROWN_PADS]) -> ResolvedPadQuality {
+    let mut reg = registry().lock().unwrap_or_else(|e| e.into_inner());
+    let crown = reg.crown_second.take();
+    let resolved = resolve_pad_quality(reg.quality_source, crown, app);
+    reg.pad_quality = resolved.scores;
+    resolved
+}
+
+fn pad_quality(channel: usize) -> Option<f64> {
+    registry()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .pad_quality
+        .get(channel)
+        .copied()
+        .flatten()
 }
 
 pub(crate) fn resolved_electrode_names(kind: DeviceKind, id: &str) -> anyhow::Result<Vec<String>> {
@@ -642,7 +670,9 @@ impl EegRing {
 /// Pick usable pads and aggregate one enabled `band.*` feature.
 ///
 /// Muse: quality from the 1 s EEG ring + line-noise penalty.
-/// Crown: quality from `/signalQuality` × 100. Missing/short quality → skip pad.
+/// Neurosity: the 1 Hz resolved pad quality (Crown or in-app, see
+/// [resolve_neurosity_second]) — the same values the UI and recording use.
+/// Missing quality → skip pad.
 pub(crate) fn collect_usable_pads(
     kind: DeviceKind,
     indices: &[usize],
@@ -657,7 +687,7 @@ pub(crate) fn collect_usable_pads(
             continue;
         };
         let q = if neurosity {
-            crown_quality(idx)
+            pad_quality(idx)
         } else {
             let noise = ch.line_noise_ratio;
             rings.get(&el).and_then(|r| r.quality(noise))
@@ -850,6 +880,64 @@ mod tests {
         let empty = collect_usable_pads(DeviceKind::Muse, &[1, 2], &HashMap::new(), &rings);
         assert!(empty.is_empty());
         assert!(aggregate_band_feature(ID_ATR, &empty).is_none());
+    }
+
+    fn pad_band(pad: i32) -> ChannelBands {
+        ChannelBands {
+            delta: 1.0,
+            theta: 1.0,
+            alpha: pad as f64,
+            beta: 1.0,
+            gamma: 1.0,
+            line_noise_ratio: -1.0,
+        }
+    }
+
+    #[test]
+    fn neurosity_gate_follows_the_resolved_quality_source() {
+        let _lock = reset();
+        set_active_kind(DeviceKind::Neurosity);
+        let bands: HashMap<i32, ChannelBands> = (0..8).map(|e| (e, pad_band(e))).collect();
+        let rings = HashMap::new();
+        let mut app = [Some(90.0); CROWN_PADS];
+        app[3] = Some(20.0);
+        app[4] = Some(95.0);
+        let mut crown = [0.9_f32; CROWN_PADS];
+        crown[3] = 0.95;
+        crown[4] = 0.2;
+
+        set_quality_source(QualitySource::Crown);
+        add_crown_quality(&crown);
+        add_crown_quality(&crown);
+        let r = resolve_neurosity_second(&app);
+        assert_eq!(r.source, QualitySource::Crown);
+        let picked = collect_usable_pads(DeviceKind::Neurosity, &[3, 4], &bands, &rings);
+        assert_eq!(picked.len(), 1, "Crown says PO3 good, PO4 bad");
+        assert_eq!(picked[0].alpha, 3.0);
+
+        let r = resolve_neurosity_second(&app);
+        assert_eq!(r.source, QualitySource::App, "no Crown values this second");
+        assert_eq!(r.scores, app);
+        let picked = collect_usable_pads(DeviceKind::Neurosity, &[3, 4], &bands, &rings);
+        assert_eq!(picked.len(), 1, "app says PO4 good, PO3 bad");
+        assert_eq!(picked[0].alpha, 4.0);
+
+        let mut incomplete = crown;
+        incomplete[5] = 3.0;
+        add_crown_quality(&incomplete);
+        assert_eq!(resolve_neurosity_second(&app).source, QualitySource::App);
+
+        set_quality_source(QualitySource::App);
+        add_crown_quality(&crown);
+        let r = resolve_neurosity_second(&app);
+        assert_eq!(r.source, QualitySource::App);
+        assert_eq!(r.crown, None);
+        let picked = collect_usable_pads(DeviceKind::Neurosity, &[3, 4], &bands, &rings);
+        assert_eq!(picked.len(), 1);
+        assert_eq!(picked[0].alpha, 4.0);
+
+        clear_active_kind();
+        assert!(collect_usable_pads(DeviceKind::Neurosity, &[3, 4], &bands, &rings).is_empty());
     }
 
     #[test]

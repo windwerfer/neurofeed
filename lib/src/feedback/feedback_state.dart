@@ -1649,6 +1649,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           final o = settings.inhibitCeilingOverrides(fb.protocol);
           return o.isEmpty ? null : o;
         }(),
+        crownQualitySource: app.crownQualitySource?.name,
       ),
       avgSpo2: stats?.avgSpo2,
       peakAlphaHz: stats?.peakAlphaFreq,
@@ -2079,12 +2080,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     _computedSampler?.updateBands(bands.electrode, bands);
-    final signalQuality = _ref.read(appStateProvider).signalQuality;
+    final app = _ref.read(appStateProvider);
+    final signalQuality = app.signalQuality;
     if (signalQuality != null) {
       for (int i = 0; i < signalQuality.length; i++) {
         _computedSampler?.updateSignalQuality(i, signalQuality[i].round());
       }
     }
+    _computedSampler?.updateSignalQualitySource(
+      app.signalQualitySource,
+      app.crownSignalQuality,
+    );
   }
 
   void _onMovement(MovementDto movement) {

@@ -219,8 +219,9 @@ assets/                     protocols.json, calibrations.json, features.json, au
   PSD Welch, and Histogram are incremental; Inspect / electrodes / window
   still full recompute. Raw EEG traces min/max-downsample per pixel;
   `RawEegView.dispose` sets wipe-ring window 0. `bandNames` / `bandColors`
-  stay in `lib/src/charts/band_style.dart`. Pad quality is a 4-ch 1 s ring
-  in `connection_provider.dart` (not a 5 min EEG LiveCache).
+  stay in `lib/src/charts/band_style.dart`. Muse pad quality is a 1 s ring
+  in `connection_provider.dart` (not a 5 min EEG LiveCache); Neurosity pad
+  quality comes from Rust `PadQuality` events (setting `crown_quality_source`).
 - Crash recovery: feedback `lib/src/feedback/crash_recovery.dart` scans
   `scratchDirectory` for `session_*` only and reopens the session summary
   (Save/Discard; Back blocked). Monitor

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/session_format/band_second_average.dart';
 import 'package:neurofeed/src/session_format/computed_frame.dart';
@@ -32,6 +33,8 @@ class MonitorSampler {
   PeakAlphaDto? _latestPeakAlpha;
   double? _latestSpO2;
   List<String> _latestGestures = const [];
+  QualitySource? _signalQualitySource;
+  List<double>? _crownSignalQuality;
 
   void updateBands(int electrode, BandsDto bands) =>
       _bands.add(electrode, bands);
@@ -47,6 +50,13 @@ class MonitorSampler {
   void updateSignalQuality(int electrode, int quality) {
     if (electrode < 0 || electrode >= channelCount) return;
     _latestSignalQuality[electrode] = quality;
+  }
+
+  /// Neurosity only: which score filled the latest pad quality, plus the
+  /// Crown per-pad 1 Hz means when that source is Crown.
+  void updateSignalQualitySource(QualitySource? source, List<double>? crown) {
+    _signalQualitySource = source;
+    _crownSignalQuality = crown;
   }
 
   void updateGestures(GestureDto g) {
@@ -89,6 +99,8 @@ class MonitorSampler {
         spo2: _latestSpO2,
         lineNoise: second.lineNoise,
         signalQuality: List<int>.from(_latestSignalQuality),
+        signalQualitySource: _signalQualitySource?.name,
+        crownSignalQuality: _crownSignalQuality,
         guardrail: const GuardrailInfo(
           sleepDir: 0,
           clarity: 0,

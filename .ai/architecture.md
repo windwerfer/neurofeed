@@ -52,7 +52,7 @@ sampling rate, PPG/IMU flags.
 | Source | Kind | Transport | Notes |
 |------|-----------|--------|--------|
 | Muse | muse | btleplug via muse-rs | BLE scan, Muse only. 4 pads TP9/AF7/AF8/TP10 @ 256 Hz |
-| Neurosity | neurosity | OSC (`neurosity_osc.rs`) | Never BLE. One UDP socket on 0.0.0.0:9000 (SO_REUSEADDR, broadcast) shared by LAN discovery (`start_crown_discovery` / `discovered_crowns`, from `/info` or any `/neurosity/notion/{id}/…`) and the receiver. Device id matched exactly in `/neurosity/notion/{id}/…`; `/crown{prefix}/…` when prefix-of-id. `/raw` floats flattened from OSC arrays (8 per frame, sample-major), re-batched to 16-sample `Eeg` events. `/signalQuality` 8 floats per pad, 1 float overall (not mapped to pads). Android holds a `MulticastLock` (`neurofeed/wifi`) while discovering/streaming. Band messages ignored (bands come only from the forwarder FFT). Test stream: `tools/crown_osc_sim.py`. |
+| Neurosity | neurosity | OSC (`neurosity_osc.rs`) | Never BLE. One UDP socket on 0.0.0.0:9000 (SO_REUSEADDR, broadcast) shared by LAN discovery (`start_crown_discovery` / `discovered_crowns`, from `/info` or any `/neurosity/notion/{id}/…`) and the receiver. Device id matched exactly in `/neurosity/notion/{id}/…`; `/crown{prefix}/…` when prefix-of-id. `/raw` floats flattened from OSC arrays (8 per frame, sample-major), re-batched to 16-sample `Eeg` events. `/signalQuality` 8 floats per pad → 1 Hz pad quality (see Signal quality); 1 float overall is ignored. Android holds a `MulticastLock` (`neurofeed/wifi`) while discovering/streaming. Band messages ignored (bands come only from the forwarder FFT). Test stream: `tools/crown_osc_sim.py`. |
 | Simulator | muse or neurosity from the row | `simulator.rs` locally | Static catalog; Crown (OSC) / Notion (OSC) are 8-ch sim, no UDP. Emits headset events only (`Eeg` / `Ppg` / IMU / `Telemetry`); the forwarder derives bands, features, pulse, SpO2, quality. |
 
 **Crown Start is refused** (`crownSessionUnsupportedMessage` in
@@ -181,6 +181,14 @@ EEG is resampled to 256 Hz in Rust (`import_dsp.rs`, `rubato`). Details:
 
 Pad quality 0–100: EEG std + `BandsDto.line_noise_ratio` (Dart UI dots) and
 the same formula in Rust for autodrop (`pad_quality_from_std_and_noise`).
+Neurosity: Rust is the single source (`features::resolve_neurosity_second`,
+`analysis/crown_quality.rs`). Each 1 Hz forwarder tick it resolves one score
+per pad and sends `MuseEventDto::PadQuality`; the same values feed the UI
+dots, recording (`signalQualitySource` / `crownSignalQuality` per frame) and
+the feature gate. Setting `crown_quality_source`: `crown` (default) uses the
+Crown's per-pad `/signalQuality` (8 floats, 0..1, ≥ 0.75 adequate) averaged
+per second, mapped 0→0, 0.75→80, 1→100; a second without a complete in-range
+message falls back to the app score. `app` always uses the app score.
 Before calibration: gate electrodes green for 3 s. After baseline: no re-lock.
 Playing pauses only when **all** gate pads are critical for 10 s; never
 auto-ends. Band features skip pads below 80; no usable pad → no `FeatureDto`

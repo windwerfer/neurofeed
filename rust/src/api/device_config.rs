@@ -22,6 +22,17 @@ impl DeviceKind {
     }
 }
 
+/// Where Neurosity pad signal quality comes from. `Crown`: the headset's
+/// per-pad `/signalQuality` averaged per second, falling back to the in-app
+/// score for seconds without a complete in-range message. `App`: always the
+/// in-app score (raw std + line-noise penalty).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum QualitySource {
+    Crown,
+    App,
+}
+
 /// Device configuration — electrode layout, target electrodes for ATR, gate electrodes, enabled features
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceConfig {

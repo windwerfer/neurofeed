@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'muse.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `compute_spo2`, `emit_enabled_band_features`, `frontal_delta_average`, `map_event`, `map_imu`, `muse_aux_channels`, `now_ms`, `score_window_len`, `spawn_event_forwarder`
+// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `compute_spo2`, `emit_enabled_band_features`, `emit_neurosity_pad_quality`, `frontal_delta_average`, `map_event`, `map_imu`, `muse_aux_channels`, `now_ms`, `score_window_len`, `spawn_event_forwarder`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ForwarderGuard`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `drop`
 
@@ -49,16 +49,19 @@ Future<ConnectionStatus> getStatus() =>
 /// - `simulate`: if true, runs the built-in simulator instead of a headset
 /// - `record_aux`: Muse only — stream AUX inputs as electrodes 4.. (Classic:
 ///   AUX characteristic; Athena: keep electrodes 4..7). Off drops them.
+/// - `quality_source`: Neurosity only — pad quality from the Crown or the app.
 Future<ConnectionStatus> connectWithOptions({
   required String deviceId,
   required DeviceKind kind,
   required bool simulate,
   required bool recordAux,
+  required QualitySource qualitySource,
 }) => RustLib.instance.api.crateApiMuseConnectWithOptions(
   deviceId: deviceId,
   kind: kind,
   simulate: simulate,
   recordAux: recordAux,
+  qualitySource: qualitySource,
 );
 
 /// Returns `true` if a connection is currently active. The Rust side clears
@@ -189,6 +192,19 @@ sealed class MuseEventDto with _$MuseEventDto {
       MuseEventDto_Gestures;
   const factory MuseEventDto.reve(ReveDto field0) = MuseEventDto_Reve;
   const factory MuseEventDto.feature(FeatureDto field0) = MuseEventDto_Feature;
+  const factory MuseEventDto.padQuality(PadQualityDto field0) =
+      MuseEventDto_PadQuality;
+}
+
+/// Neurosity pad signal quality for one second — the single source for the
+/// UI pads, recording and the band-feature gate.
+@freezed
+sealed class PadQualityDto with _$PadQualityDto {
+  const factory PadQualityDto({
+    required Float64List values,
+    required QualitySource source,
+    Float64List? crown,
+  }) = _PadQualityDto;
 }
 
 /// Peak alpha frequency and power (parabolic interpolation over FFT bins).
