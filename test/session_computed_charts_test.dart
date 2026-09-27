@@ -289,7 +289,10 @@ void main() {
       expect(deviceFrontalElectrodes(crown), [2, 5]);
       expect(names(crown), ['F5', 'F6']);
       // Not the device target pair (Crown PO3/PO4).
-      expect(deviceGateElectrodeNames(crown), isNot(names(crown)));
+      expect(
+        crown.targetElectrodes.map((e) => e.toInt()).toList(),
+        isNot(deviceFrontalElectrodes(crown)),
+      );
       final infos = await availableFeatures(kind: DeviceKind.neurosity);
       expect(
         infos.firstWhere((f) => f.id == 'band.delta').defaultElectrodes,
@@ -301,8 +304,8 @@ void main() {
         () async {
       final muse = await DeviceConfig.forKind(kind: DeviceKind.muse);
       final crown = await DeviceConfig.forKind(kind: DeviceKind.neurosity);
-      expect(deviceGateElectrodeNames(muse), ['AF7', 'AF8']);
-      expect(deviceGateElectrodeNames(crown), ['PO3', 'PO4']);
+      expect(muse.targetElectrodes.map((e) => e.toInt()), [1, 2]);
+      expect(crown.targetElectrodes.map((e) => e.toInt()), [3, 4]);
       List<int> gate(DeviceKind kind, {String? reward, String? guard}) =>
           sessionGateElectrodes(
             kind: kind,

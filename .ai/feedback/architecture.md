@@ -64,9 +64,11 @@ feature + output, background kind, calibration id, electrode **names**
 (empty = Rust default).
 
 **Crown sessions** (real Crown/Notion or the Crown (OSC) / Notion (OSC)
-simulator rows) record all 8 channels. Gate, reward and guard-delta
-electrodes default to `deviceGateElectrodeNames(DeviceConfig)` (PO3/PO4;
-Muse AF7/AF8), and session charts caption the pair they average. Pad
+simulator rows) record all 8 channels. Gate and reward pads come from Rust
+`session_gate_electrodes` (feature electrodes, else needed pads PO3/PO4;
+Muse AF7/AF8); the band-math guard reads delta on `DeviceConfig`
+`frontalElectrodes` (F5/F6; Muse AF7/AF8). Session charts caption the pair
+they average. Pad
 quality is the Rust 1 Hz `PadQuality` (Crown or app source per
 `crown_quality_source`). `ai.*` guards stay Muse-only.
 

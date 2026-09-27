@@ -55,3 +55,29 @@ guard is on:
 Before a session (idle) the same call with no features gives the device's
 needed pads. Dart owns the gate state machine (waiting, pause/resume,
 timers, UI) and only asks Rust for the pads.
+
+The reward lane's pads (inhibit bands, reward value) come from the same call
+with only the reward feature. The band-math guard reads delta on
+`DeviceConfig.frontal_electrodes`. Dart never picks pads itself; the only
+Dart input is the protocol's `electrodes` override.
+
+## Electrode audit (per feature × device)
+
+✓ = fits what the feature measures. ⚖ = judgement call, recommendation not
+applied.
+
+| Feature / consumer | Measures | Muse | Crown | Verdict |
+|---|---|---|---|---|
+| `band.atr` α/θ | posterior α vs θ | AF7, AF8 | PO3, PO4 | Crown ✓. Muse ⚖: α is posterior; TP9/TP10 see eyes-closed α best on Muse (more jaw EMG). Recommend TP9/TP10 |
+| `band.alpha` α/total | posterior α | AF7, AF8 | PO3, PO4 | as `band.atr` |
+| `band.tar` θ/α | hypnagogic θ vs α (classic Pz/O) | AF7, AF8 | PO3, PO4 | Crown ✓. Muse ⚖ as `band.atr` |
+| `band.btr` β/θ | alertness TBR (classic Cz/Fz) | AF7, AF8 | PO3, PO4 | Muse ✓ (most frontal). Crown ⚖: posterior is off for TBR; recommend C3/C4 |
+| `band.delta` | frontal δ (drowsiness rail) | AF7, AF8 | F5, F6 | ✓ |
+| `ai.*` | model rows AF7/AF8/TP9/TP10 | all four | unavailable | ✓ (as trained) |
+| `device.focus` / `calm` | headset-computed | unavailable | none | ✓ |
+| Gate / needed pads | pads that must be good | AF7, AF8 | PO3, PO4 | ✓ (feature pads win) |
+| Guardrail δ rail, band-math guard | frontal δ | AF7, AF8 | F5, F6 | ✓ |
+| Blink (gesture) | frontal EOG | AF7, AF8 | F5, F6 | ✓ (F5/F6 farther from the eyes: smaller blinks) |
+| Clench EMG, eye-level reference | temporal EMG / mastoid-like reference | TP9, TP10 | CP3, CP4 | Crown ⚖: no temporal sites; CP3/CP4 is the closest, keep |
+| Stats FAA / TAA (by label) | frontal / temporal α asymmetry | AF7/AF8, TP9/TP10 | omitted | ⚖: Crown FAA on F5/F6 possible later |
+| History charts pair (Dart, by label) | display average | AF7, AF8 | PO3, PO4 | ⚖: display only; could come from a Rust label helper |

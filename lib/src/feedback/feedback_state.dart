@@ -815,12 +815,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final app = _ref.read(appStateProvider);
     final kind = app.lastConnectedKind ?? DeviceKind.muse;
     List<String> montage = const [];
-    List<String> deviceGate = const [];
     List<int> frontal = const [];
     try {
       final config = await DeviceConfig.forKind(kind: kind);
       montage = config.electrodeNames;
-      deviceGate = deviceGateElectrodeNames(config);
       frontal = deviceFrontalElectrodes(config);
     } catch (e) {
       debugPrint('[feature] DeviceConfig.forKind failed: $e');
@@ -841,11 +839,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     } catch (e) {
       debugPrint('[feature] available_features failed: $e');
     }
-    final byId = {for (final f in infos) f.id: f};
-
-    final rewardDefault = spec?.reward == null
-        ? null
-        : byId[spec!.reward!.feature]?.defaultElectrodes;
 
     // Protocol overrides (none = registry default), then the gate pads.
     final ids = <String>[];
@@ -879,8 +872,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       debugPrint('[feature] set_enabled_features failed: $e');
     }
 
-    final rewardNames =
-        spec?.reward?.electrodes ?? rewardDefault ?? deviceGate;
+    // Reward pads from Rust: protocol override, else registry default, else
+    // the device's needed pads.
+    final rewardNames = [
+      for (final i in sessionGateElectrodes(
+        kind: kind,
+        rewardFeature: rewardFeature,
+        guardFeature: null,
+      ))
+        if (i < montage.length) montage[i],
+    ];
     _reward.configure(
       hasReward: spec?.hasReward ?? false,
       featureId: spec?.reward?.feature,
