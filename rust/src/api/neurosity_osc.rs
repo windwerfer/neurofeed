@@ -1036,7 +1036,10 @@ mod tests {
 #[cfg(test)]
 mod sim_loopback_tests {
     use super::*;
+    use crate::analysis::eeg_filter::{EegConditioner, Mains};
     use crate::api::device_config::QualitySource;
+    use crate::api::features::pad_quality_from_std_and_noise;
+    use crate::api::muse::compute_fft_bands;
     use std::process::{Child, Command};
 
     const ID: &str = "local7cca794fb5f4675a69371e949b2";
@@ -1064,6 +1067,7 @@ mod sim_loopback_tests {
     struct Collected {
         samples: Vec<Vec<f64>>,
         batches: Vec<(f64, usize)>,
+        events: Vec<(i32, f64, Vec<f64>)>,
     }
 
     async fn collect(rx: &mut mpsc::Receiver<MuseEventDto>, secs: f64) -> Collected {
@@ -1077,7 +1081,8 @@ mod sim_loopback_tests {
                 if e.electrode == 0 {
                     out.batches.push((e.timestamp, e.samples.len()));
                 }
-                out.samples[e.electrode as usize].extend(e.samples);
+                out.samples[e.electrode as usize].extend(e.samples.iter().copied());
+                out.events.push((e.electrode, e.timestamp, e.samples));
             }
         }
         out
@@ -1288,5 +1293,79 @@ mod sim_loopback_tests {
         assert!(lo >= -50.0 && hi <= 51.0 && lo < -40.0 && hi > 40.0);
         assert!(all.len() > 8 * 400);
         drop(handle);
+    }
+
+    /// The receiver's Eeg events through the forwarder's conditioning:
+    /// per-channel conditioned samples and the mains decision.
+    fn conditioned(got: &Collected) -> (Vec<Vec<f64>>, Mains) {
+        let mut c = EegConditioner::default();
+        let mut out = vec![Vec::new(); CROWN_CHANNELS];
+        for (electrode, ts, samples) in &got.events {
+            for (_, chunk) in c.process(*electrode, *ts, samples) {
+                out[*electrode as usize].extend(chunk);
+            }
+        }
+        (out, c.mains())
+    }
+
+    /// Per channel over the last 2 s (two 1 s windows): (quality, alpha
+    /// power, relative alpha, line-noise ratio), averaged.
+    fn quality_and_bands(ch: &[f64]) -> (f64, f64, f64, f64) {
+        let tail = &ch[ch.len() - 512..];
+        let mut acc = (0.0, 0.0, 0.0, 0.0);
+        for w in tail.chunks(256) {
+            let b = compute_fft_bands(w);
+            let q = pad_quality_from_std_and_noise(std_dev(w), b[7]);
+            acc.0 += q / 2.0;
+            acc.1 += b[2] / 2.0;
+            acc.2 += b[2] / b[..5].iter().sum::<f64>() / 2.0;
+            acc.3 += b[7] / 2.0;
+        }
+        acc
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn crown_osc_sim_realistic_raw_conditioned() {
+        let clean = {
+            let _main = sim(&["--duration", "5", "--epoch", "16", "--bad-pads", "3"]);
+            let (handle, _status, mut rx) = connect(0.2).await;
+            let got = collect(&mut rx, 4.0).await;
+            drop(handle);
+            conditioned(&got)
+        };
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert_eq!(clean.1, Mains::Absent, "clean signal has no hum");
+        for hz in ["50", "60"] {
+            let _main = sim(&[
+                "--duration", "5", "--epoch", "16", "--bad-pads", "3",
+                "--realistic-raw", "--line-noise", hz,
+            ]);
+            let (handle, _status, mut rx) = connect(0.2).await;
+            let got = collect(&mut rx, 4.0).await;
+            drop(handle);
+            let raw_mean = got.samples[0].iter().sum::<f64>() / got.samples[0].len() as f64;
+            let (chans, mains) = conditioned(&got);
+            println!("realistic {hz} Hz: raw ch0 mean {raw_mean:.0} uV, mains {mains:?}");
+            assert!(raw_mean < -1.9e5, "sim offset missing");
+            assert_eq!(mains, Mains::Hz(hz.parse().unwrap()));
+            for ch in 0..CROWN_CHANNELS {
+                let (q, alpha, rel, line) = quality_and_bands(&chans[ch]);
+                let (cq, calpha, crel, _) = quality_and_bands(&clean.0[ch]);
+                println!(
+                    "  ch{ch}: quality {q:.0} (clean {cq:.0}) alpha {alpha:.2} (clean {calpha:.2}) \
+                     rel alpha {rel:.3} (clean {crel:.3}) line {line:.5}"
+                );
+                if ch == 3 {
+                    assert!(q < 80.0, "bad pad scored usable");
+                    continue;
+                }
+                assert!(q >= 80.0, "ch{ch} quality {q}");
+                assert!((alpha / calpha - 1.0).abs() < 0.05, "ch{ch} alpha {alpha} vs {calpha}");
+                assert!((rel - crel).abs() < 0.02, "ch{ch} rel alpha {rel} vs {crel}");
+                assert!(line < 0.01, "ch{ch} line noise {line}");
+            }
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
     }
 }

@@ -24,6 +24,10 @@ The default signal is NeuroFeed's in-app simulator model
 sub-uV hash noise, at 256 Hz. --noise switches to Neurosity's uniform
 -50..50 uV noise.
 
+--realistic-raw adds what the real Crown's unfiltered OSC RAW carries: a DC
+offset near -2e5 uV (slightly different per channel) with slow drift, and
+raises --line-noise hum to 138 uV (~190x the alpha power), on every pad.
+
 --epoch N packs N samples per /raw packet (8*N floats; Neurosity's docs
 describe 16-sample epochs for the Crown), sample-major (ch0_s0, ch1_s0, ...)
 unless --channel-major (ch0_s0, ch0_s1, ...).
@@ -39,6 +43,7 @@ Usage, from any computer on the same LAN as the app:
   python3 tools/crown_osc_sim.py --quality-overall                # app fallback
   python3 tools/crown_osc_sim.py --dropout 10:3 --duration 60
   python3 tools/crown_osc_sim.py --epoch 16 --channel-major
+  python3 tools/crown_osc_sim.py --realistic-raw --line-noise 50 --bad-pads 3
 """
 import argparse
 import math
@@ -59,6 +64,8 @@ SAMPLE_RATE = 256
 LOCAL_PORT = 8000
 DEFAULT_ID = "local7cca794fb5f4675a69371e949b2"
 LINE_NOISE_UV = 10.0
+REALISTIC_LINE_UV = 138.0
+REALISTIC_OFFSET_UV = -2.0e5
 BAD_NOISE_UV = 150.0
 GOOD_QUALITY = (0.85, 0.95)
 BAD_QUALITY = (0.05, 0.15)
@@ -169,6 +176,8 @@ def build_args(argv):
     p.add_argument("--dropout", type=parse_dropout, metavar="EVERY:SECONDS")
     p.add_argument("--line-noise", type=int, choices=(50, 60),
                    help=f"add {LINE_NOISE_UV:.0f} uV mains hum")
+    p.add_argument("--realistic-raw", action="store_true",
+                   help="unfiltered-RAW DC offset + drift, 138 uV --line-noise hum")
     quality = p.add_mutually_exclusive_group()
     quality.add_argument("--quality", action="store_const", const="channels", dest="quality",
                          help="send per-pad /crown{id}/signalQuality (8 floats, 0..1) at 4 Hz")
@@ -195,13 +204,21 @@ class Crown:
     def sample(self, n):
         t = n / SAMPLE_RATE
         out = []
+        realistic = self.args.realistic_raw
         for ch in range(CHANNELS):
             if ch in self.args.bad_pads:
-                out.append(0.0 if self.args.bad_mode == "flat" else random.gauss(0.0, BAD_NOISE_UV))
-                continue
-            v = neurosity_noise() if self.args.noise else app_sample(t, ch)
+                v = 0.0 if self.args.bad_mode == "flat" else random.gauss(0.0, BAD_NOISE_UV)
+                if not realistic:
+                    out.append(v)
+                    continue
+            else:
+                v = neurosity_noise() if self.args.noise else app_sample(t, ch)
             if self.args.line_noise:
-                v += LINE_NOISE_UV * math.sin(2.0 * math.pi * self.args.line_noise * t)
+                amp = REALISTIC_LINE_UV if realistic else LINE_NOISE_UV
+                v += amp * math.sin(2.0 * math.pi * self.args.line_noise * t)
+            if realistic:
+                drift = 40.0 * math.sin(2.0 * math.pi * (0.02 + 0.005 * ch) * t + ch)
+                v += REALISTIC_OFFSET_UV + 1500.0 * ch + drift
             out.append(v)
         return out
 
