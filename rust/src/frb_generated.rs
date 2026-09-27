@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -766672519;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1388154661;
 
 // Section: executor
 
@@ -888,42 +888,6 @@ fn wire__crate__api__session_format__container_encode_to_path_impl(
         },
     )
 }
-fn wire__crate__api__muse__crown_connect_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "crown_connect",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_device_id = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::muse::crown_connect(api_device_id).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
 fn wire__crate__api__edf_export__decode_edf_import_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1385,6 +1349,39 @@ fn wire__crate__api__muse__disconnect_impl(
                     })()
                     .await,
                 )
+            }
+        },
+    )
+}
+fn wire__crate__api__neurosity_osc__discovered_crowns_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "discovered_crowns",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::neurosity_osc::discovered_crowns())?;
+                    Ok(output_ok)
+                })())
             }
         },
     )
@@ -2450,6 +2447,75 @@ fn wire__crate__api__simulator__simulated_identity_impl(
                     let output_ok = Result::<_, ()>::Ok(
                         crate::api::simulator::simulated_identity(&api_device_id, api_kind),
                     )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__neurosity_osc__start_crown_discovery_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "start_crown_discovery",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::neurosity_osc::start_crown_discovery().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__neurosity_osc__stop_crown_discovery_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "stop_crown_discovery",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok({
+                        crate::api::neurosity_osc::stop_crown_discovery();
+                    })?;
                     Ok(output_ok)
                 })())
             }
@@ -3890,74 +3956,79 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__muse__crown_connect_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__device_config__device_config_all_needed_good_impl(
+        26 => wire__crate__api__device_config__device_config_all_needed_good_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        28 => wire__crate__api__device_config__device_config_electrode_index_impl(
+        27 => wire__crate__api__device_config__device_config_electrode_index_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__device_config__device_config_for_kind_impl(
+        28 => wire__crate__api__device_config__device_config_for_kind_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        30 => wire__crate__api__device_config__device_config_has_needed_electrode_impl(
+        29 => wire__crate__api__device_config__device_config_has_needed_electrode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => wire__crate__api__device_config__device_config_is_usable_impl(
+        30 => wire__crate__api__device_config__device_config_is_usable_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__device_config__device_config_muse_impl(
+        31 => wire__crate__api__device_config__device_config_muse_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__api__device_config__device_config_neurosity_crown_impl(
+        32 => wire__crate__api__device_config__device_config_neurosity_crown_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        34 => wire__crate__api__device_config__device_config_target_values_impl(
+        33 => wire__crate__api__device_config__device_config_target_values_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__api__device_config__device_features_default_impl(
+        34 => wire__crate__api__device_config__device_features_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__device_config__device_kind_is_muse_impl(
+        35 => wire__crate__api__device_config__device_kind_is_muse_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__device_config__device_kind_is_neurosity_impl(
+        36 => wire__crate__api__device_config__device_kind_is_neurosity_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__muse__disconnect_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__muse__disconnect_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__neurosity_osc__discovered_crowns_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         43 => wire__crate__api__session_format__extract_computed_from_path_impl(
             port,
             ptr,
@@ -4017,8 +4088,20 @@ fn pde_ffi_dispatcher_primary_impl(
         70 => {
             wire__crate__api__simulator__simulated_identity_impl(port, ptr, rust_vec_len, data_len)
         }
-        71 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
-        72 => wire__crate__api__muse__telemetry_snapshot_default_impl(
+        71 => wire__crate__api__neurosity_osc__start_crown_discovery_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        72 => wire__crate__api__neurosity_osc__stop_crown_discovery_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        73 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__muse__telemetry_snapshot_default_impl(
             port,
             ptr,
             rust_vec_len,
@@ -4051,7 +4134,7 @@ fn pde_ffi_dispatcher_sync_impl(
         16 => wire__crate__api__capture__capture_write_errors_impl(ptr, rust_vec_len, data_len),
         17 => wire__crate__api__capture__capture_write_sidecar_impl(ptr, rust_vec_len, data_len),
         23 => wire__crate__api__session_format__container_encode_impl(ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__edf_export__decode_edf_import_impl(ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__edf_export__decode_edf_import_impl(ptr, rust_vec_len, data_len),
         39 => wire__crate__api__import_dsp__eeg_second_bands_impl(ptr, rust_vec_len, data_len),
         40 => wire__crate__api__edf_export__encode_edf_export_impl(ptr, rust_vec_len, data_len),
         41 => {

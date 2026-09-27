@@ -12,6 +12,7 @@ import 'api/edf_export.dart';
 import 'api/features.dart';
 import 'api/import_dsp.dart';
 import 'api/muse.dart';
+import 'api/neurosity_osc.dart';
 import 'api/reve.dart';
 import 'api/session_format.dart';
 import 'api/simulator.dart';

@@ -2568,6 +2568,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "socket2",
  "tokio",
  "zip 2.4.2",
  "zstd 0.13.3",

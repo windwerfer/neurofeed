@@ -44,8 +44,9 @@ Future<ConnectionStatus> getStatus() =>
     RustLib.instance.api.crateApiMuseGetStatus();
 
 /// Connect to a device with explicit kind and simulation flag.
-/// - `kind`: DeviceKind::Muse or DeviceKind::Neurosity (determines electrode layout, features)
-/// - `simulate`: if true, runs the built-in simulator instead of real BLE
+/// - `kind`: DeviceKind::Muse (BLE id from `scan`) or DeviceKind::Neurosity
+///   (Crown device id from `discovered_crowns`, streamed over OSC on the LAN)
+/// - `simulate`: if true, runs the built-in simulator instead of a headset
 /// - `record_aux`: Muse only — stream AUX inputs as electrodes 4.. (Classic:
 ///   AUX characteristic; Athena: keep electrodes 4..7). Off drops them.
 Future<ConnectionStatus> connectWithOptions({
@@ -72,11 +73,6 @@ Future<bool> isConnected() => RustLib.instance.api.crateApiMuseIsConnected();
 /// connection. The Rust side forwards events into the provided `StreamSink`.
 Stream<MuseEventDto> subscribeEvents() =>
     RustLib.instance.api.crateApiMuseSubscribeEvents();
-
-/// Connect to a Neurosity Crown/Notion device via BLE.
-/// Stub: not implemented — returns a placeholder connection (Crown Start refused).
-Future<ConnectionStatus> crownConnect({required String deviceId}) =>
-    RustLib.instance.api.crateApiMuseCrownConnect(deviceId: deviceId);
 
 /// Band power estimates for a single electrode.
 /// Bands: [delta, theta, alpha, beta, gamma] in µV²/Hz.

@@ -5,13 +5,14 @@ use muse_rs::prelude::*;
 use tokio::sync::mpsc;
 
 use crate::api::muse::MuseEventDto;
+use crate::api::neurosity_osc::CrownOscHandle;
 use crate::api::simulator::DeviceSimulator;
 use crate::frb_generated::StreamSink;
 
-/// Handle type for Muse, Crown, and simulated connections
+/// Handle type for Muse, Crown (OSC), and simulated connections
 pub enum ConnectionHandle {
     Muse(MuseHandle),
-    Crown, // Placeholder - Phase D will implement proper Crown handle
+    Crown(CrownOscHandle),
     Simulator(Arc<DeviceSimulator>),
 }
 
@@ -21,10 +22,7 @@ impl ConnectionHandle {
             ConnectionHandle::Muse(h) => {
                 let _ = h.disconnect().await;
             }
-            ConnectionHandle::Crown => {
-                // Phase D: implement proper Crown disconnect
-                log::warn!("[crown] disconnect called but not yet implemented");
-            }
+            ConnectionHandle::Crown(h) => h.disconnect(),
             ConnectionHandle::Simulator(s) => {
                 s.stop().await;
             }
@@ -44,7 +42,7 @@ pub struct ActiveConnection {
 
 #[derive(Default)]
 pub struct ManagerState {
-    /// All devices discovered in the most recent scan, keyed by BLE id.
+    /// Muse devices discovered by BLE scans, keyed by BLE id.
     pub devices: HashMap<String, MuseDevice>,
     /// The currently active connection, if any.
     pub active: Option<ActiveConnection>,

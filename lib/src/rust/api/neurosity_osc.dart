@@ -4,12 +4,26 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'device_config.dart';
+import 'muse.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `handle_band`, `handle_battery`, `handle_osc_message`, `handle_osc_packet`, `handle_raw_eeg`, `handle_signal_quality`, `now_ms`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `BandAccumulator`, `CrownOscHandle`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `connect_crown_osc`, `start_crown_osc_receiver`
-// These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `default`, `disconnect`
+// These functions are ignored because they are not marked as `pub`: `bind_socket`, `collect_floats`, `dispatch`, `emit_battery`, `ensure_socket`, `flatten_packet`, `floats`, `flush`, `hub`, `is_for`, `leaf`, `new`, `now_ms`, `observe`, `on_feature`, `on_message`, `on_raw`, `on_signal_quality`, `parse`, `parse`, `release_route`, `run_socket`, `run`, `send`, `start_crown_receiver`, `stop_socket_if_idle`, `visible`, `warn`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ChannelClosed`, `CrownAddr`, `CrownOscHandle`, `CrownRegistry`, `CrownStream`, `Hub`, `LogLimiter`, `Route`, `SeenCrown`, `SignalQuality`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `eq`, `eq`, `fmt`, `fmt`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `connect_crown_osc`
+// These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `default`, `default`, `default`, `disconnect`
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner< JoinHandle < () >>>
-abstract class JoinHandle implements RustOpaqueInterface {}
+/// Start listening for Crowns broadcasting OSC on the local network
+/// (UDP port 9000). Poll [discovered_crowns] for the list.
+Future<void> startCrownDiscovery() =>
+    RustLib.instance.api.crateApiNeurosityOscStartCrownDiscovery();
+
+/// Stop LAN discovery. The socket stays open while a Crown is connected.
+Future<void> stopCrownDiscovery() =>
+    RustLib.instance.api.crateApiNeurosityOscStopCrownDiscovery();
+
+/// Crowns that sent any `/neurosity/notion/{deviceId}/…` packet within the
+/// last few seconds. Name is the `/info` nickname, else the device id.
+Future<List<DeviceInfo>> discoveredCrowns() =>
+    RustLib.instance.api.crateApiNeurosityOscDiscoveredCrowns();

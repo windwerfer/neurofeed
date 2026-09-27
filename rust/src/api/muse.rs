@@ -363,11 +363,7 @@ pub async fn scan(timeout_secs: Option<u64>) -> anyhow::Result<Vec<DeviceInfo>> 
         .map(|d| DeviceInfo {
             name: d.name.clone(),
             id: d.id.clone(),
-            kind: if d.name.contains("Crown") || d.name.contains("Notion") {
-                DeviceKind::Neurosity
-            } else {
-                DeviceKind::Muse
-            },
+            kind: DeviceKind::Muse,
         })
         .collect();
 
@@ -532,8 +528,9 @@ pub fn get_status() -> ConnectionStatus {
 }
 
 /// Connect to a device with explicit kind and simulation flag.
-/// - `kind`: DeviceKind::Muse or DeviceKind::Neurosity (determines electrode layout, features)
-/// - `simulate`: if true, runs the built-in simulator instead of real BLE
+/// - `kind`: DeviceKind::Muse (BLE id from `scan`) or DeviceKind::Neurosity
+///   (Crown device id from `discovered_crowns`, streamed over OSC on the LAN)
+/// - `simulate`: if true, runs the built-in simulator instead of a headset
 /// - `record_aux`: Muse only — stream AUX inputs as electrodes 4.. (Classic:
 ///   AUX characteristic; Athena: keep electrodes 4..7). Off drops them.
 #[frb]
@@ -550,21 +547,8 @@ pub async fn connect_with_options(
         }
     }
 
-    // If simulating, we don't need a real device from cache
-    let (name, firmware) = if simulate {
-        crate::api::simulator::simulated_identity(&device_id, kind)
-    } else {
-        // Real device - look up from cache
-        let device = {
-            let guard = state().inner.lock().unwrap();
-            guard.devices.get(&device_id).cloned().ok_or_else(|| {
-                anyhow::anyhow!("Device {device_id} not found; scan first")
-            })?
-        };
-        (device.name.clone(), String::new()) // firmware filled after connect
-    };
-
     if simulate {
+        let (name, firmware) = crate::api::simulator::simulated_identity(&device_id, kind);
         let config = crate::api::device_config::DeviceConfig::for_kind(kind);
         let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(1024);
         let simulator = crate::api::simulator::spawn_simulator(config, dto_tx);
@@ -600,27 +584,16 @@ pub async fn connect_with_options(
         });
     }
 
-    // Real Neurosity (Crown/Notion) - use OSC over Wi-Fi
     if kind.is_neurosity() {
-        // For OSC, we don't strictly need the device in cache. The device_id is the Crown's serial number.
-        // Verify it exists if it was discovered via scan.
-        {
-            let guard = state().inner.lock().unwrap();
-            if !guard.devices.contains_key(&device_id) {
-                log::warn!("[crown_osc] Device {device_id} not in cache; connecting anyway (OSC uses serial)");
-            }
-        }
-        
         let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
-        
-        // Start OSC receiver (creates its own tokio task)
-        let status = crate::api::neurosity_osc::connect_crown_osc(device_id.clone(), dto_tx).await?;
-        
+        let (handle, status) =
+            crate::api::neurosity_osc::connect_crown_osc(device_id.clone(), dto_tx).await?;
+
         {
             let mut guard = state().inner.lock().unwrap();
             guard.connection_epoch += 1;
             guard.active = Some(ActiveConnection {
-                handle: ConnectionHandle::Crown, // CrownOscHandle would be better but kept simple
+                handle: ConnectionHandle::Crown(handle),
                 name: status.name.clone(),
                 id: device_id.clone(),
                 firmware: status.firmware.clone(),
@@ -632,11 +605,10 @@ pub async fn connect_with_options(
         features::set_active_kind(kind);
 
         spawn_event_forwarder();
-        
+
         return Ok(status);
     }
 
-    // Real Muse - existing logic
     let device = {
         let guard = state().inner.lock().unwrap();
         guard.devices.get(&device_id).cloned().ok_or_else(|| {
@@ -1704,56 +1676,6 @@ fn map_imu(imu: ImuData) -> ImuDto {
             })
             .collect(),
     }
-}
-
-/// Connect to a Neurosity Crown/Notion device via BLE.
-/// Stub: not implemented — returns a placeholder connection (Crown Start refused).
-pub async fn crown_connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
-    {
-        let old = state().inner.lock().unwrap().active.take();
-        if let Some(old) = old {
-            old.handle.disconnect().await;
-        }
-    }
-
-    let device = {
-        let guard = state().inner.lock().unwrap();
-        guard.devices.get(&device_id).cloned().ok_or_else(|| {
-            anyhow::anyhow!("Device {device_id} not found; scan first")
-        })?
-    };
-
-    let name = device.name.clone();
-    
-    // Placeholder channel; Crown BLE Start is refused until implemented.
-    let (_tx, rx) = tokio::sync::mpsc::channel(256);
-
-    log::warn!("[crown] Crown BLE not yet implemented - returning placeholder connection");
-
-    {
-        let mut guard = state().inner.lock().unwrap();
-        guard.connection_epoch += 1;
-        guard.active = Some(ActiveConnection {
-            handle: ConnectionHandle::Crown,
-            name: name.clone(),
-            id: device_id.clone(),
-            firmware: "Crown".to_string(),
-            aux_channels: 0,
-        });
-        guard.events = Some(rx);
-        guard.eeg_electrode_limit = None;
-    }
-    features::set_active_kind(DeviceKind::Neurosity);
-
-    spawn_event_forwarder();
-
-    Ok(ConnectionStatus {
-        connected: true,
-        name,
-        id: device_id,
-        firmware: "Crown".to_string(),
-        aux_channels: 0,
-    })
 }
 
 #[cfg(test)]
