@@ -50,6 +50,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
             name: '',
             id: '',
             firmware: '',
+            auxChannels: 0,
           ),
           currentView: _settings.lastView,
           sidebarOpen: false,
@@ -100,7 +101,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
   /// Latest 50/60 Hz line-noise ratio per electrode from Bands events.
   /// -1 means no data yet for that pad.
-  final List<double> _lineNoise = List.filled(4, -1);
+  final List<double> _lineNoise = List.filled(kMaxPadChannels, -1);
   final _PadQualityRing _padQuality = _PadQualityRing();
 
   Stream<MuseEventDto> get eventStream => _eventController.stream;
@@ -369,6 +370,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       name: '',
       id: '',
       firmware: '',
+      auxChannels: 0,
     );
     const telemetry = TelemetrySnapshot(
       batteryLevel: 0,
@@ -413,10 +415,11 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     _lastQualityCheck = now;
 
     const window = 1.0;
-    final quals = List.filled(4, 0.0);
+    final present = _padQuality.channels.toList();
+    final count = present.fold<int>(4, (n, ch) => ch + 1 > n ? ch + 1 : n);
+    final quals = List.filled(count, 0.0);
 
-    for (final ch in _padQuality.channels) {
-      if (ch < 0 || ch > 3) continue;
+    for (final ch in present) {
       final samples = _padQuality.valuesIn(ch, now - window, now);
       if (samples.length < 10) continue;
 
@@ -486,6 +489,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           deviceId: id,
           kind: kind,
           simulate: simulate,
+          recordAux: _settings.recordAux,
         );
         debugPrint('[neurofeed] connect returned: connected=${status.connected}');
         if (persist) await _settings.setLastDeviceId(id);
@@ -667,6 +671,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     String name = 'Muse 2',
     String id = 'sim:muse-2',
     String firmware = 'Classic',
+    int auxChannels = 0,
   }) {
     if (connected) {
       _allowAutoReconnect = true;
@@ -676,6 +681,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           name: name,
           id: id,
           firmware: firmware,
+          auxChannels: auxChannels,
         ),
         lastConnectedKind: kind,
       );
@@ -686,6 +692,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           name: '',
           id: '',
           firmware: '',
+          auxChannels: 0,
         ),
       );
     }
@@ -820,10 +827,13 @@ final appStateProvider = StateNotifierProvider<AppStateNotifier, AppUiState>((
 });
 
 /// 4-ch, 1 s EEG ring for status-bar pad quality. Not the 5 min live cache.
+/// Pad-quality slots: Muse 4 head + up to 4 AUX, or Crown 8.
+const int kMaxPadChannels = 8;
+
 class _PadQualityRing {
   static const _sampleRate = 256.0;
   static const _capacity = 256;
-  static const _channelCount = 4;
+  static const _channelCount = kMaxPadChannels;
 
   final List<_PadChannel?> _channels = List<_PadChannel?>.filled(
     _channelCount,
@@ -832,7 +842,7 @@ class _PadQualityRing {
 
   void appendEeg(EegDto dto) {
     final ch = dto.electrode;
-    if (ch < 0 || ch > 3) return;
+    if (ch < 0 || ch >= _channelCount) return;
     final buf = _channels[ch] ??= _PadChannel(_capacity);
     final dt = 1.0 / _sampleRate;
     final baseSecs = dto.timestamp / 1000.0;
@@ -860,7 +870,7 @@ class _PadQualityRing {
   }
 
   List<double> valuesIn(int channel, double startT, double endT) {
-    if (channel < 0 || channel > 3) return const [];
+    if (channel < 0 || channel >= _channelCount) return const [];
     final buf = _channels[channel];
     if (buf == null || buf.length == 0) return const [];
     final lo = buf.lowerBound(startT);

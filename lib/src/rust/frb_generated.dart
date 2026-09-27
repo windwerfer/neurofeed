@@ -149,6 +149,7 @@ abstract class RustLibApi extends BaseApi {
     required String deviceId,
     required DeviceKind kind,
     required bool simulate,
+    required bool recordAux,
   });
 
   Future<ConnectionStatus> crateApiMuseConnectionStatusDefault();
@@ -888,6 +889,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String deviceId,
     required DeviceKind kind,
     required bool simulate,
+    required bool recordAux,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -896,6 +898,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(deviceId, serializer);
           sse_encode_device_kind(kind, serializer);
           sse_encode_bool(simulate, serializer);
+          sse_encode_bool(recordAux, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -908,7 +911,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_AnyhowException,
         ),
         constMeta: kCrateApiMuseConnectWithOptionsConstMeta,
-        argValues: [deviceId, kind, simulate],
+        argValues: [deviceId, kind, simulate, recordAux],
         apiImpl: this,
       ),
     );
@@ -917,7 +920,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiMuseConnectWithOptionsConstMeta =>
       const TaskConstMeta(
         debugName: "connect_with_options",
-        argNames: ["deviceId", "kind", "simulate"],
+        argNames: ["deviceId", "kind", "simulate", "recordAux"],
       );
 
   @override
@@ -2628,13 +2631,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ConnectionStatus dco_decode_connection_status(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return ConnectionStatus(
       connected: dco_decode_bool(arr[0]),
       name: dco_decode_String(arr[1]),
       id: dco_decode_String(arr[2]),
       firmware: dco_decode_String(arr[3]),
+      auxChannels: dco_decode_u_32(arr[4]),
     );
   }
 
@@ -3746,11 +3750,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_name = sse_decode_String(deserializer);
     var var_id = sse_decode_String(deserializer);
     var var_firmware = sse_decode_String(deserializer);
+    var var_auxChannels = sse_decode_u_32(deserializer);
     return ConnectionStatus(
       connected: var_connected,
       name: var_name,
       id: var_id,
       firmware: var_firmware,
+      auxChannels: var_auxChannels,
     );
   }
 
@@ -5091,6 +5097,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.id, serializer);
     sse_encode_String(self.firmware, serializer);
+    sse_encode_u_32(self.auxChannels, serializer);
   }
 
   @protected

@@ -188,7 +188,17 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         RepaintBoundary(child: _SubjectCard(settings: settings)),
         const SizedBox(height: 16),
         RepaintBoundary(
-          child: _RecordingCard(streams: streams, onToggle: toggle),
+          child: _RecordingCard(
+            streams: streams,
+            onToggle: toggle,
+            recordAux: settings.recordAux,
+            onRecordAux: (on) async {
+              await settings.setRecordAux(on);
+              if (mounted) {
+                setState(() {});
+              }
+            },
+          ),
         ),
         const SizedBox(height: 16),
         RepaintBoundary(child: _GesturesCard(settings: settings)),
@@ -657,10 +667,17 @@ class _DebugCard extends ConsumerWidget {
 
 /// Which sensor data streams get persisted into each session file.
 class _RecordingCard extends StatelessWidget {
-  const _RecordingCard({required this.streams, required this.onToggle});
+  const _RecordingCard({
+    required this.streams,
+    required this.onToggle,
+    required this.recordAux,
+    required this.onRecordAux,
+  });
 
   final Set<RecordingStream> streams;
   final void Function(RecordingStream stream, bool on) onToggle;
+  final bool recordAux;
+  final void Function(bool on) onRecordAux;
 
   static const Map<RecordingStream, (String, String)> _labels = {
     RecordingStream.eeg: (
@@ -745,6 +762,22 @@ class _RecordingCard extends StatelessWidget {
                 value: streams.contains(entry.key),
                 onChanged: (on) => onToggle(entry.key, on),
               ),
+            const Divider(height: 24),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.settings_input_component_outlined),
+              title: const Text('Record AUX channels'),
+              subtitle: Text(
+                'Muse auxiliary inputs as extra channels (Classic firmware: '
+                'AUX1; Athena: AUX1–AUX4). Off records only TP9/AF7/AF8/TP10. '
+                'Applies on the next connect.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              value: recordAux,
+              onChanged: onRecordAux,
+            ),
             const Divider(height: 24),
             Text(
               'Note: blood-oxygen (SpO2) and fNIRS metrics (HbO/HbR) are not '

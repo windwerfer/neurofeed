@@ -9,6 +9,7 @@ AppUiState _state({String? scanMessage}) => AppUiState(
     name: '',
     id: '',
     firmware: '',
+    auxChannels: 0,
   ),
   currentView: AppView.feedback,
   sidebarOpen: false,

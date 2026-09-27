@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/feedback/target_state.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/monitor/signal_usable.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
 
@@ -134,10 +135,8 @@ Map<String, Object?>? assembleBaseStats({
         maxPowerHz = pa.freq;
       }
     }
-    if (f.signalQuality.isNotEmpty) {
-      final mean =
-          f.signalQuality.map((e) => e.toDouble()).reduce((a, b) => a + b) /
-          f.signalQuality.length;
+    final mean = _headQualityMean(f.signalQuality, channelLabels);
+    if (mean != null) {
       qSum += mean;
       qN++;
       if (mean >= kUsableSignalThreshold) goodN++;
@@ -197,7 +196,10 @@ Map<String, Object?>? assembleBaseStats({
       ?'endPct': batteryEndPct,
     };
   }
-  final experimental = assembleExperimentalBands(frames);
+  final experimental = assembleExperimentalBands(
+    frames,
+    channelLabels: channelLabels,
+  );
   if (experimental != null) {
     stats.addAll(experimental);
   }
@@ -219,12 +221,24 @@ const int kChAf7 = 1;
 const int kChAf8 = 2;
 const int kChTp10 = 3;
 
-bool _frameUsable(ffi.ComputedFrame f) {
-  if (f.signalQuality.isEmpty) return false;
-  final mean =
-      f.signalQuality.map((e) => e.toDouble()).reduce((a, b) => a + b) /
-      f.signalQuality.length;
-  return mean >= kUsableSignalThreshold;
+bool _isHead(int i, List<String> labels) =>
+    i >= labels.length || !isAuxChannelLabel(labels[i]);
+
+/// Mean pad quality over head channels (AUX excluded); null when none.
+double? _headQualityMean(List<int> quality, List<String> labels) {
+  var sum = 0.0;
+  var n = 0;
+  for (var i = 0; i < quality.length; i++) {
+    if (!_isHead(i, labels)) continue;
+    sum += quality[i];
+    n++;
+  }
+  return n == 0 ? null : sum / n;
+}
+
+bool _frameUsable(ffi.ComputedFrame f, List<String> labels) {
+  final mean = _headQualityMean(f.signalQuality, labels);
+  return mean != null && mean >= kUsableSignalThreshold;
 }
 
 double? _channelMeanBand(List<List<num>> bands, int bandIdx) {
@@ -252,12 +266,13 @@ double? _relAlpha(List<num> ch) {
 /// when fewer than [kMinUsableSecondsForExperimentalBands] usable seconds.
 Map<String, Object?>? assembleExperimentalBands(
   List<ffi.ComputedFrame> frames, {
+  List<String> channelLabels = const ['TP9', 'AF7', 'AF8', 'TP10'],
   bool includeSensible = true,
   bool includeCool = true,
 }) {
   final usable = <ffi.ComputedFrame>[];
   for (final f in frames) {
-    if (!_frameUsable(f)) continue;
+    if (!_frameUsable(f, channelLabels)) continue;
     if (f.bands.isEmpty) continue;
     usable.add(f);
   }
@@ -290,7 +305,8 @@ Map<String, Object?>? assembleExperimentalBands(
 
   for (final f in usable) {
     final bands = [
-      for (final row in f.bands) List<num>.from(row),
+      for (var i = 0; i < f.bands.length; i++)
+        if (_isHead(i, channelLabels)) List<num>.from(f.bands[i]),
     ];
     // Ensure channel sum lists sized
     while (chAlphaSum.length < bands.length) {

@@ -173,6 +173,17 @@ annotations: [ { onset, duration, type }, … ]   // unified timeline: quality i
 feedback: { … }   // ONLY when kind == "feedback"; NO gestures[] list
 ```
 
+### Channel labels (LOCKED)
+
+`device.channelLabels[i]` is the label of electrode index `i`; every per-channel array (`ComputedFrame.bands`, `lineNoise`, `signalQuality`, raw EEG electrode numbers) uses the same index. Labels come from our own device table, never from the headset driver's name strings.
+
+| Device | Head channels (index 0…) | AUX (optional, after head channels) |
+|--------|--------------------------|-------------------------------------|
+| Muse (Classic, Athena) | `TP9`, `AF7`, `AF8`, `TP10` (reference FPz is not a channel) | `AUX1` (Classic, electrode 4); `AUX1`…`AUX4` (Athena, electrodes 4–7) |
+| Crown | `CP3`, `C3`, `F5`, `PO3`, `PO4`, `F6`, `C4`, `CP4` | — |
+
+AUX channels are present only when the user enabled **Record AUX channels**. They get raw EEG, computed bands and `stats.quality.channelUsable`, but are excluded from `stats.quality.mean`, `pctGood`, the usable-second gate and `stats.experimental`.
+
 ### Example — `kind: "recording"`
 
 Uses **Locked vocabulary** keys (no synonyms).

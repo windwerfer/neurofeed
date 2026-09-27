@@ -150,6 +150,7 @@ class Settings extends ChangeNotifier {
   static const String _durationMinutesKey = 'duration_minutes';
   static const String _sessionFolderKey = 'session_folder';
   static const String _recordStreamsKey = 'record_streams';
+  static const String _recordAuxKey = 'record_aux_channels';
   static const String _eyeMarkersKey = 'gesture_eye_markers';
   static const String _markersInFeedbackKey = 'gesture_markers_in_feedback';
   static const String _trustRewardVisibleKey = 'trust_reward_visible';
@@ -510,6 +511,15 @@ class Settings extends ChangeNotifier {
       _recordStreamsKey,
       streams.map((s) => s.name).toList(),
     );
+    notifyListeners();
+  }
+
+  /// Record Muse AUX inputs (AUX1–AUX4) as extra EEG channels. Off by
+  /// default: only TP9/AF7/AF8/TP10 are recorded. Applies on connect.
+  bool get recordAux => _prefs.getBool(_recordAuxKey) ?? false;
+
+  Future<void> setRecordAux(bool value) async {
+    await _prefs.setBool(_recordAuxKey, value);
     notifyListeners();
   }
 

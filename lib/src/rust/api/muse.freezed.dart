@@ -316,6 +316,7 @@ mixin _$ConnectionStatus {
   String get name => throw _privateConstructorUsedError;
   String get id => throw _privateConstructorUsedError;
   String get firmware => throw _privateConstructorUsedError;
+  int get auxChannels => throw _privateConstructorUsedError;
 
   /// Create a copy of ConnectionStatus
   /// with the given fields replaced by the non-null parameter values.
@@ -331,7 +332,13 @@ abstract class $ConnectionStatusCopyWith<$Res> {
     $Res Function(ConnectionStatus) then,
   ) = _$ConnectionStatusCopyWithImpl<$Res, ConnectionStatus>;
   @useResult
-  $Res call({bool connected, String name, String id, String firmware});
+  $Res call({
+    bool connected,
+    String name,
+    String id,
+    String firmware,
+    int auxChannels,
+  });
 }
 
 /// @nodoc
@@ -353,6 +360,7 @@ class _$ConnectionStatusCopyWithImpl<$Res, $Val extends ConnectionStatus>
     Object? name = null,
     Object? id = null,
     Object? firmware = null,
+    Object? auxChannels = null,
   }) {
     return _then(
       _value.copyWith(
@@ -372,6 +380,10 @@ class _$ConnectionStatusCopyWithImpl<$Res, $Val extends ConnectionStatus>
                 ? _value.firmware
                 : firmware // ignore: cast_nullable_to_non_nullable
                       as String,
+            auxChannels: null == auxChannels
+                ? _value.auxChannels
+                : auxChannels // ignore: cast_nullable_to_non_nullable
+                      as int,
           )
           as $Val,
     );
@@ -387,7 +399,13 @@ abstract class _$$ConnectionStatusImplCopyWith<$Res>
   ) = __$$ConnectionStatusImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({bool connected, String name, String id, String firmware});
+  $Res call({
+    bool connected,
+    String name,
+    String id,
+    String firmware,
+    int auxChannels,
+  });
 }
 
 /// @nodoc
@@ -408,6 +426,7 @@ class __$$ConnectionStatusImplCopyWithImpl<$Res>
     Object? name = null,
     Object? id = null,
     Object? firmware = null,
+    Object? auxChannels = null,
   }) {
     return _then(
       _$ConnectionStatusImpl(
@@ -427,6 +446,10 @@ class __$$ConnectionStatusImplCopyWithImpl<$Res>
             ? _value.firmware
             : firmware // ignore: cast_nullable_to_non_nullable
                   as String,
+        auxChannels: null == auxChannels
+            ? _value.auxChannels
+            : auxChannels // ignore: cast_nullable_to_non_nullable
+                  as int,
       ),
     );
   }
@@ -440,6 +463,7 @@ class _$ConnectionStatusImpl extends _ConnectionStatus {
     required this.name,
     required this.id,
     required this.firmware,
+    required this.auxChannels,
   }) : super._();
 
   @override
@@ -450,10 +474,12 @@ class _$ConnectionStatusImpl extends _ConnectionStatus {
   final String id;
   @override
   final String firmware;
+  @override
+  final int auxChannels;
 
   @override
   String toString() {
-    return 'ConnectionStatus(connected: $connected, name: $name, id: $id, firmware: $firmware)';
+    return 'ConnectionStatus(connected: $connected, name: $name, id: $id, firmware: $firmware, auxChannels: $auxChannels)';
   }
 
   @override
@@ -466,11 +492,14 @@ class _$ConnectionStatusImpl extends _ConnectionStatus {
             (identical(other.name, name) || other.name == name) &&
             (identical(other.id, id) || other.id == id) &&
             (identical(other.firmware, firmware) ||
-                other.firmware == firmware));
+                other.firmware == firmware) &&
+            (identical(other.auxChannels, auxChannels) ||
+                other.auxChannels == auxChannels));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, connected, name, id, firmware);
+  int get hashCode =>
+      Object.hash(runtimeType, connected, name, id, firmware, auxChannels);
 
   /// Create a copy of ConnectionStatus
   /// with the given fields replaced by the non-null parameter values.
@@ -490,6 +519,7 @@ abstract class _ConnectionStatus extends ConnectionStatus {
     required final String name,
     required final String id,
     required final String firmware,
+    required final int auxChannels,
   }) = _$ConnectionStatusImpl;
   const _ConnectionStatus._() : super._();
 
@@ -501,6 +531,8 @@ abstract class _ConnectionStatus extends ConnectionStatus {
   String get id;
   @override
   String get firmware;
+  @override
+  int get auxChannels;
 
   /// Create a copy of ConnectionStatus
   /// with the given fields replaced by the non-null parameter values.

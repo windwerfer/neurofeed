@@ -12,20 +12,37 @@ const List<String> kCrownElectrodeNames = [
   'CP4',
 ];
 
+/// Muse AUX inputs follow the four head electrodes: electrode 4 = AUX1 …
+/// electrode 7 = AUX4 (Classic streams AUX1 only; Athena AUX1–AUX4).
+const List<String> kMuseAuxElectrodeNames = ['AUX1', 'AUX2', 'AUX3', 'AUX4'];
+
+/// True for auxiliary (non-head) inputs. AUX channels are recorded with raw
+/// + bands but never count toward quality aggregates or feature selection.
+bool isAuxChannelLabel(String label) => label.startsWith('AUX');
+
 /// Recording montage: electrode index → label. Monitor and feedback
-/// recordings write this as `device.channelLabels`.
-List<String> electrodeNamesForKind(DeviceKind? kind) =>
-    kind == DeviceKind.neurosity ? kCrownElectrodeNames : kMuseElectrodeNames;
+/// recordings write this as `device.channelLabels`. [auxChannels] is the
+/// Muse AUX count streamed on the connection (`ConnectionStatus.auxChannels`).
+List<String> electrodeNamesForKind(DeviceKind? kind, {int auxChannels = 0}) {
+  if (kind == DeviceKind.neurosity) return kCrownElectrodeNames;
+  if (auxChannels <= 0) return kMuseElectrodeNames;
+  return [
+    ...kMuseElectrodeNames,
+    ...kMuseAuxElectrodeNames.take(auxChannels),
+  ];
+}
 
 /// Channel labels in electrode-index order for a recording that produced
-/// data on [electrodes]. Covers the full device montage and any extra
-/// electrode index beyond it (`CH<n>`).
+/// data on [electrodes]. Covers the full device montage; Muse electrodes
+/// past the head four are AUX, anything else unknown is `CH<n>`.
 List<String> recordedChannelLabels({
   required DeviceKind? kind,
   required Iterable<int> electrodes,
 }) {
-  final names = electrodeNamesForKind(kind);
-  var count = names.length;
+  final names = kind == DeviceKind.neurosity
+      ? kCrownElectrodeNames
+      : [...kMuseElectrodeNames, ...kMuseAuxElectrodeNames];
+  var count = electrodeNamesForKind(kind).length;
   for (final e in electrodes) {
     if (e + 1 > count) count = e + 1;
   }
@@ -33,6 +50,12 @@ List<String> recordedChannelLabels({
     for (var i = 0; i < count; i++) i < names.length ? names[i] : 'CH${i + 1}',
   ];
 }
+
+/// Indices of head (non-AUX) channels in [labels].
+List<int> headChannelIndices(List<String> labels) => [
+  for (var i = 0; i < labels.length; i++)
+    if (!isAuxChannelLabel(labels[i])) i,
+];
 
 int channelCountForKind(DeviceKind? kind) => electrodeNamesForKind(kind).length;
 

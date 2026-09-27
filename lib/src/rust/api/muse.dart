@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'muse.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `compute_spo2`, `emit_enabled_band_features`, `frontal_delta_average`, `map_event`, `map_imu`, `now_ms`, `score_window_len`, `spawn_event_forwarder`
+// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `compute_spo2`, `emit_enabled_band_features`, `frontal_delta_average`, `map_event`, `map_imu`, `muse_aux_channels`, `now_ms`, `score_window_len`, `spawn_event_forwarder`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ForwarderGuard`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `drop`
 
@@ -46,14 +46,18 @@ Future<ConnectionStatus> getStatus() =>
 /// Connect to a device with explicit kind and simulation flag.
 /// - `kind`: DeviceKind::Muse or DeviceKind::Neurosity (determines electrode layout, features)
 /// - `simulate`: if true, runs the built-in simulator instead of real BLE
+/// - `record_aux`: Muse only — stream AUX inputs as electrodes 4.. (Classic:
+///   AUX characteristic; Athena: keep electrodes 4..7). Off drops them.
 Future<ConnectionStatus> connectWithOptions({
   required String deviceId,
   required DeviceKind kind,
   required bool simulate,
+  required bool recordAux,
 }) => RustLib.instance.api.crateApiMuseConnectWithOptions(
   deviceId: deviceId,
   kind: kind,
   simulate: simulate,
+  recordAux: recordAux,
 );
 
 /// Returns `true` if a connection is currently active. The Rust side clears
@@ -99,6 +103,7 @@ sealed class ConnectionStatus with _$ConnectionStatus {
     required String name,
     required String id,
     required String firmware,
+    required int auxChannels,
   }) = _ConnectionStatus;
   static Future<ConnectionStatus> default_() =>
       RustLib.instance.api.crateApiMuseConnectionStatusDefault();

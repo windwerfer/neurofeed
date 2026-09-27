@@ -753,6 +753,7 @@ fn wire__crate__api__muse__connect_with_options_impl(
             let api_device_id = <String>::sse_decode(&mut deserializer);
             let api_kind = <crate::api::device_config::DeviceKind>::sse_decode(&mut deserializer);
             let api_simulate = <bool>::sse_decode(&mut deserializer);
+            let api_record_aux = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
@@ -761,6 +762,7 @@ fn wire__crate__api__muse__connect_with_options_impl(
                             api_device_id,
                             api_kind,
                             api_simulate,
+                            api_record_aux,
                         )
                         .await?;
                         Ok(output_ok)
@@ -2610,11 +2612,13 @@ impl SseDecode for crate::api::muse::ConnectionStatus {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_id = <String>::sse_decode(deserializer);
         let mut var_firmware = <String>::sse_decode(deserializer);
+        let mut var_auxChannels = <u32>::sse_decode(deserializer);
         return crate::api::muse::ConnectionStatus {
             connected: var_connected,
             name: var_name,
             id: var_id,
             firmware: var_firmware,
+            aux_channels: var_auxChannels,
         };
     }
 }
@@ -4114,6 +4118,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::muse::ConnectionStatus {
             self.name.into_into_dart().into_dart(),
             self.id.into_into_dart().into_dart(),
             self.firmware.into_into_dart().into_dart(),
+            self.aux_channels.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5079,6 +5084,7 @@ impl SseEncode for crate::api::muse::ConnectionStatus {
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.id, serializer);
         <String>::sse_encode(self.firmware, serializer);
+        <u32>::sse_encode(self.aux_channels, serializer);
     }
 }
 

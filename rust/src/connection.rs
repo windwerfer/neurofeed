@@ -39,6 +39,7 @@ pub struct ActiveConnection {
     pub name: String,
     pub id: String,
     pub firmware: String,
+    pub aux_channels: u32,
 }
 
 #[derive(Default)]
@@ -51,6 +52,9 @@ pub struct ManagerState {
     pub sink: Option<StreamSink<MuseEventDto>>,
     /// The receiver end of the active connection's event channel, if any.
     pub events: Option<mpsc::Receiver<MuseEventDto>>,
+    /// EEG electrodes at or above this index are dropped by the forwarder
+    /// for the active connection (Muse without AUX: `Some(4)`).
+    pub eeg_electrode_limit: Option<i32>,
     /// Whether the event-forwarding task is already running.
     pub forwarder_running: bool,
     /// Monotonically increasing counter, bumped on each new connection.

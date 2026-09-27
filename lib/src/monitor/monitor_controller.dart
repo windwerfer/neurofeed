@@ -213,7 +213,10 @@ class MonitorController extends Notifier<MonitorState> {
       }
       final app = ref.read(appStateProvider);
       final settings = ref.read(settingsProvider);
-      final names = electrodeNamesForKind(app.lastConnectedKind);
+      final names = electrodeNamesForKind(
+        app.lastConnectedKind,
+        auxChannels: app.status.auxChannels,
+      );
       final startedAt = _latestEegTsMs ?? DateTime.now().millisecondsSinceEpoch;
       _recordingSessionId = const Uuid().v4();
       state = MonitorState(
@@ -333,7 +336,10 @@ class MonitorController extends Notifier<MonitorState> {
         await dir.create(recursive: true);
       }
       final settings = ref.read(settingsProvider);
-      final names = electrodeNamesForKind(app.lastConnectedKind);
+      final names = electrodeNamesForKind(
+        app.lastConnectedKind,
+        auxChannels: app.status.auxChannels,
+      );
       final startedAt = _latestEegTsMs ?? DateTime.now().millisecondsSinceEpoch;
       _recordingSessionId = const Uuid().v4();
       _clearLiveGraphs();
@@ -508,11 +514,13 @@ class MonitorController extends Notifier<MonitorState> {
         _latestEegTsMs = event.field0.timestamp.round();
         sweepBuffer.append(event.field0);
       case MuseEventDto_Bands():
-        bandCache.appendBands(
-          event.field0,
-          signalQuality: ref.read(appStateProvider).signalQuality,
-        );
+        final quality = ref.read(appStateProvider).signalQuality;
+        bandCache.appendBands(event.field0, signalQuality: quality);
         _sampler?.updateBands(event.field0.electrode, event.field0);
+        final e = event.field0.electrode;
+        if (quality != null && e >= 0 && e < quality.length) {
+          _sampler?.updateSignalQuality(e, quality[e].round());
+        }
       case MuseEventDto_Pulse():
         opticalCache.appendPulse(event.field0);
         _sampler?.updatePulse(event.field0);

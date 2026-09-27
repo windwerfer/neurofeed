@@ -330,5 +330,6 @@ pub async fn connect_crown_osc(
         name: format!("Crown ({device_id})"),
         id: device_id,
         firmware: "Crown_OSC".to_string(),
+        aux_channels: 0,
     })
 }

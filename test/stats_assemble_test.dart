@@ -19,7 +19,7 @@ ffi.ComputedFrame _frame({
   return ffi.ComputedFrame(
     t: t,
     bands: [
-      for (var i = 0; i < 4; i++) _f32([1.0, 2.0, 3.0, 4.0, 5.0]),
+      for (var i = 0; i < quality.length; i++) _f32([1.0, 2.0, 3.0, 4.0, 5.0]),
     ],
     pulse: pulse,
     movement: movement,
@@ -114,5 +114,22 @@ void main() {
       SessionAnnotation(onset: 30, duration: 0, type: 'double_blink'),
     ]);
     expect(secs, {'pause': 10.0, 'bad_quality': 5.0});
+  });
+
+  test('AUX channels are excluded from quality aggregates but keep channelUsable', () {
+    final frames = [
+      for (var t = 0; t < 3; t++)
+        _frame(t: t.toDouble(), quality: const [90, 90, 90, 90, 0]),
+    ];
+    final stats = assembleBaseStats(
+      frames: frames,
+      channelLabels: const ['TP9', 'AF7', 'AF8', 'TP10', 'AUX1'],
+    )!;
+    final q = stats['quality'] as Map;
+    expect(q['mean'], closeTo(90, 1e-9));
+    expect(q['pctGood'], closeTo(100, 1e-9));
+    final usable = q['channelUsable'] as Map;
+    expect(usable['AUX1'], 0);
+    expect(usable['TP9'], 1);
   });
 }

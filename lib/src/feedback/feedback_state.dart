@@ -2205,10 +2205,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   double? get guardrailThreshold => _guard.threshold;
 
   bool _allGreen(List<double>? quality) {
-    if (quality == null || quality.length < 4) {
+    final head = electrodeNamesForKind(
+      _ref.read(appStateProvider).lastConnectedKind,
+    ).length;
+    if (quality == null || quality.length < head) {
       return false;
     }
-    return quality.every((s) => s >= signalGoodThreshold);
+    return quality.take(head).every((s) => s >= signalGoodThreshold);
   }
 
   bool _hasNeededElectrode(List<double>? quality) {

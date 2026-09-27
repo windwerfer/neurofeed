@@ -102,6 +102,8 @@ pub struct ConnectionStatus {
     pub name: String,
     pub id: String,
     pub firmware: String,
+    /// Muse AUX inputs streamed on this connection (electrodes 4.. = AUX1..).
+    pub aux_channels: u32,
 }
 
 impl Default for ConnectionStatus {
@@ -111,7 +113,21 @@ impl Default for ConnectionStatus {
             name: String::new(),
             id: String::new(),
             firmware: String::new(),
+            aux_channels: 0,
         }
+    }
+}
+
+/// Muse on-head EEG electrodes (TP9, AF7, AF8, TP10); AUX inputs follow.
+pub(crate) const MUSE_HEAD_ELECTRODES: u32 = 4;
+
+/// AUX inputs muse-rs streams when AUX is requested: Classic exposes one
+/// AUX characteristic (electrode 4); Athena delivers electrodes 4..7.
+pub(crate) fn muse_aux_channels(is_athena: bool, record_aux: bool) -> u32 {
+    match (record_aux, is_athena) {
+        (false, _) => 0,
+        (true, true) => 4,
+        (true, false) => 1,
     }
 }
 
@@ -449,8 +465,10 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
                 name: name.clone(),
                 id: device_id.clone(),
                 firmware: firmware.clone(),
+                aux_channels: 0,
             });
             guard.events = Some(dto_rx);
+            guard.eeg_electrode_limit = Some(MUSE_HEAD_ELECTRODES as i32);
         }
         features::set_active_kind(DeviceKind::Muse);
 
@@ -461,6 +479,7 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
             name,
             id: device_id,
             firmware,
+            aux_channels: 0,
         })
     })
     .await
@@ -506,6 +525,7 @@ pub fn get_status() -> ConnectionStatus {
             name: conn.name.clone(),
             id: conn.id.clone(),
             firmware: conn.firmware.clone(),
+            aux_channels: conn.aux_channels,
         },
         None => ConnectionStatus::default(),
     }
@@ -514,11 +534,14 @@ pub fn get_status() -> ConnectionStatus {
 /// Connect to a device with explicit kind and simulation flag.
 /// - `kind`: DeviceKind::Muse or DeviceKind::Neurosity (determines electrode layout, features)
 /// - `simulate`: if true, runs the built-in simulator instead of real BLE
+/// - `record_aux`: Muse only — stream AUX inputs as electrodes 4.. (Classic:
+///   AUX characteristic; Athena: keep electrodes 4..7). Off drops them.
 #[frb]
 pub async fn connect_with_options(
     device_id: String,
     kind: DeviceKind,
     simulate: bool,
+    record_aux: bool,
 ) -> anyhow::Result<ConnectionStatus> {
     {
         let old = state().inner.lock().unwrap().active.take();
@@ -555,8 +578,14 @@ pub async fn connect_with_options(
                 name: name.clone(),
                 id: device_id.clone(),
                 firmware: firmware.clone(),
+                aux_channels: 0,
             });
             guard.events = Some(dto_rx);
+            guard.eeg_electrode_limit = if kind.is_muse() {
+                Some(MUSE_HEAD_ELECTRODES as i32)
+            } else {
+                None
+            };
         }
         features::set_active_kind(kind);
 
@@ -567,6 +596,7 @@ pub async fn connect_with_options(
             name,
             id: device_id,
             firmware,
+            aux_channels: 0,
         });
     }
 
@@ -594,8 +624,10 @@ pub async fn connect_with_options(
                 name: status.name.clone(),
                 id: device_id.clone(),
                 firmware: status.firmware.clone(),
+                aux_channels: 0,
             });
             guard.events = Some(dto_rx);
+            guard.eeg_electrode_limit = None;
         }
         features::set_active_kind(kind);
 
@@ -615,6 +647,7 @@ pub async fn connect_with_options(
     let name = device.name.clone();
     let client = MuseClient::new(MuseClientConfig {
         enable_ppg: true,
+        enable_aux: record_aux,
         ..Default::default()
     });
 
@@ -626,12 +659,13 @@ pub async fn connect_with_options(
             "Classic"
         }
         .to_string();
+        let aux_channels = muse_aux_channels(handle.is_athena, record_aux);
 
-        log::info!("[muse] connected to {name} ({firmware} firmware)");
+        log::info!("[muse] connected to {name} ({firmware} firmware, aux={aux_channels})");
 
         let start_result = tokio::time::timeout(
             std::time::Duration::from_secs(8),
-            handle.start(true, false),
+            handle.start(true, record_aux),
         )
         .await;
 match start_result {
@@ -663,8 +697,10 @@ match start_result {
                 name: name.clone(),
                 id: device_id.clone(),
                 firmware: firmware.clone(),
+                aux_channels,
             });
             guard.events = Some(dto_rx);
+            guard.eeg_electrode_limit = Some((MUSE_HEAD_ELECTRODES + aux_channels) as i32);
         }
         features::set_active_kind(kind);
 
@@ -675,6 +711,7 @@ match start_result {
             name,
             id: device_id,
             firmware,
+            aux_channels,
         })
     })
     .await
@@ -788,10 +825,10 @@ fn spawn_event_forwarder() {
 
         const FFT_N: usize = 256;
         loop {
-            let rx = {
+            let (rx, eeg_limit) = {
                 let mut guard =
                     state().inner.lock().unwrap_or_else(|e| e.into_inner());
-                guard.events.take()
+                (guard.events.take(), guard.eeg_electrode_limit)
             };
             let Some(mut rx) = rx else {
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -884,8 +921,10 @@ fn spawn_event_forwarder() {
                     last_print = tokio::time::Instant::now();
                 }
                 let mut dto = ev;
-                if matches!(dto, MuseEventDto::Bands(_)) {
-                    continue;
+                match &dto {
+                    MuseEventDto::Bands(_) => continue,
+                    MuseEventDto::Eeg(e) if eeg_limit.is_some_and(|l| e.electrode >= l) => continue,
+                    _ => {}
                 }
                 // Patch Athena EEG timestamps (0.0) with virtual wall-clock
                 // timestamps derived from total sample count @ 256 Hz.
@@ -1699,8 +1738,10 @@ pub async fn crown_connect(device_id: String) -> anyhow::Result<ConnectionStatus
             name: name.clone(),
             id: device_id.clone(),
             firmware: "Crown".to_string(),
+            aux_channels: 0,
         });
         guard.events = Some(rx);
+        guard.eeg_electrode_limit = None;
     }
     features::set_active_kind(DeviceKind::Neurosity);
 
@@ -1711,5 +1752,19 @@ pub async fn crown_connect(device_id: String) -> anyhow::Result<ConnectionStatus
         name,
         id: device_id,
         firmware: "Crown".to_string(),
+        aux_channels: 0,
     })
+}
+
+#[cfg(test)]
+mod aux_tests {
+    use super::*;
+
+    #[test]
+    fn aux_channel_count_by_firmware() {
+        assert_eq!(muse_aux_channels(false, false), 0);
+        assert_eq!(muse_aux_channels(true, false), 0);
+        assert_eq!(muse_aux_channels(false, true), 1);
+        assert_eq!(muse_aux_channels(true, true), 4);
+    }
 }
