@@ -61,7 +61,7 @@ Honest 1–10 match of v6 names/shapes to EDF+, BIDS-EEG, and common annotation 
 | Device / streams models | `lib/src/session_format/models.dart` (`DeviceInfo`, `StreamsConfig`) |
 | Computed frame | `lib/src/session_format/computed_frame.dart` |
 | Monitor 1 Hz writer | `lib/src/monitor/recording/monitor_sampler.dart` (N-ch; zeroed guard/feedback) |
-| Feedback 1 Hz writer | `lib/src/feedback/computed_sampler.dart` (4-ch; live guard/feedback) |
+| Feedback 1 Hz writer | `lib/src/feedback/computed_sampler.dart` (N-ch, sized from the connected device montage; live guard/feedback) |
 | Scalar extract at publish | `lib/src/spine/assemble.dart` → `extractComputedScalars` |
 | Recording publish → sqlite | `lib/src/monitor/recording/recording_store.dart` |
 | Feedback publish → sqlite | `lib/src/feedback/session_store_core.dart` |
@@ -612,7 +612,7 @@ Future agents: change locked names only with a format PR and an updated table. P
 
 Compute only over **usable** computed seconds: mean pad `signalQuality ≥ 80` (same gate as `stats.quality` / sticky unusable). Skip seconds with missing `bands`. If fewer than **30** usable seconds, **omit** `stats.experimental` entirely (do not write NaNs / zeros pretending to be data).
 
-Band order on `ComputedFrame.bands` is locked elsewhere: per channel `[delta, theta, alpha, beta, gamma]` absolute power (µV²/Hz). Channel order follows `device.channelLabels` (Muse: `TP9`, `AF7`, `AF8`, `TP10`).
+Band order on `ComputedFrame.bands` is locked elsewhere: per channel `[delta, theta, alpha, beta, gamma]` absolute power (µV²/Hz). Channel order follows `device.channelLabels` (Muse: `TP9`, `AF7`, `AF8`, `TP10`). Channels are found **by label**, never by index; a key whose labels are absent (e.g. asymmetry keys on Crown) is omitted. AUX channels are excluded.
 
 Relative power for a channel-second: `band / (delta+theta+alpha+beta+gamma)` with total `> 0`; else skip that channel-second.
 
@@ -625,11 +625,11 @@ Relative power for a channel-second: `band / (delta+theta+alpha+beta+gamma)` wit
 | **Must** | `frontalAlphaAsym` | Mean over usable secs of `ln(α_AF8) − ln(α_AF7)` (skip sec if either α ≤ 0 or label missing) | Muse-validated FAA (whole α band); literature standard |
 | **Must** | `crossChannelAlphaVar` | Variance across channels of each channel’s **session-mean** absolute α (population variance, N = channel count with ≥1 usable sample) | Spatial spread / montage imbalance; never call this “spread” |
 | **Sensible** | `meanAlphaRel` | Mean of per-second all-channel-mean **relative** α | Scale-free companion to `meanAlphaAbs`; recordings lack `feedback.outcomeScalars.avgAlphaRel` |
-| **Sensible** | `frontalTemporalAlphaAsym` | Mean over secs of `ln(mean(α_AF7,α_AF8)) − ln(mean(α_TP9,α_TP10))` (skip if any side ≤ 0) | Frontal vs temporal α contrast on Muse 4-ch |
+| **Sensible** | `frontalTemporalAlphaAsym` | Mean over secs of `ln(mean(α_AF7,α_AF8)) − ln(mean(α_TP9,α_TP10))` (skip if any side ≤ 0 or label missing) | Frontal vs temporal α contrast on Muse 4-ch |
 | **Sensible** | `meanBetaTheta` | Mean of per-second `(mean_β / mean_θ)` (skip if mean_θ ≤ 0) | Classic alertness / cognitive-load companion (BTR) |
 | **Cool / cheap** | `meanThetaAbs` | Mean all-channel absolute θ | Cheap; pairs with α/θ |
 | **Cool / cheap** | `meanBetaAbs` | Mean all-channel absolute β | Cheap |
-| **Cool / cheap** | `temporalAlphaAsym` | Mean of `ln(α_TP10) − ln(α_TP9)` (skip if either ≤ 0) | Temporal twin of FAA; optional labeling feature |
+| **Cool / cheap** | `temporalAlphaAsym` | Mean of `ln(α_TP10) − ln(α_TP9)` (skip if either ≤ 0 or label missing) | Temporal twin of FAA; optional labeling feature |
 
 **Do not** also write duplicate ratio keys (`meanAtr` / `meanTar`) — `meanAlphaTheta` is ATR; TAR = `1/meanAlphaTheta` when needed downstream.
 

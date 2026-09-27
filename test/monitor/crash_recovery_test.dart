@@ -136,4 +136,20 @@ void main() {
       isTrue,
     );
   });
+
+  test('recovered metadata without sidecar never labels unknown widths as Muse', () {
+    expect(
+      recoveredRecordingMetadata(elapsedSeconds: 1).device.channelLabels,
+      ['TP9', 'AF7', 'AF8', 'TP10'],
+    );
+    expect(
+      recoveredRecordingMetadata(elapsedSeconds: 1, channelCount: 5)
+          .device
+          .channelLabels,
+      ['TP9', 'AF7', 'AF8', 'TP10', 'AUX1'],
+    );
+    final eight = recoveredRecordingMetadata(elapsedSeconds: 1, channelCount: 8);
+    expect(eight.device.channelCount, 8);
+    expect(eight.device.channelLabels.first, 'CH1');
+  });
 }

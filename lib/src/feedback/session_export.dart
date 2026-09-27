@@ -16,6 +16,7 @@ import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/rust/api/edf_export.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/util/timezone.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
 
 /// What an export produces.
 enum ExportKind { pdf, pngThumbnail, pngAll, csv, edf }
@@ -525,6 +526,9 @@ class SessionExporter {
         metric: protocol.reward?.feature ?? 'band.atr',
         conditions: protocol.conditions,
         startedAt: meta.startedAt,
+        channelLabels: meta.recordedChannels.isEmpty
+            ? kMuseElectrodeNames
+            : meta.recordedChannels,
       ),
       meta: meta,
     );

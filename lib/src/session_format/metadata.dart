@@ -1,4 +1,5 @@
 import 'package:neurofeed/src/feedback/session_metadata.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/session_format/stats_assemble.dart';
@@ -83,12 +84,15 @@ Map<String, Object?> buildFeedbackMetadata({
               id: meta.deviceId ?? '',
               firmware: meta.deviceModel ?? '',
               model: meta.deviceModel ?? '',
-              sensors: const ['EEG', 'PPG', 'IMU'],
+              sensors: meta.recordedChannels.isNotEmpty &&
+                      kCrownElectrodeNames.contains(meta.recordedChannels.first)
+                  ? const ['EEG', 'IMU']
+                  : const ['EEG', 'PPG', 'IMU'],
               channelCount: meta.recordedChannels.isEmpty
-                  ? 4
+                  ? kMuseElectrodeNames.length
                   : meta.recordedChannels.length,
               channelLabels: meta.recordedChannels.isEmpty
-                  ? const ['TP9', 'AF7', 'AF8', 'TP10']
+                  ? kMuseElectrodeNames
                   : meta.recordedChannels,
             ))
         .toJson(),

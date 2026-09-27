@@ -68,7 +68,7 @@ lib/src/monitor/
 ```
 
 `bandNames` / `bandColors` stay in `lib/src/charts/band_style.dart`.
-Pad-quality dots are a 4-ch 1 s ring in `connection_provider.dart`.
+Pad quality is a 1 s ring per channel (up to 8) in `connection_provider.dart`; the status-bar dots show the first 4.
 
 ---
 

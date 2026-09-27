@@ -9,12 +9,18 @@ class ComputedSampler {
   ComputedSampler({
     required this.onFrame,
     required DateTime recordingStart,
+    this.channelCount = 4,
     this.interval = const Duration(seconds: 1),
     DateTime Function()? now,
   })  : _recordingStart = recordingStart,
-        _now = now ?? DateTime.now;
+        _now = now ?? DateTime.now,
+        _bands = BandSecondAverage(channelCount),
+        _latestSignalQuality = List.filled(channelCount, 0);
 
   final void Function(ComputedFrame) onFrame;
+
+  /// Electrodes per frame (`device.channelLabels.length`).
+  final int channelCount;
   final Duration interval;
   final DateTime _recordingStart;
   final DateTime Function() _now;
@@ -23,12 +29,12 @@ class ComputedSampler {
   Duration _pauseAccumulated = Duration.zero;
   DateTime? _pauseBegan;
 
-  final BandSecondAverage _bands = BandSecondAverage(4);
+  final BandSecondAverage _bands;
   double? _latestPulse;
   double? _latestMovement;
   PeakAlphaDto? _latestPeakAlpha;
   double? _latestSpO2;
-  final List<int> _latestSignalQuality = List.filled(4, 0);
+  final List<int> _latestSignalQuality;
   double _lastSleepDir = 0.0;
   double _lastClarity = 0.0;
   double _lastDelta = 0.0;
@@ -64,7 +70,7 @@ class ComputedSampler {
   void updateSpO2(SpO2Dto spo2) => _latestSpO2 = spo2.spo2;
 
   void updateSignalQuality(int electrode, int quality) {
-    if (electrode >= 0 && electrode < 4) {
+    if (electrode >= 0 && electrode < channelCount) {
       _latestSignalQuality[electrode] = quality;
     }
   }

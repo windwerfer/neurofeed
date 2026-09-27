@@ -18,6 +18,7 @@ import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/feedback/session_chart_data.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/audio/output_ids.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
@@ -140,6 +141,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       metric: protocol?.reward?.feature ?? 'band.atr',
       conditions: protocol?.conditions ?? const [],
       recordingStartMs: recordingStartMsFromIso(meta.startedAt),
+      channelLabels: meta.recordedChannels.isEmpty
+          ? kMuseElectrodeNames
+          : meta.recordedChannels,
     );
     return _DashboardLoad(
       prepared: prepared,

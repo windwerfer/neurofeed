@@ -7,6 +7,7 @@ import 'package:neurofeed/src/feedback/session_chart_data.dart';
 import 'package:neurofeed/src/feedback/session_export.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -38,6 +39,9 @@ Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) asyn
     metric: protocol.reward?.feature ?? 'band.atr',
     conditions: protocol.conditions,
     startedAt: meta.startedAt,
+    channelLabels: meta.recordedChannels.isEmpty
+        ? kMuseElectrodeNames
+        : meta.recordedChannels,
   );
   final charts = SessionExporter.chartsFor(prepared, meta);
 

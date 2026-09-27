@@ -743,9 +743,23 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _musicSeries.clear();
     _musicTracks.clear();
     await _recorder.startSession();
+    final connected = _ref.read(appStateProvider);
+    _sessionAuxChannels = connected.status.auxChannels;
+    final montage = electrodeNamesForKind(
+      connected.lastConnectedKind,
+      auxChannels: _sessionAuxChannels,
+    );
+    _recorder.writeMetadata({
+      'type': 'device',
+      'name': connected.status.name,
+      'id': connected.status.id,
+      'firmware': connected.status.firmware,
+      'channelLabels': montage,
+    });
     _computedSampler = ComputedSampler(
       onFrame: (frame) => _recorder.appendComputed(frame),
       recordingStart: _sessionStartAt!,
+      channelCount: montage.length,
     );
     _computedSampler!.start();
     await _enableSessionFeatures();
@@ -1534,6 +1548,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   /// Electrode indices that produced data in the current recording.
   Set<int> get recordedChannels => _recorder.recordedChannels;
+  int _sessionAuxChannels = 0;
 
   /// Streams enabled for this session's recording.
   Set<RecordingStream> get recordStreams => _recorder.streams;
@@ -1561,6 +1576,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final channels = recordedChannelLabels(
       kind: app.lastConnectedKind,
       electrodes: recordedChannels,
+      auxChannels: _sessionAuxChannels,
     );
     final drowsy = sessionDrowsiness;
     return SessionMetadata(
@@ -2065,7 +2081,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _computedSampler?.updateBands(bands.electrode, bands);
     final signalQuality = _ref.read(appStateProvider).signalQuality;
     if (signalQuality != null) {
-      for (int i = 0; i < signalQuality.length && i < 4; i++) {
+      for (int i = 0; i < signalQuality.length; i++) {
         _computedSampler?.updateSignalQuality(i, signalQuality[i].round());
       }
     }

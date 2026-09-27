@@ -47,6 +47,17 @@ void main() {
       );
     });
 
+    test('recordedChannelLabels covers the session montage with AUX', () {
+      expect(
+        recordedChannelLabels(
+          kind: DeviceKind.muse,
+          electrodes: {0, 1, 2, 3},
+          auxChannels: 1,
+        ),
+        ['TP9', 'AF7', 'AF8', 'TP10', 'AUX1'],
+      );
+    });
+
     test('electrodeNamesForKind appends AUX labels', () {
       expect(electrodeNamesForKind(DeviceKind.muse), kMuseElectrodeNames);
       expect(

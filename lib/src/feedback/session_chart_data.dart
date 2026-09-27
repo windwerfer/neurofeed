@@ -4,12 +4,23 @@ import 'package:neurofeed/src/charts/session_reader.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/target_state.dart'
     show movementGateThreshold;
+import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
 
-/// Charts stay Muse-4-ch this series (non-goal). Local copies; do not import
-/// from the reward path.
+/// Muse AF7/AF8 indices for raw-body charts (CSV/EDF bodies are Muse-only).
 const int electrodeAf7 = 1;
 const int electrodeAf8 = 2;
+
+/// Electrode pair the computed charts average, by label: Muse AF7/AF8, else
+/// the Crown band-feature pair PO3/PO4. Null when neither pair is present.
+(int, int)? chartElectrodePair(List<String> channelLabels) {
+  for (final (a, b) in const [('AF7', 'AF8'), ('PO3', 'PO4')]) {
+    final i = channelLabels.indexOf(a);
+    final j = channelLabels.indexOf(b);
+    if (i >= 0 && j >= 0) return (i, j);
+  }
+  return null;
+}
 
 /// Display-ready chart series for one session: per-second band-relative powers
 /// of the frontal AF7/AF8 average, movement, heart rate, SpO2, and derived
@@ -249,6 +260,7 @@ SessionChartData prepareChartDataFromContainer({
   String metric = 'band.atr',
   List<TargetCondition> conditions = const [],
   String? startedAt,
+  List<String> channelLabels = kMuseElectrodeNames,
 }) {
   ffi.SessionData? raw;
   try {
@@ -264,6 +276,7 @@ SessionChartData prepareChartDataFromContainer({
     conditions: conditions,
     rawFallback: raw,
     recordingStartMs: recordingStartMsFromIso(startedAt),
+    channelLabels: channelLabels,
   );
 }
 
@@ -281,7 +294,9 @@ SessionChartData prepareChartDataFromComputed(
   List<TargetCondition> conditions = const [],
   ffi.SessionData? rawFallback,
   double? recordingStartMs,
+  List<String> channelLabels = kMuseElectrodeNames,
 }) {
+  final pair = chartElectrodePair(channelLabels);
   final cut =
       (trainingStartOffset != null && trainingStartOffset > 0)
           ? trainingStartOffset
@@ -308,10 +323,12 @@ SessionChartData prepareChartDataFromComputed(
   var bandsCount = 0;
 
   for (final f in kept) {
-    final all = _relativeAll(
-      _ffiBandTuple(f.bands, electrodeAf7),
-      _ffiBandTuple(f.bands, electrodeAf8),
-    );
+    final all = pair == null
+        ? null
+        : _relativeAll(
+            _ffiBandTuple(f.bands, pair.$1),
+            _ffiBandTuple(f.bands, pair.$2),
+          );
     if (all == null) {
       continue;
     }

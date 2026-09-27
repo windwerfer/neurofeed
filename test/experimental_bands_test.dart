@@ -100,4 +100,51 @@ void main() {
     ];
     expect(assembleExperimentalBands(frames), isNull);
   });
+
+  test('Crown montage: asymmetry metrics skipped, all-channel means kept', () {
+    const crown = ['CP3', 'C3', 'F5', 'PO3', 'PO4', 'F6', 'C4', 'CP4'];
+    final frames = [
+      for (var i = 0; i < 30; i++)
+        _frame(
+          t: i.toDouble(),
+          bands: [
+            for (var c = 0; c < 8; c++) [1, 1, c + 1.0, 1, 1],
+          ],
+          quality: List.filled(8, 90),
+        ),
+    ];
+    final bands =
+        (assembleExperimentalBands(frames, channelLabels: crown)!['experimental']
+                as Map)['bands']
+            as Map;
+    expect(bands['meanAlphaAbs'], closeTo(4.5, 1e-9));
+    expect(bands.containsKey('frontalAlphaAsym'), isFalse);
+    expect(bands.containsKey('frontalTemporalAlphaAsym'), isFalse);
+    expect(bands.containsKey('temporalAlphaAsym'), isFalse);
+  });
+
+  test('asymmetry follows labels, not fixed indices', () {
+    final af7 = math.exp(1.0);
+    final af8 = math.exp(1.2);
+    final frames = [
+      for (var i = 0; i < 30; i++)
+        _frame(
+          t: i.toDouble(),
+          bands: [
+            [1, 1, af8, 1, 1],
+            [1, 1, 2, 1, 1],
+            [1, 1, 2, 1, 1],
+            [1, 1, af7, 1, 1],
+          ],
+        ),
+    ];
+    final bands =
+        (assembleExperimentalBands(
+                  frames,
+                  channelLabels: const ['AF8', 'TP9', 'TP10', 'AF7'],
+                )!['experimental']
+                as Map)['bands']
+            as Map;
+    expect(bands['frontalAlphaAsym'], closeTo(0.2, 1e-6));
+  });
 }

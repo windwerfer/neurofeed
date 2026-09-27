@@ -164,6 +164,15 @@ void main() {
       expect(prepared.spo2, isNotEmpty);
     });
 
+    test('chartElectrodePair picks AF7/AF8 or Crown PO3/PO4 by label', () {
+      expect(chartElectrodePair(const ['TP9', 'AF7', 'AF8', 'TP10']), (1, 2));
+      expect(
+        chartElectrodePair(const ['CP3', 'C3', 'F5', 'PO3', 'PO4', 'F6', 'C4', 'CP4']),
+        (3, 4),
+      );
+      expect(chartElectrodePair(const ['Fp1', 'Fp2']), isNull);
+    });
+
     test('prepareChartDataFromComputed fills pulse from raw when omitted', () {
       final frames = [
         for (var t = 0; t < 3; t++)
@@ -265,12 +274,18 @@ void main() {
         0x0A,
       ]);
       await File('${scratch.path}/session_$id.metadata').writeAsString(
+        '{"type":"device","name":"Crown-A1","id":"crown-a1","firmware":"Crown",'
+        '"channelLabels":["CP3","C3","F5","PO3","PO4","F6","C4","CP4"]}\n'
         '{"type":"calibration_start","kind":"staged","calibrationId":"eyes-closed-01"}\n',
       );
 
       final recovered = await scanRecoverableSessions(storage);
       expect(recovered, hasLength(1));
       expect(recovered.first.id, id);
+      expect(recovered.first.metadata?.recordedChannels, [
+        'CP3', 'C3', 'F5', 'PO3', 'PO4', 'F6', 'C4', 'CP4',
+      ]);
+      expect(recovered.first.metadata?.deviceName, 'Crown-A1');
       expect(recovered.first.elapsedSeconds, 2);
       expect(recovered.first.calibrationKind, 'staged');
       expect(

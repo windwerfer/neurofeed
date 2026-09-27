@@ -215,11 +215,19 @@ const int kBandGamma = 4;
 
 const int kMinUsableSecondsForExperimentalBands = 30;
 
-/// Muse channel indices matching default `device.channelLabels`.
-const int kChTp9 = 0;
-const int kChAf7 = 1;
-const int kChAf8 = 2;
-const int kChTp10 = 3;
+int? _labelIndex(List<String> labels, String label) {
+  final i = labels.indexOf(label);
+  return i < 0 ? null : i;
+}
+
+/// Absolute α of channel [i]; null when the channel is absent or α ≤ 0.
+double? _alphaAt(List<List<num>> bands, int? i) {
+  if (i == null || i >= bands.length || bands[i].length <= kBandAlpha) {
+    return null;
+  }
+  final a = bands[i][kBandAlpha].toDouble();
+  return a > 0 ? a : null;
+}
 
 bool _isHead(int i, List<String> labels) =>
     i >= labels.length || !isAuxChannelLabel(labels[i]);
@@ -299,6 +307,11 @@ Map<String, Object?>? assembleExperimentalBands(
   var taaSum = 0.0;
   var taaN = 0;
 
+  final iAf7 = _labelIndex(channelLabels, 'AF7');
+  final iAf8 = _labelIndex(channelLabels, 'AF8');
+  final iTp9 = _labelIndex(channelLabels, 'TP9');
+  final iTp10 = _labelIndex(channelLabels, 'TP10');
+
   // Per-channel session-mean absolute α for crossChannelAlphaVar.
   final chAlphaSum = <double>[];
   final chAlphaN = <int>[];
@@ -361,31 +374,21 @@ Map<String, Object?>? assembleExperimentalBands(
       meanAlphaRelN++;
     }
 
-    if (bands.length > kChAf8) {
-      final a7 = bands[kChAf7].length > kBandAlpha
-          ? bands[kChAf7][kBandAlpha].toDouble()
-          : 0.0;
-      final a8 = bands[kChAf8].length > kBandAlpha
-          ? bands[kChAf8][kBandAlpha].toDouble()
-          : 0.0;
-      if (a7 > 0 && a8 > 0) {
-        faaSum += _ln(a8) - _ln(a7);
-        faaN++;
-      }
-      if (bands.length > kChTp10) {
-        final t9 = bands[kChTp9][kBandAlpha].toDouble();
-        final t10 = bands[kChTp10][kBandAlpha].toDouble();
-        if (a7 > 0 && a8 > 0 && t9 > 0 && t10 > 0) {
-          final frontal = (a7 + a8) / 2;
-          final temporal = (t9 + t10) / 2;
-          ftaaSum += _ln(frontal) - _ln(temporal);
-          ftaaN++;
-        }
-        if (t9 > 0 && t10 > 0) {
-          taaSum += _ln(t10) - _ln(t9);
-          taaN++;
-        }
-      }
+    final a7 = _alphaAt(f.bands, iAf7);
+    final a8 = _alphaAt(f.bands, iAf8);
+    final t9 = _alphaAt(f.bands, iTp9);
+    final t10 = _alphaAt(f.bands, iTp10);
+    if (a7 != null && a8 != null) {
+      faaSum += _ln(a8) - _ln(a7);
+      faaN++;
+    }
+    if (a7 != null && a8 != null && t9 != null && t10 != null) {
+      ftaaSum += _ln((a7 + a8) / 2) - _ln((t9 + t10) / 2);
+      ftaaN++;
+    }
+    if (t9 != null && t10 != null) {
+      taaSum += _ln(t10) - _ln(t9);
+      taaN++;
     }
   }
 

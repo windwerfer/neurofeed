@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/settings.dart';
@@ -88,8 +90,17 @@ Future<void> deleteRecordingScratch(Directory dir, String id) async {
   }
 }
 
-RecordingMetadata recoveredRecordingMetadata({required int elapsedSeconds}) {
+/// Fallback metadata when the sidecar is missing or unreadable. The device
+/// is unknown, so only a plain 4- or 5-channel frame is labelled as Muse;
+/// any other width gets neutral `CH<n>` labels.
+RecordingMetadata recoveredRecordingMetadata({
+  required int elapsedSeconds,
+  int channelCount = 4,
+}) {
   final now = DateTime.now();
+  final labels = channelCount == 4 || channelCount == 5
+      ? electrodeNamesForKind(DeviceKind.muse, auxChannels: channelCount - 4)
+      : [for (var i = 0; i < channelCount; i++) 'CH${i + 1}'];
   return RecordingMetadata(
     formatVersion: 6,
     appVersion: appVersion,
@@ -100,32 +111,30 @@ RecordingMetadata recoveredRecordingMetadata({required int elapsedSeconds}) {
     sessionId: const Uuid().v4(),
     elapsedSeconds: elapsedSeconds,
     durationS: elapsedSeconds,
-    device: const DeviceInfo(
+    device: DeviceInfo(
       name: '',
       id: '',
       firmware: '',
       model: '',
-      sensors: ['EEG'],
-      channelCount: 4,
-      channelLabels: ['TP9', 'AF7', 'AF8', 'TP10'],
+      sensors: const ['EEG'],
+      channelCount: labels.length,
+      channelLabels: labels,
     ),
     streams: RecordingMetadata.streamsConfig(RecordingStream.values.toSet()),
   );
 }
 
-int _elapsedFromComputed(Uint8List computed) {
-  if (computed.isEmpty) return 0;
+Map<dynamic, dynamic>? _lastComputedLine(Uint8List computed) {
+  if (computed.isEmpty) return null;
   try {
     final lines = utf8.decode(computed, allowMalformed: true).split('\n');
     for (var i = lines.length - 1; i >= 0; i--) {
       if (lines[i].trim().isEmpty) continue;
       final decoded = jsonDecode(lines[i]);
-      if (decoded is Map && decoded['t'] is num) {
-        return (decoded['t'] as num).round();
-      }
+      if (decoded is Map && decoded['t'] is num) return decoded;
     }
   } catch (_) {}
-  return 0;
+  return null;
 }
 
 Map<String, Object?> _metadataJsonFromSidecar(
@@ -142,8 +151,11 @@ Map<String, Object?> _metadataJsonFromSidecar(
       debugPrint('[monitor-crash] sidecar parse failed: $e');
     }
   }
+  final last = _lastComputedLine(computed);
+  final bands = last?['bands'];
   return recoveredRecordingMetadata(
-    elapsedSeconds: _elapsedFromComputed(computed),
+    elapsedSeconds: last == null ? 0 : (last['t'] as num).round(),
+    channelCount: bands is List && bands.isNotEmpty ? bands.length : 4,
   ).toJson();
 }
 

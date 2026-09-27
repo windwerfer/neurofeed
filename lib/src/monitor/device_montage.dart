@@ -38,11 +38,12 @@ List<String> electrodeNamesForKind(DeviceKind? kind, {int auxChannels = 0}) {
 List<String> recordedChannelLabels({
   required DeviceKind? kind,
   required Iterable<int> electrodes,
+  int auxChannels = 0,
 }) {
   final names = kind == DeviceKind.neurosity
       ? kCrownElectrodeNames
       : [...kMuseElectrodeNames, ...kMuseAuxElectrodeNames];
-  var count = electrodeNamesForKind(kind).length;
+  var count = electrodeNamesForKind(kind, auxChannels: auxChannels).length;
   for (final e in electrodes) {
     if (e + 1 > count) count = e + 1;
   }
