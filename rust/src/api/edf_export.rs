@@ -15,6 +15,8 @@ pub struct EdfExportAnnotation {
     /// Seconds from recording start (session-relative, same clock as
     /// gesture markers).
     pub onset_seconds: f64,
+    /// Interval length in seconds; `0` omits the TAL Duration segment.
+    pub duration_seconds: f64,
     pub text: String,
 }
 
@@ -128,8 +130,7 @@ pub fn encode_edf_export(
         .iter()
         .map(|a| edf_export::EdfAnnotation {
             onset_seconds: a.onset_seconds,
-            // TAL duration not yet on EdfExportAnnotation (needs FRB regen).
-            duration_seconds: 0.0,
+            duration_seconds: a.duration_seconds,
             text: a.text.clone(),
         })
         .collect();
@@ -139,6 +140,7 @@ pub fn encode_edf_export(
         start: (params.year, params.month, params.day, params.hour, params.minute, params.second),
         physical_dimension: "uV",
         annotations: &annotations,
+        discontinuous_starts: None, // export path is continuous EDF+C
     };
     edf_export::encode_edf_plus(&signals, &spec).map_err(|e| e.to_string())
 }
@@ -148,7 +150,7 @@ pub fn encode_edf_export(
 #[frb(dart_metadata = ("freezed",))]
 pub struct EdfDecodedSignal {
     pub label: String,
-    /// Samples per 1-second data record (== nominal Hz for EDF+C).
+    /// Samples per data record (see `EdfImportResult::record_duration_seconds`).
     pub samples_per_record: u32,
     pub physical_min: f64,
     pub physical_max: f64,
@@ -169,6 +171,11 @@ pub struct EdfImportResult {
     pub second: u16,
     /// Header reserved field (`EDF+C` / `EDF+D` / empty for plain EDF).
     pub reserved: String,
+    /// Data-record duration in seconds; sample rate = `samples_per_record / record_duration_seconds`.
+    pub record_duration_seconds: f64,
+    /// Absolute start (seconds from file start) of each data record, from
+    /// EDF+ timekeeping TALs (EDF+D gaps show as jumps).
+    pub record_starts_seconds: Vec<f64>,
     pub signals: Vec<EdfDecodedSignal>,
     pub annotations: Vec<EdfExportAnnotation>,
 }
@@ -191,6 +198,8 @@ pub fn decode_edf_import(bytes: &[u8]) -> Result<EdfImportResult, String> {
         minute,
         second,
         reserved: dec.reserved,
+        record_duration_seconds: dec.record_duration,
+        record_starts_seconds: dec.record_starts,
         signals: dec
             .signals
             .into_iter()
@@ -207,6 +216,7 @@ pub fn decode_edf_import(bytes: &[u8]) -> Result<EdfImportResult, String> {
             .into_iter()
             .map(|a| EdfExportAnnotation {
                 onset_seconds: a.onset_seconds,
+                duration_seconds: a.duration_seconds,
                 text: a.text,
             })
             .collect(),
@@ -251,6 +261,7 @@ mod tests {
             second: 5,
             annotations: vec![EdfExportAnnotation {
                 onset_seconds: 0.25,
+                duration_seconds: 0.0,
                 text: "Double blink".to_string(),
             }],
         }
@@ -335,6 +346,7 @@ mod decode_tests {
                 second: 0,
                 annotations: vec![EdfExportAnnotation {
                     onset_seconds: 0.1,
+                    duration_seconds: 0.0,
                     text: "double_blink".to_string(),
                 }],
             },

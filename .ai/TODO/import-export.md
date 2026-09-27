@@ -15,7 +15,7 @@
 | EDF+ patient code = `subject.id` | Was hardcoded `NeuroFeed`. | Pack EDF Local Patient ID `{code} X X X` from `meta.userId` / `subject.id`. Nickname→name deferred. |
 | EDF+ startdate/starttime local (FAQ Q17) | `localWallClockFromIso` ignored `timeZone` (`toLocal()` only). | Delegate to `sessionWallClock` (offset digits / `Etc/GMT±N`). |
 | Annotations / markers vs v6 | History list summaries omit calibration + `annotations[]`. Exporter used `meta.gestures` (emptied on v6 file read). | Reload file head metadata; emit calibration free-text + root `annotations[].type` as TAL text. Legacy gestures only if annotations empty. |
-| TAL `duration` for intervals | Crate encodes/decodes Duration segment when `duration_seconds > 0`. | **Partial** — crate round-trip done; Dart `EdfExportAnnotation` still onset+text only (needs FRB regen to wire `SessionAnnotation.duration`). |
+| TAL `duration` for intervals | Crate + FRB + Dart export/import wire `durationSeconds`. | **Done** — interval annotations (pause/bad_quality/disconnect) emit/parse TAL Duration. |
 | Annotation channel record size | Was variable-length (non-EDF+). | Fixed: pad to max TAL size; header `nsamples` matches. |
 | Signal header layout | Was signal-major 256-byte blocks (non-spec). | Fixed: **field-major** (`ns` labels, then transducers, …). |
 | Sample scaling | Near-midpoint ≈ same; now exact EDF linear map. | `phys↔dig` uses `(phys-pmin)/(pmax-pmin)*(dmax-dmin)+dmin`. |
@@ -48,8 +48,8 @@ Do **not** invent `feedback{}` Trust extras, protocol, calibration, or
 | History **Import…** (`.edf`/`.csv`, progress, snackbar) | [x] |
 | IMU/PPG raw streams from CSV columns | [x] ACC/Gyro/PPG → raw tags + `streams.imu`/`ppg` |
 | Elements → annotations (double blink/jaw) | [x] consecutive within 2 s → `double_*`; singles/markers warn+skip |
-| EDF+D discontinuous gaps | [ ] decode lacks per-record timekeeping jumps; warn on `EDF+D` |
-| TAL duration on export | [~] crate yes; Dart FFI still onset+text (FRB regen) |
+| EDF+D discontinuous gaps | [x] timekeeping TAL jumps → `disconnect` annotations (crate); warn if EDF+D with no recoverable gaps |
+| TAL duration on export | [x] FRB `durationSeconds` + Dart export/import |
 | Computed 1 Hz rebuild from bands on import | [x] Bel→linear heuristic; charts via `extractComputed` |
 | Export recordings (CSV / EDF+ / PNG thumb) | [x] PDF/PNG charts stay feedback-only |
 
@@ -105,3 +105,9 @@ History Export sheet:
 | EDF+ raw EEG | yes | yes |
 
 No invented `feedback{}` on import. Design matrix + remaining gaps above.
+
+## Still open
+
+- PDF / PNG charts for recordings need a **protocol-free** chart path (reuse
+  recording dashboard band charts if desired). Do not invent feedback
+  protocol charts for `kind: recording`.

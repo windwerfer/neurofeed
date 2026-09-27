@@ -48,6 +48,7 @@ sealed class EdfDecodedSignal with _$EdfDecodedSignal {
 sealed class EdfExportAnnotation with _$EdfExportAnnotation {
   const factory EdfExportAnnotation({
     required double onsetSeconds,
+    required double durationSeconds,
     required String text,
   }) = _EdfExportAnnotation;
 }
@@ -80,6 +81,8 @@ sealed class EdfImportResult with _$EdfImportResult {
     required int minute,
     required int second,
     required String reserved,
+    required double recordDurationSeconds,
+    required Float64List recordStartsSeconds,
     required List<EdfDecodedSignal> signals,
     required List<EdfExportAnnotation> annotations,
   }) = _EdfImportResult;

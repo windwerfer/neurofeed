@@ -36,8 +36,12 @@ the limit when mixed.
 - EDF patient field = `{subject.id} X X X` (anonymous; nickname→name deferred).
 - EDF startdate/starttime = site-local from `startedAt` + `timeZone` (FAQ Q17).
 - EDF annotations = calibration free-text + root `annotations[].type` (v6 SoT).
-- TAL Duration segment is written by the crate when `duration_seconds > 0`;
-  Dart FFI still passes onset+text only until FRB regen exposes duration.
+- TAL Duration segment is written when `durationSeconds > 0` (interval
+  annotations); instants omit Duration. Import restores `SessionAnnotation.duration`.
+- Every data record starts with a timekeeping TAL `+<start>\x14\x14\x00`;
+  annotation onsets are absolute seconds from the file start.
+- EDF+D timekeeping jumps decode to `disconnect` annotations; raw EEG is
+  placed at each record's start (gaps stay gaps).
 - CSV TimeStamp prefers `startedAt` wall clock.
 
 ## Import
@@ -48,7 +52,7 @@ picks `.edf` / `.csv` → NFED6 `kind: recording` + `RecordingStore.publish`
 
 | Input | Behaviour |
 |-------|-----------|
-| EDF / EDF+ | `decodeEdfImport` → raw EEG packets; optional band-named signals → tags + computed; patient code → `subject.id` when not `X`; TALs mapped to locked annotation types when possible; placeholder thumb; `EDF+D` warns (disconnect gaps not mapped yet) |
+| EDF / EDF+ | `decodeEdfImport` → raw EEG packets; optional band-named signals → tags + computed; patient code → `subject.id` when not `X`; TALs (with duration) mapped to locked annotation types; EDF+D timekeeping jumps → `disconnect`; placeholder thumb |
 | Mind Monitor / neurofeed CSV | 1 Hz + Constant; bands → tags + computed 1 Hz; RAW → EEG; ACC/Gyro/PPG → raw streams; Elements doubles → annotations |
 
 No invented `feedback{}`. Design matrix + remaining gaps:

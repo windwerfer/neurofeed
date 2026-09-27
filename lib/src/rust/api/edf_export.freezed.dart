@@ -255,6 +255,7 @@ abstract class _EdfDecodedSignal implements EdfDecodedSignal {
 /// @nodoc
 mixin _$EdfExportAnnotation {
   double get onsetSeconds => throw _privateConstructorUsedError;
+  double get durationSeconds => throw _privateConstructorUsedError;
   String get text => throw _privateConstructorUsedError;
 
   /// Create a copy of EdfExportAnnotation
@@ -271,7 +272,7 @@ abstract class $EdfExportAnnotationCopyWith<$Res> {
     $Res Function(EdfExportAnnotation) then,
   ) = _$EdfExportAnnotationCopyWithImpl<$Res, EdfExportAnnotation>;
   @useResult
-  $Res call({double onsetSeconds, String text});
+  $Res call({double onsetSeconds, double durationSeconds, String text});
 }
 
 /// @nodoc
@@ -288,12 +289,20 @@ class _$EdfExportAnnotationCopyWithImpl<$Res, $Val extends EdfExportAnnotation>
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? onsetSeconds = null, Object? text = null}) {
+  $Res call({
+    Object? onsetSeconds = null,
+    Object? durationSeconds = null,
+    Object? text = null,
+  }) {
     return _then(
       _value.copyWith(
             onsetSeconds: null == onsetSeconds
                 ? _value.onsetSeconds
                 : onsetSeconds // ignore: cast_nullable_to_non_nullable
+                      as double,
+            durationSeconds: null == durationSeconds
+                ? _value.durationSeconds
+                : durationSeconds // ignore: cast_nullable_to_non_nullable
                       as double,
             text: null == text
                 ? _value.text
@@ -314,7 +323,7 @@ abstract class _$$EdfExportAnnotationImplCopyWith<$Res>
   ) = __$$EdfExportAnnotationImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({double onsetSeconds, String text});
+  $Res call({double onsetSeconds, double durationSeconds, String text});
 }
 
 /// @nodoc
@@ -330,12 +339,20 @@ class __$$EdfExportAnnotationImplCopyWithImpl<$Res>
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? onsetSeconds = null, Object? text = null}) {
+  $Res call({
+    Object? onsetSeconds = null,
+    Object? durationSeconds = null,
+    Object? text = null,
+  }) {
     return _then(
       _$EdfExportAnnotationImpl(
         onsetSeconds: null == onsetSeconds
             ? _value.onsetSeconds
             : onsetSeconds // ignore: cast_nullable_to_non_nullable
+                  as double,
+        durationSeconds: null == durationSeconds
+            ? _value.durationSeconds
+            : durationSeconds // ignore: cast_nullable_to_non_nullable
                   as double,
         text: null == text
             ? _value.text
@@ -351,17 +368,20 @@ class __$$EdfExportAnnotationImplCopyWithImpl<$Res>
 class _$EdfExportAnnotationImpl implements _EdfExportAnnotation {
   const _$EdfExportAnnotationImpl({
     required this.onsetSeconds,
+    required this.durationSeconds,
     required this.text,
   });
 
   @override
   final double onsetSeconds;
   @override
+  final double durationSeconds;
+  @override
   final String text;
 
   @override
   String toString() {
-    return 'EdfExportAnnotation(onsetSeconds: $onsetSeconds, text: $text)';
+    return 'EdfExportAnnotation(onsetSeconds: $onsetSeconds, durationSeconds: $durationSeconds, text: $text)';
   }
 
   @override
@@ -371,11 +391,14 @@ class _$EdfExportAnnotationImpl implements _EdfExportAnnotation {
             other is _$EdfExportAnnotationImpl &&
             (identical(other.onsetSeconds, onsetSeconds) ||
                 other.onsetSeconds == onsetSeconds) &&
+            (identical(other.durationSeconds, durationSeconds) ||
+                other.durationSeconds == durationSeconds) &&
             (identical(other.text, text) || other.text == text));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, onsetSeconds, text);
+  int get hashCode =>
+      Object.hash(runtimeType, onsetSeconds, durationSeconds, text);
 
   /// Create a copy of EdfExportAnnotation
   /// with the given fields replaced by the non-null parameter values.
@@ -392,11 +415,14 @@ class _$EdfExportAnnotationImpl implements _EdfExportAnnotation {
 abstract class _EdfExportAnnotation implements EdfExportAnnotation {
   const factory _EdfExportAnnotation({
     required final double onsetSeconds,
+    required final double durationSeconds,
     required final String text,
   }) = _$EdfExportAnnotationImpl;
 
   @override
   double get onsetSeconds;
+  @override
+  double get durationSeconds;
   @override
   String get text;
 
@@ -748,6 +774,8 @@ mixin _$EdfImportResult {
   int get minute => throw _privateConstructorUsedError;
   int get second => throw _privateConstructorUsedError;
   String get reserved => throw _privateConstructorUsedError;
+  double get recordDurationSeconds => throw _privateConstructorUsedError;
+  Float64List get recordStartsSeconds => throw _privateConstructorUsedError;
   List<EdfDecodedSignal> get signals => throw _privateConstructorUsedError;
   List<EdfExportAnnotation> get annotations =>
       throw _privateConstructorUsedError;
@@ -776,6 +804,8 @@ abstract class $EdfImportResultCopyWith<$Res> {
     int minute,
     int second,
     String reserved,
+    double recordDurationSeconds,
+    Float64List recordStartsSeconds,
     List<EdfDecodedSignal> signals,
     List<EdfExportAnnotation> annotations,
   });
@@ -805,6 +835,8 @@ class _$EdfImportResultCopyWithImpl<$Res, $Val extends EdfImportResult>
     Object? minute = null,
     Object? second = null,
     Object? reserved = null,
+    Object? recordDurationSeconds = null,
+    Object? recordStartsSeconds = null,
     Object? signals = null,
     Object? annotations = null,
   }) {
@@ -846,6 +878,14 @@ class _$EdfImportResultCopyWithImpl<$Res, $Val extends EdfImportResult>
                 ? _value.reserved
                 : reserved // ignore: cast_nullable_to_non_nullable
                       as String,
+            recordDurationSeconds: null == recordDurationSeconds
+                ? _value.recordDurationSeconds
+                : recordDurationSeconds // ignore: cast_nullable_to_non_nullable
+                      as double,
+            recordStartsSeconds: null == recordStartsSeconds
+                ? _value.recordStartsSeconds
+                : recordStartsSeconds // ignore: cast_nullable_to_non_nullable
+                      as Float64List,
             signals: null == signals
                 ? _value.signals
                 : signals // ignore: cast_nullable_to_non_nullable
@@ -879,6 +919,8 @@ abstract class _$$EdfImportResultImplCopyWith<$Res>
     int minute,
     int second,
     String reserved,
+    double recordDurationSeconds,
+    Float64List recordStartsSeconds,
     List<EdfDecodedSignal> signals,
     List<EdfExportAnnotation> annotations,
   });
@@ -907,6 +949,8 @@ class __$$EdfImportResultImplCopyWithImpl<$Res>
     Object? minute = null,
     Object? second = null,
     Object? reserved = null,
+    Object? recordDurationSeconds = null,
+    Object? recordStartsSeconds = null,
     Object? signals = null,
     Object? annotations = null,
   }) {
@@ -948,6 +992,14 @@ class __$$EdfImportResultImplCopyWithImpl<$Res>
             ? _value.reserved
             : reserved // ignore: cast_nullable_to_non_nullable
                   as String,
+        recordDurationSeconds: null == recordDurationSeconds
+            ? _value.recordDurationSeconds
+            : recordDurationSeconds // ignore: cast_nullable_to_non_nullable
+                  as double,
+        recordStartsSeconds: null == recordStartsSeconds
+            ? _value.recordStartsSeconds
+            : recordStartsSeconds // ignore: cast_nullable_to_non_nullable
+                  as Float64List,
         signals: null == signals
             ? _value._signals
             : signals // ignore: cast_nullable_to_non_nullable
@@ -974,6 +1026,8 @@ class _$EdfImportResultImpl implements _EdfImportResult {
     required this.minute,
     required this.second,
     required this.reserved,
+    required this.recordDurationSeconds,
+    required this.recordStartsSeconds,
     required final List<EdfDecodedSignal> signals,
     required final List<EdfExportAnnotation> annotations,
   }) : _signals = signals,
@@ -997,6 +1051,10 @@ class _$EdfImportResultImpl implements _EdfImportResult {
   final int second;
   @override
   final String reserved;
+  @override
+  final double recordDurationSeconds;
+  @override
+  final Float64List recordStartsSeconds;
   final List<EdfDecodedSignal> _signals;
   @override
   List<EdfDecodedSignal> get signals {
@@ -1015,7 +1073,7 @@ class _$EdfImportResultImpl implements _EdfImportResult {
 
   @override
   String toString() {
-    return 'EdfImportResult(patientId: $patientId, recordingId: $recordingId, year: $year, month: $month, day: $day, hour: $hour, minute: $minute, second: $second, reserved: $reserved, signals: $signals, annotations: $annotations)';
+    return 'EdfImportResult(patientId: $patientId, recordingId: $recordingId, year: $year, month: $month, day: $day, hour: $hour, minute: $minute, second: $second, reserved: $reserved, recordDurationSeconds: $recordDurationSeconds, recordStartsSeconds: $recordStartsSeconds, signals: $signals, annotations: $annotations)';
   }
 
   @override
@@ -1035,6 +1093,12 @@ class _$EdfImportResultImpl implements _EdfImportResult {
             (identical(other.second, second) || other.second == second) &&
             (identical(other.reserved, reserved) ||
                 other.reserved == reserved) &&
+            (identical(other.recordDurationSeconds, recordDurationSeconds) ||
+                other.recordDurationSeconds == recordDurationSeconds) &&
+            const DeepCollectionEquality().equals(
+              other.recordStartsSeconds,
+              recordStartsSeconds,
+            ) &&
             const DeepCollectionEquality().equals(other._signals, _signals) &&
             const DeepCollectionEquality().equals(
               other._annotations,
@@ -1054,6 +1118,8 @@ class _$EdfImportResultImpl implements _EdfImportResult {
     minute,
     second,
     reserved,
+    recordDurationSeconds,
+    const DeepCollectionEquality().hash(recordStartsSeconds),
     const DeepCollectionEquality().hash(_signals),
     const DeepCollectionEquality().hash(_annotations),
   );
@@ -1081,6 +1147,8 @@ abstract class _EdfImportResult implements EdfImportResult {
     required final int minute,
     required final int second,
     required final String reserved,
+    required final double recordDurationSeconds,
+    required final Float64List recordStartsSeconds,
     required final List<EdfDecodedSignal> signals,
     required final List<EdfExportAnnotation> annotations,
   }) = _$EdfImportResultImpl;
@@ -1103,6 +1171,10 @@ abstract class _EdfImportResult implements EdfImportResult {
   int get second;
   @override
   String get reserved;
+  @override
+  double get recordDurationSeconds;
+  @override
+  Float64List get recordStartsSeconds;
   @override
   List<EdfDecodedSignal> get signals;
   @override

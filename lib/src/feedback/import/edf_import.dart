@@ -29,7 +29,11 @@ ImportResult importEdfBytes({
 
   final eegLabels = <String>[];
   final samplesByElectrode = <int, List<double>>{};
+  final samplesPerRecord = <int, int>{};
   var rateHz = 256.0;
+  final recordDuration = decoded.recordDurationSeconds > 0
+      ? decoded.recordDurationSeconds
+      : 1.0;
 
   // Optional band signals: label like `Alpha_TP9` or `Alpha TP9`.
   final bandByElectrode = <int, Map<String, List<double>>>{};
@@ -46,16 +50,18 @@ ImportResult importEdfBytes({
       final ch = bandParsed.channel;
       if (!bandChannelOrder.contains(ch)) bandChannelOrder.add(ch);
       final ei = bandChannelOrder.indexOf(ch);
-      bandByElectrode.putIfAbsent(ei, () => {})[bandParsed.band] =
-          [for (final v in sig.data) v.toDouble()];
+      bandByElectrode.putIfAbsent(ei, () => {})[bandParsed.band] = [
+        for (final v in sig.data) v.toDouble(),
+      ];
       continue;
     }
 
     final idx = eegLabels.length;
     eegLabels.add(label);
     samplesByElectrode[idx] = [for (final v in sig.data) v.toDouble()];
+    samplesPerRecord[idx] = sig.samplesPerRecord;
     if (sig.samplesPerRecord > 0) {
-      rateHz = sig.samplesPerRecord.toDouble();
+      rateHz = sig.samplesPerRecord / recordDuration;
     }
   }
 
@@ -63,14 +69,37 @@ ImportResult importEdfBytes({
     throw StateError('EDF has no importable signal channels');
   }
 
+  final runs = _contiguousRuns(decoded.recordStartsSeconds, recordDuration);
   final events = <int>[];
-  if (samplesByElectrode.isNotEmpty) {
-    events.addAll(
-      encodeEegPackets(
-        samplesByElectrode: samplesByElectrode,
-        sampleRateHz: rateHz,
-      ),
-    );
+  for (final e in samplesByElectrode.entries) {
+    final spr = samplesPerRecord[e.key] ?? 0;
+    final rate = spr / recordDuration;
+    if (spr <= 0 || runs.isEmpty) {
+      events.addAll(
+        encodeEegPackets(
+          samplesByElectrode: {e.key: e.value},
+          sampleRateHz: rateHz,
+        ),
+      );
+      continue;
+    }
+    var packets = 0;
+    for (final run in runs) {
+      final from = run.firstRecord * spr;
+      if (from >= e.value.length) break;
+      final to = run.endRecord * spr > e.value.length
+          ? e.value.length
+          : run.endRecord * spr;
+      events.addAll(
+        encodeEegPackets(
+          samplesByElectrode: {e.key: e.value.sublist(from, to)},
+          sampleRateHz: rate,
+          startMs: run.startSeconds * 1000.0,
+          firstIndex: packets,
+        ),
+      );
+      packets += ((to - from) / kEegPacketSamples).ceil();
+    }
   }
 
   final bandRows = <BandInstant>[];
@@ -89,6 +118,7 @@ ImportResult importEdfBytes({
           if (col == null || i >= col.length) return null;
           return col[i];
         }
+
         final d = g('Delta');
         final th = g('Theta');
         final a = g('Alpha');
@@ -97,13 +127,7 @@ ImportResult importEdfBytes({
         if (d == null || th == null || a == null || b == null || ga == null) {
           continue;
         }
-        byEl[e] = BandValues(
-          delta: d,
-          theta: th,
-          alpha: a,
-          beta: b,
-          gamma: ga,
-        );
+        byEl[e] = BandValues(delta: d, theta: th, alpha: a, beta: b, gamma: ga);
       }
       if (byEl.isNotEmpty) {
         bandRows.add(BandInstant(timestampMs: i * 1000.0, byElectrode: byEl));
@@ -124,18 +148,24 @@ ImportResult importEdfBytes({
       continue;
     }
     annotations.add(
-      SessionAnnotation(onset: a.onsetSeconds, duration: 0, type: type),
+      SessionAnnotation(
+        onset: a.onsetSeconds,
+        duration: a.durationSeconds,
+        type: type,
+      ),
     );
   }
 
-  final channelLabels =
-      eegLabels.isNotEmpty ? eegLabels : List<String>.from(bandChannelOrder);
+  final channelLabels = eegLabels.isNotEmpty
+      ? eegLabels
+      : List<String>.from(bandChannelOrder);
   final maxSamples = samplesByElectrode.values
       .map((s) => s.length)
       .fold<int>(0, (a, b) => a > b ? a : b);
-  var durationS = rateHz > 0 && maxSamples > 0
-      ? (maxSamples / rateHz).ceil()
-      : 0;
+  final starts = decoded.recordStartsSeconds;
+  var durationS = starts.isNotEmpty && maxSamples > 0
+      ? (starts.last + recordDuration).ceil()
+      : (rateHz > 0 && maxSamples > 0 ? (maxSamples / rateHz).ceil() : 0);
   if (durationS == 0 && bandRows.isNotEmpty) {
     durationS = bandRows.length;
   }
@@ -151,8 +181,7 @@ ImportResult importEdfBytes({
   );
   final savedAt = DateTime.now();
   final tz = timeZone ?? captureIanaTimeZone();
-  final id = recordingId ??
-      savedAt.toUtc().millisecondsSinceEpoch.toString();
+  final id = recordingId ?? savedAt.toUtc().millisecondsSinceEpoch.toString();
 
   final code = edfPatientCode(decoded.patientId);
   final subject = (code != null && code.isNotEmpty)
@@ -175,9 +204,7 @@ ImportResult importEdfBytes({
     id: '',
     firmware: '',
     model: 'imported',
-    sensors: [
-      if (enabled.contains(RecordingStream.eeg)) 'EEG',
-    ],
+    sensors: [if (enabled.contains(RecordingStream.eeg)) 'EEG'],
     channelCount: channelLabels.length,
     channelLabels: channelLabels,
   );
@@ -227,12 +254,12 @@ ImportResult importEdfBytes({
     warnings.add(const ImportWarning('EDF contained no EEG/band samples'));
   }
 
-  // EDF+D discontinuity → disconnect annotations: decode does not yet expose
-  // per-record timekeeping jumps; see .ai/TODO/import-export.md.
-  if (decoded.reserved.trim().toUpperCase().startsWith('EDF+D')) {
+  final isEdfD = decoded.reserved.trim().toUpperCase().startsWith('EDF+D');
+  final hasDisconnect = annotations.any((a) => a.type == 'disconnect');
+  if (isEdfD && !hasDisconnect) {
     warnings.add(
       const ImportWarning(
-        'EDF+D discontinuous file — disconnect gaps not yet mapped',
+        'EDF+D file had no recoverable timekeeping gaps — no disconnect annotations',
       ),
     );
   }
@@ -243,6 +270,25 @@ ImportResult importEdfBytes({
     metadataJson: metadataJson,
     warnings: warnings,
   );
+}
+
+List<({double startSeconds, int firstRecord, int endRecord})> _contiguousRuns(
+  List<double> starts,
+  double recordDuration,
+) {
+  final runs = <({double startSeconds, int firstRecord, int endRecord})>[];
+  if (starts.isEmpty) return runs;
+  var first = 0;
+  for (var i = 1; i <= starts.length; i++) {
+    final split =
+        i == starts.length ||
+        starts[i] - (starts[i - 1] + recordDuration) > 0.05;
+    if (split) {
+      runs.add((startSeconds: starts[first], firstRecord: first, endRecord: i));
+      first = i;
+    }
+  }
+  return runs;
 }
 
 ({String band, String channel})? _parseBandLabel(String label) {

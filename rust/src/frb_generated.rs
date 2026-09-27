@@ -2748,9 +2748,11 @@ impl SseDecode for crate::api::edf_export::EdfExportAnnotation {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_onsetSeconds = <f64>::sse_decode(deserializer);
+        let mut var_durationSeconds = <f64>::sse_decode(deserializer);
         let mut var_text = <String>::sse_decode(deserializer);
         return crate::api::edf_export::EdfExportAnnotation {
             onset_seconds: var_onsetSeconds,
+            duration_seconds: var_durationSeconds,
             text: var_text,
         };
     }
@@ -2795,6 +2797,8 @@ impl SseDecode for crate::api::edf_export::EdfImportResult {
         let mut var_minute = <u16>::sse_decode(deserializer);
         let mut var_second = <u16>::sse_decode(deserializer);
         let mut var_reserved = <String>::sse_decode(deserializer);
+        let mut var_recordDurationSeconds = <f64>::sse_decode(deserializer);
+        let mut var_recordStartsSeconds = <Vec<f64>>::sse_decode(deserializer);
         let mut var_signals =
             <Vec<crate::api::edf_export::EdfDecodedSignal>>::sse_decode(deserializer);
         let mut var_annotations =
@@ -2809,6 +2813,8 @@ impl SseDecode for crate::api::edf_export::EdfImportResult {
             minute: var_minute,
             second: var_second,
             reserved: var_reserved,
+            record_duration_seconds: var_recordDurationSeconds,
+            record_starts_seconds: var_recordStartsSeconds,
             signals: var_signals,
             annotations: var_annotations,
         };
@@ -4289,6 +4295,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::edf_export::EdfExportAnnotati
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.onset_seconds.into_into_dart().into_dart(),
+            self.duration_seconds.into_into_dart().into_dart(),
             self.text.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -4346,6 +4353,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::edf_export::EdfImportResult {
             self.minute.into_into_dart().into_dart(),
             self.second.into_into_dart().into_dart(),
             self.reserved.into_into_dart().into_dart(),
+            self.record_duration_seconds.into_into_dart().into_dart(),
+            self.record_starts_seconds.into_into_dart().into_dart(),
             self.signals.into_into_dart().into_dart(),
             self.annotations.into_into_dart().into_dart(),
         ]
@@ -5161,6 +5170,7 @@ impl SseEncode for crate::api::edf_export::EdfExportAnnotation {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <f64>::sse_encode(self.onset_seconds, serializer);
+        <f64>::sse_encode(self.duration_seconds, serializer);
         <String>::sse_encode(self.text, serializer);
     }
 }
@@ -5195,6 +5205,8 @@ impl SseEncode for crate::api::edf_export::EdfImportResult {
         <u16>::sse_encode(self.minute, serializer);
         <u16>::sse_encode(self.second, serializer);
         <String>::sse_encode(self.reserved, serializer);
+        <f64>::sse_encode(self.record_duration_seconds, serializer);
+        <Vec<f64>>::sse_encode(self.record_starts_seconds, serializer);
         <Vec<crate::api::edf_export::EdfDecodedSignal>>::sse_encode(self.signals, serializer);
         <Vec<crate::api::edf_export::EdfExportAnnotation>>::sse_encode(
             self.annotations,

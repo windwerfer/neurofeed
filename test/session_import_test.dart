@@ -17,6 +17,8 @@ import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
 import 'package:neurofeed/src/settings.dart';
 
+import 'support/edf_writer.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
@@ -86,7 +88,11 @@ void main() {
           minute: 0,
           second: 0,
           annotations: [
-            EdfExportAnnotation(onsetSeconds: 0.5, text: 'double_blink'),
+            EdfExportAnnotation(
+              onsetSeconds: 0.5,
+              durationSeconds: 0,
+              text: 'double_blink',
+            ),
           ],
         ),
       );
@@ -134,6 +140,90 @@ void main() {
         (n, r) => n + r.samples.length,
       );
       expect(totalSamples, greaterThanOrEqualTo(12 * 20));
+    });
+
+    test('TAL duration round-trips into SessionAnnotation.duration', () {
+      final events = <int>[];
+      for (var pkt = 0; pkt < 30; pkt++) {
+        final ts = pkt * 12 * 1000.0 / 256.0;
+        events.addAll(
+          encodeSessionEvent(
+            event: MuseEventDto.eeg(
+              EegDto(
+                index: pkt,
+                electrode: 0,
+                timestamp: ts,
+                samples: Float64List.fromList(List<double>.filled(12, 10.0)),
+              ),
+            ),
+          ),
+        );
+      }
+      final header = sessionHeaderBytes();
+      final frame = sessionFrameBytes(data: events);
+      final body = Uint8List.fromList([...header, ...frame]);
+      final edf = encodeEdfExport(
+        body: body,
+        channelLabels: const ['TP9'],
+        params: const EdfExportParams(
+          patientId: 'dur-subj X X X',
+          recordingId: 'rec',
+          year: 2026,
+          month: 9,
+          day: 25,
+          hour: 4,
+          minute: 0,
+          second: 0,
+          annotations: [
+            EdfExportAnnotation(
+              onsetSeconds: 0.5,
+              durationSeconds: 15.0,
+              text: 'bad_quality',
+            ),
+            EdfExportAnnotation(
+              onsetSeconds: 0.8,
+              durationSeconds: 0,
+              text: 'double_blink',
+            ),
+          ],
+        ),
+      );
+      final imported = importEdfBytes(
+        bytes: edf,
+        fallbackSubject: subject,
+        recordingId: 'edf_dur',
+      );
+      final anns = imported.metadataJson['annotations'] as List;
+      final bq = anns.cast<Map>().firstWhere((a) => a['type'] == 'bad_quality');
+      expect((bq['duration'] as num).toDouble(), closeTo(15.0, 1e-6));
+      final db =
+          anns.cast<Map>().firstWhere((a) => a['type'] == 'double_blink');
+      expect((db['duration'] as num).toDouble(), 0);
+    });
+
+    test('EDF+D timekeeping gap becomes disconnect and shifts raw', () {
+      final edf = buildTestEdf(
+        signals: [TestEdfSignal('TP9', 256, List<double>.filled(512, 5.0))],
+        recordStarts: const [0, 5],
+      );
+      final decoded = decodeEdfImport(bytes: edf);
+      expect(decoded.recordStartsSeconds.toList(), [0.0, 5.0]);
+      final imported = importEdfBytes(
+        bytes: edf,
+        fallbackSubject: subject,
+        recordingId: 'edf_d',
+      );
+      final anns = (imported.metadataJson['annotations'] as List).cast<Map>();
+      final disc = anns.firstWhere((a) => a['type'] == 'disconnect');
+      expect((disc['onset'] as num).toDouble(), closeTo(1.0, 1e-9));
+      expect((disc['duration'] as num).toDouble(), closeTo(4.0, 1e-9));
+      final data = sessionParseBody(
+        bytes: extractRaw(bytes: imported.containerBytes),
+      );
+      final last =
+          data.eeg.map((r) => r.timestamp).reduce((a, b) => a > b ? a : b);
+      expect(last, greaterThanOrEqualTo(5000.0));
+      expect(imported.metadataJson['durationS'], 6);
     });
   });
 

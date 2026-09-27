@@ -45,11 +45,14 @@ Uint8List assembleRawBody(List<int> encodedEvents) {
 /// Pack continuous per-electrode µV samples into Muse-shaped EEG packets.
 ///
 /// [samplesByElectrode] keys are electrode indices. Timestamps are ms from
-/// recording start. [sampleRateHz] drives packet spacing.
+/// recording start, beginning at [startMs]. [sampleRateHz] drives packet
+/// spacing. Packet indices start at [firstIndex].
 List<int> encodeEegPackets({
   required Map<int, List<double>> samplesByElectrode,
   required double sampleRateHz,
   int packetSamples = kEegPacketSamples,
+  double startMs = 0,
+  int firstIndex = 0,
 }) {
   final rate = sampleRateHz <= 0 ? 256.0 : sampleRateHz;
   final events = <int>[];
@@ -57,13 +60,13 @@ List<int> encodeEegPackets({
   for (final el in electrodes) {
     final samples = samplesByElectrode[el]!;
     if (samples.isEmpty) continue;
-    var index = 0;
+    var index = firstIndex;
     for (var i = 0; i < samples.length; i += packetSamples) {
       final end = i + packetSamples > samples.length
           ? samples.length
           : i + packetSamples;
       final chunk = samples.sublist(i, end);
-      final tsMs = (i / rate) * 1000.0;
+      final tsMs = startMs + (i / rate) * 1000.0;
       events.addAll(
         encodeSessionEvent(
           event: MuseEventDto.eeg(

@@ -317,12 +317,17 @@ class SessionExporter {
     final cal = meta.calibration;
     final annotations = <EdfExportAnnotation>[
       if (cal != null && cal.calibrationStartSecs != null)
-        const EdfExportAnnotation(onsetSeconds: 0, text: 'Calibration start'),
+        const EdfExportAnnotation(
+          onsetSeconds: 0,
+          durationSeconds: 0,
+          text: 'Calibration start',
+        ),
       if (cal != null &&
           cal.calibrationStartSecs != null &&
           cal.calibrationEndSecs != null)
         EdfExportAnnotation(
           onsetSeconds: cal.calibrationEndSecs! - cal.calibrationStartSecs!,
+          durationSeconds: 0,
           text: 'Calibration end',
         ),
       if (cal != null &&
@@ -330,17 +335,21 @@ class SessionExporter {
           cal.trainingStartSecs != null)
         EdfExportAnnotation(
           onsetSeconds: cal.trainingStartSecs! - cal.calibrationStartSecs!,
+          durationSeconds: 0,
           text: 'Training start',
         ),
-      // v6 annotations SoT (gestures + pause/bad_quality/disconnect).
-      // TAL duration encoding is not yet in edf_export; onset + type text only.
       for (final a in meta.annotations)
-        EdfExportAnnotation(onsetSeconds: a.onset, text: a.type),
+        EdfExportAnnotation(
+          onsetSeconds: a.onset,
+          durationSeconds: a.duration,
+          text: a.type,
+        ),
       // Legacy in-memory gestures (unit tests / pre-publish flat model).
       if (meta.annotations.isEmpty)
         for (final g in meta.gestures)
           EdfExportAnnotation(
             onsetSeconds: g.offsetSeconds.toDouble(),
+            durationSeconds: 0,
             text: switch (g.type) {
               GestureType.doubleBlink => 'double_blink',
               GestureType.doubleClench => 'double_jaw_clench',

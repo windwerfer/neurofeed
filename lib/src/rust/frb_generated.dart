@@ -2740,11 +2740,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   EdfExportAnnotation dco_decode_edf_export_annotation(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return EdfExportAnnotation(
       onsetSeconds: dco_decode_f_64(arr[0]),
-      text: dco_decode_String(arr[1]),
+      durationSeconds: dco_decode_f_64(arr[1]),
+      text: dco_decode_String(arr[2]),
     );
   }
 
@@ -2771,8 +2772,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   EdfImportResult dco_decode_edf_import_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return EdfImportResult(
       patientId: dco_decode_String(arr[0]),
       recordingId: dco_decode_String(arr[1]),
@@ -2783,8 +2784,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       minute: dco_decode_u_16(arr[6]),
       second: dco_decode_u_16(arr[7]),
       reserved: dco_decode_String(arr[8]),
-      signals: dco_decode_list_edf_decoded_signal(arr[9]),
-      annotations: dco_decode_list_edf_export_annotation(arr[10]),
+      recordDurationSeconds: dco_decode_f_64(arr[9]),
+      recordStartsSeconds: dco_decode_list_prim_f_64_strict(arr[10]),
+      signals: dco_decode_list_edf_decoded_signal(arr[11]),
+      annotations: dco_decode_list_edf_export_annotation(arr[12]),
     );
   }
 
@@ -3863,8 +3866,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_onsetSeconds = sse_decode_f_64(deserializer);
+    var var_durationSeconds = sse_decode_f_64(deserializer);
     var var_text = sse_decode_String(deserializer);
-    return EdfExportAnnotation(onsetSeconds: var_onsetSeconds, text: var_text);
+    return EdfExportAnnotation(
+      onsetSeconds: var_onsetSeconds,
+      durationSeconds: var_durationSeconds,
+      text: var_text,
+    );
   }
 
   @protected
@@ -3904,6 +3912,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_minute = sse_decode_u_16(deserializer);
     var var_second = sse_decode_u_16(deserializer);
     var var_reserved = sse_decode_String(deserializer);
+    var var_recordDurationSeconds = sse_decode_f_64(deserializer);
+    var var_recordStartsSeconds = sse_decode_list_prim_f_64_strict(
+      deserializer,
+    );
     var var_signals = sse_decode_list_edf_decoded_signal(deserializer);
     var var_annotations = sse_decode_list_edf_export_annotation(deserializer);
     return EdfImportResult(
@@ -3916,6 +3928,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       minute: var_minute,
       second: var_second,
       reserved: var_reserved,
+      recordDurationSeconds: var_recordDurationSeconds,
+      recordStartsSeconds: var_recordStartsSeconds,
       signals: var_signals,
       annotations: var_annotations,
     );
@@ -5163,6 +5177,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_f_64(self.onsetSeconds, serializer);
+    sse_encode_f_64(self.durationSeconds, serializer);
     sse_encode_String(self.text, serializer);
   }
 
@@ -5198,6 +5213,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_16(self.minute, serializer);
     sse_encode_u_16(self.second, serializer);
     sse_encode_String(self.reserved, serializer);
+    sse_encode_f_64(self.recordDurationSeconds, serializer);
+    sse_encode_list_prim_f_64_strict(self.recordStartsSeconds, serializer);
     sse_encode_list_edf_decoded_signal(self.signals, serializer);
     sse_encode_list_edf_export_annotation(self.annotations, serializer);
   }
