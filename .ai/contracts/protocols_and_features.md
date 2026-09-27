@@ -13,7 +13,8 @@ plus availability. `available_features(kind)` exposes them as
 
 | Feature | Muse | Crown |
 |---------|------|-------|
-| `band.*` (atr, tar, btr, alpha, delta) | AF7, AF8 | PO3, PO4 |
+| `band.atr` / `band.tar` / `band.btr` / `band.alpha` | AF7, AF8 | PO3, PO4 |
+| `band.delta` (frontal pair) | AF7, AF8 | F5, F6 |
 | `ai.*` (a_vig, wake_light, *_reve, drowsiness alias) | AF7, AF8, TP9, TP10 | unavailable |
 | `device.focus` / `device.calm` | unavailable | none (headset-computed) |
 
@@ -22,9 +23,9 @@ authority (`electrode_names`, `electrode_index`) and holds the role pairs:
 
 | Field | Muse | Crown | Used by |
 |-------|------|-------|---------|
-| `target_electrodes` | AF7, AF8 | PO3, PO4 | Reward electrode names when a reward feature has no montage; band-math guard delta pads |
+| `target_electrodes` | AF7, AF8 | PO3, PO4 | Reward electrode names when a reward feature has no montage |
 | `needed_electrodes` | AF7, AF8 | PO3, PO4 | Gate pads when neither lane has montage electrodes (below) |
-| `frontal_electrodes` | AF7, AF8 | F5, F6 | Guardrail frontal delta rail, blink detection, AI model rows AF7/AF8 |
+| `frontal_electrodes` | AF7, AF8 | F5, F6 | Guardrail frontal delta rail and band-math guard delta pads (Dart takes them from `frontalElectrodes`), blink detection, AI model rows AF7/AF8 |
 | `temporal_electrodes` | TP9, TP10 | CP3, CP4 | Clench EMG, eye-level reference, AI model rows TP9/TP10 (Crown has no temporal sites) |
 
 ## Protocol overrides (Dart → Rust)

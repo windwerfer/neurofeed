@@ -7,17 +7,9 @@ List<String> deviceGateElectrodeNames(DeviceConfig config) => [
     if (i < config.electrodeNames.length) config.electrodeNames[i],
 ];
 
-/// Resolve montage **names** to indices. Unknown names are dropped.
-List<int> electrodeIndicesFor(
-  List<String> names, {
-  required List<String> montageNames,
-}) {
-  final out = <int>[];
-  for (final name in names) {
-    final i = montageNames.indexOf(name);
-    if (i >= 0) {
-      out.add(i);
-    }
-  }
-  return out;
-}
+/// Device frontal pair as montage indices: [DeviceConfig.frontalElectrodes]
+/// (Muse AF7/AF8, Crown F5/F6). The band-math drowsiness guard reads delta here.
+List<int> deviceFrontalElectrodes(DeviceConfig config) => [
+  for (final i in config.frontalElectrodes.map((e) => e.toInt()))
+    if (i < config.electrodeNames.length) i,
+];

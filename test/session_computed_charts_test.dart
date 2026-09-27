@@ -278,6 +278,25 @@ void main() {
       expect(crown.alphaRel.first, closeTo((223 / 495 + 224 / 500) / 2, 1e-9));
     });
 
+    test('band-math guard delta pads are the Rust frontal pair', () async {
+      final muse = await DeviceConfig.forKind(kind: DeviceKind.muse);
+      final crown = await DeviceConfig.forKind(kind: DeviceKind.neurosity);
+      List<String> names(DeviceConfig c) => [
+        for (final i in deviceFrontalElectrodes(c)) c.electrodeNames[i],
+      ];
+      expect(deviceFrontalElectrodes(muse), [1, 2]);
+      expect(names(muse), ['AF7', 'AF8']);
+      expect(deviceFrontalElectrodes(crown), [2, 5]);
+      expect(names(crown), ['F5', 'F6']);
+      // Not the device target pair (Crown PO3/PO4).
+      expect(deviceGateElectrodeNames(crown), isNot(names(crown)));
+      final infos = await availableFeatures(kind: DeviceKind.neurosity);
+      expect(
+        infos.firstWhere((f) => f.id == 'band.delta').defaultElectrodes,
+        ['F5', 'F6'],
+      );
+    });
+
     test('gate pads come from Rust: feature electrodes, else needed pads',
         () async {
       final muse = await DeviceConfig.forKind(kind: DeviceKind.muse);
@@ -302,9 +321,11 @@ void main() {
         3,
       ]);
       await setFeatureElectrodes(id: 'band.atr', names: []);
-      // Band guard override when there is no reward.
-      await setFeatureElectrodes(id: 'band.delta', names: ['F5', 'F6']);
+      // Band guard without reward: frontal default, then override.
       expect(gate(DeviceKind.neurosity, guard: 'band.delta'), [2, 5]);
+      expect(gate(DeviceKind.muse, guard: 'band.delta'), [1, 2]);
+      await setFeatureElectrodes(id: 'band.delta', names: ['C3', 'C4']);
+      expect(gate(DeviceKind.neurosity, guard: 'band.delta'), [1, 6]);
       await setFeatureElectrodes(id: 'band.delta', names: []);
       // AI guard: the device's needed pads.
       expect(gate(DeviceKind.muse, guard: 'ai.a_vig'), [1, 2]);

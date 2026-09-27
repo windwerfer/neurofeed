@@ -816,10 +816,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final kind = app.lastConnectedKind ?? DeviceKind.muse;
     List<String> montage = const [];
     List<String> deviceGate = const [];
+    List<int> frontal = const [];
     try {
       final config = await DeviceConfig.forKind(kind: kind);
       montage = config.electrodeNames;
       deviceGate = deviceGateElectrodeNames(config);
+      frontal = deviceFrontalElectrodes(config);
     } catch (e) {
       debugPrint('[feature] DeviceConfig.forKind failed: $e');
     }
@@ -889,14 +891,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       electrodeNames: rewardNames,
       montageNames: montage,
     );
-    final deltaIdx = electrodeIndicesFor(deviceGate, montageNames: montage);
     _guard.configure(
       enabled: false,
       bandMath: settings.guardrailIsBandMathFor(state.protocol),
       featureId: guardFeature == guardFeatureNone
           ? guardFeatureBandDelta
           : guardFeature,
-      deltaElectrodes: deltaIdx,
+      deltaElectrodes: frontal,
     );
   }
 

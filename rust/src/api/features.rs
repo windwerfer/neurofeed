@@ -161,7 +161,7 @@ const SPECS: &[Spec] = &[
         source: FeatureSource::Band,
         usable_for: &[FeatureLane::Guard],
         muse_electrodes: &["AF7", "AF8"],
-        crown_electrodes: &["PO3", "PO4"],
+        crown_electrodes: &["F5", "F6"], // frontal pair
         native_rate_hz: 1.0,
         muse_available: true,
         crown_available: true,
@@ -763,7 +763,7 @@ mod tests {
         let gate = |kind, reward: Option<&str>, guard: Option<&str>| {
             session_gate_electrodes(kind, reward.map(String::from), guard.map(String::from))
         };
-        // Defaults: Muse AF7/AF8, Crown PO3/PO4 (registry and needed pads).
+        // Reward defaults: Muse AF7/AF8, Crown PO3/PO4 (registry and needed pads).
         assert_eq!(gate(DeviceKind::Muse, Some(ID_ATR), None), vec![1, 2]);
         assert_eq!(gate(DeviceKind::Neurosity, Some(ID_ATR), None), vec![3, 4]);
         assert_eq!(gate(DeviceKind::Muse, None, None), vec![1, 2]);
@@ -772,9 +772,11 @@ mod tests {
         set_feature_electrodes(ID_ATR.into(), vec!["TP9".into(), "TP10".into()]).unwrap();
         assert_eq!(gate(DeviceKind::Muse, Some(ID_ATR), Some(ID_DELTA)), vec![0, 3]);
         set_feature_electrodes(ID_ATR.into(), vec![]).unwrap();
-        // No reward: a band guard's override.
-        set_feature_electrodes(ID_DELTA.into(), vec!["F5".into(), "F6".into()]).unwrap();
+        // No reward: the band guard's pads (default frontal F5/F6, then override).
         assert_eq!(gate(DeviceKind::Neurosity, None, Some(ID_DELTA)), vec![2, 5]);
+        assert_eq!(gate(DeviceKind::Muse, None, Some(ID_DELTA)), vec![1, 2]);
+        set_feature_electrodes(ID_DELTA.into(), vec!["C3".into(), "C4".into()]).unwrap();
+        assert_eq!(gate(DeviceKind::Neurosity, None, Some(ID_DELTA)), vec![1, 6]);
         set_feature_electrodes(ID_DELTA.into(), vec![]).unwrap();
         // AI guard and montage-less reward: the device's needed pads.
         assert_eq!(gate(DeviceKind::Muse, None, Some(ID_A_VIG)), vec![1, 2]);
@@ -797,6 +799,19 @@ mod tests {
         assert_eq!(idx, vec![3, 4]);
         let names = resolved_electrode_names(DeviceKind::Neurosity, ID_ATR).unwrap();
         assert_eq!(names, vec!["PO3", "PO4"]);
+    }
+
+    #[test]
+    fn delta_default_electrodes_are_the_frontal_pair() {
+        let _lock = reset();
+        for kind in [DeviceKind::Muse, DeviceKind::Neurosity] {
+            let idx = resolved_electrode_indices(kind, ID_DELTA).unwrap();
+            assert_eq!(idx, DeviceConfig::for_kind(kind).frontal_electrodes);
+        }
+        let names = resolved_electrode_names(DeviceKind::Neurosity, ID_DELTA).unwrap();
+        assert_eq!(names, vec!["F5", "F6"]);
+        let names = resolved_electrode_names(DeviceKind::Muse, ID_DELTA).unwrap();
+        assert_eq!(names, vec!["AF7", "AF8"]);
     }
 
     #[test]

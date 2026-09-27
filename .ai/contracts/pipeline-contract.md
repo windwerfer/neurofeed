@@ -101,7 +101,7 @@ Guard warning / muffle does **not** change `inTarget`.
 
 Inhibit **fails closed** if the relative-band vector for the reward electrodes is missing: `inTarget = false`.
 
-`band.delta` as a **guard** is absolute δ µV²/Hz average on AF7/AF8. Relative delta for **inhibit** comes from always-on `BandsDto` totals, not from this feature ID. Do not conflate the two.
+`band.delta` as a **guard** is absolute δ µV²/Hz average on the frontal pair (Muse AF7/AF8, Crown F5/F6). Relative delta for **inhibit** comes from always-on `BandsDto` totals, not from this feature ID. Do not conflate the two.
 
 ---
 
@@ -115,7 +115,7 @@ Producer registry in Rust. Copy + `usableFor` in `assets/features.json`. No Dart
 | `band.tar` | band | θ/α | reward | AF7, AF8 | PO3, PO4 | 1 Hz |
 | `band.btr` | band | β/θ | reward | AF7, AF8 | PO3, PO4 | 1 Hz |
 | `band.alpha` | band | α / total | reward | AF7, AF8 | PO3, PO4 | 1 Hz |
-| `band.delta` | band | absolute δ µV²/Hz avg | guard | AF7, AF8 | PO3, PO4 | 1 Hz |
+| `band.delta` | band | absolute δ µV²/Hz avg | guard | AF7, AF8 | F5, F6 | 1 Hz |
 | `ai.drowsiness` | ai | `sleep_dir` | guard | AF7, AF8, TP9, TP10 | **unavailable** | 1 Hz |
 | `device.focus` | device | Crown OSC 0–1 | reward, guard | **unavailable** | n/a | ~4 Hz |
 | `device.calm` | device | Crown OSC 0–1 | reward, guard | **unavailable** | n/a | ~4 Hz |
