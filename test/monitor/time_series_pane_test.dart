@@ -229,18 +229,21 @@ void main() {
       ),
       isFalse,
     );
-    expect(
-      highlightHitTest(
-        localX: 36 + 25,
-        chartLeft: 36,
-        chartWidth: 200,
-        visStart: 10,
-        visEnd: 40,
-        highlightStart: 20,
-        highlightEnd: 30,
-      ),
-      isTrue,
-    );
+    // Highlight 20–30 s of 10–40 s on 200 px from x = 36 → x ≈ 102.7–169.3.
+    for (final (x, hit) in [(36.0 + 100, true), (36.0 + 25, false)]) {
+      expect(
+        highlightHitTest(
+          localX: x,
+          chartLeft: 36,
+          chartWidth: 200,
+          visStart: 10,
+          visEnd: 40,
+          highlightStart: 20,
+          highlightEnd: 30,
+        ),
+        hit,
+      );
+    }
   });
 
   test('buildBandSeries dashes when all selected pads unusable', () {

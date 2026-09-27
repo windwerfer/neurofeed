@@ -59,8 +59,9 @@ void main() {
       });
       final settings = await Settings.load();
       expect(settings.guardModel, 'cbramod_a_vig');
-      expect(settings.guardFeatureFor('drowsiness'), guardFeatureAiDrowsiness);
-      expect(settings.guardFeatureFor('twilight'), guardFeatureAiDrowsiness);
+      // LUNA → Spur A head; the legacy REVE mode name falls back to band.delta.
+      expect(settings.guardFeatureFor('drowsiness'), guardFeatureAiAVig);
+      expect(settings.guardFeatureFor('twilight'), guardFeatureBandDelta);
     },
   );
 

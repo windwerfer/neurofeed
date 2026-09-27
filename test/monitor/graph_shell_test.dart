@@ -1,11 +1,20 @@
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neurofeed/src/connection_provider.dart';
 import 'package:neurofeed/src/monitor/electrode_toggles.dart';
 import 'package:neurofeed/src/monitor/graph_shell.dart';
 import 'package:neurofeed/src/monitor/device_montage.dart';
+import 'package:neurofeed/src/monitor/monitor_controller.dart';
+import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/viewport_controller.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:neurofeed/src/spine/scratch_writer.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void _portrait(WidgetTester tester) {
   tester.view.physicalSize = const Size(800, 1200);
@@ -36,6 +45,25 @@ GraphShell _shell(ViewportController viewport, {required Widget body}) {
     onInspect: () {},
     onWindowChanged: (_) {},
     body: body,
+  );
+}
+
+/// Record controls read the monitor and connection state (disconnected).
+Future<Widget> _withProviders(WidgetTester tester, Widget child) async {
+  SharedPreferences.setMockInitialValues({});
+  final settings = (await tester.runAsync(Settings.load))!;
+  return ProviderScope(
+    overrides: [
+      settingsProvider.overrideWith((ref) => settings),
+      appStateProvider.overrideWith((ref) => AppStateNotifier.forTest(settings)),
+      monitorControllerProvider.overrideWith(
+        () => MonitorController(
+          createRecorder: () => SessionRecorder(headerBytes: () => Uint8List(12)),
+          liveConditioning: () => null,
+        ),
+      ),
+    ],
+    child: child,
   );
 }
 
@@ -236,7 +264,7 @@ void main() {
     final viewport = ViewportController();
     addTearDown(viewport.dispose);
     await tester.pumpWidget(
-      MaterialApp(
+      await _withProviders(tester, MaterialApp(
         home: Scaffold(
           body: GraphShell(
             title: 'Bands',
@@ -254,7 +282,7 @@ void main() {
             body: const SizedBox.expand(),
           ),
         ),
-      ),
+      )),
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('chrome-overflow-arrow')), findsOneWidget);
@@ -270,7 +298,7 @@ void main() {
     final viewport = ViewportController();
     addTearDown(viewport.dispose);
     await tester.pumpWidget(
-      MaterialApp(
+      await _withProviders(tester, MaterialApp(
         home: Scaffold(
           body: GraphShell(
             title: 'Bands',
@@ -288,7 +316,7 @@ void main() {
             body: const SizedBox.expand(),
           ),
         ),
-      ),
+      )),
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('chrome-overflow-arrow')), findsOneWidget);
@@ -300,17 +328,21 @@ void main() {
         .controller!;
     expect(controller.offset, 0);
 
-    // Drag left over the electrode chips (mouse) — strip should pan.
+    // The chips sit past the Record controls, off-screen at 320 px: scroll
+    // to the end, then drag right over the chips (mouse) — strip pans back.
     final chips = find.byType(ToggleButtons);
     expect(chips, findsOneWidget);
+    final end = controller.position.maxScrollExtent;
+    controller.jumpTo(end);
+    await tester.pumpAndSettle();
     final gesture = await tester.startGesture(
       tester.getCenter(chips),
       kind: PointerDeviceKind.mouse,
     );
-    await gesture.moveBy(const Offset(-120, 0));
+    await gesture.moveBy(const Offset(120, 0));
     await tester.pump();
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(controller.offset, greaterThan(0));
+    expect(controller.offset, lessThan(end));
   });
 }
