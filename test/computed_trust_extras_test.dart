@@ -3,13 +3,15 @@ import 'package:neurofeed/src/audio/reward_output.dart';
 import 'package:neurofeed/src/feedback/computed_sampler.dart';
 import 'package:neurofeed/src/feedback/feature_bus.dart';
 import 'package:neurofeed/src/feedback/feedback_phase.dart';
-import 'package:neurofeed/src/feedback/gate_electrodes.dart';
 import 'package:neurofeed/src/feedback/reward_lane.dart';
 import 'package:neurofeed/src/feedback/target_state.dart';
 import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 import 'package:neurofeed/src/monitor/recording/monitor_sampler.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/session_format/computed_frame.dart';
+
+const _museMontage = ['TP9', 'AF7', 'AF8', 'TP10'];
+const _museFrontal = ['AF7', 'AF8'];
 
 void main() {
   test('dirty playing second writes clean:false + finite dirty percentile', () {
@@ -74,8 +76,8 @@ void main() {
       hasReward: true,
       featureId: 'band.atr',
       inhibit: const [],
-      electrodeNames: museGateElectrodeNames,
-      montageNames: museMontageNames,
+      electrodeNames: _museFrontal,
+      montageNames: _museMontage,
     );
     for (final e in [0, 1, 2, 3]) {
       lane.onBands(

@@ -44,8 +44,6 @@ import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/util/timezone.dart';
 
 export 'package:neurofeed/src/feedback/feedback_phase.dart';
-export 'package:neurofeed/src/feedback/gate_electrodes.dart'
-    show defaultGateElectrodes;
 export 'package:neurofeed/src/feedback/guard_lane.dart'
     show guardrailDeltaCeiling, warningChimeCooldown;
 
@@ -323,13 +321,20 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// boolean.
   List<String> _enabledFeatureIds = const [];
 
-  List<int> _gateElectrodes = List.of(defaultGateElectrodes);
+  /// Session gate pads from Rust ([sessionGateElectrodes]); null = idle.
+  List<int>? _sessionGate;
 
   AudioService get _audio => _ref.read(audioServiceProvider);
 
-  /// Gate electrodes for continue-anyway + playing-phase pause (Muse AF7/AF8
-  /// until session start resolves names). AI window does not add TP9/TP10.
+  /// Gate electrodes for continue-anyway + playing-phase pause: resolved in
+  /// Rust at session start; before that the device's needed pads.
   List<int> get gateElectrodes => List.unmodifiable(_gateElectrodes);
+
+  List<int> get _gateElectrodes =>
+      _sessionGate ??
+      sessionGateElectrodes(
+        kind: _ref.read(appStateProvider).lastConnectedKind ?? DeviceKind.muse,
+      ).toList();
 
   void selectProtocol(String protocolId) {
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
@@ -792,14 +797,25 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
   }
 
+  /// Protocol electrode override for [id]; null resets to the registry
+  /// default.
+  Future<void> _applyElectrodeOverride(String id, List<String>? names) async {
+    try {
+      await setFeatureElectrodes(id: id, names: names ?? const []);
+      debugPrint('[feature] set_feature_electrodes $id ${names ?? 'default'}');
+    } catch (e) {
+      debugPrint('[feature] set_feature_electrodes $id failed: $e');
+    }
+  }
+
   CalibrationPlan get _calibrationPlan =>
       CalibrationPlan.fromEnabledFeatures(_enabledFeatureIds);
 
   Future<void> _enableSessionFeatures() async {
     final app = _ref.read(appStateProvider);
     final kind = app.lastConnectedKind ?? DeviceKind.muse;
-    var montage = museMontageNames;
-    var deviceGate = museGateElectrodeNames;
+    List<String> montage = const [];
+    List<String> deviceGate = const [];
     try {
       final config = await DeviceConfig.forKind(kind: kind);
       montage = config.electrodeNames;
@@ -828,53 +844,25 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final rewardDefault = spec?.reward == null
         ? null
         : byId[spec!.reward!.feature]?.defaultElectrodes;
-    final guardDefault = guardOn && guardFeature != guardFeatureNone
-        ? byId[guardFeature]?.defaultElectrodes
-        : null;
 
-    final gateNames = gateElectrodeNames(
-      hasReward: spec?.hasReward ?? false,
-      guardOn: guardOn,
-      guardFeature: guardFeature,
-      rewardElectrodes: spec?.reward?.electrodes ?? rewardDefault,
-      guardElectrodes: spec?.guard?.electrodes ?? guardDefault,
-      deviceDefault: deviceGate,
-    );
-    final resolved = electrodeIndicesFor(gateNames, montageNames: montage);
-    _gateElectrodes = resolved.isEmpty
-        ? List.of(defaultGateElectrodes)
-        : resolved;
-
+    // Protocol overrides (none = registry default), then the gate pads.
     final ids = <String>[];
-    if (spec?.reward != null) {
-      final id = spec!.reward!.feature;
-      final override = spec.reward!.electrodes;
-      if (override != null) {
-        try {
-          await setFeatureElectrodes(id: id, names: override);
-          debugPrint('[feature] set_feature_electrodes $id $override');
-        } catch (e) {
-          debugPrint('[feature] set_feature_electrodes $id failed: $e');
-        }
-      }
-      ids.add(id);
+    final rewardFeature = spec?.reward?.feature;
+    if (rewardFeature != null) {
+      await _applyElectrodeOverride(rewardFeature, spec!.reward!.electrodes);
+      ids.add(rewardFeature);
     }
-    if (guardOn && guardFeature != guardFeatureNone) {
-      final override = spec?.guard?.electrodes;
-      if (override != null) {
-        try {
-          await setFeatureElectrodes(id: guardFeature, names: override);
-          debugPrint(
-            '[feature] set_feature_electrodes $guardFeature $override',
-          );
-        } catch (e) {
-          debugPrint(
-            '[feature] set_feature_electrodes $guardFeature failed: $e',
-          );
-        }
-      }
+    final guardActive = guardOn && guardFeature != guardFeatureNone;
+    if (guardActive) {
+      await _applyElectrodeOverride(guardFeature, spec?.guard?.electrodes);
       ids.add(guardFeature);
     }
+    _sessionGate = sessionGateElectrodes(
+      kind: kind,
+      rewardFeature: (spec?.hasReward ?? false) ? rewardFeature : null,
+      guardFeature: guardActive ? guardFeature : null,
+    ).toList();
+    debugPrint('[feature] gate pads $_sessionGate');
     final unique = <String>[];
     for (final id in ids) {
       if (!unique.contains(id)) {
@@ -908,7 +896,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       featureId: guardFeature == guardFeatureNone
           ? guardFeatureBandDelta
           : guardFeature,
-      deltaElectrodes: deltaIdx.isEmpty ? defaultGateElectrodes : deltaIdx,
+      deltaElectrodes: deltaIdx,
     );
   }
 
@@ -1493,7 +1481,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _pauseOnsetContent = null;
     _pauseWallBegan = null;
     _collectionEyes = null;
-    _gateElectrodes = List.of(defaultGateElectrodes);
+    _sessionGate = null;
     _featureOverride.clear();
     _ref.read(liveStatsProvider).reset();
     state = const FeedbackState();

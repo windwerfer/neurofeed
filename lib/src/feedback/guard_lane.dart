@@ -5,7 +5,6 @@ import 'package:neurofeed/src/audio/guard_output.dart';
 import 'package:neurofeed/src/audio/reward_output.dart';
 import 'package:neurofeed/src/feedback/feature_bus.dart';
 import 'package:neurofeed/src/feedback/feedback_phase.dart';
-import 'package:neurofeed/src/feedback/gate_electrodes.dart';
 import 'package:neurofeed/src/feedback/guardrail_mode.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
@@ -99,7 +98,7 @@ class GuardLane {
   DateTime lastWarningChimeAt = DateTime.fromMillisecondsSinceEpoch(0);
   final Map<int, double> _frontalDelta = {};
   String featureId = guardFeatureBandDelta;
-  List<int> deltaElectrodes = defaultGateElectrodes;
+  List<int> deltaElectrodes = const [];
 
   void configure({
     required bool enabled,
@@ -110,9 +109,7 @@ class GuardLane {
     this.enabled = enabled;
     this.bandMath = bandMath;
     this.featureId = featureId;
-    this.deltaElectrodes = deltaElectrodes.isEmpty
-        ? defaultGateElectrodes
-        : deltaElectrodes;
+    this.deltaElectrodes = deltaElectrodes;
   }
 
   void resetSession() {

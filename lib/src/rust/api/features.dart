@@ -32,6 +32,22 @@ Future<void> setFeatureElectrodes({
   names: names,
 );
 
+/// Gate pads (montage indices) for a session on `kind`: the reward feature's
+/// resolved electrodes (protocol override, else registry default); else the
+/// guard's when it is a `band.*` feature; else the device's needed pads.
+/// Pass `guard_feature` only while the guard is on; both `None` gives the
+/// idle pads. Call after the session's `set_feature_electrodes` overrides
+/// are applied.
+Int32List sessionGateElectrodes({
+  required DeviceKind kind,
+  String? rewardFeature,
+  String? guardFeature,
+}) => RustLib.instance.api.crateApiFeaturesSessionGateElectrodes(
+  kind: kind,
+  rewardFeature: rewardFeature,
+  guardFeature: guardFeature,
+);
+
 @freezed
 sealed class FeatureDto with _$FeatureDto {
   const factory FeatureDto({

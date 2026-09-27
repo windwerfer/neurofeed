@@ -3,7 +3,6 @@ import 'package:neurofeed/src/audio/guard_output.dart';
 import 'package:neurofeed/src/audio/reward_output.dart';
 import 'package:neurofeed/src/feedback/feature_bus.dart';
 import 'package:neurofeed/src/feedback/feedback_phase.dart';
-import 'package:neurofeed/src/feedback/gate_electrodes.dart';
 import 'package:neurofeed/src/feedback/guard_lane.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/reward_lane.dart';
@@ -74,8 +73,8 @@ RewardLane _lane(RatioEngine engine, RewardOutput out) {
     hasReward: true,
     featureId: 'band.atr',
     inhibit: const [],
-    electrodeNames: museGateElectrodeNames,
-    montageNames: museMontageNames,
+    electrodeNames: _museFrontal,
+    montageNames: _museMontage,
   );
   engine
     ..addBaselineSample(1.0)
@@ -109,6 +108,9 @@ const _dirty = RewardTick(
   quality: [100, 100, 100, 100],
   dirtyReason: TrustDirtyReason.movement,
 );
+
+const _museMontage = ['TP9', 'AF7', 'AF8', 'TP10'];
+const _museFrontal = ['AF7', 'AF8'];
 
 void main() {
   test(
@@ -302,8 +304,8 @@ void main() {
       hasReward: true,
       featureId: 'band.atr',
       inhibit: const [BetaCeiling(0.01)],
-      electrodeNames: museGateElectrodeNames,
-      montageNames: museMontageNames,
+      electrodeNames: _museFrontal,
+      montageNames: _museMontage,
     );
     engine
       ..addBaselineSample(1.0)

@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 593373974;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1079143970;
 
 // Section: executor
 
@@ -2386,6 +2386,43 @@ fn wire__crate__api__session_format__session_frame_bytes_impl(
         },
     )
 }
+fn wire__crate__api__features__session_gate_electrodes_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "session_gate_electrodes",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_kind = <crate::api::device_config::DeviceKind>::sse_decode(&mut deserializer);
+            let api_reward_feature = <Option<String>>::sse_decode(&mut deserializer);
+            let api_guard_feature = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::features::session_gate_electrodes(
+                        api_kind,
+                        api_reward_feature,
+                        api_guard_feature,
+                    ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__session_format__session_header_bytes_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -4330,32 +4367,32 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         67 => wire__crate__api__muse__scan_impl(port, ptr, rust_vec_len, data_len),
-        71 => {
+        72 => {
             wire__crate__api__features__set_enabled_features_impl(port, ptr, rust_vec_len, data_len)
         }
-        72 => wire__crate__api__features__set_feature_electrodes_impl(
+        73 => wire__crate__api__features__set_feature_electrodes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        74 => {
+        75 => {
             wire__crate__api__simulator__simulated_identity_impl(port, ptr, rust_vec_len, data_len)
         }
-        75 => wire__crate__api__neurosity_osc__start_crown_discovery_impl(
+        76 => wire__crate__api__neurosity_osc__start_crown_discovery_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        76 => wire__crate__api__neurosity_osc__stop_crown_discovery_impl(
+        77 => wire__crate__api__neurosity_osc__stop_crown_discovery_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__muse__telemetry_snapshot_default_impl(
+        78 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__muse__telemetry_snapshot_default_impl(
             port,
             ptr,
             rust_vec_len,
@@ -4413,13 +4450,14 @@ fn pde_ffi_dispatcher_sync_impl(
         68 => {
             wire__crate__api__session_format__session_frame_bytes_impl(ptr, rust_vec_len, data_len)
         }
-        69 => {
+        69 => wire__crate__api__features__session_gate_electrodes_impl(ptr, rust_vec_len, data_len),
+        70 => {
             wire__crate__api__session_format__session_header_bytes_impl(ptr, rust_vec_len, data_len)
         }
-        70 => {
+        71 => {
             wire__crate__api__session_format__session_parse_body_impl(ptr, rust_vec_len, data_len)
         }
-        73 => wire__crate__api__eeg_conditioning__set_saved_mains_impl(ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__eeg_conditioning__set_saved_mains_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

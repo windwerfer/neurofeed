@@ -518,6 +518,33 @@ pub(crate) fn resolved_electrode_indices(kind: DeviceKind, id: &str) -> anyhow::
     Ok(out)
 }
 
+/// Gate pads (montage indices) for a session on `kind`: the reward feature's
+/// resolved electrodes (protocol override, else registry default); else the
+/// guard's when it is a `band.*` feature; else the device's needed pads.
+/// Pass `guard_feature` only while the guard is on; both `None` gives the
+/// idle pads. Call after the session's `set_feature_electrodes` overrides
+/// are applied.
+#[frb(sync)]
+pub fn session_gate_electrodes(
+    kind: DeviceKind,
+    reward_feature: Option<String>,
+    guard_feature: Option<String>,
+) -> Vec<i32> {
+    let band_guard = guard_feature.filter(|id| id.starts_with("band."));
+    for id in reward_feature.iter().chain(band_guard.iter()) {
+        match resolved_electrode_indices(kind, id) {
+            Ok(idx) if !idx.is_empty() => return idx.into_iter().map(|i| i as i32).collect(),
+            Ok(_) => {}
+            Err(e) => log::warn!("[feature] gate pads for {id}: {e}"),
+        }
+    }
+    DeviceConfig::for_kind(kind)
+        .needed_electrodes
+        .into_iter()
+        .map(|i| i as i32)
+        .collect()
+}
+
 /// Keep in sync with Dart `_maybeComputeSignalQuality` until the Crown-run
 /// series deletes the Dart copy. `noise < 0` means "no Bands yet" (no penalty).
 pub(crate) fn pad_quality_from_std_and_noise(std: f64, noise: f64) -> f64 {
@@ -728,6 +755,30 @@ mod tests {
             DeviceConfig::neurosity_crown().target_electrodes,
             vec![3, 4]
         );
+    }
+
+    #[test]
+    fn session_gate_pads_follow_features_then_device() {
+        let _lock = reset();
+        let gate = |kind, reward: Option<&str>, guard: Option<&str>| {
+            session_gate_electrodes(kind, reward.map(String::from), guard.map(String::from))
+        };
+        // Defaults: Muse AF7/AF8, Crown PO3/PO4 (registry and needed pads).
+        assert_eq!(gate(DeviceKind::Muse, Some(ID_ATR), None), vec![1, 2]);
+        assert_eq!(gate(DeviceKind::Neurosity, Some(ID_ATR), None), vec![3, 4]);
+        assert_eq!(gate(DeviceKind::Muse, None, None), vec![1, 2]);
+        assert_eq!(gate(DeviceKind::Neurosity, None, None), vec![3, 4]);
+        // Reward override wins over the guard.
+        set_feature_electrodes(ID_ATR.into(), vec!["TP9".into(), "TP10".into()]).unwrap();
+        assert_eq!(gate(DeviceKind::Muse, Some(ID_ATR), Some(ID_DELTA)), vec![0, 3]);
+        set_feature_electrodes(ID_ATR.into(), vec![]).unwrap();
+        // No reward: a band guard's override.
+        set_feature_electrodes(ID_DELTA.into(), vec!["F5".into(), "F6".into()]).unwrap();
+        assert_eq!(gate(DeviceKind::Neurosity, None, Some(ID_DELTA)), vec![2, 5]);
+        set_feature_electrodes(ID_DELTA.into(), vec![]).unwrap();
+        // AI guard and montage-less reward: the device's needed pads.
+        assert_eq!(gate(DeviceKind::Muse, None, Some(ID_A_VIG)), vec![1, 2]);
+        assert_eq!(gate(DeviceKind::Neurosity, Some(ID_FOCUS), None), vec![3, 4]);
     }
 
     #[test]

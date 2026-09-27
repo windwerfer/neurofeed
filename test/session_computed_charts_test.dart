@@ -17,6 +17,7 @@ import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/features.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
@@ -277,21 +278,36 @@ void main() {
       expect(crown.alphaRel.first, closeTo((223 / 495 + 224 / 500) / 2, 1e-9));
     });
 
-    test('Crown gate defaults to PO3/PO4 from DeviceConfig', () async {
+    test('gate pads come from Rust: feature electrodes, else needed pads',
+        () async {
       final muse = await DeviceConfig.forKind(kind: DeviceKind.muse);
       final crown = await DeviceConfig.forKind(kind: DeviceKind.neurosity);
       expect(deviceGateElectrodeNames(muse), ['AF7', 'AF8']);
       expect(deviceGateElectrodeNames(crown), ['PO3', 'PO4']);
-      final names = gateElectrodeNames(
-        hasReward: true,
-        guardOn: false,
-        guardFeature: 'none',
-        deviceDefault: deviceGateElectrodeNames(crown),
-      );
-      expect(
-        electrodeIndicesFor(names, montageNames: crown.electrodeNames),
-        [3, 4],
-      );
+      List<int> gate(DeviceKind kind, {String? reward, String? guard}) =>
+          sessionGateElectrodes(
+            kind: kind,
+            rewardFeature: reward,
+            guardFeature: guard,
+          ).toList();
+      // Registry defaults / needed pads.
+      expect(gate(DeviceKind.muse, reward: 'band.atr'), [1, 2]);
+      expect(gate(DeviceKind.neurosity, reward: 'band.atr'), [3, 4]);
+      expect(gate(DeviceKind.muse), [1, 2]);
+      expect(gate(DeviceKind.neurosity), [3, 4]);
+      // Protocol override of the reward feature.
+      await setFeatureElectrodes(id: 'band.atr', names: ['TP9', 'TP10']);
+      expect(gate(DeviceKind.muse, reward: 'band.atr', guard: 'band.delta'), [
+        0,
+        3,
+      ]);
+      await setFeatureElectrodes(id: 'band.atr', names: []);
+      // Band guard override when there is no reward.
+      await setFeatureElectrodes(id: 'band.delta', names: ['F5', 'F6']);
+      expect(gate(DeviceKind.neurosity, guard: 'band.delta'), [2, 5]);
+      await setFeatureElectrodes(id: 'band.delta', names: []);
+      // AI guard: the device's needed pads.
+      expect(gate(DeviceKind.muse, guard: 'ai.a_vig'), [1, 2]);
     });
 
     test('crash recovery scans scratch; temps assemble; discard deletes',
