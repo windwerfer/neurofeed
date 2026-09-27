@@ -12,9 +12,12 @@ Reproduces the wire format of Neurosity's own simulator
   * Per sample: /neurosity/notion/{id}/raw
                 [ffffffff] 8 channels in uV, s timestamp (seconds), i count
                 (sample index % 256), s marker ("")
-  * --quality:  /crown{id}/signalQuality at 4 Hz (not sent by Neurosity's
-                simulator; one float per the Neurosity OSC docs, or 8 floats
-                with --quality channels). Good pads 1.0, bad pads 0.0.
+  * --quality:  /crown{id}/signalQuality at 4 Hz, 8 floats in 0..1 (one per
+                pad; good ~0.9, --bad-pads ~0.1). --quality-overall sends one
+                float instead, which the app ignores for pad quality. Neither
+                is sent by Neurosity's simulator; the Neurosity OSC docs only
+                show a single float at this address, so the real per-channel
+                address/format is unverified.
 
 The default signal is NeuroFeed's in-app simulator model
 (rust/src/api/simulator.rs): ~10 uV 10 Hz alpha with a per-channel phase plus
@@ -29,6 +32,7 @@ Usage, from any computer on the same LAN as the app:
   python3 tools/crown_osc_sim.py
   python3 tools/crown_osc_sim.py --target 192.168.1.42        # unicast
   python3 tools/crown_osc_sim.py --bad-pads 3,5 --line-noise 50 --quality
+  python3 tools/crown_osc_sim.py --quality-overall                # app fallback
   python3 tools/crown_osc_sim.py --dropout 10:3 --duration 60
 """
 import argparse
@@ -51,6 +55,8 @@ LOCAL_PORT = 8000
 DEFAULT_ID = "local7cca794fb5f4675a69371e949b2"
 LINE_NOISE_UV = 10.0
 BAD_NOISE_UV = 150.0
+GOOD_QUALITY = (0.85, 0.95)
+BAD_QUALITY = (0.05, 0.15)
 TICK_S = 0.004
 
 
@@ -158,8 +164,12 @@ def build_args(argv):
     p.add_argument("--dropout", type=parse_dropout, metavar="EVERY:SECONDS")
     p.add_argument("--line-noise", type=int, choices=(50, 60),
                    help=f"add {LINE_NOISE_UV:.0f} uV mains hum")
-    p.add_argument("--quality", nargs="?", const="overall", choices=("overall", "channels"),
-                   help="also send /crown{id}/signalQuality at 4 Hz")
+    quality = p.add_mutually_exclusive_group()
+    quality.add_argument("--quality", action="store_const", const="channels", dest="quality",
+                         help="send per-pad /crown{id}/signalQuality (8 floats, 0..1) at 4 Hz")
+    quality.add_argument("--quality-overall", action="store_const", const="overall",
+                         dest="quality",
+                         help="send one overall /crown{id}/signalQuality float at 4 Hz")
     p.add_argument("--duration", type=float, help="seconds to run (default: forever)")
     return p.parse_args(argv)
 
@@ -191,7 +201,8 @@ class Crown:
         return osc_message(f"{self.base}/raw", [self.sample(n), timestamp, n % SAMPLE_RATE, ""])
 
     def quality(self):
-        per_channel = [0.0 if ch in self.args.bad_pads else 1.0 for ch in range(CHANNELS)]
+        per_channel = [random.uniform(*(BAD_QUALITY if ch in self.args.bad_pads else GOOD_QUALITY))
+                       for ch in range(CHANNELS)]
         payload = per_channel if self.args.quality == "channels" else [sum(per_channel) / CHANNELS]
         return osc_message(f"/crown{self.args.device_id}/signalQuality", payload)
 
