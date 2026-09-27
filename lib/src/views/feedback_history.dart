@@ -155,6 +155,7 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
   Future<bool> _confirmImport(ImportResult result) async {
     final summary = importSummary(result);
     final p = result.provenance;
+    final coverageWarning = intervalCoverageWarning(p);
     final theme = Theme.of(context);
     final ok = await showDialog<bool>(
       context: context,
@@ -169,6 +170,35 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
                 p.sourceFileName.isEmpty ? p.sourceFormat : p.sourceFileName,
                 style: theme.textTheme.bodySmall,
               ),
+              if (coverageWarning != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  key: const Key('import_interval_warning'),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          coverageWarning,
+                          style: TextStyle(
+                            color: theme.colorScheme.onErrorContainer,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Text('Kept', style: theme.textTheme.titleSmall),
               for (final line in summary.kept) Text('• $line'),

@@ -1,3 +1,4 @@
+import 'package:neurofeed/src/feedback/import/csv_import.dart';
 import 'package:neurofeed/src/feedback/import/import_types.dart';
 import 'package:neurofeed/src/session_format/models.dart';
 
@@ -17,6 +18,22 @@ import 'package:neurofeed/src/session_format/models.dart';
     ],
     lost: p.warnings,
   );
+}
+
+/// Pre-import warning for a Mind Monitor file recorded with one row every
+/// 2 s or slower; null for Constant files, 1 s intervals and EDF.
+String? intervalCoverageWarning(ImportProvenance p) {
+  final interval = p.recordingInterval;
+  final coverage = p.intervalCoverage;
+  if (interval == null || coverage == null) return null;
+  if (interval < kCsvCoverageWarnSeconds) return null;
+  final seconds = interval == interval.roundToDouble()
+      ? interval.toStringAsFixed(0)
+      : interval.toStringAsFixed(1);
+  return 'This Mind Monitor file was recorded with one row every $seconds '
+      'seconds, so it covers only about ${(coverage * 100).round()}% of the '
+      'session. Short events can be missed, so expect lower result quality. '
+      "For better results, set Mind Monitor's recording interval to 1 second.";
 }
 
 /// One-line export notice for a recording whose import was lossy; null

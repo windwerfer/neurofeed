@@ -93,6 +93,7 @@ class ImportProvenance {
     this.resampled = false,
     required this.rawPresent,
     this.recordingInterval,
+    this.intervalCoverage,
     this.reference,
     required this.lossy,
     this.warnings = const [],
@@ -111,6 +112,10 @@ class ImportProvenance {
 
   /// Mind Monitor recording interval (s); null for Constant / non-CSV.
   final double? recordingInterval;
+
+  /// Share of the session the interval rows cover: min(1, ~1 s band window /
+  /// [recordingInterval]). Null when [recordingInterval] is null.
+  final double? intervalCoverage;
   final String? reference;
   final bool lossy;
   final List<String> warnings;
@@ -124,6 +129,7 @@ class ImportProvenance {
     'resampled': resampled,
     'rawPresent': rawPresent,
     'recordingInterval': recordingInterval,
+    'intervalCoverage': intervalCoverage,
     if (reference != null) 'reference': reference,
     'lossy': lossy,
     'warnings': warnings,
@@ -142,6 +148,7 @@ class ImportProvenance {
       resampled: json['resampled'] == true,
       rawPresent: json['rawPresent'] == true,
       recordingInterval: (json['recordingInterval'] as num?)?.toDouble(),
+      intervalCoverage: (json['intervalCoverage'] as num?)?.toDouble(),
       reference: json['reference'] as String?,
       lossy: json['lossy'] == true,
       warnings: strings(json['warnings']),

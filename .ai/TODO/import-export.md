@@ -58,7 +58,7 @@ Mind Monitor CSV:
 | Recording interval | Import |
 |---|---|
 | **Constant** (median row Δt ≤ 0.25 s) | RAW (+ AUX) at native rate (256, or 220 → resampled); **every** band value kept at native rate in raw band records; computed = per-second mean; IMU/PPG kept. No band columns → bands from our FFT of RAW (warning). |
-| **Interval** (0.5 s, 1 s default, … 60 s) | Rows are snapshots → **bands only**: no RAW/AUX/IMU/PPG (warning). Raw band record at each row time; computed frames on the 1 Hz grid at the row times (0.5 s rows averaged per second; > 1 s intervals are sparse). No band columns → refused. `import.recordingInterval` = median Δt. |
+| **Interval** (0.5 s, 1 s default, … 60 s) | Rows are snapshots → **bands only**: no RAW/AUX/IMU/PPG (warning). Raw band record at each row time; computed frames on the 1 Hz grid at the row times (0.5 s rows averaged per second; > 1 s intervals are sparse). No band columns → refused. `import.recordingInterval` = median Δt between band rows; `import.intervalCoverage` = min(1, 1 s / interval); ≥ 1.9 s → coverage warning in the import dialog. |
 
 AUX columns (`AUX*`, max 4) → `AUX1…AUXn`. Optics (Athena fNIRS) → dropped with
 a warning. Elements doubles → annotations; singles/markers skipped (warning).

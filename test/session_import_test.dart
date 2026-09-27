@@ -17,6 +17,7 @@ import 'package:neurofeed/src/rust/api/edf_export.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
+import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/settings.dart';
 
 import 'support/edf_writer.dart';
@@ -42,6 +43,7 @@ String _museCsv({
   double Function(int row)? alpha,
   List<String> extraHeaders = const [],
   List<String> Function(int row)? extra,
+  double Function(int row)? secondsAt,
 }) {
   final b = StringBuffer('TimeStamp');
   for (final band in _bandNames) {
@@ -58,7 +60,8 @@ String _museCsv({
   b.writeln();
   final start = DateTime(2026, 9, 25, 10, 0, 0);
   for (var i = 0; i < rows; i++) {
-    final t = start.add(Duration(microseconds: (i * dtSeconds * 1e6).round()));
+    final secs = secondsAt?.call(i) ?? i * dtSeconds;
+    final t = start.add(Duration(microseconds: (secs * 1e6).round()));
     b.write(_ts(t));
     final withBands = i % bandEvery == 0;
     for (var bi = 0; bi < 5; bi++) {
@@ -434,6 +437,75 @@ TimeStamp,Delta_TP9,Delta_AF7,Delta_AF8,Delta_TP10,Theta_TP9,Theta_AF7,Theta_AF8
       final frames = extractComputed(bytes: imported.containerBytes);
       expect(frames.map((f) => f.t).toList(), [0, 60, 120]);
       expect(imported.metadataJson['durationS'], 120);
+    });
+
+    group('interval coverage warning', () {
+      ImportProvenance importAt(String csv) =>
+          importCsvText(csvText: csv, subject: subject, recordingId: 'cov')
+              .provenance;
+
+      test('1 s interval: full coverage, no warning', () {
+        final p = importAt(_museCsv(rows: 6, dtSeconds: 1));
+        expect(p.recordingInterval, 1.0);
+        expect(p.intervalCoverage, 1.0);
+        expect(intervalCoverageWarning(p), isNull);
+      });
+
+      test('2 s interval: 50% coverage and a warning', () {
+        final imported = importCsvText(
+          csvText: _museCsv(rows: 6, dtSeconds: 2),
+          subject: subject,
+          recordingId: 'cov2',
+        );
+        final prov = imported.metadataJson['import'] as Map;
+        expect(prov['recordingInterval'], 2.0);
+        expect(prov['intervalCoverage'], 0.5);
+        final warning = intervalCoverageWarning(imported.provenance);
+        expect(
+          warning,
+          'This Mind Monitor file was recorded with one row every 2 seconds, '
+          'so it covers only about 50% of the session. Short events can be '
+          'missed, so expect lower result quality. For better results, set '
+          "Mind Monitor's recording interval to 1 second.",
+        );
+      });
+
+      test('10 s interval: 10% coverage', () {
+        final p = importAt(_museCsv(rows: 4, dtSeconds: 10));
+        expect(p.recordingInterval, 10.0);
+        expect(p.intervalCoverage, 0.1);
+        expect(intervalCoverageWarning(p), contains('every 10 seconds'));
+        expect(intervalCoverageWarning(p), contains('about 10%'));
+      });
+
+      test('jittery timestamps use the median gap', () {
+        const jitter = [0.0, 0.04, -0.03, 0.05, -0.02, 0.03, -0.05, 0.01, 0.0];
+        final twoSec = importAt(
+          _museCsv(rows: 9, dtSeconds: 2, secondsAt: (i) => i * 2 + jitter[i]),
+        );
+        expect(twoSec.recordingInterval, 2.0);
+        expect(twoSec.intervalCoverage, 0.5);
+        expect(intervalCoverageWarning(twoSec), contains('about 50%'));
+
+        final oneSec = importAt(
+          _museCsv(rows: 9, dtSeconds: 1, secondsAt: (i) => i + jitter[i]),
+        );
+        expect(oneSec.recordingInterval, 1.0);
+        expect(intervalCoverageWarning(oneSec), isNull);
+      });
+
+      test('Constant CSV has no interval, coverage or warning', () {
+        final imported = importCsvText(
+          csvText: _museCsv(rows: 26, dtSeconds: 1 / 256, bandEvery: 10),
+          subject: subject,
+          recordingId: 'cov_const',
+        );
+        final prov = imported.metadataJson['import'] as Map;
+        expect(prov['recordingInterval'], isNull);
+        expect(prov.containsKey('intervalCoverage'), isTrue);
+        expect(prov['intervalCoverage'], isNull);
+        expect(intervalCoverageWarning(imported.provenance), isNull);
+      });
     });
 
     test('AUX columns become AUX1…; Optics dropped with a warning', () {

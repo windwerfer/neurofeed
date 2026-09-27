@@ -207,12 +207,13 @@ Recordings created by **History → Import…** (EDF/EDF+ or Mind Monitor CSV) a
 | `droppedChannels` | string[] | Source channels not imported (outside the montage, EDF band signals next to EEG, Optics, interval-mode AUX) |
 | `resampled` | bool | EEG resampled to 256 Hz |
 | `rawPresent` | bool | Raw EEG is in the file (false = bands only) |
-| `recordingInterval` | number \| null | Mind Monitor recording interval in seconds; null for Constant CSVs and EDF |
+| `recordingInterval` | number \| null | Mind Monitor recording interval in seconds (median gap between band rows, 0.1 s); null for Constant CSVs and EDF |
+| `intervalCoverage` | number \| null | Share of the session the interval rows cover: `min(1, 1 s band window / recordingInterval)` (2 s → 0.5, 10 s → 0.1); null when `recordingInterval` is null |
 | `reference` | string? | Reference if known (EDF label suffix such as `REF`/`LE`/`AVG`; `FPz` for Muse CSVs); omitted when unknown |
 | `lossy` | bool | Something was dropped, resampled or reduced to bands only |
 | `warnings` | string[] | Short human-readable loss reasons / skipped content |
 
-Import policy: channels are matched to a supported montage (Muse `TP9 AF7 AF8 TP10` + optional contiguous `AUX1…AUX4`, else Crown 8) after case-folding, stripping an `EEG ` prefix and `-REF`/`-LE`/`-AVG` suffixes. Extra channels are dropped; missing electrodes are never interpolated; a file without a complete montage is refused. EEG is stored at 256 Hz. Interval-mode Mind Monitor CSVs (not Constant) contain bands only.
+Import policy: channels are matched to a supported montage (Muse `TP9 AF7 AF8 TP10` + optional contiguous `AUX1…AUX4`, else Crown 8) after case-folding, stripping an `EEG ` prefix and `-REF`/`-LE`/`-AVG` suffixes. Extra channels are dropped; missing electrodes are never interpolated; a file without a complete montage is refused. EEG is stored at 256 Hz. Interval-mode Mind Monitor CSVs (not Constant) contain bands only; at `recordingInterval ≥ 1.9` s (2 s and slower, jitter tolerated) the import dialog warns about the low coverage before saving.
 
 ```json
 "import": {
@@ -224,6 +225,7 @@ Import policy: channels are matched to a supported montage (Muse `TP9 AF7 AF8 TP
   "resampled": true,
   "rawPresent": true,
   "recordingInterval": null,
+  "intervalCoverage": null,
   "reference": "REF",
   "lossy": true,
   "warnings": ["dropped 60 channel(s) outside the Muse/Crown montage: …", "EEG resampled from 512 Hz to 256 Hz"]

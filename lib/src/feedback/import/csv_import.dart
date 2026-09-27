@@ -42,6 +42,17 @@ enum CsvRecordingRate {
 /// Median row spacing below this is Constant; at or above it, Interval.
 const double kCsvConstantMaxRowSeconds = 0.25;
 
+/// EEG span behind one Mind Monitor band row (~1 s window).
+const double kCsvBandWindowSeconds = 1.0;
+
+/// Interval rows at or above this (2 s with jitter) cover too little of the
+/// session; the import dialog warns.
+const double kCsvCoverageWarnSeconds = 1.9;
+
+/// Share of the session covered by band rows every [intervalSeconds].
+double csvIntervalCoverage(double intervalSeconds) =>
+    math.min(1.0, kCsvBandWindowSeconds / intervalSeconds);
+
 /// Parsed Mind Monitor / neurofeed CSV ready to assemble.
 class ParsedMindMonitorCsv {
   ParsedMindMonitorCsv({
@@ -348,6 +359,7 @@ ImportResult importCsvText({
   final channelLabels = parsed.channelLabels;
   final events = <int>[];
   var bandRows = <BandInstant>[];
+  double? recordingInterval;
   var bandsFromFft = false;
   double? rawRateHz;
   var resampled = false;
@@ -363,6 +375,10 @@ ImportResult importCsvText({
   if (interval) {
     enabled.remove(RecordingStream.eeg);
     bandRows = _bandRowsAt(parsed, dedupe: false);
+    recordingInterval =
+        ((_medianGapSeconds(bandRows) ?? parsed.medianDeltaSeconds) * 10)
+            .round() /
+        10;
     events.addAll(encodeBandEvents(bandRows));
     final auxColumns = parsed.sourceChannels
         .where((c) => c.toUpperCase().startsWith('AUX'))
@@ -377,7 +393,7 @@ ImportResult importCsvText({
     if (skipped.isNotEmpty) {
       warnings.add(
         ImportWarning(
-          'Recording interval ${_seconds(parsed.medianDeltaSeconds)} s: '
+          'Recording interval ${_seconds(recordingInterval)} s: '
           '${skipped.join('/')} are one snapshot per interval — not imported '
           '(bands only)',
         ),
@@ -504,9 +520,10 @@ ImportResult importCsvText({
     droppedChannels: dropped,
     resampled: resampled,
     rawPresent: rawPresent,
-    recordingInterval: interval
-        ? (parsed.medianDeltaSeconds * 10).round() / 10
-        : null,
+    recordingInterval: recordingInterval,
+    intervalCoverage: recordingInterval == null
+        ? null
+        : (csvIntervalCoverage(recordingInterval) * 1000).round() / 1000,
     reference: kMuseElectrodeNames.contains(channelLabels.first) ? 'FPz' : null,
     lossy: (interval && hasAnyRaw) || resampled || dropped.isNotEmpty,
     warnings: [for (final w in warnings) w.message],
@@ -549,6 +566,16 @@ ImportResult importCsvText({
     provenance: provenance,
     warnings: warnings,
   );
+}
+
+/// Median gap between consecutive band rows; null with fewer than two rows.
+double? _medianGapSeconds(List<BandInstant> rows) {
+  if (rows.length < 2) return null;
+  final gaps = [
+    for (var i = 1; i < rows.length; i++)
+      (rows[i].timestampMs - rows[i - 1].timestampMs) / 1000.0,
+  ]..sort();
+  return gaps[gaps.length ~/ 2];
 }
 
 String _seconds(double v) {
