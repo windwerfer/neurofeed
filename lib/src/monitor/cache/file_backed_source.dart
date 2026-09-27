@@ -60,7 +60,9 @@ class FileBackedSource {
       body.setAll(0, header);
       body.setAll(header.length, complete);
       final raw = sessionParseBody(bytes: body);
-      final parsed = raw.copyWith(eeg: conditionEeg(eeg: raw.eeg).eeg);
+      final parsed = raw.copyWith(
+        eeg: conditionEeg(eeg: raw.eeg, conditioning: liveEegConditioning()).eeg,
+      );
       return _toElapsed(parsed, started, startElapsed, endElapsed);
     } finally {
       raf.closeSync();

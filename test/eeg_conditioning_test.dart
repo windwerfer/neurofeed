@@ -12,22 +12,26 @@ import 'package:neurofeed/src/session_format/eeg_conditioning_meta.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
 import 'package:neurofeed/src/session_format/models.dart';
 import 'package:neurofeed/src/settings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final String _rustLibPath =
     '${Directory.current.path}/rust/target/debug/librust_lib_neurofeed.so';
 
 const _startMs = 1790000000000;
 
-const _live = EegConditioning(
-  highPassHz: 0.5,
-  notchQ: 30,
-  decisions: [
-    NotchDecision(timestampMs: _startMs - 2000.0, notchHz: null),
-    NotchDecision(timestampMs: _startMs + 61500.0, notchHz: 50),
-  ],
-);
+SignalConditioning _conditioning(List<double> notchHz, String source) =>
+    SignalConditioning(
+      highPassHz: 0.5,
+      notchQ: 10,
+      notchHz: notchHz,
+      notchSource: source,
+    );
 
-DeviceInfo _device(String firmware, List<String> labels) => DeviceInfo(
+DeviceInfo _device(
+  String firmware,
+  List<String> labels,
+  SignalConditioning conditioning,
+) => DeviceInfo(
   name: firmware,
   id: 'id-$firmware',
   firmware: firmware,
@@ -36,7 +40,7 @@ DeviceInfo _device(String firmware, List<String> labels) => DeviceInfo(
   channelCount: labels.length,
   channelLabels: labels,
   rawFiltering: RawFiltering.deviceUnfiltered,
-  conditioning: signalConditioningFrom(_live, startMs: _startMs),
+  conditioning: conditioning,
 );
 
 /// Muse-style 12-sample packets for [channels]: offset + 10 µV alpha +
@@ -70,13 +74,20 @@ List<EegSampleRecord> _packets({
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('rawFiltering / conditioning metadata', () {
-    for (final (firmware, labels) in [
-      ('Classic', const ['TP9', 'AF7', 'AF8', 'TP10']),
-      ('Athena', const ['TP9', 'AF7', 'AF8', 'TP10']),
-      ('Crown', const ['CP3', 'C3', 'F5', 'PO3', 'PO4', 'F6', 'C4', 'CP4']),
+    for (final (firmware, labels, notchHz, source) in [
+      ('Classic', const ['TP9', 'AF7', 'AF8', 'TP10'], [50.0], 'detected'),
+      ('Athena', const ['TP9', 'AF7', 'AF8', 'TP10'], <double>[], 'saved'),
+      (
+        'Crown',
+        const ['CP3', 'C3', 'F5', 'PO3', 'PO4', 'F6', 'C4', 'CP4'],
+        [50.0, 60.0],
+        'undecided',
+      ),
     ]) {
-      test('$firmware recording round-trips', () {
+      test('$firmware recording round-trips notch $notchHz ($source)', () {
         final meta = RecordingMetadata(
           formatVersion: 6,
           appVersion: 'test',
@@ -85,7 +96,7 @@ void main() {
           startedAt: DateTime.fromMillisecondsSinceEpoch(_startMs),
           elapsedSeconds: 120,
           durationS: 120,
-          device: _device(firmware, labels),
+          device: _device(firmware, labels, _conditioning(notchHz, source)),
           streams: RecordingMetadata.streamsConfig(
             RecordingStream.values.toSet(),
           ),
@@ -99,32 +110,35 @@ void main() {
         });
         expect(device['conditioning'], {
           'highPassHz': 0.5,
-          'notchQ': 30.0,
-          'notchHz': 50.0,
-          'notchChanges': [
-            {'onset': -2.0, 'notchHz': null},
-            {'onset': 61.5, 'notchHz': 50.0},
-          ],
+          'notchQ': 10.0,
+          'notchHz': notchHz,
+          'notchSource': source,
         });
         final back = RecordingMetadata.fromJson(json).device;
         expect(back.rawFiltering!.storedAsReceived, isTrue);
         expect(back.rawFiltering!.edfPrefiltering, 'HP:DC N:none');
-        expect(back.conditioning!.notchHz, 50);
-        expect(back.conditioning!.notchChanges.map((c) => c.onset), [
-          -2.0,
-          61.5,
-        ]);
+        expect(back.conditioning!.notchHz, notchHz);
+        expect(back.conditioning!.notchSource, source);
       });
     }
 
-    test('no decision yet: notchHz null, no changes', () {
-      final c = signalConditioningFrom(
-        const EegConditioning(highPassHz: 0.5, notchQ: 30, decisions: []),
-        startMs: _startMs,
+    test('Rust conditioning maps to the metadata block and back', () {
+      final rust = EegConditioning(
+        highPassHz: 0.5,
+        notchQ: 10,
+        notchHz: Float64List.fromList([60]),
+        notchSource: NotchSource.saved,
       );
-      expect(c.notchHz, isNull);
-      expect(c.notchChanges, isEmpty);
-      expect(SignalConditioning.fromJson(c.toJson())!.highPassHz, 0.5);
+      final c = signalConditioningFrom(rust);
+      expect(c.toJson(), {
+        'highPassHz': 0.5,
+        'notchQ': 10.0,
+        'notchHz': [60.0],
+        'notchSource': 'saved',
+      });
+      final again = eegConditioningFrom(c);
+      expect(again.notchHz, [60.0]);
+      expect(again.notchSource, NotchSource.saved);
     });
 
     test('feedback metadata carries both blocks through SessionMetadata', () {
@@ -138,18 +152,31 @@ void main() {
           timeZone: 'Asia/Bangkok',
           recordedChannels: const ['TP9', 'AF7', 'AF8', 'TP10'],
           rawFiltering: RawFiltering.deviceUnfiltered,
-          conditioning: signalConditioningFrom(_live, startMs: _startMs),
+          conditioning: _conditioning([50.0], 'detected'),
         ),
         subject: const SubjectInfo(id: 'anon'),
       );
       final device = json['device'] as Map;
       expect((device['rawFiltering'] as Map)['storedAsReceived'], isTrue);
-      expect((device['conditioning'] as Map)['notchHz'], 50.0);
+      expect((device['conditioning'] as Map)['notchHz'], [50.0]);
       final back = SessionMetadata.fromJson(json)!;
       expect(back.rawFiltering!.notchHz, isNull);
-      expect(back.conditioning!.notchChanges.length, 2);
+      expect(back.conditioning!.notchSource, 'detected');
       final flat = SessionMetadata.fromJson(back.toJson())!;
-      expect(flat.conditioning!.notchHz, 50);
+      expect(flat.conditioning!.notchHz, [50.0]);
+    });
+
+    test('saved mains per device id round-trip in settings', () async {
+      SharedPreferences.setMockInitialValues({});
+      final settings = await Settings.load();
+      expect(settings.savedMainsFor('muse-1'), isNull);
+      await settings.setSavedMains('muse-1', [50]);
+      await settings.setSavedMains('crown-1', []);
+      expect(settings.savedMainsFor('muse-1'), [50.0]);
+      expect(settings.savedMainsFor('crown-1'), isEmpty);
+      await settings.setSavedMains('muse-1', [60]);
+      expect(settings.savedMainsFor('muse-1'), [60.0]);
+      expect(settings.savedMainsFor(''), isNull);
     });
 
     test('EDF prefiltering text', () {
@@ -179,9 +206,10 @@ void main() {
           seconds: 4,
         );
         final before = [for (final r in raw) List<double>.of(r.samples)];
-        final out = conditionEeg(eeg: raw);
+        final out = conditionEeg(eeg: raw, conditioning: null);
         expect(out.eeg.length, raw.length);
-        expect(out.conditioning.decisions.single.notchHz, 50);
+        expect(out.conditioning.notchHz, [50.0]);
+        expect(out.conditioning.notchSource, NotchSource.detected);
         for (var i = 0; i < raw.length; i++) {
           expect(raw[i].samples, before[i]);
           expect(out.eeg[i].electrode, raw[i].electrode);
@@ -199,5 +227,43 @@ void main() {
         expect(peak, inInclusiveRange(9.0, 11.0));
       });
     }
+  
+    test('recorded notch is used as is (no scan)', () {
+      final raw = _packets(
+        channels: 4,
+        packetSamples: 12,
+        offset: 800,
+        mainsHz: 50,
+        seconds: 4,
+      );
+      final none = EegConditioning(
+        highPassHz: 0.5,
+        notchQ: 10,
+        notchHz: Float64List(0),
+        notchSource: NotchSource.saved,
+      );
+      final out = conditionEeg(eeg: raw, conditioning: none);
+      expect(out.conditioning.notchHz, isEmpty);
+      expect(out.conditioning.notchSource, NotchSource.saved);
+      final peak = out.eeg
+          .where((r) => r.timestamp >= _startMs + 3000 && r.electrode == 1)
+          .expand((r) => r.samples)
+          .map((v) => v.abs())
+          .reduce(math.max);
+      expect(peak, greaterThan(50));
+    });
+
+    test('live notch: saved value seeds it, else both', () {
+      setSavedMains(notchHz: Float64List.fromList([60]));
+      final saved = liveEegConditioning();
+      expect(saved.notchHz, [60.0]);
+      expect(saved.notchSource, NotchSource.saved);
+      expect(saved.notchQ, 10);
+      expect(liveMainsDecision(), isNull);
+      setSavedMains(notchHz: null);
+      final undecided = liveEegConditioning();
+      expect(undecided.notchHz, [50.0, 60.0]);
+      expect(undecided.notchSource, NotchSource.undecided);
+    });
   });
 }

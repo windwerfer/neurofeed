@@ -88,6 +88,27 @@ void main() {
     expect(meta['kind'], 'recording');
   });
 
+  test('recovered recording keeps the frozen device.conditioning', () async {
+    final meta = _meta().toJson();
+    const conditioning = SignalConditioning(
+      highPassHz: 0.5,
+      notchQ: 10,
+      notchHz: [50, 60],
+      notchSource: 'undecided',
+    );
+    (meta['device'] as Map)['conditioning'] = conditioning.toJson();
+    await File('${scratch.path}/recording_4004.raw').writeAsBytes([1, 2, 3, 4]);
+    await File('${scratch.path}/recording_4004.computed').writeAsString('');
+    await File('${scratch.path}/recording_4004.json').writeAsString(jsonEncode(meta));
+
+    final recovered = await scanRecoverableRecordings(scratch);
+    final head = parseHead(
+      bytes: Uint8List.fromList(recovered.single.scratch.readAsBytesSync()),
+    );
+    final stored = jsonDecode(utf8.decode(head.metadataJson)) as Map;
+    expect((stored['device'] as Map)['conditioning'], conditioning.toJson());
+  });
+
   test('leftover assembled .neurofeed is returned without a second assemble', () async {
     final scratchFile = await writeScratch(
       dir: scratch,

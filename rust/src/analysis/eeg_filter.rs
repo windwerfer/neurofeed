@@ -26,13 +26,23 @@
 //! (±8 Hz). [LOCK_VOTES] consecutive agreeing votes decide 50, 60 or none;
 //! from none, [SWITCH_VOTES] consecutive votes for one frequency switch to
 //! it (hum appearing mid-stream). 50/60 is final: it never flips.
+//!
+//! Recordings: detection runs from connect and the live stream follows it,
+//! but a recording (capture prefix `recording` / `session`) locks the notch
+//! in effect at its start for its whole length ([lock_for_recording]); an
+//! undecided state locks both 50 and 60. A reconnect during the recording
+//! restarts the filter with the locked notch. Offline, a recording is
+//! conditioned with its recorded notch, and a file without one (imports) is
+//! scanned once for mains first and then conditioned with that fixed result.
 
 use std::collections::HashMap;
+
+pub use crate::api::eeg_conditioning::NotchSource;
 use std::f64::consts::{PI, SQRT_2};
 
 pub const SAMPLE_RATE_HZ: f64 = 256.0;
 pub const HIGHPASS_HZ: f64 = 0.5;
-pub const NOTCH_Q: f64 = 30.0;
+pub const NOTCH_Q: f64 = 10.0;
 pub const MAINS_CANDIDATES_HZ: [f64; 2] = [50.0, 60.0];
 pub const WARMUP_SAMPLES: usize = 128;
 pub const PRIME_PASSES: usize = 4;
@@ -53,11 +63,30 @@ pub enum Mains {
 }
 
 impl Mains {
-    /// Notch frequency for metadata: `None` while unknown or absent.
-    pub fn notch_hz(self) -> Option<f64> {
+    /// Mains fundamentals notched (each with its 2nd harmonic): `[f]`,
+    /// `[]` for none, `[50, 60]` while undecided.
+    pub fn notched_mains(self) -> Vec<f64> {
         match self {
-            Mains::Hz(f) => Some(f),
-            _ => None,
+            Mains::Hz(f) => vec![f],
+            Mains::Absent => Vec::new(),
+            Mains::Unknown => MAINS_CANDIDATES_HZ.to_vec(),
+        }
+    }
+
+    /// Inverse of [Mains::notched_mains].
+    pub fn from_notched(hz: &[f64]) -> Self {
+        match hz {
+            [] => Mains::Absent,
+            [f] => Mains::Hz(*f),
+            _ => Mains::Unknown,
+        }
+    }
+
+    fn describe(self) -> String {
+        match self {
+            Mains::Hz(f) => format!("{f} Hz"),
+            Mains::Absent => "none".into(),
+            Mains::Unknown => "both 50 and 60 Hz (undecided)".into(),
         }
     }
 }
@@ -310,24 +339,52 @@ struct Channel {
     next_ms: f64,
 }
 
+/// Which notch a conditioner applies.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum NotchMode {
+    /// Follow its own mains detection.
+    #[default]
+    Detect,
+    /// The live stream: the recording lock when one is set, else detection,
+    /// else the device's saved decision.
+    Live,
+    /// Always this notch (detection off).
+    Fixed(Mains),
+}
+
 /// Conditioner for every EEG channel of one stream (one connection or
 /// one recording).
 #[derive(Default, Debug)]
 pub struct EegConditioner {
     channels: HashMap<i32, Channel>,
     mains: MainsDetector,
-    decisions: Vec<(f64, Mains)>,
+    mode: NotchMode,
+    applied: Option<Mains>,
 }
 
 impl EegConditioner {
+    pub fn new(mode: NotchMode) -> Self {
+        Self { mode, ..Default::default() }
+    }
+
+    /// Detected mains (Unknown until decided; never set in `Fixed` mode).
     pub fn mains(&self) -> Mains {
         self.mains.mains()
     }
 
-    /// Every mains decision so far: `(timestamp_ms of the deciding packet,
-    /// new state)`.
-    pub fn decisions(&self) -> &[(f64, Mains)] {
-        &self.decisions
+    /// Notch the filters apply now.
+    pub fn applied(&self) -> Mains {
+        match self.mode {
+            NotchMode::Detect => self.mains.mains(),
+            NotchMode::Live => match recording_lock() {
+                Some((m, _)) => m,
+                None => match self.mains.mains() {
+                    Mains::Unknown => saved_mains().unwrap_or(Mains::Unknown),
+                    m => m,
+                },
+            },
+            NotchMode::Fixed(m) => m,
+        }
     }
 
     /// Condition one packet of unfiltered samples starting at
@@ -340,15 +397,18 @@ impl EegConditioner {
         timestamp_ms: f64,
         samples: &[f64],
     ) -> Vec<(f64, Vec<f64>)> {
-        if let Some(m) = self.mains.feed(electrode, samples) {
-            self.decisions.push((timestamp_ms, m));
+        if !matches!(self.mode, NotchMode::Fixed(_)) {
+            self.mains.feed(electrode, samples);
+        }
+        let mains = self.applied();
+        if self.applied != Some(mains) {
+            self.applied = Some(mains);
             for ch in self.channels.values_mut() {
                 if let Stage::Running(f) = &mut ch.stage {
-                    f.set_mains(m);
+                    f.set_mains(mains);
                 }
             }
         }
-        let mains = self.mains.mains();
         let mut out = Vec::new();
         let ch = self.channels.entry(electrode).or_insert_with(|| Channel {
             stage: Stage::Warmup { start_ms: timestamp_ms, held: Vec::new() },
@@ -375,7 +435,7 @@ impl EegConditioner {
 
     /// Release every held block (end of a recording).
     pub fn finish(&mut self) -> Vec<(i32, f64, Vec<f64>)> {
-        let mains = self.mains.mains();
+        let mains = self.applied();
         let mut out = Vec::new();
         for (&electrode, ch) in &mut self.channels {
             if let Some((ts, block)) = flush(&mut ch.stage, mains) {
@@ -400,25 +460,75 @@ fn flush(stage: &mut Stage, mains: Mains) -> Option<(f64, Vec<f64>)> {
     Some((start_ms, block))
 }
 
-static LIVE_DECISIONS: std::sync::Mutex<Vec<(f64, Mains)>> = std::sync::Mutex::new(Vec::new());
+static LIVE_MAINS: std::sync::Mutex<Mains> = std::sync::Mutex::new(Mains::Unknown);
+static SAVED_MAINS: std::sync::Mutex<Option<Mains>> = std::sync::Mutex::new(None);
+static RECORDING_LOCK: std::sync::Mutex<Option<(Mains, NotchSource)>> = std::sync::Mutex::new(None);
 
-/// Mains decisions of the live EEG stream (reset on every connection).
-pub fn live_decisions() -> Vec<(f64, Mains)> {
-    LIVE_DECISIONS.lock().unwrap_or_else(|e| e.into_inner()).clone()
+/// Detected mains of the live stream (Unknown after every connect).
+pub fn live_mains() -> Mains {
+    *LIVE_MAINS.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-pub fn publish_live_decisions(decisions: &[(f64, Mains)]) {
-    *LIVE_DECISIONS.lock().unwrap_or_else(|e| e.into_inner()) = decisions.to_vec();
+pub fn publish_live_mains(mains: Mains) {
+    *LIVE_MAINS.lock().unwrap_or_else(|e| e.into_inner()) = mains;
 }
 
-/// Condition whole recorded EEG streams offline with the live rules:
-/// `packets` are `(electrode, timestamp_ms, samples)` in stream order; the
-/// result has the same packets with conditioned samples, plus the mains
-/// decisions.
+/// Last decision saved for the connected device (app settings).
+pub fn saved_mains() -> Option<Mains> {
+    *SAVED_MAINS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+pub fn set_saved_mains(mains: Option<Mains>) {
+    *SAVED_MAINS.lock().unwrap_or_else(|e| e.into_inner()) = mains;
+}
+
+/// Live notch without a recording lock: detection, else the saved
+/// decision, else both.
+pub fn live_notch() -> (Mains, NotchSource) {
+    match (live_mains(), saved_mains()) {
+        (Mains::Unknown, Some(saved)) => (saved, NotchSource::Saved),
+        (Mains::Unknown, None) => (Mains::Unknown, NotchSource::Undecided),
+        (detected, _) => (detected, NotchSource::Detected),
+    }
+}
+
+/// Notch locked for the recording in progress, if any.
+pub fn recording_lock() -> Option<(Mains, NotchSource)> {
+    *RECORDING_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Lock the live notch for a starting recording or session.
+pub fn lock_for_recording() -> (Mains, NotchSource) {
+    let lock = live_notch();
+    *RECORDING_LOCK.lock().unwrap_or_else(|e| e.into_inner()) = Some(lock);
+    log::info!("[eeg_filter] recording mains notch locked: {} ({:?})", lock.0.describe(), lock.1);
+    lock
+}
+
+pub fn unlock_recording() {
+    *RECORDING_LOCK.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
+/// Mains of whole recorded streams, as the live detector would end up.
+pub fn detect_packets(packets: &[(i32, f64, Vec<f64>)]) -> Mains {
+    let mut detector = MainsDetector::default();
+    for (electrode, _, samples) in packets {
+        detector.feed(*electrode, samples);
+    }
+    detector.mains()
+}
+
+/// Condition whole recorded EEG streams offline with one fixed notch:
+/// `notch` (the recording's), or else one found by scanning the packets
+/// first. `packets` are `(electrode, timestamp_ms, samples)` in stream
+/// order; the result has the same packets with conditioned samples, plus
+/// the notch used.
 pub fn condition_packets(
     packets: &[(i32, f64, Vec<f64>)],
-) -> (Vec<Vec<f64>>, Vec<(f64, Mains)>) {
-    let mut conditioner = EegConditioner::default();
+    notch: Option<Mains>,
+) -> (Vec<Vec<f64>>, Mains) {
+    let mains = notch.unwrap_or_else(|| detect_packets(packets));
+    let mut conditioner = EegConditioner::new(NotchMode::Fixed(mains));
     let mut per_electrode: HashMap<i32, Vec<f64>> = HashMap::new();
     for (electrode, ts, samples) in packets {
         for (_, block) in conditioner.process(*electrode, *ts, samples) {
@@ -439,7 +549,7 @@ pub fn condition_packets(
             out
         })
         .collect();
-    (out, conditioner.decisions)
+    (out, mains)
 }
 
 #[cfg(test)]
@@ -601,7 +711,6 @@ mod tests {
                 -2.0e5 + alpha(n) + rng.next(2.0) + h
             });
             assert_eq!(c.mains(), want, "hum {hum:?}");
-            assert_eq!(c.decisions().len(), 1);
         }
     }
 
@@ -627,18 +736,13 @@ mod tests {
         let mut c = EegConditioner::default();
         run(&mut c, 8, 0, 256 * 5, 0.0, &mut |_, n| alpha(n) + rng.next(2.0));
         assert_eq!(c.mains(), Mains::Absent);
-        let out = run(&mut c, 8, 256 * 5, 256 * 10, 5000.0, &mut |_, n| {
-            alpha(n) + rng.next(2.0) + 138.0 * (2.0 * PI * 50.0 * n as f64 / FS).sin()
-        });
-        assert_eq!(c.mains(), Mains::Hz(50.0));
-        let d = c.decisions();
-        assert_eq!(d.len(), 2);
-        assert_eq!(d[0].1, Mains::Absent);
-        assert_eq!(d[1].1, Mains::Hz(50.0));
+        let hum = |n: usize| 138.0 * (2.0 * PI * 50.0 * n as f64 / FS).sin();
+        run(&mut c, 8, 256 * 5, 256 * 3, 5000.0, &mut |_, n| alpha(n) + rng.next(2.0) + hum(n));
         // Switch after SWITCH_VOTES windows (2 s at 8 channels), then the
         // notch removes the hum.
-        assert!(d[1].0 >= 5000.0 && d[1].0 < 8000.0, "switch at {} ms", d[1].0);
-        let tail = &out[0][256 * 6..];
+        assert_eq!(c.mains(), Mains::Hz(50.0));
+        let out = run(&mut c, 8, 256 * 8, 256 * 7, 8000.0, &mut |_, n| alpha(n) + rng.next(2.0) + hum(n));
+        let tail = &out[0][256..];
         assert!(amplitude_at(tail, 50.0) < 0.05, "residual {}", amplitude_at(tail, 50.0));
     }
 
@@ -652,7 +756,6 @@ mod tests {
         let mut rng = Lcg(5);
         run(&mut c, 8, 256 * 22, 256 * 5, 22000.0, &mut |_, n| alpha(n) + rng.next(2.0));
         assert_eq!(c.mains(), Mains::Hz(50.0));
-        assert_eq!(c.decisions().len(), 1);
 
         // Alternating or mixed votes never decide.
         let mut d = MainsDetector::default();
@@ -687,12 +790,13 @@ mod tests {
                 packets.push((ch, ts, samples));
             }
         }
-        let (out, _) = condition_packets(&packets);
+        let (out, mains) = condition_packets(&packets, None);
+        assert_eq!(mains, Mains::Hz(50.0));
         assert_eq!(out.len(), packets.len());
         for (o, p) in out.iter().zip(&packets) {
             assert_eq!(o.len(), p.2.len());
         }
-        let mut streaming = EegConditioner::default();
+        let mut streaming = EegConditioner::new(NotchMode::Fixed(mains));
         let mut ch0 = Vec::new();
         for (ch, ts, s) in &packets {
             for (_, b) in streaming.process(*ch, *ts, s) {
@@ -708,5 +812,90 @@ mod tests {
         }
         let offline: Vec<f64> = out.iter().zip(&packets).filter(|(_, p)| p.0 == 0).flat_map(|(o, _)| o.clone()).collect();
         assert_eq!(offline, ch0);
+    }
+
+    #[test]
+    fn offline_uses_the_recorded_notch() {
+        let packets: Vec<(i32, f64, Vec<f64>)> = (0..160usize)
+            .map(|k| (0, k as f64 * 62.5, (k * 16..k * 16 + 16).map(|n| realistic(n, -2.0e5, 60.0)).collect()))
+            .collect();
+        let (_, scanned) = condition_packets(&packets, None);
+        assert_eq!(scanned, Mains::Hz(60.0));
+        // Recorded as "both": 60 Hz still removed, no scan.
+        let (out, used) = condition_packets(&packets, Some(Mains::Unknown));
+        assert_eq!(used, Mains::Unknown);
+        let tail: Vec<f64> = out[80..].iter().flatten().copied().collect();
+        assert!(amplitude_at(&tail, 60.0) < 0.05);
+        // Recorded as "none": the hum stays.
+        let (out, _) = condition_packets(&packets, Some(Mains::Absent));
+        let tail: Vec<f64> = out[80..].iter().flatten().copied().collect();
+        assert!(amplitude_at(&tail, 60.0) > 100.0);
+    }
+
+    #[test]
+    fn notched_mains_round_trip() {
+        for m in [Mains::Hz(50.0), Mains::Hz(60.0), Mains::Absent, Mains::Unknown] {
+            assert_eq!(Mains::from_notched(&m.notched_mains()), m);
+        }
+        assert_eq!(Mains::Unknown.notched_mains(), vec![50.0, 60.0]);
+        assert!(Mains::Absent.notched_mains().is_empty());
+    }
+
+    #[test]
+    fn recording_lock_freezes_the_live_notch() {
+        let _g = crate::spine::capture::test_lock();
+        // Undecided at recording start: both notches for the whole recording.
+        publish_live_mains(Mains::Unknown);
+        set_saved_mains(None);
+        assert_eq!(lock_for_recording(), (Mains::Unknown, NotchSource::Undecided));
+        let mut c = EegConditioner::new(NotchMode::Live);
+        let out = run(&mut c, 8, 0, 256 * 6, 0.0, &mut |_, n| realistic(n, -2.0e5, 50.0));
+        assert_eq!(c.mains(), Mains::Hz(50.0));
+        assert_eq!(c.applied(), Mains::Unknown);
+        // Reconnect mid-recording: a new conditioner reuses the lock.
+        publish_live_mains(Mains::Unknown);
+        let mut r = EegConditioner::new(NotchMode::Live);
+        run(&mut r, 8, 0, 256 * 3, 0.0, &mut |_, n| realistic(n, -2.0e5, 60.0));
+        assert_eq!(r.mains(), Mains::Hz(60.0));
+        assert_eq!(r.applied(), Mains::Unknown);
+        let tail = &out[0][256 * 3..];
+        assert!(amplitude_at(tail, 50.0) < 0.05);
+        // Recording stops: the live stream follows detection again.
+        unlock_recording();
+        run(&mut c, 8, 256 * 6, 256, 6000.0, &mut |_, n| realistic(n, -2.0e5, 50.0));
+        assert_eq!(c.applied(), Mains::Hz(50.0));
+        // Decided at start: that value is locked.
+        publish_live_mains(Mains::Hz(60.0));
+        set_saved_mains(Some(Mains::Hz(50.0)));
+        assert_eq!(lock_for_recording(), (Mains::Hz(60.0), NotchSource::Detected));
+        assert_eq!(EegConditioner::new(NotchMode::Live).applied(), Mains::Hz(60.0));
+        unlock_recording();
+        // Undecided but saved for this device: the saved value, assumed true.
+        publish_live_mains(Mains::Unknown);
+        assert_eq!(lock_for_recording(), (Mains::Hz(50.0), NotchSource::Saved));
+        unlock_recording();
+        set_saved_mains(Some(Mains::Absent));
+        assert_eq!(lock_for_recording(), (Mains::Absent, NotchSource::Saved));
+        unlock_recording();
+        set_saved_mains(None);
+    }
+
+    #[test]
+    fn live_filter_starts_from_the_saved_decision() {
+        let _g = crate::spine::capture::test_lock();
+        unlock_recording();
+        set_saved_mains(Some(Mains::Hz(60.0)));
+        let mut c = EegConditioner::new(NotchMode::Live);
+        assert_eq!(c.applied(), Mains::Hz(60.0));
+        // Seeded: 60 Hz hum is removed from the first output on.
+        let out = run(&mut c, 1, 0, 256, 0.0, &mut |_, n| realistic(n, -2.0e5, 60.0));
+        assert!(amplitude_at(&out[0][128..], 60.0) < 1.0);
+        // Detection overrides the saved value once it decides.
+        set_saved_mains(Some(Mains::Hz(50.0)));
+        let mut d = EegConditioner::new(NotchMode::Live);
+        run(&mut d, 8, 0, 256 * 3, 0.0, &mut |_, n| realistic(n, -2.0e5, 60.0));
+        assert_eq!(d.applied(), Mains::Hz(60.0));
+        set_saved_mains(None);
+        assert_eq!(EegConditioner::new(NotchMode::Live).applied(), Mains::Unknown);
     }
 }

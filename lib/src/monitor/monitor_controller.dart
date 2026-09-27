@@ -32,18 +32,20 @@ class MonitorController extends Notifier<MonitorState> {
     this.tmpCap = MonitorRecorder.kTmpCap,
     this.sidecarInterval = MonitorRecorder.kSidecarInterval,
     SessionRecorder Function()? createRecorder,
-    SignalConditioning? Function(int startMs)? liveConditioning,
+    SignalConditioning? Function()? liveConditioning,
   }) : _createRecorder = createRecorder ?? (() => SessionRecorder()),
-       _liveConditioning =
-           liveConditioning ??
-           ((startMs) => liveSignalConditioning(startMs: startMs));
+       _liveConditioning = liveConditioning ?? liveSignalConditioning;
 
   final Duration tmpCap;
   final Duration sidecarInterval;
   final SessionRecorder Function() _createRecorder;
 
   /// `device.conditioning` source (the live Rust conditioner by default).
-  final SignalConditioning? Function(int startMs) _liveConditioning;
+  final SignalConditioning? Function() _liveConditioning;
+
+  /// Conditioning frozen at recording start (Rust locks the notch in
+  /// capture_start; the first sidecar reads it).
+  SignalConditioning? _recordingConditioning;
 
   final BandCache bandCache = BandCache();
   final OpticalCache opticalCache = OpticalCache();
@@ -351,6 +353,7 @@ class MonitorController extends Notifier<MonitorState> {
       final startedAt = _latestEegTsMs ?? DateTime.now().millisecondsSinceEpoch;
       _recordingSessionId = const Uuid().v4();
       _clearLiveGraphs();
+      _recordingConditioning = null;
       state = MonitorState(
         kind: CaptureKind.recording,
         electrodeNames: names,
@@ -512,7 +515,9 @@ class MonitorController extends Notifier<MonitorState> {
         channelCount: state.channelCount,
         channelLabels: state.electrodeNames,
         rawFiltering: RawFiltering.deviceUnfiltered,
-        conditioning: _liveConditioning(started),
+        conditioning: _lease.kind == CaptureKind.recording
+            ? (_recordingConditioning ??= _liveConditioning())
+            : _liveConditioning(),
       ),
       streams: RecordingMetadata.streamsConfig(settings.recordStreams),
     );

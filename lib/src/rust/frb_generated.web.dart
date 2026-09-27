@@ -75,13 +75,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   EdfExportParams dco_decode_box_autoadd_edf_export_params(dynamic raw);
 
   @protected
+  EegConditioning dco_decode_box_autoadd_eeg_conditioning(dynamic raw);
+
+  @protected
   EegDto dco_decode_box_autoadd_eeg_dto(dynamic raw);
 
   @protected
   double dco_decode_box_autoadd_f_32(dynamic raw);
-
-  @protected
-  double dco_decode_box_autoadd_f_64(dynamic raw);
 
   @protected
   FeatureDto dco_decode_box_autoadd_feature_dto(dynamic raw);
@@ -252,9 +252,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<MovementRecord> dco_decode_list_movement_record(dynamic raw);
 
   @protected
-  List<NotchDecision> dco_decode_list_notch_decision(dynamic raw);
-
-  @protected
   List<PeakAlphaRecord> dco_decode_list_peak_alpha_record(dynamic raw);
 
   @protected
@@ -306,7 +303,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MuseEventDto dco_decode_muse_event_dto(dynamic raw);
 
   @protected
-  NotchDecision dco_decode_notch_decision(dynamic raw);
+  NotchSource dco_decode_notch_source(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -318,10 +315,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ComputedFrame? dco_decode_opt_box_autoadd_computed_frame(dynamic raw);
 
   @protected
-  double? dco_decode_opt_box_autoadd_f_32(dynamic raw);
+  EegConditioning? dco_decode_opt_box_autoadd_eeg_conditioning(dynamic raw);
 
   @protected
-  double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
+  double? dco_decode_opt_box_autoadd_f_32(dynamic raw);
 
   @protected
   PeakAlphaInfo? dco_decode_opt_box_autoadd_peak_alpha_info(dynamic raw);
@@ -465,13 +462,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  EegConditioning sse_decode_box_autoadd_eeg_conditioning(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   EegDto sse_decode_box_autoadd_eeg_dto(SseDeserializer deserializer);
 
   @protected
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
-
-  @protected
-  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
   FeatureDto sse_decode_box_autoadd_feature_dto(SseDeserializer deserializer);
@@ -670,11 +669,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<NotchDecision> sse_decode_list_notch_decision(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   List<PeakAlphaRecord> sse_decode_list_peak_alpha_record(
     SseDeserializer deserializer,
   );
@@ -732,7 +726,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MuseEventDto sse_decode_muse_event_dto(SseDeserializer deserializer);
 
   @protected
-  NotchDecision sse_decode_notch_decision(SseDeserializer deserializer);
+  NotchSource sse_decode_notch_source(SseDeserializer deserializer);
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
@@ -746,10 +740,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer);
+  EegConditioning? sse_decode_opt_box_autoadd_eeg_conditioning(
+    SseDeserializer deserializer,
+  );
 
   @protected
-  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
+  double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer);
 
   @protected
   PeakAlphaInfo? sse_decode_opt_box_autoadd_peak_alpha_info(
@@ -916,13 +912,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_eeg_conditioning(
+    EegConditioning self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_eeg_dto(EegDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_feature_dto(
@@ -1189,12 +1188,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_notch_decision(
-    List<NotchDecision> self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_list_peak_alpha_record(
     List<PeakAlphaRecord> self,
     SseSerializer serializer,
@@ -1285,7 +1278,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_muse_event_dto(MuseEventDto self, SseSerializer serializer);
 
   @protected
-  void sse_encode_notch_decision(NotchDecision self, SseSerializer serializer);
+  void sse_encode_notch_source(NotchSource self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
@@ -1300,10 +1293,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer);
+  void sse_encode_opt_box_autoadd_eeg_conditioning(
+    EegConditioning? self,
+    SseSerializer serializer,
+  );
 
   @protected
-  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
+  void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_peak_alpha_info(

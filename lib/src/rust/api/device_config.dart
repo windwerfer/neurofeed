@@ -20,6 +20,15 @@ class DeviceConfig {
   /// Electrode indices required for signal gate (calibration/playing)
   final Uint64List neededElectrodes;
 
+  /// Frontal pair (left, right): drowsiness delta rail, blink detection,
+  /// guardrail model rows AF7/AF8.
+  final Uint64List frontalElectrodes;
+
+  /// Temporal pair (left, right): clench EMG, eye-level reference,
+  /// guardrail model rows TP9/TP10. Crown has no temporal sites and uses
+  /// its most lateral rear pair.
+  final Uint64List temporalElectrodes;
+
   /// Minimum signal quality (0-100) for "good" electrode
   final double signalGoodThreshold;
 
@@ -44,6 +53,8 @@ class DeviceConfig {
     required this.electrodeNames,
     required this.targetElectrodes,
     required this.neededElectrodes,
+    required this.frontalElectrodes,
+    required this.temporalElectrodes,
     required this.signalGoodThreshold,
     required this.signalCriticalThreshold,
     required this.features,
@@ -106,6 +117,8 @@ class DeviceConfig {
       electrodeNames.hashCode ^
       targetElectrodes.hashCode ^
       neededElectrodes.hashCode ^
+      frontalElectrodes.hashCode ^
+      temporalElectrodes.hashCode ^
       signalGoodThreshold.hashCode ^
       signalCriticalThreshold.hashCode ^
       features.hashCode ^
@@ -123,6 +136,8 @@ class DeviceConfig {
           electrodeNames == other.electrodeNames &&
           targetElectrodes == other.targetElectrodes &&
           neededElectrodes == other.neededElectrodes &&
+          frontalElectrodes == other.frontalElectrodes &&
+          temporalElectrodes == other.temporalElectrodes &&
           signalGoodThreshold == other.signalGoodThreshold &&
           signalCriticalThreshold == other.signalCriticalThreshold &&
           features == other.features &&

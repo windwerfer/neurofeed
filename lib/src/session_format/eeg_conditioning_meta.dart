@@ -1,25 +1,28 @@
+import 'dart:typed_data';
+
 import '../rust/api/eeg_conditioning.dart';
 import 'models.dart';
 
-/// `device.conditioning` for a recording that started at [startMs]. Every
-/// mains decision of the connection is listed; one made before the recording
-/// started has a negative onset. No decision yet = both mains pairs notched.
-SignalConditioning signalConditioningFrom(
-  EegConditioning c, {
-  required int startMs,
-}) => SignalConditioning(
+/// `device.conditioning` from the Rust conditioning.
+SignalConditioning signalConditioningFrom(EegConditioning c) =>
+    SignalConditioning(
+      highPassHz: c.highPassHz,
+      notchQ: c.notchQ,
+      notchHz: c.notchHz.toList(),
+      notchSource: c.notchSource.name,
+    );
+
+/// Rust conditioning from a recording's `device.conditioning`.
+EegConditioning eegConditioningFrom(SignalConditioning c) => EegConditioning(
   highPassHz: c.highPassHz,
   notchQ: c.notchQ,
-  notchHz: c.decisions.isEmpty ? null : c.decisions.last.notchHz,
-  notchChanges: [
-    for (final d in c.decisions)
-      NotchChange(
-        onset: (d.timestampMs - startMs) / 1000.0,
-        notchHz: d.notchHz,
-      ),
-  ],
+  notchHz: Float64List.fromList(c.notchHz),
+  notchSource: NotchSource.values.firstWhere(
+    (s) => s.name == c.notchSource,
+    orElse: () => NotchSource.undecided,
+  ),
 );
 
-/// The live connection's conditioning, relative to a recording start.
-SignalConditioning liveSignalConditioning({required int startMs}) =>
-    signalConditioningFrom(liveEegConditioning(), startMs: startMs);
+/// The live stream's conditioning now (the recording lock while one runs).
+SignalConditioning liveSignalConditioning() =>
+    signalConditioningFrom(liveEegConditioning());

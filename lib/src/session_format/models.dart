@@ -136,63 +136,46 @@ class RawFiltering {
   }
 }
 
-/// A mains decision: `onset` seconds from `startedAt` (negative = before the
-/// recording started), `notchHz` 50 / 60 or null (no hum, notch off).
-class NotchChange {
-  const NotchChange({required this.onset, this.notchHz});
-
-  final double onset;
-  final double? notchHz;
-
-  Map<String, Object?> toJson() => {'onset': onset, 'notchHz': notchHz};
-
-  static NotchChange? fromJson(Object? json) {
-    if (json is! Map || json['onset'] is! num) return null;
-    return NotchChange(
-      onset: (json['onset'] as num).toDouble(),
-      notchHz: (json['notchHz'] as num?)?.toDouble(),
-    );
-  }
-}
-
 /// `device.conditioning`: high-pass and mains notch the app applies to the
-/// RAW before quality, bands, features and charts. Before the first mains
-/// decision both 50/100 and 60/120 Hz are notched.
+/// RAW before quality, bands, features and charts. One notch for the whole
+/// recording, fixed when it started.
 class SignalConditioning {
   const SignalConditioning({
     required this.highPassHz,
     required this.notchQ,
-    this.notchHz,
-    this.notchChanges = const [],
+    required this.notchHz,
+    required this.notchSource,
   });
 
   final double highPassHz;
   final double notchQ;
 
-  /// Mains notch in effect at the end; null = none, or undecided when
-  /// [notchChanges] is empty.
-  final double? notchHz;
+  /// Mains notched, each with its 2nd harmonic: `[50]`, `[60]`, `[]` (no
+  /// hum) or `[50, 60]` (undecided).
+  final List<double> notchHz;
 
-  /// Mains decisions of the connection (negative onset = before start).
-  final List<NotchChange> notchChanges;
+  /// `detected` | `saved` (the device's last decision) | `undecided`.
+  final String notchSource;
 
   Map<String, Object?> toJson() => {
     'highPassHz': highPassHz,
     'notchQ': notchQ,
     'notchHz': notchHz,
-    'notchChanges': [for (final c in notchChanges) c.toJson()],
+    'notchSource': notchSource,
   };
 
   static SignalConditioning? fromJson(Object? json) {
-    if (json is! Map || json['highPassHz'] is! num) return null;
+    if (json is! Map || json['highPassHz'] is! num || json['notchHz'] is! List) {
+      return null;
+    }
     return SignalConditioning(
       highPassHz: (json['highPassHz'] as num).toDouble(),
       notchQ: (json['notchQ'] as num?)?.toDouble() ?? 0,
-      notchHz: (json['notchHz'] as num?)?.toDouble(),
-      notchChanges: [
-        for (final c in (json['notchChanges'] as List?) ?? const [])
-          ?NotchChange.fromJson(c),
+      notchHz: [
+        for (final v in json['notchHz'] as List)
+          if (v is num) v.toDouble(),
       ],
+      notchSource: json['notchSource'] as String? ?? 'undecided',
     );
   }
 }

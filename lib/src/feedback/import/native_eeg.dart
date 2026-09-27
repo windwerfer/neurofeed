@@ -78,7 +78,10 @@ List<int> encodeEegRuns(Map<int, List<EegRun>> runsByElectrode) {
     final t = a.rec.timestamp.compareTo(b.rec.timestamp);
     return t != 0 ? t : a.e.compareTo(b.e);
   });
-  final out = conditionEeg(eeg: [for (final p in packets) p.rec]);
+  final out = conditionEeg(
+    eeg: [for (final p in packets) p.rec],
+    conditioning: null,
+  );
   final runs = {
     for (final e in runsByElectrode.entries)
       e.key: [

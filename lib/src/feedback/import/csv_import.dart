@@ -418,7 +418,7 @@ ImportResult importCsvText({
     if (bandRows.isEmpty && raw.runs.isNotEmpty) {
       final fft = fftBandRows(raw.runs);
       bandRows = fft.rows;
-      conditioning = signalConditioningFrom(fft.conditioning, startMs: 0);
+      conditioning = signalConditioningFrom(fft.conditioning);
       bandsFromFft = true;
       enabled.add(RecordingStream.bands);
       warnings.add(
@@ -428,7 +428,6 @@ ImportResult importCsvText({
       // Charts show the conditioned RAW; record what that conditioning is.
       conditioning = signalConditioningFrom(
         conditionRuns(raw.runs).conditioning,
-        startMs: 0,
       );
     }
     events.addAll(encodeBandEvents(bandRows));

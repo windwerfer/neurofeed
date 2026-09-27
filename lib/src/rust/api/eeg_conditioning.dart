@@ -8,15 +8,34 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'session_format.dart';
 
 // These functions are ignored because they are not marked as `pub`: `conditioning`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `eq`, `fmt`, `fmt`
 
-/// Mains decisions of the current connection so far.
+/// Notch the live stream applies now: the recording lock while a recording
+/// or session is written, else detection, else the saved decision.
 EegConditioning liveEegConditioning() =>
     RustLib.instance.api.crateApiEegConditioningLiveEegConditioning();
 
-/// Condition recorded EEG records (file order) exactly like the live
-/// stream. Records keep their order, electrode, timestamp and length.
-ConditionedEeg conditionEeg({required List<EegSampleRecord> eeg}) =>
-    RustLib.instance.api.crateApiEegConditioningConditionEeg(eeg: eeg);
+/// Saved mains decision of the device being connected (`None`: nothing
+/// saved). Seeds the live notch until detection decides.
+void setSavedMains({Float64List? notchHz}) =>
+    RustLib.instance.api.crateApiEegConditioningSetSavedMains(notchHz: notchHz);
+
+/// Live detection's decision (`[50]`, `[60]`, `[]`), `None` while
+/// undecided. Dart saves it per device.
+Float64List? liveMainsDecision() =>
+    RustLib.instance.api.crateApiEegConditioningLiveMainsDecision();
+
+/// Condition recorded EEG records (file order) like the live stream, with
+/// one notch for the whole recording: the recording's `conditioning`, or
+/// else one found by scanning the RAW. Records keep their order, electrode,
+/// timestamp and length.
+ConditionedEeg conditionEeg({
+  required List<EegSampleRecord> eeg,
+  EegConditioning? conditioning,
+}) => RustLib.instance.api.crateApiEegConditioningConditionEeg(
+  eeg: eeg,
+  conditioning: conditioning,
+);
 
 class ConditionedEeg {
   final List<EegSampleRecord> eeg;
@@ -37,20 +56,27 @@ class ConditionedEeg {
 }
 
 /// Conditioning applied to EEG before quality, bands, features and charts.
+/// `notch_hz`: mains notched (harmonics implied): `[50]`, `[60]`, `[]` (no
+/// hum) or `[50, 60]` (undecided).
 class EegConditioning {
   final double highPassHz;
   final double notchQ;
-  final List<NotchDecision> decisions;
+  final Float64List notchHz;
+  final NotchSource notchSource;
 
   const EegConditioning({
     required this.highPassHz,
     required this.notchQ,
-    required this.decisions,
+    required this.notchHz,
+    required this.notchSource,
   });
 
   @override
   int get hashCode =>
-      highPassHz.hashCode ^ notchQ.hashCode ^ decisions.hashCode;
+      highPassHz.hashCode ^
+      notchQ.hashCode ^
+      notchHz.hashCode ^
+      notchSource.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -59,24 +85,18 @@ class EegConditioning {
           runtimeType == other.runtimeType &&
           highPassHz == other.highPassHz &&
           notchQ == other.notchQ &&
-          decisions == other.decisions;
+          notchHz == other.notchHz &&
+          notchSource == other.notchSource;
 }
 
-/// One mains decision: `notch_hz` 50 / 60, or null when no hum was found.
-class NotchDecision {
-  final double timestampMs;
-  final double? notchHz;
+/// Where a recording's notch came from.
+enum NotchSource {
+  /// Mains detection of this connection (or a scan of the file).
+  detected,
 
-  const NotchDecision({required this.timestampMs, this.notchHz});
+  /// The device's last saved decision; detection had not decided yet.
+  saved,
 
-  @override
-  int get hashCode => timestampMs.hashCode ^ notchHz.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is NotchDecision &&
-          runtimeType == other.runtimeType &&
-          timestampMs == other.timestampMs &&
-          notchHz == other.notchHz;
+  /// Neither: both 50 and 60 Hz notched.
+  undecided,
 }

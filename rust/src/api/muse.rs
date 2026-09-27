@@ -1,6 +1,6 @@
 use flutter_rust_bridge::frb;
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::api::device_config::{DeviceKind, QualitySource};
+use crate::api::device_config::{DeviceConfig, DeviceKind, QualitySource};
 use crate::api::features::{self, FeatureDto};
 use crate::frb_generated::StreamSink;
 use muse_rs::prelude::*;
@@ -24,10 +24,20 @@ fn now_ms() -> f64 {
 /// 5.5 s @ 256 Hz covers a 5 s epoch (1280 samples) with headroom.
 const GUARDRAIL_WINDOW: usize = 1408;
 
-/// App electrode index → model row order (AF7, AF8, TP9, TP10). The forwarder's
-/// electrode numbering is `0=TP9, 1=AF7, 2=AF8, 3=TP10`; the encoders expect
-/// rows in AF7/AF8/TP9/TP10 order to match the fixed position vectors below.
-const ELECTRODE_TO_MODEL_ROW: [i32; 4] = [1, 2, 0, 3];
+/// Frontal and temporal pads of the active device (device config): Muse
+/// AF7/AF8 + TP9/TP10, Crown F5/F6 + CP3/CP4.
+fn device_pads(kind: DeviceKind) -> ([i32; 2], [i32; 2]) {
+    let c = DeviceConfig::for_kind(kind);
+    let pair = |v: &[usize]| [v[0] as i32, v[1] as i32];
+    (pair(&c.frontal_electrodes), pair(&c.temporal_electrodes))
+}
+
+/// App electrode indices in model row order (AF7, AF8, TP9, TP10 rows): the
+/// device's frontal pair, then its temporal pair.
+fn model_rows(kind: DeviceKind) -> [i32; 4] {
+    let (f, t) = device_pads(kind);
+    [f[0], f[1], t[0], t[1]]
+}
 
 /// AF7/AF8/TP9/TP10 approximate EEG coordinates (mm), used by REVE
 /// (`positions_xyz`). CBraMod Spur A ignores positions (channel-order only).
@@ -49,15 +59,16 @@ fn score_window_len(kind: &str) -> Option<usize> {
 }
 
 /// Build a time-aligned model window from the per-electrode rolling buffers,
-/// arranged in model row order (AF7, AF8, TP9, TP10). Returns
+/// arranged in model row order ([model_rows]). Returns
 /// `(signal, positions, n_channels, n_times)` or None when any of the four
 /// electrodes has fewer than [n_times] buffered samples yet.
 fn build_score_window(
     bufs: &std::collections::HashMap<i32, Vec<f64>>,
     n_times: usize,
+    rows: [i32; 4],
 ) -> Option<(Vec<f32>, Vec<f32>, usize, usize)> {
     let mut signal = Vec::with_capacity(4 * n_times);
-    for app_el in ELECTRODE_TO_MODEL_ROW {
+    for app_el in rows {
         let buf = bufs.get(&app_el)?;
         if buf.len() < n_times {
             return None;
@@ -68,12 +79,13 @@ fn build_score_window(
     Some((signal, MODEL_POSITIONS.to_vec(), 4, n_times))
 }
 
-/// Average of the most recent frontal (AF7/AF8) delta band powers, µV²/Hz.
-/// Used as the permanent hard-rail companion to the embedding.
-fn frontal_delta_average(deltas: &std::collections::HashMap<i32, f64>) -> f64 {
+/// Average of the most recent delta band powers of the device's frontal
+/// pair (Muse AF7/AF8, Crown F5/F6), µV²/Hz. Used as the permanent
+/// hard-rail companion to the embedding.
+fn frontal_delta_average(deltas: &std::collections::HashMap<i32, f64>, frontal: [i32; 2]) -> f64 {
     let mut sum = 0f64;
     let mut n = 0u32;
-    for el in [1i32, 2] {
+    for el in frontal {
         if let Some(d) = deltas.get(&el) {
             sum += d;
             n += 1;
@@ -816,7 +828,8 @@ fn spawn_event_forwarder() {
         // as received; quality, bands, features, gestures and the UI get
         // the conditioned signal.
         let mut conditioner: EegConditioner;
-        let mut decisions_published: usize;
+        let mut published_mains: eeg_filter::Mains;
+        let mut pads_kind: Option<DeviceKind> = None;
 
         const FFT_N: usize = 256;
         loop {
@@ -829,9 +842,9 @@ fn spawn_event_forwarder() {
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                 continue;
             };
-            conditioner = EegConditioner::default();
-            decisions_published = 0;
-            eeg_filter::publish_live_decisions(&[]);
+            conditioner = EegConditioner::new(eeg_filter::NotchMode::Live);
+            published_mains = eeg_filter::Mains::Unknown;
+            eeg_filter::publish_live_mains(published_mains);
             // Poll the event channel once a second. This serves two purposes:
             // 1. A reconnect stores a fresh channel in `events`; pick it up
             //    here instead of draining a stale one forever.
@@ -994,9 +1007,15 @@ fn spawn_event_forwarder() {
                     }
                     _ => (None, None),
                 };
-                if conditioner.decisions().len() != decisions_published {
-                    decisions_published = conditioner.decisions().len();
-                    eeg_filter::publish_live_decisions(conditioner.decisions());
+                if conditioner.mains() != published_mains {
+                    published_mains = conditioner.mains();
+                    eeg_filter::publish_live_mains(published_mains);
+                }
+                let kind = features::active_kind().unwrap_or(DeviceKind::Muse);
+                if pads_kind != Some(kind) {
+                    pads_kind = Some(kind);
+                    let (frontal, temporal) = device_pads(kind);
+                    gesture.set_electrodes(frontal, temporal);
                 }
                 if let (Some((electrode, _, samples)), MuseEventDto::Eeg(e)) = (&eeg_samples, &dto) {
                     quality_rings.entry(*electrode).or_default().extend(samples);
@@ -1225,7 +1244,8 @@ fn spawn_event_forwarder() {
                                 guardrail::finish_score();
                                 continue;
                             };
-                            let window = build_score_window(&window_bufs, n_times);
+                            let device = features::active_kind().unwrap_or(DeviceKind::Muse);
+                            let window = build_score_window(&window_bufs, n_times, model_rows(device));
                             let Some((signal, positions, n_channels, n_times)) = window
                             else {
                                 // Not enough buffered samples yet — first window
@@ -1234,7 +1254,7 @@ fn spawn_event_forwarder() {
                                 continue;
                             };
                             let ts = now_ms;
-                            let delta = frontal_delta_average(&frontal_delta);
+                            let delta = frontal_delta_average(&frontal_delta, device_pads(device).0);
                             tokio::spawn(async move {
                                 let infer_kind = kind.clone();
                                 let embedding = tokio::task::spawn_blocking(move || {

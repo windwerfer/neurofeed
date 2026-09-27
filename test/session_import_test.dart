@@ -200,7 +200,8 @@ void main() {
       expect((prov['prefiltering'] as Map)['AF7'], 'HP:DC N:none');
       final conditioning = device['conditioning'] as Map;
       expect(conditioning['highPassHz'], 0.5);
-      expect(conditioning['notchQ'], 30);
+      expect(conditioning['notchQ'], 10);
+      expect(conditioning['notchSource'], anyOf('detected', 'undecided'));
 
       final anns = imported.metadataJson['annotations'] as List;
       expect(anns.any((a) => (a as Map)['type'] == 'double_blink'), isTrue);

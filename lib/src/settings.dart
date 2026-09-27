@@ -763,6 +763,33 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
+  static const String _mainsByDeviceKey = 'mains_by_device';
+
+  /// Last mains decision per device id: `[50]`, `[60]` or `[]` (no hum).
+  List<double>? savedMainsFor(String deviceId) {
+    if (deviceId.isEmpty) return null;
+    final v = _mainsByDevice()[deviceId];
+    return v is List ? [for (final hz in v) if (hz is num) hz.toDouble()] : null;
+  }
+
+  Future<void> setSavedMains(String deviceId, List<double> notchHz) async {
+    if (deviceId.isEmpty) return;
+    final next = Map<String, Object?>.from(_mainsByDevice());
+    next[deviceId] = notchHz;
+    await _prefs.setString(_mainsByDeviceKey, jsonEncode(next));
+  }
+
+  Map<String, Object?> _mainsByDevice() {
+    final raw = _prefs.getString(_mainsByDeviceKey);
+    if (raw == null || raw.isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map<String, Object?> ? decoded : const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
   LastCalibrationBaseline? lastCalibrationBaselineFor(String deviceId) {
     if (deviceId.isEmpty) {
       return null;

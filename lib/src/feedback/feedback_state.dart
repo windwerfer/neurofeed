@@ -288,6 +288,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// training/feedback begins. Their difference is the training-boundary
   /// offset used to trim the displayed window.
   DateTime? _sessionStartAt;
+
+  /// `device.conditioning`, frozen when the session capture starts.
+  SignalConditioning? _sessionConditioning;
   String? _sessionTimeZone;
   DateTime? _trainingStartAt;
   bool _usedStartAnyway = false;
@@ -738,6 +741,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _musicSeries.clear();
     _musicTracks.clear();
     await _recorder.startSession();
+    _sessionConditioning = liveSignalConditioning();
     final connected = _ref.read(appStateProvider);
     _sessionAuxChannels = connected.status.auxChannels;
     final montage = electrodeNamesForKind(
@@ -751,6 +755,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       'firmware': connected.status.firmware,
       'channelLabels': montage,
       'rawFiltering': RawFiltering.deviceUnfiltered.toJson(),
+      'conditioning': _sessionConditioning?.toJson(),
     });
     _computedSampler = ComputedSampler(
       onFrame: (frame) => _recorder.appendComputed(frame),
@@ -1477,6 +1482,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _reward.reset();
     _bus.reset();
     _sessionStartAt = null;
+    _sessionConditioning = null;
     _sessionTimeZone = null;
     _trainingStartAt = null;
     _usedStartAnyway = false;
@@ -1608,11 +1614,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       deviceModel: app.status.connected ? app.status.firmware : null,
       deviceId: app.status.connected ? app.status.id : null,
       rawFiltering: RawFiltering.deviceUnfiltered,
-      conditioning: _sessionStartAt == null
-          ? null
-          : liveSignalConditioning(
-              startMs: _sessionStartAt!.millisecondsSinceEpoch,
-            ),
+      conditioning: _sessionConditioning,
       recordedChannels: channels,
       recordedData: recordStreams.map((s) => s.name).toList(),
       gestures: settings.markersInFeedbackEnabled ? gestureMarkers : const [],

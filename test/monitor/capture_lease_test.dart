@@ -118,7 +118,7 @@ void main() {
             () => MonitorController(
               createRecorder: () =>
                   SessionRecorder(headerBytes: () => Uint8List(12)),
-              liveConditioning: (_) => null,
+              liveConditioning: () => null,
             ),
           ),
         ],

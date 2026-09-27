@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -311,7 +312,9 @@ void main() {
       ]);
       await File('${scratch.path}/session_$id.metadata').writeAsString(
         '{"type":"device","name":"Crown-A1","id":"crown-a1","firmware":"Crown",'
-        '"channelLabels":["CP3","C3","F5","PO3","PO4","F6","C4","CP4"]}\n'
+        '"channelLabels":["CP3","C3","F5","PO3","PO4","F6","C4","CP4"],'
+        '"conditioning":{"highPassHz":0.5,"notchQ":10.0,"notchHz":[60.0],'
+        '"notchSource":"saved"}}\n'
         '{"type":"calibration_start","kind":"staged","calibrationId":"eyes-closed-01"}\n',
       );
 
@@ -322,6 +325,20 @@ void main() {
         'CP3', 'C3', 'F5', 'PO3', 'PO4', 'F6', 'C4', 'CP4',
       ]);
       expect(recovered.first.metadata?.deviceName, 'Crown-A1');
+      final conditioning = recovered.first.metadata?.conditioning;
+      expect(conditioning?.notchHz, [60.0]);
+      expect(conditioning?.notchSource, 'saved');
+      expect(conditioning?.notchQ, 10.0);
+      final head = parseHead(
+        bytes: await File('${scratch.path}/session_$id.neurofeed').readAsBytes(),
+      );
+      final stored = jsonDecode(utf8.decode(head.metadataJson)) as Map;
+      expect(stored['conditioning'], {
+        'highPassHz': 0.5,
+        'notchQ': 10.0,
+        'notchHz': [60.0],
+        'notchSource': 'saved',
+      });
       expect(recovered.first.elapsedSeconds, 2);
       expect(recovered.first.calibrationKind, 'staged');
       expect(

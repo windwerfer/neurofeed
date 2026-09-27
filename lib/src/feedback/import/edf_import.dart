@@ -108,7 +108,7 @@ ImportResult importEdfBytes({
     events.addAll(encodeEegRuns(runsByElectrode));
     final fft = fftBandRows(runsByElectrode);
     bandRows = fft.rows;
-    conditioning = signalConditioningFrom(fft.conditioning, startMs: 0);
+    conditioning = signalConditioningFrom(fft.conditioning);
     events.addAll(encodeBandEvents(bandRows));
   } else {
     bandRows = _bandSignalRows(bandSignals, match);

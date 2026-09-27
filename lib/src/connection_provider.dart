@@ -10,6 +10,7 @@ import 'package:neurofeed/src/connect_source.dart';
 import 'package:neurofeed/src/lan_multicast_lock.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/eeg_conditioning.dart';
 import 'package:neurofeed/src/rust/api/neurosity_osc.dart';
 import 'package:neurofeed/src/settings.dart';
 
@@ -131,6 +132,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       _eventSub = stream.listen((event) {
         _eventController.add(event);
         _onEvent(event);
+        if (event is MuseEventDto_Bands) _saveMainsDecision();
       });
 
       final status = await getStatus();
@@ -463,6 +465,23 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     }
   }
 
+  /// Save live mains detection per device (settings) whenever it decides
+  /// or changes; also while a recording keeps its own notch frozen.
+  void _saveMainsDecision() {
+    final id = state.status.id;
+    if (id.isEmpty) return;
+    final decision = liveMainsDecision()?.toList();
+    if (decision == null) return;
+    final key = '$id $decision';
+    if (key == _mainsSavedKey) return;
+    _mainsSavedKey = key;
+    if (listEquals(_settings.savedMainsFor(id), decision)) return;
+    debugPrint('[neurofeed] mains decision saved for $id: $decision Hz');
+    unawaited(_settings.setSavedMains(id, decision));
+  }
+
+  String? _mainsSavedKey;
+
   void _onDisconnected() {
     // A second Disconnected (muse-rs watcher after our own sink event) must
     // not abort an in-flight reconnect or restart one the user already
@@ -602,6 +621,10 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       state = state.copyWith(scanMessage: 'Connecting… (attempt $attempt)');
       try {
         _rustPadQuality = false;
+        final savedMains = _settings.savedMainsFor(id);
+        setSavedMains(
+          notchHz: savedMains == null ? null : Float64List.fromList(savedMains),
+        );
         final qualitySource = _settings.crownQualitySource;
         final status = await connectWithOptions(
           deviceId: id,

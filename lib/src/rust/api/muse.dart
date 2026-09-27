@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'muse.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `compute_spo2`, `condition_eeg_packet`, `emit_enabled_band_features`, `emit_neurosity_pad_quality`, `frontal_delta_average`, `mains_bin_power`, `mains_peak_ratios`, `map_event`, `map_imu`, `muse_aux_channels`, `now_ms`, `score_window_len`, `spawn_event_forwarder`, `with_spectrum`
+// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `compute_spo2`, `condition_eeg_packet`, `device_pads`, `emit_enabled_band_features`, `emit_neurosity_pad_quality`, `frontal_delta_average`, `mains_bin_power`, `mains_peak_ratios`, `map_event`, `map_imu`, `model_rows`, `muse_aux_channels`, `now_ms`, `score_window_len`, `spawn_event_forwarder`, `with_spectrum`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ForwarderGuard`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `drop`
 

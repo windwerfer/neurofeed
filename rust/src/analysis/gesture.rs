@@ -9,11 +9,10 @@
 
 use std::collections::HashMap;
 
-/// Frontal electrodes (AF7, AF8) — blink potentials are strongest here.
-const BLINK_ELECTRODES: [i32; 2] = [1, 2];
-/// Posterior / temporal electrodes (TP9, TP10) — jaw clench EMG is strongest
-/// here.
-const CLENCH_ELECTRODES: [i32; 2] = [0, 3];
+/// Muse frontal pair (AF7, AF8) — blink potentials are strongest here.
+const MUSE_FRONTAL: [i32; 2] = [1, 2];
+/// Muse temporal pair (TP9, TP10) — jaw clench EMG is strongest here.
+const MUSE_TEMPORAL: [i32; 2] = [0, 3];
 /// Bin length in samples (~125 ms at 256 Hz).
 const BIN_LEN: usize = 32;
 /// Blink energy must exceed this multiple of the rolling baseline.
@@ -51,8 +50,11 @@ pub struct GestureReport {
 /// Rolling per-second detector. Call `feed_eeg` for every EEG packet,
 /// `feed_gamma` for each electrode's gamma band power (once per second), and
 /// `tick` once per second to get the aggregate report.
-#[derive(Default)]
 pub struct GestureDetector {
+    /// Frontal pair (blinks, eye level); device config.
+    frontal: [i32; 2],
+    /// Temporal pair (clench, eye reference); device config.
+    temporal: [i32; 2],
     /// Pending raw samples per electrode, grouped into fixed bins.
     pending: HashMap<i32, Vec<f64>>,
     /// Per-electrode sum of samples this second (for the eye EOG mean).
@@ -82,7 +84,40 @@ pub struct GestureDetector {
     eye_state: u8,
 }
 
+impl Default for GestureDetector {
+    fn default() -> Self {
+        Self::with_electrodes(MUSE_FRONTAL, MUSE_TEMPORAL)
+    }
+}
+
 impl GestureDetector {
+    pub fn with_electrodes(frontal: [i32; 2], temporal: [i32; 2]) -> Self {
+        Self {
+            frontal,
+            temporal,
+            pending: HashMap::new(),
+            eog_sums: HashMap::new(),
+            eog_counts: HashMap::new(),
+            blink_baseline: HashMap::new(),
+            blink_active: false,
+            blink_cooldown: 0,
+            gamma: HashMap::new(),
+            clench_baseline: 0.0,
+            eog_scale: 0.0,
+            eog_baseline: 0.0,
+            blinks_this_second: 0,
+            clench_active: false,
+            eye_state: 0,
+        }
+    }
+
+    /// Switch pads (new device kind); keeps nothing of the old ones.
+    pub fn set_electrodes(&mut self, frontal: [i32; 2], temporal: [i32; 2]) {
+        if (frontal, temporal) != (self.frontal, self.temporal) {
+            *self = Self::with_electrodes(frontal, temporal);
+        }
+    }
+
     /// Feed one electrode's EEG as it arrives: the conditioned samples
     /// (high-passed, notched) drive blink bins; the RAW packet keeps the slow
     /// EOG level the eye estimate needs.
@@ -115,7 +150,7 @@ impl GestureDetector {
         for w in bin.windows(2) {
             energy += (w[1] - w[0]).abs();
         }
-        if BLINK_ELECTRODES.contains(&electrode) {
+        if self.frontal.contains(&electrode) {
             let baseline = *self.blink_baseline.get(&electrode).unwrap_or(&energy);
             let threshold = (baseline * BLINK_MULT).max(BLINK_MIN_ENERGY);
             let rising = energy > threshold;
@@ -153,7 +188,7 @@ impl GestureDetector {
     fn update_clench(&mut self) {
         let mut present = 0usize;
         let mut total = 0.0;
-        for e in CLENCH_ELECTRODES {
+        for e in self.temporal {
             if let Some(g) = self.gamma.get(&e) {
                 present += 1;
                 total += *g;
@@ -177,8 +212,8 @@ impl GestureDetector {
     /// Vertical eye position (experimental): frontal minus posterior mean, with
     /// polarity interpreted as up (positive) / down (negative).
     fn update_eye(&mut self) {
-        let frontal = mean_of(&self.eog_sums, &self.eog_counts, &BLINK_ELECTRODES);
-        let posterior = mean_of(&self.eog_sums, &self.eog_counts, &CLENCH_ELECTRODES);
+        let frontal = mean_of(&self.eog_sums, &self.eog_counts, &self.frontal);
+        let posterior = mean_of(&self.eog_sums, &self.eog_counts, &self.temporal);
         let (Some(f), Some(p)) = (frontal, posterior) else {
             return;
         };

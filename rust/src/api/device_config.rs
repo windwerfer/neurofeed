@@ -43,6 +43,13 @@ pub struct DeviceConfig {
     pub target_electrodes: Vec<usize>,
     /// Electrode indices required for signal gate (calibration/playing)
     pub needed_electrodes: Vec<usize>,
+    /// Frontal pair (left, right): drowsiness delta rail, blink detection,
+    /// guardrail model rows AF7/AF8.
+    pub frontal_electrodes: Vec<usize>,
+    /// Temporal pair (left, right): clench EMG, eye-level reference,
+    /// guardrail model rows TP9/TP10. Crown has no temporal sites and uses
+    /// its most lateral rear pair.
+    pub temporal_electrodes: Vec<usize>,
     /// Minimum signal quality (0-100) for "good" electrode
     pub signal_good_threshold: f32,
     /// Minimum signal quality (0-100) for "critical" electrode (pause threshold)
@@ -85,6 +92,8 @@ impl DeviceConfig {
             electrode_names: vec!["TP9".into(), "AF7".into(), "AF8".into(), "TP10".into()],
             target_electrodes: vec![1, 2], // AF7, AF8
             needed_electrodes: vec![1, 2],
+            frontal_electrodes: vec![1, 2],  // AF7, AF8
+            temporal_electrodes: vec![0, 3], // TP9, TP10
             signal_good_threshold: 80.0,
             signal_critical_threshold: 40.0,
             features: DeviceFeatures {
@@ -116,6 +125,8 @@ impl DeviceConfig {
             ],
             target_electrodes: vec![3, 4], // PO3, PO4 (posterior alpha)
             needed_electrodes: vec![3, 4],
+            frontal_electrodes: vec![2, 5],  // F5, F6
+            temporal_electrodes: vec![0, 7], // CP3, CP4
             signal_good_threshold: 80.0,
             signal_critical_threshold: 40.0,
             features: DeviceFeatures {
