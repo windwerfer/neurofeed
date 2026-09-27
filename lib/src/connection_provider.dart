@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/agent/agent_flags.dart';
 import 'package:neurofeed/src/app.dart';
 import 'package:neurofeed/src/connect_source.dart';
+import 'package:neurofeed/src/lan_multicast_lock.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/rust/api/neurosity_osc.dart';
@@ -96,6 +97,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   bool _allowAutoReconnect = true;
   bool _reconnectInFlight = false;
   int _crownDiscoveryGeneration = 0;
+  bool _crownDiscoveryActive = false;
+  bool _multicastLockHeld = false;
   final Completer<void> _initDone = Completer<void>();
   final StreamController<MuseEventDto> _eventController =
       StreamController<MuseEventDto>.broadcast();
@@ -348,6 +351,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         (lookFor == null || _allowAutoReconnect);
     final started = DateTime.now();
     try {
+      _setCrownDiscoveryActive(true);
       await startCrownDiscovery();
       while (active()) {
         final crowns = await discoveredCrowns();
@@ -380,6 +384,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       }
     } finally {
       if (generation == _crownDiscoveryGeneration) {
+        _setCrownDiscoveryActive(false);
         try {
           await stopCrownDiscovery();
         } catch (e) {
@@ -392,6 +397,24 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       }
     }
     return state.status.connected;
+  }
+
+  void _setCrownDiscoveryActive(bool active) {
+    _crownDiscoveryActive = active;
+    _syncMulticastLock();
+  }
+
+  /// Hold the Android multicast lock while Crown OSC is being received:
+  /// during LAN discovery and while a real Crown is connected.
+  void _syncMulticastLock() {
+    final crownStreaming =
+        state.status.connected &&
+        state.lastConnectedKind == DeviceKind.neurosity &&
+        !isSimDeviceId(state.status.id);
+    final want = _crownDiscoveryActive || crownStreaming;
+    if (want == _multicastLockHeld) return;
+    _multicastLockHeld = want;
+    unawaited(setMulticastLock(held: want));
   }
 
   void _onEvent(MuseEventDto event) {
@@ -463,6 +486,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         scanMessage: null,
         disconnecting: false,
       );
+      _syncMulticastLock();
       return;
     }
     state = state.copyWith(
@@ -477,6 +501,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       scanMessage: 'Reconnecting…',
       disconnecting: false,
     );
+    _syncMulticastLock();
     unawaited(_tryReconnect());
   }
 
@@ -572,6 +597,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           lastConnectedKind: kind,
           scanMessage: status.connected ? null : state.scanMessage,
         );
+        _syncMulticastLock();
         return;
       } catch (e) {
         lastError = e;
