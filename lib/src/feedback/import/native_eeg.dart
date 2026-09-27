@@ -1,7 +1,11 @@
 import 'dart:collection';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:neurofeed/src/feedback/import/raw_body.dart';
+import 'package:neurofeed/src/rust/api/eeg_conditioning.dart';
 import 'package:neurofeed/src/rust/api/import_dsp.dart';
+import 'package:neurofeed/src/rust/api/session_format.dart';
 
 /// Rate every recording stores EEG at.
 const int kNativeEegHz = 256;
@@ -46,9 +50,57 @@ List<int> encodeEegRuns(Map<int, List<EegRun>> runsByElectrode) {
   return events;
 }
 
-/// Band rows from our own FFT (the live band source): one record per
-/// electrode per full second of each run, stamped at the end of that second.
-List<BandInstant> fftBandRows(Map<int, List<EegRun>> runsByElectrode) {
+/// [runsByElectrode] through the live EEG conditioning (high-pass + mains
+/// notch; mains detected across all electrodes). Runs keep their shape.
+({Map<int, List<EegRun>> runs, EegConditioning conditioning}) conditionRuns(
+  Map<int, List<EegRun>> runsByElectrode,
+) {
+  final packets = <({int e, int run, int offset, EegSampleRecord rec})>[];
+  for (final e in runsByElectrode.entries) {
+    for (var r = 0; r < e.value.length; r++) {
+      final run = e.value[r];
+      for (var o = 0; o < run.samples.length; o += kEegPacketSamples) {
+        final end = math.min(o + kEegPacketSamples, run.samples.length);
+        packets.add((
+          e: e.key,
+          run: r,
+          offset: o,
+          rec: EegSampleRecord(
+            timestamp: run.startMs + o * 1000.0 / kNativeEegHz,
+            electrode: e.key,
+            samples: Float32List.fromList(run.samples.sublist(o, end)),
+          ),
+        ));
+      }
+    }
+  }
+  packets.sort((a, b) {
+    final t = a.rec.timestamp.compareTo(b.rec.timestamp);
+    return t != 0 ? t : a.e.compareTo(b.e);
+  });
+  final out = conditionEeg(eeg: [for (final p in packets) p.rec]);
+  final runs = {
+    for (final e in runsByElectrode.entries)
+      e.key: [
+        for (final run in e.value)
+          EegRun(run.startMs, List<double>.filled(run.samples.length, 0)),
+      ],
+  };
+  for (var i = 0; i < packets.length; i++) {
+    final p = packets[i];
+    runs[p.e]![p.run].samples.setAll(p.offset, out.eeg[i].samples);
+  }
+  return (runs: runs, conditioning: out.conditioning);
+}
+
+/// Band rows from our own FFT (the live band source) over the conditioned
+/// signal: one record per electrode per full second of each run, stamped at
+/// the end of that second.
+({List<BandInstant> rows, EegConditioning conditioning}) fftBandRows(
+  Map<int, List<EegRun>> rawRunsByElectrode,
+) {
+  final conditioned = conditionRuns(rawRunsByElectrode);
+  final runsByElectrode = conditioned.runs;
   final byTs = SplayTreeMap<double, Map<int, BandValues>>();
   for (final e in runsByElectrode.entries) {
     for (final run in e.value) {
@@ -66,8 +118,11 @@ List<BandInstant> fftBandRows(Map<int, List<EegRun>> runsByElectrode) {
       }
     }
   }
-  return [
-    for (final e in byTs.entries)
-      BandInstant(timestampMs: e.key, byElectrode: e.value),
-  ];
+  return (
+    rows: [
+      for (final e in byTs.entries)
+        BandInstant(timestampMs: e.key, byElectrode: e.value),
+    ],
+    conditioning: conditioned.conditioning,
+  );
 }

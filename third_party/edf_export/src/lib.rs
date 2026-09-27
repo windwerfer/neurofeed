@@ -33,6 +33,9 @@ pub struct EdfSignal {
     /// [-32768, 32767].
     pub physical_min: f64,
     pub physical_max: f64,
+    /// Prefiltering header field (e.g. `"HP:0.1Hz LP:75Hz N:50Hz"`), max
+    /// 80 bytes; empty = not stated.
+    pub prefiltering: String,
     /// Continuous physical-domain samples, one per sample point.
     pub data: Vec<f32>,
 }
@@ -45,6 +48,7 @@ impl EdfSignal {
             samples_per_record,
             physical_min: -2000.0,
             physical_max: 2000.0,
+            prefiltering: String::new(),
             data,
         }
     }
@@ -270,9 +274,10 @@ fn write_header(
     for _ in 0..nsig {
         num_field(out, 32767_i32, 8);
     }
-    for _ in 0..nsig {
-        pad_field(out, " ", 80); // prefiltering
+    for s in signals {
+        pad_field(out, if s.prefiltering.is_empty() { " " } else { &s.prefiltering }, 80);
     }
+    pad_field(out, " ", 80); // annotation prefiltering
     for s in signals {
         num_field(out, s.samples_per_record, 8);
     }
@@ -511,7 +516,7 @@ pub fn decode_edf_plus(bytes: &[u8]) -> Result<EdfDecoded, EdfDecodeError> {
     let pmax = take_owned(8, nsig)?;
     let dmin = take_owned(8, nsig)?;
     let dmax = take_owned(8, nsig)?;
-    let _pre = take_owned(80, nsig)?;
+    let pre = take_owned(80, nsig)?;
     let nsamp = take_owned(8, nsig)?;
     let _reserved_s = take_owned(32, nsig)?;
 
@@ -599,6 +604,7 @@ pub fn decode_edf_plus(bytes: &[u8]) -> Result<EdfDecoded, EdfDecodeError> {
             samples_per_record: rate,
             physical_min: phys_min,
             physical_max: phys_max,
+            prefiltering: String::from_utf8_lossy(trim_ascii(&pre[si])).into_owned(),
             data: signal_data[si].clone(),
         });
     }

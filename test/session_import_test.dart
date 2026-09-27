@@ -156,10 +156,14 @@ void main() {
               text: 'double_blink',
             ),
           ],
+          prefiltering: 'HP:DC N:none',
         ),
       );
 
       final decoded = decodeEdfImport(bytes: edf);
+      expect(decoded.signals.map((s) => s.prefiltering).toSet(), {
+        'HP:DC N:none',
+      });
       expect(decoded.signals.length, 4);
       expect(decoded.signals[0].label, 'TP9');
       expect(decoded.signals[1].label, 'AF7');
@@ -193,6 +197,10 @@ void main() {
       expect(prov['lossy'], isFalse);
       expect(prov['resampled'], isFalse);
       expect(prov['droppedChannels'], isEmpty);
+      expect((prov['prefiltering'] as Map)['AF7'], 'HP:DC N:none');
+      final conditioning = device['conditioning'] as Map;
+      expect(conditioning['highPassHz'], 0.5);
+      expect(conditioning['notchQ'], 30);
 
       final anns = imported.metadataJson['annotations'] as List;
       expect(anns.any((a) => (a as Map)['type'] == 'double_blink'), isTrue);
@@ -207,6 +215,11 @@ void main() {
         (n, r) => n + r.samples.length,
       );
       expect(totalSamples, greaterThanOrEqualTo(12 * 20));
+      // Stored RAW is the decoded EDF data, not the conditioned signal.
+      final tp9 = data.eeg.where((r) => r.electrode == 0).first;
+      for (var i = 0; i < tp9.samples.length; i++) {
+        expect(tp9.samples[i], closeTo(decoded.signals[0].data[i], 1e-3));
+      }
     });
 
     test('TAL duration round-trips into SessionAnnotation.duration', () {
@@ -255,6 +268,7 @@ void main() {
               text: 'double_blink',
             ),
           ],
+          prefiltering: '',
         ),
       );
       final imported = importEdfBytes(

@@ -1,6 +1,7 @@
 pub mod ai_heads;
 pub mod cbramod;
 pub mod cbramod_encoder;
+pub mod eeg_filter;
 pub mod crown_quality;
 pub mod gesture;
 pub mod guardrail;

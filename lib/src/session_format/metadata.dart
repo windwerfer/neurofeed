@@ -95,6 +95,8 @@ Map<String, Object?> buildFeedbackMetadata({
               channelLabels: meta.recordedChannels.isEmpty
                   ? kMuseElectrodeNames
                   : meta.recordedChannels,
+              rawFiltering: meta.rawFiltering,
+              conditioning: meta.conditioning,
             ))
         .toJson(),
     'streams': (streams ??

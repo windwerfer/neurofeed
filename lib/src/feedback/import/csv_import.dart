@@ -10,6 +10,7 @@ import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
 import 'package:neurofeed/src/session_format/models.dart';
+import 'package:neurofeed/src/session_format/eeg_conditioning_meta.dart';
 import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
@@ -359,6 +360,7 @@ ImportResult importCsvText({
   final channelLabels = parsed.channelLabels;
   final events = <int>[];
   var bandRows = <BandInstant>[];
+  SignalConditioning? conditioning;
   double? recordingInterval;
   var bandsFromFft = false;
   double? rawRateHz;
@@ -414,11 +416,19 @@ ImportResult importCsvText({
     if (raw.runs.isEmpty) enabled.remove(RecordingStream.eeg);
     bandRows = _bandRowsAt(parsed, dedupe: true);
     if (bandRows.isEmpty && raw.runs.isNotEmpty) {
-      bandRows = fftBandRows(raw.runs);
+      final fft = fftBandRows(raw.runs);
+      bandRows = fft.rows;
+      conditioning = signalConditioningFrom(fft.conditioning, startMs: 0);
       bandsFromFft = true;
       enabled.add(RecordingStream.bands);
       warnings.add(
         const ImportWarning('no band columns — bands computed from RAW'),
+      );
+    } else if (raw.runs.isNotEmpty) {
+      // Charts show the conditioned RAW; record what that conditioning is.
+      conditioning = signalConditioningFrom(
+        conditionRuns(raw.runs).conditioning,
+        startMs: 0,
       );
     }
     events.addAll(encodeBandEvents(bandRows));
@@ -510,6 +520,7 @@ ImportResult importCsvText({
     sensors: sensors,
     channelCount: channelLabels.length,
     channelLabels: List<String>.from(channelLabels),
+    conditioning: conditioning,
   );
   final streams = RecordingMetadata.streamsConfig(enabled);
   final provenance = ImportProvenance(

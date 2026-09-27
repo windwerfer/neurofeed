@@ -1,5 +1,6 @@
 pub mod capture;
 pub mod device_config;
+pub mod eeg_conditioning;
 pub mod edf_export;
 pub mod features;
 pub mod import_dsp;

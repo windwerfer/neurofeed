@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:neurofeed/src/monitor/cache/recording_index.dart';
+import 'package:neurofeed/src/rust/api/eeg_conditioning.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 
 const double _eegRateHz = 256.0;
@@ -58,7 +59,8 @@ class FileBackedSource {
       final body = Uint8List(header.length + complete.length);
       body.setAll(0, header);
       body.setAll(header.length, complete);
-      final parsed = sessionParseBody(bytes: body);
+      final raw = sessionParseBody(bytes: body);
+      final parsed = raw.copyWith(eeg: conditionEeg(eeg: raw.eeg).eeg);
       return _toElapsed(parsed, started, startElapsed, endElapsed);
     } finally {
       raf.closeSync();

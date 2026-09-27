@@ -393,6 +393,8 @@ class SessionExporter {
           minute: edfStart.minute,
           second: edfStart.second,
           annotations: annotations,
+          // RAW is stored as received; imports without a statement stay blank.
+          prefiltering: meta.rawFiltering?.edfPrefiltering ?? '',
         ),
       );
     } catch (e) {

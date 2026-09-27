@@ -96,6 +96,7 @@ SessionMetadata _metadataFromTemps({
   String? deviceName;
   String? deviceModel;
   String? deviceId;
+  RawFiltering? rawFiltering;
   var channelLabels = const <String>[];
   if (jsonl.isNotEmpty) {
     for (final line in utf8.decode(jsonl, allowMalformed: true).split('\n')) {
@@ -110,6 +111,7 @@ SessionMetadata _metadataFromTemps({
           deviceName = meta['name'] as String?;
           deviceModel = meta['firmware'] as String?;
           deviceId = meta['id'] as String?;
+          rawFiltering = RawFiltering.fromJson(meta['rawFiltering']);
           final labels = meta['channelLabels'];
           if (labels is List) {
             channelLabels = labels.whereType<String>().toList();
@@ -135,6 +137,7 @@ SessionMetadata _metadataFromTemps({
     deviceName: deviceName,
     deviceModel: deviceModel,
     deviceId: deviceId,
+    rawFiltering: rawFiltering,
     recordedChannels: channelLabels,
     calibration: calibrationId == null && calibrationKind.isEmpty
         ? null

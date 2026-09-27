@@ -21,6 +21,7 @@ mixin _$EdfDecodedSignal {
   int get samplesPerRecord => throw _privateConstructorUsedError;
   double get physicalMin => throw _privateConstructorUsedError;
   double get physicalMax => throw _privateConstructorUsedError;
+  String get prefiltering => throw _privateConstructorUsedError;
   Float32List get data => throw _privateConstructorUsedError;
 
   /// Create a copy of EdfDecodedSignal
@@ -42,6 +43,7 @@ abstract class $EdfDecodedSignalCopyWith<$Res> {
     int samplesPerRecord,
     double physicalMin,
     double physicalMax,
+    String prefiltering,
     Float32List data,
   });
 }
@@ -65,6 +67,7 @@ class _$EdfDecodedSignalCopyWithImpl<$Res, $Val extends EdfDecodedSignal>
     Object? samplesPerRecord = null,
     Object? physicalMin = null,
     Object? physicalMax = null,
+    Object? prefiltering = null,
     Object? data = null,
   }) {
     return _then(
@@ -85,6 +88,10 @@ class _$EdfDecodedSignalCopyWithImpl<$Res, $Val extends EdfDecodedSignal>
                 ? _value.physicalMax
                 : physicalMax // ignore: cast_nullable_to_non_nullable
                       as double,
+            prefiltering: null == prefiltering
+                ? _value.prefiltering
+                : prefiltering // ignore: cast_nullable_to_non_nullable
+                      as String,
             data: null == data
                 ? _value.data
                 : data // ignore: cast_nullable_to_non_nullable
@@ -109,6 +116,7 @@ abstract class _$$EdfDecodedSignalImplCopyWith<$Res>
     int samplesPerRecord,
     double physicalMin,
     double physicalMax,
+    String prefiltering,
     Float32List data,
   });
 }
@@ -131,6 +139,7 @@ class __$$EdfDecodedSignalImplCopyWithImpl<$Res>
     Object? samplesPerRecord = null,
     Object? physicalMin = null,
     Object? physicalMax = null,
+    Object? prefiltering = null,
     Object? data = null,
   }) {
     return _then(
@@ -151,6 +160,10 @@ class __$$EdfDecodedSignalImplCopyWithImpl<$Res>
             ? _value.physicalMax
             : physicalMax // ignore: cast_nullable_to_non_nullable
                   as double,
+        prefiltering: null == prefiltering
+            ? _value.prefiltering
+            : prefiltering // ignore: cast_nullable_to_non_nullable
+                  as String,
         data: null == data
             ? _value.data
             : data // ignore: cast_nullable_to_non_nullable
@@ -168,6 +181,7 @@ class _$EdfDecodedSignalImpl implements _EdfDecodedSignal {
     required this.samplesPerRecord,
     required this.physicalMin,
     required this.physicalMax,
+    required this.prefiltering,
     required this.data,
   });
 
@@ -180,11 +194,13 @@ class _$EdfDecodedSignalImpl implements _EdfDecodedSignal {
   @override
   final double physicalMax;
   @override
+  final String prefiltering;
+  @override
   final Float32List data;
 
   @override
   String toString() {
-    return 'EdfDecodedSignal(label: $label, samplesPerRecord: $samplesPerRecord, physicalMin: $physicalMin, physicalMax: $physicalMax, data: $data)';
+    return 'EdfDecodedSignal(label: $label, samplesPerRecord: $samplesPerRecord, physicalMin: $physicalMin, physicalMax: $physicalMax, prefiltering: $prefiltering, data: $data)';
   }
 
   @override
@@ -199,6 +215,8 @@ class _$EdfDecodedSignalImpl implements _EdfDecodedSignal {
                 other.physicalMin == physicalMin) &&
             (identical(other.physicalMax, physicalMax) ||
                 other.physicalMax == physicalMax) &&
+            (identical(other.prefiltering, prefiltering) ||
+                other.prefiltering == prefiltering) &&
             const DeepCollectionEquality().equals(other.data, data));
   }
 
@@ -209,6 +227,7 @@ class _$EdfDecodedSignalImpl implements _EdfDecodedSignal {
     samplesPerRecord,
     physicalMin,
     physicalMax,
+    prefiltering,
     const DeepCollectionEquality().hash(data),
   );
 
@@ -230,6 +249,7 @@ abstract class _EdfDecodedSignal implements EdfDecodedSignal {
     required final int samplesPerRecord,
     required final double physicalMin,
     required final double physicalMax,
+    required final String prefiltering,
     required final Float32List data,
   }) = _$EdfDecodedSignalImpl;
 
@@ -241,6 +261,8 @@ abstract class _EdfDecodedSignal implements EdfDecodedSignal {
   double get physicalMin;
   @override
   double get physicalMax;
+  @override
+  String get prefiltering;
   @override
   Float32List get data;
 
@@ -446,6 +468,7 @@ mixin _$EdfExportParams {
   int get second => throw _privateConstructorUsedError;
   List<EdfExportAnnotation> get annotations =>
       throw _privateConstructorUsedError;
+  String get prefiltering => throw _privateConstructorUsedError;
 
   /// Create a copy of EdfExportParams
   /// with the given fields replaced by the non-null parameter values.
@@ -471,6 +494,7 @@ abstract class $EdfExportParamsCopyWith<$Res> {
     int minute,
     int second,
     List<EdfExportAnnotation> annotations,
+    String prefiltering,
   });
 }
 
@@ -498,6 +522,7 @@ class _$EdfExportParamsCopyWithImpl<$Res, $Val extends EdfExportParams>
     Object? minute = null,
     Object? second = null,
     Object? annotations = null,
+    Object? prefiltering = null,
   }) {
     return _then(
       _value.copyWith(
@@ -537,6 +562,10 @@ class _$EdfExportParamsCopyWithImpl<$Res, $Val extends EdfExportParams>
                 ? _value.annotations
                 : annotations // ignore: cast_nullable_to_non_nullable
                       as List<EdfExportAnnotation>,
+            prefiltering: null == prefiltering
+                ? _value.prefiltering
+                : prefiltering // ignore: cast_nullable_to_non_nullable
+                      as String,
           )
           as $Val,
     );
@@ -562,6 +591,7 @@ abstract class _$$EdfExportParamsImplCopyWith<$Res>
     int minute,
     int second,
     List<EdfExportAnnotation> annotations,
+    String prefiltering,
   });
 }
 
@@ -588,6 +618,7 @@ class __$$EdfExportParamsImplCopyWithImpl<$Res>
     Object? minute = null,
     Object? second = null,
     Object? annotations = null,
+    Object? prefiltering = null,
   }) {
     return _then(
       _$EdfExportParamsImpl(
@@ -627,6 +658,10 @@ class __$$EdfExportParamsImplCopyWithImpl<$Res>
             ? _value._annotations
             : annotations // ignore: cast_nullable_to_non_nullable
                   as List<EdfExportAnnotation>,
+        prefiltering: null == prefiltering
+            ? _value.prefiltering
+            : prefiltering // ignore: cast_nullable_to_non_nullable
+                  as String,
       ),
     );
   }
@@ -645,6 +680,7 @@ class _$EdfExportParamsImpl implements _EdfExportParams {
     required this.minute,
     required this.second,
     required final List<EdfExportAnnotation> annotations,
+    required this.prefiltering,
   }) : _annotations = annotations;
 
   @override
@@ -672,8 +708,11 @@ class _$EdfExportParamsImpl implements _EdfExportParams {
   }
 
   @override
+  final String prefiltering;
+
+  @override
   String toString() {
-    return 'EdfExportParams(patientId: $patientId, recordingId: $recordingId, year: $year, month: $month, day: $day, hour: $hour, minute: $minute, second: $second, annotations: $annotations)';
+    return 'EdfExportParams(patientId: $patientId, recordingId: $recordingId, year: $year, month: $month, day: $day, hour: $hour, minute: $minute, second: $second, annotations: $annotations, prefiltering: $prefiltering)';
   }
 
   @override
@@ -694,7 +733,9 @@ class _$EdfExportParamsImpl implements _EdfExportParams {
             const DeepCollectionEquality().equals(
               other._annotations,
               _annotations,
-            ));
+            ) &&
+            (identical(other.prefiltering, prefiltering) ||
+                other.prefiltering == prefiltering));
   }
 
   @override
@@ -709,6 +750,7 @@ class _$EdfExportParamsImpl implements _EdfExportParams {
     minute,
     second,
     const DeepCollectionEquality().hash(_annotations),
+    prefiltering,
   );
 
   /// Create a copy of EdfExportParams
@@ -734,6 +776,7 @@ abstract class _EdfExportParams implements EdfExportParams {
     required final int minute,
     required final int second,
     required final List<EdfExportAnnotation> annotations,
+    required final String prefiltering,
   }) = _$EdfExportParamsImpl;
 
   @override
@@ -754,6 +797,8 @@ abstract class _EdfExportParams implements EdfExportParams {
   int get second;
   @override
   List<EdfExportAnnotation> get annotations;
+  @override
+  String get prefiltering;
 
   /// Create a copy of EdfExportParams
   /// with the given fields replaced by the non-null parameter values.

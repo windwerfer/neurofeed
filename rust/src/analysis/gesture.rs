@@ -3,7 +3,7 @@
 //!
 //! All thresholds are auto-adaptive (rolling EWMA baselines) so the detector
 //! works across different pads, headband fits and users without calibration.
-//! The Rust forwarder feeds it raw EEG packets as they arrive, feeds it the
+//! The Rust forwarder feeds it EEG packets as they arrive, feeds it the
 //! per-electrode gamma band power once per second (from the FFT), and calls
 //! `tick()` once per second to drain a [GestureReport].
 
@@ -83,9 +83,11 @@ pub struct GestureDetector {
 }
 
 impl GestureDetector {
-    /// Feed raw EEG samples for one electrode as they arrive.
-    pub fn feed_eeg(&mut self, electrode: i32, samples: &[f64]) {
-        for s in samples {
+    /// Feed one electrode's EEG as it arrives: the conditioned samples
+    /// (high-passed, notched) drive blink bins; the RAW packet keeps the slow
+    /// EOG level the eye estimate needs.
+    pub fn feed_eeg(&mut self, electrode: i32, samples: &[f64], raw: &[f64]) {
+        for s in raw {
             *self.eog_counts.entry(electrode).or_default() += 1;
             *self.eog_sums.entry(electrode).or_default() += *s;
         }

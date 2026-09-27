@@ -33,6 +33,9 @@ pub struct EdfExportParams {
     /// Annotations, sorted ascending by onset (e.g. calibration
     /// boundaries, gesture markers).
     pub annotations: Vec<EdfExportAnnotation>,
+    /// Prefiltering header field for every EEG signal (the stored RAW's
+    /// filtering, e.g. `"HP:DC N:none"`); empty = not stated.
+    pub prefiltering: String,
 }
 
 /// Nominal Muse EEG sample rate used when the recorded packet stream is
@@ -119,7 +122,10 @@ pub fn encode_edf_export(
                 last_idx = idx;
             }
         }
-        signals.push(edf_export::EdfSignal::eeg(label, rate, buf));
+        signals.push(edf_export::EdfSignal {
+            prefiltering: params.prefiltering.clone(),
+            ..edf_export::EdfSignal::eeg(label, rate, buf)
+        });
     }
     if signals.is_empty() {
         return Err("no EEG electrodes with labels provided".to_string());
@@ -154,6 +160,8 @@ pub struct EdfDecodedSignal {
     pub samples_per_record: u32,
     pub physical_min: f64,
     pub physical_max: f64,
+    /// Prefiltering header field as written by the source (trimmed).
+    pub prefiltering: String,
     /// Physical-domain samples (µV for EEG).
     pub data: Vec<f32>,
 }
@@ -208,6 +216,7 @@ pub fn decode_edf_import(bytes: &[u8]) -> Result<EdfImportResult, String> {
                 samples_per_record: s.samples_per_record as u32,
                 physical_min: s.physical_min,
                 physical_max: s.physical_max,
+                prefiltering: s.prefiltering,
                 data: s.data,
             })
             .collect(),
@@ -264,6 +273,7 @@ mod tests {
                 duration_seconds: 0.0,
                 text: "Double blink".to_string(),
             }],
+            prefiltering: String::new(),
         }
     }
 
@@ -349,6 +359,7 @@ mod decode_tests {
                     duration_seconds: 0.0,
                     text: "double_blink".to_string(),
                 }],
+                prefiltering: "HP:DC N:none".to_string(),
             },
         )
         .unwrap();
@@ -358,6 +369,7 @@ mod decode_tests {
         assert_eq!(imported.signals.len(), 2);
         assert_eq!(imported.signals[0].label, "TP9");
         assert_eq!(imported.signals[1].label, "AF7");
+        assert!(imported.signals.iter().all(|s| s.prefiltering == "HP:DC N:none"));
         assert!(imported.signals[0].data.len() >= 12);
         assert!(
             imported

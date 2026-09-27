@@ -23,6 +23,7 @@ import 'package:neurofeed/src/monitor/viewport_controller.dart';
 import 'package:neurofeed/src/monitor/views/histogram_view.dart';
 import 'package:neurofeed/src/monitor/views/psd_view.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
+import 'package:neurofeed/src/rust/api/eeg_conditioning.dart';
 
 enum RecordingDashGraph { rawEeg, bands, histogram, psd, spectrogram }
 
@@ -224,7 +225,9 @@ class _RecordingDashboardViewState
       }
       final full = Uint8List.fromList(bytes);
       final raw = extractRaw(bytes: full);
-      final data = sessionParseBody(bytes: raw);
+      final parsed = sessionParseBody(bytes: raw);
+      // Chart the conditioned signal (same as live); the file keeps RAW.
+      final data = parsed.copyWith(eeg: conditionEeg(eeg: parsed.eeg).eeg);
       final newest = math.max(
         loaded.newestElapsed,
         _newestElapsed(data, loaded.originMs, loaded.meta),

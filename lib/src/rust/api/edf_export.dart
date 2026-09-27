@@ -40,6 +40,7 @@ sealed class EdfDecodedSignal with _$EdfDecodedSignal {
     required int samplesPerRecord,
     required double physicalMin,
     required double physicalMax,
+    required String prefiltering,
     required Float32List data,
   }) = _EdfDecodedSignal;
 }
@@ -65,6 +66,7 @@ sealed class EdfExportParams with _$EdfExportParams {
     required int minute,
     required int second,
     required List<EdfExportAnnotation> annotations,
+    required String prefiltering,
   }) = _EdfExportParams;
 }
 

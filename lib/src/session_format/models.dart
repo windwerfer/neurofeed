@@ -47,6 +47,8 @@ class DeviceInfo {
     required this.sensors,
     required this.channelCount,
     required this.channelLabels,
+    this.rawFiltering,
+    this.conditioning,
   });
 
   final String name;
@@ -57,6 +59,13 @@ class DeviceInfo {
   final int channelCount;
   final List<String> channelLabels;
 
+  /// How the stored RAW was filtered (live recordings: stored as received,
+  /// no device-side filtering).
+  final RawFiltering? rawFiltering;
+
+  /// App conditioning under computed values and charts.
+  final SignalConditioning? conditioning;
+
   Map<String, Object?> toJson() => {
     'name': name,
     'id': id,
@@ -65,6 +74,8 @@ class DeviceInfo {
     'sensors': sensors,
     'channelCount': channelCount,
     'channelLabels': channelLabels,
+    if (rawFiltering != null) 'rawFiltering': rawFiltering!.toJson(),
+    if (conditioning != null) 'conditioning': conditioning!.toJson(),
   };
 
   static DeviceInfo? fromJson(Map<String, dynamic>? json) {
@@ -77,6 +88,111 @@ class DeviceInfo {
       sensors: (json['sensors'] as List?)?.map((e) => e as String).toList() ?? [],
       channelCount: (json['channelCount'] as num?)?.toInt() ?? 4,
       channelLabels: (json['channelLabels'] as List?)?.map((e) => e as String).toList() ?? [],
+      rawFiltering: RawFiltering.fromJson(json['rawFiltering']),
+      conditioning: SignalConditioning.fromJson(json['conditioning']),
+    );
+  }
+}
+
+/// `device.rawFiltering`: the stored RAW is the device output as received
+/// (`storedAsReceived`, the app never filters it); `highPassHz` / `notchHz`
+/// are filters the device itself applied, null = none.
+class RawFiltering {
+  const RawFiltering({
+    this.storedAsReceived = true,
+    this.highPassHz,
+    this.notchHz,
+  });
+
+  /// Unfiltered live device output (Muse Classic / Athena, Crown).
+  static const deviceUnfiltered = RawFiltering();
+
+  /// EDF Prefiltering header text, e.g. `HP:DC N:none` (no high-pass, no
+  /// notch; a low-pass is not stated because none is documented).
+  String get edfPrefiltering {
+    String hz(double v) => v == v.roundToDouble() ? '${v.round()}' : '$v';
+    final hp = highPassHz == null ? 'HP:DC' : 'HP:${hz(highPassHz!)}Hz';
+    final n = notchHz == null ? 'N:none' : 'N:${hz(notchHz!)}Hz';
+    return '$hp $n';
+  }
+
+  final bool storedAsReceived;
+  final double? highPassHz;
+  final double? notchHz;
+
+  Map<String, Object?> toJson() => {
+    'storedAsReceived': storedAsReceived,
+    'highPassHz': highPassHz,
+    'notchHz': notchHz,
+  };
+
+  static RawFiltering? fromJson(Object? json) {
+    if (json is! Map) return null;
+    return RawFiltering(
+      storedAsReceived: json['storedAsReceived'] as bool? ?? true,
+      highPassHz: (json['highPassHz'] as num?)?.toDouble(),
+      notchHz: (json['notchHz'] as num?)?.toDouble(),
+    );
+  }
+}
+
+/// A mains decision: `onset` seconds from `startedAt` (negative = before the
+/// recording started), `notchHz` 50 / 60 or null (no hum, notch off).
+class NotchChange {
+  const NotchChange({required this.onset, this.notchHz});
+
+  final double onset;
+  final double? notchHz;
+
+  Map<String, Object?> toJson() => {'onset': onset, 'notchHz': notchHz};
+
+  static NotchChange? fromJson(Object? json) {
+    if (json is! Map || json['onset'] is! num) return null;
+    return NotchChange(
+      onset: (json['onset'] as num).toDouble(),
+      notchHz: (json['notchHz'] as num?)?.toDouble(),
+    );
+  }
+}
+
+/// `device.conditioning`: high-pass and mains notch the app applies to the
+/// RAW before quality, bands, features and charts. Before the first mains
+/// decision both 50/100 and 60/120 Hz are notched.
+class SignalConditioning {
+  const SignalConditioning({
+    required this.highPassHz,
+    required this.notchQ,
+    this.notchHz,
+    this.notchChanges = const [],
+  });
+
+  final double highPassHz;
+  final double notchQ;
+
+  /// Mains notch in effect at the end; null = none, or undecided when
+  /// [notchChanges] is empty.
+  final double? notchHz;
+
+  /// Mains decisions of the connection (negative onset = before start).
+  final List<NotchChange> notchChanges;
+
+  Map<String, Object?> toJson() => {
+    'highPassHz': highPassHz,
+    'notchQ': notchQ,
+    'notchHz': notchHz,
+    'notchChanges': [for (final c in notchChanges) c.toJson()],
+  };
+
+  static SignalConditioning? fromJson(Object? json) {
+    if (json is! Map || json['highPassHz'] is! num) return null;
+    return SignalConditioning(
+      highPassHz: (json['highPassHz'] as num).toDouble(),
+      notchQ: (json['notchQ'] as num?)?.toDouble() ?? 0,
+      notchHz: (json['notchHz'] as num?)?.toDouble(),
+      notchChanges: [
+        for (final c in (json['notchChanges'] as List?) ?? const [])
+          ?NotchChange.fromJson(c),
+      ],
     );
   }
 }
@@ -95,6 +211,7 @@ class ImportProvenance {
     this.recordingInterval,
     this.intervalCoverage,
     this.reference,
+    this.prefiltering = const {},
     required this.lossy,
     this.warnings = const [],
   });
@@ -117,6 +234,9 @@ class ImportProvenance {
   /// [recordingInterval]). Null when [recordingInterval] is null.
   final double? intervalCoverage;
   final String? reference;
+
+  /// EDF per-signal Prefiltering header (source label → text) where stated.
+  final Map<String, String> prefiltering;
   final bool lossy;
   final List<String> warnings;
 
@@ -131,6 +251,7 @@ class ImportProvenance {
     'recordingInterval': recordingInterval,
     'intervalCoverage': intervalCoverage,
     if (reference != null) 'reference': reference,
+    if (prefiltering.isNotEmpty) 'prefiltering': prefiltering,
     'lossy': lossy,
     'warnings': warnings,
   };
@@ -150,6 +271,12 @@ class ImportProvenance {
       recordingInterval: (json['recordingInterval'] as num?)?.toDouble(),
       intervalCoverage: (json['intervalCoverage'] as num?)?.toDouble(),
       reference: json['reference'] as String?,
+      prefiltering: {
+        if (json['prefiltering'] case final Map m)
+          for (final e in m.entries)
+            if (e.key is String && e.value is String)
+              e.key as String: e.value as String,
+      },
       lossy: json['lossy'] == true,
       warnings: strings(json['warnings']),
     );

@@ -5,6 +5,7 @@ use crate::api::features::{self, FeatureDto};
 use crate::frb_generated::StreamSink;
 use muse_rs::prelude::*;
 
+use crate::analysis::eeg_filter::{self, EegConditioner};
 use crate::analysis::gesture::GestureDetector;
 use crate::analysis::{cbramod, guardrail, reve};
 use crate::connection::{state, ActiveConnection, ConnectionHandle};
@@ -795,7 +796,8 @@ fn spawn_event_forwarder() {
             std::collections::HashMap::new();
         let mut last_guardrail_attempt = tokio::time::Instant::now();
 
-        // Blink / clench / eye-position detector, fed from raw EEG + gamma.
+        // Blink / clench / eye-position detector: conditioned EEG for blinks,
+        // RAW for the slow eye level, plus gamma.
         let mut gesture = GestureDetector::default();
 
         // Per-electrode virtual timestamp tracking for Athena firmware.
@@ -810,6 +812,12 @@ fn spawn_event_forwarder() {
         let mut latest_bands: std::collections::HashMap<i32, features::ChannelBands> =
             std::collections::HashMap::new();
 
+        // EEG conditioning (per connection, every device). RAW is recorded
+        // as received; quality, bands, features, gestures and the UI get
+        // the conditioned signal.
+        let mut conditioner: EegConditioner;
+        let mut decisions_published: usize;
+
         const FFT_N: usize = 256;
         loop {
             let (rx, eeg_limit) = {
@@ -821,6 +829,9 @@ fn spawn_event_forwarder() {
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                 continue;
             };
+            conditioner = EegConditioner::default();
+            decisions_published = 0;
+            eeg_filter::publish_live_decisions(&[]);
             // Poll the event channel once a second. This serves two purposes:
             // 1. A reconnect stores a fresh channel in `events`; pick it up
             //    here instead of draining a stale one forever.
@@ -974,42 +985,48 @@ fn spawn_event_forwarder() {
                     }
                 }
 
-                if let MuseEventDto::Eeg(ref e) = dto {
-                    quality_rings
-                        .entry(e.electrode)
-                        .or_default()
-                        .extend(&e.samples);
-                }
-                let eeg_samples = if let MuseEventDto::Eeg(ref e) = dto {
-                    Some((e.electrode, e.timestamp, e.samples.clone()))
-                } else {
-                    None
+                // Capture records `dto` (RAW as received); analysis and the UI
+                // use the conditioned samples.
+                let (eeg_samples, outgoing) = match &dto {
+                    MuseEventDto::Eeg(e) => {
+                        let (samples, events) = condition_eeg_packet(&mut conditioner, e);
+                        (Some((e.electrode, e.timestamp, samples)), Some(events))
+                    }
+                    _ => (None, None),
                 };
-                if let MuseEventDto::Eeg(ref e) = dto {
-                    gesture.feed_eeg(e.electrode, &e.samples);
+                if conditioner.decisions().len() != decisions_published {
+                    decisions_published = conditioner.decisions().len();
+                    eeg_filter::publish_live_decisions(conditioner.decisions());
+                }
+                if let (Some((electrode, _, samples)), MuseEventDto::Eeg(e)) = (&eeg_samples, &dto) {
+                    quality_rings.entry(*electrode).or_default().extend(samples);
+                    gesture.feed_eeg(*electrode, samples, &e.samples);
                 }
                 crate::spine::capture::on_dto(&dto);
+                let outgoing = outgoing.unwrap_or_else(|| vec![dto]);
                 let should_stop = {
                     let mut guard =
                         state().inner.lock().unwrap_or_else(|e| e.into_inner());
-                    match guard.sink.as_ref() {
-                        Some(sink) => {
-                            if sink.add(dto).is_err() {
-                                guard.sink = None;
-                                true
-                            } else {
-                                false
+                    let mut failed = false;
+                    if let Some(sink) = guard.sink.as_ref() {
+                        for ev in outgoing {
+                            if sink.add(ev).is_err() {
+                                failed = true;
+                                break;
                             }
                         }
-                        None => false,
                     }
+                    if failed {
+                        guard.sink = None;
+                    }
+                    failed
                 };
                 if should_stop {
                     break;
                 }
                 if let Some((electrode, timestamp, samples)) = eeg_samples {
                     // Keep the rolling guardrail window (all electrodes, capped
-                    // at ~5.5 s) fed from the same raw EEG packets.
+                    // at ~5.5 s) fed from the same conditioned EEG.
                     {
                         let buf = window_bufs.entry(electrode).or_default();
                         buf.extend_from_slice(&samples);
@@ -1338,15 +1355,33 @@ fn spawn_event_forwarder() {
     });
 }
 
-pub(crate) fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
-    let n = samples.len();
-    if n < 2 {
-        return [0.0; 8];
-    }
-    let sample_rate = 256.0;
-    let hz_per_bin = sample_rate / n as f64;
-    let bin = |hz: f64| (hz / hz_per_bin).round() as usize;
+/// One RAW EEG packet through the conditioner: the conditioned samples for
+/// quality / bands / features / gestures, and the conditioned EEG events
+/// for the UI (none while a segment's first samples are held).
+fn condition_eeg_packet(
+    conditioner: &mut EegConditioner,
+    e: &EegDto,
+) -> (Vec<f64>, Vec<MuseEventDto>) {
+    let chunks = conditioner.process(e.electrode, e.timestamp, &e.samples);
+    let samples = chunks.iter().flat_map(|(_, s)| s.iter().copied()).collect();
+    let events = chunks
+        .into_iter()
+        .map(|(timestamp, samples)| {
+            MuseEventDto::Eeg(EegDto {
+                index: e.index,
+                electrode: e.electrode,
+                timestamp,
+                samples,
+            })
+        })
+        .collect();
+    (samples, events)
+}
 
+/// Radix-2 FFT of `samples` (length a power of two) into thread-local
+/// scratch buffers; `f` sees the real and imaginary parts.
+fn with_spectrum<R>(samples: &[f64], f: impl FnOnce(&[f64], &[f64]) -> R) -> R {
+    let n = samples.len();
     // Reuse scratch buffers across calls via a small thread-local pool to
     // avoid repeated allocations.  Each electrode does one FFT per second,
     // and one blocking task runs at a time, so 2 buffers × n is enough.
@@ -1405,7 +1440,63 @@ pub(crate) fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
             }
             len <<= 1;
         }
+        f(&re, &im)
+    }))
+}
 
+/// Power in the mains bin for `hz`, summed over a ±1 bin window to tolerate
+/// slight mains drift. hz_per_bin = 1.0 at FFT_N=256 @ 256 Hz, so the mains
+/// spike lands directly on bins 50/60.
+fn mains_bin_power(re: &[f64], im: &[f64], hz: f64) -> f64 {
+    let n = re.len();
+    let half_n = n / 2;
+    let k = (hz / (256.0 / n as f64)).round() as usize;
+    let lo = k.saturating_sub(1).max(1);
+    let hi = (k + 1).min(half_n);
+    (lo..=hi).map(|kk| re[kk] * re[kk] + im[kk] * im[kk]).sum()
+}
+
+/// How far the 50 Hz and 60 Hz mains peaks stand out in one 256 Hz window:
+/// mean power of each mains window (±1 bin, as in the line-noise ratio) over
+/// the median bin power within ±8 Hz, excluding bins within 2 Hz of either
+/// mains frequency. Infinite when a peak sits on a zero floor.
+pub(crate) fn mains_peak_ratios(samples: &[f64]) -> (f64, f64) {
+    if samples.len() != 256 {
+        return (0.0, 0.0);
+    }
+    with_spectrum(samples, |re, im| {
+        let power = |k: usize| re[k] * re[k] + im[k] * im[k];
+        let ratio = |hz: f64| {
+            let k = hz as usize;
+            let mut floor: Vec<f64> = (k - 8..=k + 8)
+                .filter(|&b| (b as f64 - 50.0).abs() > 2.0 && (b as f64 - 60.0).abs() > 2.0)
+                .map(power)
+                .collect();
+            floor.sort_by(f64::total_cmp);
+            let median = floor[floor.len() / 2];
+            let peak = mains_bin_power(re, im, hz) / 3.0;
+            if median > 0.0 {
+                peak / median
+            } else if peak > 0.0 {
+                f64::INFINITY
+            } else {
+                0.0
+            }
+        };
+        (ratio(50.0), ratio(60.0))
+    })
+}
+
+pub(crate) fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
+    let n = samples.len();
+    if n < 2 {
+        return [0.0; 8];
+    }
+    let sample_rate = 256.0;
+    let hz_per_bin = sample_rate / n as f64;
+    let bin = |hz: f64| (hz / hz_per_bin).round() as usize;
+
+    with_spectrum(samples, |re, im| {
         let half_n = n / 2;
         let powers = [
             (1..=bin(4.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
@@ -1415,36 +1506,22 @@ pub(crate) fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
             (bin(30.0)..=bin(half_n.min(50) as f64)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
         ];
 
-        let (peak_freq, peak_power) = compute_peak_alpha(&re, &im, hz_per_bin);
+        let (peak_freq, peak_power) = compute_peak_alpha(re, im, hz_per_bin);
 
         // Line-noise / impedance proxy: fraction of total power in the
-        // 50/60 Hz mains bins (each averaged over a ±1 bin window to tolerate
-        // slight mains drift). hz_per_bin = 1.0 at FFT_N=256 @ 256 Hz, so the
-        // mains spike lands directly on bins 50/60.
-        let mains = |hz: f64| -> f64 {
-            let k = bin(hz);
-            let mut p = 0.0;
-            let lo = k.saturating_sub(1).max(1);
-            let hi = (k + 1).min(half_n);
-            for kk in lo..=hi {
-                p += re[kk] * re[kk] + im[kk] * im[kk];
-            }
-            p
-        };
+        // 50/60 Hz mains bins.
         let total: f64 =
             (1..=half_n).map(|k| re[k] * re[k] + im[k] * im[k]).sum();
-        let mains_power = mains(50.0).max(mains(60.0));
+        let mains_power = mains_bin_power(re, im, 50.0).max(mains_bin_power(re, im, 60.0));
         let line_noise_ratio = if total > 0.0 { mains_power / total } else { 0.0 };
 
         [
             powers[0], powers[1], powers[2], powers[3], powers[4],
             peak_freq, peak_power, line_noise_ratio,
         ]
-    }))
+    })
 }
 
-/// Pulse detection from PPG infrared channel using peak-finding.
-/// Returns (bpm, confidence).
 fn compute_pulse(ir_samples: &[f64]) -> (f64, f64) {
     if ir_samples.len() < 128 {
         return (0.0, 0.0);
@@ -1730,5 +1807,130 @@ mod aux_tests {
         assert_eq!(muse_aux_channels(true, false), 0);
         assert_eq!(muse_aux_channels(false, true), 1);
         assert_eq!(muse_aux_channels(true, true), 4);
+    }
+}
+
+#[cfg(test)]
+mod conditioning_tests {
+    use super::*;
+    use crate::api::features::pad_quality_from_std_and_noise;
+    use std::f64::consts::PI;
+
+    /// Muse Classic-style packet: 12 samples, ~800 µV offset, 10 µV alpha,
+    /// 60 µV 50 Hz hum.
+    fn muse_packet(n0: usize, electrode: i32) -> EegDto {
+        EegDto {
+            index: (n0 / 12) as u16,
+            electrode,
+            timestamp: 1.0e12 + n0 as f64 * 1000.0 / 256.0,
+            samples: (n0..n0 + 12)
+                .map(|n| {
+                    let t = n as f64 / 256.0;
+                    800.0 + electrode as f64 * 37.0
+                        + 10.0 * (2.0 * PI * 10.0 * t).sin()
+                        + 60.0 * (2.0 * PI * 50.0 * t).sin()
+                })
+                .collect(),
+        }
+    }
+
+    fn std(v: &[f64]) -> f64 {
+        let m = v.iter().sum::<f64>() / v.len() as f64;
+        (v.iter().map(|x| (x - m).powi(2)).sum::<f64>() / v.len() as f64).sqrt()
+    }
+
+    #[test]
+    fn muse_quality_and_bands_use_the_conditioned_signal() {
+        let mut c = EegConditioner::default();
+        let mut raw = vec![Vec::new(); 4];
+        let mut conditioned = vec![Vec::new(); 4];
+        let mut n = 0;
+        while n < 256 * 6 {
+            for el in 0..4 {
+                let p = muse_packet(n, el);
+                let before = p.samples.clone();
+                let (samples, events) = condition_eeg_packet(&mut c, &p);
+                // The packet capture records is RAW as received.
+                assert_eq!(p.samples, before);
+                assert_eq!(samples.len(), events.iter().map(|e| match e {
+                    MuseEventDto::Eeg(e) => e.samples.len(),
+                    _ => 0,
+                }).sum::<usize>());
+                raw[el as usize].extend(before);
+                conditioned[el as usize].extend(samples);
+            }
+            n += 12;
+        }
+        assert_eq!(c.mains(), eeg_filter::Mains::Hz(50.0));
+        for el in 0..4 {
+            let last_raw = &raw[el][256 * 5..256 * 6];
+            let last = &conditioned[el][256 * 5..256 * 6];
+            let raw_bands = compute_fft_bands(last_raw);
+            let bands = compute_fft_bands(last);
+            // Unfiltered: hum dominates spread and line noise → unusable.
+            let raw_q = pad_quality_from_std_and_noise(std(last_raw), raw_bands[7]);
+            // Conditioned: 10 µV alpha, no residual hum → usable.
+            let q = pad_quality_from_std_and_noise(std(last), bands[7]);
+            assert!(raw_q < 80.0 && q >= 80.0, "raw {raw_q} conditioned {q}");
+            assert!(bands[7] < 1e-4, "line noise {}", bands[7]);
+            let rel_alpha = bands[2] / bands[..5].iter().sum::<f64>();
+            assert!(rel_alpha > 0.99, "relative alpha {rel_alpha}");
+        }
+    }
+
+    #[test]
+    fn crown_packet_is_conditioned_and_raw_untouched() {
+        let mut c = EegConditioner::default();
+        let mut out = Vec::new();
+        for k in 0..64usize {
+            let p = EegDto {
+                index: k as u16,
+                electrode: 3,
+                timestamp: k as f64 * 62.5,
+                samples: (k * 16..k * 16 + 16)
+                    .map(|n| -2.0e5 + 10.0 * (2.0 * PI * 10.0 * n as f64 / 256.0).sin())
+                    .collect(),
+            };
+            let before = p.samples.clone();
+            let (samples, _) = condition_eeg_packet(&mut c, &p);
+            assert_eq!(p.samples, before);
+            out.extend(samples);
+        }
+        assert_eq!(out.len(), 64 * 16);
+        assert!(out.iter().all(|v| v.abs() < 15.0));
+    }
+
+    /// Direct DFT reference for the band / line-noise math.
+    #[test]
+    fn fft_bands_match_direct_dft() {
+        let x: Vec<f64> = (0..256)
+            .map(|n| {
+                let t = n as f64 / 256.0;
+                20.0 * (2.0 * PI * 10.0 * t).sin()
+                    + 5.0 * (2.0 * PI * 3.0 * t).cos()
+                    + 4.0 * (2.0 * PI * 50.0 * t).sin()
+                    + 2.0 * (2.0 * PI * 21.0 * t).sin()
+            })
+            .collect();
+        let p = |k: usize| {
+            let (mut re, mut im) = (0.0, 0.0);
+            for (n, v) in x.iter().enumerate() {
+                let w = 2.0 * PI * (k * n) as f64 / 256.0;
+                re += v * w.cos();
+                im -= v * w.sin();
+            }
+            re * re + im * im
+        };
+        let band = |lo: usize, hi: usize| (lo..=hi).map(p).sum::<f64>() / 65536.0;
+        let got = compute_fft_bands(&x);
+        let want = [band(1, 4), band(4, 8), band(8, 13), band(13, 30), band(30, 50)];
+        for i in 0..5 {
+            assert!((got[i] - want[i]).abs() <= 1e-9 * want[i].max(1.0), "band {i}: {} vs {}", got[i], want[i]);
+        }
+        let total: f64 = (1..=128).map(p).sum();
+        let mains = (49..=51).map(p).sum::<f64>().max((59..=61).map(p).sum());
+        assert!((got[7] - mains / total).abs() < 1e-12);
+        let (r50, _) = mains_peak_ratios(&x);
+        assert!(r50 > eeg_filter::PEAK_RATIO, "{r50}");
     }
 }

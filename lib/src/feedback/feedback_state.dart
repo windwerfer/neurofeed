@@ -29,9 +29,9 @@ import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/feedback/target_state.dart';
 import 'package:neurofeed/src/feedback/trust/trust_gestures.dart';
 import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
-import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
+import 'package:neurofeed/src/session_format/eeg_conditioning_meta.dart';
 import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/reve/model_engine.dart';
@@ -750,6 +750,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       'id': connected.status.id,
       'firmware': connected.status.firmware,
       'channelLabels': montage,
+      'rawFiltering': RawFiltering.deviceUnfiltered.toJson(),
     });
     _computedSampler = ComputedSampler(
       onFrame: (frame) => _recorder.appendComputed(frame),
@@ -1606,6 +1607,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       deviceName: app.status.connected ? app.status.name : null,
       deviceModel: app.status.connected ? app.status.firmware : null,
       deviceId: app.status.connected ? app.status.id : null,
+      rawFiltering: RawFiltering.deviceUnfiltered,
+      conditioning: _sessionStartAt == null
+          ? null
+          : liveSignalConditioning(
+              startMs: _sessionStartAt!.millisecondsSinceEpoch,
+            ),
       recordedChannels: channels,
       recordedData: recordStreams.map((s) => s.name).toList(),
       gestures: settings.markersInFeedbackEnabled ? gestureMarkers : const [],

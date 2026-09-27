@@ -10,6 +10,7 @@ import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/rust/api/edf_export.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
 import 'package:neurofeed/src/session_format/models.dart';
+import 'package:neurofeed/src/session_format/eeg_conditioning_meta.dart';
 import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
@@ -77,6 +78,7 @@ ImportResult importEdfBytes({
   final runs = _contiguousRuns(decoded.recordStartsSeconds, recordDuration);
   final events = <int>[];
   var bandRows = <BandInstant>[];
+  SignalConditioning? conditioning;
   double? originalRateHz;
   var resampled = false;
   if (eegSignals.isNotEmpty) {
@@ -104,7 +106,9 @@ ImportResult importEdfBytes({
       ];
     }
     events.addAll(encodeEegRuns(runsByElectrode));
-    bandRows = fftBandRows(runsByElectrode);
+    final fft = fftBandRows(runsByElectrode);
+    bandRows = fft.rows;
+    conditioning = signalConditioningFrom(fft.conditioning, startMs: 0);
     events.addAll(encodeBandEvents(bandRows));
   } else {
     bandRows = _bandSignalRows(bandSignals, match);
@@ -199,6 +203,7 @@ ImportResult importEdfBytes({
     sensors: [if (enabled.contains(RecordingStream.eeg)) 'EEG'],
     channelCount: channelLabels.length,
     channelLabels: channelLabels,
+    conditioning: conditioning,
   );
   final streams = RecordingMetadata.streamsConfig(enabled);
 
@@ -239,6 +244,10 @@ ImportResult importEdfBytes({
     resampled: resampled,
     rawPresent: eegSignals.isNotEmpty,
     reference: refs.length == 1 ? refs.single : null,
+    prefiltering: {
+      for (final s in decoded.signals)
+        if (s.prefiltering.isNotEmpty) s.label.trim(): s.prefiltering,
+    },
     lossy: dropped.isNotEmpty || resampled,
     warnings: [for (final w in warnings) w.message],
   );

@@ -20,6 +20,7 @@ import 'package:neurofeed/src/monitor/recording/recording_store.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/rust/api/muse.dart' hide DeviceInfo;
 import 'package:neurofeed/src/session_format/models.dart';
+import 'package:neurofeed/src/session_format/eeg_conditioning_meta.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/version.dart';
@@ -31,11 +32,18 @@ class MonitorController extends Notifier<MonitorState> {
     this.tmpCap = MonitorRecorder.kTmpCap,
     this.sidecarInterval = MonitorRecorder.kSidecarInterval,
     SessionRecorder Function()? createRecorder,
-  }) : _createRecorder = createRecorder ?? (() => SessionRecorder());
+    SignalConditioning? Function(int startMs)? liveConditioning,
+  }) : _createRecorder = createRecorder ?? (() => SessionRecorder()),
+       _liveConditioning =
+           liveConditioning ??
+           ((startMs) => liveSignalConditioning(startMs: startMs));
 
   final Duration tmpCap;
   final Duration sidecarInterval;
   final SessionRecorder Function() _createRecorder;
+
+  /// `device.conditioning` source (the live Rust conditioner by default).
+  final SignalConditioning? Function(int startMs) _liveConditioning;
 
   final BandCache bandCache = BandCache();
   final OpticalCache opticalCache = OpticalCache();
@@ -503,6 +511,8 @@ class MonitorController extends Notifier<MonitorState> {
             : const ['EEG', 'PPG', 'IMU'],
         channelCount: state.channelCount,
         channelLabels: state.electrodeNames,
+        rawFiltering: RawFiltering.deviceUnfiltered,
+        conditioning: _liveConditioning(started),
       ),
       streams: RecordingMetadata.streamsConfig(settings.recordStreams),
     );
