@@ -23,7 +23,6 @@ import 'package:neurofeed/src/feedback/live_stats.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:neurofeed/src/feedback/reward_lane.dart';
-import 'package:neurofeed/src/charts/eeg_data_source.dart';
 import 'package:neurofeed/src/feedback/session_chart_data.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
@@ -33,6 +32,7 @@ import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/reve/model_engine.dart';
 import 'package:neurofeed/src/reve/models.dart';
@@ -1558,7 +1558,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final protocol = catalog?.forName(fb.protocol);
     final feature = settings.guardFeatureFor(fb.protocol);
     final model = settings.guardModel;
-    final channels = recordedChannels.map(channelName).toList()..sort();
+    final channels = recordedChannelLabels(
+      kind: app.lastConnectedKind,
+      electrodes: recordedChannels,
+    );
     final drowsy = sessionDrowsiness;
     return SessionMetadata(
       protocol: fb.protocol,
