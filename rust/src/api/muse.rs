@@ -1507,6 +1507,23 @@ pub(crate) fn mains_peak_ratios(samples: &[f64]) -> (f64, f64) {
     })
 }
 
+/// EEG bands `[lo, hi)` in Hz: delta, theta, alpha, beta, gamma. Every 1 Hz
+/// bin belongs to exactly one band; gamma stops below the mains notch.
+pub(crate) const BANDS_HZ: [(f64, f64); 5] =
+    [(1.0, 4.0), (4.0, 8.0), (8.0, 13.0), (13.0, 30.0), (30.0, 45.0)];
+
+/// Periodic Hamming window `0.54 − 0.46·cos(2πi/n)`.
+fn hamming(n: usize) -> Vec<f64> {
+    (0..n)
+        .map(|i| 0.54 - 0.46 * (2.0 * std::f64::consts::PI * i as f64 / n as f64).cos())
+        .collect()
+}
+
+/// Bands, peak alpha and line noise of one window (256 samples at 256 Hz):
+/// Hamming-windowed FFT, one-sided PSD `2|X_k|² / (fs·Σw²)` in µV²/Hz.
+/// Band power = PSD summed over the band's bins (× 1 Hz bin width).
+/// Returns `[delta, theta, alpha, beta, gamma, peak_alpha_hz,
+/// peak_alpha_psd, line_noise_ratio]`.
 pub(crate) fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
     let n = samples.len();
     if n < 2 {
@@ -1514,17 +1531,24 @@ pub(crate) fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
     }
     let sample_rate = 256.0;
     let hz_per_bin = sample_rate / n as f64;
-    let bin = |hz: f64| (hz / hz_per_bin).round() as usize;
+    let w = hamming(n);
+    let windowed: Vec<f64> = samples.iter().zip(&w).map(|(x, w)| x * w).collect();
+    let psd_scale = 2.0 / (sample_rate * w.iter().map(|v| v * v).sum::<f64>());
 
-    with_spectrum(samples, |re, im| {
+    with_spectrum(&windowed, |re, im| {
         let half_n = n / 2;
-        let powers = [
-            (1..=bin(4.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
-            (bin(4.0)..=bin(8.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
-            (bin(8.0)..=bin(13.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
-            (bin(13.0)..=bin(30.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
-            (bin(30.0)..=bin(half_n.min(50) as f64)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
-        ];
+        let psd = |k: usize| (re[k] * re[k] + im[k] * im[k]) * psd_scale;
+        let band = |(lo, hi): (f64, f64)| {
+            (1..half_n)
+                .filter(|&k| {
+                    let f = k as f64 * hz_per_bin;
+                    f >= lo && f < hi
+                })
+                .map(psd)
+                .sum::<f64>()
+                * hz_per_bin
+        };
+        let powers = BANDS_HZ.map(band);
 
         let (peak_freq, peak_power) = compute_peak_alpha(re, im, hz_per_bin);
 
@@ -1537,7 +1561,7 @@ pub(crate) fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
 
         [
             powers[0], powers[1], powers[2], powers[3], powers[4],
-            peak_freq, peak_power, line_noise_ratio,
+            peak_freq, peak_power * psd_scale, line_noise_ratio,
         ]
     })
 }
@@ -1671,8 +1695,9 @@ fn compute_movement(magnitudes: &[f64]) -> f64 {
 /// `re` and `im` are the full FFT output (half_n + 1 usable bins).
 /// Returns (frequency_hz, power).
 fn compute_peak_alpha(re: &[f64], im: &[f64], hz_per_bin: f64) -> (f64, f64) {
-    let bin_start = (8.0 / hz_per_bin).round() as usize;
-    let bin_end = (13.0 / hz_per_bin).round() as usize;
+    let (lo, hi) = BANDS_HZ[2];
+    let bin_start = (lo / hz_per_bin).ceil() as usize;
+    let bin_end = (hi / hz_per_bin).ceil() as usize;
     let bin_end = bin_end.min(re.len());
 
     let mut max_power = 0.0f64;
@@ -1920,6 +1945,33 @@ mod conditioning_tests {
         assert!(out.iter().all(|v| v.abs() < 15.0));
     }
 
+    /// A 10 µV sine carries 50 µV² (A²/2): the alpha band gets it all when
+    /// the sine sits inside alpha, on or between bins.
+    #[test]
+    fn known_alpha_sine_band_power() {
+        for hz in [10.0, 10.5, 11.3] {
+            let x: Vec<f64> = (0..256).map(|n| 10.0 * (2.0 * PI * hz * n as f64 / 256.0).sin()).collect();
+            let b = compute_fft_bands(&x);
+            let total: f64 = b[..5].iter().sum();
+            eprintln!("{hz} Hz: bands {:?} peak {:.2} Hz {:.2} µV²/Hz", &b[..5], b[5], b[6]);
+            assert!((b[2] - 50.0).abs() < 2.0, "{hz} Hz alpha {}", b[2]);
+            assert!(b[2] / total > 0.97, "{hz} Hz rel alpha {}", b[2] / total);
+            assert!((b[5] - hz).abs() < 0.3, "{hz} Hz peak {}", b[5]);
+        }
+        // Every 1 Hz bin in exactly one band: 1..=44 Hz tones each land in
+        // one band only, and 45..=50 Hz in none.
+        for f in 1..=50usize {
+            let x: Vec<f64> = (0..256).map(|n| (2.0 * PI * f as f64 * n as f64 / 256.0).cos()).collect();
+            let b = compute_fft_bands(&x);
+            let hit = BANDS_HZ.iter().position(|&(lo, hi)| (f as f64) >= lo && (f as f64) < hi);
+            if let Some(i) = hit {
+                assert!(b[i] > 0.3, "{f} Hz band {i} {}", b[i]);
+            } else {
+                assert!(b[4] < 0.2, "{f} Hz leaks into gamma {}", b[4]);
+            }
+        }
+    }
+
     /// Direct DFT reference for the band / line-noise math.
     #[test]
     fn fft_bands_match_direct_dft() {
@@ -1932,18 +1984,21 @@ mod conditioning_tests {
                     + 2.0 * (2.0 * PI * 21.0 * t).sin()
             })
             .collect();
+        let w: Vec<f64> = (0..256).map(|n| 0.54 - 0.46 * (2.0 * PI * n as f64 / 256.0).cos()).collect();
+        let sum_w2: f64 = w.iter().map(|v| v * v).sum();
         let p = |k: usize| {
             let (mut re, mut im) = (0.0, 0.0);
             for (n, v) in x.iter().enumerate() {
-                let w = 2.0 * PI * (k * n) as f64 / 256.0;
-                re += v * w.cos();
-                im -= v * w.sin();
+                let a = 2.0 * PI * (k * n) as f64 / 256.0;
+                re += v * w[n] * a.cos();
+                im -= v * w[n] * a.sin();
             }
             re * re + im * im
         };
-        let band = |lo: usize, hi: usize| (lo..=hi).map(p).sum::<f64>() / 65536.0;
+        // Half-open bins [lo, hi), one-sided PSD, 1 Hz bins.
+        let band = |lo: usize, hi: usize| (lo..hi).map(p).sum::<f64>() * 2.0 / (256.0 * sum_w2);
         let got = compute_fft_bands(&x);
-        let want = [band(1, 4), band(4, 8), band(8, 13), band(13, 30), band(30, 50)];
+        let want = [band(1, 4), band(4, 8), band(8, 13), band(13, 30), band(30, 45)];
         for i in 0..5 {
             assert!((got[i] - want[i]).abs() <= 1e-9 * want[i].max(1.0), "band {i}: {} vs {}", got[i], want[i]);
         }

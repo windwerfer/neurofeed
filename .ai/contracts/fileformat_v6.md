@@ -107,6 +107,8 @@ Written by `buildSessionMetadata()`:
 
 **Band source (LOCKED):** every band value — raw `bands` records and computed `bands` / `lineNoise` — comes from the app's own 256-point FFT of 256 Hz raw EEG, for every device. Headset-supplied band powers (e.g. Crown `/brainwaves/*`) are never recorded or used. The one exception is an imported Mind Monitor CSV (`import.sourceFormat == "mind_monitor_csv"`) that carries band columns: its bands are Mind Monitor's, converted from Bels. Computed frames are exactly 1 Hz; `bands[e]` / `lineNoise[e]` are the **mean of every band update for electrode `e` within that second**; an electrode with no update repeats its previous value.
 
+**Band definitions (LOCKED):** each band update is one 256-sample (1 s) window of conditioned EEG with a periodic Hamming window, as one-sided PSD `P[k] = 2·|X[k]|² / (256 Hz · Σw²)` in µV²/Hz (1 Hz bins). A band is the sum of `P[k]` over its bins × 1 Hz, edges half-open `[lo, hi)`, so every bin belongs to at most one band: delta 1–4 (bins 1–3), theta 4–8 (4–7), alpha 8–13 (8–12), beta 13–30 (13–29), gamma 30–45 (30–44). DC and bins ≥ 45 Hz (mains) are in no band. A 10 µV sine inside a band reads ≈ 50 µV² (its power `A²/2`). Peak alpha: parabolic-interpolated argmax over bins 8–12; its power is the PSD at the peak bin (µV²/Hz). Imported Mind Monitor band columns keep Mind Monitor's own definition (Muse: alpha 7.5–13, gamma 30–44, Muse scaling), so their absolute values are not comparable with app-computed bands.
+
 **Sparse computed (LOCKED):** frame `t` is always on the 1 Hz grid, but seconds may be absent (disconnects; interval-mode CSV imports write one frame per source row, e.g. every 60 s). Stats never count frames as seconds: each frame weighs `frameSeconds` = gap to the next frame, capped at the median gap (the last frame gets the median gap). Weighted seconds feed `stats.quality`, `stats.movement.stillnessPct`, the 30 usable-second experimental gate and feedback target seconds.
 
 **`feedback{}` per second (LOCKED keep + add)** — see **Computed feedback extras**:
@@ -708,7 +710,7 @@ Future agents: change locked names only with a format PR and an updated table. P
 
 Compute only over **usable** computed seconds: mean pad `signalQuality ≥ 80` (same gate as `stats.quality` / sticky unusable). Skip seconds with missing `bands`. Seconds are weighted by `frameSeconds` (see Sparse computed). If fewer than **30** usable seconds, **omit** `stats.experimental` entirely (do not write NaNs / zeros pretending to be data).
 
-Band order on `ComputedFrame.bands` is locked elsewhere: per channel `[delta, theta, alpha, beta, gamma]` absolute power (µV²/Hz). Channel order follows `device.channelLabels` (Muse: `TP9`, `AF7`, `AF8`, `TP10`). Channels are found **by label**, never by index; a key whose labels are absent (e.g. asymmetry keys on Crown) is omitted. AUX channels are excluded.
+Band order on `ComputedFrame.bands` is locked elsewhere: per channel `[delta, theta, alpha, beta, gamma]` absolute power (µV², see **Band definitions**). Channel order follows `device.channelLabels` (Muse: `TP9`, `AF7`, `AF8`, `TP10`). Channels are found **by label**, never by index; a key whose labels are absent (e.g. asymmetry keys on Crown) is omitted. AUX channels are excluded.
 
 Relative power for a channel-second: `band / (delta+theta+alpha+beta+gamma)` with total `> 0`; else skip that channel-second.
 

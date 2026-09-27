@@ -76,6 +76,12 @@ stored RAW with Prefiltering `HP:DC N:none`; an imported EDF's Prefiltering
 is kept in `import.prefiltering`. OSC/LSL/BrainFlow streaming sends the
 conditioned signal.
 
+**Bands** use the common EEG / neurofeedback ranges (BrainFlow, Muse, OpenBCI
+GUI, IFCN): delta 1–4, theta 4–8, alpha 8–13, beta 13–30, gamma 30–45 Hz,
+lower edge inclusive, so each 1 Hz bin counts once and mains (≥ 45 Hz) never.
+Every second a 256-sample Hamming window (as Muse, OpenBCI GUI, MNE) gives a
+one-sided PSD; band power is its sum over the band (a 10 µV sine → 50 µV²).
+
 ## Status
 
 Android 10+ **arm64-v8a only** (no x86 emulator, no 32-bit). Linux and
