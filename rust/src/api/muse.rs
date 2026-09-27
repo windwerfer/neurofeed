@@ -865,7 +865,6 @@ fn spawn_event_forwarder() {
                 };
                 match &ev {
                     MuseEventDto::Eeg(_) => counts.eeg += 1,
-                    MuseEventDto::Bands(_) => counts.bands += 1,
                     MuseEventDto::Ppg(_) => counts.ppg += 1,
                     MuseEventDto::Telemetry(_) => counts.telemetry += 1,
                     MuseEventDto::Accelerometer(_) => counts.accelerometer += 1,
@@ -884,8 +883,10 @@ fn spawn_event_forwarder() {
                     counts = PktCounts::default();
                     last_print = tokio::time::Instant::now();
                 }
-                // ev is already MuseEventDto
                 let mut dto = ev;
+                if matches!(dto, MuseEventDto::Bands(_)) {
+                    continue;
+                }
                 // Patch Athena EEG timestamps (0.0) with virtual wall-clock
                 // timestamps derived from total sample count @ 256 Hz.
                 if let MuseEventDto::Eeg(ref mut e) = dto {
@@ -952,19 +953,6 @@ fn spawn_event_forwarder() {
                         .entry(e.electrode)
                         .or_default()
                         .extend(&e.samples);
-                }
-                if let MuseEventDto::Bands(ref b) = dto {
-                    latest_bands.insert(
-                        b.electrode,
-                        features::ChannelBands {
-                            delta: b.delta,
-                            theta: b.theta,
-                            alpha: b.alpha,
-                            beta: b.beta,
-                            gamma: b.gamma,
-                            line_noise_ratio: b.line_noise_ratio,
-                        },
-                    );
                 }
                 let eeg_samples = if let MuseEventDto::Eeg(ref e) = dto {
                     Some((e.electrode, e.timestamp, e.samples.clone()))

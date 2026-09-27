@@ -1,6 +1,6 @@
 use crate::api::device_config::DeviceConfig;
 use crate::api::features::{self, FeatureDto};
-use crate::api::muse::{MuseEventDto, EegDto, BandsDto, TelemetrySnapshot};
+use crate::api::muse::{MuseEventDto, EegDto, TelemetrySnapshot};
 use anyhow::Result;
 use flutter_rust_bridge::frb;
 use rosc::{OscPacket, OscMessage, OscType};
@@ -20,21 +20,10 @@ fn now_ms() -> f64 {
 
 /// Crown electrode order matches `DeviceConfig::neurosity_crown()`:
 /// 0=CP3, 1=C3, 2=F5, 3=PO3, 4=PO4, 5=F6, 6=C4, 7=CP4.
-/// OSC `/raw` and `/brainwaves/*` packs 8 floats in this index order.
+/// OSC `/raw` and `/signalQuality` pack 8 floats in this index order.
+/// Band powers come only from our own FFT of `/raw` (muse.rs forwarder);
+/// Crown `/brainwaves/*` messages are not used.
 const CROWN_ELECTRODE_COUNT: usize = 8;
-
-/// Per-electrode band power accumulator for merging /brainwaves/{band} messages
-#[frb(ignore)]
-#[derive(Default)]
-struct BandAccumulator {
-    timestamp: f64,
-    delta: [f32; 8],
-    theta: [f32; 8],
-    alpha: [f32; 8],
-    beta: [f32; 8],
-    gamma: [f32; 8],
-    received: [bool; 5],
-}
 
 /// Crown OSC connection handle for the connection manager
 #[frb(ignore)]
@@ -65,8 +54,6 @@ pub async fn start_crown_osc_receiver(
 
     let config = DeviceConfig::neurosity_crown();
     
-    let band_accumulator = Arc::new(Mutex::new(BandAccumulator::default()));
-    
     let signal_quality = Arc::new(Mutex::new([0.5f32; CROWN_ELECTRODE_COUNT]));
     
     let battery_level = Arc::new(Mutex::new(0.0f32));
@@ -76,7 +63,6 @@ pub async fn start_crown_osc_receiver(
 
     let task_handle = tokio::spawn(async move {
         let mut buf = [0u8; 8192];
-        let mut band_emit_interval = interval(Duration::from_millis(100)); // ~10Hz bands emit
         let mut telemetry_emit_interval = interval(Duration::from_secs(5));
         let mut first_packet = true;
 
@@ -98,7 +84,6 @@ pub async fn start_crown_osc_receiver(
                                 src_addr,
                                 &device_id_filter,
                                 &tx,
-                                &band_accumulator,
                                 &signal_quality,
                                 &battery_level,
                                 &config,
@@ -109,32 +94,6 @@ pub async fn start_crown_osc_receiver(
                         Err(e) => {
                             log::error!("[crown_osc] UDP recv error: {e}");
                         }
-                    }
-                }
-                _ = band_emit_interval.tick() => {
-                    // Emit merged bands at ~10Hz
-                    let mut acc = band_accumulator.lock().await;
-                    if acc.received.iter().any(|&r| r) {
-                        let ts = acc.timestamp;
-                        let sq = signal_quality.lock().await;
-                        
-                        for ch in 0..CROWN_ELECTRODE_COUNT {
-                            let electrode = ch as i32;
-                            let event = MuseEventDto::Bands(BandsDto {
-                                electrode,
-                                timestamp: ts,
-                                delta: acc.delta[ch] as f64,
-                                theta: acc.theta[ch] as f64,
-                                alpha: acc.alpha[ch] as f64,
-                                beta: acc.beta[ch] as f64,
-                                gamma: acc.gamma[ch] as f64,
-                                line_noise_ratio: sq[ch] as f64,
-                            });
-                            if tx.send(event).await.is_err() {
-                                return; // Channel closed
-                            }
-                        }
-                        acc.received = [false; 5];
                     }
                 }
                 _ = telemetry_emit_interval.tick() => {
@@ -163,7 +122,6 @@ async fn handle_osc_packet(
     _src_addr: SocketAddr,
     device_id_filter: &str,
     tx: &mpsc::Sender<MuseEventDto>,
-    band_accumulator: &Arc<Mutex<BandAccumulator>>,
     signal_quality: &Arc<Mutex<[f32; CROWN_ELECTRODE_COUNT]>>,
     battery_level: &Arc<Mutex<f32>>,
     _config: &DeviceConfig,
@@ -177,7 +135,6 @@ async fn handle_osc_packet(
                 msg,
                 device_id_filter,
                 tx,
-                band_accumulator,
                 signal_quality,
                 battery_level,
             ).await?;
@@ -189,7 +146,6 @@ async fn handle_osc_packet(
                         msg,
                         device_id_filter,
                         tx,
-                        band_accumulator,
                         signal_quality,
                         battery_level,
                     ).await?;
@@ -204,7 +160,6 @@ async fn handle_osc_message(
     msg: OscMessage,
     device_id_filter: &str,
     tx: &mpsc::Sender<MuseEventDto>,
-    band_accumulator: &Arc<Mutex<BandAccumulator>>,
     signal_quality: &Arc<Mutex<[f32; CROWN_ELECTRODE_COUNT]>>,
     battery_level: &Arc<Mutex<f32>>,
 ) -> Result<()> {
@@ -217,16 +172,6 @@ async fn handle_osc_message(
 
     if addr.ends_with("/raw") {
         handle_raw_eeg(msg, tx).await?;
-    } else if addr.ends_with("/brainwaves/delta") {
-        handle_band(msg, band_accumulator, 0).await?;
-    } else if addr.ends_with("/brainwaves/theta") {
-        handle_band(msg, band_accumulator, 1).await?;
-    } else if addr.ends_with("/brainwaves/alpha") {
-        handle_band(msg, band_accumulator, 2).await?;
-    } else if addr.ends_with("/brainwaves/beta") {
-        handle_band(msg, band_accumulator, 3).await?;
-    } else if addr.ends_with("/brainwaves/gamma") {
-        handle_band(msg, band_accumulator, 4).await?;
     } else if addr.ends_with("/signalQuality") {
         handle_signal_quality(msg, signal_quality).await?;
     } else if addr.ends_with("/battery") {
@@ -319,45 +264,6 @@ async fn handle_raw_eeg(
             return Err(anyhow::anyhow!("Channel closed"));
         }
     }
-    
-    Ok(())
-}
-
-async fn handle_band(
-    msg: OscMessage,
-    band_accumulator: &Arc<Mutex<BandAccumulator>>,
-    band_idx: usize, // 0=delta, 1=theta, 2=alpha, 3=beta, 4=gamma
-) -> Result<()> {
-    // /neurosity/notion/{deviceId}/brainwaves/{band}
-    // Args: 8 float32 values (one per electrode)
-    
-    let float_args: Vec<f32> = msg.args.iter()
-        .filter_map(|arg| match arg {
-            OscType::Float(f) => Some(*f),
-            OscType::Double(d) => Some(*d as f32),
-            _ => None,
-        })
-        .collect();
-    
-    if float_args.len() != CROWN_ELECTRODE_COUNT {
-        log::warn!("[crown_osc] Unexpected band arg count: {} (expected 8)", float_args.len());
-        return Ok(());
-    }
-    
-    let mut acc = band_accumulator.lock().await;
-    acc.timestamp = now_ms();
-    
-    for ch in 0..CROWN_ELECTRODE_COUNT {
-        match band_idx {
-            0 => acc.delta[ch] = float_args[ch],
-            1 => acc.theta[ch] = float_args[ch],
-            2 => acc.alpha[ch] = float_args[ch],
-            3 => acc.beta[ch] = float_args[ch],
-            4 => acc.gamma[ch] = float_args[ch],
-            _ => {}
-        }
-    }
-    acc.received[band_idx] = true;
     
     Ok(())
 }

@@ -74,4 +74,36 @@ void main() {
     expect(last!.lineNoise, hasLength(4));
     expect(last!.signalQuality, hasLength(4));
   });
+
+  test('averages all band updates within the second; repeats last if none', () {
+    ComputedFrame? last;
+    final sampler = MonitorSampler(
+      channelCount: 4,
+      captureStartedAtMs: 0,
+      nowMs: () => 0,
+      onFrame: (f) => last = f,
+    );
+    BandsDto b(double v, double noise) => BandsDto(
+      electrode: 1,
+      timestamp: 0,
+      delta: v,
+      theta: v,
+      alpha: v,
+      beta: v,
+      gamma: v,
+      lineNoiseRatio: noise,
+    );
+    sampler.updateBands(1, b(1, 0.1));
+    sampler.updateBands(1, b(2, 0.2));
+    sampler.updateBands(1, b(6, 0.3));
+    sampler.emitFrame();
+    expect(last!.bands[1], [3, 3, 3, 3, 3]);
+    expect(last!.lineNoise[1], closeTo(0.2, 1e-9));
+    expect(last!.bands[0], [0, 0, 0, 0, 0]);
+    sampler.emitFrame();
+    expect(last!.bands[1], [3, 3, 3, 3, 3]);
+    sampler.updateBands(1, b(10, 0.5));
+    sampler.emitFrame();
+    expect(last!.bands[1], [10, 10, 10, 10, 10]);
+  });
 }

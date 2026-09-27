@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/session_format/band_second_average.dart';
 import 'package:neurofeed/src/session_format/computed_frame.dart';
 
 /// 1 Hz computed frames for monitor captures. N-channel; zeroed guard/feedback.
@@ -13,11 +14,7 @@ class MonitorSampler {
     this.interval = const Duration(seconds: 1),
     int Function()? nowMs,
   }) : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
-       _latestBands = List.generate(
-         channelCount,
-         (_) => [0.0, 0.0, 0.0, 0.0, 0.0],
-       ),
-       _latestLineNoise = List.filled(channelCount, 0.0),
+       _bands = BandSecondAverage(channelCount),
        _latestSignalQuality = List.filled(channelCount, 0);
 
   final int channelCount;
@@ -28,8 +25,7 @@ class MonitorSampler {
 
   Timer? _timer;
 
-  final List<List<double>> _latestBands;
-  final List<double> _latestLineNoise;
+  final BandSecondAverage _bands;
   final List<int> _latestSignalQuality;
   double? _latestPulse;
   double? _latestMovement;
@@ -37,17 +33,8 @@ class MonitorSampler {
   double? _latestSpO2;
   List<String> _latestGestures = const [];
 
-  void updateBands(int electrode, BandsDto bands) {
-    if (electrode < 0 || electrode >= channelCount) return;
-    _latestBands[electrode] = [
-      bands.delta,
-      bands.theta,
-      bands.alpha,
-      bands.beta,
-      bands.gamma,
-    ];
-    _latestLineNoise[electrode] = bands.lineNoiseRatio;
-  }
+  void updateBands(int electrode, BandsDto bands) =>
+      _bands.add(electrode, bands);
 
   void updatePulse(PulseDto pulse) => _latestPulse = pulse.bpm;
 
@@ -86,10 +73,11 @@ class MonitorSampler {
 
   void _emitFrame() {
     final t = (_nowMs() - captureStartedAtMs) / 1000.0;
+    final second = _bands.take();
     onFrame(
       ComputedFrame(
         t: t,
-        bands: [for (final b in _latestBands) List<double>.from(b)],
+        bands: second.bands,
         pulse: _latestPulse,
         movement: _latestMovement,
         peakAlpha: _latestPeakAlpha != null
@@ -99,7 +87,7 @@ class MonitorSampler {
               )
             : null,
         spo2: _latestSpO2,
-        lineNoise: List<double>.from(_latestLineNoise),
+        lineNoise: second.lineNoise,
         signalQuality: List<int>.from(_latestSignalQuality),
         guardrail: const GuardrailInfo(
           sleepDir: 0,

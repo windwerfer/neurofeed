@@ -105,6 +105,8 @@ Written by `buildSessionMetadata()`:
 
 `ComputedFrame`: `t`, `bands` (N×5 abs), `lineNoise`, `signalQuality`, optional `pulse` / `movement` / `peakAlpha` / `spo2`, `gestures[]` (string ids that second).
 
+**Band source (LOCKED):** every band value — raw `bands` records and computed `bands` / `lineNoise` — comes from the app's own 256-point FFT of 256 Hz raw EEG, for every device. Headset-supplied band powers (e.g. Crown `/brainwaves/*`) are never recorded or used. Computed frames are exactly 1 Hz; `bands[e]` / `lineNoise[e]` are the **mean of every band update for electrode `e` within that second**; an electrode with no update repeats its previous value.
+
 **`feedback{}` per second (LOCKED keep + add)** — see **Computed feedback extras**:
 - **KEEP:** `ratio`, `threshold`, `inTarget`, `pct`
 - **ADD:** `percentile`, `thresholdPercentile`, `heldBack`, `inhibitTags`, `clean`, `dirtyReason`, `betaRel`, `deltaRel`

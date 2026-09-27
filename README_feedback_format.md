@@ -53,6 +53,10 @@ Dashboard, history, PDF, and PNG charts plot computed 1 Hz:
 `extractComputed` (parses the **v6** container) →
 `prepareChartDataFromComputed`. The history-list preview is the WebP thumbnail.
 
+Band values (raw `bands` records and computed `bands`) always come from the
+app's own 256-point FFT of raw EEG, for every device. A computed frame's
+`bands[e]` is the mean of all band updates for electrode `e` in that second.
+
 ---
 
 ## Base metadata (both kinds)
