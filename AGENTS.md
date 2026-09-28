@@ -29,7 +29,7 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   `MuseEventDto::Feature`; Dart `FeatureBus` → `RewardLane` / `GuardLane`.
   Copy in `assets/features.json`; electrodes in `rust/src/api/features.rs`.
   Guard **only warns**, never modulates reward. Frozen:
-  `.ai/contracts/pipeline-contract.md`. **Crown Start is refused.**
+  `.ai/contracts/pipeline-contract.md`. Crown sessions use PO3/PO4 by default.
 - **Protocols** are JSON documents (`origin: catalog | user`). Catalog:
   `assets/protocols.json`. User: `user_protocol_store.dart` +
   `lib/src/views/protocol_builder.dart`. `ProtocolType` / `GuardrailMode`
@@ -72,8 +72,9 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   LOCKED**. Prefer those JSON keys; do not invent synonyms. Session-format FFI
   identifiers are unversioned (`containerEncode`, `parseHead`, …; container is NFED6).
 - Do not reopen pipeline-contract Key Decisions. Do not unlock Crown
-  sessions. Connect UX is frozen (`.ai/connect-simulator-ux.md`) — do not
-  mix OSC-connect or Crown Start into it. `DeviceKind` is Muse | Neurosity
+  sessions. Connect UX is frozen (`.ai/connect-simulator-ux.md`) — Neurosity
+  is OSC LAN discovery only (`neurosity_osc.rs`, sim `tools/crown_osc_sim.py`);
+  do not mix Crown Start into it. `DeviceKind` is Muse | Neurosity
   only; do not restore Simulated*. Audio-engine Key Decisions
   (`.ai/audio-engine.md`) are frozen: do not duck unmodulated background;
   do not deinit SoLoud from a controller; do not restore
@@ -218,8 +219,9 @@ assets/                     protocols.json, calibrations.json, features.json, au
   PSD Welch, and Histogram are incremental; Inspect / electrodes / window
   still full recompute. Raw EEG traces min/max-downsample per pixel;
   `RawEegView.dispose` sets wipe-ring window 0. `bandNames` / `bandColors`
-  stay in `lib/src/charts/band_style.dart`. Pad quality is a 4-ch 1 s ring
-  in `connection_provider.dart` (not a 5 min EEG LiveCache).
+  stay in `lib/src/charts/band_style.dart`. Muse pad quality is a 1 s ring
+  in `connection_provider.dart` (not a 5 min EEG LiveCache); Neurosity pad
+  quality comes from Rust `PadQuality` events (setting `crown_quality_source`).
 - Crash recovery: feedback `lib/src/feedback/crash_recovery.dart` scans
   `scratchDirectory` for `session_*` only and reopens the session summary
   (Save/Discard; Back blocked). Monitor
@@ -280,7 +282,8 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `sim:*` `lastDeviceId` when debug is off.
 - **`DeviceKind` is two values** (Muse, Neurosity). FFI enum — regenerate
   FRB if it changes. `deviceKindIsCrown` is `kind == neurosity`. Crown
-  Start is refused for real and simulated Crown/Notion.
+  sessions (real and simulated) record 8 channels; gate/reward default is
+  `DeviceConfig.targetElectrodes` (PO3/PO4).
 - **Settings has no “AI sleep guardrail” card.** Guard is per-protocol in
   the builder + `Settings.guardFeatureFor`. Debug mode is the last card
   (after About).

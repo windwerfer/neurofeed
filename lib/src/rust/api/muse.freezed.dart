@@ -316,6 +316,7 @@ mixin _$ConnectionStatus {
   String get name => throw _privateConstructorUsedError;
   String get id => throw _privateConstructorUsedError;
   String get firmware => throw _privateConstructorUsedError;
+  int get auxChannels => throw _privateConstructorUsedError;
 
   /// Create a copy of ConnectionStatus
   /// with the given fields replaced by the non-null parameter values.
@@ -331,7 +332,13 @@ abstract class $ConnectionStatusCopyWith<$Res> {
     $Res Function(ConnectionStatus) then,
   ) = _$ConnectionStatusCopyWithImpl<$Res, ConnectionStatus>;
   @useResult
-  $Res call({bool connected, String name, String id, String firmware});
+  $Res call({
+    bool connected,
+    String name,
+    String id,
+    String firmware,
+    int auxChannels,
+  });
 }
 
 /// @nodoc
@@ -353,6 +360,7 @@ class _$ConnectionStatusCopyWithImpl<$Res, $Val extends ConnectionStatus>
     Object? name = null,
     Object? id = null,
     Object? firmware = null,
+    Object? auxChannels = null,
   }) {
     return _then(
       _value.copyWith(
@@ -372,6 +380,10 @@ class _$ConnectionStatusCopyWithImpl<$Res, $Val extends ConnectionStatus>
                 ? _value.firmware
                 : firmware // ignore: cast_nullable_to_non_nullable
                       as String,
+            auxChannels: null == auxChannels
+                ? _value.auxChannels
+                : auxChannels // ignore: cast_nullable_to_non_nullable
+                      as int,
           )
           as $Val,
     );
@@ -387,7 +399,13 @@ abstract class _$$ConnectionStatusImplCopyWith<$Res>
   ) = __$$ConnectionStatusImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({bool connected, String name, String id, String firmware});
+  $Res call({
+    bool connected,
+    String name,
+    String id,
+    String firmware,
+    int auxChannels,
+  });
 }
 
 /// @nodoc
@@ -408,6 +426,7 @@ class __$$ConnectionStatusImplCopyWithImpl<$Res>
     Object? name = null,
     Object? id = null,
     Object? firmware = null,
+    Object? auxChannels = null,
   }) {
     return _then(
       _$ConnectionStatusImpl(
@@ -427,6 +446,10 @@ class __$$ConnectionStatusImplCopyWithImpl<$Res>
             ? _value.firmware
             : firmware // ignore: cast_nullable_to_non_nullable
                   as String,
+        auxChannels: null == auxChannels
+            ? _value.auxChannels
+            : auxChannels // ignore: cast_nullable_to_non_nullable
+                  as int,
       ),
     );
   }
@@ -440,6 +463,7 @@ class _$ConnectionStatusImpl extends _ConnectionStatus {
     required this.name,
     required this.id,
     required this.firmware,
+    required this.auxChannels,
   }) : super._();
 
   @override
@@ -450,10 +474,12 @@ class _$ConnectionStatusImpl extends _ConnectionStatus {
   final String id;
   @override
   final String firmware;
+  @override
+  final int auxChannels;
 
   @override
   String toString() {
-    return 'ConnectionStatus(connected: $connected, name: $name, id: $id, firmware: $firmware)';
+    return 'ConnectionStatus(connected: $connected, name: $name, id: $id, firmware: $firmware, auxChannels: $auxChannels)';
   }
 
   @override
@@ -466,11 +492,14 @@ class _$ConnectionStatusImpl extends _ConnectionStatus {
             (identical(other.name, name) || other.name == name) &&
             (identical(other.id, id) || other.id == id) &&
             (identical(other.firmware, firmware) ||
-                other.firmware == firmware));
+                other.firmware == firmware) &&
+            (identical(other.auxChannels, auxChannels) ||
+                other.auxChannels == auxChannels));
   }
 
   @override
-  int get hashCode => Object.hash(runtimeType, connected, name, id, firmware);
+  int get hashCode =>
+      Object.hash(runtimeType, connected, name, id, firmware, auxChannels);
 
   /// Create a copy of ConnectionStatus
   /// with the given fields replaced by the non-null parameter values.
@@ -490,6 +519,7 @@ abstract class _ConnectionStatus extends ConnectionStatus {
     required final String name,
     required final String id,
     required final String firmware,
+    required final int auxChannels,
   }) = _$ConnectionStatusImpl;
   const _ConnectionStatus._() : super._();
 
@@ -501,6 +531,8 @@ abstract class _ConnectionStatus extends ConnectionStatus {
   String get id;
   @override
   String get firmware;
+  @override
+  int get auxChannels;
 
   /// Create a copy of ConnectionStatus
   /// with the given fields replaced by the non-null parameter values.
@@ -1562,6 +1594,7 @@ mixin _$MuseEventDto {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
@@ -1581,6 +1614,7 @@ mixin _$MuseEventDto {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
@@ -1600,6 +1634,7 @@ mixin _$MuseEventDto {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
@@ -1620,6 +1655,7 @@ mixin _$MuseEventDto {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? mapOrNull<TResult extends Object?>({
@@ -1639,6 +1675,7 @@ mixin _$MuseEventDto {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeMap<TResult extends Object?>({
@@ -1658,6 +1695,7 @@ mixin _$MuseEventDto {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) => throw _privateConstructorUsedError;
 }
@@ -1774,6 +1812,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return connected(field0);
   }
@@ -1797,6 +1836,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return connected?.call(field0);
   }
@@ -1820,6 +1860,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (connected != null) {
@@ -1847,6 +1888,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return connected(this);
   }
@@ -1870,6 +1912,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return connected?.call(this);
   }
@@ -1893,6 +1936,7 @@ class _$MuseEventDto_ConnectedImpl extends MuseEventDto_Connected {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (connected != null) {
@@ -1976,6 +2020,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return disconnected();
   }
@@ -1999,6 +2044,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return disconnected?.call();
   }
@@ -2022,6 +2068,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (disconnected != null) {
@@ -2049,6 +2096,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return disconnected(this);
   }
@@ -2072,6 +2120,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return disconnected?.call(this);
   }
@@ -2095,6 +2144,7 @@ class _$MuseEventDto_DisconnectedImpl extends MuseEventDto_Disconnected {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (disconnected != null) {
@@ -2210,6 +2260,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return eeg(field0);
   }
@@ -2233,6 +2284,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return eeg?.call(field0);
   }
@@ -2256,6 +2308,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (eeg != null) {
@@ -2283,6 +2336,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return eeg(this);
   }
@@ -2306,6 +2360,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return eeg?.call(this);
   }
@@ -2329,6 +2384,7 @@ class _$MuseEventDto_EegImpl extends MuseEventDto_Eeg {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (eeg != null) {
@@ -2452,6 +2508,7 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return bands(field0);
   }
@@ -2475,6 +2532,7 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return bands?.call(field0);
   }
@@ -2498,6 +2556,7 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (bands != null) {
@@ -2525,6 +2584,7 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return bands(this);
   }
@@ -2548,6 +2608,7 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return bands?.call(this);
   }
@@ -2571,6 +2632,7 @@ class _$MuseEventDto_BandsImpl extends MuseEventDto_Bands {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (bands != null) {
@@ -2695,6 +2757,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return ppg(field0);
   }
@@ -2718,6 +2781,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return ppg?.call(field0);
   }
@@ -2741,6 +2805,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (ppg != null) {
@@ -2768,6 +2833,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return ppg(this);
   }
@@ -2791,6 +2857,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return ppg?.call(this);
   }
@@ -2814,6 +2881,7 @@ class _$MuseEventDto_PpgImpl extends MuseEventDto_Ppg {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (ppg != null) {
@@ -2938,6 +3006,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return telemetry(field0);
   }
@@ -2961,6 +3030,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return telemetry?.call(field0);
   }
@@ -2984,6 +3054,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (telemetry != null) {
@@ -3011,6 +3082,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return telemetry(this);
   }
@@ -3034,6 +3106,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return telemetry?.call(this);
   }
@@ -3057,6 +3130,7 @@ class _$MuseEventDto_TelemetryImpl extends MuseEventDto_Telemetry {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (telemetry != null) {
@@ -3181,6 +3255,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return accelerometer(field0);
   }
@@ -3204,6 +3279,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return accelerometer?.call(field0);
   }
@@ -3227,6 +3303,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (accelerometer != null) {
@@ -3254,6 +3331,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return accelerometer(this);
   }
@@ -3277,6 +3355,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return accelerometer?.call(this);
   }
@@ -3300,6 +3379,7 @@ class _$MuseEventDto_AccelerometerImpl extends MuseEventDto_Accelerometer {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (accelerometer != null) {
@@ -3425,6 +3505,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return gyroscope(field0);
   }
@@ -3448,6 +3529,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return gyroscope?.call(field0);
   }
@@ -3471,6 +3553,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (gyroscope != null) {
@@ -3498,6 +3581,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return gyroscope(this);
   }
@@ -3521,6 +3605,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return gyroscope?.call(this);
   }
@@ -3544,6 +3629,7 @@ class _$MuseEventDto_GyroscopeImpl extends MuseEventDto_Gyroscope {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (gyroscope != null) {
@@ -3669,6 +3755,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return control(field0);
   }
@@ -3692,6 +3779,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return control?.call(field0);
   }
@@ -3715,6 +3803,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (control != null) {
@@ -3742,6 +3831,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return control(this);
   }
@@ -3765,6 +3855,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return control?.call(this);
   }
@@ -3788,6 +3879,7 @@ class _$MuseEventDto_ControlImpl extends MuseEventDto_Control {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (control != null) {
@@ -3912,6 +4004,7 @@ class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return pulse(field0);
   }
@@ -3935,6 +4028,7 @@ class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return pulse?.call(field0);
   }
@@ -3958,6 +4052,7 @@ class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (pulse != null) {
@@ -3985,6 +4080,7 @@ class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return pulse(this);
   }
@@ -4008,6 +4104,7 @@ class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return pulse?.call(this);
   }
@@ -4031,6 +4128,7 @@ class _$MuseEventDto_PulseImpl extends MuseEventDto_Pulse {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (pulse != null) {
@@ -4155,6 +4253,7 @@ class _$MuseEventDto_SpO2Impl extends MuseEventDto_SpO2 {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return spO2(field0);
   }
@@ -4178,6 +4277,7 @@ class _$MuseEventDto_SpO2Impl extends MuseEventDto_SpO2 {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return spO2?.call(field0);
   }
@@ -4201,6 +4301,7 @@ class _$MuseEventDto_SpO2Impl extends MuseEventDto_SpO2 {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (spO2 != null) {
@@ -4228,6 +4329,7 @@ class _$MuseEventDto_SpO2Impl extends MuseEventDto_SpO2 {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return spO2(this);
   }
@@ -4251,6 +4353,7 @@ class _$MuseEventDto_SpO2Impl extends MuseEventDto_SpO2 {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return spO2?.call(this);
   }
@@ -4274,6 +4377,7 @@ class _$MuseEventDto_SpO2Impl extends MuseEventDto_SpO2 {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (spO2 != null) {
@@ -4399,6 +4503,7 @@ class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return movement(field0);
   }
@@ -4422,6 +4527,7 @@ class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return movement?.call(field0);
   }
@@ -4445,6 +4551,7 @@ class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (movement != null) {
@@ -4472,6 +4579,7 @@ class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return movement(this);
   }
@@ -4495,6 +4603,7 @@ class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return movement?.call(this);
   }
@@ -4518,6 +4627,7 @@ class _$MuseEventDto_MovementImpl extends MuseEventDto_Movement {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (movement != null) {
@@ -4643,6 +4753,7 @@ class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return peakAlpha(field0);
   }
@@ -4666,6 +4777,7 @@ class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return peakAlpha?.call(field0);
   }
@@ -4689,6 +4801,7 @@ class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (peakAlpha != null) {
@@ -4716,6 +4829,7 @@ class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return peakAlpha(this);
   }
@@ -4739,6 +4853,7 @@ class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return peakAlpha?.call(this);
   }
@@ -4762,6 +4877,7 @@ class _$MuseEventDto_PeakAlphaImpl extends MuseEventDto_PeakAlpha {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (peakAlpha != null) {
@@ -4887,6 +5003,7 @@ class _$MuseEventDto_GesturesImpl extends MuseEventDto_Gestures {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return gestures(field0);
   }
@@ -4910,6 +5027,7 @@ class _$MuseEventDto_GesturesImpl extends MuseEventDto_Gestures {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return gestures?.call(field0);
   }
@@ -4933,6 +5051,7 @@ class _$MuseEventDto_GesturesImpl extends MuseEventDto_Gestures {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (gestures != null) {
@@ -4960,6 +5079,7 @@ class _$MuseEventDto_GesturesImpl extends MuseEventDto_Gestures {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return gestures(this);
   }
@@ -4983,6 +5103,7 @@ class _$MuseEventDto_GesturesImpl extends MuseEventDto_Gestures {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return gestures?.call(this);
   }
@@ -5006,6 +5127,7 @@ class _$MuseEventDto_GesturesImpl extends MuseEventDto_Gestures {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (gestures != null) {
@@ -5130,6 +5252,7 @@ class _$MuseEventDto_ReveImpl extends MuseEventDto_Reve {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return reve(field0);
   }
@@ -5153,6 +5276,7 @@ class _$MuseEventDto_ReveImpl extends MuseEventDto_Reve {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return reve?.call(field0);
   }
@@ -5176,6 +5300,7 @@ class _$MuseEventDto_ReveImpl extends MuseEventDto_Reve {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (reve != null) {
@@ -5203,6 +5328,7 @@ class _$MuseEventDto_ReveImpl extends MuseEventDto_Reve {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return reve(this);
   }
@@ -5226,6 +5352,7 @@ class _$MuseEventDto_ReveImpl extends MuseEventDto_Reve {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return reve?.call(this);
   }
@@ -5249,6 +5376,7 @@ class _$MuseEventDto_ReveImpl extends MuseEventDto_Reve {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (reve != null) {
@@ -5374,6 +5502,7 @@ class _$MuseEventDto_FeatureImpl extends MuseEventDto_Feature {
     required TResult Function(GestureDto field0) gestures,
     required TResult Function(ReveDto field0) reve,
     required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
   }) {
     return feature(field0);
   }
@@ -5397,6 +5526,7 @@ class _$MuseEventDto_FeatureImpl extends MuseEventDto_Feature {
     TResult? Function(GestureDto field0)? gestures,
     TResult? Function(ReveDto field0)? reve,
     TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
   }) {
     return feature?.call(field0);
   }
@@ -5420,6 +5550,7 @@ class _$MuseEventDto_FeatureImpl extends MuseEventDto_Feature {
     TResult Function(GestureDto field0)? gestures,
     TResult Function(ReveDto field0)? reve,
     TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
     required TResult orElse(),
   }) {
     if (feature != null) {
@@ -5447,6 +5578,7 @@ class _$MuseEventDto_FeatureImpl extends MuseEventDto_Feature {
     required TResult Function(MuseEventDto_Gestures value) gestures,
     required TResult Function(MuseEventDto_Reve value) reve,
     required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
   }) {
     return feature(this);
   }
@@ -5470,6 +5602,7 @@ class _$MuseEventDto_FeatureImpl extends MuseEventDto_Feature {
     TResult? Function(MuseEventDto_Gestures value)? gestures,
     TResult? Function(MuseEventDto_Reve value)? reve,
     TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
   }) {
     return feature?.call(this);
   }
@@ -5493,6 +5626,7 @@ class _$MuseEventDto_FeatureImpl extends MuseEventDto_Feature {
     TResult Function(MuseEventDto_Gestures value)? gestures,
     TResult Function(MuseEventDto_Reve value)? reve,
     TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
     required TResult orElse(),
   }) {
     if (feature != null) {
@@ -5514,6 +5648,436 @@ abstract class MuseEventDto_Feature extends MuseEventDto {
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$MuseEventDto_FeatureImplCopyWith<_$MuseEventDto_FeatureImpl>
   get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$MuseEventDto_PadQualityImplCopyWith<$Res> {
+  factory _$$MuseEventDto_PadQualityImplCopyWith(
+    _$MuseEventDto_PadQualityImpl value,
+    $Res Function(_$MuseEventDto_PadQualityImpl) then,
+  ) = __$$MuseEventDto_PadQualityImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({PadQualityDto field0});
+
+  $PadQualityDtoCopyWith<$Res> get field0;
+}
+
+/// @nodoc
+class __$$MuseEventDto_PadQualityImplCopyWithImpl<$Res>
+    extends _$MuseEventDtoCopyWithImpl<$Res, _$MuseEventDto_PadQualityImpl>
+    implements _$$MuseEventDto_PadQualityImplCopyWith<$Res> {
+  __$$MuseEventDto_PadQualityImplCopyWithImpl(
+    _$MuseEventDto_PadQualityImpl _value,
+    $Res Function(_$MuseEventDto_PadQualityImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? field0 = null}) {
+    return _then(
+      _$MuseEventDto_PadQualityImpl(
+        null == field0
+            ? _value.field0
+            : field0 // ignore: cast_nullable_to_non_nullable
+                  as PadQualityDto,
+      ),
+    );
+  }
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $PadQualityDtoCopyWith<$Res> get field0 {
+    return $PadQualityDtoCopyWith<$Res>(_value.field0, (value) {
+      return _then(_value.copyWith(field0: value));
+    });
+  }
+}
+
+/// @nodoc
+
+class _$MuseEventDto_PadQualityImpl extends MuseEventDto_PadQuality {
+  const _$MuseEventDto_PadQualityImpl(this.field0) : super._();
+
+  @override
+  final PadQualityDto field0;
+
+  @override
+  String toString() {
+    return 'MuseEventDto.padQuality(field0: $field0)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$MuseEventDto_PadQualityImpl &&
+            (identical(other.field0, field0) || other.field0 == field0));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, field0);
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$MuseEventDto_PadQualityImplCopyWith<_$MuseEventDto_PadQualityImpl>
+  get copyWith =>
+      __$$MuseEventDto_PadQualityImplCopyWithImpl<
+        _$MuseEventDto_PadQualityImpl
+      >(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function(String field0) connected,
+    required TResult Function() disconnected,
+    required TResult Function(EegDto field0) eeg,
+    required TResult Function(BandsDto field0) bands,
+    required TResult Function(PpgDto field0) ppg,
+    required TResult Function(TelemetrySnapshot field0) telemetry,
+    required TResult Function(ImuDto field0) accelerometer,
+    required TResult Function(ImuDto field0) gyroscope,
+    required TResult Function(ControlDto field0) control,
+    required TResult Function(PulseDto field0) pulse,
+    required TResult Function(SpO2Dto field0) spO2,
+    required TResult Function(MovementDto field0) movement,
+    required TResult Function(PeakAlphaDto field0) peakAlpha,
+    required TResult Function(GestureDto field0) gestures,
+    required TResult Function(ReveDto field0) reve,
+    required TResult Function(FeatureDto field0) feature,
+    required TResult Function(PadQualityDto field0) padQuality,
+  }) {
+    return padQuality(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function(String field0)? connected,
+    TResult? Function()? disconnected,
+    TResult? Function(EegDto field0)? eeg,
+    TResult? Function(BandsDto field0)? bands,
+    TResult? Function(PpgDto field0)? ppg,
+    TResult? Function(TelemetrySnapshot field0)? telemetry,
+    TResult? Function(ImuDto field0)? accelerometer,
+    TResult? Function(ImuDto field0)? gyroscope,
+    TResult? Function(ControlDto field0)? control,
+    TResult? Function(PulseDto field0)? pulse,
+    TResult? Function(SpO2Dto field0)? spO2,
+    TResult? Function(MovementDto field0)? movement,
+    TResult? Function(PeakAlphaDto field0)? peakAlpha,
+    TResult? Function(GestureDto field0)? gestures,
+    TResult? Function(ReveDto field0)? reve,
+    TResult? Function(FeatureDto field0)? feature,
+    TResult? Function(PadQualityDto field0)? padQuality,
+  }) {
+    return padQuality?.call(field0);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function(String field0)? connected,
+    TResult Function()? disconnected,
+    TResult Function(EegDto field0)? eeg,
+    TResult Function(BandsDto field0)? bands,
+    TResult Function(PpgDto field0)? ppg,
+    TResult Function(TelemetrySnapshot field0)? telemetry,
+    TResult Function(ImuDto field0)? accelerometer,
+    TResult Function(ImuDto field0)? gyroscope,
+    TResult Function(ControlDto field0)? control,
+    TResult Function(PulseDto field0)? pulse,
+    TResult Function(SpO2Dto field0)? spO2,
+    TResult Function(MovementDto field0)? movement,
+    TResult Function(PeakAlphaDto field0)? peakAlpha,
+    TResult Function(GestureDto field0)? gestures,
+    TResult Function(ReveDto field0)? reve,
+    TResult Function(FeatureDto field0)? feature,
+    TResult Function(PadQualityDto field0)? padQuality,
+    required TResult orElse(),
+  }) {
+    if (padQuality != null) {
+      return padQuality(field0);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(MuseEventDto_Connected value) connected,
+    required TResult Function(MuseEventDto_Disconnected value) disconnected,
+    required TResult Function(MuseEventDto_Eeg value) eeg,
+    required TResult Function(MuseEventDto_Bands value) bands,
+    required TResult Function(MuseEventDto_Ppg value) ppg,
+    required TResult Function(MuseEventDto_Telemetry value) telemetry,
+    required TResult Function(MuseEventDto_Accelerometer value) accelerometer,
+    required TResult Function(MuseEventDto_Gyroscope value) gyroscope,
+    required TResult Function(MuseEventDto_Control value) control,
+    required TResult Function(MuseEventDto_Pulse value) pulse,
+    required TResult Function(MuseEventDto_SpO2 value) spO2,
+    required TResult Function(MuseEventDto_Movement value) movement,
+    required TResult Function(MuseEventDto_PeakAlpha value) peakAlpha,
+    required TResult Function(MuseEventDto_Gestures value) gestures,
+    required TResult Function(MuseEventDto_Reve value) reve,
+    required TResult Function(MuseEventDto_Feature value) feature,
+    required TResult Function(MuseEventDto_PadQuality value) padQuality,
+  }) {
+    return padQuality(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(MuseEventDto_Connected value)? connected,
+    TResult? Function(MuseEventDto_Disconnected value)? disconnected,
+    TResult? Function(MuseEventDto_Eeg value)? eeg,
+    TResult? Function(MuseEventDto_Bands value)? bands,
+    TResult? Function(MuseEventDto_Ppg value)? ppg,
+    TResult? Function(MuseEventDto_Telemetry value)? telemetry,
+    TResult? Function(MuseEventDto_Accelerometer value)? accelerometer,
+    TResult? Function(MuseEventDto_Gyroscope value)? gyroscope,
+    TResult? Function(MuseEventDto_Control value)? control,
+    TResult? Function(MuseEventDto_Pulse value)? pulse,
+    TResult? Function(MuseEventDto_SpO2 value)? spO2,
+    TResult? Function(MuseEventDto_Movement value)? movement,
+    TResult? Function(MuseEventDto_PeakAlpha value)? peakAlpha,
+    TResult? Function(MuseEventDto_Gestures value)? gestures,
+    TResult? Function(MuseEventDto_Reve value)? reve,
+    TResult? Function(MuseEventDto_Feature value)? feature,
+    TResult? Function(MuseEventDto_PadQuality value)? padQuality,
+  }) {
+    return padQuality?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(MuseEventDto_Connected value)? connected,
+    TResult Function(MuseEventDto_Disconnected value)? disconnected,
+    TResult Function(MuseEventDto_Eeg value)? eeg,
+    TResult Function(MuseEventDto_Bands value)? bands,
+    TResult Function(MuseEventDto_Ppg value)? ppg,
+    TResult Function(MuseEventDto_Telemetry value)? telemetry,
+    TResult Function(MuseEventDto_Accelerometer value)? accelerometer,
+    TResult Function(MuseEventDto_Gyroscope value)? gyroscope,
+    TResult Function(MuseEventDto_Control value)? control,
+    TResult Function(MuseEventDto_Pulse value)? pulse,
+    TResult Function(MuseEventDto_SpO2 value)? spO2,
+    TResult Function(MuseEventDto_Movement value)? movement,
+    TResult Function(MuseEventDto_PeakAlpha value)? peakAlpha,
+    TResult Function(MuseEventDto_Gestures value)? gestures,
+    TResult Function(MuseEventDto_Reve value)? reve,
+    TResult Function(MuseEventDto_Feature value)? feature,
+    TResult Function(MuseEventDto_PadQuality value)? padQuality,
+    required TResult orElse(),
+  }) {
+    if (padQuality != null) {
+      return padQuality(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class MuseEventDto_PadQuality extends MuseEventDto {
+  const factory MuseEventDto_PadQuality(final PadQualityDto field0) =
+      _$MuseEventDto_PadQualityImpl;
+  const MuseEventDto_PadQuality._() : super._();
+
+  PadQualityDto get field0;
+
+  /// Create a copy of MuseEventDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$MuseEventDto_PadQualityImplCopyWith<_$MuseEventDto_PadQualityImpl>
+  get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+mixin _$PadQualityDto {
+  Float64List get values => throw _privateConstructorUsedError;
+  QualitySource get source => throw _privateConstructorUsedError;
+  Float64List? get crown => throw _privateConstructorUsedError;
+
+  /// Create a copy of PadQualityDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $PadQualityDtoCopyWith<PadQualityDto> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $PadQualityDtoCopyWith<$Res> {
+  factory $PadQualityDtoCopyWith(
+    PadQualityDto value,
+    $Res Function(PadQualityDto) then,
+  ) = _$PadQualityDtoCopyWithImpl<$Res, PadQualityDto>;
+  @useResult
+  $Res call({Float64List values, QualitySource source, Float64List? crown});
+}
+
+/// @nodoc
+class _$PadQualityDtoCopyWithImpl<$Res, $Val extends PadQualityDto>
+    implements $PadQualityDtoCopyWith<$Res> {
+  _$PadQualityDtoCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of PadQualityDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? values = null,
+    Object? source = null,
+    Object? crown = freezed,
+  }) {
+    return _then(
+      _value.copyWith(
+            values: null == values
+                ? _value.values
+                : values // ignore: cast_nullable_to_non_nullable
+                      as Float64List,
+            source: null == source
+                ? _value.source
+                : source // ignore: cast_nullable_to_non_nullable
+                      as QualitySource,
+            crown: freezed == crown
+                ? _value.crown
+                : crown // ignore: cast_nullable_to_non_nullable
+                      as Float64List?,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$PadQualityDtoImplCopyWith<$Res>
+    implements $PadQualityDtoCopyWith<$Res> {
+  factory _$$PadQualityDtoImplCopyWith(
+    _$PadQualityDtoImpl value,
+    $Res Function(_$PadQualityDtoImpl) then,
+  ) = __$$PadQualityDtoImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({Float64List values, QualitySource source, Float64List? crown});
+}
+
+/// @nodoc
+class __$$PadQualityDtoImplCopyWithImpl<$Res>
+    extends _$PadQualityDtoCopyWithImpl<$Res, _$PadQualityDtoImpl>
+    implements _$$PadQualityDtoImplCopyWith<$Res> {
+  __$$PadQualityDtoImplCopyWithImpl(
+    _$PadQualityDtoImpl _value,
+    $Res Function(_$PadQualityDtoImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of PadQualityDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? values = null,
+    Object? source = null,
+    Object? crown = freezed,
+  }) {
+    return _then(
+      _$PadQualityDtoImpl(
+        values: null == values
+            ? _value.values
+            : values // ignore: cast_nullable_to_non_nullable
+                  as Float64List,
+        source: null == source
+            ? _value.source
+            : source // ignore: cast_nullable_to_non_nullable
+                  as QualitySource,
+        crown: freezed == crown
+            ? _value.crown
+            : crown // ignore: cast_nullable_to_non_nullable
+                  as Float64List?,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+
+class _$PadQualityDtoImpl implements _PadQualityDto {
+  const _$PadQualityDtoImpl({
+    required this.values,
+    required this.source,
+    this.crown,
+  });
+
+  @override
+  final Float64List values;
+  @override
+  final QualitySource source;
+  @override
+  final Float64List? crown;
+
+  @override
+  String toString() {
+    return 'PadQualityDto(values: $values, source: $source, crown: $crown)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$PadQualityDtoImpl &&
+            const DeepCollectionEquality().equals(other.values, values) &&
+            (identical(other.source, source) || other.source == source) &&
+            const DeepCollectionEquality().equals(other.crown, crown));
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    runtimeType,
+    const DeepCollectionEquality().hash(values),
+    source,
+    const DeepCollectionEquality().hash(crown),
+  );
+
+  /// Create a copy of PadQualityDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$PadQualityDtoImplCopyWith<_$PadQualityDtoImpl> get copyWith =>
+      __$$PadQualityDtoImplCopyWithImpl<_$PadQualityDtoImpl>(this, _$identity);
+}
+
+abstract class _PadQualityDto implements PadQualityDto {
+  const factory _PadQualityDto({
+    required final Float64List values,
+    required final QualitySource source,
+    final Float64List? crown,
+  }) = _$PadQualityDtoImpl;
+
+  @override
+  Float64List get values;
+  @override
+  QualitySource get source;
+  @override
+  Float64List? get crown;
+
+  /// Create a copy of PadQualityDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$PadQualityDtoImplCopyWith<_$PadQualityDtoImpl> get copyWith =>
+      throw _privateConstructorUsedError;
 }
 
 /// @nodoc

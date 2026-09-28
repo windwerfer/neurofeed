@@ -7,12 +7,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/agent/agent_flags.dart';
 import 'package:neurofeed/src/app.dart';
 import 'package:neurofeed/src/connect_source.dart';
+import 'package:neurofeed/src/lan_multicast_lock.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/eeg_conditioning.dart';
+import 'package:neurofeed/src/rust/api/neurosity_osc.dart';
 import 'package:neurofeed/src/settings.dart';
 
 /// Duration of each scan chunk when scanning continuously.
 const _scanChunkSecs = 3;
+
+/// Crown LAN list refresh while the connect window is open.
+const _crownPollInterval = Duration(seconds: 1);
+
+/// Show the spinner this long before the empty-list copy. Crowns send
+/// `/info` every second.
+const _crownListenGrace = Duration(seconds: 3);
 
 /// Number of connect attempts before giving up.  The first BLE connect after
 /// a cold start / recent re-connect often times out even when the scan just
@@ -50,6 +60,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
             name: '',
             id: '',
             firmware: '',
+            auxChannels: 0,
           ),
           currentView: _settings.lastView,
           sidebarOpen: false,
@@ -86,10 +97,17 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   bool _scanEnabled = false;
   bool _allowAutoReconnect = true;
   bool _reconnectInFlight = false;
+  int _crownDiscoveryGeneration = 0;
+  bool _crownDiscoveryActive = false;
+  bool _multicastLockHeld = false;
   final Completer<void> _initDone = Completer<void>();
   final StreamController<MuseEventDto> _eventController =
       StreamController<MuseEventDto>.broadcast();
   double _lastQualityCheck = 0;
+
+  /// Rust sends resolved Neurosity pad quality ([MuseEventDto_PadQuality]);
+  /// while it does, the Dart score below is not computed.
+  bool _rustPadQuality = false;
 
   /// Lost-link and launch auto-reconnect. Cleared by a user disconnect
   /// (status bar / agent) until the next [connectTo].
@@ -100,7 +118,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
   /// Latest 50/60 Hz line-noise ratio per electrode from Bands events.
   /// -1 means no data yet for that pad.
-  final List<double> _lineNoise = List.filled(4, -1);
+  final List<double> _lineNoise = List.filled(kMaxPadChannels, -1);
   final _PadQualityRing _padQuality = _PadQualityRing();
 
   Stream<MuseEventDto> get eventStream => _eventController.stream;
@@ -114,6 +132,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       _eventSub = stream.listen((event) {
         _eventController.add(event);
         _onEvent(event);
+        if (event is MuseEventDto_Bands) _saveMainsDecision();
       });
 
       final status = await getStatus();
@@ -140,6 +159,9 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         if (isSimDeviceId(lastId!)) {
           final found = await _tryAutoconnectSim(lastId);
           if (found) return;
+        } else if (_settings.lastDeviceKind == DeviceKind.neurosity) {
+          unawaited(_runCrownDiscovery(lookFor: lastId));
+          return;
         } else {
           // Unbounded scan for lastDeviceId; do not block initDone on it.
           unawaited(_tryAutoconnect(lastId));
@@ -238,13 +260,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       case ConnectSource.muse:
         unawaited(_startContinuousScan());
       case ConnectSource.neurosity:
-        _scanEnabled = false;
-        state = state.copyWith(
-          connectWindowOpen: true,
-          scanning: false,
-          devices: const [],
-          scanMessage: null,
-        );
+        unawaited(_runCrownDiscovery());
       case ConnectSource.simulator:
         _scanEnabled = false;
         state = state.copyWith(
@@ -320,6 +336,93 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     }
   }
 
+  /// OSC LAN discovery for the Neurosity source. Lists Crowns seen on the
+  /// network until the window closes, the source changes, or a device
+  /// connects. With [lookFor], connects that Crown id when it appears.
+  Future<bool> _runCrownDiscovery({String? lookFor}) async {
+    final generation = ++_crownDiscoveryGeneration;
+    _scanEnabled = true;
+    state = state.copyWith(
+      connectSource: ConnectSource.neurosity,
+      connectWindowOpen: true,
+      scanning: true,
+      devices: const [],
+      scanMessage: lookFor == null ? null : 'Looking for last device…',
+    );
+    bool active() =>
+        _scanEnabled &&
+        generation == _crownDiscoveryGeneration &&
+        state.connectSource == ConnectSource.neurosity &&
+        !state.status.connected &&
+        (lookFor == null || _allowAutoReconnect);
+    final started = DateTime.now();
+    try {
+      _setCrownDiscoveryActive(true);
+      await startCrownDiscovery();
+      while (active()) {
+        final crowns = await discoveredCrowns();
+        if (!active()) break;
+        final match = crowns.where((d) => d.id == lookFor).firstOrNull;
+        if (match != null) {
+          await connectTo(match);
+          if (state.status.connected || !_allowAutoReconnect) break;
+          _scanEnabled = true;
+        }
+        final elapsed = DateTime.now().difference(started);
+        state = state.copyWith(
+          devices: crowns,
+          scanning:
+              lookFor != null ||
+              (crowns.isEmpty && elapsed < _crownListenGrace),
+          scanMessage: lookFor == null
+              ? state.scanMessage
+              : 'Searching… (${elapsed.inSeconds}s)',
+        );
+        await Future<void>.delayed(_crownPollInterval);
+      }
+    } catch (e) {
+      debugPrint('[neurofeed] crown discovery error: $e');
+      if (generation == _crownDiscoveryGeneration) {
+        state = state.copyWith(
+          scanning: false,
+          scanMessage: 'Discovery error: $e',
+        );
+      }
+    } finally {
+      if (generation == _crownDiscoveryGeneration) {
+        _setCrownDiscoveryActive(false);
+        try {
+          await stopCrownDiscovery();
+        } catch (e) {
+          debugPrint('[neurofeed] stop crown discovery: $e');
+        }
+        if (!state.status.connected &&
+            state.connectSource == ConnectSource.neurosity) {
+          state = state.copyWith(scanning: false);
+        }
+      }
+    }
+    return state.status.connected;
+  }
+
+  void _setCrownDiscoveryActive(bool active) {
+    _crownDiscoveryActive = active;
+    _syncMulticastLock();
+  }
+
+  /// Hold the Android multicast lock while Crown OSC is being received:
+  /// during LAN discovery and while a real Crown is connected.
+  void _syncMulticastLock() {
+    final crownStreaming =
+        state.status.connected &&
+        state.lastConnectedKind == DeviceKind.neurosity &&
+        !isSimDeviceId(state.status.id);
+    final want = _crownDiscoveryActive || crownStreaming;
+    if (want == _multicastLockHeld) return;
+    _multicastLockHeld = want;
+    unawaited(setMulticastLock(held: want));
+  }
+
   void _onEvent(MuseEventDto event) {
     switch (event) {
       case MuseEventDto_Connected():
@@ -342,6 +445,14 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         if (idx >= 0 && idx < _lineNoise.length) {
           _lineNoise[idx] = event.field0.lineNoiseRatio;
         }
+      case MuseEventDto_PadQuality():
+        _rustPadQuality = true;
+        final q = event.field0;
+        state = state.copyWith(
+          signalQuality: q.values.toList(),
+          signalQualitySource: q.source,
+          crownSignalQuality: q.crown?.toList(),
+        );
       case MuseEventDto_Gestures():
         state = state.copyWith(gestures: event.field0);
       case MuseEventDto_Telemetry():
@@ -354,6 +465,23 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     }
   }
 
+  /// Save live mains detection per device (settings) whenever it decides
+  /// or changes; also while a recording keeps its own notch frozen.
+  void _saveMainsDecision() {
+    final id = state.status.id;
+    if (id.isEmpty) return;
+    final decision = liveMainsDecision()?.toList();
+    if (decision == null) return;
+    final key = '$id $decision';
+    if (key == _mainsSavedKey) return;
+    _mainsSavedKey = key;
+    if (listEquals(_settings.savedMainsFor(id), decision)) return;
+    debugPrint('[neurofeed] mains decision saved for $id: $decision Hz');
+    unawaited(_settings.setSavedMains(id, decision));
+  }
+
+  String? _mainsSavedKey;
+
   void _onDisconnected() {
     // A second Disconnected (muse-rs watcher after our own sink event) must
     // not abort an in-flight reconnect or restart one the user already
@@ -364,11 +492,13 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     _lineNoise.fillRange(0, _lineNoise.length, -1);
     _padQuality.clear();
     _lastQualityCheck = 0;
+    _rustPadQuality = false;
     const idle = ConnectionStatus(
       connected: false,
       name: '',
       id: '',
       firmware: '',
+      auxChannels: 0,
     );
     const telemetry = TelemetrySnapshot(
       batteryLevel: 0,
@@ -380,6 +510,8 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         status: idle,
         batteryLevel: 0,
         signalQuality: null,
+        signalQualitySource: null,
+        crownSignalQuality: null,
         gestures: null,
         telemetry: telemetry,
         connectWindowOpen: false,
@@ -388,12 +520,15 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         scanMessage: null,
         disconnecting: false,
       );
+      _syncMulticastLock();
       return;
     }
     state = state.copyWith(
       status: idle,
       batteryLevel: 0,
       signalQuality: null,
+      signalQualitySource: null,
+      crownSignalQuality: null,
       gestures: null,
       telemetry: telemetry,
       connectWindowOpen: true,
@@ -402,21 +537,24 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       scanMessage: 'Reconnecting…',
       disconnecting: false,
     );
+    _syncMulticastLock();
     unawaited(_tryReconnect());
   }
 
-  /// Keep in sync with Rust `features::pad_quality_from_std_and_noise` until
-  /// the Crown-run series deletes this Dart copy.
+  /// Muse pad quality. Keep in sync with Rust
+  /// `features::pad_quality_from_std_and_noise`, which also scores Neurosity.
   void _maybeComputeSignalQuality() {
+    if (_rustPadQuality) return;
     final now = _padQuality.latestTimestamp;
     if (now - _lastQualityCheck < 0.9) return;
     _lastQualityCheck = now;
 
     const window = 1.0;
-    final quals = List.filled(4, 0.0);
+    final present = _padQuality.channels.toList();
+    final count = present.fold<int>(4, (n, ch) => ch + 1 > n ? ch + 1 : n);
+    final quals = List.filled(count, 0.0);
 
-    for (final ch in _padQuality.channels) {
-      if (ch < 0 || ch > 3) continue;
+    for (final ch in present) {
       final samples = _padQuality.valuesIn(ch, now - window, now);
       if (samples.length < 10) continue;
 
@@ -482,26 +620,36 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       );
       state = state.copyWith(scanMessage: 'Connecting… (attempt $attempt)');
       try {
+        _rustPadQuality = false;
+        final savedMains = _settings.savedMainsFor(id);
+        setSavedMains(
+          notchHz: savedMains == null ? null : Float64List.fromList(savedMains),
+        );
+        final qualitySource = _settings.crownQualitySource;
         final status = await connectWithOptions(
           deviceId: id,
           kind: kind,
           simulate: simulate,
+          recordAux: _settings.recordAux,
+          qualitySource: qualitySource,
         );
         debugPrint('[neurofeed] connect returned: connected=${status.connected}');
-        if (persist) await _settings.setLastDeviceId(id);
+        if (persist) await _settings.setLastDevice(id, kind);
         state = state.copyWith(
           status: status,
           connectingTo: null,
           lastConnectedKind: kind,
+          crownQualitySource: kind == DeviceKind.neurosity ? qualitySource : null,
           scanMessage: status.connected ? null : state.scanMessage,
         );
+        _syncMulticastLock();
         return;
       } catch (e) {
         lastError = e;
         debugPrint('[neurofeed] connect attempt $attempt failed: $e');
         if (!simulate && attempt < attempts) {
           await Future<void>.delayed(const Duration(milliseconds: 800));
-          await _refreshDevice(id);
+          if (kind == DeviceKind.muse) await _refreshDevice(id);
         }
       }
     }
@@ -548,6 +696,9 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       )) {
         if (isSimDeviceId(lastId!)) {
           final ok = await _tryAutoconnectSim(lastId);
+          if (ok || !_allowAutoReconnect) return;
+        } else if (_settings.lastDeviceKind == DeviceKind.neurosity) {
+          final ok = await _runCrownDiscovery(lookFor: lastId);
           if (ok || !_allowAutoReconnect) return;
         } else {
           final ok = await _tryAutoconnect(lastId);
@@ -667,6 +818,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     String name = 'Muse 2',
     String id = 'sim:muse-2',
     String firmware = 'Classic',
+    int auxChannels = 0,
   }) {
     if (connected) {
       _allowAutoReconnect = true;
@@ -676,6 +828,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           name: name,
           id: id,
           firmware: firmware,
+          auxChannels: auxChannels,
         ),
         lastConnectedKind: kind,
       );
@@ -686,6 +839,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           name: '',
           id: '',
           firmware: '',
+          auxChannels: 0,
         ),
       );
     }
@@ -728,12 +882,15 @@ class AppUiState {
     required this.batteryLevel,
     required this.telemetry,
     this.signalQuality,
+    this.signalQualitySource,
+    this.crownSignalQuality,
     this.gestures,
     this.scanMessage,
     this.connectingTo,
     this.disconnecting = false,
     this.connectSource = ConnectSource.muse,
     this.lastConnectedKind,
+    this.crownQualitySource,
   });
 
   final ConnectionStatus status;
@@ -745,6 +902,12 @@ class AppUiState {
   final double batteryLevel;
   final TelemetrySnapshot telemetry;
   final List<double>? signalQuality;
+
+  /// Neurosity only: which score filled [signalQuality] this second.
+  final QualitySource? signalQualitySource;
+
+  /// Neurosity only: Crown per-pad 1 Hz means (0..1) when the source is Crown.
+  final List<double>? crownSignalQuality;
 
   /// Latest 1 Hz gesture report (blinks / clench / eye position).
   final GestureDto? gestures;
@@ -764,6 +927,10 @@ class AppUiState {
   /// Null when no device has been connected.
   DeviceKind? get listingDeviceKind => lastConnectedKind;
 
+  /// Pad quality source the last Neurosity connect used ([lastConnectedKind]
+  /// Neurosity). Null after a Muse connect or before any connect.
+  final QualitySource? crownQualitySource;
+
   static const _sentinel = Object();
 
   AppUiState copyWith({
@@ -776,12 +943,15 @@ class AppUiState {
     double? batteryLevel,
     TelemetrySnapshot? telemetry,
     Object? signalQuality = _sentinel,
+    Object? signalQualitySource = _sentinel,
+    Object? crownSignalQuality = _sentinel,
     Object? gestures = _sentinel,
     Object? scanMessage = _sentinel,
     Object? connectingTo = _sentinel,
     bool? disconnecting,
     ConnectSource? connectSource,
     Object? lastConnectedKind = _sentinel,
+    Object? crownQualitySource = _sentinel,
   }) => AppUiState(
     status: status ?? this.status,
     currentView: currentView ?? this.currentView,
@@ -794,6 +964,12 @@ class AppUiState {
     signalQuality: identical(signalQuality, _sentinel)
         ? this.signalQuality
         : signalQuality as List<double>?,
+    signalQualitySource: identical(signalQualitySource, _sentinel)
+        ? this.signalQualitySource
+        : signalQualitySource as QualitySource?,
+    crownSignalQuality: identical(crownSignalQuality, _sentinel)
+        ? this.crownSignalQuality
+        : crownSignalQuality as List<double>?,
     gestures: identical(gestures, _sentinel)
         ? this.gestures
         : gestures as GestureDto?,
@@ -810,6 +986,9 @@ class AppUiState {
     lastConnectedKind: identical(lastConnectedKind, _sentinel)
         ? this.lastConnectedKind
         : lastConnectedKind as DeviceKind?,
+    crownQualitySource: identical(crownQualitySource, _sentinel)
+        ? this.crownQualitySource
+        : crownQualitySource as QualitySource?,
   );
 }
 
@@ -820,10 +999,13 @@ final appStateProvider = StateNotifierProvider<AppStateNotifier, AppUiState>((
 });
 
 /// 4-ch, 1 s EEG ring for status-bar pad quality. Not the 5 min live cache.
+/// Pad-quality slots: Muse 4 head + up to 4 AUX, or Crown 8.
+const int kMaxPadChannels = 8;
+
 class _PadQualityRing {
   static const _sampleRate = 256.0;
   static const _capacity = 256;
-  static const _channelCount = 4;
+  static const _channelCount = kMaxPadChannels;
 
   final List<_PadChannel?> _channels = List<_PadChannel?>.filled(
     _channelCount,
@@ -832,7 +1014,7 @@ class _PadQualityRing {
 
   void appendEeg(EegDto dto) {
     final ch = dto.electrode;
-    if (ch < 0 || ch > 3) return;
+    if (ch < 0 || ch >= _channelCount) return;
     final buf = _channels[ch] ??= _PadChannel(_capacity);
     final dt = 1.0 / _sampleRate;
     final baseSecs = dto.timestamp / 1000.0;
@@ -860,7 +1042,7 @@ class _PadQualityRing {
   }
 
   List<double> valuesIn(int channel, double startT, double endT) {
-    if (channel < 0 || channel > 3) return const [];
+    if (channel < 0 || channel >= _channelCount) return const [];
     final buf = _channels[channel];
     if (buf == null || buf.length == 0) return const [];
     final lo = buf.lowerBound(startT);

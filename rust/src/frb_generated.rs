@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -234101178;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1079143970;
 
 // Section: executor
 
@@ -692,6 +692,44 @@ fn wire__crate__api__session_format__computed_frame_to_json_bytes_impl(
         },
     )
 }
+fn wire__crate__api__eeg_conditioning__condition_eeg_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "condition_eeg",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_eeg =
+                <Vec<crate::api::session_format::EegSampleRecord>>::sse_decode(&mut deserializer);
+            let api_conditioning =
+                <Option<crate::api::eeg_conditioning::EegConditioning>>::sse_decode(
+                    &mut deserializer,
+                );
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::eeg_conditioning::condition_eeg(
+                    api_eeg,
+                    api_conditioning,
+                ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__muse__connect_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -753,6 +791,9 @@ fn wire__crate__api__muse__connect_with_options_impl(
             let api_device_id = <String>::sse_decode(&mut deserializer);
             let api_kind = <crate::api::device_config::DeviceKind>::sse_decode(&mut deserializer);
             let api_simulate = <bool>::sse_decode(&mut deserializer);
+            let api_record_aux = <bool>::sse_decode(&mut deserializer);
+            let api_quality_source =
+                <crate::api::device_config::QualitySource>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
@@ -761,6 +802,8 @@ fn wire__crate__api__muse__connect_with_options_impl(
                             api_device_id,
                             api_kind,
                             api_simulate,
+                            api_record_aux,
+                            api_quality_source,
                         )
                         .await?;
                         Ok(output_ok)
@@ -886,17 +929,16 @@ fn wire__crate__api__session_format__container_encode_to_path_impl(
         },
     )
 }
-fn wire__crate__api__muse__crown_connect_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
+fn wire__crate__api__edf_export__decode_edf_import_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "crown_connect",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+            debug_name: "decode_edf_import",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
         move || {
             let message = unsafe {
@@ -908,17 +950,12 @@ fn wire__crate__api__muse__crown_connect_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_device_id = <String>::sse_decode(&mut deserializer);
+            let api_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
             deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::muse::crown_connect(api_device_id).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
+            transform_result_sse::<_, String>((move || {
+                let output_ok = crate::api::edf_export::decode_edf_import(&api_bytes)?;
+                Ok(output_ok)
+            })())
         },
     )
 }
@@ -1354,6 +1391,70 @@ fn wire__crate__api__muse__disconnect_impl(
                     .await,
                 )
             }
+        },
+    )
+}
+fn wire__crate__api__neurosity_osc__discovered_crowns_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "discovered_crowns",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::neurosity_osc::discovered_crowns())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__import_dsp__eeg_second_bands_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "eeg_second_bands",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_samples = <Vec<f64>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::import_dsp::eeg_second_bands(api_samples))?;
+                Ok(output_ok)
+            })())
         },
     )
 }
@@ -1853,6 +1954,66 @@ fn wire__crate__api__muse__is_connected_impl(
         },
     )
 }
+fn wire__crate__api__eeg_conditioning__live_eeg_conditioning_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "live_eeg_conditioning",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::eeg_conditioning::live_eeg_conditioning())?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__eeg_conditioning__live_mains_decision_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "live_mains_decision",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::eeg_conditioning::live_mains_decision())?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__reve__model_config_json_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2083,6 +2244,39 @@ fn wire__crate__api__session_format__parse_header_impl(
         },
     )
 }
+fn wire__crate__api__import_dsp__resample_eeg_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "resample_eeg",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_samples = <Vec<f64>>::sse_decode(&mut deserializer);
+            let api_from_hz = <u32>::sse_decode(&mut deserializer);
+            let api_to_hz = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, String>((move || {
+                let output_ok =
+                    crate::api::import_dsp::resample_eeg(api_samples, api_from_hz, api_to_hz)?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__session_format__rewrite_head_to_path_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2187,6 +2381,43 @@ fn wire__crate__api__session_format__session_frame_bytes_impl(
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::session_format::session_frame_bytes(&api_data),
                 )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__features__session_gate_electrodes_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "session_gate_electrodes",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_kind = <crate::api::device_config::DeviceKind>::sse_decode(&mut deserializer);
+            let api_reward_feature = <Option<String>>::sse_decode(&mut deserializer);
+            let api_guard_feature = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::features::session_gate_electrodes(
+                        api_kind,
+                        api_reward_feature,
+                        api_guard_feature,
+                    ))?;
                 Ok(output_ok)
             })())
         },
@@ -2324,6 +2555,38 @@ fn wire__crate__api__features__set_feature_electrodes_impl(
         },
     )
 }
+fn wire__crate__api__eeg_conditioning__set_saved_mains_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_saved_mains",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_notch_hz = <Option<Vec<f64>>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok({
+                    crate::api::eeg_conditioning::set_saved_mains(api_notch_hz);
+                })?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__simulator__simulated_identity_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2354,6 +2617,75 @@ fn wire__crate__api__simulator__simulated_identity_impl(
                     let output_ok = Result::<_, ()>::Ok(
                         crate::api::simulator::simulated_identity(&api_device_id, api_kind),
                     )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__neurosity_osc__start_crown_discovery_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "start_crown_discovery",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::neurosity_osc::start_crown_discovery().await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__neurosity_osc__stop_crown_discovery_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "stop_crown_discovery",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok({
+                        crate::api::neurosity_osc::stop_crown_discovery();
+                    })?;
                     Ok(output_ok)
                 })())
             }
@@ -2557,6 +2889,8 @@ impl SseDecode for crate::api::session_format::ComputedFrame {
             <crate::api::session_format::GuardrailInfo>::sse_decode(deserializer);
         let mut var_feedback = <crate::api::session_format::FeedbackInfo>::sse_decode(deserializer);
         let mut var_gestures = <Vec<String>>::sse_decode(deserializer);
+        let mut var_signalQualitySource = <Option<String>>::sse_decode(deserializer);
+        let mut var_crownSignalQuality = <Option<Vec<f32>>>::sse_decode(deserializer);
         return crate::api::session_format::ComputedFrame {
             t: var_t,
             bands: var_bands,
@@ -2569,6 +2903,22 @@ impl SseDecode for crate::api::session_format::ComputedFrame {
             guardrail: var_guardrail,
             feedback: var_feedback,
             gestures: var_gestures,
+            signal_quality_source: var_signalQualitySource,
+            crown_signal_quality: var_crownSignalQuality,
+        };
+    }
+}
+
+impl SseDecode for crate::api::eeg_conditioning::ConditionedEeg {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_eeg =
+            <Vec<crate::api::session_format::EegSampleRecord>>::sse_decode(deserializer);
+        let mut var_conditioning =
+            <crate::api::eeg_conditioning::EegConditioning>::sse_decode(deserializer);
+        return crate::api::eeg_conditioning::ConditionedEeg {
+            eeg: var_eeg,
+            conditioning: var_conditioning,
         };
     }
 }
@@ -2580,11 +2930,13 @@ impl SseDecode for crate::api::muse::ConnectionStatus {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_id = <String>::sse_decode(deserializer);
         let mut var_firmware = <String>::sse_decode(deserializer);
+        let mut var_auxChannels = <u32>::sse_decode(deserializer);
         return crate::api::muse::ConnectionStatus {
             connected: var_connected,
             name: var_name,
             id: var_id,
             firmware: var_firmware,
+            aux_channels: var_auxChannels,
         };
     }
 }
@@ -2631,6 +2983,8 @@ impl SseDecode for crate::api::device_config::DeviceConfig {
         let mut var_electrodeNames = <Vec<String>>::sse_decode(deserializer);
         let mut var_targetElectrodes = <Vec<usize>>::sse_decode(deserializer);
         let mut var_neededElectrodes = <Vec<usize>>::sse_decode(deserializer);
+        let mut var_frontalElectrodes = <Vec<usize>>::sse_decode(deserializer);
+        let mut var_temporalElectrodes = <Vec<usize>>::sse_decode(deserializer);
         let mut var_signalGoodThreshold = <f32>::sse_decode(deserializer);
         let mut var_signalCriticalThreshold = <f32>::sse_decode(deserializer);
         let mut var_features =
@@ -2644,6 +2998,8 @@ impl SseDecode for crate::api::device_config::DeviceConfig {
             electrode_names: var_electrodeNames,
             target_electrodes: var_targetElectrodes,
             needed_electrodes: var_neededElectrodes,
+            frontal_electrodes: var_frontalElectrodes,
+            temporal_electrodes: var_temporalElectrodes,
             signal_good_threshold: var_signalGoodThreshold,
             signal_critical_threshold: var_signalCriticalThreshold,
             features: var_features,
@@ -2696,13 +3052,35 @@ impl SseDecode for crate::api::device_config::DeviceKind {
     }
 }
 
+impl SseDecode for crate::api::edf_export::EdfDecodedSignal {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_label = <String>::sse_decode(deserializer);
+        let mut var_samplesPerRecord = <u32>::sse_decode(deserializer);
+        let mut var_physicalMin = <f64>::sse_decode(deserializer);
+        let mut var_physicalMax = <f64>::sse_decode(deserializer);
+        let mut var_prefiltering = <String>::sse_decode(deserializer);
+        let mut var_data = <Vec<f32>>::sse_decode(deserializer);
+        return crate::api::edf_export::EdfDecodedSignal {
+            label: var_label,
+            samples_per_record: var_samplesPerRecord,
+            physical_min: var_physicalMin,
+            physical_max: var_physicalMax,
+            prefiltering: var_prefiltering,
+            data: var_data,
+        };
+    }
+}
+
 impl SseDecode for crate::api::edf_export::EdfExportAnnotation {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_onsetSeconds = <f64>::sse_decode(deserializer);
+        let mut var_durationSeconds = <f64>::sse_decode(deserializer);
         let mut var_text = <String>::sse_decode(deserializer);
         return crate::api::edf_export::EdfExportAnnotation {
             onset_seconds: var_onsetSeconds,
+            duration_seconds: var_durationSeconds,
             text: var_text,
         };
     }
@@ -2721,6 +3099,7 @@ impl SseDecode for crate::api::edf_export::EdfExportParams {
         let mut var_second = <u16>::sse_decode(deserializer);
         let mut var_annotations =
             <Vec<crate::api::edf_export::EdfExportAnnotation>>::sse_decode(deserializer);
+        let mut var_prefiltering = <String>::sse_decode(deserializer);
         return crate::api::edf_export::EdfExportParams {
             patient_id: var_patientId,
             recording_id: var_recordingId,
@@ -2731,6 +3110,60 @@ impl SseDecode for crate::api::edf_export::EdfExportParams {
             minute: var_minute,
             second: var_second,
             annotations: var_annotations,
+            prefiltering: var_prefiltering,
+        };
+    }
+}
+
+impl SseDecode for crate::api::edf_export::EdfImportResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_patientId = <String>::sse_decode(deserializer);
+        let mut var_recordingId = <String>::sse_decode(deserializer);
+        let mut var_year = <u16>::sse_decode(deserializer);
+        let mut var_month = <u16>::sse_decode(deserializer);
+        let mut var_day = <u16>::sse_decode(deserializer);
+        let mut var_hour = <u16>::sse_decode(deserializer);
+        let mut var_minute = <u16>::sse_decode(deserializer);
+        let mut var_second = <u16>::sse_decode(deserializer);
+        let mut var_reserved = <String>::sse_decode(deserializer);
+        let mut var_recordDurationSeconds = <f64>::sse_decode(deserializer);
+        let mut var_recordStartsSeconds = <Vec<f64>>::sse_decode(deserializer);
+        let mut var_signals =
+            <Vec<crate::api::edf_export::EdfDecodedSignal>>::sse_decode(deserializer);
+        let mut var_annotations =
+            <Vec<crate::api::edf_export::EdfExportAnnotation>>::sse_decode(deserializer);
+        return crate::api::edf_export::EdfImportResult {
+            patient_id: var_patientId,
+            recording_id: var_recordingId,
+            year: var_year,
+            month: var_month,
+            day: var_day,
+            hour: var_hour,
+            minute: var_minute,
+            second: var_second,
+            reserved: var_reserved,
+            record_duration_seconds: var_recordDurationSeconds,
+            record_starts_seconds: var_recordStartsSeconds,
+            signals: var_signals,
+            annotations: var_annotations,
+        };
+    }
+}
+
+impl SseDecode for crate::api::eeg_conditioning::EegConditioning {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_highPassHz = <f64>::sse_decode(deserializer);
+        let mut var_notchQ = <f64>::sse_decode(deserializer);
+        let mut var_notchHz = <Vec<f64>>::sse_decode(deserializer);
+        let mut var_notchSource =
+            <crate::api::eeg_conditioning::NotchSource>::sse_decode(deserializer);
+        return crate::api::eeg_conditioning::EegConditioning {
+            high_pass_hz: var_highPassHz,
+            notch_q: var_notchQ,
+            notch_hz: var_notchHz,
+            notch_source: var_notchSource,
         };
     }
 }
@@ -3001,6 +3434,20 @@ impl SseDecode for Vec<crate::api::muse::DeviceInfo> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::api::muse::DeviceInfo>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::edf_export::EdfDecodedSignal> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::edf_export::EdfDecodedSignal>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -3319,10 +3766,27 @@ impl SseDecode for crate::api::muse::MuseEventDto {
                 let mut var_field0 = <crate::api::features::FeatureDto>::sse_decode(deserializer);
                 return crate::api::muse::MuseEventDto::Feature(var_field0);
             }
+            16 => {
+                let mut var_field0 = <crate::api::muse::PadQualityDto>::sse_decode(deserializer);
+                return crate::api::muse::MuseEventDto::PadQuality(var_field0);
+            }
             _ => {
                 unimplemented!("");
             }
         }
+    }
+}
+
+impl SseDecode for crate::api::eeg_conditioning::NotchSource {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::eeg_conditioning::NotchSource::Detected,
+            1 => crate::api::eeg_conditioning::NotchSource::Saved,
+            2 => crate::api::eeg_conditioning::NotchSource::Undecided,
+            _ => unreachable!("Invalid variant for NotchSource: {}", inner),
+        };
     }
 }
 
@@ -3353,6 +3817,19 @@ impl SseDecode for Option<crate::api::session_format::ComputedFrame> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::session_format::ComputedFrame>::sse_decode(
+                deserializer,
+            ));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::eeg_conditioning::EegConditioning> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::eeg_conditioning::EegConditioning>::sse_decode(
                 deserializer,
             ));
         } else {
@@ -3415,6 +3892,42 @@ impl SseDecode for Option<Vec<String>> {
         } else {
             return None;
         }
+    }
+}
+
+impl SseDecode for Option<Vec<f32>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<Vec<f32>>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<Vec<f64>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<Vec<f64>>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for crate::api::muse::PadQualityDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_values = <Vec<f64>>::sse_decode(deserializer);
+        let mut var_source = <crate::api::device_config::QualitySource>::sse_decode(deserializer);
+        let mut var_crown = <Option<Vec<f64>>>::sse_decode(deserializer);
+        return crate::api::muse::PadQualityDto {
+            values: var_values,
+            source: var_source,
+            crown: var_crown,
+        };
     }
 }
 
@@ -3513,6 +4026,18 @@ impl SseDecode for crate::api::session_format::PulseRecord {
             timestamp: var_timestamp,
             bpm: var_bpm,
             confidence: var_confidence,
+        };
+    }
+}
+
+impl SseDecode for crate::api::device_config::QualitySource {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::device_config::QualitySource::Crown,
+            1 => crate::api::device_config::QualitySource::App,
+            _ => unreachable!("Invalid variant for QualitySource: {}", inner),
         };
     }
 }
@@ -3708,149 +4233,166 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        20 => wire__crate__api__muse__connect_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__muse__connect_with_options_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__muse__connection_status_default_impl(
+        21 => wire__crate__api__muse__connect_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__muse__connect_with_options_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__muse__connection_status_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__api__session_format__container_encode_to_path_impl(
+        25 => wire__crate__api__session_format__container_encode_to_path_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__muse__crown_connect_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__device_config__device_config_all_needed_good_impl(
+        27 => wire__crate__api__device_config__device_config_all_needed_good_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        27 => wire__crate__api__device_config__device_config_electrode_index_impl(
+        28 => wire__crate__api__device_config__device_config_electrode_index_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        28 => wire__crate__api__device_config__device_config_for_kind_impl(
+        29 => wire__crate__api__device_config__device_config_for_kind_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__device_config__device_config_has_needed_electrode_impl(
+        30 => wire__crate__api__device_config__device_config_has_needed_electrode_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        30 => wire__crate__api__device_config__device_config_is_usable_impl(
+        31 => wire__crate__api__device_config__device_config_is_usable_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => wire__crate__api__device_config__device_config_muse_impl(
+        32 => wire__crate__api__device_config__device_config_muse_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__device_config__device_config_neurosity_crown_impl(
+        33 => wire__crate__api__device_config__device_config_neurosity_crown_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__api__device_config__device_config_target_values_impl(
+        34 => wire__crate__api__device_config__device_config_target_values_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        34 => wire__crate__api__device_config__device_features_default_impl(
+        35 => wire__crate__api__device_config__device_features_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__api__device_config__device_kind_is_muse_impl(
+        36 => wire__crate__api__device_config__device_kind_is_muse_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__device_config__device_kind_is_neurosity_impl(
+        37 => wire__crate__api__device_config__device_kind_is_neurosity_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__muse__disconnect_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__session_format__extract_computed_from_path_impl(
+        38 => wire__crate__api__muse__disconnect_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__neurosity_osc__discovered_crowns_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        43 => wire__crate__api__session_format__feedback_info_default_impl(
+        44 => wire__crate__api__session_format__extract_computed_from_path_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__muse__get_status_impl(port, ptr, rust_vec_len, data_len),
-        45 => {
+        46 => wire__crate__api__session_format__feedback_info_default_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        47 => wire__crate__api__muse__get_status_impl(port, ptr, rust_vec_len, data_len),
+        48 => {
             wire__crate__api__reve__guardrail_capture_anchor_impl(port, ptr, rust_vec_len, data_len)
         }
-        46 => wire__crate__api__reve__guardrail_disable_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__reve__guardrail_enable_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__session_format__guardrail_info_default_impl(
+        49 => wire__crate__api__reve__guardrail_disable_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__reve__guardrail_enable_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__session_format__guardrail_info_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        49 => wire__crate__api__reve__guardrail_live_dim_impl(port, ptr, rust_vec_len, data_len),
-        50 => {
+        52 => wire__crate__api__reve__guardrail_live_dim_impl(port, ptr, rust_vec_len, data_len),
+        53 => {
             wire__crate__api__reve__guardrail_reset_anchors_impl(port, ptr, rust_vec_len, data_len)
         }
-        51 => wire__crate__api__muse__init_app_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__muse__is_connected_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__reve__model_config_json_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__reve__model_load_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__reve__model_loaded_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__reve__model_unload_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__session_format__parse_head_from_path_impl(
+        54 => wire__crate__api__muse__init_app_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__muse__is_connected_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__reve__model_config_json_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__reve__model_load_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__reve__model_loaded_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__reve__model_unload_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__session_format__parse_head_from_path_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__session_format__rewrite_head_to_path_impl(
+        66 => wire__crate__api__session_format__rewrite_head_to_path_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__muse__scan_impl(port, ptr, rust_vec_len, data_len),
-        65 => {
+        67 => wire__crate__api__muse__scan_impl(port, ptr, rust_vec_len, data_len),
+        72 => {
             wire__crate__api__features__set_enabled_features_impl(port, ptr, rust_vec_len, data_len)
         }
-        66 => wire__crate__api__features__set_feature_electrodes_impl(
+        73 => wire__crate__api__features__set_feature_electrodes_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        67 => {
+        75 => {
             wire__crate__api__simulator__simulated_identity_impl(port, ptr, rust_vec_len, data_len)
         }
-        68 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__muse__telemetry_snapshot_default_impl(
+        76 => wire__crate__api__neurosity_osc__start_crown_discovery_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        77 => wire__crate__api__neurosity_osc__stop_crown_discovery_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        78 => wire__crate__api__muse__subscribe_events_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__muse__telemetry_snapshot_default_impl(
             port,
             ptr,
             rust_vec_len,
@@ -3882,24 +4424,40 @@ fn pde_ffi_dispatcher_sync_impl(
         }
         16 => wire__crate__api__capture__capture_write_errors_impl(ptr, rust_vec_len, data_len),
         17 => wire__crate__api__capture__capture_write_sidecar_impl(ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__session_format__container_encode_impl(ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__edf_export__encode_edf_export_impl(ptr, rust_vec_len, data_len),
-        39 => {
+        20 => wire__crate__api__eeg_conditioning__condition_eeg_impl(ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__session_format__container_encode_impl(ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__edf_export__decode_edf_import_impl(ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__import_dsp__eeg_second_bands_impl(ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__edf_export__encode_edf_export_impl(ptr, rust_vec_len, data_len),
+        42 => {
             wire__crate__api__session_format__encode_session_event_impl(ptr, rust_vec_len, data_len)
         }
-        40 => wire__crate__api__session_format__extract_computed_impl(ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__session_format__extract_raw_impl(ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__session_format__parse_head_impl(ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__session_format__parse_header_impl(ptr, rust_vec_len, data_len),
-        62 => {
+        43 => wire__crate__api__session_format__extract_computed_impl(ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__session_format__extract_raw_impl(ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__eeg_conditioning__live_eeg_conditioning_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        57 => wire__crate__api__eeg_conditioning__live_mains_decision_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        62 => wire__crate__api__session_format__parse_head_impl(ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__session_format__parse_header_impl(ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__import_dsp__resample_eeg_impl(ptr, rust_vec_len, data_len),
+        68 => {
             wire__crate__api__session_format__session_frame_bytes_impl(ptr, rust_vec_len, data_len)
         }
-        63 => {
+        69 => wire__crate__api__features__session_gate_electrodes_impl(ptr, rust_vec_len, data_len),
+        70 => {
             wire__crate__api__session_format__session_header_bytes_impl(ptr, rust_vec_len, data_len)
         }
-        64 => {
+        71 => {
             wire__crate__api__session_format__session_parse_body_impl(ptr, rust_vec_len, data_len)
         }
+        74 => wire__crate__api__eeg_conditioning__set_saved_mains_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3990,6 +4548,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::session_format::ComputedFrame
             self.guardrail.into_into_dart().into_dart(),
             self.feedback.into_into_dart().into_dart(),
             self.gestures.into_into_dart().into_dart(),
+            self.signal_quality_source.into_into_dart().into_dart(),
+            self.crown_signal_quality.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4006,6 +4566,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::session_format::ComputedFrame
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::eeg_conditioning::ConditionedEeg {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.eeg.into_into_dart().into_dart(),
+            self.conditioning.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::eeg_conditioning::ConditionedEeg
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::eeg_conditioning::ConditionedEeg>
+    for crate::api::eeg_conditioning::ConditionedEeg
+{
+    fn into_into_dart(self) -> crate::api::eeg_conditioning::ConditionedEeg {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::muse::ConnectionStatus {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -4013,6 +4594,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::muse::ConnectionStatus {
             self.name.into_into_dart().into_dart(),
             self.id.into_into_dart().into_dart(),
             self.firmware.into_into_dart().into_dart(),
+            self.aux_channels.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4081,6 +4663,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::device_config::DeviceConfig {
             self.electrode_names.into_into_dart().into_dart(),
             self.target_electrodes.into_into_dart().into_dart(),
             self.needed_electrodes.into_into_dart().into_dart(),
+            self.frontal_electrodes.into_into_dart().into_dart(),
+            self.temporal_electrodes.into_into_dart().into_dart(),
             self.signal_good_threshold.into_into_dart().into_dart(),
             self.signal_critical_threshold.into_into_dart().into_dart(),
             self.features.into_into_dart().into_dart(),
@@ -4166,10 +4750,36 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::device_config::DeviceKind>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::edf_export::EdfDecodedSignal {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.label.into_into_dart().into_dart(),
+            self.samples_per_record.into_into_dart().into_dart(),
+            self.physical_min.into_into_dart().into_dart(),
+            self.physical_max.into_into_dart().into_dart(),
+            self.prefiltering.into_into_dart().into_dart(),
+            self.data.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::edf_export::EdfDecodedSignal
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::edf_export::EdfDecodedSignal>
+    for crate::api::edf_export::EdfDecodedSignal
+{
+    fn into_into_dart(self) -> crate::api::edf_export::EdfDecodedSignal {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::edf_export::EdfExportAnnotation {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.onset_seconds.into_into_dart().into_dart(),
+            self.duration_seconds.into_into_dart().into_dart(),
             self.text.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -4199,6 +4809,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::edf_export::EdfExportParams {
             self.minute.into_into_dart().into_dart(),
             self.second.into_into_dart().into_dart(),
             self.annotations.into_into_dart().into_dart(),
+            self.prefiltering.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4211,6 +4822,61 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::edf_export::EdfExportParams>
     for crate::api::edf_export::EdfExportParams
 {
     fn into_into_dart(self) -> crate::api::edf_export::EdfExportParams {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::edf_export::EdfImportResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.patient_id.into_into_dart().into_dart(),
+            self.recording_id.into_into_dart().into_dart(),
+            self.year.into_into_dart().into_dart(),
+            self.month.into_into_dart().into_dart(),
+            self.day.into_into_dart().into_dart(),
+            self.hour.into_into_dart().into_dart(),
+            self.minute.into_into_dart().into_dart(),
+            self.second.into_into_dart().into_dart(),
+            self.reserved.into_into_dart().into_dart(),
+            self.record_duration_seconds.into_into_dart().into_dart(),
+            self.record_starts_seconds.into_into_dart().into_dart(),
+            self.signals.into_into_dart().into_dart(),
+            self.annotations.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::edf_export::EdfImportResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::edf_export::EdfImportResult>
+    for crate::api::edf_export::EdfImportResult
+{
+    fn into_into_dart(self) -> crate::api::edf_export::EdfImportResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::eeg_conditioning::EegConditioning {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.high_pass_hz.into_into_dart().into_dart(),
+            self.notch_q.into_into_dart().into_dart(),
+            self.notch_hz.into_into_dart().into_dart(),
+            self.notch_source.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::eeg_conditioning::EegConditioning
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::eeg_conditioning::EegConditioning>
+    for crate::api::eeg_conditioning::EegConditioning
+{
+    fn into_into_dart(self) -> crate::api::eeg_conditioning::EegConditioning {
         self
     }
 }
@@ -4529,6 +5195,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::muse::MuseEventDto {
             crate::api::muse::MuseEventDto::Feature(field0) => {
                 [15.into_dart(), field0.into_into_dart().into_dart()].into_dart()
             }
+            crate::api::muse::MuseEventDto::PadQuality(field0) => {
+                [16.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
             _ => {
                 unimplemented!("");
             }
@@ -4543,6 +5212,50 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::MuseEventDto>
     for crate::api::muse::MuseEventDto
 {
     fn into_into_dart(self) -> crate::api::muse::MuseEventDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::eeg_conditioning::NotchSource {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Detected => 0.into_dart(),
+            Self::Saved => 1.into_dart(),
+            Self::Undecided => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::eeg_conditioning::NotchSource
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::eeg_conditioning::NotchSource>
+    for crate::api::eeg_conditioning::NotchSource
+{
+    fn into_into_dart(self) -> crate::api::eeg_conditioning::NotchSource {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::muse::PadQualityDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.values.into_into_dart().into_dart(),
+            self.source.into_into_dart().into_dart(),
+            self.crown.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::muse::PadQualityDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::PadQualityDto>
+    for crate::api::muse::PadQualityDto
+{
+    fn into_into_dart(self) -> crate::api::muse::PadQualityDto {
         self
     }
 }
@@ -4687,6 +5400,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::session_format::PulseRecord>
     for crate::api::session_format::PulseRecord
 {
     fn into_into_dart(self) -> crate::api::session_format::PulseRecord {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::device_config::QualitySource {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Crown => 0.into_dart(),
+            Self::App => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::device_config::QualitySource
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::device_config::QualitySource>
+    for crate::api::device_config::QualitySource
+{
+    fn into_into_dart(self) -> crate::api::device_config::QualitySource {
         self
     }
 }
@@ -4911,6 +5645,16 @@ impl SseEncode for crate::api::session_format::ComputedFrame {
         <crate::api::session_format::GuardrailInfo>::sse_encode(self.guardrail, serializer);
         <crate::api::session_format::FeedbackInfo>::sse_encode(self.feedback, serializer);
         <Vec<String>>::sse_encode(self.gestures, serializer);
+        <Option<String>>::sse_encode(self.signal_quality_source, serializer);
+        <Option<Vec<f32>>>::sse_encode(self.crown_signal_quality, serializer);
+    }
+}
+
+impl SseEncode for crate::api::eeg_conditioning::ConditionedEeg {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::api::session_format::EegSampleRecord>>::sse_encode(self.eeg, serializer);
+        <crate::api::eeg_conditioning::EegConditioning>::sse_encode(self.conditioning, serializer);
     }
 }
 
@@ -4921,6 +5665,7 @@ impl SseEncode for crate::api::muse::ConnectionStatus {
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.id, serializer);
         <String>::sse_encode(self.firmware, serializer);
+        <u32>::sse_encode(self.aux_channels, serializer);
     }
 }
 
@@ -4953,6 +5698,8 @@ impl SseEncode for crate::api::device_config::DeviceConfig {
         <Vec<String>>::sse_encode(self.electrode_names, serializer);
         <Vec<usize>>::sse_encode(self.target_electrodes, serializer);
         <Vec<usize>>::sse_encode(self.needed_electrodes, serializer);
+        <Vec<usize>>::sse_encode(self.frontal_electrodes, serializer);
+        <Vec<usize>>::sse_encode(self.temporal_electrodes, serializer);
         <f32>::sse_encode(self.signal_good_threshold, serializer);
         <f32>::sse_encode(self.signal_critical_threshold, serializer);
         <crate::api::device_config::DeviceFeatures>::sse_encode(self.features, serializer);
@@ -4997,10 +5744,23 @@ impl SseEncode for crate::api::device_config::DeviceKind {
     }
 }
 
+impl SseEncode for crate::api::edf_export::EdfDecodedSignal {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.label, serializer);
+        <u32>::sse_encode(self.samples_per_record, serializer);
+        <f64>::sse_encode(self.physical_min, serializer);
+        <f64>::sse_encode(self.physical_max, serializer);
+        <String>::sse_encode(self.prefiltering, serializer);
+        <Vec<f32>>::sse_encode(self.data, serializer);
+    }
+}
+
 impl SseEncode for crate::api::edf_export::EdfExportAnnotation {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <f64>::sse_encode(self.onset_seconds, serializer);
+        <f64>::sse_encode(self.duration_seconds, serializer);
         <String>::sse_encode(self.text, serializer);
     }
 }
@@ -5020,6 +5780,39 @@ impl SseEncode for crate::api::edf_export::EdfExportParams {
             self.annotations,
             serializer,
         );
+        <String>::sse_encode(self.prefiltering, serializer);
+    }
+}
+
+impl SseEncode for crate::api::edf_export::EdfImportResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.patient_id, serializer);
+        <String>::sse_encode(self.recording_id, serializer);
+        <u16>::sse_encode(self.year, serializer);
+        <u16>::sse_encode(self.month, serializer);
+        <u16>::sse_encode(self.day, serializer);
+        <u16>::sse_encode(self.hour, serializer);
+        <u16>::sse_encode(self.minute, serializer);
+        <u16>::sse_encode(self.second, serializer);
+        <String>::sse_encode(self.reserved, serializer);
+        <f64>::sse_encode(self.record_duration_seconds, serializer);
+        <Vec<f64>>::sse_encode(self.record_starts_seconds, serializer);
+        <Vec<crate::api::edf_export::EdfDecodedSignal>>::sse_encode(self.signals, serializer);
+        <Vec<crate::api::edf_export::EdfExportAnnotation>>::sse_encode(
+            self.annotations,
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::eeg_conditioning::EegConditioning {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.high_pass_hz, serializer);
+        <f64>::sse_encode(self.notch_q, serializer);
+        <Vec<f64>>::sse_encode(self.notch_hz, serializer);
+        <crate::api::eeg_conditioning::NotchSource>::sse_encode(self.notch_source, serializer);
     }
 }
 
@@ -5222,6 +6015,16 @@ impl SseEncode for Vec<crate::api::muse::DeviceInfo> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::muse::DeviceInfo>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::edf_export::EdfDecodedSignal> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::edf_export::EdfDecodedSignal>::sse_encode(item, serializer);
         }
     }
 }
@@ -5479,10 +6282,31 @@ impl SseEncode for crate::api::muse::MuseEventDto {
                 <i32>::sse_encode(15, serializer);
                 <crate::api::features::FeatureDto>::sse_encode(field0, serializer);
             }
+            crate::api::muse::MuseEventDto::PadQuality(field0) => {
+                <i32>::sse_encode(16, serializer);
+                <crate::api::muse::PadQualityDto>::sse_encode(field0, serializer);
+            }
             _ => {
                 unimplemented!("");
             }
         }
+    }
+}
+
+impl SseEncode for crate::api::eeg_conditioning::NotchSource {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::eeg_conditioning::NotchSource::Detected => 0,
+                crate::api::eeg_conditioning::NotchSource::Saved => 1,
+                crate::api::eeg_conditioning::NotchSource::Undecided => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 
@@ -5512,6 +6336,16 @@ impl SseEncode for Option<crate::api::session_format::ComputedFrame> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::session_format::ComputedFrame>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::eeg_conditioning::EegConditioning> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::eeg_conditioning::EegConditioning>::sse_encode(value, serializer);
         }
     }
 }
@@ -5563,6 +6397,35 @@ impl SseEncode for Option<Vec<String>> {
         if let Some(value) = self {
             <Vec<String>>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for Option<Vec<f32>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <Vec<f32>>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<Vec<f64>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <Vec<f64>>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for crate::api::muse::PadQualityDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<f64>>::sse_encode(self.values, serializer);
+        <crate::api::device_config::QualitySource>::sse_encode(self.source, serializer);
+        <Option<Vec<f64>>>::sse_encode(self.crown, serializer);
     }
 }
 
@@ -5626,6 +6489,22 @@ impl SseEncode for crate::api::session_format::PulseRecord {
         <f64>::sse_encode(self.timestamp, serializer);
         <f64>::sse_encode(self.bpm, serializer);
         <f64>::sse_encode(self.confidence, serializer);
+    }
+}
+
+impl SseEncode for crate::api::device_config::QualitySource {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::device_config::QualitySource::Crown => 0,
+                crate::api::device_config::QualitySource::App => 1,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 

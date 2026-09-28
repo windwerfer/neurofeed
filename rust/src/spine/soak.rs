@@ -273,6 +273,8 @@ fn computed_frames(equiv_secs: u64) -> Vec<ComputedFrame> {
                             ..Default::default()
             },
             gestures: Vec::new(),
+            signal_quality_source: None,
+            crown_signal_quality: None,
         })
         .collect()
 }

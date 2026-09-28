@@ -472,6 +472,7 @@ class SessionSettings {
     this.guardFeature,
     this.guardModel,
     this.inhibitCeilingOverrides,
+    this.crownQualitySource,
   });
 
   final bool dynamicAdapt;
@@ -506,6 +507,9 @@ class SessionSettings {
   /// Settings slider overlays (`beta` / `delta`); omit when empty.
   final Map<String, double>? inhibitCeilingOverrides;
 
+  /// Neurosity only: `crown` | `app` — pad quality source used this session.
+  final String? crownQualitySource;
+
   Map<String, Object?> toJson() => {
     'dynamicAdapt': dynamicAdapt,
     'responsiveness': responsiveness,
@@ -532,6 +536,7 @@ class SessionSettings {
     if (guardModel != null) 'guardModel': guardModel,
     if (inhibitCeilingOverrides != null && inhibitCeilingOverrides!.isNotEmpty)
       'inhibitCeilingOverrides': inhibitCeilingOverrides,
+    if (crownQualitySource != null) 'crownQualitySource': crownQualitySource,
   };
 
   static SessionSettings? fromJson(Object? json) {
@@ -578,6 +583,7 @@ class SessionSettings {
         }
         return out.isEmpty ? null : out;
       }(),
+      crownQualitySource: json['crownQualitySource'] as String?,
     );
   }
 }
@@ -635,6 +641,8 @@ class SessionMetadata {
     this.deviceName,
     this.deviceModel,
     this.deviceId,
+    this.rawFiltering,
+    this.conditioning,
     this.recordedChannels = const [],
     this.recordedData = const [],
     this.gestures = const [],
@@ -679,6 +687,8 @@ class SessionMetadata {
   final String? deviceName;
   final String? deviceModel;
   final String? deviceId;
+  final RawFiltering? rawFiltering;
+  final SignalConditioning? conditioning;
   final List<String> recordedChannels;
   final List<String> recordedData;
   final List<GestureMarker> gestures;
@@ -730,6 +740,8 @@ class SessionMetadata {
     if (deviceName != null) 'deviceName': deviceName,
     if (deviceModel != null) 'deviceModel': deviceModel,
     if (deviceId != null) 'deviceId': deviceId,
+    if (rawFiltering != null) 'rawFiltering': rawFiltering!.toJson(),
+    if (conditioning != null) 'conditioning': conditioning!.toJson(),
     if (recordedChannels.isNotEmpty) 'recordedChannels': recordedChannels,
     if (recordedData.isNotEmpty) 'recordedData': recordedData,
     if (gestures.isNotEmpty) 'gestures': [for (final g in gestures) g.toJson()],
@@ -807,6 +819,8 @@ class SessionMetadata {
       deviceModel: (device?['model'] as String?) ??
           (device?['firmware'] as String?),
       deviceId: device?['id'] as String?,
+      rawFiltering: RawFiltering.fromJson(device?['rawFiltering']),
+      conditioning: SignalConditioning.fromJson(device?['conditioning']),
       recordedChannels: recordedChannels,
       recordedData: recordedData,
       gestures: const [],
@@ -863,6 +877,12 @@ class SessionMetadata {
       deviceName: json['deviceName'] as String?,
       deviceModel: json['deviceModel'] as String?,
       deviceId: json['deviceId'] as String?,
+      rawFiltering: RawFiltering.fromJson(
+        json['rawFiltering'] ?? _asStringKeyedMap(json['device'])?['rawFiltering'],
+      ),
+      conditioning: SignalConditioning.fromJson(
+        json['conditioning'] ?? _asStringKeyedMap(json['device'])?['conditioning'],
+      ),
       recordedChannels:
           (json['recordedChannels'] as List<Object?>?)
               ?.whereType<String>()

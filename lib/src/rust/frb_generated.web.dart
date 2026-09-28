@@ -9,8 +9,11 @@
 import 'api/capture.dart';
 import 'api/device_config.dart';
 import 'api/edf_export.dart';
+import 'api/eeg_conditioning.dart';
 import 'api/features.dart';
+import 'api/import_dsp.dart';
 import 'api/muse.dart';
+import 'api/neurosity_osc.dart';
 import 'api/reve.dart';
 import 'api/session_format.dart';
 import 'api/simulator.dart';
@@ -72,6 +75,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   EdfExportParams dco_decode_box_autoadd_edf_export_params(dynamic raw);
 
   @protected
+  EegConditioning dco_decode_box_autoadd_eeg_conditioning(dynamic raw);
+
+  @protected
   EegDto dco_decode_box_autoadd_eeg_dto(dynamic raw);
 
   @protected
@@ -91,6 +97,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MuseEventDto dco_decode_box_autoadd_muse_event_dto(dynamic raw);
+
+  @protected
+  PadQualityDto dco_decode_box_autoadd_pad_quality_dto(dynamic raw);
 
   @protected
   PeakAlphaDto dco_decode_box_autoadd_peak_alpha_dto(dynamic raw);
@@ -126,6 +135,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ComputedFrame dco_decode_computed_frame(dynamic raw);
 
   @protected
+  ConditionedEeg dco_decode_conditioned_eeg(dynamic raw);
+
+  @protected
   ConnectionStatus dco_decode_connection_status(dynamic raw);
 
   @protected
@@ -147,10 +159,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DeviceKind dco_decode_device_kind(dynamic raw);
 
   @protected
+  EdfDecodedSignal dco_decode_edf_decoded_signal(dynamic raw);
+
+  @protected
   EdfExportAnnotation dco_decode_edf_export_annotation(dynamic raw);
 
   @protected
   EdfExportParams dco_decode_edf_export_params(dynamic raw);
+
+  @protected
+  EdfImportResult dco_decode_edf_import_result(dynamic raw);
+
+  @protected
+  EegConditioning dco_decode_eeg_conditioning(dynamic raw);
 
   @protected
   EegDto dco_decode_eeg_dto(dynamic raw);
@@ -210,6 +231,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<DeviceInfo> dco_decode_list_device_info(dynamic raw);
 
   @protected
+  List<EdfDecodedSignal> dco_decode_list_edf_decoded_signal(dynamic raw);
+
+  @protected
   List<EdfExportAnnotation> dco_decode_list_edf_export_annotation(dynamic raw);
 
   @protected
@@ -235,6 +259,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
+
+  @protected
+  List<double> dco_decode_list_prim_f_64_loose(dynamic raw);
 
   @protected
   Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
@@ -276,6 +303,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MuseEventDto dco_decode_muse_event_dto(dynamic raw);
 
   @protected
+  NotchSource dco_decode_notch_source(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -283,6 +313,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ComputedFrame? dco_decode_opt_box_autoadd_computed_frame(dynamic raw);
+
+  @protected
+  EegConditioning? dco_decode_opt_box_autoadd_eeg_conditioning(dynamic raw);
 
   @protected
   double? dco_decode_opt_box_autoadd_f_32(dynamic raw);
@@ -298,6 +331,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String>? dco_decode_opt_list_String(dynamic raw);
+
+  @protected
+  Float32List? dco_decode_opt_list_prim_f_32_strict(dynamic raw);
+
+  @protected
+  Float64List? dco_decode_opt_list_prim_f_64_strict(dynamic raw);
+
+  @protected
+  PadQualityDto dco_decode_pad_quality_dto(dynamic raw);
 
   @protected
   ParsedHead dco_decode_parsed_head(dynamic raw);
@@ -319,6 +361,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PulseRecord dco_decode_pulse_record(dynamic raw);
+
+  @protected
+  QualitySource dco_decode_quality_source(dynamic raw);
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
@@ -417,6 +462,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  EegConditioning sse_decode_box_autoadd_eeg_conditioning(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   EegDto sse_decode_box_autoadd_eeg_dto(SseDeserializer deserializer);
 
   @protected
@@ -436,6 +486,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MuseEventDto sse_decode_box_autoadd_muse_event_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PadQualityDto sse_decode_box_autoadd_pad_quality_dto(
     SseDeserializer deserializer,
   );
 
@@ -481,6 +536,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ComputedFrame sse_decode_computed_frame(SseDeserializer deserializer);
 
   @protected
+  ConditionedEeg sse_decode_conditioned_eeg(SseDeserializer deserializer);
+
+  @protected
   ConnectionStatus sse_decode_connection_status(SseDeserializer deserializer);
 
   @protected
@@ -502,12 +560,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DeviceKind sse_decode_device_kind(SseDeserializer deserializer);
 
   @protected
+  EdfDecodedSignal sse_decode_edf_decoded_signal(SseDeserializer deserializer);
+
+  @protected
   EdfExportAnnotation sse_decode_edf_export_annotation(
     SseDeserializer deserializer,
   );
 
   @protected
   EdfExportParams sse_decode_edf_export_params(SseDeserializer deserializer);
+
+  @protected
+  EdfImportResult sse_decode_edf_import_result(SseDeserializer deserializer);
+
+  @protected
+  EegConditioning sse_decode_eeg_conditioning(SseDeserializer deserializer);
 
   @protected
   EegDto sse_decode_eeg_dto(SseDeserializer deserializer);
@@ -571,6 +638,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<DeviceInfo> sse_decode_list_device_info(SseDeserializer deserializer);
 
   @protected
+  List<EdfDecodedSignal> sse_decode_list_edf_decoded_signal(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<EdfExportAnnotation> sse_decode_list_edf_export_annotation(
     SseDeserializer deserializer,
   );
@@ -606,6 +678,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
+
+  @protected
+  List<double> sse_decode_list_prim_f_64_loose(SseDeserializer deserializer);
 
   @protected
   Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
@@ -651,6 +726,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MuseEventDto sse_decode_muse_event_dto(SseDeserializer deserializer);
 
   @protected
+  NotchSource sse_decode_notch_source(SseDeserializer deserializer);
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -658,6 +736,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ComputedFrame? sse_decode_opt_box_autoadd_computed_frame(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  EegConditioning? sse_decode_opt_box_autoadd_eeg_conditioning(
     SseDeserializer deserializer,
   );
 
@@ -679,6 +762,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
+  Float32List? sse_decode_opt_list_prim_f_32_strict(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  Float64List? sse_decode_opt_list_prim_f_64_strict(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PadQualityDto sse_decode_pad_quality_dto(SseDeserializer deserializer);
+
+  @protected
   ParsedHead sse_decode_parsed_head(SseDeserializer deserializer);
 
   @protected
@@ -698,6 +794,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PulseRecord sse_decode_pulse_record(SseDeserializer deserializer);
+
+  @protected
+  QualitySource sse_decode_quality_source(SseDeserializer deserializer);
 
   @protected
   (String, String) sse_decode_record_string_string(
@@ -813,6 +912,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_eeg_conditioning(
+    EegConditioning self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_eeg_dto(EegDto self, SseSerializer serializer);
 
   @protected
@@ -842,6 +947,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_muse_event_dto(
     MuseEventDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_pad_quality_dto(
+    PadQualityDto self,
     SseSerializer serializer,
   );
 
@@ -897,6 +1008,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_computed_frame(ComputedFrame self, SseSerializer serializer);
 
   @protected
+  void sse_encode_conditioned_eeg(
+    ConditionedEeg self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_connection_status(
     ConnectionStatus self,
     SseSerializer serializer,
@@ -927,6 +1044,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_device_kind(DeviceKind self, SseSerializer serializer);
 
   @protected
+  void sse_encode_edf_decoded_signal(
+    EdfDecodedSignal self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_edf_export_annotation(
     EdfExportAnnotation self,
     SseSerializer serializer,
@@ -935,6 +1058,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_edf_export_params(
     EdfExportParams self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_edf_import_result(
+    EdfImportResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_eeg_conditioning(
+    EegConditioning self,
     SseSerializer serializer,
   );
 
@@ -1011,6 +1146,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_edf_decoded_signal(
+    List<EdfDecodedSignal> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_edf_export_annotation(
     List<EdfExportAnnotation> self,
     SseSerializer serializer,
@@ -1061,6 +1202,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_f_32_strict(
     Float32List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_64_loose(
+    List<double> self,
     SseSerializer serializer,
   );
 
@@ -1131,6 +1278,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_muse_event_dto(MuseEventDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_notch_source(NotchSource self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -1139,6 +1289,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_computed_frame(
     ComputedFrame? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_eeg_conditioning(
+    EegConditioning? self,
     SseSerializer serializer,
   );
 
@@ -1159,6 +1315,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_prim_f_32_strict(
+    Float32List? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_list_prim_f_64_strict(
+    Float64List? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_pad_quality_dto(PadQualityDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_parsed_head(ParsedHead self, SseSerializer serializer);
@@ -1183,6 +1354,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_pulse_record(PulseRecord self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_quality_source(QualitySource self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_string_string(

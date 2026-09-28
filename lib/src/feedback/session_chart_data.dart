@@ -4,15 +4,28 @@ import 'package:neurofeed/src/charts/session_reader.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/target_state.dart'
     show movementGateThreshold;
+import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
+import 'package:neurofeed/src/session_format/stats_assemble.dart'
+    show frameSeconds;
 
-/// Charts stay Muse-4-ch this series (non-goal). Local copies; do not import
-/// from the reward path.
+/// Muse AF7/AF8 indices for raw-body charts (CSV/EDF bodies are Muse-only).
 const int electrodeAf7 = 1;
 const int electrodeAf8 = 2;
 
+/// Electrode pair the computed charts average, by label: Muse AF7/AF8, else
+/// the Crown band-feature pair PO3/PO4. Null when neither pair is present.
+(int, int)? chartElectrodePair(List<String> channelLabels) {
+  for (final (a, b) in const [('AF7', 'AF8'), ('PO3', 'PO4')]) {
+    final i = channelLabels.indexOf(a);
+    final j = channelLabels.indexOf(b);
+    if (i >= 0 && j >= 0) return (i, j);
+  }
+  return null;
+}
+
 /// Display-ready chart series for one session: per-second band-relative powers
-/// of the frontal AF7/AF8 average, movement, heart rate, SpO2, and derived
+/// of the [chartElectrodePair] average, movement, heart rate, SpO2, and derived
 /// stats. Built by [prepareChartDataFromComputed] (computed 1 Hz) or
 /// [prepareChartData] (raw body, CSV/EDF only).
 class SessionChartData {
@@ -33,6 +46,9 @@ class SessionChartData {
   final SessionChartStats stats;
   final int bandsCount;
 
+  /// The averaged pair, e.g. `AF7/AF8` or `PO3/PO4`, for chart captions.
+  final String electrodePairLabel;
+
   const SessionChartData({
     required this.x,
     required this.alphaRel,
@@ -50,6 +66,7 @@ class SessionChartData {
     this.guardrailSleepDir = const [],
     required this.stats,
     required this.bandsCount,
+    this.electrodePairLabel = 'AF7/AF8',
   });
 }
 
@@ -249,6 +266,7 @@ SessionChartData prepareChartDataFromContainer({
   String metric = 'band.atr',
   List<TargetCondition> conditions = const [],
   String? startedAt,
+  List<String> channelLabels = kMuseElectrodeNames,
 }) {
   ffi.SessionData? raw;
   try {
@@ -264,6 +282,7 @@ SessionChartData prepareChartDataFromContainer({
     conditions: conditions,
     rawFallback: raw,
     recordingStartMs: recordingStartMsFromIso(startedAt),
+    channelLabels: channelLabels,
   );
 }
 
@@ -281,11 +300,12 @@ SessionChartData prepareChartDataFromComputed(
   List<TargetCondition> conditions = const [],
   ffi.SessionData? rawFallback,
   double? recordingStartMs,
+  List<String> channelLabels = kMuseElectrodeNames,
 }) {
-  final cut =
-      (trainingStartOffset != null && trainingStartOffset > 0)
-          ? trainingStartOffset
-          : null;
+  final pair = chartElectrodePair(channelLabels);
+  final cut = (trainingStartOffset != null && trainingStartOffset > 0)
+      ? trainingStartOffset
+      : null;
 
   final kept = [
     for (final f in frames)
@@ -303,19 +323,25 @@ SessionChartData prepareChartDataFromComputed(
   final deltaRel = <double>[];
   final betaRel = <double>[];
   final gammaRel = <double>[];
-  var targetSeconds = 0;
+  final weights = frameSeconds(kept);
+  var targetSeconds = 0.0;
+  var bandSeconds = 0.0;
   var alphaRelSum = 0.0;
   var bandsCount = 0;
 
-  for (final f in kept) {
-    final all = _relativeAll(
-      _ffiBandTuple(f.bands, electrodeAf7),
-      _ffiBandTuple(f.bands, electrodeAf8),
-    );
+  for (var fi = 0; fi < kept.length; fi++) {
+    final f = kept[fi];
+    final all = pair == null
+        ? null
+        : _relativeAll(
+            _ffiBandTuple(f.bands, pair.$1),
+            _ffiBandTuple(f.bands, pair.$2),
+          );
     if (all == null) {
       continue;
     }
     bandsCount++;
+    bandSeconds += weights[fi];
     final aRel = all.$3;
     final tRel = all.$2;
     final dRel = all.$1;
@@ -329,20 +355,22 @@ SessionChartData prepareChartDataFromComputed(
     gammaRel.add(gRel);
     alphaRelSum += aRel;
     if (_inTarget(dRel, tRel, aRel, bRel, metric, conditions)) {
-      targetSeconds++;
+      targetSeconds += weights[fi];
     }
   }
 
   final movementX = <double>[];
   final movement = <double>[];
-  var still = 0;
-  for (final f in kept) {
-    final m = f.movement;
+  var still = 0.0;
+  var movementSeconds = 0.0;
+  for (var fi = 0; fi < kept.length; fi++) {
+    final m = kept[fi].movement;
     if (m == null) continue;
-    movementX.add(f.t - startTs);
+    movementX.add(kept[fi].t - startTs);
     movement.add(m);
+    movementSeconds += weights[fi];
     if (m <= movementGateThreshold) {
-      still++;
+      still += weights[fi];
     }
   }
 
@@ -421,11 +449,14 @@ SessionChartData prepareChartDataFromComputed(
     guardrailX: guardrailX,
     guardrailSleepDir: guardrailSleepDir,
     bandsCount: bandsCount,
+    electrodePairLabel: pair == null
+        ? 'AF7/AF8'
+        : '${channelLabels[pair.$1]}/${channelLabels[pair.$2]}',
     stats: SessionChartStats(
       peakAlphaFreq: peakFreq,
       peakAlphaPower: peakPower,
-      targetPct: x.isEmpty ? 0 : targetSeconds / x.length * 100,
-      stillnessPct: movement.isEmpty ? 0 : still / movement.length * 100,
+      targetPct: bandSeconds <= 0 ? 0 : targetSeconds / bandSeconds * 100,
+      stillnessPct: movementSeconds <= 0 ? 0 : still / movementSeconds * 100,
       avgBpm: bpm.isEmpty ? null : bpmSum / bpm.length,
       avgSpo2: spo2.isEmpty ? null : spo2Sum / spo2.length,
       avgAlphaRel: alphaRel.isEmpty ? 0 : alphaRelSum / alphaRel.length,
@@ -440,7 +471,8 @@ SessionChartData prepareChartDataFromComputed(
   List<double> spo2,
   List<double> spo2X,
   double spo2Sum,
-}) _physioFromRaw(
+})
+_physioFromRaw(
   ffi.SessionData data, {
   required double? cut,
   required double startTs,

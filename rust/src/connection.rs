@@ -5,13 +5,14 @@ use muse_rs::prelude::*;
 use tokio::sync::mpsc;
 
 use crate::api::muse::MuseEventDto;
+use crate::api::neurosity_osc::CrownOscHandle;
 use crate::api::simulator::DeviceSimulator;
 use crate::frb_generated::StreamSink;
 
-/// Handle type for Muse, Crown, and simulated connections
+/// Handle type for Muse, Crown (OSC), and simulated connections
 pub enum ConnectionHandle {
     Muse(MuseHandle),
-    Crown, // Placeholder - Phase D will implement proper Crown handle
+    Crown(CrownOscHandle),
     Simulator(Arc<DeviceSimulator>),
 }
 
@@ -21,10 +22,7 @@ impl ConnectionHandle {
             ConnectionHandle::Muse(h) => {
                 let _ = h.disconnect().await;
             }
-            ConnectionHandle::Crown => {
-                // Phase D: implement proper Crown disconnect
-                log::warn!("[crown] disconnect called but not yet implemented");
-            }
+            ConnectionHandle::Crown(h) => h.disconnect(),
             ConnectionHandle::Simulator(s) => {
                 s.stop().await;
             }
@@ -39,11 +37,12 @@ pub struct ActiveConnection {
     pub name: String,
     pub id: String,
     pub firmware: String,
+    pub aux_channels: u32,
 }
 
 #[derive(Default)]
 pub struct ManagerState {
-    /// All devices discovered in the most recent scan, keyed by BLE id.
+    /// Muse devices discovered by BLE scans, keyed by BLE id.
     pub devices: HashMap<String, MuseDevice>,
     /// The currently active connection, if any.
     pub active: Option<ActiveConnection>,
@@ -51,6 +50,9 @@ pub struct ManagerState {
     pub sink: Option<StreamSink<MuseEventDto>>,
     /// The receiver end of the active connection's event channel, if any.
     pub events: Option<mpsc::Receiver<MuseEventDto>>,
+    /// EEG electrodes at or above this index are dropped by the forwarder
+    /// for the active connection (Muse without AUX: `Some(4)`).
+    pub eeg_electrode_limit: Option<i32>,
     /// Whether the event-forwarding task is already running.
     pub forwarder_running: bool,
     /// Monotonically increasing counter, bumped on each new connection.

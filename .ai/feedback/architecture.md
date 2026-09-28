@@ -63,10 +63,14 @@ A protocol wires: reward feature + output + optional inhibit, optional guard
 feature + output, background kind, calibration id, electrode **names**
 (empty = Rust default).
 
-**Crown Start is refused** whenever `listingDeviceKind` /
-`lastConnectedKind` is `DeviceKind.neurosity` (real Crown/Notion or the
-Crown (OSC) / Notion (OSC) simulator rows). Catalog may list band protocols
-on that kind; `startCalibration` must not silently train C3/F5.
+**Crown sessions** (real Crown/Notion or the Crown (OSC) / Notion (OSC)
+simulator rows) record all 8 channels. Gate and reward pads come from Rust
+`session_gate_electrodes` (feature electrodes, else needed pads PO3/PO4;
+Muse AF7/AF8); the band-math guard reads delta on `DeviceConfig`
+`frontalElectrodes` (F5/F6; Muse AF7/AF8). Session charts caption the pair
+they average. Pad
+quality is the Rust 1 Hz `PadQuality` (Crown or app source per
+`crown_quality_source`). `ai.*` guards stay Muse-only.
 
 `DeviceKind` is Muse | Neurosity. Simulation is `ConnectSource.simulator` +
 `sim:*` ids, not extra enum variants. List filter is last connected this

@@ -4,7 +4,6 @@ import 'package:neurofeed/src/audio/reward_output.dart';
 import 'package:neurofeed/src/feedback/feature_bus.dart';
 import 'package:neurofeed/src/feedback/feature_override.dart';
 import 'package:neurofeed/src/feedback/feedback_phase.dart';
-import 'package:neurofeed/src/feedback/gate_electrodes.dart';
 import 'package:neurofeed/src/feedback/guard_lane.dart';
 import 'package:neurofeed/src/feedback/target_state.dart';
 import 'package:neurofeed/src/rust/api/features.dart';
@@ -166,7 +165,7 @@ void main() {
               enabled: true,
               bandMath: true,
               featureId: 'band.delta',
-              deltaElectrodes: defaultGateElectrodes,
+              deltaElectrodes: const [1, 2],
             );
       lane.baselineSleepDir.addAll(
         FeatureOverride.baselineSamples('band.delta'),

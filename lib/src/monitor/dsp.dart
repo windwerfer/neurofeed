@@ -8,6 +8,8 @@ const double kHistogramDefaultHalfRange = 100;
 const int kStftHopSamples = 64;
 const double kLogEpsilon = 1e-12;
 
+/// EEG bands `[lo, hi)` Hz, same as Rust `BANDS_HZ`: each 1 Hz bin is in
+/// exactly one band; gamma stops below the mains notch.
 const double kBandDeltaLoHz = 1;
 const double kBandDeltaHiHz = 4;
 const double kBandThetaLoHz = 4;
@@ -17,7 +19,7 @@ const double kBandAlphaHiHz = 13;
 const double kBandBetaLoHz = 13;
 const double kBandBetaHiHz = 30;
 const double kBandGammaLoHz = 30;
-const double kBandGammaHiHz = 50;
+const double kBandGammaHiHz = 45;
 
 bool isPowerOfTwo(int n) => n >= 2 && (n & (n - 1)) == 0;
 
@@ -133,34 +135,36 @@ Spectrum fft(
   }
   _fftInPlace(re, im);
   final half = n >> 1;
+  // One-sided PSD in µV²/Hz: 2|X_k|² / (fs·Σw²), DC and Nyquist once.
+  var sumW2 = 0.0;
+  for (final v in w) {
+    sumW2 += v * v;
+  }
   final power = Float64List(half + 1);
-  final norm = 1.0 / (n * n);
+  final norm = 1.0 / (sampleRate * sumW2);
   for (var k = 0; k <= half; k++) {
-    power[k] = (re[k] * re[k] + im[k] * im[k]) * norm;
+    final sides = k == 0 || k == half ? 1.0 : 2.0;
+    power[k] = (re[k] * re[k] + im[k] * im[k]) * norm * sides;
   }
   return Spectrum(n: n, sampleRate: sampleRate, power: power);
 }
 
+/// Band power over bins with `loHz <= f < hiHz` (PSD × bin width).
 double bandPower(Spectrum s, double loHz, double hiHz) {
-  final lo = freqBin(loHz, s.n, sampleRate: s.sampleRate);
-  var hi = freqBin(hiHz, s.n, sampleRate: s.sampleRate);
-  final last = s.power.length - 1;
-  if (hi > last) hi = last;
   var sum = 0.0;
-  for (var k = lo; k <= hi; k++) {
-    if (k < 1) continue;
-    sum += s.power[k];
+  for (var k = 1; k < s.power.length; k++) {
+    final f = s.freqAt(k);
+    if (f >= loHz && f < hiHz) sum += s.power[k];
   }
-  return sum;
+  return sum * s.binHz;
 }
 
 double? alphaPeakHz(Spectrum s) {
-  final lo = freqBin(kBandAlphaLoHz, s.n, sampleRate: s.sampleRate);
-  final hi = freqBin(kBandAlphaHiHz, s.n, sampleRate: s.sampleRate);
   var maxP = 0.0;
-  var maxK = lo;
-  for (var k = lo; k <= hi && k < s.power.length; k++) {
-    if (k < 1) continue;
+  var maxK = 0;
+  for (var k = 1; k < s.power.length; k++) {
+    final f = s.freqAt(k);
+    if (f < kBandAlphaLoHz || f >= kBandAlphaHiHz) continue;
     if (s.power[k] > maxP) {
       maxP = s.power[k];
       maxK = k;

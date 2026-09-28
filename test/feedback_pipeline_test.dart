@@ -4,7 +4,6 @@ import 'package:neurofeed/src/audio/guard_output.dart';
 import 'package:neurofeed/src/audio/reward_output.dart';
 import 'package:neurofeed/src/feedback/feature_bus.dart';
 import 'package:neurofeed/src/feedback/feedback_phase.dart';
-import 'package:neurofeed/src/feedback/gate_electrodes.dart';
 import 'package:neurofeed/src/feedback/guard_lane.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/reward_lane.dart';
@@ -55,6 +54,9 @@ class RecordingGuardOutput implements GuardOutput {
   }
 }
 
+const _museMontage = ['TP9', 'AF7', 'AF8', 'TP10'];
+const _museFrontal = ['AF7', 'AF8'];
+
 void main() {
   group('FeatureBus', () {
     test('publish FeatureDto and of(id) delivers the sample', () {
@@ -84,64 +86,6 @@ void main() {
     });
   });
 
-  group('gate electrodes', () {
-    test('reward montage wins', () {
-      expect(
-        gateElectrodeNames(
-          hasReward: true,
-          guardOn: true,
-          guardFeature: 'ai.drowsiness',
-          rewardElectrodes: ['AF7', 'AF8'],
-        ),
-        ['AF7', 'AF8'],
-      );
-    });
-
-    test('ai.drowsiness does not add TP9/TP10', () {
-      expect(
-        gateElectrodeNames(
-          hasReward: false,
-          guardOn: true,
-          guardFeature: 'ai.drowsiness',
-        ),
-        museGateElectrodeNames,
-      );
-      expect(
-        electrodeIndicesFor(
-          gateElectrodeNames(
-            hasReward: false,
-            guardOn: true,
-            guardFeature: 'ai.drowsiness',
-          ),
-          montageNames: museMontageNames,
-        ),
-        defaultGateElectrodes,
-      );
-    });
-
-    test('band.delta guard uses frontal montage', () {
-      expect(
-        gateElectrodeNames(
-          hasReward: false,
-          guardOn: true,
-          guardFeature: 'band.delta',
-        ),
-        museGateElectrodeNames,
-      );
-    });
-
-    test('recordOnly falls back to AF7/AF8', () {
-      expect(
-        gateElectrodeNames(
-          hasReward: false,
-          guardOn: false,
-          guardFeature: 'none',
-        ),
-        museGateElectrodeNames,
-      );
-    });
-  });
-
   group('RatioEngine wall-clock window', () {
     test('epochWindowSeconds is 75', () {
       expect(RatioEngine.epochWindowSeconds, 75);
@@ -164,7 +108,7 @@ void main() {
       final agg = RelativeBandAggregator([
         'AF7',
         'AF8',
-      ], montageNames: museMontageNames);
+      ], montageNames: _museMontage);
       agg.update(
         const BandsDto(
           electrode: 1,
@@ -230,8 +174,8 @@ void main() {
         hasReward: true,
         featureId: 'band.atr',
         inhibit: inhibit,
-        electrodeNames: museGateElectrodeNames,
-        montageNames: museMontageNames,
+        electrodeNames: _museFrontal,
+        montageNames: _museMontage,
       );
       engine
         ..addBaselineSample(1.0)

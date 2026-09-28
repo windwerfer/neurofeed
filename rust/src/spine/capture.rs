@@ -371,6 +371,9 @@ pub fn capture_start(
         live: true,
     });
     log::info!("[spine] capture start prefix={prefix} id={id} dir={dir}");
+    if prefix != "tmp" {
+        crate::analysis::eeg_filter::lock_for_recording();
+    }
     Ok(())
 }
 
@@ -394,12 +397,20 @@ fn join_writer(sess: &mut CaptureSession) -> anyhow::Result<()> {
     }
 }
 
+/// Recordings and sessions hold the live mains notch fixed while writing.
+fn release_mains_lock(prefix: &str) {
+    if prefix != "tmp" {
+        crate::analysis::eeg_filter::unlock_recording();
+    }
+}
+
 pub fn capture_stop() -> anyhow::Result<()> {
     let mut g = lock_session();
     let Some(sess) = g.as_mut() else {
         return Ok(());
     };
     join_writer(sess)?;
+    release_mains_lock(&sess.prefix);
     log::info!(
         "[spine] capture stop prefix={} id={} drops={} write_errors={}",
         sess.prefix,
@@ -550,6 +561,7 @@ pub fn capture_assemble(metadata_json: Vec<u8>, thumbnail: Vec<u8>) -> anyhow::R
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("no capture to assemble"))?;
         join_writer(sess)?;
+        release_mains_lock(&sess.prefix);
         if sess.write_errors.load(Ordering::Relaxed) > 0 {
             anyhow::bail!("capture write error; temps kept");
         }
@@ -603,6 +615,7 @@ pub fn capture_discard() -> anyhow::Result<()> {
         return Ok(());
     };
     let _ = join_writer(&mut sess);
+    release_mains_lock(&sess.prefix);
     delete_temps(&sess.dir, &sess.prefix, &sess.id);
     STARTED.store(false, Ordering::Release);
     *lock_ctl() = None;
@@ -1049,6 +1062,37 @@ mod tests {
         )
         .unwrap();
         capture_discard().unwrap();
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn recordings_and_sessions_lock_the_mains_notch() {
+        use crate::analysis::eeg_filter::{
+            publish_live_mains, recording_lock, set_saved_mains, Mains, NotchSource,
+        };
+        let _lock = test_lock();
+        let _ = capture_discard();
+        let dir = temp_dir();
+        let start = |prefix: &str| {
+            capture_start(dir.to_string_lossy().into_owned(), prefix.into(), unique_id(prefix), vec![], 0.0)
+                .unwrap()
+        };
+        set_saved_mains(None);
+        publish_live_mains(Mains::Hz(50.0));
+        start("tmp");
+        assert_eq!(recording_lock(), None);
+        capture_discard().unwrap();
+        start("recording");
+        publish_live_mains(Mains::Hz(60.0));
+        assert_eq!(recording_lock(), Some((Mains::Hz(50.0), NotchSource::Detected)));
+        capture_stop().unwrap();
+        assert_eq!(recording_lock(), None);
+        capture_discard().unwrap();
+        publish_live_mains(Mains::Unknown);
+        start("session");
+        assert_eq!(recording_lock(), Some((Mains::Unknown, NotchSource::Undecided)));
+        capture_discard().unwrap();
+        assert_eq!(recording_lock(), None);
         let _ = fs::remove_dir_all(&dir);
     }
 

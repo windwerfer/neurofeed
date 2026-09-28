@@ -25,10 +25,31 @@ Uint8List encodeEdfExport({
   params: params,
 );
 
+/// Decode an EDF / EDF+ file into signals + TAL annotations.
+///
+/// Mirrors [`edf_export::decode_edf_plus`]. Returns an error string when the
+/// bytes are truncated or not a version-0 EDF header.
+EdfImportResult decodeEdfImport({required List<int> bytes}) =>
+    RustLib.instance.api.crateApiEdfExportDecodeEdfImport(bytes: bytes);
+
+/// One decoded continuous signal (EEG or other).
+@freezed
+sealed class EdfDecodedSignal with _$EdfDecodedSignal {
+  const factory EdfDecodedSignal({
+    required String label,
+    required int samplesPerRecord,
+    required double physicalMin,
+    required double physicalMax,
+    required String prefiltering,
+    required Float32List data,
+  }) = _EdfDecodedSignal;
+}
+
 @freezed
 sealed class EdfExportAnnotation with _$EdfExportAnnotation {
   const factory EdfExportAnnotation({
     required double onsetSeconds,
+    required double durationSeconds,
     required String text,
   }) = _EdfExportAnnotation;
 }
@@ -45,5 +66,26 @@ sealed class EdfExportParams with _$EdfExportParams {
     required int minute,
     required int second,
     required List<EdfExportAnnotation> annotations,
+    required String prefiltering,
   }) = _EdfExportParams;
+}
+
+/// Result of decoding an EDF / EDF+ file for import.
+@freezed
+sealed class EdfImportResult with _$EdfImportResult {
+  const factory EdfImportResult({
+    required String patientId,
+    required String recordingId,
+    required int year,
+    required int month,
+    required int day,
+    required int hour,
+    required int minute,
+    required int second,
+    required String reserved,
+    required double recordDurationSeconds,
+    required Float64List recordStartsSeconds,
+    required List<EdfDecodedSignal> signals,
+    required List<EdfExportAnnotation> annotations,
+  }) = _EdfImportResult;
 }

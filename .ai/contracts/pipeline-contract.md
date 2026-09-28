@@ -3,10 +3,10 @@
 | Field | Value |
 |---|---|
 | Status | **Implemented** (PRs 1–7). |
-| Scope | Feature IDs, protocol documents, lane semantics, FFI, catalog mapping, Crown Start refused. |
+| Scope | Feature IDs, protocol documents, lane semantics, FFI, catalog mapping, Crown sessions. |
 | Not this | Capture writer ([data-plane-contract.md](data-plane-contract.md)); `.neurofeed` header / computed field set ([fileformat_v6.md](fileformat_v6.md)); Connect UX; SoLoud internals ([../audio-engine.md](../audio-engine.md)); Crown *session run*. |
 
-Do not reopen [Key Decisions](#key-decisions). **Crown Start stays refused.**
+Do not reopen [Key Decisions](#key-decisions).
 
 Implemented map: [../feedback/architecture.md](../feedback/architecture.md).
 Catalog copy: `assets/features.json`, `assets/protocols.json` (file version **4**).
@@ -38,9 +38,9 @@ JSON names IDs. Code owns behavior. Availability is derived from the
 last-connected / selected device + installed models, not copied into every
 protocol row.
 
-The catalog **may list** band protocols when the selected kind is Crown.
-**Running** a catalog protocol on Crown is out of scope. The orchestrator
-refuses Start on Crown (`DeviceKind.neurosity`, real or simulated).
+The catalog lists band protocols when the selected kind is Crown and they
+run on it (`DeviceKind.neurosity`, real or simulated) with the Crown
+default electrodes (PO3/PO4) unless the protocol names its own.
 
 ---
 
@@ -101,7 +101,7 @@ Guard warning / muffle does **not** change `inTarget`.
 
 Inhibit **fails closed** if the relative-band vector for the reward electrodes is missing: `inTarget = false`.
 
-`band.delta` as a **guard** is absolute δ µV²/Hz average on AF7/AF8. Relative delta for **inhibit** comes from always-on `BandsDto` totals, not from this feature ID. Do not conflate the two.
+`band.delta` as a **guard** is absolute δ µV²/Hz average on the frontal pair (Muse AF7/AF8, Crown F5/F6). Relative delta for **inhibit** comes from always-on `BandsDto` totals, not from this feature ID. Do not conflate the two.
 
 ---
 
@@ -115,7 +115,7 @@ Producer registry in Rust. Copy + `usableFor` in `assets/features.json`. No Dart
 | `band.tar` | band | θ/α | reward | AF7, AF8 | PO3, PO4 | 1 Hz |
 | `band.btr` | band | β/θ | reward | AF7, AF8 | PO3, PO4 | 1 Hz |
 | `band.alpha` | band | α / total | reward | AF7, AF8 | PO3, PO4 | 1 Hz |
-| `band.delta` | band | absolute δ µV²/Hz avg | guard | AF7, AF8 | PO3, PO4 | 1 Hz |
+| `band.delta` | band | absolute δ µV²/Hz avg | guard | AF7, AF8 | F5, F6 | 1 Hz |
 | `ai.drowsiness` | ai | `sleep_dir` | guard | AF7, AF8, TP9, TP10 | **unavailable** | 1 Hz |
 | `device.focus` | device | Crown OSC 0–1 | reward, guard | **unavailable** | n/a | ~4 Hz |
 | `device.calm` | device | Crown OSC 0–1 | reward, guard | **unavailable** | n/a | ~4 Hz |
@@ -128,9 +128,10 @@ Add a feature later: register producer in Rust, add a copy row to `features.json
 
 Do **not** union every subscribed feature’s channels into one `needed_electrodes` (that would pause on TP9/TP10 whenever `ai.drowsiness` is on).
 
-1. Reward lane on → gate = that feature’s **montage** producer electrodes (`device.*` have none — Crown run is OOS).
-2. Else guard lane on → gate = that feature’s montage electrodes if it has them. **`ai.drowsiness` does not add TP9/TP10**; fall back to AF7/AF8 on Muse.
-3. Else (`recordOnly`) → gate = AF7/AF8 on Muse.
+Rust resolves the gate pads (`session_gate_electrodes`, see [protocols_and_features.md](protocols_and_features.md)):
+1. Reward lane on → the reward feature's resolved electrodes (protocol override, else registry default).
+2. Else a `band.*` guard on → that feature's resolved electrodes. **AI guards do not add TP9/TP10.**
+3. Else → `DeviceConfig.needed_electrodes` (Muse AF7/AF8, Crown PO3/PO4).
 
 Playing pause: **all gate pads** below `signal_critical_threshold` (40) for `badSignalPauseSeconds` (10). Rear pads never pause a frontal-gated session.
 
@@ -138,7 +139,7 @@ Playing pause: **all gate pads** below `signal_critical_threshold` (40) for `bad
 
 `DeviceConfig` montage is the index authority (`muse()` / `neurosity_crown()`). Protocol override: optional `reward.electrodes` / `guard.electrodes` as **names**, never indices. Rust rejects unknown names. Do not restore `const electrodeAf7 = 1` on the reward path.
 
-Autodrop: 0–100 in the Rust forwarder (Muse: 1.0 **second** EEG ring, same std/noise formula as the Dart UI dots). Null/short quality → skip the sample. Crown `/signalQuality` 0–1 → 0–100 is defined for `band.*` computation; Crown **run** stays refused.
+Autodrop: 0–100 in the Rust forwarder (Muse: 1.0 **second** EEG ring, same std/noise formula as the Dart UI dots). Null/short quality → skip the sample. Crown `/signalQuality` 0–1 → 0–100 is defined for `band.*` computation.
 
 ---
 
@@ -184,7 +185,7 @@ Any document **with** a `guard` object defaults ON (`band.delta`) when no pref e
 
 ### Listing vs running
 
-List filter = last-connected / currently connected `DeviceKind` this process; if none, show all catalog rows. Band protocols **list** on Crown; **Start is refused**. `ai.drowsiness` stays unavailable on Crown. `recordOnly` lists on every known kind; Start on Crown is still refused.
+List filter = last-connected / currently connected `DeviceKind` this process; if none, show all catalog rows. Band protocols list and run on Crown. `ai.drowsiness` stays unavailable on Crown. `recordOnly` lists on every known kind.
 
 ---
 
@@ -284,7 +285,7 @@ Reconnect does not re-enable; the orchestrator re-calls on session start.
 1. **Inhibit ≠ guard.** Inhibit AND-gates the reward verdict. Guard never changes `inTarget` or the reward scalar.
 2. **Background ≠ reward output ≠ guard output.** `muffleReward` is a guard-document bool; live muffle is `RewardOutput.setMuffle`.
 3. **JSON names IDs; code owns behavior.** Protocols may say `band.atr` / `musicFilter` / `percentileUptrain`. They may not say FFT bins, biquads, or percentile math.
-4. **Rust owns `(device, feature)` producer electrodes / rate / existence.** Protocol override is names. Gate electrodes are a second list: reward montage, else guard montage; **`ai.drowsiness` does not add TP9/TP10 to the gate.** `DeviceConfig` montage is the index authority. Do not change `DeviceConfig` FFI fields (`targetElectrodes` / `neededElectrodes` / `DeviceFeatures`) for Crown run.
+4. **Rust owns `(device, feature)` producer electrodes / rate / existence.** Protocol override is names. Gate electrodes are a second list, resolved in Rust: reward feature, else `band.*` guard, else device needed pads; **AI guards do not add TP9/TP10 to the gate.** `DeviceConfig` montage is the index authority. Do not change `DeviceConfig` FFI fields (`targetElectrodes` / `neededElectrodes` / `DeviceFeatures`) for Crown run.
 5. **Always-on vs subscribed.** Bands, movement, gestures always-on. Pad quality 0–100 for autodrop is in the Rust forwarder; null/short quality skips the sample. Subscribe only `FeatureDto` producers. Default enabled set is empty.
 6. **Band-derived features computed in Rust** from the FFT already running, autodropped there. Do not restore Dart `scalarForFeature` or `electrodeAf7` on the reward path. Charts may keep 4-ch names until the Crown-run series.
 7. **Missing sample = no sample**, not 0.

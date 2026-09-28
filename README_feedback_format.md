@@ -53,6 +53,10 @@ Dashboard, history, PDF, and PNG charts plot computed 1 Hz:
 `extractComputed` (parses the **v6** container) →
 `prepareChartDataFromComputed`. The history-list preview is the WebP thumbnail.
 
+Band values (raw `bands` records and computed `bands`) always come from the
+app's own 256-point FFT of raw EEG, for every device. A computed frame's
+`bands[e]` is the mean of all band updates for electrode `e` in that second.
+
 ---
 
 ## Base metadata (both kinds)
@@ -106,6 +110,8 @@ Writers: `lib/src/session_format/metadata.dart` (`buildRecordingMetadata` /
 - `subject.id` = stable anonymous UUID v4 from Settings; optional `nickname`.
 - Root `sessionId` = **file** identity (new per capture), not the person.
 - `annotations[]` is the single timeline (pause / bad_quality / disconnect + gesture instants). No parallel `feedback.gestures[]`.
+- Crown computed frames carry `signalQualitySource` (`crown` | `app`) and, for `crown`, `crownSignalQuality` (8 per-pad 0..1 means); `feedback.sessionSettings.crownQualitySource` records the setting. See contract **Neurosity signal quality**.
+- Imported recordings (EDF/EDF+/Mind Monitor CSV) carry a root `import` provenance object (`sourceFormat`, `sourceFileName`, `originalChannels`, `droppedChannels`, `resampled`, `rawPresent`, `lossy`, `warnings`, …); see `.ai/contracts/fileformat_v6.md` **Import provenance**.
 
 ---
 

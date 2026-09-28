@@ -1,10 +1,16 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:neurofeed/src/util/timezone.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:neurofeed/src/feedback/session_export.dart';
+import 'package:neurofeed/src/feedback/session_import.dart';
+import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/monitor/recording/recording_store.dart';
+import 'package:neurofeed/src/settings.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/monitor/views/recording_dashboard.dart';
 import 'package:neurofeed/src/views/feedback_dashboard.dart';
@@ -74,6 +80,151 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
       if (_selected.contains(s.id)) s,
   ];
 
+
+  static const _importTypes = [
+    XTypeGroup(label: 'EEG / CSV', extensions: ['edf', 'csv']),
+  ];
+
+  Future<void> _importRecording() async {
+    late final String path;
+    String? fileName;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      final uri = await SafSessionStorage.pickFile();
+      if (uri == null) return;
+      path = await SafSessionStorage.copyUriToCache(uri, 'import_recording');
+      fileName = Uri.decodeComponent(uri).split(RegExp(r'[/:]')).last;
+    } else {
+      final file = await openFile(acceptedTypeGroups: _importTypes);
+      if (file == null) return;
+      path = file.path;
+    }
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(width: 16),
+            Expanded(child: Text('Importing…')),
+          ],
+        ),
+      ),
+    );
+    final ImportResult result;
+    try {
+      result = await importFile(
+        path: path,
+        fileName: fileName,
+        subject: ref.read(settingsProvider).subjectInfo,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: $e')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+    if (!await _confirmImport(result) || !mounted) return;
+    try {
+      final store = await ref.read(recordingStoreProvider.future);
+      final storage = await ref.read(sessionStorageProvider.future);
+      await publishImportResult(
+        result: result,
+        store: store,
+        storage: storage,
+      );
+      if (!mounted) return;
+      ref.invalidate(sessionListProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Imported recording_${result.id}.neurofeed')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Import failed: $e')),
+      );
+    }
+  }
+
+  /// Kept-vs-lost summary before an import is saved.
+  Future<bool> _confirmImport(ImportResult result) async {
+    final summary = importSummary(result);
+    final p = result.provenance;
+    final coverageWarning = intervalCoverageWarning(p);
+    final theme = Theme.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(p.lossy ? 'Import with losses?' : 'Import recording?'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                p.sourceFileName.isEmpty ? p.sourceFormat : p.sourceFileName,
+                style: theme.textTheme.bodySmall,
+              ),
+              if (coverageWarning != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  key: const Key('import_interval_warning'),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          coverageWarning,
+                          style: TextStyle(
+                            color: theme.colorScheme.onErrorContainer,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Text('Kept', style: theme.textTheme.titleSmall),
+              for (final line in summary.kept) Text('• $line'),
+              if (summary.lost.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text('Lost or changed', style: theme.textTheme.titleSmall),
+                for (final line in summary.lost) Text('• $line'),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   Future<void> _export(List<SessionSummary> sessions, ExportKind kind) async {
     final store = await ref.read(sessionStoreProvider.future);
     final history = await store.storage;
@@ -120,17 +271,21 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
 
   void _showExportResult(SessionExportResult result) {
     final messenger = ScaffoldMessenger.of(context);
+    final notices = [for (final n in result.notices) n.message].join('\n');
     if (result.warnings.isEmpty) {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'Exported ${result.fileCount} file(s) to ${result.location}',
+            'Exported ${result.fileCount} file(s) to ${result.location}'
+            '${notices.isEmpty ? '' : '\n$notices'}',
           ),
+          duration: Duration(seconds: notices.isEmpty ? 4 : 8),
         ),
       );
       return;
     }
-    final files = '${result.fileCount} file(s) exported to ${result.location}.';
+    final files = '${result.fileCount} file(s) exported to ${result.location}.'
+        '${notices.isEmpty ? '' : '\n$notices'}';
     final problems = [
       for (final w in result.warnings) '• ${w.sessionId}: ${w.message}',
     ].join('\n');
@@ -194,19 +349,13 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
   }
 
   void _openExportSheet(List<SessionSummary> sessions) {
-    final exportable = [
+    if (sessions.isEmpty) return;
+    final feedbackOnly = [
       for (final s in sessions)
         if (!s.isRecording) s,
     ];
-    if (exportable.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Export is not available for recordings.'),
-        ),
-      );
-      return;
-    }
-    sessions = exportable;
+    final hasRecording = sessions.any((s) => s.isRecording);
+    final hasFeedback = feedbackOnly.isNotEmpty;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -216,37 +365,50 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
           children: [
             ListTile(
               title: Text(
-                'Export ${sessions.length} session(s)',
+                'Export ${sessions.length} item(s)',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
+              subtitle: hasRecording && !hasFeedback
+                  ? const Text(
+                      'Recordings: CSV, EDF+, PNG thumbnail. '
+                      'PDF / PNG charts are feedback-session only.',
+                    )
+                  : hasRecording
+                      ? const Text(
+                          'PDF / PNG charts apply to feedback sessions only; '
+                          'CSV / EDF+ / thumbnail include recordings.',
+                        )
+                      : null,
             ),
-            _ExportOption(
-              icon: Icons.picture_as_pdf,
-              title: 'PDF report',
-              subtitle: 'One vector page per session',
-              onTap: () {
-                Navigator.of(context).pop();
-                _export(sessions, ExportKind.pdf);
-              },
-            ),
+            if (hasFeedback)
+              _ExportOption(
+                icon: Icons.picture_as_pdf,
+                title: 'PDF report',
+                subtitle: 'Feedback sessions only · one vector page each',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _export(feedbackOnly, ExportKind.pdf);
+                },
+              ),
             _ExportOption(
               icon: Icons.photo,
               title: 'PNG thumbnail',
-              subtitle: 'Single thumbnail image per session',
+              subtitle: 'Single thumbnail image per item',
               onTap: () {
                 Navigator.of(context).pop();
                 _export(sessions, ExportKind.pngThumbnail);
               },
             ),
-            _ExportOption(
-              icon: Icons.photo_library,
-              title: 'PNG charts',
-              subtitle: 'Thumbnail + every chart, one image each',
-              onTap: () {
-                Navigator.of(context).pop();
-                _export(sessions, ExportKind.pngAll);
-              },
-            ),
+            if (hasFeedback)
+              _ExportOption(
+                icon: Icons.photo_library,
+                title: 'PNG charts',
+                subtitle: 'Feedback sessions only · thumbnail + charts',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _export(feedbackOnly, ExportKind.pngAll);
+                },
+              ),
             _ExportOption(
               icon: Icons.table_chart,
               title: 'CSV (Mind Monitor)',
@@ -259,7 +421,7 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
             _ExportOption(
               icon: Icons.bolt,
               title: 'EDF+ raw EEG',
-              subtitle: 'Standard EEG file with calibration/gesture markers',
+              subtitle: 'Standard EEG file with markers when present',
               onTap: () {
                 Navigator.of(context).pop();
                 _export(sessions, ExportKind.edf);
@@ -296,12 +458,18 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
                   tooltip: 'Cancel selection',
                   onPressed: _clearSelection,
                 )
-              else
+              else ...[
+                IconButton(
+                  icon: const Icon(Icons.file_upload_outlined),
+                  tooltip: 'Import…',
+                  onPressed: _importRecording,
+                ),
                 IconButton(
                   icon: const Icon(Icons.refresh),
                   tooltip: 'Refresh',
                   onPressed: () => ref.invalidate(sessionListProvider),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 8),

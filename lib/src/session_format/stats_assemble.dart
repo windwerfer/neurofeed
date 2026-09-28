@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/feedback/target_state.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/monitor/signal_usable.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
 
@@ -94,60 +95,61 @@ Map<String, Object?>? assembleBaseStats({
 
   double? hrMean, hrMin, hrMax;
   double? spo2Mean, spo2Min, spo2Max;
-  var hrSum = 0.0, hrN = 0;
-  var spo2Sum = 0.0, spo2N = 0;
-  var movSum = 0.0, movN = 0, stillN = 0;
+  var hrSum = 0.0, hrN = 0.0;
+  var spo2Sum = 0.0, spo2N = 0.0;
+  var movSum = 0.0, movN = 0.0, stillN = 0.0;
   var peakPower = double.negativeInfinity;
   double? maxPowerHz;
-  var peakHzSum = 0.0, peakHzN = 0;
-  var qSum = 0.0, qN = 0, goodN = 0;
-  final channelGood = List<int>.filled(channelLabels.length, 0);
-  final channelSeen = List<int>.filled(channelLabels.length, 0);
+  var peakHzSum = 0.0, peakHzN = 0.0;
+  var qSum = 0.0, qN = 0.0, goodN = 0.0;
+  final channelGood = List<double>.filled(channelLabels.length, 0);
+  final channelSeen = List<double>.filled(channelLabels.length, 0);
+  final weights = frameSeconds(frames);
 
-  for (final f in frames) {
+  for (var fi = 0; fi < frames.length; fi++) {
+    final f = frames[fi];
+    final w = weights[fi];
     final p = f.pulse;
     if (p != null) {
-      hrSum += p;
-      hrN++;
+      hrSum += p * w;
+      hrN += w;
       hrMin = hrMin == null ? p : (p < hrMin ? p : hrMin);
       hrMax = hrMax == null ? p : (p > hrMax ? p : hrMax);
     }
     final s = f.spo2;
     if (s != null) {
-      spo2Sum += s;
-      spo2N++;
+      spo2Sum += s * w;
+      spo2N += w;
       spo2Min = spo2Min == null ? s : (s < spo2Min ? s : spo2Min);
       spo2Max = spo2Max == null ? s : (s > spo2Max ? s : spo2Max);
     }
     final m = f.movement;
     if (m != null) {
-      movSum += m;
-      movN++;
-      if (m <= movementGateThreshold) stillN++;
+      movSum += m * w;
+      movN += w;
+      if (m <= movementGateThreshold) stillN += w;
     }
     final pa = f.peakAlpha;
     if (pa != null) {
-      peakHzSum += pa.freq;
-      peakHzN++;
+      peakHzSum += pa.freq * w;
+      peakHzN += w;
       if (pa.power > peakPower) {
         peakPower = pa.power;
         maxPowerHz = pa.freq;
       }
     }
-    if (f.signalQuality.isNotEmpty) {
-      final mean =
-          f.signalQuality.map((e) => e.toDouble()).reduce((a, b) => a + b) /
-          f.signalQuality.length;
-      qSum += mean;
-      qN++;
-      if (mean >= kUsableSignalThreshold) goodN++;
+    final mean = _headQualityMean(f.signalQuality, channelLabels);
+    if (mean != null) {
+      qSum += mean * w;
+      qN += w;
+      if (mean >= kUsableSignalThreshold) goodN += w;
       final n = f.signalQuality.length < channelLabels.length
           ? f.signalQuality.length
           : channelLabels.length;
       for (var i = 0; i < n; i++) {
-        channelSeen[i]++;
+        channelSeen[i] += w;
         if (f.signalQuality[i] >= kUsableSignalThreshold) {
-          channelGood[i]++;
+          channelGood[i] += w;
         }
       }
     }
@@ -197,7 +199,10 @@ Map<String, Object?>? assembleBaseStats({
       ?'endPct': batteryEndPct,
     };
   }
-  final experimental = assembleExperimentalBands(frames);
+  final experimental = assembleExperimentalBands(
+    frames,
+    channelLabels: channelLabels,
+  );
   if (experimental != null) {
     stats.addAll(experimental);
   }
@@ -213,18 +218,58 @@ const int kBandGamma = 4;
 
 const int kMinUsableSecondsForExperimentalBands = 30;
 
-/// Muse channel indices matching default `device.channelLabels`.
-const int kChTp9 = 0;
-const int kChAf7 = 1;
-const int kChAf8 = 2;
-const int kChTp10 = 3;
+/// Seconds each computed frame stands for: the gap to the next frame,
+/// capped at the median gap (the last frame gets the median gap). Regular
+/// 1 Hz frames weigh 1; sparse interval imports weigh their interval;
+/// a gap longer than usual does not inflate the frame before it.
+List<double> frameSeconds(List<ffi.ComputedFrame> frames) =>
+    frameSecondsFromTimes([for (final f in frames) f.t]);
 
-bool _frameUsable(ffi.ComputedFrame f) {
-  if (f.signalQuality.isEmpty) return false;
-  final mean =
-      f.signalQuality.map((e) => e.toDouble()).reduce((a, b) => a + b) /
-      f.signalQuality.length;
-  return mean >= kUsableSignalThreshold;
+List<double> frameSecondsFromTimes(List<double> t) {
+  if (t.isEmpty) return const [];
+  if (t.length == 1) return const [1.0];
+  final gaps = [for (var i = 1; i < t.length; i++) t[i] - t[i - 1]];
+  final sorted = [...gaps]..sort();
+  var median = sorted[sorted.length ~/ 2];
+  if (median <= 0) median = 1.0;
+  return [
+    for (final g in gaps) g <= 0 ? 0.0 : math.min(g, median),
+    median,
+  ];
+}
+
+int? _labelIndex(List<String> labels, String label) {
+  final i = labels.indexOf(label);
+  return i < 0 ? null : i;
+}
+
+/// Absolute α of channel [i]; null when the channel is absent or α ≤ 0.
+double? _alphaAt(List<List<num>> bands, int? i) {
+  if (i == null || i >= bands.length || bands[i].length <= kBandAlpha) {
+    return null;
+  }
+  final a = bands[i][kBandAlpha].toDouble();
+  return a > 0 ? a : null;
+}
+
+bool _isHead(int i, List<String> labels) =>
+    i >= labels.length || !isAuxChannelLabel(labels[i]);
+
+/// Mean pad quality over head channels (AUX excluded); null when none.
+double? _headQualityMean(List<int> quality, List<String> labels) {
+  var sum = 0.0;
+  var n = 0;
+  for (var i = 0; i < quality.length; i++) {
+    if (!_isHead(i, labels)) continue;
+    sum += quality[i];
+    n++;
+  }
+  return n == 0 ? null : sum / n;
+}
+
+bool _frameUsable(ffi.ComputedFrame f, List<String> labels) {
+  final mean = _headQualityMean(f.signalQuality, labels);
+  return mean != null && mean >= kUsableSignalThreshold;
 }
 
 double? _channelMeanBand(List<List<num>> bands, int bandIdx) {
@@ -252,45 +297,59 @@ double? _relAlpha(List<num> ch) {
 /// when fewer than [kMinUsableSecondsForExperimentalBands] usable seconds.
 Map<String, Object?>? assembleExperimentalBands(
   List<ffi.ComputedFrame> frames, {
+  List<String> channelLabels = const ['TP9', 'AF7', 'AF8', 'TP10'],
   bool includeSensible = true,
   bool includeCool = true,
 }) {
+  final weights = frameSeconds(frames);
   final usable = <ffi.ComputedFrame>[];
-  for (final f in frames) {
-    if (!_frameUsable(f)) continue;
+  final usableW = <double>[];
+  for (var fi = 0; fi < frames.length; fi++) {
+    final f = frames[fi];
+    if (!_frameUsable(f, channelLabels)) continue;
     if (f.bands.isEmpty) continue;
     usable.add(f);
+    usableW.add(weights[fi]);
   }
-  if (usable.length < kMinUsableSecondsForExperimentalBands) {
+  final usableSeconds = usableW.fold<double>(0, (a, b) => a + b);
+  if (usableSeconds < kMinUsableSecondsForExperimentalBands) {
     return null;
   }
 
   var meanAlphaAbsSum = 0.0;
-  var meanAlphaAbsN = 0;
+  var meanAlphaAbsN = 0.0;
   var meanAlphaThetaSum = 0.0;
-  var meanAlphaThetaN = 0;
+  var meanAlphaThetaN = 0.0;
   var faaSum = 0.0;
-  var faaN = 0;
+  var faaN = 0.0;
   var meanAlphaRelSum = 0.0;
-  var meanAlphaRelN = 0;
+  var meanAlphaRelN = 0.0;
   var ftaaSum = 0.0;
-  var ftaaN = 0;
+  var ftaaN = 0.0;
   var meanBetaThetaSum = 0.0;
-  var meanBetaThetaN = 0;
+  var meanBetaThetaN = 0.0;
   var meanThetaAbsSum = 0.0;
-  var meanThetaAbsN = 0;
+  var meanThetaAbsN = 0.0;
   var meanBetaAbsSum = 0.0;
-  var meanBetaAbsN = 0;
+  var meanBetaAbsN = 0.0;
   var taaSum = 0.0;
-  var taaN = 0;
+  var taaN = 0.0;
+
+  final iAf7 = _labelIndex(channelLabels, 'AF7');
+  final iAf8 = _labelIndex(channelLabels, 'AF8');
+  final iTp9 = _labelIndex(channelLabels, 'TP9');
+  final iTp10 = _labelIndex(channelLabels, 'TP10');
 
   // Per-channel session-mean absolute α for crossChannelAlphaVar.
   final chAlphaSum = <double>[];
-  final chAlphaN = <int>[];
+  final chAlphaN = <double>[];
 
-  for (final f in usable) {
+  for (var ui = 0; ui < usable.length; ui++) {
+    final f = usable[ui];
+    final w = usableW[ui];
     final bands = [
-      for (final row in f.bands) List<num>.from(row),
+      for (var i = 0; i < f.bands.length; i++)
+        if (_isHead(i, channelLabels)) List<num>.from(f.bands[i]),
     ];
     // Ensure channel sum lists sized
     while (chAlphaSum.length < bands.length) {
@@ -301,8 +360,8 @@ Map<String, Object?>? assembleExperimentalBands(
       if (bands[i].length > kBandAlpha) {
         final a = bands[i][kBandAlpha].toDouble();
         if (!a.isNaN && a > 0) {
-          chAlphaSum[i] += a;
-          chAlphaN[i]++;
+          chAlphaSum[i] += a * w;
+          chAlphaN[i] += w;
         }
       }
     }
@@ -311,24 +370,24 @@ Map<String, Object?>? assembleExperimentalBands(
     final meanT = _channelMeanBand(bands, kBandTheta);
     final meanB = _channelMeanBand(bands, kBandBeta);
     if (meanA != null) {
-      meanAlphaAbsSum += meanA;
-      meanAlphaAbsN++;
+      meanAlphaAbsSum += meanA * w;
+      meanAlphaAbsN += w;
     }
     if (meanA != null && meanT != null && meanT > 0) {
-      meanAlphaThetaSum += meanA / meanT;
-      meanAlphaThetaN++;
+      meanAlphaThetaSum += (meanA / meanT) * w;
+      meanAlphaThetaN += w;
     }
     if (meanT != null) {
-      meanThetaAbsSum += meanT;
-      meanThetaAbsN++;
+      meanThetaAbsSum += meanT * w;
+      meanThetaAbsN += w;
     }
     if (meanB != null) {
-      meanBetaAbsSum += meanB;
-      meanBetaAbsN++;
+      meanBetaAbsSum += meanB * w;
+      meanBetaAbsN += w;
     }
     if (meanB != null && meanT != null && meanT > 0) {
-      meanBetaThetaSum += meanB / meanT;
-      meanBetaThetaN++;
+      meanBetaThetaSum += (meanB / meanT) * w;
+      meanBetaThetaN += w;
     }
 
     // Relative α: all-channel mean of per-channel relative α
@@ -341,35 +400,25 @@ Map<String, Object?>? assembleExperimentalBands(
       relN++;
     }
     if (relN > 0) {
-      meanAlphaRelSum += relSum / relN;
-      meanAlphaRelN++;
+      meanAlphaRelSum += (relSum / relN) * w;
+      meanAlphaRelN += w;
     }
 
-    if (bands.length > kChAf8) {
-      final a7 = bands[kChAf7].length > kBandAlpha
-          ? bands[kChAf7][kBandAlpha].toDouble()
-          : 0.0;
-      final a8 = bands[kChAf8].length > kBandAlpha
-          ? bands[kChAf8][kBandAlpha].toDouble()
-          : 0.0;
-      if (a7 > 0 && a8 > 0) {
-        faaSum += _ln(a8) - _ln(a7);
-        faaN++;
-      }
-      if (bands.length > kChTp10) {
-        final t9 = bands[kChTp9][kBandAlpha].toDouble();
-        final t10 = bands[kChTp10][kBandAlpha].toDouble();
-        if (a7 > 0 && a8 > 0 && t9 > 0 && t10 > 0) {
-          final frontal = (a7 + a8) / 2;
-          final temporal = (t9 + t10) / 2;
-          ftaaSum += _ln(frontal) - _ln(temporal);
-          ftaaN++;
-        }
-        if (t9 > 0 && t10 > 0) {
-          taaSum += _ln(t10) - _ln(t9);
-          taaN++;
-        }
-      }
+    final a7 = _alphaAt(f.bands, iAf7);
+    final a8 = _alphaAt(f.bands, iAf8);
+    final t9 = _alphaAt(f.bands, iTp9);
+    final t10 = _alphaAt(f.bands, iTp10);
+    if (a7 != null && a8 != null) {
+      faaSum += (_ln(a8) - _ln(a7)) * w;
+      faaN += w;
+    }
+    if (a7 != null && a8 != null && t9 != null && t10 != null) {
+      ftaaSum += (_ln((a7 + a8) / 2) - _ln((t9 + t10) / 2)) * w;
+      ftaaN += w;
+    }
+    if (t9 != null && t10 != null) {
+      taaSum += (_ln(t10) - _ln(t9)) * w;
+      taaN += w;
     }
   }
 

@@ -11,6 +11,7 @@ import 'package:neurofeed/src/feedback/last_calibration_baseline.dart';
 import 'package:neurofeed/src/agent/agent_flags.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -137,6 +138,7 @@ class Settings extends ChangeNotifier {
   static const String _monitorWindowPrefix = 'monitor_window_';
   static const String _monitorDetailWindowPrefix = 'monitor_detail_window_';
   static const String _lastDeviceKey = 'last_device_id';
+  static const String _lastDeviceKindKey = 'last_device_kind';
   static const String _masterVolumeKey = 'master_volume';
   static const String _backgroundVolumeKey = 'background_volume';
   static const String _feedbackVolumeKey = 'feedback_volume';
@@ -150,6 +152,8 @@ class Settings extends ChangeNotifier {
   static const String _durationMinutesKey = 'duration_minutes';
   static const String _sessionFolderKey = 'session_folder';
   static const String _recordStreamsKey = 'record_streams';
+  static const String _recordAuxKey = 'record_aux_channels';
+  static const String _crownQualitySourceKey = 'crown_quality_source';
   static const String _eyeMarkersKey = 'gesture_eye_markers';
   static const String _markersInFeedbackKey = 'gesture_markers_in_feedback';
   static const String _trustRewardVisibleKey = 'trust_reward_visible';
@@ -346,8 +350,16 @@ class Settings extends ChangeNotifier {
 
   String? get lastDeviceId => _prefs.getString(_lastDeviceKey);
 
-  Future<void> setLastDeviceId(String id) async {
+  /// Headset family of [lastDeviceId]: Muse is found by BLE scan, Neurosity
+  /// by OSC LAN discovery.
+  DeviceKind get lastDeviceKind =>
+      _prefs.getString(_lastDeviceKindKey) == DeviceKind.neurosity.name
+      ? DeviceKind.neurosity
+      : DeviceKind.muse;
+
+  Future<void> setLastDevice(String id, DeviceKind kind) async {
     await _prefs.setString(_lastDeviceKey, id);
+    await _prefs.setString(_lastDeviceKindKey, kind.name);
     notifyListeners();
   }
 
@@ -510,6 +522,27 @@ class Settings extends ChangeNotifier {
       _recordStreamsKey,
       streams.map((s) => s.name).toList(),
     );
+    notifyListeners();
+  }
+
+  /// Record Muse AUX inputs (AUX1–AUX4) as extra EEG channels. Off by
+  /// default: only TP9/AF7/AF8/TP10 are recorded. Applies on connect.
+  bool get recordAux => _prefs.getBool(_recordAuxKey) ?? false;
+
+  Future<void> setRecordAux(bool value) async {
+    await _prefs.setBool(_recordAuxKey, value);
+    notifyListeners();
+  }
+
+  /// Where Neurosity pad signal quality comes from (UI pads, recording and
+  /// the feature gate). Default [QualitySource.crown]. Applies on connect.
+  QualitySource get crownQualitySource =>
+      _prefs.getString(_crownQualitySourceKey) == QualitySource.app.name
+          ? QualitySource.app
+          : QualitySource.crown;
+
+  Future<void> setCrownQualitySource(QualitySource value) async {
+    await _prefs.setString(_crownQualitySourceKey, value.name);
     notifyListeners();
   }
 
@@ -728,6 +761,33 @@ class Settings extends ChangeNotifier {
   Future<void> setEnableSimulatedDevices(bool value) async {
     await _prefs.setBool(_enableSimulatedDevicesKey, value);
     notifyListeners();
+  }
+
+  static const String _mainsByDeviceKey = 'mains_by_device';
+
+  /// Last mains decision per device id: `[50]`, `[60]` or `[]` (no hum).
+  List<double>? savedMainsFor(String deviceId) {
+    if (deviceId.isEmpty) return null;
+    final v = _mainsByDevice()[deviceId];
+    return v is List ? [for (final hz in v) if (hz is num) hz.toDouble()] : null;
+  }
+
+  Future<void> setSavedMains(String deviceId, List<double> notchHz) async {
+    if (deviceId.isEmpty) return;
+    final next = Map<String, Object?>.from(_mainsByDevice());
+    next[deviceId] = notchHz;
+    await _prefs.setString(_mainsByDeviceKey, jsonEncode(next));
+  }
+
+  Map<String, Object?> _mainsByDevice() {
+    final raw = _prefs.getString(_mainsByDeviceKey);
+    if (raw == null || raw.isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is Map<String, Object?> ? decoded : const {};
+    } catch (_) {
+      return const {};
+    }
   }
 
   LastCalibrationBaseline? lastCalibrationBaselineFor(String deviceId) {

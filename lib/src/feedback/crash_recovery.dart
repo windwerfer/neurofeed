@@ -93,6 +93,12 @@ SessionMetadata _metadataFromTemps({
   var protocol = '';
   var calibrationKind = '';
   String? calibrationId;
+  String? deviceName;
+  String? deviceModel;
+  String? deviceId;
+  RawFiltering? rawFiltering;
+  SignalConditioning? conditioning;
+  var channelLabels = const <String>[];
   if (jsonl.isNotEmpty) {
     for (final line in utf8.decode(jsonl, allowMalformed: true).split('\n')) {
       if (line.trim().isEmpty) continue;
@@ -102,6 +108,16 @@ SessionMetadata _metadataFromTemps({
         final type = meta['type'];
         if (type == 'protocol') {
           protocol = meta['protocol'] as String? ?? protocol;
+        } else if (type == 'device') {
+          deviceName = meta['name'] as String?;
+          deviceModel = meta['firmware'] as String?;
+          deviceId = meta['id'] as String?;
+          rawFiltering = RawFiltering.fromJson(meta['rawFiltering']);
+          conditioning = SignalConditioning.fromJson(meta['conditioning']);
+          final labels = meta['channelLabels'];
+          if (labels is List) {
+            channelLabels = labels.whereType<String>().toList();
+          }
         } else if (type == 'calibration_start') {
           calibrationKind = meta['kind'] as String? ?? calibrationKind;
           calibrationId = meta['calibrationId'] as String? ?? calibrationId;
@@ -120,6 +136,12 @@ SessionMetadata _metadataFromTemps({
     savedAt: formatIso8601WithOffset(DateTime.now()),
     timeZone: captureIanaTimeZone(),
     sessionId: id,
+    deviceName: deviceName,
+    deviceModel: deviceModel,
+    deviceId: deviceId,
+    rawFiltering: rawFiltering,
+    conditioning: conditioning,
+    recordedChannels: channelLabels,
     calibration: calibrationId == null && calibrationKind.isEmpty
         ? null
         : SessionCalibration(

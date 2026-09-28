@@ -1,7 +1,6 @@
 import 'package:neurofeed/src/audio/reward_output.dart';
 import 'package:neurofeed/src/feedback/feature_bus.dart';
 import 'package:neurofeed/src/feedback/feedback_phase.dart';
-import 'package:neurofeed/src/feedback/gate_electrodes.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/target_state.dart';
 import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
@@ -60,8 +59,8 @@ class RewardLane {
   final void Function() onThresholdChanged;
 
   RelativeBandAggregator _bands = RelativeBandAggregator(
-    museGateElectrodeNames,
-    montageNames: museMontageNames,
+    const [],
+    montageNames: const [],
   );
   List<TargetCondition> _inhibit = const [];
   String _featureId = 'band.atr';

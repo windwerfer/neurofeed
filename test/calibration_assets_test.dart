@@ -64,7 +64,7 @@ void main() {
       expect(json['version'], 4);
       final featuresRaw = await rootBundle.loadString(FeatureCatalog.asset);
       final features = FeatureCatalog.fromJson(jsonDecode(featuresRaw) as Map);
-      expect(features.byId.length, 8);
+      expect(features.byId.length, 12);
       final catalog = ProtocolCatalog.fromJson(json, features: features);
       expect(catalog.version, 4);
       final manifestRaw = await rootBundle.loadString(

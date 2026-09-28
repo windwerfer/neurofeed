@@ -383,6 +383,7 @@ mod tests {
                 | MuseEventDto::Gestures(_)
                 | MuseEventDto::Movement(_)
                 | MuseEventDto::Feature(_)
+                | MuseEventDto::PadQuality(_)
                 | MuseEventDto::Reve(_) => derived += 1,
                 _ => {}
             }

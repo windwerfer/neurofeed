@@ -75,6 +75,8 @@ DeviceInfo? simulatorCatalogRow(String id) {
 
 String emptyDevicesCopy(ConnectSource source) => switch (source) {
   ConnectSource.muse => 'No Muse devices found. Make sure the headset is on.',
-  ConnectSource.neurosity => 'No Neurosity devices found.',
+  ConnectSource.neurosity =>
+    'No Crown found on this Wi-Fi. The Crown must be on the same network '
+        'and have OSC streaming turned on.',
   ConnectSource.simulator => 'No simulator devices.',
 };

@@ -40,6 +40,7 @@ void main() {
           () => MonitorController(
             createRecorder: () =>
                 SessionRecorder(headerBytes: () => Uint8List(12)),
+            liveConditioning: () => null,
           ),
         ),
       ],
@@ -48,7 +49,12 @@ void main() {
   });
 
   tearDown(() async {
+    // Dispose queues the tmp discard; let it finish before deleting.
+    final monitor = container.exists(monitorControllerProvider)
+        ? container.read(monitorControllerProvider.notifier)
+        : null;
     container.dispose();
+    await monitor?.pendingOps;
     if (await history.exists()) {
       await history.delete(recursive: true);
     }
@@ -113,24 +119,21 @@ void main() {
     expect(res.body['error'], 'recording_active');
   });
 
-  test(
-    'POST /session/start 409 crown_refused before recording_active',
-    () async {
-      container.read(monitorControllerProvider);
-      app.debugSetConnected(kind: DeviceKind.neurosity, id: 'sim:crown-osc');
-      await settle();
-      await container.read(monitorControllerProvider.notifier).startRecording();
-      await settle();
+  test('POST /session/start on a Crown reaches the recording check', () async {
+    container.read(monitorControllerProvider);
+    app.debugSetConnected(kind: DeviceKind.neurosity, id: 'sim:crown-osc');
+    await settle();
+    await container.read(monitorControllerProvider.notifier).startRecording();
+    await settle();
 
-      final res = await agent.handle(
-        method: 'POST',
-        path: '/session/start',
-        body: const {},
-      );
-      expect(res.status, 409);
-      expect(res.body['error'], 'crown_refused');
-    },
-  );
+    final res = await agent.handle(
+      method: 'POST',
+      path: '/session/start',
+      body: const {},
+    );
+    expect(res.status, 409);
+    expect(res.body['error'], 'recording_active');
+  });
 
   test(
     'POST /session/start 412 not_connected before recording checks',

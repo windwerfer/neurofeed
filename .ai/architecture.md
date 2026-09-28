@@ -46,13 +46,15 @@ Crown-start-refused). Simulation is not a kind — it is `connect_with_options`
 Debug mode only (`enable_simulated_devices`). Spec:
 [connect-simulator-ux.md](connect-simulator-ux.md).
 
-`DeviceConfig` owns channel count, electrode **names**, gate electrodes,
-sampling rate, PPG/IMU flags.
+`DeviceConfig` owns channel count, electrode **names**, role pairs
+(target / needed / frontal / temporal), sampling rate, PPG/IMU flags. Gate
+pads are resolved in Rust (`features::session_gate_electrodes`); see
+[contracts/protocols_and_features.md](contracts/protocols_and_features.md).
 
 | Source | Kind | Transport | Notes |
 |------|-----------|--------|--------|
 | Muse | muse | btleplug via muse-rs | BLE scan, Muse only. 4 pads TP9/AF7/AF8/TP10 @ 256 Hz |
-| Neurosity | neurosity | OSC (`neurosity_osc.rs`) | Never BLE. Empty list OK (no OSC discovery yet). 8 ch |
+| Neurosity | neurosity | OSC (`neurosity_osc.rs`) | Never BLE. One UDP socket on 0.0.0.0:9000 (SO_REUSEADDR, broadcast) shared by LAN discovery (`start_crown_discovery` / `discovered_crowns`, from `/info` or any `/neurosity/notion/{id}/…`) and the receiver. Device id matched exactly in `/neurosity/notion/{id}/…`; `/crown{prefix}/…` when prefix-of-id. `/raw` floats flattened from OSC arrays or plain args; 8 floats = one sample, 8·N = N-sample epoch whose order (sample- or channel-major, unverified on real hardware) is detected per connection from per-channel smoothness and locked after 3 agreeing packets; re-batched to 16-sample `Eeg` events. `/signalQuality` 8 floats per pad → 1 Hz pad quality (see Signal quality); 1 float overall is ignored. Android holds a `MulticastLock` (`neurofeed/wifi`) while discovering/streaming. Band messages ignored (bands come only from the forwarder FFT). Test stream: `tools/crown_osc_sim.py`. |
 | Simulator | muse or neurosity from the row | `simulator.rs` locally | Static catalog; Crown (OSC) / Notion (OSC) are 8-ch sim, no UDP. Emits headset events only (`Eeg` / `Ppg` / IMU / `Telemetry`); the forwarder derives bands, features, pulse, SpO2, quality. |
 
 **Crown Start is refused** (`crownSessionUnsupportedMessage` in
@@ -169,10 +171,44 @@ Wire-format reference: `third_party/brainflow/` (tag 5.9.0), not a build dep.
 `prepareChartDataFromComputed` with the dashboard. CSV/EDF use the framed
 raw body. Destination `<root>/export/`.
 
+## Import
+
+History **Import…**: EDF/EDF+ (`decodeEdfImport`) or Mind Monitor CSV →
+NFED6 `kind: recording` with a root `import` provenance object. Channels
+must contain a full Muse or Crown montage (extras dropped, else refused);
+EEG is resampled to 256 Hz in Rust (`import_dsp.rs`, `rubato`). Details:
+[export.md](export.md), [TODO/import-export.md](TODO/import-export.md).
+
+## EEG conditioning
+
+`analysis/eeg_filter.rs` (`EegConditioner`): per channel, every device, 0.5 Hz
+Butterworth high-pass + Q 10 notch at 50/100 or 60/120 Hz, mains
+auto-detected per connection as 50 / 60 / none (sticky; none → 50/60 allowed,
+50 ↔ 60 never). Dart saves each decision per device id (settings
+`mains_by_device`) and hands it back at connect (`set_saved_mains`), which
+seeds the live notch. `capture_start` for `recording` / `session` freezes the
+notch (`lock_for_recording`: detected, else saved, else both) until the
+capture stops; the forwarder's `NotchMode::Live` conditioner follows the lock,
+also after a reconnect. The forwarder records the RAW dto (`capture::on_dto`) and
+feeds quality rings, FFT, features, gesture blink bins, the guardrail window
+and the Dart sink with the conditioned signal (gesture eye level uses RAW).
+`api/eeg_conditioning.rs`: `live_eeg_conditioning()` (the frozen notch for
+`device.conditioning`), `live_mains_decision()` (for saving) and
+`condition_eeg()` for offline RAW with one notch per file (History: the
+recording's; imports: scanned). Contract: fileformat_v6 **EEG conditioning**.
+
 ## Signal quality + gate
 
-Pad quality 0–100: EEG std + `BandsDto.line_noise_ratio` (Dart UI dots) and
+Pad quality 0–100 on the conditioned EEG: std + `BandsDto.line_noise_ratio` (Dart UI dots) and
 the same formula in Rust for autodrop (`pad_quality_from_std_and_noise`).
+Neurosity: Rust is the single source (`features::resolve_neurosity_second`,
+`analysis/crown_quality.rs`). Each 1 Hz forwarder tick it resolves one score
+per pad and sends `MuseEventDto::PadQuality`; the same values feed the UI
+dots, recording (`signalQualitySource` / `crownSignalQuality` per frame) and
+the feature gate. Setting `crown_quality_source`: `crown` (default) uses the
+Crown's per-pad `/signalQuality` (8 floats, 0..1, ≥ 0.75 adequate) averaged
+per second, mapped 0→0, 0.75→80, 1→100; a second without a complete in-range
+message falls back to the app score. `app` always uses the app score.
 Before calibration: gate electrodes green for 3 s. After baseline: no re-lock.
 Playing pauses only when **all** gate pads are critical for 10 s; never
 auto-ends. Band features skip pads below 80; no usable pad → no `FeatureDto`

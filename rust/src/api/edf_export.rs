@@ -15,6 +15,8 @@ pub struct EdfExportAnnotation {
     /// Seconds from recording start (session-relative, same clock as
     /// gesture markers).
     pub onset_seconds: f64,
+    /// Interval length in seconds; `0` omits the TAL Duration segment.
+    pub duration_seconds: f64,
     pub text: String,
 }
 
@@ -31,6 +33,9 @@ pub struct EdfExportParams {
     /// Annotations, sorted ascending by onset (e.g. calibration
     /// boundaries, gesture markers).
     pub annotations: Vec<EdfExportAnnotation>,
+    /// Prefiltering header field for every EEG signal (the stored RAW's
+    /// filtering, e.g. `"HP:DC N:none"`); empty = not stated.
+    pub prefiltering: String,
 }
 
 /// Nominal Muse EEG sample rate used when the recorded packet stream is
@@ -117,7 +122,10 @@ pub fn encode_edf_export(
                 last_idx = idx;
             }
         }
-        signals.push(edf_export::EdfSignal::eeg(label, rate, buf));
+        signals.push(edf_export::EdfSignal {
+            prefiltering: params.prefiltering.clone(),
+            ..edf_export::EdfSignal::eeg(label, rate, buf)
+        });
     }
     if signals.is_empty() {
         return Err("no EEG electrodes with labels provided".to_string());
@@ -128,6 +136,7 @@ pub fn encode_edf_export(
         .iter()
         .map(|a| edf_export::EdfAnnotation {
             onset_seconds: a.onset_seconds,
+            duration_seconds: a.duration_seconds,
             text: a.text.clone(),
         })
         .collect();
@@ -137,8 +146,90 @@ pub fn encode_edf_export(
         start: (params.year, params.month, params.day, params.hour, params.minute, params.second),
         physical_dimension: "uV",
         annotations: &annotations,
+        discontinuous_starts: None, // export path is continuous EDF+C
     };
     edf_export::encode_edf_plus(&signals, &spec).map_err(|e| e.to_string())
+}
+
+
+/// One decoded continuous signal (EEG or other).
+#[frb(dart_metadata = ("freezed",))]
+pub struct EdfDecodedSignal {
+    pub label: String,
+    /// Samples per data record (see `EdfImportResult::record_duration_seconds`).
+    pub samples_per_record: u32,
+    pub physical_min: f64,
+    pub physical_max: f64,
+    /// Prefiltering header field as written by the source (trimmed).
+    pub prefiltering: String,
+    /// Physical-domain samples (µV for EEG).
+    pub data: Vec<f32>,
+}
+
+/// Result of decoding an EDF / EDF+ file for import.
+#[frb(dart_metadata = ("freezed",))]
+pub struct EdfImportResult {
+    pub patient_id: String,
+    pub recording_id: String,
+    pub year: u16,
+    pub month: u16,
+    pub day: u16,
+    pub hour: u16,
+    pub minute: u16,
+    pub second: u16,
+    /// Header reserved field (`EDF+C` / `EDF+D` / empty for plain EDF).
+    pub reserved: String,
+    /// Data-record duration in seconds; sample rate = `samples_per_record / record_duration_seconds`.
+    pub record_duration_seconds: f64,
+    /// Absolute start (seconds from file start) of each data record, from
+    /// EDF+ timekeeping TALs (EDF+D gaps show as jumps).
+    pub record_starts_seconds: Vec<f64>,
+    pub signals: Vec<EdfDecodedSignal>,
+    pub annotations: Vec<EdfExportAnnotation>,
+}
+
+/// Decode an EDF / EDF+ file into signals + TAL annotations.
+///
+/// Mirrors [`edf_export::decode_edf_plus`]. Returns an error string when the
+/// bytes are truncated or not a version-0 EDF header.
+#[frb(sync)]
+pub fn decode_edf_import(bytes: &[u8]) -> Result<EdfImportResult, String> {
+    let dec = edf_export::decode_edf_plus(bytes).map_err(|e| e.to_string())?;
+    let (year, month, day, hour, minute, second) = dec.start;
+    Ok(EdfImportResult {
+        patient_id: dec.patient_id,
+        recording_id: dec.recording_id,
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        second,
+        reserved: dec.reserved,
+        record_duration_seconds: dec.record_duration,
+        record_starts_seconds: dec.record_starts,
+        signals: dec
+            .signals
+            .into_iter()
+            .map(|s| EdfDecodedSignal {
+                label: s.label,
+                samples_per_record: s.samples_per_record as u32,
+                physical_min: s.physical_min,
+                physical_max: s.physical_max,
+                prefiltering: s.prefiltering,
+                data: s.data,
+            })
+            .collect(),
+        annotations: dec
+            .annotations
+            .into_iter()
+            .map(|a| EdfExportAnnotation {
+                onset_seconds: a.onset_seconds,
+                duration_seconds: a.duration_seconds,
+                text: a.text,
+            })
+            .collect(),
+    })
 }
 
 #[cfg(test)]
@@ -179,8 +270,10 @@ mod tests {
             second: 5,
             annotations: vec![EdfExportAnnotation {
                 onset_seconds: 0.25,
+                duration_seconds: 0.0,
                 text: "Double blink".to_string(),
             }],
+            prefiltering: String::new(),
         }
     }
 
@@ -199,12 +292,12 @@ mod tests {
         assert_eq!(&header[8..88], format!("{:<80}", "NeuroFeed").as_bytes());
         assert_eq!(&header[192..236], format!("{:<44}", "EDF+C").as_bytes());
         assert_eq!(&header[236..244], b"       2");
-        // First TP9 sample = 1.0 µV → 16 int16 LE.
+        // First TP9 sample = 1.0 µV on ±2000 range → ~16 digital LSB.
         let first = i16::from_le_bytes([out[1024], out[1025]]);
         assert_eq!(first, 16);
         // The "+0.25 s" annotation TAL must land in record 0.
         assert!(
-            out.windows(21).any(|w| w == b"+0.25\x14\x14Double blink\x14\x00".as_slice()),
+            out.windows(20).any(|w| w == b"+0.25\x14Double blink\x14\x00".as_slice()),
             "annotation TAL missing from output"
         );
     }
@@ -218,5 +311,72 @@ mod tests {
         assert!(encode_edf_export(&session_header_bytes(), vec!["TP9".to_string()], &params())
             .unwrap_err()
             .contains("no raw EEG"));
+    }
+}
+
+
+#[cfg(test)]
+mod decode_tests {
+    use super::*;
+
+    #[test]
+    fn ffi_decode_round_trip_via_encode() {
+        use crate::api::muse::{EegDto, MuseEventDto};
+        use crate::api::session_format::{
+            encode_session_event, session_frame_bytes, session_header_bytes,
+        };
+        let mk = |ts: f64, electrode: i32, samples: Vec<f64>| {
+            MuseEventDto::Eeg(EegDto {
+                index: 0,
+                electrode,
+                timestamp: ts,
+                samples,
+            })
+        };
+        let events = vec![
+            mk(1000.0, 0, vec![10.0; 12]),
+            mk(1000.0 + 12.0 * 1000.0 / 256.0, 0, vec![10.0; 12]),
+            mk(1000.0, 1, vec![-10.0; 12]),
+            mk(1000.0 + 12.0 * 1000.0 / 256.0, 1, vec![-10.0; 12]),
+        ];
+        let mut body = session_header_bytes();
+        let records: Vec<u8> = events.iter().flat_map(|e| encode_session_event(e)).collect();
+        body.extend_from_slice(&session_frame_bytes(&records));
+        let edf = encode_edf_export(
+            &body,
+            vec!["TP9".to_string(), "AF7".to_string()],
+            &EdfExportParams {
+                patient_id: "subj1 X X X".to_string(),
+                recording_id: "rec-test".to_string(),
+                year: 2026,
+                month: 9,
+                day: 25,
+                hour: 3,
+                minute: 50,
+                second: 0,
+                annotations: vec![EdfExportAnnotation {
+                    onset_seconds: 0.1,
+                    duration_seconds: 0.0,
+                    text: "double_blink".to_string(),
+                }],
+                prefiltering: "HP:DC N:none".to_string(),
+            },
+        )
+        .unwrap();
+        let imported = decode_edf_import(&edf).unwrap();
+        assert_eq!(imported.patient_id.trim(), "subj1 X X X");
+        assert_eq!(imported.year, 2026);
+        assert_eq!(imported.signals.len(), 2);
+        assert_eq!(imported.signals[0].label, "TP9");
+        assert_eq!(imported.signals[1].label, "AF7");
+        assert!(imported.signals.iter().all(|s| s.prefiltering == "HP:DC N:none"));
+        assert!(imported.signals[0].data.len() >= 12);
+        assert!(
+            imported
+                .annotations
+                .iter()
+                .any(|a| a.text == "double_blink"),
+            "missing annotation"
+        );
     }
 }

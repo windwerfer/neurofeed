@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | **Implemented / LOCKED.** Authority for `.neurofeed` v6 (NFED6 / `formatVersion: 6`). **Annotations / base vocab / feedback / experimental bands / subject / overshoot / pause / timezone / computed Trust extras / `feedback.audioEvents` / `baselineSamples` / `inhibitCeilingOverrides` = LOCKED.** |
+| Status | **Implemented / LOCKED.** Authority for `.neurofeed` v6 (NFED6 / `formatVersion: 6`). **Annotations / base vocab / feedback / experimental bands / subject / overshoot / pause / timezone / computed Trust extras / `feedback.audioEvents` / `baselineSamples` / `inhibitCeilingOverrides` / `import` provenance = LOCKED.** |
 | Scope | Unified recording + feedback **metadata JSON** and **v6 container** (NFED6 magic/version + writers/readers). |
 | Not this | Rename Dart/Rust FFI identifiers (historical `v5*` / `*V5` names kept); Athena tag 11; History UI chrome; pipeline Key Decisions. |
 | Supersedes | Dual dialects formerly in [../archive/session-format-contract-v5.md](../archive/session-format-contract-v5.md); [../archive/session_vs_recording_metadata.md](../archive/session_vs_recording_metadata.md). |
@@ -61,7 +61,7 @@ Honest 1–10 match of v6 names/shapes to EDF+, BIDS-EEG, and common annotation 
 | Device / streams models | `lib/src/session_format/models.dart` (`DeviceInfo`, `StreamsConfig`) |
 | Computed frame | `lib/src/session_format/computed_frame.dart` |
 | Monitor 1 Hz writer | `lib/src/monitor/recording/monitor_sampler.dart` (N-ch; zeroed guard/feedback) |
-| Feedback 1 Hz writer | `lib/src/feedback/computed_sampler.dart` (4-ch; live guard/feedback) |
+| Feedback 1 Hz writer | `lib/src/feedback/computed_sampler.dart` (N-ch, sized from the connected device montage; live guard/feedback) |
 | Scalar extract at publish | `lib/src/spine/assemble.dart` → `extractComputedScalars` |
 | Recording publish → sqlite | `lib/src/monitor/recording/recording_store.dart` |
 | Feedback publish → sqlite | `lib/src/feedback/session_store_core.dart` |
@@ -103,7 +103,13 @@ Written by `buildSessionMetadata()`:
 
 #### Computed 1 Hz (both kinds) — not metadata
 
-`ComputedFrame`: `t`, `bands` (N×5 abs), `lineNoise`, `signalQuality`, optional `pulse` / `movement` / `peakAlpha` / `spo2`, `gestures[]` (string ids that second).
+`ComputedFrame`: `t`, `bands` (N×5 abs), `lineNoise`, `signalQuality`, optional `pulse` / `movement` / `peakAlpha` / `spo2`, `gestures[]` (string ids that second); Crown only: `signalQualitySource`, optional `crownSignalQuality` (see Neurosity signal quality).
+
+**Band source (LOCKED):** every band value — raw `bands` records and computed `bands` / `lineNoise` — comes from the app's own 256-point FFT of 256 Hz raw EEG, for every device. Headset-supplied band powers (e.g. Crown `/brainwaves/*`) are never recorded or used. The one exception is an imported Mind Monitor CSV (`import.sourceFormat == "mind_monitor_csv"`) that carries band columns: its bands are Mind Monitor's, converted from Bels. Computed frames are exactly 1 Hz; `bands[e]` / `lineNoise[e]` are the **mean of every band update for electrode `e` within that second**; an electrode with no update repeats its previous value.
+
+**Band definitions (LOCKED):** each band update is one 256-sample (1 s) window of conditioned EEG with a periodic Hamming window, as one-sided PSD `P[k] = 2·|X[k]|² / (256 Hz · Σw²)` in µV²/Hz (1 Hz bins). A band is the sum of `P[k]` over its bins × 1 Hz, edges half-open `[lo, hi)`, so every bin belongs to at most one band: delta 1–4 (bins 1–3), theta 4–8 (4–7), alpha 8–13 (8–12), beta 13–30 (13–29), gamma 30–45 (30–44). DC and bins ≥ 45 Hz (mains) are in no band. A 10 µV sine inside a band reads ≈ 50 µV² (its power `A²/2`). Peak alpha: parabolic-interpolated argmax over bins 8–12; its power is the PSD at the peak bin (µV²/Hz). Imported Mind Monitor band columns keep Mind Monitor's own definition (Muse: alpha 7.5–13, gamma 30–44, Muse scaling), so their absolute values are not comparable with app-computed bands.
+
+**Sparse computed (LOCKED):** frame `t` is always on the 1 Hz grid, but seconds may be absent (disconnects; interval-mode CSV imports write one frame per source row, e.g. every 60 s). Stats never count frames as seconds: each frame weighs `frameSeconds` = gap to the next frame, capped at the median gap (the last frame gets the median gap). Weighted seconds feed `stats.quality`, `stats.movement.stillnessPct`, the 30 usable-second experimental gate and feedback target seconds.
 
 **`feedback{}` per second (LOCKED keep + add)** — see **Computed feedback extras**:
 - **KEEP:** `ratio`, `threshold`, `inTarget`, `pct`
@@ -114,6 +120,23 @@ Written by `buildSessionMetadata()`:
 - **ADD:** `featurePercentile`, `warnOver`, `ceilingOver`, `clean`, `dirtyReason`
 
 Recordings: zeroed legacy `guardrail`/`feedback` keys may still be present for chart shape; **omit/null the NEW Trust extras** (never fake `percentile:0` / `clean:false`). Wire = camelCase JSONL (Dart `ComputedFrame.toJson`); Rust extract must accept those keys (serde rename).
+
+**Neurosity signal quality (LOCKED):** on Crown sessions one per-second source fills `signalQuality` and drives everything derived from it (live pads, quality annotations, `stats.quality`, the band-feature gate). Each frame names it:
+- `signalQualitySource`: `"crown"` | `"app"`.
+- `"crown"`: the Crown's own per-pad signal quality (Neurosity SignalQuality V2: 0..1 per pad, ≥ 0.75 adequate), mean of that second's messages. Used only when the second has at least one message with all 8 pads and every value within 0..1 is present; any out-of-range value makes the second missing. Mapped to 0–100 piecewise linear (0→0, 0.75→80, 1→100) so "adequate" is the usable threshold 80. `crownSignalQuality` (8 numbers, 0..1, `device.channelLabels` order) holds the per-pad means; they cannot be recomputed from RAW.
+- `"app"`: the app's score from raw std + line-noise penalty (same formula as Muse), used when the setting is `app` or the second has no valid Crown values. `crownSignalQuality` is omitted.
+- A single overall Crown quality value is never used. Muse frames omit both keys.
+- `feedback.sessionSettings.crownQualitySource` (`"crown"` | `"app"`) records the setting the Crown connection used; omitted for Muse.
+
+**EEG conditioning (LOCKED):** RAW EEG is stored exactly as the device sent it, for every device; the app never filters stored RAW. Everything computed from EEG — the app signal quality (std score and line-noise ratio), FFT bands / `lineNoise` / peak alpha, band features, gestures (blink bins; the eye estimate uses the RAW level), the guardrail window — and the live and History EEG charts use the same conditioned signal, per channel (AUX included):
+- 2nd-order Butterworth high-pass at **0.5 Hz** (`highPassHz`), which removes the DC offset and slow drift but keeps delta (−0.26 dB at 1 Hz).
+- Mains notch, **Q = 10** (`notchQ`; −3 dB width 3.8 Hz at 50 Hz), at the mains frequency and its 2nd harmonic (50/100 or 60/120 Hz). The width tolerates mains drift (≤ −20 dB at ±0.2 Hz) and costs ≤ 0.6 dB below 45 Hz. Mains is detected per connection: every 256 unfiltered samples per channel vote 50, 60 or none, and a frequency gets the vote when its bins (±1) average ≥ 5× the median of the neighbouring non-mains bins (±8 Hz). 8 consecutive agreeing votes decide 50, 60 or none. From none, 16 consecutive votes for one frequency switch to it (hum appearing later). 50/60 never flips. "None" means no notch.
+- Saved decision: every detected decision is saved per device id in app settings. At connect the live notch starts from the device's saved decision (both pairs when nothing is saved) and follows detection once it decides; the live view may change notch until a recording starts.
+- Locked per recording: when a recording or feedback session capture starts, the live notch is frozen for the whole capture — detection's decision if made, else the device's saved decision, else both 50/100 and 60/120 Hz. A reconnect during the capture restarts the filter with the same notch; detection keeps running (and keeps updating the saved value) but does not change the capture's notch.
+- Lost samples: a running channel whose next packet starts 1–12 whole samples (≤ 47 ms) after the previous one ends gets those samples linearly interpolated between the neighbours in the conditioned path only; RAW keeps the gap as received (packet timestamps show it). Offline conditioning runs the same fill but emits only the recorded samples. Crown RAW timestamps are a 256 Hz sample timeline anchored on arrival, advanced by the `/raw` sample counter so a lost sample is a one-period gap, and re-anchored on arrival when they drift more than 200 ms.
+- Start-up and after any timestamp gap > 200 ms: the first 128 samples are held, the high-pass is seeded at their mean and the chain is primed on them, so a large offset (Crown RAW ≈ −2e5 µV) settles within the first samples.
+- Offline paths run the same chain with one notch for the whole file: History charts use the recording's `device.conditioning.notchHz`; Inspect of the running capture uses the live notch; EDF / RAW-only CSV imports scan the whole RAW first and use the result.
+- `device.rawFiltering` / `device.conditioning` record both sides — see **Raw filtering and conditioning**.
 
 #### Sqlite (publish-time; not always in metadata JSON)
 
@@ -164,11 +187,99 @@ Shared root for `kind: "recording"` and (with `feedback` attached) for feedback.
 ```
 identity: formatVersion, appVersion, kind, savedAt, startedAt, timeZone, elapsedSeconds, durationS, notes, sessionId?
 subject:  { id, nickname?, sex?, ageAtRecording?, meditationExperience?, … }  // anonymous-first; omit voluntary until collected
-device:   { name, id, firmware, model, sensors, channelCount, channelLabels }
+device:   { name, id, firmware, model, sensors, channelCount, channelLabels, rawFiltering?, conditioning? }
 streams:  { ten keys… }   // gestures enablement stub only; markers → annotations
 stats:    { … aggregates; annotationSeconds?: { pause, bad_quality, disconnect }; experimental?: { … } }
 annotations: [ { onset, duration, type }, … ]   // unified timeline: quality intervals + gesture instants
+import:   { sourceFormat, sourceFileName, originalChannels, … }   // ONLY on imported recordings
 feedback: { … }   // ONLY when kind == "feedback"; NO gestures[] list
+```
+
+### Channel labels (LOCKED)
+
+`device.channelLabels[i]` is the label of electrode index `i`; every per-channel array (`ComputedFrame.bands`, `lineNoise`, `signalQuality`, raw EEG electrode numbers) uses the same index. Labels come from our own device table, never from the headset driver's name strings.
+
+| Device | Head channels (index 0…) | AUX (optional, after head channels) |
+|--------|--------------------------|-------------------------------------|
+| Muse (Classic, Athena) | `TP9`, `AF7`, `AF8`, `TP10` (reference FPz is not a channel) | `AUX1` (Classic, electrode 4); `AUX1`…`AUX4` (Athena, electrodes 4–7) |
+| Crown | `CP3`, `C3`, `F5`, `PO3`, `PO4`, `F6`, `C4`, `CP4` | — |
+
+AUX channels are present only when the user enabled **Record AUX channels**. They get raw EEG, computed bands and `stats.quality.channelUsable`, but are excluded from `stats.quality.mean`, `pctGood`, the usable-second gate and `stats.experimental`.
+
+### Raw filtering and conditioning (LOCKED)
+
+`device.rawFiltering` says how the stored RAW was filtered; `device.conditioning` says what the app applied on top for computed values and charts (see **EEG conditioning**). Every live recording and feedback session has both.
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `rawFiltering.storedAsReceived` | bool | `true`: RAW is the device output as received; the app never filters it |
+| `rawFiltering.highPassHz` | number \| null | High-pass the device itself applied; null = none |
+| `rawFiltering.notchHz` | number \| null | Mains notch the device itself applied; null = none |
+| `conditioning.highPassHz` | number | App high-pass cutoff (0.5) |
+| `conditioning.notchQ` | number | App notch Q (10) |
+| `conditioning.notchHz` | number[] | Mains notched for the whole recording, each with its 2nd harmonic: `[50]`, `[60]`, `[]` (no hum, no notch) or `[50, 60]` (undecided at start) |
+| `conditioning.notchSource` | `"detected"` \| `"saved"` \| `"undecided"` | Where `notchHz` came from: this connection's detection (imports: the scan of the file), the device's saved decision, or neither (`[50, 60]`) |
+
+Device-side filtering of live devices is none: Crown OSC RAW is unfiltered (crown-reader, Neurosity's BrainFlow tutorial), Muse MU-02 and later have no hardware filtering (Interaxon LibMuse `NotchFrequency`); Athena is assumed the same. Imported recordings have no `rawFiltering`; an EDF's own per-signal Prefiltering text goes to `import.prefiltering`. Their `conditioning` is present when the file has RAW (bands from that RAW, charts). The capture's sidecar carries both blocks from the first write, so crash-recovered recordings and feedback sessions have them too.
+
+```json
+"device": {
+  "name": "Crown-A1B",
+  "id": "a1b2c3…",
+  "firmware": "Crown 3",
+  "model": "Crown 3",
+  "sensors": ["EEG", "IMU"],
+  "channelCount": 8,
+  "channelLabels": ["CP3", "C3", "F5", "PO3", "PO4", "F6", "C4", "CP4"],
+  "rawFiltering": { "storedAsReceived": true, "highPassHz": null, "notchHz": null },
+  "conditioning": {
+    "highPassHz": 0.5,
+    "notchQ": 10,
+    "notchHz": [50],
+    "notchSource": "detected"
+  }
+}
+```
+
+EDF export writes the stored RAW with Prefiltering `HP:DC N:none` from `rawFiltering` (no high-pass, no notch; no low-pass is stated because none is documented); files without `rawFiltering` (imports) leave it blank.
+
+### Import provenance (LOCKED)
+
+Recordings created by **History → Import…** (EDF/EDF+ or Mind Monitor CSV) are always `kind: "recording"` with `device.model == "imported"`, never a `feedback` block, and carry a root `import` object. Recorded sessions never have it.
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `sourceFormat` | `"edf"` \| `"edf+"` \| `"mind_monitor_csv"` | Source file kind (`edf+` = EDF+C or EDF+D) |
+| `sourceFileName` | string | File name as picked (no path) |
+| `originalChannels` | string[] | Source channel labels, as written in the file |
+| `originalRateHz` | number \| null | Source EEG rate; null when the file has no RAW EEG |
+| `droppedChannels` | string[] | Source channels not imported (outside the montage, EDF band signals next to EEG, Optics, interval-mode AUX) |
+| `resampled` | bool | EEG resampled to 256 Hz |
+| `rawPresent` | bool | Raw EEG is in the file (false = bands only) |
+| `recordingInterval` | number \| null | Mind Monitor recording interval in seconds (median gap between band rows, 0.1 s); null for Constant CSVs and EDF |
+| `intervalCoverage` | number \| null | Share of the session the interval rows cover: `min(1, 1 s band window / recordingInterval)` (2 s → 0.5, 10 s → 0.1); null when `recordingInterval` is null |
+| `reference` | string? | Reference if known (EDF label suffix such as `REF`/`LE`/`AVG`; `FPz` for Muse CSVs); omitted when unknown |
+| `prefiltering` | object? | EDF per-signal Prefiltering header, source label → text (e.g. `"HP:0.1Hz LP:75Hz N:50Hz"`), only signals that state one; omitted when none do. Mind Monitor CSVs have none (whether Mind Monitor's notch setting affects its recorded RAW is not documented) |
+| `lossy` | bool | Something was dropped, resampled or reduced to bands only |
+| `warnings` | string[] | Short human-readable loss reasons / skipped content |
+
+Import policy: channels are matched to a supported montage (Muse `TP9 AF7 AF8 TP10` + optional contiguous `AUX1…AUX4`, else Crown 8) after case-folding, stripping an `EEG ` prefix and `-REF`/`-LE`/`-AVG` suffixes. Extra channels are dropped; missing electrodes are never interpolated; a file without a complete montage is refused. EEG is stored at 256 Hz. Interval-mode Mind Monitor CSVs (not Constant) contain bands only; at `recordingInterval ≥ 1.9` s (2 s and slower, jitter tolerated) the import dialog warns about the low coverage before saving.
+
+```json
+"import": {
+  "sourceFormat": "edf+",
+  "sourceFileName": "cap64.edf",
+  "originalChannels": ["EEG Fp1-REF", "…", "EEG TP10-REF"],
+  "originalRateHz": 512,
+  "droppedChannels": ["EEG Fp1-REF", "…"],
+  "resampled": true,
+  "rawPresent": true,
+  "recordingInterval": null,
+  "intervalCoverage": null,
+  "reference": "REF",
+  "lossy": true,
+  "warnings": ["dropped 60 channel(s) outside the Muse/Crown montage: …", "EEG resampled from 512 Hz to 256 Hz"]
+}
 ```
 
 ### Example — `kind: "recording"`
@@ -563,6 +674,7 @@ Discipline: rename only when EDF / BIDS / common EEG has a **clearly better** te
 | `subject` (+ `id` required; voluntary fields omit-until-collected) | Anonymous-first person object — see Subject model |
 | `streams` ten keys | `eeg`, `bands`, `pulse`, `spo2`, `movement`, `peakAlpha`, `imu`, `ppg`, `telemetry`, `gestures` — enablement `{enabled,rateHz}`; `gestures` stub only |
 | `feedback` | Only when `kind=="feedback"`; no `gestures[]` list |
+| `import` | Only on imported recordings — see Import provenance |
 
 ### Naming rationale (expanded)
 
@@ -597,9 +709,9 @@ Future agents: change locked names only with a format PR and an updated table. P
 
 ### Gate (all metrics)
 
-Compute only over **usable** computed seconds: mean pad `signalQuality ≥ 80` (same gate as `stats.quality` / sticky unusable). Skip seconds with missing `bands`. If fewer than **30** usable seconds, **omit** `stats.experimental` entirely (do not write NaNs / zeros pretending to be data).
+Compute only over **usable** computed seconds: mean pad `signalQuality ≥ 80` (same gate as `stats.quality` / sticky unusable). Skip seconds with missing `bands`. Seconds are weighted by `frameSeconds` (see Sparse computed). If fewer than **30** usable seconds, **omit** `stats.experimental` entirely (do not write NaNs / zeros pretending to be data).
 
-Band order on `ComputedFrame.bands` is locked elsewhere: per channel `[delta, theta, alpha, beta, gamma]` absolute power (µV²/Hz). Channel order follows `device.channelLabels` (Muse: `TP9`, `AF7`, `AF8`, `TP10`).
+Band order on `ComputedFrame.bands` is locked elsewhere: per channel `[delta, theta, alpha, beta, gamma]` absolute power (µV², see **Band definitions**). Channel order follows `device.channelLabels` (Muse: `TP9`, `AF7`, `AF8`, `TP10`). Channels are found **by label**, never by index; a key whose labels are absent (e.g. asymmetry keys on Crown) is omitted. AUX channels are excluded.
 
 Relative power for a channel-second: `band / (delta+theta+alpha+beta+gamma)` with total `> 0`; else skip that channel-second.
 
@@ -612,11 +724,11 @@ Relative power for a channel-second: `band / (delta+theta+alpha+beta+gamma)` wit
 | **Must** | `frontalAlphaAsym` | Mean over usable secs of `ln(α_AF8) − ln(α_AF7)` (skip sec if either α ≤ 0 or label missing) | Muse-validated FAA (whole α band); literature standard |
 | **Must** | `crossChannelAlphaVar` | Variance across channels of each channel’s **session-mean** absolute α (population variance, N = channel count with ≥1 usable sample) | Spatial spread / montage imbalance; never call this “spread” |
 | **Sensible** | `meanAlphaRel` | Mean of per-second all-channel-mean **relative** α | Scale-free companion to `meanAlphaAbs`; recordings lack `feedback.outcomeScalars.avgAlphaRel` |
-| **Sensible** | `frontalTemporalAlphaAsym` | Mean over secs of `ln(mean(α_AF7,α_AF8)) − ln(mean(α_TP9,α_TP10))` (skip if any side ≤ 0) | Frontal vs temporal α contrast on Muse 4-ch |
+| **Sensible** | `frontalTemporalAlphaAsym` | Mean over secs of `ln(mean(α_AF7,α_AF8)) − ln(mean(α_TP9,α_TP10))` (skip if any side ≤ 0 or label missing) | Frontal vs temporal α contrast on Muse 4-ch |
 | **Sensible** | `meanBetaTheta` | Mean of per-second `(mean_β / mean_θ)` (skip if mean_θ ≤ 0) | Classic alertness / cognitive-load companion (BTR) |
 | **Cool / cheap** | `meanThetaAbs` | Mean all-channel absolute θ | Cheap; pairs with α/θ |
 | **Cool / cheap** | `meanBetaAbs` | Mean all-channel absolute β | Cheap |
-| **Cool / cheap** | `temporalAlphaAsym` | Mean of `ln(α_TP10) − ln(α_TP9)` (skip if either ≤ 0) | Temporal twin of FAA; optional labeling feature |
+| **Cool / cheap** | `temporalAlphaAsym` | Mean of `ln(α_TP10) − ln(α_TP9)` (skip if either ≤ 0 or label missing) | Temporal twin of FAA; optional labeling feature |
 
 **Do not** also write duplicate ratio keys (`meanAtr` / `meanTar`) — `meanAlphaTheta` is ATR; TAR = `1/meanAlphaTheta` when needed downstream.
 
@@ -865,7 +977,7 @@ Notes on the example:
 | `metadataDescription` | string? | Human protocol blurb from catalog (`ProtocolDocument.metadataDescription`). |
 | `calibrationProfile` | string? | Optional profile id string; rarely set today — keep if writers populate it. |
 | `calibration` | object? | Nested calibration blob — **keep shape as-is** (`version`, `kind`=`single`\|`staged`, `calibrationId`, timing, `baseline` stats summary, `phases[]`, `recalibrations[]`, …). **ADD (LOCKED):** `baselineSamples: number[]` — raw native reward samples used by `percentileOf` after initial calibration (~50 doubles). Each `recalibrations[]` entry may include `baselineSamples` alongside existing `atSecs` + `baseline` stats when present. |
-| `sessionSettings` | object | **Locked engine home.** Training knobs at save: adaptivity, baseline percentile, guardrail on/off + `guardFeature` / `guardModel` / `guardrailEngine`, warning sound, music/binaural knobs, marker flags. Optional nested `modelSnapshot` `{engine, weightsSha256?, configJson?, repoRevision?, loadedAt}`. **ADD (LOCKED):** optional `inhibitCeilingOverrides?: { "beta"?: number, "delta"?: number }` — Settings slider overlays (Map may have only set keys). No parallel `feedback.engine` / flat `modelKind` / `modelSha256` / `feedbackEngine`. |
+| `sessionSettings` | object | **Locked engine home.** Training knobs at save: adaptivity, baseline percentile, guardrail on/off + `guardFeature` / `guardModel` / `guardrailEngine`, warning sound, music/binaural knobs, marker flags. Optional nested `modelSnapshot` `{engine, weightsSha256?, configJson?, repoRevision?, loadedAt}`. **ADD (LOCKED):** optional `inhibitCeilingOverrides?: { "beta"?: number, "delta"?: number }` — Settings slider overlays (Map may have only set keys). **ADD (LOCKED):** optional `crownQualitySource?: "crown" | "app"` — Crown pad quality source (see Neurosity signal quality); omitted for Muse. No parallel `feedback.engine` / flat `modelKind` / `modelSha256` / `feedbackEngine`. |
 | ~~`drowsiness`~~ | — | **Forbidden as a nest.** Fold scalars into `feedback.outcomeScalars` (`guardWarnPct`, `avgSleepDir`, `guardThreshold`). Protocol id is `feedback.protocol`, not a key name. |
 | `music` | object? | Playback summary — **keep shape as-is** (`trackCount`, cutoff min/max, `invert`, `shuffle`, `tracks[]` `{at,name}`, `series[]` `{at,hz}`). |
 | `audioEvents` | array? | Sparse one-shot play log: `[{ "onset": number, "type": string }]`. Locked types: `reward_chime` \| `guard_chime`. `onset` = seconds from capture start (same clock as computed `t` / annotations). Omit array or empty when none fired. Records **actual** play times (product constants today: reward hold 2.5s + 8s cooldown via `FeedbackAudioController`; guard warning chime 20s cooldown) so History does not reconstruct from constants. Continuous musicFilter / rain / binaural do **not** emit per-second audio events. **Forbidden** in root `annotations[]`. |
@@ -1118,7 +1230,7 @@ Full example + migrated-away table: **Feedback extension — LOCKED** above. Do 
 | `calibration` (+ optional `calibrationProfile`) | Nested calibration blob |
 | ~~`drowsiness`~~ → `outcomeScalars.guardWarnPct` / `avgSleepDir` / `guardThreshold` | Folded; no protocol-named nest |
 | `music` | Tracks / cutoff series |
-| `sessionSettings` | Incl. `guardFeature` / `guardModel` / `guardrailEngine`, markers flags, music/binaural knobs; optional `modelSnapshot`; **`inhibitCeilingOverrides?`** (`beta`/`delta` slider overlays) |
+| `sessionSettings` | Incl. `guardFeature` / `guardModel` / `guardrailEngine`, markers flags, music/binaural knobs; optional `modelSnapshot`; **`inhibitCeilingOverrides?`** (`beta`/`delta` slider overlays); **`crownQualitySource?`** (Crown only) |
 | `calibration.baselineSamples` (+ per-recal) | Raw native reward samples for `percentileOf` (~50 doubles); keep `baseline` stats summary |
 | `audioEvents[]` `{onset,type}` | Sparse one-shot play log (`reward_chime`\|`guard_chime`); not annotations |
 | `outcomeScalars.pctInTarget` (← `targetPct` / `pctInTarget`) | Feedback-only reward outcome |

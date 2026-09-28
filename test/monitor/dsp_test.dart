@@ -11,19 +11,28 @@ void main() {
     expect(w[128], closeTo(1.0, 1e-12));
   });
 
-  test('FFT power is 1/N²; DC of ones is 0.54² after Hamming', () {
-    final spec = fft(List<double>.filled(256, 1.0), n: 256);
-    expect(spec.power[0], closeTo(0.54 * 0.54, 1e-9));
+  test('one-sided PSD: a 10 µV sine carries 50 µV² in its band', () {
+    for (final hz in [10.0, 10.5]) {
+      final spec = fft([
+        for (var i = 0; i < 256; i++) 10 * math.sin(2 * math.pi * hz * i / 256),
+      ], n: 256);
+      expect(bandPower(spec, kBandAlphaLoHz, kBandAlphaHiHz), closeTo(50, 1));
+    }
   });
 
-  test('band edges 1–4 / 4–8 / 8–13 / 13–30 / 30–50 at 256-pt', () {
-    expect(freqBin(1, 256), 1);
-    expect(freqBin(4, 256), 4);
-    expect(freqBin(8, 256), 8);
-    expect(freqBin(13, 256), 13);
-    expect(freqBin(30, 256), 30);
-    expect(freqBin(50, 256), 50);
-    expect(gammaHiHz(256), 50);
+  test('bands [1,4) [4,8) [8,13) [13,30) [30,45): each bin in one band', () {
+    expect(gammaHiHz(256), 45);
+    const edges = [
+      (kBandDeltaLoHz, kBandDeltaHiHz),
+      (kBandThetaLoHz, kBandThetaHiHz),
+      (kBandAlphaLoHz, kBandAlphaHiHz),
+      (kBandBetaLoHz, kBandBetaHiHz),
+      (kBandGammaLoHz, kBandGammaHiHz),
+    ];
+    for (var f = 1; f <= 50; f++) {
+      final inBands = edges.where((e) => f >= e.$1 && f < e.$2).length;
+      expect(inBands, f < 45 ? 1 : 0, reason: '$f Hz');
+    }
 
     final spec = fft([
       for (var i = 0; i < 256; i++) math.cos(2 * math.pi * 10 * i / 256),

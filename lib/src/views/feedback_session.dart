@@ -368,8 +368,6 @@ class _PhaseControls extends ConsumerWidget {
     // is allowed; the one-time stutter warning fires when the user picks the
     // combination (see [_maybeWarnMusicAiCpu]).
     Future<void> startSession({bool skipCalibration = false}) async {
-      if (await _refuseCrownStart(context, ref)) return;
-      if (!context.mounted) return;
       if (await _refuseRecordingStart(context, ref)) return;
       if (!context.mounted) return;
       final settings = ref.watch(settingsProvider);
@@ -407,8 +405,6 @@ class _PhaseControls extends ConsumerWidget {
             children: [
               FilledButton.icon(
                 onPressed: () async {
-                  if (await _refuseCrownStart(context, ref)) return;
-                  if (!context.mounted) return;
                   if (await _refuseRecordingStart(context, ref)) return;
                   if (!context.mounted) return;
                   final ready = await showModelGateDialog(
@@ -2410,32 +2406,6 @@ class _GuardrailThresholdDialogState
       ],
     );
   }
-}
-
-/// Returns true when Start was refused because a Crown (or simulated Crown)
-/// is currently connected.
-Future<bool> _refuseCrownStart(BuildContext context, WidgetRef ref) async {
-  final app = ref.read(appStateProvider);
-  if (!app.status.connected ||
-      app.lastConnectedKind == null ||
-      !deviceKindIsCrown(app.lastConnectedKind!)) {
-    return false;
-  }
-  if (!context.mounted) return true;
-  await showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Crown not supported yet'),
-      content: const Text(crownSessionUnsupportedMessage),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('OK'),
-        ),
-      ],
-    ),
-  );
-  return true;
 }
 
 /// Returns true when Start was refused because an explicit recording is open.

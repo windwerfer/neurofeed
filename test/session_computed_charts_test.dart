@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -7,12 +8,16 @@ import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/session_format/computed_frame.dart' as dart;
 import 'package:neurofeed/src/feedback/computed_sampler.dart';
 import 'package:neurofeed/src/feedback/crash_recovery.dart';
+import 'package:neurofeed/src/feedback/gate_electrodes.dart';
 import 'package:neurofeed/src/feedback/feedback_recorder.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/feedback/session_chart_data.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
+import 'package:neurofeed/src/rust/api/features.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/rust/frb_generated.dart';
@@ -20,19 +25,19 @@ import 'package:neurofeed/src/rust/frb_generated.dart';
 final String _rustLibPath =
     '${Directory.current.path}/rust/target/debug/librust_lib_neurofeed.so';
 
-dart.ComputedFrame _dartFrame(double t) {
+dart.ComputedFrame _dartFrame(double t, {int channels = 4}) {
   return dart.ComputedFrame(
     t: t,
     bands: [
-      for (var e = 0; e < 4; e++)
+      for (var e = 0; e < channels; e++)
         [100.0 + e, 80.0 + e, 220.0 + e, 50.0 + e, 30.0 + e],
     ],
     pulse: 70 + t,
     movement: 0.05,
     peakAlpha: dart.PeakAlphaInfo(freq: 10.0, power: 100.0 + t),
     spo2: 98.0,
-    lineNoise: const [0.05, 0.04, 0.06, 0.05],
-    signalQuality: const [80, 85, 90, 75],
+    lineNoise: [for (var e = 0; e < channels; e++) 0.05],
+    signalQuality: [for (var e = 0; e < channels; e++) 85],
     guardrail: const dart.GuardrailInfo(
       sleepDir: 0.3,
       clarity: 0.8,
@@ -164,6 +169,15 @@ void main() {
       expect(prepared.spo2, isNotEmpty);
     });
 
+    test('chartElectrodePair picks AF7/AF8 or Crown PO3/PO4 by label', () {
+      expect(chartElectrodePair(const ['TP9', 'AF7', 'AF8', 'TP10']), (1, 2));
+      expect(
+        chartElectrodePair(const ['CP3', 'C3', 'F5', 'PO3', 'PO4', 'F6', 'C4', 'CP4']),
+        (3, 4),
+      );
+      expect(chartElectrodePair(const ['Fp1', 'Fp2']), isNull);
+    });
+
     test('prepareChartDataFromComputed fills pulse from raw when omitted', () {
       final frames = [
         for (var t = 0; t < 3; t++)
@@ -248,6 +262,78 @@ void main() {
       expect(decoded.music?.toJson().containsKey('buckets'), isFalse);
     });
 
+    test('Crown 8-ch frames chart the PO3/PO4 pair and caption it', () {
+      final muse = prepareChartDataFromComputed([
+        for (var t = 0; t < 3; t++) toFfiFrame(_dartFrame(t.toDouble())),
+      ]);
+      expect(muse.electrodePairLabel, 'AF7/AF8');
+
+      final crown = prepareChartDataFromComputed([
+        for (var t = 0; t < 3; t++)
+          toFfiFrame(_dartFrame(t.toDouble(), channels: 8)),
+      ], channelLabels: kCrownElectrodeNames);
+      expect(crown.electrodePairLabel, 'PO3/PO4');
+      expect(crown.alphaRel, hasLength(3));
+      // Mean of the PO3 (electrode 3) and PO4 (electrode 4) relative alpha.
+      expect(crown.alphaRel.first, closeTo((223 / 495 + 224 / 500) / 2, 1e-9));
+    });
+
+    test('band-math guard delta pads are the Rust frontal pair', () async {
+      final muse = await DeviceConfig.forKind(kind: DeviceKind.muse);
+      final crown = await DeviceConfig.forKind(kind: DeviceKind.neurosity);
+      List<String> names(DeviceConfig c) => [
+        for (final i in deviceFrontalElectrodes(c)) c.electrodeNames[i],
+      ];
+      expect(deviceFrontalElectrodes(muse), [1, 2]);
+      expect(names(muse), ['AF7', 'AF8']);
+      expect(deviceFrontalElectrodes(crown), [2, 5]);
+      expect(names(crown), ['F5', 'F6']);
+      // Not the device target pair (Crown PO3/PO4).
+      expect(
+        crown.targetElectrodes.map((e) => e.toInt()).toList(),
+        isNot(deviceFrontalElectrodes(crown)),
+      );
+      final infos = await availableFeatures(kind: DeviceKind.neurosity);
+      expect(
+        infos.firstWhere((f) => f.id == 'band.delta').defaultElectrodes,
+        ['F5', 'F6'],
+      );
+    });
+
+    test('gate pads come from Rust: feature electrodes, else needed pads',
+        () async {
+      final muse = await DeviceConfig.forKind(kind: DeviceKind.muse);
+      final crown = await DeviceConfig.forKind(kind: DeviceKind.neurosity);
+      expect(muse.targetElectrodes.map((e) => e.toInt()), [1, 2]);
+      expect(crown.targetElectrodes.map((e) => e.toInt()), [3, 4]);
+      List<int> gate(DeviceKind kind, {String? reward, String? guard}) =>
+          sessionGateElectrodes(
+            kind: kind,
+            rewardFeature: reward,
+            guardFeature: guard,
+          ).toList();
+      // Registry defaults / needed pads.
+      expect(gate(DeviceKind.muse, reward: 'band.atr'), [1, 2]);
+      expect(gate(DeviceKind.neurosity, reward: 'band.atr'), [3, 4]);
+      expect(gate(DeviceKind.muse), [1, 2]);
+      expect(gate(DeviceKind.neurosity), [3, 4]);
+      // Protocol override of the reward feature.
+      await setFeatureElectrodes(id: 'band.atr', names: ['TP9', 'TP10']);
+      expect(gate(DeviceKind.muse, reward: 'band.atr', guard: 'band.delta'), [
+        0,
+        3,
+      ]);
+      await setFeatureElectrodes(id: 'band.atr', names: []);
+      // Band guard without reward: frontal default, then override.
+      expect(gate(DeviceKind.neurosity, guard: 'band.delta'), [2, 5]);
+      expect(gate(DeviceKind.muse, guard: 'band.delta'), [1, 2]);
+      await setFeatureElectrodes(id: 'band.delta', names: ['C3', 'C4']);
+      expect(gate(DeviceKind.neurosity, guard: 'band.delta'), [1, 6]);
+      await setFeatureElectrodes(id: 'band.delta', names: []);
+      // AI guard: the device's needed pads.
+      expect(gate(DeviceKind.muse, guard: 'ai.a_vig'), [1, 2]);
+    });
+
     test('crash recovery scans scratch; temps assemble; discard deletes',
         () async {
       final tmp = await Directory.systemTemp.createTemp('neurofeed_crash_');
@@ -265,12 +351,34 @@ void main() {
         0x0A,
       ]);
       await File('${scratch.path}/session_$id.metadata').writeAsString(
+        '{"type":"device","name":"Crown-A1","id":"crown-a1","firmware":"Crown",'
+        '"channelLabels":["CP3","C3","F5","PO3","PO4","F6","C4","CP4"],'
+        '"conditioning":{"highPassHz":0.5,"notchQ":10.0,"notchHz":[60.0],'
+        '"notchSource":"saved"}}\n'
         '{"type":"calibration_start","kind":"staged","calibrationId":"eyes-closed-01"}\n',
       );
 
       final recovered = await scanRecoverableSessions(storage);
       expect(recovered, hasLength(1));
       expect(recovered.first.id, id);
+      expect(recovered.first.metadata?.recordedChannels, [
+        'CP3', 'C3', 'F5', 'PO3', 'PO4', 'F6', 'C4', 'CP4',
+      ]);
+      expect(recovered.first.metadata?.deviceName, 'Crown-A1');
+      final conditioning = recovered.first.metadata?.conditioning;
+      expect(conditioning?.notchHz, [60.0]);
+      expect(conditioning?.notchSource, 'saved');
+      expect(conditioning?.notchQ, 10.0);
+      final head = parseHead(
+        bytes: await File('${scratch.path}/session_$id.neurofeed').readAsBytes(),
+      );
+      final stored = jsonDecode(utf8.decode(head.metadataJson)) as Map;
+      expect(stored['conditioning'], {
+        'highPassHz': 0.5,
+        'notchQ': 10.0,
+        'notchHz': [60.0],
+        'notchSource': 'saved',
+      });
       expect(recovered.first.elapsedSeconds, 2);
       expect(recovered.first.calibrationKind, 'staged');
       expect(

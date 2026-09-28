@@ -58,6 +58,12 @@ abstract class ComputedFrame with _$ComputedFrame {
     required GuardrailInfo guardrail,
     required FeedbackInfo feedback,
     required List<String> gestures,
+
+    /// Neurosity only: `crown` | `app` — which score filled [signalQuality].
+    String? signalQualitySource,
+
+    /// Neurosity only: Crown per-pad 1 Hz means (0..1) when the source is `crown`.
+    List<double>? crownSignalQuality,
   }) = _ComputedFrame;
 
   static ComputedFrame fromJson(Map<String, dynamic> json) =>
@@ -77,6 +83,9 @@ extension ComputedFrameJson on ComputedFrame {
         'guardrail': guardrail.toJson(),
         'feedback': feedback.toJson(),
         'gestures': gestures,
+        if (signalQualitySource != null)
+          'signalQualitySource': signalQualitySource,
+        if (crownSignalQuality != null) 'crownSignalQuality': crownSignalQuality,
       };
 
   List<int> toJsonBytes() => utf8.encode(jsonEncode(toJson()));
@@ -100,6 +109,10 @@ ComputedFrame _computedFrameFromJson(Map<String, dynamic> json) => ComputedFrame
       guardrail: _guardrailInfoFromJson(json['guardrail'] as Map<String, dynamic>),
       feedback: _feedbackInfoFromJson(json['feedback'] as Map<String, dynamic>),
       gestures: (json['gestures'] as List).map((e) => e as String).toList(),
+      signalQualitySource: json['signalQualitySource'] as String?,
+      crownSignalQuality: (json['crownSignalQuality'] as List?)
+          ?.map((e) => (e as num).toDouble())
+          .toList(),
     );
 
 PeakAlphaInfo _peakAlphaInfoFromJson(Map<String, dynamic> json) => PeakAlphaInfo(

@@ -14,9 +14,15 @@ The `[patch]` key must match the **dependency source URL**, not crates.io
 (unlike btleplug). `third_party/muse-rs/` is a reference checkout, not the
 build input. Bump the fork tag in `rust/Cargo.toml` when it advances.
 
-`connect()` in `rust/src/api/muse.rs` calls `handle.start(true, false)`:
-`enable_ppg=true` → Classic preset `p50` (EEG + PPG). Athena ignores the flag
-(`p1045`). If Classic connection stability regresses, the old delayed `h/s/p21/d`
+`connect_with_options()` in `rust/src/api/muse.rs` calls
+`handle.start(true, record_aux)`: `enable_ppg=true` → Classic preset `p50`
+(EEG + PPG); `record_aux` comes from the **Record AUX channels** setting. Athena
+ignores both flags (`p1045`).
+
+Electrodes: we use muse-rs's electrode index only, never its name strings
+(it calls Athena electrode 4 `FPz`; it is AUX1). 0–3 = TP9, AF7, AF8, TP10.
+Classic AUX = electrode 4; Athena AUX = electrodes 4–7. With the setting off
+the forwarder drops electrodes ≥ 4 (`ManagerState.eeg_electrode_limit`). If Classic connection stability regresses, the old delayed `h/s/p21/d`
 sequence is in the parent of commit `217cefe`.
 
 ## Classic vs Athena battery

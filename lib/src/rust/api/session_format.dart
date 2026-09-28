@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'device_config.dart';
 import 'features.dart';
 import 'muse.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -143,6 +144,8 @@ sealed class ComputedFrame with _$ComputedFrame {
     required GuardrailInfo guardrail,
     required FeedbackInfo feedback,
     required List<String> gestures,
+    String? signalQualitySource,
+    Float32List? crownSignalQuality,
   }) = _ComputedFrame;
 
   /// Decode from JSON bytes.

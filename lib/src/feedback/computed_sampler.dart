@@ -1,19 +1,27 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
+import 'package:neurofeed/src/session_format/band_second_average.dart';
 import 'package:neurofeed/src/session_format/computed_frame.dart';
 
 class ComputedSampler {
   ComputedSampler({
     required this.onFrame,
     required DateTime recordingStart,
+    this.channelCount = 4,
     this.interval = const Duration(seconds: 1),
     DateTime Function()? now,
   })  : _recordingStart = recordingStart,
-        _now = now ?? DateTime.now;
+        _now = now ?? DateTime.now,
+        _bands = BandSecondAverage(channelCount),
+        _latestSignalQuality = List.filled(channelCount, 0);
 
   final void Function(ComputedFrame) onFrame;
+
+  /// Electrodes per frame (`device.channelLabels.length`).
+  final int channelCount;
   final Duration interval;
   final DateTime _recordingStart;
   final DateTime Function() _now;
@@ -22,15 +30,12 @@ class ComputedSampler {
   Duration _pauseAccumulated = Duration.zero;
   DateTime? _pauseBegan;
 
-  // Latest values from event stream (updated by FeedbackStateNotifier)
-  // Bands per electrode (4 electrodes × 5 bands)
-  final List<List<double>> _latestBands = List.generate(4, (_) => [0.0, 0.0, 0.0, 0.0, 0.0]);
+  final BandSecondAverage _bands;
   double? _latestPulse;
   double? _latestMovement;
   PeakAlphaDto? _latestPeakAlpha;
   double? _latestSpO2;
-  final List<double> _latestLineNoise = List.filled(4, 0.0);
-  final List<int> _latestSignalQuality = List.filled(4, 0);
+  final List<int> _latestSignalQuality;
   double _lastSleepDir = 0.0;
   double _lastClarity = 0.0;
   double _lastDelta = 0.0;
@@ -53,19 +58,11 @@ class ComputedSampler {
   bool? _guardClean;
   String? _guardDirtyReason;
   final List<String> _latestGestures = [];
+  QualitySource? _signalQualitySource;
+  List<double>? _crownSignalQuality;
 
-  void updateBands(int electrode, BandsDto bands) {
-    if (electrode >= 0 && electrode < 4) {
-      _latestBands[electrode] = [
-        bands.delta,
-        bands.theta,
-        bands.alpha,
-        bands.beta,
-        bands.gamma,
-      ];
-      _latestLineNoise[electrode] = bands.lineNoiseRatio;
-    }
-  }
+  void updateBands(int electrode, BandsDto bands) =>
+      _bands.add(electrode, bands);
 
   void updatePulse(PulseDto pulse) => _latestPulse = pulse.bpm;
 
@@ -76,9 +73,16 @@ class ComputedSampler {
   void updateSpO2(SpO2Dto spo2) => _latestSpO2 = spo2.spo2;
 
   void updateSignalQuality(int electrode, int quality) {
-    if (electrode >= 0 && electrode < 4) {
+    if (electrode >= 0 && electrode < channelCount) {
       _latestSignalQuality[electrode] = quality;
     }
+  }
+
+  /// Neurosity only: which score filled the latest pad quality, plus the
+  /// Crown per-pad 1 Hz means when that source is Crown.
+  void updateSignalQualitySource(QualitySource? source, List<double>? crown) {
+    _signalQualitySource = source;
+    _crownSignalQuality = crown;
   }
 
   void updateGuardrail({
@@ -192,10 +196,11 @@ class ComputedSampler {
     final wall = _now().difference(_recordingStart);
     final content = wall - _pauseAccumulated;
     final t = content.inMilliseconds / 1000.0;
+    final second = _bands.take();
 
     final frame = ComputedFrame(
       t: t,
-      bands: List.from(_latestBands),
+      bands: second.bands,
       pulse: _latestPulse,
       movement: _latestMovement,
       peakAlpha: _latestPeakAlpha != null
@@ -205,8 +210,10 @@ class ComputedSampler {
             )
           : null,
       spo2: _latestSpO2,
-      lineNoise: List.from(_latestLineNoise),
+      lineNoise: second.lineNoise,
       signalQuality: List.from(_latestSignalQuality),
+      signalQualitySource: _signalQualitySource?.name,
+      crownSignalQuality: _crownSignalQuality,
       guardrail: GuardrailInfo(
         sleepDir: _lastSleepDir,
         clarity: _lastClarity,

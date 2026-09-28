@@ -1,7 +1,9 @@
 pub mod capture;
 pub mod device_config;
+pub mod eeg_conditioning;
 pub mod edf_export;
 pub mod features;
+pub mod import_dsp;
 pub mod muse;
 pub mod neurosity_osc;
 pub mod reve;

@@ -74,9 +74,11 @@ String etcGmtFromOffset(Duration offset) {
 }
 
 /// Local wall-clock components for EDF `startdate`/`starttime` from a
-/// timezone-aware ISO string (prefer [startedAt]). Uses device [toLocal] —
-/// correct when exporting on the recording device; offset on the timestamp
-/// still yields the right absolute instant.
+/// timezone-aware ISO string (prefer [startedAt]).
+///
+/// Uses [sessionWallClock] so offset-bearing stamps keep their site-local
+/// digits, and `Z` + [timeZone] (`Etc/GMT±N`) recover recording-site local
+/// (EDF FAQ Q17 — header clock is local; EDF has no timezone field).
 DateTime localWallClockFromIso({
   String? startedAt,
   String? savedAt,
@@ -85,11 +87,10 @@ DateTime localWallClockFromIso({
   final raw = (startedAt != null && startedAt.isNotEmpty)
       ? startedAt
       : (savedAt ?? '');
-  final parsed = DateTime.tryParse(raw);
-  if (parsed != null) {
-    return parsed.toLocal();
-  }
-  return DateTime.now();
+  return sessionWallClock(
+    iso: raw.isEmpty ? null : raw,
+    timeZone: timeZone,
+  );
 }
 
 bool _looksIana(String z) {

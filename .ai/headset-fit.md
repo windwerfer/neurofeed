@@ -10,7 +10,9 @@ the bar stays 4 dots.
 | Amber | 40–79 | Noisy / poor contact. |
 | Red | < 40 | Critical. Playing pauses only when **all gate pads** (default AF7/AF8) stay critical for 10 s — it never auto-ends. |
 
-Score is EEG std over 1 s plus a 50/60 Hz line-noise penalty. Very flat
+Score is EEG std over 1 s plus a 50/60 Hz line-noise penalty, both on the
+conditioned signal (0.5 Hz high-pass + auto mains notch), so the residual
+penalty flags hum the notch does not remove. Very flat
 (`std < 1`) or huge (`std > 100`) reads as 0 (off-head or saturated).
 
 **Fit:** rear pads on the mastoid (hair out), front pads on bare forehead,

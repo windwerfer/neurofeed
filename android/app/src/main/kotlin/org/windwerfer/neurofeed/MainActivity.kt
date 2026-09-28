@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.provider.DocumentsContract
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +25,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "neurofeed/saf"
         private const val INIT_CHANNEL = "neurofeed/init"
+        private const val WIFI_CHANNEL = "neurofeed/wifi"
         private const val REQ_PICK_DIR = 7401
         private const val REQ_PICK_FILE = 7402
         private const val TAG = "neurofeed_saf"
@@ -39,6 +41,7 @@ class MainActivity : FlutterActivity() {
 
     private var pendingResult: Result? = null
     private var lastTreeUri: String? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -58,6 +61,26 @@ class MainActivity : FlutterActivity() {
                     }
                 } else {
                     result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WIFI_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "acquireMulticastLock" -> {
+                        val lock = multicastLock ?: (applicationContext
+                            .getSystemService(Context.WIFI_SERVICE) as WifiManager)
+                            .createMulticastLock("neurofeed-crown-osc")
+                            .apply { setReferenceCounted(false) }
+                            .also { multicastLock = it }
+                        if (!lock.isHeld) lock.acquire()
+                        result.success(null)
+                    }
+                    "releaseMulticastLock" -> {
+                        releaseMulticastLock()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
                 }
             }
 
@@ -88,7 +111,12 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    private fun releaseMulticastLock() {
+        multicastLock?.let { if (it.isHeld) it.release() }
+    }
+
     override fun onDestroy() {
+        releaseMulticastLock()
         try {
             val engine = flutterEngine
             if (engine == null ||

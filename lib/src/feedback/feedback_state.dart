@@ -23,16 +23,16 @@ import 'package:neurofeed/src/feedback/live_stats.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:neurofeed/src/feedback/reward_lane.dart';
-import 'package:neurofeed/src/charts/eeg_data_source.dart';
 import 'package:neurofeed/src/feedback/session_chart_data.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/feedback/target_state.dart';
 import 'package:neurofeed/src/feedback/trust/trust_gestures.dart';
 import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
-import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
+import 'package:neurofeed/src/session_format/eeg_conditioning_meta.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/reve/model_engine.dart';
 import 'package:neurofeed/src/reve/models.dart';
@@ -44,8 +44,6 @@ import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/util/timezone.dart';
 
 export 'package:neurofeed/src/feedback/feedback_phase.dart';
-export 'package:neurofeed/src/feedback/gate_electrodes.dart'
-    show defaultGateElectrodes;
 export 'package:neurofeed/src/feedback/guard_lane.dart'
     show guardrailDeltaCeiling, warningChimeCooldown;
 
@@ -288,6 +286,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// training/feedback begins. Their difference is the training-boundary
   /// offset used to trim the displayed window.
   DateTime? _sessionStartAt;
+
+  /// `device.conditioning`, frozen when the session capture starts.
+  SignalConditioning? _sessionConditioning;
   String? _sessionTimeZone;
   DateTime? _trainingStartAt;
   bool _usedStartAnyway = false;
@@ -320,13 +321,20 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// boolean.
   List<String> _enabledFeatureIds = const [];
 
-  List<int> _gateElectrodes = List.of(defaultGateElectrodes);
+  /// Session gate pads from Rust ([sessionGateElectrodes]); null = idle.
+  List<int>? _sessionGate;
 
   AudioService get _audio => _ref.read(audioServiceProvider);
 
-  /// Gate electrodes for continue-anyway + playing-phase pause (Muse AF7/AF8
-  /// until session start resolves names). AI window does not add TP9/TP10.
+  /// Gate electrodes for continue-anyway + playing-phase pause: resolved in
+  /// Rust at session start; before that the device's needed pads.
   List<int> get gateElectrodes => List.unmodifiable(_gateElectrodes);
+
+  List<int> get _gateElectrodes =>
+      _sessionGate ??
+      sessionGateElectrodes(
+        kind: _ref.read(appStateProvider).lastConnectedKind ?? DeviceKind.muse,
+      ).toList();
 
   void selectProtocol(String protocolId) {
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
@@ -680,11 +688,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
       return;
     }
-    if (app.lastConnectedKind != null &&
-        deviceKindIsCrown(app.lastConnectedKind!)) {
-      debugPrint('[feedback] refusing Start on Crown');
-      return;
-    }
     final leased = await _ref
         .read(monitorControllerProvider.notifier)
         .acquireFeedbackLease();
@@ -743,9 +746,26 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _musicSeries.clear();
     _musicTracks.clear();
     await _recorder.startSession();
+    _sessionConditioning = liveSignalConditioning();
+    final connected = _ref.read(appStateProvider);
+    _sessionAuxChannels = connected.status.auxChannels;
+    final montage = electrodeNamesForKind(
+      connected.lastConnectedKind,
+      auxChannels: _sessionAuxChannels,
+    );
+    _recorder.writeMetadata({
+      'type': 'device',
+      'name': connected.status.name,
+      'id': connected.status.id,
+      'firmware': connected.status.firmware,
+      'channelLabels': montage,
+      'rawFiltering': RawFiltering.deviceUnfiltered.toJson(),
+      'conditioning': _sessionConditioning?.toJson(),
+    });
     _computedSampler = ComputedSampler(
       onFrame: (frame) => _recorder.appendComputed(frame),
       recordingStart: _sessionStartAt!,
+      channelCount: montage.length,
     );
     _computedSampler!.start();
     await _enableSessionFeatures();
@@ -777,16 +797,29 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
   }
 
+  /// Protocol electrode override for [id]; null resets to the registry
+  /// default.
+  Future<void> _applyElectrodeOverride(String id, List<String>? names) async {
+    try {
+      await setFeatureElectrodes(id: id, names: names ?? const []);
+      debugPrint('[feature] set_feature_electrodes $id ${names ?? 'default'}');
+    } catch (e) {
+      debugPrint('[feature] set_feature_electrodes $id failed: $e');
+    }
+  }
+
   CalibrationPlan get _calibrationPlan =>
       CalibrationPlan.fromEnabledFeatures(_enabledFeatureIds);
 
   Future<void> _enableSessionFeatures() async {
     final app = _ref.read(appStateProvider);
     final kind = app.lastConnectedKind ?? DeviceKind.muse;
-    var montage = museMontageNames;
+    List<String> montage = const [];
+    List<int> frontal = const [];
     try {
       final config = await DeviceConfig.forKind(kind: kind);
       montage = config.electrodeNames;
+      frontal = deviceFrontalElectrodes(config);
     } catch (e) {
       debugPrint('[feature] DeviceConfig.forKind failed: $e');
     }
@@ -806,57 +839,25 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     } catch (e) {
       debugPrint('[feature] available_features failed: $e');
     }
-    final byId = {for (final f in infos) f.id: f};
 
-    final rewardDefault = spec?.reward == null
-        ? null
-        : byId[spec!.reward!.feature]?.defaultElectrodes;
-    final guardDefault = guardOn && guardFeature != guardFeatureNone
-        ? byId[guardFeature]?.defaultElectrodes
-        : null;
-
-    final gateNames = gateElectrodeNames(
-      hasReward: spec?.hasReward ?? false,
-      guardOn: guardOn,
-      guardFeature: guardFeature,
-      rewardElectrodes: spec?.reward?.electrodes ?? rewardDefault,
-      guardElectrodes: spec?.guard?.electrodes ?? guardDefault,
-    );
-    final resolved = electrodeIndicesFor(gateNames, montageNames: montage);
-    _gateElectrodes = resolved.isEmpty
-        ? List.of(defaultGateElectrodes)
-        : resolved;
-
+    // Protocol overrides (none = registry default), then the gate pads.
     final ids = <String>[];
-    if (spec?.reward != null) {
-      final id = spec!.reward!.feature;
-      final override = spec.reward!.electrodes;
-      if (override != null) {
-        try {
-          await setFeatureElectrodes(id: id, names: override);
-          debugPrint('[feature] set_feature_electrodes $id $override');
-        } catch (e) {
-          debugPrint('[feature] set_feature_electrodes $id failed: $e');
-        }
-      }
-      ids.add(id);
+    final rewardFeature = spec?.reward?.feature;
+    if (rewardFeature != null) {
+      await _applyElectrodeOverride(rewardFeature, spec!.reward!.electrodes);
+      ids.add(rewardFeature);
     }
-    if (guardOn && guardFeature != guardFeatureNone) {
-      final override = spec?.guard?.electrodes;
-      if (override != null) {
-        try {
-          await setFeatureElectrodes(id: guardFeature, names: override);
-          debugPrint(
-            '[feature] set_feature_electrodes $guardFeature $override',
-          );
-        } catch (e) {
-          debugPrint(
-            '[feature] set_feature_electrodes $guardFeature failed: $e',
-          );
-        }
-      }
+    final guardActive = guardOn && guardFeature != guardFeatureNone;
+    if (guardActive) {
+      await _applyElectrodeOverride(guardFeature, spec?.guard?.electrodes);
       ids.add(guardFeature);
     }
+    _sessionGate = sessionGateElectrodes(
+      kind: kind,
+      rewardFeature: (spec?.hasReward ?? false) ? rewardFeature : null,
+      guardFeature: guardActive ? guardFeature : null,
+    ).toList();
+    debugPrint('[feature] gate pads $_sessionGate');
     final unique = <String>[];
     for (final id in ids) {
       if (!unique.contains(id)) {
@@ -871,8 +872,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       debugPrint('[feature] set_enabled_features failed: $e');
     }
 
-    final rewardNames =
-        spec?.reward?.electrodes ?? rewardDefault ?? museGateElectrodeNames;
+    // Reward pads from Rust: protocol override, else registry default, else
+    // the device's needed pads.
+    final rewardNames = [
+      for (final i in sessionGateElectrodes(
+        kind: kind,
+        rewardFeature: rewardFeature,
+        guardFeature: null,
+      ))
+        if (i < montage.length) montage[i],
+    ];
     _reward.configure(
       hasReward: spec?.hasReward ?? false,
       featureId: spec?.reward?.feature,
@@ -883,17 +892,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       electrodeNames: rewardNames,
       montageNames: montage,
     );
-    final deltaIdx = electrodeIndicesFor(
-      museGateElectrodeNames,
-      montageNames: montage,
-    );
     _guard.configure(
       enabled: false,
       bandMath: settings.guardrailIsBandMathFor(state.protocol),
       featureId: guardFeature == guardFeatureNone
           ? guardFeatureBandDelta
           : guardFeature,
-      deltaElectrodes: deltaIdx.isEmpty ? defaultGateElectrodes : deltaIdx,
+      deltaElectrodes: frontal,
     );
   }
 
@@ -1467,6 +1472,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _reward.reset();
     _bus.reset();
     _sessionStartAt = null;
+    _sessionConditioning = null;
     _sessionTimeZone = null;
     _trainingStartAt = null;
     _usedStartAnyway = false;
@@ -1477,7 +1483,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _pauseOnsetContent = null;
     _pauseWallBegan = null;
     _collectionEyes = null;
-    _gateElectrodes = List.of(defaultGateElectrodes);
+    _sessionGate = null;
     _featureOverride.clear();
     _ref.read(liveStatsProvider).reset();
     state = const FeedbackState();
@@ -1534,6 +1540,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   /// Electrode indices that produced data in the current recording.
   Set<int> get recordedChannels => _recorder.recordedChannels;
+  int _sessionAuxChannels = 0;
 
   /// Streams enabled for this session's recording.
   Set<RecordingStream> get recordStreams => _recorder.streams;
@@ -1558,7 +1565,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final protocol = catalog?.forName(fb.protocol);
     final feature = settings.guardFeatureFor(fb.protocol);
     final model = settings.guardModel;
-    final channels = recordedChannels.map(channelName).toList()..sort();
+    final channels = recordedChannelLabels(
+      kind: app.lastConnectedKind,
+      electrodes: recordedChannels,
+      auxChannels: _sessionAuxChannels,
+    );
     final drowsy = sessionDrowsiness;
     return SessionMetadata(
       protocol: fb.protocol,
@@ -1592,6 +1603,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       deviceName: app.status.connected ? app.status.name : null,
       deviceModel: app.status.connected ? app.status.firmware : null,
       deviceId: app.status.connected ? app.status.id : null,
+      rawFiltering: RawFiltering.deviceUnfiltered,
+      conditioning: _sessionConditioning,
       recordedChannels: channels,
       recordedData: recordStreams.map((s) => s.name).toList(),
       gestures: settings.markersInFeedbackEnabled ? gestureMarkers : const [],
@@ -1630,6 +1643,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           final o = settings.inhibitCeilingOverrides(fb.protocol);
           return o.isEmpty ? null : o;
         }(),
+        crownQualitySource: app.crownQualitySource?.name,
       ),
       avgSpo2: stats?.avgSpo2,
       peakAlphaHz: stats?.peakAlphaFreq,
@@ -2060,12 +2074,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     _computedSampler?.updateBands(bands.electrode, bands);
-    final signalQuality = _ref.read(appStateProvider).signalQuality;
+    final app = _ref.read(appStateProvider);
+    final signalQuality = app.signalQuality;
     if (signalQuality != null) {
-      for (int i = 0; i < signalQuality.length && i < 4; i++) {
+      for (int i = 0; i < signalQuality.length; i++) {
         _computedSampler?.updateSignalQuality(i, signalQuality[i].round());
       }
     }
+    _computedSampler?.updateSignalQualitySource(
+      app.signalQualitySource,
+      app.crownSignalQuality,
+    );
   }
 
   void _onMovement(MovementDto movement) {
@@ -2202,10 +2221,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   double? get guardrailThreshold => _guard.threshold;
 
   bool _allGreen(List<double>? quality) {
-    if (quality == null || quality.length < 4) {
+    final head = electrodeNamesForKind(
+      _ref.read(appStateProvider).lastConnectedKind,
+    ).length;
+    if (quality == null || quality.length < head) {
       return false;
     }
-    return quality.every((s) => s >= signalGoodThreshold);
+    return quality.take(head).every((s) => s >= signalGoodThreshold);
   }
 
   bool _hasNeededElectrode(List<double>? quality) {

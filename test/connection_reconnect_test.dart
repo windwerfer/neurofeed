@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,7 +24,7 @@ void main() {
   test(
     'lost connection starts auto-reconnect and keeps lastDeviceId',
     () async {
-      await settings.setLastDeviceId('aa:bb');
+      await settings.setLastDevice('aa:bb', DeviceKind.muse);
       app.debugSetConnected(id: 'aa:bb', name: 'Muse 2');
 
       app.debugAddEvent(const MuseEventDto.disconnected());
@@ -38,7 +39,7 @@ void main() {
   );
 
   test('duplicate Disconnected during reconnect is ignored', () async {
-    await settings.setLastDeviceId('aa:bb');
+    await settings.setLastDevice('aa:bb', DeviceKind.muse);
     app.debugSetConnected(id: 'aa:bb', name: 'Muse 2');
     app.debugAddEvent(const MuseEventDto.disconnected());
     expect(app.debugReconnectCalls, 1);
@@ -49,7 +50,7 @@ void main() {
   });
 
   test('user disconnect stays down and keeps lastDeviceId', () async {
-    await settings.setLastDeviceId('aa:bb');
+    await settings.setLastDevice('aa:bb', DeviceKind.muse);
     app.debugSetConnected(id: 'aa:bb', name: 'Muse 2');
     app.debugMarkUserDisconnected();
 
@@ -69,7 +70,7 @@ void main() {
   });
 
   test('connect again re-enables lost-link auto-reconnect', () async {
-    await settings.setLastDeviceId('aa:bb');
+    await settings.setLastDevice('aa:bb', DeviceKind.muse);
     app.debugSetConnected(id: 'aa:bb', name: 'Muse 2');
     app.debugMarkUserDisconnected();
     app.debugAddEvent(const MuseEventDto.disconnected());

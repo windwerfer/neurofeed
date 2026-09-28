@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/agent/agent_protocol.dart';
 import 'package:neurofeed/src/connection_provider.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
-import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/monitor_state.dart';
@@ -176,10 +175,6 @@ class AgentCommands {
     final app = _container.read(appStateProvider);
     if (!app.status.connected) {
       return agentError(412, 'not_connected');
-    }
-    if (app.lastConnectedKind != null &&
-        deviceKindIsCrown(app.lastConnectedKind!)) {
-      return agentError(409, 'crown_refused', crownSessionUnsupportedMessage);
     }
     if (_container.read(monitorControllerProvider).kind ==
         CaptureKind.recording) {

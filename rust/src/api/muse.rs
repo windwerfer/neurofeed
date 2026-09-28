@@ -1,10 +1,11 @@
 use flutter_rust_bridge::frb;
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::api::device_config::DeviceKind;
+use crate::api::device_config::{DeviceConfig, DeviceKind, QualitySource};
 use crate::api::features::{self, FeatureDto};
 use crate::frb_generated::StreamSink;
 use muse_rs::prelude::*;
 
+use crate::analysis::eeg_filter::{self, EegConditioner};
 use crate::analysis::gesture::GestureDetector;
 use crate::analysis::{cbramod, guardrail, reve};
 use crate::connection::{state, ActiveConnection, ConnectionHandle};
@@ -23,10 +24,20 @@ fn now_ms() -> f64 {
 /// 5.5 s @ 256 Hz covers a 5 s epoch (1280 samples) with headroom.
 const GUARDRAIL_WINDOW: usize = 1408;
 
-/// App electrode index → model row order (AF7, AF8, TP9, TP10). The forwarder's
-/// electrode numbering is `0=TP9, 1=AF7, 2=AF8, 3=TP10`; the encoders expect
-/// rows in AF7/AF8/TP9/TP10 order to match the fixed position vectors below.
-const ELECTRODE_TO_MODEL_ROW: [i32; 4] = [1, 2, 0, 3];
+/// Frontal and temporal pads of the active device (device config): Muse
+/// AF7/AF8 + TP9/TP10, Crown F5/F6 + CP3/CP4.
+fn device_pads(kind: DeviceKind) -> ([i32; 2], [i32; 2]) {
+    let c = DeviceConfig::for_kind(kind);
+    let pair = |v: &[usize]| [v[0] as i32, v[1] as i32];
+    (pair(&c.frontal_electrodes), pair(&c.temporal_electrodes))
+}
+
+/// App electrode indices in model row order (AF7, AF8, TP9, TP10 rows): the
+/// device's frontal pair, then its temporal pair.
+fn model_rows(kind: DeviceKind) -> [i32; 4] {
+    let (f, t) = device_pads(kind);
+    [f[0], f[1], t[0], t[1]]
+}
 
 /// AF7/AF8/TP9/TP10 approximate EEG coordinates (mm), used by REVE
 /// (`positions_xyz`). CBraMod Spur A ignores positions (channel-order only).
@@ -48,15 +59,16 @@ fn score_window_len(kind: &str) -> Option<usize> {
 }
 
 /// Build a time-aligned model window from the per-electrode rolling buffers,
-/// arranged in model row order (AF7, AF8, TP9, TP10). Returns
+/// arranged in model row order ([model_rows]). Returns
 /// `(signal, positions, n_channels, n_times)` or None when any of the four
 /// electrodes has fewer than [n_times] buffered samples yet.
 fn build_score_window(
     bufs: &std::collections::HashMap<i32, Vec<f64>>,
     n_times: usize,
+    rows: [i32; 4],
 ) -> Option<(Vec<f32>, Vec<f32>, usize, usize)> {
     let mut signal = Vec::with_capacity(4 * n_times);
-    for app_el in ELECTRODE_TO_MODEL_ROW {
+    for app_el in rows {
         let buf = bufs.get(&app_el)?;
         if buf.len() < n_times {
             return None;
@@ -67,12 +79,13 @@ fn build_score_window(
     Some((signal, MODEL_POSITIONS.to_vec(), 4, n_times))
 }
 
-/// Average of the most recent frontal (AF7/AF8) delta band powers, µV²/Hz.
-/// Used as the permanent hard-rail companion to the embedding.
-fn frontal_delta_average(deltas: &std::collections::HashMap<i32, f64>) -> f64 {
+/// Average of the most recent delta band powers of the device's frontal
+/// pair (Muse AF7/AF8, Crown F5/F6), µV²/Hz. Used as the permanent
+/// hard-rail companion to the embedding.
+fn frontal_delta_average(deltas: &std::collections::HashMap<i32, f64>, frontal: [i32; 2]) -> f64 {
     let mut sum = 0f64;
     let mut n = 0u32;
-    for el in [1i32, 2] {
+    for el in frontal {
         if let Some(d) = deltas.get(&el) {
             sum += d;
             n += 1;
@@ -102,6 +115,8 @@ pub struct ConnectionStatus {
     pub name: String,
     pub id: String,
     pub firmware: String,
+    /// Muse AUX inputs streamed on this connection (electrodes 4.. = AUX1..).
+    pub aux_channels: u32,
 }
 
 impl Default for ConnectionStatus {
@@ -111,7 +126,21 @@ impl Default for ConnectionStatus {
             name: String::new(),
             id: String::new(),
             firmware: String::new(),
+            aux_channels: 0,
         }
+    }
+}
+
+/// Muse on-head EEG electrodes (TP9, AF7, AF8, TP10); AUX inputs follow.
+pub(crate) const MUSE_HEAD_ELECTRODES: u32 = 4;
+
+/// AUX inputs muse-rs streams when AUX is requested: Classic exposes one
+/// AUX characteristic (electrode 4); Athena delivers electrodes 4..7.
+pub(crate) fn muse_aux_channels(is_athena: bool, record_aux: bool) -> u32 {
+    match (record_aux, is_athena) {
+        (false, _) => 0,
+        (true, true) => 4,
+        (true, false) => 1,
     }
 }
 
@@ -255,6 +284,17 @@ pub struct ReveDto {
     pub dim: u32,
 }
 
+/// Neurosity pad signal quality for one second — the single source for the
+/// UI pads, recording and the band-feature gate.
+#[frb(dart_metadata = ("freezed",))]
+pub struct PadQualityDto {
+    /// Per pad, 0–100 (usable >= 80).
+    pub values: Vec<f64>,
+    pub source: QualitySource,
+    /// Crown per-pad means (0..1) for this second when [source] is Crown.
+    pub crown: Option<Vec<f64>>,
+}
+
 /// All events streamed from the headset to the UI.
 #[frb(dart_metadata = ("freezed",))]
 pub enum MuseEventDto {
@@ -274,6 +314,7 @@ pub enum MuseEventDto {
     Gestures(GestureDto),
     Reve(ReveDto),
     Feature(FeatureDto),
+    PadQuality(PadQualityDto),
 }
 
 // ── Bridge API ─────────────────────────────────────────────────────────────────
@@ -347,11 +388,7 @@ pub async fn scan(timeout_secs: Option<u64>) -> anyhow::Result<Vec<DeviceInfo>> 
         .map(|d| DeviceInfo {
             name: d.name.clone(),
             id: d.id.clone(),
-            kind: if d.name.contains("Crown") || d.name.contains("Notion") {
-                DeviceKind::Neurosity
-            } else {
-                DeviceKind::Muse
-            },
+            kind: DeviceKind::Muse,
         })
         .collect();
 
@@ -449,8 +486,10 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
                 name: name.clone(),
                 id: device_id.clone(),
                 firmware: firmware.clone(),
+                aux_channels: 0,
             });
             guard.events = Some(dto_rx);
+            guard.eeg_electrode_limit = Some(MUSE_HEAD_ELECTRODES as i32);
         }
         features::set_active_kind(DeviceKind::Muse);
 
@@ -461,6 +500,7 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
             name,
             id: device_id,
             firmware,
+            aux_channels: 0,
         })
     })
     .await
@@ -506,20 +546,28 @@ pub fn get_status() -> ConnectionStatus {
             name: conn.name.clone(),
             id: conn.id.clone(),
             firmware: conn.firmware.clone(),
+            aux_channels: conn.aux_channels,
         },
         None => ConnectionStatus::default(),
     }
 }
 
 /// Connect to a device with explicit kind and simulation flag.
-/// - `kind`: DeviceKind::Muse or DeviceKind::Neurosity (determines electrode layout, features)
-/// - `simulate`: if true, runs the built-in simulator instead of real BLE
+/// - `kind`: DeviceKind::Muse (BLE id from `scan`) or DeviceKind::Neurosity
+///   (Crown device id from `discovered_crowns`, streamed over OSC on the LAN)
+/// - `simulate`: if true, runs the built-in simulator instead of a headset
+/// - `record_aux`: Muse only — stream AUX inputs as electrodes 4.. (Classic:
+///   AUX characteristic; Athena: keep electrodes 4..7). Off drops them.
+/// - `quality_source`: Neurosity only — pad quality from the Crown or the app.
 #[frb]
 pub async fn connect_with_options(
     device_id: String,
     kind: DeviceKind,
     simulate: bool,
+    record_aux: bool,
+    quality_source: QualitySource,
 ) -> anyhow::Result<ConnectionStatus> {
+    features::set_quality_source(quality_source);
     {
         let old = state().inner.lock().unwrap().active.take();
         if let Some(old) = old {
@@ -527,21 +575,8 @@ pub async fn connect_with_options(
         }
     }
 
-    // If simulating, we don't need a real device from cache
-    let (name, firmware) = if simulate {
-        crate::api::simulator::simulated_identity(&device_id, kind)
-    } else {
-        // Real device - look up from cache
-        let device = {
-            let guard = state().inner.lock().unwrap();
-            guard.devices.get(&device_id).cloned().ok_or_else(|| {
-                anyhow::anyhow!("Device {device_id} not found; scan first")
-            })?
-        };
-        (device.name.clone(), String::new()) // firmware filled after connect
-    };
-
     if simulate {
+        let (name, firmware) = crate::api::simulator::simulated_identity(&device_id, kind);
         let config = crate::api::device_config::DeviceConfig::for_kind(kind);
         let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(1024);
         let simulator = crate::api::simulator::spawn_simulator(config, dto_tx);
@@ -555,8 +590,14 @@ pub async fn connect_with_options(
                 name: name.clone(),
                 id: device_id.clone(),
                 firmware: firmware.clone(),
+                aux_channels: 0,
             });
             guard.events = Some(dto_rx);
+            guard.eeg_electrode_limit = if kind.is_muse() {
+                Some(MUSE_HEAD_ELECTRODES as i32)
+            } else {
+                None
+            };
         }
         features::set_active_kind(kind);
 
@@ -567,44 +608,35 @@ pub async fn connect_with_options(
             name,
             id: device_id,
             firmware,
+            aux_channels: 0,
         });
     }
 
-    // Real Neurosity (Crown/Notion) - use OSC over Wi-Fi
     if kind.is_neurosity() {
-        // For OSC, we don't strictly need the device in cache. The device_id is the Crown's serial number.
-        // Verify it exists if it was discovered via scan.
-        {
-            let guard = state().inner.lock().unwrap();
-            if !guard.devices.contains_key(&device_id) {
-                log::warn!("[crown_osc] Device {device_id} not in cache; connecting anyway (OSC uses serial)");
-            }
-        }
-        
         let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(256);
-        
-        // Start OSC receiver (creates its own tokio task)
-        let status = crate::api::neurosity_osc::connect_crown_osc(device_id.clone(), dto_tx).await?;
-        
+        let (handle, status) =
+            crate::api::neurosity_osc::connect_crown_osc(device_id.clone(), dto_tx).await?;
+
         {
             let mut guard = state().inner.lock().unwrap();
             guard.connection_epoch += 1;
             guard.active = Some(ActiveConnection {
-                handle: ConnectionHandle::Crown, // CrownOscHandle would be better but kept simple
+                handle: ConnectionHandle::Crown(handle),
                 name: status.name.clone(),
                 id: device_id.clone(),
                 firmware: status.firmware.clone(),
+                aux_channels: 0,
             });
             guard.events = Some(dto_rx);
+            guard.eeg_electrode_limit = None;
         }
         features::set_active_kind(kind);
 
         spawn_event_forwarder();
-        
+
         return Ok(status);
     }
 
-    // Real Muse - existing logic
     let device = {
         let guard = state().inner.lock().unwrap();
         guard.devices.get(&device_id).cloned().ok_or_else(|| {
@@ -615,6 +647,7 @@ pub async fn connect_with_options(
     let name = device.name.clone();
     let client = MuseClient::new(MuseClientConfig {
         enable_ppg: true,
+        enable_aux: record_aux,
         ..Default::default()
     });
 
@@ -626,12 +659,13 @@ pub async fn connect_with_options(
             "Classic"
         }
         .to_string();
+        let aux_channels = muse_aux_channels(handle.is_athena, record_aux);
 
-        log::info!("[muse] connected to {name} ({firmware} firmware)");
+        log::info!("[muse] connected to {name} ({firmware} firmware, aux={aux_channels})");
 
         let start_result = tokio::time::timeout(
             std::time::Duration::from_secs(8),
-            handle.start(true, false),
+            handle.start(true, record_aux),
         )
         .await;
 match start_result {
@@ -663,8 +697,10 @@ match start_result {
                 name: name.clone(),
                 id: device_id.clone(),
                 firmware: firmware.clone(),
+                aux_channels,
             });
             guard.events = Some(dto_rx);
+            guard.eeg_electrode_limit = Some((MUSE_HEAD_ELECTRODES + aux_channels) as i32);
         }
         features::set_active_kind(kind);
 
@@ -675,6 +711,7 @@ match start_result {
             name,
             id: device_id,
             firmware,
+            aux_channels,
         })
     })
     .await
@@ -771,7 +808,8 @@ fn spawn_event_forwarder() {
             std::collections::HashMap::new();
         let mut last_guardrail_attempt = tokio::time::Instant::now();
 
-        // Blink / clench / eye-position detector, fed from raw EEG + gamma.
+        // Blink / clench / eye-position detector: conditioned EEG for blinks,
+        // RAW for the slow eye level, plus gamma.
         let mut gesture = GestureDetector::default();
 
         // Per-electrode virtual timestamp tracking for Athena firmware.
@@ -786,17 +824,27 @@ fn spawn_event_forwarder() {
         let mut latest_bands: std::collections::HashMap<i32, features::ChannelBands> =
             std::collections::HashMap::new();
 
+        // EEG conditioning (per connection, every device). RAW is recorded
+        // as received; quality, bands, features, gestures and the UI get
+        // the conditioned signal.
+        let mut conditioner: EegConditioner;
+        let mut published_mains: eeg_filter::Mains;
+        let mut pads_kind: Option<DeviceKind> = None;
+
         const FFT_N: usize = 256;
         loop {
-            let rx = {
+            let (rx, eeg_limit) = {
                 let mut guard =
                     state().inner.lock().unwrap_or_else(|e| e.into_inner());
-                guard.events.take()
+                (guard.events.take(), guard.eeg_electrode_limit)
             };
             let Some(mut rx) = rx else {
                 tokio::time::sleep(std::time::Duration::from_millis(200)).await;
                 continue;
             };
+            conditioner = EegConditioner::new(eeg_filter::NotchMode::Live);
+            published_mains = eeg_filter::Mains::Unknown;
+            eeg_filter::publish_live_mains(published_mains);
             // Poll the event channel once a second. This serves two purposes:
             // 1. A reconnect stores a fresh channel in `events`; pick it up
             //    here instead of draining a stale one forever.
@@ -865,7 +913,6 @@ fn spawn_event_forwarder() {
                 };
                 match &ev {
                     MuseEventDto::Eeg(_) => counts.eeg += 1,
-                    MuseEventDto::Bands(_) => counts.bands += 1,
                     MuseEventDto::Ppg(_) => counts.ppg += 1,
                     MuseEventDto::Telemetry(_) => counts.telemetry += 1,
                     MuseEventDto::Accelerometer(_) => counts.accelerometer += 1,
@@ -884,8 +931,12 @@ fn spawn_event_forwarder() {
                     counts = PktCounts::default();
                     last_print = tokio::time::Instant::now();
                 }
-                // ev is already MuseEventDto
                 let mut dto = ev;
+                match &dto {
+                    MuseEventDto::Bands(_) => continue,
+                    MuseEventDto::Eeg(e) if eeg_limit.is_some_and(|l| e.electrode >= l) => continue,
+                    _ => {}
+                }
                 // Patch Athena EEG timestamps (0.0) with virtual wall-clock
                 // timestamps derived from total sample count @ 256 Hz.
                 if let MuseEventDto::Eeg(ref mut e) = dto {
@@ -947,55 +998,54 @@ fn spawn_event_forwarder() {
                     }
                 }
 
-                if let MuseEventDto::Eeg(ref e) = dto {
-                    quality_rings
-                        .entry(e.electrode)
-                        .or_default()
-                        .extend(&e.samples);
-                }
-                if let MuseEventDto::Bands(ref b) = dto {
-                    latest_bands.insert(
-                        b.electrode,
-                        features::ChannelBands {
-                            delta: b.delta,
-                            theta: b.theta,
-                            alpha: b.alpha,
-                            beta: b.beta,
-                            gamma: b.gamma,
-                            line_noise_ratio: b.line_noise_ratio,
-                        },
-                    );
-                }
-                let eeg_samples = if let MuseEventDto::Eeg(ref e) = dto {
-                    Some((e.electrode, e.timestamp, e.samples.clone()))
-                } else {
-                    None
+                // Capture records `dto` (RAW as received); analysis and the UI
+                // use the conditioned samples.
+                let (eeg_samples, outgoing) = match &dto {
+                    MuseEventDto::Eeg(e) => {
+                        let (samples, events) = condition_eeg_packet(&mut conditioner, e);
+                        (Some((e.electrode, e.timestamp, samples)), Some(events))
+                    }
+                    _ => (None, None),
                 };
-                if let MuseEventDto::Eeg(ref e) = dto {
-                    gesture.feed_eeg(e.electrode, &e.samples);
+                if conditioner.mains() != published_mains {
+                    published_mains = conditioner.mains();
+                    eeg_filter::publish_live_mains(published_mains);
+                }
+                let kind = features::active_kind().unwrap_or(DeviceKind::Muse);
+                if pads_kind != Some(kind) {
+                    pads_kind = Some(kind);
+                    let (frontal, temporal) = device_pads(kind);
+                    gesture.set_electrodes(frontal, temporal);
+                }
+                if let (Some((electrode, _, samples)), MuseEventDto::Eeg(e)) = (&eeg_samples, &dto) {
+                    quality_rings.entry(*electrode).or_default().extend(samples);
+                    gesture.feed_eeg(*electrode, samples, &e.samples);
                 }
                 crate::spine::capture::on_dto(&dto);
+                let outgoing = outgoing.unwrap_or_else(|| vec![dto]);
                 let should_stop = {
                     let mut guard =
                         state().inner.lock().unwrap_or_else(|e| e.into_inner());
-                    match guard.sink.as_ref() {
-                        Some(sink) => {
-                            if sink.add(dto).is_err() {
-                                guard.sink = None;
-                                true
-                            } else {
-                                false
+                    let mut failed = false;
+                    if let Some(sink) = guard.sink.as_ref() {
+                        for ev in outgoing {
+                            if sink.add(ev).is_err() {
+                                failed = true;
+                                break;
                             }
                         }
-                        None => false,
                     }
+                    if failed {
+                        guard.sink = None;
+                    }
+                    failed
                 };
                 if should_stop {
                     break;
                 }
                 if let Some((electrode, timestamp, samples)) = eeg_samples {
                     // Keep the rolling guardrail window (all electrodes, capped
-                    // at ~5.5 s) fed from the same raw EEG packets.
+                    // at ~5.5 s) fed from the same conditioned EEG.
                     {
                         let buf = window_bufs.entry(electrode).or_default();
                         buf.extend_from_slice(&samples);
@@ -1092,6 +1142,7 @@ fn spawn_event_forwarder() {
                     if last_metrics.elapsed() >= std::time::Duration::from_secs(1) {
                         let now_ms = now_ms();
                         last_metrics = tokio::time::Instant::now();
+                        emit_neurosity_pad_quality(&latest_bands, &quality_rings);
                         emit_enabled_band_features(now_ms, &latest_bands, &quality_rings);
 
                         let (bpm, confidence) = compute_pulse(&ppg_ir_buffer);
@@ -1193,7 +1244,8 @@ fn spawn_event_forwarder() {
                                 guardrail::finish_score();
                                 continue;
                             };
-                            let window = build_score_window(&window_bufs, n_times);
+                            let device = features::active_kind().unwrap_or(DeviceKind::Muse);
+                            let window = build_score_window(&window_bufs, n_times, model_rows(device));
                             let Some((signal, positions, n_channels, n_times)) = window
                             else {
                                 // Not enough buffered samples yet — first window
@@ -1202,7 +1254,7 @@ fn spawn_event_forwarder() {
                                 continue;
                             };
                             let ts = now_ms;
-                            let delta = frontal_delta_average(&frontal_delta);
+                            let delta = frontal_delta_average(&frontal_delta, device_pads(device).0);
                             tokio::spawn(async move {
                                 let infer_kind = kind.clone();
                                 let embedding = tokio::task::spawn_blocking(move || {
@@ -1323,15 +1375,33 @@ fn spawn_event_forwarder() {
     });
 }
 
-fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
-    let n = samples.len();
-    if n < 2 {
-        return [0.0; 8];
-    }
-    let sample_rate = 256.0;
-    let hz_per_bin = sample_rate / n as f64;
-    let bin = |hz: f64| (hz / hz_per_bin).round() as usize;
+/// One RAW EEG packet through the conditioner: the conditioned samples for
+/// quality / bands / features / gestures, and the conditioned EEG events
+/// for the UI (none while a segment's first samples are held).
+fn condition_eeg_packet(
+    conditioner: &mut EegConditioner,
+    e: &EegDto,
+) -> (Vec<f64>, Vec<MuseEventDto>) {
+    let chunks = conditioner.process(e.electrode, e.timestamp, &e.samples);
+    let samples = chunks.iter().flat_map(|(_, s)| s.iter().copied()).collect();
+    let events = chunks
+        .into_iter()
+        .map(|(timestamp, samples)| {
+            MuseEventDto::Eeg(EegDto {
+                index: e.index,
+                electrode: e.electrode,
+                timestamp,
+                samples,
+            })
+        })
+        .collect();
+    (samples, events)
+}
 
+/// Radix-2 FFT of `samples` (length a power of two) into thread-local
+/// scratch buffers; `f` sees the real and imaginary parts.
+fn with_spectrum<R>(samples: &[f64], f: impl FnOnce(&[f64], &[f64]) -> R) -> R {
+    let n = samples.len();
     // Reuse scratch buffers across calls via a small thread-local pool to
     // avoid repeated allocations.  Each electrode does one FFT per second,
     // and one blocking task runs at a time, so 2 buffers × n is enough.
@@ -1390,46 +1460,112 @@ fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
             }
             len <<= 1;
         }
+        f(&re, &im)
+    }))
+}
 
+/// Power in the mains bin for `hz`, summed over a ±1 bin window to tolerate
+/// slight mains drift. hz_per_bin = 1.0 at FFT_N=256 @ 256 Hz, so the mains
+/// spike lands directly on bins 50/60.
+fn mains_bin_power(re: &[f64], im: &[f64], hz: f64) -> f64 {
+    let n = re.len();
+    let half_n = n / 2;
+    let k = (hz / (256.0 / n as f64)).round() as usize;
+    let lo = k.saturating_sub(1).max(1);
+    let hi = (k + 1).min(half_n);
+    (lo..=hi).map(|kk| re[kk] * re[kk] + im[kk] * im[kk]).sum()
+}
+
+/// How far the 50 Hz and 60 Hz mains peaks stand out in one 256 Hz window:
+/// mean power of each mains window (±1 bin, as in the line-noise ratio) over
+/// the median bin power within ±8 Hz, excluding bins within 2 Hz of either
+/// mains frequency. Infinite when a peak sits on a zero floor.
+pub(crate) fn mains_peak_ratios(samples: &[f64]) -> (f64, f64) {
+    if samples.len() != 256 {
+        return (0.0, 0.0);
+    }
+    with_spectrum(samples, |re, im| {
+        let power = |k: usize| re[k] * re[k] + im[k] * im[k];
+        let ratio = |hz: f64| {
+            let k = hz as usize;
+            let mut floor: Vec<f64> = (k - 8..=k + 8)
+                .filter(|&b| (b as f64 - 50.0).abs() > 2.0 && (b as f64 - 60.0).abs() > 2.0)
+                .map(power)
+                .collect();
+            floor.sort_by(f64::total_cmp);
+            let median = floor[floor.len() / 2];
+            let peak = mains_bin_power(re, im, hz) / 3.0;
+            if median > 0.0 {
+                peak / median
+            } else if peak > 0.0 {
+                f64::INFINITY
+            } else {
+                0.0
+            }
+        };
+        (ratio(50.0), ratio(60.0))
+    })
+}
+
+/// EEG bands `[lo, hi)` in Hz: delta, theta, alpha, beta, gamma. Every 1 Hz
+/// bin belongs to exactly one band; gamma stops below the mains notch.
+pub(crate) const BANDS_HZ: [(f64, f64); 5] =
+    [(1.0, 4.0), (4.0, 8.0), (8.0, 13.0), (13.0, 30.0), (30.0, 45.0)];
+
+/// Periodic Hamming window `0.54 − 0.46·cos(2πi/n)`.
+fn hamming(n: usize) -> Vec<f64> {
+    (0..n)
+        .map(|i| 0.54 - 0.46 * (2.0 * std::f64::consts::PI * i as f64 / n as f64).cos())
+        .collect()
+}
+
+/// Bands, peak alpha and line noise of one window (256 samples at 256 Hz):
+/// Hamming-windowed FFT, one-sided PSD `2|X_k|² / (fs·Σw²)` in µV²/Hz.
+/// Band power = PSD summed over the band's bins (× 1 Hz bin width).
+/// Returns `[delta, theta, alpha, beta, gamma, peak_alpha_hz,
+/// peak_alpha_psd, line_noise_ratio]`.
+pub(crate) fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
+    let n = samples.len();
+    if n < 2 {
+        return [0.0; 8];
+    }
+    let sample_rate = 256.0;
+    let hz_per_bin = sample_rate / n as f64;
+    let w = hamming(n);
+    let windowed: Vec<f64> = samples.iter().zip(&w).map(|(x, w)| x * w).collect();
+    let psd_scale = 2.0 / (sample_rate * w.iter().map(|v| v * v).sum::<f64>());
+
+    with_spectrum(&windowed, |re, im| {
         let half_n = n / 2;
-        let powers = [
-            (1..=bin(4.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
-            (bin(4.0)..=bin(8.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
-            (bin(8.0)..=bin(13.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
-            (bin(13.0)..=bin(30.0)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
-            (bin(30.0)..=bin(half_n.min(50) as f64)).map(|k| re[k] * re[k] + im[k] * im[k]).sum::<f64>() / (n * n) as f64,
-        ];
+        let psd = |k: usize| (re[k] * re[k] + im[k] * im[k]) * psd_scale;
+        let band = |(lo, hi): (f64, f64)| {
+            (1..half_n)
+                .filter(|&k| {
+                    let f = k as f64 * hz_per_bin;
+                    f >= lo && f < hi
+                })
+                .map(psd)
+                .sum::<f64>()
+                * hz_per_bin
+        };
+        let powers = BANDS_HZ.map(band);
 
-        let (peak_freq, peak_power) = compute_peak_alpha(&re, &im, hz_per_bin);
+        let (peak_freq, peak_power) = compute_peak_alpha(re, im, hz_per_bin);
 
         // Line-noise / impedance proxy: fraction of total power in the
-        // 50/60 Hz mains bins (each averaged over a ±1 bin window to tolerate
-        // slight mains drift). hz_per_bin = 1.0 at FFT_N=256 @ 256 Hz, so the
-        // mains spike lands directly on bins 50/60.
-        let mains = |hz: f64| -> f64 {
-            let k = bin(hz);
-            let mut p = 0.0;
-            let lo = k.saturating_sub(1).max(1);
-            let hi = (k + 1).min(half_n);
-            for kk in lo..=hi {
-                p += re[kk] * re[kk] + im[kk] * im[kk];
-            }
-            p
-        };
+        // 50/60 Hz mains bins.
         let total: f64 =
             (1..=half_n).map(|k| re[k] * re[k] + im[k] * im[k]).sum();
-        let mains_power = mains(50.0).max(mains(60.0));
+        let mains_power = mains_bin_power(re, im, 50.0).max(mains_bin_power(re, im, 60.0));
         let line_noise_ratio = if total > 0.0 { mains_power / total } else { 0.0 };
 
         [
             powers[0], powers[1], powers[2], powers[3], powers[4],
-            peak_freq, peak_power, line_noise_ratio,
+            peak_freq, peak_power * psd_scale, line_noise_ratio,
         ]
-    }))
+    })
 }
 
-/// Pulse detection from PPG infrared channel using peak-finding.
-/// Returns (bpm, confidence).
 fn compute_pulse(ir_samples: &[f64]) -> (f64, f64) {
     if ir_samples.len() < 128 {
         return (0.0, 0.0);
@@ -1559,8 +1695,9 @@ fn compute_movement(magnitudes: &[f64]) -> f64 {
 /// `re` and `im` are the full FFT output (half_n + 1 usable bins).
 /// Returns (frequency_hz, power).
 fn compute_peak_alpha(re: &[f64], im: &[f64], hz_per_bin: f64) -> (f64, f64) {
-    let bin_start = (8.0 / hz_per_bin).round() as usize;
-    let bin_end = (13.0 / hz_per_bin).round() as usize;
+    let (lo, hi) = BANDS_HZ[2];
+    let bin_start = (lo / hz_per_bin).ceil() as usize;
+    let bin_end = (hi / hz_per_bin).ceil() as usize;
     let bin_end = bin_end.min(re.len());
 
     let mut max_power = 0.0f64;
@@ -1591,6 +1728,32 @@ fn compute_peak_alpha(re: &[f64], im: &[f64], hz_per_bin: f64) -> (f64, f64) {
         / (2.0 * (2.0 * max_power - prev_power - next_power));
     let frequency = (max_bin as f64 + offset) * hz_per_bin;
     (frequency, max_power)
+}
+
+fn emit_neurosity_pad_quality(
+    latest_bands: &std::collections::HashMap<i32, features::ChannelBands>,
+    rings: &std::collections::HashMap<i32, features::EegRing>,
+) {
+    if !features::active_kind().is_some_and(|k| k.is_neurosity()) {
+        return;
+    }
+    let app: [Option<f64>; crate::analysis::crown_quality::CROWN_PADS] = std::array::from_fn(|pad| {
+        let el = pad as i32;
+        let noise = latest_bands.get(&el).map_or(-1.0, |b| b.line_noise_ratio);
+        rings.get(&el).and_then(|r| r.quality(noise))
+    });
+    let resolved = features::resolve_neurosity_second(&app);
+    let dto = MuseEventDto::PadQuality(PadQualityDto {
+        values: resolved.scores.iter().map(|q| q.unwrap_or(0.0)).collect(),
+        source: resolved.source,
+        crown: resolved.crown.map(|c| c.to_vec()),
+    });
+    let mut guard = state().inner.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(sink) = &guard.sink {
+        if sink.add(dto).is_err() {
+            guard.sink = None;
+        }
+    }
 }
 
 fn emit_enabled_band_features(
@@ -1679,49 +1842,170 @@ fn map_imu(imu: ImuData) -> ImuDto {
     }
 }
 
-/// Connect to a Neurosity Crown/Notion device via BLE.
-/// Stub: not implemented — returns a placeholder connection (Crown Start refused).
-pub async fn crown_connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
-    {
-        let old = state().inner.lock().unwrap().active.take();
-        if let Some(old) = old {
-            old.handle.disconnect().await;
+#[cfg(test)]
+mod aux_tests {
+    use super::*;
+
+    #[test]
+    fn aux_channel_count_by_firmware() {
+        assert_eq!(muse_aux_channels(false, false), 0);
+        assert_eq!(muse_aux_channels(true, false), 0);
+        assert_eq!(muse_aux_channels(false, true), 1);
+        assert_eq!(muse_aux_channels(true, true), 4);
+    }
+}
+
+#[cfg(test)]
+mod conditioning_tests {
+    use super::*;
+    use crate::api::features::pad_quality_from_std_and_noise;
+    use std::f64::consts::PI;
+
+    /// Muse Classic-style packet: 12 samples, ~800 µV offset, 10 µV alpha,
+    /// 60 µV 50 Hz hum.
+    fn muse_packet(n0: usize, electrode: i32) -> EegDto {
+        EegDto {
+            index: (n0 / 12) as u16,
+            electrode,
+            timestamp: 1.0e12 + n0 as f64 * 1000.0 / 256.0,
+            samples: (n0..n0 + 12)
+                .map(|n| {
+                    let t = n as f64 / 256.0;
+                    800.0 + electrode as f64 * 37.0
+                        + 10.0 * (2.0 * PI * 10.0 * t).sin()
+                        + 60.0 * (2.0 * PI * 50.0 * t).sin()
+                })
+                .collect(),
         }
     }
 
-    let device = {
-        let guard = state().inner.lock().unwrap();
-        guard.devices.get(&device_id).cloned().ok_or_else(|| {
-            anyhow::anyhow!("Device {device_id} not found; scan first")
-        })?
-    };
-
-    let name = device.name.clone();
-    
-    // Placeholder channel; Crown BLE Start is refused until implemented.
-    let (_tx, rx) = tokio::sync::mpsc::channel(256);
-
-    log::warn!("[crown] Crown BLE not yet implemented - returning placeholder connection");
-
-    {
-        let mut guard = state().inner.lock().unwrap();
-        guard.connection_epoch += 1;
-        guard.active = Some(ActiveConnection {
-            handle: ConnectionHandle::Crown,
-            name: name.clone(),
-            id: device_id.clone(),
-            firmware: "Crown".to_string(),
-        });
-        guard.events = Some(rx);
+    fn std(v: &[f64]) -> f64 {
+        let m = v.iter().sum::<f64>() / v.len() as f64;
+        (v.iter().map(|x| (x - m).powi(2)).sum::<f64>() / v.len() as f64).sqrt()
     }
-    features::set_active_kind(DeviceKind::Neurosity);
 
-    spawn_event_forwarder();
+    #[test]
+    fn muse_quality_and_bands_use_the_conditioned_signal() {
+        let mut c = EegConditioner::default();
+        let mut raw = vec![Vec::new(); 4];
+        let mut conditioned = vec![Vec::new(); 4];
+        let mut n = 0;
+        while n < 256 * 6 {
+            for el in 0..4 {
+                let p = muse_packet(n, el);
+                let before = p.samples.clone();
+                let (samples, events) = condition_eeg_packet(&mut c, &p);
+                // The packet capture records is RAW as received.
+                assert_eq!(p.samples, before);
+                assert_eq!(samples.len(), events.iter().map(|e| match e {
+                    MuseEventDto::Eeg(e) => e.samples.len(),
+                    _ => 0,
+                }).sum::<usize>());
+                raw[el as usize].extend(before);
+                conditioned[el as usize].extend(samples);
+            }
+            n += 12;
+        }
+        assert_eq!(c.mains(), eeg_filter::Mains::Hz(50.0));
+        for el in 0..4 {
+            let last_raw = &raw[el][256 * 5..256 * 6];
+            let last = &conditioned[el][256 * 5..256 * 6];
+            let raw_bands = compute_fft_bands(last_raw);
+            let bands = compute_fft_bands(last);
+            // Unfiltered: hum dominates spread and line noise → unusable.
+            let raw_q = pad_quality_from_std_and_noise(std(last_raw), raw_bands[7]);
+            // Conditioned: 10 µV alpha, no residual hum → usable.
+            let q = pad_quality_from_std_and_noise(std(last), bands[7]);
+            assert!(raw_q < 80.0 && q >= 80.0, "raw {raw_q} conditioned {q}");
+            assert!(bands[7] < 1e-4, "line noise {}", bands[7]);
+            let rel_alpha = bands[2] / bands[..5].iter().sum::<f64>();
+            assert!(rel_alpha > 0.99, "relative alpha {rel_alpha}");
+        }
+    }
 
-    Ok(ConnectionStatus {
-        connected: true,
-        name,
-        id: device_id,
-        firmware: "Crown".to_string(),
-    })
+    #[test]
+    fn crown_packet_is_conditioned_and_raw_untouched() {
+        let mut c = EegConditioner::default();
+        let mut out = Vec::new();
+        for k in 0..64usize {
+            let p = EegDto {
+                index: k as u16,
+                electrode: 3,
+                timestamp: k as f64 * 62.5,
+                samples: (k * 16..k * 16 + 16)
+                    .map(|n| -2.0e5 + 10.0 * (2.0 * PI * 10.0 * n as f64 / 256.0).sin())
+                    .collect(),
+            };
+            let before = p.samples.clone();
+            let (samples, _) = condition_eeg_packet(&mut c, &p);
+            assert_eq!(p.samples, before);
+            out.extend(samples);
+        }
+        assert_eq!(out.len(), 64 * 16);
+        assert!(out.iter().all(|v| v.abs() < 15.0));
+    }
+
+    /// A 10 µV sine carries 50 µV² (A²/2): the alpha band gets it all when
+    /// the sine sits inside alpha, on or between bins.
+    #[test]
+    fn known_alpha_sine_band_power() {
+        for hz in [10.0, 10.5, 11.3] {
+            let x: Vec<f64> = (0..256).map(|n| 10.0 * (2.0 * PI * hz * n as f64 / 256.0).sin()).collect();
+            let b = compute_fft_bands(&x);
+            let total: f64 = b[..5].iter().sum();
+            eprintln!("{hz} Hz: bands {:?} peak {:.2} Hz {:.2} µV²/Hz", &b[..5], b[5], b[6]);
+            assert!((b[2] - 50.0).abs() < 2.0, "{hz} Hz alpha {}", b[2]);
+            assert!(b[2] / total > 0.97, "{hz} Hz rel alpha {}", b[2] / total);
+            assert!((b[5] - hz).abs() < 0.3, "{hz} Hz peak {}", b[5]);
+        }
+        // Every 1 Hz bin in exactly one band: 1..=44 Hz tones each land in
+        // one band only, and 45..=50 Hz in none.
+        for f in 1..=50usize {
+            let x: Vec<f64> = (0..256).map(|n| (2.0 * PI * f as f64 * n as f64 / 256.0).cos()).collect();
+            let b = compute_fft_bands(&x);
+            let hit = BANDS_HZ.iter().position(|&(lo, hi)| (f as f64) >= lo && (f as f64) < hi);
+            if let Some(i) = hit {
+                assert!(b[i] > 0.3, "{f} Hz band {i} {}", b[i]);
+            } else {
+                assert!(b[4] < 0.2, "{f} Hz leaks into gamma {}", b[4]);
+            }
+        }
+    }
+
+    /// Direct DFT reference for the band / line-noise math.
+    #[test]
+    fn fft_bands_match_direct_dft() {
+        let x: Vec<f64> = (0..256)
+            .map(|n| {
+                let t = n as f64 / 256.0;
+                20.0 * (2.0 * PI * 10.0 * t).sin()
+                    + 5.0 * (2.0 * PI * 3.0 * t).cos()
+                    + 4.0 * (2.0 * PI * 50.0 * t).sin()
+                    + 2.0 * (2.0 * PI * 21.0 * t).sin()
+            })
+            .collect();
+        let w: Vec<f64> = (0..256).map(|n| 0.54 - 0.46 * (2.0 * PI * n as f64 / 256.0).cos()).collect();
+        let sum_w2: f64 = w.iter().map(|v| v * v).sum();
+        let p = |k: usize| {
+            let (mut re, mut im) = (0.0, 0.0);
+            for (n, v) in x.iter().enumerate() {
+                let a = 2.0 * PI * (k * n) as f64 / 256.0;
+                re += v * w[n] * a.cos();
+                im -= v * w[n] * a.sin();
+            }
+            re * re + im * im
+        };
+        // Half-open bins [lo, hi), one-sided PSD, 1 Hz bins.
+        let band = |lo: usize, hi: usize| (lo..hi).map(p).sum::<f64>() * 2.0 / (256.0 * sum_w2);
+        let got = compute_fft_bands(&x);
+        let want = [band(1, 4), band(4, 8), band(8, 13), band(13, 30), band(30, 45)];
+        for i in 0..5 {
+            assert!((got[i] - want[i]).abs() <= 1e-9 * want[i].max(1.0), "band {i}: {} vs {}", got[i], want[i]);
+        }
+        let total: f64 = (1..=128).map(p).sum();
+        let mains = (49..=51).map(p).sum::<f64>().max((59..=61).map(p).sum());
+        assert!((got[7] - mains / total).abs() < 1e-12);
+        let (r50, _) = mains_peak_ratios(&x);
+        assert!(r50 > eeg_filter::PEAK_RATIO, "{r50}");
+    }
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -7,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:neurofeed/src/charts/band_style.dart';
 import 'package:neurofeed/src/charts/session_reader.dart';
+import 'package:neurofeed/src/feedback/import/import_summary.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:neurofeed/src/feedback/session_chart_data.dart';
@@ -16,6 +18,7 @@ import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/rust/api/edf_export.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/util/timezone.dart';
+import 'package:neurofeed/src/monitor/device_montage.dart';
 
 /// What an export produces.
 enum ExportKind { pdf, pngThumbnail, pngAll, csv, edf }
@@ -37,11 +40,15 @@ class SessionExportResult {
     required this.fileCount,
     required this.warnings,
     required this.location,
+    this.notices = const [],
   });
 
   final int fileCount;
   final List<ExportWarning> warnings;
   final String location;
+
+  /// Informational lines, e.g. a recording that came from a lossy import.
+  final List<ExportWarning> notices;
 }
 
 /// One value line of an exported chart. Samples are evenly spaced on the
@@ -148,8 +155,11 @@ class SessionExporter {
     required ExportKind kind,
   }) async {
     final warnings = <ExportWarning>[];
+    final notices = <ExportWarning>[];
     var files = 0;
     for (final s in sessions) {
+      final notice = s.isRecording ? await _importNotice(s) : null;
+      if (notice != null) notices.add(ExportWarning(s.id, notice));
       switch (kind) {
         case ExportKind.csv:
           files += await _exportCsv(s, warnings);
@@ -167,6 +177,7 @@ class SessionExporter {
       fileCount: files,
       warnings: warnings,
       location: '${_storage.displayName}/$exportDirName',
+      notices: notices,
     );
   }
 
@@ -237,8 +248,20 @@ class SessionExporter {
     for (final sec in eegLastPerSec.keys) {
       if (sec > maxSec) maxSec = sec;
     }
-    final savedDt = DateTime.tryParse(meta.savedAt) ?? DateTime.now();
-    final anchor = savedDt.subtract(Duration(seconds: meta.elapsedSeconds));
+    // Prefer startedAt (v6); fall back to savedAt - elapsedSeconds.
+    final DateTime anchor;
+    if (meta.startedAt != null && meta.startedAt!.isNotEmpty) {
+      anchor = sessionWallClock(
+        iso: meta.startedAt,
+        timeZone: meta.timeZone,
+      );
+    } else {
+      final savedWall = sessionWallClock(
+        iso: meta.savedAt,
+        timeZone: meta.timeZone,
+      );
+      anchor = savedWall.subtract(Duration(seconds: meta.elapsedSeconds));
+    }
     for (var sec = 0; sec <= maxSec; sec++) {
       final ts = anchor.add(Duration(seconds: sec));
       buf.write(
@@ -296,7 +319,8 @@ class SessionExporter {
       warnings.add(ExportWarning(s.id, 'could not read session file'));
       return 0;
     }
-    final meta = s.metadata;
+    // History list summaries omit calibration / annotations — reload from file.
+    final meta = await _loadFileMetadata(s) ?? s.metadata;
     final labels = List<String>.filled(8, '');
     for (var e = 0; e < meta.recordedChannels.length && e < labels.length; e++) {
       labels[e] = meta.recordedChannels[e];
@@ -304,12 +328,17 @@ class SessionExporter {
     final cal = meta.calibration;
     final annotations = <EdfExportAnnotation>[
       if (cal != null && cal.calibrationStartSecs != null)
-        const EdfExportAnnotation(onsetSeconds: 0, text: 'Calibration start'),
+        const EdfExportAnnotation(
+          onsetSeconds: 0,
+          durationSeconds: 0,
+          text: 'Calibration start',
+        ),
       if (cal != null &&
           cal.calibrationStartSecs != null &&
           cal.calibrationEndSecs != null)
         EdfExportAnnotation(
           onsetSeconds: cal.calibrationEndSecs! - cal.calibrationStartSecs!,
+          durationSeconds: 0,
           text: 'Calibration end',
         ),
       if (cal != null &&
@@ -317,18 +346,28 @@ class SessionExporter {
           cal.trainingStartSecs != null)
         EdfExportAnnotation(
           onsetSeconds: cal.trainingStartSecs! - cal.calibrationStartSecs!,
+          durationSeconds: 0,
           text: 'Training start',
         ),
-      for (final g in meta.gestures)
+      for (final a in meta.annotations)
         EdfExportAnnotation(
-          onsetSeconds: g.offsetSeconds.toDouble(),
-          text: switch (g.type) {
-            GestureType.doubleBlink => 'Double blink',
-            GestureType.doubleClench => 'Double clench',
-            GestureType.eyeUp => 'Eye up',
-            GestureType.eyeDown => 'Eye down',
-          },
+          onsetSeconds: a.onset,
+          durationSeconds: a.duration,
+          text: a.type,
         ),
+      // Legacy in-memory gestures (unit tests / pre-publish flat model).
+      if (meta.annotations.isEmpty)
+        for (final g in meta.gestures)
+          EdfExportAnnotation(
+            onsetSeconds: g.offsetSeconds.toDouble(),
+            durationSeconds: 0,
+            text: switch (g.type) {
+              GestureType.doubleBlink => 'double_blink',
+              GestureType.doubleClench => 'double_jaw_clench',
+              GestureType.eyeUp => 'eye_up',
+              GestureType.eyeDown => 'eye_down',
+            },
+          ),
     ]..sort((a, b) => a.onsetSeconds.compareTo(b.onsetSeconds));
 
     // EDF FAQ Q17: header startdate/starttime = local wall clock at site.
@@ -337,15 +376,16 @@ class SessionExporter {
       savedAt: meta.savedAt,
       timeZone: meta.timeZone,
     );
+    final patientId = edfLocalPatientIdentification(meta.userId);
+    final recordingId = edfLocalRecordingIdentification(meta);
     final Uint8List edf;
     try {
       edf = encodeEdfExport(
         body: body,
         channelLabels: labels,
         params: EdfExportParams(
-          patientId: 'NeuroFeed',
-          recordingId:
-              '${meta.protocol} ${meta.startedAt ?? meta.savedAt}',
+          patientId: patientId,
+          recordingId: recordingId,
           year: edfStart.year,
           month: edfStart.month,
           day: edfStart.day,
@@ -353,6 +393,8 @@ class SessionExporter {
           minute: edfStart.minute,
           second: edfStart.second,
           annotations: annotations,
+          // RAW is stored as received; imports without a statement stay blank.
+          prefiltering: meta.rawFiltering?.edfPrefiltering ?? '',
         ),
       );
     } catch (e) {
@@ -447,6 +489,30 @@ class SessionExporter {
 
   // ── shared helpers ─────────────────────────────────────────────────────
 
+
+  /// Full metadata from the `.neurofeed` head (calibration, annotations, subject).
+  /// History list rows are sqlite scalars only — too thin for EDF markers.
+  /// One-line notice when [s] came from a lossy import (`import` block).
+  Future<String?> _importNotice(SessionSummary s) async {
+    try {
+      final container = await _store.readContainer(s.id);
+      if (container == null) return null;
+      final json = jsonDecode(utf8.decode(parseHead(bytes: container).metadataJson));
+      return json is Map ? importLossNotice(ImportProvenance.fromJson(json['import'])) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<SessionMetadata?> _loadFileMetadata(SessionSummary s) async {
+    final container = await _store.readContainer(s.id);
+    if (container == null) {
+      return null;
+    }
+    final head = parseHead(bytes: container);
+    return SessionMetadata.fromJsonBytes(head.metadataJson);
+  }
+
   Future<SessionData?> _readBody(
     SessionSummary s,
     List<ExportWarning> warnings,
@@ -484,6 +550,9 @@ class SessionExporter {
         metric: protocol.reward?.feature ?? 'band.atr',
         conditions: protocol.conditions,
         startedAt: meta.startedAt,
+        channelLabels: meta.recordedChannels.isEmpty
+            ? kMuseElectrodeNames
+            : meta.recordedChannels,
       ),
       meta: meta,
     );
@@ -491,7 +560,7 @@ class SessionExporter {
 
   static String _num(double v) => v.toStringAsPrecision(6);
 
-  /// File stem for one session: `yyyyMMdd_HHmmss_protocol_id8`.
+  /// File stem: `yyyyMMdd_HHmmss_<protocol|recording>_id8`.
   static String _stem(SessionMetadata meta, String id) {
     final t = DateTime.tryParse(meta.savedAt) ?? DateTime.now();
     final date = '${t.year.toString().padLeft(4, '0')}'
@@ -501,7 +570,8 @@ class SessionExporter {
         '${t.minute.toString().padLeft(2, '0')}'
         '${t.second.toString().padLeft(2, '0')}';
     final shortId = id.length > 8 ? id.substring(id.length - 8) : id;
-    return '${date}_${time}_${meta.protocol}_$shortId';
+    final label = meta.protocol.trim().isEmpty ? 'recording' : meta.protocol;
+    return '${date}_${time}_${label}_$shortId';
   }
 
   /// The same charts the detail view shows: bands, alpha-vs-theta, movement,
@@ -514,7 +584,7 @@ class SessionExporter {
     final charts = <ExportChart>[
       ExportChart(
         title: 'Bands',
-        subtitle: 'AF7/AF8 average · relative power',
+        subtitle: '${prepared.electrodePairLabel} average · relative power',
         lines: [
           for (var i = 0; i < bandNames.length; i++)
             ExportChartLine(
@@ -534,7 +604,7 @@ class SessionExporter {
       ),
       ExportChart(
         title: 'Alpha vs Theta',
-        subtitle: 'AF7/AF8 average · relative power',
+        subtitle: '${prepared.electrodePairLabel} average · relative power',
         lines: [
           ExportChartLine('alpha', bandColors[2], prepared.alphaRel),
           ExportChartLine('theta', bandColors[1], prepared.thetaRel),
@@ -600,6 +670,29 @@ class SessionExporter {
     }
     return charts;
   }
+}
+
+
+/// EDF+ Local Patient Identification: `code sex birthdate name`.
+/// Anonymous-first: [subjectId] → code; sex/birthdate/name stay `X`
+/// (nickname-as-name export opt-in is deferred).
+String edfLocalPatientIdentification(String? subjectId) {
+  final raw = subjectId?.trim() ?? '';
+  final code = raw.isEmpty ? 'X' : raw.replaceAll(' ', '_');
+  return '$code X X X';
+}
+
+/// EDF+ Local Recording Identification fragment for the recording-id field.
+/// Includes protocol + start instant (startdate subfield is written by the
+/// EDF writer from the numeric start components).
+String edfLocalRecordingIdentification(SessionMetadata meta) {
+  final protocol = meta.protocol.isEmpty ? 'session' : meta.protocol;
+  final when = meta.startedAt ?? meta.savedAt;
+  final id = meta.sessionId;
+  if (id != null && id.isNotEmpty) {
+    return '$protocol $id $when';
+  }
+  return '$protocol $when';
 }
 
 /// Resolve where an export should land:

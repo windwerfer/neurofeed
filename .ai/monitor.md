@@ -44,13 +44,13 @@ lib/src/monitor/
   electrode_toggles.dart      non-EEG average membership
   band_toggles.dart           in-pane delta/theta/alpha/beta/gamma chips
   empty_state.dart            Waiting for signal
-  dsp.dart                    Hamming FFT, 1/N², n power-of-two (live uses 256)
+  dsp.dart                    Hamming FFT, one-sided PSD µV²/Hz, n power-of-two (live uses 256)
   device_montage.dart         N = channelCount (Muse 4 / Crown 8)
   cache/
     sweep_buffer.dart         5 min EEG RAM + display ring
     band_cache.dart           1 Hz bands, 30 min cap
     recording_index.dart      (elapsedT, fileLength) at frame boundaries
-    file_backed_source.dart   Inspect beyond RAM (tmp / recording .raw)
+    file_backed_source.dart   Inspect beyond RAM (tmp / recording .raw), conditioned like live
     sweep_mean.dart
     optical_cache.dart       Pulse / SpO2 / IR PPG rings (HR+SpO2)
     stft_ring.dart            Follow STFT column ring (Inspect / electrodes / window = full)
@@ -68,7 +68,7 @@ lib/src/monitor/
 ```
 
 `bandNames` / `bandColors` stay in `lib/src/charts/band_style.dart`.
-Pad-quality dots are a 4-ch 1 s ring in `connection_provider.dart`.
+Pad quality is a 1 s ring per channel (up to 8) in `connection_provider.dart`; the status-bar dots show the first 4.
 
 ---
 
@@ -157,7 +157,9 @@ edges); drag outside pans the strip. One electrode-toggle set drives both
 panes. Recording-dashboard Histogram/PSD are one pane (no strip). Follow is
 disabled there.
 
-DSP: `monitor/dsp.dart` only. Hamming, power `(re²+im²)/(n*n)`. Live `n = 256`.
+DSP: `monitor/dsp.dart` only. Hamming, one-sided PSD `2|X|²/(fs·Σw²)` µV²/Hz
+(DC/Nyquist ×1); bands `[lo, hi)` 1–4 / 4–8 / 8–13 / 13–30 / 30–45 Hz, same as
+Rust `compute_fft_bands`. Live `n = 256`.
 Follow Spectrogram STFT is incremental (one new hop FFT); Inspect / electrode
 set / window-length still full recompute. Follow Histogram adds/subtracts
 bins; Follow PSD is sliding Welch (hop `n/2` = 128). Inspect pan, window,
@@ -190,7 +192,7 @@ uses the Follow wipe ring; leaving that view calls `setDisplayWindow(0)` so
 
 `lastConnectedKind` → `DeviceConfig.forKind` → `channelCount` / names.
 Muse: TP9 AF7 AF8 TP10. Crown/Notion: 8 names. Simulator Crown is 8-ch
-for graphs; Start Session stays refused. Status-bar pads stay 4-ch.
+for graphs and sessions. Status-bar pads follow the kind (4 Muse, 8 Crown).
 
 Non-EEG electrode toggles: top-right text, depressed = in the mean, default
 all on, last one stays. Raw EEG has no chips.
@@ -237,5 +239,5 @@ Not `SessionMetadata.toJson()`. Format: [README_feedback_format.md](../README_fe
   Spectrogram `mag ▾` is color, not Hz.
 - No averaging, no hold-finger readout, no FFT-window chrome (256-pt only).
 - Histogram/PSD: no time slider; Bands strip is the time map. No strip on Spectrogram.
-- Crown graphs + recording allowed; Crown Start refused.
+- Crown graphs, recording and sessions allowed.
 - No Android foreground service in this surface (recording dies if the app is backgrounded).

@@ -894,6 +894,12 @@ mixin _$ComputedFrame {
   FeedbackInfo get feedback => throw _privateConstructorUsedError;
   List<String> get gestures => throw _privateConstructorUsedError;
 
+  /// Neurosity only: `crown` | `app` — which score filled [signalQuality].
+  String? get signalQualitySource => throw _privateConstructorUsedError;
+
+  /// Neurosity only: Crown per-pad 1 Hz means (0..1) when the source is `crown`.
+  List<double>? get crownSignalQuality => throw _privateConstructorUsedError;
+
   /// Create a copy of ComputedFrame
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -920,6 +926,8 @@ abstract class $ComputedFrameCopyWith<$Res> {
     GuardrailInfo guardrail,
     FeedbackInfo feedback,
     List<String> gestures,
+    String? signalQualitySource,
+    List<double>? crownSignalQuality,
   });
 
   $PeakAlphaInfoCopyWith<$Res>? get peakAlpha;
@@ -953,6 +961,8 @@ class _$ComputedFrameCopyWithImpl<$Res, $Val extends ComputedFrame>
     Object? guardrail = null,
     Object? feedback = null,
     Object? gestures = null,
+    Object? signalQualitySource = freezed,
+    Object? crownSignalQuality = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -1000,6 +1010,14 @@ class _$ComputedFrameCopyWithImpl<$Res, $Val extends ComputedFrame>
                 ? _value.gestures
                 : gestures // ignore: cast_nullable_to_non_nullable
                       as List<String>,
+            signalQualitySource: freezed == signalQualitySource
+                ? _value.signalQualitySource
+                : signalQualitySource // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            crownSignalQuality: freezed == crownSignalQuality
+                ? _value.crownSignalQuality
+                : crownSignalQuality // ignore: cast_nullable_to_non_nullable
+                      as List<double>?,
           )
           as $Val,
     );
@@ -1061,6 +1079,8 @@ abstract class _$$ComputedFrameImplCopyWith<$Res>
     GuardrailInfo guardrail,
     FeedbackInfo feedback,
     List<String> gestures,
+    String? signalQualitySource,
+    List<double>? crownSignalQuality,
   });
 
   @override
@@ -1096,6 +1116,8 @@ class __$$ComputedFrameImplCopyWithImpl<$Res>
     Object? guardrail = null,
     Object? feedback = null,
     Object? gestures = null,
+    Object? signalQualitySource = freezed,
+    Object? crownSignalQuality = freezed,
   }) {
     return _then(
       _$ComputedFrameImpl(
@@ -1143,6 +1165,14 @@ class __$$ComputedFrameImplCopyWithImpl<$Res>
             ? _value._gestures
             : gestures // ignore: cast_nullable_to_non_nullable
                   as List<String>,
+        signalQualitySource: freezed == signalQualitySource
+            ? _value.signalQualitySource
+            : signalQualitySource // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        crownSignalQuality: freezed == crownSignalQuality
+            ? _value._crownSignalQuality
+            : crownSignalQuality // ignore: cast_nullable_to_non_nullable
+                  as List<double>?,
       ),
     );
   }
@@ -1163,10 +1193,13 @@ class _$ComputedFrameImpl implements _ComputedFrame {
     required this.guardrail,
     required this.feedback,
     required final List<String> gestures,
+    this.signalQualitySource,
+    final List<double>? crownSignalQuality,
   }) : _bands = bands,
        _lineNoise = lineNoise,
        _signalQuality = signalQuality,
-       _gestures = gestures;
+       _gestures = gestures,
+       _crownSignalQuality = crownSignalQuality;
 
   @override
   final double t;
@@ -1214,9 +1247,27 @@ class _$ComputedFrameImpl implements _ComputedFrame {
     return EqualUnmodifiableListView(_gestures);
   }
 
+  /// Neurosity only: `crown` | `app` — which score filled [signalQuality].
+  @override
+  final String? signalQualitySource;
+
+  /// Neurosity only: Crown per-pad 1 Hz means (0..1) when the source is `crown`.
+  final List<double>? _crownSignalQuality;
+
+  /// Neurosity only: Crown per-pad 1 Hz means (0..1) when the source is `crown`.
+  @override
+  List<double>? get crownSignalQuality {
+    final value = _crownSignalQuality;
+    if (value == null) return null;
+    if (_crownSignalQuality is EqualUnmodifiableListView)
+      return _crownSignalQuality;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(value);
+  }
+
   @override
   String toString() {
-    return 'ComputedFrame(t: $t, bands: $bands, pulse: $pulse, movement: $movement, peakAlpha: $peakAlpha, spo2: $spo2, lineNoise: $lineNoise, signalQuality: $signalQuality, guardrail: $guardrail, feedback: $feedback, gestures: $gestures)';
+    return 'ComputedFrame(t: $t, bands: $bands, pulse: $pulse, movement: $movement, peakAlpha: $peakAlpha, spo2: $spo2, lineNoise: $lineNoise, signalQuality: $signalQuality, guardrail: $guardrail, feedback: $feedback, gestures: $gestures, signalQualitySource: $signalQualitySource, crownSignalQuality: $crownSignalQuality)';
   }
 
   @override
@@ -1244,7 +1295,13 @@ class _$ComputedFrameImpl implements _ComputedFrame {
                 other.guardrail == guardrail) &&
             (identical(other.feedback, feedback) ||
                 other.feedback == feedback) &&
-            const DeepCollectionEquality().equals(other._gestures, _gestures));
+            const DeepCollectionEquality().equals(other._gestures, _gestures) &&
+            (identical(other.signalQualitySource, signalQualitySource) ||
+                other.signalQualitySource == signalQualitySource) &&
+            const DeepCollectionEquality().equals(
+              other._crownSignalQuality,
+              _crownSignalQuality,
+            ));
   }
 
   @override
@@ -1261,6 +1318,8 @@ class _$ComputedFrameImpl implements _ComputedFrame {
     guardrail,
     feedback,
     const DeepCollectionEquality().hash(_gestures),
+    signalQualitySource,
+    const DeepCollectionEquality().hash(_crownSignalQuality),
   );
 
   /// Create a copy of ComputedFrame
@@ -1285,6 +1344,8 @@ abstract class _ComputedFrame implements ComputedFrame {
     required final GuardrailInfo guardrail,
     required final FeedbackInfo feedback,
     required final List<String> gestures,
+    final String? signalQualitySource,
+    final List<double>? crownSignalQuality,
   }) = _$ComputedFrameImpl;
 
   @override
@@ -1309,6 +1370,14 @@ abstract class _ComputedFrame implements ComputedFrame {
   FeedbackInfo get feedback;
   @override
   List<String> get gestures;
+
+  /// Neurosity only: `crown` | `app` — which score filled [signalQuality].
+  @override
+  String? get signalQualitySource;
+
+  /// Neurosity only: Crown per-pad 1 Hz means (0..1) when the source is `crown`.
+  @override
+  List<double>? get crownSignalQuality;
 
   /// Create a copy of ComputedFrame
   /// with the given fields replaced by the non-null parameter values.

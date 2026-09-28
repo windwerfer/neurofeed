@@ -20,6 +20,7 @@ import 'package:neurofeed/src/monitor/recording/recording_store.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/rust/api/muse.dart' hide DeviceInfo;
 import 'package:neurofeed/src/session_format/models.dart';
+import 'package:neurofeed/src/session_format/eeg_conditioning_meta.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/version.dart';
@@ -31,11 +32,20 @@ class MonitorController extends Notifier<MonitorState> {
     this.tmpCap = MonitorRecorder.kTmpCap,
     this.sidecarInterval = MonitorRecorder.kSidecarInterval,
     SessionRecorder Function()? createRecorder,
-  }) : _createRecorder = createRecorder ?? (() => SessionRecorder());
+    SignalConditioning? Function()? liveConditioning,
+  }) : _createRecorder = createRecorder ?? (() => SessionRecorder()),
+       _liveConditioning = liveConditioning ?? liveSignalConditioning;
 
   final Duration tmpCap;
   final Duration sidecarInterval;
   final SessionRecorder Function() _createRecorder;
+
+  /// `device.conditioning` source (the live Rust conditioner by default).
+  final SignalConditioning? Function() _liveConditioning;
+
+  /// Conditioning frozen at recording start (Rust locks the notch in
+  /// capture_start; the first sidecar reads it).
+  SignalConditioning? _recordingConditioning;
 
   final BandCache bandCache = BandCache();
   final OpticalCache opticalCache = OpticalCache();
@@ -103,7 +113,8 @@ class MonitorController extends Notifier<MonitorState> {
       _eventSub = null;
       _stopDisconnectGapFiller();
       _stopSampler();
-      unawaited(_capture?.discard() ?? Future<void>.value());
+      // Queued behind pending ops so pendingOps covers the delete.
+      unawaited(_serialized(() => _capture?.discard() ?? Future<void>.value()));
     });
     final current = ref.read(appStateProvider);
     if (current.status.connected) {
@@ -213,7 +224,10 @@ class MonitorController extends Notifier<MonitorState> {
       }
       final app = ref.read(appStateProvider);
       final settings = ref.read(settingsProvider);
-      final names = electrodeNamesForKind(app.lastConnectedKind);
+      final names = electrodeNamesForKind(
+        app.lastConnectedKind,
+        auxChannels: app.status.auxChannels,
+      );
       final startedAt = _latestEegTsMs ?? DateTime.now().millisecondsSinceEpoch;
       _recordingSessionId = const Uuid().v4();
       state = MonitorState(
@@ -333,10 +347,14 @@ class MonitorController extends Notifier<MonitorState> {
         await dir.create(recursive: true);
       }
       final settings = ref.read(settingsProvider);
-      final names = electrodeNamesForKind(app.lastConnectedKind);
+      final names = electrodeNamesForKind(
+        app.lastConnectedKind,
+        auxChannels: app.status.auxChannels,
+      );
       final startedAt = _latestEegTsMs ?? DateTime.now().millisecondsSinceEpoch;
       _recordingSessionId = const Uuid().v4();
       _clearLiveGraphs();
+      _recordingConditioning = null;
       state = MonitorState(
         kind: CaptureKind.recording,
         electrodeNames: names,
@@ -497,6 +515,10 @@ class MonitorController extends Notifier<MonitorState> {
             : const ['EEG', 'PPG', 'IMU'],
         channelCount: state.channelCount,
         channelLabels: state.electrodeNames,
+        rawFiltering: RawFiltering.deviceUnfiltered,
+        conditioning: _lease.kind == CaptureKind.recording
+            ? (_recordingConditioning ??= _liveConditioning())
+            : _liveConditioning(),
       ),
       streams: RecordingMetadata.streamsConfig(settings.recordStreams),
     );
@@ -508,11 +530,18 @@ class MonitorController extends Notifier<MonitorState> {
         _latestEegTsMs = event.field0.timestamp.round();
         sweepBuffer.append(event.field0);
       case MuseEventDto_Bands():
-        bandCache.appendBands(
-          event.field0,
-          signalQuality: ref.read(appStateProvider).signalQuality,
-        );
+        final app = ref.read(appStateProvider);
+        final quality = app.signalQuality;
+        bandCache.appendBands(event.field0, signalQuality: quality);
         _sampler?.updateBands(event.field0.electrode, event.field0);
+        final e = event.field0.electrode;
+        if (quality != null && e >= 0 && e < quality.length) {
+          _sampler?.updateSignalQuality(e, quality[e].round());
+        }
+        _sampler?.updateSignalQualitySource(
+          app.signalQualitySource,
+          app.crownSignalQuality,
+        );
       case MuseEventDto_Pulse():
         opticalCache.appendPulse(event.field0);
         _sampler?.updatePulse(event.field0);

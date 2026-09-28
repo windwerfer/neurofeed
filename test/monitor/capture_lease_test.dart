@@ -118,6 +118,7 @@ void main() {
             () => MonitorController(
               createRecorder: () =>
                   SessionRecorder(headerBytes: () => Uint8List(12)),
+              liveConditioning: () => null,
             ),
           ),
         ],
@@ -125,7 +126,12 @@ void main() {
     });
 
     tearDown(() async {
+      // Dispose queues the tmp discard; let it finish before deleting.
+      final monitor = container.exists(monitorControllerProvider)
+          ? container.read(monitorControllerProvider.notifier)
+          : null;
       container.dispose();
+      await monitor?.pendingOps;
       if (await history.exists()) {
         await history.delete(recursive: true);
       }
