@@ -61,6 +61,7 @@ flutter test \
   test/monitor/recording_metadata_test.dart \
   test/history_filter_test.dart \
   test/history/session_trust_test.dart \
+  test/history/history_dashboard_summary_test.dart \
   test/settings_sections_test.dart \
   test/agent/agent_commands_test.dart \
   test/capture_foreground_test.dart \
@@ -122,7 +123,8 @@ NEUROFEED_SOAK_EQUIV_SECS=43200 cargo test --manifest-path rust/Cargo.toml \
 | Protocol JSON | Dart unit | `user_protocol_builder_test.dart`, `calibration_assets_test.dart` | those files | Catalog copy, clip files | Builder UI |
 | Guard pref migrate | Dart unit | `settings_guardrail_migrate_test.dart` | that file | Old enum → feature ids | Debug switch widget |
 | History / store | Dart+FFI | `session_store_test.dart`, `test/history_filter_test.dart` | FFI command above + `flutter test test/history_filter_test.dart` | List includes `kind=recording`; no orphan-file backfill; `moveAllTo` both prefixes; delete uses sqlite `path`; filter All/Feedback/Recordings | History widget |
-| History trust reader | Dart unit | `test/history/session_trust_test.dart` | `flutter test test/history/session_trust_test.dart` | Dirty second holds last clean percentile (first dirty uses its own); in-zone ignores calibration and noise and caps a 60 s gap at the median gap; dirty `heldBack` adds no inhibited time; null percents when all noisy or a recording; chimes only `reward_chime` / `guard_chime`; marks only `double_blink` and `double_jaw_clench` | Dashboard / Feedback chips are later PRs |
+| History trust reader | Dart unit | `test/history/session_trust_test.dart` | `flutter test test/history/session_trust_test.dart` | Dirty second holds last clean percentile (first dirty uses its own); in-zone ignores calibration and noise and caps a 60 s gap at the median gap; dirty `heldBack` adds no inhibited time; null percents when all noisy or a recording; chimes only `reward_chime` / `guard_chime`; marks only `double_blink` and `double_jaw_clench` | Session Dashboard is PR 3; Feedback chip is PR 4 |
+| History Dashboard chip | Dart unit | `test/history/history_dashboard_summary_test.dart` | `flutter test test/history/history_dashboard_summary_test.dart` | Recording summary: empty stats do not throw; absent cells omitted (not `0`); no in-zone or chime cells without feedback totals; More defaults closed, toggle writes `history_dashboard_more_expanded`, a second pump opens when the pref is true | Session summary hosts the same widget in PR 3 |
 | Session format v6 (NFED6) | Rust + Dart+FFI | `session_format` + export/charts tests | rust + FFI | Roundtrip | Don't edit layout from Dart |
 | Spine soak (capture writer) | Rust | `rust/src/spine/soak.rs` | `cargo test --manifest-path rust/Cargo.toml --lib spine::soak -- --nocapture` | Max-rate fill through writer `try_send`; volume printed; assemble is `capture_assemble` copy of `.raw` (no outer zstd; extra RSS must not scale with filled volume). Drops = 0. Env `NEUROFEED_SOAK_EQUIV_SECS` (default 60). 12 h-equivalent: same command with `--ignored` (or env `43200`) | Phone overnight **cannot** |
 | Simulator identity | Rust unit | `simulator.rs` | `cargo test --lib simulator` | name/firmware table | Live spawn needs tokio |

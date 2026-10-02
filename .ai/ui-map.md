@@ -190,15 +190,19 @@ Sidebar **History** (`AppView.feedbackHistory`). One sqlite list; no
 
 ### Recording dashboard — `lib/src/monitor/views/recording_dashboard.dart`
 
-History row `kind = recording`. Follow is visible but **disabled**. Default
-chip is **Bands** (metadata + computed via two prefix reads). Raw body lazy-
-loads on Raw EEG / Histogram / PSD / Spectrogram. Histogram/PSD have **no**
-Bands strip.
+History row `kind = recording`. Follow is visible but **disabled** on graph
+chips. Chip order is **Dashboard**, **Bands**, **Raw EEG**, **Histogram**,
+**PSD**, **Spectrogram**. Opening a recording still lands on **Bands**
+(metadata + computed via two prefix reads). Raw body lazy-loads on Raw EEG /
+Histogram / PSD / Spectrogram. Histogram/PSD have **no** Bands strip.
+**Dashboard** is the summary block, not a graph.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Graph switcher | `Bands` `Raw EEG` `Histogram` `PSD` `Spectrogram` | `RecordingDashGraph` | `recording_dashboard.dart` | SegmentedButton under the shell. Default Bands. |
-| Follow | `Follow` | `followEnabled: false` | `graph_shell.dart` | Shown, disabled. |
+| Graph switcher | `Dashboard` `Bands` `Raw EEG` `Histogram` `PSD` `Spectrogram` | `RecordingDashGraph` | `recording_dashboard.dart` | SegmentedButton. `Dashboard` is first. Default **Bands**. |
+| Dashboard | `Dashboard` | `RecordingDashGraph.dashboard` / `HistoryDashboardSummary` | `recording_dashboard.dart` / `history/history_dashboard_summary.dart` | Summary from nested `stats` plus `durationS` (else `elapsedSeconds`). No feedback totals, so in-zone and chime cells are absent. |
+| More | `More` | `Settings.historyDashboardMoreExpanded` | `history/history_dashboard_summary.dart` | Fold under the summary. Pref `history_dashboard_more_expanded`, default closed. One flag for both History pages. |
+| Follow | `Follow` | `followEnabled: false` | `graph_shell.dart` | Shown on graph chips, disabled. Hidden on Dashboard. |
 | Magnitude | `mag ▾` | `_magMenu` | `recording_dashboard.dart` | Spectrogram graph only. Same as live. |
 | Hz range | `0–60 Hz` | `PsdHzRange` | `recording_dashboard.dart` | PSD graph. Overflow `0–100 Hz`. |
 | µV range | `±100 µV` | `HistogramUvRange` | `recording_dashboard.dart` | Histogram graph. |

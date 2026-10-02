@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/charts/band_style.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/history/history_dashboard_summary.dart';
 import 'package:neurofeed/src/monitor/cache/sweep_buffer.dart';
 import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/monitor/dsp.dart';
@@ -26,7 +27,14 @@ import 'package:neurofeed/src/rust/api/session_format.dart';
 import 'package:neurofeed/src/rust/api/eeg_conditioning.dart';
 import 'package:neurofeed/src/session_format/eeg_conditioning_meta.dart';
 
-enum RecordingDashGraph { rawEeg, bands, histogram, psd, spectrogram }
+enum RecordingDashGraph {
+  dashboard,
+  rawEeg,
+  bands,
+  histogram,
+  psd,
+  spectrogram,
+}
 
 class _LoadedRecording {
   const _LoadedRecording({
@@ -36,6 +44,9 @@ class _LoadedRecording {
     required this.labels,
     this.meta,
     this.data,
+    this.stats = const {},
+    this.durationS,
+    this.elapsedSeconds,
   });
 
   /// 1 Hz computed frames — enough for Bands without the raw body.
@@ -48,6 +59,11 @@ class _LoadedRecording {
   final List<String> labels;
   final RecordingMetadata? meta;
 
+  /// Nested metadata `stats`, read before [RecordingMetadata.fromJson].
+  final Map<String, Object?> stats;
+  final num? durationS;
+  final num? elapsedSeconds;
+
   _LoadedRecording withRaw(SessionData data, double newestElapsed) =>
       _LoadedRecording(
         frames: frames,
@@ -56,12 +72,16 @@ class _LoadedRecording {
         newestElapsed: newestElapsed,
         labels: labels,
         meta: meta,
+        stats: stats,
+        durationS: durationS,
+        elapsedSeconds: elapsedSeconds,
       );
 }
 
-/// History row for `kind = recording`. Follow is disabled. Opens on **Bands**
-/// from metadata + computed (two prefix reads); raw EEG loads lazily on the
-/// Raw EEG / Histogram / PSD / Spectrogram chips.
+/// History row for `kind = recording`. Follow is disabled. Chip order is
+/// Dashboard, then Bands, Raw EEG, Histogram, PSD, Spectrogram. Opens on
+/// **Bands** from metadata + computed (two prefix reads); raw EEG loads
+/// lazily on the Raw EEG / Histogram / PSD / Spectrogram chips.
 class RecordingDashboardView extends ConsumerStatefulWidget {
   const RecordingDashboardView({super.key, required this.sessionId, this.path});
 
@@ -170,11 +190,15 @@ class _RecordingDashboardViewState
     }
     final prefix = Uint8List.fromList(headBytes);
     RecordingMetadata? meta;
+    var dash = const _DashboardFields();
     try {
       final head = parseHead(bytes: prefix);
       final decoded = jsonDecode(utf8.decode(head.metadataJson));
-      if (decoded is Map<String, dynamic>) {
-        meta = RecordingMetadata.fromJson(decoded);
+      if (decoded is Map) {
+        final json = Map<String, dynamic>.from(decoded);
+        // `stats` is not on RecordingMetadata; fromJson / toJson drop it.
+        dash = _dashboardFields(json);
+        meta = RecordingMetadata.fromJson(json);
       }
     } catch (_) {}
     final frames = extractComputed(bytes: prefix);
@@ -188,6 +212,9 @@ class _RecordingDashboardViewState
       newestElapsed: newest,
       labels: labels,
       meta: meta,
+      stats: dash.stats,
+      durationS: dash.durationS,
+      elapsedSeconds: dash.elapsedSeconds,
     );
   }
 
@@ -196,7 +223,7 @@ class _RecordingDashboardViewState
     RecordingDashGraph.histogram ||
     RecordingDashGraph.psd ||
     RecordingDashGraph.spectrogram => true,
-    RecordingDashGraph.bands => false,
+    RecordingDashGraph.dashboard || RecordingDashGraph.bands => false,
   };
 
   /// Third read: full file → raw body only when an EEG-dependent chip is
@@ -283,8 +310,14 @@ class _RecordingDashboardViewState
 
   void _setGraph(RecordingDashGraph next) {
     if (_graph == next) return;
+    if (next == RecordingDashGraph.dashboard) {
+      setState(() => _graph = next);
+      return;
+    }
     final newest = _loaded?.newestElapsed ?? 0;
     final def = switch (next) {
+      RecordingDashGraph.dashboard =>
+        ViewportController.bandsDefaultWindowSeconds,
       RecordingDashGraph.rawEeg => ViewportController.defaultWindowSeconds,
       RecordingDashGraph.bands => ViewportController.bandsDefaultWindowSeconds,
       RecordingDashGraph.histogram =>
@@ -310,8 +343,9 @@ class _RecordingDashboardViewState
   }
 
   List<double> get _windowOptions => switch (_graph) {
-    RecordingDashGraph.rawEeg => ViewportController.eegWindowOptions,
+    RecordingDashGraph.dashboard ||
     RecordingDashGraph.bands => ViewportController.bandsWindowOptions,
+    RecordingDashGraph.rawEeg => ViewportController.eegWindowOptions,
     RecordingDashGraph.histogram ||
     RecordingDashGraph.psd => ViewportController.histogramPsdWindowOptions,
     RecordingDashGraph.spectrogram =>
@@ -384,6 +418,10 @@ class _RecordingDashboardViewState
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: SegmentedButton<RecordingDashGraph>(
         segments: const [
+          ButtonSegment(
+            value: RecordingDashGraph.dashboard,
+            label: Text('Dashboard'),
+          ),
           ButtonSegment(value: RecordingDashGraph.bands, label: Text('Bands')),
           ButtonSegment(
             value: RecordingDashGraph.rawEeg,
@@ -537,7 +575,7 @@ class _RecordingDashboardViewState
       RecordingDashGraph.histogram => _uvMenu(context),
       RecordingDashGraph.psd => _hzMenu(context),
       RecordingDashGraph.spectrogram => _magMenu(context),
-      RecordingDashGraph.bands => null,
+      RecordingDashGraph.dashboard || RecordingDashGraph.bands => null,
     };
   }
 
@@ -557,9 +595,26 @@ class _RecordingDashboardViewState
           : Column(
               children: [
                 _graphKindBar(context),
-                Expanded(child: _shell(theme, loaded)),
+                Expanded(
+                  child: _graph == RecordingDashGraph.dashboard
+                      ? _summary(loaded)
+                      : _shell(theme, loaded),
+                ),
               ],
             ),
+    );
+  }
+
+  Widget _summary(_LoadedRecording loaded) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        HistoryDashboardSummary(
+          stats: loaded.stats,
+          durationS: loaded.durationS,
+          elapsedSeconds: loaded.elapsedSeconds,
+        ),
+      ],
     );
   }
 
@@ -583,6 +638,7 @@ class _RecordingDashboardViewState
 
     return GraphShell(
       title: switch (_graph) {
+        RecordingDashGraph.dashboard => 'Dashboard',
         RecordingDashGraph.rawEeg => 'Raw EEG',
         RecordingDashGraph.bands => 'Bands',
         RecordingDashGraph.histogram => 'Histogram',
@@ -653,6 +709,8 @@ class _RecordingDashboardViewState
     double end,
   ) {
     switch (_graph) {
+      case RecordingDashGraph.dashboard:
+        return const SizedBox.shrink();
       case RecordingDashGraph.rawEeg:
         if (loaded.data == null) return _rawLoadingPane();
         return _rawEeg(theme, loaded, start);
@@ -840,6 +898,37 @@ class _RecordingDashboardViewState
     final pad = range > 0 ? range * 0.15 : 20.0;
     _yScale.setAutoHalfRange(((range / 2) + pad).clamp(10.0, 10000.0));
   }
+}
+
+class _DashboardFields {
+  const _DashboardFields({
+    this.stats = const {},
+    this.durationS,
+    this.elapsedSeconds,
+  });
+
+  final Map<String, Object?> stats;
+  final num? durationS;
+  final num? elapsedSeconds;
+}
+
+_DashboardFields _dashboardFields(Map<String, dynamic> json) {
+  num? finite(Object? value) {
+    if (value is! num || !value.isFinite) return null;
+    return value;
+  }
+
+  final rawStats = json['stats'];
+  final stats = rawStats is Map
+      ? Map<String, Object?>.from(
+          rawStats.map((key, value) => MapEntry('$key', value)),
+        )
+      : const <String, Object?>{};
+  return _DashboardFields(
+    stats: stats,
+    durationS: finite(json['durationS']),
+    elapsedSeconds: finite(json['elapsedSeconds']),
+  );
 }
 
 int _originMs(SessionData? data, RecordingMetadata? meta) {

@@ -160,6 +160,8 @@ class Settings extends ChangeNotifier {
   static const String _trustRewardVisibleKey = 'trust_reward_visible';
   static const String _trustGuardVisibleKey = 'trust_guard_visible';
   static const String _trustMoreVisibleKey = 'trust_more_visible';
+  static const String _historyDashboardMoreExpandedKey =
+      'history_dashboard_more_expanded';
   static const String _warningThresholdPercentileKey =
       'reve_warning_threshold_percentile';
   static const String _inhibitCeilingsKey = 'inhibit_ceilings';
@@ -591,6 +593,16 @@ class Settings extends ChangeNotifier {
 
   Future<void> setTrustMoreVisible(bool value) async {
     await _prefs.setBool(_trustMoreVisibleKey, value);
+    notifyListeners();
+  }
+
+  /// History Dashboard `More` fold. Default closed. One flag for recordings
+  /// and feedback sessions.
+  bool get historyDashboardMoreExpanded =>
+      _prefs.getBool(_historyDashboardMoreExpandedKey) ?? false;
+
+  Future<void> setHistoryDashboardMoreExpanded(bool value) async {
+    await _prefs.setBool(_historyDashboardMoreExpandedKey, value);
     notifyListeners();
   }
 
