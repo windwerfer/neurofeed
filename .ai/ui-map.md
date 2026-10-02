@@ -272,7 +272,7 @@ was open. Picking a hit opens that section and scrolls to the card.
 |---|---|---|---|---|
 | Search settings | tooltip `Search settings` | `_openSearch` | `settings_view.dart` | Icon only. |
 | General | `General` | `SettingsSection.general` | `settings_sections.dart` | Appearance, Subject, Music feedback, Audio (Android). |
-| Appearance | `Choose a light or dark theme, or follow this device.` | `_AppearanceCard` / `AppAppearance` | `settings_view.dart` | One line: description on the left, dropdown on the right (`System` / `Light` / `Dark`). Default System. Pref `theme_mode`. |
+| Appearance | `Appearance` | `_AppearanceCard` / `AppAppearance` | `settings_view.dart` | Name on the left, description under it (`Choose a light or dark theme, or follow this device.`), dropdown on the right (`System` / `Light` / `Dark`). Default System. Pref `theme_mode`. |
 | Devices | `Devices` | `SettingsSection.devices` | `settings_sections.dart` | Crown. |
 | AI | `AI` | `SettingsSection.ai` | `settings_sections.dart` | Guardrail AI engine. |
 | Recording | `Recording` | `SettingsSection.recording` | `settings_sections.dart` | Save folder, Session recording, Gesture markers. |

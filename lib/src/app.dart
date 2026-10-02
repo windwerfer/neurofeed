@@ -312,8 +312,7 @@ class _SideBarItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      type: MaterialType.card,
-      color: const Color(0xFF1E212A),
+      type: MaterialType.transparency,
       child: ListTile(
         title: Text(label),
         trailing: trailing,

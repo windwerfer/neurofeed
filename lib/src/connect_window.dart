@@ -128,8 +128,7 @@ class ConnectWindow extends ConsumerWidget {
             else ...[
               ...state.devices.map(
                 (d) => Material(
-                  type: MaterialType.card,
-                  color: const Color(0xFF1E212A),
+                  color: Theme.of(context).colorScheme.surface,
                   child: ListTile(
                     leading: Icon(
                       source == ConnectSource.simulator

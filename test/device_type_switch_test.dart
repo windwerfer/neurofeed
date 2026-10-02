@@ -342,6 +342,55 @@ void main() {
       await tester.pump();
     });
 
+    testWidgets('device list follows the light theme', (tester) async {
+      await settings.setEnableSimulatedDevices(true);
+      final switched = await app.switchConnectSource(ConnectSource.simulator);
+      expect(switched, isTrue);
+      expect(app.state.devices, isNotEmpty);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            settingsProvider.overrideWith((ref) => settings),
+            appStateProvider.overrideWith((ref) => app),
+            deviceTypeSwitchBlockProvider.overrideWith(
+              (ref) => DeviceTypeSwitchBlock.none,
+            ),
+          ],
+          child: MaterialApp(
+            theme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: Colors.deepPurple,
+                brightness: Brightness.light,
+              ),
+            ),
+            home: const Scaffold(body: ConnectWindow()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final title = tester.element(find.text('Muse 2'));
+      final scheme = Theme.of(title).colorScheme;
+      expect(DefaultTextStyle.of(title).style.color, scheme.onSurface);
+      final row = tester.widget<Material>(
+        find
+            .ancestor(of: find.text('Muse 2'), matching: find.byType(Material))
+            .first,
+      );
+      expect(
+        ThemeData.estimateBrightnessForColor(row.color!),
+        Brightness.light,
+      );
+      expect(
+        tester
+            .widgetList<Material>(find.byType(Material))
+            .any((material) => material.color == const Color(0xFF1E212A)),
+        isFalse,
+      );
+    });
+
     testWidgets('no recording disconnects without a dialog', (tester) async {
       app.debugSetConnected(name: 'Muse 2 (Simulated)');
       await pumpWindow(tester, block: DeviceTypeSwitchBlock.none);

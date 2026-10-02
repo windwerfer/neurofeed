@@ -62,6 +62,7 @@ void main() {
 
     expect(find.text('General'), findsOneWidget);
     expect(find.text('Devices'), findsOneWidget);
+    expect(find.text('Appearance'), findsOneWidget);
     expect(
       find.text('Choose a light or dark theme, or follow this device.'),
       findsOneWidget,
@@ -75,6 +76,7 @@ void main() {
 
     expect(find.text('Crown'), findsWidgets);
     expect(find.text('Subject'), findsNothing);
+    expect(find.text('Appearance'), findsNothing);
     expect(
       find.text('Choose a light or dark theme, or follow this device.'),
       findsNothing,
