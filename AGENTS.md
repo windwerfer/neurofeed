@@ -221,9 +221,15 @@ assets/                     protocols.json, calibrations.json, features.json, au
   PSD Welch, and Histogram are incremental; Inspect / electrodes / window
   still full recompute. Raw EEG traces min/max-downsample per pixel;
   `RawEegView.dispose` sets wipe-ring window 0. `bandNames` / `bandColors`
-  stay in `lib/src/charts/band_style.dart`. Muse pad quality is a 1 s ring
-  in `connection_provider.dart` (not a 5 min EEG LiveCache); Neurosity pad
-  quality comes from Rust `PadQuality` events (setting `crown_quality_source`).
+  stay in `lib/src/charts/band_style.dart`. Pad quality for both devices is a
+  Rust `PadQuality` event (1 Hz, from the forwarder's 1 s EEG ring). Neurosity
+  resolves `crown_quality_source` (headset vs in-app) and records
+  `signalQualitySource` on computed frames. Muse events carry the in-app
+  score only; frames keep `signalQuality` and omit the source. Each `Bands`
+  event also carries `signal_quality` for that FFT window (Muse: std + that
+  window's line noise; Neurosity Crown source: the resolved 1 Hz score when
+  present). The live dash and the playing-session sampler stamp that field.
+  The raw record does not store it.
 - Crash recovery: feedback `lib/src/feedback/crash_recovery.dart` scans
   `scratchDirectory` for `session_*` only and reopens the session summary
   (Save/Discard; Back blocked). Monitor
@@ -374,7 +380,9 @@ assets/                     protocols.json, calibrations.json, features.json, au
   for 10 s; never auto-ends. Names in `gate_electrodes.dart`, default Muse
   AF7/AF8.
 - **Line-noise**: `BandsDto.line_noise_ratio` from the 256-point FFT
-  (50/60 Hz ±1 bin). Folded into Dart UI dots and Rust autodrop.
+  (50/60 Hz ±1 bin). Folded into the pad-quality formula (status dots, the
+  band-window score, Rust autodrop). `encode_session_event` does not write
+  `line_noise_ratio` or `signal_quality`.
 - **Gesture markers are metadata-only** (not a `RecordingStream`). Gated by
   `Settings.markersInFeedbackEnabled` / `eyeMarkersEnabled`.
 - **Blink/clench gate cleanliness**: `_sampleIsClean` needs movement and

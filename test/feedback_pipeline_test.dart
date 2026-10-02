@@ -118,6 +118,7 @@ void main() {
           alpha: 2,
           beta: 1,
           gamma: 1,
+          signalQuality: 0,
           lineNoiseRatio: 0,
         ),
       );
@@ -130,6 +131,7 @@ void main() {
           alpha: 2,
           beta: 1,
           gamma: 1,
+          signalQuality: 0,
           lineNoiseRatio: 0,
         ),
       );
@@ -192,6 +194,7 @@ void main() {
       alpha: 2,
       beta: 0.1,
       gamma: 0.1,
+      signalQuality: 0,
       lineNoiseRatio: 0,
     );
 

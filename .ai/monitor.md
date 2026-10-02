@@ -68,7 +68,7 @@ lib/src/monitor/
 ```
 
 `bandNames` / `bandColors` stay in `lib/src/charts/band_style.dart`.
-Pad quality is a 1 s ring per channel (up to 8) in `connection_provider.dart`; the status-bar dots show the first 4.
+Pad quality is a Rust `PadQuality` event (1 Hz). The status bar draws the head pads; Muse AUX scores are extra dots between the overlines when AUX is streaming. Muse frames store `signalQuality` only; Crown frames also store `signalQualitySource`. The live Bands dash stamps `BandsDto.signalQuality`, the score of that FFT window, not the latest 1 Hz snapshot. The raw record does not store that field.
 
 ---
 

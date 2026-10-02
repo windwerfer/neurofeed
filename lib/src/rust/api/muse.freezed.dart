@@ -25,6 +25,7 @@ mixin _$BandsDto {
   double get beta => throw _privateConstructorUsedError;
   double get gamma => throw _privateConstructorUsedError;
   double get lineNoiseRatio => throw _privateConstructorUsedError;
+  double get signalQuality => throw _privateConstructorUsedError;
 
   /// Create a copy of BandsDto
   /// with the given fields replaced by the non-null parameter values.
@@ -47,6 +48,7 @@ abstract class $BandsDtoCopyWith<$Res> {
     double beta,
     double gamma,
     double lineNoiseRatio,
+    double signalQuality,
   });
 }
 
@@ -73,6 +75,7 @@ class _$BandsDtoCopyWithImpl<$Res, $Val extends BandsDto>
     Object? beta = null,
     Object? gamma = null,
     Object? lineNoiseRatio = null,
+    Object? signalQuality = null,
   }) {
     return _then(
       _value.copyWith(
@@ -108,6 +111,10 @@ class _$BandsDtoCopyWithImpl<$Res, $Val extends BandsDto>
                 ? _value.lineNoiseRatio
                 : lineNoiseRatio // ignore: cast_nullable_to_non_nullable
                       as double,
+            signalQuality: null == signalQuality
+                ? _value.signalQuality
+                : signalQuality // ignore: cast_nullable_to_non_nullable
+                      as double,
           )
           as $Val,
     );
@@ -132,6 +139,7 @@ abstract class _$$BandsDtoImplCopyWith<$Res>
     double beta,
     double gamma,
     double lineNoiseRatio,
+    double signalQuality,
   });
 }
 
@@ -157,6 +165,7 @@ class __$$BandsDtoImplCopyWithImpl<$Res>
     Object? beta = null,
     Object? gamma = null,
     Object? lineNoiseRatio = null,
+    Object? signalQuality = null,
   }) {
     return _then(
       _$BandsDtoImpl(
@@ -192,6 +201,10 @@ class __$$BandsDtoImplCopyWithImpl<$Res>
             ? _value.lineNoiseRatio
             : lineNoiseRatio // ignore: cast_nullable_to_non_nullable
                   as double,
+        signalQuality: null == signalQuality
+            ? _value.signalQuality
+            : signalQuality // ignore: cast_nullable_to_non_nullable
+                  as double,
       ),
     );
   }
@@ -209,6 +222,7 @@ class _$BandsDtoImpl implements _BandsDto {
     required this.beta,
     required this.gamma,
     required this.lineNoiseRatio,
+    required this.signalQuality,
   });
 
   @override
@@ -227,10 +241,12 @@ class _$BandsDtoImpl implements _BandsDto {
   final double gamma;
   @override
   final double lineNoiseRatio;
+  @override
+  final double signalQuality;
 
   @override
   String toString() {
-    return 'BandsDto(electrode: $electrode, timestamp: $timestamp, delta: $delta, theta: $theta, alpha: $alpha, beta: $beta, gamma: $gamma, lineNoiseRatio: $lineNoiseRatio)';
+    return 'BandsDto(electrode: $electrode, timestamp: $timestamp, delta: $delta, theta: $theta, alpha: $alpha, beta: $beta, gamma: $gamma, lineNoiseRatio: $lineNoiseRatio, signalQuality: $signalQuality)';
   }
 
   @override
@@ -248,7 +264,9 @@ class _$BandsDtoImpl implements _BandsDto {
             (identical(other.beta, beta) || other.beta == beta) &&
             (identical(other.gamma, gamma) || other.gamma == gamma) &&
             (identical(other.lineNoiseRatio, lineNoiseRatio) ||
-                other.lineNoiseRatio == lineNoiseRatio));
+                other.lineNoiseRatio == lineNoiseRatio) &&
+            (identical(other.signalQuality, signalQuality) ||
+                other.signalQuality == signalQuality));
   }
 
   @override
@@ -262,6 +280,7 @@ class _$BandsDtoImpl implements _BandsDto {
     beta,
     gamma,
     lineNoiseRatio,
+    signalQuality,
   );
 
   /// Create a copy of BandsDto
@@ -283,6 +302,7 @@ abstract class _BandsDto implements BandsDto {
     required final double beta,
     required final double gamma,
     required final double lineNoiseRatio,
+    required final double signalQuality,
   }) = _$BandsDtoImpl;
 
   @override
@@ -301,6 +321,8 @@ abstract class _BandsDto implements BandsDto {
   double get gamma;
   @override
   double get lineNoiseRatio;
+  @override
+  double get signalQuality;
 
   /// Create a copy of BandsDto
   /// with the given fields replaced by the non-null parameter values.

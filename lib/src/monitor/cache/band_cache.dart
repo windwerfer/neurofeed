@@ -36,9 +36,12 @@ class BandCache extends ChangeNotifier
 
   final Map<int, _BandRing> _channels = {};
 
-  /// Latest pad-quality scores (from ConnectionProvider). Used at append to
-  /// stamp sticky unusable bits; null means all pads treated as unusable.
+  /// Scores for the sticky unusable stamp. Live appends remember each
+  /// electrode's [BandsDto.signalQuality]. A caller-supplied list replaces
+  /// that until [setSignalQuality] clears it.
   List<double>? _signalQuality;
+  final Map<int, double> _windowQuality = {};
+  bool _qualityFromCaller = false;
 
   /// Electrodes currently selected in the Bands UI. Empty → only per-pad
   /// quality stamps; non-empty enables the "all selected dirty → dash all
@@ -48,9 +51,12 @@ class BandCache extends ChangeNotifier
   @override
   double get maxTimeWindowSecs => 1800.0;
 
-  /// Wire live pad quality for sticky unusable stamps on the next appends.
+  /// Install a whole quality vector, or clear it so the next bands use their
+  /// own window scores.
   void setSignalQuality(List<double>? quality) {
     _signalQuality = quality;
+    _qualityFromCaller = quality != null;
+    if (quality == null) _windowQuality.clear();
   }
 
   /// Wire Bands electrode selection for the all-selected-dirty stamp rule.
@@ -67,6 +73,12 @@ class BandCache extends ChangeNotifier
   void appendBands(BandsDto dto, {List<double>? signalQuality}) {
     if (signalQuality != null) {
       _signalQuality = signalQuality;
+      _qualityFromCaller = true;
+    } else if (!_qualityFromCaller) {
+      if (dto.electrode >= 0) {
+        _windowQuality[dto.electrode] = dto.signalQuality;
+      }
+      _signalQuality = _windowQualityVector();
     }
     final unusable = shouldStampBandUnusable(
       electrode: dto.electrode,
@@ -80,6 +92,18 @@ class BandCache extends ChangeNotifier
     _insert(dto.electrode, 3, ts, dto.beta, unusable);
     _insert(dto.electrode, 4, ts, dto.gamma, unusable);
     notifyListenersCoalesced();
+  }
+
+  List<double> _windowQualityVector() {
+    var n = 0;
+    for (final electrode in _windowQuality.keys) {
+      if (electrode >= n) n = electrode + 1;
+    }
+    final out = List<double>.filled(n, 0);
+    for (final entry in _windowQuality.entries) {
+      out[entry.key] = entry.value;
+    }
+    return out;
   }
 
   void _insert(int electrode, int bandIdx, double t, double v, bool unusable) {
@@ -172,6 +196,9 @@ class BandCache extends ChangeNotifier
   }
 
   void clear() {
+    _windowQuality.clear();
+    _signalQuality = null;
+    _qualityFromCaller = false;
     if (_channels.isEmpty) return;
     _channels.clear();
     notifyListeners();

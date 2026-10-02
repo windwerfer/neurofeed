@@ -35,41 +35,42 @@ void main() {
       engine: engine,
       output: const NoneRewardOutput(),
       onStats: (_) {},
-      onComputedFeedback: ({
-        required ratio,
-        required threshold,
-        required inTarget,
-        required inTargetPct,
-        percentile,
-        thresholdPercentile,
-        heldBack,
-        inhibitTags,
-        clean,
-        dirtyReason,
-        betaRel,
-        deltaRel,
-      }) {
-        lastFb = {
-          'inTarget': inTarget,
-          'percentile': percentile,
-          'clean': clean,
-          'dirtyReason': dirtyReason,
-        };
-        sampler.updateFeedback(
-          ratio: ratio,
-          threshold: threshold,
-          inTarget: inTarget,
-          inTargetPct: inTargetPct,
-          percentile: percentile,
-          thresholdPercentile: thresholdPercentile,
-          heldBack: heldBack,
-          inhibitTags: inhibitTags,
-          clean: clean,
-          dirtyReason: dirtyReason,
-          betaRel: betaRel,
-          deltaRel: deltaRel,
-        );
-      },
+      onComputedFeedback:
+          ({
+            required ratio,
+            required threshold,
+            required inTarget,
+            required inTargetPct,
+            percentile,
+            thresholdPercentile,
+            heldBack,
+            inhibitTags,
+            clean,
+            dirtyReason,
+            betaRel,
+            deltaRel,
+          }) {
+            lastFb = {
+              'inTarget': inTarget,
+              'percentile': percentile,
+              'clean': clean,
+              'dirtyReason': dirtyReason,
+            };
+            sampler.updateFeedback(
+              ratio: ratio,
+              threshold: threshold,
+              inTarget: inTarget,
+              inTargetPct: inTargetPct,
+              percentile: percentile,
+              thresholdPercentile: thresholdPercentile,
+              heldBack: heldBack,
+              inhibitTags: inhibitTags,
+              clean: clean,
+              dirtyReason: dirtyReason,
+              betaRel: betaRel,
+              deltaRel: deltaRel,
+            );
+          },
       onThresholdChanged: () {},
     );
     lane.configure(
@@ -89,6 +90,7 @@ void main() {
           alpha: 2,
           beta: 0.1,
           gamma: 0.1,
+          signalQuality: 0,
           lineNoiseRatio: 0,
         ),
       );

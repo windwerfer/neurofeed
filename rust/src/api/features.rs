@@ -9,10 +9,10 @@ use std::sync::{Mutex, OnceLock};
 
 use flutter_rust_bridge::frb;
 
-use crate::api::device_config::{DeviceConfig, DeviceKind, QualitySource};
 use crate::analysis::crown_quality::{
     resolve_pad_quality, CrownQualitySecond, ResolvedPadQuality, CROWN_PADS,
 };
+use crate::api::device_config::{DeviceConfig, DeviceKind, QualitySource};
 
 pub(crate) const ID_ATR: &str = "band.atr";
 pub(crate) const ID_TAR: &str = "band.tar";
@@ -51,9 +51,9 @@ pub(crate) fn canonical_ai_id(id: &str) -> &str {
     crate::analysis::ai_heads::canonical_feature_id(id)
 }
 
-/// Keep in sync with Dart `atrUsableSignalThreshold` / `signalGoodThreshold`
-/// and the Dart copy of this formula in `connection_provider._maybeComputeSignalQuality`
-/// until the Crown-run series deletes the Dart one.
+/// Keep in sync with Dart `kUsableSignalThreshold` (feedback
+/// `atrUsableSignalThreshold` / `signalGoodThreshold`). The score formula
+/// lives only in [pad_quality_from_std_and_noise].
 pub(crate) const SIGNAL_GOOD_THRESHOLD: f64 = 80.0;
 
 const EEG_RING_SAMPLES: usize = 256;
@@ -178,7 +178,7 @@ const SPECS: &[Spec] = &[
         muse_available: true,
         crown_available: false,
         unavailable_muse: None,
-        unavailable_crown: Some("ai.a_vig is Muse-only")
+        unavailable_crown: Some("ai.a_vig is Muse-only"),
     },
     Spec {
         id: ID_WAKE_LIGHT,
@@ -190,7 +190,7 @@ const SPECS: &[Spec] = &[
         muse_available: true,
         crown_available: false,
         unavailable_muse: None,
-        unavailable_crown: Some("ai.wake_light is Muse-only")
+        unavailable_crown: Some("ai.wake_light is Muse-only"),
     },
     Spec {
         id: ID_A_VIG_REVE,
@@ -226,7 +226,7 @@ const SPECS: &[Spec] = &[
         muse_available: true,
         crown_available: false,
         unavailable_muse: None,
-        unavailable_crown: Some("ai.drowsiness is Muse-only (deprecated alias of ai.a_vig)")
+        unavailable_crown: Some("ai.drowsiness is Muse-only (deprecated alias of ai.a_vig)"),
     },
     Spec {
         id: ID_FOCUS,
@@ -545,8 +545,8 @@ pub fn session_gate_electrodes(
         .collect()
 }
 
-/// Keep in sync with Dart `_maybeComputeSignalQuality` until the Crown-run
-/// series deletes the Dart copy. `noise < 0` means "no Bands yet" (no penalty).
+/// In-app pad score from one second of EEG standard deviation and that
+/// electrode's line-noise ratio. `noise < 0` means no band yet (no penalty).
 pub(crate) fn pad_quality_from_std_and_noise(std: f64, noise: f64) -> f64 {
     let mut score = if std < 1.0 || std > 100.0 {
         0.0
@@ -692,6 +692,65 @@ impl EegRing {
         let std = sample_std(&self.samples)?;
         Some(pad_quality_from_std_and_noise(std, line_noise))
     }
+
+    pub fn has_window(&self) -> bool {
+        self.samples.len() >= MIN_QUALITY_SAMPLES
+    }
+}
+
+/// Score of one FFT window for the live band dash.
+///
+/// Muse, and Neurosity while the in-app source is selected, use `std` and
+/// `line_noise` (`noise < 0` is no penalty). Neurosity with the Crown source
+/// uses the resolved 1 Hz score when that electrode has one, and this window
+/// otherwise. A missing std is 0.
+pub(crate) fn score_band_window(
+    kind: DeviceKind,
+    electrode: i32,
+    std: Option<f64>,
+    line_noise: f64,
+) -> f64 {
+    let app = match std {
+        Some(s) => pad_quality_from_std_and_noise(s, line_noise),
+        None => 0.0,
+    };
+    if !kind.is_neurosity() {
+        return app;
+    }
+    let reg = registry().lock().unwrap_or_else(|e| e.into_inner());
+    if reg.quality_source != QualitySource::Crown {
+        return app;
+    }
+    let Ok(idx) = usize::try_from(electrode) else {
+        return app;
+    };
+    reg.pad_quality.get(idx).copied().flatten().unwrap_or(app)
+}
+
+/// In-app scores for one Muse second. Index is the electrode.
+///
+/// `electrode_count` is the connected montage (4 head, plus AUX when that
+/// input is streaming). A slot with no ring, or fewer than
+/// `MIN_QUALITY_SAMPLES`, is 0. A missing band applies no line-noise penalty.
+pub(crate) fn muse_pad_scores(
+    rings: &HashMap<i32, EegRing>,
+    bands: &HashMap<i32, ChannelBands>,
+    electrode_count: usize,
+) -> Vec<f64> {
+    let mut values = vec![0.0; electrode_count];
+    for (&el, ring) in rings {
+        let Ok(idx) = usize::try_from(el) else {
+            continue;
+        };
+        if idx >= electrode_count {
+            continue;
+        }
+        let noise = bands.get(&el).map(|b| b.line_noise_ratio).unwrap_or(-1.0);
+        if let Some(q) = ring.quality(noise) {
+            values[idx] = q;
+        }
+    }
+    values
 }
 
 /// Pick usable pads and aggregate one enabled `band.*` feature.
@@ -770,17 +829,29 @@ mod tests {
         assert_eq!(gate(DeviceKind::Neurosity, None, None), vec![3, 4]);
         // Reward override wins over the guard.
         set_feature_electrodes(ID_ATR.into(), vec!["TP9".into(), "TP10".into()]).unwrap();
-        assert_eq!(gate(DeviceKind::Muse, Some(ID_ATR), Some(ID_DELTA)), vec![0, 3]);
+        assert_eq!(
+            gate(DeviceKind::Muse, Some(ID_ATR), Some(ID_DELTA)),
+            vec![0, 3]
+        );
         set_feature_electrodes(ID_ATR.into(), vec![]).unwrap();
         // No reward: the band guard's pads (default frontal F5/F6, then override).
-        assert_eq!(gate(DeviceKind::Neurosity, None, Some(ID_DELTA)), vec![2, 5]);
+        assert_eq!(
+            gate(DeviceKind::Neurosity, None, Some(ID_DELTA)),
+            vec![2, 5]
+        );
         assert_eq!(gate(DeviceKind::Muse, None, Some(ID_DELTA)), vec![1, 2]);
         set_feature_electrodes(ID_DELTA.into(), vec!["C3".into(), "C4".into()]).unwrap();
-        assert_eq!(gate(DeviceKind::Neurosity, None, Some(ID_DELTA)), vec![1, 6]);
+        assert_eq!(
+            gate(DeviceKind::Neurosity, None, Some(ID_DELTA)),
+            vec![1, 6]
+        );
         set_feature_electrodes(ID_DELTA.into(), vec![]).unwrap();
         // AI guard and montage-less reward: the device's needed pads.
         assert_eq!(gate(DeviceKind::Muse, None, Some(ID_A_VIG)), vec![1, 2]);
-        assert_eq!(gate(DeviceKind::Neurosity, Some(ID_FOCUS), None), vec![3, 4]);
+        assert_eq!(
+            gate(DeviceKind::Neurosity, Some(ID_FOCUS), None),
+            vec![3, 4]
+        );
     }
 
     #[test]
@@ -883,7 +954,7 @@ mod tests {
     }
 
     #[test]
-    fn quality_formula_matches_dart_branches() {
+    fn quality_formula_branches() {
         assert_eq!(pad_quality_from_std_and_noise(0.5, -1.0), 0.0);
         assert_eq!(pad_quality_from_std_and_noise(101.0, -1.0), 0.0);
         let s15 = pad_quality_from_std_and_noise(10.0, -1.0);
@@ -895,6 +966,90 @@ mod tests {
         let with_noise = pad_quality_from_std_and_noise(10.0, 0.5);
         let penalty = ((0.5_f64 - 0.2) / 0.3).clamp(0.0, 1.0);
         assert!((with_noise - s15 * (1.0 - 0.6 * penalty)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn muse_pad_scores_follow_the_ring_and_this_bands_noise() {
+        let mut samples = vec![0.0; 128];
+        samples.extend(std::iter::repeat(20.0).take(128));
+        let mut rings = HashMap::new();
+        let mut head = EegRing::new();
+        head.extend(&samples);
+        rings.insert(0, head);
+        let mut aux = EegRing::new();
+        aux.extend(&samples);
+        rings.insert(4, aux);
+
+        let mut short = EegRing::new();
+        short.extend(&[1.0; 9]);
+        rings.insert(1, short);
+        rings.insert(9, {
+            let mut extra = EegRing::new();
+            extra.extend(&samples);
+            extra
+        });
+
+        let mut bands = HashMap::new();
+        bands.insert(
+            4,
+            ChannelBands {
+                line_noise_ratio: 0.5,
+                ..ChannelBands::default()
+            },
+        );
+
+        let scores = muse_pad_scores(&rings, &bands, 5);
+        assert_eq!(scores.len(), 5);
+        let bare = pad_quality_from_std_and_noise(10.0, -1.0);
+        let penalised = pad_quality_from_std_and_noise(10.0, 0.5);
+        assert!((scores[0] - bare).abs() < 1e-9, "{}", scores[0]);
+        assert_eq!(scores[1], 0.0, "short ring");
+        assert_eq!(scores[2], 0.0);
+        assert_eq!(scores[3], 0.0);
+        assert!(
+            (scores[4] - penalised).abs() < 1e-9,
+            "AUX uses its own line noise: {}",
+            scores[4]
+        );
+    }
+
+    #[test]
+    fn score_band_window_uses_the_fft_unless_crown_already_resolved() {
+        let _lock = reset();
+        let app = pad_quality_from_std_and_noise(10.0, -1.0);
+        let noisy = pad_quality_from_std_and_noise(10.0, 0.5);
+        assert!((score_band_window(DeviceKind::Muse, 0, Some(10.0), -1.0) - app).abs() < 1e-9);
+        assert!((score_band_window(DeviceKind::Muse, 0, Some(10.0), 0.5) - noisy).abs() < 1e-9);
+        assert_eq!(score_band_window(DeviceKind::Muse, 3, None, 0.5), 0.0);
+        assert_eq!(
+            score_band_window(DeviceKind::Muse, 0, Some(500.0), -1.0),
+            0.0
+        );
+        assert!((score_band_window(DeviceKind::Neurosity, 2, Some(10.0), -1.0) - app).abs() < 1e-9);
+
+        set_active_kind(DeviceKind::Neurosity);
+        set_quality_source(QualitySource::Crown);
+        add_crown_quality(&[0.9; CROWN_PADS]);
+        let resolved = resolve_neurosity_second(&[Some(10.0); CROWN_PADS]);
+        assert_eq!(resolved.source, QualitySource::Crown);
+        let crown_score = resolved.scores[4].unwrap();
+        assert!((crown_score - app).abs() > 1.0);
+        assert!(
+            (score_band_window(DeviceKind::Neurosity, 4, Some(10.0), -1.0) - crown_score).abs()
+                < 1e-9
+        );
+        assert!(
+            (score_band_window(DeviceKind::Neurosity, 4, Some(500.0), -1.0) - crown_score).abs()
+                < 1e-9
+        );
+        assert!((score_band_window(DeviceKind::Muse, 4, Some(10.0), -1.0) - app).abs() < 1e-9);
+        assert!(
+            (score_band_window(DeviceKind::Neurosity, -1, Some(10.0), -1.0) - app).abs() < 1e-9
+        );
+
+        set_quality_source(QualitySource::App);
+        assert!((score_band_window(DeviceKind::Neurosity, 4, Some(10.0), -1.0) - app).abs() < 1e-9);
+        assert_eq!(score_band_window(DeviceKind::Neurosity, 4, None, -1.0), 0.0);
     }
 
     #[test]
@@ -1028,13 +1183,22 @@ mod tests {
         let muse = available_features(DeviceKind::Muse);
         let crown = available_features(DeviceKind::Neurosity);
         for id in AI_FEATURE_IDS {
-            let m = muse.iter().find(|f| f.id == *id).unwrap_or_else(|| panic!("missing {id}"));
+            let m = muse
+                .iter()
+                .find(|f| f.id == *id)
+                .unwrap_or_else(|| panic!("missing {id}"));
             assert!(m.usable_for.contains(&FeatureLane::Guard));
             let c = crown.iter().find(|f| f.id == *id).unwrap();
             assert!(!c.available, "{id} Muse-only");
         }
         // CBraMod + REVE heads: available on Muse once encoder/base is in play.
-        for id in [ID_A_VIG, ID_WAKE_LIGHT, ID_DROWSINESS, ID_A_VIG_REVE, ID_WAKE_LIGHT_REVE] {
+        for id in [
+            ID_A_VIG,
+            ID_WAKE_LIGHT,
+            ID_DROWSINESS,
+            ID_A_VIG_REVE,
+            ID_WAKE_LIGHT_REVE,
+        ] {
             let m = muse.iter().find(|f| f.id == id).unwrap();
             assert!(m.available, "{id} should be available on Muse");
         }

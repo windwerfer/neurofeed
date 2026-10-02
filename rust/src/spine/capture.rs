@@ -526,7 +526,6 @@ pub fn capture_write_errors() -> u64 {
         .unwrap_or(0)
 }
 
-
 /// Pause/resume raw (and Dart-gated computed) capture without tearing down the session.
 pub fn capture_set_paused(paused: bool) {
     PAUSED.store(paused, Ordering::SeqCst);
@@ -985,6 +984,7 @@ mod tests {
             alpha: 3.0,
             beta: 4.0,
             gamma: 5.0,
+            signal_quality: 0.0,
             line_noise_ratio: 0.05,
         })
     }
@@ -1074,8 +1074,14 @@ mod tests {
         let _ = capture_discard();
         let dir = temp_dir();
         let start = |prefix: &str| {
-            capture_start(dir.to_string_lossy().into_owned(), prefix.into(), unique_id(prefix), vec![], 0.0)
-                .unwrap()
+            capture_start(
+                dir.to_string_lossy().into_owned(),
+                prefix.into(),
+                unique_id(prefix),
+                vec![],
+                0.0,
+            )
+            .unwrap()
         };
         set_saved_mains(None);
         publish_live_mains(Mains::Hz(50.0));
@@ -1084,13 +1090,19 @@ mod tests {
         capture_discard().unwrap();
         start("recording");
         publish_live_mains(Mains::Hz(60.0));
-        assert_eq!(recording_lock(), Some((Mains::Hz(50.0), NotchSource::Detected)));
+        assert_eq!(
+            recording_lock(),
+            Some((Mains::Hz(50.0), NotchSource::Detected))
+        );
         capture_stop().unwrap();
         assert_eq!(recording_lock(), None);
         capture_discard().unwrap();
         publish_live_mains(Mains::Unknown);
         start("session");
-        assert_eq!(recording_lock(), Some((Mains::Unknown, NotchSource::Undecided)));
+        assert_eq!(
+            recording_lock(),
+            Some((Mains::Unknown, NotchSource::Undecided))
+        );
         capture_discard().unwrap();
         assert_eq!(recording_lock(), None);
         let _ = fs::remove_dir_all(&dir);
@@ -1221,5 +1233,4 @@ mod tests {
         capture_discard().unwrap();
         let _ = fs::remove_dir_all(&dir);
     }
-
 }

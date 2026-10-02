@@ -27,6 +27,7 @@ BandsDto _bands(int electrode, {double timestamp = 1000, double alpha = 3}) =>
       alpha: alpha,
       beta: 4,
       gamma: 5,
+      signalQuality: 0,
       lineNoiseRatio: 0,
     );
 

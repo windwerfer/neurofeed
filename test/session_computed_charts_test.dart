@@ -124,6 +124,7 @@ void main() {
             alpha: 3,
             beta: 4,
             gamma: 5,
+            signalQuality: 0,
             lineNoiseRatio: 0.05,
           ),
         ),

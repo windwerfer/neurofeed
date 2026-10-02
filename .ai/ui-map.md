@@ -26,9 +26,9 @@ toggles the same hide. Not Settings / Feedback / Streaming / History.
 | Connecting | `Connecting to {name}…` | `connectingTo` | `status_bar.dart` | |
 | Disconnecting | `Disconnecting…` | `disconnecting` | `status_bar.dart` | |
 | Device name | `status.name` (e.g. `Muse 2 (Simulated)`) | `ConnectionStatus.name` | `status_bar.dart` | After connect. Elides when chrome is tight; **signal pads keep priority**. |
-| Signal pads | `/‾‾\` (Muse 4) or 8 × `•` (Crown) | `signalQualityRow` | `status_bar.dart` | One glyph per head pad of `lastConnectedKind`; green ≥ 80, orange ≥ 40, red below. |
+| Signal pads | `/‾‾\` (Muse 4) or 8 × `•` (Crown) | `signalQualityRow` | `status_bar.dart` | Head pads of `lastConnectedKind`. Muse AUX (Classic 1, Athena up to 4) inserts Crown-style `•` between the overlines: `/‾•‾\` … `/‾••••‾\`. Green ≥ 80, orange ≥ 40, red below. |
 | Battery | `{n}%` | `batteryLevel` | `status_bar.dart` | From `bp`, not fuel gauge. |
-| Signal pads | `/ ‾ ‾ \` | `_signalQualityRow` | `status_bar.dart` | TP9 AF7 AF8 TP10. Green ≥80, amber ≥40, red <40. Never elided for a long device name. [headset-fit.md](headset-fit.md). |
+| Signal pads | `/‾‾\` or `/‾••••‾\` | `signalQualityRow` | `status_bar.dart` | TP9 AF7, then AUX1–AUX4 dots when streaming, then AF8 TP10. Green ≥80, amber ≥40, red <40. Never elided for a long device name. [headset-fit.md](headset-fit.md). |
 | Disconnect | tooltip `Disconnect` | `disconnectDevice` | `status_bar.dart` | Icon `link_off`. |
 
 ### Sidebar — `lib/src/app.dart`

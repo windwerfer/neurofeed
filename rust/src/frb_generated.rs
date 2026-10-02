@@ -2819,6 +2819,7 @@ impl SseDecode for crate::api::muse::BandsDto {
         let mut var_beta = <f64>::sse_decode(deserializer);
         let mut var_gamma = <f64>::sse_decode(deserializer);
         let mut var_lineNoiseRatio = <f64>::sse_decode(deserializer);
+        let mut var_signalQuality = <f64>::sse_decode(deserializer);
         return crate::api::muse::BandsDto {
             electrode: var_electrode,
             timestamp: var_timestamp,
@@ -2828,6 +2829,7 @@ impl SseDecode for crate::api::muse::BandsDto {
             beta: var_beta,
             gamma: var_gamma,
             line_noise_ratio: var_lineNoiseRatio,
+            signal_quality: var_signalQuality,
         };
     }
 }
@@ -4476,6 +4478,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::muse::BandsDto {
             self.beta.into_into_dart().into_dart(),
             self.gamma.into_into_dart().into_dart(),
             self.line_noise_ratio.into_into_dart().into_dart(),
+            self.signal_quality.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -5597,6 +5600,7 @@ impl SseEncode for crate::api::muse::BandsDto {
         <f64>::sse_encode(self.beta, serializer);
         <f64>::sse_encode(self.gamma, serializer);
         <f64>::sse_encode(self.line_noise_ratio, serializer);
+        <f64>::sse_encode(self.signal_quality, serializer);
     }
 }
 

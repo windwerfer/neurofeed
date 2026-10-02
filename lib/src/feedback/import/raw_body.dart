@@ -105,6 +105,7 @@ List<int> encodeBandEvents(List<BandInstant> rows) {
               alpha: b.alpha,
               beta: b.beta,
               gamma: b.gamma,
+              signalQuality: 0,
               lineNoiseRatio: b.lineNoise,
             ),
           ),

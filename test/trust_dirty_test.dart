@@ -91,6 +91,7 @@ BandsDto _pad(int electrode) => BandsDto(
   alpha: 2,
   beta: 0.1,
   gamma: 0.1,
+  signalQuality: 0,
   lineNoiseRatio: 0,
 );
 

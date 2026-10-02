@@ -558,13 +558,10 @@ class MonitorController extends Notifier<MonitorState> {
         sweepBuffer.append(event.field0);
       case MuseEventDto_Bands():
         final app = ref.read(appStateProvider);
-        final quality = app.signalQuality;
-        bandCache.appendBands(event.field0, signalQuality: quality);
-        _sampler?.updateBands(event.field0.electrode, event.field0);
-        final e = event.field0.electrode;
-        if (quality != null && e >= 0 && e < quality.length) {
-          _sampler?.updateSignalQuality(e, quality[e].round());
-        }
+        final dto = event.field0;
+        bandCache.appendBands(dto);
+        _sampler?.updateBands(dto.electrode, dto);
+        _sampler?.updateSignalQuality(dto.electrode, dto.signalQuality.round());
         _sampler?.updateSignalQualitySource(
           app.signalQualitySource,
           app.crownSignalQuality,

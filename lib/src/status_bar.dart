@@ -4,22 +4,51 @@ import 'package:neurofeed/src/connection_provider.dart';
 import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/streaming/streaming_indicator.dart';
 
-const _kMuseSignalSymbols = ['/', '‾', '‾', '\\'];
+const _kMuseHeadSymbols = ['/', '‾', '‾', '\\'];
 
-/// One glyph per head pad: the Muse head outline for 4 pads, dots otherwise.
-@visibleForTesting
-List<String> padSymbols(int count) => count == _kMuseSignalSymbols.length
-    ? _kMuseSignalSymbols
-    : List.filled(count, '•');
+/// One status-bar pad: the glyph and the electrode whose score colours it.
+class SignalPad {
+  const SignalPad(this.glyph, this.electrode);
 
-/// Pad quality glyphs for the connected device's [padCount] head pads.
+  final String glyph;
+  final int electrode;
+}
+
+/// Muse head outline `/‾‾\`, with AUX dots between the overlines when AUX
+/// is streaming (`/‾•‾\` … `/‾••••‾\`). Anything else is one Crown-style
+/// dot per head pad. AUX count is capped at [kMuseAuxElectrodeNames].
 @visibleForTesting
-Widget signalQualityRow(List<double>? qualities, int padCount) {
+List<SignalPad> signalPads({required int headCount, int auxChannels = 0}) {
+  if (headCount != _kMuseHeadSymbols.length) {
+    return [for (var i = 0; i < headCount; i++) SignalPad('•', i)];
+  }
+  final aux = auxChannels.clamp(0, kMuseAuxElectrodeNames.length);
+  return [
+    const SignalPad('/', 0),
+    const SignalPad('‾', 1),
+    for (var i = 0; i < aux; i++)
+      SignalPad('•', kMuseElectrodeNames.length + i),
+    const SignalPad('‾', 2),
+    const SignalPad('\\', 3),
+  ];
+}
+
+/// Pad quality glyphs. [headCount] is the device head montage. [auxChannels]
+/// is the Muse AUX count on this connection (0 for Crown).
+@visibleForTesting
+Widget signalQualityRow(
+  List<double>? qualities,
+  int headCount, {
+  int auxChannels = 0,
+}) {
   if (qualities == null) return const SizedBox.shrink();
-  final symbols = padSymbols(padCount);
+  final pads = signalPads(headCount: headCount, auxChannels: auxChannels);
   final children = <Widget>[];
-  for (int i = 0; i < symbols.length; i++) {
-    final score = i < qualities.length ? qualities[i] : 0.0;
+  for (var i = 0; i < pads.length; i++) {
+    final pad = pads[i];
+    final score = pad.electrode < qualities.length
+        ? qualities[pad.electrode]
+        : 0.0;
     final color = score >= 80
         ? const Color(0xFF4CAF50)
         : score >= 40
@@ -27,7 +56,7 @@ Widget signalQualityRow(List<double>? qualities, int padCount) {
         : const Color(0xFFF44336);
     children.add(
       Text(
-        symbols[i],
+        pad.glyph,
         style: TextStyle(
           color: color,
           fontSize: 18,
@@ -36,7 +65,7 @@ Widget signalQualityRow(List<double>? qualities, int padCount) {
         ),
       ),
     );
-    if (i < symbols.length - 1) children.add(const SizedBox(width: 2));
+    if (i < pads.length - 1) children.add(const SizedBox(width: 2));
   }
   return Row(mainAxisSize: MainAxisSize.min, children: children);
 }
@@ -119,6 +148,7 @@ class StatusBar extends ConsumerWidget {
                           signalQualityRow(
                             state.signalQuality,
                             channelCountForKind(state.lastConnectedKind),
+                            auxChannels: state.status.auxChannels,
                           ),
                           const SizedBox(width: 12),
                           const StreamIndicator(),

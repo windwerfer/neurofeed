@@ -386,6 +386,7 @@ void main() {
             alpha: 2,
             beta: 1,
             gamma: 1,
+            signalQuality: 0,
             lineNoiseRatio: 0.1,
           ),
         ),

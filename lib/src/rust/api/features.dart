@@ -9,10 +9,10 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'features.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `active_kind`, `add_crown_quality`, `aggregate_band_feature`, `all_known_electrode_names`, `available_on`, `canonical_ai_id`, `clear_active_kind`, `collect_usable_pads`, `default_electrode_names`, `enabled_ids`, `is_ai_feature_id`, `is_enabled`, `is_neurosity`, `pad_quality_from_std_and_noise`, `pad_quality`, `registry`, `relative`, `resolve_neurosity_second`, `resolved_electrode_indices`, `resolved_electrode_names`, `sample_std`, `set_active_kind`, `set_quality_source`, `spec_by_id`
+// These functions are ignored because they are not marked as `pub`: `active_kind`, `add_crown_quality`, `aggregate_band_feature`, `all_known_electrode_names`, `available_on`, `canonical_ai_id`, `clear_active_kind`, `collect_usable_pads`, `default_electrode_names`, `enabled_ids`, `is_ai_feature_id`, `is_enabled`, `is_neurosity`, `muse_pad_scores`, `pad_quality_from_std_and_noise`, `pad_quality`, `registry`, `relative`, `resolve_neurosity_second`, `resolved_electrode_indices`, `resolved_electrode_names`, `sample_std`, `score_band_window`, `set_active_kind`, `set_quality_source`, `spec_by_id`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ChannelBands`, `EegRing`, `Spec`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
-// These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `default`, `default`, `default`, `extend`, `new`, `quality`
+// These functions are ignored (category: IgnoreBecauseOwnerTyShouldIgnore): `default`, `default`, `default`, `extend`, `has_window`, `new`, `quality`
 
 /// Sync Rust; FRB 2.11.1 exposes a Dart `Future` (not `#[frb(sync)]`).
 Future<List<FeatureInfo>> availableFeatures({required DeviceKind kind}) =>

@@ -13,14 +13,17 @@ import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-MuseEventDto _pad(List<double> values, QualitySource source, [List<double>? crown]) =>
-    MuseEventDto.padQuality(
-      PadQualityDto(
-        values: Float64List.fromList(values),
-        source: source,
-        crown: crown == null ? null : Float64List.fromList(crown),
-      ),
-    );
+MuseEventDto _pad(
+  List<double> values,
+  QualitySource source, [
+  List<double>? crown,
+]) => MuseEventDto.padQuality(
+  PadQualityDto(
+    values: Float64List.fromList(values),
+    source: source,
+    crown: crown == null ? null : Float64List.fromList(crown),
+  ),
+);
 
 MuseEventDto _eeg(int electrode, double startMs, double value) =>
     MuseEventDto.eeg(
@@ -47,12 +50,7 @@ ComputedFrame _frame({String? source, List<double>? crown}) => ComputedFrame(
     warning: false,
     delta: 0,
   ),
-  feedback: const FeedbackInfo(
-    ratio: 0,
-    threshold: 0,
-    inTarget: false,
-    pct: 0,
-  ),
+  feedback: const FeedbackInfo(ratio: 0, threshold: 0, inTarget: false, pct: 0),
   gestures: const [],
   signalQualitySource: source,
   crownSignalQuality: crown,
@@ -109,8 +107,10 @@ void main() {
       expect(app.state.crownSignalQuality, isNull);
     });
 
-    test('Dart score is not computed while Rust pad quality arrives', () {
-      app.debugAddEvent(_pad(List.filled(8, 88), QualitySource.crown, List.filled(8, 0.8)));
+    test('EEG does not replace a PadQuality score', () {
+      app.debugAddEvent(
+        _pad(List.filled(8, 88), QualitySource.crown, List.filled(8, 0.8)),
+      );
       for (var s = 0; s < 3; s++) {
         for (var e = 0; e < 8; e++) {
           app.debugAddEvent(_eeg(e, 1000.0 * s, 300));
@@ -121,7 +121,9 @@ void main() {
 
     test('disconnect clears source and Crown values', () {
       app.debugMarkUserDisconnected();
-      app.debugAddEvent(_pad(List.filled(8, 88), QualitySource.crown, List.filled(8, 0.8)));
+      app.debugAddEvent(
+        _pad(List.filled(8, 88), QualitySource.crown, List.filled(8, 0.8)),
+      );
       app.debugAddEvent(const MuseEventDto.disconnected());
       expect(app.state.signalQuality, isNull);
       expect(app.state.signalQualitySource, isNull);
@@ -129,23 +131,45 @@ void main() {
     });
   });
 
-  test('Muse keeps the Dart score (no PadQuality events)', () async {
-    SharedPreferences.setMockInitialValues({});
-    final app = AppStateNotifier.forTest(await Settings.load());
-    addTearDown(app.dispose);
-    app.debugSetConnected();
-    for (var s = 0; s < 3; s++) {
-      for (var e = 0; e < 4; e++) {
-        app.debugAddEvent(_eeg(e, 1000.0 * s, 5));
+  test(
+    'Muse quality comes from PadQuality and does not record a source',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final app = AppStateNotifier.forTest(await Settings.load());
+      addTearDown(app.dispose);
+      app.debugSetConnected();
+      for (var s = 0; s < 3; s++) {
+        for (var e = 0; e < 4; e++) {
+          app.debugAddEvent(_eeg(e, 1000.0 * s, 5));
+        }
       }
-    }
-    expect(app.state.signalQuality, isNotNull);
-    expect(app.state.signalQualitySource, isNull);
-  });
+      expect(app.state.signalQuality, isNull);
+      expect(app.state.signalQualitySource, isNull);
+      expect(app.state.crownSignalQuality, isNull);
+
+      app.debugAddEvent(_pad(const [90, 80, 70, 60], QualitySource.app));
+      expect(app.state.signalQuality, [90, 80, 70, 60]);
+      expect(app.state.signalQualitySource, isNull);
+      expect(app.state.crownSignalQuality, isNull);
+
+      app.debugAddEvent(
+        _pad(const [1, 2, 3, 4, 5], QualitySource.crown, List.filled(8, 0.5)),
+      );
+      expect(app.state.signalQuality, [1, 2, 3, 4, 5]);
+      expect(app.state.signalQualitySource, isNull);
+      expect(app.state.crownSignalQuality, isNull);
+
+      app.debugAddEvent(_eeg(0, 4000, 80));
+      expect(app.state.signalQuality, [1, 2, 3, 4, 5]);
+    },
+  );
 
   group('computed frame quality source', () {
     test('JSON round-trip keeps source and Crown values', () {
-      final f = _frame(source: 'crown', crown: [0.9, 0.1, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8]);
+      final f = _frame(
+        source: 'crown',
+        crown: [0.9, 0.1, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8],
+      );
       final json = jsonDecode(jsonEncode(f.toJson())) as Map<String, dynamic>;
       expect(json['signalQualitySource'], 'crown');
       expect(json['crownSignalQuality'], hasLength(8));
@@ -174,7 +198,10 @@ void main() {
         recordingStart: start,
         now: () => start.add(const Duration(seconds: 1)),
       );
-      sampler.updateSignalQualitySource(QualitySource.crown, List.filled(8, 0.9));
+      sampler.updateSignalQualitySource(
+        QualitySource.crown,
+        List.filled(8, 0.9),
+      );
       sampler.emitFrame();
       sampler.updateSignalQualitySource(QualitySource.app, null);
       sampler.emitFrame();
@@ -191,7 +218,10 @@ void main() {
         nowMs: () => 1000,
       );
       monitor.emitFrame();
-      monitor.updateSignalQualitySource(QualitySource.crown, List.filled(8, 0.8));
+      monitor.updateSignalQualitySource(
+        QualitySource.crown,
+        List.filled(8, 0.8),
+      );
       monitor.emitFrame();
       expect(mon[0].signalQualitySource, isNull);
       expect(mon[1].signalQualitySource, 'crown');

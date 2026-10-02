@@ -199,6 +199,7 @@ fn fill_classic_muse(stats: &mut FillStats, equiv_secs: u64) {
                     beta: 4.0,
                     gamma: 5.0,
                     line_noise_ratio: 0.01,
+                    signal_quality: 0.0,
                 }),
             );
         }
@@ -263,14 +264,14 @@ fn computed_frames(equiv_secs: u64) -> Vec<ComputedFrame> {
                 clarity: 1.0,
                 warning: false,
                 delta: 0.0,
-                            ..Default::default()
+                ..Default::default()
             },
             feedback: FeedbackInfo {
                 ratio: 1.0,
                 threshold: 1.0,
                 in_target: true,
                 pct: 0.5,
-                            ..Default::default()
+                ..Default::default()
             },
             gestures: Vec::new(),
             signal_quality_source: None,

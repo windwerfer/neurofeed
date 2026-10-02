@@ -1421,7 +1421,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         ),
       );
       if (path == null) {
-        debugPrint('[feedback] end: scratch .neurofeed assemble failed; temps kept');
+        debugPrint(
+          '[feedback] end: scratch .neurofeed assemble failed; temps kept',
+        );
       }
     } catch (e, st) {
       debugPrint('[feedback] end: scratch .neurofeed assemble failed: $e\n$st');
@@ -1650,7 +1652,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       peakAlphaPower: stats?.peakAlphaPower,
       pctInTarget: stats?.targetPct,
       avgSleepDir: drowsy?.meanSleepDir,
-      userId: settings.subjectInfo.id.isEmpty ? null : settings.subjectInfo.id
+      userId: settings.subjectInfo.id.isEmpty ? null : settings.subjectInfo.id,
     );
   }
 
@@ -2025,14 +2027,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         final guardDirtyReason = guardClean
             ? null
             : (_reward.lastDirty
-                ? _reward.lastDirtyReason
-                : artifactDirtyReason(
-                    now: DateTime.now(),
-                    lastMovementAt: _lastMovementAt,
-                    lastJawAt: _lastClenchDirtyAt,
-                    lastBlinkAt: _lastBlinkDirtyAt,
-                    buffer: movementBuffer,
-                  ));
+                  ? _reward.lastDirtyReason
+                  : artifactDirtyReason(
+                      now: DateTime.now(),
+                      lastMovementAt: _lastMovementAt,
+                      lastJawAt: _lastClenchDirtyAt,
+                      lastBlinkAt: _lastBlinkDirtyAt,
+                      buffer: movementBuffer,
+                    ));
         final featurePct = _guard.percentileOf(native) ?? 50.0;
         _trust.pushGuard(
           TrustGuardSample(
@@ -2075,12 +2077,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     _computedSampler?.updateBands(bands.electrode, bands);
     final app = _ref.read(appStateProvider);
-    final signalQuality = app.signalQuality;
-    if (signalQuality != null) {
-      for (int i = 0; i < signalQuality.length; i++) {
-        _computedSampler?.updateSignalQuality(i, signalQuality[i].round());
-      }
-    }
+    _computedSampler?.updateSignalQuality(
+      bands.electrode,
+      bands.signalQuality.round(),
+    );
     _computedSampler?.updateSignalQualitySource(
       app.signalQualitySource,
       app.crownSignalQuality,

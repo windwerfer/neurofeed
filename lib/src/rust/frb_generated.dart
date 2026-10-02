@@ -2701,8 +2701,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BandsDto dco_decode_bands_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return BandsDto(
       electrode: dco_decode_i_32(arr[0]),
       timestamp: dco_decode_f_64(arr[1]),
@@ -2712,6 +2712,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       beta: dco_decode_f_64(arr[5]),
       gamma: dco_decode_f_64(arr[6]),
       lineNoiseRatio: dco_decode_f_64(arr[7]),
+      signalQuality: dco_decode_f_64(arr[8]),
     );
   }
 
@@ -3888,6 +3889,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_beta = sse_decode_f_64(deserializer);
     var var_gamma = sse_decode_f_64(deserializer);
     var var_lineNoiseRatio = sse_decode_f_64(deserializer);
+    var var_signalQuality = sse_decode_f_64(deserializer);
     return BandsDto(
       electrode: var_electrode,
       timestamp: var_timestamp,
@@ -3897,6 +3899,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       beta: var_beta,
       gamma: var_gamma,
       lineNoiseRatio: var_lineNoiseRatio,
+      signalQuality: var_signalQuality,
     );
   }
 
@@ -5371,6 +5374,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.beta, serializer);
     sse_encode_f_64(self.gamma, serializer);
     sse_encode_f_64(self.lineNoiseRatio, serializer);
+    sse_encode_f_64(self.signalQuality, serializer);
   }
 
   @protected

@@ -20,6 +20,7 @@ void main() {
         alpha: 3,
         beta: 4,
         gamma: 5,
+        signalQuality: 0,
         lineNoiseRatio: 0.05,
       ),
     );
@@ -53,6 +54,7 @@ void main() {
         alpha: 1,
         beta: 1,
         gamma: 1,
+        signalQuality: 0,
         lineNoiseRatio: 0,
       ),
       signalQuality: [10, 90, 90, 90],
@@ -66,6 +68,7 @@ void main() {
         alpha: 2,
         beta: 2,
         gamma: 2,
+        signalQuality: 0,
         lineNoiseRatio: 0,
       ),
       signalQuality: [10, 90, 90, 90],
@@ -88,13 +91,13 @@ void main() {
         alpha: 1,
         beta: 1,
         gamma: 1,
+        signalQuality: 0,
         lineNoiseRatio: 0,
       ),
       signalQuality: [5, 5, 90, 90],
     );
     expect(cache.getRange(bandChannelId(0, 2), 0, 10).single.unusable, isTrue);
   });
-
 
   test('appendHeldUnusableGap holds last Y and stamps unusable', () {
     final cache = BandCache();
@@ -107,6 +110,7 @@ void main() {
         alpha: 3,
         beta: 4,
         gamma: 5,
+        signalQuality: 0,
         lineNoiseRatio: 0,
       ),
       signalQuality: [90, 90, 90, 90],
@@ -121,5 +125,50 @@ void main() {
     expect(after.last.t, closeTo(2.0, 1e-9));
     expect(after.last.v, 3);
     expect(after.last.unusable, isTrue);
+  });
+
+  BandsDto window(int electrode, double timestampMs, double quality) =>
+      BandsDto(
+        electrode: electrode,
+        timestamp: timestampMs,
+        delta: 1,
+        theta: 1,
+        alpha: 1,
+        beta: 1,
+        gamma: 1,
+        signalQuality: quality,
+        lineNoiseRatio: 0,
+      );
+
+  test('each band point uses that window score', () {
+    final cache = BandCache();
+    cache.setSelectedElectrodes({0, 1});
+    cache.appendBands(window(0, 1000, 10));
+    cache.appendBands(window(1, 1000, 90));
+    expect(cache.getRange(bandChannelId(0, 0), 0, 10).single.unusable, isTrue);
+    expect(cache.getRange(bandChannelId(1, 0), 0, 10).single.unusable, isFalse);
+
+    cache.appendBands(window(0, 2000, 95));
+    final el0 = cache.getRange(bandChannelId(0, 0), 0, 10);
+    expect(el0, hasLength(2));
+    expect(el0.first.unusable, isTrue);
+    expect(el0.last.unusable, isFalse);
+
+    cache.appendBands(window(1, 2000, 95), signalQuality: [10, 10, 10, 10]);
+    expect(cache.getRange(bandChannelId(1, 0), 0, 10).last.unusable, isTrue);
+  });
+
+  test('clearing caller quality returns to the window score', () {
+    final cache = BandCache();
+    cache.setSignalQuality([10, 10, 10, 10]);
+    cache.appendBands(window(0, 1000, 95));
+    expect(cache.getRange(bandChannelId(0, 0), 0, 10).single.unusable, isTrue);
+
+    cache.setSignalQuality(null);
+    cache.appendBands(window(0, 2000, 95));
+    final samples = cache.getRange(bandChannelId(0, 0), 0, 10);
+    expect(samples, hasLength(2));
+    expect(samples.first.unusable, isTrue);
+    expect(samples.last.unusable, isFalse);
   });
 }

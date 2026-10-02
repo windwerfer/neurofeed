@@ -27,6 +27,7 @@ void main() {
           alpha: 3,
           beta: 4,
           gamma: 5,
+          signalQuality: 0,
           lineNoiseRatio: 0.1,
         ),
       );
@@ -91,6 +92,7 @@ void main() {
       alpha: v,
       beta: v,
       gamma: v,
+      signalQuality: 0,
       lineNoiseRatio: noise,
     );
     sampler.updateBands(1, b(1, 0.1));

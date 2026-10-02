@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -131,11 +130,6 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   final Completer<void> _initDone = Completer<void>();
   final StreamController<MuseEventDto> _eventController =
       StreamController<MuseEventDto>.broadcast();
-  double _lastQualityCheck = 0;
-
-  /// Rust sends resolved Neurosity pad quality ([MuseEventDto_PadQuality]);
-  /// while it does, the Dart score below is not computed.
-  bool _rustPadQuality = false;
 
   /// Lost-link and launch auto-reconnect. Cleared by a user disconnect
   /// (status bar / agent) until the next [connectTo].
@@ -143,11 +137,6 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
   @visibleForTesting
   int debugReconnectCalls = 0;
-
-  /// Latest 50/60 Hz line-noise ratio per electrode from Bands events.
-  /// -1 means no data yet for that pad.
-  final List<double> _lineNoise = List.filled(kMaxPadChannels, -1);
-  final _PadQualityRing _padQuality = _PadQualityRing();
 
   Stream<MuseEventDto> get eventStream => _eventController.stream;
 
@@ -545,21 +534,13 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       case MuseEventDto_Disconnected():
         debugPrint('[neurofeed] event: disconnected');
         _onDisconnected();
-      case MuseEventDto_Eeg():
-        _padQuality.appendEeg(event.field0);
-        _maybeComputeSignalQuality();
-      case MuseEventDto_Bands():
-        final idx = event.field0.electrode;
-        if (idx >= 0 && idx < _lineNoise.length) {
-          _lineNoise[idx] = event.field0.lineNoiseRatio;
-        }
       case MuseEventDto_PadQuality():
-        _rustPadQuality = true;
         final q = event.field0;
+        final recordSource = state.lastConnectedKind == DeviceKind.neurosity;
         state = state.copyWith(
           signalQuality: q.values.toList(),
-          signalQualitySource: q.source,
-          crownSignalQuality: q.crown?.toList(),
+          signalQualitySource: recordSource ? q.source : null,
+          crownSignalQuality: recordSource ? q.crown?.toList() : null,
         );
       case MuseEventDto_Gestures():
         state = state.copyWith(gestures: event.field0);
@@ -597,10 +578,6 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     if (!state.status.connected && !state.disconnecting) {
       return;
     }
-    _lineNoise.fillRange(0, _lineNoise.length, -1);
-    _padQuality.clear();
-    _lastQualityCheck = 0;
-    _rustPadQuality = false;
     const idle = ConnectionStatus(
       connected: false,
       name: '',
@@ -652,60 +629,6 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
   /// Muse pad quality. Keep in sync with Rust
   /// `features::pad_quality_from_std_and_noise`, which also scores Neurosity.
-  void _maybeComputeSignalQuality() {
-    if (_rustPadQuality) return;
-    final now = _padQuality.latestTimestamp;
-    if (now - _lastQualityCheck < 0.9) return;
-    _lastQualityCheck = now;
-
-    const window = 1.0;
-    final present = _padQuality.channels.toList();
-    final count = present.fold<int>(4, (n, ch) => ch + 1 > n ? ch + 1 : n);
-    final quals = List.filled(count, 0.0);
-
-    for (final ch in present) {
-      final samples = _padQuality.valuesIn(ch, now - window, now);
-      if (samples.length < 10) continue;
-
-      final n = samples.length;
-      double sum = 0;
-      for (final v in samples) {
-        sum += v;
-      }
-      final mean = sum / n;
-
-      double sumSq = 0;
-      for (final v in samples) {
-        sumSq += (v - mean) * (v - mean);
-      }
-      final variance = sumSq / n;
-      final std = sqrt(variance);
-
-      double score;
-      if (std < 1.0 || std > 100.0) {
-        score = 0;
-      } else if (std < 15.0) {
-        score = 80.0 + (15.0 - std) / 15.0 * 20.0;
-      } else if (std < 40.0) {
-        score = 50.0 + (40.0 - std) / 25.0 * 25.0;
-      } else {
-        score = 40.0 * (100.0 - std) / 60.0;
-        if (score < 0) score = 0;
-      }
-
-      // Line-noise (impedance) penalty: ratios above ~0.2 start to hurt a
-      // pad's fit, ~0.5 is severe (mains power is half the total spectrum).
-      final noise = _lineNoise[ch];
-      if (noise >= 0) {
-        final penalty = ((noise - 0.2) / 0.3).clamp(0.0, 1.0);
-        score = score * (1.0 - 0.6 * penalty);
-      }
-      quals[ch] = score;
-    }
-
-    state = state.copyWith(signalQuality: quals);
-  }
-
   bool _deviceMatchesSource(DeviceInfo device) {
     final sim = isSimDeviceId(device.id);
     switch (state.connectSource) {
@@ -774,7 +697,6 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       );
       state = state.copyWith(scanMessage: 'Connecting… (attempt $attempt)');
       try {
-        _rustPadQuality = false;
         final savedMains = _settings.savedMainsFor(id);
         setSavedMains(
           notchHz: savedMains == null ? null : Float64List.fromList(savedMains),
@@ -1315,113 +1237,3 @@ final appStateProvider = StateNotifierProvider<AppStateNotifier, AppUiState>((
 ) {
   throw UnimplementedError('Initialize with settings before use');
 });
-
-/// 4-ch, 1 s EEG ring for status-bar pad quality. Not the 5 min live cache.
-/// Pad-quality slots: Muse 4 head + up to 4 AUX, or Crown 8.
-const int kMaxPadChannels = 8;
-
-class _PadQualityRing {
-  static const _sampleRate = 256.0;
-  static const _capacity = 256;
-  static const _channelCount = kMaxPadChannels;
-
-  final List<_PadChannel?> _channels = List<_PadChannel?>.filled(
-    _channelCount,
-    null,
-  );
-
-  void appendEeg(EegDto dto) {
-    final ch = dto.electrode;
-    if (ch < 0 || ch >= _channelCount) return;
-    final buf = _channels[ch] ??= _PadChannel(_capacity);
-    final dt = 1.0 / _sampleRate;
-    final baseSecs = dto.timestamp / 1000.0;
-    for (var i = 0; i < dto.samples.length; i++) {
-      buf.add(baseSecs + i * dt, dto.samples[i]);
-    }
-  }
-
-  Iterable<int> get channels sync* {
-    for (var i = 0; i < _channelCount; i++) {
-      if (_channels[i] != null) yield i;
-    }
-  }
-
-  double get latestTimestamp {
-    var latest = 0.0;
-    for (final buf in _channels) {
-      if (buf != null &&
-          buf.length > 0 &&
-          buf.timestampAt(buf.length - 1) > latest) {
-        latest = buf.timestampAt(buf.length - 1);
-      }
-    }
-    return latest;
-  }
-
-  List<double> valuesIn(int channel, double startT, double endT) {
-    if (channel < 0 || channel >= _channelCount) return const [];
-    final buf = _channels[channel];
-    if (buf == null || buf.length == 0) return const [];
-    final lo = buf.lowerBound(startT);
-    final hi = buf.upperBound(endT);
-    if (lo >= hi) return const [];
-    return List<double>.generate(hi - lo, (i) => buf.valueAt(lo + i));
-  }
-
-  void clear() {
-    _channels.fillRange(0, _channelCount, null);
-  }
-}
-
-class _PadChannel {
-  _PadChannel(int capacity)
-    : timestamps = Float64List(capacity),
-      values = Float64List(capacity);
-
-  final Float64List timestamps;
-  final Float64List values;
-  int _head = 0;
-  int _count = 0;
-
-  int get length => _count;
-
-  void add(double t, double v) {
-    timestamps[_head] = t;
-    values[_head] = v;
-    _head = (_head + 1) % timestamps.length;
-    if (_count < timestamps.length) _count++;
-  }
-
-  int _physicalIndex(int i) =>
-      (_head - _count + i + timestamps.length) % timestamps.length;
-
-  double timestampAt(int i) => timestamps[_physicalIndex(i)];
-  double valueAt(int i) => values[_physicalIndex(i)];
-
-  int lowerBound(double t) {
-    var lo = 0, hi = _count;
-    while (lo < hi) {
-      final mid = (lo + hi) >> 1;
-      if (timestampAt(mid) < t) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
-      }
-    }
-    return lo;
-  }
-
-  int upperBound(double t) {
-    var lo = 0, hi = _count;
-    while (lo < hi) {
-      final mid = (lo + hi) >> 1;
-      if (timestampAt(mid) <= t) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
-      }
-    }
-    return lo;
-  }
-}

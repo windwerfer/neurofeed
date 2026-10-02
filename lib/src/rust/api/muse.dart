@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'muse.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `compute_spo2`, `condition_eeg_packet`, `device_pads`, `emit_enabled_band_features`, `emit_neurosity_pad_quality`, `frontal_delta_average`, `mains_bin_power`, `mains_peak_ratios`, `map_event`, `map_imu`, `model_rows`, `muse_aux_channels`, `now_ms`, `score_window_len`, `spawn_event_forwarder`, `with_spectrum`
+// These functions are ignored because they are not marked as `pub`: `build_score_window`, `compute_fft_bands`, `compute_movement`, `compute_peak_alpha`, `compute_pulse`, `compute_spo2`, `condition_eeg_packet`, `device_pads`, `emit_enabled_band_features`, `emit_muse_pad_quality`, `emit_neurosity_pad_quality`, `emit_pad_quality`, `frontal_delta_average`, `hamming`, `mains_bin_power`, `mains_peak_ratios`, `map_event`, `map_imu`, `model_rows`, `muse_aux_channels`, `muse_quality_width`, `now_ms`, `push_pad_quality`, `score_window_len`, `spawn_event_forwarder`, `with_spectrum`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ForwarderGuard`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `drop`
 
@@ -79,6 +79,9 @@ Stream<MuseEventDto> subscribeEvents() =>
 
 /// Band power estimates for a single electrode.
 /// Bands: [delta, theta, alpha, beta, gamma] in µV²/Hz.
+///
+/// `signal_quality` is the score of this FFT window (0–100). The live dash
+/// and the playing-session sampler stamp it. The raw record does not store it.
 @freezed
 sealed class BandsDto with _$BandsDto {
   const factory BandsDto({
@@ -90,6 +93,7 @@ sealed class BandsDto with _$BandsDto {
     required double beta,
     required double gamma,
     required double lineNoiseRatio,
+    required double signalQuality,
   }) = _BandsDto;
 }
 
@@ -196,8 +200,13 @@ sealed class MuseEventDto with _$MuseEventDto {
       MuseEventDto_PadQuality;
 }
 
-/// Neurosity pad signal quality for one second — the single source for the
-/// UI pads, recording and the band-feature gate.
+/// Pad signal quality for one second. The single source for the UI pads
+/// and the recording sampler.
+///
+/// Muse: in-app scores, [source] is [QualitySource::App], [crown] is None.
+/// Dart does not record [source] on a Muse computed frame.
+/// Neurosity: [source] is the resolved `crown_quality_source`, and [crown]
+/// holds the headset's 0..1 means when that source won.
 @freezed
 sealed class PadQualityDto with _$PadQualityDto {
   const factory PadQualityDto({

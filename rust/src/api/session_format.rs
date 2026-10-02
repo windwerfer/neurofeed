@@ -47,7 +47,7 @@ pub const FORMAT_TAG_SPO2: u8 = 10;
 /// The 64-bit header sentinel. Stored as a little-endian u64, so the on-disk
 /// bytes are the reverse of the "NFEDBIN\n" string.
 pub const HEADER_MAGIC: u64 = 0x4E46_4544_4249_4E0A; // as u64 LE → "NFEDBIN\n" reversed on disk
-// NFEDBIN raw-body wire version (not container NFED6 magic).
+                                                     // NFEDBIN raw-body wire version (not container NFED6 magic).
 pub const FORMAT_VERSION: u32 = 5;
 
 /// The plaintext on-disk bytes of the sentinel (LE u64 of [HEADER_MAGIC]).
@@ -1091,6 +1091,7 @@ mod tests {
             beta: 4.0,
             gamma: 5.0,
             line_noise_ratio: 0.0,
+            signal_quality: 0.0,
         })
     }
 
@@ -1159,6 +1160,7 @@ mod tests {
             beta: 4.5,
             gamma: 5.5,
             line_noise_ratio: 0.0,
+            signal_quality: 0.0,
         });
         let mut expected = Vec::new();
         expected.push(FORMAT_TAG_BANDS);
@@ -1412,6 +1414,7 @@ mod tests {
             beta: 0.0,
             gamma: 0.0,
             line_noise_ratio: 0.0,
+            signal_quality: 0.0,
         });
         // wire must carry the f32 value, not the full f64 mantissa
         assert_eq!(
@@ -1530,6 +1533,7 @@ mod tests {
                 beta: 0.5,
                 gamma: 0.5,
                 line_noise_ratio: 0.0,
+                signal_quality: 0.0,
             }),
             MuseEventDto::Pulse(PulseDto {
                 timestamp: 1.0,
@@ -1617,14 +1621,14 @@ mod tests {
                     clarity: 0.9,
                     warning: false,
                     delta: 0.0,
-                                    ..Default::default()
+                    ..Default::default()
                 },
                 feedback: FeedbackInfo {
                     ratio: 1.5,
                     threshold: 1.0,
                     in_target: true,
                     pct: 0.6,
-                                    ..Default::default()
+                    ..Default::default()
                 },
                 gestures: vec!["blink".to_string()],
                 signal_quality_source: None,
@@ -1647,14 +1651,14 @@ mod tests {
                     clarity: 0.8,
                     warning: true,
                     delta: 0.1,
-                                    ..Default::default()
+                    ..Default::default()
                 },
                 feedback: FeedbackInfo {
                     ratio: 1.4,
                     threshold: 1.1,
                     in_target: false,
                     pct: 0.4,
-                                    ..Default::default()
+                    ..Default::default()
                 },
                 gestures: vec![],
                 signal_quality_source: None,
@@ -1751,15 +1755,15 @@ mod tests {
                 clarity: 0.8,
                 warning: false,
                 delta: 0.05,
-                                ..Default::default()
-                },
+                ..Default::default()
+            },
             feedback: FeedbackInfo {
                 ratio: 1.8,
                 threshold: 1.3,
                 in_target: true,
                 pct: 0.65,
-                                ..Default::default()
-                },
+                ..Default::default()
+            },
             gestures: vec!["blink".to_string(), "clench".to_string()],
             signal_quality_source: None,
             crown_signal_quality: None,
@@ -1794,7 +1798,6 @@ mod tests {
         assert_eq!(frames.len(), 1);
         assert_eq!(frames[0].t, 1.0);
     }
-
 
     #[test]
     fn v6_computed_trust_extras_parse_from_dart_jsonl() {
@@ -1832,15 +1835,15 @@ mod tests {
                 clarity: 0.0,
                 warning: false,
                 delta: 0.0,
-                                ..Default::default()
-                },
+                ..Default::default()
+            },
             feedback: FeedbackInfo {
                 ratio: 0.0,
                 threshold: 0.0,
                 in_target: false,
                 pct: 0.0,
-                                ..Default::default()
-                },
+                ..Default::default()
+            },
             gestures: vec![],
             signal_quality_source: None,
             crown_signal_quality: None,

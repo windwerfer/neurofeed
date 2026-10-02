@@ -25,6 +25,7 @@ BandsDto _bands({
   alpha: alpha,
   beta: beta,
   gamma: gamma,
+  signalQuality: 0,
   lineNoiseRatio: 0,
 );
 
@@ -94,7 +95,6 @@ void main() {
       isNull,
     );
   });
-
 
   test('resolveHighlightElapsed pins Follow+lead flush-right to visEnd', () {
     final follow = resolveHighlightElapsed(
