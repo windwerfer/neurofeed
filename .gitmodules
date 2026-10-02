@@ -23,7 +23,7 @@
 	url = https://github.com/brainflow-dev/brainflow
 	ignore = all
 
-[submodule "third_party/neuroboard-rs"]
-	path = third_party/neuroboard-rs
-	url = https://github.com/windwerfer/neuroboard-rs
+[submodule "third_party/neurofeed.wiki"]
+	path = third_party/neurofeed.wiki
+	url = https://github.com/windwerfer/neurofeed.wiki
 	ignore = all
