@@ -68,8 +68,8 @@ The file records both (`device.rawFiltering`, `device.conditioning`; see
 presets; MU-02, and MU-01 in research presets, have no hardware filtering
 ([LibMuse NotchFrequency](https://siddhantattavar.com/libmuse/enumcom_1_1choosemuse_1_1libmuse_1_1_notch_frequency.html));
 the Muse app / Muse-IO notch was an option. Muse 2 / Muse S are not listed.
-Athena is not documented there and is assumed the same. The app uses presets
-p21/p20/p50 (Classic) and p1045 (Athena). ADC anti-alias filtering is not
+Athena is not documented there and is assumed the same. The app uses preset
+p50 (Classic) and p1045 (Athena). ADC anti-alias filtering is not
 documented. ² [crown-reader](https://github.com/dmty/crown-reader) and
 Neurosity's BrainFlow tutorial filter the OSC RAW themselves. ³ Unless pad
 quality is set to the Crown's own values. ⁴ Whether Mind Monitor's notch

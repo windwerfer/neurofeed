@@ -326,9 +326,13 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `release-{android,windows,linux}.yml`.
 - **Android BLE init** must happen from JNI before scan or
   `"Droidplug has not been initialized"`.
-- **Muse startup** uses `handle.start(true, false)` (commit `217cefe`).
-  Classic `p50` enables PPG. Revert that commit if Classic stability
-  regresses.
+- **Muse startup** is `connect_with_options` → `handle.start(true, record_aux)`
+  (PPG always on; commit `217cefe`). Classic preset is `p50`: that turns on
+  the 5th EEG channel (`273e0007`) and PPG. `p21` leaves the 5th off. `p20`
+  is not the AUX preset. `record_aux` only subscribes (Settings → Recording
+  → Record AUX channels). Athena stays `p1045`. The Crown has no AUX
+  channel. Revert `217cefe` if Classic stability regresses. Preset law:
+  `.ai/muse-rs.md`.
 - **Simulator connect must `tokio::spawn` `DeviceSimulator::start`.** Do
   not drop the Future (the old std-thread bridge never ran). Do not emit
   derived `Bands` / Pulse / SpO₂ / Gestures from the sim — the forwarder
@@ -422,4 +426,5 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **Unsaved ended session cannot be dropped.** Live summary `canPop:
   false`; protocol tap reopens it; `reset()` / Start refuse while scratch
   remains. Agent `POST /session/start` and `/session/reset` return 409
-  `unsaved_session`. Classic Muse startup is still `p50` (not `p21`).
+  `unsaved_session`. Classic Muse startup is still `p50` (not `p21`). `p50`
+  is the preset that enables the 5th EEG channel.

@@ -14,10 +14,23 @@ The `[patch]` key must match the **dependency source URL**, not crates.io
 (unlike btleplug). `third_party/muse-rs/` is a reference checkout, not the
 build input. Bump the fork tag in `rust/Cargo.toml` when it advances.
 
-`connect_with_options()` in `rust/src/api/muse.rs` calls
-`handle.start(true, record_aux)`: `enable_ppg=true` → Classic preset `p50`
-(EEG + PPG); `record_aux` comes from the **Record AUX channels** setting. Athena
-ignores both flags (`p1045`).
+Classic presets, from BrainFlow `docs/SupportedBoards.rst` and
+`src/board_controller/muse/muse.cpp`. Do not use the old muse-rs table.
+
+- `p21` is the 4-channel default. The 5th EEG characteristic (`273e0007`,
+  RIGHTAUX) stays silent. Muse 2016 has no 5th channel.
+- `p50` turns that 5th channel on. On Muse 2 it also enables PPG. On Muse S,
+  PPG alone is `p61` and `p50` is the 5th EEG channel.
+- `p20` is not the AUX preset. BrainFlow's auxiliary preset is
+  accelerometer and gyroscope, not this electrode.
+
+`connect_with_options()` calls `handle.start(true, record_aux)`. PPG is
+always requested, so Classic startup is `p50`. `record_aux` (Settings →
+Recording → **Record AUX channels**) only subscribes to `273e0007`. Off,
+the headset can emit AUX and we do not listen. Athena ignores both flags
+and uses `p1045`; the forwarder drops electrodes ≥ 4 when the setting is
+off. The Crown has no AUX electrode (CP3, C3, F5, PO3, PO4, F6, C4, CP4
+only). Do not add a ninth channel.
 
 Electrodes: we use muse-rs's electrode index only, never its name strings
 (it calls Athena electrode 4 `FPz`; it is AUX1). 0–3 = TP9, AF7, AF8, TP10.

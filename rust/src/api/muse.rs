@@ -457,7 +457,8 @@ pub async fn connect(device_id: String) -> anyhow::Result<ConnectionStatus> {
         // inter-command delays because Android was dropping rapid-fire
         // WriteWithoutResponse; that was actually the JNI notification
         // death spiral (fixed in the btleplug fork), so the delays are
-        // unnecessary. enable_ppg = true → Classic preset p50 (EEG + PPG).
+        // unnecessary. enable_ppg = true → Classic preset p50 (5th EEG
+        // channel on, and PPG). This path does not subscribe to 273e0007.
         let start_result =
             tokio::time::timeout(std::time::Duration::from_secs(8), handle.start(true, false))
                 .await;
