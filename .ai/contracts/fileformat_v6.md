@@ -1037,7 +1037,7 @@ Status of this section: **LOCKED** — Q1–Q3 resolved below; Trust metadata ex
 
 ## Computed feedback extras — **LOCKED**
 
-> **LOCKED.** Trust live-graph fields on the 1 Hz computed JSONL + sparse `feedback.audioEvents` + calibration/inhibit metadata prerequisites. Field names align with History OQ 8 field list ([../TODO/history-dashboard-unification.md](../TODO/history-dashboard-unification.md)); **History UI series remains out of scope** for this contract. Implement **metadata first**, then computed (see [../archive/fileformat-v6-implementation.md](../archive/fileformat-v6-implementation.md)). Do not invent alternatives.
+> **LOCKED.** Trust live-graph fields on the 1 Hz computed JSONL + sparse `feedback.audioEvents` + calibration/inhibit metadata prerequisites. Field names are the trust extras locked in this contract. The History UI series is [../TODO/handoff-history-summary-chips.md](../TODO/handoff-history-summary-chips.md) and remains out of scope for this contract. Implement **metadata first**, then computed (see [../archive/fileformat-v6-implementation.md](../archive/fileformat-v6-implementation.md)). Do not invent alternatives.
 
 ### Purpose
 

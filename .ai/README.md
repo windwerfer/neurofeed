@@ -59,8 +59,7 @@ pipeline-contract work.
 | [TODO/README.md](TODO/README.md) | Index |
 | [TODO/athena-optics-contract.md](TODO/athena-optics-contract.md) | Athena optical raw stream (muse-rs `Optics`, session tag 11) |
 | [TODO/handoff-athena-optics.md](TODO/handoff-athena-optics.md) | Implementer order, files, LOC |
-| [TODO/history-dashboard-unification.md](TODO/history-dashboard-unification.md) | History chips + Feedback overview (locked design) |
-| [TODO/handoff-history-dashboard.md](TODO/handoff-history-dashboard.md) | PR manager: sequential subagents, one commit per PR |
+| [TODO/handoff-history-summary-chips.md](TODO/handoff-history-summary-chips.md) | **Current.** History Dashboard chip + Feedback trust chip. Four PRs. |
 | [TODO/github actions appimage.md](TODO/github%20actions%20appimage.md) | GitHub Actions AppImage packaging |
 
 

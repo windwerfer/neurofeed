@@ -7,7 +7,7 @@ Crown-start threads.
 | Thread | Spec | Handoff |
 |--------|------|---------|
 | Athena optics (raw stream) | [athena-optics-contract.md](athena-optics-contract.md) | [handoff-athena-optics.md](handoff-athena-optics.md) |
-| History dashboard unification | [history-dashboard-unification.md](history-dashboard-unification.md) | [handoff-history-dashboard.md](handoff-history-dashboard.md) |
+| History Dashboard + Feedback chips | [handoff-history-summary-chips.md](handoff-history-summary-chips.md) | same file |
 | Import / export (EDF · Mind Monitor CSV) | [import-export.md](import-export.md) | — |
 | GitHub Actions AppImage | [github actions appimage.md](github%20actions%20appimage.md) | — |
 | App folder, cache, models, export | **Landed.** [../contracts/app-folder.md](../contracts/app-folder.md) | [handoff-app-folder.md](handoff-app-folder.md) (do not implement from this) |

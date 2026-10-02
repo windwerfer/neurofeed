@@ -123,7 +123,7 @@ Contract: **Computed feedback extras — LOCKED**. Wire = camelCase JSONL (Dart 
 | Per-record length prefix (skip unknown tags) | [../contracts/session-format-contract.md](../contracts/session-format-contract.md) |
 | Monitor Bands **overshoot** | **LOCKED chart-only** — do not persist |
 | Nickname → EDF name export toggle | Product; default EDF name = `X` |
-| History dashboard UI | [history-dashboard-unification.md](history-dashboard-unification.md) |
+| History dashboard UI | [../TODO/handoff-history-summary-chips.md](../TODO/handoff-history-summary-chips.md) |
 
 ---
 

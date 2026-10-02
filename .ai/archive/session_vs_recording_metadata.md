@@ -27,5 +27,5 @@ sqlite `kind` is set on publish).
 
 **When revisiting:** one metadata dialect, or a documented dual-read with a
 migration. Either way it is an explicit PR. Unifying History *chrome*
-([history-dashboard-unification.md](history-dashboard-unification.md)) is a
+([../TODO/handoff-history-summary-chips.md](../TODO/handoff-history-summary-chips.md)) is a
 different thread and must not rewrite the JSON as a side effect.
