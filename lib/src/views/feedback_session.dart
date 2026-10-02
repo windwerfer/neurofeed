@@ -14,6 +14,7 @@ import 'package:neurofeed/src/connect_source.dart';
 import 'package:neurofeed/src/connect_window.dart';
 import 'package:neurofeed/src/feedback/feature_override.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
+import 'package:neurofeed/src/feedback/session_leave.dart';
 import 'package:neurofeed/src/feedback/guardrail_mode.dart';
 import 'package:neurofeed/src/feedback/last_calibration_baseline.dart';
 import 'package:neurofeed/src/charts/band_style.dart';
@@ -100,113 +101,117 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
     final guardLabel =
         catalog?.features[guardFeature]?.shortLabel ?? guardFeature;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(copy.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        actions: [
-          IconButton(
-            key: const Key('nerd-stats-button'),
-            icon: const Icon(Icons.science_outlined),
-            tooltip: 'Nerd stats',
-            onPressed: () => showNerdSheet(context),
+    return SessionBackGuard(
+      phase: fb.phase,
+      onEnd: () => ref.read(feedbackStateProvider.notifier).end(),
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(copy.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          actions: [
+            IconButton(
+              key: const Key('nerd-stats-button'),
+              icon: const Icon(Icons.science_outlined),
+              tooltip: 'Nerd stats',
+              onPressed: () => showNerdSheet(context),
+            ),
+            IconButton(
+              icon: const Icon(Icons.info_outline),
+              onPressed: () => _showGuide(context, protocol, copy),
+            ),
+          ],
+          bottom: const PreferredSize(
+            preferredSize: Size.fromHeight(56),
+            child: StatusBar(showMenu: false),
           ),
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: () => _showGuide(context, protocol, copy),
-          ),
-        ],
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(56),
-          child: StatusBar(showMenu: false),
         ),
-      ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (flags.showRow) ...[
-                  TrustChipRow(
-                    flags: flags,
-                    rewardOn: rewardOn,
-                    guardOn: guardOn,
-                    moreOn: moreOn,
-                    onReward: (on) => settings.setTrustRewardVisible(on),
-                    onGuard: (on) => settings.setTrustGuardVisible(on),
-                    onMore: (on) => settings.setTrustMoreVisible(on),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                if (showGraphs)
-                  TrustGraphsColumn(
-                    key: const Key('trust-graphs-column'),
-                    trace: ref.read(feedbackStateProvider.notifier).trust,
-                    viewport: _trustViewport,
-                    showReward: rewardOn,
-                    showGuard: guardOn,
-                    showMore: moreOn,
-                    rewardLabel: rewardLabel,
-                    guardLabel: guardLabel,
-                    rewardColor: protocol.color,
-                    guardColor: bandColors[0],
-                    inhibit: trustInhibitSpecs(
-                      overlayInhibitCeilings(
-                        protocol.conditions,
-                        settings.inhibitCeilingOverrides(fb.protocol),
-                      ),
+        body: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (flags.showRow) ...[
+                    TrustChipRow(
+                      flags: flags,
+                      rewardOn: rewardOn,
+                      guardOn: guardOn,
+                      moreOn: moreOn,
+                      onReward: (on) => settings.setTrustRewardVisible(on),
+                      onGuard: (on) => settings.setTrustGuardVisible(on),
+                      onMore: (on) => settings.setTrustMoreVisible(on),
                     ),
-                    guardPanes: trustGuardPaneSpecs(guardFeature),
-                  ),
-                const SizedBox(height: 16),
-                if (fb.phase == FeedbackPhase.idle ||
-                    fb.phase == FeedbackPhase.playing ||
-                    fb.phase == FeedbackPhase.paused) ...[
-                  _SessionSettingsCard(showGuardrail: guardrailOn),
-                ],
-                if (kDebugMode &&
-                    connected &&
-                    isSimDeviceId(app.status.id)) ...[
-                  const SizedBox(height: 8),
-                  const _FeatureProbeCard(),
-                ],
-                if (fb.phase == FeedbackPhase.idle && !connected) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Icon(Icons.bluetooth_disabled, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Muse not connected — Start Session will open the '
-                          'connect window.',
-                          style: theme.textTheme.bodySmall,
+                    const SizedBox(height: 8),
+                  ],
+                  if (showGraphs)
+                    TrustGraphsColumn(
+                      key: const Key('trust-graphs-column'),
+                      trace: ref.read(feedbackStateProvider.notifier).trust,
+                      viewport: _trustViewport,
+                      showReward: rewardOn,
+                      showGuard: guardOn,
+                      showMore: moreOn,
+                      rewardLabel: rewardLabel,
+                      guardLabel: guardLabel,
+                      rewardColor: protocol.color,
+                      guardColor: bandColors[0],
+                      inhibit: trustInhibitSpecs(
+                        overlayInhibitCeilings(
+                          protocol.conditions,
+                          settings.inhibitCeilingOverrides(fb.protocol),
                         ),
                       ),
-                    ],
-                  ),
+                      guardPanes: trustGuardPaneSpecs(guardFeature),
+                    ),
+                  const SizedBox(height: 16),
+                  if (fb.phase == FeedbackPhase.idle ||
+                      fb.phase == FeedbackPhase.playing ||
+                      fb.phase == FeedbackPhase.paused) ...[
+                    _SessionSettingsCard(showGuardrail: guardrailOn),
+                  ],
+                  if (kDebugMode &&
+                      connected &&
+                      isSimDeviceId(app.status.id)) ...[
+                    const SizedBox(height: 8),
+                    const _FeatureProbeCard(),
+                  ],
+                  if (fb.phase == FeedbackPhase.idle && !connected) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Icon(Icons.bluetooth_disabled, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Muse not connected — Start Session will open the '
+                            'connect window.',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  _PhaseControls(protocol: protocol),
+                  const SizedBox(height: 8),
+                  if (fb.phase == FeedbackPhase.playing ||
+                      fb.phase == FeedbackPhase.paused)
+                    Text(
+                      '${fb.elapsedSeconds ~/ 60}:${(fb.elapsedSeconds % 60).toString().padLeft(2, '0')}'
+                      ' / ${fb.durationMinutes}:00',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  const SizedBox(height: 16),
+                  _GuideCard(protocol: protocol, copy: copy),
                 ],
-                const SizedBox(height: 16),
-                _PhaseControls(protocol: protocol),
-                const SizedBox(height: 8),
-                if (fb.phase == FeedbackPhase.playing ||
-                    fb.phase == FeedbackPhase.paused)
-                  Text(
-                    '${fb.elapsedSeconds ~/ 60}:${(fb.elapsedSeconds % 60).toString().padLeft(2, '0')}'
-                    ' / ${fb.durationMinutes}:00',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall,
-                  ),
-                const SizedBox(height: 16),
-                _GuideCard(protocol: protocol, copy: copy),
-              ],
+              ),
             ),
-          ),
-          // The session's own status bar needs the connect overlay too —
-          // without it, tapping it only flips state and nothing shows.
-          if (app.connectWindowOpen) const ConnectOverlay(),
-        ],
+            // The session's own status bar needs the connect overlay too —
+            // without it, tapping it only flips state and nothing shows.
+            if (app.connectWindowOpen) const ConnectOverlay(),
+          ],
+        ),
       ),
     );
   }
@@ -2194,12 +2199,12 @@ class _GuardrailScorerDialogState
     final settings = ref.read(settingsProvider);
     final fb = ref.read(feedbackStateProvider);
     final reveInstalled =
-        ref.read(modelInstalledProvider(ModelKind.reveBase)).valueOrNull == true;
+        ref.read(modelInstalledProvider(ModelKind.reveBase)).valueOrNull ==
+        true;
     final cbramodInstalled =
         ref.read(modelInstalledProvider(ModelKind.cbramodAVig)).valueOrNull ==
         true;
-    final cbramodBlocked =
-        guardFeatureIsCbramod(_feature) && !cbramodInstalled;
+    final cbramodBlocked = guardFeatureIsCbramod(_feature) && !cbramodInstalled;
     if (settings.guardrailEnabledFor(fb.protocol) &&
         (cbramodBlocked ||
             (guardFeatureIsReve(_feature) && !reveInstalled) ||
@@ -2211,8 +2216,8 @@ class _GuardrailScorerDialogState
         final why = guardFeatureIsCbramod(was)
             ? 'not ready (install/verify CBraMod encoder weights)'
             : guardFeatureIsReve(was)
-                ? 'REVE base not installed'
-                : 'not installed';
+            ? 'REVE base not installed'
+            : 'not installed';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

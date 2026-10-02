@@ -21,6 +21,7 @@ flutter test \
   test/settings_guardrail_migrate_test.dart \
   test/last_calibration_baseline_test.dart \
   test/session_metadata_roundtrip_test.dart \
+  test/session_leave_test.dart \
   test/streaming_osc_test.dart \
   test/streaming_mixer_test.dart \
   test/streaming_brainflow_test.dart \
@@ -111,6 +112,7 @@ NEUROFEED_SOAK_EQUIV_SECS=43200 cargo test --manifest-path rust/Cargo.toml \
 | Record / Stop | Dart + FFI | `test/monitor/capture_lease_test.dart`, `recording_assemble_test.dart`, `test/agent/agent_commands_test.dart` | `POST /record/start` after `sim:muse-2`; `GET /state` `captureKind=recording`; `POST /record/stop` scratch `.neurofeed` | 412 `disconnected`; 409 `feedback_active`; 409 `recording_active` on `/session/start` | Save/Discard widget untested |
 | Recording crash recovery | Dart + FFI | `test/monitor/crash_recovery_test.dart`, `recording_store_test.dart` | `flutter test test/monitor/crash_recovery_test.dart test/monitor/recording_store_test.dart` | Leftover `recording_*` assemble; `tmp_`/`session_*` untouched; publish `kind=recording`; existing rows `feedback`; discard no sqlite row | Dialog widget untested |
 | Feedback leftover / unsaved summary | Dart + FFI | `test/session_computed_charts_test.dart`, `test/agent/agent_commands_test.dart` | those files | Leftover `session_*` assemble; attach scratch id/path; 409 `unsaved_session` on `/session/start` and `/session/reset`; computed pulse/SpO₂ + raw fallback | Summary Back/`PopScope` widget untested |
+| Leave feedback session | Dart unit | `test/session_leave_test.dart` | `flutter test test/session_leave_test.dart` | AppBar back and system back while calibrating, playing, paused, or interrupted ask `End session?`. `Cancel`, barrier, and a second back stay. `End session` calls `end()` once and does not pop. Idle pops with no dialog. Ended does not pop. In-flight `end()` and a phase that leaves in progress before confirm do not end again. A failed `end()` can be retried. A sheet above the session closes first. | Summary Back/`PopScope` still untested |
 | Session start Muse sim | agent-linux | HTTP | `recordOnly` + skip-cal | `[feedback] phase=playing` | 50 s cal too slow — always skip |
 | Lanes / features | Dart unit | `test/feedback_pipeline_test.dart` | that file | Guard does not change reward | Orchestrator as a whole |
 | Trust graphs | Dart unit | `test/trust_graphs_test.dart`, `test/trust_dirty_test.dart`, `test/nerd_sheet_test.dart` | those files | Chip defaults/persist; dirty skip epoch/audio/guard; inhibit wash (even below the line); inhibit pane under Reward (one pane, two series); overshoot colors stay distinct; verdict priority; More glued; viewport 75 s Follow 15–300; Blink/Jaw live ring; calibrating hides graphs; nerd sheet piles / band stack / (i) rows; guard block omitted if lane did not run | Visual Follow slide **cannot** |
