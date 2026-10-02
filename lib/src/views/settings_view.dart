@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neurofeed/src/connect_source.dart';
 import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/device_type_switch.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/reve/reve_card.dart';
@@ -231,7 +233,6 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     );
   }
 }
-
 
 /// Anonymous subject identity: stable id (read-only) + optional nickname.
 class _SubjectCard extends StatefulWidget {
@@ -667,8 +668,28 @@ class _DebugCard extends ConsumerWidget {
               ),
               value: settings.enableSimulatedDevices,
               onChanged: (on) async {
+                final notifier = ref.read(appStateProvider.notifier);
+                if (!on &&
+                    ref.read(appStateProvider).connectSource ==
+                        ConnectSource.simulator) {
+                  final block = ref.read(deviceTypeSwitchBlockProvider);
+                  if (block != DeviceTypeSwitchBlock.none) {
+                    final app = ref.read(appStateProvider);
+                    final name = app.status.connected
+                        ? app.status.name
+                        : (app.connectingTo ?? '');
+                    final ok = await confirmDeviceTypeChange(
+                      context,
+                      block: block,
+                      deviceName: name,
+                      nextTypeLabel: ConnectSource.muse.displayName,
+                    );
+                    if (!ok || !context.mounted) return;
+                  }
+                  final switched = await notifier.onDebugModeChanged(false);
+                  if (!switched || !context.mounted) return;
+                }
                 await settings.setEnableSimulatedDevices(on);
-                ref.read(appStateProvider.notifier).onDebugModeChanged(on);
               },
             ),
           ],
@@ -680,7 +701,10 @@ class _DebugCard extends ConsumerWidget {
 
 /// Neurosity Crown options.
 class _CrownCard extends StatelessWidget {
-  const _CrownCard({required this.qualitySource, required this.onQualitySource});
+  const _CrownCard({
+    required this.qualitySource,
+    required this.onQualitySource,
+  });
 
   final QualitySource qualitySource;
   final void Function(QualitySource source) onQualitySource;

@@ -12,6 +12,7 @@ HTTP ([testing-guide.md](testing-guide.md) Linux agent).
 flutter analyze lib/src
 flutter test \
   test/connect_source_test.dart \
+  test/device_type_switch_test.dart \
   test/feedback_pipeline_test.dart \
   test/user_protocol_builder_test.dart \
   test/output_ids_test.dart \
@@ -104,7 +105,7 @@ NEUROFEED_SOAK_EQUIV_SECS=43200 cargo test --manifest-path rust/Cargo.toml \
 
 | Surface | Layer | Existing | Command | Agent can assert | Gap |
 |---|---|---|---|---|---|
-| Connect catalog | Dart unit | `test/connect_source_test.dart` | `flutter test test/connect_source_test.dart` | Frozen ids/labels; debug off hides Simulator | No widget of dropdown |
+| Connect catalog | Dart unit | `test/connect_source_test.dart`, `test/device_type_switch_test.dart` | `flutter test test/connect_source_test.dart test/device_type_switch_test.dart` | Frozen ids/labels; debug off hides Simulator; device-type change disconnects then scans; recording/session asks Disconnect / Cancel | Real BLE / OSC **cannot** |
 | Connect live (sim) | agent-linux | HTTP | `POST /connect` `sim:muse-2` or `sim:muse-s` | `connected=true`; `scanMessage` **null** | Real BLE **cannot** |
 | View switch | agent-linux | HTTP | `POST /view` `bands` / `rawEeg` / `histogram` / `spectrogram` / `psd` / `settings` | `GET /state` → `view=` that name | Button wiring untested |
 | Sidebar / connect window | agent-linux | HTTP | `POST /sidebar`, `POST /connect-window` | `sidebarOpen` / `connectWindowOpen` | Overlay chrome untested |

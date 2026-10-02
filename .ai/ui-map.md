@@ -74,8 +74,10 @@ Must exist in every view with a status bar (`AppShell` + session). Frozen:
 |---|---|---|---|---|
 | Connect window / overlay | `Connect to a device` | `ConnectOverlay` / `ConnectWindow` | `connect_window.dart` | Tap barrier closes it. |
 | Connect status copy | `Connecting… (attempt N)`, scan results | `scanMessage` | `connect_window.dart` | Cleared to null after a successful connect. |
-| Device type dropdown | `Device type` | `ConnectSource` | `connect_source.dart` | Muse \| Neurosity; + Simulator iff Debug. |
-| Rescan | `Rescan` | `openConnectWindowAndScan` | `connect_window.dart` | **Hidden** on Simulator. |
+| Device type dropdown | `Device type` | `ConnectSource` / `switchConnectSource` | `connect_source.dart`, `connection_provider.dart` | Muse \| Neurosity; + Simulator iff Debug. A different type disconnects the current headset first, then scans that type (Muse BLE, Neurosity OSC, Simulator catalog). If the headset stays connected, the window shows `Could not disconnect. Stay on this device and try again.` and the dropdown stays on the old type. |
+| Recording in progress | `Recording in progress` | `confirmDeviceTypeChange` | `device_type_switch.dart` | Disconnect / Cancel while a GraphShell recording is open. Cancel stays on the current headset. Disconnect leaves the recording open, then scans the new type. |
+| Session in progress | `Session in progress` | `confirmDeviceTypeChange` | `device_type_switch.dart` | Disconnect / Cancel during calibration or a playing / paused / interrupted feedback session. Disconnect ends a playing, paused, or interrupted session. |
+| Rescan | `Rescan` | `openConnectWindowAndScan` | `connect_window.dart` | **Hidden** on Simulator, and while connected or connecting. |
 | Neurosity list | Crown nickname (e.g. `Crown-LOC`), device id below | `_runCrownDiscovery` / `discoveredCrowns` | `connection_provider.dart` | OSC LAN discovery on UDP 9000 (`/info` or any `/neurosity/notion/{id}/…`), refreshed 1 s, entries drop after 5 s silence. No BLE. |
 | Neurosity empty copy | `No Crown found on this Wi-Fi. The Crown must be on the same network and have OSC streaming turned on.` | `emptyDevicesCopy` | `connect_source.dart` | Shown after a 3 s listening spinner; discovery keeps running. |
 | Simulator · Muse 2 | `Muse 2` | `sim:muse-2` | `connect_source.dart` | Startable. Connected name `Muse 2 (Simulated)`. |

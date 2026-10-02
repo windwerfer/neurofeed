@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/connect_source.dart';
 import 'package:neurofeed/src/connection_provider.dart';
+import 'package:neurofeed/src/device_type_switch.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/settings.dart';
 
@@ -48,7 +49,11 @@ class ConnectWindow extends ConsumerWidget {
       state.connectSource,
       debug: settings.enableSimulatedDevices,
     );
-    final showRescan = !state.scanning && source != ConnectSource.simulator;
+    final showRescan =
+        !state.scanning &&
+        !state.status.connected &&
+        state.connectingTo == null &&
+        source != ConnectSource.simulator;
 
     return Material(
       elevation: 8,
@@ -76,27 +81,7 @@ class ConnectWindow extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<ConnectSource>(
-              key: ValueKey(source),
-              initialValue: source,
-              decoration: const InputDecoration(
-                labelText: 'Device type',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-              ),
-              items: [
-                for (final s in sources)
-                  DropdownMenuItem(value: s, child: Text(s.displayName)),
-              ],
-              onChanged: (next) {
-                if (next != null) {
-                  notifier.setConnectSource(next);
-                }
-              },
-            ),
+            _DeviceTypeMenu(sources: sources, source: source),
             if (source == ConnectSource.neurosity) ...[
               const SizedBox(height: 8),
               Container(
@@ -136,7 +121,10 @@ class ConnectWindow extends ConsumerWidget {
             ],
             const SizedBox(height: 12),
             if (state.devices.isEmpty && !state.scanning)
-              Text(emptyDevicesCopy(source))
+              if (!state.status.connected && state.connectingTo == null)
+                Text(emptyDevicesCopy(source))
+              else
+                const SizedBox.shrink()
             else ...[
               ...state.devices.map(
                 (d) => Material(
@@ -191,6 +179,73 @@ class ConnectWindow extends ConsumerWidget {
 /// [Timer.periodic] at 5 fps instead of every animation frame, wrapped in a
 /// [RepaintBoundary] so each tick re-rasterizes only this tiny layer — parent
 /// and sibling widgets are painted once and never repainted.
+class _DeviceTypeMenu extends ConsumerStatefulWidget {
+  const _DeviceTypeMenu({required this.sources, required this.source});
+
+  final List<ConnectSource> sources;
+  final ConnectSource source;
+
+  @override
+  ConsumerState<_DeviceTypeMenu> createState() => _DeviceTypeMenuState();
+}
+
+class _DeviceTypeMenuState extends ConsumerState<_DeviceTypeMenu> {
+  int _epoch = 0;
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final disconnecting = ref.watch(
+      appStateProvider.select((s) => s.disconnecting),
+    );
+    return DropdownButtonFormField<ConnectSource>(
+      key: ValueKey('${widget.source.name}:$_epoch'),
+      initialValue: widget.source,
+      decoration: const InputDecoration(
+        labelText: 'Device type',
+        border: OutlineInputBorder(),
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      items: [
+        for (final s in widget.sources)
+          DropdownMenuItem(value: s, child: Text(s.displayName)),
+      ],
+      onChanged: (_busy || disconnecting) ? null : _select,
+    );
+  }
+
+  Future<void> _select(ConnectSource? next) async {
+    if (next == null || next == widget.source || _busy) return;
+    final block = ref.read(deviceTypeSwitchBlockProvider);
+    if (block != DeviceTypeSwitchBlock.none) {
+      final app = ref.read(appStateProvider);
+      final name = app.status.connected
+          ? app.status.name
+          : (app.connectingTo ?? '');
+      final ok = await confirmDeviceTypeChange(
+        context,
+        block: block,
+        deviceName: name,
+        nextTypeLabel: next.displayName,
+      );
+      if (!ok) {
+        if (mounted) setState(() => _epoch++);
+        return;
+      }
+    }
+    if (!mounted) return;
+    setState(() => _busy = true);
+    try {
+      final switched = await ref
+          .read(appStateProvider.notifier)
+          .switchConnectSource(next);
+      if (!switched && mounted) setState(() => _epoch++);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+}
+
 class BrailleSpinner extends StatefulWidget {
   const BrailleSpinner({super.key});
 

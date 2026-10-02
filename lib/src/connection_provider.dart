@@ -30,6 +30,10 @@ const _crownListenGrace = Duration(seconds: 3);
 /// always succeeds.
 const _maxConnectAttempts = 3;
 
+/// Wait for an in-flight connect to finish before dropping its link.
+/// Three BLE attempts are about 18 s each.
+const _linkReleaseTimeout = Duration(seconds: 70);
+
 /// Global completer for btleplug initialization on Android.
 /// Completes once the native btleplug context is guaranteed ready.
 final _btleplugReady = Completer<void>();
@@ -98,6 +102,30 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   bool _allowAutoReconnect = true;
   bool _reconnectInFlight = false;
   int _crownDiscoveryGeneration = 0;
+
+  /// Bumped on device-type change and user disconnect. [connectTo] drops a
+  /// result whose epoch is older than this, so a connect already in flight
+  /// cannot publish over the new choice.
+  int _linkEpoch = 0;
+
+  /// Epoch of the connect attempt allowed to publish a Connected event.
+  /// A device-type change bumps [_linkEpoch] so a late event cannot mark the
+  /// new scan as connected.
+  int _acceptConnectedEpoch = 0;
+
+  /// User disconnect during a device-type change keeps the connect window
+  /// open; the new category then scans in that same window.
+  bool _holdConnectWindow = false;
+
+  /// Status-bar / agent disconnect closes the window even if a device-type
+  /// change is holding it open.
+  bool _closeWindowOnDisconnect = false;
+
+  int _museScanGeneration = 0;
+  Future<void>? _crownLoop;
+  Future<void>? _connectInFlight;
+  Future<void>? _switchChain;
+  bool _debugDisconnectFails = false;
   bool _crownDiscoveryActive = false;
   bool _multicastLockHeld = false;
   final Completer<void> _initDone = Completer<void>();
@@ -130,6 +158,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       await ensureBtleplugReady();
       final stream = subscribeEvents();
       _eventSub = stream.listen((event) {
+        if (_dropStaleConnected(event)) return;
         _eventController.add(event);
         _onEvent(event);
         if (event is MuseEventDto_Bands) _saveMainsDecision();
@@ -215,20 +244,32 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         return false;
       }
       var chunks = 0;
-      while (_scanEnabled && _allowAutoReconnect && !state.status.connected) {
+      while (_scanEnabled &&
+          _allowAutoReconnect &&
+          !state.status.connected &&
+          state.connectSource == ConnectSource.muse) {
         await ensureBtleplugReady();
-        if (!_scanEnabled || !_allowAutoReconnect || state.status.connected) {
+        if (!_scanEnabled ||
+            !_allowAutoReconnect ||
+            state.status.connected ||
+            state.connectSource != ConnectSource.muse) {
           break;
         }
         final devices = await scan(timeoutSecs: BigInt.from(_scanChunkSecs));
-        if (!_scanEnabled || !_allowAutoReconnect || state.status.connected) {
+        if (!_scanEnabled ||
+            !_allowAutoReconnect ||
+            state.status.connected ||
+            state.connectSource != ConnectSource.muse) {
           break;
         }
         final match =
             devices.where((d) => d.id == lastId).firstOrNull ??
             devices.where((d) => d.name == lastId).firstOrNull;
         if (match != null) {
-          debugPrint('[neurofeed] autoconnect: found ${match.name}, connecting');
+          if (state.connectSource != ConnectSource.muse) return false;
+          debugPrint(
+            '[neurofeed] autoconnect: found ${match.name}, connecting',
+          );
           await connectTo(match);
           if (state.status.connected) return true;
           if (!_allowAutoReconnect) return false;
@@ -255,7 +296,23 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   }
 
   /// Open the connect window and start discovery for [state.connectSource].
+  /// A live link skips the scan: BLE / OSC / the simulator catalog must not
+  /// run under a headset that is still connected.
   void _startDiscoveryForCurrentSource() {
+    if (state.status.connected || state.connectingTo != null) {
+      state = state.copyWith(connectWindowOpen: true);
+      return;
+    }
+    if (_testMode && state.connectSource != ConnectSource.simulator) {
+      _scanEnabled = true;
+      state = state.copyWith(
+        connectWindowOpen: true,
+        scanning: true,
+        devices: const [],
+        scanMessage: null,
+      );
+      return;
+    }
     switch (state.connectSource) {
       case ConnectSource.muse:
         unawaited(_startContinuousScan());
@@ -280,6 +337,11 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
       _startDiscoveryForCurrentSource();
       return;
     }
+    if (state.status.connected || state.connectingTo != null) return;
+    final generation = ++_museScanGeneration;
+    bool ownScan() =>
+        generation == _museScanGeneration &&
+        state.connectSource == ConnectSource.muse;
     _scanEnabled = true;
     debugPrint('[neurofeed] continuous scan starting');
     state = state.copyWith(
@@ -292,21 +354,22 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     try {
       if (!await requestBlePermissions()) {
         debugPrint('[neurofeed] continuous scan: BLE permissions not granted');
-        state = state.copyWith(
-          scanning: false,
-          scanMessage: 'BLE permissions not granted',
-        );
+        if (ownScan()) {
+          state = state.copyWith(
+            scanning: false,
+            scanMessage: 'BLE permissions not granted',
+          );
+        }
         return;
       }
 
       var allDevices = <DeviceInfo>[];
 
-      while (_scanEnabled && !state.status.connected) {
-        if (state.connectSource != ConnectSource.muse) break;
+      while (_scanEnabled && !state.status.connected && ownScan()) {
         await ensureBtleplugReady();
+        if (!_scanEnabled || state.status.connected || !ownScan()) break;
         final devices = await scan(timeoutSecs: BigInt.from(_scanChunkSecs));
-        if (!_scanEnabled || state.status.connected) break;
-        if (state.connectSource != ConnectSource.muse) break;
+        if (!_scanEnabled || state.status.connected || !ownScan()) break;
 
         final museOnly = keepMuseBleDevices(devices);
         for (final d in museOnly) {
@@ -324,15 +387,17 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         );
       }
 
-      if (!state.status.connected) {
+      if (state.status.connected) {
+        debugPrint('[neurofeed] continuous scan stopped (connected)');
+      } else if (ownScan()) {
         debugPrint('[neurofeed] continuous scan stopped (no connection)');
         state = state.copyWith(scanning: false);
-      } else {
-        debugPrint('[neurofeed] continuous scan stopped (connected)');
       }
     } catch (e) {
       debugPrint('[neurofeed] continuous scan error: $e');
-      state = state.copyWith(scanning: false, scanMessage: 'Scan error: $e');
+      if (ownScan()) {
+        state = state.copyWith(scanning: false, scanMessage: 'Scan error: $e');
+      }
     }
   }
 
@@ -340,7 +405,21 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   /// network until the window closes, the source changes, or a device
   /// connects. With [lookFor], connects that Crown id when it appears.
   Future<bool> _runCrownDiscovery({String? lookFor}) async {
+    if (state.status.connected || state.connectingTo != null) {
+      return state.status.connected;
+    }
     final generation = ++_crownDiscoveryGeneration;
+    final done = Completer<void>();
+    _crownLoop = done.future;
+    try {
+      return await _runCrownDiscoveryBody(generation, lookFor: lookFor);
+    } finally {
+      if (!done.isCompleted) done.complete();
+      if (identical(_crownLoop, done.future)) _crownLoop = null;
+    }
+  }
+
+  Future<bool> _runCrownDiscoveryBody(int generation, {String? lookFor}) async {
     _scanEnabled = true;
     state = state.copyWith(
       connectSource: ConnectSource.neurosity,
@@ -357,8 +436,10 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         (lookFor == null || _allowAutoReconnect);
     final started = DateTime.now();
     try {
+      if (!active()) return false;
       _setCrownDiscoveryActive(true);
       await startCrownDiscovery();
+      if (!active()) return false;
       while (active()) {
         final crowns = await discoveredCrowns();
         if (!active()) break;
@@ -405,6 +486,26 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     return state.status.connected;
   }
 
+  /// Stop OSC discovery before a new category starts its own scan.
+  /// The in-flight loop is the only caller of [stopCrownDiscovery] when it
+  /// still owns the generation; after it exits, this stops a start that
+  /// already passed that check.
+  Future<void> _abandonCrownDiscovery() async {
+    _crownDiscoveryGeneration++;
+    final pending = _crownLoop;
+    if (pending != null) {
+      await pending.timeout(_linkReleaseTimeout, onTimeout: () {});
+    }
+    if (!_crownDiscoveryActive && pending == null) return;
+    _setCrownDiscoveryActive(false);
+    if (_testMode) return;
+    try {
+      await stopCrownDiscovery();
+    } catch (e) {
+      debugPrint('[neurofeed] stop crown discovery: $e');
+    }
+  }
+
   void _setCrownDiscoveryActive(bool active) {
     _crownDiscoveryActive = active;
     _syncMulticastLock();
@@ -421,6 +522,13 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     if (want == _multicastLockHeld) return;
     _multicastLockHeld = want;
     unawaited(setMulticastLock(held: want));
+  }
+
+  bool _dropStaleConnected(MuseEventDto event) {
+    if (event is! MuseEventDto_Connected) return false;
+    if (_acceptConnectedEpoch == _linkEpoch) return false;
+    debugPrint('[neurofeed] ignored stale connected event');
+    return true;
   }
 
   void _onEvent(MuseEventDto event) {
@@ -514,11 +622,12 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         crownSignalQuality: null,
         gestures: null,
         telemetry: telemetry,
-        connectWindowOpen: false,
+        connectWindowOpen: _holdConnectWindow && !_closeWindowOnDisconnect,
         connectingTo: null,
         scanning: false,
         scanMessage: null,
         disconnecting: false,
+        devices: _holdConnectWindow ? const <DeviceInfo>[] : state.devices,
       );
       _syncMulticastLock();
       return;
@@ -597,8 +706,49 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     state = state.copyWith(signalQuality: quals);
   }
 
+  bool _deviceMatchesSource(DeviceInfo device) {
+    final sim = isSimDeviceId(device.id);
+    switch (state.connectSource) {
+      case ConnectSource.simulator:
+        return sim;
+      case ConnectSource.muse:
+        return !sim &&
+            device.kind == DeviceKind.muse &&
+            !isNeurosityHeadsetName(device.name);
+      case ConnectSource.neurosity:
+        return !sim && device.kind == DeviceKind.neurosity;
+    }
+  }
+
   Future<void> connectTo(DeviceInfo device, {bool persist = true}) async {
-    if (state.connectingTo != null) return;
+    if (state.connectingTo != null || _connectInFlight != null) return;
+    if (!_deviceMatchesSource(device)) {
+      debugPrint(
+        '[neurofeed] connect ignored for ${device.id} '
+        'while source=${state.connectSource.name}',
+      );
+      return;
+    }
+    final epoch = _linkEpoch;
+    final done = Completer<void>();
+    _connectInFlight = done.future;
+    try {
+      await _connectToBody(device, persist: persist, epoch: epoch);
+    } finally {
+      if (identical(_connectInFlight, done.future)) {
+        _connectInFlight = null;
+      }
+      if (!done.isCompleted) done.complete();
+    }
+  }
+
+  Future<void> _connectToBody(
+    DeviceInfo device, {
+    required bool persist,
+    required int epoch,
+  }) async {
+    if (epoch != _linkEpoch || !_deviceMatchesSource(device)) return;
+    _acceptConnectedEpoch = epoch;
     _allowAutoReconnect = true;
     _scanEnabled = false;
     final id = device.id;
@@ -614,6 +764,10 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     );
     Object? lastError;
     for (var attempt = 1; attempt <= attempts; attempt++) {
+      if (epoch != _linkEpoch || !_deviceMatchesSource(device)) {
+        await _dropSupersededConnect(name);
+        return;
+      }
       debugPrint(
         '[neurofeed] connect attempt $attempt/$attempts — '
         '$name ($id) kind=$kind simulate=$simulate',
@@ -633,25 +787,49 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           recordAux: _settings.recordAux,
           qualitySource: qualitySource,
         );
-        debugPrint('[neurofeed] connect returned: connected=${status.connected}');
+        if (epoch != _linkEpoch || !_deviceMatchesSource(device)) {
+          await _dropSupersededConnect(name);
+          return;
+        }
+        debugPrint(
+          '[neurofeed] connect returned: connected=${status.connected}',
+        );
         if (persist) await _settings.setLastDevice(id, kind);
+        if (epoch != _linkEpoch || !_deviceMatchesSource(device)) {
+          await _dropSupersededConnect(name);
+          return;
+        }
         state = state.copyWith(
           status: status,
           connectingTo: null,
           lastConnectedKind: kind,
-          crownQualitySource: kind == DeviceKind.neurosity ? qualitySource : null,
+          crownQualitySource: kind == DeviceKind.neurosity
+              ? qualitySource
+              : null,
           scanMessage: status.connected ? null : state.scanMessage,
         );
         _syncMulticastLock();
         return;
       } catch (e) {
+        if (epoch != _linkEpoch) {
+          await _dropSupersededConnect(name);
+          return;
+        }
         lastError = e;
         debugPrint('[neurofeed] connect attempt $attempt failed: $e');
         if (!simulate && attempt < attempts) {
           await Future<void>.delayed(const Duration(milliseconds: 800));
+          if (epoch != _linkEpoch) {
+            await _dropSupersededConnect(name);
+            return;
+          }
           if (kind == DeviceKind.muse) await _refreshDevice(id);
         }
       }
+    }
+    if (epoch != _linkEpoch) {
+      await _dropSupersededConnect(name);
+      return;
     }
     debugPrint(
       '[neurofeed] connect failed after $_maxConnectAttempts attempts: '
@@ -664,6 +842,20 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           'Could not connect to $name. Check that it is turned on '
           'and nearby, then try again.',
     );
+  }
+
+  Future<void> _dropSupersededConnect(String name) async {
+    debugPrint('[neurofeed] connect dropped after device-type change');
+    if (state.connectingTo == name) {
+      state = state.copyWith(connectingTo: null);
+    }
+    if (_testMode) return;
+    if (state.status.connected && _acceptConnectedEpoch == _linkEpoch) return;
+    try {
+      await disconnect();
+    } catch (e) {
+      debugPrint('[neurofeed] stale connect disconnect: $e');
+    }
   }
 
   /// Run a short scan for [id] so the Rust-side device cache is refreshed with
@@ -720,13 +912,48 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
   /// and no longer clears the saved id.
   Future<void> disconnectDevice({bool persist = true}) async {
     _allowAutoReconnect = false;
+    _closeWindowOnDisconnect = true;
     _scanEnabled = false;
-    state = state.copyWith(disconnecting: true);
+    _museScanGeneration++;
+    _linkEpoch++;
+    await _abandonCrownDiscovery();
+    final pending = _connectInFlight;
+    if (state.status.connected || state.connectingTo != null) {
+      state = state.copyWith(disconnecting: true);
+    }
+    if (pending != null) {
+      await pending.timeout(_linkReleaseTimeout, onTimeout: () {});
+    }
+    final dropped = await _invokeDisconnect();
+    if (!dropped || state.status.connected || state.disconnecting) {
+      _onDisconnected();
+    }
+  }
+
+  /// Rust disconnect, or a test-mode stand-in. False when the link was left up.
+  Future<bool> _invokeDisconnect() async {
+    if (_debugDisconnectFails) {
+      _debugDisconnectFails = false;
+      return false;
+    }
+    if (_testMode) {
+      if (state.status.connected || state.disconnecting) {
+        _onDisconnected();
+      }
+      return !state.status.connected;
+    }
     try {
       await disconnect();
+      return true;
     } catch (e) {
       debugPrint('[neurofeed] disconnect error: $e');
-      _onDisconnected();
+      try {
+        await disconnect();
+        return true;
+      } catch (e2) {
+        debugPrint('[neurofeed] disconnect retry error: $e2');
+        return false;
+      }
     }
   }
 
@@ -756,9 +983,13 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     if (persist) _settings.setLastView(view);
   }
 
-  void setConnectWindow({required bool open, ConnectSource? source}) {
+  Future<bool> setConnectWindow({
+    required bool open,
+    ConnectSource? source,
+  }) async {
     if (source != null) {
-      setConnectSource(source);
+      final ok = await switchConnectSource(source);
+      if (!ok) return false;
       if (!open) {
         _scanEnabled = false;
         state = state.copyWith(
@@ -767,7 +998,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           scanMessage: null,
         );
       }
-      return;
+      return true;
     }
     if (open) {
       _startDiscoveryForCurrentSource();
@@ -779,23 +1010,98 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         scanMessage: null,
       );
     }
+    return true;
   }
 
-  void setConnectSource(ConnectSource source) {
+  /// Change device type. A live link is disconnected first (no lost-link
+  /// reconnect). Discovery for [source] starts only after that link is down.
+  /// False means the headset is still up and the type was left unchanged.
+  Future<bool> switchConnectSource(ConnectSource source) {
+    final run = (_switchChain ?? Future<void>.value()).then(
+      (_) => _switchConnectSource(source),
+    );
+    _switchChain = run.then((_) {}, onError: (Object _, StackTrace _) {});
+    return run;
+  }
+
+  Future<bool> _switchConnectSource(ConnectSource source) async {
     final resolved = resolveConnectSource(
       source,
       debug: _settings.enableSimulatedDevices,
     );
-    _scanEnabled = false;
+    if (resolved == state.connectSource) return true;
+    final released = await _releaseLinkForSourceSwitch();
+    if (!released) return false;
+    if (state.status.connected || state.connectingTo != null) return false;
     state = state.copyWith(connectSource: resolved);
     _startDiscoveryForCurrentSource();
+    return true;
+  }
+
+  /// Stop scans and drop the link before [switchConnectSource] changes type.
+  /// Waits out a connect that already started so its result cannot land after
+  /// the new scan, then disconnects whatever that connect left active.
+  Future<bool> _releaseLinkForSourceSwitch() async {
+    final linked =
+        state.status.connected ||
+        state.connectingTo != null ||
+        state.disconnecting;
+    _holdConnectWindow = true;
+    _closeWindowOnDisconnect = false;
+    _scanEnabled = false;
+    _museScanGeneration++;
+    _linkEpoch++;
+    final epoch = _linkEpoch;
+    if (linked) _allowAutoReconnect = false;
+    await _abandonCrownDiscovery();
+    final pending = _connectInFlight;
+    try {
+      if (pending != null) {
+        await pending.timeout(_linkReleaseTimeout, onTimeout: () {});
+      }
+      if (epoch != _linkEpoch) return false;
+      final needsDrop =
+          state.status.connected ||
+          state.connectingTo != null ||
+          pending != null;
+      if (!needsDrop) return true;
+      if (state.status.connected || state.connectingTo != null) {
+        state = state.copyWith(
+          disconnecting: true,
+          scanning: false,
+          scanMessage: null,
+        );
+      }
+      final dropped = await _invokeDisconnect();
+      if (state.connectingTo != null) {
+        state = state.copyWith(connectingTo: null);
+      }
+      if (!dropped || state.status.connected || state.disconnecting) {
+        if (dropped) _onDisconnected();
+      }
+      final idle = !state.status.connected && state.connectingTo == null;
+      if (!idle) {
+        if (state.status.connected) _allowAutoReconnect = true;
+        state = state.copyWith(
+          disconnecting: false,
+          scanMessage:
+              'Could not disconnect. Stay on this device and try again.',
+        );
+        return false;
+      }
+      return true;
+    } finally {
+      _holdConnectWindow = false;
+    }
   }
 
   /// Debug mode turned off while Simulator is selected → Muse.
-  void onDebugModeChanged(bool enabled) {
+  /// Disconnects a live simulator first, same as a device-type change.
+  Future<bool> onDebugModeChanged(bool enabled) {
     if (!enabled && state.connectSource == ConnectSource.simulator) {
-      setConnectSource(ConnectSource.muse);
+      return switchConnectSource(ConnectSource.muse);
     }
+    return Future<bool>.value(true);
   }
 
   void toggleConnectWindow() {
@@ -847,6 +1153,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
 
   @visibleForTesting
   void debugAddEvent(MuseEventDto event) {
+    if (_dropStaleConnected(event)) return;
     _eventController.add(event);
     _onEvent(event);
   }
@@ -857,8 +1164,19 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     _scanEnabled = false;
   }
 
+  @visibleForTesting
+  void debugSetConnecting(String name) {
+    state = state.copyWith(connectingTo: name);
+  }
+
+  @visibleForTesting
+  void debugFailNextDisconnect() {
+    _debugDisconnectFails = true;
+  }
+
   @override
   void dispose() {
+    if (!mounted) return;
     _scanEnabled = false;
     _eventSub?.cancel();
     _eventController.close();

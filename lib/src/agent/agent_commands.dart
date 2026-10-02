@@ -118,7 +118,14 @@ class AgentCommands {
     if (body?['source'] != null && source == null) {
       return agentError(400, 'bad_request', 'unknown source');
     }
-    _app.setConnectWindow(open: open, source: source);
+    final ok = await _app.setConnectWindow(open: open, source: source);
+    if (!ok) {
+      return agentError(
+        409,
+        'still_connected',
+        'Could not disconnect the current device.',
+      );
+    }
     return _ok();
   }
 
