@@ -192,6 +192,7 @@ class MainActivity : FlutterActivity() {
             "readFilePrefix" -> readFilePrefix(call, result)
             "deleteFile" -> deleteFile(call, result)
             "listFilesMeta" -> listFilesMeta(call, result)
+            "listChildren" -> listChildren(call, result)
             else -> result.notImplemented()
         }
     }
@@ -233,6 +234,18 @@ class MainActivity : FlutterActivity() {
             }
         }
         return null
+    }
+
+    /// Resolve [dir] below the tree root without creating segments.
+    /// Null [dir] is the tree root. Returns null when a segment is missing.
+    private fun resolveExistingDir(tree: Uri, dir: String?): Uri? {
+        var parent = treeRootDoc(tree)
+        if (dir.isNullOrEmpty()) return parent
+        for (segment in dir.split("/")) {
+            if (segment.isEmpty()) continue
+            parent = resolveDoc(tree, parent, segment) ?: return null
+        }
+        return parent
     }
 
     /// Resolve the (possibly nested) directory path [dir] below the tree
@@ -495,12 +508,14 @@ class MainActivity : FlutterActivity() {
     private fun deleteFile(call: MethodCall, result: Result) {
         val tree = treeUri(call)
         val name = call.argument<String>("name")
+        val dir = call.argument<String>("dir")
         if (tree == null || name == null) {
             result.error("bad_args", "tree/name required", null)
             return
         }
         try {
-            val doc = resolveDoc(tree, treeRootDoc(tree), name)
+            val parent = resolveExistingDir(tree, dir)
+            val doc = if (parent == null) null else resolveDoc(tree, parent, name)
             result.success(
                 doc != null && DocumentsContract.deleteDocument(contentResolver, doc)
             )
@@ -595,10 +610,56 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun listChildren(call: MethodCall, result: Result) {
+        val tree = treeUri(call)
+        if (tree == null) {
+            result.error("bad_args", "tree required", null)
+            return
+        }
+        val dir = call.argument<String>("dir")
+        try {
+            val parent = resolveExistingDir(tree, dir)
+            if (parent == null) {
+                result.success(emptyList<Map<String, Any?>>())
+                return
+            }
+            val parentId = DocumentsContract.getDocumentId(parent)
+            val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId)
+            val files = mutableListOf<Map<String, Any?>>()
+            contentResolver.query(
+                children,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+                    DocumentsContract.Document.COLUMN_MIME_TYPE,
+                ),
+                null, null, null,
+            )?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(0) ?: continue
+                    if (name.endsWith(".mtmp")) continue
+                    val mime = cursor.getString(2)
+                    files.add(
+                        mapOf(
+                            "name" to name,
+                            "mtime" to cursor.getLong(1),
+                            "dir" to (mime == DocumentsContract.Document.MIME_TYPE_DIR),
+                        )
+                    )
+                }
+            }
+            result.success(files)
+        } catch (e: Exception) {
+            Log.e(TAG, "listChildren failed", e)
+            result.error("list_failed", e.toString(), null)
+        }
+    }
+
     private fun copySafFileToCache(call: MethodCall, result: Result) {
         val tree = treeUri(call)
         val name = call.argument<String>("name")
         val destName = call.argument<String>("destName")
+        val dir = call.argument<String>("dir")
         if (tree == null || name == null || destName == null) {
             result.error("bad_args", "tree/name/destName required", null)
             return
@@ -606,7 +667,8 @@ class MainActivity : FlutterActivity() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val doc = resolveDoc(tree, treeRootDoc(tree), name)
+                val parent = resolveExistingDir(tree, dir)
+                val doc = if (parent == null) null else resolveDoc(tree, parent, name)
                 if (doc == null) {
                     withContext(Dispatchers.Main) { result.error("not_found", "could not resolve $name", null) }
                     return@launch

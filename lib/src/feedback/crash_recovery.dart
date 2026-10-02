@@ -44,7 +44,7 @@ class RecoverableSession {
           elapsedSeconds: elapsedSeconds,
           sound: '',
           savedAt: formatIso8601WithOffset(DateTime.now()),
-    timeZone: captureIanaTimeZone(),
+          timeZone: captureIanaTimeZone(),
           sessionId: id,
         );
     await store.publishSession(id, meta, encodedPath: scratch.path);
@@ -238,7 +238,7 @@ Future<RecoverableSession?> _assembleTemps({
 Future<List<RecoverableSession>> scanRecoverableSessions(
   SessionStorage storage,
 ) async {
-  final scratch = scratchDirectory(storage);
+  final scratch = await scratchDirectory(storage);
   if (!await scratch.exists()) return const [];
 
   final byId = <String, _ScratchFiles>{};

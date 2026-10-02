@@ -67,7 +67,9 @@ Future<void> showRecordingCrashRecoveryDialog(
   WidgetRef ref,
 ) async {
   final storage = await ref.read(sessionStorageProvider.future);
-  final recovered = await scanRecoverableRecordings(scratchDirectory(storage));
+  final recovered = await scanRecoverableRecordings(
+    await scratchDirectory(storage),
+  );
   if (recovered.isEmpty) return;
   final store = await ref.read(recordingStoreProvider.future);
   await CaptureForeground.setRecordingCrashHold(true);

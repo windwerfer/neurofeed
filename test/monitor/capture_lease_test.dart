@@ -107,7 +107,7 @@ void main() {
       settings = await Settings.load();
       history = await Directory.systemTemp.createTemp('neurofeed_hist_');
       final storage = FileSystemSessionStorage(history);
-      scratch = scratchDirectory(storage);
+      scratch = await scratchDirectory(storage);
       app = AppStateNotifier.forTest(settings);
       container = ProviderContainer(
         overrides: [

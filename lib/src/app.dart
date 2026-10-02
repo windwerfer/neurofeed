@@ -437,7 +437,7 @@ class _CrashRecoveryWrapperState extends ConsumerState<_CrashRecoveryWrapper> {
         await showCrashRecoveryDialog(context, ref);
         if (!mounted) return;
         final storage = await ref.read(sessionStorageProvider.future);
-        await deleteLeftoverTmpCaptures(scratchDirectory(storage));
+        await deleteLeftoverTmpCaptures(await scratchDirectory(storage));
         if (!mounted) return;
         await showRecordingCrashRecoveryDialog(context, ref);
       });

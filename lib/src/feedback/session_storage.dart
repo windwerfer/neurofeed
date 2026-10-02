@@ -3,54 +3,43 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:neurofeed/src/feedback/app_folder.dart';
 import 'package:neurofeed/src/settings.dart';
 
-/// Absolute default history folder on desktop (user Documents).
-Future<Directory> _desktopDefault() async {
-  String? docsPath;
-  try {
-    final docs = await getApplicationDocumentsDirectory();
-    docsPath = docs.path;
-  } catch (e) {
-    debugPrint('[storage] getApplicationDocumentsDirectory failed: $e');
-  }
-  if (docsPath == null || docsPath.isEmpty) {
-    final home = Platform.environment['HOME'];
-    if (home != null && home.isNotEmpty) {
-      docsPath = '$home${Platform.pathSeparator}Documents';
-    }
-  }
-  if (docsPath == null || docsPath.isEmpty) {
-    docsPath = Directory.systemTemp.path;
-  }
-  return Directory('$docsPath${Platform.pathSeparator}meditation feedback');
+/// Default app folder when the user has not picked one.
+///
+/// Desktop: `~/Documents/neurofeed`. Mobile: the system app support directory.
+Future<Directory> defaultSessionDir({
+  AppDataLayout? layout,
+  Future<Directory> Function()? readSystemAppFolder,
+  Map<String, String>? env,
+  Future<String?> Function()? readXdg,
+}) {
+  return defaultAppFolder(
+    layout: layout,
+    readSystemAppFolder: readSystemAppFolder,
+    env: env,
+    readXdg: readXdg,
+  );
 }
 
-/// Per-platform default history folder (used when the user has not picked a
-/// custom folder).
+/// Live scratch directory. This is the same path as the SQLite cache.
 ///
-///  * Linux/Windows: `~/Documents/meditation feedback`
-///  * Android/iOS : the app-private documents directory
-Future<Directory> defaultSessionDir() async {
-  if (Platform.isAndroid || Platform.isIOS) {
-    final docs = await getApplicationDocumentsDirectory();
-    return docs;
-  }
-  return _desktopDefault();
-}
-
-/// Scratch (live-recording) directory for a given [history] storage.
-///
-/// Live EEG is streamed here and must be fast and reliable, so it is never
-/// backed by SAF. For a filesystem history we keep it in the same folder
-/// under `.cache/` (visible, matches the default layout). For a SAF history
-/// we fall back to the app's private cache directory.
-Directory scratchDirectory(SessionStorage history) {
-  if (history is FileSystemSessionStorage) {
-    return Directory('${history.location}${Platform.pathSeparator}.cache');
-  }
-  return Directory('${Directory.systemTemp.path}/muse_scratch');
+/// Desktop: `{app folder}/.cache`. Mobile, and any SAF app folder: `{system
+/// app folder}/.cache`. Never the system cache directory and never
+/// [Directory.systemTemp].
+Future<Directory> scratchDirectory(
+  SessionStorage history, {
+  AppDataLayout? layout,
+  Future<Directory> Function()? readSystemAppFolder,
+}) {
+  return cacheDirectory(
+    filesystemAppFolder: history is FileSystemSessionStorage
+        ? history.location
+        : null,
+    layout: layout,
+    readSystemAppFolder: readSystemAppFolder,
+  );
 }
 
 /// A file handle inside the history folder. [name] is the bare file name
@@ -159,7 +148,11 @@ class FileSystemSessionStorage extends SessionStorage {
   }
 
   @override
-  Future<void> writeFileAtomic(String name, List<int> bytes, {String? dir}) async {
+  Future<void> writeFileAtomic(
+    String name,
+    List<int> bytes, {
+    String? dir,
+  }) async {
     // Write to a sibling temp file in the same directory, fsync, then rename
     // over the target. rename() is atomic on the same filesystem, so a crash
     // anywhere in the sequence leaves either the complete old file or the
@@ -239,7 +232,10 @@ class FileSystemSessionStorage extends SessionStorage {
         continue;
       }
       files.add(
-        StoredFile(e.uri.pathSegments.last, e.statSync().modified.millisecondsSinceEpoch),
+        StoredFile(
+          e.uri.pathSegments.last,
+          e.statSync().modified.millisecondsSinceEpoch,
+        ),
       );
     }
     return files;
@@ -266,6 +262,14 @@ class FileSystemSessionStorage extends SessionStorage {
   }
 }
 
+/// One child of a SAF tree. [isDir] is true for a document folder.
+class SafChild {
+  const SafChild(this.name, this.isDir);
+
+  final String name;
+  final bool isDir;
+}
+
 /// Android SAF history storage. The live recording never goes here — [writeFile]
 /// is only called when a session is saved, so each call is a single
 /// ContentResolver write (plus the small .json/.png companions).
@@ -277,7 +281,7 @@ class SafSessionStorage extends SessionStorage {
   static const MethodChannel _channel = MethodChannel('neurofeed/saf');
 
   @override
-  String get displayName => 'Android folder';
+  String get displayName => safTreeLabel(treeUri);
 
   @override
   String get location => treeUri;
@@ -323,15 +327,42 @@ class SafSessionStorage extends SessionStorage {
     return result as String;
   }
 
-  /// Copy a SAF-backed file (child of [treeUri]) to the app's cache directory
-  /// natively, returning the path.
-  Future<String> copySafFileToCache(String name, String destName) async {
+  /// Copy a SAF-backed file (child of [treeUri], or of [dir] under it) to the
+  /// app's cache directory natively, returning the path.
+  Future<String> copySafFileToCache(
+    String name,
+    String destName, {
+    String? dir,
+  }) async {
     final result = await _invoke('copySafFileToCache', {
       'tree': treeUri,
       'name': name,
       'destName': destName,
+      if (dir != null && dir.isNotEmpty) 'dir': dir,
     });
     return result as String;
+  }
+
+  /// Children of the tree root, or of [dir] (`export`, `export/charts`).
+  Future<List<SafChild>> listChildren({String? dir}) async {
+    final files = await _invoke('listChildren', {
+      'tree': treeUri,
+      if (dir != null && dir.isNotEmpty) 'dir': dir,
+    });
+    if (files == null) return const [];
+    return [
+      for (final e in files as List<dynamic>)
+        if (e is Map<Object?, Object?>)
+          SafChild(e['name'] as String? ?? '', e['dir'] == true),
+    ].where((c) => c.name.isNotEmpty).toList();
+  }
+
+  Future<void> deleteChild(String name, {String? dir}) async {
+    await _invoke('deleteFile', {
+      'tree': treeUri,
+      'name': name,
+      if (dir != null && dir.isNotEmpty) 'dir': dir,
+    });
   }
 
   @override
@@ -350,7 +381,11 @@ class SafSessionStorage extends SessionStorage {
   }
 
   @override
-  Future<void> writeFileAtomic(String name, List<int> bytes, {String? dir}) async {
+  Future<void> writeFileAtomic(
+    String name,
+    List<int> bytes, {
+    String? dir,
+  }) async {
     // SAF cannot swap URIs atomically, so the native side does the closest
     // safe sequence: write name.mtmp, sync, delete the old target, rename the
     // temp over it. [recoverDoc] on the native side heals an interrupted swap

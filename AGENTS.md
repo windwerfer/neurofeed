@@ -106,7 +106,7 @@ Tests: [`.ai/test-matrix.md`](.ai/test-matrix.md). Audio engine:
 Format/cache: `README_feedback_format.md`, `README_history_cache.md`.
 Trust graphs: [`.ai/trust-graphs.md`](.ai/trust-graphs.md) (implemented).
 Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
-Frozen contracts: [`.ai/contracts/`](.ai/contracts/) — pipeline, data-plane, fileformat v6.
+Frozen contracts: [`.ai/contracts/`](.ai/contracts/) — pipeline, data-plane, fileformat v6, app folder.
 Historical spine handoff: [`.ai/archive/handoff-spine.md`](.ai/archive/handoff-spine.md).
 
 ## Project layout
@@ -132,6 +132,8 @@ lib/src/feedback/           session orchestrator + lanes
   crash_recovery.dart       leftover `session_*` reopens session summary
   session_store*.dart / session_sqlite.dart / session_metadata.dart
   session_export.dart / session_pdf_export.dart / session_chart_data.dart
+  app_folder.dart           app folder, cache, models; scratch == sqlite cache
+  folder_move.dart          copy-then-delete save-folder change
   trust/                    live Reward / Guard / inhibit graphs + nerd sheet
 lib/src/spine/              capture / assemble Dart adapters
   capture_client.dart       start/stop/assemble/sidecar FFI
@@ -355,9 +357,18 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **Record vs Start Session:** recording refuses Start (dialog + agent 409
   `recording_active`). Feedback refuses Record. Record does not keep
   pre-click tmp bytes.
-- **Desktop default dir**: fall back to `$HOME/Documents`, never `/tmp`.
-  Changing the save folder **moves** `session_*` and `recording_*`
-  (`moveAllTo`). Settings card is **Save files to folder**.
+- **App folder**: [`.ai/contracts/app-folder.md`](.ai/contracts/app-folder.md).
+  Desktop default is `~/Documents/neurofeed` (create `Documents` and
+  `neurofeed` when `xdg-user-dir DOCUMENTS` is missing, fails, empty, or
+  `$HOME`). Never `/tmp`. Never `getApplicationCacheDirectory`. Android
+  cache and `ai_models` stay in `getApplicationSupportDirectory()` even
+  when the save folder is SAF. Export is always `{app folder}/export`.
+  A folder change asks **Move existing files?** only when something would
+  move. **Reset to default folder** uses the same dialog. Desktop moves
+  history containers, `export/`, `.cache`, and `ai_models/`. Android moves
+  history containers and `export/` only. Cache `tmp_*` does not count and
+  is deleted. Refuse while a session or recording is open. The card shows
+  the current folder. Settings card is **Save files to folder**.
 - **Signal gate**: before calibration, gate pads green for 3 s; after
   baseline, no re-lock. Playing pauses only when all gate pads are critical
   for 10 s; never auto-ends. Names in `gate_electrodes.dart`, default Muse

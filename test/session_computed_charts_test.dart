@@ -98,10 +98,7 @@ void main() {
       final rec = FeedbackRecorder(
         storage: Future.value(FileSystemSessionStorage(Directory.systemTemp)),
       );
-      rec.attachAssembledScratch(
-        id: 'abc',
-        path: '/tmp/session_abc.neurofeed',
-      );
+      rec.attachAssembledScratch(id: 'abc', path: '/tmp/session_abc.neurofeed');
       expect(rec.sessionId, 'abc');
       expect(rec.scratchPath, '/tmp/session_abc.neurofeed');
     });
@@ -109,9 +106,7 @@ void main() {
 
   group('.neurofeed assemble + charts', () {
     setUpAll(() async {
-      await RustLib.init(
-        externalLibrary: ExternalLibrary.open(_rustLibPath),
-      );
+      await RustLib.init(externalLibrary: ExternalLibrary.open(_rustLibPath));
     });
 
     test('recorder flushRaw frames so sessionParseBody sees bands', () async {
@@ -141,8 +136,7 @@ void main() {
       await rec.stop();
     });
 
-    test('JSONL → FFI → containerEncode → extractComputed round-trips t',
-        () {
+    test('JSONL → FFI → containerEncode → extractComputed round-trips t', () {
       final dartFrames = [_dartFrame(0), _dartFrame(1), _dartFrame(2)];
       final ffiFrames = dartFrames.map(toFfiFrame).toList();
       final container = assembleContainer(
@@ -172,7 +166,16 @@ void main() {
     test('chartElectrodePair picks AF7/AF8 or Crown PO3/PO4 by label', () {
       expect(chartElectrodePair(const ['TP9', 'AF7', 'AF8', 'TP10']), (1, 2));
       expect(
-        chartElectrodePair(const ['CP3', 'C3', 'F5', 'PO3', 'PO4', 'F6', 'C4', 'CP4']),
+        chartElectrodePair(const [
+          'CP3',
+          'C3',
+          'F5',
+          'PO3',
+          'PO4',
+          'F6',
+          'C4',
+          'CP4',
+        ]),
         (3, 4),
       );
       expect(chartElectrodePair(const ['Fp1', 'Fp2']), isNull);
@@ -220,47 +223,49 @@ void main() {
       expect(container.sublist(0, 6), [0x4E, 0x46, 0x45, 0x44, 0x36, 0x00]);
     });
 
-    test('publishSession writes history not scratch; SQLite row; no summary',
-        () async {
-      final tmp = await Directory.systemTemp.createTemp('neurofeed_pub_');
-      addTearDown(() => tmp.delete(recursive: true));
-      final storage = FileSystemSessionStorage(tmp);
-      final store = SessionStore(storage: Future.value(storage));
-      final meta = SessionMetadata(
-        protocol: 'drowsiness',
-        durationMinutes: 1,
-        elapsedSeconds: 3,
-        sound: 'Ambient Drone',
-        savedAt: DateTime.utc(2026, 9, 2).toIso8601String(),
-        music: const SessionMusic(
-          trackCount: 1,
-          minCutoffHz: 200,
-          maxCutoffHz: 8000,
-          invert: false,
-          shuffle: false,
-          series: [MusicCutoffSample(offsetSecs: 0, cutoffHz: 400)],
-        ),
-      );
-      await store.publishSession(
-        'abc123',
-        meta,
-        rawBody: sessionHeaderBytes(),
-        computedFrames: [toFfiFrame(_dartFrame(0))],
-      );
-      final name = 'session_abc123.neurofeed';
-      expect(await storage.fileExists(name), isTrue);
-      expect(tmp.path.contains('.cache'), isFalse);
-      final list = await store.list();
-      expect(list, hasLength(1));
-      expect(list.first.id, 'abc123');
-      final bytes = await store.readContainer('abc123');
-      expect(bytes, isNotNull);
-      final head = parseHead(bytes: bytes!);
-      final decoded = SessionMetadata.fromJsonBytes(head.metadataJson)!;
-      expect(decoded.toJson().containsKey('summary'), isFalse);
-      expect(decoded.music?.series, isNotEmpty);
-      expect(decoded.music?.toJson().containsKey('buckets'), isFalse);
-    });
+    test(
+      'publishSession writes history not scratch; SQLite row; no summary',
+      () async {
+        final tmp = await Directory.systemTemp.createTemp('neurofeed_pub_');
+        addTearDown(() => tmp.delete(recursive: true));
+        final storage = FileSystemSessionStorage(tmp);
+        final store = SessionStore(storage: Future.value(storage));
+        final meta = SessionMetadata(
+          protocol: 'drowsiness',
+          durationMinutes: 1,
+          elapsedSeconds: 3,
+          sound: 'Ambient Drone',
+          savedAt: DateTime.utc(2026, 9, 2).toIso8601String(),
+          music: const SessionMusic(
+            trackCount: 1,
+            minCutoffHz: 200,
+            maxCutoffHz: 8000,
+            invert: false,
+            shuffle: false,
+            series: [MusicCutoffSample(offsetSecs: 0, cutoffHz: 400)],
+          ),
+        );
+        await store.publishSession(
+          'abc123',
+          meta,
+          rawBody: sessionHeaderBytes(),
+          computedFrames: [toFfiFrame(_dartFrame(0))],
+        );
+        final name = 'session_abc123.neurofeed';
+        expect(await storage.fileExists(name), isTrue);
+        expect(tmp.path.contains('.cache'), isFalse);
+        final list = await store.list();
+        expect(list, hasLength(1));
+        expect(list.first.id, 'abc123');
+        final bytes = await store.readContainer('abc123');
+        expect(bytes, isNotNull);
+        final head = parseHead(bytes: bytes!);
+        final decoded = SessionMetadata.fromJsonBytes(head.metadataJson)!;
+        expect(decoded.toJson().containsKey('summary'), isFalse);
+        expect(decoded.music?.series, isNotEmpty);
+        expect(decoded.music?.toJson().containsKey('buckets'), isFalse);
+      },
+    );
 
     test('Crown 8-ch frames chart the PO3/PO4 pair and caption it', () {
       final muse = prepareChartDataFromComputed([
@@ -294,62 +299,63 @@ void main() {
         isNot(deviceFrontalElectrodes(crown)),
       );
       final infos = await availableFeatures(kind: DeviceKind.neurosity);
-      expect(
-        infos.firstWhere((f) => f.id == 'band.delta').defaultElectrodes,
-        ['F5', 'F6'],
-      );
-    });
-
-    test('gate pads come from Rust: feature electrodes, else needed pads',
-        () async {
-      final muse = await DeviceConfig.forKind(kind: DeviceKind.muse);
-      final crown = await DeviceConfig.forKind(kind: DeviceKind.neurosity);
-      expect(muse.targetElectrodes.map((e) => e.toInt()), [1, 2]);
-      expect(crown.targetElectrodes.map((e) => e.toInt()), [3, 4]);
-      List<int> gate(DeviceKind kind, {String? reward, String? guard}) =>
-          sessionGateElectrodes(
-            kind: kind,
-            rewardFeature: reward,
-            guardFeature: guard,
-          ).toList();
-      // Registry defaults / needed pads.
-      expect(gate(DeviceKind.muse, reward: 'band.atr'), [1, 2]);
-      expect(gate(DeviceKind.neurosity, reward: 'band.atr'), [3, 4]);
-      expect(gate(DeviceKind.muse), [1, 2]);
-      expect(gate(DeviceKind.neurosity), [3, 4]);
-      // Protocol override of the reward feature.
-      await setFeatureElectrodes(id: 'band.atr', names: ['TP9', 'TP10']);
-      expect(gate(DeviceKind.muse, reward: 'band.atr', guard: 'band.delta'), [
-        0,
-        3,
+      expect(infos.firstWhere((f) => f.id == 'band.delta').defaultElectrodes, [
+        'F5',
+        'F6',
       ]);
-      await setFeatureElectrodes(id: 'band.atr', names: []);
-      // Band guard without reward: frontal default, then override.
-      expect(gate(DeviceKind.neurosity, guard: 'band.delta'), [2, 5]);
-      expect(gate(DeviceKind.muse, guard: 'band.delta'), [1, 2]);
-      await setFeatureElectrodes(id: 'band.delta', names: ['C3', 'C4']);
-      expect(gate(DeviceKind.neurosity, guard: 'band.delta'), [1, 6]);
-      await setFeatureElectrodes(id: 'band.delta', names: []);
-      // AI guard: the device's needed pads.
-      expect(gate(DeviceKind.muse, guard: 'ai.a_vig'), [1, 2]);
     });
 
-    test('crash recovery scans scratch; temps assemble; discard deletes',
-        () async {
+    test(
+      'gate pads come from Rust: feature electrodes, else needed pads',
+      () async {
+        final muse = await DeviceConfig.forKind(kind: DeviceKind.muse);
+        final crown = await DeviceConfig.forKind(kind: DeviceKind.neurosity);
+        expect(muse.targetElectrodes.map((e) => e.toInt()), [1, 2]);
+        expect(crown.targetElectrodes.map((e) => e.toInt()), [3, 4]);
+        List<int> gate(DeviceKind kind, {String? reward, String? guard}) =>
+            sessionGateElectrodes(
+              kind: kind,
+              rewardFeature: reward,
+              guardFeature: guard,
+            ).toList();
+        // Registry defaults / needed pads.
+        expect(gate(DeviceKind.muse, reward: 'band.atr'), [1, 2]);
+        expect(gate(DeviceKind.neurosity, reward: 'band.atr'), [3, 4]);
+        expect(gate(DeviceKind.muse), [1, 2]);
+        expect(gate(DeviceKind.neurosity), [3, 4]);
+        // Protocol override of the reward feature.
+        await setFeatureElectrodes(id: 'band.atr', names: ['TP9', 'TP10']);
+        expect(gate(DeviceKind.muse, reward: 'band.atr', guard: 'band.delta'), [
+          0,
+          3,
+        ]);
+        await setFeatureElectrodes(id: 'band.atr', names: []);
+        // Band guard without reward: frontal default, then override.
+        expect(gate(DeviceKind.neurosity, guard: 'band.delta'), [2, 5]);
+        expect(gate(DeviceKind.muse, guard: 'band.delta'), [1, 2]);
+        await setFeatureElectrodes(id: 'band.delta', names: ['C3', 'C4']);
+        expect(gate(DeviceKind.neurosity, guard: 'band.delta'), [1, 6]);
+        await setFeatureElectrodes(id: 'band.delta', names: []);
+        // AI guard: the device's needed pads.
+        expect(gate(DeviceKind.muse, guard: 'ai.a_vig'), [1, 2]);
+      },
+    );
+
+    test('crash recovery scans scratch; temps assemble; discard deletes', () async {
       final tmp = await Directory.systemTemp.createTemp('neurofeed_crash_');
       addTearDown(() => tmp.delete(recursive: true));
       final storage = FileSystemSessionStorage(tmp);
-      final scratch = scratchDirectory(storage);
+      final scratch = await scratchDirectory(storage);
       await scratch.create(recursive: true);
 
       const id = '111';
-      await File('${scratch.path}/session_$id.raw')
-          .writeAsBytes(sessionHeaderBytes());
+      await File(
+        '${scratch.path}/session_$id.raw',
+      ).writeAsBytes(sessionHeaderBytes());
       final line = _dartFrame(2).toJsonBytes();
-      await File('${scratch.path}/session_$id.computed').writeAsBytes([
-        ...line,
-        0x0A,
-      ]);
+      await File(
+        '${scratch.path}/session_$id.computed',
+      ).writeAsBytes([...line, 0x0A]);
       await File('${scratch.path}/session_$id.metadata').writeAsString(
         '{"type":"device","name":"Crown-A1","id":"crown-a1","firmware":"Crown",'
         '"channelLabels":["CP3","C3","F5","PO3","PO4","F6","C4","CP4"],'
@@ -362,7 +368,14 @@ void main() {
       expect(recovered, hasLength(1));
       expect(recovered.first.id, id);
       expect(recovered.first.metadata?.recordedChannels, [
-        'CP3', 'C3', 'F5', 'PO3', 'PO4', 'F6', 'C4', 'CP4',
+        'CP3',
+        'C3',
+        'F5',
+        'PO3',
+        'PO4',
+        'F6',
+        'C4',
+        'CP4',
       ]);
       expect(recovered.first.metadata?.deviceName, 'Crown-A1');
       final conditioning = recovered.first.metadata?.conditioning;
@@ -370,7 +383,9 @@ void main() {
       expect(conditioning?.notchSource, 'saved');
       expect(conditioning?.notchQ, 10.0);
       final head = parseHead(
-        bytes: await File('${scratch.path}/session_$id.neurofeed').readAsBytes(),
+        bytes: await File(
+          '${scratch.path}/session_$id.neurofeed',
+        ).readAsBytes(),
       );
       final stored = jsonDecode(utf8.decode(head.metadataJson)) as Map;
       expect(stored['conditioning'], {
@@ -402,60 +417,67 @@ void main() {
       );
     });
 
-    test('crash recovery leftover .neurofeed save publishes to history not scratch',
-        () async {
-      final tmp = await Directory.systemTemp.createTemp('neurofeed_crash2_');
-      addTearDown(() => tmp.delete(recursive: true));
-      final storage = FileSystemSessionStorage(tmp);
-      final scratch = scratchDirectory(storage);
-      await scratch.create(recursive: true);
+    test(
+      'crash recovery leftover .neurofeed save publishes to history not scratch',
+      () async {
+        final tmp = await Directory.systemTemp.createTemp('neurofeed_crash2_');
+        addTearDown(() => tmp.delete(recursive: true));
+        final storage = FileSystemSessionStorage(tmp);
+        final scratch = await scratchDirectory(storage);
+        await scratch.create(recursive: true);
 
-      const id = '222';
-      final container = assembleContainer(
-        thumbnail: placeholderWebP,
-        metadataJson: {
-          'protocol': 'drowsiness',
-          'durationMinutes': 1,
-          'elapsedSeconds': 3,
-          'sound': 'Ambient Drone',
-          'savedAt': '2026-09-02T00:00:00.000Z',
-        },
-        computedFrames: [toFfiFrame(_dartFrame(0))],
-        rawBody: sessionHeaderBytes(),
-      );
-      await File('${scratch.path}/session_$id.neurofeed').writeAsBytes(container);
-      await File('${scratch.path}/session_$id.raw').writeAsBytes([1, 2, 3]);
+        const id = '222';
+        final container = assembleContainer(
+          thumbnail: placeholderWebP,
+          metadataJson: {
+            'protocol': 'drowsiness',
+            'durationMinutes': 1,
+            'elapsedSeconds': 3,
+            'sound': 'Ambient Drone',
+            'savedAt': '2026-09-02T00:00:00.000Z',
+          },
+          computedFrames: [toFfiFrame(_dartFrame(0))],
+          rawBody: sessionHeaderBytes(),
+        );
+        await File(
+          '${scratch.path}/session_$id.neurofeed',
+        ).writeAsBytes(container);
+        await File('${scratch.path}/session_$id.raw').writeAsBytes([1, 2, 3]);
 
-      final recovered = await scanRecoverableSessions(storage);
-      expect(recovered, hasLength(1));
-      expect(recovered.first.protocol, 'drowsiness');
-      expect(await File('${scratch.path}/session_$id.raw').exists(), isFalse);
+        final recovered = await scanRecoverableSessions(storage);
+        expect(recovered, hasLength(1));
+        expect(recovered.first.protocol, 'drowsiness');
+        expect(await File('${scratch.path}/session_$id.raw').exists(), isFalse);
 
-      final store = SessionStore(storage: Future.value(storage));
-      await recovered.first.save(store);
-      expect(await storage.fileExists('session_$id.neurofeed'), isTrue);
-      expect(
-        await File('${scratch.path}/session_$id.neurofeed').exists(),
-        isFalse,
-      );
-      expect(tmp.path.contains('.cache'), isFalse);
-    });
+        final store = SessionStore(storage: Future.value(storage));
+        await recovered.first.save(store);
+        expect(await storage.fileExists('session_$id.neurofeed'), isTrue);
+        expect(
+          await File('${scratch.path}/session_$id.neurofeed').exists(),
+          isFalse,
+        );
+        expect(tmp.path.contains('.cache'), isFalse);
+      },
+    );
 
-    test('crash recovery does not scan history/sessions leftover temps',
-        () async {
-      final tmp = await Directory.systemTemp.createTemp('neurofeed_crash3_');
-      addTearDown(() => tmp.delete(recursive: true));
-      final storage = FileSystemSessionStorage(tmp);
-      await scratchDirectory(storage).create(recursive: true);
-      final wrong = Directory('${tmp.path}/sessions');
-      await wrong.create(recursive: true);
-      await File('${wrong.path}/session_999.raw')
-          .writeAsBytes(sessionHeaderBytes());
-      await File('${wrong.path}/session_999.computed').writeAsString('\n');
-      await File('${wrong.path}/session_999.metadata').writeAsString('\n');
+    test(
+      'crash recovery does not scan history/sessions leftover temps',
+      () async {
+        final tmp = await Directory.systemTemp.createTemp('neurofeed_crash3_');
+        addTearDown(() => tmp.delete(recursive: true));
+        final storage = FileSystemSessionStorage(tmp);
+        await (await scratchDirectory(storage)).create(recursive: true);
+        final wrong = Directory('${tmp.path}/sessions');
+        await wrong.create(recursive: true);
+        await File(
+          '${wrong.path}/session_999.raw',
+        ).writeAsBytes(sessionHeaderBytes());
+        await File('${wrong.path}/session_999.computed').writeAsString('\n');
+        await File('${wrong.path}/session_999.metadata').writeAsString('\n');
 
-      final recovered = await scanRecoverableSessions(storage);
-      expect(recovered, isEmpty);
-    });
+        final recovered = await scanRecoverableSessions(storage);
+        expect(recovered, isEmpty);
+      },
+    );
   });
 }

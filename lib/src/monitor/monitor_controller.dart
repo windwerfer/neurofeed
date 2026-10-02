@@ -177,6 +177,30 @@ class MonitorController extends Notifier<MonitorState> {
     });
   }
 
+  /// Stop a connect-time `tmp_` writer so a folder change can delete it.
+  /// Returns true when the caller should start scratch again afterwards.
+  Future<bool> suspendTmpForFolderChange() {
+    return _serialized(() async {
+      if (_lease.kind != CaptureKind.tmp) return false;
+      await _stopTmpWriter();
+      _lease.tryDiscardTmp();
+      final app = ref.read(appStateProvider);
+      state = _withGraphEpoch(
+        MonitorState.idle(deviceKind: app.lastConnectedKind),
+      );
+      return true;
+    });
+  }
+
+  /// Start connect-time scratch in the folder that is current now.
+  Future<void> resumeTmpAfterFolderChange() {
+    return _serialized(() async {
+      if (_lease.kind != CaptureKind.idle) return;
+      if (!ref.read(appStateProvider).status.connected) return;
+      await _startTmpUnlocked();
+    });
+  }
+
   Future<void> startRecording() => _serialized(_startRecordingUnlocked);
 
   /// Flush and assemble `recording_$ts.neurofeed`. When [promptSave] is
@@ -218,7 +242,7 @@ class MonitorController extends Notifier<MonitorState> {
     try {
       final storage = await ref.read(sessionStorageProvider.future);
       await storage.ensureDir();
-      final dir = scratchDirectory(storage);
+      final dir = await scratchDirectory(storage);
       if (!await dir.exists()) {
         await dir.create(recursive: true);
       }
@@ -321,7 +345,10 @@ class MonitorController extends Notifier<MonitorState> {
     }
 
     tick();
-    _disconnectGapTimer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
+    _disconnectGapTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => tick(),
+    );
   }
 
   void _stopDisconnectGapFiller() {
@@ -342,7 +369,7 @@ class MonitorController extends Notifier<MonitorState> {
     try {
       final storage = await ref.read(sessionStorageProvider.future);
       await storage.ensureDir();
-      final dir = scratchDirectory(storage);
+      final dir = await scratchDirectory(storage);
       if (!await dir.exists()) {
         await dir.create(recursive: true);
       }

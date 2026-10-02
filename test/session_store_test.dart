@@ -63,7 +63,7 @@ void main() {
       final sqlite = await SessionSqlite.open(cacheDirectory: cacheDir);
       final recStore = RecordingStore(storage: storage, sqlite: sqlite);
 
-      final scratch = scratchDirectory(storage);
+      final scratch = await scratchDirectory(storage);
       await scratch.create(recursive: true);
       final scratchFile = await writeScratch(
         dir: scratch,
@@ -112,7 +112,7 @@ void main() {
     final sqlite = await SessionSqlite.open(cacheDirectory: cacheDir);
     final recStore = RecordingStore(storage: storage, sqlite: sqlite);
 
-    final scratch = scratchDirectory(storage);
+    final scratch = await scratchDirectory(storage);
     await scratch.create(recursive: true);
     final scratchFile = await writeScratch(
       dir: scratch,
@@ -131,10 +131,7 @@ void main() {
     final store = SessionStore(storage: Future.value(storage));
     expect(await store.delete('8008'), isTrue);
     expect(published.existsSync(), isFalse);
-    expect(
-      File('${tmp.path}/session_8008.neurofeed').existsSync(),
-      isFalse,
-    );
+    expect(File('${tmp.path}/session_8008.neurofeed').existsSync(), isFalse);
     final after = await store.list();
     expect(after.any((s) => s.id == '8008'), isFalse);
   });

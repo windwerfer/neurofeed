@@ -1,12 +1,12 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
+import 'package:neurofeed/src/feedback/app_folder.dart';
 import 'package:neurofeed/src/feedback/guardrail_mode.dart';
 import 'package:neurofeed/src/reve/models.dart';
 import 'package:neurofeed/src/rust/api/reve.dart' as frb;
@@ -69,32 +69,24 @@ const String kCbramodEncoderForwardReadyDesc = 'encoder forward ready';
 class ModelCache {
   const ModelCache();
 
-  /// The directory the app expects [kind]'s files in:
-  /// `<sessionFolder>/ai_models/<kind.folder>` when the session folder is a
-  /// real path, otherwise `<app documents>/ai_models/<kind.folder>` (a SAF
-  /// `content://` folder cannot be opened by the Rust loader).
+  /// The directory the app expects [kind]'s files in.
+  ///
+  /// Desktop: `{app folder}/ai_models/<kind.folder>`. Mobile, and a SAF app
+  /// folder: `{system app folder}/ai_models/<kind.folder>`.
   static Future<Directory> modelDirectory(
     String? sessionFolder,
-    ModelKind kind,
-  ) async {
-    String? base;
-    if (sessionFolder != null && !sessionFolder.startsWith('content://')) {
-      base = sessionFolder;
-    } else {
-      try {
-        base = (await getApplicationDocumentsDirectory()).path;
-      } catch (e) {
-        debugPrint('[models] getApplicationDocumentsDirectory failed: $e');
-        final home = Platform.environment['HOME'];
-        if (home != null && home.isNotEmpty) {
-          base = '$home${Platform.pathSeparator}Documents';
-        }
-      }
-    }
-    if (base == null || base.isEmpty) {
-      throw StateError('cannot resolve application documents directory');
-    }
-    return Directory('$base/ai_models/${kind.folder}');
+    ModelKind kind, {
+    AppDataLayout? layout,
+    Future<Directory> Function()? readSystemAppFolder,
+    Future<Directory> Function()? readDesktopDefault,
+  }) async {
+    final root = await modelsRoot(
+      sessionFolder: sessionFolder,
+      layout: layout,
+      readSystemAppFolder: readSystemAppFolder,
+      readDesktopDefault: readDesktopDefault,
+    );
+    return Directory(p.join(root.path, kind.folder));
   }
 
   List<File> _requiredFiles(Directory dir, ModelKind kind) {
@@ -125,7 +117,10 @@ class ModelCache {
   /// Pack/head files present (CBraMod) or REVE safetensors present.
   /// Does **not** call [ensureBundledPack] — copying the bundled head must not
   /// alone mark the model installed/Ready.
-  Future<bool> isPackPresentOnDisk(String? sessionFolder, ModelKind kind) async {
+  Future<bool> isPackPresentOnDisk(
+    String? sessionFolder,
+    ModelKind kind,
+  ) async {
     final dir = await modelDirectory(sessionFolder, kind);
     if (kind.layout == ModelLayout.rlxSafetensors) {
       await ensureReveExperimentalHeads(dir);
@@ -445,16 +440,12 @@ class ModelCache {
   }
 
   Future<void> _stampVerified(Directory dir, ModelKind kind) async {
-    await File('${dir.path}/verified.json').writeAsString(
-      '{"sha256":"${kind.sha256}"}',
-      flush: true,
-    );
+    await File(
+      '${dir.path}/verified.json',
+    ).writeAsString('{"sha256":"${kind.sha256}"}', flush: true);
   }
 
-  Future<bool> isVerifiedOnDisk(
-    String? sessionFolder,
-    ModelKind kind,
-  ) async {
+  Future<bool> isVerifiedOnDisk(String? sessionFolder, ModelKind kind) async {
     final dir = await modelDirectory(sessionFolder, kind);
     try {
       final contents = await File('${dir.path}/verified.json').readAsString();
@@ -484,7 +475,6 @@ class ModelCache {
     }
     return s;
   }
-
 
   /// Load the model from disk. For Spur A, copies the bundled head pack first.
   Future<ModelInstallResult> install(
@@ -625,7 +615,8 @@ class ModelEngineNotifier extends Notifier<ModelEngineState> {
           if (!(await _cache.isPackPresentOnDisk(_sessionFolder, kind))) {
             return ModelEngineError(
               kind: kind,
-              message: installError?.toString() ??
+              message:
+                  installError?.toString() ??
                   'CBraMod head pack missing — bundled assets failed to copy',
             );
           }

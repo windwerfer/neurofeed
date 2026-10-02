@@ -64,7 +64,7 @@ class FeedbackRecorder {
     await discardSession();
     final storage = await _storage;
     await storage.ensureDir();
-    final dir = scratchDirectory(storage);
+    final dir = await scratchDirectory(storage);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
       debugPrint('[feedback] startSession: created scratch $dir');

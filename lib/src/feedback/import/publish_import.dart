@@ -69,7 +69,7 @@ Future<ImportResult> publishImportResult({
   required RecordingStore store,
   required SessionStorage storage,
 }) async {
-  final scratchDir = scratchDirectory(storage);
+  final scratchDir = await scratchDirectory(storage);
   if (!await scratchDir.exists()) {
     await scratchDir.create(recursive: true);
   }
@@ -93,7 +93,8 @@ Future<ImportResult> importFile({
 }) async {
   final file = File(path);
   final bytes = await file.readAsBytes();
-  final name = fileName ??
+  final name =
+      fileName ??
       (file.uri.pathSegments.isNotEmpty ? file.uri.pathSegments.last : path);
   return importRecordingBytes(
     bytes: bytes,
@@ -116,9 +117,5 @@ Future<ImportResult> importAndPublishFile({
     subject: subject,
     timeZone: timeZone,
   );
-  return publishImportResult(
-    result: result,
-    store: store,
-    storage: storage,
-  );
+  return publishImportResult(result: result, store: store, storage: storage);
 }

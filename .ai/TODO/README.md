@@ -10,6 +10,7 @@ Crown-start threads.
 | History dashboard unification | [history-dashboard-unification.md](history-dashboard-unification.md) | [handoff-history-dashboard.md](handoff-history-dashboard.md) |
 | Import / export (EDF · Mind Monitor CSV) | [import-export.md](import-export.md) | — |
 | GitHub Actions AppImage | [github actions appimage.md](github%20actions%20appimage.md) | — |
+| App folder, cache, models, export | **Landed.** [../contracts/app-folder.md](../contracts/app-folder.md) | [handoff-app-folder.md](handoff-app-folder.md) (do not implement from this) |
 
 When a thread lands, slim the spec to frozen law and move it to
 [`.ai/contracts/`](../contracts/). Keep the full implementer spec here

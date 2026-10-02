@@ -12,6 +12,7 @@ Athena optics stays there: [../TODO/athena-optics-contract.md](../TODO/athena-op
 | [data-plane-contract.md](data-plane-contract.md) | **Implemented** | Capture fork, inner zstd, assemble, soak, Android FGS |
 | [protocols_and_features.md](protocols_and_features.md) | **Implemented** | Electrodes: Rust per-device × per-feature defaults, `DeviceConfig` role pairs, protocol overrides, gate pads |
 | [fileformat_v6.md](fileformat_v6.md) | **Implemented / LOCKED** | `.neurofeed` v6 (NFED6): unified recording+feedback metadata, container layout, computed Trust extras. Human spec: [../../README_feedback_format.md](../../README_feedback_format.md) |
+| [app-folder.md](app-folder.md) | **Implemented** | App folder, cache, AI models, export, and the save-folder move. |
 
 Archived (historical v5 / NFED5):
 [../archive/session-format-contract-v5.md](../archive/session-format-contract-v5.md).

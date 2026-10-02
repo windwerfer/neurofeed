@@ -78,7 +78,7 @@ void main() {
   setUp(() async {
     history = await Directory.systemTemp.createTemp('neurofeed_rec_store_');
     storage = FileSystemSessionStorage(history);
-    scratch = scratchDirectory(storage);
+    scratch = await scratchDirectory(storage);
     await scratch.create(recursive: true);
     sqlite = await SessionSqlite.open(cacheDirectory: scratch);
     store = RecordingStore(storage: storage, sqlite: sqlite);

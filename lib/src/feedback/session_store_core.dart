@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
+import 'package:neurofeed/src/feedback/app_folder.dart';
+import 'package:neurofeed/src/feedback/folder_move.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
 import 'package:neurofeed/src/settings.dart';
@@ -21,7 +23,6 @@ bool isHistoryContainerName(String name) {
   if (!name.endsWith('.neurofeed')) return false;
   return name.startsWith('session_') || name.startsWith('recording_');
 }
-
 
 /// Id from a history-root `session_$id.neurofeed` or `recording_$id.neurofeed`.
 String? historyContainerId(String name) {
@@ -42,7 +43,6 @@ String? historyContainerId(String name) {
   }
   return null;
 }
-
 
 /// Count published session and recording containers in a [listFiles] result.
 ({int sessions, int recordings}) countHistoryContainers(
@@ -240,7 +240,8 @@ class SessionStore {
           final feedback = meta['feedback'];
           final outcome = feedback is Map
               ? <String, Object?>{
-                  for (final e in (feedback['outcomeScalars'] as Map? ?? {}).entries)
+                  for (final e
+                      in (feedback['outcomeScalars'] as Map? ?? {}).entries)
                     e.key.toString(): e.value,
                 }
               : null;
@@ -256,24 +257,31 @@ class SessionStore {
           : (name.startsWith('recording_') ? 'recording' : 'feedback');
       final savedAt =
           DateTime.tryParse(meta['savedAt'] as String? ?? '')?.toUtc() ??
-              DateTime.now().toUtc();
+          DateTime.now().toUtc();
       final startedAt =
           DateTime.tryParse(meta['startedAt'] as String? ?? '')?.toUtc() ??
-              savedAt;
-      final durationS = (meta['durationS'] as num?)?.toInt() ??
+          savedAt;
+      final durationS =
+          (meta['durationS'] as num?)?.toInt() ??
           (meta['elapsedSeconds'] as num?)?.toInt() ??
           0;
       final device = meta['device'];
       final deviceMap = device is Map
-          ? <String, Object?>{for (final e in device.entries) e.key.toString(): e.value}
+          ? <String, Object?>{
+              for (final e in device.entries) e.key.toString(): e.value,
+            }
           : null;
       final subject = meta['subject'];
       final subjectMap = subject is Map
-          ? <String, Object?>{for (final e in subject.entries) e.key.toString(): e.value}
+          ? <String, Object?>{
+              for (final e in subject.entries) e.key.toString(): e.value,
+            }
           : null;
       final feedback = meta['feedback'];
       final fbMap = feedback is Map
-          ? <String, Object?>{for (final e in feedback.entries) e.key.toString(): e.value}
+          ? <String, Object?>{
+              for (final e in feedback.entries) e.key.toString(): e.value,
+            }
           : null;
       final channels = () {
         final labels = deviceMap?['channelLabels'];
@@ -304,7 +312,8 @@ class SessionStore {
           savedAt: savedAt,
           startedAt: startedAt,
           durationS: durationS,
-          protocol: fbMap?['protocol'] as String? ??
+          protocol:
+              fbMap?['protocol'] as String? ??
               (kind == 'recording' ? '' : (meta['protocol'] as String? ?? '')),
           kind: kind,
           protocolVersion: fbMap?['protocolVersion']?.toString(),
@@ -360,7 +369,9 @@ class SessionStore {
           }(),
           fileSize: fileSize,
           mtime: mtimeMs,
-          thumbnail: head.thumbnail.isNotEmpty ? head.thumbnail : existing?.thumbnail,
+          thumbnail: head.thumbnail.isNotEmpty
+              ? head.thumbnail
+              : existing?.thumbnail,
           createdAt: existing?.createdAt ?? now,
           updatedAt: now,
           timeZone: meta['timeZone'] as String?,
@@ -376,7 +387,6 @@ class SessionStore {
       }
     }
   }
-
 
   Future<List<int>?> readMuse(String id) async {
     final storage = await _storage;
@@ -492,8 +502,7 @@ class SessionStore {
             ? thumbnail
             : placeholderWebP,
       );
-      final subjectInfo = subject ??
-          SubjectInfo(id: metadata.userId ?? '');
+      final subjectInfo = subject ?? SubjectInfo(id: metadata.userId ?? '');
       final assembleAnns = metadata.annotations.isNotEmpty
           ? metadata.annotations
           : assembleAnnotations(gestures: metadata.gestures);
@@ -520,8 +529,7 @@ class SessionStore {
     final durationS = metadata.durationS != 0
         ? metadata.durationS
         : metadata.elapsedSeconds;
-    final subjectInfoForRow = subject ??
-        SubjectInfo(id: metadata.userId ?? '');
+    final subjectInfoForRow = subject ?? SubjectInfo(id: metadata.userId ?? '');
     final userId = subjectInfoForRow.id.isNotEmpty
         ? subjectInfoForRow.id
         : metadata.userId;
@@ -529,7 +537,7 @@ class SessionStore {
         DateTime.tryParse(metadata.savedAt)?.toUtc() ?? DateTime.now().toUtc();
     final startedAtDt =
         DateTime.tryParse(metadata.startedAt ?? metadata.savedAt)?.toUtc() ??
-            savedAtDt;
+        savedAtDt;
     final anns = metadata.annotations.isNotEmpty
         ? metadata.annotations
         : assembleAnnotations(gestures: metadata.gestures);
@@ -593,22 +601,31 @@ class SessionStore {
         spo2Min: rowScalars.spo2Min,
         spo2Max: rowScalars.spo2Max,
         peakAlphaHz:
-            rowScalars.peakAlphaHz ?? legacy.peakAlphaHz ?? metadata.peakAlphaHz,
-        peakAlphaPower: rowScalars.peakAlphaPower ??
+            rowScalars.peakAlphaHz ??
+            legacy.peakAlphaHz ??
+            metadata.peakAlphaHz,
+        peakAlphaPower:
+            rowScalars.peakAlphaPower ??
             legacy.peakAlphaPower ??
             metadata.peakAlphaPower,
         peakAlphaMeanHz: rowScalars.peakAlphaMeanHz,
-        pctInTarget: rowScalars.pctInTarget ??
+        pctInTarget:
+            rowScalars.pctInTarget ??
             legacy.pctInTarget ??
             metadata.pctInTarget,
         avgMovement:
-            rowScalars.avgMovement ?? legacy.avgMovement ?? metadata.avgMovement,
+            rowScalars.avgMovement ??
+            legacy.avgMovement ??
+            metadata.avgMovement,
         stillnessPct: rowScalars.stillnessPct ?? metadata.stats?.stillnessPct,
-        guardrailWarnCount: rowScalars.guardrailWarnCount ??
+        guardrailWarnCount:
+            rowScalars.guardrailWarnCount ??
             legacy.guardrailWarnCount ??
             metadata.guardrailWarnCount,
         avgSleepDir:
-            rowScalars.avgSleepDir ?? legacy.avgSleepDir ?? metadata.avgSleepDir,
+            rowScalars.avgSleepDir ??
+            legacy.avgSleepDir ??
+            metadata.avgSleepDir,
         avgAlphaRel: rowScalars.avgAlphaRel ?? metadata.stats?.avgAlphaRel,
         guardWarnPct: rowScalars.guardWarnPct,
         guardThreshold: rowScalars.guardThreshold,
@@ -643,7 +660,9 @@ class SessionStore {
         updatedAt: DateTime.now(),
       ),
     );
-    debugPrint('[session] written ${_containerName(id)} to ${storage.location}');
+    debugPrint(
+      '[session] written ${_containerName(id)} to ${storage.location}',
+    );
     return SessionSummary(
       id: id,
       metadata: metadata,
@@ -746,30 +765,29 @@ class SessionStore {
     return existed;
   }
 
-  /// Copy every session in the current storage into [target], then delete the
-  /// source copies so the folder change does not duplicate history. Returns the
-  /// number of sessions moved (used for folder-change migration).
-  Future<int> moveAllTo(SessionStorage target) async {
+  /// Copy history (and, on desktop, cache, export, and AI models) into
+  /// [target], then delete the sources. Returns how many history containers
+  /// moved. Closes the history database first so a desktop cache copy is
+  /// not a live file. On failure, destination copies from this attempt are
+  /// removed and sources stay.
+  Future<int> moveAllTo(
+    SessionStorage target, {
+    FolderMovePlan? plan,
+    bool? includeCacheAndModels,
+    Future<void> Function(FolderFile file)? copyForTest,
+  }) async {
     final storage = await _storage;
-    final names = await storage.listFiles();
-    var moved = 0;
-    for (final name in names) {
-      if (!isHistoryContainerName(name)) {
-        continue;
-      }
-      final bytes = await storage.readFile(name);
-      if (bytes == null) {
-        continue;
-      }
-      await target.ensureDir();
-      await target.writeFileAtomic(name, bytes);
-      await storage.deleteFile(name);
-      moved++;
-    }
-    // Ids survive a folder move verbatim, so carry the cached metadata across
-    // to the new storage key. Mtimes will mismatch once and refresh on the
-    // first open of the new folder.
-    (await _sqlite).close();
+    final sqlite = await _sqlite;
+    sqlite.checkpointAndClose();
+    final include = includeCacheAndModels ?? includesPrivateAppDirs();
+    final decided =
+        plan ?? await planStorageMove(storage, includeCacheAndModels: include);
+    final moved = await commitFolderMove(
+      source: storage,
+      target: target,
+      files: decided.files,
+      copyForTest: copyForTest,
+    );
     debugPrint('[session] moved $moved file(s)');
     return moved;
   }

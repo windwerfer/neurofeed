@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
@@ -7,8 +8,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/connect_source.dart';
 import 'package:neurofeed/src/connection_provider.dart';
 import 'package:neurofeed/src/device_type_switch.dart';
+import 'package:neurofeed/src/feedback/app_folder.dart';
+import 'package:neurofeed/src/feedback/feedback_state.dart';
+import 'package:neurofeed/src/feedback/folder_move.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/monitor/monitor_providers.dart';
+import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/reve/reve_card.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/settings.dart';
@@ -16,15 +22,85 @@ import 'package:neurofeed/src/views/about_view.dart';
 import 'package:neurofeed/src/views/music_settings_panel.dart';
 import 'package:neurofeed/src/views/settings_sections.dart';
 
+/// Why a save-folder change is refused.
+enum FolderChangeBlock { none, session, recording }
+
+/// A feedback session that is still running, an unsaved ended session, a
+/// monitor recording, or a recording waiting for Save / Discard.
+FolderChangeBlock folderChangeBlock({
+  required FeedbackPhase phase,
+  required bool unsavedSession,
+  required CaptureKind capture,
+  required bool pendingRecording,
+}) {
+  switch (phase) {
+    case FeedbackPhase.calibrating:
+    case FeedbackPhase.playing:
+    case FeedbackPhase.paused:
+    case FeedbackPhase.interrupted:
+      return FolderChangeBlock.session;
+    case FeedbackPhase.idle:
+    case FeedbackPhase.ended:
+      break;
+  }
+  if (unsavedSession) return FolderChangeBlock.session;
+  if (capture == CaptureKind.recording || pendingRecording) {
+    return FolderChangeBlock.recording;
+  }
+  return FolderChangeBlock.none;
+}
+
+String folderChangeBlockTitle(FolderChangeBlock block) => switch (block) {
+  FolderChangeBlock.session => 'Session in progress',
+  FolderChangeBlock.recording => 'Recording in progress',
+  FolderChangeBlock.none => '',
+};
+
+String folderChangeBlockBody(FolderChangeBlock block) => switch (block) {
+  FolderChangeBlock.session =>
+    'Finish the session before changing the save folder.',
+  FolderChangeBlock.recording =>
+    'Finish the recording before changing the save folder.',
+  FolderChangeBlock.none => '',
+};
+
 /// Folder-change confirm copy. Counts both `session_` and `recording_` prefixes.
-String folderChangeMoveBody(int sessions, int recordings) =>
-    'Move $sessions session(s) and $recordings recording(s) into the new '
-    'folder? Choosing No leaves them in the current folder.';
+/// [export], [cache], and [models] add those trees when they contain a file.
+String folderChangeMoveBody(
+  int sessions,
+  int recordings, {
+  bool export = false,
+  bool cache = false,
+  bool models = false,
+}) {
+  final bits = <String>[
+    if (sessions > 0 || recordings > 0)
+      '$sessions session(s) and $recordings recording(s)',
+    if (export) 'export',
+    if (cache) 'cache',
+    if (models) 'AI models',
+  ];
+  final what = bits.isEmpty
+      ? '$sessions session(s) and $recordings recording(s)'
+      : bits.join(', ');
+  return 'Move $what into the new folder? Choosing No leaves them in the '
+      'current folder.';
+}
 
 /// Settings view. Wide panes keep a section list beside the cards. Narrow
 /// panes show the list, then one section.
 class SettingsView extends ConsumerStatefulWidget {
-  const SettingsView({super.key});
+  const SettingsView({
+    super.key,
+    this.pickFolderForTest,
+    this.defaultFolderForTest,
+  });
+
+  /// Replaces the system folder picker. Tests only.
+  final Future<String?> Function()? pickFolderForTest;
+
+  /// Replaces [defaultAppFolder] for Reset. Tests only.
+  final Future<Directory> Function()? defaultFolderForTest;
 
   @override
   ConsumerState<SettingsView> createState() => _SettingsViewState();
@@ -123,35 +199,182 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     return dir;
   }
 
-  Future<void> _applyFolder(
-    WidgetRef ref,
-    String? folder, {
-    required bool migrate,
-  }) async {
-    if (folder == null) {
-      return;
-    }
-    final settings = ref.read(settingsProvider);
-    final current = ref.read(sessionStorageProvider);
-    final oldStorage = current.valueOrNull;
+  FolderChangeBlock _block(WidgetRef ref) {
+    final phase = ref.exists(feedbackStateProvider)
+        ? ref.read(feedbackStateProvider).phase
+        : FeedbackPhase.idle;
+    final unsaved = ref.exists(feedbackStateProvider)
+        ? ref.read(feedbackStateProvider.notifier).hasUnsavedSession
+        : false;
+    final monitor = ref.exists(monitorControllerProvider)
+        ? ref.read(monitorControllerProvider)
+        : null;
+    return folderChangeBlock(
+      phase: phase,
+      unsavedSession: unsaved,
+      capture: monitor?.kind ?? CaptureKind.idle,
+      pendingRecording: monitor?.pendingScratchPath != null,
+    );
+  }
 
-    if (migrate && oldStorage != null) {
-      final store = await ref.read(sessionStoreProvider.future);
-      await store.moveAllTo(resolveStorageFromFolder(folder));
-    }
+  Future<void> _showBlocked(BuildContext context, FolderChangeBlock block) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(folderChangeBlockTitle(block)),
+        content: Text(folderChangeBlockBody(block)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
 
-    await settings.setSessionFolder(folder);
+  Future<void> _showMoveFailed(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Could not move the files'),
+        content: const Text('The save folder was not changed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _invalidateStores(WidgetRef ref) {
     ref.invalidate(sessionStorageProvider);
     ref.invalidate(sessionStoreProvider);
     ref.invalidate(sessionListProvider);
   }
 
-  Future<void> _resetFolder(WidgetRef ref) async {
+  Future<bool> _suspendTmp(WidgetRef ref) async {
+    if (!ref.exists(monitorControllerProvider)) return false;
+    return ref
+        .read(monitorControllerProvider.notifier)
+        .suspendTmpForFolderChange();
+  }
+
+  Future<void> _resumeTmp(WidgetRef ref) async {
+    if (!ref.exists(monitorControllerProvider)) return;
+    await ref
+        .read(monitorControllerProvider.notifier)
+        .resumeTmpAfterFolderChange();
+  }
+
+  Future<void> _changeFolder(
+    WidgetRef ref,
+    BuildContext context,
+    Settings settings, {
+    required Future<String?> Function() pick,
+    required bool clearPref,
+  }) async {
+    final block = _block(ref);
+    if (block != FolderChangeBlock.none) {
+      if (!context.mounted) return;
+      await _showBlocked(context, block);
+      return;
+    }
+    final folder = await pick();
+    if (folder == null || folder.isEmpty) return;
+    if (!context.mounted) return;
+    final existing = await ref.read(sessionStorageProvider.future);
+    if (!context.mounted) return;
+    if (sameAppFolder(existing.location, folder)) {
+      if (clearPref && settings.sessionFolder != null) {
+        await settings.clearSessionFolder();
+        _invalidateStores(ref);
+      }
+      return;
+    }
+    final include = includesPrivateAppDirs();
+    final plan = await Zone.root.run(
+      () => planStorageMove(existing, includeCacheAndModels: include),
+    );
+    if (!context.mounted) return;
+    var migrate = false;
+    if (plan.prompts) {
+      final choice = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Move existing files?'),
+          content: Text(
+            folderChangeMoveBody(
+              plan.sessions,
+              plan.recordings,
+              export: plan.export,
+              cache: plan.cache,
+              models: plan.models,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('No'),
+            ),
+            FilledButton(
+              key: const Key('folder_move_confirm'),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Move'),
+            ),
+          ],
+        ),
+      );
+      if (choice == null) return;
+      migrate = choice;
+    }
+    if (!context.mounted) return;
+    final resume = await _suspendTmp(ref);
+    try {
+      await Zone.root.run(() async {
+        if (migrate) {
+          final store = await ref.read(sessionStoreProvider.future);
+          await store.moveAllTo(
+            resolveStorageFromFolder(folder),
+            includeCacheAndModels: include,
+          );
+        }
+        if (!migrate || !include) {
+          await deleteTmpScratch(existing);
+        }
+        if (clearPref) {
+          await settings.clearSessionFolder();
+        } else {
+          await settings.setSessionFolder(folder);
+        }
+      });
+    } catch (e) {
+      debugPrint('[folder] change failed: $e');
+      _invalidateStores(ref);
+      if (resume) await _resumeTmp(ref);
+      if (context.mounted) await _showMoveFailed(context);
+      return;
+    }
+    _invalidateStores(ref);
+    if (resume) await _resumeTmp(ref);
+  }
+
+  Future<void> _resetFolder(WidgetRef ref, BuildContext context) async {
     final settings = ref.read(settingsProvider);
-    await settings.clearSessionFolder();
-    ref.invalidate(sessionStorageProvider);
-    ref.invalidate(sessionStoreProvider);
-    ref.invalidate(sessionListProvider);
+    await _changeFolder(
+      ref,
+      context,
+      settings,
+      pick: () async {
+        final dir = widget.defaultFolderForTest != null
+            ? await widget.defaultFolderForTest!()
+            : await defaultAppFolder();
+        return dir.path;
+      },
+      clearPref: true,
+    );
   }
 
   Future<void> _onPickFolder(
@@ -159,46 +382,13 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     BuildContext context,
     Settings settings,
   ) async {
-    final folder = await _pickFolder();
-    if (folder == null) {
-      return;
-    }
-    if (!context.mounted) {
-      return;
-    }
-    final current = ref.read(sessionStorageProvider);
-    final existing = current.valueOrNull;
-    final counted = existing == null
-        ? (sessions: 0, recordings: 0)
-        : countHistoryContainers(await existing.listFiles());
-    if (!context.mounted) {
-      return;
-    }
-    final total = counted.sessions + counted.recordings;
-    final migrate = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Copy existing files?'),
-        content: Text(
-          total > 0
-              ? folderChangeMoveBody(counted.sessions, counted.recordings)
-              : 'Choose this folder for saved files?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('No'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(total > 0 ? 'Copy' : 'Yes'),
-          ),
-        ],
-      ),
+    await _changeFolder(
+      ref,
+      context,
+      settings,
+      pick: widget.pickFolderForTest ?? _pickFolder,
+      clearPref: false,
     );
-    if (migrate != null) {
-      await _applyFolder(ref, folder, migrate: migrate);
-    }
   }
 
   @override
@@ -527,6 +717,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   ) {
     final theme = Theme.of(context);
     final folder = settings.sessionFolder;
+    final mobile = Platform.isAndroid || Platform.isIOS;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
     return Card(
       color: theme.colorScheme.surfaceContainerHighest,
       child: Padding(
@@ -538,29 +732,39 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.folder_outlined),
               title: const Text('Save files to folder'),
-              subtitle: storage.maybeWhen(
-                data: (s) =>
-                    Text(s.displayName, style: theme.textTheme.bodySmall),
-                orElse: () => const Text('Resolving storage…'),
-              ),
               trailing: const Icon(Icons.edit_outlined),
               onTap: () => _onPickFolder(ref, context, settings),
+            ),
+            storage.when(
+              data: (s) => SelectableText(
+                s.displayName,
+                key: const Key('save_folder_path'),
+                style: theme.textTheme.bodySmall,
+              ),
+              loading: () => Text('Resolving storage…', style: muted),
+              error: (error, _) => Text(
+                'Could not resolve the folder',
+                key: const Key('save_folder_path'),
+                style: muted,
+              ),
             ),
             const Divider(height: 24),
             Text(
               folder == null
                   ? 'Using the default folder. Tap to choose where '
                         'session and recording files are stored.'
-                  : 'Files are saved to the folder above. Cache/temp '
-                        'files live in a hidden .cache subfolder.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+                  : mobile
+                  ? 'Files are saved to the folder above. Cache and AI '
+                        'models stay in the app\'s private folder.'
+                  : 'Files are saved to the folder above, with cache and '
+                        'AI models inside it.',
+              style: muted,
             ),
             if (folder != null) ...[
               const SizedBox(height: 8),
               TextButton.icon(
-                onPressed: () => _resetFolder(ref),
+                key: const Key('reset_folder'),
+                onPressed: () => _resetFolder(ref, context),
                 icon: const Icon(Icons.autorenew),
                 label: const Text('Reset to default folder'),
               ),

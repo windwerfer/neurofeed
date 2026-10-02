@@ -6,7 +6,9 @@ Frozen **CBraMod** encoder + full-corpus **A-vig** linear head (`drowsy` / `hypn
 
 1. Select **CBraMod A-vig** as the Guardrail AI engine (default when this pack is present).
 2. Head files are bundled under `assets/packs/cbramod-a-vig-full/` and copied into
-   `<sessionFolder>/ai_models/cbramod_a_vig/` on first install.
+   `ai_models/cbramod_a_vig/` on first install. That directory is under the app
+   folder on Linux and Windows, and under the system app folder on Android
+   (see `.ai/contracts/app-folder.md`).
 3. Download the encoder (~20 MB Apache-2.0) from Hugging Face
    `weighting666/CBraMod` → `pretrained_weights.pth`, or place a cache copy at
    that model directory. SHA-256 must match `encoder/EXPECTED.json`:

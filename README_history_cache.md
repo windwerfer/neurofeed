@@ -36,14 +36,17 @@ columns. The same reindex runs when the DB is empty but files exist on disk.
 <cache-dir>/session_metadata.db
 ```
 
-`resolveSessionCacheDir` in `session_sqlite.dart`:
+`resolveSessionCacheDir` and `scratchDirectory` are the same directory
+(see [`.ai/contracts/app-folder.md`](.ai/contracts/app-folder.md)):
 
-- Linux/Windows/macOS: `<history-folder>/.cache/`
-- Android/iOS: `getApplicationCacheDirectory()`
+- Linux/Windows/macOS: `<app folder>/.cache/`
+- Android/iOS: `<system app folder>/.cache/` (`getApplicationSupportDirectory`,
+  not the system cache directory), including when the save folder is SAF
 
-Isolation is the **database path**, not a column. Changing the save folder
-moves `session_*.neurofeed` **and** `recording_*.neurofeed` and
-opens the destination cache dir.
+Isolation is the **database path**, not a column. On desktop, changing the
+save folder moves history containers, `export/`, `.cache`, and `ai_models/`.
+On Android it moves history containers and `export/` only. The database
+stays in the system app folder.
 
 ---
 

@@ -35,6 +35,7 @@ land (Athena optics keeps its implementer detail there).
 | [contracts/data-plane-contract.md](contracts/data-plane-contract.md) | **Implemented.** Capture fork, inner zstd, assemble, soak, Android FGS. D1–D3 frozen. Do not re-run [`archive/handoff-spine.md`](archive/handoff-spine.md). |
 | [contracts/protocols_and_features.md](contracts/protocols_and_features.md) | **Implemented.** Electrode workflow: Rust defaults per device × feature, `DeviceConfig` role pairs, protocol overrides, gate pads in Rust. |
 | [contracts/fileformat_v6.md](contracts/fileformat_v6.md) | **Implemented / LOCKED.** `.neurofeed` v6 (NFED6). Human spec: [../README_feedback_format.md](../README_feedback_format.md) (update it if the contract changes). Historical v5: [archive/session-format-contract-v5.md](archive/session-format-contract-v5.md). |
+| [contracts/app-folder.md](contracts/app-folder.md) | **Implemented.** App folder, cache, AI models, export, save-folder move. |
 
 ## Feedback
 
@@ -61,6 +62,7 @@ pipeline-contract work.
 | [TODO/history-dashboard-unification.md](TODO/history-dashboard-unification.md) | History chips + Feedback overview (locked design) |
 | [TODO/handoff-history-dashboard.md](TODO/handoff-history-dashboard.md) | PR manager: sequential subagents, one commit per PR |
 | [TODO/github actions appimage.md](TODO/github%20actions%20appimage.md) | GitHub Actions AppImage packaging |
+
 
 ## Archive
 

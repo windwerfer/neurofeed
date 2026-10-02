@@ -184,7 +184,7 @@ Sidebar **History** (`AppView.feedbackHistory`). One sqlite list; no
 | Import | `Import…` | `_importRecording` | `feedback_history.dart` | App bar next to Refresh; picks `.edf` / `.csv`. |
 | Import summary | `Import recording?` / `Import with losses?` · `Kept` · `Lost or changed` · `Cancel` / `Import` | `_confirmImport` | `feedback_history.dart` | Shown before every import is saved; lost list = `import.warnings`. |
 | Import interval warning | `This Mind Monitor file was recorded with one row every {N} seconds, so it covers only about {X}% of the session. Short events can be missed, so expect lower result quality. For better results, set Mind Monitor's recording interval to 1 second.` | `intervalCoverageWarning` | `import_summary.dart` / `feedback_history.dart` | Warning box at the top of the import summary when `import.recordingInterval ≥ 1.9` s. None for Constant, ≤ 1 s intervals and EDF. |
-| Folder-change dialog | `Move {s} session(s) and {r} recording(s) into the new folder? Choosing No leaves them in the current folder.` | `folderChangeMoveBody` | `settings_view.dart` | Counts both prefixes. |
+| Folder-change dialog | `Move existing files?` · `Move` / `No` · `Move {s} session(s) and {r} recording(s) into the new folder? Choosing No leaves them in the current folder.` | `folderChangeMoveBody` | `settings_view.dart` | Asks only when something would move. Dismiss keeps the folder. **No** switches and leaves files. Body also names `export`, `cache`, and `AI models` when those trees contain a file. Empty trees do not count. `.cache/tmp_*` does not count and is deleted. |
 | Record AUX channels | `Record AUX channels` | `Settings.recordAux` / `_RecordingCard` | `settings_view.dart` | Recording section, Session recording card. Default off. Muse AUX inputs → `AUX1`…`AUX4` (Classic AUX1; Athena AUX1–AUX4). Applies on next connect (`connectWithOptions(recordAux:)`). |
 | Crown quality source | `Crown` card: `Crown` / `App` radios | `Settings.crownQualitySource` / `_CrownCard` | `settings_view.dart` | Devices section. Default `Crown` (Crown per-pad quality averaged per second, app score for seconds without it); `App` = app score only. Pref `crown_quality_source`. Applies on next connect (`connectWithOptions(qualitySource:)`). |
 
@@ -277,8 +277,9 @@ was open. Picking a hit opens that section and scrolls to the card.
 | AI | `AI` | `SettingsSection.ai` | `settings_sections.dart` | Guardrail AI engine. |
 | Recording | `Recording` | `SettingsSection.recording` | `settings_sections.dart` | Save folder, Session recording, Gesture markers. |
 | About | `About` | `SettingsSection.about` | `settings_sections.dart` | About card, then Debug mode. |
-| Save folder | `Save files to folder` | `setSessionFolder` | `settings_view.dart` | Was `Save feedback to folder`. Moves sessions **and** recordings. |
-| Reset folder | `Reset to default folder` | `_resetFolder` | `settings_view.dart` | Shown when a custom folder is set. |
+| Save folder | `Save files to folder` | `setSessionFolder` | `settings_view.dart` | Was `Save feedback to folder`. The current folder path is under the title (`save_folder_path`). |
+| Reset folder | `Reset to default folder` | `_resetFolder` | `settings_view.dart` | Shown when a custom folder is set. Same move dialog as picking a folder. |
+| Folder change blocked | `Session in progress` / `Recording in progress` · `Finish the session before changing the save folder.` / `Finish the recording before changing the save folder.` | `folderChangeBlock` | `settings_view.dart` | Running feedback, unsaved ended session, open recording, or a recording waiting for Save / Discard. |
 | Session recording | `Session recording` | `_RecordingCard` | `settings_view.dart` | Stream toggles. Applies to **tmp, Record, and feedback**. |
 | Gesture markers | `Gesture markers` | `_GesturesCard` | `settings_view.dart` | |
 | Subject | `Subject` | `_SubjectCard` | `settings_view.dart` | Stable id plus optional nickname. |

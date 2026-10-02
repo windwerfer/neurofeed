@@ -11,23 +11,20 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:neurofeed/src/feedback/app_folder.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 
-/// Resolves the cache directory for the session metadata SQLite database.
-/// - Linux/Windows/macOS: `.cache` subfolder of the history folder
-/// - Android: `getApplicationCacheDirectory()` (app cache folder)
-/// - iOS: `getApplicationCacheDirectory()` (app cache folder)
-Future<Directory> resolveSessionCacheDir(SessionStorage history) async {
-  if (Platform.isAndroid || Platform.isIOS) {
-    return await getApplicationCacheDirectory();
-  }
-  // Linux/Windows/macOS: use .cache subfolder of history folder
-  if (history is FileSystemSessionStorage) {
-    return Directory('${history.location}${Platform.pathSeparator}.cache');
-  }
-  // SAF on non-Android (unlikely) - fallback to app cache
-  return await getApplicationCacheDirectory();
+/// Cache directory for `session_metadata.db`. Same path as [scratchDirectory].
+Future<Directory> resolveSessionCacheDir(
+  SessionStorage history, {
+  AppDataLayout? layout,
+  Future<Directory> Function()? readSystemAppFolder,
+}) {
+  return scratchDirectory(
+    history,
+    layout: layout,
+    readSystemAppFolder: readSystemAppFolder,
+  );
 }
 
 /// Singleton SQLite database for session metadata.
@@ -91,8 +88,7 @@ class SessionSqlite {
   }
 
   void _createTables() {
-    _db.execute(
-      r"""
+    _db.execute(r"""
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY NOT NULL,
         path TEXT NOT NULL UNIQUE,
@@ -158,18 +154,30 @@ class SessionSqlite {
         time_zone TEXT,
         saved_at_ms INTEGER
       )
-""",
-    );
-    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_saved_at ON sessions(saved_at DESC)');
-    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC)');
-    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_protocol ON sessions(protocol)');
-    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_device_id ON sessions(device_id)');
-    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)');
-    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_guardrail_engine ON sessions(guardrail_engine)');
-    _db.execute('CREATE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id)');
-
+""");
     _db.execute(
-      r"""
+      'CREATE INDEX IF NOT EXISTS idx_sessions_saved_at ON sessions(saved_at DESC)',
+    );
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC)',
+    );
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_sessions_protocol ON sessions(protocol)',
+    );
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_sessions_device_id ON sessions(device_id)',
+    );
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)',
+    );
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_sessions_guardrail_engine ON sessions(guardrail_engine)',
+    );
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id)',
+    );
+
+    _db.execute(r"""
       CREATE TABLE IF NOT EXISTS state_markers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -181,10 +189,12 @@ class SessionSqlite {
         created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000),
         updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
       )
-""",
+""");
+    _db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_state_markers_session_t ON state_markers(session_id, t)',
     );
-    _db.execute('CREATE INDEX IF NOT EXISTS idx_state_markers_session_t ON state_markers(session_id, t)');
   }
+
   /// Insert or replace a session row.
   Future<void> upsertSession(SessionRow row) async {
     _db.execute('''
@@ -280,7 +290,9 @@ class SessionSqlite {
 
   /// List all sessions, newest first.
   Future<List<SessionRow>> listSessions() async {
-    final result = _db.select('SELECT * FROM sessions ORDER BY COALESCE(saved_at_ms, 0) DESC, saved_at DESC');
+    final result = _db.select(
+      'SELECT * FROM sessions ORDER BY COALESCE(saved_at_ms, 0) DESC, saved_at DESC',
+    );
     return result.map((r) => SessionRow.fromRow(r)).toList();
   }
 
@@ -293,7 +305,8 @@ class SessionSqlite {
   /// Insert or replace markers for a session.
   Future<void> upsertMarkers(String sessionId, List<MarkerRow> markers) async {
     for (final m in markers) {
-      _db.execute('''
+      _db.execute(
+        '''
         INSERT INTO state_markers (session_id, t, source, label, confidence, intensity, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, strftime('%s','now') * 1000)
         ON CONFLICT(id) DO UPDATE SET
@@ -303,7 +316,9 @@ class SessionSqlite {
           confidence = excluded.confidence,
           intensity = excluded.intensity,
           updated_at = excluded.updated_at
-      ''', [m.sessionId, m.t, m.source, m.label, m.confidence, m.intensity]);
+      ''',
+        [m.sessionId, m.t, m.source, m.label, m.confidence, m.intensity],
+      );
     }
   }
 
@@ -322,7 +337,17 @@ class SessionSqlite {
   }
 
   void close() => _db.dispose();
+
+  /// Fold the WAL into the main file, then close. Call this before copying
+  /// the cache directory.
+  void checkpointAndClose() {
+    try {
+      _db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch (_) {}
+    close();
+  }
 }
+
 /// Row for sessions table.
 class SessionRow {
   final String id;
@@ -333,6 +358,7 @@ class SessionRow {
   final DateTime startedAt;
   final int durationS;
   final String protocol;
+
   /// `feedback` or `recording`. Existing rows migrate to `feedback`.
   final String kind;
   final String? protocolVersion;
@@ -387,8 +413,10 @@ class SessionRow {
   final Uint8List? thumbnail;
   final DateTime createdAt;
   final DateTime updatedAt;
+
   /// IANA id for wall-clock display (v6).
   final String? timeZone;
+
   /// UTC epoch ms for list sorting (v6).
   final int? savedAtMs;
 
@@ -533,24 +561,69 @@ class SessionRow {
   }
 
   List<Object?> toList() => [
-    id, path, formatVersion, appVersion,
-    savedAt.toUtc().toIso8601String(), startedAt.toUtc().toIso8601String(),
-    durationS, protocol, kind, protocolVersion, deviceName, deviceModel, deviceId,
-    calibrationProfile, recordedChannels, recordedStreams,
-    offMeta, lenMeta, offComputed, lenComputed, offRaw, lenRaw,
-    avgHr, hrMin, hrMax, avgSpo2, spo2Min, spo2Max,
-    peakAlphaHz, peakAlphaPower, peakAlphaMeanHz,
-    pctInTarget, avgMovement, stillnessPct,
-    guardrailWarnCount, avgSleepDir, avgAlphaRel, guardWarnPct, guardThreshold,
-    signalQualityMean, pctQcOk, qualityChannelUsable,
-    annotationPauseS, annotationBadQualityS, annotationDisconnectS,
-    batteryStartPct, batteryEndPct, experimentalScalars,
+    id,
+    path,
+    formatVersion,
+    appVersion,
+    savedAt.toUtc().toIso8601String(),
+    startedAt.toUtc().toIso8601String(),
+    durationS,
+    protocol,
+    kind,
+    protocolVersion,
+    deviceName,
+    deviceModel,
+    deviceId,
+    calibrationProfile,
+    recordedChannels,
+    recordedStreams,
+    offMeta,
+    lenMeta,
+    offComputed,
+    lenComputed,
+    offRaw,
+    lenRaw,
+    avgHr,
+    hrMin,
+    hrMax,
+    avgSpo2,
+    spo2Min,
+    spo2Max,
+    peakAlphaHz,
+    peakAlphaPower,
+    peakAlphaMeanHz,
+    pctInTarget,
+    avgMovement,
+    stillnessPct,
+    guardrailWarnCount,
+    avgSleepDir,
+    avgAlphaRel,
+    guardWarnPct,
+    guardThreshold,
+    signalQualityMean,
+    pctQcOk,
+    qualityChannelUsable,
+    annotationPauseS,
+    annotationBadQualityS,
+    annotationDisconnectS,
+    batteryStartPct,
+    batteryEndPct,
+    experimentalScalars,
     markerCount,
-    guardrailEngine, modelKind, modelSha256, feedbackEngine,
-    userId, sessionId, notesPreview,
-    fileSize, mtime, thumbnail,
-    createdAt.millisecondsSinceEpoch, updatedAt.millisecondsSinceEpoch,
-    timeZone, savedAtMs,
+    guardrailEngine,
+    modelKind,
+    modelSha256,
+    feedbackEngine,
+    userId,
+    sessionId,
+    notesPreview,
+    fileSize,
+    mtime,
+    thumbnail,
+    createdAt.millisecondsSinceEpoch,
+    updatedAt.millisecondsSinceEpoch,
+    timeZone,
+    savedAtMs,
   ];
 
   static SessionRow fromRow(Row row) {
@@ -602,8 +675,10 @@ class SessionRow {
       pctQcOk: (row['pct_qc_ok'] as num?)?.toDouble(),
       qualityChannelUsable: row['quality_channel_usable'] as String?,
       annotationPauseS: (row['annotation_pause_s'] as num?)?.toDouble(),
-      annotationBadQualityS: (row['annotation_bad_quality_s'] as num?)?.toDouble(),
-      annotationDisconnectS: (row['annotation_disconnect_s'] as num?)?.toDouble(),
+      annotationBadQualityS: (row['annotation_bad_quality_s'] as num?)
+          ?.toDouble(),
+      annotationDisconnectS: (row['annotation_disconnect_s'] as num?)
+          ?.toDouble(),
       batteryStartPct: (row['battery_start_pct'] as num?)?.toDouble(),
       batteryEndPct: (row['battery_end_pct'] as num?)?.toDouble(),
       experimentalScalars: row['experimental_scalars'] as String?,
@@ -652,7 +727,12 @@ class MarkerRow {
        updatedAt = updatedAt ?? DateTime.now();
 
   List<Object?> toList() => [
-    sessionId, t, source, label, confidence, intensity,
+    sessionId,
+    t,
+    source,
+    label,
+    confidence,
+    intensity,
   ];
 
   static MarkerRow fromRow(Row row) => MarkerRow(
