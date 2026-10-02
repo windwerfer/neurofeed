@@ -285,8 +285,8 @@ assets/                     protocols.json, calibrations.json, features.json, au
   sessions (real and simulated) record 8 channels; gate/reward default is
   `DeviceConfig.targetElectrodes` (PO3/PO4).
 - **Settings has no “AI sleep guardrail” card.** Guard is per-protocol in
-  the builder + `Settings.guardFeatureFor`. Debug mode is the last card
-  (after About).
+  the builder + `Settings.guardFeatureFor`. Settings sections are General,
+  Devices, AI, Recording, About. Debug mode is the last card, inside About.
 - **flutter_soloud Linux Xiph libs are glibc-2.43-built** unless
   `TRY_SYSTEM_LIBS_FIRST=1` + system `libopus-dev` etc. (devcontainer and
   `release-linux.yml` already do this).

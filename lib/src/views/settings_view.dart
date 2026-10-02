@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/connect_source.dart';
 import 'package:neurofeed/src/connection_provider.dart';
@@ -13,13 +14,15 @@ import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/views/about_view.dart';
 import 'package:neurofeed/src/views/music_settings_panel.dart';
+import 'package:neurofeed/src/views/settings_sections.dart';
 
 /// Folder-change confirm copy. Counts both `session_` and `recording_` prefixes.
 String folderChangeMoveBody(int sessions, int recordings) =>
     'Move $sessions session(s) and $recordings recording(s) into the new '
     'folder? Choosing No leaves them in the current folder.';
 
-/// Settings view — session storage folder + session recording options.
+/// Settings view. Wide panes keep a section list beside the cards. Narrow
+/// panes show the list, then one section.
 class SettingsView extends ConsumerStatefulWidget {
   const SettingsView({super.key});
 
@@ -28,6 +31,87 @@ class SettingsView extends ConsumerStatefulWidget {
 }
 
 class _SettingsViewState extends ConsumerState<SettingsView> {
+  SettingsSection _section = SettingsSection.general;
+  bool _showDetail = false;
+  bool _searching = false;
+  SettingsSection _sectionBeforeSearch = SettingsSection.general;
+  bool _detailBeforeSearch = false;
+  String? _pendingScrollId;
+  final _searchController = TextEditingController();
+  final _searchFocus = FocusNode();
+  final _cardKeys = <String, GlobalKey>{};
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
+
+  GlobalKey _cardKey(String id) => _cardKeys.putIfAbsent(id, GlobalKey.new);
+
+  void _openSearch() {
+    _searchController.clear();
+    setState(() {
+      _sectionBeforeSearch = _section;
+      _detailBeforeSearch = _showDetail;
+      _searching = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _searching) _searchFocus.requestFocus();
+    });
+  }
+
+  void _closeSearch({bool restore = true}) {
+    _searchController.clear();
+    setState(() {
+      _searching = false;
+      if (restore) {
+        _section = _sectionBeforeSearch;
+        _showDetail = _detailBeforeSearch;
+      }
+      _pendingScrollId = null;
+    });
+  }
+
+  void _selectSection(SettingsSection section) {
+    _searchController.clear();
+    setState(() {
+      _searching = false;
+      _section = section;
+      _showDetail = true;
+      _pendingScrollId = null;
+    });
+  }
+
+  void _openHit(SettingsSearchHit hit) {
+    _searchController.clear();
+    setState(() {
+      _searching = false;
+      _section = hit.section;
+      _showDetail = true;
+      _pendingScrollId = hit.cardId;
+    });
+    _scheduleScroll();
+  }
+
+  void _scheduleScroll() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final id = _pendingScrollId;
+      if (id == null) return;
+      final target = _cardKeys[id]?.currentContext;
+      if (target == null) return;
+      _pendingScrollId = null;
+      Scrollable.ensureVisible(
+        target,
+        alignment: 0.05,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
   Future<String?> _pickFolder() async {
     if (Platform.isAndroid) {
       return SafSessionStorage.pickFolder();
@@ -119,117 +203,431 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final settings = ref.watch(settingsProvider);
-    final storage = ref.watch(sessionStorageProvider);
-    final folder = settings.sessionFolder;
-    final streams = settings.recordStreams;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= kSettingsRailBreakpoint;
+        if (_searching) return _searchScaffold(wide: wide);
+        if (!wide && !_showDetail) return _narrowIndex();
+        if (!wide) return _narrowDetail(settings);
+        return _wide(settings);
+      },
+    );
+  }
 
-    Future<void> toggle(RecordingStream stream, bool on) async {
-      final next = {...streams};
-      if (on) {
-        next.add(stream);
-      } else {
-        next.remove(stream);
-      }
-      await settings.setRecordStreams(next);
-      if (mounted) {
-        setState(() {});
-      }
-    }
+  Widget _searchIcon() {
+    return IconButton(
+      key: const Key('settings_search'),
+      tooltip: 'Search settings',
+      onPressed: _openSearch,
+      icon: const Icon(Icons.search),
+    );
+  }
 
+  Widget _sectionTile(
+    SettingsSection section, {
+    required bool selected,
+    required bool showChevron,
+  }) {
+    return ListTile(
+      key: Key('settings_section_${section.name}'),
+      selected: selected,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      title: Text(settingsSectionLabel(section)),
+      trailing: showChevron ? const Icon(Icons.chevron_right) : null,
+      onTap: () => _selectSection(section),
+    );
+  }
+
+  Widget _narrowIndex() {
+    final theme = Theme.of(context);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Text('Settings', style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 16),
-        RepaintBoundary(
-          child: Card(
-            color: theme.colorScheme.surfaceContainerHighest,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.folder_outlined),
-                    title: const Text('Save files to folder'),
-                    subtitle: storage.maybeWhen(
-                      data: (s) =>
-                          Text(s.displayName, style: theme.textTheme.bodySmall),
-                      orElse: () => const Text('Resolving storage…'),
+        Align(alignment: Alignment.centerLeft, child: _searchIcon()),
+        for (final section in settingsSections)
+          _sectionTile(section, selected: false, showChevron: true),
+      ],
+    );
+  }
+
+  Widget _narrowDetail(Settings settings) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              key: const Key('settings_back'),
+              tooltip: 'Back',
+              onPressed: () => setState(() => _showDetail = false),
+              icon: const Icon(Icons.arrow_back),
+            ),
+            Expanded(
+              child: Text(
+                settingsSectionLabel(_section),
+                style: theme.textTheme.titleLarge,
+              ),
+            ),
+            _searchIcon(),
+          ],
+        ),
+        Expanded(child: _sectionBody(settings)),
+      ],
+    );
+  }
+
+  Widget _wide(Settings settings) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Text('Settings', style: theme.textTheme.headlineSmall),
+        ),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(width: kSettingsRailWidth, child: _rail(selected: true)),
+              VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: theme.dividerColor,
+              ),
+              Expanded(child: _sectionBody(settings)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _rail({required bool selected, bool showSearch = true}) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+      children: [
+        if (showSearch)
+          Align(alignment: Alignment.centerLeft, child: _searchIcon()),
+        for (final section in settingsSections)
+          _sectionTile(
+            section,
+            selected: selected && section == _section,
+            showChevron: false,
+          ),
+      ],
+    );
+  }
+
+  Widget _searchScaffold({required bool wide}) {
+    final theme = Theme.of(context);
+    final hits = filterSettingsSearch(
+      settingsSearchHits(includeAudio: Platform.isAndroid),
+      _searchController.text,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 8, 12, 0),
+          child: Row(
+            children: [
+              IconButton(
+                key: const Key('settings_search_close'),
+                tooltip: 'Close search',
+                onPressed: () => _closeSearch(),
+                icon: const Icon(Icons.arrow_back),
+              ),
+              Expanded(child: _searchField()),
+            ],
+          ),
+        ),
+        Expanded(
+          child: wide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: kSettingsRailWidth,
+                      child: _rail(selected: true, showSearch: false),
                     ),
-                    trailing: const Icon(Icons.edit_outlined),
-                    onTap: () => _onPickFolder(ref, context, settings),
-                  ),
-                  const Divider(height: 24),
-                  Text(
-                    folder == null
-                        ? 'Using the default folder. Tap to choose where '
-                              'session and recording files are stored.'
-                        : 'Files are saved to the folder above. Cache/temp '
-                              'files live in a hidden .cache subfolder.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                    VerticalDivider(
+                      width: 1,
+                      thickness: 1,
+                      color: theme.dividerColor,
                     ),
-                  ),
-                  if (folder != null) ...[
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: () => _resetFolder(ref),
-                      icon: const Icon(Icons.autorenew),
-                      label: const Text('Reset to default folder'),
-                    ),
+                    Expanded(child: _searchResults(hits)),
                   ],
+                )
+              : _searchResults(hits),
+        ),
+      ],
+    );
+  }
+
+  Widget _searchField() {
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): () => _closeSearch(),
+      },
+      child: TextField(
+        key: const Key('settings_search_field'),
+        controller: _searchController,
+        focusNode: _searchFocus,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: 'Search settings',
+          isDense: true,
+          border: const OutlineInputBorder(),
+          suffixIcon: _searchController.text.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Clear search',
+                  onPressed: _searchController.clear,
+                  icon: const Icon(Icons.close),
+                ),
+        ),
+        onChanged: (_) => setState(() {}),
+      ),
+    );
+  }
+
+  Widget _searchResults(List<SettingsSearchHit> hits) {
+    final theme = Theme.of(context);
+    final query = _searchController.text.trim();
+    if (query.isEmpty) {
+      return Center(
+        child: Text(
+          'Type to search settings',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+    if (hits.isEmpty) {
+      return Center(
+        child: Text(
+          'No matching settings',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        for (final hit in hits)
+          ListTile(
+            key: Key('settings_hit_${hit.cardId}'),
+            title: Text(hit.resultLabel),
+            onTap: () => _openHit(hit),
+          ),
+      ],
+    );
+  }
+
+  Widget _sectionBody(Settings settings) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: _sectionCards(settings),
+    );
+  }
+
+  Widget _keyed(String id, Widget child) {
+    return RepaintBoundary(key: _cardKey(id), child: child);
+  }
+
+  List<Widget> _sectionCards(Settings settings) {
+    switch (_section) {
+      case SettingsSection.general:
+        return [
+          _keyed(
+            'appearance',
+            _AppearanceCard(
+              appearance: settings.appearance,
+              onChanged: (value) {
+                settings.setAppearance(value);
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+          _keyed('subject', _SubjectCard(settings: settings)),
+          const SizedBox(height: 16),
+          _keyed('music', _MusicCard(settings: settings)),
+          if (Platform.isAndroid) ...[
+            const SizedBox(height: 16),
+            _keyed('audio', _AudioCard(settings: settings)),
+          ],
+        ];
+      case SettingsSection.devices:
+        return [
+          _keyed(
+            'crown',
+            _CrownCard(
+              qualitySource: settings.crownQualitySource,
+              onQualitySource: (source) async {
+                await settings.setCrownQualitySource(source);
+                if (mounted) setState(() {});
+              },
+            ),
+          ),
+        ];
+      case SettingsSection.ai:
+        return [_keyed('ai', const AiEngineCard())];
+      case SettingsSection.recording:
+        final storage = ref.watch(sessionStorageProvider);
+        final streams = settings.recordStreams;
+        Future<void> toggle(RecordingStream stream, bool on) async {
+          final next = {...streams};
+          if (on) {
+            next.add(stream);
+          } else {
+            next.remove(stream);
+          }
+          await settings.setRecordStreams(next);
+          if (mounted) setState(() {});
+        }
+
+        return [
+          _keyed('folder', _saveFolderCard(settings, storage)),
+          const SizedBox(height: 16),
+          _keyed(
+            'recording',
+            _RecordingCard(
+              streams: streams,
+              onToggle: toggle,
+              recordAux: settings.recordAux,
+              onRecordAux: (on) async {
+                await settings.setRecordAux(on);
+                if (mounted) setState(() {});
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+          _keyed('gestures', _GesturesCard(settings: settings)),
+        ];
+      case SettingsSection.about:
+        return [
+          _keyed('about', const _AboutCard()),
+          const SizedBox(height: 40),
+          _keyed('debug', _DebugCard(settings: settings)),
+        ];
+    }
+  }
+
+  Widget _saveFolderCard(
+    Settings settings,
+    AsyncValue<SessionStorage> storage,
+  ) {
+    final theme = Theme.of(context);
+    final folder = settings.sessionFolder;
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.folder_outlined),
+              title: const Text('Save files to folder'),
+              subtitle: storage.maybeWhen(
+                data: (s) =>
+                    Text(s.displayName, style: theme.textTheme.bodySmall),
+                orElse: () => const Text('Resolving storage…'),
+              ),
+              trailing: const Icon(Icons.edit_outlined),
+              onTap: () => _onPickFolder(ref, context, settings),
+            ),
+            const Divider(height: 24),
+            Text(
+              folder == null
+                  ? 'Using the default folder. Tap to choose where '
+                        'session and recording files are stored.'
+                  : 'Files are saved to the folder above. Cache/temp '
+                        'files live in a hidden .cache subfolder.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (folder != null) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: () => _resetFolder(ref),
+                icon: const Icon(Icons.autorenew),
+                label: const Text('Reset to default folder'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AppearanceCard extends StatelessWidget {
+  const _AppearanceCard({required this.appearance, required this.onChanged});
+
+  final AppAppearance appearance;
+  final ValueChanged<AppAppearance> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Choose a light or dark theme, or follow this device.',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            DropdownButtonHideUnderline(
+              child: DropdownButton<AppAppearance>(
+                key: const Key('appearance_dropdown'),
+                value: appearance,
+                borderRadius: BorderRadius.circular(8),
+                onChanged: (value) {
+                  if (value != null) onChanged(value);
+                },
+                items: const [
+                  DropdownMenuItem(
+                    key: Key('appearance_system'),
+                    value: AppAppearance.system,
+                    child: Text('System'),
+                  ),
+                  DropdownMenuItem(
+                    key: Key('appearance_light'),
+                    value: AppAppearance.light,
+                    child: Text('Light'),
+                  ),
+                  DropdownMenuItem(
+                    key: Key('appearance_dark'),
+                    value: AppAppearance.dark,
+                    child: Text('Dark'),
+                  ),
                 ],
               ),
             ),
-          ),
+          ],
         ),
-        const SizedBox(height: 16),
-        RepaintBoundary(child: _SubjectCard(settings: settings)),
-        const SizedBox(height: 16),
-        RepaintBoundary(
-          child: _RecordingCard(
-            streams: streams,
-            onToggle: toggle,
-            recordAux: settings.recordAux,
-            onRecordAux: (on) async {
-              await settings.setRecordAux(on);
-              if (mounted) {
-                setState(() {});
-              }
-            },
-          ),
-        ),
-        const SizedBox(height: 16),
-        RepaintBoundary(
-          child: _CrownCard(
-            qualitySource: settings.crownQualitySource,
-            onQualitySource: (source) async {
-              await settings.setCrownQualitySource(source);
-              if (mounted) {
-                setState(() {});
-              }
-            },
-          ),
-        ),
-        const SizedBox(height: 16),
-        RepaintBoundary(child: _GesturesCard(settings: settings)),
-        const SizedBox(height: 16),
-        RepaintBoundary(child: _MusicCard(settings: settings)),
-        const SizedBox(height: 16),
-        const RepaintBoundary(child: AiEngineCard()),
-        if (Platform.isAndroid) ...[
-          const SizedBox(height: 16),
-          RepaintBoundary(child: _AudioCard(settings: settings)),
-        ],
-        const SizedBox(height: 16),
-        const RepaintBoundary(child: _AboutCard()),
-        const SizedBox(height: 16),
-        RepaintBoundary(child: _DebugCard(settings: settings)),
-      ],
+      ),
     );
   }
 }

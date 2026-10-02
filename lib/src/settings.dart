@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/audio/output_ids.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
@@ -106,7 +106,6 @@ AppView _viewFromName(String? name) {
   }
 }
 
-
 /// Anonymous subject identity for file metadata (`subject.id` / optional nickname).
 /// Writers map [SubjectInfo.toJson] into root `subject` when v6 metadata lands.
 class SubjectInfo {
@@ -124,6 +123,8 @@ class SubjectInfo {
     return out;
   }
 }
+
+enum AppAppearance { system, light, dark }
 
 /// Persistent app settings backed by SharedPreferences.
 class Settings extends ChangeNotifier {
@@ -387,7 +388,6 @@ class Settings extends ChangeNotifier {
   SubjectInfo get subjectInfo =>
       SubjectInfo(id: subjectId, nickname: subjectNickname);
 
-
   double? get masterVolume => _prefs.getDouble(_masterVolumeKey);
 
   Future<void> setMasterVolume(double value) async {
@@ -538,8 +538,8 @@ class Settings extends ChangeNotifier {
   /// the feature gate). Default [QualitySource.crown]. Applies on connect.
   QualitySource get crownQualitySource =>
       _prefs.getString(_crownQualitySourceKey) == QualitySource.app.name
-          ? QualitySource.app
-          : QualitySource.crown;
+      ? QualitySource.app
+      : QualitySource.crown;
 
   Future<void> setCrownQualitySource(QualitySource value) async {
     await _prefs.setString(_crownQualitySourceKey, value.name);
@@ -736,6 +736,37 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
+  static const String _appearanceKey = 'theme_mode';
+
+  /// Light, dark, or follow the device. Missing and unknown values follow
+  /// the device.
+  AppAppearance get appearance {
+    switch (_prefs.getString(_appearanceKey)) {
+      case 'light':
+        return AppAppearance.light;
+      case 'dark':
+        return AppAppearance.dark;
+      default:
+        return AppAppearance.system;
+    }
+  }
+
+  ThemeMode get themeMode => switch (appearance) {
+    AppAppearance.light => ThemeMode.light,
+    AppAppearance.dark => ThemeMode.dark,
+    AppAppearance.system => ThemeMode.system,
+  };
+
+  Future<void> setAppearance(AppAppearance value) async {
+    final stored = switch (value) {
+      AppAppearance.light => 'light',
+      AppAppearance.dark => 'dark',
+      AppAppearance.system => 'system',
+    };
+    await _prefs.setString(_appearanceKey, stored);
+    notifyListeners();
+  }
+
   static const String _audioStableModeKey = 'audio_stable_mode';
 
   /// Conservative audio profile (Android): gives the audio engine more
@@ -756,7 +787,8 @@ class Settings extends ChangeNotifier {
   /// Debug mode. When true, Simulator appears in the connect dropdown and
   /// `sim:*` last-device ids may autoconnect. Defaults to false.
   bool get enableSimulatedDevices =>
-      neurofeedDebugEnabled || (_prefs.getBool(_enableSimulatedDevicesKey) ?? false);
+      neurofeedDebugEnabled ||
+      (_prefs.getBool(_enableSimulatedDevicesKey) ?? false);
 
   Future<void> setEnableSimulatedDevices(bool value) async {
     await _prefs.setBool(_enableSimulatedDevicesKey, value);
@@ -769,7 +801,12 @@ class Settings extends ChangeNotifier {
   List<double>? savedMainsFor(String deviceId) {
     if (deviceId.isEmpty) return null;
     final v = _mainsByDevice()[deviceId];
-    return v is List ? [for (final hz in v) if (hz is num) hz.toDouble()] : null;
+    return v is List
+        ? [
+            for (final hz in v)
+              if (hz is num) hz.toDouble(),
+          ]
+        : null;
   }
 
   Future<void> setSavedMains(String deviceId, List<double> notchHz) async {

@@ -185,8 +185,8 @@ Sidebar **History** (`AppView.feedbackHistory`). One sqlite list; no
 | Import summary | `Import recording?` / `Import with losses?` · `Kept` · `Lost or changed` · `Cancel` / `Import` | `_confirmImport` | `feedback_history.dart` | Shown before every import is saved; lost list = `import.warnings`. |
 | Import interval warning | `This Mind Monitor file was recorded with one row every {N} seconds, so it covers only about {X}% of the session. Short events can be missed, so expect lower result quality. For better results, set Mind Monitor's recording interval to 1 second.` | `intervalCoverageWarning` | `import_summary.dart` / `feedback_history.dart` | Warning box at the top of the import summary when `import.recordingInterval ≥ 1.9` s. None for Constant, ≤ 1 s intervals and EDF. |
 | Folder-change dialog | `Move {s} session(s) and {r} recording(s) into the new folder? Choosing No leaves them in the current folder.` | `folderChangeMoveBody` | `settings_view.dart` | Counts both prefixes. |
-| Record AUX channels | `Record AUX channels` | `Settings.recordAux` / `_RecordingCard` | `settings_view.dart` | Session recording card. Default off. Muse AUX inputs → `AUX1`…`AUX4` (Classic AUX1; Athena AUX1–AUX4). Applies on next connect (`connectWithOptions(recordAux:)`). |
-| Crown quality source | `Crown` card: `Crown` / `App` radios | `Settings.crownQualitySource` / `_CrownCard` | `settings_view.dart` | Card below Session recording. Default `Crown` (Crown per-pad quality averaged per second, app score for seconds without it); `App` = app score only. Pref `crown_quality_source`. Applies on next connect (`connectWithOptions(qualitySource:)`). |
+| Record AUX channels | `Record AUX channels` | `Settings.recordAux` / `_RecordingCard` | `settings_view.dart` | Recording section, Session recording card. Default off. Muse AUX inputs → `AUX1`…`AUX4` (Classic AUX1; Athena AUX1–AUX4). Applies on next connect (`connectWithOptions(recordAux:)`). |
+| Crown quality source | `Crown` card: `Crown` / `App` radios | `Settings.crownQualitySource` / `_CrownCard` | `settings_view.dart` | Devices section. Default `Crown` (Crown per-pad quality averaged per second, app score for seconds without it); `App` = app score only. Pref `crown_quality_source`. Applies on next connect (`connectWithOptions(qualitySource:)`). |
 
 ### Recording dashboard — `lib/src/monitor/views/recording_dashboard.dart`
 
@@ -259,22 +259,34 @@ Pushed after End (`pushReplacement` from the session route). Leftover
 | Discard | `Discard` | `_discard` | `feedback_dashboard.dart` | Deletes scratch `.neurofeed`. Live only. |
 | Heart rate / SpO₂ | `Heart rate / SpO₂` | `prepared.bpm` / `prepared.spo2` | `feedback_dashboard.dart` | From computed 1 Hz pulse/SpO₂; raw body fallback if those fields were omitted. Empty copy: `No reliable heart-rate or SpO₂ data was captured for this session.` |
 
-### Settings cards — `lib/src/views/settings_view.dart`
+### Settings — `lib/src/views/settings_view.dart`
 
-Order: Save folder, Session recording, Gesture markers, Music feedback,
-Guardrail AI engine, Audio (Android only), About, Debug mode.
+In-page section list, separate from the app sidebar. At ≥ 640 px of the
+settings pane the list stays on the left and the cards on the right. Below
+that, the list is the page and a section opens its cards with Back. Search
+is an icon (tooltip `Search settings`). The field matches every section. A
+hit reads `{Section} · {card}`. Closing search returns to the section that
+was open. Picking a hit opens that section and scrolls to the card.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
+| Search settings | tooltip `Search settings` | `_openSearch` | `settings_view.dart` | Icon only. |
+| General | `General` | `SettingsSection.general` | `settings_sections.dart` | Appearance, Subject, Music feedback, Audio (Android). |
+| Appearance | `Choose a light or dark theme, or follow this device.` | `_AppearanceCard` / `AppAppearance` | `settings_view.dart` | One line: description on the left, dropdown on the right (`System` / `Light` / `Dark`). Default System. Pref `theme_mode`. |
+| Devices | `Devices` | `SettingsSection.devices` | `settings_sections.dart` | Crown. |
+| AI | `AI` | `SettingsSection.ai` | `settings_sections.dart` | Guardrail AI engine. |
+| Recording | `Recording` | `SettingsSection.recording` | `settings_sections.dart` | Save folder, Session recording, Gesture markers. |
+| About | `About` | `SettingsSection.about` | `settings_sections.dart` | About card, then Debug mode. |
 | Save folder | `Save files to folder` | `setSessionFolder` | `settings_view.dart` | Was `Save feedback to folder`. Moves sessions **and** recordings. |
 | Reset folder | `Reset to default folder` | `_resetFolder` | `settings_view.dart` | Shown when a custom folder is set. |
 | Session recording | `Session recording` | `_RecordingCard` | `settings_view.dart` | Stream toggles. Applies to **tmp, Record, and feedback**. |
 | Gesture markers | `Gesture markers` | `_GesturesCard` | `settings_view.dart` | |
+| Subject | `Subject` | `_SubjectCard` | `settings_view.dart` | Stable id plus optional nickname. |
 | Music feedback | `Music feedback` | `_MusicCard` | `settings_view.dart` | Persist cutoff on `onChangeEnd`. |
 | Guardrail AI engine | `Guardrail AI engine` | `AiEngineCard` | `reve_card.dart` | Not “AI sleep guardrail”. |
 | Audio (Android) | `Audio` / `Reduce audio stutter` | `_AudioCard` | `settings_view.dart` | Hidden off Android. |
 | About | `About` | `_AboutCard` | `settings_view.dart` | |
-| Debug mode | `Debug mode` | `enableSimulatedDevices` | `settings_view.dart` | Last card. Shows Simulator. Also shows calibration `Skip`. |
+| Debug mode | `Debug mode` | `enableSimulatedDevices` | `settings_view.dart` | Last card, inside About. Shows Simulator. Also shows calibration `Skip`. |
 
 ### Android capture notification — `lib/src/spine/capture_foreground.dart`
 

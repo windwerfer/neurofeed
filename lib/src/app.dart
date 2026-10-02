@@ -34,6 +34,36 @@ import 'package:neurofeed/src/views/feedback_history.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
+class NeuroFeedApp extends ConsumerWidget {
+  const NeuroFeedApp({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(settingsProvider).themeMode;
+    return MaterialApp(
+      title: 'NeuroFeed',
+      builder: (context, child) =>
+          FreeformInsetClamp(child: child ?? const SizedBox.shrink()),
+      themeMode: themeMode,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.light,
+        ),
+      ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.dark,
+        ),
+      ),
+      home: const _CrashRecoveryWrapper(child: AppShell()),
+    );
+  }
+}
+
 /// The main app shell: status bar on top, a collapsible sidebar with the three
 /// views, and the connect window overlay.
 class AppShell extends ConsumerStatefulWidget {
@@ -320,27 +350,7 @@ Future<void> main() async {
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: MaterialApp(
-        title: 'NeuroFeed',
-        builder: (context, child) =>
-            FreeformInsetClamp(child: child ?? const SizedBox.shrink()),
-        themeMode: ThemeMode.system,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.deepPurple,
-            brightness: Brightness.light,
-          ),
-        ),
-        darkTheme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.deepPurple,
-            brightness: Brightness.dark,
-          ),
-        ),
-        home: const _CrashRecoveryWrapper(child: AppShell()),
-      ),
+      child: const NeuroFeedApp(),
     ),
   );
   if (agentCfg.enabled) {
