@@ -254,15 +254,23 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 
 Pushed after End (`pushReplacement` from the session route). Leftover
 `session_*` scratch at launch opens the same screen. Not an `AppView`.
-Chip row is **Dashboard** only. Opening a feedback session lands on
-**Dashboard**. Alpha vs Theta, Bands, Movement, Heart rate / SpO₂, guard,
-music, and gesture cards stay on this chip, under the summary.
+Chip row is **Dashboard**, then **Feedback** when the session has a reward
+or guard lane. Opening a feedback session lands on **Dashboard**.
+`recordOnly` has no Feedback chip. Alpha vs Theta, Bands, Movement, Heart
+rate / SpO₂, guard, music, and gesture cards stay on the Dashboard chip,
+under the summary.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
 | Session summary | `{protocol} — Session` | `FeedbackDashboardView` | `feedback_dashboard.dart` | Live (`readOnly: false`) or History (`readOnly: true`). |
-| Dashboard | `Dashboard` | `_SessionSummaryChip.dashboard` / `HistoryDashboardSummary` | `feedback_dashboard.dart` / `history/history_dashboard_summary.dart` | Only chip. Default. Summary from nested `stats` plus the trust reader, then the old charts. |
-| More | `More` | `Settings.historyDashboardMoreExpanded` | `history/history_dashboard_summary.dart` | Fold under the summary. Pref `history_dashboard_more_expanded`, default closed. Same flag as the recording Dashboard. |
+| Dashboard | `Dashboard` | `_SessionSummaryChip.dashboard` / `HistoryDashboardSummary` | `feedback_dashboard.dart` / `history/history_dashboard_summary.dart` | Default chip. Summary from nested `stats` plus the trust reader, then the old charts. |
+| Feedback | `Feedback` | `_SessionSummaryChip.feedback` / `HistoryTrustReplay` | `feedback_dashboard.dart` / `history/history_trust_viewport.dart` | Second chip. Omitted when the trust reader has no reward lane and no guard lane (`recordOnly`, recordings). Replays `RewardTrustPane` / `InhibitTrustPane` / `GuardWarnPane` / `GuardCeilingPane` with `showMore` off (no verdict, glyph strip, needle, or "in for Ns"). |
+| More | `More` | `Settings.historyDashboardMoreExpanded` | `history/history_dashboard_summary.dart` | Fold under the summary on the Dashboard chip. Pref `history_dashboard_more_expanded`, default closed. Same flag as the recording Dashboard. Not on the Feedback chip. |
+| Reward | `Reward` | local toggle on `HistoryTrustReplay` | `history/history_trust_viewport.dart` | Feedback chip only. Depressed = on. Default on when reward samples exist. Does not write `Settings.trustRewardVisible`. |
+| Guard | `Guard` | local toggle on `HistoryTrustReplay` | `history/history_trust_viewport.dart` | Feedback chip only. Default off, except on when there is no reward lane and guard samples exist (`guardrailOnly`). Does not write `Settings.trustGuardVisible`. Omitted when the saved guard feature has no pane. |
+| Trust window | `m:ss – m:ss` | `HistoryTrustViewport` | `history/history_trust_viewport.dart` | Default 75 s ending at the last sample. Drag pans. Pinch and Ctrl/Meta+scroll zoom, clamped 15–300 s. Right edge is the view end, not now. Not live `TrustViewport`. |
+| Reward footer | `{n}% in zone · {n} chimes · {n}% inhibited` | `historyRewardFooter` | `history/history_trust_viewport.dart` | Whole session, not the visible window. Hidden when there is no reward lane. Null percent is `—`. |
+| Guard footer | `{n}% warning · {n} chimes` | `historyGuardFooter` | `history/history_trust_viewport.dart` | Whole session. Adds ` · {n}% over ceiling` only when the ceiling pane is in the spec. |
 | Back | AppBar leading / system back | `PopScope` | `feedback_dashboard.dart` | **Blocked** on the live unsaved summary (`canPop: false` while scratch remains). Must Save or Discard. History: warn if notes dirty. |
 | Save | `Save` | `_save` | `feedback_dashboard.dart` | App bar. Live unsaved summary only. Publishes scratch `.neurofeed` to History. |
 | Discard | `Discard` | `_discard` | `feedback_dashboard.dart` | App bar. Live unsaved summary only. Deletes scratch `.neurofeed`. |
@@ -323,7 +331,7 @@ is allowed to sleep. Stop asks Dart to stop capture; it does not disconnect BLE.
 | Paused / interrupted / ended | matching log | `paused` / `interrupted` / `ended` | | |
 | Reward lane | session audio | `RewardLane` | `reward_lane.dart` | Guard never modulates. Dirty skips `recordEpoch` / `onSample`. |
 | Guard lane | protocol builder Guard | `GuardLane` | `guard_lane.dart` | Warns only. Dirty skips `evaluateWarning`. |
-| Trust graphs | Reward / Guard / More | `TrustTrace` / `TrustViewport` | `feedback/trust/` | Follow-only; not GraphShell. Inhibit pane shares the Reward window. |
+| Trust graphs | Reward / Guard / More | `TrustTrace` / `TrustViewport` | `feedback/trust/` | Follow-only; not GraphShell. Inhibit pane shares the Reward window. History Feedback chip uses `HistoryTrustViewport` and the reader lists, not `TrustTrace`. |
 | Feature bus | — | `FeatureBus` | `feature_bus.dart` | |
 | Feature probe latch | debug sliders | `FeatureOverride` | `feature_override.dart` | Replaces `FeatureDto.value` in `_onEvent` while playing. |
 

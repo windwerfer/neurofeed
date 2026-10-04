@@ -15,8 +15,13 @@ import 'package:neurofeed/src/charts/band_style.dart'
     show bandColors, bandNames;
 import 'package:neurofeed/src/charts/smooth_path.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
+import 'package:neurofeed/src/feedback/guardrail_mode.dart';
+import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/feedback/trust/trust_guard.dart';
+import 'package:neurofeed/src/feedback/trust/trust_inhibit.dart';
 import 'package:neurofeed/src/history/history_dashboard_summary.dart';
+import 'package:neurofeed/src/history/history_trust_viewport.dart';
 import 'package:neurofeed/src/history/session_trust.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/feedback/session_chart_data.dart';
@@ -24,7 +29,7 @@ import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 
-enum _SessionSummaryChip { dashboard }
+enum _SessionSummaryChip { dashboard, feedback }
 
 class FeedbackDashboardView extends ConsumerStatefulWidget {
   const FeedbackDashboardView({
@@ -57,6 +62,11 @@ class _DashboardLoad {
     this.durationS,
     this.elapsedSeconds,
     this.feedback,
+    this.trust,
+    this.protocolDoc,
+    this.guardFeature = guardFeatureNone,
+    this.rewardLabel = '',
+    this.guardLabel = '',
   });
 
   final SessionChartData prepared;
@@ -67,6 +77,11 @@ class _DashboardLoad {
   final num? durationS;
   final num? elapsedSeconds;
   final HistoryDashboardTotals? feedback;
+  final SessionTrust? trust;
+  final ProtocolDocument? protocolDoc;
+  final String guardFeature;
+  final String rewardLabel;
+  final String guardLabel;
 }
 
 class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
@@ -79,6 +94,14 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   num? _durationS;
   num? _summaryElapsed;
   HistoryDashboardTotals? _feedbackTotals;
+  SessionTrust? _sessionTrust;
+  ProtocolDocument? _savedProtocol;
+  String _guardFeature = guardFeatureNone;
+  String _rewardLabel = '';
+  String _guardLabel = '';
+  bool _rewardOn = true;
+  bool _guardOn = false;
+  final HistoryTrustViewport _historyViewport = HistoryTrustViewport();
   Object? _loadError;
   Uint8List? _thumbnail;
   bool _busy = false;
@@ -104,6 +127,12 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
             _durationS = loaded.durationS;
             _summaryElapsed = loaded.elapsedSeconds;
             _feedbackTotals = loaded.feedback;
+            _sessionTrust = loaded.trust;
+            _savedProtocol = loaded.protocolDoc;
+            _guardFeature = loaded.guardFeature;
+            _rewardLabel = loaded.rewardLabel;
+            _guardLabel = loaded.guardLabel;
+            _applyHistoryTrustDefaults(loaded);
             _loadError = null;
             if (loaded.metadata.notes.isNotEmpty && _notes.text.isEmpty) {
               _notes.text = loaded.metadata.notes;
@@ -178,18 +207,42 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         (widget.readOnly || !mounted
             ? null
             : ref.read(feedbackStateProvider.notifier).trainingStartOffsetSecs);
+    final savedProtocol = _savedProtocolDoc(meta, catalog);
+    final guardFeature = _savedGuardFeature(meta, savedProtocol);
+    final trust = _sessionTrustFor(
+      frames: frames,
+      trainingStartOffsetSecs: training,
+      meta: meta,
+    );
     return _DashboardLoad(
       prepared: prepared,
       metadata: meta,
       stats: _nestedStats(root),
       durationS: _finiteNum(root?['durationS']),
       elapsedSeconds: _finiteNum(root?['elapsedSeconds']),
-      feedback: _feedbackTotalsFor(
-        frames: frames,
-        trainingStartOffsetSecs: training,
-        meta: meta,
-      ),
+      feedback: trust == null
+          ? null
+          : HistoryDashboardTotals.fromSessionTrust(trust),
+      trust: trust,
+      protocolDoc: savedProtocol,
+      guardFeature: guardFeature,
+      rewardLabel: _featureShortLabel(catalog, savedProtocol?.reward?.feature),
+      guardLabel: _featureShortLabel(catalog, guardFeature),
     );
+  }
+
+  void _applyHistoryTrustDefaults(_DashboardLoad loaded) {
+    final trust = loaded.trust;
+    if (trust == null) return;
+    final rewardLane =
+        trust.reward.isNotEmpty && (loaded.protocolDoc?.hasReward ?? false);
+    final guardLane =
+        trust.guard.isNotEmpty &&
+        trustGuardPaneSpecs(loaded.guardFeature).isNotEmpty;
+    _rewardOn = rewardLane;
+    _guardOn = !rewardLane && guardLane;
+    final end = historyTrustLastT(trust);
+    if (end != null) _historyViewport.anchorTo(end);
   }
 
   bool get _notesDirty => _notes.text != _savedNotes;
@@ -217,6 +270,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     _notes.removeListener(_onNotesChanged);
     _notesFlashTimer?.cancel();
     _notes.dispose();
+    _historyViewport.dispose();
     super.dispose();
   }
 
@@ -327,18 +381,31 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     }
   }
 
+  bool get _showFeedbackChip =>
+      _feedbackLane(_sessionTrust, _savedProtocol, _guardFeature);
+
+  _SessionSummaryChip get _visibleChip =>
+      _chip == _SessionSummaryChip.feedback && !_showFeedbackChip
+      ? _SessionSummaryChip.dashboard
+      : _chip;
+
   Widget _chipBar() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: SegmentedButton<_SessionSummaryChip>(
-        segments: const [
-          ButtonSegment(
+        segments: [
+          const ButtonSegment(
             value: _SessionSummaryChip.dashboard,
             label: Text('Dashboard'),
           ),
+          if (_showFeedbackChip)
+            const ButtonSegment(
+              value: _SessionSummaryChip.feedback,
+              label: Text('Feedback'),
+            ),
         ],
-        selected: {_chip},
+        selected: {_visibleChip},
         showSelectedIcon: false,
         style: const ButtonStyle(
           visualDensity: VisualDensity.compact,
@@ -354,7 +421,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
 
   Widget _dashboard(SessionMetadata? meta, FeedbackState fb) {
     if (_prepared != null) {
-      return switch (_chip) {
+      return switch (_visibleChip) {
         _SessionSummaryChip.dashboard => _DashboardBody(
           elapsedSeconds: meta?.elapsedSeconds ?? fb.elapsedSeconds,
           prepared: _prepared!,
@@ -377,6 +444,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
           notesSaving: _notesSaving,
           notesSavedFlash: _notesSavedFlash,
         ),
+        _SessionSummaryChip.feedback => _feedbackBody(),
       };
     }
     if (_loadError != null) {
@@ -390,6 +458,30 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       return const Center(child: CircularProgressIndicator());
     }
     return _NoData(theme: Theme.of(context));
+  }
+
+  Widget _feedbackBody() {
+    final trust = _sessionTrust;
+    final protocol = _savedProtocol;
+    if (trust == null || protocol == null) return const SizedBox.shrink();
+    final overrides =
+        _fileMeta?.sessionSettings?.inhibitCeilingOverrides ?? const {};
+    return HistoryTrustReplay(
+      trust: trust,
+      viewport: _historyViewport,
+      showReward: _rewardOn,
+      showGuard: _guardOn,
+      onReward: (on) => setState(() => _rewardOn = on),
+      onGuard: (on) => setState(() => _guardOn = on),
+      inhibit: trustInhibitSpecs(
+        overlayInhibitCeilings(protocol.conditions, overrides),
+      ),
+      guardPanes: trustGuardPaneSpecs(_guardFeature),
+      rewardLabel: _rewardLabel,
+      guardLabel: _guardLabel,
+      rewardColor: protocol.color,
+      guardColor: bandColors[0],
+    );
   }
 
   int _captureAttempts = 0;
@@ -1919,21 +2011,60 @@ Map<String, Object?>? _metadataMap(List<int> bytes) {
 }
 
 /// Null when the trust reader throws, so feedback cells stay out.
-HistoryDashboardTotals? _feedbackTotalsFor({
+SessionTrust? _sessionTrustFor({
   required List<ComputedFrame> frames,
   required double? trainingStartOffsetSecs,
   required SessionMetadata meta,
 }) {
   try {
-    return HistoryDashboardTotals.fromSessionTrust(
-      readSessionTrust(
-        frames: frames,
-        trainingStartOffsetSecs: trainingStartOffsetSecs,
-        annotations: meta.annotations,
-        audioEvents: meta.audioEvents,
-      ),
+    return readSessionTrust(
+      frames: frames,
+      trainingStartOffsetSecs: trainingStartOffsetSecs,
+      annotations: meta.annotations,
+      audioEvents: meta.audioEvents,
     );
   } catch (_) {
     return null;
   }
+}
+
+ProtocolDocument? _savedProtocolDoc(
+  SessionMetadata meta,
+  ProtocolCatalog catalog,
+) {
+  final raw = meta.protocolJson;
+  if (raw != null) {
+    try {
+      final id = meta.protocol.isNotEmpty
+          ? meta.protocol
+          : raw['id'] as String? ?? '';
+      return ProtocolDocument.fromJson(raw, id: id, features: catalog.features);
+    } catch (_) {}
+  }
+  return catalog.forName(meta.protocol);
+}
+
+String _savedGuardFeature(SessionMetadata meta, ProtocolDocument? protocol) {
+  final saved = meta.sessionSettings?.guardFeature;
+  if (saved != null && saved.isNotEmpty) return saved;
+  final feature = protocol?.guard?.feature;
+  if (feature == null || feature.isEmpty) return guardFeatureNone;
+  return feature;
+}
+
+String _featureShortLabel(ProtocolCatalog catalog, String? id) {
+  if (id == null || id.isEmpty || id == guardFeatureNone) return '';
+  return catalog.features[id]?.shortLabel ?? id;
+}
+
+bool _feedbackLane(
+  SessionTrust? trust,
+  ProtocolDocument? protocol,
+  String guardFeature,
+) {
+  if (trust == null) return false;
+  final reward = trust.reward.isNotEmpty && (protocol?.hasReward ?? false);
+  final guard =
+      trust.guard.isNotEmpty && trustGuardPaneSpecs(guardFeature).isNotEmpty;
+  return reward || guard;
 }
