@@ -11,17 +11,20 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
-import 'package:neurofeed/src/charts/band_style.dart' show bandColors, bandNames;
+import 'package:neurofeed/src/charts/band_style.dart'
+    show bandColors, bandNames;
 import 'package:neurofeed/src/charts/smooth_path.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
-import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/history/history_dashboard_summary.dart';
+import 'package:neurofeed/src/history/session_trust.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/feedback/session_chart_data.dart';
 import 'package:neurofeed/src/monitor/device_montage.dart';
-import 'package:neurofeed/src/audio/output_ids.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
+
+enum _SessionSummaryChip { dashboard }
 
 class FeedbackDashboardView extends ConsumerStatefulWidget {
   const FeedbackDashboardView({
@@ -50,10 +53,20 @@ class _DashboardLoad {
   const _DashboardLoad({
     required this.prepared,
     required this.metadata,
+    required this.stats,
+    this.durationS,
+    this.elapsedSeconds,
+    this.feedback,
   });
 
   final SessionChartData prepared;
   final SessionMetadata metadata;
+
+  /// Nested metadata `stats`, copied before [SessionMetadata] flattens it.
+  final Map<String, Object?> stats;
+  final num? durationS;
+  final num? elapsedSeconds;
+  final HistoryDashboardTotals? feedback;
 }
 
 class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
@@ -62,9 +75,14 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   Future<_DashboardLoad>? _loadFuture;
   SessionChartData? _prepared;
   SessionMetadata? _fileMeta;
+  Map<String, Object?> _summaryStats = const {};
+  num? _durationS;
+  num? _summaryElapsed;
+  HistoryDashboardTotals? _feedbackTotals;
   Object? _loadError;
   Uint8List? _thumbnail;
   bool _busy = false;
+  _SessionSummaryChip _chip = _SessionSummaryChip.dashboard;
 
   /// Notes value that is persisted on disk (used to detect unsaved edits).
   String _savedNotes = '';
@@ -76,24 +94,30 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   void initState() {
     super.initState();
     _loadFuture = _loadSession();
-    _loadFuture!.then((loaded) {
-      if (!mounted) return;
-      setState(() {
-        _prepared = loaded.prepared;
-        _fileMeta = loaded.metadata;
-        _loadError = null;
-        if (loaded.metadata.notes.isNotEmpty && _notes.text.isEmpty) {
-          _notes.text = loaded.metadata.notes;
-          _savedNotes = _notes.text;
-        }
-      });
-      if (!widget.readOnly) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
-      }
-    }).catchError((Object e) {
-      if (!mounted) return;
-      setState(() => _loadError = e);
-    });
+    _loadFuture!
+        .then((loaded) {
+          if (!mounted) return;
+          setState(() {
+            _prepared = loaded.prepared;
+            _fileMeta = loaded.metadata;
+            _summaryStats = loaded.stats;
+            _durationS = loaded.durationS;
+            _summaryElapsed = loaded.elapsedSeconds;
+            _feedbackTotals = loaded.feedback;
+            _loadError = null;
+            if (loaded.metadata.notes.isNotEmpty && _notes.text.isEmpty) {
+              _notes.text = loaded.metadata.notes;
+              _savedNotes = _notes.text;
+            }
+          });
+          if (!widget.readOnly) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
+          }
+        })
+        .catchError((Object e) {
+          if (!mounted) return;
+          setState(() => _loadError = e);
+        });
     final notes = widget.metadata?.notes;
     if (notes != null && notes.isNotEmpty) {
       _notes.text = notes;
@@ -112,7 +136,8 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       }
       path = resolved;
     } else {
-      final scratch = widget.sessionPath ??
+      final scratch =
+          widget.sessionPath ??
           ref.read(feedbackStateProvider.notifier).scratchPath;
       if (scratch == null) {
         throw StateError('scratch .neurofeed not assembled');
@@ -124,7 +149,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     }
     final frames = await extractComputedFromPath(path: path);
     final head = await parseHeadFromPath(path: path);
-    final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ??
+    final root = _metadataMap(head.metadataJson);
+    final meta =
+        SessionMetadata.fromJsonBytes(head.metadataJson) ??
         widget.metadata ??
         SessionMetadata(
           protocol: '',
@@ -145,9 +172,23 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
           ? kMuseElectrodeNames
           : meta.recordedChannels,
     );
+    final training =
+        meta.calibration?.trainingStartOffsetSecs ??
+        widget.metadata?.calibration?.trainingStartOffsetSecs ??
+        (widget.readOnly || !mounted
+            ? null
+            : ref.read(feedbackStateProvider.notifier).trainingStartOffsetSecs);
     return _DashboardLoad(
       prepared: prepared,
       metadata: meta,
+      stats: _nestedStats(root),
+      durationS: _finiteNum(root?['durationS']),
+      elapsedSeconds: _finiteNum(root?['elapsedSeconds']),
+      feedback: _feedbackTotalsFor(
+        frames: frames,
+        trainingStartOffsetSecs: training,
+        meta: meta,
+      ),
     );
   }
 
@@ -206,10 +247,30 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         appBar: AppBar(
           title: Text('${copy.title} — Session'),
           automaticallyImplyLeading: widget.readOnly,
+          actions: widget.readOnly
+              ? null
+              : [
+                  TextButton(
+                    onPressed: _busy ? null : _save,
+                    child: const Text('Save'),
+                  ),
+                  TextButton(
+                    onPressed: _busy ? null : _discard,
+                    child: const Text('Discard'),
+                  ),
+                ],
         ),
-        body: _busy
-            ? const Center(child: CircularProgressIndicator())
-            : _dashboard(meta, fb, protocol, copy.title),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _chipBar(),
+            Expanded(
+              child: _busy
+                  ? const Center(child: CircularProgressIndicator())
+                  : _dashboard(meta, fb),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -266,42 +327,57 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     }
   }
 
-  Widget _dashboard(
-    SessionMetadata? meta,
-    FeedbackState fb,
-    ProtocolDocument protocol,
-    String protocolTitle,
-  ) {
+  Widget _chipBar() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: SegmentedButton<_SessionSummaryChip>(
+        segments: const [
+          ButtonSegment(
+            value: _SessionSummaryChip.dashboard,
+            label: Text('Dashboard'),
+          ),
+        ],
+        selected: {_chip},
+        showSelectedIcon: false,
+        style: const ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        onSelectionChanged: (next) {
+          if (next.isEmpty) return;
+          setState(() => _chip = next.first);
+        },
+      ),
+    );
+  }
+
+  Widget _dashboard(SessionMetadata? meta, FeedbackState fb) {
     if (_prepared != null) {
-      return _DashboardBody(
-        protocol: protocol,
-        protocolTitle: protocolTitle,
-        durationMinutes: meta?.durationMinutes ?? fb.durationMinutes,
-        elapsedSeconds: meta?.elapsedSeconds ?? fb.elapsedSeconds,
-        soundName: meta?.sound ?? fb.soundName,
-        feedbackSoundName: widget.readOnly
-            ? (meta?.feedbackSound == null
+      return switch (_chip) {
+        _SessionSummaryChip.dashboard => _DashboardBody(
+          elapsedSeconds: meta?.elapsedSeconds ?? fb.elapsedSeconds,
+          prepared: _prepared!,
+          summaryStats: _summaryStats,
+          durationS: _durationS,
+          summaryElapsed: _summaryElapsed,
+          feedback: _feedbackTotals,
+          drowsiness: meta?.drowsiness,
+          music: meta?.music,
+          gestures:
+              meta?.gestures ??
+              (widget.readOnly
                   ? null
-                  : feedbackSoundLabel(meta!.feedbackSound))
-            : fb.rewardOutput.label,
-        prepared: _prepared!,
-        drowsiness: meta?.drowsiness,
-        music: meta?.music,
-        gestures: meta?.gestures ??
-            (widget.readOnly
-                ? null
-                : ref.read(feedbackStateProvider.notifier).gestureMarkers),
-        trainingStartOffsetSecs: _trainingStartOffset,
-        readOnly: widget.readOnly,
-        thumbKey: _thumbKey,
-        notesController: _notes,
-        onSave: _save,
-        onDiscard: _discard,
-        onSaveNotes: widget.readOnly ? _saveNotes : null,
-        notesDirty: _notesDirty,
-        notesSaving: _notesSaving,
-        notesSavedFlash: _notesSavedFlash,
-      );
+                  : ref.read(feedbackStateProvider.notifier).gestureMarkers),
+          trainingStartOffsetSecs: _trainingStartOffset,
+          thumbKey: _thumbKey,
+          notesController: _notes,
+          onSaveNotes: widget.readOnly ? _saveNotes : null,
+          notesDirty: _notesDirty,
+          notesSaving: _notesSaving,
+          notesSavedFlash: _notesSavedFlash,
+        ),
+      };
     }
     if (_loadError != null) {
       return _LoadError(
@@ -316,16 +392,26 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     return _NoData(theme: Theme.of(context));
   }
 
+  int _captureAttempts = 0;
+
   Future<void> _capture() async {
     final boundary =
         _thumbKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-    if (boundary == null) return;
-    final image = await boundary.toImage(pixelRatio: 2);
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    image.dispose();
-    final bytes = byteData?.buffer.asUint8List();
-    if (bytes != null && mounted) {
-      setState(() => _thumbnail = bytes);
+    if (boundary == null || !boundary.hasSize) return;
+    try {
+      final image = await boundary.toImage(pixelRatio: 2);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      final bytes = byteData?.buffer.asUint8List();
+      if (bytes != null && mounted) {
+        setState(() => _thumbnail = bytes);
+      }
+    } catch (_) {
+      // The summary boundary can still be dirty on the frame that mounts it.
+      if (_captureAttempts++ > 4 || !mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_capture());
+      });
     }
   }
 
@@ -342,7 +428,8 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       }
       final thumb = encodeThumbnailWebP(_thumbnail ?? Uint8List(0));
       final stats = _prepared?.stats;
-      final metadata = _fileMeta?.withSaveFields(
+      final metadata =
+          _fileMeta?.withSaveFields(
             notes: _notes.text,
             stats: stats == null
                 ? null
@@ -356,15 +443,12 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
                   ),
             avgSpo2: stats?.avgSpo2,
           ) ??
-          notifier.buildSessionMetadata(
-            notes: _notes.text,
-            stats: stats,
-          );
+          notifier.buildSessionMetadata(notes: _notes.text, stats: stats);
       final patched = '${Directory.systemTemp.path}/nf_save_$id.neurofeed';
       await rewriteHeadToPath(
         srcPath: path,
         destPath: patched,
-                metadataJson: utf8.encode(
+        metadataJson: utf8.encode(
           jsonEncode(
             buildFeedbackMetadata(
               meta: metadata,
@@ -471,35 +555,30 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
 
 class _DashboardBody extends StatefulWidget {
   const _DashboardBody({
-    required this.protocol,
-    required this.protocolTitle,
-    required this.durationMinutes,
     required this.elapsedSeconds,
-    required this.soundName,
-    this.feedbackSoundName,
     required this.prepared,
+    required this.summaryStats,
+    this.durationS,
+    this.summaryElapsed,
+    this.feedback,
     this.drowsiness,
     this.music,
     this.gestures,
     this.trainingStartOffsetSecs,
-    required this.readOnly,
     required this.thumbKey,
     required this.notesController,
-    required this.onSave,
-    required this.onDiscard,
     this.onSaveNotes,
     this.notesDirty = false,
     this.notesSaving = false,
     this.notesSavedFlash = false,
   });
 
-  final ProtocolDocument protocol;
-  final String protocolTitle;
-  final int durationMinutes;
   final int elapsedSeconds;
-  final String soundName;
-  final String? feedbackSoundName;
   final SessionChartData prepared;
+  final Map<String, Object?> summaryStats;
+  final num? durationS;
+  final num? summaryElapsed;
+  final HistoryDashboardTotals? feedback;
 
   /// Sleep-guardrail trace of this session (null when the guardrail did not
   /// run or recorded nothing).
@@ -517,11 +596,8 @@ class _DashboardBody extends StatefulWidget {
   /// aligns the trace with the training-window chart axis.
   final double? trainingStartOffsetSecs;
 
-  final bool readOnly;
   final GlobalKey thumbKey;
   final TextEditingController notesController;
-  final Future<void> Function() onSave;
-  final Future<void> Function() onDiscard;
   final Future<void> Function()? onSaveNotes;
   final bool notesDirty;
   final bool notesSaving;
@@ -642,8 +718,7 @@ class _DashboardBodyState extends State<_DashboardBody> {
       }
       final offset = widget.trainingStartOffsetSecs ?? 0;
       final xs = [
-        for (final s in music.series)
-          (s.offsetSecs - offset).clamp(0.0, 1e9),
+        for (final s in music.series) (s.offsetSecs - offset).clamp(0.0, 1e9),
       ];
       final hz = [for (final s in music.series) s.cutoffHz];
       return [
@@ -799,8 +874,11 @@ class _DashboardBodyState extends State<_DashboardBody> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(iconForType(entry.key),
-                              size: 16, color: colorForType(entry.key)),
+                          Icon(
+                            iconForType(entry.key),
+                            size: 16,
+                            color: colorForType(entry.key),
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             '${entry.key.name}: ${entry.value}',
@@ -818,10 +896,17 @@ class _DashboardBodyState extends State<_DashboardBody> {
                     padding: const EdgeInsets.symmetric(vertical: 2),
                     child: Row(
                       children: [
-                        Icon(iconForType(g.type), size: 16, color: colorForType(g.type)),
+                        Icon(
+                          iconForType(g.type),
+                          size: 16,
+                          color: colorForType(g.type),
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(g.type.name, overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            g.type.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         Text(
                           formatOffset(g.offsetSeconds - offset),
@@ -845,104 +930,34 @@ class _DashboardBodyState extends State<_DashboardBody> {
       children: [
         RepaintBoundary(
           key: widget.thumbKey,
-          child: Card(
-          color: theme.colorScheme.surfaceContainerHighest,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Session summary', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 12),
-                _SummaryRow(label: 'Protocol', value: widget.protocolTitle),
-                _SummaryRow(
-                  label: 'Duration',
-                  value: '${widget.durationMinutes} min',
-                ),
-                _SummaryRow(
-                  label: 'Elapsed',
-                  value:
-                      '${widget.elapsedSeconds ~/ 60}:'
-                      '${(widget.elapsedSeconds % 60).toString().padLeft(2, '0')}',
-                ),
-                _SummaryRow(label: 'Background sound', value: widget.soundName),
-                if (widget.feedbackSoundName != null)
-                  _SummaryRow(
-                    label: 'Feedback sound',
-                    value: widget.feedbackSoundName!,
-                  ),
-                if (prepared.x.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _StatChip(
-                        label: 'Peak alpha',
-                        value: stats.peakAlphaFreq == null
-                            ? '—'
-                            : '${stats.peakAlphaFreq!.toStringAsFixed(1)} Hz',
-                        icon: Icons.auto_awesome,
-                        color: const Color(0xFF66BB6A),
-                      ),
-                      _StatChip(
-                        label: 'Target time',
-                        value: '${stats.targetPct.toStringAsFixed(0)}%',
-                        icon: Icons.track_changes,
-                        color: const Color(0xFFAB47BC),
-                      ),
-                      _StatChip(
-                        label: 'Stillness',
-                        value: '${stats.stillnessPct.toStringAsFixed(0)}%',
-                        icon: Icons.self_improvement,
-                        color: const Color(0xFF4FC3F7),
-                      ),
-                      _StatChip(
-                        label: 'Avg BPM',
-                        value: stats.avgBpm == null
-                            ? '—'
-                            : stats.avgBpm!.toStringAsFixed(0),
-                        icon: Icons.favorite,
-                        color: const Color(0xFFEC407A),
-                      ),
-                      if (widget.drowsiness != null) ...[
-                        _StatChip(
-                          label: 'Drift time',
-                          value:
-                              '${widget.drowsiness!.scoreTotalPct.toStringAsFixed(0)}%',
-                          icon: Icons.nightlight_outlined,
-                          color: const Color(0xFF1E88E5),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ],
-            ),
+          child: HistoryDashboardSummary(
+            stats: widget.summaryStats,
+            durationS: widget.durationS,
+            elapsedSeconds: widget.summaryElapsed,
+            feedback: widget.feedback,
           ),
-        ),
         ),
         const SizedBox(height: 16),
         if (prepared.x.isNotEmpty) ...[
           chart(
-              'Alpha vs Theta (relative power, ${prepared.electrodePairLabel} avg)',
-              'rel. power',
-              [
-                _Series(
-                  label: 'Alpha rel',
-                  color: const Color(0xFF66BB6A),
-                  values: prepared.alphaRel,
-                ),
-                _Series(
-                  label: 'Theta rel',
-                  color: const Color(0xFFAB47BC),
-                  values: prepared.thetaRel,
-                ),
-              ],
-              prepared.x,
-              fixedYMin: 0,
-              fixedYMax: 1,
-            ),
+            'Alpha vs Theta (relative power, ${prepared.electrodePairLabel} avg)',
+            'rel. power',
+            [
+              _Series(
+                label: 'Alpha rel',
+                color: const Color(0xFF66BB6A),
+                values: prepared.alphaRel,
+              ),
+              _Series(
+                label: 'Theta rel',
+                color: const Color(0xFFAB47BC),
+                values: prepared.thetaRel,
+              ),
+            ],
+            prepared.x,
+            fixedYMin: 0,
+            fixedYMax: 1,
+          ),
           const SizedBox(height: 16),
         ] else ...[
           notEnough(
@@ -977,36 +992,6 @@ class _DashboardBodyState extends State<_DashboardBody> {
               ),
           ],
         ),
-        if (!widget.readOnly) ...[
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: widget.onSave,
-                  icon: const Icon(Icons.check),
-                  label: const Text('Save'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: widget.onDiscard,
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Discard'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: theme.colorScheme.onSurfaceVariant,
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
         const SizedBox(height: 16),
         if (prepared.x.isNotEmpty) ...[
           chart(
@@ -1052,15 +1037,20 @@ class _DashboardBodyState extends State<_DashboardBody> {
           const SizedBox(height: 16),
         ],
         if (prepared.movement.isNotEmpty) ...[
-          chart('Movement score', 'g stddev', [
-            _Series(
-              label: 'Movement',
-              color: const Color(0xFFFFA726),
-              values: prepared.movement,
-            ),
-          ], prepared.movementX,
-          fixedYMin: 0,
-          fixedYMax: 1.5),
+          chart(
+            'Movement score',
+            'g stddev',
+            [
+              _Series(
+                label: 'Movement',
+                color: const Color(0xFFFFA726),
+                values: prepared.movement,
+              ),
+            ],
+            prepared.movementX,
+            fixedYMin: 0,
+            fixedYMax: 1.5,
+          ),
           const SizedBox(height: 16),
         ] else ...[
           notEnough(
@@ -1144,15 +1134,13 @@ class _Series {
 
   /// Optional horizontal average line value
   final double? avgLineValue;
+
   /// Style for the average line (dashed/dotted, color defaults to series color)
   final _AvgLineStyle? avgLineStyle;
 }
 
 class _AvgLineStyle {
-  const _AvgLineStyle({
-    required this.dashPattern,
-    this.strokeWidth = 0.8,
-  });
+  const _AvgLineStyle({required this.dashPattern, this.strokeWidth = 0.8});
 
   /// Dash pattern: [dash, gap] in pixels
   final List<double> dashPattern;
@@ -1237,6 +1225,7 @@ class _ZoomableChart extends StatefulWidget {
   /// matches across sessions.
   final double? fixedYMin;
   final double? fixedYMax;
+
   /// Optional fixed y bounds for right axis (e.g. SpO2 50..100).
   final double? fixedYMinRight;
   final double? fixedYMaxRight;
@@ -1530,6 +1519,7 @@ class _ChartPainter extends CustomPainter {
   /// Left Y-axis fixed bounds (e.g. for HR: bpm). When null, auto-fit.
   final double? yMinLeft;
   final double? yMaxLeft;
+
   /// Right Y-axis fixed bounds (e.g. for SpO2: %). When null, auto-fit.
   final double? yMinRight;
   final double? yMaxRight;
@@ -1634,8 +1624,13 @@ class _ChartPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..isAntiAlias = true;
         // Draw dashed/dotted line
-        _drawDashedLine(canvas, paint, Offset(x0, lineY), Offset(x0 + w, lineY),
-            style.dashPattern);
+        _drawDashedLine(
+          canvas,
+          paint,
+          Offset(x0, lineY),
+          Offset(x0 + w, lineY),
+          style.dashPattern,
+        );
       }
     }
 
@@ -1742,79 +1737,6 @@ class _ChartPainter extends CustomPainter {
       oldDelegate.yMaxLeft != yMaxLeft ||
       oldDelegate.yMinRight != yMinRight ||
       oldDelegate.yMaxRight != yMaxRight;
-}
-
-class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          Text(value, style: theme.textTheme.bodyMedium),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  const _StatChip({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withAlpha(24),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 4),
-              Text(label, style: theme.textTheme.bodySmall),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _NotEnoughData extends StatelessWidget {
@@ -1965,5 +1887,53 @@ class _NotesStatusIcon extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Nested `stats` from metadata JSON. [SessionMetadata] keeps only the old
+/// flat card, so this copy is what the Dashboard summary reads.
+Map<String, Object?> _nestedStats(Map<String, Object?>? root) {
+  final raw = root?['stats'];
+  if (raw is! Map) return const {};
+  return Map<String, Object?>.from(
+    raw.map((key, value) => MapEntry('$key', value)),
+  );
+}
+
+num? _finiteNum(Object? value) {
+  if (value is! num || !value.isFinite) return null;
+  return value;
+}
+
+Map<String, Object?>? _metadataMap(List<int> bytes) {
+  if (bytes.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(utf8.decode(bytes));
+    if (decoded is! Map) return null;
+    return Map<String, Object?>.from(
+      decoded.map((key, value) => MapEntry('$key', value)),
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Null when the trust reader throws, so feedback cells stay out.
+HistoryDashboardTotals? _feedbackTotalsFor({
+  required List<ComputedFrame> frames,
+  required double? trainingStartOffsetSecs,
+  required SessionMetadata meta,
+}) {
+  try {
+    return HistoryDashboardTotals.fromSessionTrust(
+      readSessionTrust(
+        frames: frames,
+        trainingStartOffsetSecs: trainingStartOffsetSecs,
+        annotations: meta.annotations,
+        audioEvents: meta.audioEvents,
+      ),
+    );
+  } catch (_) {
+    return null;
   }
 }

@@ -254,14 +254,21 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 
 Pushed after End (`pushReplacement` from the session route). Leftover
 `session_*` scratch at launch opens the same screen. Not an `AppView`.
+Chip row is **Dashboard** only. Opening a feedback session lands on
+**Dashboard**. Alpha vs Theta, Bands, Movement, Heart rate / SpO₂, guard,
+music, and gesture cards stay on this chip, under the summary.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
 | Session summary | `{protocol} — Session` | `FeedbackDashboardView` | `feedback_dashboard.dart` | Live (`readOnly: false`) or History (`readOnly: true`). |
-| Back | AppBar leading / system back | `PopScope` | `feedback_dashboard.dart` | **Blocked** on live unsaved summary. Must Save or Discard. History: warn if notes dirty. |
-| Save | `Save` | `_save` | `feedback_dashboard.dart` | Publishes scratch `.neurofeed` to History. Live only. |
-| Discard | `Discard` | `_discard` | `feedback_dashboard.dart` | Deletes scratch `.neurofeed`. Live only. |
-| Heart rate / SpO₂ | `Heart rate / SpO₂` | `prepared.bpm` / `prepared.spo2` | `feedback_dashboard.dart` | From computed 1 Hz pulse/SpO₂; raw body fallback if those fields were omitted. Empty copy: `No reliable heart-rate or SpO₂ data was captured for this session.` |
+| Dashboard | `Dashboard` | `_SessionSummaryChip.dashboard` / `HistoryDashboardSummary` | `feedback_dashboard.dart` / `history/history_dashboard_summary.dart` | Only chip. Default. Summary from nested `stats` plus the trust reader, then the old charts. |
+| More | `More` | `Settings.historyDashboardMoreExpanded` | `history/history_dashboard_summary.dart` | Fold under the summary. Pref `history_dashboard_more_expanded`, default closed. Same flag as the recording Dashboard. |
+| Back | AppBar leading / system back | `PopScope` | `feedback_dashboard.dart` | **Blocked** on the live unsaved summary (`canPop: false` while scratch remains). Must Save or Discard. History: warn if notes dirty. |
+| Save | `Save` | `_save` | `feedback_dashboard.dart` | App bar. Live unsaved summary only. Publishes scratch `.neurofeed` to History. |
+| Discard | `Discard` | `_discard` | `feedback_dashboard.dart` | App bar. Live unsaved summary only. Deletes scratch `.neurofeed`. |
+| Notes | `Notes` | `_notes` | `feedback_dashboard.dart` | Editable on the Dashboard chip. History detail shows a save icon when the notes are dirty. |
+| Thumbnail | — | `_thumbKey` | `feedback_dashboard.dart` | Capture of the summary block (`HistoryDashboardSummary`), not a trust graph. |
+| Heart rate / SpO₂ | `Heart rate / SpO₂` | `prepared.bpm` / `prepared.spo2` | `feedback_dashboard.dart` | Still on the Dashboard chip, under the summary. From computed 1 Hz pulse/SpO₂; raw body fallback if those fields were omitted. Empty copy: `No reliable heart-rate or SpO₂ data was captured for this session.` |
 
 ### Settings — `lib/src/views/settings_view.dart`
 
