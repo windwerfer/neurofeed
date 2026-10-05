@@ -204,6 +204,7 @@ void main() {
         peakAlphas: const [],
         eegSamples: BigInt.zero,
         eeg: const [],
+        ppg: const [],
       );
       final omitted = prepareChartDataFromComputed(frames);
       expect(omitted.bpm, isEmpty);
@@ -395,6 +396,9 @@ void main() {
         'notchHz': [60.0],
         'notchSource': 'saved',
       });
+      final hr = (stored['stats'] as Map)['hr'] as Map;
+      expect(hr['mean'], 72);
+      expect(((stored['stats'] as Map)['spo2'] as Map)['mean'], 98);
       expect(recovered.first.elapsedSeconds, 2);
       expect(recovered.first.calibrationKind, 'staged');
       expect(

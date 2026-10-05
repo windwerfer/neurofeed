@@ -1,7 +1,15 @@
 import 'package:flutter/foundation.dart';
 
+/// Window the trust painters query. Live Follow and history replay both
+/// answer this. History does not use [TrustViewport].
+abstract interface class TrustWindow {
+  double get windowSeconds;
+  double visibleStart(double newestElapsed, {double? wallNow});
+  double visibleEnd(double newestElapsed, {double? wallNow});
+}
+
 /// Follow-only window for trust graphs. Pinch / Ctrl+scroll zoom; never Inspect.
-class TrustViewport extends ChangeNotifier {
+class TrustViewport extends ChangeNotifier implements TrustWindow {
   static const double defaultWindowSeconds = 75;
   static const double minWindowSeconds = 15;
   static const double maxWindowSeconds = 300;
@@ -13,6 +21,7 @@ class TrustViewport extends ChangeNotifier {
         maxWindowSeconds,
       );
 
+  @override
   double windowSeconds;
   double? _sampleAnchor;
   double? _wallAnchor;
@@ -61,9 +70,11 @@ class TrustViewport extends ChangeNotifier {
     return _sampleAnchor! + (now - _wallAnchor!) - followLeadSeconds;
   }
 
+  @override
   double visibleEnd(double newestElapsed, {double? wallNow}) =>
       followNewest(newestElapsed, wallNow: wallNow);
 
+  @override
   double visibleStart(double newestElapsed, {double? wallNow}) =>
       visibleEnd(newestElapsed, wallNow: wallNow) - windowSeconds;
 

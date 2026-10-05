@@ -1,27 +1,43 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
-import 'package:neurofeed/src/charts/band_style.dart' show bandColors, bandNames;
-import 'package:neurofeed/src/charts/smooth_path.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
+import 'package:neurofeed/src/charts/band_style.dart' show bandColors;
 import 'package:neurofeed/src/feedback/feedback_state.dart';
+import 'package:neurofeed/src/feedback/guardrail_mode.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/feedback/trust/trust_guard.dart';
+import 'package:neurofeed/src/feedback/trust/trust_inhibit.dart';
+import 'package:neurofeed/src/history/history_dashboard_summary.dart';
+import 'package:neurofeed/src/history/history_trust_viewport.dart';
+import 'package:neurofeed/src/history/session_trust.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/feedback/session_chart_data.dart';
 import 'package:neurofeed/src/monitor/device_montage.dart';
-import 'package:neurofeed/src/audio/output_ids.dart';
+import 'package:neurofeed/src/monitor/views/recording_dashboard.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
+
+enum _SessionSummaryChip {
+  dashboard,
+  feedback,
+  bands,
+  rawEeg,
+  histogram,
+  psd,
+  spectrogram,
+  hrSpo2,
+  movement,
+}
 
 class FeedbackDashboardView extends ConsumerStatefulWidget {
   const FeedbackDashboardView({
@@ -50,10 +66,32 @@ class _DashboardLoad {
   const _DashboardLoad({
     required this.prepared,
     required this.metadata,
+    required this.stats,
+    this.durationS,
+    this.elapsedSeconds,
+    this.feedback,
+    this.trust,
+    this.protocolDoc,
+    this.guardFeature = guardFeatureNone,
+    this.rewardLabel = '',
+    this.guardLabel = '',
+    required this.containerPath,
   });
 
+  final String containerPath;
   final SessionChartData prepared;
   final SessionMetadata metadata;
+
+  /// Nested metadata `stats`, copied before [SessionMetadata] flattens it.
+  final Map<String, Object?> stats;
+  final num? durationS;
+  final num? elapsedSeconds;
+  final HistoryDashboardTotals? feedback;
+  final SessionTrust? trust;
+  final ProtocolDocument? protocolDoc;
+  final String guardFeature;
+  final String rewardLabel;
+  final String guardLabel;
 }
 
 class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
@@ -62,9 +100,23 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   Future<_DashboardLoad>? _loadFuture;
   SessionChartData? _prepared;
   SessionMetadata? _fileMeta;
+  Map<String, Object?> _summaryStats = const {};
+  num? _durationS;
+  num? _summaryElapsed;
+  HistoryDashboardTotals? _feedbackTotals;
+  SessionTrust? _sessionTrust;
+  ProtocolDocument? _savedProtocol;
+  String _guardFeature = guardFeatureNone;
+  String _rewardLabel = '';
+  String _guardLabel = '';
+  String? _containerPath;
+  bool _rewardOn = true;
+  bool _guardOn = false;
+  final HistoryTrustViewport _historyViewport = HistoryTrustViewport();
   Object? _loadError;
   Uint8List? _thumbnail;
   bool _busy = false;
+  _SessionSummaryChip _chip = _SessionSummaryChip.dashboard;
 
   /// Notes value that is persisted on disk (used to detect unsaved edits).
   String _savedNotes = '';
@@ -76,24 +128,37 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   void initState() {
     super.initState();
     _loadFuture = _loadSession();
-    _loadFuture!.then((loaded) {
-      if (!mounted) return;
-      setState(() {
-        _prepared = loaded.prepared;
-        _fileMeta = loaded.metadata;
-        _loadError = null;
-        if (loaded.metadata.notes.isNotEmpty && _notes.text.isEmpty) {
-          _notes.text = loaded.metadata.notes;
-          _savedNotes = _notes.text;
-        }
-      });
-      if (!widget.readOnly) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
-      }
-    }).catchError((Object e) {
-      if (!mounted) return;
-      setState(() => _loadError = e);
-    });
+    _loadFuture!
+        .then((loaded) {
+          if (!mounted) return;
+          setState(() {
+            _prepared = loaded.prepared;
+            _fileMeta = loaded.metadata;
+            _summaryStats = loaded.stats;
+            _durationS = loaded.durationS;
+            _summaryElapsed = loaded.elapsedSeconds;
+            _feedbackTotals = loaded.feedback;
+            _sessionTrust = loaded.trust;
+            _savedProtocol = loaded.protocolDoc;
+            _guardFeature = loaded.guardFeature;
+            _rewardLabel = loaded.rewardLabel;
+            _guardLabel = loaded.guardLabel;
+            _containerPath = loaded.containerPath;
+            _applyHistoryTrustDefaults(loaded);
+            _loadError = null;
+            if (loaded.metadata.notes.isNotEmpty && _notes.text.isEmpty) {
+              _notes.text = loaded.metadata.notes;
+              _savedNotes = _notes.text;
+            }
+          });
+          if (!widget.readOnly) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
+          }
+        })
+        .catchError((Object e) {
+          if (!mounted) return;
+          setState(() => _loadError = e);
+        });
     final notes = widget.metadata?.notes;
     if (notes != null && notes.isNotEmpty) {
       _notes.text = notes;
@@ -112,7 +177,8 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       }
       path = resolved;
     } else {
-      final scratch = widget.sessionPath ??
+      final scratch =
+          widget.sessionPath ??
           ref.read(feedbackStateProvider.notifier).scratchPath;
       if (scratch == null) {
         throw StateError('scratch .neurofeed not assembled');
@@ -124,7 +190,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     }
     final frames = await extractComputedFromPath(path: path);
     final head = await parseHeadFromPath(path: path);
-    final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ??
+    final root = _metadataMap(head.metadataJson);
+    final meta =
+        SessionMetadata.fromJsonBytes(head.metadataJson) ??
         widget.metadata ??
         SessionMetadata(
           protocol: '',
@@ -145,10 +213,49 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
           ? kMuseElectrodeNames
           : meta.recordedChannels,
     );
+    final training =
+        meta.calibration?.trainingStartOffsetSecs ??
+        widget.metadata?.calibration?.trainingStartOffsetSecs ??
+        (widget.readOnly || !mounted
+            ? null
+            : ref.read(feedbackStateProvider.notifier).trainingStartOffsetSecs);
+    final savedProtocol = _savedProtocolDoc(meta, catalog);
+    final guardFeature = _savedGuardFeature(meta, savedProtocol);
+    final trust = _sessionTrustFor(
+      frames: frames,
+      trainingStartOffsetSecs: training,
+      meta: meta,
+    );
     return _DashboardLoad(
       prepared: prepared,
       metadata: meta,
+      stats: _nestedStats(root),
+      durationS: _finiteNum(root?['durationS']),
+      elapsedSeconds: _finiteNum(root?['elapsedSeconds']),
+      feedback: trust == null
+          ? null
+          : HistoryDashboardTotals.fromSessionTrust(trust),
+      trust: trust,
+      protocolDoc: savedProtocol,
+      guardFeature: guardFeature,
+      rewardLabel: _featureShortLabel(catalog, savedProtocol?.reward?.feature),
+      guardLabel: _featureShortLabel(catalog, guardFeature),
+      containerPath: path,
     );
+  }
+
+  void _applyHistoryTrustDefaults(_DashboardLoad loaded) {
+    final trust = loaded.trust;
+    if (trust == null) return;
+    final rewardLane =
+        trust.reward.isNotEmpty && (loaded.protocolDoc?.hasReward ?? false);
+    final guardLane =
+        trust.guard.isNotEmpty &&
+        trustGuardPaneSpecs(loaded.guardFeature).isNotEmpty;
+    _rewardOn = rewardLane;
+    _guardOn = !rewardLane && guardLane;
+    final end = historyTrustLastT(trust);
+    if (end != null) _historyViewport.anchorTo(end);
   }
 
   bool get _notesDirty => _notes.text != _savedNotes;
@@ -176,6 +283,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     _notes.removeListener(_onNotesChanged);
     _notesFlashTimer?.cancel();
     _notes.dispose();
+    _historyViewport.dispose();
     super.dispose();
   }
 
@@ -206,10 +314,30 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         appBar: AppBar(
           title: Text('${copy.title} — Session'),
           automaticallyImplyLeading: widget.readOnly,
+          actions: widget.readOnly
+              ? null
+              : [
+                  TextButton(
+                    onPressed: _busy ? null : _save,
+                    child: const Text('Save'),
+                  ),
+                  TextButton(
+                    onPressed: _busy ? null : _discard,
+                    child: const Text('Discard'),
+                  ),
+                ],
         ),
-        body: _busy
-            ? const Center(child: CircularProgressIndicator())
-            : _dashboard(meta, fb, protocol, copy.title),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _chipBar(),
+            Expanded(
+              child: _busy
+                  ? const Center(child: CircularProgressIndicator())
+                  : _dashboard(meta, fb),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -266,42 +394,117 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     }
   }
 
-  Widget _dashboard(
-    SessionMetadata? meta,
-    FeedbackState fb,
-    ProtocolDocument protocol,
-    String protocolTitle,
-  ) {
+  bool get _showFeedbackChip =>
+      _feedbackLane(_sessionTrust, _savedProtocol, _guardFeature);
+
+  _SessionSummaryChip get _visibleChip =>
+      _chip == _SessionSummaryChip.feedback && !_showFeedbackChip
+      ? _SessionSummaryChip.dashboard
+      : _chip;
+
+  Widget _chipBar() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: SegmentedButton<_SessionSummaryChip>(
+        segments: [
+          const ButtonSegment(
+            value: _SessionSummaryChip.dashboard,
+            label: Text('Dashboard'),
+          ),
+          if (_showFeedbackChip)
+            const ButtonSegment(
+              value: _SessionSummaryChip.feedback,
+              label: Text('Feedback'),
+            ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.bands,
+            label: Text('Bands'),
+          ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.rawEeg,
+            label: Text('Raw EEG'),
+          ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.histogram,
+            label: Text('Histogram'),
+          ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.psd,
+            label: Text('PSD'),
+          ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.spectrogram,
+            label: Text('Spectrogram'),
+          ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.hrSpo2,
+            label: Text('HR+SpO2'),
+          ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.movement,
+            label: Text('Movement'),
+          ),
+        ],
+        selected: {_visibleChip},
+        showSelectedIcon: false,
+        style: const ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        onSelectionChanged: (next) {
+          if (next.isEmpty) return;
+          setState(() => _chip = next.first);
+        },
+      ),
+    );
+  }
+
+  RecordingDashGraph? _signalFor(_SessionSummaryChip chip) => switch (chip) {
+    _SessionSummaryChip.dashboard || _SessionSummaryChip.feedback => null,
+    _SessionSummaryChip.bands => RecordingDashGraph.bands,
+    _SessionSummaryChip.rawEeg => RecordingDashGraph.rawEeg,
+    _SessionSummaryChip.histogram => RecordingDashGraph.histogram,
+    _SessionSummaryChip.psd => RecordingDashGraph.psd,
+    _SessionSummaryChip.spectrogram => RecordingDashGraph.spectrogram,
+    _SessionSummaryChip.hrSpo2 => RecordingDashGraph.hrSpo2,
+    _SessionSummaryChip.movement => RecordingDashGraph.movement,
+  };
+
+  Widget _dashboard(SessionMetadata? meta, FeedbackState fb) {
     if (_prepared != null) {
-      return _DashboardBody(
-        protocol: protocol,
-        protocolTitle: protocolTitle,
-        durationMinutes: meta?.durationMinutes ?? fb.durationMinutes,
-        elapsedSeconds: meta?.elapsedSeconds ?? fb.elapsedSeconds,
-        soundName: meta?.sound ?? fb.soundName,
-        feedbackSoundName: widget.readOnly
-            ? (meta?.feedbackSound == null
+      final signal = _signalFor(_visibleChip);
+      final path = _containerPath;
+      if (signal != null && path != null) {
+        return HistorySignalGraphs(
+          key: ValueKey('session-graphs-$path'),
+          absolutePath: path,
+          graph: signal,
+        );
+      }
+      return switch (_visibleChip) {
+        _SessionSummaryChip.dashboard => _DashboardBody(
+          summaryStats: _summaryStats,
+          durationS: _durationS,
+          summaryElapsed: _summaryElapsed,
+          feedback: _feedbackTotals,
+          music: meta?.music,
+          gestures:
+              meta?.gestures ??
+              (widget.readOnly
                   ? null
-                  : feedbackSoundLabel(meta!.feedbackSound))
-            : fb.rewardOutput.label,
-        prepared: _prepared!,
-        drowsiness: meta?.drowsiness,
-        music: meta?.music,
-        gestures: meta?.gestures ??
-            (widget.readOnly
-                ? null
-                : ref.read(feedbackStateProvider.notifier).gestureMarkers),
-        trainingStartOffsetSecs: _trainingStartOffset,
-        readOnly: widget.readOnly,
-        thumbKey: _thumbKey,
-        notesController: _notes,
-        onSave: _save,
-        onDiscard: _discard,
-        onSaveNotes: widget.readOnly ? _saveNotes : null,
-        notesDirty: _notesDirty,
-        notesSaving: _notesSaving,
-        notesSavedFlash: _notesSavedFlash,
-      );
+                  : ref.read(feedbackStateProvider.notifier).gestureMarkers),
+          trainingStartOffsetSecs: _trainingStartOffset,
+          thumbKey: _thumbKey,
+          notesController: _notes,
+          onSaveNotes: widget.readOnly ? _saveNotes : null,
+          notesDirty: _notesDirty,
+          notesSaving: _notesSaving,
+          notesSavedFlash: _notesSavedFlash,
+        ),
+        _SessionSummaryChip.feedback => _feedbackBody(),
+        _ => const SizedBox.shrink(),
+      };
     }
     if (_loadError != null) {
       return _LoadError(
@@ -316,16 +519,50 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     return _NoData(theme: Theme.of(context));
   }
 
+  Widget _feedbackBody() {
+    final trust = _sessionTrust;
+    final protocol = _savedProtocol;
+    if (trust == null || protocol == null) return const SizedBox.shrink();
+    final overrides =
+        _fileMeta?.sessionSettings?.inhibitCeilingOverrides ?? const {};
+    return HistoryTrustReplay(
+      trust: trust,
+      viewport: _historyViewport,
+      showReward: _rewardOn,
+      showGuard: _guardOn,
+      onReward: (on) => setState(() => _rewardOn = on),
+      onGuard: (on) => setState(() => _guardOn = on),
+      inhibit: trustInhibitSpecs(
+        overlayInhibitCeilings(protocol.conditions, overrides),
+      ),
+      guardPanes: trustGuardPaneSpecs(_guardFeature),
+      rewardLabel: _rewardLabel,
+      guardLabel: _guardLabel,
+      rewardColor: protocol.color,
+      guardColor: bandColors[0],
+    );
+  }
+
+  int _captureAttempts = 0;
+
   Future<void> _capture() async {
     final boundary =
         _thumbKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-    if (boundary == null) return;
-    final image = await boundary.toImage(pixelRatio: 2);
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    image.dispose();
-    final bytes = byteData?.buffer.asUint8List();
-    if (bytes != null && mounted) {
-      setState(() => _thumbnail = bytes);
+    if (boundary == null || !boundary.hasSize) return;
+    try {
+      final image = await boundary.toImage(pixelRatio: 2);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      image.dispose();
+      final bytes = byteData?.buffer.asUint8List();
+      if (bytes != null && mounted) {
+        setState(() => _thumbnail = bytes);
+      }
+    } catch (_) {
+      // The summary boundary can still be dirty on the frame that mounts it.
+      if (_captureAttempts++ > 4 || !mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_capture());
+      });
     }
   }
 
@@ -342,7 +579,8 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       }
       final thumb = encodeThumbnailWebP(_thumbnail ?? Uint8List(0));
       final stats = _prepared?.stats;
-      final metadata = _fileMeta?.withSaveFields(
+      final metadata =
+          _fileMeta?.withSaveFields(
             notes: _notes.text,
             stats: stats == null
                 ? null
@@ -356,19 +594,25 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
                   ),
             avgSpo2: stats?.avgSpo2,
           ) ??
-          notifier.buildSessionMetadata(
-            notes: _notes.text,
-            stats: stats,
-          );
+          notifier.buildSessionMetadata(notes: _notes.text, stats: stats);
+      final frames = await extractComputedFromPath(path: path);
+      final baseStats = assembleBaseStats(
+        frames: frames,
+        annotations: metadata.annotations,
+        channelLabels: metadata.recordedChannels.isEmpty
+            ? kMuseElectrodeNames
+            : metadata.recordedChannels,
+      );
       final patched = '${Directory.systemTemp.path}/nf_save_$id.neurofeed';
       await rewriteHeadToPath(
         srcPath: path,
         destPath: patched,
-                metadataJson: utf8.encode(
+        metadataJson: utf8.encode(
           jsonEncode(
             buildFeedbackMetadata(
               meta: metadata,
               subject: ref.read(settingsProvider).subjectInfo,
+              stats: baseStats,
             ),
           ),
         ),
@@ -471,57 +715,39 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
 
 class _DashboardBody extends StatefulWidget {
   const _DashboardBody({
-    required this.protocol,
-    required this.protocolTitle,
-    required this.durationMinutes,
-    required this.elapsedSeconds,
-    required this.soundName,
-    this.feedbackSoundName,
-    required this.prepared,
-    this.drowsiness,
+    required this.summaryStats,
+    this.durationS,
+    this.summaryElapsed,
+    this.feedback,
     this.music,
     this.gestures,
     this.trainingStartOffsetSecs,
-    required this.readOnly,
     required this.thumbKey,
     required this.notesController,
-    required this.onSave,
-    required this.onDiscard,
     this.onSaveNotes,
     this.notesDirty = false,
     this.notesSaving = false,
     this.notesSavedFlash = false,
   });
 
-  final ProtocolDocument protocol;
-  final String protocolTitle;
-  final int durationMinutes;
-  final int elapsedSeconds;
-  final String soundName;
-  final String? feedbackSoundName;
-  final SessionChartData prepared;
+  final Map<String, Object?> summaryStats;
+  final num? durationS;
+  final num? summaryElapsed;
+  final HistoryDashboardTotals? feedback;
 
-  /// Sleep-guardrail trace of this session (null when the guardrail did not
-  /// run or recorded nothing).
-  final SessionDrowsiness? drowsiness;
-
-  /// Music-feedback record (track list + cutoff trace) of this session (null
+  /// Music-feedback record (track list) of this session (null
   /// when music feedback did not run).
   final SessionMusic? music;
 
   /// Gesture markers recorded during the session.
   final List<GestureMarker>? gestures;
 
-  /// Seconds from recording start to the training boundary; drowsiness
-  /// offsets are wall-clock-relative to session start, so subtracting this
-  /// aligns the trace with the training-window chart axis.
+  /// Seconds from recording start to the training boundary. Music and
+  /// gesture offsets are relative to session start.
   final double? trainingStartOffsetSecs;
 
-  final bool readOnly;
   final GlobalKey thumbKey;
   final TextEditingController notesController;
-  final Future<void> Function() onSave;
-  final Future<void> Function() onDiscard;
   final Future<void> Function()? onSaveNotes;
   final bool notesDirty;
   final bool notesSaving;
@@ -532,100 +758,11 @@ class _DashboardBody extends StatefulWidget {
 }
 
 class _DashboardBodyState extends State<_DashboardBody> {
-  late final _ChartViewport _viewport;
-
-  @override
-  void initState() {
-    super.initState();
-    final p = widget.prepared;
-    var end = widget.elapsedSeconds.toDouble();
-    void take(List<double> xs) {
-      if (xs.isNotEmpty && xs.last > end) end = xs.last;
-    }
-
-    take(p.x);
-    take(p.movementX);
-    take(p.bpmX);
-    take(p.guardrailX);
-    take(p.spo2X);
-    final music = widget.music;
-    if (music != null && music.series.isNotEmpty) {
-      take([
-        music.series.last.offsetSecs - (widget.trainingStartOffsetSecs ?? 0),
-      ]);
-    }
-    _viewport = _ChartViewport(0, math.max(end, 1.0));
-  }
-
-  @override
-  void dispose() {
-    _viewport.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final stats = widget.prepared.stats;
-    final prepared = widget.prepared;
-    final vp = _viewport;
 
-    Widget chart(
-      String title,
-      String unit,
-      List<_Series> series,
-      List<double> xs, {
-      double? fixedYMin,
-      double? fixedYMax,
-      double? fixedYMinRight,
-      double? fixedYMaxRight,
-    }) {
-      return _ZoomableChart(
-        title: title,
-        unit: unit,
-        series: series,
-        x: xs,
-        viewport: vp,
-        fixedYMin: fixedYMin,
-        fixedYMax: fixedYMax,
-        fixedYMinRight: fixedYMinRight,
-        fixedYMaxRight: fixedYMaxRight,
-      );
-    }
-
-    final notEnough = _notEnoughData;
-
-    // Sleep-guardrail trace widgets for the current session: the model's
-    // sleep-direction line vs the baseline warning threshold. Empty when the
-    // guardrail produced no samples.
-    List<Widget> drowsinessWidgets() {
-      final xs = prepared.guardrailX;
-      final sleepDir = prepared.guardrailSleepDir;
-      if (xs.isEmpty || sleepDir.isEmpty) {
-        return const [];
-      }
-      final threshold = widget.drowsiness?.threshold ?? double.nan;
-      return [
-        chart('Sleep guardrail (AI model)', 'sleep-dir score', [
-          _Series(
-            label: 'Sleep direction',
-            color: const Color(0xFF1E88E5),
-            values: sleepDir,
-          ),
-          if (threshold.isFinite)
-            _Series(
-              label: 'Warning threshold',
-              color: const Color(0xFFFFA726),
-              values: List.filled(xs.length, threshold),
-            ),
-        ], xs),
-        const SizedBox(height: 16),
-      ];
-    }
-
-    // Music-feedback widgets: the low-pass cutoff the reward drove (bounded by
-    // the configured range) plus the track list with the offsets they started
-    // at. Empty when music feedback produced no samples.
+    // Music-feedback track list. Empty when music feedback produced no samples.
     String formatOffset(double secs) {
       if (secs.isNaN || secs < 0) {
         return '00:00';
@@ -641,11 +778,6 @@ class _DashboardBodyState extends State<_DashboardBody> {
         return const [];
       }
       final offset = widget.trainingStartOffsetSecs ?? 0;
-      final xs = [
-        for (final s in music.series)
-          (s.offsetSecs - offset).clamp(0.0, 1e9),
-      ];
-      final hz = [for (final s in music.series) s.cutoffHz];
       return [
         Card(
           color: theme.colorScheme.surface,
@@ -672,24 +804,6 @@ class _DashboardBodyState extends State<_DashboardBody> {
                       ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                chart('Low-pass cutoff', 'Hz', [
-                  _Series(
-                    label: 'Cutoff',
-                    color: const Color(0xFF8E24AA),
-                    values: hz,
-                  ),
-                  _Series(
-                    label: 'Max',
-                    color: const Color(0xFFBDBDBD),
-                    values: List.filled(xs.length, music.maxCutoffHz),
-                  ),
-                  _Series(
-                    label: 'Min',
-                    color: const Color(0xFFBDBDBD),
-                    values: List.filled(xs.length, music.minCutoffHz),
-                  ),
-                ], xs),
                 if (music.tracks.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text('Tracks', style: theme.textTheme.titleSmall),
@@ -799,8 +913,11 @@ class _DashboardBodyState extends State<_DashboardBody> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(iconForType(entry.key),
-                              size: 16, color: colorForType(entry.key)),
+                          Icon(
+                            iconForType(entry.key),
+                            size: 16,
+                            color: colorForType(entry.key),
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             '${entry.key.name}: ${entry.value}',
@@ -818,10 +935,17 @@ class _DashboardBodyState extends State<_DashboardBody> {
                     padding: const EdgeInsets.symmetric(vertical: 2),
                     child: Row(
                       children: [
-                        Icon(iconForType(g.type), size: 16, color: colorForType(g.type)),
+                        Icon(
+                          iconForType(g.type),
+                          size: 16,
+                          color: colorForType(g.type),
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(g.type.name, overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            g.type.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         Text(
                           formatOffset(g.offsetSeconds - offset),
@@ -845,115 +969,14 @@ class _DashboardBodyState extends State<_DashboardBody> {
       children: [
         RepaintBoundary(
           key: widget.thumbKey,
-          child: Card(
-          color: theme.colorScheme.surfaceContainerHighest,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Session summary', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 12),
-                _SummaryRow(label: 'Protocol', value: widget.protocolTitle),
-                _SummaryRow(
-                  label: 'Duration',
-                  value: '${widget.durationMinutes} min',
-                ),
-                _SummaryRow(
-                  label: 'Elapsed',
-                  value:
-                      '${widget.elapsedSeconds ~/ 60}:'
-                      '${(widget.elapsedSeconds % 60).toString().padLeft(2, '0')}',
-                ),
-                _SummaryRow(label: 'Background sound', value: widget.soundName),
-                if (widget.feedbackSoundName != null)
-                  _SummaryRow(
-                    label: 'Feedback sound',
-                    value: widget.feedbackSoundName!,
-                  ),
-                if (prepared.x.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _StatChip(
-                        label: 'Peak alpha',
-                        value: stats.peakAlphaFreq == null
-                            ? '—'
-                            : '${stats.peakAlphaFreq!.toStringAsFixed(1)} Hz',
-                        icon: Icons.auto_awesome,
-                        color: const Color(0xFF66BB6A),
-                      ),
-                      _StatChip(
-                        label: 'Target time',
-                        value: '${stats.targetPct.toStringAsFixed(0)}%',
-                        icon: Icons.track_changes,
-                        color: const Color(0xFFAB47BC),
-                      ),
-                      _StatChip(
-                        label: 'Stillness',
-                        value: '${stats.stillnessPct.toStringAsFixed(0)}%',
-                        icon: Icons.self_improvement,
-                        color: const Color(0xFF4FC3F7),
-                      ),
-                      _StatChip(
-                        label: 'Avg BPM',
-                        value: stats.avgBpm == null
-                            ? '—'
-                            : stats.avgBpm!.toStringAsFixed(0),
-                        icon: Icons.favorite,
-                        color: const Color(0xFFEC407A),
-                      ),
-                      if (widget.drowsiness != null) ...[
-                        _StatChip(
-                          label: 'Drift time',
-                          value:
-                              '${widget.drowsiness!.scoreTotalPct.toStringAsFixed(0)}%',
-                          icon: Icons.nightlight_outlined,
-                          color: const Color(0xFF1E88E5),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ],
-            ),
+          child: HistoryDashboardSummary(
+            stats: widget.summaryStats,
+            durationS: widget.durationS,
+            elapsedSeconds: widget.summaryElapsed,
+            feedback: widget.feedback,
           ),
-        ),
         ),
         const SizedBox(height: 16),
-        if (prepared.x.isNotEmpty) ...[
-          chart(
-              'Alpha vs Theta (relative power, ${prepared.electrodePairLabel} avg)',
-              'rel. power',
-              [
-                _Series(
-                  label: 'Alpha rel',
-                  color: const Color(0xFF66BB6A),
-                  values: prepared.alphaRel,
-                ),
-                _Series(
-                  label: 'Theta rel',
-                  color: const Color(0xFFAB47BC),
-                  values: prepared.thetaRel,
-                ),
-              ],
-              prepared.x,
-              fixedYMin: 0,
-              fixedYMax: 1,
-            ),
-          const SizedBox(height: 16),
-        ] else ...[
-          notEnough(
-            'Alpha vs Theta',
-            'Not enough signal data was recorded to build this graph. '
-                'This usually means the headband was not in good contact or the '
-                'connection dropped during the session. Check the electrodes and '
-                'try again.',
-          ),
-          const SizedBox(height: 16),
-        ],
         Stack(
           children: [
             TextField(
@@ -977,878 +1000,10 @@ class _DashboardBodyState extends State<_DashboardBody> {
               ),
           ],
         ),
-        if (!widget.readOnly) ...[
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: widget.onSave,
-                  icon: const Icon(Icons.check),
-                  label: const Text('Save'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: widget.onDiscard,
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Discard'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: theme.colorScheme.onSurfaceVariant,
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
         const SizedBox(height: 16),
-        if (prepared.x.isNotEmpty) ...[
-          chart(
-            'Bands (relative power, ${prepared.electrodePairLabel} avg)',
-            'rel. power',
-            [
-              _Series(
-                label: bandNames[0],
-                color: bandColors[0],
-                values: prepared.deltaRel,
-              ),
-              _Series(
-                label: bandNames[1],
-                color: bandColors[1],
-                values: prepared.thetaRel,
-              ),
-              _Series(
-                label: bandNames[2],
-                color: bandColors[2],
-                values: prepared.alphaRel,
-              ),
-              _Series(
-                label: bandNames[3],
-                color: bandColors[3],
-                values: prepared.betaRel,
-              ),
-              _Series(
-                label: bandNames[4],
-                color: bandColors[4],
-                values: prepared.gammaRel,
-              ),
-            ],
-            prepared.x,
-            fixedYMin: 0,
-            fixedYMax: 1,
-          ),
-          const SizedBox(height: 16),
-        ] else ...[
-          notEnough(
-            'Bands',
-            'Not enough signal data was recorded to build this graph.',
-          ),
-          const SizedBox(height: 16),
-        ],
-        if (prepared.movement.isNotEmpty) ...[
-          chart('Movement score', 'g stddev', [
-            _Series(
-              label: 'Movement',
-              color: const Color(0xFFFFA726),
-              values: prepared.movement,
-            ),
-          ], prepared.movementX,
-          fixedYMin: 0,
-          fixedYMax: 1.5),
-          const SizedBox(height: 16),
-        ] else ...[
-          notEnough(
-            'Movement score',
-            'No movement data was recorded for this session.',
-          ),
-          const SizedBox(height: 16),
-        ],
-        if (prepared.bpm.isNotEmpty || prepared.spo2.isNotEmpty) ...[
-          chart(
-            'Heart rate / SpO₂',
-            'bpm / %',
-            [
-              if (prepared.bpm.isNotEmpty)
-                _Series(
-                  label: 'Pulse (bpm)',
-                  color: const Color(0xFFEC407A),
-                  values: prepared.bpm,
-                  axis: _AxisSide.left,
-                  avgLineValue: stats.avgBpm,
-                  avgLineStyle: const _AvgLineStyle(
-                    dashPattern: [8, 4],
-                    strokeWidth: 0.8,
-                  ),
-                ),
-              if (prepared.spo2.isNotEmpty)
-                _Series(
-                  label: 'SpO₂ (%)',
-                  color: const Color(0xFF26C6DA),
-                  values: prepared.spo2,
-                  axis: _AxisSide.right,
-                  avgLineValue: stats.avgSpo2,
-                  avgLineStyle: const _AvgLineStyle(
-                    dashPattern: [3, 3],
-                    strokeWidth: 0.8,
-                  ),
-                ),
-            ],
-            // Use bpmX for X-axis (both series share time base)
-            prepared.bpm.isNotEmpty ? prepared.bpmX : prepared.spo2X,
-            fixedYMin: 40,
-            fixedYMax: 200,
-            fixedYMinRight: 50,
-            fixedYMaxRight: 100,
-          ),
-          const SizedBox(height: 16),
-        ] else ...[
-          notEnough(
-            'Heart rate / SpO₂',
-            'No reliable heart-rate or SpO₂ data was captured for this session.',
-          ),
-          const SizedBox(height: 16),
-        ],
-        ...drowsinessWidgets(),
         ...musicWidgets(),
         ...gestureWidgets(),
       ],
-    );
-  }
-}
-
-_NotEnoughData _notEnoughData(String title, String detail) =>
-    _NotEnoughData(title: title, detail: detail);
-
-enum _AxisSide { left, right }
-
-class _Series {
-  const _Series({
-    required this.label,
-    required this.color,
-    required this.values,
-    this.axis = _AxisSide.left,
-    this.avgLineValue,
-    this.avgLineStyle,
-  });
-
-  final String label;
-  final Color color;
-  final List<double> values;
-  final _AxisSide axis;
-
-  /// Optional horizontal average line value
-  final double? avgLineValue;
-  /// Style for the average line (dashed/dotted, color defaults to series color)
-  final _AvgLineStyle? avgLineStyle;
-}
-
-class _AvgLineStyle {
-  const _AvgLineStyle({
-    required this.dashPattern,
-    this.strokeWidth = 0.8,
-  });
-
-  /// Dash pattern: [dash, gap] in pixels
-  final List<double> dashPattern;
-  final double strokeWidth;
-}
-
-/// Shared time-window state for all summary graphs. Every chart renders the
-/// exact same slice of the session, so zooming/panning one graph moves them all.
-class _ChartViewport extends ChangeNotifier {
-  _ChartViewport(this.fullStart, this.fullEnd)
-    : _viewStart = fullStart,
-      _viewEnd = fullEnd;
-
-  final double fullStart;
-  final double fullEnd;
-  double _viewStart;
-  double _viewEnd;
-
-  double get viewStart => _viewStart;
-  double get viewEnd => _viewEnd;
-  double get span => _viewEnd - _viewStart;
-  double get fullSpan => fullEnd - fullStart;
-  bool get isZoomed => span < fullSpan - 1e-6;
-
-  double get minSpan => math.max(1.0, fullSpan / 500);
-
-  void setView(double start, double end) {
-    var span = (end - start).clamp(minSpan, fullSpan);
-    var s = start;
-    if (s < fullStart) s = fullStart;
-    if (s + span > fullEnd) s = fullEnd - span;
-    _viewStart = s;
-    _viewEnd = s + span;
-    notifyListeners();
-  }
-
-  /// Keep the time under [frac] (0..1 of chart width) fixed while scaling the
-  /// visible window by [factor] (>1 zooms in to a smaller slice).
-  void zoomAtFrac({required double frac, required double factor}) {
-    final newSpan = (span * factor).clamp(minSpan, fullSpan);
-    final anchorT = _viewStart + frac * span;
-    var s = anchorT - frac * newSpan;
-    if (s > fullEnd - newSpan) s = fullEnd - newSpan;
-    if (s < fullStart) s = fullStart;
-    setView(s, s + newSpan);
-  }
-
-  /// Shift the window horizontally. Only meaningful while zoomed in; a fully
-  /// zoomed-out view is already showing everything so nothing moves.
-  void panByDx({required double dx, required double width}) {
-    if (width <= 0 || !isZoomed) return;
-    final dt = dx / width * span;
-    var s = _viewStart - dt;
-    if (s + span > fullEnd) s = fullEnd - span;
-    if (s < fullStart) s = fullStart;
-    setView(s, s + span);
-  }
-
-  void reset() => setView(fullStart, fullEnd);
-}
-
-class _ZoomableChart extends StatefulWidget {
-  const _ZoomableChart({
-    required this.title,
-    required this.unit,
-    required this.series,
-    required this.x,
-    required this.viewport,
-    this.fixedYMin,
-    this.fixedYMax,
-    this.fixedYMinRight,
-    this.fixedYMaxRight,
-  });
-
-  final String title;
-  final String unit;
-  final List<_Series> series;
-  final List<double> x;
-  final _ChartViewport viewport;
-
-  /// Optional fixed y bounds for left axis (e.g. 0..1 relative power) so the scale
-  /// matches across sessions.
-  final double? fixedYMin;
-  final double? fixedYMax;
-  /// Optional fixed y bounds for right axis (e.g. SpO2 50..100).
-  final double? fixedYMinRight;
-  final double? fixedYMaxRight;
-
-  @override
-  State<_ZoomableChart> createState() => _ZoomableChartState();
-}
-
-class _ZoomableChartState extends State<_ZoomableChart> {
-  double _gestureStartSpan = 0;
-  double _gestureStartT = 0;
-  double _gestureStartFrac = 0;
-  double _chartWidth = 0;
-  final Set<String> _hidden = {};
-
-  void _toggleSeries(String label) {
-    setState(() {
-      if (!_hidden.add(label)) {
-        _hidden.remove(label);
-      }
-    });
-  }
-
-  List<_Series> get _visibleSeries =>
-      widget.series.where((s) => !_hidden.contains(s.label)).toList();
-
-  void _onScaleStart(ScaleStartDetails d) {
-    if (_chartWidth <= 0) return;
-    _gestureStartSpan = widget.viewport.span;
-    _gestureStartFrac = (d.localFocalPoint.dx / _chartWidth).clamp(0.0, 1.0);
-    _gestureStartT =
-        widget.viewport.viewStart + _gestureStartFrac * _gestureStartSpan;
-  }
-
-  void _onScaleUpdate(ScaleUpdateDetails d) {
-    if (_chartWidth <= 0) return;
-    final newSpan = (_gestureStartSpan / d.scale).clamp(
-      widget.viewport.minSpan,
-      widget.viewport.fullSpan,
-    );
-    final curFrac = (d.localFocalPoint.dx / _chartWidth).clamp(0.0, 1.0);
-    final start = _gestureStartT - curFrac * newSpan;
-    widget.viewport.setView(start, start + newSpan);
-  }
-
-  void _onSignal(PointerSignalEvent e) {
-    if (_chartWidth <= 0) return;
-    // Desktop zoom deliberately requires the modifier so a plain wheel or
-    // trackpad scroll still scrolls the page normally.
-    final kb = HardwareKeyboard.instance;
-    if (e is PointerScrollEvent) {
-      if (!kb.isControlPressed && !kb.isMetaPressed) {
-        return;
-      }
-      GestureBinding.instance.pointerSignalResolver.register(
-        e,
-        (_) => widget.viewport.zoomAtFrac(
-          frac: (e.localPosition.dx / _chartWidth).clamp(0.0, 1.0),
-          factor: math.exp(e.scrollDelta.dy * 0.002),
-        ),
-      );
-    } else if (e is PointerScaleEvent) {
-      GestureBinding.instance.pointerSignalResolver.register(
-        e,
-        (_) => widget.viewport.zoomAtFrac(
-          frac: (e.localPosition.dx / _chartWidth).clamp(0.0, 1.0),
-          factor: e.scale,
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(widget.title, style: theme.textTheme.titleSmall),
-                ),
-                Text(widget.unit, style: theme.textTheme.bodySmall),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 4,
-              children: [
-                for (final s in widget.series)
-                  GestureDetector(
-                    onTap: () => _toggleSeries(s.label),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: s.color,
-                            borderRadius: BorderRadius.circular(2),
-                            border: Border.all(
-                              color: _hidden.contains(s.label)
-                                  ? Colors.transparent
-                                  : theme.colorScheme.onSurfaceVariant
-                                        .withAlpha(80),
-                              width: 1,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          s.label,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: _hidden.contains(s.label)
-                                ? theme.colorScheme.onSurfaceVariant.withAlpha(
-                                    140,
-                                  )
-                                : null,
-                            decoration: _hidden.contains(s.label)
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(width: 2),
-                        Icon(
-                          _hidden.contains(s.label)
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          size: 12,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (widget.x.isEmpty ||
-                widget.series.any((s) => s.values.length != widget.x.length))
-              SizedBox(
-                height: 140,
-                width: double.infinity,
-                child: Center(
-                  child: Text(
-                    'No data',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              )
-            else
-              ListenableBuilder(
-                listenable: widget.viewport,
-                builder: (context, _) {
-                  final vp = widget.viewport;
-                  final visible = _visibleSeries;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        height: 140,
-                        width: double.infinity,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            _chartWidth = constraints.maxWidth;
-                            return Listener(
-                              behavior: HitTestBehavior.opaque,
-                              onPointerSignal: _onSignal,
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onScaleStart: _onScaleStart,
-                                onScaleUpdate: _onScaleUpdate,
-                                onDoubleTap: vp.reset,
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    CustomPaint(
-                                      painter: _ChartPainter(
-                                        series: visible,
-                                        x: widget.x,
-                                        viewStart: vp.viewStart,
-                                        viewEnd: vp.viewEnd,
-                                        yMinLeft: widget.fixedYMin,
-                                        yMaxLeft: widget.fixedYMax,
-                                        yMinRight: widget.fixedYMinRight,
-                                        yMaxRight: widget.fixedYMaxRight,
-                                      ),
-                                    ),
-                                    if (visible.isEmpty)
-                                      Center(
-                                        child: Text(
-                                          'All lines hidden — tap a label to show it',
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                                color: theme
-                                                    .colorScheme
-                                                    .onSurfaceVariant,
-                                              ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _fmtTime(vp.viewStart),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          if (vp.isZoomed)
-                            InkWell(
-                              onTap: vp.reset,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.fullscreen_exit,
-                                    size: 14,
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Reset zoom',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else
-                            Text(
-                              'pinch / ctrl+scroll to zoom, drag to pan',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          Text(
-                            _fmtTime(vp.viewEnd),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ],
-                  );
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-String _fmtTime(double seconds) {
-  final s = seconds < 0 ? 0 : seconds.round();
-  return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
-}
-
-class _ChartPainter extends CustomPainter {
-  const _ChartPainter({
-    required this.series,
-    required this.x,
-    required this.viewStart,
-    required this.viewEnd,
-    this.yMinLeft,
-    this.yMaxLeft,
-    this.yMinRight,
-    this.yMaxRight,
-  });
-
-  final List<_Series> series;
-  final List<double> x;
-  final double viewStart;
-  final double viewEnd;
-
-  /// Left Y-axis fixed bounds (e.g. for HR: bpm). When null, auto-fit.
-  final double? yMinLeft;
-  final double? yMaxLeft;
-  /// Right Y-axis fixed bounds (e.g. for SpO2: %). When null, auto-fit.
-  final double? yMinRight;
-  final double? yMaxRight;
-
-  static const double _yGutter = 34;
-  static const double _rightGutter = 34;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (series.isEmpty || x.isEmpty || viewEnd <= viewStart) {
-      return;
-    }
-
-    // Separate series by axis side
-    final leftSeries = series.where((s) => s.axis == _AxisSide.left).toList();
-    final rightSeries = series.where((s) => s.axis == _AxisSide.right).toList();
-
-    // Compute Y ranges for each axis
-    final leftRange = _computeRange(leftSeries, yMinLeft, yMaxLeft);
-    final rightRange = _computeRange(rightSeries, yMinRight, yMaxRight);
-
-    if (leftRange == null && rightRange == null) return;
-
-    const pad = 8.0;
-    final w = size.width - _yGutter - _rightGutter - pad;
-    final h = size.height - pad * 2;
-    final x0 = pad + _yGutter;
-
-    // X projection (shared)
-    double px(double v) => x0 + (v - viewStart) / (viewEnd - viewStart) * w;
-    // Left Y projection
-    double pyLeft(double v) => leftRange != null
-        ? pad + h - (v - leftRange.$1) / (leftRange.$2 - leftRange.$1) * h
-        : size.height / 2;
-    // Right Y projection
-    double pyRight(double v) => rightRange != null
-        ? pad + h - (v - rightRange.$1) / (rightRange.$2 - rightRange.$1) * h
-        : size.height / 2;
-
-    // Grid paint
-    final grid = Paint()
-      ..color = const Color(0x222A2D37)
-      ..strokeWidth = 1;
-
-    const ticks = 4;
-    for (var i = 0; i <= ticks; i++) {
-      final y = pad + h * i / ticks;
-      canvas.drawLine(Offset(x0 - 4, y), Offset(x0, y), grid);
-      canvas.drawLine(Offset(x0, y), Offset(x0 + w, y), grid);
-    }
-
-    // Left Y tick labels (fixed scale only)
-    if (yMinLeft != null && yMaxLeft != null && leftRange != null) {
-      final tp = TextPainter(
-        text: const TextSpan(),
-        textDirection: TextDirection.ltr,
-      );
-      for (var i = 0; i <= ticks; i++) {
-        final t = leftRange.$2 - (leftRange.$2 - leftRange.$1) * i / ticks;
-        tp.text = TextSpan(
-          text: t.toStringAsFixed(0),
-          style: const TextStyle(color: Color(0xFF9AA0AE), fontSize: 9),
-        );
-        tp.layout();
-        final y = pad + h * i / ticks;
-        tp.paint(canvas, Offset(x0 - 4 - tp.width, y - tp.height / 2));
-      }
-    }
-
-    // Right Y tick labels (fixed scale only)
-    if (yMinRight != null && yMaxRight != null && rightRange != null) {
-      final tp = TextPainter(
-        text: const TextSpan(),
-        textDirection: TextDirection.ltr,
-      );
-      for (var i = 0; i <= ticks; i++) {
-        final t = rightRange.$2 - (rightRange.$2 - rightRange.$1) * i / ticks;
-        tp.text = TextSpan(
-          text: t.toStringAsFixed(0),
-          style: const TextStyle(color: Color(0xFF9AA0AE), fontSize: 9),
-        );
-        tp.layout();
-        final y = pad + h * i / ticks;
-        tp.paint(canvas, Offset(x0 + w + 4, y - tp.height / 2));
-      }
-    }
-
-    // Draw average lines first (behind series)
-    for (final s in series) {
-      if (s.avgLineValue != null) {
-        final isLeft = s.axis == _AxisSide.left;
-        final range = isLeft ? leftRange : rightRange;
-        if (range == null) continue;
-        final py = isLeft ? pyLeft : pyRight;
-        final lineY = py(s.avgLineValue!);
-        if (lineY < pad || lineY > pad + h) continue;
-
-        final style = s.avgLineStyle ?? _AvgLineStyle(dashPattern: [4, 4]);
-        final paint = Paint()
-          ..color = s.color.withValues(alpha: 0.6)
-          ..strokeWidth = style.strokeWidth
-          ..style = PaintingStyle.stroke
-          ..isAntiAlias = true;
-        // Draw dashed/dotted line
-        _drawDashedLine(canvas, paint, Offset(x0, lineY), Offset(x0 + w, lineY),
-            style.dashPattern);
-      }
-    }
-
-    // Draw series lines
-    for (final s in series) {
-      if (s.values.length != x.length) continue;
-      final isLeft = s.axis == _AxisSide.left;
-      final range = isLeft ? leftRange : rightRange;
-      if (range == null) continue;
-      final py = isLeft ? pyLeft : pyRight;
-
-      final paint = Paint()
-        ..color = s.color
-        ..strokeWidth = 1.6
-        ..style = PaintingStyle.stroke
-        ..isAntiAlias = true;
-      final path = Path();
-      final pts = <Offset>[];
-      for (var i = 0; i < s.values.length; i++) {
-        if (x[i] < viewStart || x[i] > viewEnd) continue;
-        pts.add(Offset(px(x[i]), py(s.values[i])));
-      }
-      if (pts.isNotEmpty && pts.length < 2) {
-        canvas.drawCircle(pts.first, 1.6, paint);
-        continue;
-      }
-      buildSmoothPath(path, pts);
-      canvas.drawPath(path, paint);
-    }
-  }
-
-  static (double, double)? _computeRange(
-    List<_Series> series,
-    double? fixedMin,
-    double? fixedMax,
-  ) {
-    if (series.isEmpty) return null;
-    if (fixedMin != null && fixedMax != null) return (fixedMin, fixedMax);
-
-    final visibleValues = <double>[];
-    for (final s in series) {
-      for (final v in s.values) {
-        visibleValues.add(v);
-      }
-    }
-
-    if (visibleValues.isEmpty) return null;
-    visibleValues.sort();
-    final p5 = visibleValues[(visibleValues.length * 0.05).floor()];
-    final p95 = visibleValues[(visibleValues.length * 0.95).floor()];
-    final range = math.max(p95 - p5, 1e-6);
-
-    final minY = fixedMin ?? p5 - range * 0.1;
-    final maxY = fixedMax ?? p95 + range * 0.1;
-    if (minY == maxY) return (minY - 1, maxY + 1);
-    return (minY, maxY);
-  }
-
-  static void _drawDashedLine(
-    Canvas canvas,
-    Paint paint,
-    Offset p1,
-    Offset p2,
-    List<double> dashPattern,
-  ) {
-    final dx = p2.dx - p1.dx;
-    final dy = p2.dy - p1.dy;
-    final dist = math.sqrt(dx * dx + dy * dy);
-    if (dist == 0) return;
-
-    var drawn = 0.0;
-    var dashOn = true;
-    var patternIndex = 0;
-    var curX = p1.dx;
-    var curY = p1.dy;
-    final stepX = dx / dist;
-    final stepY = dy / dist;
-
-    while (drawn < dist) {
-      final segment = dashPattern[patternIndex % dashPattern.length];
-      patternIndex++;
-      if (dashOn) {
-        final endX = curX + stepX * segment;
-        final endY = curY + stepY * segment;
-        canvas.drawLine(Offset(curX, curY), Offset(endX, endY), paint);
-        curX = endX;
-        curY = endY;
-      } else {
-        curX += stepX * segment;
-        curY += stepY * segment;
-      }
-      drawn += segment;
-      dashOn = !dashOn;
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ChartPainter oldDelegate) =>
-      oldDelegate.series != series ||
-      oldDelegate.x != x ||
-      oldDelegate.viewStart != viewStart ||
-      oldDelegate.viewEnd != viewEnd ||
-      oldDelegate.yMinLeft != yMinLeft ||
-      oldDelegate.yMaxLeft != yMaxLeft ||
-      oldDelegate.yMinRight != yMinRight ||
-      oldDelegate.yMaxRight != yMaxRight;
-}
-
-class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          Text(value, style: theme.textTheme.bodyMedium),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  const _StatChip({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withAlpha(24),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 4),
-              Text(label, style: theme.textTheme.bodySmall),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NotEnoughData extends StatelessWidget {
-  const _NotEnoughData({required this.title, required this.detail});
-
-  final String title;
-  final String detail;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.cloud_off_outlined,
-                  size: 18,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 8),
-                Text(title, style: theme.textTheme.titleSmall),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(detail, style: theme.textTheme.bodySmall),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -1966,4 +1121,91 @@ class _NotesStatusIcon extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Nested `stats` from metadata JSON. [SessionMetadata] keeps only the old
+/// flat card, so this copy is what the Dashboard summary reads.
+Map<String, Object?> _nestedStats(Map<String, Object?>? root) {
+  final raw = root?['stats'];
+  if (raw is! Map) return const {};
+  return Map<String, Object?>.from(
+    raw.map((key, value) => MapEntry('$key', value)),
+  );
+}
+
+num? _finiteNum(Object? value) {
+  if (value is! num || !value.isFinite) return null;
+  return value;
+}
+
+Map<String, Object?>? _metadataMap(List<int> bytes) {
+  if (bytes.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(utf8.decode(bytes));
+    if (decoded is! Map) return null;
+    return Map<String, Object?>.from(
+      decoded.map((key, value) => MapEntry('$key', value)),
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Null when the trust reader throws, so feedback cells stay out.
+SessionTrust? _sessionTrustFor({
+  required List<ComputedFrame> frames,
+  required double? trainingStartOffsetSecs,
+  required SessionMetadata meta,
+}) {
+  try {
+    return readSessionTrust(
+      frames: frames,
+      trainingStartOffsetSecs: trainingStartOffsetSecs,
+      annotations: meta.annotations,
+      audioEvents: meta.audioEvents,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+ProtocolDocument? _savedProtocolDoc(
+  SessionMetadata meta,
+  ProtocolCatalog catalog,
+) {
+  final raw = meta.protocolJson;
+  if (raw != null) {
+    try {
+      final id = meta.protocol.isNotEmpty
+          ? meta.protocol
+          : raw['id'] as String? ?? '';
+      return ProtocolDocument.fromJson(raw, id: id, features: catalog.features);
+    } catch (_) {}
+  }
+  return catalog.forName(meta.protocol);
+}
+
+String _savedGuardFeature(SessionMetadata meta, ProtocolDocument? protocol) {
+  final saved = meta.sessionSettings?.guardFeature;
+  if (saved != null && saved.isNotEmpty) return saved;
+  final feature = protocol?.guard?.feature;
+  if (feature == null || feature.isEmpty) return guardFeatureNone;
+  return feature;
+}
+
+String _featureShortLabel(ProtocolCatalog catalog, String? id) {
+  if (id == null || id.isEmpty || id == guardFeatureNone) return '';
+  return catalog.features[id]?.shortLabel ?? id;
+}
+
+bool _feedbackLane(
+  SessionTrust? trust,
+  ProtocolDocument? protocol,
+  String guardFeature,
+) {
+  if (trust == null) return false;
+  final reward = trust.reward.isNotEmpty && (protocol?.hasReward ?? false);
+  final guard =
+      trust.guard.isNotEmpty && trustGuardPaneSpecs(guardFeature).isNotEmpty;
+  return reward || guard;
 }

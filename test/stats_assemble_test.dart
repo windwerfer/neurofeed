@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -73,6 +74,21 @@ void main() {
     expect(merged, hasLength(2));
     expect(merged.first.duration, 8);
     expect(merged.last.type, 'double_blink');
+  });
+
+  test('assembleBaseStatsFromJsonl reads a computed line', () {
+    const line =
+        '{"t":1,"bands":[[1,2,3,4,5],[1,2,3,4,5],[1,2,3,4,5],[1,2,3,4,5]],'
+        '"pulse":64,"movement":0.01,"spo2":97,"lineNoise":[0,0,0,0],'
+        '"signalQuality":[90,90,90,90],'
+        '"guardrail":{"sleepDir":0.0,"clarity":1.0,"warning":false,"delta":0.0},'
+        '"feedback":{"ratio":1.0,"threshold":1.0,"inTarget":true,"pct":1.0},'
+        '"gestures":[]}\n';
+    final stats = assembleBaseStatsFromJsonl(utf8.encode(line));
+    expect(stats, isNotNull);
+    expect((stats!['hr'] as Map)['mean'], 64);
+    expect((stats['spo2'] as Map)['mean'], 97);
+    expect(assembleBaseStatsFromJsonl(const <int>[]), isNull);
   });
 
   test('assembleBaseStats fills hr/spo2 min/max, peakAlpha.meanHz, stillness, quality', () {

@@ -55,7 +55,7 @@ Shared chrome for the five live graph views. Record is global
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Not Live / History. Disabled on saved-recording dashboard. |
+| Follow | `Follow` | `ViewportMode.follow` | `viewport_controller.dart` | Live graph views only. Hidden on the saved-recording dashboard. |
 | Inspect | `Inspect` | `ViewportMode.inspect` | `viewport_controller.dart` | Freeze. Drag/pinch on time-X graphs enters Inspect. |
 | Window length | `10s` / `30s` / … | `windowOptions` | `graph_shell.dart` | Per-view presets. Pinch-X on Bands/Spectrogram → `custom`. |
 | Record | `Record` | `_RecordControls` | `graph_shell.dart` | All five **live** views. Starts `recording_$ts`. Clears the live graph, new capture clock, enters Follow. |
@@ -179,7 +179,7 @@ Sidebar **History** (`AppView.feedbackHistory`). One sqlite list; no
 | Filter All | `All` | `HistoryKindFilter.all` | `feedback_history.dart` | Default. |
 | Filter Feedback | `Feedback` | `HistoryKindFilter.feedback` | `feedback_history.dart` | `kind = feedback` → `FeedbackDashboardView`. |
 | Filter Recordings | `Recordings` | `HistoryKindFilter.recordings` | `feedback_history.dart` | `kind = recording` → `RecordingDashboardView`. |
-| Recording row | `Recording • {date}` | `SessionSummary.isRecording` | `feedback_history.dart` | Opens `monitor/views/recording_dashboard.dart`. Follow disabled. |
+| Recording row | `Recording • {date}` | `SessionSummary.isRecording` | `feedback_history.dart` | Opens `monitor/views/recording_dashboard.dart`. Graph chips are inspect-only. |
 | Export | `PDF report` / `PNG thumbnail` / `PNG charts` / `CSV (Mind Monitor)` / `EDF+ raw EEG` | `ExportKind` | `feedback_history.dart` | PDF / PNG charts feedback only; thumbnail / CSV / EDF+ also for recordings. Lossy imports add `Imported from … — already lost on import: …` to the result. [export.md](export.md). |
 | Import | `Import…` | `_importRecording` | `feedback_history.dart` | App bar next to Refresh; picks `.edf` / `.csv`. |
 | Import summary | `Import recording?` / `Import with losses?` · `Kept` · `Lost or changed` · `Cancel` / `Import` | `_confirmImport` | `feedback_history.dart` | Shown before every import is saved; lost list = `import.warnings`. |
@@ -190,15 +190,23 @@ Sidebar **History** (`AppView.feedbackHistory`). One sqlite list; no
 
 ### Recording dashboard — `lib/src/monitor/views/recording_dashboard.dart`
 
-History row `kind = recording`. Follow is visible but **disabled**. Default
-chip is **Bands** (metadata + computed via two prefix reads). Raw body lazy-
-loads on Raw EEG / Histogram / PSD / Spectrogram. Histogram/PSD have **no**
-Bands strip.
+History row `kind = recording`. Graph chips are inspect-only: the
+Follow / Inspect control is hidden. Chip order is **Dashboard**, **Bands**, **Raw EEG**, **Histogram**,
+**PSD**, **Spectrogram**, **HR+SpO2**, **Movement**. Opening a recording still lands on **Bands**
+(metadata + computed via two prefix reads). Raw body lazy-loads on Raw EEG /
+Histogram / PSD / Spectrogram. HR+SpO2 always loads the raw body to look for
+infrared PPG, and Movement loads raw only when computed frames omit the
+metric. Histogram/PSD have **no** Bands strip.
+**Dashboard** is the summary block, with no graphs.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
-| Graph switcher | `Bands` `Raw EEG` `Histogram` `PSD` `Spectrogram` | `RecordingDashGraph` | `recording_dashboard.dart` | SegmentedButton under the shell. Default Bands. |
-| Follow | `Follow` | `followEnabled: false` | `graph_shell.dart` | Shown, disabled. |
+| Graph switcher | `Dashboard` `Bands` `Raw EEG` `Histogram` `PSD` `Spectrogram` `HR+SpO2` `Movement` | `RecordingDashGraph` | `recording_dashboard.dart` | SegmentedButton. `Dashboard` is first. Default **Bands**. |
+| Dashboard | `Dashboard` | `RecordingDashGraph.dashboard` / `HistoryDashboardSummary` | `recording_dashboard.dart` / `history/history_dashboard_summary.dart` | Summary from nested `stats` plus `durationS` (else `elapsedSeconds`). No feedback totals, so in-zone and chime cells are absent. No graphs. |
+| HR+SpO2 | `HR+SpO2` | `RecordingDashGraph.hrSpo2` / `OpticalOverviewPane` / `OpticalPpgPane` | `recording_dashboard.dart` | Same overview as sidebar HR+SpO2 (HR 40–200 bpm, SpO₂ 50–100%). Window 15/30/60/120, default 30 s. When the raw body has infrared PPG (channel 1), a lower IR strip uses 2/4/8/10 s, default 10 s (`history-hr-spo2-detail-window`, tooltip `IR PPG window`). The highlight tracks the overview’s visible end. No strip and no warning when the file has no IR samples. No electrode toggles. |
+| Movement | `Movement` | `RecordingDashGraph.movement` / `MovementPane` | `recording_dashboard.dart` / `monitor/panes/movement_pane.dart` | Inspect-only linear series, 0–1.5 g, color same family as the old movement trace. Same window family as HR+SpO2. No live sidebar Movement view. No electrode toggles. |
+| More | `More` | `Settings.historyDashboardMoreExpanded` | `history/history_dashboard_summary.dart` | Fold under the summary. Pref `history_dashboard_more_expanded`, default closed. One flag for both History pages. |
+| Follow / Inspect | — | `followEnabled: false` | `graph_shell.dart` | Hidden on graph chips. The window length control stays. |
 | Magnitude | `mag ▾` | `_magMenu` | `recording_dashboard.dart` | Spectrogram graph only. Same as live. |
 | Hz range | `0–60 Hz` | `PsdHzRange` | `recording_dashboard.dart` | PSD graph. Overflow `0–100 Hz`. |
 | µV range | `±100 µV` | `HistogramUvRange` | `recording_dashboard.dart` | Histogram graph. |
@@ -250,14 +258,35 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 
 Pushed after End (`pushReplacement` from the session route). Leftover
 `session_*` scratch at launch opens the same screen. Not an `AppView`.
+Chip row is **Dashboard**, then **Feedback** when the session has a reward
+or guard lane, then **Bands**, **Raw EEG**, **Histogram**, **PSD**,
+**Spectrogram**, **HR+SpO2**, **Movement**. Opening a feedback session lands on **Dashboard**.
+`recordOnly` has no Feedback chip. Graph chips are the same inspect-only
+graphs as a recording (`HistorySignalGraphs`). The Dashboard chip has no
+graphs. The music track list and the gesture-marker list stay under the
+summary when the file has them. Alpha vs Theta, the old relative-power
+Bands chart, Movement score, Heart rate / SpO₂, the sleep guardrail
+chart, and the music cutoff chart do not.
 
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
 | Session summary | `{protocol} — Session` | `FeedbackDashboardView` | `feedback_dashboard.dart` | Live (`readOnly: false`) or History (`readOnly: true`). |
-| Back | AppBar leading / system back | `PopScope` | `feedback_dashboard.dart` | **Blocked** on live unsaved summary. Must Save or Discard. History: warn if notes dirty. |
-| Save | `Save` | `_save` | `feedback_dashboard.dart` | Publishes scratch `.neurofeed` to History. Live only. |
-| Discard | `Discard` | `_discard` | `feedback_dashboard.dart` | Deletes scratch `.neurofeed`. Live only. |
-| Heart rate / SpO₂ | `Heart rate / SpO₂` | `prepared.bpm` / `prepared.spo2` | `feedback_dashboard.dart` | From computed 1 Hz pulse/SpO₂; raw body fallback if those fields were omitted. Empty copy: `No reliable heart-rate or SpO₂ data was captured for this session.` |
+| Dashboard | `Dashboard` | `_SessionSummaryChip.dashboard` / `HistoryDashboardSummary` | `feedback_dashboard.dart` / `history/history_dashboard_summary.dart` | Default chip. Summary from nested `stats` plus the trust reader. No graphs. Music track list and gesture markers stay when present. |
+| Feedback | `Feedback` | `_SessionSummaryChip.feedback` / `HistoryTrustReplay` | `feedback_dashboard.dart` / `history/history_trust_viewport.dart` | After Dashboard, before the graph chips. Omitted when the trust reader has no reward lane and no guard lane (`recordOnly`, recordings). Replays `RewardTrustPane` / `InhibitTrustPane` / `GuardWarnPane` / `GuardCeilingPane` with `showMore` off (no verdict, glyph strip, needle, or "in for Ns"). |
+| Graph switcher | `Bands` `Raw EEG` `Histogram` `PSD` `Spectrogram` `HR+SpO2` `Movement` | `_SessionSummaryChip` / `HistorySignalGraphs` | `feedback_dashboard.dart` / `recording_dashboard.dart` | Same order as a recording, after Feedback when that chip exists. Inspect-only. One chip visible at a time. |
+| More | `More` | `Settings.historyDashboardMoreExpanded` | `history/history_dashboard_summary.dart` | Fold under the summary on the Dashboard chip. Pref `history_dashboard_more_expanded`, default closed. Same flag as the recording Dashboard. Not on the Feedback chip. |
+| Reward | `Reward` | local toggle on `HistoryTrustReplay` | `history/history_trust_viewport.dart` | Feedback chip only. Depressed = on. Default on when reward samples exist. Does not write `Settings.trustRewardVisible`. |
+| Guard | `Guard` | local toggle on `HistoryTrustReplay` | `history/history_trust_viewport.dart` | Feedback chip only. Default off, except on when there is no reward lane and guard samples exist (`guardrailOnly`). Does not write `Settings.trustGuardVisible`. Omitted when the saved guard feature has no pane. |
+| Trust window | `m:ss – m:ss` | `HistoryTrustViewport` | `history/history_trust_viewport.dart` | Default 75 s ending at the last sample. Drag pans. Pinch and Ctrl/Meta+scroll zoom, clamped 15–300 s. Right edge is the view end, not now. Not live `TrustViewport`. |
+| Reward footer | `{n}% in zone · {n} chimes · {n}% inhibited` | `historyRewardFooter` | `history/history_trust_viewport.dart` | Whole session, not the visible window. Hidden when there is no reward lane. Null percent is `—`. |
+| Guard footer | `{n}% warning · {n} chimes` | `historyGuardFooter` | `history/history_trust_viewport.dart` | Whole session. Adds ` · {n}% over ceiling` only when the ceiling pane is in the spec. |
+| Back | AppBar leading / system back | `PopScope` | `feedback_dashboard.dart` | **Blocked** on the live unsaved summary (`canPop: false` while scratch remains). Must Save or Discard. History: warn if notes dirty. |
+| Save | `Save` | `_save` | `feedback_dashboard.dart` | App bar. Live unsaved summary only. Publishes scratch `.neurofeed` to History. |
+| Discard | `Discard` | `_discard` | `feedback_dashboard.dart` | App bar. Live unsaved summary only. Deletes scratch `.neurofeed`. |
+| Notes | `Notes` | `_notes` | `feedback_dashboard.dart` | Editable on the Dashboard chip. History detail shows a save icon when the notes are dirty. |
+| Thumbnail | — | `_thumbKey` | `feedback_dashboard.dart` | Capture of the summary block (`HistoryDashboardSummary`), not a trust graph. |
+| HR+SpO2 | `HR+SpO2` | `_SessionSummaryChip.hrSpo2` | `feedback_dashboard.dart` | Same chip as the recording page, including the IR strip when the file has infrared PPG. |
+| Movement | `Movement` | `_SessionSummaryChip.movement` | `feedback_dashboard.dart` | Same chip as the recording page. |
 
 ### Settings — `lib/src/views/settings_view.dart`
 
@@ -281,6 +310,7 @@ was open. Picking a hit opens that section and scrolls to the card.
 | Reset folder | `Reset to default folder` | `_resetFolder` | `settings_view.dart` | Shown when a custom folder is set. Same move dialog as picking a folder. |
 | Folder change blocked | `Session in progress` / `Recording in progress` · `Finish the session before changing the save folder.` / `Finish the recording before changing the save folder.` | `folderChangeBlock` | `settings_view.dart` | Running feedback, unsaved ended session, open recording, or a recording waiting for Save / Discard. |
 | Session recording | `Session recording` | `_RecordingCard` | `settings_view.dart` | Stream toggles. Applies to **tmp, Record, and feedback**. |
+| PPG | `PPG` | `RecordingStream.ppg` | `settings_view.dart` | Session recording card. Default on (a missing `record_streams` pref is every stream). Stores raw light channels. History draws infrared only when the file has channel 1. |
 | Gesture markers | `Gesture markers` | `_GesturesCard` | `settings_view.dart` | |
 | Subject | `Subject` | `_SubjectCard` | `settings_view.dart` | Stable id plus optional nickname. |
 | Music feedback | `Music feedback` | `_MusicCard` | `settings_view.dart` | Persist cutoff on `onChangeEnd`. |
@@ -312,7 +342,7 @@ is allowed to sleep. Stop asks Dart to stop capture; it does not disconnect BLE.
 | Paused / interrupted / ended | matching log | `paused` / `interrupted` / `ended` | | |
 | Reward lane | session audio | `RewardLane` | `reward_lane.dart` | Guard never modulates. Dirty skips `recordEpoch` / `onSample`. |
 | Guard lane | protocol builder Guard | `GuardLane` | `guard_lane.dart` | Warns only. Dirty skips `evaluateWarning`. |
-| Trust graphs | Reward / Guard / More | `TrustTrace` / `TrustViewport` | `feedback/trust/` | Follow-only; not GraphShell. Inhibit pane shares the Reward window. |
+| Trust graphs | Reward / Guard / More | `TrustTrace` / `TrustViewport` | `feedback/trust/` | Follow-only; not GraphShell. Inhibit pane shares the Reward window. History Feedback chip uses `HistoryTrustViewport` and the reader lists, not `TrustTrace`. |
 | Feature bus | — | `FeatureBus` | `feature_bus.dart` | |
 | Feature probe latch | debug sliders | `FeatureOverride` | `feature_override.dart` | Replaces `FeatureDto.value` in `_onEvent` while playing. |
 

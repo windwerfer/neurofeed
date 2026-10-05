@@ -3359,6 +3359,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<PpgSampleRecord> dco_decode_list_ppg_sample_record(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ppg_sample_record).toList();
+  }
+
+  @protected
   List<double> dco_decode_list_prim_f_32_loose(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as List<double>;
@@ -3666,6 +3672,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PpgSampleRecord dco_decode_ppg_sample_record(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return PpgSampleRecord(
+      timestamp: dco_decode_f_64(arr[0]),
+      channel: dco_decode_i_16(arr[1]),
+      samples: dco_decode_list_prim_f_32_strict(arr[2]),
+    );
+  }
+
+  @protected
   PulseDto dco_decode_pulse_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -3737,8 +3756,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SessionData dco_decode_session_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return SessionData(
       bands: dco_decode_list_bands_record(arr[0]),
       pulses: dco_decode_list_pulse_record(arr[1]),
@@ -3747,6 +3766,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       peakAlphas: dco_decode_list_peak_alpha_record(arr[4]),
       eegSamples: dco_decode_u_64(arr[5]),
       eeg: dco_decode_list_eeg_sample_record(arr[6]),
+      ppg: dco_decode_list_ppg_sample_record(arr[7]),
     );
   }
 
@@ -4720,6 +4740,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<PpgSampleRecord> sse_decode_list_ppg_sample_record(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <PpgSampleRecord>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ppg_sample_record(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<double> sse_decode_list_prim_f_32_loose(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
@@ -5132,6 +5166,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PpgSampleRecord sse_decode_ppg_sample_record(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_timestamp = sse_decode_f_64(deserializer);
+    var var_channel = sse_decode_i_16(deserializer);
+    var var_samples = sse_decode_list_prim_f_32_strict(deserializer);
+    return PpgSampleRecord(
+      timestamp: var_timestamp,
+      channel: var_channel,
+      samples: var_samples,
+    );
+  }
+
+  @protected
   PulseDto sse_decode_pulse_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_timestamp = sse_decode_f_64(deserializer);
@@ -5211,6 +5258,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_peakAlphas = sse_decode_list_peak_alpha_record(deserializer);
     var var_eegSamples = sse_decode_u_64(deserializer);
     var var_eeg = sse_decode_list_eeg_sample_record(deserializer);
+    var var_ppg = sse_decode_list_ppg_sample_record(deserializer);
     return SessionData(
       bands: var_bands,
       pulses: var_pulses,
@@ -5219,6 +5267,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       peakAlphas: var_peakAlphas,
       eegSamples: var_eegSamples,
       eeg: var_eeg,
+      ppg: var_ppg,
     );
   }
 
@@ -6057,6 +6106,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_ppg_sample_record(
+    List<PpgSampleRecord> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ppg_sample_record(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_prim_f_32_loose(
     List<double> self,
     SseSerializer serializer,
@@ -6468,6 +6529,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_ppg_sample_record(
+    PpgSampleRecord self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.timestamp, serializer);
+    sse_encode_i_16(self.channel, serializer);
+    sse_encode_list_prim_f_32_strict(self.samples, serializer);
+  }
+
+  @protected
   void sse_encode_pulse_dto(PulseDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_f_64(self.timestamp, serializer);
@@ -6530,6 +6602,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_peak_alpha_record(self.peakAlphas, serializer);
     sse_encode_u_64(self.eegSamples, serializer);
     sse_encode_list_eeg_sample_record(self.eeg, serializer);
+    sse_encode_list_ppg_sample_record(self.ppg, serializer);
   }
 
   @protected

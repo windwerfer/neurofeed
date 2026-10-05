@@ -62,6 +62,37 @@ void main() {
     expect(recordingIdFrom('recording_.raw', '.raw'), isNull);
   });
 
+  test('recovered recording stats come from the computed frames', () async {
+    const line =
+        '{"t":1,"bands":[[1,2,3,4,5],[1,2,3,4,5],[1,2,3,4,5],[1,2,3,4,5]],'
+        '"pulse":60,"movement":0.01,"spo2":97,"lineNoise":[0,0,0,0],'
+        '"signalQuality":[90,90,90,90],'
+        '"guardrail":{"sleepDir":0.0,"clarity":1.0,"warning":false,"delta":0.0},'
+        '"feedback":{"ratio":1.0,"threshold":1.0,"inTarget":true,"pct":1.0},'
+        '"gestures":[]}\n'
+        '{"t":2,"bands":[[1,2,3,4,5],[1,2,3,4,5],[1,2,3,4,5],[1,2,3,4,5]],'
+        '"pulse":80,"movement":0.01,"spo2":99,"lineNoise":[0,0,0,0],'
+        '"signalQuality":[90,90,90,90],'
+        '"guardrail":{"sleepDir":0.0,"clarity":1.0,"warning":false,"delta":0.0},'
+        '"feedback":{"ratio":1.0,"threshold":1.0,"inTarget":true,"pct":1.0},'
+        '"gestures":[]}\n';
+    await File('${scratch.path}/recording_1002.raw').writeAsBytes([1, 2, 3, 4]);
+    await File('${scratch.path}/recording_1002.computed').writeAsString(line);
+    await File(
+      '${scratch.path}/recording_1002.json',
+    ).writeAsString(jsonEncode(_meta().toJson()));
+
+    final recovered = await scanRecoverableRecordings(scratch);
+    final head = parseHead(
+      bytes: Uint8List.fromList(recovered.single.scratch.readAsBytesSync()),
+    );
+    final meta = jsonDecode(utf8.decode(head.metadataJson)) as Map;
+    final hr = (meta['stats'] as Map)['hr'] as Map;
+    expect(hr['mean'], 70);
+    expect(hr['min'], 60);
+    expect(hr['max'], 80);
+  });
+
   test('leftover recording_ temps assemble to scratch .neurofeed', () async {
     await File('${scratch.path}/recording_1001.raw').writeAsBytes([1, 2, 3, 4]);
     await File('${scratch.path}/recording_1001.computed').writeAsString('');

@@ -255,6 +255,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PeakAlphaRecord> dco_decode_list_peak_alpha_record(dynamic raw);
 
   @protected
+  List<PpgSampleRecord> dco_decode_list_ppg_sample_record(dynamic raw);
+
+  @protected
   List<double> dco_decode_list_prim_f_32_loose(dynamic raw);
 
   @protected
@@ -355,6 +358,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PpgDto dco_decode_ppg_dto(dynamic raw);
+
+  @protected
+  PpgSampleRecord dco_decode_ppg_sample_record(dynamic raw);
 
   @protected
   PulseDto dco_decode_pulse_dto(dynamic raw);
@@ -674,6 +680,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<PpgSampleRecord> sse_decode_list_ppg_sample_record(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<double> sse_decode_list_prim_f_32_loose(SseDeserializer deserializer);
 
   @protected
@@ -788,6 +799,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PpgDto sse_decode_ppg_dto(SseDeserializer deserializer);
+
+  @protected
+  PpgSampleRecord sse_decode_ppg_sample_record(SseDeserializer deserializer);
 
   @protected
   PulseDto sse_decode_pulse_dto(SseDeserializer deserializer);
@@ -1194,6 +1208,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ppg_sample_record(
+    List<PpgSampleRecord> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_f_32_loose(
     List<double> self,
     SseSerializer serializer,
@@ -1348,6 +1368,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ppg_dto(PpgDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ppg_sample_record(
+    PpgSampleRecord self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_pulse_dto(PulseDto self, SseSerializer serializer);

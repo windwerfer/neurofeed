@@ -28,7 +28,7 @@ class RewardTrustPane extends StatelessWidget {
 
   final List<TrustRewardSample> samples;
   final List<TrustGestureMark> marks;
-  final TrustViewport viewport;
+  final TrustWindow viewport;
   final double newestElapsed;
   final double wallNow;
   final String label;
@@ -71,7 +71,7 @@ class InhibitTrustPane extends StatelessWidget {
 
   final List<TrustRewardSample> samples;
   final List<TrustGestureMark> marks;
-  final TrustViewport viewport;
+  final TrustWindow viewport;
   final double newestElapsed;
   final double wallNow;
   final TrustInhibitSpec spec;
@@ -112,7 +112,7 @@ class GuardWarnPane extends StatelessWidget {
 
   final List<TrustGuardSample> samples;
   final List<TrustGestureMark> marks;
-  final TrustViewport viewport;
+  final TrustWindow viewport;
   final double newestElapsed;
   final double wallNow;
   final String label;
@@ -154,7 +154,7 @@ class GuardCeilingPane extends StatelessWidget {
 
   final List<TrustGuardSample> samples;
   final List<TrustGestureMark> marks;
-  final TrustViewport viewport;
+  final TrustWindow viewport;
   final double newestElapsed;
   final double wallNow;
   final Color seriesColor;

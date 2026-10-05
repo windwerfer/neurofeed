@@ -52,20 +52,34 @@ exec "$APPDIR"/neurofeed "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 
+ICON_NAME=org.windwerfer.neurofeed
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -d "$BUNDLE_DIR/share/icons/hicolor" ]; then
+  HICOLOR_SRC="$BUNDLE_DIR/share/icons/hicolor"
+elif [ -d "$ROOT/linux/icons/hicolor" ]; then
+  HICOLOR_SRC="$ROOT/linux/icons/hicolor"
+else
+  echo "hicolor icons not found for AppImage icon" >&2
+  exit 1
+fi
+
 cat > "$APPDIR/neurofeed.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=NeuroFeed
 Exec=neurofeed
-Icon=app
+Icon=${ICON_NAME}
 Categories=Audio;
 Terminal=false
 EOF
 
+mkdir -p "$APPDIR/usr/share/icons"
+cp -a "$HICOLOR_SRC" "$APPDIR/usr/share/icons/hicolor"
+
 if [ -f "$BUNDLE_DIR/neurofeed.png" ]; then
-  cp "$BUNDLE_DIR/neurofeed.png" "$APPDIR/app.png"
-elif [ -f "$(dirname "$0")/../linux/neurofeed.png" ]; then
-  cp "$(dirname "$0")/../linux/neurofeed.png" "$APPDIR/app.png"
+  cp "$BUNDLE_DIR/neurofeed.png" "$APPDIR/${ICON_NAME}.png"
+elif [ -f "$ROOT/linux/neurofeed.png" ]; then
+  cp "$ROOT/linux/neurofeed.png" "$APPDIR/${ICON_NAME}.png"
 else
   echo "neurofeed.png not found for AppImage icon" >&2
   exit 1
