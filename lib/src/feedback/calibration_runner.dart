@@ -58,6 +58,7 @@ class CalibrationRunner {
     required this.sessionStartAt,
     required this.onCollectionEyes,
     required this.onFinished,
+    this.usedStartAnyway = _startAnywayDefault,
   });
 
   final Future<CalibrationManifest> Function() loadManifest;
@@ -69,6 +70,9 @@ class CalibrationRunner {
   final DateTime? Function() sessionStartAt;
   final void Function(String? eyes) onCollectionEyes;
   final void Function() onFinished;
+  final bool Function() usedStartAnyway;
+
+  static bool _startAnywayDefault() => false;
 
   final List<CalibrationStepRun> steps = [];
   int stepIndex = 0;
@@ -160,6 +164,8 @@ class CalibrationRunner {
       'kind': kind,
       'calibrationId': calibrationId,
       'timestamp': DateTime.now().toIso8601String(),
+      if (calibrationJson != null) 'calibrationJson': calibrationJson,
+      if (usedStartAnyway()) 'usedStartAnyway': true,
     });
     await _runNextStep();
   }
@@ -220,7 +226,10 @@ class CalibrationRunner {
         writeMetadata({
           'type': 'calibration_phase',
           'clipId': step.clip!.id,
+          'clipFile': step.clip!.file,
+          'spokenText': step.clip!.text,
           'eyes': step.clip!.eyes,
+          if (step.challengeText != null) 'challengeText': step.challengeText,
           'startSecs': clipStart.difference(sessionStart).inMilliseconds / 1000,
           'endSecs': clipEnd.difference(sessionStart).inMilliseconds / 1000,
           'kind': kind == 'staged' ? 'stage' : 'intro',

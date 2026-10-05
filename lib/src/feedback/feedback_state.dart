@@ -218,6 +218,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       sessionStartAt: () => _sessionStartAt,
       onCollectionEyes: (eyes) => _collectionEyes = eyes,
       onFinished: _finishCalibration,
+      usedStartAnyway: () => _usedStartAnyway,
     );
 
     _eventSub = _ref
@@ -613,11 +614,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   void setDynamicAdapt(bool enabled) {
     _engine.setDynamicAdapt(enabled);
     _ref.read(settingsProvider).setDynamicAdapt(enabled);
+    _writeSessionFacts();
   }
 
   void setResponsiveness(double value) {
     _engine.setResponsiveness(value);
     _ref.read(settingsProvider).setResponsiveness(value);
+    _writeSessionFacts();
   }
 
   void resetTargetSettings() {
@@ -776,6 +779,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _computedSampler!.start();
     await _enableSessionFeatures();
     await _maybeEnableGuardrail();
+    _writeSessionFacts();
     if (skipCalibration) {
       _engine.reset();
       if (featureProbeAvailable) {
@@ -1013,6 +1017,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         'baselinePercentile': _engine.baselinePercentile,
         'baselineMean': _engine.baselineMean,
         'baselineStddev': _engine.baselineStddev,
+        'baselineSamples': List<double>.of(_engine.baselineSamples),
         'timestamp': DateTime.now().toIso8601String(),
       });
     }
@@ -1134,14 +1139,24 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         'baselinePercentile': _engine.baselinePercentile,
         'baselineMean': _engine.baselineMean,
         'baselineStddev': _engine.baselineStddev,
+        'baselineSamples': List<double>.of(_engine.baselineSamples),
         'skipped': _skipCalibrationRequested,
         if (_skipCalibrationRequested) 'skipSource': _calibrationSkipSource,
+        'usedStartAnyway': _usedStartAnyway,
+        'greenStableSeconds': greenStableSeconds,
+        'faultyPadSeconds': faultyPadSeconds,
+        'kind': _calibration.kind,
+        'calibrationId': _calibration.calibrationId,
+        'version': CalibrationManifest.currentVersion,
+        if (_calibration.calibrationJson != null)
+          'calibrationJson': _calibration.calibrationJson,
         'timestamp': DateTime.now().toIso8601String(),
         'elapsedSecs':
             DateTime.now().difference(_sessionStartAt!).inMilliseconds / 1000,
       });
     }
     _recordCalibration();
+    _writeSessionFacts();
     state = state.copyWith(
       baselineSecondsLeft: 0,
       currentThreshold: threshold,
@@ -1270,6 +1285,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       calibrationEndSecs: now.millisecondsSinceEpoch / 1000,
       trainingStartSecs: now.millisecondsSinceEpoch / 1000,
       usedStartAnyway: _usedStartAnyway,
+      skipped: _skipCalibrationRequested,
+      skipSource: _skipCalibrationRequested ? _calibrationSkipSource : null,
       greenStableSeconds: greenStableSeconds,
       faultyPadSeconds: faultyPadSeconds,
       baseline: SessionBaselineStats(
@@ -1334,6 +1351,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   void _onSparseAudioEvent(String type) {
     final onset = state.elapsedSeconds.toDouble();
     _audioEvents.add({'onset': onset, 'type': type});
+    _recorder.writeMetadata({
+      'type': 'audio_event',
+      'onset': onset,
+      'audioType': type,
+    });
   }
 
   Future<void> pause() async {
@@ -1342,6 +1364,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     _pauseOnsetContent = state.elapsedSeconds.toDouble();
     _pauseWallBegan = DateTime.now();
+    _recorder.writeMetadata({
+      'type': 'annotation',
+      'onset': _pauseOnsetContent,
+      'annotationType': 'pause',
+      'open': true,
+    });
     _setPhase(FeedbackPhase.paused);
     _ticker?.cancel();
     _computedSampler?.pause();
@@ -1368,13 +1396,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     final duration = DateTime.now().difference(began).inMilliseconds / 1000.0;
-    _sessionAnnotations.add(
-      SessionAnnotation(
-        onset: onset,
-        duration: duration < 0 ? 0 : duration,
-        type: 'pause',
-      ),
+    final annotation = SessionAnnotation(
+      onset: onset,
+      duration: duration < 0 ? 0 : duration,
+      type: 'pause',
     );
+    _sessionAnnotations.add(annotation);
+    _persistAnnotation(annotation);
+    _writeSessionFacts();
     _pauseOnsetContent = null;
     _pauseWallBegan = null;
   }
@@ -1389,13 +1418,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     final duration = DateTime.now().difference(began).inMilliseconds / 1000.0;
-    _sessionAnnotations.add(
-      SessionAnnotation(
-        onset: onset,
-        duration: duration < 0 ? 0 : duration,
-        type: type,
-      ),
+    final annotation = SessionAnnotation(
+      onset: onset,
+      duration: duration < 0 ? 0 : duration,
+      type: type,
     );
+    _sessionAnnotations.add(annotation);
+    _persistAnnotation(annotation);
     _interruptOnsetContent = null;
     _interruptWallBegan = null;
     _interruptAnnType = null;
@@ -1418,11 +1447,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _interruptTimer = null;
     _calibration.cancelTimers();
     _computedSampler?.stop();
+    final meta = buildSessionMetadata();
     _guard.teardown();
     unawaited(_clearEnabledFeatures());
     await _recorder.flushSession();
     try {
-      final meta = buildSessionMetadata();
       final path = await _recorder.assembleScratch(
         buildFeedbackMetadata(
           meta: meta,
@@ -1567,6 +1596,91 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
   Future<void> deleteScratch() => _recorder.deleteScratch();
 
+  void _persistAnnotation(SessionAnnotation annotation) {
+    _recorder.writeMetadata({
+      'type': 'annotation',
+      'onset': annotation.onset,
+      'duration': annotation.duration,
+      'annotationType': annotation.type,
+    });
+  }
+
+  void _persistNewGestures(int before) {
+    for (var i = before; i < _gestureMarkers.length; i++) {
+      final marker = _gestureMarkers[i];
+      _persistAnnotation(
+        SessionAnnotation(
+          onset: marker.offsetSeconds.toDouble(),
+          duration: 0,
+          type: gestureAnnotationType(marker.type),
+        ),
+      );
+    }
+  }
+
+  SessionSettings _currentSessionSettings() {
+    final fb = state;
+    final app = _ref.read(appStateProvider);
+    final settings = _ref.read(settingsProvider);
+    final feature = settings.guardFeatureFor(fb.protocol);
+    final model = settings.guardModel;
+    final overrides = settings.inhibitCeilingOverrides(fb.protocol);
+    return SessionSettings(
+      dynamicAdapt: dynamicAdapt,
+      responsiveness: responsiveness,
+      baselinePercentile: fb.baselinePercentile,
+      guardrailEnabled: guardrailEnabled,
+      guardrailEngine: guardrailEnabled
+          ? guardrailEngineName(feature: feature, model: model)
+          : 'none',
+      guardFeature: feature,
+      guardModel: model,
+      warningThresholdPercentile: settings.warningThresholdPercentile,
+      warningSound: settings.warningSoundName,
+      musicFolder: settings.musicFolder,
+      musicMinCutoffHz: settings.musicMinCutoffHz,
+      musicMaxCutoffHz: settings.musicMaxCutoffHz,
+      musicInvert: settings.musicInvertMapping,
+      musicShuffle: settings.musicShuffle,
+      binauralPresetId: settings.binauralPresetId,
+      binauralCarrierHz: settings.binauralCarrierHz,
+      binauralBeatHz: settings.binauralBeatHz,
+      backgroundBinauralPresetId: settings.backgroundBinauralPresetId,
+      backgroundBinauralCarrierHz: settings.backgroundBinauralCarrierHz,
+      backgroundBinauralBeatHz: settings.backgroundBinauralBeatHz,
+      markersInFeedbackEnabled: settings.markersInFeedbackEnabled,
+      eyeMarkersEnabled: settings.eyeMarkersEnabled,
+      inhibitCeilingOverrides: overrides.isEmpty ? null : overrides,
+      crownQualitySource: app.crownQualitySource?.name,
+    );
+  }
+
+  void _writeSessionFacts() {
+    if (_sessionStartAt == null) return;
+    final settings = _ref.read(settingsProvider);
+    final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
+    final protocol = catalog?.forName(state.protocol);
+    final feature = settings.guardFeatureFor(state.protocol);
+    final description = protocol?.metadataDescription;
+    final protocolJson = protocol?.resolved(guardFeature: feature).toJson();
+    final userId = settings.subjectInfo.id;
+    _recorder.writeMetadata({
+      'type': 'session',
+      'protocol': state.protocol,
+      'durationMinutes': state.durationMinutes,
+      'sound': state.soundName,
+      'feedbackSound': state.rewardOutput.name,
+      'startedAt': formatIso8601WithOffset(_sessionStartAt!),
+      'timeZone': _sessionTimeZone ?? captureIanaTimeZone(),
+      'protocolVersion': '1',
+      'metadataDescription': ?description,
+      'protocolJson': ?protocolJson,
+      'recordedData': [for (final stream in recordStreams) stream.name],
+      if (userId.isNotEmpty) 'userId': userId,
+      'sessionSettings': _currentSessionSettings().toJson(),
+    });
+  }
+
   /// Snapshot metadata for the scratch `.neurofeed` at end() and the rewritten file
   /// on Save. No `summary` / 400-bucket fields. Drowsiness is scalars only.
   SessionMetadata buildSessionMetadata({
@@ -1579,7 +1693,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
     final protocol = catalog?.forName(fb.protocol);
     final feature = settings.guardFeatureFor(fb.protocol);
-    final model = settings.guardModel;
     final channels = recordedChannelLabels(
       kind: app.lastConnectedKind,
       electrodes: recordedChannels,
@@ -1629,37 +1742,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       metadataDescription: protocol?.metadataDescription,
       protocolJson: protocol?.resolved(guardFeature: feature).toJson(),
       protocolVersion: '1',
-      sessionSettings: SessionSettings(
-        dynamicAdapt: dynamicAdapt,
-        responsiveness: responsiveness,
-        baselinePercentile: fb.baselinePercentile,
-        guardrailEnabled: guardrailEnabled,
-        guardrailEngine: guardrailEnabled
-            ? guardrailEngineName(feature: feature, model: model)
-            : 'none',
-        guardFeature: feature,
-        guardModel: model,
-        warningThresholdPercentile: settings.warningThresholdPercentile,
-        warningSound: settings.warningSoundName,
-        musicFolder: settings.musicFolder,
-        musicMinCutoffHz: settings.musicMinCutoffHz,
-        musicMaxCutoffHz: settings.musicMaxCutoffHz,
-        musicInvert: settings.musicInvertMapping,
-        musicShuffle: settings.musicShuffle,
-        binauralPresetId: settings.binauralPresetId,
-        binauralCarrierHz: settings.binauralCarrierHz,
-        binauralBeatHz: settings.binauralBeatHz,
-        backgroundBinauralPresetId: settings.backgroundBinauralPresetId,
-        backgroundBinauralCarrierHz: settings.backgroundBinauralCarrierHz,
-        backgroundBinauralBeatHz: settings.backgroundBinauralBeatHz,
-        markersInFeedbackEnabled: settings.markersInFeedbackEnabled,
-        eyeMarkersEnabled: settings.eyeMarkersEnabled,
-        inhibitCeilingOverrides: () {
-          final o = settings.inhibitCeilingOverrides(fb.protocol);
-          return o.isEmpty ? null : o;
-        }(),
-        crownQualitySource: app.crownQualitySource?.name,
-      ),
+      sessionSettings: _currentSessionSettings(),
       avgSpo2: stats?.avgSpo2,
       peakAlphaHz: stats?.peakAlphaFreq,
       peakAlphaPower: stats?.peakAlphaPower,
@@ -1880,13 +1963,36 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final offset =
         DateTime.now().difference(sessionStart).inMilliseconds / 1000;
     final track = _audio.musicTrackName;
+    final firstSample = _musicSeries.isEmpty;
     if (track != null &&
         (_musicTracks.isEmpty || _musicTracks.last.name != track)) {
       _musicTracks.add(MusicTrackMarker(offsetSecs: offset, name: track));
+      _recorder.writeMetadata({
+        'type': 'music_track',
+        'at': offset,
+        'name': track,
+        'trackCount': _audio.musicTrackCount,
+      });
     }
     _musicSeries.add(
       MusicCutoffSample(offsetSecs: offset, cutoffHz: _audio.musicCutoffHz),
     );
+    if (firstSample) {
+      final settings = _ref.read(settingsProvider);
+      _recorder.writeMetadata({
+        'type': 'music',
+        'trackCount': _audio.musicTrackCount,
+        'minCutoffHz': settings.musicMinCutoffHz,
+        'maxCutoffHz': settings.musicMaxCutoffHz,
+        'invert': settings.musicInvertMapping,
+        'shuffle': settings.musicShuffle,
+      });
+    }
+    _recorder.writeMetadata({
+      'type': 'music_sample',
+      'at': offset,
+      'hz': _audio.musicCutoffHz,
+    });
   }
 
   /// Whole-session music feedback record (track list + 1 Hz cutoff series),
@@ -2141,6 +2247,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final persist = _ref.read(settingsProvider).markersInFeedbackEnabled;
     final types = _trustGestures.ingest(g, now);
     final t = _trustElapsed();
+    final markersBefore = _gestureMarkers.length;
     for (final type in types) {
       recordLiveMark(
         live: _trust,
@@ -2151,6 +2258,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       );
     }
     if (!persist) {
+      _persistNewGestures(markersBefore);
       return;
     }
     final gestures = <String>[];
@@ -2172,6 +2280,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       }
       _prevEyeState = g.eye;
     }
+    _persistNewGestures(markersBefore);
     if (gestures.isNotEmpty) {
       _computedSampler?.updateGestures(gestures);
     }

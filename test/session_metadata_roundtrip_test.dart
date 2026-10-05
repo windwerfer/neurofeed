@@ -35,7 +35,10 @@ void main() {
           version: 2,
           kind: 'staged',
           calibrationId: 'eyes-closed-01',
-          calibrationJson: {'name': 'Eyes Closed', 'staged': {'stages': []}},
+          calibrationJson: {
+            'name': 'Eyes Closed',
+            'staged': {'stages': []},
+          },
           calibrationStartSecs: 0,
           calibrationEndSecs: 50,
           trainingStartSecs: 95,
@@ -152,13 +155,13 @@ void main() {
           musicMaxCutoffHz: 8000,
           musicInvert: false,
           musicShuffle: true,
-           binauralPresetId: 'alpha',
-           binauralCarrierHz: 200,
-           binauralBeatHz: 10,
-           backgroundBinauralPresetId: 'thetaCalm',
-           backgroundBinauralCarrierHz: 150,
-           backgroundBinauralBeatHz: 6,
-           markersInFeedbackEnabled: true,
+          binauralPresetId: 'alpha',
+          binauralCarrierHz: 200,
+          binauralBeatHz: 10,
+          backgroundBinauralPresetId: 'thetaCalm',
+          backgroundBinauralCarrierHz: 150,
+          backgroundBinauralBeatHz: 6,
+          markersInFeedbackEnabled: true,
           eyeMarkersEnabled: false,
         ),
         durationS: 900,
@@ -195,10 +198,19 @@ void main() {
       expect(restored.sound, equals(original.sound));
       expect(restored.savedAt, equals(original.savedAt));
       expect(restored.notes, equals(original.notes));
-      expect(restored.stats?.peakAlphaFreq, equals(original.stats?.peakAlphaFreq));
-      expect(restored.stats?.peakAlphaPower, equals(original.stats?.peakAlphaPower));
+      expect(
+        restored.stats?.peakAlphaFreq,
+        equals(original.stats?.peakAlphaFreq),
+      );
+      expect(
+        restored.stats?.peakAlphaPower,
+        equals(original.stats?.peakAlphaPower),
+      );
       expect(restored.stats?.targetPct, equals(original.stats?.targetPct));
-      expect(restored.stats?.stillnessPct, equals(original.stats?.stillnessPct));
+      expect(
+        restored.stats?.stillnessPct,
+        equals(original.stats?.stillnessPct),
+      );
       expect(restored.stats?.avgBpm, equals(original.stats?.avgBpm));
       expect(restored.stats?.avgAlphaRel, equals(original.stats?.avgAlphaRel));
       expect(restored.deviceName, equals(original.deviceName));
@@ -210,29 +222,74 @@ void main() {
       expect(restored.gestures.length, equals(original.gestures.length));
       for (var i = 0; i < original.gestures.length; i++) {
         expect(restored.gestures[i].type, equals(original.gestures[i].type));
-        expect(restored.gestures[i].offsetSeconds, equals(original.gestures[i].offsetSeconds));
+        expect(
+          restored.gestures[i].offsetSeconds,
+          equals(original.gestures[i].offsetSeconds),
+        );
       }
-      expect(restored.calibration?.version, equals(original.calibration?.version));
+      expect(
+        restored.calibration?.version,
+        equals(original.calibration?.version),
+      );
       expect(restored.calibration?.kind, equals(original.calibration?.kind));
-      expect(restored.calibration?.calibrationId, equals(original.calibration?.calibrationId));
-      expect(restored.calibration?.trainingStartOffsetSecs, equals(original.calibration?.trainingStartOffsetSecs));
-      expect(restored.calibration?.phases.length, equals(original.calibration?.phases.length));
-      expect(restored.calibration?.recalibrations.length, equals(original.calibration?.recalibrations.length));
-      expect(restored.drowsiness?.scoreTotalPct, equals(original.drowsiness?.scoreTotalPct));
-      expect(restored.drowsiness?.meanSleepDir, equals(original.drowsiness?.meanSleepDir));
-      expect(restored.drowsiness?.threshold, equals(original.drowsiness?.threshold));
+      expect(
+        restored.calibration?.calibrationId,
+        equals(original.calibration?.calibrationId),
+      );
+      expect(
+        restored.calibration?.trainingStartOffsetSecs,
+        equals(original.calibration?.trainingStartOffsetSecs),
+      );
+      expect(
+        restored.calibration?.phases.length,
+        equals(original.calibration?.phases.length),
+      );
+      expect(
+        restored.calibration?.recalibrations.length,
+        equals(original.calibration?.recalibrations.length),
+      );
+      expect(
+        restored.drowsiness?.scoreTotalPct,
+        equals(original.drowsiness?.scoreTotalPct),
+      );
+      expect(
+        restored.drowsiness?.meanSleepDir,
+        equals(original.drowsiness?.meanSleepDir),
+      );
+      expect(
+        restored.drowsiness?.threshold,
+        equals(original.drowsiness?.threshold),
+      );
       expect(restored.music?.trackCount, equals(original.music?.trackCount));
-      expect(restored.music?.tracks.length, equals(original.music?.tracks.length));
-      expect(restored.music?.series.length, equals(original.music?.series.length));
+      expect(
+        restored.music?.tracks.length,
+        equals(original.music?.tracks.length),
+      );
+      expect(
+        restored.music?.series.length,
+        equals(original.music?.series.length),
+      );
       expect((json['music'] as Map)['series'], isNotNull);
       expect((json['music'] as Map).containsKey('buckets'), isFalse);
       expect((json['drowsiness'] as Map).containsKey('buckets'), isFalse);
       expect((json['drowsiness'] as Map).containsKey('series'), isFalse);
       expect(restored.feedbackSound, equals(original.feedbackSound));
-      expect(restored.metadataDescription, equals(original.metadataDescription));
-      expect(restored.sessionSettings?.dynamicAdapt, equals(original.sessionSettings?.dynamicAdapt));
-      expect(restored.sessionSettings?.baselinePercentile, equals(original.sessionSettings?.baselinePercentile));
-      expect(restored.sessionSettings?.guardrailEngine, equals(original.sessionSettings?.guardrailEngine));
+      expect(
+        restored.metadataDescription,
+        equals(original.metadataDescription),
+      );
+      expect(
+        restored.sessionSettings?.dynamicAdapt,
+        equals(original.sessionSettings?.dynamicAdapt),
+      );
+      expect(
+        restored.sessionSettings?.baselinePercentile,
+        equals(original.sessionSettings?.baselinePercentile),
+      );
+      expect(
+        restored.sessionSettings?.guardrailEngine,
+        equals(original.sessionSettings?.guardrailEngine),
+      );
       expect(restored.durationS, equals(original.durationS));
       expect(restored.startedAt, equals(original.startedAt));
       expect(restored.protocolVersion, equals(original.protocolVersion));
@@ -341,6 +398,8 @@ void main() {
         calibrationEndSecs: 90,
         trainingStartSecs: 95,
         usedStartAnyway: false,
+        skipped: true,
+        skipSource: 'synthetic',
         greenStableSeconds: 3,
         faultyPadSeconds: 20,
         baseline: SessionBaselineStats(
@@ -381,6 +440,10 @@ void main() {
       expect(restored.version, equals(2));
       expect(restored.kind, equals('single'));
       expect(restored.calibrationId, equals('eyes-open-01'));
+      expect(restored.skipped, isTrue);
+      expect(restored.skipSource, 'synthetic');
+      expect(json['skipped'], isTrue);
+      expect(json['skipSource'], 'synthetic');
       expect(restored.trainingStartOffsetSecs, equals(95.0));
       expect(restored.phases.length, equals(1));
       expect(restored.recalibrations.length, equals(1));
@@ -399,6 +462,12 @@ void main() {
           meanSleepDir: 0.35,
         ),
         sessionId: 'abc',
+        audioEvents: const [
+          {'onset': 1.0, 'type': 'reward_chime'},
+        ],
+        annotations: const [
+          SessionAnnotation(onset: 2, duration: 1, type: 'pause'),
+        ],
       );
       final saved = original.withSaveFields(
         notes: 'new notes',
@@ -416,6 +485,10 @@ void main() {
       expect(saved.protocol, 'drowsiness');
       expect(saved.drowsiness?.scoreTotalPct, 12.5);
       expect(saved.sessionId, 'abc');
+      expect(saved.audioEvents, [
+        {'onset': 1.0, 'type': 'reward_chime'},
+      ]);
+      expect(saved.annotations.single.type, 'pause');
       expect(saved.stats?.avgBpm, 72);
       expect(saved.avgSpo2, 98.1);
       expect(saved.savedAt, isNot('2026-09-02T00:00:00.000Z'));

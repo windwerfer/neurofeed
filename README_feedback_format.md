@@ -21,6 +21,8 @@ History list is sqlite `kind` (`feedback` \| `recording`), not a directory scan.
 
 **Timestamps:** computed `t`, annotation `onset`/`duration`, and gesture offsets are seconds from **this capture’s start** (content clock; does not advance during pause). Raw EEG/band timestamps in the raw body are **ms epochs**. PPG tag 5 uses the same ms epoch; the reader keeps infrared channel 1 (64 Hz, timestamp is the last sample) and drops the other channels. Wall-clock `startedAt` / `savedAt` are ISO-8601 **with explicit offset or `Z`**; root `timeZone` is IANA (e.g. `Asia/Bangkok`).
 
+A user **pause** is only the `annotations[]` row `{type:"pause", onset, duration}` (`onset` = content clock when pause began, `duration` = wall-clock length). Raw samples and computed frames are **not** written during that span. If the process dies while paused, that open pause closes at the end of the recorded capture (`duration` = max(0, last content time − onset)). That end is the raw-body end, because raw already stopped. Do not use the wall time until the app is opened again.
+
 ---
 
 ## v6 container layout
@@ -119,7 +121,9 @@ Writers: `lib/src/session_format/metadata.dart` (`buildRecordingMetadata` /
 
 When `kind == "feedback"`, also write top-level `feedback: { … }` (protocol,
 durationMinutes, calibration, sessionSettings, outcomeScalars, music, …).
-Shared physio stays under base `stats` only. See contract **Feedback extension**.
+`feedback.calibration.skipped` is true when calibration was skipped;
+`skipSource` is then `synthetic` or `last`. Shared physio stays under base
+`stats` only. See contract **Feedback extension**.
 
 ---
 

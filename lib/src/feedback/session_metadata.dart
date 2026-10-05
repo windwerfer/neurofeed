@@ -356,6 +356,8 @@ class SessionCalibration {
     this.calibrationEndSecs,
     this.trainingStartSecs,
     this.usedStartAnyway = false,
+    this.skipped = false,
+    this.skipSource,
     this.greenStableSeconds,
     this.faultyPadSeconds,
     this.baseline,
@@ -372,11 +374,19 @@ class SessionCalibration {
   final double? calibrationEndSecs;
   final double? trainingStartSecs;
   final bool usedStartAnyway;
+
+  /// Debug Skip: the baseline was not collected in this session.
+  final bool skipped;
+
+  /// `synthetic` (simulated device) or `last` (previous device baseline).
+  /// Set only when [skipped] is true.
+  final String? skipSource;
   final int? greenStableSeconds;
   final int? faultyPadSeconds;
   final SessionBaselineStats? baseline;
   final List<SessionCalibrationPhase> phases;
   final List<SessionRecalibration> recalibrations;
+
   /// Raw native reward samples used by percentileOf after calibration.
   final List<double> baselineSamples;
 
@@ -400,6 +410,8 @@ class SessionCalibration {
     if (calibrationEndSecs != null) 'calibrationEndSecs': calibrationEndSecs,
     if (trainingStartSecs != null) 'trainingStartSecs': trainingStartSecs,
     if (usedStartAnyway) 'usedStartAnyway': true,
+    if (skipped) 'skipped': true,
+    if (skipSource != null) 'skipSource': skipSource,
     if (greenStableSeconds != null) 'greenStableSeconds': greenStableSeconds,
     if (faultyPadSeconds != null) 'faultyPadSeconds': faultyPadSeconds,
     if (baseline != null) 'baseline': baseline!.toJson(),
@@ -422,6 +434,8 @@ class SessionCalibration {
       calibrationEndSecs: (json['calibrationEndSecs'] as num?)?.toDouble(),
       trainingStartSecs: (json['trainingStartSecs'] as num?)?.toDouble(),
       usedStartAnyway: json['usedStartAnyway'] as bool? ?? false,
+      skipped: json['skipped'] as bool? ?? false,
+      skipSource: json['skipSource'] as String?,
       greenStableSeconds: (json['greenStableSeconds'] as num?)?.toInt(),
       faultyPadSeconds: (json['faultyPadSeconds'] as num?)?.toInt(),
       baseline: SessionBaselineStats.fromJson(json['baseline']),
@@ -579,7 +593,9 @@ class SessionSettings {
         if (raw is! Map) return null;
         final out = <String, double>{};
         for (final e in raw.entries) {
-          if (e.value is num) out[e.key.toString()] = (e.value as num).toDouble();
+          if (e.value is num) {
+            out[e.key.toString()] = (e.value as num).toDouble();
+          }
         }
         return out.isEmpty ? null : out;
       }(),
@@ -700,6 +716,7 @@ class SessionMetadata {
   final SessionSettings? sessionSettings;
   final int durationS;
   final String? startedAt;
+
   /// IANA id at session start (e.g. `Asia/Bangkok`).
   final String? timeZone;
   final String? protocolVersion;
@@ -774,6 +791,7 @@ class SessionMetadata {
     if (protocolJson != null) 'protocolJson': protocolJson,
     if (annotations.isNotEmpty)
       'annotations': [for (final a in annotations) a.toJson()],
+    if (audioEvents.isNotEmpty) 'audioEvents': audioEvents,
   };
 
   static SessionMetadata? fromJson(Object? json) {
@@ -811,13 +829,14 @@ class SessionMetadata {
       durationMinutes: (fb['durationMinutes'] as num?)?.toInt() ?? 0,
       elapsedSeconds: (root['elapsedSeconds'] as num?)?.toInt() ?? 0,
       sound: (fb['sound'] as String?) ?? 'Ambient Drone',
-      savedAt: (root['savedAt'] as String?) ??
+      savedAt:
+          (root['savedAt'] as String?) ??
           formatIso8601WithOffset(DateTime.now()),
       notes: (root['notes'] as String?) ?? '',
       stats: SessionStatsData.fromJson(root['stats']),
       deviceName: device?['name'] as String?,
-      deviceModel: (device?['model'] as String?) ??
-          (device?['firmware'] as String?),
+      deviceModel:
+          (device?['model'] as String?) ?? (device?['firmware'] as String?),
       deviceId: device?['id'] as String?,
       rawFiltering: RawFiltering.fromJson(device?['rawFiltering']),
       conditioning: SignalConditioning.fromJson(device?['conditioning']),
@@ -838,7 +857,8 @@ class SessionMetadata {
       avgSpo2: (root['avgSpo2'] as num?)?.toDouble(),
       peakAlphaHz: (root['peakAlphaHz'] as num?)?.toDouble(),
       peakAlphaPower: (root['peakAlphaPower'] as num?)?.toDouble(),
-      pctInTarget: (outcome['pctInTarget'] as num?)?.toDouble() ??
+      pctInTarget:
+          (outcome['pctInTarget'] as num?)?.toDouble() ??
           (fb['pctInTarget'] as num?)?.toDouble(),
       avgMovement: (root['avgMovement'] as num?)?.toDouble(),
       guardrailWarnCount: (outcome['guardrailWarnCount'] as num?)?.toInt(),
@@ -870,7 +890,8 @@ class SessionMetadata {
       durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
       elapsedSeconds: (json['elapsedSeconds'] as num?)?.toInt() ?? 0,
       sound: (json['sound'] as String?) ?? 'Ambient Drone',
-      savedAt: (json['savedAt'] as String?) ??
+      savedAt:
+          (json['savedAt'] as String?) ??
           formatIso8601WithOffset(DateTime.now()),
       notes: (json['notes'] as String?) ?? '',
       stats: SessionStatsData.fromJson(json['stats']),
@@ -878,10 +899,12 @@ class SessionMetadata {
       deviceModel: json['deviceModel'] as String?,
       deviceId: json['deviceId'] as String?,
       rawFiltering: RawFiltering.fromJson(
-        json['rawFiltering'] ?? _asStringKeyedMap(json['device'])?['rawFiltering'],
+        json['rawFiltering'] ??
+            _asStringKeyedMap(json['device'])?['rawFiltering'],
       ),
       conditioning: SignalConditioning.fromJson(
-        json['conditioning'] ?? _asStringKeyedMap(json['device'])?['conditioning'],
+        json['conditioning'] ??
+            _asStringKeyedMap(json['device'])?['conditioning'],
       ),
       recordedChannels:
           (json['recordedChannels'] as List<Object?>?)
@@ -971,7 +994,6 @@ class SessionMetadata {
     }
   }
 }
-
 
 Map<String, Object?>? _asStringKeyedMap(Object? value) {
   if (value is Map<String, Object?>) {

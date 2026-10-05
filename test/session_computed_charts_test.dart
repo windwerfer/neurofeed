@@ -363,7 +363,40 @@ void main() {
         '"channelLabels":["CP3","C3","F5","PO3","PO4","F6","C4","CP4"],'
         '"conditioning":{"highPassHz":0.5,"notchQ":10.0,"notchHz":[60.0],'
         '"notchSource":"saved"}}\n'
-        '{"type":"calibration_start","kind":"staged","calibrationId":"eyes-closed-01"}\n',
+        '{"type":"session","protocol":"drowsiness","durationMinutes":15,'
+        '"sound":"Rain","feedbackSound":"bowlChimes",'
+        '"startedAt":"2026-10-05T12:00:02.000Z","timeZone":"Pacific/Auckland",'
+        '"protocolVersion":"1","metadataDescription":"Eyes closed",'
+        '"protocolJson":{"id":"drowsiness"},"recordedData":["eeg","ppg"],'
+        '"userId":"user-1","sessionSettings":{"dynamicAdapt":true,'
+        '"baselinePercentile":40}}\n'
+        '{"type":"calibration_start","kind":"staged","calibrationId":"eyes-closed-01",'
+        '"calibrationJson":{"name":"Eyes closed"},"usedStartAnyway":true,'
+        '"timestamp":"2026-10-05T12:00:10.000Z"}\n'
+        '{"type":"calibration_phase","clipId":"atr-short-clear","eyes":"closed",'
+        '"clipFile":"clips/atr.opus","spokenText":"Close your eyes",'
+        '"challengeText":"Count backward","startSecs":8.0,"endSecs":12.5,'
+        '"kind":"intro","timestamp":"2026-10-05T12:00:14.500Z"}\n'
+        '{"type":"calibration_complete","threshold":1.2,"baselineCount":40,'
+        '"baselinePercentile":40,"baselineMean":0.8,"baselineStddev":0.1,'
+        '"baselineSamples":[0.5,0.8],"skipped":true,"skipSource":"last",'
+        '"usedStartAnyway":true,"greenStableSeconds":3,"faultyPadSeconds":20,'
+        '"kind":"staged","calibrationId":"eyes-closed-01","version":2,'
+        '"timestamp":"2026-10-05T12:01:02.500Z","elapsedSecs":60.5}\n'
+        '{"type":"recalibration","atSecs":90,"baselineCount":50,'
+        '"baselinePercentile":40,"baselineMean":0.9,"baselineStddev":0.2,'
+        '"baselineSamples":[0.9,1.1],"timestamp":"2026-10-05T12:01:32.000Z"}\n'
+        '{"type":"annotation","onset":1,"annotationType":"pause","open":true}\n'
+        '{"type":"annotation","onset":20,"duration":4.5,"annotationType":"pause"}\n'
+        '{"type":"annotation","onset":20,"annotationType":"pause","open":true}\n'
+        '{"type":"annotation","onset":30,"duration":2,"annotationType":"bad_quality"}\n'
+        '{"type":"annotation","onset":45,"duration":0,"annotationType":"double_blink"}\n'
+        '{"type":"audio_event","onset":50,"audioType":"reward_chime"}\n'
+        '{"type":"music","trackCount":2,"minCutoffHz":200,"maxCutoffHz":8000,'
+        '"invert":false,"shuffle":true}\n'
+        '{"type":"music_track","at":70,"name":"a.opus","trackCount":2}\n'
+        '{"type":"music_sample","at":70,"hz":1000}\n'
+        '{"type":"music_sample","at":71,"hz":1200}\n',
       );
 
       final recovered = await scanRecoverableSessions(storage);
@@ -401,6 +434,101 @@ void main() {
       expect(((stored['stats'] as Map)['spo2'] as Map)['mean'], 98);
       expect(recovered.first.elapsedSeconds, 2);
       expect(recovered.first.calibrationKind, 'staged');
+      final calibration = recovered.first.metadata?.calibration;
+      expect(calibration?.calibrationId, 'eyes-closed-01');
+      expect(calibration?.kind, 'staged');
+      expect(calibration?.phases, hasLength(1));
+      expect(calibration?.phases.single.name, 'atr-short-clear');
+      expect(calibration?.phases.single.eyes, 'closed');
+      expect(calibration?.phases.single.startSecs, 8);
+      expect(calibration?.phases.single.endSecs, 12.5);
+      expect(calibration?.phases.single.kind, 'intro');
+      final sessionStart = DateTime.parse(
+        '2026-10-05T12:01:02.500Z',
+      ).subtract(const Duration(milliseconds: 60500));
+      expect(
+        calibration?.calibrationStartSecs,
+        sessionStart.millisecondsSinceEpoch / 1000,
+      );
+      expect(calibration?.trainingStartOffsetSecs, closeTo(60.5, 1e-6));
+      expect(calibration?.baseline?.count, 40);
+      expect(calibration?.baseline?.mean, closeTo(0.8, 1e-9));
+      expect(calibration?.recalibrations.single.atSecs, 90);
+      expect(calibration?.recalibrations.single.baseline.count, 50);
+      expect(calibration?.recalibrations.single.baselineSamples, [0.9, 1.1]);
+      expect(calibration?.skipped, isTrue);
+      expect(calibration?.skipSource, 'last');
+      expect(calibration?.usedStartAnyway, isTrue);
+      expect(calibration?.greenStableSeconds, 3);
+      expect(calibration?.faultyPadSeconds, 20);
+      expect(calibration?.baselineSamples, [0.5, 0.8]);
+      expect(calibration?.calibrationJson, {'name': 'Eyes closed'});
+      expect(calibration?.phases.single.clipFile, 'clips/atr.opus');
+      expect(calibration?.phases.single.spokenText, 'Close your eyes');
+      expect(calibration?.phases.single.challengeText, 'Count backward');
+      final meta = recovered.first.metadata;
+      expect(meta?.protocol, 'drowsiness');
+      expect(meta?.durationMinutes, 15);
+      expect(meta?.sound, 'Rain');
+      expect(meta?.feedbackSound, 'bowlChimes');
+      expect(meta?.startedAt, '2026-10-05T12:00:02.000Z');
+      expect(meta?.timeZone, 'Pacific/Auckland');
+      expect(meta?.protocolVersion, '1');
+      expect(meta?.metadataDescription, 'Eyes closed');
+      expect(meta?.protocolJson, {'id': 'drowsiness'});
+      expect(meta?.recordedData, ['eeg', 'ppg']);
+      expect(meta?.userId, 'user-1');
+      expect(meta?.sessionSettings?.dynamicAdapt, isTrue);
+      expect(meta?.sessionSettings?.baselinePercentile, 40);
+      expect(meta?.audioEvents, [
+        {'onset': 50.0, 'type': 'reward_chime'},
+      ]);
+      expect(meta?.music?.trackCount, 2);
+      expect(meta?.music?.tracks.single.name, 'a.opus');
+      expect(meta?.music?.series.length, 2);
+      expect(meta?.gestures.single.type, GestureType.doubleBlink);
+      expect(meta?.gestures.single.offsetSeconds, 45);
+      final pauses = meta?.annotations.where((a) => a.type == 'pause').toList();
+      expect(pauses, hasLength(2));
+      expect(pauses?[0].onset, 1);
+      expect(pauses?[0].duration, 1);
+      expect(pauses?[1].onset, 20);
+      expect(pauses?[1].duration, 4.5);
+      expect(
+        meta?.annotations.where((a) => a.type == 'bad_quality').single.duration,
+        2,
+      );
+      expect(
+        meta?.annotations
+            .where((a) => a.type == 'double_blink')
+            .single
+            .duration,
+        0,
+      );
+      final storedCalibration = stored['calibration'] as Map;
+      expect(storedCalibration['skipped'], isTrue);
+      expect(storedCalibration['skipSource'], 'last');
+      expect(stored['timeZone'], 'Pacific/Auckland');
+      expect(stored['startedAt'], '2026-10-05T12:00:02.000Z');
+      expect(stored['audioEvents'], [
+        {'onset': 50.0, 'type': 'reward_chime'},
+      ]);
+      expect((stored['stats'] as Map)['annotationSeconds'], {
+        'pause': 5.5,
+        'bad_quality': 2.0,
+      });
+      expect((storedCalibration['phases'] as List).single, {
+        'name': 'atr-short-clear',
+        'durationSecs': 4.5,
+        'sampleCount': 0,
+        'clipFile': 'clips/atr.opus',
+        'spokenText': 'Close your eyes',
+        'eyes': 'closed',
+        'challengeText': 'Count backward',
+        'startSecs': 8.0,
+        'endSecs': 12.5,
+        'kind': 'intro',
+      });
       expect(
         await File('${scratch.path}/session_$id.neurofeed').exists(),
         isTrue,
