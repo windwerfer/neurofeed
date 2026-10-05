@@ -37,6 +37,13 @@ class OpticalCache extends ChangeNotifier with FrameCoalescedNotify {
     return latest;
   }
 
+  /// Unix seconds of the newest infrared sample. Pulse and SpO2 are excluded
+  /// so a 1 Hz wall-clock stamp cannot pull the PPG sweep ahead of its trace.
+  double? get latestPpgTimestamp {
+    if (_ppgIr.length == 0) return null;
+    return _ppgIr.timestampAt(_ppgIr.length - 1);
+  }
+
   double get oldestTimestamp {
     var oldest = double.infinity;
     for (final buf in [_pulse, _spo2, _ppgIr]) {

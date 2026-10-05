@@ -109,6 +109,16 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
     return cache.latestTimestamp - opticalOriginUnix(cache, startMs);
   }
 
+  /// Elapsed time of the newest IR sample. The sweep window uses this so a
+  /// once-a-second pulse or SpO2 stamp does not slide the PPG trace forward.
+  double _newestPpgElapsed() {
+    final cache = _mon.opticalCache;
+    final t = cache.latestPpgTimestamp;
+    if (t == null) return _newestElapsed();
+    final startMs = ref.read(monitorControllerProvider).captureStartedAtMs;
+    return t - opticalOriginUnix(cache, startMs);
+  }
+
   double _oldestElapsed() {
     final cache = _mon.opticalCache;
     final startMs = ref.read(monitorControllerProvider).captureStartedAtMs;
@@ -573,13 +583,16 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                 final sweep =
                                     _detail.mode == ViewportMode.follow &&
                                     _overview.mode == ViewportMode.follow;
+                                final sweepElapsed = sweep
+                                    ? _newestPpgElapsed()
+                                    : n;
                                 final start = sweep
-                                    ? n - _detail.windowSeconds
+                                    ? sweepElapsed - _detail.windowSeconds
                                     : _detail.stripVisibleStart(
                                         newestElapsed: n,
                                       );
                                 final end = sweep
-                                    ? n
+                                    ? sweepElapsed
                                     : _detail.stripVisibleEnd(newestElapsed: n);
                                 const pad = 0.25;
                                 final ppg = live
@@ -594,7 +607,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                 return OpticalPpgPane(
                                   samples: ppg,
                                   viewport: _detail,
-                                  newestElapsed: n,
+                                  newestElapsed: sweepElapsed,
                                   connected: live,
                                   cursorElapsed: _cursorElapsed,
                                   onTapElapsed: (t) =>

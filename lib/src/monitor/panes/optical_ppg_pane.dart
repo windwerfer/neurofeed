@@ -19,6 +19,24 @@ int ppgSweepSlot({
   return ((idx % n) + n) % n;
 }
 
+/// Follow wipe time. [newestElapsed] also moves when pulse or SpO2 is stamped,
+/// once a second, and that stamp can sit ahead of the last IR sample. The wipe
+/// stays on the newest sample that is not after [newestElapsed] so the bar
+/// does not skip a blank gap.
+double ppgSweepHeadElapsed({
+  required double newestElapsed,
+  required List<ChartSample> samples,
+}) {
+  var head = double.negativeInfinity;
+  for (final s in samples) {
+    if (!s.t.isFinite || !s.v.isFinite) continue;
+    if (s.t > newestElapsed) continue;
+    if (s.t > head) head = s.t;
+  }
+  if (!head.isFinite) return newestElapsed;
+  return head;
+}
+
 /// Wipe cursor as a fraction of chart width (0..1) for Follow sweep.
 double ppgSweepCursorFraction({
   required double newestElapsed,
@@ -34,7 +52,6 @@ double ppgSweepCursorFraction({
       ) /
       n;
 }
-
 
 /// Raw IR PPG waveform for the bottom HR+SpO2 detail pane.
 class OpticalPpgPane extends StatefulWidget {
@@ -100,8 +117,7 @@ class _OpticalPpgPaneState extends State<OpticalPpgPane>
   }
 
   void _syncTicker() {
-    final run =
-        widget.connected && widget.viewport.mode == ViewportMode.follow;
+    final run = widget.connected && widget.viewport.mode == ViewportMode.follow;
     final ticker = _ticker;
     if (ticker == null) return;
     if (run) {
@@ -194,7 +210,8 @@ class _OpticalPpgPaneState extends State<OpticalPpgPane>
         elapsed: widget.newestElapsed,
         windowSeconds: window,
       );
-      final age = (cursor - slot) % (window * OpticalCache.ppgSampleRate).round();
+      final age =
+          (cursor - slot) % (window * OpticalCache.ppgSampleRate).round();
       final elapsed = widget.newestElapsed - age / OpticalCache.ppgSampleRate;
       widget.onTapElapsed?.call(elapsed.clamp(visStart, visEnd));
       return;
@@ -384,12 +401,9 @@ class OpticalPpgPainter extends CustomPainter {
     if (c != null && c >= visStart && c <= visEnd) {
       final x = sweep
           ? chart.left +
-              ppgSweepSlot(
-                    elapsed: c,
-                    windowSeconds: window,
-                  ) /
-                  math.max(1, (window * OpticalCache.ppgSampleRate).round()) *
-                  chart.width
+                ppgSweepSlot(elapsed: c, windowSeconds: window) /
+                    math.max(1, (window * OpticalCache.ppgSampleRate).round()) *
+                    chart.width
           : chart.left + (c - visStart) / span * chart.width;
       canvas.drawLine(
         Offset(x, chart.top),
@@ -445,14 +459,18 @@ class OpticalPpgPainter extends CustomPainter {
     final n = (window * rate).round();
     if (n <= 0) return;
     final display = List<double>.filled(n, double.nan);
+    final head = ppgSweepHeadElapsed(
+      newestElapsed: newestElapsed,
+      samples: samples,
+    );
     final cursor = ppgSweepSlot(
-      elapsed: newestElapsed,
+      elapsed: head,
       windowSeconds: window,
       sampleRate: rate,
     );
     for (final s in samples) {
       if (!s.v.isFinite) continue;
-      final age = (newestElapsed - s.t) * rate;
+      final age = (head - s.t) * rate;
       if (age < 0 || age >= n) continue;
       var idx = (cursor - age.round()) % n;
       if (idx < 0) idx += n;

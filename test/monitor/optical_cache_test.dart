@@ -34,6 +34,11 @@ void main() {
     expect(cache.avgHr, 70);
     expect(cache.ppgIrRange(0, 10).length, 3);
     expect(cache.ppgIrRange(0, 10).map((s) => s.v), [1, 2, 3]);
+    expect(cache.latestPpgTimestamp, 3.0);
+
+    cache.appendPulse(PulseDto(timestamp: 5000, bpm: 72, confidence: 1));
+    expect(cache.latestTimestamp, 5.0);
+    expect(cache.latestPpgTimestamp, 3.0);
 
     cache.clear();
     expect(cache.hasData, isFalse);
