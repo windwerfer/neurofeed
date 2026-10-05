@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/session_format/computed_frame.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
@@ -81,6 +83,23 @@ class FeedbackRecorder {
   /// Add a computed frame (1 Hz) to the session recording.
   void appendComputed(ComputedFrame frame) {
     _recorder.appendComputed(frame);
+  }
+
+  /// Nested `stats` from the computed file flushed so far. Null when that
+  /// file is missing or has no samples.
+  Future<Map<String, Object?>?> baseStats({
+    List<SessionAnnotation> annotations = const [],
+    List<String> channelLabels = const [],
+  }) async {
+    final path = _recorder.computedPath;
+    if (path == null) return null;
+    final file = File(path);
+    if (!await file.exists()) return null;
+    return assembleBaseStatsFromJsonl(
+      await file.readAsBytes(),
+      annotations: annotations,
+      channelLabels: channelLabels,
+    );
   }
 
   /// Pause/resume Rust raw capture for this session.

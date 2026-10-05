@@ -19,7 +19,7 @@ Two filenames, **one metadata dialect**:
 
 History list is sqlite `kind` (`feedback` \| `recording`), not a directory scan. See [README_history_cache.md](README_history_cache.md).
 
-**Timestamps:** computed `t`, annotation `onset`/`duration`, and gesture offsets are seconds from **this capture’s start** (content clock; does not advance during pause). Raw EEG/band timestamps in the raw body are **ms epochs**. Wall-clock `startedAt` / `savedAt` are ISO-8601 **with explicit offset or `Z`**; root `timeZone` is IANA (e.g. `Asia/Bangkok`).
+**Timestamps:** computed `t`, annotation `onset`/`duration`, and gesture offsets are seconds from **this capture’s start** (content clock; does not advance during pause). Raw EEG/band timestamps in the raw body are **ms epochs**. PPG tag 5 uses the same ms epoch; the reader keeps infrared channel 1 (64 Hz, timestamp is the last sample) and drops the other channels. Wall-clock `startedAt` / `savedAt` are ISO-8601 **with explicit offset or `Z`**; root `timeZone` is IANA (e.g. `Asia/Bangkok`).
 
 ---
 

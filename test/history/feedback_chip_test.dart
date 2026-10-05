@@ -211,7 +211,10 @@ void main() {
     expect(find.text('10% in zone'), findsOneWidget);
     expect(find.text(_rewardFooter), findsNothing);
     expect(find.text('Notes'), findsOneWidget);
-    expect(find.textContaining('Alpha vs Theta'), findsOneWidget);
+    expect(find.text('HR+SpO2'), findsOneWidget);
+    expect(find.text('Movement'), findsOneWidget);
+    expect(find.textContaining('Bands (relative power'), findsNothing);
+    expect(find.text('Sleep guardrail (AI model)'), findsNothing);
     expect(find.byKey(const Key('trust-reward-pane')), findsNothing);
     expect(find.text('Save'), findsNothing);
     expect(find.byType(BackButton), findsOneWidget);
@@ -220,7 +223,6 @@ void main() {
     await tester.pump();
 
     expect(find.text('Notes'), findsNothing);
-    expect(find.textContaining('Alpha vs Theta'), findsNothing);
     expect(find.text(_rewardFooter), findsOneWidget);
     expect(find.text('In zone'), findsNothing);
     expect(find.textContaining('Above the line'), findsNothing);
@@ -300,7 +302,7 @@ void main() {
     await tester.tap(find.text('Dashboard'));
     await tester.pump();
     expect(find.text('Notes'), findsOneWidget);
-    expect(find.textContaining('Alpha vs Theta'), findsOneWidget);
+    expect(find.textContaining('Bands (relative power'), findsNothing);
     expect(find.text('10% in zone'), findsOneWidget);
     expect(find.text(_rewardFooter), findsNothing);
   });
@@ -317,6 +319,8 @@ void main() {
     await _open(tester, settings, file.path);
     expect(find.text('Dashboard'), findsOneWidget);
     expect(find.text('Feedback'), findsNothing);
+    expect(find.text('HR+SpO2'), findsOneWidget);
+    expect(find.text('Movement'), findsOneWidget);
     expect(find.text('100% in zone'), findsOneWidget);
     expect(find.byKey(const Key('trust-reward-pane')), findsNothing);
   });

@@ -3551,6 +3551,20 @@ impl SseDecode for Vec<crate::api::session_format::PeakAlphaRecord> {
     }
 }
 
+impl SseDecode for Vec<crate::api::session_format::PpgSampleRecord> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::session_format::PpgSampleRecord>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<f32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4004,6 +4018,20 @@ impl SseDecode for crate::api::muse::PpgDto {
     }
 }
 
+impl SseDecode for crate::api::session_format::PpgSampleRecord {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_timestamp = <f64>::sse_decode(deserializer);
+        let mut var_channel = <i16>::sse_decode(deserializer);
+        let mut var_samples = <Vec<f32>>::sse_decode(deserializer);
+        return crate::api::session_format::PpgSampleRecord {
+            timestamp: var_timestamp,
+            channel: var_channel,
+            samples: var_samples,
+        };
+    }
+}
+
 impl SseDecode for crate::api::muse::PulseDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4097,6 +4125,8 @@ impl SseDecode for crate::api::session_format::SessionData {
         let mut var_eegSamples = <u64>::sse_decode(deserializer);
         let mut var_eeg =
             <Vec<crate::api::session_format::EegSampleRecord>>::sse_decode(deserializer);
+        let mut var_ppg =
+            <Vec<crate::api::session_format::PpgSampleRecord>>::sse_decode(deserializer);
         return crate::api::session_format::SessionData {
             bands: var_bands,
             pulses: var_pulses,
@@ -4105,6 +4135,7 @@ impl SseDecode for crate::api::session_format::SessionData {
             peak_alphas: var_peakAlphas,
             eeg_samples: var_eegSamples,
             eeg: var_eeg,
+            ppg: var_ppg,
         };
     }
 }
@@ -5368,6 +5399,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::muse::PpgDto> for crate::api:
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::session_format::PpgSampleRecord {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.timestamp.into_into_dart().into_dart(),
+            self.channel.into_into_dart().into_dart(),
+            self.samples.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::session_format::PpgSampleRecord
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::session_format::PpgSampleRecord>
+    for crate::api::session_format::PpgSampleRecord
+{
+    fn into_into_dart(self) -> crate::api::session_format::PpgSampleRecord {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::muse::PulseDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -5458,6 +5511,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::session_format::SessionData {
             self.peak_alphas.into_into_dart().into_dart(),
             self.eeg_samples.into_into_dart().into_dart(),
             self.eeg.into_into_dart().into_dart(),
+            self.ppg.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -6103,6 +6157,16 @@ impl SseEncode for Vec<crate::api::session_format::PeakAlphaRecord> {
     }
 }
 
+impl SseEncode for Vec<crate::api::session_format::PpgSampleRecord> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::session_format::PpgSampleRecord>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<f32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6478,6 +6542,15 @@ impl SseEncode for crate::api::muse::PpgDto {
     }
 }
 
+impl SseEncode for crate::api::session_format::PpgSampleRecord {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.timestamp, serializer);
+        <i16>::sse_encode(self.channel, serializer);
+        <Vec<f32>>::sse_encode(self.samples, serializer);
+    }
+}
+
 impl SseEncode for crate::api::muse::PulseDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6553,6 +6626,7 @@ impl SseEncode for crate::api::session_format::SessionData {
         );
         <u64>::sse_encode(self.eeg_samples, serializer);
         <Vec<crate::api::session_format::EegSampleRecord>>::sse_encode(self.eeg, serializer);
+        <Vec<crate::api::session_format::PpgSampleRecord>>::sse_encode(self.ppg, serializer);
     }
 }
 

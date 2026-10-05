@@ -62,19 +62,20 @@ A recording chip row is `Dashboard`, then today's `Bands`, `Raw EEG`, `Histogram
 12. **Dashboard reads nested `stats` from the container metadata JSON.** `SessionStatsData` is the old flat card (`peakAlphaFreq`, `targetPct`, `avgBpm`). `RecordingMetadata.fromJson` drops `stats`. Keep the decoded map, or parse a small view model from it. Do not round-trip a recording through `RecordingMetadata.toJson` (that write would strip `stats`).
 13. **Missing stats show `—`.** Do not invent a number. Experimental bands appear inside More only when `stats.experimental` is present.
 14. **Save / Discard, unsaved `canPop: false`, notes, and the thumbnail capture stay.** They live with the Dashboard chip. Save and Discard stay in the app bar on the live unsaved summary. The thumbnail remains a capture of the summary block, not the trust graph.
-15. **Today's session charts stay on the Dashboard chip, under the new summary,** until a later series gives them their own chips. Do not delete Alpha vs Theta, Bands, Movement, Heart rate / SpO₂, guard, music, or gesture cards in this series.
+15. **Superseded 2026-10-05.** The Dashboard chip has no graphs. The old relative-power Bands chart, Movement score, Heart rate / SpO₂, sleep guardrail, and music cutoff chart are gone from that chip. The music track list and the gesture-marker list stay. PDF / PNG `chartsFor` is unchanged. Alpha and theta remain series on the Bands chip. Do not restore the old Dashboard charts.
 16. **Gesture marks** on the history panes come from root `annotations` with `duration == 0` and type `double_blink` or `double_jaw_clench`. Eye up / eye down stay unmarked, same as live.
+17. **HR+SpO2 and Movement are chips on both History pages,** after Spectrogram. HR+SpO2 reuses `OpticalOverviewPane` (sidebar overview: HR 40–200, SpO₂ 50–100). When `session_parse_body` kept infrared PPG (channel 1), the chip also mounts `OpticalPpgPane` under it (flex 6/4). Detail window is page-local, 2/4/8/10 s, default 10 s, and its right edge stays on the overview’s visible end. No strip and no warning when the file has no IR samples. Movement is an inspect-only 0–1.5 g series (`MovementPane`). Overview window family is 15/30/60/120, default 30. No electrode toggles on those two chips.
 
 ## Not this series
 
 Designed with the owner, explicitly deferred:
 
 - Bands overview under history Raw EEG, Histogram, PSD, and Spectrogram (tap jumps the shaded window, drag of the shade moves the window, drag of the plot pans the plot). Live sidebar Spectrogram stays without a strip.
-- HR+SpO2 chip.
 - `cinemaEnabled: false` on History.
-- Removing Alpha vs Theta from the summary and from the default PDF.
+- Removing Alpha vs Theta from the summary and from the default PDF. Done 2026-10-05. Do not restore that chart.
+- Dashboard graphs removed 2026-10-05 (decision 15). HR+SpO2 and Movement chips added the same day (decision 17). Do not put those graphs back on the Dashboard chip.
 - Making the History thumbnail the trust graph.
-- A shared extraction of `RecordingGraphBody`. Add the Dashboard segment in `recording_dashboard.dart`. Extract only the summary widget, which both pages need.
+- A shared extraction of `RecordingGraphBody`. Done 2026-10-05 as `HistorySignalGraphs`. The feedback summary chip row is Dashboard, Feedback (when a lane exists), Bands, Raw EEG, Histogram, PSD, Spectrogram, HR+SpO2, Movement. Opening a feedback session still lands on Dashboard. A recording still opens on Bands.
 
 Also frozen and untouched: pipeline Key Decisions, Crown Start, Connect UX, `DeviceKind`, live GraphShell Follow/Inspect, live trust Key Decisions in `.ai/trust-graphs.md`, data-plane contract, NFED6 header.
 

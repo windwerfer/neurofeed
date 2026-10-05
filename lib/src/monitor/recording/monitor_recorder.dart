@@ -7,6 +7,7 @@ import 'package:neurofeed/src/monitor/cache/recording_index.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/session_format/computed_frame.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
@@ -194,17 +195,18 @@ class MonitorRecorder {
       debugPrint('[monitor] assemble: no active recording');
       return null;
     }
+    final stamped = await _withBaseStats(metadataJson);
     try {
       final File file;
       if (_writer.usesRustCapture) {
-        file = await spine.assembleCapture(metadataJson: metadataJson);
+        file = await spine.assembleCapture(metadataJson: stamped);
         _writer.detachAfterAssemble();
       } else {
         file = await writeScratch(
           dir: dir,
           id: id,
           prefix: 'recording',
-          metadataJson: metadataJson,
+          metadataJson: stamped,
           rawPath: rawPath,
           computedPath: _writer.computedPath,
         );
@@ -222,6 +224,23 @@ class MonitorRecorder {
     }
   }
 
+  /// Copy [metadataJson] and attach nested `stats` from the flushed computed file.
+  Future<Map<String, Object?>> _withBaseStats(
+    Map<String, Object?> metadataJson,
+  ) async {
+    final stamped = Map<String, Object?>.from(metadataJson);
+    final path = _writer.computedPath;
+    if (path == null) return stamped;
+    final file = File(path);
+    if (!await file.exists()) return stamped;
+    final stats = assembleBaseStatsFromJsonl(
+      await file.readAsBytes(),
+      channelLabels: _channelLabels(stamped),
+    );
+    if (stats != null) stamped['stats'] = stats;
+    return stamped;
+  }
+
   Future<void> discard() async {
     _rotateTimer?.cancel();
     _rotateTimer = null;
@@ -237,6 +256,18 @@ class MonitorRecorder {
     final prefix = _prefix;
     await _writer.stop();
     debugPrint('[monitor] $prefix discard id=$id');
+  }
+
+  static List<String> _channelLabels(Map<String, Object?> meta) {
+    final device = meta['device'];
+    if (device is Map) {
+      final raw = device['channelLabels'];
+      if (raw is List) {
+        final labels = raw.whereType<String>().toList();
+        if (labels.isNotEmpty) return labels;
+      }
+    }
+    return const ['TP9', 'AF7', 'AF8', 'TP10'];
   }
 
   void _indexFlushedFrame(int fileLength) {

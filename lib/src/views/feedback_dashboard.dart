@@ -1,19 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
-import 'package:neurofeed/src/charts/band_style.dart'
-    show bandColors, bandNames;
-import 'package:neurofeed/src/charts/smooth_path.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
+import 'package:neurofeed/src/charts/band_style.dart' show bandColors;
 import 'package:neurofeed/src/feedback/feedback_state.dart';
 import 'package:neurofeed/src/feedback/guardrail_mode.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
@@ -26,10 +23,21 @@ import 'package:neurofeed/src/history/session_trust.dart';
 import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/feedback/session_chart_data.dart';
 import 'package:neurofeed/src/monitor/device_montage.dart';
+import 'package:neurofeed/src/monitor/views/recording_dashboard.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
 
-enum _SessionSummaryChip { dashboard, feedback }
+enum _SessionSummaryChip {
+  dashboard,
+  feedback,
+  bands,
+  rawEeg,
+  histogram,
+  psd,
+  spectrogram,
+  hrSpo2,
+  movement,
+}
 
 class FeedbackDashboardView extends ConsumerStatefulWidget {
   const FeedbackDashboardView({
@@ -67,8 +75,10 @@ class _DashboardLoad {
     this.guardFeature = guardFeatureNone,
     this.rewardLabel = '',
     this.guardLabel = '',
+    required this.containerPath,
   });
 
+  final String containerPath;
   final SessionChartData prepared;
   final SessionMetadata metadata;
 
@@ -99,6 +109,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
   String _guardFeature = guardFeatureNone;
   String _rewardLabel = '';
   String _guardLabel = '';
+  String? _containerPath;
   bool _rewardOn = true;
   bool _guardOn = false;
   final HistoryTrustViewport _historyViewport = HistoryTrustViewport();
@@ -132,6 +143,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
             _guardFeature = loaded.guardFeature;
             _rewardLabel = loaded.rewardLabel;
             _guardLabel = loaded.guardLabel;
+            _containerPath = loaded.containerPath;
             _applyHistoryTrustDefaults(loaded);
             _loadError = null;
             if (loaded.metadata.notes.isNotEmpty && _notes.text.isEmpty) {
@@ -228,6 +240,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       guardFeature: guardFeature,
       rewardLabel: _featureShortLabel(catalog, savedProtocol?.reward?.feature),
       guardLabel: _featureShortLabel(catalog, guardFeature),
+      containerPath: path,
     );
   }
 
@@ -404,6 +417,34 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
               value: _SessionSummaryChip.feedback,
               label: Text('Feedback'),
             ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.bands,
+            label: Text('Bands'),
+          ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.rawEeg,
+            label: Text('Raw EEG'),
+          ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.histogram,
+            label: Text('Histogram'),
+          ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.psd,
+            label: Text('PSD'),
+          ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.spectrogram,
+            label: Text('Spectrogram'),
+          ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.hrSpo2,
+            label: Text('HR+SpO2'),
+          ),
+          const ButtonSegment(
+            value: _SessionSummaryChip.movement,
+            label: Text('Movement'),
+          ),
         ],
         selected: {_visibleChip},
         showSelectedIcon: false,
@@ -419,17 +460,34 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
     );
   }
 
+  RecordingDashGraph? _signalFor(_SessionSummaryChip chip) => switch (chip) {
+    _SessionSummaryChip.dashboard || _SessionSummaryChip.feedback => null,
+    _SessionSummaryChip.bands => RecordingDashGraph.bands,
+    _SessionSummaryChip.rawEeg => RecordingDashGraph.rawEeg,
+    _SessionSummaryChip.histogram => RecordingDashGraph.histogram,
+    _SessionSummaryChip.psd => RecordingDashGraph.psd,
+    _SessionSummaryChip.spectrogram => RecordingDashGraph.spectrogram,
+    _SessionSummaryChip.hrSpo2 => RecordingDashGraph.hrSpo2,
+    _SessionSummaryChip.movement => RecordingDashGraph.movement,
+  };
+
   Widget _dashboard(SessionMetadata? meta, FeedbackState fb) {
     if (_prepared != null) {
+      final signal = _signalFor(_visibleChip);
+      final path = _containerPath;
+      if (signal != null && path != null) {
+        return HistorySignalGraphs(
+          key: ValueKey('session-graphs-$path'),
+          absolutePath: path,
+          graph: signal,
+        );
+      }
       return switch (_visibleChip) {
         _SessionSummaryChip.dashboard => _DashboardBody(
-          elapsedSeconds: meta?.elapsedSeconds ?? fb.elapsedSeconds,
-          prepared: _prepared!,
           summaryStats: _summaryStats,
           durationS: _durationS,
           summaryElapsed: _summaryElapsed,
           feedback: _feedbackTotals,
-          drowsiness: meta?.drowsiness,
           music: meta?.music,
           gestures:
               meta?.gestures ??
@@ -445,6 +503,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
           notesSavedFlash: _notesSavedFlash,
         ),
         _SessionSummaryChip.feedback => _feedbackBody(),
+        _ => const SizedBox.shrink(),
       };
     }
     if (_loadError != null) {
@@ -536,6 +595,14 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
             avgSpo2: stats?.avgSpo2,
           ) ??
           notifier.buildSessionMetadata(notes: _notes.text, stats: stats);
+      final frames = await extractComputedFromPath(path: path);
+      final baseStats = assembleBaseStats(
+        frames: frames,
+        annotations: metadata.annotations,
+        channelLabels: metadata.recordedChannels.isEmpty
+            ? kMuseElectrodeNames
+            : metadata.recordedChannels,
+      );
       final patched = '${Directory.systemTemp.path}/nf_save_$id.neurofeed';
       await rewriteHeadToPath(
         srcPath: path,
@@ -545,6 +612,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
             buildFeedbackMetadata(
               meta: metadata,
               subject: ref.read(settingsProvider).subjectInfo,
+              stats: baseStats,
             ),
           ),
         ),
@@ -647,13 +715,10 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
 
 class _DashboardBody extends StatefulWidget {
   const _DashboardBody({
-    required this.elapsedSeconds,
-    required this.prepared,
     required this.summaryStats,
     this.durationS,
     this.summaryElapsed,
     this.feedback,
-    this.drowsiness,
     this.music,
     this.gestures,
     this.trainingStartOffsetSecs,
@@ -665,27 +730,20 @@ class _DashboardBody extends StatefulWidget {
     this.notesSavedFlash = false,
   });
 
-  final int elapsedSeconds;
-  final SessionChartData prepared;
   final Map<String, Object?> summaryStats;
   final num? durationS;
   final num? summaryElapsed;
   final HistoryDashboardTotals? feedback;
 
-  /// Sleep-guardrail trace of this session (null when the guardrail did not
-  /// run or recorded nothing).
-  final SessionDrowsiness? drowsiness;
-
-  /// Music-feedback record (track list + cutoff trace) of this session (null
+  /// Music-feedback record (track list) of this session (null
   /// when music feedback did not run).
   final SessionMusic? music;
 
   /// Gesture markers recorded during the session.
   final List<GestureMarker>? gestures;
 
-  /// Seconds from recording start to the training boundary; drowsiness
-  /// offsets are wall-clock-relative to session start, so subtracting this
-  /// aligns the trace with the training-window chart axis.
+  /// Seconds from recording start to the training boundary. Music and
+  /// gesture offsets are relative to session start.
   final double? trainingStartOffsetSecs;
 
   final GlobalKey thumbKey;
@@ -700,100 +758,11 @@ class _DashboardBody extends StatefulWidget {
 }
 
 class _DashboardBodyState extends State<_DashboardBody> {
-  late final _ChartViewport _viewport;
-
-  @override
-  void initState() {
-    super.initState();
-    final p = widget.prepared;
-    var end = widget.elapsedSeconds.toDouble();
-    void take(List<double> xs) {
-      if (xs.isNotEmpty && xs.last > end) end = xs.last;
-    }
-
-    take(p.x);
-    take(p.movementX);
-    take(p.bpmX);
-    take(p.guardrailX);
-    take(p.spo2X);
-    final music = widget.music;
-    if (music != null && music.series.isNotEmpty) {
-      take([
-        music.series.last.offsetSecs - (widget.trainingStartOffsetSecs ?? 0),
-      ]);
-    }
-    _viewport = _ChartViewport(0, math.max(end, 1.0));
-  }
-
-  @override
-  void dispose() {
-    _viewport.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final stats = widget.prepared.stats;
-    final prepared = widget.prepared;
-    final vp = _viewport;
 
-    Widget chart(
-      String title,
-      String unit,
-      List<_Series> series,
-      List<double> xs, {
-      double? fixedYMin,
-      double? fixedYMax,
-      double? fixedYMinRight,
-      double? fixedYMaxRight,
-    }) {
-      return _ZoomableChart(
-        title: title,
-        unit: unit,
-        series: series,
-        x: xs,
-        viewport: vp,
-        fixedYMin: fixedYMin,
-        fixedYMax: fixedYMax,
-        fixedYMinRight: fixedYMinRight,
-        fixedYMaxRight: fixedYMaxRight,
-      );
-    }
-
-    final notEnough = _notEnoughData;
-
-    // Sleep-guardrail trace widgets for the current session: the model's
-    // sleep-direction line vs the baseline warning threshold. Empty when the
-    // guardrail produced no samples.
-    List<Widget> drowsinessWidgets() {
-      final xs = prepared.guardrailX;
-      final sleepDir = prepared.guardrailSleepDir;
-      if (xs.isEmpty || sleepDir.isEmpty) {
-        return const [];
-      }
-      final threshold = widget.drowsiness?.threshold ?? double.nan;
-      return [
-        chart('Sleep guardrail (AI model)', 'sleep-dir score', [
-          _Series(
-            label: 'Sleep direction',
-            color: const Color(0xFF1E88E5),
-            values: sleepDir,
-          ),
-          if (threshold.isFinite)
-            _Series(
-              label: 'Warning threshold',
-              color: const Color(0xFFFFA726),
-              values: List.filled(xs.length, threshold),
-            ),
-        ], xs),
-        const SizedBox(height: 16),
-      ];
-    }
-
-    // Music-feedback widgets: the low-pass cutoff the reward drove (bounded by
-    // the configured range) plus the track list with the offsets they started
-    // at. Empty when music feedback produced no samples.
+    // Music-feedback track list. Empty when music feedback produced no samples.
     String formatOffset(double secs) {
       if (secs.isNaN || secs < 0) {
         return '00:00';
@@ -809,10 +778,6 @@ class _DashboardBodyState extends State<_DashboardBody> {
         return const [];
       }
       final offset = widget.trainingStartOffsetSecs ?? 0;
-      final xs = [
-        for (final s in music.series) (s.offsetSecs - offset).clamp(0.0, 1e9),
-      ];
-      final hz = [for (final s in music.series) s.cutoffHz];
       return [
         Card(
           color: theme.colorScheme.surface,
@@ -839,24 +804,6 @@ class _DashboardBodyState extends State<_DashboardBody> {
                       ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                chart('Low-pass cutoff', 'Hz', [
-                  _Series(
-                    label: 'Cutoff',
-                    color: const Color(0xFF8E24AA),
-                    values: hz,
-                  ),
-                  _Series(
-                    label: 'Max',
-                    color: const Color(0xFFBDBDBD),
-                    values: List.filled(xs.length, music.maxCutoffHz),
-                  ),
-                  _Series(
-                    label: 'Min',
-                    color: const Color(0xFFBDBDBD),
-                    values: List.filled(xs.length, music.minCutoffHz),
-                  ),
-                ], xs),
                 if (music.tracks.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text('Tracks', style: theme.textTheme.titleSmall),
@@ -1030,37 +977,6 @@ class _DashboardBodyState extends State<_DashboardBody> {
           ),
         ),
         const SizedBox(height: 16),
-        if (prepared.x.isNotEmpty) ...[
-          chart(
-            'Alpha vs Theta (relative power, ${prepared.electrodePairLabel} avg)',
-            'rel. power',
-            [
-              _Series(
-                label: 'Alpha rel',
-                color: const Color(0xFF66BB6A),
-                values: prepared.alphaRel,
-              ),
-              _Series(
-                label: 'Theta rel',
-                color: const Color(0xFFAB47BC),
-                values: prepared.thetaRel,
-              ),
-            ],
-            prepared.x,
-            fixedYMin: 0,
-            fixedYMax: 1,
-          ),
-          const SizedBox(height: 16),
-        ] else ...[
-          notEnough(
-            'Alpha vs Theta',
-            'Not enough signal data was recorded to build this graph. '
-                'This usually means the headband was not in good contact or the '
-                'connection dropped during the session. Check the electrodes and '
-                'try again.',
-          ),
-          const SizedBox(height: 16),
-        ],
         Stack(
           children: [
             TextField(
@@ -1085,784 +1001,9 @@ class _DashboardBodyState extends State<_DashboardBody> {
           ],
         ),
         const SizedBox(height: 16),
-        if (prepared.x.isNotEmpty) ...[
-          chart(
-            'Bands (relative power, ${prepared.electrodePairLabel} avg)',
-            'rel. power',
-            [
-              _Series(
-                label: bandNames[0],
-                color: bandColors[0],
-                values: prepared.deltaRel,
-              ),
-              _Series(
-                label: bandNames[1],
-                color: bandColors[1],
-                values: prepared.thetaRel,
-              ),
-              _Series(
-                label: bandNames[2],
-                color: bandColors[2],
-                values: prepared.alphaRel,
-              ),
-              _Series(
-                label: bandNames[3],
-                color: bandColors[3],
-                values: prepared.betaRel,
-              ),
-              _Series(
-                label: bandNames[4],
-                color: bandColors[4],
-                values: prepared.gammaRel,
-              ),
-            ],
-            prepared.x,
-            fixedYMin: 0,
-            fixedYMax: 1,
-          ),
-          const SizedBox(height: 16),
-        ] else ...[
-          notEnough(
-            'Bands',
-            'Not enough signal data was recorded to build this graph.',
-          ),
-          const SizedBox(height: 16),
-        ],
-        if (prepared.movement.isNotEmpty) ...[
-          chart(
-            'Movement score',
-            'g stddev',
-            [
-              _Series(
-                label: 'Movement',
-                color: const Color(0xFFFFA726),
-                values: prepared.movement,
-              ),
-            ],
-            prepared.movementX,
-            fixedYMin: 0,
-            fixedYMax: 1.5,
-          ),
-          const SizedBox(height: 16),
-        ] else ...[
-          notEnough(
-            'Movement score',
-            'No movement data was recorded for this session.',
-          ),
-          const SizedBox(height: 16),
-        ],
-        if (prepared.bpm.isNotEmpty || prepared.spo2.isNotEmpty) ...[
-          chart(
-            'Heart rate / SpO₂',
-            'bpm / %',
-            [
-              if (prepared.bpm.isNotEmpty)
-                _Series(
-                  label: 'Pulse (bpm)',
-                  color: const Color(0xFFEC407A),
-                  values: prepared.bpm,
-                  axis: _AxisSide.left,
-                  avgLineValue: stats.avgBpm,
-                  avgLineStyle: const _AvgLineStyle(
-                    dashPattern: [8, 4],
-                    strokeWidth: 0.8,
-                  ),
-                ),
-              if (prepared.spo2.isNotEmpty)
-                _Series(
-                  label: 'SpO₂ (%)',
-                  color: const Color(0xFF26C6DA),
-                  values: prepared.spo2,
-                  axis: _AxisSide.right,
-                  avgLineValue: stats.avgSpo2,
-                  avgLineStyle: const _AvgLineStyle(
-                    dashPattern: [3, 3],
-                    strokeWidth: 0.8,
-                  ),
-                ),
-            ],
-            // Use bpmX for X-axis (both series share time base)
-            prepared.bpm.isNotEmpty ? prepared.bpmX : prepared.spo2X,
-            fixedYMin: 40,
-            fixedYMax: 200,
-            fixedYMinRight: 50,
-            fixedYMaxRight: 100,
-          ),
-          const SizedBox(height: 16),
-        ] else ...[
-          notEnough(
-            'Heart rate / SpO₂',
-            'No reliable heart-rate or SpO₂ data was captured for this session.',
-          ),
-          const SizedBox(height: 16),
-        ],
-        ...drowsinessWidgets(),
         ...musicWidgets(),
         ...gestureWidgets(),
       ],
-    );
-  }
-}
-
-_NotEnoughData _notEnoughData(String title, String detail) =>
-    _NotEnoughData(title: title, detail: detail);
-
-enum _AxisSide { left, right }
-
-class _Series {
-  const _Series({
-    required this.label,
-    required this.color,
-    required this.values,
-    this.axis = _AxisSide.left,
-    this.avgLineValue,
-    this.avgLineStyle,
-  });
-
-  final String label;
-  final Color color;
-  final List<double> values;
-  final _AxisSide axis;
-
-  /// Optional horizontal average line value
-  final double? avgLineValue;
-
-  /// Style for the average line (dashed/dotted, color defaults to series color)
-  final _AvgLineStyle? avgLineStyle;
-}
-
-class _AvgLineStyle {
-  const _AvgLineStyle({required this.dashPattern, this.strokeWidth = 0.8});
-
-  /// Dash pattern: [dash, gap] in pixels
-  final List<double> dashPattern;
-  final double strokeWidth;
-}
-
-/// Shared time-window state for all summary graphs. Every chart renders the
-/// exact same slice of the session, so zooming/panning one graph moves them all.
-class _ChartViewport extends ChangeNotifier {
-  _ChartViewport(this.fullStart, this.fullEnd)
-    : _viewStart = fullStart,
-      _viewEnd = fullEnd;
-
-  final double fullStart;
-  final double fullEnd;
-  double _viewStart;
-  double _viewEnd;
-
-  double get viewStart => _viewStart;
-  double get viewEnd => _viewEnd;
-  double get span => _viewEnd - _viewStart;
-  double get fullSpan => fullEnd - fullStart;
-  bool get isZoomed => span < fullSpan - 1e-6;
-
-  double get minSpan => math.max(1.0, fullSpan / 500);
-
-  void setView(double start, double end) {
-    var span = (end - start).clamp(minSpan, fullSpan);
-    var s = start;
-    if (s < fullStart) s = fullStart;
-    if (s + span > fullEnd) s = fullEnd - span;
-    _viewStart = s;
-    _viewEnd = s + span;
-    notifyListeners();
-  }
-
-  /// Keep the time under [frac] (0..1 of chart width) fixed while scaling the
-  /// visible window by [factor] (>1 zooms in to a smaller slice).
-  void zoomAtFrac({required double frac, required double factor}) {
-    final newSpan = (span * factor).clamp(minSpan, fullSpan);
-    final anchorT = _viewStart + frac * span;
-    var s = anchorT - frac * newSpan;
-    if (s > fullEnd - newSpan) s = fullEnd - newSpan;
-    if (s < fullStart) s = fullStart;
-    setView(s, s + newSpan);
-  }
-
-  /// Shift the window horizontally. Only meaningful while zoomed in; a fully
-  /// zoomed-out view is already showing everything so nothing moves.
-  void panByDx({required double dx, required double width}) {
-    if (width <= 0 || !isZoomed) return;
-    final dt = dx / width * span;
-    var s = _viewStart - dt;
-    if (s + span > fullEnd) s = fullEnd - span;
-    if (s < fullStart) s = fullStart;
-    setView(s, s + span);
-  }
-
-  void reset() => setView(fullStart, fullEnd);
-}
-
-class _ZoomableChart extends StatefulWidget {
-  const _ZoomableChart({
-    required this.title,
-    required this.unit,
-    required this.series,
-    required this.x,
-    required this.viewport,
-    this.fixedYMin,
-    this.fixedYMax,
-    this.fixedYMinRight,
-    this.fixedYMaxRight,
-  });
-
-  final String title;
-  final String unit;
-  final List<_Series> series;
-  final List<double> x;
-  final _ChartViewport viewport;
-
-  /// Optional fixed y bounds for left axis (e.g. 0..1 relative power) so the scale
-  /// matches across sessions.
-  final double? fixedYMin;
-  final double? fixedYMax;
-
-  /// Optional fixed y bounds for right axis (e.g. SpO2 50..100).
-  final double? fixedYMinRight;
-  final double? fixedYMaxRight;
-
-  @override
-  State<_ZoomableChart> createState() => _ZoomableChartState();
-}
-
-class _ZoomableChartState extends State<_ZoomableChart> {
-  double _gestureStartSpan = 0;
-  double _gestureStartT = 0;
-  double _gestureStartFrac = 0;
-  double _chartWidth = 0;
-  final Set<String> _hidden = {};
-
-  void _toggleSeries(String label) {
-    setState(() {
-      if (!_hidden.add(label)) {
-        _hidden.remove(label);
-      }
-    });
-  }
-
-  List<_Series> get _visibleSeries =>
-      widget.series.where((s) => !_hidden.contains(s.label)).toList();
-
-  void _onScaleStart(ScaleStartDetails d) {
-    if (_chartWidth <= 0) return;
-    _gestureStartSpan = widget.viewport.span;
-    _gestureStartFrac = (d.localFocalPoint.dx / _chartWidth).clamp(0.0, 1.0);
-    _gestureStartT =
-        widget.viewport.viewStart + _gestureStartFrac * _gestureStartSpan;
-  }
-
-  void _onScaleUpdate(ScaleUpdateDetails d) {
-    if (_chartWidth <= 0) return;
-    final newSpan = (_gestureStartSpan / d.scale).clamp(
-      widget.viewport.minSpan,
-      widget.viewport.fullSpan,
-    );
-    final curFrac = (d.localFocalPoint.dx / _chartWidth).clamp(0.0, 1.0);
-    final start = _gestureStartT - curFrac * newSpan;
-    widget.viewport.setView(start, start + newSpan);
-  }
-
-  void _onSignal(PointerSignalEvent e) {
-    if (_chartWidth <= 0) return;
-    // Desktop zoom deliberately requires the modifier so a plain wheel or
-    // trackpad scroll still scrolls the page normally.
-    final kb = HardwareKeyboard.instance;
-    if (e is PointerScrollEvent) {
-      if (!kb.isControlPressed && !kb.isMetaPressed) {
-        return;
-      }
-      GestureBinding.instance.pointerSignalResolver.register(
-        e,
-        (_) => widget.viewport.zoomAtFrac(
-          frac: (e.localPosition.dx / _chartWidth).clamp(0.0, 1.0),
-          factor: math.exp(e.scrollDelta.dy * 0.002),
-        ),
-      );
-    } else if (e is PointerScaleEvent) {
-      GestureBinding.instance.pointerSignalResolver.register(
-        e,
-        (_) => widget.viewport.zoomAtFrac(
-          frac: (e.localPosition.dx / _chartWidth).clamp(0.0, 1.0),
-          factor: e.scale,
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(widget.title, style: theme.textTheme.titleSmall),
-                ),
-                Text(widget.unit, style: theme.textTheme.bodySmall),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 4,
-              children: [
-                for (final s in widget.series)
-                  GestureDetector(
-                    onTap: () => _toggleSeries(s.label),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: s.color,
-                            borderRadius: BorderRadius.circular(2),
-                            border: Border.all(
-                              color: _hidden.contains(s.label)
-                                  ? Colors.transparent
-                                  : theme.colorScheme.onSurfaceVariant
-                                        .withAlpha(80),
-                              width: 1,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          s.label,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: _hidden.contains(s.label)
-                                ? theme.colorScheme.onSurfaceVariant.withAlpha(
-                                    140,
-                                  )
-                                : null,
-                            decoration: _hidden.contains(s.label)
-                                ? TextDecoration.lineThrough
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(width: 2),
-                        Icon(
-                          _hidden.contains(s.label)
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                          size: 12,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (widget.x.isEmpty ||
-                widget.series.any((s) => s.values.length != widget.x.length))
-              SizedBox(
-                height: 140,
-                width: double.infinity,
-                child: Center(
-                  child: Text(
-                    'No data',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              )
-            else
-              ListenableBuilder(
-                listenable: widget.viewport,
-                builder: (context, _) {
-                  final vp = widget.viewport;
-                  final visible = _visibleSeries;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        height: 140,
-                        width: double.infinity,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            _chartWidth = constraints.maxWidth;
-                            return Listener(
-                              behavior: HitTestBehavior.opaque,
-                              onPointerSignal: _onSignal,
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onScaleStart: _onScaleStart,
-                                onScaleUpdate: _onScaleUpdate,
-                                onDoubleTap: vp.reset,
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    CustomPaint(
-                                      painter: _ChartPainter(
-                                        series: visible,
-                                        x: widget.x,
-                                        viewStart: vp.viewStart,
-                                        viewEnd: vp.viewEnd,
-                                        yMinLeft: widget.fixedYMin,
-                                        yMaxLeft: widget.fixedYMax,
-                                        yMinRight: widget.fixedYMinRight,
-                                        yMaxRight: widget.fixedYMaxRight,
-                                      ),
-                                    ),
-                                    if (visible.isEmpty)
-                                      Center(
-                                        child: Text(
-                                          'All lines hidden — tap a label to show it',
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                                color: theme
-                                                    .colorScheme
-                                                    .onSurfaceVariant,
-                                              ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            _fmtTime(vp.viewStart),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          if (vp.isZoomed)
-                            InkWell(
-                              onTap: vp.reset,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.fullscreen_exit,
-                                    size: 14,
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Reset zoom',
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          else
-                            Text(
-                              'pinch / ctrl+scroll to zoom, drag to pan',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          Text(
-                            _fmtTime(vp.viewEnd),
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ],
-                  );
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-String _fmtTime(double seconds) {
-  final s = seconds < 0 ? 0 : seconds.round();
-  return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
-}
-
-class _ChartPainter extends CustomPainter {
-  const _ChartPainter({
-    required this.series,
-    required this.x,
-    required this.viewStart,
-    required this.viewEnd,
-    this.yMinLeft,
-    this.yMaxLeft,
-    this.yMinRight,
-    this.yMaxRight,
-  });
-
-  final List<_Series> series;
-  final List<double> x;
-  final double viewStart;
-  final double viewEnd;
-
-  /// Left Y-axis fixed bounds (e.g. for HR: bpm). When null, auto-fit.
-  final double? yMinLeft;
-  final double? yMaxLeft;
-
-  /// Right Y-axis fixed bounds (e.g. for SpO2: %). When null, auto-fit.
-  final double? yMinRight;
-  final double? yMaxRight;
-
-  static const double _yGutter = 34;
-  static const double _rightGutter = 34;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (series.isEmpty || x.isEmpty || viewEnd <= viewStart) {
-      return;
-    }
-
-    // Separate series by axis side
-    final leftSeries = series.where((s) => s.axis == _AxisSide.left).toList();
-    final rightSeries = series.where((s) => s.axis == _AxisSide.right).toList();
-
-    // Compute Y ranges for each axis
-    final leftRange = _computeRange(leftSeries, yMinLeft, yMaxLeft);
-    final rightRange = _computeRange(rightSeries, yMinRight, yMaxRight);
-
-    if (leftRange == null && rightRange == null) return;
-
-    const pad = 8.0;
-    final w = size.width - _yGutter - _rightGutter - pad;
-    final h = size.height - pad * 2;
-    final x0 = pad + _yGutter;
-
-    // X projection (shared)
-    double px(double v) => x0 + (v - viewStart) / (viewEnd - viewStart) * w;
-    // Left Y projection
-    double pyLeft(double v) => leftRange != null
-        ? pad + h - (v - leftRange.$1) / (leftRange.$2 - leftRange.$1) * h
-        : size.height / 2;
-    // Right Y projection
-    double pyRight(double v) => rightRange != null
-        ? pad + h - (v - rightRange.$1) / (rightRange.$2 - rightRange.$1) * h
-        : size.height / 2;
-
-    // Grid paint
-    final grid = Paint()
-      ..color = const Color(0x222A2D37)
-      ..strokeWidth = 1;
-
-    const ticks = 4;
-    for (var i = 0; i <= ticks; i++) {
-      final y = pad + h * i / ticks;
-      canvas.drawLine(Offset(x0 - 4, y), Offset(x0, y), grid);
-      canvas.drawLine(Offset(x0, y), Offset(x0 + w, y), grid);
-    }
-
-    // Left Y tick labels (fixed scale only)
-    if (yMinLeft != null && yMaxLeft != null && leftRange != null) {
-      final tp = TextPainter(
-        text: const TextSpan(),
-        textDirection: TextDirection.ltr,
-      );
-      for (var i = 0; i <= ticks; i++) {
-        final t = leftRange.$2 - (leftRange.$2 - leftRange.$1) * i / ticks;
-        tp.text = TextSpan(
-          text: t.toStringAsFixed(0),
-          style: const TextStyle(color: Color(0xFF9AA0AE), fontSize: 9),
-        );
-        tp.layout();
-        final y = pad + h * i / ticks;
-        tp.paint(canvas, Offset(x0 - 4 - tp.width, y - tp.height / 2));
-      }
-    }
-
-    // Right Y tick labels (fixed scale only)
-    if (yMinRight != null && yMaxRight != null && rightRange != null) {
-      final tp = TextPainter(
-        text: const TextSpan(),
-        textDirection: TextDirection.ltr,
-      );
-      for (var i = 0; i <= ticks; i++) {
-        final t = rightRange.$2 - (rightRange.$2 - rightRange.$1) * i / ticks;
-        tp.text = TextSpan(
-          text: t.toStringAsFixed(0),
-          style: const TextStyle(color: Color(0xFF9AA0AE), fontSize: 9),
-        );
-        tp.layout();
-        final y = pad + h * i / ticks;
-        tp.paint(canvas, Offset(x0 + w + 4, y - tp.height / 2));
-      }
-    }
-
-    // Draw average lines first (behind series)
-    for (final s in series) {
-      if (s.avgLineValue != null) {
-        final isLeft = s.axis == _AxisSide.left;
-        final range = isLeft ? leftRange : rightRange;
-        if (range == null) continue;
-        final py = isLeft ? pyLeft : pyRight;
-        final lineY = py(s.avgLineValue!);
-        if (lineY < pad || lineY > pad + h) continue;
-
-        final style = s.avgLineStyle ?? _AvgLineStyle(dashPattern: [4, 4]);
-        final paint = Paint()
-          ..color = s.color.withValues(alpha: 0.6)
-          ..strokeWidth = style.strokeWidth
-          ..style = PaintingStyle.stroke
-          ..isAntiAlias = true;
-        // Draw dashed/dotted line
-        _drawDashedLine(
-          canvas,
-          paint,
-          Offset(x0, lineY),
-          Offset(x0 + w, lineY),
-          style.dashPattern,
-        );
-      }
-    }
-
-    // Draw series lines
-    for (final s in series) {
-      if (s.values.length != x.length) continue;
-      final isLeft = s.axis == _AxisSide.left;
-      final range = isLeft ? leftRange : rightRange;
-      if (range == null) continue;
-      final py = isLeft ? pyLeft : pyRight;
-
-      final paint = Paint()
-        ..color = s.color
-        ..strokeWidth = 1.6
-        ..style = PaintingStyle.stroke
-        ..isAntiAlias = true;
-      final path = Path();
-      final pts = <Offset>[];
-      for (var i = 0; i < s.values.length; i++) {
-        if (x[i] < viewStart || x[i] > viewEnd) continue;
-        pts.add(Offset(px(x[i]), py(s.values[i])));
-      }
-      if (pts.isNotEmpty && pts.length < 2) {
-        canvas.drawCircle(pts.first, 1.6, paint);
-        continue;
-      }
-      buildSmoothPath(path, pts);
-      canvas.drawPath(path, paint);
-    }
-  }
-
-  static (double, double)? _computeRange(
-    List<_Series> series,
-    double? fixedMin,
-    double? fixedMax,
-  ) {
-    if (series.isEmpty) return null;
-    if (fixedMin != null && fixedMax != null) return (fixedMin, fixedMax);
-
-    final visibleValues = <double>[];
-    for (final s in series) {
-      for (final v in s.values) {
-        visibleValues.add(v);
-      }
-    }
-
-    if (visibleValues.isEmpty) return null;
-    visibleValues.sort();
-    final p5 = visibleValues[(visibleValues.length * 0.05).floor()];
-    final p95 = visibleValues[(visibleValues.length * 0.95).floor()];
-    final range = math.max(p95 - p5, 1e-6);
-
-    final minY = fixedMin ?? p5 - range * 0.1;
-    final maxY = fixedMax ?? p95 + range * 0.1;
-    if (minY == maxY) return (minY - 1, maxY + 1);
-    return (minY, maxY);
-  }
-
-  static void _drawDashedLine(
-    Canvas canvas,
-    Paint paint,
-    Offset p1,
-    Offset p2,
-    List<double> dashPattern,
-  ) {
-    final dx = p2.dx - p1.dx;
-    final dy = p2.dy - p1.dy;
-    final dist = math.sqrt(dx * dx + dy * dy);
-    if (dist == 0) return;
-
-    var drawn = 0.0;
-    var dashOn = true;
-    var patternIndex = 0;
-    var curX = p1.dx;
-    var curY = p1.dy;
-    final stepX = dx / dist;
-    final stepY = dy / dist;
-
-    while (drawn < dist) {
-      final segment = dashPattern[patternIndex % dashPattern.length];
-      patternIndex++;
-      if (dashOn) {
-        final endX = curX + stepX * segment;
-        final endY = curY + stepY * segment;
-        canvas.drawLine(Offset(curX, curY), Offset(endX, endY), paint);
-        curX = endX;
-        curY = endY;
-      } else {
-        curX += stepX * segment;
-        curY += stepY * segment;
-      }
-      drawn += segment;
-      dashOn = !dashOn;
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ChartPainter oldDelegate) =>
-      oldDelegate.series != series ||
-      oldDelegate.x != x ||
-      oldDelegate.viewStart != viewStart ||
-      oldDelegate.viewEnd != viewEnd ||
-      oldDelegate.yMinLeft != yMinLeft ||
-      oldDelegate.yMaxLeft != yMaxLeft ||
-      oldDelegate.yMinRight != yMinRight ||
-      oldDelegate.yMaxRight != yMaxRight;
-}
-
-class _NotEnoughData extends StatelessWidget {
-  const _NotEnoughData({required this.title, required this.detail});
-
-  final String title;
-  final String detail;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.cloud_off_outlined,
-                  size: 18,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 8),
-                Text(title, style: theme.textTheme.titleSmall),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(detail, style: theme.textTheme.bodySmall),
-          ],
-        ),
-      ),
     );
   }
 }

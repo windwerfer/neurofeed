@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:neurofeed/src/monitor/cache/optical_cache.dart';
 import 'package:neurofeed/src/monitor/cache/recording_index.dart';
 import 'package:neurofeed/src/rust/api/eeg_conditioning.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart';
@@ -15,6 +16,7 @@ SessionData _emptySessionData() => SessionData(
   peakAlphas: const [],
   eegSamples: BigInt.zero,
   eeg: const [],
+  ppg: const [],
 );
 
 /// File-backed Inspect of an in-progress `tmp_` / `recording_` `.raw`.
@@ -61,7 +63,10 @@ class FileBackedSource {
       body.setAll(header.length, complete);
       final raw = sessionParseBody(bytes: body);
       final parsed = raw.copyWith(
-        eeg: conditionEeg(eeg: raw.eeg, conditioning: liveEegConditioning()).eeg,
+        eeg: conditionEeg(
+          eeg: raw.eeg,
+          conditioning: liveEegConditioning(),
+        ).eeg,
       );
       return _toElapsed(parsed, started, startElapsed, endElapsed);
     } finally {
@@ -140,5 +145,28 @@ SessionData _toElapsed(
     ],
     eegSamples: BigInt.from(sampleCount),
     eeg: eeg,
+    ppg: [
+      for (final rec in data.ppg)
+        if (rec.channel == kPpgInfraredChannel &&
+            rec.samples.isNotEmpty &&
+            _ppgOverlaps(
+              conv(rec.timestamp),
+              rec.samples.length,
+              startElapsed,
+              endElapsed,
+            ))
+          rec.copyWith(timestamp: conv(rec.timestamp)),
+    ],
   );
+}
+
+bool _ppgOverlaps(
+  double endElapsedSample,
+  int sampleCount,
+  double startElapsed,
+  double endElapsed,
+) {
+  final span = (sampleCount - 1) / OpticalCache.ppgSampleRate;
+  final t0 = endElapsedSample - span;
+  return t0 <= endElapsed && endElapsedSample >= startElapsed;
 }

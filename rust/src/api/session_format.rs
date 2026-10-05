@@ -22,6 +22,9 @@ use crate::api::muse::{ImuDto, MuseEventDto};
 //   tag 3  Accelerometer: [ts f64][seq u16][n u16][n × (x,y,z f32)]
 //   tag 4  Gyroscope    : same as tag 3
 //   tag 5  PPG          : [ts f64][channel i16][n u16][n × f32]
+//                        reader keeps channel 1 (IR). Timestamp is the last
+//                        sample; earlier samples step back at 64 Hz. Other
+//                        channels are consumed and dropped.
 //   tag 6  Bands        : [ts f64][electrode i16][δ θ α β γ f32]
 //   tag 7  Pulse        : [ts f64][bpm f32][conf f32]
 //   tag 8  Movement     : [ts f64][score f32]
@@ -43,6 +46,9 @@ pub const FORMAT_TAG_PULSE: u8 = 7;
 pub const FORMAT_TAG_MOVEMENT: u8 = 8;
 pub const FORMAT_TAG_PEAK_ALPHA: u8 = 9;
 pub const FORMAT_TAG_SPO2: u8 = 10;
+
+/// Classic Muse infrared PPG channel (ambient = 0, IR = 1, red = 2).
+const PPG_IR_CHANNEL: i16 = 1;
 
 /// The 64-bit header sentinel. Stored as a little-endian u64, so the on-disk
 /// bytes are the reverse of the "NFEDBIN\n" string.
@@ -207,6 +213,16 @@ pub struct SessionData {
     pub peak_alphas: Vec<PeakAlphaRecord>,
     pub eeg_samples: u64,
     pub eeg: Vec<EegSampleRecord>,
+    pub ppg: Vec<PpgSampleRecord>,
+}
+
+/// One raw PPG packet. `timestamp` is the wall-clock ms epoch of the LAST
+/// sample. Only infrared channel 1 is stored.
+#[frb(dart_metadata = ("freezed",))]
+pub struct PpgSampleRecord {
+    pub timestamp: f64,
+    pub channel: i16,
+    pub samples: Vec<f32>,
 }
 
 /// One raw EEG packet: per-sample values are in µV, `timestamp` is the
@@ -349,10 +365,24 @@ fn parse_records(records: &[u8], out: &mut SessionData) {
                 }
             }
             FORMAT_TAG_PPG => {
-                let (Some(_), Some(_), Some(n)) = (p.f64(), p.i16(), p.u16()) else {
+                let (Some(ts), Some(channel), Some(n)) = (p.f64(), p.i16(), p.u16()) else {
                     break;
                 };
-                if !p.skip(n as usize * 4) {
+                if channel == PPG_IR_CHANNEL {
+                    let mut samples = Vec::with_capacity(n as usize);
+                    for _ in 0..n {
+                        let Some(s) = p.f32() else { break };
+                        samples.push(s);
+                    }
+                    if samples.len() != n as usize {
+                        break;
+                    }
+                    out.ppg.push(PpgSampleRecord {
+                        timestamp: ts,
+                        channel,
+                        samples,
+                    });
+                } else if !p.skip(n as usize * 4) {
                     break;
                 }
             }
@@ -440,6 +470,7 @@ pub fn session_parse_body(bytes: &[u8]) -> Result<SessionData, String> {
         peak_alphas: Vec::new(),
         eeg_samples: 0,
         eeg: Vec::new(),
+        ppg: Vec::new(),
     };
     let mut off = 12usize;
     while off + 4 <= bytes.len() {
@@ -1333,6 +1364,28 @@ mod tests {
 
         let out = session_parse_body(&body(&[dto])).unwrap();
         assert_eq!(out.eeg_samples, 0); // ppg must not count as eeg
+        assert_eq!(out.ppg.len(), 1);
+        assert_eq!(out.ppg[0].channel, PPG_IR_CHANNEL);
+        assert_eq!(out.ppg[0].timestamp, 1.0);
+        assert_eq!(out.ppg[0].samples, vec![1.0, 2.0]);
+
+        let red = MuseEventDto::Ppg(PpgDto {
+            index: 1,
+            channel: 2,
+            timestamp: 2.0,
+            samples: vec![3.0, 4.0],
+        });
+        let ir = MuseEventDto::Ppg(PpgDto {
+            index: 0,
+            channel: 1,
+            timestamp: 1.0,
+            samples: vec![1.0, 2.0],
+        });
+        let skipped = session_parse_body(&body(&[red, ir])).unwrap();
+        assert_eq!(skipped.eeg_samples, 0);
+        assert_eq!(skipped.ppg.len(), 1);
+        assert_eq!(skipped.ppg[0].channel, PPG_IR_CHANNEL);
+        assert_eq!(skipped.ppg[0].samples, vec![1.0, 2.0]);
     }
 
     #[test]

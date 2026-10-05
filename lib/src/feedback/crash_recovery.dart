@@ -8,6 +8,7 @@ import 'package:neurofeed/src/spine/assemble.dart';
 import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 import 'package:neurofeed/src/feedback/feedback_state.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
 import 'package:neurofeed/src/views/feedback_dashboard.dart';
@@ -211,11 +212,19 @@ Future<RecoverableSession?> _assembleTemps({
       jsonl: metadataBytes,
       frames: frames,
     );
+    final metadataJson = meta.toJson();
+    final stats = assembleBaseStats(
+      frames: frames,
+      channelLabels: meta.recordedChannels.isEmpty
+          ? const ['TP9', 'AF7', 'AF8', 'TP10']
+          : meta.recordedChannels,
+    );
+    if (stats != null) metadataJson['stats'] = stats;
     final file = await spine.assembleCaptureAt(
       dir: scratch,
       prefix: 'session',
       id: id,
-      metadataJson: meta.toJson(),
+      metadataJson: metadataJson,
     );
     await _deleteTemps(files);
     return RecoverableSession(

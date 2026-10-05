@@ -1414,10 +1414,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     unawaited(_clearEnabledFeatures());
     await _recorder.flushSession();
     try {
+      final meta = buildSessionMetadata();
       final path = await _recorder.assembleScratch(
         buildFeedbackMetadata(
-          meta: buildSessionMetadata(),
+          meta: meta,
           subject: _ref.read(settingsProvider).subjectInfo,
+          stats: await _recorder.baseStats(
+            annotations: meta.annotations,
+            channelLabels: meta.recordedChannels,
+          ),
         ),
       );
       if (path == null) {

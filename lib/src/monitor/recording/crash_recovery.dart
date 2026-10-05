@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/monitor/recording/recording_metadata.dart';
+import 'package:neurofeed/src/session_format/stats_assemble.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/spine/capture_client.dart' as spine;
 import 'package:neurofeed/src/session_format/models.dart';
@@ -141,11 +142,13 @@ Map<String, Object?> _metadataJsonFromSidecar(
   File? jsonFile,
   Uint8List computed,
 ) {
+  Map<String, Object?> json;
   if (jsonFile != null && jsonFile.existsSync()) {
     try {
       final decoded = jsonDecode(jsonFile.readAsStringSync());
       if (decoded is Map<String, dynamic>) {
-        return RecordingMetadata.fromJson(decoded).toJson();
+        json = RecordingMetadata.fromJson(decoded).toJson();
+        return _withRecoveredStats(json, computed);
       }
     } catch (e) {
       debugPrint('[monitor-crash] sidecar parse failed: $e');
@@ -153,10 +156,29 @@ Map<String, Object?> _metadataJsonFromSidecar(
   }
   final last = _lastComputedLine(computed);
   final bands = last?['bands'];
-  return recoveredRecordingMetadata(
+  json = recoveredRecordingMetadata(
     elapsedSeconds: last == null ? 0 : (last['t'] as num).round(),
     channelCount: bands is List && bands.isNotEmpty ? bands.length : 4,
   ).toJson();
+  return _withRecoveredStats(json, computed);
+}
+
+Map<String, Object?> _withRecoveredStats(
+  Map<String, Object?> json,
+  Uint8List computed,
+) {
+  final device = json['device'];
+  var labels = const <String>['TP9', 'AF7', 'AF8', 'TP10'];
+  if (device is Map) {
+    final raw = device['channelLabels'];
+    if (raw is List) {
+      final parsed = raw.whereType<String>().toList();
+      if (parsed.isNotEmpty) labels = parsed;
+    }
+  }
+  final stats = assembleBaseStatsFromJsonl(computed, channelLabels: labels);
+  if (stats == null) return json;
+  return {...json, 'stats': stats};
 }
 
 Future<void> _deleteTemps(_RecordingScratch files) async {

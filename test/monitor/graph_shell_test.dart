@@ -224,7 +224,9 @@ void main() {
     expect(find.text('30s'), findsOneWidget);
   });
 
-  testWidgets('Follow is disabled when followEnabled is false', (tester) async {
+  testWidgets('Follow and Inspect are hidden when follow is off', (
+    tester,
+  ) async {
     _portrait(tester);
     final viewport = ViewportController()
       ..mode = ViewportMode.inspect
@@ -246,10 +248,9 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Follow'), findsOneWidget);
-    expect(find.text('Inspect'), findsOneWidget);
-    await tester.tap(find.text('Follow'));
-    await tester.pump();
+    expect(find.text('Follow'), findsNothing);
+    expect(find.text('Inspect'), findsNothing);
+    expect(find.byType(DropdownButton<double>), findsOneWidget);
     expect(viewport.mode, ViewportMode.inspect);
   });
 

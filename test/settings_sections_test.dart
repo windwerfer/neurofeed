@@ -97,6 +97,9 @@ void main() {
 
     expect(find.text('Save files to folder'), findsOneWidget);
     expect(find.text('Session recording'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('PPG'), 200);
+    expect(find.text('PPG'), findsOneWidget);
+    expect(find.text('PPG optical / fNIRS'), findsNothing);
     await tester.scrollUntilVisible(find.text('Gesture markers'), 400);
     expect(find.text('Gesture markers'), findsOneWidget);
     expect(find.text('Subject'), findsNothing);

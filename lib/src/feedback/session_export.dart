@@ -574,9 +574,9 @@ class SessionExporter {
     return '${date}_${time}_${label}_$shortId';
   }
 
-  /// The same charts the detail view shows: bands, alpha-vs-theta, movement,
-  /// heart rate, plus the guardrail/music traces when present. Shared with
-  /// the PDF exporter so PNG and PDF render identical content.
+  /// The same charts the detail view shows: bands, movement, heart rate,
+  /// SpO₂, plus the guardrail/music traces when present. Shared with the
+  /// PDF exporter so PNG and PDF render identical content.
   static List<ExportChart> chartsFor(
     SessionChartData prepared,
     SessionMetadata meta,
@@ -598,16 +598,6 @@ class SessionExporter {
                 _ => prepared.gammaRel,
               },
             ),
-        ],
-        yMin: 0,
-        yMax: 1,
-      ),
-      ExportChart(
-        title: 'Alpha vs Theta',
-        subtitle: '${prepared.electrodePairLabel} average · relative power',
-        lines: [
-          ExportChartLine('alpha', bandColors[2], prepared.alphaRel),
-          ExportChartLine('theta', bandColors[1], prepared.thetaRel),
         ],
         yMin: 0,
         yMax: 1,

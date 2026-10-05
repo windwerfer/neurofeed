@@ -68,8 +68,8 @@ class GraphShell extends ConsumerWidget {
   /// Record / Stop recording. Set true on the five live graph views.
   final bool showRecord;
 
-  /// Saved-recording dashboard has no live stream. Follow stays visible
-  /// but disabled.
+  /// Live graphs only. History recording graphs are inspect-only and
+  /// omit the Follow / Inspect control.
   final bool followEnabled;
 
   @override
@@ -92,41 +92,37 @@ class GraphShell extends ConsumerWidget {
                 ),
                 child: _PannableChromeRow(
                   children: [
-                    SegmentedButton<ViewportMode>(
-                      segments: [
-                        ButtonSegment(
-                          value: ViewportMode.follow,
-                          label: const Text('Follow'),
-                          enabled: followEnabled,
+                    if (followEnabled) ...[
+                      SegmentedButton<ViewportMode>(
+                        segments: const [
+                          ButtonSegment(
+                            value: ViewportMode.follow,
+                            label: Text('Follow'),
+                          ),
+                          ButtonSegment(
+                            value: ViewportMode.inspect,
+                            label: Text('Inspect'),
+                          ),
+                        ],
+                        selected: {viewport.mode},
+                        showSelectedIcon: false,
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        const ButtonSegment(
-                          value: ViewportMode.inspect,
-                          label: Text('Inspect'),
-                        ),
-                      ],
-                      selected: {
-                        followEnabled ? viewport.mode : ViewportMode.inspect,
-                      },
-                      showSelectedIcon: false,
-                      style: const ButtonStyle(
-                        visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        onSelectionChanged: (s) {
+                          if (s.isEmpty) return;
+                          final next = s.first;
+                          if (next == viewport.mode) return;
+                          if (next == ViewportMode.follow) {
+                            onFollow();
+                          } else {
+                            onInspect();
+                          }
+                        },
                       ),
-                      onSelectionChanged: (s) {
-                        if (s.isEmpty) return;
-                        final next = s.first;
-                        if (next == ViewportMode.follow && !followEnabled) {
-                          return;
-                        }
-                        if (next == viewport.mode) return;
-                        if (next == ViewportMode.follow) {
-                          onFollow();
-                        } else {
-                          onInspect();
-                        }
-                      },
-                    ),
-                    const SizedBox(width: 12),
+                      const SizedBox(width: 12),
+                    ],
                     DropdownButtonHideUnderline(
                       child: DropdownButton<double>(
                         value: presetOrCustomValue(

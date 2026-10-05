@@ -101,7 +101,7 @@ void main() {
     await RustLib.init(externalLibrary: ExternalLibrary.open(_rustLibPath));
   });
 
-  testWidgets('history summary is Dashboard, with stats, totals, and charts', (
+  testWidgets('history summary is Dashboard, with stats and graph chips', (
     tester,
   ) async {
     final settings = await _settings(tester);
@@ -114,8 +114,13 @@ void main() {
 
     expect(find.text('Dashboard'), findsOneWidget);
     expect(find.text('Feedback'), findsNothing);
-    expect(find.text('Bands'), findsNothing);
-    expect(find.text('Raw EEG'), findsNothing);
+    expect(find.text('Bands'), findsOneWidget);
+    expect(find.text('Raw EEG'), findsOneWidget);
+    expect(find.text('Histogram'), findsOneWidget);
+    expect(find.text('PSD'), findsOneWidget);
+    expect(find.text('Spectrogram'), findsOneWidget);
+    expect(find.text('HR+SpO2'), findsOneWidget);
+    expect(find.text('Movement'), findsOneWidget);
     expect(find.text('Session summary'), findsNothing);
     expect(find.text('Target time'), findsNothing);
     expect(find.text('1:30'), findsOneWidget);
@@ -134,11 +139,56 @@ void main() {
     expect(_canPop(tester), isTrue);
     _expectSummaryThumbnail(tester);
 
-    expect(find.textContaining('Alpha vs Theta'), findsOneWidget);
-    expect(find.textContaining('Bands (relative power'), findsOneWidget);
-    expect(find.text('Movement score'), findsOneWidget);
-    expect(find.text('Heart rate / SpO₂'), findsOneWidget);
-    expect(find.text('Sleep guardrail (AI model)'), findsOneWidget);
+    expect(find.textContaining('Alpha vs Theta'), findsNothing);
+    expect(find.textContaining('Bands (relative power'), findsNothing);
+    expect(find.text('Movement score'), findsNothing);
+    expect(find.text('Heart rate / SpO₂'), findsNothing);
+    expect(find.text('Sleep guardrail (AI model)'), findsNothing);
+    expect(find.text('Low-pass cutoff'), findsNothing);
+
+    await tester.tap(find.text('Bands'));
+    await tester.pump();
+    expect(find.text('Notes'), findsNothing);
+    expect(find.text('Follow'), findsNothing);
+    expect(find.text('Inspect'), findsNothing);
+    final window = find.text('30s');
+    for (var i = 0; i < 40 && window.evaluate().isEmpty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+    }
+    expect(window, findsOneWidget);
+    expect(find.text('TP9'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('HR+SpO2'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('HR+SpO2'));
+    await tester.pump();
+    expect(find.text('Notes'), findsNothing);
+    expect(find.text('Follow'), findsNothing);
+    expect(find.text('Inspect'), findsNothing);
+    expect(find.text('TP9'), findsNothing);
+    expect(find.text('30s'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('history-hr-spo2-detail-window')),
+      findsNothing,
+    );
+
+    await tester.ensureVisible(find.text('Movement'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Movement'));
+    await tester.pump();
+    expect(find.text('TP9'), findsNothing);
+    expect(find.text('30s'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dashboard'));
+    await tester.pump();
+    expect(find.text('Notes'), findsOneWidget);
+    expect(find.textContaining('Bands (relative power'), findsNothing);
+    expect(find.text('Sleep guardrail (AI model)'), findsNothing);
 
     await tester.tap(find.text('More'));
     await tester.pump();
@@ -187,10 +237,7 @@ void _expectSummaryThumbnail(WidgetTester tester) {
   expect(boundaries, findsWidgets);
   expect(tester.widget<RepaintBoundary>(boundaries.first).key, isNotNull);
   expect(
-    find.descendant(
-      of: boundaries.first,
-      matching: find.textContaining('Alpha vs Theta'),
-    ),
+    find.descendant(of: boundaries.first, matching: find.text('Notes')),
     findsNothing,
   );
 }

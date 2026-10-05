@@ -155,6 +155,49 @@ void main() {
     await rec.discard();
   });
 
+  test('getRange keeps infrared PPG by packet end', () async {
+    final dir = await Directory.systemTemp.createTemp('neurofeed_ppg_');
+    addTearDown(() => dir.delete(recursive: true));
+    final rec = await _started(dir);
+
+    rec.writeEvent(_eeg(5000));
+    rec.writeEvent(
+      MuseEventDto.ppg(
+        PpgDto(
+          index: 0,
+          channel: 1,
+          timestamp: (_startMs + 5000).toDouble(),
+          samples: Float64List.fromList([1, 2, 3, 4]),
+        ),
+      ),
+    );
+    rec.writeEvent(
+      MuseEventDto.ppg(
+        PpgDto(
+          index: 1,
+          channel: 2,
+          timestamp: (_startMs + 5000).toDouble(),
+          samples: Float64List.fromList([9]),
+        ),
+      ),
+    );
+    await rec.flushRaw();
+
+    final hit = rec.source!.getRange(4.9, 5.1);
+    expect(hit.ppg, hasLength(1));
+    expect(hit.ppg.single.channel, 1);
+    expect(hit.ppg.single.timestamp, closeTo(5.0, 0.01));
+    expect(
+      hit.ppg.single.samples.map((v) => v.toDouble()).toList(),
+      [1, 2, 3, 4],
+    );
+
+    final miss = rec.source!.getRange(0, 4.9);
+    expect(miss.ppg, isEmpty);
+
+    await rec.discard();
+  });
+
   test('slice without header fails parse; prepend path succeeds', () async {
     final dir = await Directory.systemTemp.createTemp('neurofeed_hdr_');
     addTearDown(() => dir.delete(recursive: true));

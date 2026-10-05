@@ -261,6 +261,17 @@ sealed class PeakAlphaRecord with _$PeakAlphaRecord {
   }) = _PeakAlphaRecord;
 }
 
+/// One raw PPG packet. `timestamp` is the wall-clock ms epoch of the LAST
+/// sample. Only infrared channel 1 is stored.
+@freezed
+sealed class PpgSampleRecord with _$PpgSampleRecord {
+  const factory PpgSampleRecord({
+    required double timestamp,
+    required int channel,
+    required Float32List samples,
+  }) = _PpgSampleRecord;
+}
+
 @freezed
 sealed class PulseRecord with _$PulseRecord {
   const factory PulseRecord({
@@ -281,6 +292,7 @@ sealed class SessionData with _$SessionData {
     required List<PeakAlphaRecord> peakAlphas,
     required BigInt eegSamples,
     required List<EegSampleRecord> eeg,
+    required List<PpgSampleRecord> ppg,
   }) = _SessionData;
 }
 

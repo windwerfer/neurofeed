@@ -1,9 +1,12 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
+
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/feedback/target_state.dart';
 import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:neurofeed/src/monitor/signal_usable.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
+import 'package:neurofeed/src/spine/assemble.dart';
 
 /// Map [GestureType] → locked snake_case annotation `type`.
 String gestureAnnotationType(GestureType type) => switch (type) {
@@ -81,6 +84,28 @@ Map<String, double> annotationSecondsFrom(List<SessionAnnotation> anns) {
     out[a.type] = (out[a.type] ?? 0) + a.duration;
   }
   return out;
+}
+
+/// Nested `stats` from a computed JSONL blob already on disk.
+///
+/// Empty or unreadable bytes yield null. An empty [channelLabels] list uses
+/// the Muse head labels.
+Map<String, Object?>? assembleBaseStatsFromJsonl(
+  List<int> bytes, {
+  List<SessionAnnotation> annotations = const [],
+  List<String> channelLabels = const ['TP9', 'AF7', 'AF8', 'TP10'],
+}) {
+  if (bytes.isEmpty) return null;
+  final frames = parseComputedJsonl(
+    bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
+  );
+  return assembleBaseStats(
+    frames: frames,
+    annotations: annotations,
+    channelLabels: channelLabels.isEmpty
+        ? const ['TP9', 'AF7', 'AF8', 'TP10']
+        : channelLabels,
+  );
 }
 
 /// Locked base `stats` object for v6 metadata (without experimental bands).
