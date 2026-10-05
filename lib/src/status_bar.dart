@@ -15,8 +15,9 @@ class SignalPad {
 }
 
 /// Muse head outline `/‾‾\`, with AUX dots between the overlines when AUX
-/// is streaming (`/‾•‾\` … `/‾••••‾\`). Anything else is one Crown-style
-/// dot per head pad. AUX count is capped at [kMuseAuxElectrodeNames].
+/// is streaming (`/‾•‾\` … `/‾••••‾\`). Any other head count is one `•`
+/// per pad. AUX count is capped at [kMuseAuxElectrodeNames]. Crown's eight
+/// are laid out by [_crownQualityRing].
 @visibleForTesting
 List<SignalPad> signalPads({required int headCount, int auxChannels = 0}) {
   if (headCount != _kMuseHeadSymbols.length) {
@@ -33,6 +34,50 @@ List<SignalPad> signalPads({required int headCount, int auxChannels = 0}) {
   ];
 }
 
+Color _signalColor(double score) => score >= 80
+    ? const Color(0xFF4CAF50)
+    : score >= 40
+    ? const Color(0xFFFF9800)
+    : const Color(0xFFF44336);
+
+/// Top-down Crown ring, nose up: F5 F6, C3 C4, CP3 CP4, PO3 PO4.
+/// Each cell is the bullet's ink (~7px). The 18px glyph overflows the
+/// cell, so the ring stays about as tall as the Muse line.
+Widget _crownQualityRing(List<double> qualities) {
+  Widget mark(int electrode) {
+    final score = electrode < qualities.length ? qualities[electrode] : 0.0;
+    return SizedBox(
+      width: 7,
+      height: 7,
+      child: OverflowBox(
+        maxWidth: 22,
+        maxHeight: 22,
+        child: Text(
+          '•',
+          style: TextStyle(
+            color: _signalColor(score),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+            height: 1,
+          ),
+        ),
+      ),
+    );
+  }
+
+  const gap = SizedBox.shrink();
+  return Table(
+    defaultColumnWidth: const FixedColumnWidth(7),
+    children: [
+      TableRow(children: [gap, mark(2), mark(5), gap]),
+      TableRow(children: [mark(1), gap, gap, mark(6)]),
+      TableRow(children: [mark(0), gap, gap, mark(7)]),
+      TableRow(children: [gap, mark(3), mark(4), gap]),
+    ],
+  );
+}
+
 /// Pad quality glyphs. [headCount] is the device head montage. [auxChannels]
 /// is the Muse AUX count on this connection (0 for Crown).
 @visibleForTesting
@@ -42,6 +87,9 @@ Widget signalQualityRow(
   int auxChannels = 0,
 }) {
   if (qualities == null) return const SizedBox.shrink();
+  if (headCount == kCrownElectrodeNames.length) {
+    return _crownQualityRing(qualities);
+  }
   final pads = signalPads(headCount: headCount, auxChannels: auxChannels);
   final children = <Widget>[];
   for (var i = 0; i < pads.length; i++) {
@@ -49,16 +97,11 @@ Widget signalQualityRow(
     final score = pad.electrode < qualities.length
         ? qualities[pad.electrode]
         : 0.0;
-    final color = score >= 80
-        ? const Color(0xFF4CAF50)
-        : score >= 40
-        ? const Color(0xFFFF9800)
-        : const Color(0xFFF44336);
     children.add(
       Text(
         pad.glyph,
         style: TextStyle(
-          color: color,
+          color: _signalColor(score),
           fontSize: 18,
           fontWeight: FontWeight.bold,
           fontFamily: 'monospace',

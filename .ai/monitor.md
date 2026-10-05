@@ -192,7 +192,8 @@ uses the Follow wipe ring; leaving that view calls `setDisplayWindow(0)` so
 
 `lastConnectedKind` → `DeviceConfig.forKind` → `channelCount` / names.
 Muse: TP9 AF7 AF8 TP10. Crown/Notion: 8 names. Simulator Crown is 8-ch
-for graphs and sessions. Status-bar pads follow the kind (4 Muse, 8 Crown).
+for graphs and sessions. Status-bar pads follow the kind (Muse line,
+Crown top-down ring: F5/F6, C3/C4, CP3/CP4, PO3/PO4).
 
 Non-EEG electrode toggles: top-right text, depressed = in the mean, default
 all on, last one stays. Raw EEG has no chips.
