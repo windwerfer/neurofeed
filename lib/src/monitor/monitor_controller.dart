@@ -104,9 +104,20 @@ class MonitorController extends Notifier<MonitorState> {
       prev,
       next,
     ) {
-      if (_lease.kind == CaptureKind.idle) {
-        state = MonitorState.idle(deviceKind: next);
+      if (_lease.kind == CaptureKind.idle && state.pendingScratchPath == null) {
+        state = _withGraphEpoch(_liveIdle());
+      } else {
+        _applyLiveMontage();
       }
+    });
+    ref.listen(settingsProvider.select((s) => s.museAuxEnabled), (prev, next) {
+      _applyLiveMontage();
+    });
+    ref.listen(appStateProvider.select((s) => s.status.auxChannels), (
+      prev,
+      next,
+    ) {
+      _applyLiveMontage();
     });
     ref.onDispose(() {
       _eventSub?.cancel();
@@ -123,7 +134,7 @@ class MonitorController extends Notifier<MonitorState> {
       );
       unawaited(_serialized(_startTmpUnlocked));
     }
-    return MonitorState.idle(deviceKind: current.lastConnectedKind);
+    return _liveIdle();
   }
 
   Future<T> _serialized<T>(Future<T> Function() fn) {
@@ -152,12 +163,8 @@ class MonitorController extends Notifier<MonitorState> {
       if (wasTmp) {
         await _stopTmpWriter();
       }
-      final app = ref.read(appStateProvider);
-      state = _withGraphEpoch(
-        MonitorState.idle(
-          deviceKind: app.lastConnectedKind,
-        ).copyWith(kind: CaptureKind.feedback),
-      );
+      _fileLabels = null;
+      state = _withGraphEpoch(_liveIdle(kind: CaptureKind.feedback));
       debugPrint('[monitor] lease feedback');
       return true;
     });
@@ -168,9 +175,7 @@ class MonitorController extends Notifier<MonitorState> {
       if (!_lease.tryReleaseFeedback()) return;
       debugPrint('[monitor] lease release');
       final app = ref.read(appStateProvider);
-      state = _withGraphEpoch(
-        MonitorState.idle(deviceKind: app.lastConnectedKind),
-      );
+      state = _withGraphEpoch(_liveIdle());
       if (app.status.connected) {
         await _startTmpUnlocked();
       }
@@ -184,10 +189,8 @@ class MonitorController extends Notifier<MonitorState> {
       if (_lease.kind != CaptureKind.tmp) return false;
       await _stopTmpWriter();
       _lease.tryDiscardTmp();
-      final app = ref.read(appStateProvider);
-      state = _withGraphEpoch(
-        MonitorState.idle(deviceKind: app.lastConnectedKind),
-      );
+      _fileLabels = null;
+      state = _withGraphEpoch(_liveIdle());
       return true;
     });
   }
@@ -246,18 +249,16 @@ class MonitorController extends Notifier<MonitorState> {
       if (!await dir.exists()) {
         await dir.create(recursive: true);
       }
-      final app = ref.read(appStateProvider);
       final settings = ref.read(settingsProvider);
-      final names = electrodeNamesForKind(
-        app.lastConnectedKind,
-        auxChannels: app.status.auxChannels,
-      );
+      final live = _liveNames();
+      final file = _captureNames();
+      _fileLabels = file;
       final startedAt = _latestEegTsMs ?? DateTime.now().millisecondsSinceEpoch;
       _recordingSessionId = const Uuid().v4();
       state = MonitorState(
         kind: CaptureKind.tmp,
-        electrodeNames: names,
-        channelCount: names.length,
+        electrodeNames: live,
+        channelCount: file.length,
         captureStartedAtMs: startedAt,
         graphEpoch: state.graphEpoch,
       );
@@ -266,17 +267,16 @@ class MonitorController extends Notifier<MonitorState> {
         recordStreams: settings.recordStreams,
         metadata: _currentMetadata,
         captureStartedAtMs: startedAt,
+        eegChannelLimit: file.length,
       );
       state = state.copyWith(captureId: _capture!.captureId);
-      _startSampler(names.length, startedAt);
+      _startSampler(file.length, startedAt);
     } catch (e, st) {
       debugPrint('[monitor] tmp start failed: $e\n$st');
       _lease.tryDiscardTmp();
       _stopSampler();
-      final app = ref.read(appStateProvider);
-      state = _withGraphEpoch(
-        MonitorState.idle(deviceKind: app.lastConnectedKind),
-      );
+      _fileLabels = null;
+      state = _withGraphEpoch(_liveIdle());
     }
   }
 
@@ -285,10 +285,8 @@ class MonitorController extends Notifier<MonitorState> {
     _latestEegTsMs = null;
     await _stopTmpWriter();
     _lease.tryDiscardTmp();
-    final app = ref.read(appStateProvider);
-    state = _withGraphEpoch(
-      MonitorState.idle(deviceKind: app.lastConnectedKind),
-    );
+    _fileLabels = null;
+    state = _withGraphEpoch(_liveIdle());
     await _startTmpUnlocked();
   }
 
@@ -306,10 +304,12 @@ class MonitorController extends Notifier<MonitorState> {
     _lease.tryDiscardTmp();
     _latestEegTsMs = null;
     _clearLiveGraphs();
+    _fileLabels = null;
+    final names = _liveNames();
     state = MonitorState(
       kind: CaptureKind.idle,
-      electrodeNames: state.electrodeNames,
-      channelCount: state.channelCount,
+      electrodeNames: names,
+      channelCount: names.length,
       pendingScratchPath: state.pendingScratchPath,
       graphEpoch: state.graphEpoch,
     );
@@ -374,18 +374,17 @@ class MonitorController extends Notifier<MonitorState> {
         await dir.create(recursive: true);
       }
       final settings = ref.read(settingsProvider);
-      final names = electrodeNamesForKind(
-        app.lastConnectedKind,
-        auxChannels: app.status.auxChannels,
-      );
+      final live = _liveNames();
+      final file = _captureNames();
+      _fileLabels = file;
       final startedAt = _latestEegTsMs ?? DateTime.now().millisecondsSinceEpoch;
       _recordingSessionId = const Uuid().v4();
       _clearLiveGraphs();
       _recordingConditioning = null;
       state = MonitorState(
         kind: CaptureKind.recording,
-        electrodeNames: names,
-        channelCount: names.length,
+        electrodeNames: live,
+        channelCount: file.length,
         captureStartedAtMs: startedAt,
         graphEpoch: state.graphEpoch + 1,
         graphResumeFollow: true,
@@ -396,19 +395,19 @@ class MonitorController extends Notifier<MonitorState> {
         recordStreams: settings.recordStreams,
         metadata: _currentMetadata,
         captureStartedAtMs: startedAt,
+        eegChannelLimit: file.length,
       );
       state = state.copyWith(captureId: _capture!.captureId);
       _recordingSessionId ??= _capture!.captureId;
-      _startSampler(names.length, startedAt);
+      _startSampler(file.length, startedAt);
       debugPrint('[monitor] recording start id=${_capture!.captureId}');
     } catch (e, st) {
       debugPrint('[monitor] recording start failed: $e\n$st');
       _lease.tryReleaseRecording();
       _stopSampler();
+      _fileLabels = null;
       final after = ref.read(appStateProvider);
-      state = _withGraphEpoch(
-        MonitorState.idle(deviceKind: after.lastConnectedKind),
-      );
+      state = _withGraphEpoch(_liveIdle());
       if (after.status.connected) {
         await _startTmpUnlocked();
       }
@@ -430,11 +429,14 @@ class MonitorController extends Notifier<MonitorState> {
     }
     _lease.tryReleaseRecording();
     _clearLiveGraphs();
+    final live = _liveNames();
+    final startedAt = state.captureStartedAtMs;
+    _fileLabels = null;
     state = MonitorState(
       kind: CaptureKind.idle,
-      electrodeNames: state.electrodeNames,
-      channelCount: state.channelCount,
-      captureStartedAtMs: promptSave ? state.captureStartedAtMs : null,
+      electrodeNames: live,
+      channelCount: live.length,
+      captureStartedAtMs: promptSave ? startedAt : null,
       pendingScratchPath: promptSave ? file.path : null,
       graphEpoch: state.graphEpoch + 1,
       graphResumeFollow: true,
@@ -474,9 +476,7 @@ class MonitorController extends Notifier<MonitorState> {
       state = state.copyWith(pendingScratchPath: null);
       return;
     }
-    state = _withGraphEpoch(
-      MonitorState.idle(deviceKind: app.lastConnectedKind),
-    );
+    state = _withGraphEpoch(_liveIdle());
     if (app.status.connected) {
       await _startTmpUnlocked();
     }
@@ -512,6 +512,73 @@ class MonitorController extends Notifier<MonitorState> {
   }
 
   String? _recordingSessionId;
+  List<String>? _fileLabels;
+  int _latchedHardwareAux = 0;
+
+  int _hardwareAux() {
+    final app = ref.read(appStateProvider);
+    if (app.status.connected) {
+      _latchedHardwareAux = app.status.auxChannels;
+      return _latchedHardwareAux;
+    }
+    if (_lease.kind == CaptureKind.recording) return _latchedHardwareAux;
+    return 0;
+  }
+
+  List<String> _liveNames() {
+    final app = ref.read(appStateProvider);
+    final settings = ref.read(settingsProvider);
+    return electrodeNamesForKind(
+      app.lastConnectedKind,
+      auxChannels: displayedAuxChannels(
+        kind: app.lastConnectedKind,
+        hardwareAux: _hardwareAux(),
+        museAuxEnabled: settings.museAuxEnabled,
+      ),
+    );
+  }
+
+  List<String> _captureNames() {
+    final app = ref.read(appStateProvider);
+    final settings = ref.read(settingsProvider);
+    return electrodeNamesForKind(
+      app.lastConnectedKind,
+      auxChannels: recordedAuxChannels(
+        kind: app.lastConnectedKind,
+        hardwareAux: _hardwareAux(),
+        museAuxEnabled: settings.museAuxEnabled,
+        recordAux: settings.recordAux,
+      ),
+    );
+  }
+
+  void _applyLiveMontage() {
+    final names = _liveNames();
+    final idle =
+        _lease.kind == CaptureKind.idle && state.pendingScratchPath == null;
+    if (idle) {
+      if (listEquals(names, state.electrodeNames) &&
+          state.channelCount == names.length) {
+        return;
+      }
+      state = state.copyWith(
+        electrodeNames: names,
+        channelCount: names.length,
+      );
+      return;
+    }
+    if (listEquals(names, state.electrodeNames)) return;
+    state = state.copyWith(electrodeNames: names);
+  }
+
+  MonitorState _liveIdle({CaptureKind kind = CaptureKind.idle}) {
+    final names = _liveNames();
+    return MonitorState(
+      kind: kind,
+      electrodeNames: names,
+      channelCount: names.length,
+    );
+  }
 
   RecordingMetadata _currentMetadata() {
     final app = ref.read(appStateProvider);
@@ -540,8 +607,8 @@ class MonitorController extends Notifier<MonitorState> {
         sensors: kind == DeviceKind.neurosity
             ? const ['EEG', 'IMU']
             : const ['EEG', 'PPG', 'IMU'],
-        channelCount: state.channelCount,
-        channelLabels: state.electrodeNames,
+        channelCount: (_fileLabels ?? state.electrodeNames).length,
+        channelLabels: _fileLabels ?? state.electrodeNames,
         rawFiltering: RawFiltering.deviceUnfiltered,
         conditioning: _lease.kind == CaptureKind.recording
             ? (_recordingConditioning ??= _liveConditioning())

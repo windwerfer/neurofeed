@@ -76,6 +76,8 @@ struct CaptureCtl {
     drops: Arc<AtomicU64>,
     failed: Arc<AtomicBool>,
     streams: u32,
+    /// Electrodes `>=` this are not written. `None` keeps every electrode.
+    eeg_channel_limit: Option<i32>,
     channels: Arc<Mutex<HashSet<i32>>>,
 }
 
@@ -109,6 +111,21 @@ fn lock_ctl() -> std::sync::MutexGuard<'static, Option<Arc<CaptureCtl>>> {
 
 fn lock_session() -> std::sync::MutexGuard<'static, Option<CaptureSession>> {
     SESSION.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn eeg_channel_limit(names: &[String]) -> Option<i32> {
+    for name in names {
+        let Some(rest) = name.strip_prefix("eeg_channels:") else {
+            continue;
+        };
+        let Ok(n) = rest.parse::<i32>() else {
+            continue;
+        };
+        if n > 0 {
+            return Some(n);
+        }
+    }
+    None
 }
 
 fn stream_mask(names: &[String]) -> u32 {
@@ -258,6 +275,16 @@ pub fn on_dto(dto: &MuseEventDto) {
     if ctl.streams & stream == 0 {
         return;
     }
+    if let Some(limit) = ctl.eeg_channel_limit {
+        let electrode = match dto {
+            MuseEventDto::Eeg(e) => Some(e.electrode),
+            MuseEventDto::Bands(b) => Some(b.electrode),
+            _ => None,
+        };
+        if electrode.is_some_and(|ch| ch >= limit) {
+            return;
+        }
+    }
     note_channels(&ctl, dto);
     let bytes = encode_session_event(dto);
     if bytes.is_empty() {
@@ -314,6 +341,7 @@ pub fn capture_start(
         drops: Arc::clone(&drops),
         failed: Arc::clone(&failed),
         streams: stream_mask(&record_streams),
+        eeg_channel_limit: eeg_channel_limit(&record_streams),
         channels: Arc::clone(&channels),
     });
 
@@ -1027,6 +1055,28 @@ mod tests {
         File::open(&dest).unwrap().read_exact(&mut magic).unwrap();
         assert_eq!(magic, V6_MAGIC);
         assert!(!raw_path(&dir, "recording", &id).exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn eeg_channel_limit_drops_aux_electrodes() {
+        let _lock = test_lock();
+        let _ = capture_discard();
+        let dir = temp_dir();
+        let id = unique_id("auxlim");
+        let started = 1_700_000_000_000.0;
+        capture_start(
+            dir.to_string_lossy().into_owned(),
+            "recording".into(),
+            id,
+            vec!["eeg".into(), "eeg_channels:4".into()],
+            started,
+        )
+        .unwrap();
+        on_dto(&eeg(started + 1000.0, 0));
+        on_dto(&eeg(started + 1000.0, 4));
+        assert_eq!(capture_recorded_channels(), vec![0]);
+        capture_discard().unwrap();
         let _ = fs::remove_dir_all(&dir);
     }
 

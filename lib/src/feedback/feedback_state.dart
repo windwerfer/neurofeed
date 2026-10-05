@@ -745,14 +745,20 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _drowsinessSeries.clear();
     _musicSeries.clear();
     _musicTracks.clear();
-    await _recorder.startSession();
-    _sessionConditioning = liveSignalConditioning();
     final connected = _ref.read(appStateProvider);
-    _sessionAuxChannels = connected.status.auxChannels;
+    final recordSettings = _ref.read(settingsProvider);
+    _sessionAuxChannels = recordedAuxChannels(
+      kind: connected.lastConnectedKind,
+      hardwareAux: connected.status.auxChannels,
+      museAuxEnabled: recordSettings.museAuxEnabled,
+      recordAux: recordSettings.recordAux,
+    );
     final montage = electrodeNamesForKind(
       connected.lastConnectedKind,
       auxChannels: _sessionAuxChannels,
     );
+    await _recorder.startSession(eegChannelLimit: montage.length);
+    _sessionConditioning = liveSignalConditioning();
     _recorder.writeMetadata({
       'type': 'device',
       'name': connected.status.name,

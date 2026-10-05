@@ -73,6 +73,7 @@ class MonitorRecorder {
     required Set<RecordingStream> recordStreams,
     required RecordingMetadata Function() metadata,
     required int captureStartedAtMs,
+    required int eegChannelLimit,
   }) {
     return _start(
       dir: dir,
@@ -80,6 +81,7 @@ class MonitorRecorder {
       recordStreams: recordStreams,
       metadata: metadata,
       captureStartedAtMs: captureStartedAtMs,
+      eegChannelLimit: eegChannelLimit,
       rotate: true,
     );
   }
@@ -89,6 +91,7 @@ class MonitorRecorder {
     required Set<RecordingStream> recordStreams,
     required RecordingMetadata Function() metadata,
     required int captureStartedAtMs,
+    required int eegChannelLimit,
   }) {
     return _start(
       dir: dir,
@@ -96,6 +99,7 @@ class MonitorRecorder {
       recordStreams: recordStreams,
       metadata: metadata,
       captureStartedAtMs: captureStartedAtMs,
+      eegChannelLimit: eegChannelLimit,
       rotate: false,
     );
   }
@@ -106,6 +110,7 @@ class MonitorRecorder {
     required Set<RecordingStream> recordStreams,
     required RecordingMetadata Function() metadata,
     required int captureStartedAtMs,
+    required int eegChannelLimit,
     required bool rotate,
   }) async {
     index.clear();
@@ -119,6 +124,7 @@ class MonitorRecorder {
       prefix: prefix,
       sidecar: SidecarMode.snapshot,
       startedAtMs: captureStartedAtMs,
+      eegChannelLimit: eegChannelLimit,
     );
     debugPrint(
       '[monitor] $prefix start id=${_writer.sessionId} '

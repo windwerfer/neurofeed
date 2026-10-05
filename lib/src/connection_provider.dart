@@ -706,7 +706,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
           deviceId: id,
           kind: kind,
           simulate: simulate,
-          recordAux: _settings.recordAux,
+          recordAux: true,
           qualitySource: qualitySource,
         );
         if (epoch != _linkEpoch || !_deviceMatchesSource(device)) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/connection_provider.dart';
 import 'package:neurofeed/src/monitor/device_montage.dart';
+import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/streaming/streaming_indicator.dart';
 
 const _kMuseHeadSymbols = ['/', '‾', '‾', '\\'];
@@ -191,7 +192,13 @@ class StatusBar extends ConsumerWidget {
                           signalQualityRow(
                             state.signalQuality,
                             channelCountForKind(state.lastConnectedKind),
-                            auxChannels: state.status.auxChannels,
+                            auxChannels: displayedAuxChannels(
+                              kind: state.lastConnectedKind,
+                              hardwareAux: state.status.auxChannels,
+                              museAuxEnabled: ref.watch(
+                                settingsProvider.select((s) => s.museAuxEnabled),
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 12),
                           const StreamIndicator(),

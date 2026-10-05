@@ -74,6 +74,7 @@ class SessionRecorder {
     String? id,
     SidecarMode sidecar = SidecarMode.jsonl,
     int? startedAtMs,
+    int? eegChannelLimit,
   }) async {
     if (_rawFile != null) return;
 
@@ -100,6 +101,7 @@ class SessionRecorder {
           id: ts,
           streams: recordStreams,
           startedAtMs: startedAtMs ?? DateTime.now().millisecondsSinceEpoch,
+          eegChannelLimit: eegChannelLimit,
         );
       } catch (_) {
         _rawFile = null;

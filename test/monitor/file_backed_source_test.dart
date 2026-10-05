@@ -73,6 +73,7 @@ Future<MonitorRecorder> _started(Directory dir) async {
     recordStreams: RecordingStream.values.toSet(),
     metadata: _meta,
     captureStartedAtMs: _startMs,
+    eegChannelLimit: 4,
   );
   return rec;
 }
@@ -119,6 +120,7 @@ void main() {
       recordStreams: RecordingStream.values.toSet(),
       metadata: _meta,
       captureStartedAtMs: _startMs,
+      eegChannelLimit: 4,
     );
 
     rec.writeEvent(_eeg(5000));
@@ -282,6 +284,7 @@ void main() {
       recordStreams: RecordingStream.values.toSet(),
       metadata: _meta,
       captureStartedAtMs: _startMs,
+      eegChannelLimit: 4,
     );
     expect(rec.index.isEmpty, isTrue);
     expect(rec.currentFilePath, isNot(oldPath));

@@ -326,17 +326,21 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `release-{android,windows,linux}.yml`.
 - **Android BLE init** must happen from JNI before scan or
   `"Droidplug has not been initialized"`.
-- **Muse startup** is `connect_with_options` → `handle.start(true, record_aux)`
+- **Muse startup** is `connect_with_options` → `handle.start(true, true)`
   (PPG always on; commit `217cefe`). Classic preset is `p50`: that turns on
   the 5th EEG channel (`273e0007`) and PPG. `p21` leaves the 5th off. `p20`
-  is not the AUX preset. `record_aux` only subscribes (Settings → Recording
-  → Record AUX channels). Athena stays `p1045`. The Crown has no AUX
-  channel. Revert `217cefe` if Classic stability regresses. Preset law:
-  `.ai/muse-rs.md`.
+  is not the AUX preset. AUX is always subscribed. Devices → Muse Aux
+  channels shows it (default off, immediate). Record AUX (default on)
+  filters the next recording. Athena stays `p1045` and keeps electrodes
+  4..7 in the stream. The Crown has no AUX channel. Revert `217cefe` if
+  Classic stability regresses. Preset law: `.ai/muse-rs.md`.
 - **Simulator connect must `tokio::spawn` `DeviceSimulator::start`.** Do
   not drop the Future (the old std-thread bridge never ran). Do not emit
   derived `Bands` / Pulse / SpO₂ / Gestures from the sim — the forwarder
   owns those. EEG std must stay in `1..15` µV so pad quality ≥ 80.
+  A simulated Muse emits AUX and reports it: Classic electrode 4, Athena
+  electrodes 4..7. Devices → Muse Aux channels shows or hides them.
+  Crown simulation stays 8 channels and `auxChannels` 0.
   `cargo test --lib simulator`.
 - **Athena optical ≠ Classic PPG.** muse-rs maps optical tags `0x34` /
   `0x35` **first 3 channels only** into `MuseEvent::Ppg` (as if they were

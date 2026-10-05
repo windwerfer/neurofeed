@@ -62,7 +62,7 @@ class FeedbackRecorder {
 
   /// Begin a session recording in the scratch directory. If one is already
   /// active, it is ended first.
-  Future<void> startSession() async {
+  Future<void> startSession({int? eegChannelLimit}) async {
     await discardSession();
     final storage = await _storage;
     await storage.ensureDir();
@@ -72,7 +72,7 @@ class FeedbackRecorder {
       debugPrint('[feedback] startSession: created scratch $dir');
     }
     debugPrint('[feedback] startSession: scratch=${dir.path}');
-    await _recorder.start(dir);
+    await _recorder.start(dir, eegChannelLimit: eegChannelLimit);
   }
 
   /// Write a Muse event to the session recording.

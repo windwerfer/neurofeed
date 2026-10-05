@@ -439,4 +439,41 @@ mod tests {
         );
         assert_eq!(ppg, 0, "Crown has no PPG");
     }
+
+    #[tokio::test]
+    async fn muse_simulator_emits_the_requested_aux_electrodes() {
+        async fn electrodes(channel_count: usize) -> Vec<bool> {
+            let mut config = DeviceConfig::muse();
+            config.channel_count = channel_count;
+            let (tx, mut rx) = mpsc::channel(4096);
+            let sim = spawn_simulator(config, tx);
+            let events = drain_for(&mut rx, Duration::from_millis(250)).await;
+            sim.stop().await;
+            let mut seen = vec![false; channel_count];
+            let mut extra = false;
+            for ev in &events {
+                if let MuseEventDto::Eeg(e) = ev {
+                    let i = e.electrode as usize;
+                    if i < channel_count {
+                        seen[i] = true;
+                    } else {
+                        extra = true;
+                    }
+                }
+            }
+            assert!(!extra, "emitted an electrode past {channel_count}");
+            seen
+        }
+
+        let classic = electrodes(5).await;
+        assert!(
+            classic.iter().all(|on| *on),
+            "Classic sim missing an electrode in 0..5: {classic:?}"
+        );
+        let athena = electrodes(8).await;
+        assert!(
+            athena.iter().all(|on| *on),
+            "Athena sim missing an electrode in 0..8: {athena:?}"
+        );
+    }
 }

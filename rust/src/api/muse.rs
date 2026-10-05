@@ -134,14 +134,24 @@ impl Default for ConnectionStatus {
 /// Muse on-head EEG electrodes (TP9, AF7, AF8, TP10); AUX inputs follow.
 pub(crate) const MUSE_HEAD_ELECTRODES: u32 = 4;
 
-/// AUX inputs muse-rs streams when AUX is requested: Classic exposes one
-/// AUX characteristic (electrode 4); Athena delivers electrodes 4..7.
-pub(crate) fn muse_aux_channels(is_athena: bool, record_aux: bool) -> u32 {
-    match (record_aux, is_athena) {
-        (false, _) => 0,
-        (true, true) => 4,
-        (true, false) => 1,
+/// AUX inputs a real Muse streams on every connect. Classic exposes one
+/// AUX characteristic (electrode 4). Athena delivers electrodes 4..7.
+/// Devices → Muse Aux channels filters the UI; it does not change this.
+pub(crate) fn muse_aux_channels(is_athena: bool) -> u32 {
+    if is_athena {
+        4
+    } else {
+        1
     }
+}
+
+/// AUX count a simulator reports. Classic is 1, Athena is 4, Crown is 0.
+/// The Devices switch shows or hides them; the sim already emits them.
+pub(crate) fn simulated_aux_channels(kind: DeviceKind, firmware: &str) -> u32 {
+    if !kind.is_muse() {
+        return 0;
+    }
+    muse_aux_channels(firmware == "Athena")
 }
 
 /// Telemetry snapshot (battery etc.) surfaced in the status bar.
@@ -564,8 +574,10 @@ pub fn get_status() -> ConnectionStatus {
 /// - `kind`: DeviceKind::Muse (BLE id from `scan`) or DeviceKind::Neurosity
 ///   (Crown device id from `discovered_crowns`, streamed over OSC on the LAN)
 /// - `simulate`: if true, runs the built-in simulator instead of a headset
-/// - `record_aux`: Muse only — stream AUX inputs as electrodes 4.. (Classic:
-///   AUX characteristic; Athena: keep electrodes 4..7). Off drops them.
+/// - `record_aux`: ignored. A real Muse always streams AUX (Classic `p50`
+///   plus the RIGHTAUX subscribe, Athena `p1045` electrodes 4..7). The
+///   Devices setting filters the status bar and monitors. Record AUX
+///   filters the file.
 /// - `quality_source`: Neurosity only — pad quality from the Crown or the app.
 #[frb]
 pub async fn connect_with_options(
@@ -585,10 +597,14 @@ pub async fn connect_with_options(
 
     if simulate {
         let (name, firmware) = crate::api::simulator::simulated_identity(&device_id, kind);
-        let config = crate::api::device_config::DeviceConfig::for_kind(kind);
+        let aux_channels = simulated_aux_channels(kind, &firmware);
+        let mut config = crate::api::device_config::DeviceConfig::for_kind(kind);
+        if kind.is_muse() {
+            config.channel_count = (MUSE_HEAD_ELECTRODES + aux_channels) as usize;
+        }
         let (dto_tx, dto_rx) = tokio::sync::mpsc::channel(1024);
         let simulator = crate::api::simulator::spawn_simulator(config, dto_tx);
-        log::info!("[muse] simulator started for {name} ({device_id})");
+        log::info!("[muse] simulator started for {name} ({device_id}, aux={aux_channels})");
 
         {
             let mut guard = state().inner.lock().unwrap();
@@ -598,11 +614,11 @@ pub async fn connect_with_options(
                 name: name.clone(),
                 id: device_id.clone(),
                 firmware: firmware.clone(),
-                aux_channels: 0,
+                aux_channels,
             });
             guard.events = Some(dto_rx);
             guard.eeg_electrode_limit = if kind.is_muse() {
-                Some(MUSE_HEAD_ELECTRODES as i32)
+                Some((MUSE_HEAD_ELECTRODES + aux_channels) as i32)
             } else {
                 None
             };
@@ -616,7 +632,7 @@ pub async fn connect_with_options(
             name,
             id: device_id,
             firmware,
-            aux_channels: 0,
+            aux_channels,
         });
     }
 
@@ -655,9 +671,10 @@ pub async fn connect_with_options(
     };
 
     let name = device.name.clone();
+    let _ = record_aux;
     let client = MuseClient::new(MuseClientConfig {
         enable_ppg: true,
-        enable_aux: record_aux,
+        enable_aux: true,
         ..Default::default()
     });
 
@@ -669,15 +686,12 @@ pub async fn connect_with_options(
             "Classic"
         }
         .to_string();
-        let aux_channels = muse_aux_channels(handle.is_athena, record_aux);
+        let aux_channels = muse_aux_channels(handle.is_athena);
 
         log::info!("[muse] connected to {name} ({firmware} firmware, aux={aux_channels})");
 
-        let start_result = tokio::time::timeout(
-            std::time::Duration::from_secs(8),
-            handle.start(true, record_aux),
-        )
-        .await;
+        let start_result =
+            tokio::time::timeout(std::time::Duration::from_secs(8), handle.start(true, true)).await;
         match start_result {
             Ok(Err(e)) => log::warn!("[muse] start commands failed: {e:#}"),
             Err(_) => log::warn!("[muse] start commands timed out after 8 s"),
@@ -1885,10 +1899,18 @@ mod aux_tests {
 
     #[test]
     fn aux_channel_count_by_firmware() {
-        assert_eq!(muse_aux_channels(false, false), 0);
-        assert_eq!(muse_aux_channels(true, false), 0);
-        assert_eq!(muse_aux_channels(false, true), 1);
-        assert_eq!(muse_aux_channels(true, true), 4);
+        assert_eq!(muse_aux_channels(false), 1);
+        assert_eq!(muse_aux_channels(true), 4);
+    }
+
+    #[test]
+    fn simulated_aux_follows_catalog_firmware() {
+        assert_eq!(simulated_aux_channels(DeviceKind::Muse, "Classic"), 1);
+        assert_eq!(simulated_aux_channels(DeviceKind::Muse, "Athena"), 4);
+        assert_eq!(
+            simulated_aux_channels(DeviceKind::Neurosity, "Crown_sim_v1.0"),
+            0
+        );
     }
 
     #[test]

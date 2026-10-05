@@ -47,8 +47,10 @@ Future<ConnectionStatus> getStatus() =>
 /// - `kind`: DeviceKind::Muse (BLE id from `scan`) or DeviceKind::Neurosity
 ///   (Crown device id from `discovered_crowns`, streamed over OSC on the LAN)
 /// - `simulate`: if true, runs the built-in simulator instead of a headset
-/// - `record_aux`: Muse only — stream AUX inputs as electrodes 4.. (Classic:
-///   AUX characteristic; Athena: keep electrodes 4..7). Off drops them.
+/// - `record_aux`: ignored. A real Muse always streams AUX (Classic `p50`
+///   plus the RIGHTAUX subscribe, Athena `p1045` electrodes 4..7). The
+///   Devices setting filters the status bar and monitors. Record AUX
+///   filters the file.
 /// - `quality_source`: Neurosity only — pad quality from the Crown or the app.
 Future<ConnectionStatus> connectWithOptions({
   required String deviceId,

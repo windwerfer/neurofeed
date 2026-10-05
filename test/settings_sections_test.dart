@@ -25,6 +25,10 @@ void main() {
     expect(filterSettingsSearch(hits, 'crown').map((hit) => hit.cardId), [
       'crown',
     ]);
+    expect(filterSettingsSearch(hits, 'aux').map((hit) => hit.cardId), [
+      'muse',
+      'recording',
+    ]);
     expect(filterSettingsSearch(hits, 'save folder').map((hit) => hit.cardId), [
       'folder',
     ]);
@@ -76,6 +80,8 @@ void main() {
     await tester.tap(find.byKey(const Key('settings_section_devices')));
     await tester.pump();
 
+    expect(find.text('Muse'), findsOneWidget);
+    expect(find.text('Muse Aux channels'), findsOneWidget);
     expect(find.text('Crown'), findsWidgets);
     expect(find.text('Subject'), findsNothing);
     expect(find.text('Appearance'), findsNothing);
@@ -166,6 +172,53 @@ void main() {
     expect(settings.themeMode, ThemeMode.dark);
     expect(find.text('Dark'), findsOneWidget);
     expect(find.text('Light'), findsNothing);
+  });
+
+  test('muse aux defaults off and record aux defaults on', () async {
+    SharedPreferences.setMockInitialValues({});
+    final settings = await Settings.load();
+    expect(settings.museAuxEnabled, isFalse);
+    expect(settings.recordAux, isTrue);
+
+    SharedPreferences.setMockInitialValues({'record_aux_channels': false});
+    final savedOff = await Settings.load();
+    expect(savedOff.recordAux, isFalse);
+  });
+
+  testWidgets('record AUX stays on but disabled until Muse Aux is enabled', (
+    tester,
+  ) async {
+    final settings = (await tester.runAsync(_loadSettings))!;
+    await _pump(tester, settings, const Size(420, 800));
+
+    await tester.tap(find.byKey(const Key('settings_section_recording')));
+    await tester.pump();
+    await _scrollToRecordAux(tester);
+    final blocked = tester.widget<SwitchListTile>(
+      find.byKey(const Key('record_aux_switch')),
+    );
+    expect(blocked.value, isTrue);
+    expect(blocked.onChanged, isNull);
+    expect(find.textContaining('Turn on Muse Aux channels'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('settings_back')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('settings_section_devices')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('muse_aux_switch')));
+    await tester.pump();
+    expect(settings.museAuxEnabled, isTrue);
+
+    await tester.tap(find.byKey(const Key('settings_back')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('settings_section_recording')));
+    await tester.pump();
+    await _scrollToRecordAux(tester);
+    final open = tester.widget<SwitchListTile>(
+      find.byKey(const Key('record_aux_switch')),
+    );
+    expect(open.value, isTrue);
+    expect(open.onChanged, isNotNull);
   });
 
   test('folder change refuses an open session or recording', () {
@@ -398,6 +451,19 @@ Future<Settings> _loadSettings({String? folder}) async {
     if (folder != null) 'session_folder': folder,
   });
   return Settings.load();
+}
+
+Future<void> _scrollToRecordAux(WidgetTester tester) {
+  return tester.scrollUntilVisible(
+    find.byKey(const Key('record_aux_switch')),
+    200,
+    scrollable: find
+        .descendant(
+          of: find.byType(ListView),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
 }
 
 Future<void> _pump(

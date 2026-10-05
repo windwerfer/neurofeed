@@ -154,6 +154,7 @@ class Settings extends ChangeNotifier {
   static const String _sessionFolderKey = 'session_folder';
   static const String _recordStreamsKey = 'record_streams';
   static const String _recordAuxKey = 'record_aux_channels';
+  static const String _museAuxKey = 'muse_aux_channels';
   static const String _crownQualitySourceKey = 'crown_quality_source';
   static const String _eyeMarkersKey = 'gesture_eye_markers';
   static const String _markersInFeedbackKey = 'gesture_markers_in_feedback';
@@ -527,9 +528,20 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Record Muse AUX inputs (AUX1–AUX4) as extra EEG channels. Off by
-  /// default: only TP9/AF7/AF8/TP10 are recorded. Applies on connect.
-  bool get recordAux => _prefs.getBool(_recordAuxKey) ?? false;
+  /// Show Muse AUX on the status bar and in the monitors. Off by default.
+  /// The headset already sends AUX; this only filters the UI. Recordings
+  /// include AUX only when this and [recordAux] are both on.
+  bool get museAuxEnabled => _prefs.getBool(_museAuxKey) ?? false;
+
+  Future<void> setMuseAuxEnabled(bool value) async {
+    await _prefs.setBool(_museAuxKey, value);
+    notifyListeners();
+  }
+
+  /// Save Muse AUX inputs in the next recording or feedback session.
+  /// On by default. Has no effect while [museAuxEnabled] is off, and the
+  /// Recording switch stays disabled so the saved choice is kept.
+  bool get recordAux => _prefs.getBool(_recordAuxKey) ?? true;
 
   Future<void> setRecordAux(bool value) async {
     await _prefs.setBool(_recordAuxKey, value);

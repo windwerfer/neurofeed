@@ -7,8 +7,18 @@ import 'package:neurofeed/src/settings.dart';
 
 export 'package:neurofeed/src/rust/api/capture.dart';
 
-List<String> recordingStreamNames(Set<RecordingStream> streams) =>
-    streams.map((s) => s.name).toList();
+String eegChannelLimitToken(int channelCount) => 'eeg_channels:$channelCount';
+
+List<String> recordingStreamNames(
+  Set<RecordingStream> streams, {
+  int? eegChannelLimit,
+}) {
+  final names = streams.map((s) => s.name).toList();
+  if (eegChannelLimit != null && eegChannelLimit > 0) {
+    names.add(eegChannelLimitToken(eegChannelLimit));
+  }
+  return names;
+}
 
 Future<void> startCapture({
   required Directory dir,
@@ -16,12 +26,16 @@ Future<void> startCapture({
   required String id,
   required Set<RecordingStream> streams,
   required int startedAtMs,
+  int? eegChannelLimit,
 }) {
   return captureStart(
     dir: dir.path,
     prefix: prefix,
     id: id,
-    recordStreams: recordingStreamNames(streams),
+    recordStreams: recordingStreamNames(
+      streams,
+      eegChannelLimit: eegChannelLimit,
+    ),
     startedAtMs: startedAtMs.toDouble(),
   );
 }

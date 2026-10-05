@@ -28,7 +28,7 @@ toggles the same hide. Not Settings / Feedback / Streaming / History.
 | Device name | `status.name` (e.g. `Muse 2 (Simulated)`) | `ConnectionStatus.name` | `status_bar.dart` | After connect. Elides when chrome is tight; **signal pads keep priority**. |
 | Signal pads | `/‾‾\` (Muse 4) or Crown ring of `•` | `signalQualityRow` | `status_bar.dart` | Head pads of `lastConnectedKind`. Muse AUX (Classic 1, Athena up to 4) inserts `•` between the overlines: `/‾•‾\` … `/‾••••‾\`. Crown is eight `•` in a top-down ring (front F5/F6, then C3/C4, CP3/CP4, back PO3/PO4), same 18px glyph, about one line tall. Green ≥ 80, orange ≥ 40, red below. |
 | Battery | `{n}%` | `batteryLevel` | `status_bar.dart` | From `bp`, not fuel gauge. |
-| Signal pads | `/‾‾\` or `/‾••••‾\` | `signalQualityRow` | `status_bar.dart` | TP9 AF7, then AUX1–AUX4 dots when streaming, then AF8 TP10. Green ≥80, amber ≥40, red <40. Never elided for a long device name. [headset-fit.md](headset-fit.md). |
+| Signal pads | `/‾‾\` or `/‾••••‾\` | `signalQualityRow` | `status_bar.dart` | TP9 AF7, then AUX dots when Devices → Muse Aux channels is on, then AF8 TP10. Classic one dot, Athena four. Hidden while that switch is off. Updates immediately. Green ≥80, amber ≥40, red <40. Never elided for a long device name. [headset-fit.md](headset-fit.md). |
 | Disconnect | tooltip `Disconnect` | `disconnectDevice` | `status_bar.dart` | Icon `link_off`. |
 
 ### Sidebar — `lib/src/app.dart`
@@ -185,7 +185,8 @@ Sidebar **History** (`AppView.feedbackHistory`). One sqlite list; no
 | Import summary | `Import recording?` / `Import with losses?` · `Kept` · `Lost or changed` · `Cancel` / `Import` | `_confirmImport` | `feedback_history.dart` | Shown before every import is saved; lost list = `import.warnings`. |
 | Import interval warning | `This Mind Monitor file was recorded with one row every {N} seconds, so it covers only about {X}% of the session. Short events can be missed, so expect lower result quality. For better results, set Mind Monitor's recording interval to 1 second.` | `intervalCoverageWarning` | `import_summary.dart` / `feedback_history.dart` | Warning box at the top of the import summary when `import.recordingInterval ≥ 1.9` s. None for Constant, ≤ 1 s intervals and EDF. |
 | Folder-change dialog | `Move existing files?` · `Move` / `No` · `Move {s} session(s) and {r} recording(s) into the new folder? Choosing No leaves them in the current folder.` | `folderChangeMoveBody` | `settings_view.dart` | Asks only when something would move. Dismiss keeps the folder. **No** switches and leaves files. Body also names `export`, `cache`, and `AI models` when those trees contain a file. Empty trees do not count. `.cache/tmp_*` does not count and is deleted. |
-| Record AUX channels | `Record AUX channels` | `Settings.recordAux` / `_RecordingCard` | `settings_view.dart` | Recording section, Session recording card. Default off. Muse AUX inputs → `AUX1`…`AUX4` (Classic AUX1; Athena AUX1–AUX4). Applies on next connect (`connectWithOptions(recordAux:)`). |
+| Muse Aux channels | `Muse Aux channels` | `Settings.museAuxEnabled` / `_MuseCard` | `settings_view.dart` | Devices section, Muse card. Default off. Shows AUX on the status bar and in the monitors immediately (Classic AUX1, Athena AUX1–AUX4). A real Muse already sends them. A simulated Muse does the same: Muse 2 and Muse S are one AUX channel, Muse S Athena is four. Pref `muse_aux_channels`. |
+| Record AUX channels | `Record AUX channels` | `Settings.recordAux` / `_RecordingCard` | `settings_view.dart` | Recording section, Session recording card. Default on. Grayed, with a Devices note, while Muse Aux channels is off. Saves AUX in the next recording or feedback session. Does not change the status bar. |
 | Crown quality source | `Crown` card: `Crown` / `App` radios | `Settings.crownQualitySource` / `_CrownCard` | `settings_view.dart` | Devices section. Default `Crown` (Crown per-pad quality averaged per second, app score for seconds without it); `App` = app score only. Pref `crown_quality_source`. Applies on next connect (`connectWithOptions(qualitySource:)`). |
 
 ### Recording dashboard — `lib/src/monitor/views/recording_dashboard.dart`
@@ -302,7 +303,7 @@ was open. Picking a hit opens that section and scrolls to the card.
 | Search settings | tooltip `Search settings` | `_openSearch` | `settings_view.dart` | Icon only. |
 | General | `General` | `SettingsSection.general` | `settings_sections.dart` | Appearance, Subject, Music feedback, Audio (Android). |
 | Appearance | `Appearance` | `_AppearanceCard` / `AppAppearance` | `settings_view.dart` | Name on the left, description under it (`Choose a light or dark theme, or follow this device.`), dropdown on the right (`System` / `Light` / `Dark`). Default System. Pref `theme_mode`. |
-| Devices | `Devices` | `SettingsSection.devices` | `settings_sections.dart` | Crown. |
+| Devices | `Devices` | `SettingsSection.devices` | `settings_sections.dart` | Muse, Crown. |
 | AI | `AI` | `SettingsSection.ai` | `settings_sections.dart` | Guardrail AI engine. |
 | Recording | `Recording` | `SettingsSection.recording` | `settings_sections.dart` | Save folder, Session recording, Gesture markers. |
 | About | `About` | `SettingsSection.about` | `settings_sections.dart` | About card, then Debug mode. |

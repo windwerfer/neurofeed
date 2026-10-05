@@ -65,6 +65,12 @@ const List<SettingsSearchHit> settingsSearchCatalog = <SettingsSearchHit>[
   ),
   SettingsSearchHit(
     section: SettingsSection.devices,
+    cardId: 'muse',
+    title: 'Muse',
+    terms: ['aux', 'auxiliary', 'aux1'],
+  ),
+  SettingsSearchHit(
+    section: SettingsSection.devices,
     cardId: 'crown',
     title: 'Crown',
     terms: ['quality source', 'signal quality', 'pads'],

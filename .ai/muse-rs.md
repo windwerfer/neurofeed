@@ -24,18 +24,21 @@ Classic presets, from BrainFlow `docs/SupportedBoards.rst` and
 - `p20` is not the AUX preset. BrainFlow's auxiliary preset is
   accelerometer and gyroscope, not this electrode.
 
-`connect_with_options()` calls `handle.start(true, record_aux)`. PPG is
-always requested, so Classic startup is `p50`. `record_aux` (Settings →
-Recording → **Record AUX channels**) only subscribes to `273e0007`. Off,
-the headset can emit AUX and we do not listen. Athena ignores both flags
-and uses `p1045`; the forwarder drops electrodes ≥ 4 when the setting is
-off. The Crown has no AUX electrode (CP3, C3, F5, PO3, PO4, F6, C4, CP4
-only). Do not add a ninth channel.
+`connect_with_options()` calls `handle.start(true, true)`. PPG is
+always requested, so Classic startup is `p50`, and the app always
+subscribes to `273e0007`. Athena ignores both flags and uses `p1045`,
+and the forwarder keeps electrodes 4..7. Devices → **Muse Aux channels**
+shows or hides those channels immediately. Record AUX chooses whether
+the next recording or feedback file keeps them. The Crown has no AUX
+electrode (CP3, C3, F5, PO3, PO4, F6, C4, CP4 only). Do not add a ninth
+channel.
 
 Electrodes: we use muse-rs's electrode index only, never its name strings
 (it calls Athena electrode 4 `FPz`; it is AUX1). 0–3 = TP9, AF7, AF8, TP10.
-Classic AUX = electrode 4; Athena AUX = electrodes 4–7. With the setting off
-the forwarder drops electrodes ≥ 4 (`ManagerState.eeg_electrode_limit`). If Classic connection stability regresses, the old delayed `h/s/p21/d`
+Classic AUX = electrode 4; Athena AUX = electrodes 4–7. A simulated Muse
+reports the same counts and emits those electrodes (Muse 2 and Muse S are
+Classic, Muse S Athena is Athena). Crown simulation stays at 8 channels
+and `auxChannels` 0. If Classic connection stability regresses, the old delayed `h/s/p21/d`
 sequence is in the parent of commit `217cefe`.
 
 ## Classic vs Athena battery

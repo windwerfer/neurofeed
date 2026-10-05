@@ -58,6 +58,68 @@ void main() {
       );
     });
 
+    test('displayed AUX follows the Devices switch and the headset', () {
+      expect(
+        displayedAuxChannels(
+          kind: DeviceKind.muse,
+          hardwareAux: 1,
+          museAuxEnabled: false,
+        ),
+        0,
+      );
+      expect(
+        displayedAuxChannels(
+          kind: DeviceKind.muse,
+          hardwareAux: 1,
+          museAuxEnabled: true,
+        ),
+        1,
+      );
+      expect(
+        displayedAuxChannels(
+          kind: DeviceKind.muse,
+          hardwareAux: 4,
+          museAuxEnabled: true,
+        ),
+        4,
+      );
+      expect(
+        displayedAuxChannels(
+          kind: DeviceKind.neurosity,
+          hardwareAux: 4,
+          museAuxEnabled: true,
+        ),
+        0,
+      );
+      expect(
+        recordedAuxChannels(
+          kind: DeviceKind.muse,
+          hardwareAux: 4,
+          museAuxEnabled: true,
+          recordAux: false,
+        ),
+        0,
+      );
+      expect(
+        recordedAuxChannels(
+          kind: DeviceKind.muse,
+          hardwareAux: 4,
+          museAuxEnabled: true,
+          recordAux: true,
+        ),
+        4,
+      );
+      expect(
+        recordedAuxChannels(
+          kind: DeviceKind.muse,
+          hardwareAux: 1,
+          museAuxEnabled: false,
+          recordAux: true,
+        ),
+        0,
+      );
+    });
+
     test('electrodeNamesForKind appends AUX labels', () {
       expect(electrodeNamesForKind(DeviceKind.muse), kMuseElectrodeNames);
       expect(

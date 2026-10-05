@@ -658,6 +658,17 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
       case SettingsSection.devices:
         return [
           _keyed(
+            'muse',
+            _MuseCard(
+              museAuxEnabled: settings.museAuxEnabled,
+              onMuseAux: (on) async {
+                await settings.setMuseAuxEnabled(on);
+                if (mounted) setState(() {});
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+          _keyed(
             'crown',
             _CrownCard(
               qualitySource: settings.crownQualitySource,
@@ -693,6 +704,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
               streams: streams,
               onToggle: toggle,
               recordAux: settings.recordAux,
+              museAuxEnabled: settings.museAuxEnabled,
               onRecordAux: (on) async {
                 await settings.setRecordAux(on);
                 if (mounted) setState(() {});
@@ -1307,6 +1319,60 @@ class _DebugCard extends ConsumerWidget {
   }
 }
 
+class _MuseCard extends StatelessWidget {
+  const _MuseCard({required this.museAuxEnabled, required this.onMuseAux});
+
+  final bool museAuxEnabled;
+  final ValueChanged<bool> onMuseAux;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.headset, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 8),
+                Text('Muse', style: theme.textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Auxiliary EEG for Muse. Classic shows AUX1. Athena shows '
+              'AUX1–AUX4. The status bar and the monitors update immediately.',
+              style: muted,
+            ),
+            const Divider(height: 24),
+            SwitchListTile(
+              key: const Key('muse_aux_switch'),
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.settings_input_component_outlined),
+              title: const Text('Muse Aux channels'),
+              subtitle: Text(
+                'Off hides the extra pads and channels. The headset already '
+                'sends them. Recordings include them only when Record AUX '
+                'channels is on.',
+                style: muted,
+              ),
+              value: museAuxEnabled,
+              onChanged: onMuseAux,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Neurosity Crown options.
 class _CrownCard extends StatelessWidget {
   const _CrownCard({
@@ -1388,12 +1454,14 @@ class _RecordingCard extends StatelessWidget {
     required this.streams,
     required this.onToggle,
     required this.recordAux,
+    required this.museAuxEnabled,
     required this.onRecordAux,
   });
 
   final Set<RecordingStream> streams;
   final void Function(RecordingStream stream, bool on) onToggle;
   final bool recordAux;
+  final bool museAuxEnabled;
   final void Function(bool on) onRecordAux;
 
   static const Map<RecordingStream, (String, String)> _labels = {
@@ -1478,19 +1546,23 @@ class _RecordingCard extends StatelessWidget {
               ),
             const Divider(height: 24),
             SwitchListTile(
+              key: const Key('record_aux_switch'),
               contentPadding: EdgeInsets.zero,
               secondary: const Icon(Icons.settings_input_component_outlined),
               title: const Text('Record AUX channels'),
               subtitle: Text(
-                'Muse auxiliary inputs as extra channels (Classic firmware: '
-                'AUX1; Athena: AUX1–AUX4). Off records only TP9/AF7/AF8/TP10. '
-                'Applies on the next connect.',
+                museAuxEnabled
+                    ? 'Saves AUX1 on Classic and AUX1–AUX4 on Athena in the '
+                        'next recording or feedback session. The status bar '
+                        'and monitors follow Muse Aux channels under Devices.'
+                    : 'Turn on Muse Aux channels under Devices before AUX '
+                        'can be saved in a recording.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               value: recordAux,
-              onChanged: onRecordAux,
+              onChanged: museAuxEnabled ? onRecordAux : null,
             ),
             const Divider(height: 24),
             Text(
