@@ -119,6 +119,16 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
     return t - opticalOriginUnix(cache, startMs);
   }
 
+  /// Elapsed time of the newest Pulse or SpO2 sample. The top Follow window
+  /// leads this by 1 s, so infrared packets must not move it.
+  double _overviewElapsed() {
+    final cache = _mon.opticalCache;
+    final t = cache.latestMetricTimestamp;
+    if (t == null) return _newestElapsed();
+    final startMs = ref.read(monitorControllerProvider).captureStartedAtMs;
+    return t - opticalOriginUnix(cache, startMs);
+  }
+
   double _oldestElapsed() {
     final cache = _mon.opticalCache;
     final startMs = ref.read(monitorControllerProvider).captureStartedAtMs;
@@ -135,7 +145,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
   }
 
   void _inspect() {
-    final newest = _newestElapsed();
+    final newest = _overviewElapsed();
     _overview.enterInspectStrip(newestElapsed: newest);
     alignDetailToOverview(
       detail: _detail,
@@ -146,7 +156,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
   }
 
   void _onOverviewWindowChanged(double seconds) {
-    final newest = _newestElapsed();
+    final newest = _overviewElapsed();
     _overview.setStripWindowSeconds(seconds, newestElapsed: newest);
     clampDetailToOverview(
       detail: _detail,
@@ -166,7 +176,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
   }
 
   void _onDetailWindowChanged(double seconds) {
-    final newest = _newestElapsed();
+    final newest = _overviewElapsed();
     var next = seconds;
     if (next > _overview.windowSeconds) next = _overview.windowSeconds;
     _detail.setStripWindowSeconds(next, newestElapsed: newest);
@@ -188,7 +198,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
   }
 
   void _beginPinch(ScaleStartDetails d, {required bool detail}) {
-    final newest = _newestElapsed();
+    final newest = _overviewElapsed();
     final oldest = _oldestElapsed();
     _pinchOnDetail = detail;
     _draggingHighlight = false;
@@ -251,7 +261,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
   }
 
   void _updatePinch(ScaleUpdateDetails d) {
-    final newest = _newestElapsed();
+    final newest = _overviewElapsed();
     final oldest = _oldestElapsed();
     if (d.pointerCount >= 2) {
       _draggingHighlight = false;
@@ -352,7 +362,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
     final kb = HardwareKeyboard.instance;
     if (e is! PointerScrollEvent) return;
     if (!kb.isControlPressed && !kb.isMetaPressed) return;
-    final newest = _newestElapsed();
+    final newest = _overviewElapsed();
     final oldest = _oldestElapsed();
     final vp = detail ? _detail : _overview;
     if (_overview.mode == ViewportMode.follow) {
@@ -461,7 +471,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
     );
 
     final hasPpg = deviceHasPpg(kind);
-    final newest = _newestElapsed();
+    final newest = _overviewElapsed();
     final inspectLabel = _overview.mode == ViewportMode.inspect
         ? '${formatElapsed(_overview.stripVisibleStart(newestElapsed: newest))}–${formatElapsed(_overview.stripVisibleEnd(newestElapsed: newest))}'
         : null;
@@ -494,28 +504,25 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                             cache,
                             state.captureStartedAtMs,
                           );
-                          final n = _newestElapsed();
+                          final n = _overviewElapsed();
                           final start = _overview.stripVisibleStart(
-                            newestElapsed: n,
-                          );
-                          final end = _overview.stripVisibleEnd(
                             newestElapsed: n,
                           );
                           const pad = 1.0;
                           final hr = live
                               ? _elapsedSeries(
-                                  cache.pulseRange(
+                                  cache.pulseRangeWithNeighbors(
                                     origin + start - pad,
-                                    origin + end + pad,
+                                    origin + n + pad,
                                   ),
                                   origin,
                                 )
                               : const <ChartSample>[];
                           final spo2 = live
                               ? _elapsedSeries(
-                                  cache.spo2Range(
+                                  cache.spo2RangeWithNeighbors(
                                     origin + start - pad,
-                                    origin + end + pad,
+                                    origin + n + pad,
                                   ),
                                   origin,
                                 )
@@ -579,7 +586,7 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                   cache,
                                   state.captureStartedAtMs,
                                 );
-                                final n = _newestElapsed();
+                                final n = _overviewElapsed();
                                 final sweep =
                                     _detail.mode == ViewportMode.follow &&
                                     _overview.mode == ViewportMode.follow;

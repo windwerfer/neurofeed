@@ -228,7 +228,16 @@ class OpticalOverviewPainter extends CustomPainter {
     canvas.clipRect(chart);
     _drawHighlight(canvas, chart, visStart, visEnd);
     if (connected) {
-      _drawSeries(canvas, chart, hr, kHrColor, visStart, span, kHrYMin, kHrYMax);
+      _drawSeries(
+        canvas,
+        chart,
+        hr,
+        kHrColor,
+        visStart,
+        span,
+        kHrYMin,
+        kHrYMax,
+      );
       _drawSeries(
         canvas,
         chart,
@@ -310,9 +319,17 @@ class OpticalOverviewPainter extends CustomPainter {
     double yMin,
     double yMax,
   ) {
-    if (samples.length < 2) return;
+    if (samples.isEmpty) return;
     final ySpan = yMax - yMin;
     if (ySpan <= 0) return;
+    if (samples.length == 1) {
+      final s = samples.first;
+      if (!s.t.isFinite || !s.v.isFinite) return;
+      final x = chart.left + (s.t - visStart) / span * chart.width;
+      final y = chart.bottom - ((s.v - yMin) / ySpan) * chart.height;
+      canvas.drawCircle(Offset(x, y), 2.2, Paint()..color = color);
+      return;
+    }
     final pts = <Offset>[];
     for (final s in samples) {
       final x = chart.left + (s.t - visStart) / span * chart.width;

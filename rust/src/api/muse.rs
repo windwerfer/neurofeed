@@ -1173,7 +1173,7 @@ fn spawn_event_forwarder() {
                             }
                         }
 
-                        // SpO2 from IR + Red (30 s window)
+                        // SpO2 from IR + Red (from 4 s, up to the last 30 s)
                         let (spo2, spo2_conf) = compute_spo2(&ppg_ir_buffer, &ppg_red_buffer);
                         if spo2 > 0.0 {
                             let dto = MuseEventDto::SpO2(SpO2Dto {
@@ -1627,26 +1627,23 @@ fn compute_pulse(ir_samples: &[f64]) -> (f64, f64) {
     (bpm, confidence)
 }
 
-/// SpO2 estimation from PPG IR + Red channels using ratio-of-ratios.
-/// Returns (spo2_percent, confidence).
-/// Standard coefficients (A=110, B=25) are a best-guess; not Muse-calibrated.
+/// SpO2 from PPG IR + Red (ratio-of-ratios). Returns (percent, confidence).
+/// A=110, B=25 are a best-guess, not Muse-calibrated. Needs 4 s of both
+/// channels and uses up to the last 30 s. The estimate is clamped into
+/// 50–100 so the trace stays continuous. No optical pulse returns (0, 0).
 fn compute_spo2(ir_samples: &[f64], red_samples: &[f64]) -> (f64, f64) {
-    const MIN_SAMPLES: usize = 1920; // 30 s @ 64 Hz
+    const MIN_SAMPLES: usize = 256; // 4 s @ 64 Hz
+    const MAX_SAMPLES: usize = 1920; // 30 s @ 64 Hz
     if ir_samples.len() < MIN_SAMPLES || red_samples.len() < MIN_SAMPLES {
         return (0.0, 0.0);
     }
-    // Use the last 30 seconds of data
-    let window_size = MIN_SAMPLES;
-    let ir_start = ir_samples.len().saturating_sub(window_size);
-    let red_start = red_samples.len().saturating_sub(window_size);
-    let ir_window = &ir_samples[ir_start..];
-    let red_window = &red_samples[red_start..];
+    let window_size = ir_samples.len().min(red_samples.len()).min(MAX_SAMPLES);
+    let ir_window = &ir_samples[ir_samples.len() - window_size..];
+    let red_window = &red_samples[red_samples.len() - window_size..];
 
-    // DC = mean, AC = std dev of the AC component (after removing DC)
     let ir_dc = ir_window.iter().copied().sum::<f64>() / ir_window.len() as f64;
     let red_dc = red_window.iter().copied().sum::<f64>() / red_window.len() as f64;
 
-    // AC = standard deviation (RMS of AC component)
     let ir_ac = (ir_window.iter().map(|s| (s - ir_dc).powi(2)).sum::<f64>()
         / ir_window.len() as f64)
         .sqrt();
@@ -1654,32 +1651,27 @@ fn compute_spo2(ir_samples: &[f64], red_samples: &[f64]) -> (f64, f64) {
         / red_window.len() as f64)
         .sqrt();
 
-    // Gating: require sufficient AC amplitude on both channels
     if ir_dc < 100.0 || red_dc < 100.0 || ir_ac < 1.0 || red_ac < 1.0 {
         return (0.0, 0.0);
     }
 
-    // Ratio-of-ratios R = (Red_AC / Red_DC) / (IR_AC / IR_DC)
     let r = (red_ac / red_dc) / (ir_ac / ir_dc);
-
-    // Standard empirical formula: SpO2 = A - B * R
-    // A=110, B=25 are common defaults for forehead PPG; not Muse-calibrated.
-    const A: f64 = 110.0;
-    const B: f64 = 25.0;
-    let spo2 = A - B * r;
-
-    // Physiological range + R plausibility gate (typical R ~0.4..1.0 for 70-100% SpO2)
-    if !(0.4..=1.2).contains(&r) || !(50.0..=100.0).contains(&spo2) {
+    if !r.is_finite() {
         return (0.0, 0.0);
     }
 
-    // Confidence based on AC signal quality (higher AC/DC ratio = more confidence)
-    // Typical PPG AC/DC is 1-5%, scale to 0-1 range
+    const A: f64 = 110.0;
+    const B: f64 = 25.0;
+    let spo2 = (A - B * r).clamp(50.0, 100.0);
+
     let ir_quality = (ir_ac / ir_dc * 20.0).min(1.0);
     let red_quality = (red_ac / red_dc * 20.0).min(1.0);
-    let confidence = (ir_quality * red_quality).sqrt().clamp(0.0, 1.0);
+    let mut confidence = (ir_quality * red_quality).sqrt().clamp(0.0, 1.0);
+    if !(0.4..=1.2).contains(&r) {
+        confidence *= 0.5;
+    }
 
-    (spo2.clamp(0.0, 100.0), confidence)
+    (spo2, confidence)
 }
 
 /// Movement score from accelerometer magnitude variance.
@@ -2106,5 +2098,60 @@ mod conditioning_tests {
         assert!((got[7] - mains / total).abs() < 1e-12);
         let (r50, _) = mains_peak_ratios(&x);
         assert!(r50 > eeg_filter::PEAK_RATIO, "{r50}");
+    }
+}
+
+#[cfg(test)]
+mod spo2_tests {
+    use super::compute_spo2;
+
+    fn tone(n: usize, dc: f64, amp: f64) -> Vec<f64> {
+        (0..n)
+            .map(|i| {
+                let t = i as f64 / 64.0;
+                dc + amp * (2.0 * std::f64::consts::PI * 1.2 * t).sin()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn spo2_waits_for_four_seconds_then_estimates() {
+        let short = tone(255, 200_000.0, 8_000.0);
+        assert_eq!(compute_spo2(&short, &tone(255, 180_000.0, 6_000.0)).0, 0.0);
+
+        let ir = tone(256, 200_000.0, 8_000.0);
+        let red = tone(256, 180_000.0, 6_000.0);
+        let (spo2, confidence) = compute_spo2(&ir, &red);
+        assert!(
+            (70.0..=100.0).contains(&spo2),
+            "spo2 {spo2} confidence {confidence}"
+        );
+        assert!(confidence > 0.0 && confidence <= 1.0);
+    }
+
+    #[test]
+    fn spo2_flat_or_tiny_signal_stays_absent() {
+        let flat = vec![200_000.0; 256];
+        assert_eq!(compute_spo2(&flat, &vec![180_000.0; 256]).0, 0.0);
+        let quiet = tone(256, 50.0, 30.0);
+        assert_eq!(compute_spo2(&quiet, &tone(256, 40.0, 30.0)).0, 0.0);
+    }
+
+    #[test]
+    fn spo2_keeps_a_value_when_the_ratio_leaves_the_old_band() {
+        // R ≈ 1.3 still yields ~77% and used to be dropped.
+        let (mid, _) = compute_spo2(
+            &tone(256, 200_000.0, 8_000.0),
+            &tone(256, 180_000.0, 9_360.0),
+        );
+        assert!((mid - 77.5).abs() < 2.0, "{mid}");
+
+        // Far outside the formula range clamps to the floor instead of a hole.
+        let (low, confidence) = compute_spo2(
+            &tone(256, 200_000.0, 2_000.0),
+            &tone(256, 180_000.0, 20_000.0),
+        );
+        assert_eq!(low, 50.0);
+        assert!(confidence > 0.0 && confidence <= 0.5);
     }
 }

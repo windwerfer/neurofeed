@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 import 'package:neurofeed/src/charts/eeg_data_source.dart';
 import 'package:neurofeed/src/monitor/cache/frame_coalesced_notify.dart';
@@ -42,6 +40,20 @@ class OpticalCache extends ChangeNotifier with FrameCoalescedNotify {
   double? get latestPpgTimestamp {
     if (_ppgIr.length == 0) return null;
     return _ppgIr.timestampAt(_ppgIr.length - 1);
+  }
+
+  /// Unix seconds of the newest Pulse or SpO2 sample. Infrared packets are
+  /// excluded so the 1 Hz overview does not track the PPG clock.
+  double? get latestMetricTimestamp {
+    var latest = double.negativeInfinity;
+    var any = false;
+    for (final buf in [_pulse, _spo2]) {
+      if (buf.length == 0) continue;
+      any = true;
+      final t = buf.timestampAt(buf.length - 1);
+      if (t > latest) latest = t;
+    }
+    return any ? latest : null;
   }
 
   double get oldestTimestamp {
@@ -92,6 +104,14 @@ class OpticalCache extends ChangeNotifier with FrameCoalescedNotify {
 
   List<ChartSample> spo2Range(double startUnix, double endUnix) =>
       _spo2.range(startUnix, endUnix);
+
+  /// [pulseRange] plus the samples just outside the window, so a Follow stroke
+  /// still reaches the edge after a 1 Hz point has left the pane.
+  List<ChartSample> pulseRangeWithNeighbors(double startUnix, double endUnix) =>
+      _pulse.rangeWithNeighbors(startUnix, endUnix);
+
+  List<ChartSample> spo2RangeWithNeighbors(double startUnix, double endUnix) =>
+      _spo2.rangeWithNeighbors(startUnix, endUnix);
 
   List<ChartSample> ppgIrRange(double startUnix, double endUnix) =>
       _ppgIr.range(startUnix, endUnix);
@@ -172,11 +192,20 @@ class _MetricRing {
     return lo;
   }
 
-  List<ChartSample> range(double startT, double endT) {
+  List<ChartSample> range(double startT, double endT) =>
+      _slice(lowerBound(startT), upperBound(endT));
+
+  List<ChartSample> rangeWithNeighbors(double startT, double endT) {
     if (_count == 0) return const [];
-    final lo = lowerBound(startT);
-    final hi = upperBound(endT);
-    if (lo >= hi) return const [];
+    var lo = lowerBound(startT);
+    var hi = upperBound(endT);
+    if (lo > 0) lo -= 1;
+    if (hi < _count) hi += 1;
+    return _slice(lo, hi);
+  }
+
+  List<ChartSample> _slice(int lo, int hi) {
+    if (_count == 0 || lo >= hi) return const [];
     return List.generate(
       hi - lo,
       (i) => ChartSample(timestampAt(lo + i), valueAt(lo + i)),

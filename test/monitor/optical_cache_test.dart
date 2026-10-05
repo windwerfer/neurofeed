@@ -43,6 +43,37 @@ void main() {
     cache.clear();
     expect(cache.hasData, isFalse);
     expect(cache.avgHr, isNull);
+    expect(cache.latestMetricTimestamp, isNull);
+  });
+
+  test('metric time ignores PPG and a point just outside the window stays', () {
+    final cache = OpticalCache();
+    cache.appendPpg(
+      PpgDto(
+        index: 0,
+        channel: kPpgInfraredChannel,
+        timestamp: 9000,
+        samples: Float64List.fromList([1]),
+      ),
+    );
+    expect(cache.latestMetricTimestamp, isNull);
+    expect(cache.latestTimestamp, 9.0);
+
+    cache.appendPulse(PulseDto(timestamp: 1000, bpm: 60, confidence: 1));
+    cache.appendPulse(PulseDto(timestamp: 2100, bpm: 62, confidence: 1));
+    cache.appendPulse(PulseDto(timestamp: 3200, bpm: 64, confidence: 1));
+    cache.appendSpO2(SpO2Dto(timestamp: 1000, spo2: 96, confidence: 1));
+    cache.appendSpO2(SpO2Dto(timestamp: 2100, spo2: 97, confidence: 1));
+    cache.appendSpO2(SpO2Dto(timestamp: 3200, spo2: 98, confidence: 1));
+
+    expect(cache.latestMetricTimestamp, 3.2);
+    expect(cache.latestTimestamp, 9.0);
+
+    expect(cache.pulseRange(2.0, 3.2).map((s) => s.t), [2.1, 3.2]);
+    final pulse = cache.pulseRangeWithNeighbors(2.0, 3.2);
+    expect(pulse.map((s) => s.t), [1.0, 2.1, 3.2]);
+    final spo2 = cache.spo2RangeWithNeighbors(2.0, 3.2);
+    expect(spo2.map((s) => s.v), [96, 97, 98]);
   });
 
   test('clampDetailToOverview and alignDetailToOverview', () {
