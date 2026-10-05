@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:neurofeed/src/audio/calibration_clips.dart';
 import 'package:neurofeed/src/feedback/feedback_phase.dart';
+import 'package:neurofeed/src/reve/model_engine.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/monitor/monitor_state.dart';
 import 'package:neurofeed/src/settings.dart';
@@ -31,6 +33,9 @@ void main() {
     ]);
     expect(filterSettingsSearch(hits, 'save folder').map((hit) => hit.cardId), [
       'folder',
+    ]);
+    expect(filterSettingsSearch(hits, 'calibration').map((hit) => hit.cardId), [
+      'calibration',
     ]);
     expect(filterSettingsSearch(hits, 'stutter'), isEmpty);
     expect(
@@ -174,6 +179,25 @@ void main() {
     expect(find.text('Light'), findsNothing);
   });
 
+  test('calibration method defaults to the feature choice', () async {
+    SharedPreferences.setMockInitialValues({});
+    final settings = await Settings.load();
+    expect(settings.calibrationMethod, CalibrationMethod.byFeature);
+
+    SharedPreferences.setMockInitialValues({'calibration_method': 'nope'});
+    final unknown = await Settings.load();
+    expect(unknown.calibrationMethod, CalibrationMethod.byFeature);
+
+    await settings.setCalibrationMethod(CalibrationMethod.alwaysStaged);
+    expect(settings.calibrationMethod, CalibrationMethod.alwaysStaged);
+
+    SharedPreferences.setMockInitialValues({
+      'calibration_method': 'always_staged',
+    });
+    final saved = await Settings.load();
+    expect(saved.calibrationMethod, CalibrationMethod.alwaysStaged);
+  });
+
   test('muse aux defaults off and record aux defaults on', () async {
     SharedPreferences.setMockInitialValues({});
     final settings = await Settings.load();
@@ -183,6 +207,71 @@ void main() {
     SharedPreferences.setMockInitialValues({'record_aux_channels': false});
     final savedOff = await Settings.load();
     expect(savedOff.recordAux, isFalse);
+  });
+
+  testWidgets('AI section shows Calibration after the guardrail engine', (
+    tester,
+  ) async {
+    final settings = (await tester.runAsync(_loadSettings))!;
+    await _pump(
+      tester,
+      settings,
+      const Size(420, 800),
+      extraOverrides: [
+        modelEngineNotifierProvider.overrideWith(_QuietModelEngine.new),
+        modelFolderProvider.overrideWith((ref) async => '/tmp/models'),
+        modelInstalledProvider.overrideWith((ref, kind) async => false),
+      ],
+    );
+
+    await tester.tap(find.byKey(const Key('settings_section_ai')));
+    await tester.pump();
+
+    expect(find.text('Guardrail AI engine'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Calibration'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(
+      find.text('Default calibration method for neurofeedback.'),
+      findsOneWidget,
+    );
+    expect(settings.calibrationMethod, CalibrationMethod.byFeature);
+
+    final engine = tester.getTopLeft(find.text('Guardrail AI engine'));
+    final calibration = tester.getTopLeft(find.text('Calibration'));
+    expect(calibration.dy, greaterThan(engine.dy));
+
+    await tester.tap(find.byKey(const Key('calibration_method_info')));
+    await tester.pump();
+    expect(find.textContaining('15 seconds'), findsOneWidget);
+    expect(find.textContaining('30 seconds'), findsOneWidget);
+    expect(find.textContaining('50 seconds'), findsOneWidget);
+    expect(find.textContaining('12 seconds'), findsNothing);
+    await tester.tap(find.text('Got it'));
+    await tester.pump();
+
+    expect(find.text('Default'), findsOneWidget);
+    expect(find.text('Always staged'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('calibration_method_always_staged')),
+      100,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(find.byKey(const Key('calibration_method_always_staged')));
+    await tester.pump();
+    expect(settings.calibrationMethod, CalibrationMethod.alwaysStaged);
   });
 
   testWidgets('record AUX stays on but disabled until Muse Aux is enabled', (
@@ -466,6 +555,11 @@ Future<void> _scrollToRecordAux(WidgetTester tester) {
   );
 }
 
+class _QuietModelEngine extends ModelEngineNotifier {
+  @override
+  ModelEngineState build() => const ModelEngineNotInstalled();
+}
+
 Future<void> _pump(
   WidgetTester tester,
   Settings settings,
@@ -473,6 +567,7 @@ Future<void> _pump(
   Future<String?> Function()? pickFolder,
   Future<Directory> Function()? defaultFolder,
   bool useStorageOverride = true,
+  List<Override> extraOverrides = const [],
 }) async {
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -484,6 +579,7 @@ Future<void> _pump(
           sessionStorageProvider.overrideWith(
             (ref) async => FileSystemSessionStorage(Directory.systemTemp),
           ),
+        ...extraOverrides,
       ],
       child: MaterialApp(
         home: Scaffold(

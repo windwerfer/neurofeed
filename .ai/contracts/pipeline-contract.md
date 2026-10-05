@@ -254,15 +254,16 @@ Suppress (engine, not JSON): `rainStage` and `musicFilter` suppress background. 
 
 ## Calibration compose
 
-`assets/calibrations.json` v2 is the clip library (`eyes-closed-01` / `eyes-open-01`, each with `single` and `staged`). Protocol points at one calibration id. Stages are composed from subscribed features `S`:
+`assets/calibrations.json` v2 is the clip library (`eyes-closed-01` / `eyes-open-01`, each with `single` and `staged`). Protocol points at one calibration id. Stages are composed from subscribed features `S`, unless Settings → AI → Calibration is **Always staged** (`calibration_method`: `default` or `always_staged`; missing means `default`):
 
 | Condition | Stages |
 |---|---|
 | `S` empty (`recordOnly`) | skippable; else `single` baseline only |
 | any `ai.*` in `S` | `staged`: artifact + challenge + baseline |
 | else any lane present | `single` baseline only |
+| setting **Always staged** | `staged` even when `S` would use `single` |
 
-Clips stay those in `calibrations.json` (artifacts 15 s, challenge 30 s, rest 45 s; `single` baseline **50 s**). Do not retune 15 s → 12 s here. Eyes-open vs closed comes from the calibration id.
+Clips stay those in `calibrations.json` (artifacts 15 s, challenge 30 s, rest 45 s; `single` baseline **50 s**). Rest is 60 s when `S` contains both an `ai.*` feature and a non-AI feature. Do not retune 15 s → 12 s here. Eyes-open vs closed for a `single` baseline comes from the calibration id.
 
 ---
 
@@ -290,7 +291,7 @@ Reconnect does not re-enable; the orchestrator re-calls on session start.
 6. **Band-derived features computed in Rust** from the FFT already running, autodropped there. Do not restore Dart `scalarForFeature` or `electrodeAf7` on the reward path. Charts may keep 4-ch names until the Crown-run series.
 7. **Missing sample = no sample**, not 0.
 8. **Two scalars:** native value on `FeatureDto`; percentile rank in Dart `FeedbackEngine`.
-9. **Calibration composed from subscribed features**, using existing `single`/`staged` clips. AI in `S` → three stages; otherwise baseline; record-only skippable.
+9. **Calibration composed from subscribed features**, using existing `single`/`staged` clips. AI in `S` → three stages; otherwise baseline; record-only skippable. Settings → AI Calibration may override that with **Always staged**. Rest extends to 60 s when a reward shares that stage with an AI feature.
 10. **`ProtocolType` stays gone.** Keep the nine current IDs. Unknown IDs do not become `drowsiness`. Snapshot `protocolJson` for detail/export/replay.
 11. **`GuardrailMode` stays split** into guard feature vs **global** model. Document with `guard` defaults ON (`band.delta`); without `guard` → none. `guardrailEngine` **keeps writing `GuardrailMode.name`**.
 12. **Availability is derived.** Catalog **may list** band protocols on Crown; **running them is out of scope**. List filter = connected/last `DeviceKind`, else show all.

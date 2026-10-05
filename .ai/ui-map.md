@@ -304,7 +304,7 @@ was open. Picking a hit opens that section and scrolls to the card.
 | General | `General` | `SettingsSection.general` | `settings_sections.dart` | Appearance, Subject, Music feedback, Audio (Android). |
 | Appearance | `Appearance` | `_AppearanceCard` / `AppAppearance` | `settings_view.dart` | Name on the left, description under it (`Choose a light or dark theme, or follow this device.`), dropdown on the right (`System` / `Light` / `Dark`). Default System. Pref `theme_mode`. |
 | Devices | `Devices` | `SettingsSection.devices` | `settings_sections.dart` | Muse, Crown. |
-| AI | `AI` | `SettingsSection.ai` | `settings_sections.dart` | Guardrail AI engine. |
+| AI | `AI` | `SettingsSection.ai` | `settings_sections.dart` | Guardrail AI engine, then Calibration. |
 | Recording | `Recording` | `SettingsSection.recording` | `settings_sections.dart` | Save folder, Session recording, Gesture markers. |
 | About | `About` | `SettingsSection.about` | `settings_sections.dart` | About card, then Debug mode. |
 | Save folder | `Save files to folder` | `setSessionFolder` | `settings_view.dart` | Was `Save feedback to folder`. The current folder path is under the title (`save_folder_path`). |
@@ -316,6 +316,7 @@ was open. Picking a hit opens that section and scrolls to the card.
 | Subject | `Subject` | `_SubjectCard` | `settings_view.dart` | Stable id plus optional nickname. |
 | Music feedback | `Music feedback` | `_MusicCard` | `settings_view.dart` | Persist cutoff on `onChangeEnd`. |
 | Guardrail AI engine | `Guardrail AI engine` | `AiEngineCard` | `reve_card.dart` | Not “AI sleep guardrail”. |
+| Calibration | `Calibration` | `CalibrationSettingsCard` / `Settings.calibrationMethod` | `settings_view.dart` | AI section, after Guardrail AI engine. `Default` / `Always staged`. The setting default is Default: AI labeling features use staged, other features use simple. Always staged overrides that. Description `Default calibration method for neurofeedback.` Pref `calibration_method` (`default` / `always_staged`). Applies to the next session. |
 | Audio (Android) | `Audio` / `Reduce audio stutter` | `_AudioCard` | `settings_view.dart` | Hidden off Android. |
 | About | `About` | `_AboutCard` | `settings_view.dart` | |
 | Debug mode | `Debug mode` | `enableSimulatedDevices` | `settings_view.dart` | Last card, inside About. Shows Simulator. Also shows calibration `Skip`. |

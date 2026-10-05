@@ -9,12 +9,37 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// detail, not a calibrations.json field.
 const int calibrationAdaptiveBaselineSeconds = 60;
 
-/// Which stages to run, composed from the session's enabled feature set `S`.
+/// Settings → AI Calibration. Pref `calibration_method`.
 ///
-/// Frozen table:
-/// * `S` empty (`recordOnly`) → baseline only (skippable at Start)
+/// [byFeature] follows the enabled features: any `ai.*` → staged, otherwise
+/// the single baseline. [alwaysStaged] forces staged.
+enum CalibrationMethod {
+  byFeature,
+  alwaysStaged;
+
+  /// Stored pref. [byFeature] is `default`.
+  String get storageValue => switch (this) {
+    CalibrationMethod.byFeature => 'default',
+    CalibrationMethod.alwaysStaged => 'always_staged',
+  };
+
+  static CalibrationMethod parse(String? raw) => switch (raw) {
+    'always_staged' || 'staged' => CalibrationMethod.alwaysStaged,
+    _ => CalibrationMethod.byFeature,
+  };
+}
+
+/// Which stages to run.
+///
+/// [CalibrationMethod.byFeature] (the setting default):
 /// * any `ai.*` in `S` → artifact + challenge + baseline
-/// * else any lane (band reward and/or `band.delta` guard) → baseline only
+/// * otherwise the `single` baseline (50 s)
+///
+/// [CalibrationMethod.alwaysStaged] runs artifact + challenge + baseline
+/// even when `S` has no `ai.*`. Rest stays 45 s, or 60 s when `S` has both
+/// an `ai.*` feature and a non-AI feature.
+///
+/// Record-only can still skip. This plan is for a calibration that runs.
 class CalibrationPlan {
   const CalibrationPlan({
     required this.artifact,
@@ -44,21 +69,28 @@ class CalibrationPlan {
 
   /// `S` = features actually enabled this session (reward.feature if the
   /// reward lane is present; guard.feature only when the guard is on).
-  factory CalibrationPlan.fromEnabledFeatures(Iterable<String> enabled) {
+  /// [method] is Settings → AI Calibration. [CalibrationMethod.byFeature]
+  /// stages only when `S` contains `ai.*`. [CalibrationMethod.alwaysStaged]
+  /// stages either way. The 60 s rest applies only when an AI feature and a
+  /// non-AI feature are both in `S`.
+  factory CalibrationPlan.fromEnabledFeatures(
+    Iterable<String> enabled, {
+    CalibrationMethod method = CalibrationMethod.byFeature,
+  }) {
     final ids = [
       for (final id in enabled)
         if (id.isNotEmpty && id != 'none') id,
     ];
     final hasAi = ids.any((id) => id.startsWith('ai.'));
-    if (!hasAi) {
+    final hasNonAi = ids.any((id) => !id.startsWith('ai.'));
+    if (method != CalibrationMethod.alwaysStaged && !hasAi) {
       return baselineOnly;
     }
-    final hasNonAi = ids.any((id) => !id.startsWith('ai.'));
     return CalibrationPlan(
       artifact: true,
       challenge: true,
       baseline: true,
-      adaptiveBaselineSeconds: hasNonAi
+      adaptiveBaselineSeconds: hasAi && hasNonAi
           ? calibrationAdaptiveBaselineSeconds
           : null,
     );

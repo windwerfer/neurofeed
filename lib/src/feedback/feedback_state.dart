@@ -814,8 +814,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
   }
 
-  CalibrationPlan get _calibrationPlan =>
-      CalibrationPlan.fromEnabledFeatures(_enabledFeatureIds);
+  CalibrationPlan get _calibrationPlan => CalibrationPlan.fromEnabledFeatures(
+    _enabledFeatureIds,
+    method: _ref.read(settingsProvider).calibrationMethod,
+  );
 
   Future<void> _enableSessionFeatures() async {
     final app = _ref.read(appStateProvider);

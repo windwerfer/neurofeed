@@ -37,7 +37,10 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   `ai.drowsiness` / `none`).
 - **Calibration** (`assets/calibrations.json` v2): `eyes-closed-01` /
   `eyes-open-01`, each with `single` (**50 s** silent baseline) and `staged`
-  (artifacts / eyes-open / eyes-closed). AI model ready → staged; else single.
+  (artifacts 15 s / eyes-open challenge 30 s / eyes-closed rest 45 s, or 60 s
+  when a reward shares that rest). Settings → AI Calibration is Default
+  (AI labeling → staged, otherwise simple) or Always staged. Record-only
+  stays skippable.
 - **Android**: NDK 27/28, Gradle 8.14, `targetSdk` from Flutter, arm64-only
   (`abiFilters = ["arm64-v8a"]`).
 - **JNI glue**: btleplug init from Dart **after** `RustLib.init()`. Kotlin

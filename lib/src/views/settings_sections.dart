@@ -82,6 +82,12 @@ const List<SettingsSearchHit> settingsSearchCatalog = <SettingsSearchHit>[
     terms: ['spur', 'cbramod', 'reve', 'model'],
   ),
   SettingsSearchHit(
+    section: SettingsSection.ai,
+    cardId: 'calibration',
+    title: 'Calibration',
+    terms: ['default', 'always', 'staged', 'simple', 'baseline', 'artifacts'],
+  ),
+  SettingsSearchHit(
     section: SettingsSection.recording,
     cardId: 'folder',
     title: 'Save files to folder',

@@ -85,8 +85,7 @@ Non-reward catalog rows: `recordOnly` (calibration skippable) and
 has `single` (one random intro + **50 s** silent baseline) and `staged`
 (artifacts 15 s / eyes-open 30 s / eyes-closed 45 s).
 
-Variant: AI model ready → staged; band math / no guardrail → single.
-`CalibrationRunner` composes stages from the subscribed features.
+Variant follows subscribed features: any `ai.*` in `S` → staged; otherwise the 50 s single baseline. Settings → AI Calibration can force Always staged. Rest is 60 s when a reward shares that stage with an AI feature. Record-only stays skippable.
 
 ## Audio outputs
 

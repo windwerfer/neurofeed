@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neurofeed/src/audio/calibration_clips.dart';
 import 'package:neurofeed/src/audio/output_ids.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
 import 'package:neurofeed/src/feedback/guardrail_mode.dart';
@@ -168,6 +169,7 @@ class Settings extends ChangeNotifier {
   static const String _inhibitCeilingsKey = 'inhibit_ceilings';
   static const String _guardrailModeKey = 'guardrail_mode';
   static const String _guardModelKey = 'guard_model';
+  static const String _calibrationMethodKey = 'calibration_method';
   static const String _warningSoundKey = 'warning_sound';
   static const String _lastCustomMinutesKey = 'last_custom_minutes';
   static const String _musicFolderKey = 'music_folder';
@@ -710,6 +712,16 @@ class Settings extends ChangeNotifier {
     } else {
       await _prefs.setString(_guardModelKey, ffId);
     }
+    notifyListeners();
+  }
+
+  /// How the next session calibrates. [CalibrationMethod.byFeature] until
+  /// the user picks always staged.
+  CalibrationMethod get calibrationMethod =>
+      CalibrationMethod.parse(_prefs.getString(_calibrationMethodKey));
+
+  Future<void> setCalibrationMethod(CalibrationMethod value) async {
+    await _prefs.setString(_calibrationMethodKey, value.storageValue);
     notifyListeners();
   }
 

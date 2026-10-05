@@ -427,20 +427,13 @@ void main() {
   });
 
   group('CalibrationPlan', () {
-    test('empty S is baseline only (recordOnly)', () {
+    test('default follows the feature: bands are baseline only', () {
       expect(
         CalibrationPlan.fromEnabledFeatures([]),
         CalibrationPlan.baselineOnly,
       );
-    });
-
-    test('band reward and/or band.delta is baseline only', () {
       expect(
         CalibrationPlan.fromEnabledFeatures(['band.atr']),
-        CalibrationPlan.baselineOnly,
-      );
-      expect(
-        CalibrationPlan.fromEnabledFeatures(['band.delta']),
         CalibrationPlan.baselineOnly,
       );
       expect(
@@ -449,7 +442,7 @@ void main() {
       );
     });
 
-    test('any ai.* in S is artifact + challenge + baseline', () {
+    test('default stages when S contains ai.*', () {
       final plan = CalibrationPlan.fromEnabledFeatures(['ai.drowsiness']);
       expect(plan.artifact, isTrue);
       expect(plan.challenge, isTrue);
@@ -457,7 +450,7 @@ void main() {
       expect(plan.adaptiveBaselineSeconds, isNull);
     });
 
-    test('AI + reward extends staged rest to 60s', () {
+    test('default AI + reward extends staged rest to 60s', () {
       final plan = CalibrationPlan.fromEnabledFeatures([
         'band.atr',
         'ai.drowsiness',
@@ -468,11 +461,22 @@ void main() {
       expect(plan.adaptiveBaselineSeconds, calibrationAdaptiveBaselineSeconds);
     });
 
-    test('disabled AI guard is not in S so not staged', () {
-      expect(
-        CalibrationPlan.fromEnabledFeatures(['band.atr']),
-        CalibrationPlan.baselineOnly,
-      );
+    test('always staged overrides a band-only feature', () {
+      final plan = CalibrationPlan.fromEnabledFeatures([
+        'band.atr',
+      ], method: CalibrationMethod.alwaysStaged);
+      expect(plan.artifact, isTrue);
+      expect(plan.challenge, isTrue);
+      expect(plan.baseline, isTrue);
+      expect(plan.adaptiveBaselineSeconds, isNull);
+    });
+
+    test('always staged still extends rest when AI and reward share it', () {
+      final plan = CalibrationPlan.fromEnabledFeatures([
+        'band.atr',
+        'ai.drowsiness',
+      ], method: CalibrationMethod.alwaysStaged);
+      expect(plan.adaptiveBaselineSeconds, calibrationAdaptiveBaselineSeconds);
     });
   });
 }

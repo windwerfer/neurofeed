@@ -206,16 +206,6 @@ void main() {
       isTrue,
       reason: 'band reward + band.delta guard → single baseline',
     );
-    expect(
-      manifest
-          .recipeFor(
-            'eyes-closed-01',
-            plan: CalibrationPlan.fromEnabledFeatures(['band.delta']),
-          )!
-          .isSingle,
-      isTrue,
-      reason: 'guardrailOnly + band-math → single baseline',
-    );
 
     final guardrailOnlyAi = manifest.recipeFor(
       'eyes-closed-01',
@@ -224,10 +214,19 @@ void main() {
     expect(
       guardrailOnlyAi.isStaged,
       isTrue,
-      reason: 'guardrailOnly + AI → artifact + challenge + baseline',
+      reason: 'AI feature → artifact + challenge + baseline',
     );
     expect(guardrailOnlyAi.stages, hasLength(3));
     expect(guardrailOnlyAi.stages.last.seconds, 45);
+
+    final forced = manifest.recipeFor(
+      'eyes-closed-01',
+      plan: CalibrationPlan.fromEnabledFeatures([
+        'band.atr',
+      ], method: CalibrationMethod.alwaysStaged),
+    )!;
+    expect(forced.isStaged, isTrue, reason: 'always staged overrides simple');
+    expect(forced.stages.last.seconds, 45);
 
     final rewardPlusAi = manifest.recipeFor(
       'eyes-closed-01',

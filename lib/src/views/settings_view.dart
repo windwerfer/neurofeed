@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neurofeed/src/audio/calibration_clips.dart';
 import 'package:neurofeed/src/connect_source.dart';
 import 'package:neurofeed/src/connection_provider.dart';
 import 'package:neurofeed/src/device_type_switch.dart';
@@ -680,7 +681,11 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
           ),
         ];
       case SettingsSection.ai:
-        return [_keyed('ai', const AiEngineCard())];
+        return [
+          _keyed('ai', const AiEngineCard()),
+          const SizedBox(height: 16),
+          _keyed('calibration', const CalibrationSettingsCard()),
+        ];
       case SettingsSection.recording:
         final storage = ref.watch(sessionStorageProvider);
         final streams = settings.recordStreams;
@@ -849,6 +854,106 @@ class _AppearanceCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Settings → AI. Which calibration the next neurofeedback session runs.
+class CalibrationSettingsCard extends ConsumerWidget {
+  const CalibrationSettingsCard({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final settings = ref.watch(settingsProvider);
+    final method = settings.calibrationMethod;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Card(
+      color: theme.colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.timer_outlined,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Calibration',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+                IconButton(
+                  key: const Key('calibration_method_info'),
+                  icon: const Icon(Icons.info_outline, size: 20),
+                  tooltip: 'About calibration',
+                  onPressed: () => _showInfo(context),
+                ),
+              ],
+            ),
+            Text('Default calibration method for neurofeedback.', style: muted),
+            const Divider(height: 24),
+            RadioGroup<CalibrationMethod>(
+              groupValue: method,
+              onChanged: (value) {
+                if (value != null) {
+                  settings.setCalibrationMethod(value);
+                }
+              },
+              child: Column(
+                children: [
+                  RadioListTile<CalibrationMethod>(
+                    key: const Key('calibration_method_default'),
+                    contentPadding: EdgeInsets.zero,
+                    value: CalibrationMethod.byFeature,
+                    title: const Text('Default'),
+                  ),
+                  RadioListTile<CalibrationMethod>(
+                    key: const Key('calibration_method_always_staged'),
+                    contentPadding: EdgeInsets.zero,
+                    value: CalibrationMethod.alwaysStaged,
+                    title: const Text('Always staged'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showInfo(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Calibration'),
+        content: const Text(
+          'Default follows the feature. AI labeling uses staged calibration. '
+          'Other neurofeedback uses simple.\n\n'
+          'Always staged runs that staged sequence every time, including '
+          'when the feature would use simple.\n\n'
+          'Staged records how artifacts (15 seconds), active thinking (30 '
+          'seconds), and a relaxed baseline (45 seconds, or 60 seconds when '
+          'neurofeedback shares that rest) look on your device today.\n\n'
+          'Simple measures only the baseline (50 seconds). Eyes-closed '
+          'protocols rest with eyes closed. Eyes-open protocols stay quietly '
+          'alert.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
       ),
     );
   }
@@ -1553,10 +1658,10 @@ class _RecordingCard extends StatelessWidget {
               subtitle: Text(
                 museAuxEnabled
                     ? 'Saves AUX1 on Classic and AUX1–AUX4 on Athena in the '
-                        'next recording or feedback session. The status bar '
-                        'and monitors follow Muse Aux channels under Devices.'
+                          'next recording or feedback session. The status bar '
+                          'and monitors follow Muse Aux channels under Devices.'
                     : 'Turn on Muse Aux channels under Devices before AUX '
-                        'can be saved in a recording.',
+                          'can be saved in a recording.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
