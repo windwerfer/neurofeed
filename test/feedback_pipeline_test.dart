@@ -150,6 +150,7 @@ void main() {
       required RewardOutput output,
       void Function(double value)? onStats,
       List<TargetCondition> inhibit = const [],
+      bool seedBaseline = true,
     }) {
       final lane = RewardLane(
         engine: engine,
@@ -179,10 +180,12 @@ void main() {
         electrodeNames: _museFrontal,
         montageNames: _museMontage,
       );
-      engine
-        ..addBaselineSample(1.0)
-        ..addBaselineSample(1.5)
-        ..computeThreshold();
+      if (seedBaseline) {
+        engine
+          ..addBaselineSample(1.0)
+          ..addBaselineSample(1.5)
+          ..computeThreshold();
+      }
       return lane;
     }
 
@@ -198,6 +201,45 @@ void main() {
       lineNoiseRatio: 0,
     );
 
+    test('calibration stores a sample only for an accepted baseline frame', () {
+      final engine = RatioEngine();
+      final lane = laneWith(
+        engine,
+        output: const NoneRewardOutput(),
+        seedBaseline: false,
+      );
+      const sample = FeatureSample(id: 'band.atr', t: 0, value: 1.25);
+      const keptOut = RewardTick(
+        phase: FeedbackPhase.calibrating,
+        sampleIsClean: true,
+        quality: [90, 90, 90, 90],
+      );
+      lane.onFeature(sample, keptOut);
+      expect(engine.baselineSamples, isEmpty);
+      lane.onFeature(
+        FeatureSample(id: 'band.atr', t: 0, value: double.nan),
+        const RewardTick(
+          phase: FeedbackPhase.calibrating,
+          sampleIsClean: true,
+          acceptBaselineSample: true,
+          quality: [90, 90, 90, 90],
+        ),
+      );
+      expect(engine.baselineSamples, isEmpty);
+      lane.onFeature(
+        sample,
+        const RewardTick(
+          phase: FeedbackPhase.calibrating,
+          sampleIsClean: true,
+          acceptBaselineSample: true,
+          quality: [90, 90, 90, 90],
+        ),
+      );
+      expect(engine.baselineSamples, [1.25]);
+      lane.onFeature(sample, keptOut);
+      expect(engine.baselineSamples, [1.25]);
+    });
+
     test('missing relative bands is dirty: no onSample, no recordEpoch', () {
       final out = RecordingRewardOutput();
       final engine = RatioEngine(epochWindow: const Duration(milliseconds: 1));
@@ -206,7 +248,6 @@ void main() {
         const FeatureSample(id: 'band.atr', t: 0, value: 3.0),
         const RewardTick(
           phase: FeedbackPhase.playing,
-          collectingBaseline: false,
           sampleIsClean: true,
           quality: [100, 100, 100, 100],
         ),
@@ -232,7 +273,6 @@ void main() {
         const FeatureSample(id: 'band.atr', t: 0, value: 4.0),
         const RewardTick(
           phase: FeedbackPhase.playing,
-          collectingBaseline: false,
           sampleIsClean: true,
           quality: [100, 100, 100, 100],
         ),
@@ -253,7 +293,6 @@ void main() {
         const FeatureSample(id: 'band.tar', t: 0, value: 4.0),
         const RewardTick(
           phase: FeedbackPhase.playing,
-          collectingBaseline: false,
           sampleIsClean: true,
           quality: [100, 100, 100, 100],
         ),
@@ -273,7 +312,6 @@ void main() {
       lane.onBands(pad(2));
       const tick = RewardTick(
         phase: FeedbackPhase.playing,
-        collectingBaseline: false,
         sampleIsClean: true,
         quality: [100, 100, 100, 100],
       );
@@ -294,7 +332,6 @@ void main() {
   group('GuardLane outputs', () {
     GuardTick tick({required bool muffleReward}) => GuardTick(
       phase: FeedbackPhase.playing,
-      collectingBaseline: false,
       collectionEyes: null,
       muffleReward: muffleReward,
       sessionStartAt: DateTime.now(),
@@ -347,6 +384,109 @@ void main() {
       expect(lane.warningActive, isFalse);
       expect(guard.lastActive, isFalse);
       expect(reward.muffle, isFalse);
+    });
+
+    test('eyes-closed baseline keeps one accepted finite sample', () {
+      GuardTick closed({required bool accept}) => GuardTick(
+        phase: FeedbackPhase.calibrating,
+        collectionEyes: 'closed',
+        muffleReward: false,
+        sessionStartAt: null,
+        acceptBaselineSample: accept,
+        writeWarningMetadata:
+            ({
+              required sleepDir,
+              required delta,
+              required threshold,
+              required bandMath,
+            }) {},
+        updateComputed:
+            ({
+              required sleepDir,
+              required clarity,
+              required delta,
+              required warning,
+              threshold,
+              featurePercentile,
+              warnOver,
+              ceilingOver,
+              clean,
+              dirtyReason,
+            }) {},
+      );
+
+      final band =
+          GuardLane(
+              guardOutput: RecordingGuardOutput(),
+              rewardOutput: RecordingRewardOutput(),
+            )
+            ..enabled = true
+            ..bandMath = true
+            ..featureId = 'band.delta';
+      band.onFeature(
+        const FeatureSample(id: 'band.delta', t: 0, value: 0.2),
+        closed(accept: false),
+      );
+      band.onFeature(
+        FeatureSample(id: 'band.delta', t: 0, value: double.nan),
+        closed(accept: true),
+      );
+      band.onFeature(
+        const FeatureSample(id: 'band.delta', t: 0, value: 0.2),
+        GuardTick(
+          phase: FeedbackPhase.calibrating,
+          collectionEyes: 'open',
+          muffleReward: false,
+          sessionStartAt: null,
+          acceptBaselineSample: true,
+          writeWarningMetadata:
+              ({
+                required sleepDir,
+                required delta,
+                required threshold,
+                required bandMath,
+              }) {},
+          updateComputed:
+              ({
+                required sleepDir,
+                required clarity,
+                required delta,
+                required warning,
+                threshold,
+                featurePercentile,
+                warnOver,
+                ceilingOver,
+                clean,
+                dirtyReason,
+              }) {},
+        ),
+      );
+      expect(band.baselineSleepDir, isEmpty);
+      band.onFeature(
+        const FeatureSample(id: 'band.delta', t: 0, value: 0.2),
+        closed(accept: true),
+      );
+      expect(band.baselineSleepDir, [0.2]);
+
+      final ai =
+          GuardLane(
+              guardOutput: RecordingGuardOutput(),
+              rewardOutput: RecordingRewardOutput(),
+            )
+            ..enabled = true
+            ..bandMath = false
+            ..clearCaptured = true
+            ..featureId = 'ai.drowsiness';
+      ai.onFeature(
+        const FeatureSample(id: 'ai.drowsiness', t: 0, value: 0.4),
+        closed(accept: false),
+      );
+      expect(ai.baselineSleepDir, isEmpty);
+      ai.onFeature(
+        const FeatureSample(id: 'ai.drowsiness', t: 0, value: 0.4),
+        closed(accept: true),
+      );
+      expect(ai.baselineSleepDir, [0.4]);
     });
 
     test('muffleReward false does not call setMuffle', () {
@@ -447,36 +587,31 @@ void main() {
       expect(plan.artifact, isTrue);
       expect(plan.challenge, isTrue);
       expect(plan.baseline, isTrue);
-      expect(plan.adaptiveBaselineSeconds, isNull);
+      expect(plan, CalibrationPlan.stagedAi);
     });
 
-    test('default AI + reward extends staged rest to 60s', () {
-      final plan = CalibrationPlan.fromEnabledFeatures([
-        'band.atr',
-        'ai.drowsiness',
-      ]);
-      expect(plan.artifact, isTrue);
-      expect(plan.challenge, isTrue);
-      expect(plan.baseline, isTrue);
-      expect(plan.adaptiveBaselineSeconds, calibrationAdaptiveBaselineSeconds);
+    test('AI + reward uses the same staged plan', () {
+      expect(
+        CalibrationPlan.fromEnabledFeatures(['band.atr', 'ai.drowsiness']),
+        CalibrationPlan.stagedAi,
+      );
     });
 
     test('always staged overrides a band-only feature', () {
       final plan = CalibrationPlan.fromEnabledFeatures([
         'band.atr',
       ], method: CalibrationMethod.alwaysStaged);
-      expect(plan.artifact, isTrue);
-      expect(plan.challenge, isTrue);
-      expect(plan.baseline, isTrue);
-      expect(plan.adaptiveBaselineSeconds, isNull);
+      expect(plan, CalibrationPlan.stagedAi);
     });
 
-    test('always staged still extends rest when AI and reward share it', () {
-      final plan = CalibrationPlan.fromEnabledFeatures([
-        'band.atr',
-        'ai.drowsiness',
-      ], method: CalibrationMethod.alwaysStaged);
-      expect(plan.adaptiveBaselineSeconds, calibrationAdaptiveBaselineSeconds);
+    test('always staged with AI and reward stays the staged plan', () {
+      expect(
+        CalibrationPlan.fromEnabledFeatures([
+          'band.atr',
+          'ai.drowsiness',
+        ], method: CalibrationMethod.alwaysStaged),
+        CalibrationPlan.stagedAi,
+      );
     });
   });
 }

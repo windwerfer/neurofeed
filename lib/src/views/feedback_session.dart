@@ -552,7 +552,10 @@ class _PhaseControls extends ConsumerWidget {
               const SizedBox(height: 16),
               if (fb.baselineSecondsLeft > 0) ...[
                 Text(
-                  'Sit quietly, let your mind wander. ${fb.baselineSecondsLeft}s',
+                  fb.baselineCleanCountdown
+                      ? 'Sit quietly, let your mind wander. '
+                            '${fb.baselineSecondsLeft}s of clean signal left'
+                      : 'Sit quietly, let your mind wander. ${fb.baselineSecondsLeft}s',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium,
                 ),

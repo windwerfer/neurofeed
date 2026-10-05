@@ -176,7 +176,6 @@ void main() {
 
       GuardTick tick() => GuardTick(
         phase: FeedbackPhase.playing,
-        collectingBaseline: false,
         collectionEyes: null,
         muffleReward: false,
         sessionStartAt: DateTime.now(),

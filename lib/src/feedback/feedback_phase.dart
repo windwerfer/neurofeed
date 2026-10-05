@@ -15,7 +15,8 @@ const int greenStableSeconds = 3;
 /// assume that pad is faulty and surface the continue-anyway fallback.
 const int faultyPadSeconds = 20;
 
-const int calibrationBaselineSeconds = 50;
+const int calibrationBaselineValidSeconds = 45;
+const int calibrationBaselineMaxSeconds = 60;
 const int adaptIntervalSeconds = 30;
 const Duration movementBuffer = Duration(seconds: 1);
 const Duration calibrationAudioTimeout = Duration(seconds: 15);

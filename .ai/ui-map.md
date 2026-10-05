@@ -339,7 +339,7 @@ is allowed to sleep. Stop asks Dart to stop capture; it does not disconnect BLE.
 | Spoken name | On-screen / log | Code symbol | File | Notes |
 |---|---|---|---|---|
 | Phase idle | `[feedback] phase=idle` | `FeedbackPhase.idle` | `feedback_phase.dart` | |
-| Calibrating | `[feedback] phase=calibrating` | `FeedbackPhase.calibrating` | | 50 s baseline unless skip. Debug `Skip` next to `Cancel`. |
+| Calibrating | `[feedback] phase=calibrating` | `FeedbackPhase.calibrating` | | Shared baseline: 45 s of clean signal, or 60 s wall. Countdown `Ns of clean signal left`. Debug `Skip` next to `Cancel`. |
 | Playing | `[feedback] phase=playing` | `FeedbackPhase.playing` | | Agent asserts this. |
 | Paused / interrupted / ended | matching log | `paused` / `interrupted` / `ended` | | |
 | Reward lane | session audio | `RewardLane` | `reward_lane.dart` | Guard never modulates. Dirty skips `recordEpoch` / `onSample`. |

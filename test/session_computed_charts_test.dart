@@ -381,6 +381,7 @@ void main() {
         '"baselinePercentile":40,"baselineMean":0.8,"baselineStddev":0.1,'
         '"baselineSamples":[0.5,0.8],"skipped":true,"skipSource":"last",'
         '"usedStartAnyway":true,"greenStableSeconds":3,"faultyPadSeconds":20,'
+        '"baselineValidSeconds":45,"baselineWallSeconds":52,'
         '"kind":"staged","calibrationId":"eyes-closed-01","version":2,'
         '"timestamp":"2026-10-05T12:01:02.500Z","elapsedSecs":60.5}\n'
         '{"type":"recalibration","atSecs":90,"baselineCount":50,'
@@ -461,6 +462,8 @@ void main() {
       expect(calibration?.usedStartAnyway, isTrue);
       expect(calibration?.greenStableSeconds, 3);
       expect(calibration?.faultyPadSeconds, 20);
+      expect(calibration?.baselineValidSeconds, 45);
+      expect(calibration?.baselineWallSeconds, 52);
       expect(calibration?.baselineSamples, [0.5, 0.8]);
       expect(calibration?.calibrationJson, {'name': 'Eyes closed'});
       expect(calibration?.phases.single.clipFile, 'clips/atr.opus');
@@ -507,6 +510,8 @@ void main() {
       );
       final storedCalibration = stored['calibration'] as Map;
       expect(storedCalibration['skipped'], isTrue);
+      expect(storedCalibration['baselineValidSeconds'], 45);
+      expect(storedCalibration['baselineWallSeconds'], 52);
       expect(storedCalibration['skipSource'], 'last');
       expect(stored['timeZone'], 'Pacific/Auckland');
       expect(stored['startedAt'], '2026-10-05T12:00:02.000Z');

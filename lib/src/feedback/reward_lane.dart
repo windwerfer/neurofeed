@@ -10,15 +10,15 @@ import 'package:neurofeed/src/rust/api/muse.dart';
 class RewardTick {
   const RewardTick({
     required this.phase,
-    required this.collectingBaseline,
     required this.sampleIsClean,
     required this.quality,
+    this.acceptBaselineSample = false,
     this.dirtyReason,
   });
 
   final FeedbackPhase phase;
-  final bool collectingBaseline;
   final bool sampleIsClean;
+  final bool acceptBaselineSample;
   final List<double>? quality;
   final TrustDirtyReason? dirtyReason;
 }
@@ -112,8 +112,8 @@ class RewardLane {
     if (!sample.value.isFinite) {
       return;
     }
-    if (tick.phase == FeedbackPhase.calibrating && tick.collectingBaseline) {
-      if (_hasReward && tick.sampleIsClean) {
+    if (tick.phase == FeedbackPhase.calibrating) {
+      if (tick.acceptBaselineSample && _hasReward) {
         engine.addBaselineSample(sample.value);
       }
       return;

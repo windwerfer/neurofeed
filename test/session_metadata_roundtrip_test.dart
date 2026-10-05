@@ -402,6 +402,8 @@ void main() {
         skipSource: 'synthetic',
         greenStableSeconds: 3,
         faultyPadSeconds: 20,
+        baselineValidSeconds: 45,
+        baselineWallSeconds: 52,
         baseline: SessionBaselineStats(
           percentile: 40,
           count: 100,
@@ -442,6 +444,10 @@ void main() {
       expect(restored.calibrationId, equals('eyes-open-01'));
       expect(restored.skipped, isTrue);
       expect(restored.skipSource, 'synthetic');
+      expect(restored.baselineValidSeconds, 45);
+      expect(restored.baselineWallSeconds, 52);
+      expect(json['baselineValidSeconds'], 45);
+      expect(json['baselineWallSeconds'], 52);
       expect(json['skipped'], isTrue);
       expect(json['skipSource'], 'synthetic');
       expect(restored.trainingStartOffsetSecs, equals(95.0));

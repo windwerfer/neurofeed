@@ -360,6 +360,8 @@ class SessionCalibration {
     this.skipSource,
     this.greenStableSeconds,
     this.faultyPadSeconds,
+    this.baselineValidSeconds,
+    this.baselineWallSeconds,
     this.baseline,
     this.phases = const [],
     this.recalibrations = const [],
@@ -383,6 +385,8 @@ class SessionCalibration {
   final String? skipSource;
   final int? greenStableSeconds;
   final int? faultyPadSeconds;
+  final int? baselineValidSeconds;
+  final int? baselineWallSeconds;
   final SessionBaselineStats? baseline;
   final List<SessionCalibrationPhase> phases;
   final List<SessionRecalibration> recalibrations;
@@ -414,6 +418,9 @@ class SessionCalibration {
     if (skipSource != null) 'skipSource': skipSource,
     if (greenStableSeconds != null) 'greenStableSeconds': greenStableSeconds,
     if (faultyPadSeconds != null) 'faultyPadSeconds': faultyPadSeconds,
+    if (baselineValidSeconds != null)
+      'baselineValidSeconds': baselineValidSeconds,
+    if (baselineWallSeconds != null) 'baselineWallSeconds': baselineWallSeconds,
     if (baseline != null) 'baseline': baseline!.toJson(),
     if (baselineSamples.isNotEmpty) 'baselineSamples': baselineSamples,
     if (phases.isNotEmpty) 'phases': [for (final p in phases) p.toJson()],
@@ -438,6 +445,8 @@ class SessionCalibration {
       skipSource: json['skipSource'] as String?,
       greenStableSeconds: (json['greenStableSeconds'] as num?)?.toInt(),
       faultyPadSeconds: (json['faultyPadSeconds'] as num?)?.toInt(),
+      baselineValidSeconds: (json['baselineValidSeconds'] as num?)?.toInt(),
+      baselineWallSeconds: (json['baselineWallSeconds'] as num?)?.toInt(),
       baseline: SessionBaselineStats.fromJson(json['baseline']),
       phases:
           (json['phases'] as List<Object?>?)

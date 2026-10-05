@@ -13,8 +13,8 @@ Companion app for Interaxon Muse EEG headsets. Flutter UI, Rust BLE stack
   PSD. Follow the live signal or Inspect recent history.
 - **Record** from the graph bar. Saved recordings sit in the same History
   list as biofeedback sessions.
-- **Biofeedback**: pick a program (or build one), 50 s silent calibration
-  (or a staged AI sequence), then audio reward on a chosen EEG feature.
+- **Biofeedback**: pick a program (or build one), a 45 s clean baseline
+  (up to 60 s, or a staged AI sequence), then audio reward on a chosen EEG feature.
   Optional drowsiness **warning** (on-device CBraMod Candle / optional REVE or band-math delta)
   never changes the reward.
 - **History**: sessions and recordings, notes, charts, export (PDF, CSV, EDF).

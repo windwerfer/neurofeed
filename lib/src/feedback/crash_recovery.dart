@@ -151,6 +151,8 @@ SessionCalibration? _recoveredCalibration({
   String? skipSource,
   int? greenStableSeconds,
   int? faultyPadSeconds,
+  int? baselineValidSeconds,
+  int? baselineWallSeconds,
   List<double> baselineSamples = const [],
   int version = 2,
 }) {
@@ -185,6 +187,8 @@ SessionCalibration? _recoveredCalibration({
     skipSource: skipSource,
     greenStableSeconds: greenStableSeconds,
     faultyPadSeconds: faultyPadSeconds,
+    baselineValidSeconds: baselineValidSeconds,
+    baselineWallSeconds: baselineWallSeconds,
     baseline: baselineCount == null
         ? null
         : SessionBaselineStats(
@@ -241,6 +245,8 @@ SessionMetadata _metadataFromTemps({
   String? skipSource;
   int? greenStableSeconds;
   int? faultyPadSeconds;
+  int? baselineValidSeconds;
+  int? baselineWallSeconds;
   var baselineSamples = const <double>[];
   var calibrationVersion = 2;
   final intervals = <SessionAnnotation>[];
@@ -358,6 +364,12 @@ SessionMetadata _metadataFromTemps({
               greenStableSeconds;
           faultyPadSeconds =
               (meta['faultyPadSeconds'] as num?)?.toInt() ?? faultyPadSeconds;
+          baselineValidSeconds =
+              (meta['baselineValidSeconds'] as num?)?.toInt() ??
+              baselineValidSeconds;
+          baselineWallSeconds =
+              (meta['baselineWallSeconds'] as num?)?.toInt() ??
+              baselineWallSeconds;
         } else if (type == 'recalibration') {
           sawCalibration = true;
           recalibrations.add(
@@ -513,6 +525,8 @@ SessionMetadata _metadataFromTemps({
       skipSource: skipped ? skipSource : null,
       greenStableSeconds: greenStableSeconds,
       faultyPadSeconds: faultyPadSeconds,
+      baselineValidSeconds: baselineValidSeconds,
+      baselineWallSeconds: baselineWallSeconds,
       baselineSamples: baselineSamples,
       version: calibrationVersion,
     ),

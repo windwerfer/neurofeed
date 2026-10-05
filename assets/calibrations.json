@@ -4,7 +4,7 @@
     "eyes-closed-01": {
       "name": "Eyes Closed",
       "single": {
-        "seconds": 50,
+        "seconds": 45,
         "eyes": "closed",
         "intros": [
           {
@@ -70,7 +70,7 @@
     "eyes-open-01": {
       "name": "Eyes Open",
       "single": {
-        "seconds": 50,
+        "seconds": 45,
         "eyes": "open",
         "intros": [
           {

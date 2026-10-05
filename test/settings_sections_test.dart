@@ -252,7 +252,9 @@ void main() {
     await tester.pump();
     expect(find.textContaining('15 seconds'), findsOneWidget);
     expect(find.textContaining('30 seconds'), findsOneWidget);
-    expect(find.textContaining('50 seconds'), findsOneWidget);
+    expect(find.textContaining('45 seconds'), findsOneWidget);
+    expect(find.textContaining('60 seconds'), findsOneWidget);
+    expect(find.textContaining('50 seconds'), findsNothing);
     expect(find.textContaining('12 seconds'), findsNothing);
     await tester.tap(find.text('Got it'));
     await tester.pump();

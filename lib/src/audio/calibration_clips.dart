@@ -4,11 +4,6 @@ import 'dart:math';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Rest-window length when a reward feature shares the AI rest stage
-/// (V_sleep + reward baseline). Clip JSON stays 45 s; this is a recipe
-/// detail, not a calibrations.json field.
-const int calibrationAdaptiveBaselineSeconds = 60;
-
 /// Settings → AI Calibration. Pref `calibration_method`.
 ///
 /// [byFeature] follows the enabled features: any `ai.*` → staged, otherwise
@@ -33,11 +28,13 @@ enum CalibrationMethod {
 ///
 /// [CalibrationMethod.byFeature] (the setting default):
 /// * any `ai.*` in `S` → artifact + challenge + baseline
-/// * otherwise the `single` baseline (50 s)
+/// * otherwise the `single` baseline
 ///
 /// [CalibrationMethod.alwaysStaged] runs artifact + challenge + baseline
-/// even when `S` has no `ai.*`. Rest stays 45 s, or 60 s when `S` has both
-/// an `ai.*` feature and a non-AI feature.
+/// even when `S` has no `ai.*`. The simple window and the staged rest share
+/// one live baseline: [calibrationBaselineValidSeconds] clean frames, or
+/// [calibrationBaselineMaxSeconds] of wall time. Artifact and challenge
+/// stages keep the clip lengths.
 ///
 /// Record-only can still skip. This plan is for a calibration that runs.
 class CalibrationPlan {
@@ -45,7 +42,6 @@ class CalibrationPlan {
     required this.artifact,
     required this.challenge,
     required this.baseline,
-    this.adaptiveBaselineSeconds,
   });
 
   static const baselineOnly = CalibrationPlan(
@@ -64,15 +60,11 @@ class CalibrationPlan {
   final bool challenge;
   final bool baseline;
 
-  /// When set, overrides the staged rest clip's seconds (AI + reward).
-  final int? adaptiveBaselineSeconds;
-
   /// `S` = features actually enabled this session (reward.feature if the
   /// reward lane is present; guard.feature only when the guard is on).
   /// [method] is Settings → AI Calibration. [CalibrationMethod.byFeature]
   /// stages only when `S` contains `ai.*`. [CalibrationMethod.alwaysStaged]
-  /// stages either way. The 60 s rest applies only when an AI feature and a
-  /// non-AI feature are both in `S`.
+  /// stages either way. Baseline length is not chosen here.
   factory CalibrationPlan.fromEnabledFeatures(
     Iterable<String> enabled, {
     CalibrationMethod method = CalibrationMethod.byFeature,
@@ -82,17 +74,13 @@ class CalibrationPlan {
         if (id.isNotEmpty && id != 'none') id,
     ];
     final hasAi = ids.any((id) => id.startsWith('ai.'));
-    final hasNonAi = ids.any((id) => !id.startsWith('ai.'));
     if (method != CalibrationMethod.alwaysStaged && !hasAi) {
       return baselineOnly;
     }
-    return CalibrationPlan(
+    return const CalibrationPlan(
       artifact: true,
       challenge: true,
       baseline: true,
-      adaptiveBaselineSeconds: hasAi && hasNonAi
-          ? calibrationAdaptiveBaselineSeconds
-          : null,
     );
   }
 
@@ -103,12 +91,10 @@ class CalibrationPlan {
       other is CalibrationPlan &&
       artifact == other.artifact &&
       challenge == other.challenge &&
-      baseline == other.baseline &&
-      adaptiveBaselineSeconds == other.adaptiveBaselineSeconds;
+      baseline == other.baseline;
 
   @override
-  int get hashCode =>
-      Object.hash(artifact, challenge, baseline, adaptiveBaselineSeconds);
+  int get hashCode => Object.hash(artifact, challenge, baseline);
 }
 
 /// One playable clip inside a calibration recipe: an intro variant for a
@@ -131,8 +117,9 @@ class CalibrationStep {
   final String text;
 
   /// Collection seconds associated with this step. 0 for intro variants (the
-  /// single calibration's silent window lives on the recipe); the fixed length
-  /// of each silent window for staged steps.
+  /// single calibration's silent window lives on the recipe). Staged artifact
+  /// and challenge steps use this as a fixed silent window. The rest step's
+  /// value is the nominal target; the live baseline window is the authority.
   final int seconds;
 
   /// `open`, `closed`, or null when the step does not instruct an eye state.
@@ -162,16 +149,6 @@ class CalibrationStep {
     }
     return challengeText[(random ?? Random()).nextInt(challengeText.length)];
   }
-
-  CalibrationStep withSeconds(int seconds) => CalibrationStep(
-    id: id,
-    file: file,
-    text: text,
-    seconds: seconds,
-    eyes: eyes,
-    challengeText: challengeText,
-    challengeTextHint: challengeTextHint,
-  );
 
   factory CalibrationStep.fromJson(Map<String, Object?> json) =>
       CalibrationStep(
@@ -305,7 +282,7 @@ class Calibration {
   /// Compose a playable recipe from [plan]. Baseline-only uses the `single`
   /// variant (eye state comes from this calibration id). Any artifact or
   /// challenge flag uses the `staged` clips, filtered to the requested
-  /// stages. Adaptive rest length lives on the plan, not in JSON.
+  /// stages. Rest length is the live baseline window, not this JSON.
   CalibrationRecipe compose(CalibrationPlan plan) {
     if (!plan.usesStagedClips) {
       return single;
@@ -322,12 +299,7 @@ class Calibration {
         }
       } else if (stage.isRestStage) {
         if (plan.baseline) {
-          final override = plan.adaptiveBaselineSeconds;
-          stages.add(
-            override != null && override > stage.seconds
-                ? stage.withSeconds(override)
-                : stage,
-          );
+          stages.add(stage);
         }
       }
     }

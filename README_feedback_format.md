@@ -122,7 +122,9 @@ Writers: `lib/src/session_format/metadata.dart` (`buildRecordingMetadata` /
 When `kind == "feedback"`, also write top-level `feedback: { … }` (protocol,
 durationMinutes, calibration, sessionSettings, outcomeScalars, music, …).
 `feedback.calibration.skipped` is true when calibration was skipped;
-`skipSource` is then `synthetic` or `last`. Shared physio stays under base
+`skipSource` is then `synthetic` or `last`. `baselineValidSeconds` and
+`baselineWallSeconds` are the shared baseline window (45 clean frames, or
+60 wall seconds). Shared physio stays under base
 `stats` only. See contract **Feedback extension**.
 
 ---

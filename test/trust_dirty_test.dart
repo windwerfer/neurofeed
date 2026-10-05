@@ -97,14 +97,12 @@ BandsDto _pad(int electrode) => BandsDto(
 
 const _clean = RewardTick(
   phase: FeedbackPhase.playing,
-  collectingBaseline: false,
   sampleIsClean: true,
   quality: [100, 100, 100, 100],
 );
 
 const _dirty = RewardTick(
   phase: FeedbackPhase.playing,
-  collectingBaseline: false,
   sampleIsClean: false,
   quality: [100, 100, 100, 100],
   dirtyReason: TrustDirtyReason.movement,
@@ -202,7 +200,6 @@ void main() {
       ..lastDelta = 0.9;
     GuardTick over() => GuardTick(
       phase: FeedbackPhase.playing,
-      collectingBaseline: false,
       collectionEyes: null,
       muffleReward: false,
       sessionStartAt: null,
@@ -230,7 +227,6 @@ void main() {
     );
     GuardTick dirtyTick() => GuardTick(
       phase: FeedbackPhase.playing,
-      collectingBaseline: false,
       collectionEyes: null,
       muffleReward: false,
       sessionStartAt: null,

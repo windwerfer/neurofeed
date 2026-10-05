@@ -39,17 +39,16 @@ const Duration warningChimeCooldown = Duration(seconds: 20);
 class GuardTick {
   const GuardTick({
     required this.phase,
-    required this.collectingBaseline,
     required this.collectionEyes,
     required this.muffleReward,
     required this.sessionStartAt,
     required this.writeWarningMetadata,
     required this.updateComputed,
     this.sampleIsClean = true,
+    this.acceptBaselineSample = false,
   });
 
   final FeedbackPhase phase;
-  final bool collectingBaseline;
   final String? collectionEyes;
   final bool muffleReward;
   final DateTime? sessionStartAt;
@@ -74,6 +73,7 @@ class GuardTick {
   })
   updateComputed;
   final bool sampleIsClean;
+  final bool acceptBaselineSample;
 }
 
 /// Guard lane: [FeatureDto] → percentileWarn. Never changes the reward scalar
@@ -146,8 +146,9 @@ class GuardLane {
     if (bandMath) {
       lastDelta = sample.value;
       if (tick.phase == FeedbackPhase.calibrating &&
-          tick.collectingBaseline &&
-          tick.collectionEyes == 'closed') {
+          tick.acceptBaselineSample &&
+          tick.collectionEyes == 'closed' &&
+          sample.value.isFinite) {
         baselineSleepDir.add(sample.value);
         return false;
       }
@@ -164,8 +165,9 @@ class GuardLane {
       return false;
     }
     if (tick.phase == FeedbackPhase.calibrating &&
-        tick.collectingBaseline &&
-        tick.collectionEyes == 'closed') {
+        tick.acceptBaselineSample &&
+        tick.collectionEyes == 'closed' &&
+        sample.value.isFinite) {
       baselineSleepDir.add(sample.value);
       return false;
     }

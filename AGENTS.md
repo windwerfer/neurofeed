@@ -36,11 +36,13 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   enums are gone — ids are strings; guard is a feature id (`band.delta` /
   `ai.drowsiness` / `none`).
 - **Calibration** (`assets/calibrations.json` v2): `eyes-closed-01` /
-  `eyes-open-01`, each with `single` (**50 s** silent baseline) and `staged`
-  (artifacts 15 s / eyes-open challenge 30 s / eyes-closed rest 45 s, or 60 s
-  when a reward shares that rest). Settings → AI Calibration is Default
-  (AI labeling → staged, otherwise simple) or Always staged. Record-only
-  stays skippable.
+  `eyes-open-01`, each with `single` and `staged` (artifacts 15 s /
+  eyes-open challenge 30 s / rest). The simple window and the staged rest
+  share one live baseline: 45 clean frames, or 60 s of wall time. A clean
+  frame is all head electrodes ≥ 80 and a quiet movement/gesture buffer.
+  One feature source second counts once.
+  Settings → AI Calibration is Default (AI labeling → staged, otherwise
+  simple) or Always staged. Record-only stays skippable.
 - **Android**: NDK 27/28, Gradle 8.14, `targetSdk` from Flutter, arm64-only
   (`abiFilters = ["arm64-v8a"]`).
 - **JNI glue**: btleplug init from Dart **after** `RustLib.init()`. Kotlin

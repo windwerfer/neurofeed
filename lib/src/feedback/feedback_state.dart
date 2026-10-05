@@ -63,6 +63,7 @@ class FeedbackState {
   final bool waitingForSignal;
   final bool startAnywayAvailable;
   final int baselineSecondsLeft;
+  final bool baselineCleanCountdown;
   final int baselinePercentile;
   final double? currentThreshold;
   final String? calibrationStepName;
@@ -86,6 +87,7 @@ class FeedbackState {
     this.waitingForSignal = false,
     this.startAnywayAvailable = false,
     this.baselineSecondsLeft = 0,
+    this.baselineCleanCountdown = false,
     this.baselinePercentile = defaultBaselinePercentile,
     this.currentThreshold,
     this.calibrationStepName,
@@ -112,6 +114,7 @@ class FeedbackState {
     bool? waitingForSignal,
     bool? startAnywayAvailable,
     int? baselineSecondsLeft,
+    bool? baselineCleanCountdown,
     int? baselinePercentile,
     Object? currentThreshold = _sentinel,
     Object? calibrationStepName = _sentinel,
@@ -138,6 +141,8 @@ class FeedbackState {
     waitingForSignal: waitingForSignal ?? this.waitingForSignal,
     startAnywayAvailable: startAnywayAvailable ?? this.startAnywayAvailable,
     baselineSecondsLeft: baselineSecondsLeft ?? this.baselineSecondsLeft,
+    baselineCleanCountdown:
+        baselineCleanCountdown ?? this.baselineCleanCountdown,
     baselinePercentile: baselinePercentile ?? this.baselinePercentile,
     currentThreshold: identical(currentThreshold, _sentinel)
         ? this.currentThreshold
@@ -219,6 +224,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       onCollectionEyes: (eyes) => _collectionEyes = eyes,
       onFinished: _finishCalibration,
       usedStartAnyway: () => _usedStartAnyway,
+      baselineFrameValid: () {
+        final quality = _ref.read(appStateProvider).signalQuality;
+        return _sampleIsClean && _allGreen(quality);
+      },
     );
 
     _eventSub = _ref
@@ -669,8 +678,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   }
 
   /// Begin calibration: play the voice intro, require all electrodes green
-  /// for [greenStableSeconds] before starting a [calibrationBaselineSeconds]
-  /// silent baseline, then start feedback automatically. Opens the connect
+  /// for [greenStableSeconds] before the shared baseline window
+  /// ([calibrationBaselineValidSeconds] clean frames, or
+  /// [calibrationBaselineMaxSeconds] of wall time), then start feedback.
+  /// Opens the connect
   /// window if the Muse is not connected. There is no gate after the
   /// baseline. If one pad never turns green for [faultyPadSeconds] while the
   /// needed frontal pads do, it is assumed faulty and a continue-anyway
@@ -719,6 +730,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       waitingForSignal: false,
       startAnywayAvailable: false,
       baselineSecondsLeft: 0,
+      baselineCleanCountdown: false,
       currentThreshold: null,
       audioInitFailed: audioFailed,
     );
@@ -1091,6 +1103,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       startAnywayAvailable:
           ui.startAnywayAvailable ?? state.startAnywayAvailable,
       baselineSecondsLeft: ui.baselineSecondsLeft ?? state.baselineSecondsLeft,
+      baselineCleanCountdown: ui.cleanCountdown ?? state.baselineCleanCountdown,
       calibrationStepName: ui.stepName ?? state.calibrationStepName,
       calibrationStepTotal: ui.stepTotal ?? state.calibrationStepTotal,
       calibrationChallengeHint: ui.clearChallenges
@@ -1145,6 +1158,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         'usedStartAnyway': _usedStartAnyway,
         'greenStableSeconds': greenStableSeconds,
         'faultyPadSeconds': faultyPadSeconds,
+        if (_calibration.baselineValidSeconds != null)
+          'baselineValidSeconds': _calibration.baselineValidSeconds,
+        if (_calibration.baselineWallSeconds != null)
+          'baselineWallSeconds': _calibration.baselineWallSeconds,
         'kind': _calibration.kind,
         'calibrationId': _calibration.calibrationId,
         'version': CalibrationManifest.currentVersion,
@@ -1289,6 +1306,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       skipSource: _skipCalibrationRequested ? _calibrationSkipSource : null,
       greenStableSeconds: greenStableSeconds,
       faultyPadSeconds: faultyPadSeconds,
+      baselineValidSeconds: _calibration.baselineValidSeconds,
+      baselineWallSeconds: _calibration.baselineWallSeconds,
       baseline: SessionBaselineStats(
         percentile: _engine.baselinePercentile.toDouble(),
         count: _engine.baselineCount,
@@ -2015,13 +2034,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     );
   }
 
-  RewardTick _rewardTick() {
+  RewardTick _rewardTick({bool acceptBaselineSample = false}) {
     final quality = _ref.read(appStateProvider).signalQuality;
     return RewardTick(
       phase: state.phase,
-      collectingBaseline:
-          state.phase == FeedbackPhase.calibrating &&
-          state.baselineSecondsLeft > 0,
+      acceptBaselineSample: acceptBaselineSample,
       sampleIsClean: _sampleIsClean,
       quality: quality,
       dirtyReason: artifactDirtyReason(
@@ -2040,18 +2057,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     return DateTime.now().difference(start).inMilliseconds / 1000.0;
   }
 
-  GuardTick _guardTick() {
+  GuardTick _guardTick({bool acceptBaselineSample = false}) {
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
     final spec = catalog?.forName(state.protocol);
     final quality = _ref.read(appStateProvider).signalQuality;
     return GuardTick(
       phase: state.phase,
-      collectingBaseline:
-          state.phase == FeedbackPhase.calibrating &&
-          state.baselineSecondsLeft > 0,
       collectionEyes: _collectionEyes,
       muffleReward: spec?.guard?.muffleReward ?? false,
       sessionStartAt: _sessionStartAt,
+      acceptBaselineSample: acceptBaselineSample,
       sampleIsClean: _sampleIsClean && _reward.padsUsable(quality),
       writeWarningMetadata:
           ({
@@ -2109,7 +2124,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (sample == null) {
       return;
     }
-    _reward.onFeature(sample, _rewardTick());
+    final finite = sample.value.isFinite;
+    final sourceSecond = sample.t.isFinite ? (sample.t / 1000).floor() : null;
+    final acceptBaseline =
+        finite &&
+        _calibration.noteBaselineFrame(
+          featureId: sample.id,
+          sourceSecond: sourceSecond,
+        );
+    _reward.onFeature(
+      sample,
+      _rewardTick(acceptBaselineSample: acceptBaseline),
+    );
     if (state.phase == FeedbackPhase.playing &&
         _reward.hasReward &&
         sample.id == _reward.featureId &&
@@ -2133,7 +2159,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         _audio.onMovement();
       }
     }
-    if (_guard.onFeature(sample, _guardTick())) {
+    if (_guard.onFeature(
+      sample,
+      _guardTick(acceptBaselineSample: acceptBaseline),
+    )) {
       final start = _sessionStartAt;
       if (start != null) {
         _guard.recordSample(_drowsinessSeries, start);
@@ -2181,6 +2210,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         );
       }
     }
+    _calibration.finishBaselineFrame();
   }
 
   void _onBands(BandsDto bands) {

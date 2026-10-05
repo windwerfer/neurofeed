@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:neurofeed/src/audio/calibration_clips.dart';
+import 'package:neurofeed/src/feedback/baseline_window.dart';
 import 'package:neurofeed/src/feedback/feedback_phase.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 
@@ -14,6 +15,7 @@ class CalibrationStepRun {
     this.seconds = 0,
     this.eyes,
     this.challengeText,
+    this.baselineWindow = false,
   });
 
   final String name;
@@ -21,6 +23,7 @@ class CalibrationStepRun {
   final int seconds;
   final String? eyes;
   final String? challengeText;
+  final bool baselineWindow;
 }
 
 class CalibrationUi {
@@ -33,6 +36,7 @@ class CalibrationUi {
     this.challengeHint,
     this.challengeText,
     this.clearChallenges = false,
+    this.cleanCountdown,
   });
 
   final bool? waitingForSignal;
@@ -43,6 +47,7 @@ class CalibrationUi {
   final String? challengeHint;
   final String? challengeText;
   final bool clearChallenges;
+  final bool? cleanCountdown;
 }
 
 /// Playback of today's `single` / `staged` clips, composed from a
@@ -59,6 +64,8 @@ class CalibrationRunner {
     required this.onCollectionEyes,
     required this.onFinished,
     this.usedStartAnyway = _startAnywayDefault,
+    this.baselineFrameValid = _baselineFrameInvalid,
+    this.clock = _systemClock,
   });
 
   final Future<CalibrationManifest> Function() loadManifest;
@@ -72,7 +79,12 @@ class CalibrationRunner {
   final void Function() onFinished;
   final bool Function() usedStartAnyway;
 
+  final bool Function() baselineFrameValid;
+  final DateTime Function() clock;
+
   static bool _startAnywayDefault() => false;
+  static bool _baselineFrameInvalid() => false;
+  static DateTime _systemClock() => DateTime.now();
 
   final List<CalibrationStepRun> steps = [];
   int stepIndex = 0;
@@ -82,26 +94,40 @@ class CalibrationRunner {
   final List<SessionCalibrationPhase> clipPhases = [];
   Completer<void>? collectionCompleter;
   Timer? collectionTimer;
+  bool collectingBaselineWindow = false;
+  int? baselineValidSeconds;
+  int? baselineWallSeconds;
+  BaselineWindow _window = const BaselineWindow();
+  final BaselineFrameClock _frameClock = BaselineFrameClock();
+  bool _finishAfterSample = false;
 
   void reset() {
-    collectionTimer?.cancel();
-    collectionTimer = null;
-    collectionCompleter?.complete();
-    collectionCompleter = null;
+    cancelTimers();
     steps.clear();
     stepIndex = 0;
     kind = 'single';
     calibrationId = '';
     calibrationJson = null;
     clipPhases.clear();
+    baselineValidSeconds = null;
+    baselineWallSeconds = null;
+    _window = const BaselineWindow();
+    _frameClock.reset();
+    _finishAfterSample = false;
     onCollectionEyes(null);
   }
 
   void cancelTimers() {
     collectionTimer?.cancel();
     collectionTimer = null;
-    collectionCompleter?.complete();
+    collectingBaselineWindow = false;
+    _finishAfterSample = false;
+    _frameClock.reset();
+    final pending = collectionCompleter;
     collectionCompleter = null;
+    if (pending != null && !pending.isCompleted) {
+      pending.complete();
+    }
   }
 
   /// Runs the calibration for the selected protocol from the manifest recipe
@@ -114,7 +140,11 @@ class CalibrationRunner {
       return;
     }
     updateUi(
-      const CalibrationUi(waitingForSignal: false, clearChallenges: true),
+      const CalibrationUi(
+        waitingForSignal: false,
+        clearChallenges: true,
+        cleanCountdown: false,
+      ),
     );
     steps.clear();
     stepIndex = 0;
@@ -141,8 +171,9 @@ class CalibrationRunner {
         ..add(
           CalibrationStepRun(
             name: 'Baseline',
-            seconds: recipe?.seconds ?? calibrationBaselineSeconds,
+            seconds: calibrationBaselineValidSeconds,
             eyes: recipe?.eyes,
+            baselineWindow: true,
           ),
         );
     } else {
@@ -152,9 +183,12 @@ class CalibrationRunner {
           CalibrationStepRun(
             name: _stageName(stage),
             clip: stage,
-            seconds: stage.seconds,
+            seconds: stage.isRestStage
+                ? calibrationBaselineValidSeconds
+                : stage.seconds,
             eyes: stage.eyes,
             challengeText: stage.randomChallenge(),
+            baselineWindow: stage.isRestStage,
           ),
         );
       }
@@ -192,6 +226,7 @@ class CalibrationRunner {
         challengeHint: step.clip?.challengeTextHint,
         challengeText: step.challengeText,
         baselineSecondsLeft: 0,
+        cleanCountdown: false,
       ),
     );
     if (step.clip != null) {
@@ -237,7 +272,7 @@ class CalibrationRunner {
         });
       }
     }
-    if (step.seconds > 0) {
+    if (step.baselineWindow || step.seconds > 0) {
       await _runCollection(step);
     }
     if (!isActive()) {
@@ -248,12 +283,17 @@ class CalibrationRunner {
   }
 
   Future<void> _runCollection(CalibrationStepRun step) async {
+    if (step.baselineWindow) {
+      await _runBaselineWindow(step);
+      return;
+    }
     onCollectionEyes(step.eyes);
     updateUi(
       CalibrationUi(
         baselineSecondsLeft: step.seconds,
         waitingForSignal: false,
         startAnywayAvailable: false,
+        cleanCountdown: false,
       ),
     );
     final completer = Completer<void>();
@@ -277,6 +317,106 @@ class CalibrationRunner {
     onCollectionEyes(null);
     if (!isActive()) {
       return;
+    }
+  }
+
+  Future<void> _runBaselineWindow(CalibrationStepRun step) async {
+    onCollectionEyes(step.eyes);
+    final started = clock();
+    _window = const BaselineWindow().start(started);
+    _frameClock.reset();
+    _finishAfterSample = false;
+    collectingBaselineWindow = true;
+    baselineValidSeconds = null;
+    baselineWallSeconds = null;
+    updateUi(
+      CalibrationUi(
+        baselineSecondsLeft: _window.secondsLeft,
+        stepTotal: _window.targetValidSeconds,
+        waitingForSignal: false,
+        startAnywayAvailable: false,
+        cleanCountdown: true,
+      ),
+    );
+    final completer = Completer<void>();
+    collectionCompleter = completer;
+    collectionTimer?.cancel();
+    collectionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!collectingBaselineWindow) return;
+      final now = clock();
+      if (_window.finishedAt(now)) {
+        _completeBaseline(now);
+      }
+    });
+    await completer.future;
+    onCollectionEyes(null);
+    if (!isActive()) {
+      return;
+    }
+  }
+
+  bool noteBaselineFrame({required String featureId, int? sourceSecond}) {
+    if (!collectingBaselineWindow) return false;
+    final now = clock();
+    final bucket = _sourceBucket(now, sourceSecond);
+    if (bucket == null) return false;
+    if (_window.finishedAt(now) && !_frameClock.contains(bucket)) {
+      _finishAfterSample = true;
+      return false;
+    }
+    final taken = _frameClock.take(
+      sourceSecond: bucket,
+      featureId: featureId,
+      accept: baselineFrameValid(),
+    );
+    if (taken.opened && taken.accepted) {
+      _window = _window.recordAccepted();
+      updateUi(
+        CalibrationUi(
+          baselineSecondsLeft: _window.secondsLeft,
+          cleanCountdown: true,
+        ),
+      );
+    }
+    if (_window.finishedAt(now)) {
+      _finishAfterSample = true;
+    }
+    return taken.store;
+  }
+
+  int? _sourceBucket(DateTime now, int? sourceSecond) {
+    final start = _window.started;
+    if (start == null) return null;
+    final startSecond = start.millisecondsSinceEpoch ~/ 1000;
+    final limit = startSecond + _window.maxWallSeconds;
+    if (sourceSecond != null) {
+      if (sourceSecond < startSecond || sourceSecond > limit) return null;
+      return sourceSecond;
+    }
+    final second = now.millisecondsSinceEpoch ~/ 1000;
+    if (second < startSecond || second > limit) return null;
+    return second;
+  }
+
+  void finishBaselineFrame() {
+    if (!_finishAfterSample || !collectingBaselineWindow) return;
+    _finishAfterSample = false;
+    _completeBaseline(clock());
+  }
+
+  void _completeBaseline(DateTime now) {
+    if (!collectingBaselineWindow) return;
+    baselineValidSeconds = _window.validSeconds;
+    baselineWallSeconds = _window.wallSecondsAt(now);
+    collectingBaselineWindow = false;
+    _finishAfterSample = false;
+    collectionTimer?.cancel();
+    collectionTimer = null;
+    onCollectionEyes(null);
+    final pending = collectionCompleter;
+    collectionCompleter = null;
+    if (pending != null && !pending.isCompleted) {
+      pending.complete();
     }
   }
 

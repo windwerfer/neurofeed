@@ -942,9 +942,10 @@ class CalibrationSettingsCard extends ConsumerWidget {
           'Always staged runs that staged sequence every time, including '
           'when the feature would use simple.\n\n'
           'Staged records how artifacts (15 seconds), active thinking (30 '
-          'seconds), and a relaxed baseline (45 seconds, or 60 seconds when '
-          'neurofeedback shares that rest) look on your device today.\n\n'
-          'Simple measures only the baseline (50 seconds). Eyes-closed '
+          'seconds), and a relaxed baseline look on your device today.\n\n'
+          'Simple and staged use the same baseline. It collects 45 seconds '
+          'of clean signal: every electrode good, and movement low. If that '
+          'signal is missing, it keeps going until 60 seconds. Eyes-closed '
           'protocols rest with eyes closed. Eyes-open protocols stay quietly '
           'alert.',
         ),

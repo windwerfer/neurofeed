@@ -160,7 +160,7 @@ void main() {
     )!;
     expect(closedSingle.isSingle, isTrue);
     expect(closedSingle.eyes, 'closed');
-    expect(closedSingle.seconds, 50);
+    expect(closedSingle.seconds, 45);
 
     final openSingle = manifest.recipeFor(
       'eyes-open-01',
@@ -168,7 +168,7 @@ void main() {
     )!;
     expect(openSingle.isSingle, isTrue);
     expect(openSingle.eyes, 'open');
-    expect(openSingle.seconds, 50);
+    expect(openSingle.seconds, 45);
 
     final staged = manifest.recipeFor(
       'eyes-closed-01',
@@ -233,10 +233,7 @@ void main() {
       plan: CalibrationPlan.fromEnabledFeatures(['band.atr', 'ai.drowsiness']),
     )!;
     expect(rewardPlusAi.isStaged, isTrue);
-    expect(
-      rewardPlusAi.stages.last.seconds,
-      calibrationAdaptiveBaselineSeconds,
-    );
+    expect(rewardPlusAi.stages.last.seconds, 45);
 
     final subset = manifest.recipeFor(
       'eyes-closed-01',

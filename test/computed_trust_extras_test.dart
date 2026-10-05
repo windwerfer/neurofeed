@@ -100,7 +100,6 @@ void main() {
       const FeatureSample(id: 'band.atr', t: 0, value: 1.2),
       const RewardTick(
         phase: FeedbackPhase.playing,
-        collectingBaseline: false,
         sampleIsClean: false,
         quality: [100, 100, 100, 100],
         dirtyReason: TrustDirtyReason.movement,

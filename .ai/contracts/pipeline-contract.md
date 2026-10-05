@@ -263,7 +263,9 @@ Suppress (engine, not JSON): `rainStage` and `musicFilter` suppress background. 
 | else any lane present | `single` baseline only |
 | setting **Always staged** | `staged` even when `S` would use `single` |
 
-Clips stay those in `calibrations.json` (artifacts 15 s, challenge 30 s, rest 45 s; `single` baseline **50 s**). Rest is 60 s when `S` contains both an `ai.*` feature and a non-AI feature. Do not retune 15 s → 12 s here. Eyes-open vs closed for a `single` baseline comes from the calibration id.
+Clips stay those in `calibrations.json` (artifacts 15 s, challenge 30 s). Do not retune 15 s → 12 s here. Eyes-open vs closed for a `single` baseline comes from the calibration id.
+
+The simple silent window and the staged rest stage share one live baseline window. It collects 45 seconds whose frames are valid, and it stops at 60 seconds of wall time when valid frames are still short. A valid frame has every head electrode at or above 80 and a quiet movement and gesture buffer (the same 1 s buffer as reward cleanliness). The window advances on feature frames. One source second (the feature timestamp, floored) counts once, including when a guard feature for that second arrives later. A second feature id in that second may store once. A source second from before the window, and a non-finite value, do not count. One reward sample and one guard sample may be kept for that second. Artifact and challenge stages stay fixed clocks and do not feed the reward or guard baseline. Clip `seconds` on the rest stage and the single recipe name the 45 s target; the live window is the authority. The silent span is still the gap after the last clip until feedback starts. `calibration.baselineValidSeconds` and `calibration.baselineWallSeconds` record how the window stopped.
 
 ---
 
@@ -291,7 +293,7 @@ Reconnect does not re-enable; the orchestrator re-calls on session start.
 6. **Band-derived features computed in Rust** from the FFT already running, autodropped there. Do not restore Dart `scalarForFeature` or `electrodeAf7` on the reward path. Charts may keep 4-ch names until the Crown-run series.
 7. **Missing sample = no sample**, not 0.
 8. **Two scalars:** native value on `FeatureDto`; percentile rank in Dart `FeedbackEngine`.
-9. **Calibration composed from subscribed features**, using existing `single`/`staged` clips. AI in `S` → three stages; otherwise baseline; record-only skippable. Settings → AI Calibration may override that with **Always staged**. Rest extends to 60 s when a reward shares that stage with an AI feature.
+9. **Calibration composed from subscribed features**, using existing `single`/`staged` clips. AI in `S` → three stages; otherwise baseline; record-only skippable. Settings → AI Calibration may override that with **Always staged**. The simple baseline and the staged rest share one window: 45 valid seconds, or 60 wall seconds when valid frames are still short. A valid frame has all head electrodes at or above 80 and a quiet movement/gesture buffer. One feature source second counts once. Artifact and challenge stages stay fixed and do not enter the baseline.
 10. **`ProtocolType` stays gone.** Keep the nine current IDs. Unknown IDs do not become `drowsiness`. Snapshot `protocolJson` for detail/export/replay.
 11. **`GuardrailMode` stays split** into guard feature vs **global** model. Document with `guard` defaults ON (`band.delta`); without `guard` → none. `guardrailEngine` **keeps writing `GuardrailMode.name`**.
 12. **Availability is derived.** Catalog **may list** band protocols on Crown; **running them is out of scope**. List filter = connected/last `DeviceKind`, else show all.
