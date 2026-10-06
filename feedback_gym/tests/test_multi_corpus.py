@@ -265,7 +265,7 @@ def test_missing_sibling_npz_prints_builder_command(tmp_path, monkeypatch, capsy
     assert rc == run_gym.EXIT_MISSING_CORPUS != 0
     out = (tmp_path / "gym" / "corpora" / "external" / "lee2026_eo_ec.npz").resolve()
     flag = run_gym.SIBLING_PRESETS["lee2026-eo-ec"].get("out_flag", "--out")
-    assert f"python3 {root.resolve() / 'builders' / 'build_lee2026.py'} {flag} {out}" in err
+    assert f"uv run --with numpy --with mne python {root.resolve() / 'builders' / 'build_lee2026.py'} {flag} {out}" in err
     assert "Not falling back to the synthetic corpus" in err
     assert not (tmp_path / "gym" / "results").exists()  # nothing scored
 
