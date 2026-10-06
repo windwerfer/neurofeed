@@ -107,7 +107,7 @@ def test_best_p_on_monotonic_reward_sweep(tmp_path):
         corpus,
         grids,
         is_orphan=False,
-        roles_in_protocols=["reward@drowsiness"],
+        roles_in_protocols=["reward@restAwake"],
     )
     assert out["status"] == "ok"
     assert out["best_p"] is not None
@@ -118,12 +118,12 @@ def test_best_p_on_monotonic_reward_sweep(tmp_path):
     assert hrs[0] >= hrs[-1] - 1e-9
 
 
-def test_simulate_protocol_concentration_has_inhibit(tmp_path):
+def test_simulate_protocol_concentrate_has_inhibit(tmp_path):
     path = generate_synthetic_corpus(tmp_path, n=500, seed=1)
     corpus = load_corpus(path)
     grids = load_grids()
     protocol = {
-        "id": "concentration",
+        "id": "concentrate",
         "reward": {
             "feature": "band.alpha",
             "policy": "percentileUptrain",
@@ -221,7 +221,7 @@ def test_guard_score_ignores_always_on_delta_rail(tmp_path):
 
     # Protocol guard also prefers warn_feature label_align and reports rail
     protocol = {
-        "id": "guardrailOnly",
+        "id": "sleepGuard",
         "guard": {"feature": "ai.a_vig", "policy": "percentileWarn"},
     }
     res = simulate_protocol(protocol, corpus, grids)
@@ -230,3 +230,33 @@ def test_guard_score_ignores_always_on_delta_rail(tmp_path):
     assert g["warn_rate"] == 1.0
     assert g["label_align"] is not None and g["label_align"] > 0.55
     assert g["score"] == g["label_align"]
+
+
+def test_catalog_protocols_all_simulate(tmp_path):
+    """Every protocol in assets/protocols.json runs through the simulator."""
+    from runners.helpers import load_catalog
+
+    protocols, _features = load_catalog()
+    assert list(protocols) == [
+        "sleepGuard",
+        "restAwake",
+        "openMonitor",
+        "alertOpen",
+        "alertClosed",
+        "concentrate",
+        "calibrateRecord",
+        "recordOnly",
+    ]
+    path = generate_synthetic_corpus(tmp_path, n=500, seed=3)
+    corpus = load_corpus(path)
+    grids = load_grids()
+    for pid, proto in protocols.items():
+        res = simulate_protocol(proto, corpus, grids)
+        assert res["id"] == pid
+        if pid in ("calibrateRecord", "recordOnly"):
+            assert res["final"] is None
+            assert any("no lanes" in n for n in res["notes"])
+        else:
+            assert res["final"] is not None, pid
+    assert protocols["sleepGuard"].get("reward") is None
+    assert protocols["sleepGuard"]["guard"]["feature"] == "ai.a_vig"

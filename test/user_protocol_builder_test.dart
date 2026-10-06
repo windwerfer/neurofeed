@@ -137,7 +137,7 @@ void main() {
 
     test('rejects invalid slug and catalog ids', () {
       expect(
-        () => validateUserProtocolId('drowsiness'),
+        () => validateUserProtocolId('restAwake'),
         throwsA(isA<UserProtocolException>()),
       );
       expect(
@@ -192,7 +192,7 @@ void main() {
 
     test('rejects catalog-id collision and writes nothing', () async {
       await expectLater(
-        store.save(draft(id: 'drowsiness')),
+        store.save(draft(id: 'restAwake')),
         throwsA(isA<UserProtocolException>()),
       );
       expect(dir.listSync(), isEmpty);
@@ -305,28 +305,33 @@ void main() {
       expect(doc.guardrailAllowed, isTrue);
     });
 
-    test('loader skips a catalog-id collision file', () async {
-      await File('${dir.path}/drowsiness.json').writeAsString(
-        jsonEncode({
-          'id': 'drowsiness',
-          'origin': 'user',
-          'schemaVersion': 1,
-          'copy': {
-            'catchPhrase': 'Nope',
-            'title': 'Nope',
-            'subtitle': 'Nope',
-            'guideText': 'Nope',
-            'algorithmDescription': 'Nope',
-            'metadataDescription': 'Nope',
-          },
-          'color': 1,
-          'calibration': 'eyes-closed-01',
-          'reward': {'feature': 'band.atr'},
-        }),
-      );
+    test('loader skips catalog-id and legacy-id collision files', () async {
+      for (final id in ['restAwake', 'drowsiness']) {
+        await File('${dir.path}/$id.json').writeAsString(
+          jsonEncode({
+            'id': id,
+            'origin': 'user',
+            'schemaVersion': 1,
+            'copy': {
+              'catchPhrase': 'Nope',
+              'title': 'Nope',
+              'subtitle': 'Nope',
+              'guideText': 'Nope',
+              'algorithmDescription': 'Nope',
+              'metadataDescription': 'Nope',
+            },
+            'color': 1,
+            'calibration': 'eyes-closed-01',
+            'reward': {'feature': 'band.atr'},
+          }),
+        );
+      }
       final merged = await catalog.mergeUserProtocols(directory: dir);
-      expect(merged.forName('drowsiness')!.origin, 'catalog');
-      expect(merged.forName('drowsiness')!.copy.catchPhrase, isNot('Nope'));
+      for (final id in ['restAwake', 'drowsiness']) {
+        expect(merged.forName(id)!.origin, 'catalog', reason: id);
+        expect(merged.forName(id)!.copy.catchPhrase, isNot('Nope'), reason: id);
+      }
+      expect(merged.byName.containsKey('drowsiness'), isFalse);
     });
 
     test('delete removes the user file', () async {

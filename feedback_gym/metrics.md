@@ -65,7 +65,7 @@ Weights (editable in `sweeps/grids.yaml` → `protocol_rollup`):
 | inhibit | 0.20 | mean health over inhibits | Health = `1 - 2*|inhibit_block - 0.25|` clipped to 0; empty inhibit → 1.0 |
 
 **Final** = weighted mean of available parts (weights renormalized if a part is
-absent, e.g. `recordOnly`).
+absent, e.g. `recordOnly` / `calibrateRecord`).
 
 Inhibit health penalizes blocking ~everything (`inhibit_block≈1`) or ~nothing
 when the protocol declares an inhibit (`inhibit_block≈0`). Target band ≈ 0.25.

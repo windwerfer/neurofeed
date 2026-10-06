@@ -3,18 +3,20 @@ import 'package:neurofeed/src/feedback/feature_catalog.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/rust/api/features.dart';
 
-/// Frozen catalog protocol ids (on-disk `protocol` string in `.neurofeed`).
-const List<String> catalogProtocolIds = [
-  'drowsiness',
-  'twilight',
-  'alertnessOpen',
-  'alertnessClosed',
-  'mindfulness',
-  'concentration',
-  'relaxedConcentration',
-  'recordOnly',
-  'guardrailOnly',
-];
+export 'package:neurofeed/src/feedback/protocol_ids.dart';
+
+/// `calibrationKind` values. [calibrationKindAuto] (the default) follows
+/// `CalibrationPlan.fromEnabledFeatures`: staged when an `ai.*` feature is
+/// enabled this session (or Settings → AI Calibration is "always staged"),
+/// otherwise the single baseline. [calibrationKindStaged] always runs the
+/// staged sequence (artifacts → eyes-open clear → eyes-closed rest), whatever
+/// guard engine ends up running.
+const String calibrationKindAuto = 'auto';
+const String calibrationKindStaged = 'staged';
+const Set<String> calibrationKinds = {
+  calibrationKindAuto,
+  calibrationKindStaged,
+};
 
 final RegExp userProtocolIdPattern = RegExp(r'^user\.[a-z0-9-]{3,64}$');
 
@@ -343,6 +345,7 @@ class ProtocolDocument {
     required this.colorValue,
     required this.calibration,
     this.calibrationSkippable = false,
+    this.calibrationKind = calibrationKindAuto,
     this.background = const ProtocolBackground(),
     this.reward,
     this.guard,
@@ -356,6 +359,13 @@ class ProtocolDocument {
   Color get color => Color(colorValue | 0xFF000000);
   final String calibration;
   final bool calibrationSkippable;
+
+  /// [calibrationKindAuto] or [calibrationKindStaged] (see those constants).
+  final String calibrationKind;
+
+  /// True when this document always runs the staged calibration.
+  bool get requiresStagedCalibration =>
+      calibrationKind == calibrationKindStaged;
   final ProtocolBackground background;
   final ProtocolReward? reward;
   final ProtocolGuard? guard;
@@ -388,6 +398,11 @@ class ProtocolDocument {
     final parsedColor = json['color'] as int? ?? 0xFF000000;
     final rewardJson = json['reward'];
     final guardJson = json['guard'];
+    final calibrationKind =
+        json['calibrationKind'] as String? ?? calibrationKindAuto;
+    if (!calibrationKinds.contains(calibrationKind)) {
+      throw ArgumentError('Unknown calibrationKind: $calibrationKind');
+    }
     return ProtocolDocument(
       id: json['id'] as String? ?? id,
       origin: origin,
@@ -396,6 +411,7 @@ class ProtocolDocument {
       colorValue: parsedColor,
       calibration: json['calibration'] as String? ?? '',
       calibrationSkippable: json['calibrationSkippable'] as bool? ?? false,
+      calibrationKind: calibrationKind,
       background: ProtocolBackground.fromJson(json['background']),
       reward: rewardJson is Map
           ? ProtocolReward.fromJson(jsonObject(rewardJson), features: features)
@@ -414,6 +430,8 @@ class ProtocolDocument {
     'color': colorValue,
     'calibration': calibration,
     'calibrationSkippable': calibrationSkippable,
+    if (calibrationKind != calibrationKindAuto)
+      'calibrationKind': calibrationKind,
     'background': background.toJson(),
     if (reward != null) 'reward': reward!.toJson(),
     if (guard != null) 'guard': guard!.toJson(),
@@ -428,6 +446,7 @@ class ProtocolDocument {
         colorValue: colorValue,
         calibration: calibration,
         calibrationSkippable: calibrationSkippable,
+        calibrationKind: calibrationKind,
         background: background,
         reward: reward,
         guard: clearGuard ? null : (guard ?? this.guard),

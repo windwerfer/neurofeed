@@ -97,7 +97,10 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
         catalog?.features[protocol.reward?.feature ?? '']?.shortLabel ??
         protocol.reward?.feature ??
         '';
-    final guardFeature = settings.guardFeatureFor(fb.protocol);
+    final guardFeature = settings.sessionGuardFeatureFor(
+      fb.protocol,
+      aiReady: ref.watch(modelEngineAvailabilityProvider),
+    );
     final guardLabel =
         catalog?.features[guardFeature]?.shortLabel ?? guardFeature;
 
@@ -366,8 +369,17 @@ class _PhaseControls extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final deviceId = ref.watch(appStateProvider).status.id;
     final guardrailIntended = settings.guardrailEnabledFor(fb.protocol);
+    // Model gate only for a guard that will really need the AI engine: a
+    // catalog-default AI head falls back to band.delta without a ready model
+    // (Settings.sessionGuardFeatureFor); an explicit AI pick still gates.
     final needsModel =
-        guardrailIntended && settings.guardrailIsAiFor(fb.protocol);
+        guardrailIntended &&
+        guardFeatureIsAi(
+          settings.sessionGuardFeatureFor(
+            fb.protocol,
+            aiReady: ref.watch(modelEngineAvailabilityProvider),
+          ),
+        );
 
     // Music feedback needs a music folder. The music + AI guardrail combination
     // is allowed; the one-time stutter warning fires when the user picks the
@@ -1482,7 +1494,10 @@ class _GuardrailTile extends ConsumerWidget {
     final fb = ref.watch(feedbackStateProvider);
     final settings = ref.watch(settingsProvider);
     final enabled = settings.guardrailEnabledFor(fb.protocol);
-    final feature = settings.guardFeatureFor(fb.protocol);
+    final feature = settings.sessionGuardFeatureFor(
+      fb.protocol,
+      aiReady: ref.watch(modelEngineAvailabilityProvider),
+    );
     final sound = GuardrailSound.fromName(settings.warningSoundName);
     return ListTile(
       leading: const Icon(Icons.shield_outlined),
@@ -2182,9 +2197,21 @@ class _GuardrailScorerDialogState
     final settings = ref.read(settingsProvider);
     final fb = ref.read(feedbackStateProvider);
     if (on) {
-      final next = _feature == guardFeatureNone
-          ? guardFeatureBandDelta
-          : _feature;
+      // Turning the guard on: the catalog's guard feature when it is offered
+      // here (e.g. ai.a_vig with the CBraMod encoder installed), else
+      // band.delta.
+      final catalogFeature = ref
+          .read(protocolCatalogProvider)
+          .valueOrNull
+          ?.forName(fb.protocol)
+          ?.guard
+          ?.feature;
+      final next = _feature != guardFeatureNone
+          ? _feature
+          : (catalogFeature != null &&
+                    _scorerFeatures().contains(catalogFeature)
+                ? catalogFeature
+                : guardFeatureBandDelta);
       setState(() => _feature = next);
       await settings.setGuardFeature(fb.protocol, next);
       if (guardFeatureIsAi(next) &&
@@ -2208,7 +2235,11 @@ class _GuardrailScorerDialogState
         ref.read(modelInstalledProvider(ModelKind.cbramodAVig)).valueOrNull ==
         true;
     final cbramodBlocked = guardFeatureIsCbramod(_feature) && !cbramodInstalled;
+    // A catalog-default AI head (no stored pref) already falls back to
+    // band.delta at session start (Settings.sessionGuardFeatureFor); only an
+    // explicit AI pick is pinned back to band.delta here.
     if (settings.guardrailEnabledFor(fb.protocol) &&
+        settings.hasGuardFeaturePref(fb.protocol) &&
         (cbramodBlocked ||
             (guardFeatureIsReve(_feature) && !reveInstalled) ||
             (guardFeatureIsAi(_feature) && !_anyModelInstalled()))) {
@@ -2367,7 +2398,12 @@ class _GuardrailThresholdDialogState
     final fb = ref.watch(feedbackStateProvider);
     final settings = ref.watch(settingsProvider);
     final theme = Theme.of(context);
-    final panes = trustGuardPaneSpecs(settings.guardFeatureFor(fb.protocol));
+    final panes = trustGuardPaneSpecs(
+      settings.sessionGuardFeatureFor(
+        fb.protocol,
+        aiReady: ref.watch(modelEngineAvailabilityProvider),
+      ),
+    );
     final showCeiling = panes.contains(TrustGuardPaneId.ceiling);
     return AlertDialog(
       title: const Text('Guardrail settings'),

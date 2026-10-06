@@ -144,10 +144,17 @@ class SessionExporter {
 
   static const exportDirName = 'export';
 
-  /// Load protocol info from the JSON asset.
-  static Future<ProtocolDocument?> _loadProtocolInfo(String id) async {
+  /// The protocol [meta] ran: its saved `protocolJson` snapshot, else the
+  /// catalog document (legacy ids resolve through the alias map).
+  static Future<ProtocolDocument?> _loadProtocolInfo(
+    SessionMetadata meta,
+  ) async {
     final catalog = await ProtocolCatalog.load();
-    return catalog.forName(id);
+    return savedProtocolDocument(
+      catalog,
+      protocol: meta.protocol,
+      protocolJson: meta.protocolJson,
+    );
   }
 
   Future<SessionExportResult> exportSessions({
@@ -536,7 +543,7 @@ class SessionExporter {
     }
     final head = parseHead(bytes: container);
     final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ?? s.metadata;
-    final protocol = await _loadProtocolInfo(meta.protocol);
+    final protocol = await _loadProtocolInfo(meta);
     if (protocol == null) {
       warnings.add(ExportWarning(s.id, 'protocol not found in catalog'));
       return null;

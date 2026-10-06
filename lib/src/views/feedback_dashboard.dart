@@ -202,7 +202,7 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
           savedAt: DateTime.now().toIso8601String(),
         );
     final catalog = await ProtocolCatalog.load();
-    final protocol = catalog.forName(meta.protocol);
+    final protocol = _savedProtocolDoc(meta, catalog);
     final prepared = prepareChartDataFromComputed(
       frames,
       trainingStartOffset: meta.calibration?.trainingStartOffsetSecs,
@@ -1172,24 +1172,23 @@ SessionTrust? _sessionTrustFor({
 ProtocolDocument? _savedProtocolDoc(
   SessionMetadata meta,
   ProtocolCatalog catalog,
-) {
-  final raw = meta.protocolJson;
-  if (raw != null) {
-    try {
-      final id = meta.protocol.isNotEmpty
-          ? meta.protocol
-          : raw['id'] as String? ?? '';
-      return ProtocolDocument.fromJson(raw, id: id, features: catalog.features);
-    } catch (_) {}
-  }
-  return catalog.forName(meta.protocol);
-}
+) => savedProtocolDocument(
+  catalog,
+  protocol: meta.protocol,
+  protocolJson: meta.protocolJson,
+);
 
 String _savedGuardFeature(SessionMetadata meta, ProtocolDocument? protocol) {
   final saved = meta.sessionSettings?.guardFeature;
   if (saved != null && saved.isNotEmpty) return saved;
   final feature = protocol?.guard?.feature;
   if (feature == null || feature.isEmpty) return guardFeatureNone;
+  // A retired catalog id with no snapshot resolved through the alias map to
+  // today's document, whose guard default (ai.a_vig) is newer than the
+  // session. Every retired catalog guard ran band.delta by default.
+  if (meta.protocolJson == null && isLegacyProtocolId(meta.protocol)) {
+    return guardFeatureBandDelta;
+  }
   return feature;
 }
 

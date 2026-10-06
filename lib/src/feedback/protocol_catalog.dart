@@ -29,7 +29,12 @@ class ProtocolCatalog {
   final Map<String, ProtocolDocument> byName;
   final FeatureCatalog features;
 
-  ProtocolDocument? forName(String protocolId) => byName[protocolId];
+  /// Document for [protocolId]. Retired catalog ids (see
+  /// [legacyProtocolAliases]) resolve to their current document, so old
+  /// sessions, settings and agent calls still find a protocol. The returned
+  /// document's [ProtocolDocument.id] is the current id.
+  ProtocolDocument? forName(String protocolId) =>
+      byName[protocolId] ?? byName[canonicalProtocolId(protocolId)];
 
   List<ProtocolDocument> get all => byName.values.toList();
 
@@ -92,7 +97,9 @@ class ProtocolCatalog {
             : entity.uri.pathSegments.last.replaceAll('.json', '');
         final id = json['id'] as String? ?? fallbackId;
         if (id.isEmpty) continue;
-        if (extra.containsKey(id) || catalogProtocolIds.contains(id)) {
+        if (extra.containsKey(id) ||
+            catalogProtocolIds.contains(id) ||
+            isLegacyProtocolId(id)) {
           continue;
         }
         if (!userProtocolIdPattern.hasMatch(id)) continue;
@@ -137,6 +144,34 @@ final availableFeaturesProvider =
 
 ProtocolDocument protocolOrPlaceholder(ProtocolCatalog? catalog, String id) =>
     catalog?.forName(id) ?? ProtocolDocument.placeholder(id: id);
+
+/// The document a saved session actually ran: the `protocolJson` snapshot
+/// recorded with the session when it parses, else the catalog document for
+/// [protocol] (legacy ids resolve through the alias map).
+///
+/// Prefer this over [ProtocolCatalog.forName] wherever the recipe is
+/// recomputed from a saved session (charts, export, PDF): a dropped protocol
+/// such as `twilight` aliases to `restAwake` for display, but its saved
+/// snapshot still carries the TAR reward it actually ran.
+ProtocolDocument? savedProtocolDocument(
+  ProtocolCatalog catalog, {
+  required String protocol,
+  Map<String, Object?>? protocolJson,
+}) {
+  if (protocolJson != null) {
+    try {
+      final id = protocol.isNotEmpty
+          ? protocol
+          : protocolJson['id'] as String? ?? '';
+      return ProtocolDocument.fromJson(
+        protocolJson,
+        id: id,
+        features: catalog.features,
+      );
+    } catch (_) {}
+  }
+  return catalog.forName(protocol);
+}
 
 String protocolListTitle(ProtocolCatalog? catalog, String id) {
   final copy = catalog?.forName(id)?.copy;

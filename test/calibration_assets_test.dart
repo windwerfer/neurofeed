@@ -149,9 +149,13 @@ void main() {
       jsonDecode(manifestRaw),
       protocolsJson: jsonDecode(protocolsRaw),
     )!;
-    expect(manifest.calibrationIdFor('drowsiness'), 'eyes-closed-01');
-    expect(manifest.calibrationIdFor('alertnessOpen'), 'eyes-open-01');
+    expect(manifest.calibrationIdFor('restAwake'), 'eyes-closed-01');
+    expect(manifest.calibrationIdFor('alertOpen'), 'eyes-open-01');
     expect(manifest.calibrationIdFor('recordOnly'), 'eyes-closed-01');
+    expect(manifest.calibrationIdFor('sleepGuard'), 'eyes-closed-01');
+    expect(manifest.calibrationIdFor('calibrateRecord'), 'eyes-closed-01');
+    // Retired ids resolve through the alias map.
+    expect(manifest.calibrationIdFor('alertnessOpen'), 'eyes-open-01');
     expect(manifest.calibrationIdFor('guardrailOnly'), 'eyes-closed-01');
 
     final closedSingle = manifest.recipeFor(
@@ -234,6 +238,27 @@ void main() {
     )!;
     expect(rewardPlusAi.isStaged, isTrue);
     expect(rewardPlusAi.stages.last.seconds, 45);
+
+    // calibrationKind "staged" (sleepGuard / calibrateRecord): staged even
+    // with an empty S (no reward, no guard) or a band.delta-only S.
+    for (final enabled in [
+      const <String>[],
+      const ['band.delta'],
+    ]) {
+      final required = manifest.recipeFor(
+        'eyes-closed-01',
+        plan: CalibrationPlan.fromEnabledFeatures(
+          enabled,
+          protocolRequiresStaged: true,
+        ),
+      )!;
+      expect(required.isStaged, isTrue, reason: 'S=$enabled');
+      expect(required.stages.map((s) => s.id), [
+        'reve-artifacts',
+        'reve-eyes-open-counting',
+        'reve-eyes-closed-drifting',
+      ]);
+    }
 
     final subset = manifest.recipeFor(
       'eyes-closed-01',

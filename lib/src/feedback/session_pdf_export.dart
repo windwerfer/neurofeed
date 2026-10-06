@@ -11,10 +11,15 @@ import 'package:neurofeed/src/monitor/device_montage.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-/// Load protocol info from the JSON asset.
-Future<ProtocolDocument?> _loadProtocolInfo(String id) async {
+/// The protocol [meta] ran: its saved `protocolJson` snapshot, else the
+/// catalog document (legacy ids resolve through the alias map).
+Future<ProtocolDocument?> _loadProtocolInfo(SessionMetadata meta) async {
   final catalog = await ProtocolCatalog.load();
-  return catalog.forName(id);
+  return savedProtocolDocument(
+    catalog,
+    protocol: meta.protocol,
+    protocolJson: meta.protocolJson,
+  );
 }
 
 /// Builds the vector PDF report page for one session, or null when the
@@ -27,7 +32,7 @@ Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) asyn
   }
   final head = parseHead(bytes: container);
   final meta = SessionMetadata.fromJsonBytes(head.metadataJson) ?? session.metadata;
-  final protocol = await _loadProtocolInfo(meta.protocol);
+  final protocol = await _loadProtocolInfo(meta);
   if (protocol == null) {
     return null;
   }

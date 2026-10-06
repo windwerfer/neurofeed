@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neurofeed/src/feedback/protocol_ids.dart';
 
 /// Settings → AI Calibration. Pref `calibration_method`.
 ///
@@ -64,11 +65,18 @@ class CalibrationPlan {
   /// reward lane is present; guard.feature only when the guard is on).
   /// [method] is Settings → AI Calibration. [CalibrationMethod.byFeature]
   /// stages only when `S` contains `ai.*`. [CalibrationMethod.alwaysStaged]
-  /// stages either way. Baseline length is not chosen here.
+  /// stages either way. [protocolRequiresStaged] (protocol document
+  /// `calibrationKind: "staged"`, e.g. `sleepGuard` / `calibrateRecord`)
+  /// stages regardless of `S` and [method]. Baseline length is not chosen
+  /// here.
   factory CalibrationPlan.fromEnabledFeatures(
     Iterable<String> enabled, {
     CalibrationMethod method = CalibrationMethod.byFeature,
+    bool protocolRequiresStaged = false,
   }) {
+    if (protocolRequiresStaged) {
+      return stagedAi;
+    }
     final ids = [
       for (final id in enabled)
         if (id.isNotEmpty && id != 'none') id,
@@ -354,13 +362,15 @@ class CalibrationManifest {
   static const int currentVersion = 2;
 
   /// The calibration id [protocolName] uses, or null when unknown.
+  /// Retired catalog ids resolve to their current id.
   String? calibrationIdFor(String protocolName) =>
-      protocolCalibration[protocolName];
+      protocolCalibration[protocolName] ??
+      protocolCalibration[canonicalProtocolId(protocolName)];
 
   /// The calibration definition for [protocolName], or null when the protocol
   /// or its calibration id is unknown.
   Calibration? calibrationFor(String protocolName) {
-    final id = protocolCalibration[protocolName];
+    final id = calibrationIdFor(protocolName);
     return id == null ? null : calibrations[id];
   }
 

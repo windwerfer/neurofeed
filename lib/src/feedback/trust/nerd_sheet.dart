@@ -6,6 +6,7 @@ import 'package:neurofeed/src/charts/band_style.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:neurofeed/src/feedback/trust/nerd_model.dart';
+import 'package:neurofeed/src/reve/model_engine.dart';
 import 'package:neurofeed/src/settings.dart';
 
 Future<void> showNerdSheet(BuildContext context) {
@@ -41,7 +42,10 @@ class NerdSheet extends ConsumerWidget {
         catalog?.features[protocol.reward?.feature ?? '']?.shortLabel ??
         protocol.reward?.feature ??
         '';
-    final guardFeature = settings.guardFeatureFor(fb.protocol);
+    final guardFeature = settings.sessionGuardFeatureFor(
+      fb.protocol,
+      aiReady: ref.watch(modelEngineAvailabilityProvider),
+    );
     final guardLabel =
         catalog?.features[guardFeature]?.shortLabel ?? guardFeature;
     return ListenableBuilder(
