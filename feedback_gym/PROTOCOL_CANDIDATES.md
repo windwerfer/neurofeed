@@ -40,7 +40,7 @@ Sources pooled:
 
 | # | id | User job | Blocker | Diggus priority ingest |
 |---|----|----------|---------|------------------------|
-| 9 | `stressDownshift` | Stressed → downshift / relax | No clean stress label in current gym | alkabbany Muse-S (CC-BY), then UNIVERSE |
+| 9 | `stressDownshift` | Stressed → downshift / relax | **UNIVERSE null (2026-10-06):** 46 Lab sessions, 24 subjects, N=48 790; every band feature at chance (sep 0.50–0.52, per-session AUC 0.48–0.52). Only lead: within-subject beta/ATR/TAR shift is consistent for ~70% of subjects, so a personally calibrated variant may be worth a lab test. A fixed-direction recipe is not supported. | Lab-only; alkabbany dropped (no raw EEG) |
 | — | med-depth / absorption / FA–OM twins | Meditation-type depth claims | Lab-only (L-FAME BY-NC, gated EEGMeditation) or weak med-depth AI | Lab findings OK; product only after permissive re-val |
 
 ### Drop / merge / hide
