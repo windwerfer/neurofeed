@@ -247,7 +247,7 @@ def test_sibling_presets_registered_from_manifest():
     for name, rel in {
         "lee2026-eo-ec": "corpora/external/lee2026_eo_ec.npz",
         "universe-stress": "corpora/external/universe_stress.npz",
-        "alkabbany-stress": "corpora/external/alkabbany_stress.npz",
+        "lee2026-artifacts": "corpora/external/lee2026_artifacts.npz",
     }.items():
         entry = run_gym.SIBLING_PRESETS[name]
         assert run_gym.PRESETS[name] == rel
@@ -270,11 +270,17 @@ def test_missing_sibling_npz_prints_builder_command(tmp_path, monkeypatch, capsy
     assert not (tmp_path / "gym" / "results").exists()  # nothing scored
 
     # multi mode: one missing corpus aborts the whole board up front
-    rc = run_gym.main(["--presets", "synthetic,alkabbany-stress", "--corpus-root", str(root)])
+    rc = run_gym.main(["--presets", "synthetic,lee2026-artifacts", "--corpus-root", str(root)])
     err = capsys.readouterr().err
     assert rc == run_gym.EXIT_MISSING_CORPUS
-    assert "build_alkabbany.py --out " in err
+    art_out = (tmp_path / "gym" / "corpora" / "external" / "lee2026_artifacts.npz").resolve()
+    assert f"build_lee2026.py --out-artifacts {art_out}" in err
     assert not (tmp_path / "gym" / "results").exists()
+
+
+def test_alkabbany_preset_removed():
+    assert "alkabbany-stress" not in run_gym.PRESETS
+    assert not any("alkabbany" in json.dumps(e) for e in run_gym.SIBLING_PRESETS.values())
 
 
 def test_default_corpus_root_env_override(monkeypatch, tmp_path):
