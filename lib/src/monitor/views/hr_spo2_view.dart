@@ -605,7 +605,9 @@ class _HrSpo2ViewState extends ConsumerState<HrSpo2View> {
                                 final ppg = live
                                     ? _elapsedSeries(
                                         cache.ppgIrRange(
-                                          origin + start - pad,
+                                          origin +
+                                              start -
+                                              kPpgScaleLookbackSeconds,
                                           origin + end + pad,
                                         ),
                                         origin,

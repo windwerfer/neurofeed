@@ -1138,7 +1138,7 @@ class _HistorySignalGraphsState extends ConsumerState<HistorySignalGraphs> {
                 samples: ppgIrChartSamples(
                   packets: packets,
                   originMs: loaded.originMs,
-                  startElapsed: detailStart - detailPad,
+                  startElapsed: detailStart - kPpgScaleLookbackSeconds,
                   endElapsed: detailEnd + detailPad,
                 ),
                 viewport: _ppgDetail,

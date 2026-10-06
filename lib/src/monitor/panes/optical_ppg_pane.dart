@@ -7,6 +7,121 @@ import 'package:neurofeed/src/monitor/viewport_controller.dart';
 
 import 'package:neurofeed/src/monitor/cache/optical_cache.dart';
 
+const double kPpgScaleLookbackSeconds = 3.0;
+
+const double kPpgScalePadFraction = 0.25;
+
+const double kPpgPulseHighpassHz = 0.7;
+
+const double kPpgPulseLowpassHz = 8.0;
+
+class _PulseBiquad {
+  _PulseBiquad({
+    required this.b0,
+    required this.b1,
+    required this.b2,
+    required this.a1,
+    required this.a2,
+  });
+
+  final double b0;
+  final double b1;
+  final double b2;
+  final double a1;
+  final double a2;
+  double _z1 = 0;
+  double _z2 = 0;
+
+  double process(double x) {
+    final y = b0 * x + _z1;
+    _z1 = b1 * x - a1 * y + _z2;
+    _z2 = b2 * x - a2 * y;
+    return y;
+  }
+
+  void reset() {
+    _z1 = 0;
+    _z2 = 0;
+  }
+}
+
+_PulseBiquad _butterworth({
+  required double cutoffHz,
+  required double sampleRate,
+  required bool highpass,
+}) {
+  final q = math.sqrt1_2;
+  final w0 = 2 * math.pi * cutoffHz / sampleRate;
+  final cosW = math.cos(w0);
+  final alpha = math.sin(w0) / (2 * q);
+  final b0 = highpass ? (1 + cosW) / 2 : (1 - cosW) / 2;
+  final b1 = highpass ? -(1 + cosW) : 1 - cosW;
+  final b2 = b0;
+  final a0 = 1 + alpha;
+  return _PulseBiquad(
+    b0: b0 / a0,
+    b1: b1 / a0,
+    b2: b2 / a0,
+    a1: -2 * cosW / a0,
+    a2: (1 - alpha) / a0,
+  );
+}
+
+/// Pulse shape for the IR pane. Raw infrared keeps its slow drift, which
+/// hides the beat. This drops that drift and the sample-to-sample fuzz.
+/// The smaller second peak of each beat stays.
+List<ChartSample> ppgPulseDisplay(List<ChartSample> raw) {
+  if (raw.isEmpty) return const [];
+  final fs = OpticalCache.ppgSampleRate;
+  final hp = _butterworth(
+    cutoffHz: kPpgPulseHighpassHz,
+    sampleRate: fs,
+    highpass: true,
+  );
+  final lp = _butterworth(
+    cutoffHz: kPpgPulseLowpassHz,
+    sampleRate: fs,
+    highpass: false,
+  );
+  final out = <ChartSample>[];
+  double? prevT;
+  for (final s in raw) {
+    if (!s.t.isFinite || !s.v.isFinite) {
+      hp.reset();
+      lp.reset();
+      prevT = null;
+      continue;
+    }
+    if (prevT != null && s.t - prevT > 2 / fs) {
+      hp.reset();
+      lp.reset();
+    }
+    prevT = s.t;
+    out.add(ChartSample(s.t, lp.process(hp.process(s.v))));
+  }
+  return out;
+}
+
+({double min, double max})? ppgDisplayScale({
+  required List<ChartSample> samples,
+  required double visStart,
+  required double visEnd,
+}) {
+  final scaleStart = visStart - kPpgScaleLookbackSeconds;
+  var lo = double.infinity;
+  var hi = double.negativeInfinity;
+  for (final s in samples) {
+    if (s.t < scaleStart || s.t > visEnd) continue;
+    if (!s.v.isFinite) continue;
+    if (s.v < lo) lo = s.v;
+    if (s.v > hi) hi = s.v;
+  }
+  if (!lo.isFinite) return null;
+  final range = hi - lo;
+  final pad = range > 0 ? range * kPpgScalePadFraction : 1.0;
+  return (min: lo - pad, max: hi + pad);
+}
+
 /// Sweep slot index in 0 .. slotCount-1 for an absolute elapsed time.
 int ppgSweepSlot({
   required double elapsed,
@@ -127,30 +242,22 @@ class _OpticalPpgPaneState extends State<OpticalPpgPane>
     }
   }
 
-  void _easeY(double visStart, double visEnd) {
-    final raw = <double>[];
-    for (final s in widget.samples) {
-      if (s.t < visStart || s.t > visEnd) continue;
-      if (s.v.isFinite) raw.add(s.v);
-    }
+  void _easeY(double visStart, double visEnd, List<ChartSample> samples) {
     final now = DateTime.now().millisecondsSinceEpoch;
-    if (raw.isEmpty) {
+    final target = ppgDisplayScale(
+      samples: samples,
+      visStart: visStart,
+      visEnd: visEnd,
+    );
+    if (target == null) {
       _yMin = 0;
       _yMax = 1;
       _yMs = now;
       _established = false;
       return;
     }
-    var lo = raw.first;
-    var hi = raw.first;
-    for (final v in raw) {
-      if (v < lo) lo = v;
-      if (v > hi) hi = v;
-    }
-    final range = hi - lo;
-    final pad = range > 0 ? range * 0.12 : 1.0;
-    final targetMin = lo - pad;
-    final targetMax = hi + pad;
+    final targetMin = target.min;
+    final targetMax = target.max;
     if (_yMs == null || !_established) {
       _yMin = targetMin;
       _yMax = targetMax;
@@ -171,7 +278,7 @@ class _OpticalPpgPaneState extends State<OpticalPpgPane>
     required bool expanding,
   }) {
     if (dt <= 0) return current;
-    final tau = expanding ? 0.8 : 8.0;
+    final tau = expanding ? 0.8 : 2.0;
     final a = 1 - math.exp(-dt / tau);
     return current + (target - current) * a;
   }
@@ -238,14 +345,15 @@ class _OpticalPpgPaneState extends State<OpticalPpgPane>
             newestElapsed: widget.newestElapsed,
             wallNow: wallNow,
           );
-    _easeY(visStart, visEnd);
+    final pulse = ppgPulseDisplay(widget.samples);
+    _easeY(visStart, visEnd, pulse);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapDown: _onTapDown,
       child: RepaintBoundary(
         child: CustomPaint(
           painter: OpticalPpgPainter(
-            samples: widget.samples,
+            samples: pulse,
             viewport: widget.viewport,
             newestElapsed: widget.newestElapsed,
             wallNow: wallNow,

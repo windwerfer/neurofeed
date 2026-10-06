@@ -822,6 +822,7 @@ fn spawn_event_forwarder() {
         let mut ppg_red_buffer: Vec<f64> = Vec::new();
         let mut accel_mag_buffer: Vec<f64> = Vec::new();
         let mut last_metrics = tokio::time::Instant::now();
+        let mut last_optical = tokio::time::Instant::now();
 
         // Guardrail (Sleep-Edge Rest): rolling per-electrode EEG window + the
         // most recent frontal delta, fed to the loaded foundation model once/second.
@@ -1010,6 +1011,43 @@ fn spawn_event_forwarder() {
                     }
                 }
 
+                // Pulse and SpO2 follow the optical packets. EEG pad quality is
+                // not an input, and this tick does not wait for an EEG packet.
+                if last_optical.elapsed() >= std::time::Duration::from_secs(1) {
+                    last_optical = tokio::time::Instant::now();
+                    let now_ms = now_ms();
+                    let (bpm, confidence) = compute_pulse(&ppg_ir_buffer);
+                    if bpm > 0.0 {
+                        let dto = MuseEventDto::Pulse(PulseDto {
+                            timestamp: now_ms,
+                            bpm,
+                            confidence,
+                        });
+                        crate::spine::capture::on_dto(&dto);
+                        let mut guard = state().inner.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(sink) = &guard.sink {
+                            if sink.add(dto).is_err() {
+                                guard.sink = None;
+                            }
+                        }
+                    }
+                    let (spo2, spo2_conf) = compute_spo2(&ppg_ir_buffer, &ppg_red_buffer);
+                    if spo2 > 0.0 {
+                        let dto = MuseEventDto::SpO2(SpO2Dto {
+                            timestamp: now_ms,
+                            spo2,
+                            confidence: spo2_conf,
+                        });
+                        crate::spine::capture::on_dto(&dto);
+                        let mut guard = state().inner.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(sink) = &guard.sink {
+                            if sink.add(dto).is_err() {
+                                guard.sink = None;
+                            }
+                        }
+                    }
+                }
+
                 // Capture records `dto` (RAW as received); analysis and the UI
                 // use the conditioned samples.
                 let (eeg_samples, outgoing) = match &dto {
@@ -1156,39 +1194,6 @@ fn spawn_event_forwarder() {
                         last_metrics = tokio::time::Instant::now();
                         emit_pad_quality(&latest_bands, &quality_rings, eeg_limit);
                         emit_enabled_band_features(now_ms, &latest_bands, &quality_rings);
-
-                        let (bpm, confidence) = compute_pulse(&ppg_ir_buffer);
-                        if bpm > 0.0 {
-                            let dto = MuseEventDto::Pulse(PulseDto {
-                                timestamp: now_ms,
-                                bpm,
-                                confidence,
-                            });
-                            crate::spine::capture::on_dto(&dto);
-                            let mut guard = state().inner.lock().unwrap_or_else(|e| e.into_inner());
-                            if let Some(sink) = &guard.sink {
-                                if sink.add(dto).is_err() {
-                                    guard.sink = None;
-                                }
-                            }
-                        }
-
-                        // SpO2 from IR + Red (from 4 s, up to the last 30 s)
-                        let (spo2, spo2_conf) = compute_spo2(&ppg_ir_buffer, &ppg_red_buffer);
-                        if spo2 > 0.0 {
-                            let dto = MuseEventDto::SpO2(SpO2Dto {
-                                timestamp: now_ms,
-                                spo2,
-                                confidence: spo2_conf,
-                            });
-                            crate::spine::capture::on_dto(&dto);
-                            let mut guard = state().inner.lock().unwrap_or_else(|e| e.into_inner());
-                            if let Some(sink) = &guard.sink {
-                                if sink.add(dto).is_err() {
-                                    guard.sink = None;
-                                }
-                            }
-                        }
 
                         let movement_score = compute_movement(&accel_mag_buffer);
                         {
@@ -1581,22 +1586,27 @@ pub(crate) fn compute_fft_bands(samples: &[f64]) -> [f64; 8] {
 }
 
 fn compute_pulse(ir_samples: &[f64]) -> (f64, f64) {
-    if ir_samples.len() < 128 {
+    const MIN_SAMPLES: usize = 128; // 2 s @ 64 Hz
+    const WINDOW: usize = 8 * 64;
+    if ir_samples.len() < MIN_SAMPLES {
         return (0.0, 0.0);
     }
-    // Use the last 8 seconds of data
-    let window_size = (30.0 * 64.0) as usize;
-    let start = ir_samples.len().saturating_sub(window_size);
-    let window = &ir_samples[start..];
-
-    let mean = window.iter().copied().sum::<f64>() / window.len() as f64;
-    let ac: Vec<f64> = window.iter().map(|s| s - mean).collect();
-
-    let max_abs = ac.iter().copied().map(f64::abs).fold(0.0, f64::max);
-    if max_abs < 1.0 {
+    let start = ir_samples.len().saturating_sub(WINDOW);
+    let ac = pulse_ac(&ir_samples[start..]);
+    if ac.len() < 64 {
         return (0.0, 0.0);
     }
-    let threshold = max_abs * 0.4;
+
+    let mut mags: Vec<f64> = ac.iter().map(|s| s.abs()).collect();
+    let mid = mags.len() / 2;
+    mags.select_nth_unstable_by(mid, |a, b| {
+        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let median = mags[mid];
+    if median < 1.0 {
+        return (0.0, 0.0);
+    }
+    let threshold = median;
 
     let mut peaks = Vec::new();
     for i in 1..ac.len() - 1 {
@@ -1629,11 +1639,12 @@ fn compute_pulse(ir_samples: &[f64]) -> (f64, f64) {
 
 /// SpO2 from PPG IR + Red (ratio-of-ratios). Returns (percent, confidence).
 /// A=110, B=25 are a best-guess, not Muse-calibrated. Needs 4 s of both
-/// channels and uses up to the last 30 s. The estimate is clamped into
-/// 50–100 so the trace stays continuous. No optical pulse returns (0, 0).
+/// channels and uses the last 8 s. AC is the pulse after a 0.5 Hz high-pass,
+/// so a contact step does not move the ratio. Outside 50–100 returns (0, 0)
+/// instead of pinning the trace to the rail. Flat light also returns (0, 0).
 fn compute_spo2(ir_samples: &[f64], red_samples: &[f64]) -> (f64, f64) {
     const MIN_SAMPLES: usize = 256; // 4 s @ 64 Hz
-    const MAX_SAMPLES: usize = 1920; // 30 s @ 64 Hz
+    const MAX_SAMPLES: usize = 8 * 64;
     if ir_samples.len() < MIN_SAMPLES || red_samples.len() < MIN_SAMPLES {
         return (0.0, 0.0);
     }
@@ -1643,13 +1654,13 @@ fn compute_spo2(ir_samples: &[f64], red_samples: &[f64]) -> (f64, f64) {
 
     let ir_dc = ir_window.iter().copied().sum::<f64>() / ir_window.len() as f64;
     let red_dc = red_window.iter().copied().sum::<f64>() / red_window.len() as f64;
-
-    let ir_ac = (ir_window.iter().map(|s| (s - ir_dc).powi(2)).sum::<f64>()
-        / ir_window.len() as f64)
-        .sqrt();
-    let red_ac = (red_window.iter().map(|s| (s - red_dc).powi(2)).sum::<f64>()
-        / red_window.len() as f64)
-        .sqrt();
+    let ir_ac_sig = pulse_ac(ir_window);
+    let red_ac_sig = pulse_ac(red_window);
+    if ir_ac_sig.is_empty() || red_ac_sig.is_empty() {
+        return (0.0, 0.0);
+    }
+    let ir_ac = (ir_ac_sig.iter().map(|s| s * s).sum::<f64>() / ir_ac_sig.len() as f64).sqrt();
+    let red_ac = (red_ac_sig.iter().map(|s| s * s).sum::<f64>() / red_ac_sig.len() as f64).sqrt();
 
     if ir_dc < 100.0 || red_dc < 100.0 || ir_ac < 1.0 || red_ac < 1.0 {
         return (0.0, 0.0);
@@ -1662,16 +1673,31 @@ fn compute_spo2(ir_samples: &[f64], red_samples: &[f64]) -> (f64, f64) {
 
     const A: f64 = 110.0;
     const B: f64 = 25.0;
-    let spo2 = (A - B * r).clamp(50.0, 100.0);
+    let spo2 = A - B * r;
+    if !(50.0..=100.0).contains(&spo2) {
+        return (0.0, 0.0);
+    }
 
     let ir_quality = (ir_ac / ir_dc * 20.0).min(1.0);
     let red_quality = (red_ac / red_dc * 20.0).min(1.0);
-    let mut confidence = (ir_quality * red_quality).sqrt().clamp(0.0, 1.0);
-    if !(0.4..=1.2).contains(&r) {
-        confidence *= 0.5;
-    }
-
+    let confidence = (ir_quality * red_quality).sqrt().clamp(0.0, 1.0);
     (spo2, confidence)
+}
+
+/// High-pass at 0.5 Hz, then drop the filter settle. A headset-on step dies
+/// in about a second; heart rate sits above that.
+fn pulse_ac(samples: &[f64]) -> Vec<f64> {
+    const FS: f64 = 64.0;
+    const CUTOFF: f64 = 0.5;
+    let dt = 1.0 / FS;
+    let rc = 1.0 / (2.0 * std::f64::consts::PI * CUTOFF);
+    let a = rc / (rc + dt);
+    let mut hp = vec![0.0; samples.len()];
+    for i in 1..samples.len() {
+        hp[i] = a * (hp[i - 1] + samples[i] - samples[i - 1]);
+    }
+    let settle = 32.min(hp.len());
+    hp.split_off(settle)
 }
 
 /// Movement score from accelerometer magnitude variance.
@@ -2139,19 +2165,39 @@ mod spo2_tests {
 
     #[test]
     fn spo2_keeps_a_value_when_the_ratio_leaves_the_old_band() {
-        // R ≈ 1.3 still yields ~77% and used to be dropped.
+        // R ≈ 1.3 still yields ~77%. A ratio this high used to be dropped.
         let (mid, _) = compute_spo2(
             &tone(256, 200_000.0, 8_000.0),
             &tone(256, 180_000.0, 9_360.0),
         );
         assert!((mid - 77.5).abs() < 2.0, "{mid}");
 
-        // Far outside the formula range clamps to the floor instead of a hole.
-        let (low, confidence) = compute_spo2(
+        // Far below 50% is a gap, not a pinned 50% rail.
+        let (low, _) = compute_spo2(
             &tone(256, 200_000.0, 2_000.0),
             &tone(256, 180_000.0, 20_000.0),
         );
-        assert_eq!(low, 50.0);
-        assert!(confidence > 0.0 && confidence <= 0.5);
+        assert_eq!(low, 0.0);
+    }
+
+    #[test]
+    fn contact_step_does_not_pin_spo2_or_block_pulse() {
+        let n = 8 * 64;
+        let mut ir = Vec::with_capacity(n);
+        let mut red = Vec::with_capacity(n);
+        for i in 0..n {
+            let t = i as f64 / 64.0;
+            let step = if i < 64 { 100_000.0 } else { 0.0 };
+            let wave = (2.0 * std::f64::consts::PI * 1.2 * t).sin();
+            ir.push(200_000.0 + step + 8_000.0 * wave);
+            red.push(180_000.0 + 0.4 * step + 6_000.0 * wave);
+        }
+        let (spo2, _) = compute_spo2(&ir, &red);
+        assert!(
+            (70.0..=100.0).contains(&spo2),
+            "spo2 {spo2} should follow the pulse, not the step"
+        );
+        let (bpm, _) = super::compute_pulse(&ir);
+        assert!((bpm - 72.0).abs() < 8.0, "bpm {bpm}");
     }
 }
