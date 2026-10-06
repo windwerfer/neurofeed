@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -384,7 +385,187 @@ def load_corpus(path: Path) -> dict[str, Any]:
     cal = int(out.get("cal_n", [90])[0])
     out["cal_n"] = cal
     out["labels"] = out.get("labels")
+    if "cal_starts" in out or "cal_lens" in out:
+        # Fail fast on a malformed per-recording calibration block.
+        build_cal_plan(out)
     return out
+
+
+# --- Calibration plan (global cal_n vs per-recording cal_starts/cal_lens) -----
+
+
+def corpus_length(corpus: dict[str, Any]) -> int:
+    """Row count N of the 1 Hz stream (``delta_rel`` is a required column)."""
+    for key in ("delta_rel", "band_atr", "band_delta", "ai_a_vig"):
+        if key in corpus and corpus[key] is not None:
+            return int(len(corpus[key]))
+    return int(corpus["cal_n"])
+
+
+def unique_in_order(values: np.ndarray) -> list[str]:
+    """Unique values in first-appearance order (NOT np.unique's sorted order)."""
+    seen: dict[str, None] = {}
+    for v in values:
+        seen.setdefault(str(v), None)
+    return list(seen)
+
+
+@dataclass
+class CalGroup:
+    """One calibration baseline and the play rows scored against it."""
+
+    recording_id: str
+    cal_idx: np.ndarray  # stream row indices of the baseline block
+    play_pos: np.ndarray  # positions into CalPlan.play_idx scored vs this baseline
+
+
+@dataclass
+class CalPlan:
+    """Which rows calibrate, which rows are scored, and against which baseline.
+
+    ``per_recording=False`` is the legacy path: one baseline = the first
+    ``cal_n`` rows, play = everything after (bit-identical to the old slices).
+    """
+
+    play_idx: np.ndarray
+    groups: list[CalGroup]
+    per_recording: bool
+    skipped: list[str] = field(default_factory=list)
+
+    def describe(self) -> dict[str, Any]:
+        if not self.per_recording:
+            g = self.groups[0]
+            return {
+                "mode": "global",
+                "cal_n": int(g.cal_idx.size),
+                "n_play": int(self.play_idx.size),
+            }
+        return {
+            "mode": "per_recording",
+            "n_recordings": len(self.groups),
+            "cal_rows": int(sum(g.cal_idx.size for g in self.groups)),
+            "n_play": int(self.play_idx.size),
+            "skipped": list(self.skipped),
+        }
+
+
+def build_cal_plan(corpus: dict[str, Any]) -> CalPlan:
+    """Resolve the calibration plan for a corpus.
+
+    Per-recording mode needs ``cal_starts`` + ``cal_lens`` (int, shape ``(R,)``)
+    and ``recording_id`` (N,). Entry ``r`` belongs to the r-th unique
+    ``recording_id`` in first-appearance order (== builder ``recordings_used``).
+    ``cal_starts`` are **absolute stream row indices**; the block
+    ``[start, start+len)`` must lie inside that recording's rows. Cal rows are
+    never scored. A recording with ``cal_len == 0`` has no baseline and is
+    skipped (none of its rows are scored).
+    """
+    n = corpus_length(corpus)
+    has_starts = corpus.get("cal_starts") is not None
+    has_lens = corpus.get("cal_lens") is not None
+    if not has_starts and not has_lens:
+        cal_n = int(corpus["cal_n"])
+        play_idx = np.arange(cal_n, n)
+        return CalPlan(
+            play_idx=play_idx,
+            groups=[
+                CalGroup(
+                    recording_id="*",
+                    cal_idx=np.arange(0, min(cal_n, n)),
+                    play_pos=np.arange(play_idx.size),
+                )
+            ],
+            per_recording=False,
+        )
+
+    if has_starts != has_lens:
+        raise ValueError("cal_starts and cal_lens must be provided together")
+    if corpus.get("recording_id") is None:
+        raise ValueError("cal_starts/cal_lens require a recording_id column")
+    rec = np.asarray(corpus["recording_id"]).astype(str)
+    if rec.shape != (n,):
+        raise ValueError(f"recording_id shape {rec.shape} != ({n},)")
+    starts = np.asarray(corpus["cal_starts"]).astype(np.int64).reshape(-1)
+    lens = np.asarray(corpus["cal_lens"]).astype(np.int64).reshape(-1)
+    rec_ids = unique_in_order(rec)
+    if starts.shape != (len(rec_ids),) or lens.shape != (len(rec_ids),):
+        raise ValueError(
+            f"cal_starts/cal_lens must have shape ({len(rec_ids)},) "
+            f"(one per unique recording_id); got {starts.shape} / {lens.shape}"
+        )
+
+    is_cal = np.zeros(n, dtype=bool)
+    skipped_rows = np.zeros(n, dtype=bool)
+    cal_blocks: list[tuple[str, np.ndarray, np.ndarray]] = []
+    skipped: list[str] = []
+    for rid, s, ln in zip(rec_ids, starts, lens):
+        rows = np.flatnonzero(rec == rid)
+        if ln < 0:
+            raise ValueError(f"{rid}: negative cal_len {ln}")
+        if ln == 0:
+            skipped.append(f"{rid}:no_cal_block")
+            skipped_rows[rows] = True
+            continue
+        cal_idx = np.arange(s, s + ln)
+        if s < 0 or s + ln > n or not np.all(rec[cal_idx] == rid):
+            raise ValueError(
+                f"{rid}: cal block [{s}, {s + ln}) is not inside that recording's rows"
+            )
+        is_cal[cal_idx] = True
+        cal_blocks.append((rid, cal_idx, rows))
+
+    play_mask = ~is_cal & ~skipped_rows
+    play_idx = np.flatnonzero(play_mask)
+    # map stream row -> position in play_idx
+    pos_of_row = np.full(n, -1, dtype=np.int64)
+    pos_of_row[play_idx] = np.arange(play_idx.size)
+    groups: list[CalGroup] = []
+    for rid, cal_idx, rows in cal_blocks:
+        play_rows = rows[play_mask[rows]]
+        groups.append(CalGroup(recording_id=rid, cal_idx=cal_idx, play_pos=pos_of_row[play_rows]))
+    return CalPlan(play_idx=play_idx, groups=groups, per_recording=True, skipped=skipped)
+
+
+def play_thresholds(
+    series: np.ndarray,
+    plan: CalPlan,
+    percentile: float,
+    *,
+    finite_play: np.ndarray | None = None,
+) -> tuple[np.ndarray, list[float]]:
+    """Per-play-row percentile threshold from each row's own baseline.
+
+    Returns ``(thr_rows, per_group_thresholds)`` where ``thr_rows`` is aligned
+    with ``plan.play_idx`` (masked by ``finite_play`` when given). NaN baseline
+    samples are dropped; a baseline with no finite samples falls back to that
+    group's finite play values (same fallback as the legacy global path).
+    """
+    s = np.asarray(series, dtype=float)
+    play_vals = s[plan.play_idx]
+    fin = np.isfinite(play_vals) if finite_play is None else np.asarray(finite_play, dtype=bool)
+    thr_rows = np.full(play_vals.size, np.nan)
+    per_group: list[float] = []
+    for g in plan.groups:
+        base = s[g.cal_idx]
+        base = base[np.isfinite(base)]
+        if base.size == 0:
+            gp = g.play_pos[fin[g.play_pos]]
+            base = play_vals[gp]
+        if base.size == 0:
+            per_group.append(float("nan"))
+            continue
+        t = threshold_at_percentile(base, percentile)
+        thr_rows[g.play_pos] = t
+        per_group.append(t)
+    return thr_rows[fin], per_group
+
+
+def summarize_threshold(plan: CalPlan, per_group: list[float]) -> float:
+    """Single number for reports: the global threshold, or the per-recording median."""
+    if not plan.per_recording:
+        return per_group[0]
+    vals = [t for t in per_group if np.isfinite(t)]
+    return float(np.median(vals)) if vals else float("nan")
 
 
 def feature_series(corpus: dict[str, Any], feature_id: str) -> np.ndarray | None:

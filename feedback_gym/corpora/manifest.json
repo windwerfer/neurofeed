@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Corpus pointers for feedback_gym. Synthetic demo ships in-repo so the gym runs without muse-eeg-heads on disk.",
+  "description": "Corpus pointers for feedback_gym. Synthetic demo ships in-repo so the gym runs without muse-eeg-heads on disk. Sibling findings-only corpora are built by windwerfer/neurofeed-gym-corpora (--corpus-root) into gitignored corpora/external/.",
   "synthetic": {
     "id": "demo_session",
     "path": "corpora/synthetic/demo_session.npz",
@@ -30,6 +30,63 @@
       "cal_policy": "first cal_n=90 samples of concatenated test stream (sessions typically start wake/low-y)",
       "ai": "softmax P(class1) from emb @ W.T + b; CBraMod W(2,200); REVE W(2,512) subsample-aligned; no encoder forward",
       "notes": "REVE columns optional (subsample emb_cache, NaN-padded). Falls back to synthetic if paths missing."
+    },
+    {
+      "id": "lee2026_eo_ec",
+      "corpus_id": "lee2026_muse2_eo_ec",
+      "optional": true,
+      "path": "corpora/external/lee2026_eo_ec.npz",
+      "gitignored": true,
+      "preset": "lee2026-eo-ec",
+      "source_repo": "windwerfer/neurofeed-gym-corpora",
+      "builder": "builders/build_lee2026.py",
+      "builder_status": "planned",
+      "rebuild": "python3 {corpus_root}/builders/build_lee2026.py --out corpora/external/lee2026_eo_ec.npz",
+      "run": "python3 runners/run_gym.py --preset lee2026-eo-ec [--corpus-root ../../neurofeed-gym-corpora]",
+      "upstream": "Lee et al., Sci Data 2026, doi:10.6084/m9.figshare.30162868 (Muse 2 native AF7/AF8/TP9/TP10)",
+      "license": "CC-BY-4.0",
+      "use_status": "findings-only",
+      "labels": "0=eyes_open, 1=eyes_closed",
+      "ai": "none (band columns only) -> ai.* scored N/A",
+      "notes": "findings-only: eval -> aggregate. Built NPZ is gitignored; only aggregate numbers (scores, sep, percentile bands, keep/merge/kill) may land in neurofeed PRs. No raw/windows/embeddings, no NC/gated data, ever. Attribute Lee et al. (CC-BY) when citing aggregates."
+    },
+    {
+      "id": "universe_stress",
+      "corpus_id": "universe_muse_s",
+      "optional": true,
+      "path": "corpora/external/universe_stress.npz",
+      "gitignored": true,
+      "preset": "universe-stress",
+      "source_repo": "windwerfer/neurofeed-gym-corpora",
+      "builder": "builders/build_universe.py",
+      "builder_status": "planned (~20 GB upstream); corpora-repo manifest currently names the default out universe_load.npz, the gym preset passes --out universe_stress.npz",
+      "rebuild": "python3 {corpus_root}/builders/build_universe.py --out corpora/external/universe_stress.npz",
+      "run": "python3 runners/run_gym.py --preset universe-stress [--corpus-root ../../neurofeed-gym-corpora]",
+      "upstream": "UNIVERSE, Zenodo 10.5281/zenodo.10371068 (Muse S native + E4)",
+      "license": "CC-BY-4.0",
+      "use_status": "findings-only",
+      "labels": "0=low_load/relax, 1=high_load/stress (builder decides; see label_names in NPZ)",
+      "ai": "none (band columns only) -> ai.* scored N/A",
+      "notes": "findings-only: eval -> aggregate. Built NPZ is gitignored; only aggregate numbers (scores, sep, percentile bands, keep/merge/kill) may land in neurofeed PRs. No raw/windows/embeddings, no NC/gated data, ever. Attribute UNIVERSE authors (CC-BY) when citing aggregates."
+    },
+    {
+      "id": "alkabbany_stress",
+      "corpus_id": "alkabbany_stress_muse",
+      "optional": true,
+      "path": "corpora/external/alkabbany_stress.npz",
+      "gitignored": true,
+      "preset": "alkabbany-stress",
+      "source_repo": "windwerfer/neurofeed-gym-corpora",
+      "builder": "builders/build_alkabbany.py",
+      "builder_status": "stub: upstream ships pre-extracted feature MATs, not raw EEG; builder exits 2 until raw Muse S streams are available",
+      "rebuild": "python3 {corpus_root}/builders/build_alkabbany.py --out corpora/external/alkabbany_stress.npz",
+      "run": "python3 runners/run_gym.py --preset alkabbany-stress [--corpus-root ../../neurofeed-gym-corpora]",
+      "upstream": "github.com/alkabbany/stress_det_in_the_wild (Muse S native)",
+      "license": "CC-BY-4.0",
+      "use_status": "findings-only",
+      "labels": "0=relax, 1=stress",
+      "ai": "none (band columns only) -> ai.* scored N/A",
+      "notes": "findings-only: eval -> aggregate. Built NPZ is gitignored; only aggregate numbers (scores, sep, percentile bands, keep/merge/kill) may land in neurofeed PRs. No raw/windows/embeddings, no NC/gated data, ever. Attribute alkabbany et al. (CC-BY) when citing aggregates."
     },
     {
       "id": "muse-eeg-heads-band-math",
@@ -66,11 +123,18 @@
       "labels",
       "delta_abs",
       "recording_id",
-      "label_names"
+      "label_names",
+      "cal_policy",
+      "corpus_id",
+      "recordings_used",
+      "recordings_skipped",
+      "cal_starts",
+      "cal_lens"
     ],
     "device_features": [
       "device.focus",
       "device.calm"
-    ]
+    ],
+    "per_recording_calibration": "Optional cal_starts int32 (R,) + cal_lens int32 (R,), one entry per unique recording_id in first-appearance order (== recordings_used). cal_starts are absolute stream row indices; the block [start, start+len) must lie inside that recording. Each recording is scored against its own baseline; cal rows are excluded from scoring; cal_len 0 skips the recording. Absent -> legacy: first cal_n rows."
   }
 }
