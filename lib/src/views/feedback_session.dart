@@ -15,6 +15,7 @@ import 'package:neurofeed/src/connect_window.dart';
 import 'package:neurofeed/src/feedback/feature_override.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
 import 'package:neurofeed/src/feedback/session_leave.dart';
+import 'package:neurofeed/src/feedback/guard_start_gate.dart';
 import 'package:neurofeed/src/feedback/guardrail_mode.dart';
 import 'package:neurofeed/src/feedback/last_calibration_baseline.dart';
 import 'package:neurofeed/src/charts/band_style.dart';
@@ -368,18 +369,19 @@ class _PhaseControls extends ConsumerWidget {
     final theme = Theme.of(context);
     final settings = ref.watch(settingsProvider);
     final deviceId = ref.watch(appStateProvider).status.id;
-    final guardrailIntended = settings.guardrailEnabledFor(fb.protocol);
     // Model gate only for a guard that will really need the AI engine: a
     // catalog-default AI head falls back to band.delta without a ready model
-    // (Settings.sessionGuardFeatureFor); an explicit AI pick still gates.
+    // (Settings.sessionGuardFeatureFor); an explicit AI pick and a model-only
+    // guard (guard.requiresModel, sleepGuard) gate — the dialog installs the
+    // model or waits for an installed one to finish loading.
     final needsModel =
-        guardrailIntended &&
-        guardFeatureIsAi(
-          settings.sessionGuardFeatureFor(
-            fb.protocol,
-            aiReady: ref.watch(modelEngineAvailabilityProvider),
-          ),
-        );
+        guardStartGate(
+          settings: settings,
+          protocolId: fb.protocol,
+          engine: ref.watch(modelEngineNotifierProvider),
+        ) ==
+        GuardStartGate.needsModel;
+    final requiresModel = settings.guardRequiresModelFor(fb.protocol);
 
     // Music feedback needs a music folder. The music + AI guardrail combination
     // is allowed; the one-time stutter warning fires when the user picks the
@@ -442,8 +444,12 @@ class _PhaseControls extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'The guardrail AI engine is not ready yet — download or '
-                'import a model to enable the AI sleep guardrail.',
+                requiresModel
+                    ? 'This program needs the guardrail AI engine. Start '
+                          'downloads or imports a model, or waits for the '
+                          'installed one to finish loading.'
+                    : 'The guardrail AI engine is not ready yet — download or '
+                          'import a model to enable the AI sleep guardrail.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall,
               ),
@@ -2177,7 +2183,13 @@ class _GuardrailScorerDialogState
   List<String> _scorerFeatures() {
     // Ship picker: band.delta always; CBraMod heads when Spur A encoder is
     // Ready/installed; REVE heads when REVE base is installed.
-    final items = <String>[guardFeatureBandDelta];
+    // A model-only guard (guard.requiresModel) offers AI heads only; its
+    // catalog head stays listed even before a model is installed (Start then
+    // shows the model gate).
+    final settings = ref.read(settingsProvider);
+    final fb = ref.read(feedbackStateProvider);
+    final requiresModel = settings.guardRequiresModelFor(fb.protocol);
+    final items = <String>[if (!requiresModel) guardFeatureBandDelta];
     final cbramodInstalled =
         ref.read(modelInstalledProvider(ModelKind.cbramodAVig)).valueOrNull ==
         true;
@@ -2190,8 +2202,28 @@ class _GuardrailScorerDialogState
     if (reveInstalled && _aiDrowsinessListed()) {
       items.addAll([guardFeatureAiAVigReve, guardFeatureAiWakeLightReve]);
     }
+    if (requiresModel) {
+      final catalogFeature = _catalogGuardFeature(fb.protocol);
+      if (catalogFeature != null && !items.contains(catalogFeature)) {
+        items.insert(0, catalogFeature);
+      }
+    }
     return items;
   }
+
+  String? _catalogGuardFeature(String protocolId) => ref
+      .read(protocolCatalogProvider)
+      .valueOrNull
+      ?.forName(protocolId)
+      ?.guard
+      ?.feature;
+
+  /// Fallback pick when the current feature is not offered: band.delta, or
+  /// the first AI head for a model-only guard.
+  String _fallbackFeature(List<String> features) =>
+      features.contains(guardFeatureBandDelta) || features.isEmpty
+      ? guardFeatureBandDelta
+      : features.first;
 
   Future<void> _setEnabled(bool on) async {
     final settings = ref.read(settingsProvider);
@@ -2206,12 +2238,12 @@ class _GuardrailScorerDialogState
           ?.forName(fb.protocol)
           ?.guard
           ?.feature;
+      final offered = _scorerFeatures();
       final next = _feature != guardFeatureNone
           ? _feature
-          : (catalogFeature != null &&
-                    _scorerFeatures().contains(catalogFeature)
+          : (catalogFeature != null && offered.contains(catalogFeature)
                 ? catalogFeature
-                : guardFeatureBandDelta);
+                : _fallbackFeature(offered));
       setState(() => _feature = next);
       await settings.setGuardFeature(fb.protocol, next);
       if (guardFeatureIsAi(next) &&
@@ -2238,8 +2270,11 @@ class _GuardrailScorerDialogState
     // A catalog-default AI head (no stored pref) already falls back to
     // band.delta at session start (Settings.sessionGuardFeatureFor); only an
     // explicit AI pick is pinned back to band.delta here.
+    // A model-only guard (guard.requiresModel) is never pinned to
+    // band.delta: Start shows the model gate instead.
     if (settings.guardrailEnabledFor(fb.protocol) &&
         settings.hasGuardFeaturePref(fb.protocol) &&
+        !settings.guardRequiresModelFor(fb.protocol) &&
         (cbramodBlocked ||
             (guardFeatureIsReve(_feature) && !reveInstalled) ||
             (guardFeatureIsAi(_feature) && !_anyModelInstalled()))) {
@@ -2279,7 +2314,7 @@ class _GuardrailScorerDialogState
     final features = _scorerFeatures();
     final current = features.contains(_feature)
         ? _feature
-        : guardFeatureBandDelta;
+        : _fallbackFeature(features);
 
     return AlertDialog(
       title: Row(
@@ -2332,7 +2367,8 @@ class _GuardrailScorerDialogState
               const SizedBox(height: 8),
               if (guardFeatureIsAi(current))
                 Text(
-                  'AI head ${guardFeatureLabel(current)} (${settings.guardModel ?? defaultModelKind.ffId})',
+                  'AI head ${guardFeatureLabel(current)} (${settings.guardModel ?? defaultModelKind.ffId})'
+                  '${settings.guardRequiresModelFor(fb.protocol) ? ' — this program requires the AI model (no band-math fallback).' : ''}',
                   style: theme.textTheme.bodySmall,
                 )
               else

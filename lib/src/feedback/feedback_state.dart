@@ -17,6 +17,7 @@ import 'package:neurofeed/src/feedback/feedback_phase.dart';
 import 'package:neurofeed/src/feedback/feedback_recorder.dart';
 import 'package:neurofeed/src/feedback/gate_electrodes.dart';
 import 'package:neurofeed/src/feedback/guard_lane.dart';
+import 'package:neurofeed/src/feedback/guard_start_gate.dart';
 import 'package:neurofeed/src/feedback/guardrail_mode.dart';
 import 'package:neurofeed/src/feedback/last_calibration_baseline.dart';
 import 'package:neurofeed/src/feedback/live_stats.dart';
@@ -701,6 +702,19 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       debugPrint('[feedback] refusing Start: unsaved session');
       return;
     }
+    if (guardStartBlocked(
+      settings: _ref.read(settingsProvider),
+      protocolId: state.protocol,
+      engine: _ref.read(modelEngineNotifierProvider),
+    )) {
+      // guard.requiresModel (sleepGuard): no band.delta fallback. The Start
+      // button shows the model gate first; this is the backstop.
+      debugPrint(
+        '[feedback] refusing Start: ${state.protocol} requires the AI model '
+        '(engine not ready)',
+      );
+      return;
+    }
     final app = _ref.read(appStateProvider);
     if (!app.status.connected) {
       _ref.read(appStateProvider.notifier).openConnectWindowAndScan();
@@ -852,6 +866,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// null between sessions.
   String? _lockedGuardFeature;
 
+  /// Protocol `guard.deltaRail` (default true): whether the absolute
+  /// frontal-delta ceiling may warn this session.
+  bool get _specDeltaRail =>
+      _ref
+          .read(protocolCatalogProvider)
+          .valueOrNull
+          ?.forName(state.protocol)
+          ?.guard
+          ?.deltaRail ??
+      true;
+
   /// Whether this session's guard runs band math (no AI model).
   bool get _guardIsBandMath => _sessionGuardFeature == guardFeatureBandDelta;
 
@@ -965,6 +990,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       featureId: guardFeature == guardFeatureNone
           ? guardFeatureBandDelta
           : guardFeature,
+      deltaRail: _specDeltaRail,
       deltaElectrodes: frontal,
     );
   }
@@ -995,6 +1021,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         enabled: true,
         bandMath: true,
         featureId: guardFeatureBandDelta,
+        deltaRail: _specDeltaRail,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       debugPrint('[guardrail] enabled (band math — no model)');
@@ -1015,6 +1042,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         featureId: guardFeatureIsAi(featureId)
             ? featureId
             : guardFeatureAiAVigReve,
+        deltaRail: _specDeltaRail,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       if (ok) {
@@ -1027,6 +1055,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         featureId: guardFeatureIsAi(featureId)
             ? featureId
             : guardFeatureAiAVigReve,
+        deltaRail: _specDeltaRail,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       debugPrint('[guardrail] enable failed: $e');
@@ -1367,6 +1396,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       ),
       baselineSamples: List.of(_engine.baselineSamples),
       phases: List.of(_calibration.clipPhases),
+      windows: List.of(_calibration.stageWindows),
       recalibrations: List.of(_recalibrations),
     );
   }

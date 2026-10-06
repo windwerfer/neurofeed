@@ -122,8 +122,12 @@ def write_protocol_stats(run: dict, out_path: Path) -> None:
         "",
         "## Protocols (composite + parts)",
         "",
-        "| id | final | reward | inhibit | guard | notes |",
-        "|----|------:|-------:|--------:|------:|-------|",
+        "`guard` = feature-only label alignment (the score); `rail` = protocol "
+        "`guard.deltaRail`; `warn` / `warn acc` = rate and label alignment "
+        "of the app-fidelity warning (feature OR delta rail when the rail is on).",
+        "",
+        "| id | final | reward | inhibit | guard | rail | warn | warn acc | notes |",
+        "|----|------:|-------:|--------:|------:|:----:|-----:|---------:|-------|",
     ]
     for p in run["protocols"]:
         parts = p.get("parts") or {}
@@ -142,8 +146,15 @@ def write_protocol_stats(run: dict, out_path: Path) -> None:
         notes = "; ".join(p.get("notes") or []) or ""
         final = p.get("final")
         final_s = f"{final:.3f}" if isinstance(final, (int, float)) else "N/A"
+        if g and g.get("status") not in ("unavailable", "n/a"):
+            rail_s = "on" if g.get("delta_rail", True) else "off"
+            warn_s = _s(g, "warn_rate")
+            wacc_s = _s(g, "label_align_combined")
+        else:
+            rail_s = warn_s = wacc_s = "—"
         lines.append(
-            f"| {p['id']} | {final_s} | {_s(r)} | {_s(i)} | {_s(g)} | {notes} |"
+            f"| {p['id']} | {final_s} | {_s(r)} | {_s(i)} | {_s(g)} "
+            f"| {rail_s} | {warn_s} | {wacc_s} | {notes} |"
         )
 
     lines += [

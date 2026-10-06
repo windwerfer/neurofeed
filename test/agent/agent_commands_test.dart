@@ -11,6 +11,7 @@ import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/monitor/monitor_controller.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/monitor_state.dart';
+import 'package:neurofeed/src/reve/model_engine.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/spine/scratch_writer.dart';
 import 'package:neurofeed/src/settings.dart';
@@ -36,6 +37,7 @@ void main() {
         settingsProvider.overrideWith((ref) => settings),
         appStateProvider.overrideWith((ref) => app),
         sessionStorageProvider.overrideWith((ref) => storage),
+        modelEngineNotifierProvider.overrideWith(_MissingModelEngine.new),
         monitorControllerProvider.overrideWith(
           () => MonitorController(
             createRecorder: () =>
@@ -153,17 +155,19 @@ void main() {
     container.read(monitorControllerProvider);
     app.debugSetConnected();
     await settle();
-    container.read(feedbackStateProvider.notifier).restoreEndedSession(
-      id: 'unsaved1',
-      scratchPath: '${history.path}/session_unsaved1.neurofeed',
-      metadata: SessionMetadata(
-        protocol: 'drowsiness',
-        durationMinutes: 1,
-        elapsedSeconds: 10,
-        sound: 'Ambient Drone',
-        savedAt: DateTime.utc(2026, 9, 14).toIso8601String(),
-      ),
-    );
+    container
+        .read(feedbackStateProvider.notifier)
+        .restoreEndedSession(
+          id: 'unsaved1',
+          scratchPath: '${history.path}/session_unsaved1.neurofeed',
+          metadata: SessionMetadata(
+            protocol: 'drowsiness',
+            durationMinutes: 1,
+            elapsedSeconds: 10,
+            sound: 'Ambient Drone',
+            savedAt: DateTime.utc(2026, 9, 14).toIso8601String(),
+          ),
+        );
     final res = await agent.handle(
       method: 'POST',
       path: '/session/start',
@@ -173,18 +177,35 @@ void main() {
     expect(res.body['error'], 'unsaved_session');
   });
 
-  test('POST /session/reset 409 unsaved_session', () async {
-    container.read(feedbackStateProvider.notifier).restoreEndedSession(
-      id: 'unsaved2',
-      scratchPath: '${history.path}/session_unsaved2.neurofeed',
-      metadata: SessionMetadata(
-        protocol: 'drowsiness',
-        durationMinutes: 1,
-        elapsedSeconds: 10,
-        sound: 'Ambient Drone',
-        savedAt: DateTime.utc(2026, 9, 14).toIso8601String(),
-      ),
+  test('POST /session/start 412 model_not_ready for sleepGuard', () async {
+    container.read(monitorControllerProvider);
+    app.debugSetConnected();
+    await settle();
+    container.read(feedbackStateProvider.notifier).selectProtocol('sleepGuard');
+    final res = await agent.handle(
+      method: 'POST',
+      path: '/session/start',
+      body: const {},
     );
+    expect(res.status, 412);
+    expect(res.body['error'], 'model_not_ready');
+    expect(container.read(feedbackStateProvider).phase, FeedbackPhase.idle);
+  });
+
+  test('POST /session/reset 409 unsaved_session', () async {
+    container
+        .read(feedbackStateProvider.notifier)
+        .restoreEndedSession(
+          id: 'unsaved2',
+          scratchPath: '${history.path}/session_unsaved2.neurofeed',
+          metadata: SessionMetadata(
+            protocol: 'drowsiness',
+            durationMinutes: 1,
+            elapsedSeconds: 10,
+            sound: 'Ambient Drone',
+            savedAt: DateTime.utc(2026, 9, 14).toIso8601String(),
+          ),
+        );
     final res = await agent.handle(
       method: 'POST',
       path: '/session/reset',
@@ -208,4 +229,9 @@ void main() {
     expect(res.body['ok'], true);
     expect(res.body['captureKind'], 'recording');
   });
+}
+
+class _MissingModelEngine extends ModelEngineNotifier {
+  @override
+  ModelEngineState build() => const ModelEngineNotInstalled();
 }

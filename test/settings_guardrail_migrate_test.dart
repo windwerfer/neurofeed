@@ -19,7 +19,9 @@ void main() {
     });
     final settings = await Settings.load();
     expect(settings.guardFeatureFor('restAwake'), guardFeatureBandDelta);
-    expect(settings.guardFeatureFor('sleepGuard'), guardFeatureBandDelta);
+    // sleepGuard requires the model: a stored band.delta resolves to its AI
+    // feature (guard.requiresModel).
+    expect(settings.guardFeatureFor('sleepGuard'), guardFeatureAiAVig);
     expect(settings.guardFeatureFor('notAProtocol'), guardFeatureNone);
   });
 
@@ -74,34 +76,32 @@ void main() {
     },
   );
 
-  test(
-    'no AI model ready: catalog-default AI guard falls back to band.delta',
-    () async {
-      SharedPreferences.setMockInitialValues({});
-      final settings = await Settings.load();
-      expect(
-        settings.sessionGuardFeatureFor('sleepGuard', aiReady: false),
-        guardFeatureBandDelta,
-      );
-      expect(
-        settings.sessionGuardFeatureFor('restAwake', aiReady: false),
-        guardFeatureBandDelta,
-      );
-      expect(
-        settings.sessionGuardFeatureFor('sleepGuard', aiReady: true),
-        guardFeatureAiAVig,
-      );
-      // Guard-less / default-off rows stay off either way.
-      expect(
-        settings.sessionGuardFeatureFor('alertOpen', aiReady: false),
-        guardFeatureNone,
-      );
-      expect(
-        settings.sessionGuardFeatureFor('concentrate', aiReady: true),
-        guardFeatureNone,
-      );
-    },
-  );
+  test('no AI model ready: catalog-default AI guard falls back to band.delta '
+      '(except sleepGuard, which requires the model)', () async {
+    SharedPreferences.setMockInitialValues({});
+    final settings = await Settings.load();
+    expect(
+      settings.sessionGuardFeatureFor('sleepGuard', aiReady: false),
+      guardFeatureAiAVig,
+    );
+    expect(
+      settings.sessionGuardFeatureFor('restAwake', aiReady: false),
+      guardFeatureBandDelta,
+    );
+    expect(
+      settings.sessionGuardFeatureFor('sleepGuard', aiReady: true),
+      guardFeatureAiAVig,
+    );
+    // Guard-less / default-off rows stay off either way.
+    expect(
+      settings.sessionGuardFeatureFor('alertOpen', aiReady: false),
+      guardFeatureNone,
+    );
+    expect(
+      settings.sessionGuardFeatureFor('concentrate', aiReady: true),
+      guardFeatureNone,
+    );
+  });
 
   test('explicit AI pref is kept when no model is ready (as before)', () async {
     SharedPreferences.setMockInitialValues({});

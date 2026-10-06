@@ -149,15 +149,21 @@ Catalog and user documents are the same type (`origin: catalog | user`). `Protoc
 
 ### Catalog IDs (on-disk forever)
 
-`drowsiness`, `twilight`, `alertnessOpen`, `alertnessClosed`, `mindfulness`, `concentration`, `relaxedConcentration`, `recordOnly`, `guardrailOnly`
+`sleepGuard`, `restAwake`, `openMonitor`, `alertOpen`, `alertClosed`, `concentrate`, `calibrateRecord`, `recordOnly`
 
-Unknown IDs **must not** fall back to `drowsiness` (`SessionMetadata`, SQLite list, crash recovery). List rows: `catalog.forName(id)?.copy` else raw id. Recent: catalog hit only (skip unknown). `protocolJson` is for detail / export / replay only.
+Retired ids resolve through `legacyProtocolAliases` (`lib/src/feedback/protocol_ids.dart`) for display / selection only: `drowsiness`→`restAwake`, `mindfulness`→`openMonitor`, `alertnessOpen`→`alertOpen`, `alertnessClosed`→`alertClosed`, `concentration`→`concentrate`, `guardrailOnly`→`sleepGuard`, `twilight` / `relaxedConcentration`→`restAwake`. Saved sessions keep their stored id; charts and export use the session's `protocolJson` snapshot first.
+
+Unknown IDs **must not** fall back to `restAwake` (`SessionMetadata`, SQLite list, crash recovery). List rows: `catalog.forName(id)?.copy` else raw id. Recent: catalog hit only (skip unknown). `protocolJson` is for detail / export / replay only.
 
 User IDs: `user.<slug>` where `slug` is `[a-z0-9-]{3,64}`. Catalog IDs are reserved.
 
 ### Schema (document `schemaVersion` 1; catalog file `version` 4)
 
-A protocol wires: optional `reward` (feature + output + policy + inhibit), optional `guard` (feature + output + policy + `muffleReward` + `defaultEnabled`), `background.kind`, calibration id, electrode **names** (omit = Rust default), copy strings, color.
+A protocol wires: optional `reward` (feature + output + policy + inhibit), optional `guard` (feature + output + policy + `muffleReward` + `defaultEnabled` + `deltaRail` + `requiresModel`), `background.kind`, calibration id, `calibrationKind`, electrode **names** (omit = Rust default), copy strings, color.
+
+- `guard.deltaRail` (bool, default `true`): whether the absolute frontal-delta ceiling (`guardrailDeltaCeiling` = 0.25) may warn next to the percentile rule, in AI and band mode. `false` = the ceiling never warns / chimes / muffles; computed frames still record `ceilingOver` as a signal-dirty indicator. Written to JSON only when `false`.
+- `guard.requiresModel` (bool, default `false`): the guard must run on an AI model. No band.delta fallback; a stored `band.delta` pick resolves to the catalog AI feature; Start shows the model gate (install / import, or wait for an installed model to finish loading) and `FeedbackState.startCalibration` / agent `POST /session/start` (412 `model_not_ready`) refuse while the engine is not Ready. Written only when `true`.
+- `calibrationKind` (`auto` default \| `staged`): `staged` always runs the staged calibration (artifacts → eyes-open clear → eyes-closed rest) and cannot be skipped.
 
 **Do not put in JSON:** FFT bins, biquad math, percentile numbers, EMA alphas, electrode indices, model kinds, `usableFor`, device allow-lists.
 
@@ -169,19 +175,18 @@ Catalog rows lock `reward.feature` (and `inhibit` when non-empty). They do **not
 
 ### Catalog mapping (do not guess)
 
-| ID | `reward.feature` | inhibit | `guard` | muffleReward | defaultEnabled | `reward.locked` | calibration | skippable |
-|---|---|---|---|---|---|---|---|---|
-| `drowsiness` | `band.atr` | none | `band.delta` | true | true | `feature` | `eyes-closed-01` | no |
-| `twilight` | `band.tar` | none | `band.delta` | true | true | `feature` | `eyes-closed-01` | no |
-| `alertnessOpen` | `band.btr` | none | **omit** | — | — | `feature` | `eyes-open-01` | no |
-| `alertnessClosed` | `band.btr` | none | `band.delta` | false | true | `feature` | `eyes-closed-01` | no |
-| `mindfulness` | `band.alpha` | none | `band.delta` | false | true | `feature` | `eyes-closed-01` | no |
-| `concentration` | `band.alpha` | betaCeiling 0.25 | `band.delta` | false | true | `feature`, `inhibit` | `eyes-closed-01` | no |
-| `relaxedConcentration` | `band.atr` | betaCeiling 0.25 **and** deltaCeiling 0.5 | `band.delta` | true | true | `feature`, `inhibit` | `eyes-closed-01` | no |
-| `recordOnly` | **omit** | — | **omit** | — | — | — | `eyes-closed-01` | **yes** |
-| `guardrailOnly` | **omit** | — | `band.delta` | false | true | — | `eyes-closed-01` | no |
+| ID | `reward.feature` | inhibit | `guard` | muffleReward | defaultEnabled | deltaRail | requiresModel | `reward.locked` | calibration | calibrationKind | skippable |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `sleepGuard` | **omit** | — | `ai.a_vig` | false | true | **false** | **true** | — | `eyes-closed-01` | `staged` | no |
+| `restAwake` | `band.atr` | none | `ai.a_vig` | true | true | **false** | false | `feature` | `eyes-closed-01` | auto | no |
+| `openMonitor` | `band.alpha` | none | `ai.a_vig` | false | true | **false** | false | `feature` | `eyes-closed-01` | auto | no |
+| `alertOpen` | `band.btr` | none | **omit** | — | — | — | — | `feature` | `eyes-open-01` | auto | no |
+| `alertClosed` | `band.btr` | none | `ai.a_vig` | false | true | **false** | false | `feature` | `eyes-closed-01` | auto | no |
+| `concentrate` | `band.alpha` | betaCeiling 0.25 | `ai.a_vig` | false | **false** | **false** | false | `feature`, `inhibit` | `eyes-closed-01` | auto | no |
+| `calibrateRecord` | **omit** | — | **omit** | — | — | — | — | — | `eyes-closed-01` | `staged` | no |
+| `recordOnly` | **omit** | — | **omit** | — | — | — | — | — | `eyes-closed-01` | auto | **yes** |
 
-Any document **with** a `guard` object defaults ON (`band.delta`) when no pref exists. Documents without `guard` default to **none**. Do not honor unused v3 `guardrailDefault: false`.
+Any document **with** a `guard` object defaults to its `guard.feature` when `defaultEnabled` and no pref exists (else `none`). A catalog-default AI head without a stored pref falls back to `band.delta` while no model is Ready, unless `guard.requiresModel`. Documents without `guard` default to **none**. Do not honor unused v3 `guardrailDefault: false`.
 
 ### Listing vs running
 

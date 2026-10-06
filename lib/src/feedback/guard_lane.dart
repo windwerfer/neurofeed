@@ -19,18 +19,22 @@ import 'package:neurofeed/src/rust/api/reve.dart' as frb;
 const double guardrailDeltaCeiling = 0.25;
 
 /// `percentileWarn` split: band-math scores native `band.delta`; AI scores the
-/// FeatureDto scalar (P(class1) from the selected head) and still rails on
-/// absolute frontal delta from always-on bands.
+/// FeatureDto scalar (P(class1) from the selected head) and, when
+/// [deltaRail] is on (protocol `guard.deltaRail`, default true), also rails
+/// on absolute frontal delta from always-on bands. With [deltaRail] off only
+/// the percentile rule can warn.
 bool percentileWarnOver({
   required bool bandMath,
   required double lastDelta,
   required double lastSleepDir,
   required double threshold,
+  bool deltaRail = true,
 }) {
+  final rail = deltaRail && lastDelta > guardrailDeltaCeiling;
   if (bandMath) {
-    return lastDelta > threshold || lastDelta > guardrailDeltaCeiling;
+    return lastDelta > threshold || rail;
   }
-  return lastSleepDir > threshold || lastDelta > guardrailDeltaCeiling;
+  return lastSleepDir > threshold || rail;
 }
 
 /// Minimum gap between guardrail warning chimes while drifting into sleep.
@@ -100,16 +104,22 @@ class GuardLane {
   String featureId = guardFeatureBandDelta;
   List<int> deltaElectrodes = const [];
 
+  /// Protocol `guard.deltaRail`: whether the absolute frontal-delta ceiling
+  /// may warn. [ceilingOver] is computed (and recorded) either way.
+  bool deltaRail = true;
+
   void configure({
     required bool enabled,
     required bool bandMath,
     required String featureId,
     required List<int> deltaElectrodes,
+    bool deltaRail = true,
   }) {
     this.enabled = enabled;
     this.bandMath = bandMath;
     this.featureId = featureId;
     this.deltaElectrodes = deltaElectrodes;
+    this.deltaRail = deltaRail;
   }
 
   void resetSession() {
@@ -252,6 +262,9 @@ class GuardLane {
     return lastSleepDir > t;
   }
 
+  /// Absolute frontal delta above [guardrailDeltaCeiling]. Recorded per
+  /// computed frame as a signal-dirty indicator even when [deltaRail] is off
+  /// (then it never warns).
   bool get ceilingOver => lastDelta > guardrailDeltaCeiling;
 
   void recomputeThreshold(int percentile) {
@@ -303,6 +316,7 @@ class GuardLane {
       lastDelta: lastDelta,
       lastSleepDir: lastSleepDir,
       threshold: t,
+      deltaRail: deltaRail,
     );
     if (!over) {
       warningActive = false;
@@ -330,7 +344,7 @@ class GuardLane {
         '[guardrail] WARNING sleep_dir=${lastSleepDir.toStringAsFixed(3)} '
         'delta=${lastDelta.toStringAsFixed(3)} '
         'thr=${t.toStringAsFixed(3)} '
-        'delta ceiling=$guardrailDeltaCeiling',
+        'delta ceiling=$guardrailDeltaCeiling${deltaRail ? '' : ' (rail off)'}',
       );
     }
   }

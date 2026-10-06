@@ -5,6 +5,7 @@ import 'package:neurofeed/src/audio/calibration_clips.dart';
 import 'package:neurofeed/src/feedback/baseline_window.dart';
 import 'package:neurofeed/src/feedback/feedback_phase.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/util/timezone.dart';
 
 /// One step of a calibration recipe: an optional guidance clip followed by a
 /// silent collection window. `seconds == 0` means no collection (intro-only).
@@ -92,6 +93,12 @@ class CalibrationRunner {
   String calibrationId = '';
   Map<String, Object?>? calibrationJson;
   final List<SessionCalibrationPhase> clipPhases = [];
+
+  /// Staged calibration: each stage's quiet recording window (prompt end to
+  /// collection end), in stage order. Only stages whose collection ran to the
+  /// end are listed.
+  final List<SessionCalibrationWindow> stageWindows = [];
+  bool _collectionCancelled = false;
   Completer<void>? collectionCompleter;
   Timer? collectionTimer;
   bool collectingBaselineWindow = false;
@@ -109,6 +116,7 @@ class CalibrationRunner {
     calibrationId = '';
     calibrationJson = null;
     clipPhases.clear();
+    stageWindows.clear();
     baselineValidSeconds = null;
     baselineWallSeconds = null;
     _window = const BaselineWindow();
@@ -126,6 +134,7 @@ class CalibrationRunner {
     final pending = collectionCompleter;
     collectionCompleter = null;
     if (pending != null && !pending.isCompleted) {
+      _collectionCancelled = true;
       pending.complete();
     }
   }
@@ -149,6 +158,7 @@ class CalibrationRunner {
     steps.clear();
     stepIndex = 0;
     clipPhases.clear();
+    stageWindows.clear();
     onCollectionEyes(null);
     kind = 'single';
     calibrationId = '';
@@ -204,6 +214,39 @@ class CalibrationRunner {
     await _runNextStep();
   }
 
+  /// Stage id for [SessionCalibrationWindow.stage].
+  static String stageWindowId(CalibrationStep step) {
+    if (step.isArtifactStage) return calibrationWindowArtifacts;
+    if (step.isChallengeStage) return calibrationWindowEyesOpenClear;
+    return step.eyes == 'open'
+        ? calibrationWindowEyesOpenRest
+        : calibrationWindowEyesClosedRest;
+  }
+
+  void _recordStageWindow(
+    CalibrationStepRun step,
+    DateTime start,
+    DateTime end,
+  ) {
+    final sessionStart = sessionStartAt();
+    if (sessionStart == null || end.isBefore(start)) return;
+    final window = SessionCalibrationWindow(
+      stage: stageWindowId(step.clip!),
+      eyes: step.eyes,
+      clipId: step.clip!.id,
+      startSecs: start.difference(sessionStart).inMilliseconds / 1000,
+      endSecs: end.difference(sessionStart).inMilliseconds / 1000,
+      startedAt: formatIso8601WithOffset(start),
+      endedAt: formatIso8601WithOffset(end),
+    );
+    stageWindows.add(window);
+    writeMetadata({
+      'type': 'calibration_window',
+      ...window.toJson(),
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+  }
+
   String _stageName(CalibrationStep step) => switch (step.eyes) {
     'open' => 'Eyes open',
     'closed' => 'Eyes closed',
@@ -231,7 +274,7 @@ class CalibrationRunner {
     );
     if (step.clip != null) {
       final sessionStart = sessionStartAt();
-      final clipStart = DateTime.now();
+      final clipStart = clock();
       try {
         await playClip(
           step.clip!.file,
@@ -242,7 +285,7 @@ class CalibrationRunner {
       if (!isActive()) {
         return;
       }
-      final clipEnd = DateTime.now();
+      final clipEnd = clock();
       if (sessionStart != null) {
         clipPhases.add(
           SessionCalibrationPhase(
@@ -273,7 +316,15 @@ class CalibrationRunner {
       }
     }
     if (step.baselineWindow || step.seconds > 0) {
+      _collectionCancelled = false;
+      final windowStart = clock();
       await _runCollection(step);
+      if (!isActive()) {
+        return;
+      }
+      if (kind == 'staged' && step.clip != null && !_collectionCancelled) {
+        _recordStageWindow(step, windowStart, clock());
+      }
     }
     if (!isActive()) {
       return;

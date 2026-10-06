@@ -187,6 +187,34 @@ def test_percentile_warn_parts_split():
     assert list(w) == [True, True, False]
 
 
+def test_percentile_warn_parts_delta_rail_off():
+    """guard.deltaRail false: rail mask still reported, never warns."""
+    from runners.helpers import percentile_warn_parts
+
+    feat = np.array([0.1, 0.3, 0.1])
+    delta = np.array([0.4, 0.1, 0.4])
+    for band_math in (False, True):
+        wf, wr, w = percentile_warn_parts(
+            band_math=band_math,
+            feature_values=feat,
+            delta_abs=delta,
+            threshold=0.2,
+            delta_ceiling=0.25,
+            delta_rail=False,
+        )
+        assert bool(wr[0]) and bool(wr[2])  # rail mask still computed
+        assert list(w) == list(wf)
+    # band path with the rail on also trips on feat > ceiling
+    _, _, w_on = percentile_warn_parts(
+        band_math=True,
+        feature_values=feat,
+        delta_abs=delta,
+        threshold=0.2,
+        delta_ceiling=0.25,
+    )
+    assert list(w_on) == [True, True, True]
+
+
 def test_guard_score_ignores_always_on_delta_rail(tmp_path):
     """High-sep series + constant delta>ceiling still scores well via warn_feature."""
     from runners.helpers import generate_synthetic_corpus, load_corpus, load_grids
@@ -260,3 +288,30 @@ def test_catalog_protocols_all_simulate(tmp_path):
             assert res["final"] is not None, pid
     assert protocols["sleepGuard"].get("reward") is None
     assert protocols["sleepGuard"]["guard"]["feature"] == "ai.a_vig"
+
+
+def test_simulate_protocol_reads_delta_rail_from_catalog(tmp_path):
+    """sleepGuard (deltaRail false in the catalog): combined warn == feature."""
+    from runners.helpers import load_catalog
+
+    protocols, _features = load_catalog()
+    assert protocols["sleepGuard"]["guard"]["deltaRail"] is False
+    for pid in ("restAwake", "openMonitor", "alertClosed", "concentrate"):
+        assert protocols[pid]["guard"]["deltaRail"] is False, pid
+    path = generate_synthetic_corpus(tmp_path, n=400, seed=11)
+    corpus = load_corpus(path)
+    corpus["delta_abs"] = np.full(len(corpus["ai_a_vig"]), 50.0)
+    grids = load_grids()
+    g = simulate_protocol(protocols["sleepGuard"], corpus, grids)["parts"]["guard"]
+    assert g["delta_rail"] is False
+    assert g["rail_rate"] == 1.0  # still reported (signal-dirty indicator)
+    assert g["warn_rate"] == g["warn_feature_rate"] < 1.0
+    assert g["label_align_combined"] == g["label_align"]
+
+    # Same protocol with the rail on (default) is always-on.
+    on = dict(protocols["sleepGuard"])
+    on["guard"] = {k: v for k, v in on["guard"].items() if k != "deltaRail"}
+    g_on = simulate_protocol(on, corpus, grids)["parts"]["guard"]
+    assert g_on["delta_rail"] is True
+    assert g_on["warn_rate"] == 1.0
+    assert g_on["label_align_combined"] == 0.5

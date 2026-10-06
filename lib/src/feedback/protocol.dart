@@ -267,6 +267,8 @@ class ProtocolGuard {
     this.policy = 'percentileWarn',
     this.muffleReward = false,
     this.defaultEnabled = true,
+    this.deltaRail = true,
+    this.requiresModel = false,
     this.electrodes,
     this.copy,
     this.locked = const [],
@@ -277,6 +279,18 @@ class ProtocolGuard {
   final String policy;
   final bool muffleReward;
   final bool defaultEnabled;
+
+  /// Whether the absolute frontal-delta ceiling ([guardrailDeltaCeiling] in
+  /// `guard_lane.dart`) may trigger a warning (chime / muffle) next to the
+  /// percentile rule. Default true (historic behavior). When false the
+  /// ceiling is still evaluated and recorded per computed frame
+  /// (`ceilingOver`) as a signal-dirty indicator, but never warns.
+  final bool deltaRail;
+
+  /// Whether this guard must run on an AI model. When true there is no
+  /// band.delta fallback: a session only starts once the AI engine is Ready
+  /// (Start shows the install / load prompt otherwise).
+  final bool requiresModel;
   final List<String>? electrodes;
   final String? copy;
   final List<String> locked;
@@ -301,6 +315,8 @@ class ProtocolGuard {
       policy: json['policy'] as String? ?? 'percentileWarn',
       muffleReward: json['muffleReward'] as bool? ?? false,
       defaultEnabled: json['defaultEnabled'] as bool? ?? true,
+      deltaRail: json['deltaRail'] as bool? ?? true,
+      requiresModel: json['requiresModel'] as bool? ?? false,
       electrodes: json['electrodes'] is List
           ? (json['electrodes'] as List).whereType<String>().toList()
           : null,
@@ -317,6 +333,8 @@ class ProtocolGuard {
     'policy': policy,
     'muffleReward': muffleReward,
     'defaultEnabled': defaultEnabled,
+    if (!deltaRail) 'deltaRail': deltaRail,
+    if (requiresModel) 'requiresModel': requiresModel,
     if (electrodes != null) 'electrodes': electrodes,
     if (copy != null) 'copy': copy,
     'locked': locked,
@@ -328,6 +346,8 @@ class ProtocolGuard {
     policy: policy,
     muffleReward: muffleReward,
     defaultEnabled: defaultEnabled,
+    deltaRail: deltaRail,
+    requiresModel: requiresModel,
     electrodes: electrodes,
     copy: copy,
     locked: locked,

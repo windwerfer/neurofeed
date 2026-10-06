@@ -740,6 +740,12 @@ class Settings extends ChangeNotifier {
     final doc = _catalog.forName(protocolId);
     if (doc != null && doc.guard == null) return guardFeatureNone;
     final parsed = parseGuardFeatureValue(_readGuardMap()[protocolId]);
+    // A model-only guard (guard.requiresModel) never runs band math: a stored
+    // band.delta pick resolves to the catalog's AI feature instead.
+    if (parsed == guardFeatureBandDelta &&
+        (doc?.guard?.requiresModel ?? false)) {
+      return doc!.guard!.feature;
+    }
     if (parsed != null) return parsed;
     final guard = doc?.guard;
     if (guard != null) {
@@ -747,6 +753,12 @@ class Settings extends ChangeNotifier {
     }
     return guardFeatureNone;
   }
+
+  /// Whether [protocolId]'s guard must run on the AI model (protocol
+  /// `guard.requiresModel`): no band.delta fallback, Start gates on the model.
+  bool guardRequiresModelFor(String protocolId) =>
+      _catalog.forName(canonicalProtocolId(protocolId))?.guard?.requiresModel ??
+      false;
 
   /// Whether the user has stored an explicit guard choice for [protocolId].
   bool hasGuardFeaturePref(String protocolId) =>
@@ -761,13 +773,14 @@ class Settings extends ChangeNotifier {
   /// stored pref) falls back to `band.delta` while no AI model is ready
   /// ([aiReady] false) — the same band-math guard these protocols ran by
   /// default before the AI default. An explicit stored AI choice is returned
-  /// unchanged; as before, the session then runs without a guard when the
-  /// model is not ready.
+  /// unchanged; Start then shows the model gate (install / wait for load).
+  /// A model-only guard ([guardRequiresModelFor]) never falls back either.
   String sessionGuardFeatureFor(String protocolId, {required bool aiReady}) {
     final feature = guardFeatureFor(protocolId);
     if (!aiReady &&
         guardFeatureIsAi(feature) &&
-        !hasGuardFeaturePref(protocolId)) {
+        !hasGuardFeaturePref(protocolId) &&
+        !guardRequiresModelFor(protocolId)) {
       return guardFeatureBandDelta;
     }
     return feature;

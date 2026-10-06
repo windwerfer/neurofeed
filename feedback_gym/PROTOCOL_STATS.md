@@ -1,7 +1,7 @@
 # PROTOCOL_STATS
 
-_Generated: 2026-10-06 13:42:32 UTC _
-_Run id: `20261006T134232Z`_
+_Generated: 2026-10-06 14:22:21 UTC _
+_Run id: `20261006T142221Z`_
 _Corpus: `corpora/external/sleep_edf_test.npz`_
 
 > Metrics are defined in [`metrics.md`](metrics.md). Do not claim performance without them.
@@ -10,16 +10,18 @@ UI dashboard: [`ui/index.html`](ui/index.html) (loads `ui/data/latest.json`).
 
 ## Protocols (composite + parts)
 
-| id | final | reward | inhibit | guard | notes |
-|----|------:|-------:|--------:|------:|-------|
-| sleepGuard | 0.634 | — | — | 0.634 | no reward lane |
-| restAwake | 0.823 | 0.866 | 1.000 | 0.634 |  |
-| openMonitor | 0.836 | 0.892 | 1.000 | 0.634 |  |
-| alertOpen | 0.880 | 0.831 | 1.000 | — | no guard lane |
-| alertClosed | 0.806 | 0.831 | 1.000 | 0.634 |  |
-| concentrate | 0.748 | 0.731 | 0.963 | 0.634 |  |
-| calibrateRecord | N/A | — | — | — | no reward lane; no guard lane; calibrateRecord — no lanes; composite N/A |
-| recordOnly | N/A | — | — | — | no reward lane; no guard lane; recordOnly — no lanes; composite N/A |
+`guard` = feature-only label alignment (the score); `rail` = protocol `guard.deltaRail`; `warn` / `warn acc` = rate and label alignment of the app-fidelity warning (feature OR delta rail when the rail is on).
+
+| id | final | reward | inhibit | guard | rail | warn | warn acc | notes |
+|----|------:|-------:|--------:|------:|:----:|-----:|---------:|-------|
+| sleepGuard | 0.634 | — | — | 0.634 | off | 0.789 | 0.634 | no reward lane |
+| restAwake | 0.823 | 0.866 | 1.000 | 0.634 | off | 0.789 | 0.634 |  |
+| openMonitor | 0.836 | 0.892 | 1.000 | 0.634 | off | 0.789 | 0.634 |  |
+| alertOpen | 0.880 | 0.831 | 1.000 | — | — | — | — | no guard lane |
+| alertClosed | 0.806 | 0.831 | 1.000 | 0.634 | off | 0.789 | 0.634 |  |
+| concentrate | 0.748 | 0.731 | 0.963 | 0.634 | off | 0.789 | 0.634 |  |
+| calibrateRecord | N/A | — | — | — | — | — | — | no reward lane; no guard lane; calibrateRecord — no lanes; composite N/A |
+| recordOnly | N/A | — | — | — | — | — | — | no reward lane; no guard lane; recordOnly — no lanes; composite N/A |
 
 ## Features (standalone board)
 
@@ -40,7 +42,7 @@ UI dashboard: [`ui/index.html`](ui/index.html) (loads `ui/data/latest.json`).
 
 ## Sweeps
 
-Per-feature percentile curves are in the UI **Sweeps** tab and in `results/20261006T134232Z/features.json`.
+Per-feature percentile curves are in the UI **Sweeps** tab and in `results/20261006T142221Z/features.json`.
 
 ## Approximations vs Dart lanes
 

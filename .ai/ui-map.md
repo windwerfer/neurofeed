@@ -361,3 +361,4 @@ Not a screen. `kDebugMode && --dart-define=NEUROFEED_AGENT=true`. See
 | Stop recording | `POST /record/stop` | Assembles scratch; does not publish. |
 | Start during Record | `POST /session/start` | 409 `recording_active` (after `not_connected`). |
 | Start with unsaved summary | `POST /session/start` | 409 `unsaved_session`. Same for `POST /session/reset`. |
+| Start a model-only guard without a Ready model | `POST /session/start` | 412 `model_not_ready` when the protocol's `guard.requiresModel` (sleepGuard) and the AI engine is not Ready (missing or still loading). |

@@ -74,6 +74,9 @@ class _ProtocolBuilderViewState extends ConsumerState<ProtocolBuilderView> {
   String? _guardFeature;
   GuardrailSound _guardOutput = GuardrailSound.softBowl;
   bool _muffleReward = false;
+  // Not editable in the builder; carried over when editing a saved document.
+  bool _guardDeltaRail = true;
+  bool _guardRequiresModel = false;
   final Set<String> _guardElectrodes = {};
 
   bool get _editing => widget.existing != null;
@@ -141,6 +144,8 @@ class _ProtocolBuilderViewState extends ConsumerState<ProtocolBuilderView> {
       _guardFeature = existing.guard?.feature ?? 'band.delta';
       _guardOutput = GuardrailSound.fromName(existing.guard?.output);
       _muffleReward = existing.guard?.muffleReward ?? false;
+      _guardDeltaRail = existing.guard?.deltaRail ?? true;
+      _guardRequiresModel = existing.guard?.requiresModel ?? false;
       _guardElectrodes.addAll(existing.guard?.electrodes ?? const []);
     }
     _catchPhrase.addListener(_onCatchPhraseChanged);
@@ -313,6 +318,8 @@ class _ProtocolBuilderViewState extends ConsumerState<ProtocolBuilderView> {
               policy: 'percentileWarn',
               muffleReward: _muffleReward,
               defaultEnabled: true,
+              deltaRail: _guardDeltaRail,
+              requiresModel: _guardRequiresModel,
               electrodes: _guardElectrodes.isEmpty
                   ? null
                   : _guardElectrodes.toList(),
