@@ -78,7 +78,8 @@ python3 runners/run_gym.py --presets sleep-edf-test,lee2026-eo-ec,universe-stres
 | `alkabbany-stress` | `corpora/external/alkabbany_stress.npz` | `builders/build_alkabbany.py` (stub) |
 
 If the NPZ is missing, the run stops (exit 2) and prints the exact command,
-e.g. `python3 <corpus-root>/builders/build_lee2026.py --out .../lee2026_eo_ec.npz`.
+e.g. `python3 <corpus-root>/builders/build_lee2026.py --out-eo-ec .../lee2026_eo_ec.npz`
+(the flag comes from `out_flag` in the manifest entry, default `--out`).
 It never falls back to synthetic data. `--presets` checks every corpus before
 it scores anything, and leaves `PROTOCOL_STATS.md` / `ui/data/latest.json`
 untouched. Corpora that ship `cal_starts`/`cal_lens` are scored with

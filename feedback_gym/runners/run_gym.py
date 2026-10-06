@@ -68,7 +68,8 @@ def default_corpus_root() -> Path | None:
 
 
 def builder_command(entry: dict, corpus_root: Path, out: Path) -> str:
-    return f"python3 {corpus_root / entry['builder']} --out {out}"
+    """Exact build command; ``out_flag`` in the manifest entry overrides ``--out``."""
+    return f"python3 {corpus_root / entry['builder']} {entry.get('out_flag', '--out')} {out}"
 
 
 def missing_corpus_message(preset: str, entry: dict, corpus_root: Path | None) -> str:

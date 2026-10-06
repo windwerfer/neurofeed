@@ -264,7 +264,8 @@ def test_missing_sibling_npz_prints_builder_command(tmp_path, monkeypatch, capsy
     err = capsys.readouterr().err
     assert rc == run_gym.EXIT_MISSING_CORPUS != 0
     out = (tmp_path / "gym" / "corpora" / "external" / "lee2026_eo_ec.npz").resolve()
-    assert f"python3 {root.resolve() / 'builders' / 'build_lee2026.py'} --out {out}" in err
+    flag = run_gym.SIBLING_PRESETS["lee2026-eo-ec"].get("out_flag", "--out")
+    assert f"python3 {root.resolve() / 'builders' / 'build_lee2026.py'} {flag} {out}" in err
     assert "Not falling back to the synthetic corpus" in err
     assert not (tmp_path / "gym" / "results").exists()  # nothing scored
 
@@ -272,7 +273,7 @@ def test_missing_sibling_npz_prints_builder_command(tmp_path, monkeypatch, capsy
     rc = run_gym.main(["--presets", "synthetic,alkabbany-stress", "--corpus-root", str(root)])
     err = capsys.readouterr().err
     assert rc == run_gym.EXIT_MISSING_CORPUS
-    assert "build_alkabbany.py --out" in err
+    assert "build_alkabbany.py --out " in err
     assert not (tmp_path / "gym" / "results").exists()
 
 
