@@ -45,10 +45,52 @@ P(hypnagogic), `ai_wake_light` = P(light). Head layout W(2,200) in the pack
 `.f32bin` files. REVE columns absent → treated as unavailable.
 
 Calibration: first `cal_n=90` samples of the concatenated test stream
-(sessions typically start wake / low-y).
+(sessions typically start wake / low-y). Corpora with `cal_starts`/`cal_lens`
+use per-recording baselines instead.
 
 If Sleep-EDF paths are missing, `--preset sleep-edf-test` falls back to the
 synthetic demo with a warning.
+
+## Sibling corpora (findings-only)
+
+Extra labeled EEG with relaxed licenses (CC-BY / CC0 / ODC-By) lives in the
+private sibling repo
+[`windwerfer/neurofeed-gym-corpora`](https://github.com/windwerfer/neurofeed-gym-corpora):
+manifests, license notes, and builders that emit the gym NPZ schema. **The gym
+here is still the only scorer.** Builder and band-math code stay in that repo
+and in `muse-eeg-heads`, and are never copied into neurofeed.
+
+```bash
+cd feedback_gym
+
+# corpus root defaults to $NEUROFEED_GYM_CORPORA or ../neurofeed-gym-corpora (next to neurofeed)
+python3 runners/run_gym.py --preset lee2026-eo-ec --corpus-root ../../neurofeed-gym-corpora
+
+# several corpora -> results/<ts>_<preset>/ each + results/<ts>_multi/multi_board.json
+# + MULTI_CORPUS_STATS.md (side-by-side scores; N/A where a corpus lacks a feature, e.g. ai.*)
+python3 runners/run_gym.py --presets sleep-edf-test,lee2026-eo-ec,lee2026-artifacts
+```
+
+| preset | NPZ (gitignored) | builder in corpora repo |
+|--------|------------------|-------------------------|
+| `lee2026-eo-ec` | `corpora/external/lee2026_eo_ec.npz` | `builders/build_lee2026.py --out-eo-ec` |
+| `lee2026-artifacts` | `corpora/external/lee2026_artifacts.npz` | `builders/build_lee2026.py --out-artifacts` |
+| `universe-stress` | `corpora/external/universe_stress.npz` | `builders/build_universe.py` |
+
+If the NPZ is missing, the run stops (exit 2) and prints the exact command,
+e.g. `uv run --with numpy --with mne python <corpus-root>/builders/build_lee2026.py --out-eo-ec .../lee2026_eo_ec.npz` (Lee needs `mne`; UNIVERSE runs with plain `python3`)
+(the flag comes from `out_flag` in the manifest entry, default `--out`).
+It never falls back to synthetic data. `--presets` checks every corpus before
+it scores anything, and leaves `PROTOCOL_STATS.md` / `ui/data/latest.json`
+untouched. Corpora that ship `cal_starts`/`cal_lens` are scored with
+per-recording calibration (see [`metrics.md`](metrics.md)).
+
+**Rule:** only aggregates (scores, sep, percentile bands, keep/merge/kill
+evidence) land in neurofeed. Raw EEG, windows, embeddings, built NPZs, and
+anything NC-licensed, gated, or with an unclear license **never** do.
+Lab-only corpora cannot back a product-facing protocol until the result is
+re-validated on a permissive corpus. Registered in `corpora/manifest.json`
+→ `external[]` with license + `findings-only`.
 
 ## Open the UI
 
@@ -88,6 +130,7 @@ See `corpora/manifest.json`. Synthetic demo ships under `corpora/synthetic/`.
 feedback_gym/
   metrics.md
   PROTOCOL_STATS.md
+  MULTI_CORPUS_STATS.md        # written by --presets (side-by-side board)
   runners/run_gym.py
   runners/build_corpus_sleep_edf.py
   sweeps/grids.yaml

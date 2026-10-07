@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 
 from runners.helpers import (
+    build_cal_plan,
     feature_series,
     hit_rate,
     inhibit_block_rate,
@@ -17,19 +18,12 @@ from runners.helpers import (
     protocol_composite,
     round4,
     flip_stability,
-    threshold_at_percentile,
+    play_thresholds,
+    summarize_threshold,
     uptrain_in_target,
     warn_rate,
     warn_rate_health,
 )
-
-
-def _split_cal_play(corpus: dict[str, Any]) -> tuple[slice, slice]:
-    cal_n = int(corpus["cal_n"])
-    n = len(next(v for k, v in corpus.items() if isinstance(v, np.ndarray) and v.ndim == 1 and k.startswith("band_")))
-    cal = slice(0, cal_n)
-    play = slice(cal_n, n)
-    return cal, play
 
 
 def simulate_protocol(
@@ -58,7 +52,8 @@ def simulate_protocol(
     )
     delta_ceiling = float(defaults.get("guardrail_delta_ceiling", 0.25))
 
-    cal, play = _split_cal_play(corpus)
+    plan = build_cal_plan(corpus)
+    play = plan.play_idx
     labels_full = corpus.get("labels")
     labels = None if labels_full is None else np.asarray(labels_full)[play]
 
@@ -69,6 +64,8 @@ def simulate_protocol(
         "parts": {},
         "notes": [],
     }
+    if plan.per_recording:
+        result["calibration"] = plan.describe()
 
     reward_score = None
     guard_score = None
@@ -86,10 +83,13 @@ def simulate_protocol(
             result["parts"]["reward"] = {"status": "unavailable", "feature": feat_id}
             result["notes"].append(f"reward feature {feat_id} missing from corpus")
         else:
-            baseline = series[cal]
             play_vals = series[play]
-            thr = threshold_at_percentile(baseline, r_p)
-            above = uptrain_in_target(play_vals, thr)
+            # all play rows are decided (NaN > thr is False), as before
+            thr_rows, thr_groups = play_thresholds(
+                series, plan, r_p, finite_play=np.ones(play_vals.size, dtype=bool)
+            )
+            thr = summarize_threshold(plan, thr_groups)
+            above = uptrain_in_target(play_vals, thr_rows)
 
             delta_rel = np.asarray(corpus["delta_rel"])[play]
             theta_rel = np.asarray(corpus["theta_rel"])[play]
@@ -138,6 +138,10 @@ def simulate_protocol(
                 "score": round4(reward_score),
                 "n_play": int(play_vals.size),
             }
+            if plan.per_recording:
+                result["parts"]["reward"]["thresholds_per_recording"] = {
+                    g.recording_id: round4(t) for g, t in zip(plan.groups, thr_groups)
+                }
             result["parts"]["inhibit"] = {
                 "items": inhibit_parts,
                 "score": round4(inhibit_score),
@@ -160,7 +164,6 @@ def simulate_protocol(
             result["notes"].append(f"guard feature {feat_id} missing from corpus")
         else:
             band_math = feat_id.startswith("band.")
-            baseline = np.asarray(series[cal], dtype=float)
             play_vals = np.asarray(series[play], dtype=float)
             finite = np.isfinite(play_vals)
             if not finite.any():
@@ -172,11 +175,11 @@ def simulate_protocol(
                 result["notes"].append(f"guard feature {feat_id} all-NaN")
             else:
                 play_f = play_vals[finite]
-                base_f = baseline[np.isfinite(baseline)]
-                if base_f.size == 0:
-                    base_f = play_f
                 labels_f = None if labels is None else np.asarray(labels)[finite]
-                thr = threshold_at_percentile(base_f, g_p)
+                thr_rows, thr_groups = play_thresholds(
+                    series, plan, g_p, finite_play=finite
+                )
+                thr = summarize_threshold(plan, thr_groups)
                 delta_abs = np.asarray(
                     corpus.get("delta_abs", corpus["band_delta"]), dtype=float
                 )[play][finite]
@@ -184,7 +187,7 @@ def simulate_protocol(
                     band_math=band_math,
                     feature_values=play_f,
                     delta_abs=delta_abs,
-                    threshold=thr,
+                    threshold=thr_rows,
                     delta_ceiling=delta_ceiling,
                 )
                 wr = warn_rate(warn)
@@ -217,6 +220,10 @@ def simulate_protocol(
                     else None,
                     "score": round4(guard_score),
                 }
+                if plan.per_recording:
+                    result["parts"]["guard"]["thresholds_per_recording"] = {
+                        g.recording_id: round4(t) for g, t in zip(plan.groups, thr_groups)
+                    }
 
     final = protocol_composite(
         reward_score=reward_score,

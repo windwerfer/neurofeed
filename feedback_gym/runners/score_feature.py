@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 
 from runners.helpers import (
+    build_cal_plan,
     feature_series,
     flip_stability,
     guard_feature_score,
@@ -14,24 +15,13 @@ from runners.helpers import (
     label_align,
     latency_for,
     percentile_warn_parts,
+    play_thresholds,
     roc_auc,
     round4,
-    threshold_at_percentile,
+    summarize_threshold,
     uptrain_in_target,
     warn_rate,
 )
-
-
-def _play_slice(corpus: dict[str, Any]) -> tuple[slice, slice]:
-    cal_n = int(corpus["cal_n"])
-    # infer length from any 1d band array
-    for key in ("band_atr", "band_delta", "ai_a_vig"):
-        if key in corpus:
-            n = len(corpus[key])
-            break
-    else:
-        n = cal_n
-    return slice(0, cal_n), slice(cal_n, n)
 
 
 def score_feature(
@@ -83,21 +73,19 @@ def score_feature(
         )
         return base
 
-    cal, play = _play_slice(corpus)
+    plan = build_cal_plan(corpus)
+    play = plan.play_idx
     play_vals = np.asarray(series[play], dtype=float)
-    baseline = np.asarray(series[cal], dtype=float)
     labels = corpus.get("labels")
     labels_play = None if labels is None else np.asarray(labels)[play]
 
     # REVE subsample columns may be NaN outside reconstructed indices
     finite_play = np.isfinite(play_vals)
-    finite_cal = np.isfinite(baseline)
     if not finite_play.any():
         base["status"] = "needs_pack" if source == "ai" else "unavailable"
         base["notes"].append("feature column all-NaN (e.g. REVE subsample miss)")
         return base
     play_vals_f = play_vals[finite_play]
-    baseline_f = baseline[finite_cal] if finite_cal.any() else play_vals_f
     labels_play_f = None if labels_play is None else np.asarray(labels_play)[finite_play]
     sep = roc_auc(play_vals_f, labels_play_f)
     base["sep"] = round4(sep)
@@ -142,10 +130,14 @@ def score_feature(
     worse_streak = 0
     prev_primary = None
 
+    if plan.per_recording:
+        base["calibration"] = plan.describe()
+
     for p in percentiles:
-        thr = threshold_at_percentile(baseline_f, p)
+        thr_rows, thr_groups = play_thresholds(series, plan, p, finite_play=finite_play)
+        thr = summarize_threshold(plan, thr_groups)
         if role == "reward":
-            decisions = uptrain_in_target(play_vals_f, thr)
+            decisions = uptrain_in_target(play_vals_f, thr_rows)
             hr = hit_rate(decisions)
             stab = flip_stability(decisions)
             primary = hr
@@ -162,7 +154,7 @@ def score_feature(
                 band_math=band_math,
                 feature_values=play_vals_f,
                 delta_abs=delta_abs,
-                threshold=thr,
+                threshold=thr_rows,
                 delta_ceiling=delta_ceiling,
             )
             wr = warn_rate(warn)
