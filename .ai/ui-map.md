@@ -219,7 +219,7 @@ metric. Histogram/PSD have **no** Bands strip.
 | Feedback list | `Biofeedback Protocols` | `FeedbackListView` | `feedback_list.dart` | |
 | Create program | `Create program` | `ProtocolBuilderView` | `protocol_builder.dart` | |
 | Protocol card | catch phrase (e.g. `Sleep-Edge Rest`) | `ProtocolDocument` | `feedback_list.dart` | Tap → session route. Catalog copy names the reward electrodes as `the target electrode pair (Muse AF7/AF8, Crown PO3/PO4)`. |
-| recordOnly | catalog copy | id `recordOnly` | `assets/protocols.json` | Skip-cal button. Agent smoke protocol. |
+| calibrateRecord | catalog copy | id `calibrateRecord` | `assets/protocols.json` | Only catalog row without reward or guard. Staged calibration, not skippable. Retired `recordOnly` aliases here. Agent smoke uses `alertOpen` + skip-cal. |
 
 ### Feedback session — `lib/src/views/feedback_session.dart`
 
@@ -229,7 +229,7 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 | Spoken name | On-screen text | Code symbol | File | Notes |
 |---|---|---|---|---|
 | Start Session | `Start Session` | `_PhaseControls.startSession` | `feedback_session.dart` | Crown → dialog. Recording → dialog. |
-| Start skip-cal | `Start (skip calibration)` | `startCalibration(skipCalibration: true)` | `feedback_session.dart` | recordOnly. |
+| Start skip-cal | `Start (skip calibration)` | `startCalibration(skipCalibration: true)` | `feedback_session.dart` | Documents with `calibrationSkippable` (no catalog row since recordOnly was retired; user protocols may). |
 | Calibration Skip | `Skip` | `skipCalibration` | `feedback_session.dart` | Next to `Cancel`. Debug mode only. Simulator: canned baseline. Real device: last baseline for this device id; hidden until one exists. |
 | Recording refused dialog | `Recording in progress` / `Stop the recording before starting a session.` | `_refuseRecordingStart` | `feedback_session.dart` | Actions `Cancel` / `Stop recording`. Start is not auto-continued. |
 | Save recording | `Save recording?` | `RecordingSaveDiscardDialog` | `monitor/views/recording_save_discard.dart` | Body `Save this recording to History, or discard it.` Actions `Save` / `Discard`. `barrierDismissible: false`. GraphShell Stop, session-view Stop, in-app disconnect. |
@@ -243,7 +243,7 @@ route). Engine: `FeedbackStateNotifier.startCalibration`.
 | Guardrail | `Guardrail` | `_GuardrailTile` | `feedback_session.dart` | Same layout as Feedback Sound. Tap opens scorer dialog (enable switch top right, engine, warning sound). Gear opens warning threshold; AI also shows the fixed δ ceiling. |
 | Reward chip | `Reward` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Depressed = on. Default on. Omitted without a reward lane. Persist `Settings.trustRewardVisible`. |
 | Guard chip | `Guard` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Default off; **on** when Reward is omitted (`guardrailOnly`). Omitted when protocol has no guard or Session Settings guard is `none`. Persist `Settings.trustGuardVisible`. |
-| More chip | `More` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Default on. Readouts under visible lane(s). `recordOnly` hides the whole row. Persist `Settings.trustMoreVisible`. |
+| More chip | `More` | `TrustChipRow` | `feedback/trust/trust_chips.dart` | Default on. Readouts under visible lane(s). `calibrateRecord` (no lanes) hides the whole row. Persist `Settings.trustMoreVisible`. |
 | Reward graph | catalog `shortLabel` (`ATR` / `TAR` / `BTR` / `α`) | `RewardTrustPane` | `feedback/trust/trust_pane.dart` | Playing/paused only. Follow-only, default 75 s. Not `% calm`. Gray **wash** only while inhibit is out (any reward Y). Stroke stays series color. Dirty is dotted. |
 | Inhibit graph | `β` / `δ` / `inhibit` | `InhibitTrustPane` | `feedback/trust/trust_pane.dart` | Under Reward when the protocol has inhibit. Same Follow window. One pane per ceiling (0 / 1 / 2). Ceiling line matches series color. Overshoot uses a distinct hue-keeping color. Hidden if Reward is off. |
 | Guard graphs | `warn` / `δ ceiling` | `GuardWarnPane` / `GuardCeilingPane` | `feedback/trust/trust_pane.dart` | Playing/paused only. Pane count from `trustGuardPaneSpecs`: band-math = warn only; AI = warn + δ ceiling. |
@@ -262,7 +262,7 @@ Pushed after End (`pushReplacement` from the session route). Leftover
 Chip row is **Dashboard**, then **Feedback** when the session has a reward
 or guard lane, then **Bands**, **Raw EEG**, **Histogram**, **PSD**,
 **Spectrogram**, **HR+SpO2**, **Movement**. Opening a feedback session lands on **Dashboard**.
-`recordOnly` has no Feedback chip. Graph chips are the same inspect-only
+`calibrateRecord` / legacy `recordOnly` have no Feedback chip. Graph chips are the same inspect-only
 graphs as a recording (`HistorySignalGraphs`). The Dashboard chip has no
 graphs. The music track list and the gesture-marker list stay under the
 summary when the file has them. Alpha vs Theta, the old relative-power
@@ -273,7 +273,7 @@ chart, and the music cutoff chart do not.
 |---|---|---|---|---|
 | Session summary | `{protocol} — Session` | `FeedbackDashboardView` | `feedback_dashboard.dart` | Live (`readOnly: false`) or History (`readOnly: true`). |
 | Dashboard | `Dashboard` | `_SessionSummaryChip.dashboard` / `HistoryDashboardSummary` | `feedback_dashboard.dart` / `history/history_dashboard_summary.dart` | Default chip. Summary from nested `stats` plus the trust reader. No graphs. Music track list and gesture markers stay when present. |
-| Feedback | `Feedback` | `_SessionSummaryChip.feedback` / `HistoryTrustReplay` | `feedback_dashboard.dart` / `history/history_trust_viewport.dart` | After Dashboard, before the graph chips. Omitted when the trust reader has no reward lane and no guard lane (`recordOnly`, recordings). Replays `RewardTrustPane` / `InhibitTrustPane` / `GuardWarnPane` / `GuardCeilingPane` with `showMore` off (no verdict, glyph strip, needle, or "in for Ns"). |
+| Feedback | `Feedback` | `_SessionSummaryChip.feedback` / `HistoryTrustReplay` | `feedback_dashboard.dart` / `history/history_trust_viewport.dart` | After Dashboard, before the graph chips. Omitted when the trust reader has no reward lane and no guard lane (`calibrateRecord`, legacy `recordOnly`, recordings). Replays `RewardTrustPane` / `InhibitTrustPane` / `GuardWarnPane` / `GuardCeilingPane` with `showMore` off (no verdict, glyph strip, needle, or "in for Ns"). |
 | Graph switcher | `Bands` `Raw EEG` `Histogram` `PSD` `Spectrogram` `HR+SpO2` `Movement` | `_SessionSummaryChip` / `HistorySignalGraphs` | `feedback_dashboard.dart` / `recording_dashboard.dart` | Same order as a recording, after Feedback when that chip exists. Inspect-only. One chip visible at a time. |
 | More | `More` | `Settings.historyDashboardMoreExpanded` | `history/history_dashboard_summary.dart` | Fold under the summary on the Dashboard chip. Pref `history_dashboard_more_expanded`, default closed. Same flag as the recording Dashboard. Not on the Feedback chip. |
 | Reward | `Reward` | local toggle on `HistoryTrustReplay` | `history/history_trust_viewport.dart` | Feedback chip only. Depressed = on. Default on when reward samples exist. Does not write `Settings.trustRewardVisible`. |
@@ -361,3 +361,4 @@ Not a screen. `kDebugMode && --dart-define=NEUROFEED_AGENT=true`. See
 | Stop recording | `POST /record/stop` | Assembles scratch; does not publish. |
 | Start during Record | `POST /session/start` | 409 `recording_active` (after `not_connected`). |
 | Start with unsaved summary | `POST /session/start` | 409 `unsaved_session`. Same for `POST /session/reset`. |
+| Start a model-only guard without a Ready model | `POST /session/start` | 412 `model_not_ready` when the protocol's `guard.requiresModel` (sleepGuard) and the AI engine is not Ready (missing or still loading). |

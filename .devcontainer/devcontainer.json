@@ -79,7 +79,7 @@
         "HOME": "/home/vscode",
         "UV_CACHE_DIR": "/home/vscode/.cache/uv",
         "DEBUGPY_PROCESS_SPAWN_TIMEOUT": "90",
-        "ANDROID_ADB_SERVER_ADDRESS": "host.docker.internal",
+        "ANDROID_ADB_SERVER_ADDRESS": "127.0.0.1",
         "VIRTUAL_ENV": "/workspaces/flutter_muse_ml/.venv",
         "ANDROID_HOME":     "/home/vscode/android-sdk",
         "ANDROID_SDK_ROOT": "/home/vscode/android-sdk",

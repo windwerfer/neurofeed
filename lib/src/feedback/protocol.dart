@@ -3,18 +3,20 @@ import 'package:neurofeed/src/feedback/feature_catalog.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/rust/api/features.dart';
 
-/// Frozen catalog protocol ids (on-disk `protocol` string in `.neurofeed`).
-const List<String> catalogProtocolIds = [
-  'drowsiness',
-  'twilight',
-  'alertnessOpen',
-  'alertnessClosed',
-  'mindfulness',
-  'concentration',
-  'relaxedConcentration',
-  'recordOnly',
-  'guardrailOnly',
-];
+export 'package:neurofeed/src/feedback/protocol_ids.dart';
+
+/// `calibrationKind` values. [calibrationKindAuto] (the default) follows
+/// `CalibrationPlan.fromEnabledFeatures`: staged when an `ai.*` feature is
+/// enabled this session (or Settings → AI Calibration is "always staged"),
+/// otherwise the single baseline. [calibrationKindStaged] always runs the
+/// staged sequence (artifacts → eyes-open clear → eyes-closed rest), whatever
+/// guard engine ends up running.
+const String calibrationKindAuto = 'auto';
+const String calibrationKindStaged = 'staged';
+const Set<String> calibrationKinds = {
+  calibrationKindAuto,
+  calibrationKindStaged,
+};
 
 final RegExp userProtocolIdPattern = RegExp(r'^user\.[a-z0-9-]{3,64}$');
 
@@ -265,6 +267,8 @@ class ProtocolGuard {
     this.policy = 'percentileWarn',
     this.muffleReward = false,
     this.defaultEnabled = true,
+    this.deltaRail = true,
+    this.requiresModel = false,
     this.electrodes,
     this.copy,
     this.locked = const [],
@@ -275,6 +279,18 @@ class ProtocolGuard {
   final String policy;
   final bool muffleReward;
   final bool defaultEnabled;
+
+  /// Whether the absolute frontal-delta ceiling ([guardrailDeltaCeiling] in
+  /// `guard_lane.dart`) may trigger a warning (chime / muffle) next to the
+  /// percentile rule. Default true (historic behavior). When false the
+  /// ceiling is still evaluated and recorded per computed frame
+  /// (`ceilingOver`) as a signal-dirty indicator, but never warns.
+  final bool deltaRail;
+
+  /// Whether this guard must run on an AI model. When true there is no
+  /// band.delta fallback: a session only starts once the AI engine is Ready
+  /// (Start shows the install / load prompt otherwise).
+  final bool requiresModel;
   final List<String>? electrodes;
   final String? copy;
   final List<String> locked;
@@ -299,6 +315,8 @@ class ProtocolGuard {
       policy: json['policy'] as String? ?? 'percentileWarn',
       muffleReward: json['muffleReward'] as bool? ?? false,
       defaultEnabled: json['defaultEnabled'] as bool? ?? true,
+      deltaRail: json['deltaRail'] as bool? ?? true,
+      requiresModel: json['requiresModel'] as bool? ?? false,
       electrodes: json['electrodes'] is List
           ? (json['electrodes'] as List).whereType<String>().toList()
           : null,
@@ -315,6 +333,8 @@ class ProtocolGuard {
     'policy': policy,
     'muffleReward': muffleReward,
     'defaultEnabled': defaultEnabled,
+    if (!deltaRail) 'deltaRail': deltaRail,
+    if (requiresModel) 'requiresModel': requiresModel,
     if (electrodes != null) 'electrodes': electrodes,
     if (copy != null) 'copy': copy,
     'locked': locked,
@@ -326,6 +346,8 @@ class ProtocolGuard {
     policy: policy,
     muffleReward: muffleReward,
     defaultEnabled: defaultEnabled,
+    deltaRail: deltaRail,
+    requiresModel: requiresModel,
     electrodes: electrodes,
     copy: copy,
     locked: locked,
@@ -343,6 +365,7 @@ class ProtocolDocument {
     required this.colorValue,
     required this.calibration,
     this.calibrationSkippable = false,
+    this.calibrationKind = calibrationKindAuto,
     this.background = const ProtocolBackground(),
     this.reward,
     this.guard,
@@ -356,6 +379,13 @@ class ProtocolDocument {
   Color get color => Color(colorValue | 0xFF000000);
   final String calibration;
   final bool calibrationSkippable;
+
+  /// [calibrationKindAuto] or [calibrationKindStaged] (see those constants).
+  final String calibrationKind;
+
+  /// True when this document always runs the staged calibration.
+  bool get requiresStagedCalibration =>
+      calibrationKind == calibrationKindStaged;
   final ProtocolBackground background;
   final ProtocolReward? reward;
   final ProtocolGuard? guard;
@@ -388,6 +418,11 @@ class ProtocolDocument {
     final parsedColor = json['color'] as int? ?? 0xFF000000;
     final rewardJson = json['reward'];
     final guardJson = json['guard'];
+    final calibrationKind =
+        json['calibrationKind'] as String? ?? calibrationKindAuto;
+    if (!calibrationKinds.contains(calibrationKind)) {
+      throw ArgumentError('Unknown calibrationKind: $calibrationKind');
+    }
     return ProtocolDocument(
       id: json['id'] as String? ?? id,
       origin: origin,
@@ -396,6 +431,7 @@ class ProtocolDocument {
       colorValue: parsedColor,
       calibration: json['calibration'] as String? ?? '',
       calibrationSkippable: json['calibrationSkippable'] as bool? ?? false,
+      calibrationKind: calibrationKind,
       background: ProtocolBackground.fromJson(json['background']),
       reward: rewardJson is Map
           ? ProtocolReward.fromJson(jsonObject(rewardJson), features: features)
@@ -414,6 +450,8 @@ class ProtocolDocument {
     'color': colorValue,
     'calibration': calibration,
     'calibrationSkippable': calibrationSkippable,
+    if (calibrationKind != calibrationKindAuto)
+      'calibrationKind': calibrationKind,
     'background': background.toJson(),
     if (reward != null) 'reward': reward!.toJson(),
     if (guard != null) 'guard': guard!.toJson(),
@@ -428,6 +466,7 @@ class ProtocolDocument {
         colorValue: colorValue,
         calibration: calibration,
         calibrationSkippable: calibrationSkippable,
+        calibrationKind: calibrationKind,
         background: background,
         reward: reward,
         guard: clearGuard ? null : (guard ?? this.guard),

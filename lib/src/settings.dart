@@ -208,6 +208,7 @@ class Settings extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final catalog = await ProtocolCatalog.load();
     await _migrateGuardrailPrefs(prefs, catalog);
+    await _migrateLegacyInhibitPrefs(prefs);
     await _migrateFeedbackModePref(prefs);
     await _ensureSubjectId(prefs);
     return Settings._(prefs, catalog);
@@ -265,7 +266,9 @@ class Settings extends ChangeNotifier {
       await prefs.setString(_guardModelKey, guardModel);
     }
     if (guardModel == null || guardModel.isEmpty) {
-      for (final id in catalogProtocolIds) {
+      // Old mode-name strings were written under the pre-2026-10 catalog ids,
+      // so scan those (in their old freeze order) before the current ids.
+      for (final id in [...legacyCatalogProtocolIds, ...catalogProtocolIds]) {
         final v = raw[id];
         if (v is String && oldGuardrailModeNameIsAi(v)) {
           guardModel = ffIdFromOldGuardrailModeName(v);
@@ -287,6 +290,23 @@ class Settings extends ChangeNotifier {
       debugPrint('[settings] REVE install check failed: $e');
     }
 
+    // Retired catalog ids: carry an explicit AI head choice over to the
+    // renamed protocol (when it has no pref of its own), then drop the old
+    // key. `band.delta` values are not carried: the old migration wrote
+    // band.delta for every guard row as the default, so they are not a user
+    // choice and would mask the new catalog default (ai.a_vig).
+    for (final legacy in legacyProtocolRenames) {
+      final parsed = parseGuardFeatureValue(raw[legacy]);
+      final target = canonicalProtocolId(legacy);
+      if (parsed != null &&
+          guardFeatureIsAi(parsed) &&
+          !raw.containsKey(target) &&
+          catalog.forName(target)?.guard != null) {
+        raw[target] = {'feature': parsed};
+      }
+    }
+    raw.removeWhere((key, _) => isLegacyProtocolId(key));
+
     final out = <String, Map<String, String>>{};
     final ids = <String>{...catalogProtocolIds, ...raw.keys};
     for (final id in ids) {
@@ -305,15 +325,41 @@ class Settings extends ChangeNotifier {
             ? guardFeatureBandDelta
             : parsed;
         out[id] = {'feature': feature};
-      } else if (doc?.guard != null || catalogProtocolIds.contains(id)) {
-        // Catalog rows with a guard object default ON (band.delta). Ids in
-        // the freeze list that have no document yet still must not throw.
-        if (doc == null || doc.guard != null) {
-          out[id] = {'feature': guardFeatureBandDelta};
-        }
       }
+      // No stored pref: write nothing. [guardFeatureFor] then follows the
+      // catalog document's guard (feature + defaultEnabled), and
+      // [sessionGuardFeatureFor] falls back to band.delta while no AI model
+      // is ready.
     }
     await prefs.setString(_guardrailModeKey, jsonEncode(out));
+  }
+
+  /// Move inhibit ceiling overrides stored under a renamed catalog id (e.g.
+  /// `concentration`) to the current id (`concentrate`) unless the current id
+  /// already has its own row; drop every retired-id row.
+  static Future<void> _migrateLegacyInhibitPrefs(
+    SharedPreferences prefs,
+  ) async {
+    final stored = prefs.getString(_inhibitCeilingsKey);
+    if (stored == null || stored.isEmpty) return;
+    Map<String, dynamic> root;
+    try {
+      final decoded = jsonDecode(stored);
+      if (decoded is! Map) return;
+      root = Map<String, dynamic>.from(decoded);
+    } catch (_) {
+      return;
+    }
+    if (!root.keys.any(isLegacyProtocolId)) return;
+    for (final legacy in legacyProtocolRenames) {
+      final row = root[legacy];
+      final target = canonicalProtocolId(legacy);
+      if (row is Map && !root.containsKey(target)) {
+        root[target] = Map<String, dynamic>.from(row);
+      }
+    }
+    root.removeWhere((key, _) => isLegacyProtocolId(key));
+    await prefs.setString(_inhibitCeilingsKey, jsonEncode(root));
   }
 
   Map<String, dynamic> _readGuardMap() {
@@ -645,7 +691,7 @@ class Settings extends ChangeNotifier {
   /// Per-protocol inhibit ceiling overrides (`beta` / `delta` → relative max).
   /// Missing tags keep the protocol document value.
   Map<String, double> inhibitCeilingOverrides(String protocolId) {
-    final raw = _readInhibitMap()[protocolId];
+    final raw = _readInhibitMap()[canonicalProtocolId(protocolId)];
     if (raw is! Map) return const {};
     final out = <String, double>{};
     for (final e in raw.entries) {
@@ -660,6 +706,7 @@ class Settings extends ChangeNotifier {
     String tag,
     double max,
   ) async {
+    protocolId = canonicalProtocolId(protocolId);
     final root = Map<String, dynamic>.from(_readInhibitMap());
     final row = Map<String, dynamic>.from(
       root[protocolId] is Map
@@ -673,6 +720,7 @@ class Settings extends ChangeNotifier {
   }
 
   Future<void> clearInhibitCeilingOverrides(String protocolId) async {
+    protocolId = canonicalProtocolId(protocolId);
     final root = Map<String, dynamic>.from(_readInhibitMap());
     if (!root.containsKey(protocolId)) return;
     root.remove(protocolId);
@@ -681,17 +729,65 @@ class Settings extends ChangeNotifier {
   }
 
   /// Per-protocol guard feature: `band.delta` / `ai.*` head ids / `none`.
-  /// Documents without a guard lane always return `none`.
+  /// Documents without a guard lane always return `none`. A stored pref wins;
+  /// otherwise the catalog document's guard decides: its `feature` when
+  /// `defaultEnabled`, else `none`. Retired ids resolve to their current id.
+  ///
+  /// This is the *intended* feature. What a session actually runs also
+  /// depends on whether an AI model is ready: see [sessionGuardFeatureFor].
   String guardFeatureFor(String protocolId) {
+    protocolId = canonicalProtocolId(protocolId);
     final doc = _catalog.forName(protocolId);
     if (doc != null && doc.guard == null) return guardFeatureNone;
     final parsed = parseGuardFeatureValue(_readGuardMap()[protocolId]);
+    // A model-only guard (guard.requiresModel) never runs band math: a stored
+    // band.delta pick resolves to the catalog's AI feature instead.
+    if (parsed == guardFeatureBandDelta &&
+        (doc?.guard?.requiresModel ?? false)) {
+      return doc!.guard!.feature;
+    }
     if (parsed != null) return parsed;
-    if (doc?.guard != null) return guardFeatureBandDelta;
+    final guard = doc?.guard;
+    if (guard != null) {
+      return guard.defaultEnabled ? guard.feature : guardFeatureNone;
+    }
     return guardFeatureNone;
   }
 
+  /// Whether [protocolId]'s guard must run on the AI model (protocol
+  /// `guard.requiresModel`): no band.delta fallback, Start gates on the model.
+  bool guardRequiresModelFor(String protocolId) =>
+      _catalog.forName(canonicalProtocolId(protocolId))?.guard?.requiresModel ??
+      false;
+
+  /// Whether the user has stored an explicit guard choice for [protocolId].
+  bool hasGuardFeaturePref(String protocolId) =>
+      parseGuardFeatureValue(
+        _readGuardMap()[canonicalProtocolId(protocolId)],
+      ) !=
+      null;
+
+  /// Guard feature a session runs for [protocolId] right now.
+  ///
+  /// Same as [guardFeatureFor], except that a catalog-default AI head (no
+  /// stored pref) falls back to `band.delta` while no AI model is ready
+  /// ([aiReady] false) — the same band-math guard these protocols ran by
+  /// default before the AI default. An explicit stored AI choice is returned
+  /// unchanged; Start then shows the model gate (install / wait for load).
+  /// A model-only guard ([guardRequiresModelFor]) never falls back either.
+  String sessionGuardFeatureFor(String protocolId, {required bool aiReady}) {
+    final feature = guardFeatureFor(protocolId);
+    if (!aiReady &&
+        guardFeatureIsAi(feature) &&
+        !hasGuardFeaturePref(protocolId) &&
+        !guardRequiresModelFor(protocolId)) {
+      return guardFeatureBandDelta;
+    }
+    return feature;
+  }
+
   Future<void> setGuardFeature(String protocolId, String feature) async {
+    protocolId = canonicalProtocolId(protocolId);
     final map = Map<String, dynamic>.from(_readGuardMap());
     map[protocolId] = {'feature': feature};
     await _prefs.setString(_guardrailModeKey, jsonEncode(map));

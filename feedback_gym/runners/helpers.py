@@ -99,12 +99,17 @@ def percentile_warn_parts(
     delta_abs: np.ndarray,
     threshold: float,
     delta_ceiling: float = 0.25,
+    delta_rail: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Split guard warn into feature / rail / combined.
 
     - ``warn_feature``: feature vs percentile threshold only (no delta rail)
-    - ``warn_rail``: absolute delta-ceiling fires (plus band abs ceiling)
-    - ``warn``: combined OR — fidelity to app ``percentileWarnOver``
+    - ``warn_rail``: absolute delta-ceiling over (plus band abs ceiling).
+      Always computed — with ``delta_rail`` off it is the signal-dirty
+      indicator only (app records it as ``ceilingOver``) and never warns.
+    - ``warn``: combined — fidelity to app ``percentileWarnOver``; OR of
+      feature and rail when ``delta_rail`` (protocol ``guard.deltaRail``,
+      default True), else the feature alone.
     """
     feat = np.asarray(feature_values, dtype=float)
     delta = np.asarray(delta_abs, dtype=float)
@@ -114,7 +119,7 @@ def percentile_warn_parts(
         warn_rail = (feat > delta_ceiling) | (delta > delta_ceiling)
     else:
         warn_rail = delta > delta_ceiling
-    warn = warn_feature | warn_rail
+    warn = (warn_feature | warn_rail) if delta_rail else warn_feature.copy()
     return warn_feature, warn_rail, warn
 
 

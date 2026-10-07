@@ -160,6 +160,8 @@ def simulate_protocol(
             result["notes"].append(f"guard feature {feat_id} missing from corpus")
         else:
             band_math = feat_id.startswith("band.")
+            # Protocol guard.deltaRail (default True, app ProtocolGuard).
+            delta_rail = bool(guard_cfg.get("deltaRail", True))
             baseline = np.asarray(series[cal], dtype=float)
             play_vals = np.asarray(series[play], dtype=float)
             finite = np.isfinite(play_vals)
@@ -186,6 +188,7 @@ def simulate_protocol(
                     delta_abs=delta_abs,
                     threshold=thr,
                     delta_ceiling=delta_ceiling,
+                    delta_rail=delta_rail,
                 )
                 wr = warn_rate(warn)
                 wr_feat = warn_rate(warn_feature)
@@ -206,6 +209,7 @@ def simulate_protocol(
                     "feature": feat_id,
                     "policy": guard_cfg.get("policy", "percentileWarn"),
                     "band_math": band_math,
+                    "delta_rail": delta_rail,
                     "threshold": round4(thr),
                     "warn_rate": round4(wr),
                     "warn_feature_rate": round4(wr_feat),
@@ -224,8 +228,8 @@ def simulate_protocol(
         inhibit_score=inhibit_score if reward_cfg else None,
         weights=rollup,
     )
-    # recordOnly / empty: composite None → 0 display with note
+    # calibrateRecord (no lanes): composite None → N/A with note
     result["final"] = round4(final) if final is not None else None
-    if protocol["id"] == "recordOnly":
-        result["notes"].append("recordOnly — no lanes; composite N/A")
+    if reward_cfg is None and guard_cfg is None:
+        result["notes"].append(f"{protocol['id']} — no lanes; composite N/A")
     return result

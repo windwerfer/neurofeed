@@ -15,8 +15,9 @@ app's reward / guard feature tick.
 | `hit_rate` | reward / protocol | Fraction of 1 Hz samples that are in-target after the inhibit AND-gate | 0–1 |
 | `inhibit_block` | each inhibit | Share of otherwise-in-target samples blocked by that inhibit | 0–1 |
 | `warn_feature` | guard | Feature vs percentile threshold only (no delta rail) | 0–1 binary |
-| `warn_rail` | guard | Absolute delta-ceiling fires (`delta > 0.25`; band also `feat > 0.25`) | 0–1 binary |
-| `warn` | guard | Combined `warn_feature | warn_rail` (app fidelity) | 0–1 binary |
+| `warn_rail` | guard | Absolute delta-ceiling over (`delta > 0.25`; band also `feat > 0.25`). Always computed; with protocol `guard.deltaRail: false` it is the signal-dirty indicator only (app `ceilingOver`) | 0–1 binary |
+| `warn` | guard | App fidelity: `warn_feature | warn_rail` when `guard.deltaRail` (default true), else `warn_feature` | 0–1 binary |
+| `label_align_combined` | guard, labels | Align of combined **`warn`** vs labels (reported as "warn acc"; not the score) | 0–1 |
 | `warn_rate` / `warn_feature_rate` / `rail_rate` | guard | Means of the three warn masks | 0–1 |
 | `label_align` | when labels exist | Align of **`warn_feature`** (not combined) vs labels — used for scoring | 0–1 |
 | `stability` | reward & guard | `1 - flip_rate` of binary decisions sample-to-sample | 0–1 |
@@ -40,7 +41,10 @@ where `TPR = TP / (TP+FN)`, `FPR = FP / (FP+TN)`. Missing labels → metric is
 µV²-scale, so the delta rail is near always-on → combined `label_align≈0.5` even
 when the continuous feature separates well (`sep≈0.85`). Scoring on
 `warn_feature` recovers threshold quality; combined `warn_rate` / `rail_rate`
-remain reported for app fidelity.
+remain reported for app fidelity. Protocols that set `guard.deltaRail: false`
+(all AI-guarded catalog rows since the evidence catalog) do not warn on the
+rail, so their combined `warn` equals `warn_feature` and
+`label_align_combined == label_align`.
 
 ### stability (detail)
 
@@ -65,7 +69,7 @@ Weights (editable in `sweeps/grids.yaml` → `protocol_rollup`):
 | inhibit | 0.20 | mean health over inhibits | Health = `1 - 2*|inhibit_block - 0.25|` clipped to 0; empty inhibit → 1.0 |
 
 **Final** = weighted mean of available parts (weights renormalized if a part is
-absent, e.g. `recordOnly`).
+absent, e.g. `calibrateRecord`).
 
 Inhibit health penalizes blocking ~everything (`inhibit_block≈1`) or ~nothing
 when the protocol declares an inhibit (`inhibit_block≈0`). Target band ≈ 0.25.

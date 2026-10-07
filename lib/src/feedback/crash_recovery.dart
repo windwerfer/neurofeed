@@ -136,6 +136,7 @@ SessionCalibration? _recoveredCalibration({
   required String kind,
   required String? calibrationId,
   required List<SessionCalibrationPhase> phases,
+  List<SessionCalibrationWindow> windows = const [],
   required List<SessionRecalibration> recalibrations,
   required double? elapsedSecs,
   required String? completeAt,
@@ -199,6 +200,7 @@ SessionCalibration? _recoveredCalibration({
           ),
     baselineSamples: baselineSamples,
     phases: phases,
+    windows: windows,
     recalibrations: recalibrations,
   );
 }
@@ -229,6 +231,7 @@ SessionMetadata _metadataFromTemps({
   SignalConditioning? conditioning;
   var channelLabels = const <String>[];
   final phases = <SessionCalibrationPhase>[];
+  final windows = <SessionCalibrationWindow>[];
   final recalibrations = <SessionRecalibration>[];
   var sawCalibration = false;
   double? calibrationElapsed;
@@ -339,6 +342,10 @@ SessionMetadata _metadataFromTemps({
             phaseAnchorAt = meta['timestamp'] as String;
             phaseAnchorEnd = end;
           }
+        } else if (type == 'calibration_window') {
+          sawCalibration = true;
+          final window = SessionCalibrationWindow.fromJson(meta);
+          if (window != null) windows.add(window);
         } else if (type == 'calibration_complete') {
           sawCalibration = true;
           calibrationElapsed = (meta['elapsedSecs'] as num?)?.toDouble();
@@ -510,6 +517,7 @@ SessionMetadata _metadataFromTemps({
       kind: calibrationKind,
       calibrationId: calibrationId,
       phases: phases,
+      windows: windows,
       recalibrations: recalibrations,
       elapsedSecs: calibrationElapsed,
       completeAt: calibrationCompleteAt,

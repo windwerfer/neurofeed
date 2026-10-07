@@ -23,7 +23,7 @@ up.
 
 Chips: `[ Reward ] [ Guard ] [ More ]` (`TrustChipRow`). Graphs + More
 only while **playing** and **paused**. Calibration hides graphs/More;
-chips may still show. `recordOnly` hides the row.
+chips may still show. `calibrateRecord` (no lanes) hides the row.
 
 Viewport: **Follow only**, default **75 s**, pinch-X and Ctrl+scroll
 **15–300 s**, 1 s Follow lead. Shared window. Not persisted. No Inspect.

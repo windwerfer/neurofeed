@@ -312,6 +312,76 @@ class SessionCalibrationPhase {
   }
 }
 
+/// Stage ids of [SessionCalibrationWindow.stage] (snake_case values).
+const String calibrationWindowArtifacts = 'artifacts';
+const String calibrationWindowEyesOpenClear = 'eyes_open_clear';
+const String calibrationWindowEyesClosedRest = 'eyes_closed_rest';
+const String calibrationWindowEyesOpenRest = 'eyes_open_rest';
+
+/// The quiet recording window of one staged-calibration stage: from the end
+/// of the stage's spoken prompt to the end of its silent collection. Lets
+/// downstream labeling cut clean artifact / eyes-open / eyes-closed segments
+/// without re-deriving them from prompt times.
+///
+/// [startSecs] / [endSecs] are seconds since session start (metadata
+/// `startedAt`, the same clock as [SessionCalibrationPhase.startSecs] and the
+/// raw recording); [startedAt] / [endedAt] are the same instants as ISO 8601
+/// with offset.
+class SessionCalibrationWindow {
+  const SessionCalibrationWindow({
+    required this.stage,
+    required this.startSecs,
+    required this.endSecs,
+    this.eyes,
+    this.clipId,
+    this.startedAt,
+    this.endedAt,
+  });
+
+  /// [calibrationWindowArtifacts], [calibrationWindowEyesOpenClear],
+  /// [calibrationWindowEyesClosedRest] or [calibrationWindowEyesOpenRest].
+  final String stage;
+  final double startSecs;
+  final double endSecs;
+
+  /// `open` / `closed`; null for the artifacts stage (no eye instruction).
+  final String? eyes;
+
+  /// Id of the stage's prompt clip in the calibration manifest.
+  final String? clipId;
+  final String? startedAt;
+  final String? endedAt;
+
+  double get durationSecs => endSecs - startSecs;
+
+  Map<String, Object?> toJson() => {
+    'stage': stage,
+    if (eyes != null) 'eyes': eyes,
+    'startSecs': startSecs,
+    'endSecs': endSecs,
+    if (startedAt != null) 'startedAt': startedAt,
+    if (endedAt != null) 'endedAt': endedAt,
+    if (clipId != null) 'clipId': clipId,
+  };
+
+  static SessionCalibrationWindow? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final stage = json['stage'];
+    final start = json['startSecs'];
+    final end = json['endSecs'];
+    if (stage is! String || start is! num || end is! num) return null;
+    return SessionCalibrationWindow(
+      stage: stage,
+      startSecs: start.toDouble(),
+      endSecs: end.toDouble(),
+      eyes: json['eyes'] as String?,
+      clipId: json['clipId'] as String?,
+      startedAt: json['startedAt'] as String?,
+      endedAt: json['endedAt'] as String?,
+    );
+  }
+}
+
 class SessionRecalibration {
   const SessionRecalibration({
     required this.atSecs,
@@ -364,6 +434,7 @@ class SessionCalibration {
     this.baselineWallSeconds,
     this.baseline,
     this.phases = const [],
+    this.windows = const [],
     this.recalibrations = const [],
     this.baselineSamples = const [],
   });
@@ -389,6 +460,11 @@ class SessionCalibration {
   final int? baselineWallSeconds;
   final SessionBaselineStats? baseline;
   final List<SessionCalibrationPhase> phases;
+
+  /// Staged calibration only: each stage's quiet recording window, in stage
+  /// order. Empty for single calibrations and sessions recorded before this
+  /// field existed.
+  final List<SessionCalibrationWindow> windows;
   final List<SessionRecalibration> recalibrations;
 
   /// Raw native reward samples used by percentileOf after calibration.
@@ -424,6 +500,7 @@ class SessionCalibration {
     if (baseline != null) 'baseline': baseline!.toJson(),
     if (baselineSamples.isNotEmpty) 'baselineSamples': baselineSamples,
     if (phases.isNotEmpty) 'phases': [for (final p in phases) p.toJson()],
+    if (windows.isNotEmpty) 'windows': [for (final w in windows) w.toJson()],
     if (recalibrations.isNotEmpty)
       'recalibrations': [for (final r in recalibrations) r.toJson()],
   };
@@ -452,6 +529,12 @@ class SessionCalibration {
           (json['phases'] as List<Object?>?)
               ?.map(SessionCalibrationPhase.fromJson)
               .whereType<SessionCalibrationPhase>()
+              .toList() ??
+          const [],
+      windows:
+          (json['windows'] as List<Object?>?)
+              ?.map(SessionCalibrationWindow.fromJson)
+              .whereType<SessionCalibrationWindow>()
               .toList() ??
           const [],
       recalibrations:

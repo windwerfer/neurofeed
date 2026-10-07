@@ -17,6 +17,7 @@ import 'package:neurofeed/src/feedback/feedback_phase.dart';
 import 'package:neurofeed/src/feedback/feedback_recorder.dart';
 import 'package:neurofeed/src/feedback/gate_electrodes.dart';
 import 'package:neurofeed/src/feedback/guard_lane.dart';
+import 'package:neurofeed/src/feedback/guard_start_gate.dart';
 import 'package:neurofeed/src/feedback/guardrail_mode.dart';
 import 'package:neurofeed/src/feedback/last_calibration_baseline.dart';
 import 'package:neurofeed/src/feedback/live_stats.dart';
@@ -76,7 +77,7 @@ class FeedbackState {
 
   const FeedbackState({
     this.phase = FeedbackPhase.idle,
-    this.protocol = 'drowsiness',
+    this.protocol = 'restAwake',
     this.durationMinutes = 15,
     this.soundName = 'Ambient Drone',
     this.rewardOutput = RewardOutputId.chime,
@@ -346,9 +347,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         kind: _ref.read(appStateProvider).lastConnectedKind ?? DeviceKind.muse,
       ).toList();
 
+  /// Selects [protocolId]. Retired catalog ids (agent calls, recent-session
+  /// slots) resolve to their current id, so state and per-protocol settings
+  /// always use the current id.
   void selectProtocol(String protocolId) {
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
     final info = catalog?.forName(protocolId);
+    protocolId = info?.id ?? canonicalProtocolId(protocolId);
     _engine.featureId = info?.reward?.feature ?? 'band.atr';
     final settings = _ref.read(settingsProvider);
     final output = resolveRewardOutputId(
@@ -475,7 +480,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       ids.add(reward);
     }
     if (spec?.guard != null && settings.guardrailEnabledFor(state.protocol)) {
-      final guard = settings.guardFeatureFor(state.protocol);
+      final guard = _sessionGuardFeature;
       if (guard != guardFeatureNone && !ids.contains(guard)) {
         ids.add(guard);
       }
@@ -689,12 +694,26 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   ///
   /// With [skipCalibration] the signal gate and the baseline are skipped
   /// entirely: the recorder starts and the session goes straight to playing
-  /// (used by the recordOnly protocol's "Start (skip calibration)" button).
+  /// (used by the "Start (skip calibration)" button of protocols with
+  /// `calibrationSkippable`, and by agent smoke runs).
   /// The ATR engine then has no baseline, which is fine — no-reward protocols
   /// never evaluate it.
   Future<void> startCalibration({bool skipCalibration = false}) async {
     if (hasUnsavedSession) {
       debugPrint('[feedback] refusing Start: unsaved session');
+      return;
+    }
+    if (guardStartBlocked(
+      settings: _ref.read(settingsProvider),
+      protocolId: state.protocol,
+      engine: _ref.read(modelEngineNotifierProvider),
+    )) {
+      // guard.requiresModel (sleepGuard): no band.delta fallback. The Start
+      // button shows the model gate first; this is the backstop.
+      debugPrint(
+        '[feedback] refusing Start: ${state.protocol} requires the AI model '
+        '(engine not ready)',
+      );
       return;
     }
     final app = _ref.read(appStateProvider);
@@ -789,9 +808,19 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       channelCount: montage.length,
     );
     _computedSampler!.start();
+    _lockedGuardFeature = null;
+    _lockedGuardFeature = _sessionGuardFeature;
     await _enableSessionFeatures();
     await _maybeEnableGuardrail();
     _writeSessionFacts();
+    if (skipCalibration && _protocolRequiresStagedCalibration) {
+      // calibrateRecord / sleepGuard: the staged calibration is the point
+      // (clear/rest anchors for AI labeling) — never skip it.
+      debugPrint(
+        '[feedback] skipCalibration ignored: staged calibration required',
+      );
+      skipCalibration = false;
+    }
     if (skipCalibration) {
       _engine.reset();
       if (featureProbeAvailable) {
@@ -813,11 +842,44 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     if (!settings.guardrailEnabledFor(state.protocol)) {
       return false;
     }
-    if (settings.guardrailIsBandMathFor(state.protocol)) {
+    if (_sessionGuardFeature == guardFeatureBandDelta) {
       return true;
     }
-    return _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
+    return _aiReady;
   }
+
+  /// Whether the selected AI model is loaded (Spur A CBraMod / REVE Ready).
+  bool get _aiReady =>
+      _ref.read(modelEngineNotifierProvider) is ModelEngineReady;
+
+  /// Guard feature this session runs: the per-protocol pref, else the catalog
+  /// default, with a catalog-default AI head falling back to band.delta while
+  /// no model is ready ([Settings.sessionGuardFeatureFor]).
+  /// Locked at session start so a model that turns Ready mid-session cannot
+  /// change what the snapshot reports versus what the guard lane runs.
+  String get _sessionGuardFeature =>
+      _lockedGuardFeature ??
+      _ref
+          .read(settingsProvider)
+          .sessionGuardFeatureFor(state.protocol, aiReady: _aiReady);
+
+  /// [_sessionGuardFeature] frozen for the running / just-ended session;
+  /// null between sessions.
+  String? _lockedGuardFeature;
+
+  /// Protocol `guard.deltaRail` (default true): whether the absolute
+  /// frontal-delta ceiling may warn this session.
+  bool get _specDeltaRail =>
+      _ref
+          .read(protocolCatalogProvider)
+          .valueOrNull
+          ?.forName(state.protocol)
+          ?.guard
+          ?.deltaRail ??
+      true;
+
+  /// Whether this session's guard runs band math (no AI model).
+  bool get _guardIsBandMath => _sessionGuardFeature == guardFeatureBandDelta;
 
   /// Protocol electrode override for [id]; null resets to the registry
   /// default.
@@ -833,6 +895,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   CalibrationPlan get _calibrationPlan => CalibrationPlan.fromEnabledFeatures(
     _enabledFeatureIds,
     method: _ref.read(settingsProvider).calibrationMethod,
+    protocolRequiresStaged:
+        _ref
+            .read(protocolCatalogProvider)
+            .valueOrNull
+            ?.forName(state.protocol)
+            ?.requiresStagedCalibration ??
+        false,
   );
 
   Future<void> _enableSessionFeatures() async {
@@ -852,7 +921,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final spec = catalog?.forName(state.protocol);
     final settings = _ref.read(settingsProvider);
     final guardOn = _guardrailIntent;
-    final guardFeature = settings.guardFeatureFor(state.protocol);
+    final guardFeature = _sessionGuardFeature;
 
     List<FeatureInfo> infos = const [];
     try {
@@ -918,10 +987,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     );
     _guard.configure(
       enabled: false,
-      bandMath: settings.guardrailIsBandMathFor(state.protocol),
+      bandMath: _guardIsBandMath,
       featureId: guardFeature == guardFeatureNone
           ? guardFeatureBandDelta
           : guardFeature,
+      deltaRail: _specDeltaRail,
       deltaElectrodes: frontal,
     );
   }
@@ -947,11 +1017,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     final settings = _ref.read(settingsProvider);
-    if (settings.guardrailIsBandMathFor(state.protocol)) {
+    if (_guardIsBandMath) {
       _guard.configure(
         enabled: true,
         bandMath: true,
         featureId: guardFeatureBandDelta,
+        deltaRail: _specDeltaRail,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       debugPrint('[guardrail] enabled (band math — no model)');
@@ -963,7 +1034,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       return;
     }
     final ffId = settings.guardModel ?? defaultModelKind.ffId;
-    final featureId = settings.guardFeatureFor(state.protocol);
+    final featureId = _sessionGuardFeature;
     try {
       final ok = await frb.guardrailEnable(kind: ffId);
       _guard.configure(
@@ -972,6 +1043,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         featureId: guardFeatureIsAi(featureId)
             ? featureId
             : guardFeatureAiAVigReve,
+        deltaRail: _specDeltaRail,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       if (ok) {
@@ -984,6 +1056,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         featureId: guardFeatureIsAi(featureId)
             ? featureId
             : guardFeatureAiAVigReve,
+        deltaRail: _specDeltaRail,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       debugPrint('[guardrail] enable failed: $e');
@@ -1272,6 +1345,14 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _finishCalibration();
   }
 
+  bool get _protocolRequiresStagedCalibration =>
+      _ref
+          .read(protocolCatalogProvider)
+          .valueOrNull
+          ?.forName(state.protocol)
+          ?.requiresStagedCalibration ??
+      false;
+
   bool get canSkipCalibration {
     final settings = _ref.read(settingsProvider);
     final app = _ref.read(appStateProvider);
@@ -1316,6 +1397,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       ),
       baselineSamples: List.of(_engine.baselineSamples),
       phases: List.of(_calibration.clipPhases),
+      windows: List.of(_calibration.stageWindows),
       recalibrations: List.of(_recalibrations),
     );
   }
@@ -1535,6 +1617,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     _reward.reset();
     _bus.reset();
     _sessionStartAt = null;
+    _lockedGuardFeature = null;
     _sessionConditioning = null;
     _sessionTimeZone = null;
     _trainingStartAt = null;
@@ -1641,7 +1724,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final fb = state;
     final app = _ref.read(appStateProvider);
     final settings = _ref.read(settingsProvider);
-    final feature = settings.guardFeatureFor(fb.protocol);
+    final feature = _sessionGuardFeature;
     final model = settings.guardModel;
     final overrides = settings.inhibitCeilingOverrides(fb.protocol);
     return SessionSettings(
@@ -1679,7 +1762,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final settings = _ref.read(settingsProvider);
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
     final protocol = catalog?.forName(state.protocol);
-    final feature = settings.guardFeatureFor(state.protocol);
+    final feature = _sessionGuardFeature;
     final description = protocol?.metadataDescription;
     final protocolJson = protocol?.resolved(guardFeature: feature).toJson();
     final userId = settings.subjectInfo.id;
@@ -1711,7 +1794,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final settings = _ref.read(settingsProvider);
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
     final protocol = catalog?.forName(fb.protocol);
-    final feature = settings.guardFeatureFor(fb.protocol);
+    final feature = _sessionGuardFeature;
     final channels = recordedChannelLabels(
       kind: app.lastConnectedKind,
       electrodes: recordedChannels,

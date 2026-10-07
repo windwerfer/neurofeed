@@ -3,8 +3,10 @@ import 'package:neurofeed/src/agent/agent_protocol.dart';
 import 'package:neurofeed/src/connection_provider.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
+import 'package:neurofeed/src/feedback/guard_start_gate.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/monitor_state.dart';
+import 'package:neurofeed/src/reve/model_engine.dart';
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/version.dart';
 
@@ -196,6 +198,18 @@ class AgentCommands {
         409,
         'unsaved_session',
         'Save or discard the ended session first.',
+      );
+    }
+    if (guardStartBlocked(
+      settings: _container.read(settingsProvider),
+      protocolId: _container.read(feedbackStateProvider).protocol,
+      engine: _container.read(modelEngineNotifierProvider),
+    )) {
+      return agentError(
+        412,
+        'model_not_ready',
+        'This protocol\'s guard requires the AI model; install it or wait '
+            'for it to finish loading.',
       );
     }
     final skip = body?['skipCalibration'] == true;

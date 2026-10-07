@@ -55,6 +55,90 @@
       "corpus": "corpora/external/sleep_edf_test.npz",
       "summary": "../results/20260918T102932Z/summary.json",
       "run": "../results/20260918T102932Z/run.json"
+    },
+    {
+      "run_id": "20261006T121432Z",
+      "timestamp": "2026-10-06 12:14:32 UTC",
+      "corpus": "corpora/external/sleep_edf_test.npz",
+      "summary": "../results/20261006T121432Z/summary.json",
+      "run": "../results/20261006T121432Z/run.json"
+    },
+    {
+      "run_id": "20261006T121701Z",
+      "timestamp": "2026-10-06 12:17:01 UTC",
+      "corpus": "corpora/external/sleep_edf_test.npz",
+      "summary": "../results/20261006T121701Z/summary.json",
+      "run": "../results/20261006T121701Z/run.json"
+    },
+    {
+      "run_id": "20261006T121713Z_sleep-edf-test",
+      "timestamp": "2026-10-06 12:17:13 UTC",
+      "corpus": "corpora/external/sleep_edf_test.npz",
+      "summary": "../results/20261006T121713Z_sleep-edf-test/summary.json",
+      "run": "../results/20261006T121713Z_sleep-edf-test/run.json"
+    },
+    {
+      "run_id": "20261006T121713Z_synthetic",
+      "timestamp": "2026-10-06 12:17:13 UTC",
+      "corpus": "corpora/synthetic/demo_session.npz",
+      "summary": "../results/20261006T121713Z_synthetic/summary.json",
+      "run": "../results/20261006T121713Z_synthetic/run.json"
+    },
+    {
+      "run_id": "20261006T121834Z_lee2026-eo-ec",
+      "timestamp": "2026-10-06 12:18:34 UTC",
+      "corpus": "corpora/external/lee2026_eo_ec.npz",
+      "summary": "../results/20261006T121834Z_lee2026-eo-ec/summary.json",
+      "run": "../results/20261006T121834Z_lee2026-eo-ec/run.json"
+    },
+    {
+      "run_id": "20261006T121834Z_sleep-edf-test",
+      "timestamp": "2026-10-06 12:18:34 UTC",
+      "corpus": "corpora/external/sleep_edf_test.npz",
+      "summary": "../results/20261006T121834Z_sleep-edf-test/summary.json",
+      "run": "../results/20261006T121834Z_sleep-edf-test/run.json"
+    },
+    {
+      "run_id": "20261006T121908Z",
+      "timestamp": "2026-10-06 12:19:08 UTC",
+      "corpus": "corpora/external/sleep_edf_test.npz",
+      "summary": "../results/20261006T121908Z/summary.json",
+      "run": "../results/20261006T121908Z/run.json"
+    },
+    {
+      "run_id": "20261006T123247Z_lee2026-artifacts",
+      "timestamp": "2026-10-06 12:32:47 UTC",
+      "corpus": "corpora/external/lee2026_artifacts.npz",
+      "summary": "../results/20261006T123247Z_lee2026-artifacts/summary.json",
+      "run": "../results/20261006T123247Z_lee2026-artifacts/run.json"
+    },
+    {
+      "run_id": "20261006T123247Z_lee2026-eo-ec",
+      "timestamp": "2026-10-06 12:32:47 UTC",
+      "corpus": "corpora/external/lee2026_eo_ec.npz",
+      "summary": "../results/20261006T123247Z_lee2026-eo-ec/summary.json",
+      "run": "../results/20261006T123247Z_lee2026-eo-ec/run.json"
+    },
+    {
+      "run_id": "20261006T123247Z_sleep-edf-test",
+      "timestamp": "2026-10-06 12:32:47 UTC",
+      "corpus": "corpora/external/sleep_edf_test.npz",
+      "summary": "../results/20261006T123247Z_sleep-edf-test/summary.json",
+      "run": "../results/20261006T123247Z_sleep-edf-test/run.json"
+    },
+    {
+      "run_id": "20261006T134232Z",
+      "timestamp": "2026-10-06 13:42:32 UTC",
+      "corpus": "corpora/external/sleep_edf_test.npz",
+      "summary": "../results/20261006T134232Z/summary.json",
+      "run": "../results/20261006T134232Z/run.json"
+    },
+    {
+      "run_id": "20261006T142221Z",
+      "timestamp": "2026-10-06 14:22:21 UTC",
+      "corpus": "corpora/external/sleep_edf_test.npz",
+      "summary": "../results/20261006T142221Z/summary.json",
+      "run": "../results/20261006T142221Z/run.json"
     }
   ]
 }

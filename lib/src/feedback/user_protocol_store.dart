@@ -177,6 +177,8 @@ class UserProtocolStore {
               policy: draft.guard!.policy,
               muffleReward: draft.guard!.muffleReward,
               defaultEnabled: true,
+              deltaRail: draft.guard!.deltaRail,
+              requiresModel: draft.guard!.requiresModel,
               electrodes: _namesOrOmit(draft.guard!.electrodes),
               copy: _blankToNull(draft.guard!.copy),
               locked: const [],

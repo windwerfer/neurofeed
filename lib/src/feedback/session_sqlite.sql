@@ -14,7 +14,7 @@ CREATE TABLE sessions (
   saved_at         TEXT NOT NULL,           -- ISO8601 UTC (session end)
   started_at       TEXT NOT NULL,           -- ISO8601 UTC (session start)
   duration_s       INTEGER NOT NULL,        -- elapsedSeconds
-  protocol         TEXT NOT NULL,           -- e.g. 'drowsiness', 'twilight', 'alertnessOpen', 'alertnessClosed'
+  protocol         TEXT NOT NULL,           -- e.g. 'sleepGuard', 'restAwake', 'alertOpen' (old rows may hold retired ids, see protocol_ids.dart)
   protocol_version TEXT,                    -- instructions/label schema version
 
   -- Device info
