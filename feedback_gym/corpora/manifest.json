@@ -30,7 +30,8 @@
       "cal_policy": "per recording (default): leading wake (label 0) run, <= 90 rows (45 s at 0.5 s hop); recordings starting in N1 get cal_len 0 (not scored). --cal-mode global = legacy first cal_n rows of the stream",
       "ai": "softmax P(class1) from emb @ W.T + b; CBraMod W(2,200); REVE W(2,512) subsample-aligned; no encoder forward",
       "notes": "REVE columns optional (subsample emb_cache, NaN-padded). Falls back to synthetic if paths missing.",
-      "gym_only_columns": "app_* = app band math (runners/app_bands.py) on AF7/AF8 (=Fpz-Cz); post_* = flutter_bands on TP9/TP10 (=Pz-Oz posterior proxy). Fair-round audit only."
+      "gym_only_columns": "app_* = app band math (runners/app_bands.py) on AF7/AF8 (=Fpz-Cz); post_* = flutter_bands on TP9/TP10 (=Pz-Oz posterior proxy). Fair-round audit only.",
+      "heog_columns": "optional heog_sem_2s / heog_sem_8s / heog_fast_8s: true horizontal EOG low-frequency power (runners/sleep_edf_heog.py, needs mne); positive control for the slow-eye-movement idea, not a Muse signal"
     },
     {
       "id": "lee2026_eo_ec",
@@ -52,7 +53,8 @@
       "notes": "findings-only: eval -> aggregate. Built NPZ is gitignored; only aggregate numbers (scores, sep, percentile bands, keep/merge/kill) may land in neurofeed PRs. No raw/windows/embeddings, no NC/gated data, ever. Attribute Lee et al. (CC-BY) when citing aggregates.",
       "out_flag": "--out-eo-ec",
       "calibration": "per-recording cal_starts/cal_lens: first 30 eyes-open rows per subject",
-      "interpreter": "uv run --with numpy --with mne python"
+      "interpreter": "uv run --with numpy --with mne python",
+      "pad_mix_columns": "optional (neurofeed-gym-corpora >= a4a0d2a, builder --pad-mix): per-channel bands ch_<pad>_<band>, ch_<pad>_{std,line,q}, bip_*, tpbip_*, car_tp*_*, tphp_*, eogcal_*, eogrun_*, sem_*, veog_*; used only by runners/pad_mix_round.py"
     },
     {
       "id": "lee2026_artifacts",
@@ -74,7 +76,8 @@
       "calibration": "per-recording cal_starts/cal_lens: first 30 rows of each recording's pre-rest",
       "ai": "none (band columns only) -> ai.* scored N/A",
       "notes": "findings-only: eval -> aggregate. Built NPZ is gitignored; only aggregate numbers (scores, sep, percentile bands, keep/merge/kill) may land in neurofeed PRs. No raw/windows/embeddings, no NC/gated data, ever. Attribute Lee et al. (CC-BY) when citing aggregates.",
-      "interpreter": "uv run --with numpy --with mne python"
+      "interpreter": "uv run --with numpy --with mne python",
+      "pad_mix_columns": "optional (neurofeed-gym-corpora >= a4a0d2a, builder --pad-mix): per-channel bands ch_<pad>_<band>, ch_<pad>_{std,line,q}, bip_*, tpbip_*, car_tp*_*, tphp_*, eogcal_*, eogrun_*, sem_*, veog_*; used only by runners/pad_mix_round.py"
     },
     {
       "id": "universe_stress",
@@ -94,7 +97,8 @@
       "labels": "0=low_load/relax, 1=high_load/stress (builder decides; see label_names in NPZ)",
       "ai": "none (band columns only) -> ai.* scored N/A",
       "notes": "findings-only: eval -> aggregate. Built NPZ is gitignored; only aggregate numbers (scores, sep, percentile bands, keep/merge/kill) may land in neurofeed PRs. No raw/windows/embeddings, no NC/gated data, ever. Attribute UNIVERSE authors (CC-BY) when citing aggregates.",
-      "out_flag": "--out"
+      "out_flag": "--out",
+      "pad_mix_columns": "optional (neurofeed-gym-corpora >= a4a0d2a, builder --pad-mix): per-channel bands ch_<pad>_<band>, ch_<pad>_{std,line,q}, bip_*, tpbip_*, car_tp*_*, tphp_*, eogcal_*, eogrun_*, sem_*, veog_*; used only by runners/pad_mix_round.py"
     },
     {
       "id": "muse-eeg-heads-band-math",

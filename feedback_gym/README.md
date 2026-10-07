@@ -61,6 +61,19 @@ Scores every band feature as a sleep / drowsiness guard in **both** directions,
 with per-recording baselines, next to `ai.*` on the same rows, plus Lee / UNIVERSE.
 Results and the audit: [`FAIR_BANDMATH.md`](FAIR_BANDMATH.md).
 
+## Pad-mixing round (Muse artifact robustness)
+
+```bash
+python3 runners/pad_mix_round.py        # needs Lee / UNIVERSE built with neurofeed-gym-corpora --pad-mix
+uv run --with numpy --with scipy --with mne --with pyyaml python runners/sleep_edf_heog.py   # HEOG positive control
+```
+
+Scores δ / θ / rel θ / TAR / (θ+α)/β from 16 pad combinations (TP-only, 4-pad
+mean / median / weighted / quality-gated, bipolar AF7−AF8 and TP9−TP10, EOG
+regression) and slow-eye-movement features against blinks, jaw clench, head
+turns, eye closure and test-retest stability. Artifact robustness only: no
+Muse sleep labels exist. See `FAIR_BANDMATH.md`, "Pad mixing".
+
 If Sleep-EDF paths are missing, `--preset sleep-edf-test` falls back to the
 synthetic demo with a warning.
 
