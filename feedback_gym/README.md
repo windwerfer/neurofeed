@@ -44,9 +44,22 @@ AI columns: `emb @ W.T + b` → softmax → `ai_a_vig` / `ai_drowsiness` =
 P(hypnagogic), `ai_wake_light` = P(light). Head layout W(2,200) in the pack
 `.f32bin` files. REVE columns absent → treated as unavailable.
 
-Calibration: first `cal_n=90` samples of the concatenated test stream
-(sessions typically start wake / low-y). Corpora with `cal_starts`/`cal_lens`
-use per-recording baselines instead.
+Calibration (default since the fair round): **per recording**, each
+recording's leading wake run, ≤90 rows (45 s at the 0.5 s window hop), written
+as `cal_starts`/`cal_lens`. Recordings that start in N1 have no baseline and are
+not scored. `--cal-mode global` rebuilds the old corpus, where the first
+`cal_n=90` rows of the whole stream (one recording) were the baseline for all
+20. `--from-npz <old.npz>` adds per-recording cal to an existing NPZ.
+
+## Fair band-math round
+
+```bash
+python3 runners/fair_round.py [--catalog ../assets/protocols.json]
+```
+
+Scores every band feature as a sleep / drowsiness guard in **both** directions,
+with per-recording baselines, next to `ai.*` on the same rows, plus Lee / UNIVERSE.
+Results and the audit: [`FAIR_BANDMATH.md`](FAIR_BANDMATH.md).
 
 If Sleep-EDF paths are missing, `--preset sleep-edf-test` falls back to the
 synthetic demo with a warning.

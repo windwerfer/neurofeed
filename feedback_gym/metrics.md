@@ -29,6 +29,8 @@ calibration rows are never scored.
   reported `threshold` is the median over recordings, and the per-recording
   values are in `thresholds_per_recording`. `hit_rate`, `label_align`, `sep`
   and `stability` are then computed over all scored rows pooled together.
+- `sleep_edf_test.npz` is built per-recording by default (leading wake run of
+  each recording, ≤90 rows); `--cal-mode global` restores the legacy corpus.
 - If a cal block uses up every row of one label (e.g. the whole relax block),
   only one class is left to score, so `sep` / `label_align` come out `null`.
   Keep cal blocks to a baseline segment (e.g. pre-rest, ≤90 rows).
@@ -124,3 +126,15 @@ sweep row.
 Default catalog percentiles used when a protocol does not override: reward
 **p40** (`defaultBaselinePercentile`), guard warn **p75**
 (`defaultWarningThresholdPercentile`).
+
+## Direction and validity (fair round)
+
+- `sep` is the pooled ROC AUC **folded** to `max(auc, 1-auc)`: it says how well
+  a feature separates the labels, not which way it moves. Feature rows now also
+  carry `auc_up` (directional: P(label-1 value > label-0 value); < 0.5 = the
+  feature moves the other way).
+- The reward part (`0.7*hit_rate + 0.3*stability`) and the protocol `final` are
+  **playability**: how often and how steadily a reward would fire. They are not
+  evidence that the feature tracks the state a protocol claims. Validity =
+  directional AUC / balanced accuracy vs labels, per recording. See
+  `runners/fair_round.py` and [`FAIR_BANDMATH.md`](FAIR_BANDMATH.md).

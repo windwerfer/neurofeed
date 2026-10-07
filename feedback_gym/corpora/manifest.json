@@ -15,7 +15,7 @@
       "path": "corpora/external/sleep_edf_test.npz",
       "gitignored": true,
       "preset": "sleep-edf-test",
-      "rebuild": "python3 runners/build_corpus_sleep_edf.py [--max-windows-per-rec 500]",
+      "rebuild": "python3 runners/build_corpus_sleep_edf.py [--cal-mode per-recording|global] [--max-windows-per-rec 500] [--from-npz old.npz]",
       "run": "python3 runners/run_gym.py --preset sleep-edf-test",
       "sources": {
         "windows": "../muse-eeg-heads/kaggle_datasets/muse-eeg-heads-windows/vigilance_sleep_edf/windows/*_windows.npz",
@@ -26,10 +26,11 @@
         "reve_emb_cache": "../muse-eeg-heads/exports/reve_sleep_heads_local/emb_cache/{REC}_emb.npz",
         "reve_heads": "assets/packs/reve-*-subsample/heads/*_reve_linear.f32bin"
       },
-      "labels": "windows y / emb y_a: 0=drowsy (negative), 1=hypnagogic",
-      "cal_policy": "first cal_n=90 samples of concatenated test stream (sessions typically start wake/low-y)",
+      "labels": "windows y / emb y_a: 0 = stage W ('drowsy'), 1 = stage N1 ('hypnagogic'); slice 20 min before to 40 min after first N1, N2+ dropped",
+      "cal_policy": "per recording (default): leading wake (label 0) run, <= 90 rows (45 s at 0.5 s hop); recordings starting in N1 get cal_len 0 (not scored). --cal-mode global = legacy first cal_n rows of the stream",
       "ai": "softmax P(class1) from emb @ W.T + b; CBraMod W(2,200); REVE W(2,512) subsample-aligned; no encoder forward",
-      "notes": "REVE columns optional (subsample emb_cache, NaN-padded). Falls back to synthetic if paths missing."
+      "notes": "REVE columns optional (subsample emb_cache, NaN-padded). Falls back to synthetic if paths missing.",
+      "gym_only_columns": "app_* = app band math (runners/app_bands.py) on AF7/AF8 (=Fpz-Cz); post_* = flutter_bands on TP9/TP10 (=Pz-Oz posterior proxy). Fair-round audit only."
     },
     {
       "id": "lee2026_eo_ec",

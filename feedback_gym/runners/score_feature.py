@@ -17,6 +17,7 @@ from runners.helpers import (
     percentile_warn_parts,
     play_thresholds,
     roc_auc,
+    roc_auc_up,
     round4,
     summarize_threshold,
     uptrain_in_target,
@@ -89,6 +90,8 @@ def score_feature(
     labels_play_f = None if labels_play is None else np.asarray(labels_play)[finite_play]
     sep = roc_auc(play_vals_f, labels_play_f)
     base["sep"] = round4(sep)
+    # Directional AUC (label 1 vs 0): sep hides which way the feature moves.
+    base["auc_up"] = round4(roc_auc_up(play_vals_f, labels_play_f))
     if not bool(np.all(finite_play)):
         base["notes"].append(
             f"NaN-masked scoring: {int(finite_play.sum())}/{int(finite_play.size)} play samples"

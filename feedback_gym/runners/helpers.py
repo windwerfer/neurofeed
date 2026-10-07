@@ -206,6 +206,31 @@ def roc_auc(scores: np.ndarray, labels: np.ndarray | None) -> float | None:
     return max(auc, 1.0 - auc)
 
 
+def roc_auc_up(scores: np.ndarray, labels: np.ndarray | None) -> float | None:
+    """Directional ROC AUC: P(label-1 score > label-0 score), ties 1/2.
+
+    Unlike :func:`roc_auc` (``sep``, folded to ``max(auc, 1-auc)``) this keeps
+    the direction: < 0.5 means the feature moves the other way for label 1.
+    """
+    if labels is None:
+        return None
+    y = np.asarray(labels, dtype=int)
+    s = np.asarray(scores, dtype=float)
+    if y.size != s.size or y.size == 0:
+        return None
+    m = np.isfinite(s)
+    s, y = s[m], y[m]
+    n1, n0 = int((y == 1).sum()), int((y == 0).sum())
+    if n1 == 0 or n0 == 0:
+        return None
+    _, inv, counts = np.unique(s, return_inverse=True, return_counts=True)
+    ends = np.cumsum(counts)
+    avg_rank = ends - (counts - 1) / 2.0  # 1-based average rank per unique value
+    ranks = avg_rank[inv]
+    u = float(ranks[y == 1].sum()) - n1 * (n1 + 1) / 2.0
+    return float(u / (n1 * n0))
+
+
 def warn_rate_health(
     rate: float, *, target: float = 0.15, low: float = 0.01, high: float = 0.55
 ) -> float:

@@ -12,10 +12,24 @@ same as emb `y_a`. Documented in NPZ `label_names` and README.
 Windows are aligned to emb_cache via the same light QC + wake/light stage
 keep mask used when embeddings were built (mismatched raw lengths are normal).
 
-Calibration: first `cal_n` samples of the concatenated stream (default 90).
-Sleep-EDF recordings typically start in wake / low-y, so this approximates a
-wake baseline. Multi-recording: only the stream head is used as cal (gym
-schema is single baseline).
+Calibration (default ``--cal-mode per-recording``): each recording gets its
+own baseline = its leading wake (label 0) run, capped at ``cal_n`` rows
+(default 90 rows = 45 s at the 0.5 s window hop, the app's single-baseline
+length). Written as ``cal_starts`` / ``cal_lens``; cal rows are never scored.
+A recording that starts in N1 (fewer than ``min_cal_rows`` leading wake rows)
+gets ``cal_len 0`` and is not scored. ``--cal-mode global`` restores the old
+behaviour (first ``cal_n`` rows of the concatenated stream = one recording's
+baseline for all 20 recordings). ``--from-npz`` adds per-recording cal to an
+existing NPZ without the windows.
+
+Gym-only extra columns (``--extra-columns``, default on), for the fair
+band-math audit (FAIR_BANDMATH.md); the app is unchanged:
+
+- ``app_*``: the app's current band math (``runners/app_bands.py``: Hamming,
+  PSD, half-open bands, gamma 30-45) on the same AF7/AF8 (= Fpz-Cz) pads.
+- ``post_*``: flutter_bands math on the TP9/TP10 slots, which hold the Pz-Oz
+  posterior proxy here. Sleep-EDF has no Muse electrodes; this shows how much
+  of band math's sleep-onset gap is the frontal-only derivation.
 """
 
 from __future__ import annotations
@@ -30,6 +44,8 @@ from typing import Any
 import numpy as np
 
 GYM_ROOT = Path(__file__).resolve().parent.parent
+if str(GYM_ROOT) not in sys.path:  # `python3 runners/build_corpus_sleep_edf.py`
+    sys.path.insert(0, str(GYM_ROOT))
 REPO_ROOT = GYM_ROOT.parent
 
 DEFAULT_WINDOWS = Path(
@@ -72,6 +88,7 @@ DEFAULT_REVE_SPLITS_DIR = Path(
     "/vigilance_sleep_edf/splits"
 )
 DEFAULT_REVE_WINDOWS = DEFAULT_WINDOWS
+MIN_CAL_ROWS = 30  # 15 s at 0.5 s hop; fewer leading wake rows -> no baseline
 REVE_SEED = 42  # must match muse-eeg-heads train_heads_reve_sleep_local.SEED
 BAND_MATH_CANDIDATES = [
     Path("/workspace/muse-eeg-heads/band_math"),
@@ -246,6 +263,58 @@ def replay_reve_subsample_locals(
     return out
 
 
+def per_recording_cal(
+    labels: np.ndarray,
+    recording_id: np.ndarray,
+    *,
+    cal_n: int = 90,
+    min_cal_rows: int = MIN_CAL_ROWS,
+) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """``cal_starts`` / ``cal_lens`` from each recording's leading wake run.
+
+    One entry per unique ``recording_id`` in first-appearance order (gym
+    contract). Baseline = the first ``min(cal_n, leading label-0 rows)`` rows;
+    fewer than ``min_cal_rows`` leading wake rows -> ``cal_len 0`` (recording
+    not scored). Returns ``(starts, lens, no_baseline_ids)``.
+    """
+    y = np.asarray(labels).astype(int)
+    rec = np.asarray(recording_id).astype(str)
+    seen: dict[str, None] = {}
+    for r in rec:
+        seen.setdefault(r, None)
+    starts, lens, none = [], [], []
+    for r in seen:
+        rows = np.flatnonzero(rec == r)
+        yy = y[rows]
+        lead = int(np.argmax(yy != 0)) if (yy != 0).any() else int(yy.size)
+        n_cal = min(int(cal_n), lead)
+        if n_cal < min_cal_rows:
+            n_cal = 0
+            none.append(r)
+        starts.append(int(rows[0]))
+        lens.append(n_cal)
+    return np.asarray(starts, dtype=np.int32), np.asarray(lens, dtype=np.int32), none
+
+
+def add_per_recording_cal(
+    arrays: dict[str, Any], *, cal_n: int = 90, min_cal_rows: int = MIN_CAL_ROWS
+) -> list[str]:
+    """Write ``cal_starts`` / ``cal_lens`` / ``cal_policy`` into ``arrays`` in place."""
+    starts, lens, none = per_recording_cal(
+        arrays["labels"], arrays["recording_id"], cal_n=cal_n, min_cal_rows=min_cal_rows
+    )
+    arrays["cal_starts"] = starts
+    arrays["cal_lens"] = lens
+    first = int(lens[0]) if lens.size and lens[0] > 0 else int(cal_n)
+    arrays["cal_n"] = np.array([first], dtype=np.int32)
+    arrays["cal_policy"] = np.array(
+        f"per recording: leading wake (label 0) run, <= {int(cal_n)} rows "
+        f"(0.5 s hop); < {int(min_cal_rows)} leading wake rows -> cal_len 0 "
+        "(recording not scored)"
+    )
+    return none
+
+
 def build_corpus(
     *,
     windows_dir: Path = DEFAULT_WINDOWS,
@@ -262,8 +331,13 @@ def build_corpus(
     reve_head_c_path: Path | None = DEFAULT_REVE_HEAD_C,
     reve_policy_path: Path = DEFAULT_REVE_POLICY,
     reve_splits_dir: Path = DEFAULT_REVE_SPLITS_DIR,
+    cal_mode: str = "per-recording",
+    min_cal_rows: int = MIN_CAL_ROWS,
+    extra_columns: bool = True,
 ) -> dict[str, Any]:
     """Build and write gym NPZ. Returns summary dict."""
+    if cal_mode not in ("per-recording", "global"):
+        raise ValueError(f"cal_mode must be per-recording or global, got {cal_mode!r}")
     compute_feats = import_flutter_bands()
     W_a, b_a = load_linear_head(head_a_path)
     W_c, b_c = load_linear_head(head_c_path)
@@ -394,6 +468,30 @@ def build_corpus(
         chunks["ai_drowsiness"].append(p_a)  # alias of a_vig
         chunks["recording_id"].append(np.full(n, rec, dtype=object))
 
+        if extra_columns:
+            from runners.app_bands import app_features
+
+            app = app_features(X, pads=(0, 1))
+            post = compute_feats(np.ascontiguousarray(X[:, 2:4, :]))
+            for key, src in (
+                ("band_atr", "band.atr"),
+                ("band_tar", "band.tar"),
+                ("band_btr", "band.btr"),
+                ("band_alpha", "band.alpha"),
+                ("band_delta", "band.delta"),
+                ("delta_rel", "rel_delta"),
+                ("theta_rel", "rel_theta"),
+                ("alpha_rel", "rel_alpha"),
+                ("beta_rel", "rel_beta"),
+            ):
+                chunks.setdefault(f"app_{key}", []).append(
+                    np.asarray(app[src], dtype=np.float64)
+                )
+                if src in post:
+                    chunks.setdefault(f"post_{key}", []).append(
+                        np.asarray(post[src], dtype=np.float64)
+                    )
+
         if reve_enabled:
             col_a = np.full(n, np.nan, dtype=np.float64)
             col_c = np.full(n, np.nan, dtype=np.float64)
@@ -454,6 +552,10 @@ def build_corpus(
         else:
             arrays[key] = np.concatenate(parts).astype(np.float64)
 
+    no_baseline: list[str] = []
+    if cal_mode == "per-recording":
+        no_baseline = add_per_recording_cal(arrays, cal_n=cal_n, min_cal_rows=min_cal_rows)
+
     # REVE: subsample-aligned into NaN-padded columns when emb+heads present
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -473,6 +575,8 @@ def build_corpus(
         "out": str(out_path),
         "n": n_total,
         "cal_n": cal_n_eff,
+        "cal_mode": cal_mode,
+        "recordings_without_baseline": no_baseline,
         "recordings_used": used,
         "recordings_skipped": skipped,
         "ai_a_vig_mean_sep": sep_a,
@@ -517,11 +621,40 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--reve-head-a", type=Path, default=DEFAULT_REVE_HEAD_A)
     p.add_argument("--reve-head-c", type=Path, default=DEFAULT_REVE_HEAD_C)
     p.add_argument(
+        "--cal-mode",
+        choices=("per-recording", "global"),
+        default="per-recording",
+        help="per-recording (default): leading wake run of each recording, <= --cal-n rows; "
+        "global: first --cal-n rows of the whole stream (legacy)",
+    )
+    p.add_argument("--min-cal-rows", type=int, default=MIN_CAL_ROWS)
+    p.add_argument(
+        "--no-extra-columns",
+        action="store_true",
+        help="skip gym-only app_* / post_* band columns",
+    )
+    p.add_argument(
+        "--from-npz",
+        type=Path,
+        default=None,
+        help="post-process an existing NPZ: add per-recording cal_starts/cal_lens, write --out",
+    )
+    p.add_argument(
         "--no-reve",
         action="store_true",
         help="skip optional REVE emb_cache merge",
     )
     args = p.parse_args(argv)
+
+    if args.from_npz is not None:
+        data = np.load(args.from_npz, allow_pickle=True)
+        arrays = {k: data[k] for k in data.files}
+        none = add_per_recording_cal(arrays, cal_n=args.cal_n, min_cal_rows=args.min_cal_rows)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(args.out, **arrays)
+        print(json.dumps({"out": str(args.out), "recordings_without_baseline": none,
+                          "cal_lens": arrays["cal_lens"].tolist()}, indent=2))
+        return 0
 
     summary = build_corpus(
         windows_dir=args.windows_dir,
@@ -535,6 +668,9 @@ def main(argv: list[str] | None = None) -> int:
         reve_emb_dir=None if args.no_reve else args.reve_emb_dir,
         reve_head_a_path=None if args.no_reve else args.reve_head_a,
         reve_head_c_path=None if args.no_reve else args.reve_head_c,
+        cal_mode=args.cal_mode,
+        min_cal_rows=args.min_cal_rows,
+        extra_columns=not args.no_extra_columns,
     )
     print(json.dumps(summary, indent=2))
     return 0
