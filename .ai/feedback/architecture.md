@@ -76,8 +76,9 @@ quality is the Rust 1 Hz `PadQuality` (Crown or app source per
 `sim:*` ids, not extra enum variants. List filter is last connected this
 process; no device this process → show all catalog rows.
 
-Non-reward catalog rows: `recordOnly` (calibration skippable) and
-`guardrailOnly` (warnings only).
+Non-reward catalog rows: `calibrateRecord` (no lanes, staged calibration,
+not skippable) and `sleepGuard` (warnings only). Retired `recordOnly` maps
+to `calibrateRecord`.
 
 ## Calibration
 

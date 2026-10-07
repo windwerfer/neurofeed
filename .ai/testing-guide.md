@@ -31,7 +31,9 @@ Pulse, X, Wayland, adb, or the Dart language-server.
    Never `sim:crown-osc` / `sim:notion-osc` for a playing session.
    After connect, `GET /state` → `connected=true` and `scanMessage` is
    null (not leftover `Connecting… (attempt N)`).
-4. `recordOnly` + duration 1 + `skipCalibration`. Grep
+4. `alertOpen` + duration 1 + `skipCalibration` (no guard, not staged, so
+   the skip is honoured; `recordOnly` is retired and aliases to the staged,
+   unskippable `calibrateRecord`). Grep
    `[feedback] phase=playing`. Always `POST /session/end` then
    `/session/reset`. Never `publishSession`.
 5. Logs are the stdout file. `grep` anytime — do not `tail -f` as the wait.

@@ -26,7 +26,7 @@ void main() {
   });
 
   test(
-    'alertOpen, calibrateRecord and recordOnly do not gain a guard',
+    'alertOpen, calibrateRecord and legacy recordOnly do not gain a guard',
     () async {
       SharedPreferences.setMockInitialValues({
         'guardrail_mode': jsonEncode({

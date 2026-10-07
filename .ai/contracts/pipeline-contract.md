@@ -149,9 +149,9 @@ Catalog and user documents are the same type (`origin: catalog | user`). `Protoc
 
 ### Catalog IDs (on-disk forever)
 
-`sleepGuard`, `restAwake`, `openMonitor`, `alertOpen`, `alertClosed`, `concentrate`, `calibrateRecord`, `recordOnly`
+`sleepGuard`, `restAwake`, `openMonitor`, `alertOpen`, `alertClosed`, `concentrate`, `calibrateRecord`
 
-Retired ids resolve through `legacyProtocolAliases` (`lib/src/feedback/protocol_ids.dart`) for display / selection only: `drowsiness`→`restAwake`, `mindfulness`→`openMonitor`, `alertnessOpen`→`alertOpen`, `alertnessClosed`→`alertClosed`, `concentration`→`concentrate`, `guardrailOnly`→`sleepGuard`, `twilight` / `relaxedConcentration`→`restAwake`. Saved sessions keep their stored id; charts and export use the session's `protocolJson` snapshot first.
+Retired ids resolve through `legacyProtocolAliases` (`lib/src/feedback/protocol_ids.dart`) for display / selection only: `drowsiness`→`restAwake`, `mindfulness`→`openMonitor`, `alertnessOpen`→`alertOpen`, `alertnessClosed`→`alertClosed`, `concentration`→`concentrate`, `guardrailOnly`→`sleepGuard`, `twilight` / `relaxedConcentration`→`restAwake`, `recordOnly`→`calibrateRecord` (dropped 2026-10: `calibrateRecord` is the only catalog row without reward or guard). Saved sessions keep their stored id; charts and export use the session's `protocolJson` snapshot first.
 
 Unknown IDs **must not** fall back to `restAwake` (`SessionMetadata`, SQLite list, crash recovery). List rows: `catalog.forName(id)?.copy` else raw id. Recent: catalog hit only (skip unknown). `protocolJson` is for detail / export / replay only.
 
@@ -167,7 +167,7 @@ A protocol wires: optional `reward` (feature + output + policy + inhibit), optio
 
 **Do not put in JSON:** FFT bins, biquad math, percentile numbers, EMA alphas, electrode indices, model kinds, `usableFor`, device allow-lists.
 
-Derived: `hasReward` ⇔ `reward != null`; guard allowed ⇔ `guard != null`; `recordOnly` ⇔ both lanes absent; `guardrailOnly` ⇔ reward absent, guard present.
+Derived: `hasReward` ⇔ `reward != null`; guard allowed ⇔ `guard != null`; record-only (`calibrateRecord`) ⇔ both lanes absent; `guardrailOnly` ⇔ reward absent, guard present.
 
 Catalog rows lock `reward.feature` (and `inhibit` when non-empty). They do **not** lock `guard.feature` (gear may switch `band.delta` ↔ `ai.drowsiness`).
 
@@ -184,13 +184,12 @@ Catalog rows lock `reward.feature` (and `inhibit` when non-empty). They do **not
 | `alertClosed` | `band.btr` | none | `ai.a_vig` | false | true | **false** | false | `feature` | `eyes-closed-01` | auto | no |
 | `concentrate` | `band.alpha` | betaCeiling 0.25 | `ai.a_vig` | false | **false** | **false** | false | `feature`, `inhibit` | `eyes-closed-01` | auto | no |
 | `calibrateRecord` | **omit** | — | **omit** | — | — | — | — | — | `eyes-closed-01` | `staged` | no |
-| `recordOnly` | **omit** | — | **omit** | — | — | — | — | — | `eyes-closed-01` | auto | **yes** |
 
 Any document **with** a `guard` object defaults to its `guard.feature` when `defaultEnabled` and no pref exists (else `none`). A catalog-default AI head without a stored pref falls back to `band.delta` while no model is Ready, unless `guard.requiresModel`. Documents without `guard` default to **none**. Do not honor unused v3 `guardrailDefault: false`.
 
 ### Listing vs running
 
-List filter = last-connected / currently connected `DeviceKind` this process; if none, show all catalog rows. Band protocols list and run on Crown. `ai.drowsiness` stays unavailable on Crown. `recordOnly` lists on every known kind.
+List filter = last-connected / currently connected `DeviceKind` this process; if none, show all catalog rows. Band protocols list and run on Crown. `ai.drowsiness` stays unavailable on Crown. `calibrateRecord` lists on every known kind.
 
 ---
 
@@ -263,7 +262,7 @@ Suppress (engine, not JSON): `rainStage` and `musicFilter` suppress background. 
 
 | Condition | Stages |
 |---|---|
-| `S` empty (`recordOnly`) | skippable; else `single` baseline only |
+| `S` empty (no lanes) | skippable if the document says so (no catalog row does; `calibrateRecord` is `staged`); else `single` baseline only |
 | any `ai.*` in `S` | `staged`: artifact + challenge + baseline |
 | else any lane present | `single` baseline only |
 | setting **Always staged** | `staged` even when `S` would use `single` |

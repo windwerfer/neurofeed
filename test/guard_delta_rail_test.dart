@@ -277,6 +277,7 @@ void main() {
         expect(guard.deltaRail, isFalse, reason: id);
         expect(guard.requiresModel, id == 'sleepGuard', reason: id);
       }
+      // recordOnly: retired id, resolves to calibrateRecord.
       for (final id in ['alertOpen', 'calibrateRecord', 'recordOnly']) {
         expect(catalog.forName(id)!.guard, isNull, reason: id);
       }

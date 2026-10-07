@@ -228,7 +228,7 @@ def simulate_protocol(
         inhibit_score=inhibit_score if reward_cfg else None,
         weights=rollup,
     )
-    # recordOnly / calibrateRecord (no lanes): composite None → N/A with note
+    # calibrateRecord (no lanes): composite None → N/A with note
     result["final"] = round4(final) if final is not None else None
     if reward_cfg is None and guard_cfg is None:
         result["notes"].append(f"{protocol['id']} — no lanes; composite N/A")

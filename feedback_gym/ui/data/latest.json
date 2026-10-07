@@ -222,22 +222,6 @@
         "calibrateRecord \u2014 no lanes; composite N/A"
       ],
       "final": null
-    },
-    {
-      "id": "recordOnly",
-      "reward_percentile": 40.0,
-      "guard_percentile": 75.0,
-      "parts": {
-        "reward": null,
-        "inhibit": null,
-        "guard": null
-      },
-      "notes": [
-        "no reward lane",
-        "no guard lane",
-        "recordOnly \u2014 no lanes; composite N/A"
-      ],
-      "final": null
     }
   ],
   "features": [

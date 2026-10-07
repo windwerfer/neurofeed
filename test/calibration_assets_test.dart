@@ -151,10 +151,10 @@ void main() {
     )!;
     expect(manifest.calibrationIdFor('restAwake'), 'eyes-closed-01');
     expect(manifest.calibrationIdFor('alertOpen'), 'eyes-open-01');
-    expect(manifest.calibrationIdFor('recordOnly'), 'eyes-closed-01');
     expect(manifest.calibrationIdFor('sleepGuard'), 'eyes-closed-01');
     expect(manifest.calibrationIdFor('calibrateRecord'), 'eyes-closed-01');
     // Retired ids resolve through the alias map.
+    expect(manifest.calibrationIdFor('recordOnly'), 'eyes-closed-01');
     expect(manifest.calibrationIdFor('alertnessOpen'), 'eyes-open-01');
     expect(manifest.calibrationIdFor('guardrailOnly'), 'eyes-closed-01');
 
@@ -195,7 +195,7 @@ void main() {
           )!
           .isSingle,
       isTrue,
-      reason: 'recordOnly / empty S → single baseline',
+      reason: 'empty S (no lanes) → single baseline',
     );
     expect(
       manifest

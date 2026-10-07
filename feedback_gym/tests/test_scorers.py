@@ -273,15 +273,15 @@ def test_catalog_protocols_all_simulate(tmp_path):
         "alertClosed",
         "concentrate",
         "calibrateRecord",
-        "recordOnly",
     ]
+    assert "recordOnly" not in protocols  # retired → calibrateRecord
     path = generate_synthetic_corpus(tmp_path, n=500, seed=3)
     corpus = load_corpus(path)
     grids = load_grids()
     for pid, proto in protocols.items():
         res = simulate_protocol(proto, corpus, grids)
         assert res["id"] == pid
-        if pid in ("calibrateRecord", "recordOnly"):
+        if pid == "calibrateRecord":
             assert res["final"] is None
             assert any("no lanes" in n for n in res["notes"])
         else:

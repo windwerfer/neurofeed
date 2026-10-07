@@ -14,7 +14,6 @@ const List<String> catalogProtocolIds = [
   'alertClosed',
   'concentrate',
   'calibrateRecord',
-  'recordOnly',
 ];
 
 /// The catalog ids before the 2026-10 evidence rewrite, in their old freeze
@@ -41,6 +40,10 @@ const List<String> legacyCatalogProtocolIds = [
 /// The first six are renames of the same job (recipe updated). `twilight`
 /// (TAR reward) and `relaxedConcentration` (ATR + beta/delta ceilings) were
 /// dropped; they map to `restAwake` for display / selection fallback only.
+/// `recordOnly` (no lanes, optional single baseline) was dropped in favour of
+/// `calibrateRecord`, the one catalog row without reward or guard; it maps
+/// there for display / selection fallback only (calibrateRecord's staged,
+/// required calibration is not what an old recordOnly session ran).
 /// Their recipes differ, so anything that recomputes from the recipe (charts,
 /// export) must prefer the session's saved `protocolJson` snapshot first
 /// (see `savedProtocolDocument`).
@@ -53,6 +56,7 @@ const Map<String, String> legacyProtocolAliases = {
   'guardrailOnly': 'sleepGuard',
   'twilight': 'restAwake',
   'relaxedConcentration': 'restAwake',
+  'recordOnly': 'calibrateRecord',
 };
 
 /// Legacy ids whose recipe was carried over (rename, not a merge). Per-protocol

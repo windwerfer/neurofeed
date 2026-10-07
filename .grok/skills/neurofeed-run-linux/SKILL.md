@@ -52,7 +52,7 @@ curl -sS $BASE/health
 # Startable Muse: sim:muse-2 or sim:muse-s. Never sim:crown-osc / sim:notion-osc here.
 curl -sS -X POST $BASE/connect -H 'Content-Type: application/json' -d '{"id":"sim:muse-2"}'
 curl -sS $BASE/state   # connected=true, scanMessage null
-curl -sS -X POST $BASE/session/select -H 'Content-Type: application/json' -d '{"protocol":"recordOnly"}'
+curl -sS -X POST $BASE/session/select -H 'Content-Type: application/json' -d '{"protocol":"alertOpen"}'
 curl -sS -X POST $BASE/session/duration -H 'Content-Type: application/json' -d '{"minutes":1}'
 curl -sS -X POST $BASE/session/start -H 'Content-Type: application/json' -d '{"skipCalibration":true}'
 curl -sS $BASE/state   # phase=playing

@@ -239,26 +239,6 @@
       "background": {
         "kind": "drone"
       }
-    },
-    "recordOnly": {
-      "id": "recordOnly",
-      "origin": "catalog",
-      "schemaVersion": 1,
-      "copy": {
-        "catchPhrase": "Record Only",
-        "title": "Recording only (optional calibration)",
-        "subtitle": "Records the session with no reward, guard or feedback sounds. Calibration is optional: run the single baseline or skip it.",
-        "guideText": "Recording only. No reward, no guard, no feedback sounds.\nCalibration: optional. When kept, a single eyes-closed baseline is recorded in the metadata (staged only when Settings → AI Calibration is set to always staged); it does not gate any feedback.\nFor a staged calibration with clear/rest stage anchors use Calibrate + Record.\n\nPlaceholder copy (recipe only); final descriptions pending.",
-        "algorithmDescription": "Recording only: every enabled stream (EEG, bands, PPG, pulse, IMU, movement, peak alpha, telemetry) is written to the session file. No reward metric, no guard, no feedback sounds. An optional calibration baseline is recorded in the metadata when the normal start is used.",
-        "expectedDelay": "-",
-        "metadataDescription": "Recording only: no reward metric, no guardrail, no feedback sounds. Every enabled stream (EEG, bands, PPG, pulse, IMU, movement, peak alpha, telemetry) is written to the session file. When calibration is not skipped, an eyes-closed baseline is captured and recorded in the metadata - it does not gate any feedback."
-      },
-      "color": 16745547,
-      "calibration": "eyes-closed-01",
-      "calibrationSkippable": true,
-      "background": {
-        "kind": "drone"
-      }
     }
   }
 }

@@ -694,7 +694,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   ///
   /// With [skipCalibration] the signal gate and the baseline are skipped
   /// entirely: the recorder starts and the session goes straight to playing
-  /// (used by the recordOnly protocol's "Start (skip calibration)" button).
+  /// (used by the "Start (skip calibration)" button of protocols with
+  /// `calibrationSkippable`, and by agent smoke runs).
   /// The ATR engine then has no baseline, which is fine — no-reward protocols
   /// never evaluate it.
   Future<void> startCalibration({bool skipCalibration = false}) async {

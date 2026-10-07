@@ -110,21 +110,24 @@ void main() {
     expect(again.requiresStagedCalibration, isTrue);
   });
 
-  test(
-    'recordOnly stays optional single calibration, distinct from calibrateRecord',
-    () {
-      final doc = catalog.byName['recordOnly']!;
-      expect(doc.reward, isNull);
-      expect(doc.guard, isNull);
-      expect(doc.calibrationSkippable, isTrue);
-      expect(doc.calibrationKind, calibrationKindAuto);
-      expect(doc.toJson().containsKey('calibrationKind'), isFalse);
-      expect(
-        CalibrationPlan.fromEnabledFeatures(const []),
-        CalibrationPlan.baselineOnly,
-      );
-    },
-  );
+  test('calibrateRecord is the only catalog row without reward or guard', () {
+    final laneless = [
+      for (final doc in catalog.byName.values)
+        if (doc.reward == null && doc.guard == null) doc.id,
+    ];
+    expect(laneless, ['calibrateRecord']);
+    expect(catalog.byName.containsKey('recordOnly'), isFalse);
+    expect(catalogProtocolIds, isNot(contains('recordOnly')));
+    // No catalog row offers skip-calibration any more (recordOnly was the
+    // only one); user protocols may still opt in.
+    for (final doc in catalog.byName.values) {
+      expect(doc.calibrationSkippable, isFalse, reason: doc.id);
+    }
+    expect(
+      CalibrationPlan.fromEnabledFeatures(const []),
+      CalibrationPlan.baselineOnly,
+    );
+  });
 
   test('unknown calibrationKind is rejected', () {
     expect(
@@ -147,6 +150,7 @@ void main() {
       'alertnessClosed',
       'concentration',
       'guardrailOnly',
+      'recordOnly',
       'stressDownshift',
     ]) {
       expect(catalog.byName.containsKey(id), isFalse, reason: id);
@@ -163,6 +167,7 @@ void main() {
       'guardrailOnly': 'sleepGuard',
       'twilight': 'restAwake',
       'relaxedConcentration': 'restAwake',
+      'recordOnly': 'calibrateRecord',
     };
 
     test('maps every retired id to a current catalog id', () {
@@ -172,6 +177,7 @@ void main() {
       }
       expect(legacyProtocolRenames, isNot(contains('twilight')));
       expect(legacyProtocolRenames, isNot(contains('relaxedConcentration')));
+      expect(legacyProtocolRenames, isNot(contains('recordOnly')));
     });
 
     test('canonicalProtocolId passes current and user ids through', () {
@@ -182,6 +188,7 @@ void main() {
       expect(canonicalProtocolId('user.my-proto'), 'user.my-proto');
       expect(canonicalProtocolId(''), '');
       expect(canonicalProtocolId('drowsiness'), 'restAwake');
+      expect(canonicalProtocolId('recordOnly'), 'calibrateRecord');
     });
 
     test('catalog.forName resolves old session ids with a title', () {
@@ -224,6 +231,31 @@ void main() {
         },
       );
       expect(broken!.id, 'concentrate');
+    });
+
+    test('old recordOnly sessions keep what they ran', () {
+      // Snapshot first: the optional single calibration, no lanes.
+      final doc = savedProtocolDocument(
+        catalog,
+        protocol: 'recordOnly',
+        protocolJson: const {
+          'id': 'recordOnly',
+          'calibration': 'eyes-closed-01',
+          'calibrationSkippable': true,
+        },
+      );
+      expect(doc!.id, 'recordOnly');
+      expect(doc.reward, isNull);
+      expect(doc.guard, isNull);
+      expect(doc.calibrationSkippable, isTrue);
+      expect(doc.requiresStagedCalibration, isFalse);
+
+      // No snapshot: alias to calibrateRecord (also lane-less).
+      final fallback = savedProtocolDocument(catalog, protocol: 'recordOnly');
+      expect(fallback!.id, 'calibrateRecord');
+      expect(fallback.reward, isNull);
+      expect(fallback.guard, isNull);
+      expect(protocolListTitle(catalog, 'recordOnly'), fallback.title);
     });
   });
 }

@@ -307,7 +307,7 @@ void main() {
     expect(find.text(_rewardFooter), findsNothing);
   });
 
-  testWidgets('recordOnly fixture has no Feedback chip', (tester) async {
+  testWidgets('legacy recordOnly fixture has no Feedback chip', (tester) async {
     final settings = await _settings(tester);
     final file = await tester.runAsync(
       () => _write(_meta(protocol: 'recordOnly', elapsed: 5), [
