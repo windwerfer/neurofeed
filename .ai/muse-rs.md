@@ -7,12 +7,15 @@ Muse BLE protocol + transport. We depend on upstream
 muse-rs = { git = "https://github.com/eugenehp/muse-rs.git", tag = "0.1.0", default-features = false }
 
 [patch.'https://github.com/eugenehp/muse-rs.git']
-muse-rs = { git = "https://github.com/windwerfer/muse-rs.git", tag = "0.1.1" }
+muse-rs = { git = "https://github.com/windwerfer/muse-rs.git", tag = "0.1.2" }
 ```
 
 The `[patch]` key must match the **dependency source URL**, not crates.io
-(unlike btleplug). `third_party/muse-rs/` is a reference checkout, not the
-build input. Bump the fork tag in `rust/Cargo.toml` when it advances.
+(unlike btleplug). Tag `0.1.2` is `e4891ba`. `third_party/muse-rs/` is the
+same commit. That crate depends on btleplug `0.13.4` and patches crates.io
+to `github.com/windwerfer/btleplug` tag `0.13.4-muse-1` (`36ac8b0`). Cargo
+ignores that patch while muse-rs is a dependency, so `rust/Cargo.toml`
+repeats it.
 
 Classic presets, from BrainFlow `docs/SupportedBoards.rst` and
 `src/board_controller/muse/muse.cpp`. Do not use the old muse-rs table.

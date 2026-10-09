@@ -15,15 +15,17 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   `flutter_rust_bridge_codegen generate` when the FFI surface changes and
   commit both sides.
 - **muse-rs** — depend on `eugenehp/muse-rs` tag `0.1.0`, **patched** to
-  `windwerfer/muse-rs` tag `0.1.1` via
+  `windwerfer/muse-rs` tag `0.1.2` (`e4891ba`) via
   `[patch.'https://github.com/eugenehp/muse-rs.git']`. See `.ai/muse-rs.md`.
-- **btleplug** — `github.com/windwerfer/btleplug` tag **`0.12.0-muse-5`**,
-  crate version **`0.12.0`** (must match `btleplug = "0.12.0"` or Cargo
-  silently skips the patch). JNI `get_env()` auto-attach + notification death
-  spiral fix. `[patch.crates-io]` so muse-rs's dep shares one
-  `GLOBAL_JVM`/`GLOBAL_ADAPTER`. See `.ai/btleplug.md`.
-- **`jni = "=0.19"`** — must match btleplug's `jni` or you get link-time
-  symbol conflicts.
+- **btleplug** — `github.com/windwerfer/btleplug` tag **`0.13.4-muse-1`**
+  (`36ac8b0`, branch `muse-0.13.4`), crate version **`0.13.4`** (must match
+  `btleplug = "0.13.4"` or Cargo silently skips the patch). Upstream 0.13.4
+  plus `QueueStream.pollNext` removing under the lock. The 0.12 JNI
+  attach, exception-clear, and wake/close patches are already in upstream.
+  `[patch.crates-io]` so muse-rs's dep shares one copy. See `.ai/btleplug.md`.
+- **`jni = "0.22"`** — must resolve to the same `jni` as btleplug (0.22.4)
+  or you get link-time symbol conflicts. Android init uses
+  `jni::EnvUnowned` (`jni` 0.22), not `JNIEnv::from_raw`.
 - **CBraMod Spur A + optional REVE** (on-device drowsiness): pack `assets/packs/cbramod-a-vig-full/` + Candle encoder in `rust/src/analysis/cbramod_encoder.rs` (loads SHA-pinned `pretrained_weights.pth`, mean-pool 200-d → HeadALinear). Ready requires Rust `encoder_forward_ready` (Candle actually loaded) — SHA OK alone is not Ready (`kCbramodEncoderForwardReady` is compile-time link only). **CPU/mobile forward latency is TBD** (not profiled on-device yet). REVE via `reve-rs`/RLX CPU. FFI `rust/src/api/reve.rs`. LUNA removed from ship path; Dart `lib/src/reve/`.
 - **Feature pipeline** (implemented): Rust registry produces
   `MuseEventDto::Feature`; Dart `FeatureBus` → `RewardLane` / `GuardLane`.
@@ -187,7 +189,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
 
 ## Where things live
 - BLE: `rust/src/api/muse.rs` (`scan`, `connect`, `subscribe_events`).
-- JNI attach: `third_party/btleplug/src/droidplug/jni/mod.rs` `get_env()`.
+- Android JNI: `btleplug::platform::init` from `Java_org_windwerfer_neurofeed_MainActivity_museAndroidInit` (`rust/src/api/muse.rs`). Thread attach is `JavaVM::attach_current_thread` inside btleplug 0.13 (`jni` 0.22). Bundled Java matches tag `0.13.4-muse-1` (`src/droidplug/java`), not `third_party/btleplug` `master`.
 - Devices: `DeviceKind` is Muse | Neurosity (`device_config.rs`). Connect
   dropdown is Dart `ConnectSource` (`connect_source.dart`). Simulation is
   `simulate` + `sim:*` ids (`simulator.rs`), not extra kind variants.
@@ -264,8 +266,8 @@ assets/                     protocols.json, calibrations.json, features.json, au
 
 ## Known hot spots
 - **Cargo `[patch]` version trap**: patched crate `version` must be
-  semver-compatible with the dep. btleplug fork is `0.12.0` matching
-  `btleplug = "0.12.0"`. **Do not pin the fork back to `0.11.8`.** Patch
+  semver-compatible with the dep. btleplug fork is `0.13.4` matching
+  `btleplug = "0.13.4"`. **Do not pin the fork back to `0.12.0` or `0.11.8`.** Patch
   target is `crates-io` for btleplug; muse-rs patch target is the eugenehp
   git URL. See `.ai/btleplug.md`.
 - **Vendored `rlx-cpu`** (`vendor/rlx-cpu-0.2.14`): `[patch.crates-io]`,

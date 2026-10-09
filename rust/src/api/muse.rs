@@ -362,7 +362,7 @@ pub fn init_app() {
 
 /// Called from Kotlin `MainActivity.configureFlutterEngine`/`onCreate` with the
 /// JNI environment and Android Context so that btleplug's global Android adapter
-/// can be registered. On Android, btleplug requires `btleplug::platform::init(&env)`
+/// can be registered. On Android, btleplug requires `btleplug::platform::init(env)`
 /// to be called from a JNI context before any BLE scan/connect; otherwise it panics
 /// with "Droidplug has not been initialized".
 #[cfg(target_os = "android")]
@@ -372,13 +372,14 @@ pub extern "C" fn Java_org_windwerfer_neurofeed_MainActivity_museAndroidInit(
     _class: *mut jni::sys::jobject,
     _context: *mut jni::sys::jobject,
 ) {
-    let env = unsafe { jni::JNIEnv::from_raw(env) };
-    if let Ok(env) = env {
-        if let Err(e) = btleplug::platform::init(&env) {
-            log::error!("[muse] btleplug init failed: {e:?}");
-        } else {
-            log::info!("[muse] btleplug initialized");
-        }
+    let mut env = unsafe { jni::EnvUnowned::from_raw(env) };
+    match env
+        .with_env(|env| btleplug::platform::init(env))
+        .into_outcome()
+    {
+        jni::Outcome::Ok(()) => log::info!("[muse] btleplug initialized"),
+        jni::Outcome::Err(e) => log::error!("[muse] btleplug init failed: {e:?}"),
+        jni::Outcome::Panic(_) => log::error!("[muse] btleplug init panicked"),
     }
 }
 

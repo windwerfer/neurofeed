@@ -1,43 +1,53 @@
-# btleplug fork — Android JNI thread-attach patch
+# btleplug fork — upstream 0.13.4 + QueueStream lock
 
 ## Purpose
 
-Patch btleplug 0.12.0 (Rust) to survive the **JNI `ThreadDetached` error**
-that occurs when BLE operations run on tokio worker threads instead of the
-JVM-attached Dart/UI thread. Without this patch, every BLE scan fails with
-`"JNI call failed"` — a silent, opaque error that bubbles up as an
-`anyhow::Error` from `muse_rs::MuseClient::scan_all()`.
+Track upstream btleplug **0.13.4** (`jni` 0.22). Upstream already attaches
+detached tokio threads, clears pending JNI exceptions, and reference-counts
+`FnAdapter` so a concurrent wake/close does not SIGSEGV. The one patch still
+applied on this fork is `QueueStream.pollNext`: the item is removed inside
+the monitor, and the lambda returns that value. Upstream still calls
+`LinkedList.remove()` from the lambda, which races `add()` on the binder
+thread.
+
+The notification-stream `log::warn` is not carried forward. On 0.13.4 a
+sticky error is a different bug (busy-loop), and a log line inside
+`FilterMap` does not stop it.
 
 ## Where is the fork
 
-**Published:** `github.com/windwerfer/btleplug` tag `0.12.0-muse-5`
-**Local copy:** `../third_party/btleplug/` — for development.
+**Tag:** `0.13.4-muse-1` at `36ac8b05276716fc96bbbbf7d60374572f0b321d`
+(branch `muse-0.13.4`). `third_party/btleplug` `master` tracks upstream
+`0.13.4` and does not contain this patch.
 
-Referenced from `rust/Cargo.toml` via `[patch.crates-io]`.
-Both `rust_lib_neurofeed` and `muse-rs` depend on `btleplug = "0.12.0"` from crates.io; the
-`[patch.crates-io]` replaces ALL occurrences with our fork so there is only one copy
-of btleplug (and its `GLOBAL_JVM`/`GLOBAL_ADAPTER` statics) linked:
+`rust/Cargo.toml` depends on `btleplug = "0.13.4"` and patches crates.io
+to that tag, so muse-rs and the app link one copy:
 
 ```toml
-btleplug = "0.12.0"
+btleplug = "0.13.4"
 
 [patch.crates-io]
-btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.12.0-muse-5" }
+btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.13.4-muse-1" }
 ```
 
-**For local development,** swap the patch to a local path:
-```toml
-[patch.crates-io]
-btleplug = { path = "../third_party/btleplug" }
-```
+**Version matching:** the fork crate `version` is `"0.13.4"`, matching
+`btleplug = "0.13.4"`. If those diverge by semver, Cargo **silently
+ignores** `[patch.crates-io]` and you link unpatched crates.io btleplug
+(two JNI copies). Do not pin the fork back to `0.12.0` or `0.11.8`.
+`jni = "0.22"` in `rust/Cargo.toml` must resolve to the same crate as
+btleplug (lockfile: 0.22.4). The patch target must be `crates-io`, not a
+git URL, so muse-rs's transitive dep is replaced too.
 
-**Version matching:** the fork crate `version` is `"0.12.0"`, matching
-`btleplug = "0.12.0"` in `rust/Cargo.toml`. If those diverge by semver, Cargo
-**silently ignores** `[patch.crates-io]` and you link unpatched crates.io
-btleplug (two `GLOBAL_JVM` statics, JNI panics). An older note said to pin
-the fork at `0.11.8` — that was for when the dep was `0.11.x`. Do not revert
-the fork to `0.11.8` while the dep is `0.12.0`. The patch target must be
-`crates-io`, not a git URL, so muse-rs's transitive dep is replaced too.
+Android Java under `android/app/src/main/java/` is a copy of
+`src/droidplug/java` at tag `0.13.4-muse-1`. Keep them identical.
+`third_party/btleplug` `master` is upstream and does not have the
+`pollNext` fix.
+
+## Historical patches (upstream as of 0.13.4)
+
+The sections below describe the 0.12 fork (`0.12.0-muse-5` and
+`327de2c`). They are not re-applied. `get_env()` no longer exists;
+call sites use `JavaVM::attach_current_thread`.
 
 ## Changes made
 
@@ -201,4 +211,7 @@ D/btleplug::droidplug::adapter: [btleplug] start_scan call_method OK
 
 ## Bug Report 3 — wake-after-close SIGSEGV (2026-09-22)
 
-Android Muse recording crash: binder-thread `SIGSEGV` via `QueueStream.doEvent` waking a `Waker` that a concurrent `pollNext` had already `close()`d. Fix: take-and-null `this.waker` under the lock before `wake()` (same for `SimpleFuture.wakeInternal`). App-bundled Java patched on neurofeed `bughunt/android_crashes`. Fork branch `bughunt/android_crashes` at rev `327de2cda7634248175414da093b019462252855` (not main); Cargo pin uses that rev. Optional later: new muse tag after device validation. Full write-up: `.ai/pending_bug_reports/btleplug_bugreport_3_queuestream_wake_race.md`.
+Historical. Upstream 0.13.3 fixed this inside `FnAdapter` (refcount + object
+monitor, commit `bd0e05d`), not by nulling the Java waker. `muse-0.13.4`
+does not re-apply take-and-null. Full write-up:
+`.ai/pending_bug_reports/btleplug_bugreport_3_queuestream_wake_race.md`.

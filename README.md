@@ -1,8 +1,8 @@
 # NeuroFeed
 
 Companion app for Interaxon Muse EEG headsets. Flutter UI, Rust BLE stack
-([muse-rs](https://github.com/windwerfer/muse-rs) `0.1.1`,
-[btleplug](https://github.com/windwerfer/btleplug) `0.12.0-muse-5`).
+([muse-rs](https://github.com/windwerfer/muse-rs) `0.1.2`,
+[btleplug](https://github.com/windwerfer/btleplug) tag `0.13.4-muse-1`).
 
 ## What it does
 

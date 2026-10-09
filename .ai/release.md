@@ -222,7 +222,7 @@ builds between releases keeps them warm.
 - **Release APK is debug-signed**: the signing secrets are missing. Set the
   four secrets above and re-run the workflow.
 - **`[patch]` silently ignored in Cargo**: the btleplug fork must stay at
-  `version = "0.11.8"` (see `.ai/btleplug.md`). `rust/Cargo.lock` references
+  `version = "0.13.4"` (see `.ai/btleplug.md`). `rust/Cargo.lock` references
   the fork commit; if Cargo rewrites it, keep it. The vendored `rlx-cpu` has
   the same trap: keep its `version = "0.2.13"` semver-compatible with the
   `rlx 0.2` constraint.
