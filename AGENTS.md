@@ -14,9 +14,9 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   breaks cargokit with `E0583`). Regenerate with
   `flutter_rust_bridge_codegen generate` when the FFI surface changes and
   commit both sides.
-- **muse-rs** — depend on `eugenehp/muse-rs` tag `0.1.0`, **patched** to
-  `windwerfer/muse-rs` tag `0.1.2` (`e4891ba`) via
-  `[patch.'https://github.com/eugenehp/muse-rs.git']`. See `.ai/muse-rs.md`.
+- **muse-rs** — direct git dep on `windwerfer/muse-rs` tag `0.1.2`
+  (`e4891ba`), fork of `eugenehp/muse-rs` `0.1.0`.
+  `default-features = false`. See `.ai/muse-rs.md`.
 - **btleplug** — `github.com/windwerfer/btleplug` tag **`0.13.4-muse-1`**
   (`36ac8b0`, branch `muse-0.13.4`), crate version **`0.13.4`** (must match
   `btleplug = "0.13.4"` or Cargo silently skips the patch). Upstream 0.13.4
@@ -268,8 +268,8 @@ assets/                     protocols.json, calibrations.json, features.json, au
 - **Cargo `[patch]` version trap**: patched crate `version` must be
   semver-compatible with the dep. btleplug fork is `0.13.4` matching
   `btleplug = "0.13.4"`. **Do not pin the fork back to `0.12.0` or `0.11.8`.** Patch
-  target is `crates-io` for btleplug; muse-rs patch target is the eugenehp
-  git URL. See `.ai/btleplug.md`.
+  target is `crates-io`. muse-rs is a direct git dep, not a patch. See
+  `.ai/btleplug.md`.
 - **Vendored `rlx-cpu`** (`vendor/rlx-cpu-0.2.14`): `[patch.crates-io]`,
   default `blas` cleared. Keep `version = "0.2.14"` compatible with
   `rlx-runtime 0.2.14`.

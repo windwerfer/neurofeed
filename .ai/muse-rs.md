@@ -1,19 +1,16 @@
 # muse-rs
 
-Muse BLE protocol + transport. We depend on upstream
-`github.com/eugenehp/muse-rs` tag `0.1.0`, then **patch** it to our fork:
+Muse BLE protocol + transport. Direct dependency on our fork of
+`eugenehp/muse-rs` `0.1.0`:
 
 ```toml
-muse-rs = { git = "https://github.com/eugenehp/muse-rs.git", tag = "0.1.0", default-features = false }
-
-[patch.'https://github.com/eugenehp/muse-rs.git']
-muse-rs = { git = "https://github.com/windwerfer/muse-rs.git", tag = "0.1.2" }
+muse-rs = { git = "https://github.com/windwerfer/muse-rs.git", tag = "0.1.2", default-features = false }
 ```
 
-The `[patch]` key must match the **dependency source URL**, not crates.io
-(unlike btleplug). Tag `0.1.2` is `e4891ba`. `third_party/muse-rs/` is the
-same commit. That crate depends on btleplug `0.13.4` and patches crates.io
-to `github.com/windwerfer/btleplug` tag `0.13.4-muse-1` (`36ac8b0`). Cargo
+Tag `0.1.2` is `e4891ba`. `third_party/muse-rs/` is the same commit.
+`default-features = false` keeps the TUI crates out. That crate depends
+on btleplug `0.13.4` and patches crates.io to
+`github.com/windwerfer/btleplug` tag `0.13.4-muse-1` (`36ac8b0`). Cargo
 ignores that patch while muse-rs is a dependency, so `rust/Cargo.toml`
 repeats it.
 
