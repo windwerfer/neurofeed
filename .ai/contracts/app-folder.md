@@ -20,10 +20,10 @@ Implementer notes that produced this: [../TODO/handoff-app-folder.md](../TODO/ha
 
 1. **Linux / Windows, default.** appFolder is `~/Documents/neurofeed`. If `xdg-user-dir DOCUMENTS` is missing, fails, is empty, is not absolute, or is `$HOME`, use that exact path and create `Documents` and `neurofeed`. If it returns another documents directory, appFolder is `{that}/neurofeed`. Cache is `appFolder/.cache`. Models are `appFolder/ai_models`. Export is `appFolder/export`.
 2. **Linux / Windows, folder changed.** Cache, models, and export follow the picked path.
-3. **Android, default.** appFolder is systemAppFolder. Cache is `systemAppFolder/.cache`. Models are `systemAppFolder/ai_models`. Export is `systemAppFolder/export`.
-4. **Android, folder changed** (including SAF `content://`). Export is `{appFolder}/export`. Cache and models stay in systemAppFolder. They do not move onto SAF.
+3. **Android / iOS / macOS, default.** appFolder is systemAppFolder. Cache is `systemAppFolder/.cache`. Models are `systemAppFolder/ai_models`. Export is `systemAppFolder/export`. On a sandboxed macOS app, systemAppFolder is the container the sandbox already allows (`getApplicationSupportDirectory()`).
+4. **Android / iOS / macOS, folder changed** (Android may be a SAF `content://` tree). Export is `{appFolder}/export`. Cache and models stay in systemAppFolder. They do not move onto the picked folder.
 
-macOS uses case 1–2. iOS uses case 3–4. No backwards compatibility with `~/Documents/meditation feedback` or a `/tmp` fallback. There is no migration of that old folder.
+Linux and Windows have no app container, so their default stays `~/Documents/neurofeed`. macOS keeps the App Sandbox, so it uses case 3–4 with Android and iOS. A macOS picked folder is a real path plus an app-scoped security-scoped bookmark (`session_folder_bookmark`). The bookmark is what lets the sandbox open that folder again on the next launch. The music folder has its own bookmark (`music_folder_bookmark`). No backwards compatibility with `~/Documents/meditation feedback` or a `/tmp` fallback. There is no migration of that old folder.
 
 ## Folder change
 
@@ -34,7 +34,7 @@ Applies to picking a folder and to **Reset to default folder** (shown when a cus
 - If the count is greater than 0, ask. Title: **Move existing files?** Confirm: **Move**. **No** switches the folder and leaves the files. Dismissing the dialog keeps the current folder. `tmp_*` in cache is still deleted when the folder actually changes.
 - What moves:
   - Linux / Windows: `session_*.neurofeed`, `recording_*.neurofeed`, `export/`, `.cache` (except `tmp_*`), and `ai_models/`.
-  - Android: history containers and `export/` only.
+  - Android / iOS / macOS: history containers and `export/` only.
 - Picking the current folder does nothing.
 - A destination that already has the same relative name fails before anything is overwritten.
 - Copy every item, check it, then delete sources. Stream the bytes. Do not read a whole container into RAM. If any copy fails: delete destination files created by this attempt, keep every source, and do not change `session_folder`.

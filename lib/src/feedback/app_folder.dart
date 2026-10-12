@@ -7,16 +7,26 @@ import 'package:path_provider/path_provider.dart';
 /// Where saved sessions, recordings, and export live, and where cache and
 /// AI models sit relative to that folder.
 ///
-/// Desktop (Linux, Windows, macOS) keeps cache and models inside the app
-/// folder. Mobile (Android, iOS) keeps them in the system app folder even
-/// when the user picks a different save folder, including a SAF tree.
+/// Linux and Windows keep cache and models inside the save folder. Android,
+/// iOS, and macOS keep them in the system app folder when the user picks a
+/// different folder for recordings. On macOS that system folder is the
+/// sandbox container.
 enum AppDataLayout { desktop, mobile }
 
-AppDataLayout currentAppDataLayout() => Platform.isAndroid || Platform.isIOS
-    ? AppDataLayout.mobile
-    : AppDataLayout.desktop;
+/// [AppDataLayout.mobile] is the contained layout: Android, iOS, and macOS.
+AppDataLayout layoutFor({
+  required bool android,
+  required bool ios,
+  required bool macos,
+}) => android || ios || macos ? AppDataLayout.mobile : AppDataLayout.desktop;
 
-/// Cache and `ai_models` move with the app folder on desktop only.
+AppDataLayout currentAppDataLayout() => layoutFor(
+  android: Platform.isAndroid,
+  ios: Platform.isIOS,
+  macos: Platform.isMacOS,
+);
+
+/// Cache and `ai_models` move with the save folder on Linux and Windows only.
 bool includesPrivateAppDirs({AppDataLayout? layout}) =>
     (layout ?? currentAppDataLayout()) == AppDataLayout.desktop;
 
@@ -58,8 +68,8 @@ Future<String?> readXdgDocumentsDir() {
 
 /// `$HOME/Documents/neurofeed`, creating `Documents` and `neurofeed`.
 ///
-/// [readXdg] is called on Linux and macOS when omitted. A throw from it is
-/// the same as a missing documents directory.
+/// [readXdg] is called on Linux when omitted. A throw from it is the same
+/// as a missing documents directory. macOS does not use this path.
 Future<Directory> desktopNeurofeedDir({
   Map<String, String>? env,
   Future<String?> Function()? readXdg,
@@ -70,9 +80,7 @@ Future<Directory> desktopNeurofeedDir({
     throw StateError('cannot resolve the home directory for the app folder');
   }
   String? xdg;
-  final reader =
-      readXdg ??
-      ((Platform.isLinux || Platform.isMacOS) ? readXdgDocumentsDir : null);
+  final reader = readXdg ?? (Platform.isLinux ? readXdgDocumentsDir : null);
   if (reader != null) {
     try {
       xdg = await reader();
@@ -93,8 +101,9 @@ String? _homeFrom(Map<String, String> env) {
   return null;
 }
 
-/// Default app folder. Mobile is [getApplicationSupportDirectory]. Desktop
-/// is [desktopNeurofeedDir].
+/// Default app folder. Android, iOS, and macOS use
+/// [getApplicationSupportDirectory] (the macOS sandbox container when the
+/// app is sandboxed). Linux and Windows use [desktopNeurofeedDir].
 Future<Directory> defaultAppFolder({
   AppDataLayout? layout,
   Future<Directory> Function()? readSystemAppFolder,

@@ -62,6 +62,22 @@ void main() {
     expect(dir.path.contains('meditation feedback'), isFalse);
   });
 
+  test('macOS uses the contained layout; Linux and Windows do not', () {
+    expect(
+      layoutFor(android: false, ios: false, macos: true),
+      AppDataLayout.mobile,
+    );
+    expect(
+      layoutFor(android: true, ios: false, macos: false),
+      AppDataLayout.mobile,
+    );
+    expect(
+      layoutFor(android: false, ios: false, macos: false),
+      AppDataLayout.desktop,
+    );
+    expect(includesPrivateAppDirs(layout: AppDataLayout.mobile), isFalse);
+  });
+
   test('mobile cache and models stay in the system app folder', () async {
     final support = await Directory.systemTemp.createTemp('nf_support_');
     addTearDown(() => support.delete(recursive: true));

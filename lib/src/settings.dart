@@ -168,6 +168,7 @@ class Settings extends ChangeNotifier {
   static const String _feedbackModeKey = 'feedback_mode';
   static const String _durationMinutesKey = 'duration_minutes';
   static const String _sessionFolderKey = 'session_folder';
+  static const String _sessionFolderBookmarkKey = 'session_folder_bookmark';
   static const String _recordStreamsKey = 'record_streams';
   static const String _recordAuxKey = 'record_aux_channels';
   static const String _museAuxKey = 'muse_aux_channels';
@@ -190,6 +191,7 @@ class Settings extends ChangeNotifier {
   static const String _warningSoundKey = 'warning_sound';
   static const String _lastCustomMinutesKey = 'last_custom_minutes';
   static const String _musicFolderKey = 'music_folder';
+  static const String _musicFolderBookmarkKey = 'music_folder_bookmark';
   static const String _musicMinCutoffKey = 'music_min_cutoff_hz';
   static const String _musicMaxCutoffKey = 'music_max_cutoff_hz';
   static const String _musicSlewKey = 'music_slew_seconds';
@@ -607,13 +609,21 @@ class Settings extends ChangeNotifier {
   /// other value is a real filesystem path. Null means "use the default".
   String? get sessionFolder => _prefs.getString(_sessionFolderKey);
 
-  Future<void> setSessionFolder(String value) async {
+  /// App-scoped security-scoped bookmark for [sessionFolder] on macOS.
+  String? get sessionFolderBookmark =>
+      _prefs.getString(_sessionFolderBookmarkKey);
+
+  /// [macBookmark] is stored with the path. A null bookmark clears any
+  /// previous one so a stale grant is not activated on the next launch.
+  Future<void> setSessionFolder(String value, {String? macBookmark}) async {
     await _prefs.setString(_sessionFolderKey, value);
+    await _storeBookmark(_sessionFolderBookmarkKey, macBookmark);
     notifyListeners();
   }
 
   Future<void> clearSessionFolder() async {
     await _prefs.remove(_sessionFolderKey);
+    await _prefs.remove(_sessionFolderBookmarkKey);
     notifyListeners();
   }
 
@@ -962,14 +972,29 @@ class Settings extends ChangeNotifier {
   /// any other value is a real filesystem path. Null means no music feedback.
   String? get musicFolder => _prefs.getString(_musicFolderKey);
 
-  Future<void> setMusicFolder(String value) async {
+  /// App-scoped security-scoped bookmark for [musicFolder] on macOS.
+  String? get musicFolderBookmark => _prefs.getString(_musicFolderBookmarkKey);
+
+  /// [macBookmark] is stored with the path. A null bookmark clears any
+  /// previous one.
+  Future<void> setMusicFolder(String value, {String? macBookmark}) async {
     await _prefs.setString(_musicFolderKey, value);
+    await _storeBookmark(_musicFolderBookmarkKey, macBookmark);
     notifyListeners();
   }
 
   Future<void> clearMusicFolder() async {
     await _prefs.remove(_musicFolderKey);
+    await _prefs.remove(_musicFolderBookmarkKey);
     notifyListeners();
+  }
+
+  Future<void> _storeBookmark(String key, String? bookmark) async {
+    if (bookmark != null && bookmark.isNotEmpty) {
+      await _prefs.setString(key, bookmark);
+    } else {
+      await _prefs.remove(key);
+    }
   }
 
   static const String _appearanceKey = 'theme_mode';

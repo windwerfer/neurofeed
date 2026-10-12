@@ -1,0 +1,95 @@
+name: release-macos
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to attach the zip to (empty = build only, no upload)
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.41.7"
+  RUST_VERSION: "1.97.1"
+
+jobs:
+  macos:
+    name: Build macOS bundle
+    # Hosted macOS runners are Apple Silicon. The zip is arm64 only.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Init model-engine submodules
+        run: git submodule update --init third_party/reve-rs third_party/luna-rs
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: true
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: CocoaPods
+        run: |
+          if ! command -v pod >/dev/null 2>&1; then
+            sudo gem install cocoapods
+          fi
+          pod --version
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          if [ -n "$TAG" ]; then
+            BASE="${TAG#v}"
+            VERSION="${BASE%%[-_]*}"
+          else
+            VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+            VERSION="${VERSION%%+*}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Build macOS release
+        shell: bash
+        run: |
+          flutter pub get
+          flutter create --platforms=macos --org org.windwerfer .
+          ./scripts/prepare-macos-runner.sh
+          flutter build macos --release
+
+      - name: Zip bundle
+        shell: bash
+        run: |
+          APP="build/macos/Build/Products/Release/neurofeed.app"
+          if [ ! -d "$APP" ]; then
+            echo "missing $APP" >&2
+            ls -la build/macos/Build/Products/Release >&2 || true
+            exit 1
+          fi
+          ditto -c -k --keepParent "$APP" \
+            "neurofeed-${{ steps.version.outputs.version }}-macos-arm64.zip"
+
+      - name: Upload to release
+        if: ${{ github.event.release.tag_name != '' || inputs.tag != '' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          gh release upload "$TAG" "neurofeed-${{ steps.version.outputs.version }}-macos-arm64.zip" --clobber

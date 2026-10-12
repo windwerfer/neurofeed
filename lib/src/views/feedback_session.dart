@@ -17,6 +17,7 @@ import 'package:neurofeed/src/connect_source.dart';
 import 'package:neurofeed/src/connect_window.dart';
 import 'package:neurofeed/src/feedback/feature_override.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
+import 'package:neurofeed/src/feedback/mac_bookmarks.dart';
 import 'package:neurofeed/src/feedback/session_leave.dart';
 import 'package:neurofeed/src/feedback/guard_start_gate.dart';
 import 'package:neurofeed/src/feedback/guardrail_mode.dart';
@@ -1016,7 +1017,29 @@ class _FeedbackTile extends ConsumerWidget {
             if (folder == null) {
               return;
             }
-            await settings.setMusicFolder(folder);
+            try {
+              await saveMusicFolder(settings, folder);
+            } on MacBookmarkException catch (e) {
+              debugPrint('[music] bookmark failed: $e');
+              if (!context.mounted) return;
+              await showDialog<void>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Could not use that folder'),
+                  content: const Text(
+                    'macOS did not grant lasting access to that folder. '
+                    'The music folder was not changed.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+              return;
+            }
             final count = await ref.read(audioServiceProvider).loadMusic();
             if (count == 0) {
               await settings.clearMusicFolder();

@@ -52,7 +52,10 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   `ensureBtleplugReady()` before scan/connect. Java under
   `android/app/src/main/java/com/nonpolynomial/btleplug/` and
   `io/github/gedgygedgy/rust/`.
-- **iOS/macOS**: not the current target.
+- **macOS**: CI-only (`release-macos.yml`), Apple Silicon, App Sandbox on.
+  `flutter create` then `scripts/prepare-macos-runner.sh` (sandbox
+  entitlements, Bluetooth and local-network usage strings, security-scoped
+  bookmark channel). Ad-hoc signed, not notarized. iOS is not a target.
 - **Windows**: CI-only (`release-windows.yml`). Committed
   `windows/CMakeLists.txt` (MSVC workaround); the rest is generated in CI.
 
@@ -335,7 +338,15 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `permission_handler_windows`.
 - **Android ships arm64-only.** No x86 emulator / armeabi-v7a.
 - **Release version is tag-derived**, not `pubspec.yaml`. Logic in
-  `release-{android,windows,linux}.yml`.
+  `release-{android,windows,linux,macos}.yml`.
+- **macOS runner is generated in CI.** Do not commit `macos/`. Keep the App
+  Sandbox on. `scripts/prepare-macos-runner.sh` writes the sandbox
+  entitlements (network, Bluetooth, user-selected files, app-scoped
+  bookmarks) and copies `scripts/macos/MainFlutterWindow.swift`. Default
+  save folder is the sandbox container, same split as Android: a picked
+  folder holds recordings and export; cache and AI models stay in the
+  container. A picked path without its bookmark will not open on the next
+  launch. Gatekeeper still blocks the first open of the ad-hoc zip.
 - **Android BLE init** must happen from JNI before scan or
   `"Droidplug has not been initialized"`.
 - **Muse startup** is `connect_with_options` → `handle.start(true, true)`
@@ -384,15 +395,18 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `recording_active`). Feedback refuses Record. Record does not keep
   pre-click tmp bytes.
 - **App folder**: [`.ai/contracts/app-folder.md`](.ai/contracts/app-folder.md).
-  Desktop default is `~/Documents/neurofeed` (create `Documents` and
-  `neurofeed` when `xdg-user-dir DOCUMENTS` is missing, fails, empty, or
-  `$HOME`). Never `/tmp`. Never `getApplicationCacheDirectory`. Android
+  Linux and Windows default is `~/Documents/neurofeed` (create `Documents`
+  and `neurofeed` when `xdg-user-dir DOCUMENTS` is missing, fails, empty,
+  or `$HOME`). macOS default is the sandbox container
+  (`getApplicationSupportDirectory()`), same as Android and iOS. Never
+  `/tmp`. Never `getApplicationCacheDirectory`. On Android, iOS, and macOS,
   cache and `ai_models` stay in `getApplicationSupportDirectory()` even
-  when the save folder is SAF. Export is always `{app folder}/export`.
+  when the save folder is a picked path or a SAF tree. Export is always
+  `{app folder}/export`.
   A folder change asks **Move existing files?** only when something would
-  move. **Reset to default folder** uses the same dialog. Desktop moves
-  history containers, `export/`, `.cache`, and `ai_models/`. Android moves
-  history containers and `export/` only. Cache `tmp_*` does not count and
+  move. **Reset to default folder** uses the same dialog. Linux and Windows move
+  history containers, `export/`, `.cache`, and `ai_models/`. Android, iOS,
+  and macOS move history containers and `export/` only. Cache `tmp_*` does not count and
   is deleted. Refuse while a session or recording is open. The card shows
   the current folder. Settings card is **Save files to folder**.
 - **Signal gate**: before calibration, gate pads green for 3 s; after

@@ -8,7 +8,8 @@ import 'package:neurofeed/src/settings.dart';
 
 /// Default app folder when the user has not picked one.
 ///
-/// Desktop: `~/Documents/neurofeed`. Mobile: the system app support directory.
+/// Linux and Windows: `~/Documents/neurofeed`. Android, iOS, and macOS: the
+/// system app support directory (the sandbox container on macOS).
 Future<Directory> defaultSessionDir({
   AppDataLayout? layout,
   Future<Directory> Function()? readSystemAppFolder,

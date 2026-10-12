@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neurofeed/src/audio/audio_service.dart';
+import 'package:neurofeed/src/feedback/mac_bookmarks.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/settings.dart';
 
@@ -89,7 +90,29 @@ class MusicSettingsPanelState extends ConsumerState<MusicSettingsPanel> {
     if (folder == null) {
       return;
     }
-    await widget.settings.setMusicFolder(folder);
+    try {
+      await saveMusicFolder(widget.settings, folder);
+    } on MacBookmarkException catch (e) {
+      debugPrint('[music] bookmark failed: $e');
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Could not use that folder'),
+          content: const Text(
+            'macOS did not grant lasting access to that folder. '
+            'The music folder was not changed.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     if (!mounted) {
       return;
     }

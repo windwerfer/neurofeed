@@ -9,12 +9,14 @@ workflow file**, so you can enable/disable them individually (rename a file to
 | Android | `release-android.yml` | `release` (published) | signed `neurofeed-<ver>.apk` |
 | Linux | `release-linux.yml` | `release` (published) | `neurofeed-<ver>-linux-x86_64.tar.gz` + best-effort `.AppImage` |
 | Windows | `release-windows.yml` | `release` (published) | `neurofeed-<ver>-windows-x64.zip` |
+| macOS | `release-macos.yml` | `release` (published) | `neurofeed-<ver>-macos-arm64.zip` |
 | Reproducibility check | `repro-android.yml` | manual (`workflow_dispatch`) | byte-identical APK verification |
 | Shared Android build | `_build-apk.yml` | called by Android workflows (do not trigger) | — |
 
-All three release workflows also accept `workflow_dispatch` with an optional
-`tag` input: leave it empty to do a **build-only test run** (nothing is
-uploaded), or fill it in to attach assets to an existing release.
+The Android, Linux, Windows, and macOS release workflows also accept
+`workflow_dispatch` with an optional `tag` input: leave it empty to do a
+**build-only test run** (nothing is uploaded), or fill it in to attach assets
+to an existing release.
 
 When a release is **published**, each workflow builds the tag's commit and
 uploads its assets to that release with `gh release upload --clobber`
@@ -27,7 +29,7 @@ Release assets are named after the **release tag**, not `pubspec.yaml`:
 - The **base version** is everything before the first `-` or `_` in the tag
   (a leading `v` is stripped): tag `0.0.11-feedback-01` →
   `neurofeed-0.0.11.apk`, `neurofeed-0.0.11-linux-x86_64.tar.gz`,
-  `neurofeed-0.0.11-windows-x64.zip`.
+  `neurofeed-0.0.11-windows-x64.zip`, `neurofeed-0.0.11-macos-arm64.zip`.
 - The **APK version code** (`--build-number`) is the trailing digits of the
   tag's channel suffix (`-feedback-01` → `1`), and the **version name**
   (`--build-name`) is the base version — both are baked into the APK by
@@ -35,7 +37,7 @@ Release assets are named after the **release tag**, not `pubspec.yaml`:
   part of `pubspec.yaml`.
 - A `workflow_dispatch` with an **empty** `tag` (build-only test run) falls
   back to the `pubspec.yaml` version so the zip/tarball names stay sane.
-- Keep the extraction logic identical in `release-{android,windows,linux}.yml`;
+- Keep the extraction logic identical in `release-{android,windows,linux,macos}.yml`;
   android resolves it once in a `version` job shared by the build (`_build-apk.yml`)
   and the attach job.
 
@@ -134,7 +136,7 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
     x86_64) — no network fetch needed for it. `reve-rs` is a **git dep**
     (`rust/Cargo.toml`: rev `9c8d856…` on upstream `eugenehp`), so cargo
     fetches it from GitHub. Spur A CBraMod uses Candle (crates.io) and does
-    not need a git model engine. The three build workflows also init
+    not need a git model engine. The release build workflows also init
     the `third_party/reve-rs` submodule right after checkout, but
     that is only for a reference copy — building does not require it. The
     init is a **targeted init, not `submodules: true`**:
@@ -205,6 +207,48 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
 - Audio moved to flutter_soloud; the just_audio/media_kit (`libmpv`) deps were
   removed from `pubspec.yaml`. If you do not care about Windows, delete
   `release-windows.yml`.
+
+## macOS (optional, untested on a Mac)
+
+- GitHub-hosted `macos-latest` is Apple Silicon. The zip is **arm64 only**.
+  Intel Macs cannot run it. A universal binary is not built.
+- The workflow scaffolds `macos/` with `flutter create --platforms=macos` and
+  then runs `scripts/prepare-macos-runner.sh`. Nothing under `macos/` is
+  committed. The script keeps the App Sandbox **on** and adds the sandbox
+  entitlements this app needs: outgoing and incoming network (model
+  download, Crown OSC, LSL), Bluetooth, user-selected read/write, and
+  app-scoped bookmarks. Debug also keeps `allow-jit`. It writes
+  `NSBluetoothAlwaysUsageDescription`,
+  `NSBluetoothPeripheralUsageDescription`, and
+  `NSLocalNetworkUsageDescription` into `Info.plist`, and copies
+  `scripts/macos/MainFlutterWindow.swift` (the bookmark channel).
+- The default save folder is the sandbox container
+  (`getApplicationSupportDirectory()`), the directory macOS already grants
+  the app. **Save files to folder** still lets the user pick another folder
+  for sessions, recordings, and export. Cache and AI models stay in the
+  container. That is the Android / iOS split. Linux and Windows stay on
+  `~/Documents/neurofeed` because they have no container. A picked macOS
+  folder is stored with an app-scoped security-scoped bookmark so the
+  sandbox can open it again on the next launch. The music folder has its
+  own bookmark.
+- `rust_builder/macos/rust_lib_neurofeed.podspec` links Foundation,
+  CoreFoundation, CoreBluetooth, AppKit, and Security. Cargo's `-framework`
+  flags do not reach the Xcode link of the staticlib.
+- `neurofeed-<ver>-macos-arm64.zip` is the `neurofeed.app` bundle (`ditto`,
+  so symlinks and the code signature survive). Unzip and open `neurofeed.app`.
+- The build is **ad-hoc signed and not notarized**. There is no Apple
+  Developer certificate in CI. Gatekeeper quarantines a downloaded app:
+  right-click `neurofeed.app` → **Open**, or run
+  `xattr -cr neurofeed.app` on the unzipped bundle. A double-click alone
+  is refused. Notarization needs an Apple Developer account and is not
+  wired up.
+- Nobody has launched this bundle on a Mac. The workflow is the compile
+  check. Simulator, files, and audio are the same desktop code as Linux and
+  Windows. Muse BLE uses the macOS path already in muse-rs (wait until
+  CoreBluetooth is powered on) plus the usage string above; that path has
+  not been run from this app.
+- Hosted macOS minutes cost more than Linux minutes. If you do not want the
+  build, delete `release-macos.yml`.
 
 ## Caching
 

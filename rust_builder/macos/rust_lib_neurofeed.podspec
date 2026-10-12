@@ -21,7 +21,8 @@ A new Flutter FFI plugin project.
   s.source_files     = 'Classes/**/*'
   s.dependency 'FlutterMacOS'
 
-  s.platform = :osx, '10.11'
+  s.platform = :osx, '10.15'
+  s.frameworks = 'Foundation', 'CoreFoundation', 'CoreBluetooth', 'AppKit', 'Security'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
   s.swift_version = '5.0'
 
@@ -39,6 +40,6 @@ A new Flutter FFI plugin project.
     'DEFINES_MODULE' => 'YES',
     # Flutter.framework does not contain a i386 slice.
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386',
-    'OTHER_LDFLAGS' => '-force_load ${BUILT_PRODUCTS_DIR}/librust_lib_neurofeed.a',
+    'OTHER_LDFLAGS' => '-force_load ${BUILT_PRODUCTS_DIR}/librust_lib_neurofeed.a -framework Foundation -framework CoreFoundation -framework CoreBluetooth -framework AppKit -framework Security',
   }
 end

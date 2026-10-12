@@ -12,6 +12,7 @@ import 'package:neurofeed/src/monitor/monitor_providers.dart';
 import 'package:neurofeed/src/monitor/views/recording_save_discard.dart';
 import 'package:neurofeed/src/connect_window.dart';
 import 'package:neurofeed/src/feedback/crash_recovery.dart';
+import 'package:neurofeed/src/feedback/mac_bookmarks.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/freeform_insets.dart';
 import 'package:neurofeed/src/monitor/recording/crash_recovery.dart';
@@ -335,6 +336,7 @@ Future<void> main() async {
   }
   await requestBlePermissions();
   final settings = await Settings.load();
+  await activateMacFolderBookmarks(settings);
   final container = ProviderContainer(
     overrides: [
       appStateProvider.overrideWith((ref) => AppStateNotifier(settings)),

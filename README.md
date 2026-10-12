@@ -86,8 +86,11 @@ one-sided PSD; band power is its sum over the band (a 10 µV sine → 50 µV²).
 
 ## Status
 
-Android 10+ **arm64-v8a only** (no x86 emulator, no 32-bit). Linux and
-Windows builds exist in CI; iOS/macOS are not a current target.
+Android 10+ **arm64-v8a only** (no x86 emulator, no 32-bit). Linux, Windows,
+and macOS (Apple Silicon) builds exist in CI. The macOS app stays sandboxed:
+its default save folder is the container macOS grants, and a chosen folder
+is only for recordings. iOS is not a current target. The macOS zip is not
+notarized; the first open needs a right-click → Open.
 
 Muse (Classic, Athena) and Crown (OSC, with LAN discovery) work for the live
 monitor, recordings and feedback sessions. Athena's extra optical channels are

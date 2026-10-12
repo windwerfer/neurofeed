@@ -12,6 +12,7 @@ import 'package:neurofeed/src/device_type_switch.dart';
 import 'package:neurofeed/src/feedback/app_folder.dart';
 import 'package:neurofeed/src/feedback/feedback_state.dart';
 import 'package:neurofeed/src/feedback/folder_move.dart';
+import 'package:neurofeed/src/feedback/mac_bookmarks.dart';
 import 'package:neurofeed/src/feedback/session_storage.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/monitor/monitor_providers.dart';
@@ -117,6 +118,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   final _searchController = TextEditingController();
   final _searchFocus = FocusNode();
   final _cardKeys = <String, GlobalKey>{};
+  String? _macBookmarkForPick;
 
   @override
   void dispose() {
@@ -190,6 +192,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   }
 
   Future<String?> _pickFolder() async {
+    _macBookmarkForPick = null;
     if (Platform.isAndroid) {
       return SafSessionStorage.pickFolder();
     }
@@ -197,7 +200,34 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
       initialDirectory: null,
       confirmButtonText: 'Choose this folder',
     );
+    if (dir == null || dir.isEmpty || !Platform.isMacOS) return dir;
+    try {
+      _macBookmarkForPick = await macBookmarkForPath(dir);
+    } on MacBookmarkException catch (e) {
+      debugPrint('[folder] bookmark failed: $e');
+      if (mounted) await _showFolderAccessDenied();
+      return null;
+    }
     return dir;
+  }
+
+  Future<void> _showFolderAccessDenied() {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Could not use that folder'),
+        content: const Text(
+          'macOS did not grant lasting access to that folder. '
+          'The save folder was not changed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   FolderChangeBlock _block(WidgetRef ref) {
@@ -292,7 +322,13 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
       if (clearPref && settings.sessionFolder != null) {
         await settings.clearSessionFolder();
         _invalidateStores(ref);
+      } else if (_macBookmarkForPick != null) {
+        await settings.setSessionFolder(
+          folder,
+          macBookmark: _macBookmarkForPick,
+        );
       }
+      _macBookmarkForPick = null;
       return;
     }
     final include = includesPrivateAppDirs();
@@ -328,7 +364,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
           ],
         ),
       );
-      if (choice == null) return;
+      if (choice == null) {
+        _macBookmarkForPick = null;
+        return;
+      }
       migrate = choice;
     }
     if (!context.mounted) return;
@@ -348,8 +387,12 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         if (clearPref) {
           await settings.clearSessionFolder();
         } else {
-          await settings.setSessionFolder(folder);
+          await settings.setSessionFolder(
+            folder,
+            macBookmark: _macBookmarkForPick,
+          );
         }
+        _macBookmarkForPick = null;
       });
     } catch (e) {
       debugPrint('[folder] change failed: $e');
@@ -734,7 +777,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   ) {
     final theme = Theme.of(context);
     final folder = settings.sessionFolder;
-    final mobile = Platform.isAndroid || Platform.isIOS;
+    final privateStay = !includesPrivateAppDirs();
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
@@ -770,7 +813,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
               folder == null
                   ? 'Using the default folder. Tap to choose where '
                         'session and recording files are stored.'
-                  : mobile
+                  : privateStay
                   ? 'Files are saved to the folder above. Cache and AI '
                         'models stay in the app\'s private folder.'
                   : 'Files are saved to the folder above, with cache and '
