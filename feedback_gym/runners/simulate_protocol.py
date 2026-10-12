@@ -164,6 +164,8 @@ def simulate_protocol(
             result["notes"].append(f"guard feature {feat_id} missing from corpus")
         else:
             band_math = feat_id.startswith("band.")
+            # Protocol guard.deltaRail (default True, app ProtocolGuard).
+            delta_rail = bool(guard_cfg.get("deltaRail", True))
             play_vals = np.asarray(series[play], dtype=float)
             finite = np.isfinite(play_vals)
             if not finite.any():
