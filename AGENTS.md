@@ -63,7 +63,9 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   sandbox has no network. Runtime `org.freedesktop.Platform//25.08`.
   App id `org.windwerfer.neurofeed`. The app git source sets
   `disable-submodules` (cargo git deps are vendored; `third_party/` is not
-  built). When `FLATPAK_ID` is set, the save folder follows the
+  built). `liblsl` 0.13.2+0 clones pugixml at build time; `flatpak/foreign.json`
+  vendors pugixml v1.15 into that package dir so the sandbox stays offline.
+  When `FLATPAK_ID` is set, the save folder follows the
   Android/macOS container rule.
 
 ## Core rules (do / don't)

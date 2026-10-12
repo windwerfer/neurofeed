@@ -230,6 +230,11 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
 - Rust is the same pin as the other workflows (`1.97.1`). flatpak-flutter
   installs that toolchain and points `stable` at it, because cargokit
   calls `rustup run stable`.
+- `liblsl` 0.13.2+0 compiles during `flutter build` and, if
+  `src/pugixml` is missing, clones pugixml v1.15. The sandbox has no
+  network, so `flatpak/foreign.json` places that tarball at
+  `.pub-cache/hosted/pub.dev/liblsl-0.13.2+0/src/pugixml`. Move that
+  `dest` when the locked `liblsl` version changes.
 
 ## Windows (optional)
 

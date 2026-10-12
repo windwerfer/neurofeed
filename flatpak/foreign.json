@@ -2,5 +2,19 @@
   "rust_lib": {
     "cargo_locks": ["rust"],
     "extra_pubspecs": ["rust_builder/cargokit/build_tool"]
+  },
+  "liblsl": {
+    "manifest": {
+      "sources": [
+        {
+          "type": "archive",
+          "archive-type": "tar-gzip",
+          "url": "https://github.com/zeux/pugixml/archive/refs/tags/v1.15.tar.gz",
+          "sha256": "b39647064d9e28297a34278bfb897092bf33b7c487906ddfc094c9e8868bddcb",
+          "strip-components": 1,
+          "dest": ".pub-cache/hosted/pub.dev/liblsl-0.13.2+0/src/pugixml"
+        }
+      ]
+    }
   }
 }
