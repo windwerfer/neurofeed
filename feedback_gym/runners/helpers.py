@@ -421,9 +421,73 @@ def load_corpus(path: Path) -> dict[str, Any]:
     cal = int(out.get("cal_n", [90])[0])
     out["cal_n"] = cal
     out["labels"] = out.get("labels")
+    if "label_valid" in out:
+        out = drop_invalid_label_rows(out)
     if "cal_starts" in out or "cal_lens" in out:
         # Fail fast on a malformed per-recording calibration block.
         build_cal_plan(out)
+    return out
+
+
+def drop_rows(corpus: dict[str, Any], keep: np.ndarray, *, protect_cal: bool) -> dict[str, Any]:
+    """Subset every (N,)-leading array to ``keep`` and remap ``cal_starts``/``cal_lens``.
+
+    ``protect_cal=True`` keeps every calibration row (label filtering); ``False``
+    lets dropped rows shrink a recording's cal block (app gating: the app never
+    feeds a dirty sample into its baseline). A block that loses every row gets
+    ``cal_len = 0`` (that recording is then skipped by the per-recording plan).
+    Recordings that lose every row disappear from ``cal_starts``/``cal_lens``.
+    """
+    n = corpus_length(corpus)
+    keep = np.asarray(keep, dtype=bool).copy()
+    if keep.shape != (n,):
+        raise ValueError("keep must have shape (N,)")
+    starts = corpus.get("cal_starts")
+    lens = corpus.get("cal_lens")
+    per_rec = starts is not None and lens is not None
+    if protect_cal:
+        if per_rec:
+            for s0, ln in zip(np.asarray(starts), np.asarray(lens)):
+                keep[int(s0) : int(s0) + int(ln)] = True
+        elif "cal_n" in corpus:
+            keep[: int(corpus["cal_n"])] = True
+    out = dict(corpus)
+    for k, v in corpus.items():
+        if isinstance(v, np.ndarray) and v.ndim >= 1 and v.shape[0] == n and k not in ("cal_starts", "cal_lens"):
+            out[k] = v[keep]
+    if per_rec and corpus.get("recording_id") is not None:
+        old_order = unique_in_order(corpus["recording_id"])
+        newpos = np.cumsum(keep) - 1
+        first: dict[str, int] = {}
+        for i, r in enumerate(out["recording_id"]):
+            first.setdefault(str(r), i)
+        ns, nl = [], []
+        for r, s0, ln in zip(old_order, np.asarray(starts), np.asarray(lens)):
+            if r not in first:
+                continue  # recording lost every row
+            blk = np.arange(int(s0), int(s0) + int(ln))
+            kept = blk[keep[blk]] if ln else blk
+            if int(ln) > 0 and kept.size:
+                ns.append(int(newpos[kept[0]]))
+                nl.append(int(kept.size))
+            else:
+                ns.append(first[r])
+                nl.append(0)
+        out["cal_starts"] = np.asarray(ns, dtype=np.int32)
+        out["cal_lens"] = np.asarray(nl, dtype=np.int32)
+    elif not protect_cal and "cal_n" in corpus:
+        out["cal_n"] = max(1, int(keep[: int(corpus["cal_n"])].sum()))
+    return out
+
+
+def drop_invalid_label_rows(corpus: dict[str, Any]) -> dict[str, Any]:
+    """Drop rows whose ``label_valid`` is False (e.g. ambiguous probes), keeping cal rows."""
+    keep = np.asarray(corpus["label_valid"], dtype=bool)
+    if keep.shape != (corpus_length(corpus),):
+        raise ValueError("label_valid must have shape (N,)")
+    out = drop_rows(corpus, keep, protect_cal=True)
+    out.pop("label_valid", None)
+    out["rows_dropped_label_invalid"] = int(corpus_length(corpus) - corpus_length(out))
     return out
 
 
