@@ -114,6 +114,7 @@ Map<String, Object?> _meta({
   List<Map<String, Object?>> audioEvents = const [],
   List<Map<String, Object?>> annotations = const [],
   num elapsed = 80,
+  Map<String, Object?>? protocolJson,
 }) {
   return {
     'formatVersion': 6,
@@ -133,10 +134,25 @@ Map<String, Object?> _meta({
       'durationMinutes': 15,
       'sound': 'Ambient Drone',
       if (sessionSettings != null) 'sessionSettings': sessionSettings,
+      if (protocolJson != null) 'protocolJson': protocolJson,
       if (audioEvents.isNotEmpty) 'audioEvents': audioEvents,
     },
   };
 }
+
+/// What an old `concentration` session ran (relative alpha + beta ceiling,
+/// AI guard). Saved snapshot wins over the openMonitor alias.
+const _concentrationSnapshot = <String, Object?>{
+  'id': 'concentration',
+  'calibration': 'eyes-closed-01',
+  'reward': {
+    'feature': 'band.alpha',
+    'inhibit': [
+      {'type': 'betaCeiling', 'max': 0.25},
+    ],
+  },
+  'guard': {'feature': 'ai.a_vig'},
+};
 
 SessionTrust _trust(List<ComputedFrame> frames) => readSessionTrust(
   frames: frames,
@@ -193,6 +209,7 @@ void main() {
       () => _write(
         _meta(
           protocol: 'concentration',
+          protocolJson: _concentrationSnapshot,
           sessionSettings: {
             'guardFeature': 'ai.a_vig',
             'inhibitCeilingOverrides': {'beta': 0.42},
@@ -366,6 +383,7 @@ void main() {
       () => _write(
         _meta(
           protocol: 'concentration',
+          protocolJson: _concentrationSnapshot,
           elapsed: 1,
           sessionSettings: {'guardFeature': 'band.delta'},
         ),
