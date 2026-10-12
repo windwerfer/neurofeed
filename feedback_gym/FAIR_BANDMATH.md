@@ -709,7 +709,7 @@ eye-movement features
 
 ## Gating (2026-10-12, app-matching gating now ON by default; `--no-gate` to disable)
 
-Gym runners now score only rows the app would score live: pad quality ch_af7_q/ch_af8_q >= 80 with per-pad band re-aggregation, and the movement gate (imu_movement > 0.05 g). No corpus has an IMU column, so the movement gate is **not testable offline**; the head-movement hypothesis stays open (needs a Muse recording with accelerometer). Pad gate alone catches 58% of Lee head-turn rows (MVO) vs 12% of their clean-rest rows, 28% of blinks, 14-15% of jaw/chew. Rows removed: Lee artifacts 12%, EO/EC 7%, UNIVERSE 11%, ds001787 5%, BOAS 31%, Muse Sleep-Onset 26% (lab-only, aggregate). Full tables: `results/20261012T083253Z_gating/gating_tables.md`.
+Gym runners now score only rows the app would score live: pad quality ch_af7_q/ch_af8_q >= 80 with per-pad band re-aggregation, and the movement gate (imu_movement > 0.05 g). No corpus has an IMU column, so the movement gate is **not testable offline**; the head-movement hypothesis stays open (needs a Muse recording with accelerometer). Pad gate alone catches 58% of Lee head-turn rows (MVO) vs 12% of their clean-rest rows, 28% of blinks, 14-15% of jaw/chew. Rows removed: Lee artifacts 12%, EO/EC 7%, UNIVERSE 11%, ds001787 5%, BOAS 31%, Muse Sleep-Onset 26% (lab-only, aggregate), Rodriguez-Larios 2021 15%. Full tables: `results/20261012T083253Z_gating/gating_tables.md`.
 
 ### Relative delta (app 2ce67ce: rail ceiling 0.80) under gating
 Gated, per-recording AUC for sleep: BOAS W vs N1 0.55, Muse Sleep-Onset wake vs pre-N2 0.36 (inverted). Fixed 0.80 rail warn rate wake/sleepy: BOAS 0.091/0.104, Muse Sleep-Onset 0.033/0.007, ds001787 (all awake) 0.15. On Lee cued artifacts it fires 4% vs 0.7% clean, so it is an artifact detector, not a drowsiness signal. **Recommendation: remove relative-delta as a sleep rail** (ai.a_vig gated: BOAS AUC 0.74, Muse Sleep-Onset 0.90 is the guard to keep).
@@ -728,3 +728,5 @@ Per-recording AUC in the sleep direction, median:
 | absolute delta | 0.44 (inverted) | 0.23 (inverted) | 0.55 |
 
 Takeaways: AI heads are the only guard that holds on both new real-headband sleep-onset corpora. Relative theta is the only band feature with the right sign on both (0.58-0.60; weak). Alpha/delta-based band guards flip sign across corpora (Muse Sleep-Onset wake is eyes-closed alpha-rich, BOAS wake is mixed), so they are not dependable as sleep guards. Reward-lane proposal: rail on ai.a_vig (P>0.5, as at b676f86), drop the relative-delta rail, keep relative theta only as a secondary display, not a guard.
+
+Rodriguez-Larios 2021 (OSF 3uszv, 55 scored recordings, on-task vs MW, gated): every band feature per-rec AUC 0.50-0.51. Band features carry no mind-wandering signal on a Muse-proxy montage.
