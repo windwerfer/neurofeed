@@ -315,3 +315,39 @@ def test_simulate_protocol_reads_delta_rail_from_catalog(tmp_path):
     assert g_on["delta_rail"] is True
     assert g_on["warn_rate"] == 1.0
     assert g_on["label_align_combined"] == 0.5
+
+
+def test_guard_threshold_mode_mirrors_app(tmp_path):
+    """ai.* guards default to a fixed P cut (app defaultAiGuardFixedThreshold);
+    band.* guards always use the percentile of calibration."""
+    from runners.simulate_protocol import (
+        AI_GUARD_FIXED_THRESHOLD,
+        guard_threshold_mode_for,
+    )
+
+    assert AI_GUARD_FIXED_THRESHOLD == 0.50
+    assert guard_threshold_mode_for("ai.a_vig") == "fixed"
+    assert guard_threshold_mode_for("ai.a_vig", "percentile") == "percentile"
+    assert guard_threshold_mode_for("band.delta", "fixed") == "percentile"
+    path = generate_synthetic_corpus(tmp_path, n=400, seed=5)
+    corpus = load_corpus(path)
+    grids = load_grids()
+    proto = {"id": "user.t", "guard": {"feature": "ai.a_vig", "deltaRail": False}}
+    g = simulate_protocol(proto, corpus, grids)["parts"]["guard"]
+    assert g["threshold_mode"] == "fixed"
+    assert g["threshold"] == 0.5
+    g2 = simulate_protocol(proto, corpus, grids, guard_fixed_threshold=0.7)["parts"]["guard"]
+    assert g2["threshold"] == 0.7
+    assert g2["warn_feature_rate"] <= g["warn_feature_rate"]
+    gp = simulate_protocol(
+        {"id": "user.t", "guard": {"feature": "ai.a_vig", "thresholdMode": "percentile"}},
+        corpus,
+        grids,
+    )["parts"]["guard"]
+    assert gp["threshold_mode"] == "percentile"
+    gb = simulate_protocol(
+        {"id": "user.b", "guard": {"feature": "band.delta", "thresholdMode": "fixed"}},
+        corpus,
+        grids,
+    )["parts"]["guard"]
+    assert gb["threshold_mode"] == "percentile"

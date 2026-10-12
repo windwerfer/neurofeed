@@ -108,18 +108,63 @@ class GuardLane {
   /// may warn. [ceilingOver] is computed (and recorded) either way.
   bool deltaRail = true;
 
+  String thresholdMode = guardThresholdModePercentile;
+  double fixedThreshold = defaultAiGuardFixedThreshold;
+
+  bool get fixedMode => !bandMath && thresholdMode == guardThresholdModeFixed;
+
   void configure({
     required bool enabled,
     required bool bandMath,
     required String featureId,
     required List<int> deltaElectrodes,
     bool deltaRail = true,
+    String thresholdMode = guardThresholdModePercentile,
+    double fixedThreshold = defaultAiGuardFixedThreshold,
   }) {
+    final wasFixed = fixedMode;
     this.enabled = enabled;
     this.bandMath = bandMath;
     this.featureId = featureId;
     this.deltaElectrodes = deltaElectrodes;
     this.deltaRail = deltaRail;
+    this.thresholdMode = resolveGuardThresholdMode(
+      feature: featureId,
+      declared: bandMath ? guardThresholdModePercentile : thresholdMode,
+    );
+    this.fixedThreshold = fixedThreshold;
+    if (fixedMode) {
+      threshold = fixedThreshold;
+    } else if (wasFixed) {
+      threshold = null;
+    }
+  }
+
+  /// Switch percentile ↔ fixed mid-session. Band-math guards stay
+  /// percentile. Percentile mode re-reads the captured baseline.
+  void setThresholdMode(
+    String mode, {
+    required int warningThresholdPercentile,
+  }) {
+    thresholdMode = resolveGuardThresholdMode(
+      feature: featureId,
+      declared: bandMath ? guardThresholdModePercentile : mode,
+    );
+    if (fixedMode) {
+      threshold = fixedThreshold;
+    } else if (baselineSleepDir.isNotEmpty) {
+      recomputeThreshold(warningThresholdPercentile);
+    } else {
+      threshold = null;
+    }
+  }
+
+  void setFixedThreshold(double value) {
+    fixedThreshold = value;
+    if (fixedMode) {
+      threshold = value;
+      debugPrint('[guardrail] fixed threshold P > ${value.toStringAsFixed(2)}');
+    }
   }
 
   void resetSession() {
@@ -130,6 +175,7 @@ class GuardLane {
     baselineSleepDir.clear();
     warningActive = false;
     bandMath = false;
+    thresholdMode = guardThresholdModePercentile;
     _frontalDelta.clear();
     lastSleepDir = 0;
     lastDelta = 0;
@@ -213,7 +259,13 @@ class GuardLane {
     bool captureAnchor = true,
   }) {
     final list = List<double>.of(baselineSleepDir)..sort();
-    if (list.isNotEmpty) {
+    if (fixedMode) {
+      threshold = fixedThreshold;
+      debugPrint(
+        '[guardrail] baseline n=${baselineSleepDir.length} '
+        'fixed threshold P > ${fixedThreshold.toStringAsFixed(2)}',
+      );
+    } else if (list.isNotEmpty) {
       final idx = ((warningThresholdPercentile / 100) * (list.length - 1))
           .round();
       threshold = list[idx];
@@ -268,7 +320,7 @@ class GuardLane {
   bool get ceilingOver => lastDelta > guardrailDeltaCeiling;
 
   void recomputeThreshold(int percentile) {
-    if (baselineSleepDir.isEmpty) {
+    if (fixedMode || baselineSleepDir.isEmpty) {
       return;
     }
     final list = List<double>.of(baselineSleepDir)..sort();

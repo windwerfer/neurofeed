@@ -903,6 +903,8 @@ Uses locked base vocabulary. `feedback` holds only what base does not.
       "guardFeature": "ai.drowsiness",
       "guardModel": "cbramod_a_vig",
       "warningThresholdPercentile": 80,
+      "guardThresholdMode": "fixed",
+      "guardFixedThreshold": 0.5,
       "warningSound": "softBell",
       "inhibitCeilingOverrides": { "beta": 0.35, "delta": 0.40 },
       "musicFolder": null,
@@ -1237,7 +1239,7 @@ Full example + migrated-away table: **Feedback extension — LOCKED** above. Do 
 | `calibration` (+ optional `calibrationProfile`) | Nested calibration blob |
 | ~~`drowsiness`~~ → `outcomeScalars.guardWarnPct` / `avgSleepDir` / `guardThreshold` | Folded; no protocol-named nest |
 | `music` | Tracks / cutoff series |
-| `sessionSettings` | Incl. `guardFeature` / `guardModel` / `guardrailEngine`, markers flags, music/binaural knobs; optional `modelSnapshot`; **`inhibitCeilingOverrides?`** (`beta`/`delta` slider overlays); **`crownQualitySource?`** (Crown only) |
+| `sessionSettings` | Incl. `guardFeature` / `guardModel` / `guardrailEngine`, markers flags, music/binaural knobs; optional `modelSnapshot`; **`inhibitCeilingOverrides?`** (`beta`/`delta` slider overlays); **`crownQualitySource?`** (Crown only); **`guardThresholdMode?`** (`percentile` \| `fixed`, present when a guard ran) + **`guardFixedThreshold?`** (0–1, only when `fixed`). Absent mode (sessions before 2026-10, or no guard) = percentile of calibration (`warningThresholdPercentile`). The `protocolJson` snapshot's `guard` carries the same `thresholdMode` / `fixedThreshold`. |
 | `calibration.baselineSamples` (+ per-recal) | Raw native reward samples for `percentileOf` (~50 doubles); keep `baseline` stats summary |
 | `audioEvents[]` `{onset,type}` | Sparse one-shot play log (`reward_chime`\|`guard_chime`); not annotations |
 | `outcomeScalars.pctInTarget` (← `targetPct` / `pctInTarget`) | Feedback-only reward outcome |

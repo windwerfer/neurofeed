@@ -166,6 +166,8 @@ class Settings extends ChangeNotifier {
       'history_dashboard_more_expanded';
   static const String _warningThresholdPercentileKey =
       'reve_warning_threshold_percentile';
+  static const String _aiGuardFixedThresholdKey = 'guard_fixed_threshold';
+  static const String _aiGuardThresholdModeKey = 'guard_threshold_mode';
   static const String _inhibitCeilingsKey = 'inhibit_ceilings';
   static const String _guardrailModeKey = 'guardrail_mode';
   static const String _guardModelKey = 'guard_model';
@@ -675,6 +677,44 @@ class Settings extends ChangeNotifier {
 
   Future<void> setWarningThresholdPercentile(int value) async {
     await _prefs.setInt(_warningThresholdPercentileKey, value);
+    notifyListeners();
+  }
+
+  /// User pick for AI guards (`percentile` | `fixed`); null = protocol /
+  /// default (fixed). Band guards ignore it (always percentile).
+  String? get aiGuardThresholdModePref {
+    final v = _prefs.getString(_aiGuardThresholdModeKey);
+    return guardThresholdModes.contains(v) ? v : null;
+  }
+
+  Future<void> setAiGuardThresholdMode(String mode) async {
+    if (!guardThresholdModes.contains(mode)) return;
+    await _prefs.setString(_aiGuardThresholdModeKey, mode);
+    notifyListeners();
+  }
+
+  /// Effective mode for [feature] under [protocol].
+  String guardThresholdModeFor(ProtocolDocument? protocol, String feature) =>
+      resolveGuardThresholdMode(
+        feature: feature,
+        declared: aiGuardThresholdModePref ?? protocol?.guard?.thresholdMode,
+      );
+
+  double? get aiGuardFixedThresholdPref {
+    final v = _prefs.getDouble(_aiGuardFixedThresholdKey);
+    return v == null ? null : clampAiGuardFixedThreshold(v);
+  }
+
+  double aiGuardFixedThresholdFor(ProtocolDocument? protocol) =>
+      aiGuardFixedThresholdPref ??
+      protocol?.guard?.fixedThreshold ??
+      defaultAiGuardFixedThreshold;
+
+  Future<void> setAiGuardFixedThreshold(double value) async {
+    await _prefs.setDouble(
+      _aiGuardFixedThresholdKey,
+      clampAiGuardFixedThreshold(value),
+    );
     notifyListeners();
   }
 

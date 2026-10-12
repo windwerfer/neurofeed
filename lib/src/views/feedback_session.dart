@@ -1690,6 +1690,44 @@ class _PercentileSlider extends StatelessWidget {
   }
 }
 
+/// Same look as [_PercentileSlider], for a fixed AI-guard probability cut.
+class _ProbabilitySlider extends StatelessWidget {
+  const _ProbabilitySlider({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final v = clampAiGuardFixedThreshold(value);
+    final text = 'P > ${v.toStringAsFixed(2)}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Slider(
+          value: v,
+          min: minAiGuardFixedThreshold,
+          max: maxAiGuardFixedThreshold,
+          divisions: 18,
+          label: text,
+          onChanged: (d) => onChanged(clampAiGuardFixedThreshold(d)),
+        ),
+        Text(
+          text,
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.primary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _RelativeCeilingSlider extends StatelessWidget {
   static const double min = 0.05;
   static const double max = 0.80;
@@ -2425,11 +2463,13 @@ class _GuardrailThresholdDialog extends ConsumerStatefulWidget {
 class _GuardrailThresholdDialogState
     extends ConsumerState<_GuardrailThresholdDialog> {
   late int _threshold;
+  late double _fixed;
 
   @override
   void initState() {
     super.initState();
     _threshold = ref.read(settingsProvider).warningThresholdPercentile;
+    _fixed = ref.read(feedbackStateProvider.notifier).aiGuardFixedThreshold;
   }
 
   @override
@@ -2441,14 +2481,19 @@ class _GuardrailThresholdDialogState
       ref.watch(protocolCatalogProvider).valueOrNull,
       fb.protocol,
     );
+    final guardFeature = settings.sessionGuardFeatureFor(
+      fb.protocol,
+      aiReady: ref.watch(modelEngineAvailabilityProvider),
+    );
     final panes = trustGuardPaneSpecs(
-      settings.sessionGuardFeatureFor(
-        fb.protocol,
-        aiReady: ref.watch(modelEngineAvailabilityProvider),
-      ),
+      guardFeature,
       deltaRail: protocol.guard?.deltaRail ?? true,
     );
     final showCeiling = panes.contains(TrustGuardPaneId.ceiling);
+    final isAi = guardFeatureIsProbability(guardFeature);
+    final mode = settings.guardThresholdModeFor(protocol, guardFeature);
+    final fixed = isAi && mode == guardThresholdModeFixed;
+    final notifier = ref.read(feedbackStateProvider.notifier);
     return AlertDialog(
       title: const Text('Guardrail settings'),
       content: SingleChildScrollView(
@@ -2457,22 +2502,55 @@ class _GuardrailThresholdDialogState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Warning threshold', style: theme.textTheme.titleSmall),
+            if (isAi) ...[
+              const SizedBox(height: 8),
+              SegmentedButton<String>(
+                key: const Key('guard-threshold-mode'),
+                segments: const [
+                  ButtonSegment(
+                    value: guardThresholdModeFixed,
+                    label: Text('Fixed'),
+                  ),
+                  ButtonSegment(
+                    value: guardThresholdModePercentile,
+                    label: Text('Percentile'),
+                  ),
+                ],
+                selected: {mode},
+                showSelectedIcon: false,
+                onSelectionChanged: (s) =>
+                    notifier.setAiGuardThresholdMode(s.single),
+              ),
+            ],
             const SizedBox(height: 4),
             Text(
-              'Percentile of the eyes-closed rest baseline that triggers a '
-              'warning (75% default). Low = warnings come early and often.',
+              fixed
+                  ? 'Warn while the model\'s sleep probability is above this '
+                        'value (0.50 default). Low = warnings come early and '
+                        'often.'
+                  : 'Percentile of the eyes-closed rest baseline that '
+                        'triggers a warning (75% default). Low = warnings '
+                        'come early and often.',
               style: theme.textTheme.bodySmall,
             ),
-            _PercentileSlider(
-              value: _threshold,
-              onChanged: (v) {
-                setState(() => _threshold = v);
-                settings.setWarningThresholdPercentile(v);
-                ref
-                    .read(feedbackStateProvider.notifier)
-                    .setWarningThresholdPercentile(v);
-              },
-            ),
+            if (fixed)
+              _ProbabilitySlider(
+                key: const Key('guard-fixed-threshold-slider'),
+                value: _fixed,
+                onChanged: (v) {
+                  setState(() => _fixed = v);
+                  notifier.setAiGuardFixedThreshold(v);
+                },
+              )
+            else
+              _PercentileSlider(
+                value: _threshold,
+                onChanged: (v) {
+                  setState(() => _threshold = v);
+                  settings.setWarningThresholdPercentile(v);
+                  notifier.setWarningThresholdPercentile(v);
+                },
+              ),
             if (showCeiling) ...[
               const SizedBox(height: 12),
               Text('δ ceiling', style: theme.textTheme.titleSmall),

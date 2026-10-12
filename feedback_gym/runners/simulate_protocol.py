@@ -26,6 +26,18 @@ from runners.helpers import (
 )
 
 
+# App guardrail_mode.dart defaultAiGuardFixedThreshold (ai_threshold_sweep.py).
+AI_GUARD_FIXED_THRESHOLD = 0.50
+
+
+def guard_threshold_mode_for(feature_id: str, declared: str | None = None) -> str:
+    """Mirror of app resolveGuardThresholdMode: band.* always percentile;
+    ai.* (probabilities) follow ``declared`` and default to fixed."""
+    if not feature_id.startswith("ai."):
+        return "percentile"
+    return declared if declared in ("percentile", "fixed") else "fixed"
+
+
 def simulate_protocol(
     protocol: dict[str, Any],
     corpus: dict[str, Any],
@@ -33,6 +45,8 @@ def simulate_protocol(
     *,
     reward_percentile: float | None = None,
     guard_percentile: float | None = None,
+    guard_threshold_mode: str | None = None,
+    guard_fixed_threshold: float | None = None,
 ) -> dict[str, Any]:
     defaults = grids.get("defaults", {})
     rollup = grids.get("protocol_rollup", {})
@@ -51,6 +65,11 @@ def simulate_protocol(
         else defaults.get("guard_percentile", 75)
     )
     delta_ceiling = float(defaults.get("guardrail_delta_ceiling", 0.25))
+    g_fixed = float(
+        guard_fixed_threshold
+        if guard_fixed_threshold is not None
+        else defaults.get("ai_guard_fixed_threshold", AI_GUARD_FIXED_THRESHOLD)
+    )
 
     plan = build_cal_plan(corpus)
     play = plan.play_idx
@@ -178,10 +197,22 @@ def simulate_protocol(
             else:
                 play_f = play_vals[finite]
                 labels_f = None if labels is None else np.asarray(labels)[finite]
-                thr_rows, thr_groups = play_thresholds(
-                    series, plan, g_p, finite_play=finite
+                mode = guard_threshold_mode_for(
+                    feat_id, guard_threshold_mode or guard_cfg.get("thresholdMode")
                 )
-                thr = summarize_threshold(plan, thr_groups)
+                if mode == "fixed":
+                    # App GuardLane fixed mode: warn while P > cut, no cal pick.
+                    cut = float(guard_cfg.get("fixedThreshold", g_fixed))
+                    if guard_fixed_threshold is not None:
+                        cut = g_fixed
+                    thr_rows = np.full(int(finite.sum()), cut)
+                    thr_groups = [cut for _ in plan.groups]
+                    thr = cut
+                else:
+                    thr_rows, thr_groups = play_thresholds(
+                        series, plan, g_p, finite_play=finite
+                    )
+                    thr = summarize_threshold(plan, thr_groups)
                 delta_abs = np.asarray(
                     corpus.get("delta_abs", corpus["band_delta"]), dtype=float
                 )[play][finite]
@@ -212,6 +243,7 @@ def simulate_protocol(
                     "feature": feat_id,
                     "policy": guard_cfg.get("policy", "percentileWarn"),
                     "band_math": band_math,
+                    "threshold_mode": mode,
                     "delta_rail": delta_rail,
                     "threshold": round4(thr),
                     "warn_rate": round4(wr),

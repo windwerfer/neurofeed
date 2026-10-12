@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:neurofeed/src/feedback/feature_catalog.dart';
+import 'package:neurofeed/src/feedback/guardrail_mode.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:neurofeed/src/rust/api/features.dart';
 
@@ -269,6 +270,8 @@ class ProtocolGuard {
     this.defaultEnabled = true,
     this.deltaRail = true,
     this.requiresModel = false,
+    this.thresholdMode,
+    this.fixedThreshold,
     this.electrodes,
     this.copy,
     this.locked = const [],
@@ -279,6 +282,16 @@ class ProtocolGuard {
   final String policy;
   final bool muffleReward;
   final bool defaultEnabled;
+
+  final String? thresholdMode;
+
+  final double? fixedThreshold;
+
+  String thresholdModeFor([String? runningFeature]) =>
+      resolveGuardThresholdMode(
+        feature: runningFeature ?? feature,
+        declared: thresholdMode,
+      );
 
   /// Whether the absolute frontal-delta ceiling ([guardrailDeltaCeiling] in
   /// `guard_lane.dart`) may trigger a warning (chime / muffle) next to the
@@ -309,6 +322,22 @@ class ProtocolGuard {
         'guard.feature "$feature" is not listed for the guard lane',
       );
     }
+    // Absent (every pre-2026-10 document) = feature default. Unknown or
+    // impossible values (fixed on a band feature) are ignored rather than
+    // rejected so old / hand-edited sessions still open.
+    final rawMode = json['thresholdMode'];
+    final thresholdMode =
+        rawMode is String &&
+            guardThresholdModes.contains(rawMode) &&
+            (rawMode == guardThresholdModePercentile ||
+                guardFeatureIsProbability(feature))
+        ? rawMode
+        : null;
+    final fixedThreshold = (json['fixedThreshold'] as num?)?.toDouble();
+    final validFixed =
+        fixedThreshold != null && fixedThreshold > 0 && fixedThreshold < 1
+        ? fixedThreshold
+        : null;
     return ProtocolGuard(
       feature: feature,
       output: json['output'] as String? ?? 'softBowl',
@@ -317,6 +346,8 @@ class ProtocolGuard {
       defaultEnabled: json['defaultEnabled'] as bool? ?? true,
       deltaRail: json['deltaRail'] as bool? ?? true,
       requiresModel: json['requiresModel'] as bool? ?? false,
+      thresholdMode: thresholdMode,
+      fixedThreshold: validFixed,
       electrodes: json['electrodes'] is List
           ? (json['electrodes'] as List).whereType<String>().toList()
           : null,
@@ -335,12 +366,19 @@ class ProtocolGuard {
     'defaultEnabled': defaultEnabled,
     if (!deltaRail) 'deltaRail': deltaRail,
     if (requiresModel) 'requiresModel': requiresModel,
+    if (thresholdMode != null) 'thresholdMode': thresholdMode,
+    if (fixedThreshold != null) 'fixedThreshold': fixedThreshold,
     if (electrodes != null) 'electrodes': electrodes,
     if (copy != null) 'copy': copy,
     'locked': locked,
   };
 
-  ProtocolGuard copyWith({String? feature}) => ProtocolGuard(
+  ProtocolGuard copyWith({
+    String? feature,
+    String? thresholdMode,
+    double? fixedThreshold,
+    bool clearFixedThreshold = false,
+  }) => ProtocolGuard(
     feature: feature ?? this.feature,
     output: output,
     policy: policy,
@@ -348,6 +386,10 @@ class ProtocolGuard {
     defaultEnabled: defaultEnabled,
     deltaRail: deltaRail,
     requiresModel: requiresModel,
+    thresholdMode: thresholdMode ?? this.thresholdMode,
+    fixedThreshold: clearFixedThreshold
+        ? null
+        : (fixedThreshold ?? this.fixedThreshold),
     electrodes: electrodes,
     copy: copy,
     locked: locked,
@@ -483,12 +525,32 @@ class ProtocolDocument {
 
   /// Snapshot with the session's chosen guard feature applied. A disabled
   /// guard (`none`) is omitted so the snapshot matches what actually ran.
-  ProtocolDocument resolved({String? guardFeature}) {
+  ProtocolDocument resolved({
+    String? guardFeature,
+    String? guardThresholdMode,
+    double? guardFixedThreshold,
+  }) {
     if (guard == null) return this;
     if (guardFeature == null || guardFeature == 'none') {
       return copyWith(clearGuard: true);
     }
-    return copyWith(guard: guard!.copyWith(feature: guardFeature));
+    final mode = resolveGuardThresholdMode(
+      feature: guardFeature,
+      declared: guardThresholdMode ?? guard!.thresholdMode,
+    );
+    final fixed = mode == guardThresholdModeFixed;
+    return copyWith(
+      guard: guard!.copyWith(
+        feature: guardFeature,
+        thresholdMode: mode,
+        fixedThreshold: fixed
+            ? (guardFixedThreshold ??
+                  guard!.fixedThreshold ??
+                  defaultAiGuardFixedThreshold)
+            : null,
+        clearFixedThreshold: !fixed,
+      ),
+    );
   }
 
   /// Whether some legal configuration of this document's lanes is available

@@ -383,11 +383,15 @@ NerdSheetSnapshot nerdSheetFromLanes({
       NerdInfoRowData(
         id: NerdRowId.warnThr,
         label: 'Warn thr',
-        value: '${nerdFixed(thr)}  from p$warningThresholdPercentile',
+        value: guard.fixedMode
+            ? '${nerdFixed(thr)}  fixed'
+            : '${nerdFixed(thr)}  from p$warningThresholdPercentile',
         infoTitle: 'Warn threshold',
-        infoBody:
-            'Which pick of the rest pile (guard default p75). '
-            'Over this line is the personal warn tripwire.',
+        infoBody: guard.fixedMode
+            ? 'Fixed model probability (AI guard default 0.50). '
+                  'Over this line is the warn tripwire.'
+            : 'Which pick of the rest pile (guard default p75). '
+                  'Over this line is the personal warn tripwire.',
         diagram: NerdDiagramKind.threshold,
       ),
       NerdInfoRowData(

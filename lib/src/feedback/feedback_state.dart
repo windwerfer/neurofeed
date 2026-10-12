@@ -656,6 +656,34 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             state.phase == FeedbackPhase.interrupted)) {
       _guard.recomputeThreshold(percentile);
     }
+    _writeSessionFacts();
+  }
+
+  ProtocolDocument? get _specDocument =>
+      _ref.read(protocolCatalogProvider).valueOrNull?.forName(state.protocol);
+
+  String get guardThresholdMode => _guardThresholdModeFor(_sessionGuardFeature);
+
+  String _guardThresholdModeFor(String feature) =>
+      _ref.read(settingsProvider).guardThresholdModeFor(_specDocument, feature);
+
+  void setAiGuardThresholdMode(String mode) {
+    _ref.read(settingsProvider).setAiGuardThresholdMode(mode);
+    _guard.setThresholdMode(
+      _guardThresholdModeFor(_guard.featureId),
+      warningThresholdPercentile: warningThresholdPercentile,
+    );
+    _writeSessionFacts();
+  }
+
+  double get aiGuardFixedThreshold =>
+      _ref.read(settingsProvider).aiGuardFixedThresholdFor(_specDocument);
+
+  void setAiGuardFixedThreshold(double value) {
+    final v = clampAiGuardFixedThreshold(value);
+    _ref.read(settingsProvider).setAiGuardFixedThreshold(v);
+    _guard.setFixedThreshold(v);
+    _writeSessionFacts();
   }
 
   void setInhibitCeiling(String tag, double max) {
@@ -985,14 +1013,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       electrodeNames: rewardNames,
       montageNames: montage,
     );
+    final laneFeature = guardFeature == guardFeatureNone
+        ? guardFeatureBandDelta
+        : guardFeature;
     _guard.configure(
       enabled: false,
       bandMath: _guardIsBandMath,
-      featureId: guardFeature == guardFeatureNone
-          ? guardFeatureBandDelta
-          : guardFeature,
+      featureId: laneFeature,
       deltaRail: _specDeltaRail,
       deltaElectrodes: frontal,
+      thresholdMode: _guardThresholdModeFor(laneFeature),
+      fixedThreshold: aiGuardFixedThreshold,
     );
   }
 
@@ -1035,16 +1066,19 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     final ffId = settings.guardModel ?? defaultModelKind.ffId;
     final featureId = _sessionGuardFeature;
+    final laneFeature = guardFeatureIsAi(featureId)
+        ? featureId
+        : guardFeatureAiAVigReve;
     try {
       final ok = await frb.guardrailEnable(kind: ffId);
       _guard.configure(
         enabled: ok,
         bandMath: false,
-        featureId: guardFeatureIsAi(featureId)
-            ? featureId
-            : guardFeatureAiAVigReve,
+        featureId: laneFeature,
         deltaRail: _specDeltaRail,
         deltaElectrodes: _guard.deltaElectrodes,
+        thresholdMode: _guardThresholdModeFor(laneFeature),
+        fixedThreshold: aiGuardFixedThreshold,
       );
       if (ok) {
         debugPrint('[guardrail] enabled ($ffId, feature=$featureId)');
@@ -1053,11 +1087,11 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _guard.configure(
         enabled: false,
         bandMath: false,
-        featureId: guardFeatureIsAi(featureId)
-            ? featureId
-            : guardFeatureAiAVigReve,
+        featureId: laneFeature,
         deltaRail: _specDeltaRail,
         deltaElectrodes: _guard.deltaElectrodes,
+        thresholdMode: _guardThresholdModeFor(laneFeature),
+        fixedThreshold: aiGuardFixedThreshold,
       );
       debugPrint('[guardrail] enable failed: $e');
     }
@@ -1727,6 +1761,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final feature = _sessionGuardFeature;
     final model = settings.guardModel;
     final overrides = settings.inhibitCeilingOverrides(fb.protocol);
+    final guardActive = guardrailEnabled && feature != guardFeatureNone;
     return SessionSettings(
       dynamicAdapt: dynamicAdapt,
       responsiveness: responsiveness,
@@ -1738,6 +1773,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       guardFeature: feature,
       guardModel: model,
       warningThresholdPercentile: settings.warningThresholdPercentile,
+      guardThresholdMode: guardActive ? _guardThresholdModeFor(feature) : null,
+      guardFixedThreshold:
+          guardActive &&
+              _guardThresholdModeFor(feature) == guardThresholdModeFixed
+          ? aiGuardFixedThreshold
+          : null,
       warningSound: settings.warningSoundName,
       musicFolder: settings.musicFolder,
       musicMinCutoffHz: settings.musicMinCutoffHz,
@@ -1764,7 +1805,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final protocol = catalog?.forName(state.protocol);
     final feature = _sessionGuardFeature;
     final description = protocol?.metadataDescription;
-    final protocolJson = protocol?.resolved(guardFeature: feature).toJson();
+    final protocolJson = protocol
+        ?.resolved(
+          guardFeature: feature,
+          guardThresholdMode: _guardThresholdModeFor(feature),
+          guardFixedThreshold: aiGuardFixedThreshold,
+        )
+        .toJson();
     final userId = settings.subjectInfo.id;
     _recorder.writeMetadata({
       'type': 'session',
@@ -1842,7 +1889,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       drowsiness: drowsy,
       music: sessionMusic,
       metadataDescription: protocol?.metadataDescription,
-      protocolJson: protocol?.resolved(guardFeature: feature).toJson(),
+      protocolJson: protocol
+          ?.resolved(
+            guardFeature: feature,
+            guardThresholdMode: _guardThresholdModeFor(feature),
+            guardFixedThreshold: aiGuardFixedThreshold,
+          )
+          .toJson(),
       protocolVersion: '1',
       sessionSettings: _currentSessionSettings(),
       avgSpo2: stats?.avgSpo2,

@@ -579,6 +579,8 @@ class SessionSettings {
     this.guardModel,
     this.inhibitCeilingOverrides,
     this.crownQualitySource,
+    this.guardThresholdMode,
+    this.guardFixedThreshold,
   });
 
   final bool dynamicAdapt;
@@ -616,6 +618,15 @@ class SessionSettings {
   /// Neurosity only: `crown` | `app` — pad quality source used this session.
   final String? crownQualitySource;
 
+  /// How the guard warning threshold was set: `percentile` (of the
+  /// calibration distribution, [warningThresholdPercentile]) or `fixed`
+  /// (warn while P > [guardFixedThreshold], AI guards only). Null when no
+  /// guard ran or for sessions saved before 2026-10 (then: percentile).
+  final String? guardThresholdMode;
+
+  /// Fixed probability cut; present only when [guardThresholdMode] is fixed.
+  final double? guardFixedThreshold;
+
   Map<String, Object?> toJson() => {
     'dynamicAdapt': dynamicAdapt,
     'responsiveness': responsiveness,
@@ -643,6 +654,8 @@ class SessionSettings {
     if (inhibitCeilingOverrides != null && inhibitCeilingOverrides!.isNotEmpty)
       'inhibitCeilingOverrides': inhibitCeilingOverrides,
     if (crownQualitySource != null) 'crownQualitySource': crownQualitySource,
+    if (guardThresholdMode != null) 'guardThresholdMode': guardThresholdMode,
+    if (guardFixedThreshold != null) 'guardFixedThreshold': guardFixedThreshold,
   };
 
   static SessionSettings? fromJson(Object? json) {
@@ -692,6 +705,12 @@ class SessionSettings {
         return out.isEmpty ? null : out;
       }(),
       crownQualitySource: json['crownQualitySource'] as String?,
+      guardThresholdMode: switch (json['guardThresholdMode']) {
+        'percentile' => 'percentile',
+        'fixed' => 'fixed',
+        _ => null,
+      },
+      guardFixedThreshold: (json['guardFixedThreshold'] as num?)?.toDouble(),
     );
   }
 }
