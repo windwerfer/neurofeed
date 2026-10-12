@@ -291,8 +291,10 @@ assets/                     protocols.json, calibrations.json, features.json, au
   default `blas` cleared. Keep `version = "0.2.14"` compatible with
   `rlx-runtime 0.2.14`. Clearing `blas` does not remove the macOS
   Accelerate calls (BNNS in `rlx-ir`, vForce in `rlx-cpu`). The macOS
-  podspec must pass `-framework Accelerate`; `#[link(framework)]` does
-  not reach the Xcode link of the staticlib.
+  podspec must pass `-framework Accelerate` and `-lbz2`. `#[link]`
+  directives do not reach the Xcode link of the staticlib. `-lbz2` covers
+  `npyz` → `zip` 0.6 → `bzip2-sys`, which uses system libbz2 when
+  pkg-config finds it.
 - **Model engine is git deps, not submodules.** Workflows still init
   `third_party/reve-rs` as reference copy only (do not revive luna-rs).
 - **Gated weights live in `.local/`**, never commit them. `#[ignore]`d smoke

@@ -272,13 +272,16 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
   sandbox can open it again on the next launch. The music folder has its
   own bookmark.
 - `rust_builder/macos/rust_lib_neurofeed.podspec` links Foundation,
-  CoreFoundation, CoreBluetooth, AppKit, Security, and Accelerate. Cargo's
-  `-framework` flags do not reach the Xcode link of the staticlib. Accelerate
-  is required even with the `rlx-cpu` `blas` feature cleared: on macOS,
-  `rlx-ir` calls BNNS and `rlx-cpu` calls vForce (`vvexpf` and the rest).
-  Those symbols showed up as undefined on the x86_64 slice. The sqlite
-  `MIN`/`MAX` notes and the Metal toolchain search-path notes in that log
-  are warnings.
+  CoreFoundation, CoreBluetooth, AppKit, Security, and Accelerate, plus
+  libbz2 (`-lbz2`). Cargo's `-framework` and `-l` flags do not reach the
+  Xcode link of the staticlib. Accelerate is required even with the
+  `rlx-cpu` `blas` feature cleared: on macOS, `rlx-ir` calls BNNS and
+  `rlx-cpu` calls vForce (`vvexpf` and the rest). libbz2 is required
+  because `npyz` pulls `zip` 0.6, and `bzip2-sys` links the system library
+  when pkg-config finds it instead of compiling the bundled C. Run
+  38282671901 (after the Accelerate link) failed the arm64 pod link on
+  `_BZ2_bzCompress` and the decompress entry points. The sqlite `MIN`/`MAX`
+  notes and the Metal toolchain search-path notes in that log are warnings.
 - `neurofeed-<ver>-macos-arm64.zip` is the `neurofeed.app` bundle (`ditto`,
   so symlinks and the code signature survive). Unzip and open `neurofeed.app`.
 - The build is **ad-hoc signed and not notarized**. There is no Apple
