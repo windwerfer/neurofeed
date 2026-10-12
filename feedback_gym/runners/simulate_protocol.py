@@ -64,7 +64,8 @@ def simulate_protocol(
         if guard_percentile is not None
         else defaults.get("guard_percentile", 75)
     )
-    delta_ceiling = float(defaults.get("guardrail_delta_ceiling", 0.25))
+    # App δ rail (2026-10+): relative frontal delta vs a relative ceiling.
+    delta_ceiling = float(defaults.get("guardrail_delta_rel_ceiling", 0.80))
     g_fixed = float(
         guard_fixed_threshold
         if guard_fixed_threshold is not None
@@ -213,6 +214,9 @@ def simulate_protocol(
                         series, plan, g_p, finite_play=finite
                     )
                     thr = summarize_threshold(plan, thr_groups)
+                rail_rel = np.asarray(
+                    corpus.get("delta_rel", np.full(len(series), np.nan)), dtype=float
+                )[play][finite]
                 delta_abs = np.asarray(
                     corpus.get("delta_abs", corpus["band_delta"]), dtype=float
                 )[play][finite]
@@ -222,6 +226,7 @@ def simulate_protocol(
                     delta_abs=delta_abs,
                     threshold=thr_rows,
                     delta_ceiling=delta_ceiling,
+                    rail_values=rail_rel,
                     delta_rail=delta_rail,
                 )
                 wr = warn_rate(warn)

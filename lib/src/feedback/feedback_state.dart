@@ -895,7 +895,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// null between sessions.
   String? _lockedGuardFeature;
 
-  /// Protocol `guard.deltaRail` (default true): whether the absolute
+  /// Protocol `guard.deltaRail` (default true): whether the relative
   /// frontal-delta ceiling may warn this session.
   bool get _specDeltaRail =>
       _ref
@@ -2204,6 +2204,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       sessionStartAt: _sessionStartAt,
       acceptBaselineSample: acceptBaselineSample,
       sampleIsClean: _sampleIsClean && _reward.padsUsable(quality),
+      quality: quality,
       writeWarningMetadata:
           ({
             required sleepDir,
@@ -2236,6 +2237,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             featurePercentile,
             warnOver,
             ceilingOver,
+            railDeltaRel,
             clean,
             dirtyReason,
           }) {
@@ -2248,6 +2250,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
               featurePercentile: featurePercentile,
               warnOver: warnOver,
               ceilingOver: ceilingOver,
+              railDeltaRel: railDeltaRel,
               clean: clean,
               dirtyReason: dirtyReason,
             );
@@ -2327,7 +2330,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             warningActive: _guard.warningActive,
             warnOver: _guard.warnOver,
             ceilingOver: _guard.ceilingOver,
-            lastDelta: _guard.lastDelta,
+            // Rail value the ceiling pane plots (relative δ, gated pads).
+            lastDelta: _guard.railDeltaRelOrNull ?? 0,
             clean: guardClean,
             dirtyReason: guardDirtyReason,
           ),
@@ -2341,6 +2345,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           featurePercentile: featurePct,
           warnOver: _guard.warnOver,
           ceilingOver: _guard.ceilingOver,
+          railDeltaRel: _guard.railDeltaRelOrNull,
           clean: guardClean,
           dirtyReason: guardDirtyReason?.name,
         );

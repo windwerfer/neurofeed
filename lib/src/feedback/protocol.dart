@@ -293,7 +293,7 @@ class ProtocolGuard {
         declared: thresholdMode,
       );
 
-  /// Whether the absolute frontal-delta ceiling ([guardrailDeltaCeiling] in
+  /// Whether the relative frontal-delta ceiling ([guardrailDeltaCeiling] in
   /// `guard_lane.dart`) may trigger a warning (chime / muffle) next to the
   /// percentile rule. Default true (historic behavior). When false the
   /// ceiling is still evaluated and recorded per computed frame

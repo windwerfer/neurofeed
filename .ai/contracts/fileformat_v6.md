@@ -118,6 +118,7 @@ Written by `buildSessionMetadata()`:
 **`guardrail{}` per second (LOCKED keep + add):**
 - **KEEP:** `sleepDir`, `clarity`, `warning`, `delta`
 - **ADD:** `featurePercentile`, `warnOver`, `ceilingOver`, `clean`, `dirtyReason`
+- **ADD (2026-10):** `railDeltaRel` — relative frontal δ (δ ÷ total, quality-gated AF7/AF8) the δ rail compared to its ceiling (0.80); omitted when no pad was usable. `ceilingOver` = `railDeltaRel` > 0.80. Frames without it (older sessions) used the absolute rail: `delta` > 0.25; readers plot those against 0.25.
 
 Recordings: zeroed legacy `guardrail`/`feedback` keys may still be present for chart shape; **omit/null the NEW Trust extras** (never fake `percentile:0` / `clean:false`). Wire = camelCase JSONL (Dart `ComputedFrame.toJson`); Rust extract must accept those keys (serde rename).
 
@@ -1085,6 +1086,7 @@ Dart writes **camelCase** JSONL (`ComputedFrame.toJson` dialect). Rust extract m
 | `featurePercentile` | **ADD** | Guard feature percentile this second. |
 | `warnOver` | **ADD** | Warn-threshold overshoot flag / value as implemented in live Trust. |
 | `ceilingOver` | **ADD** | Ceiling-overshoot flag / value as implemented in live Trust. |
+| `railDeltaRel` | **ADD (2026-10)** | Relative frontal δ for the rail; absent = legacy absolute rail (`delta` vs 0.25). |
 | `clean` | **ADD** | bool — guard sample quality clean. |
 | `dirtyReason` | **ADD** | Same vocab as feedback (`movement`\|`blink`\|`jaw`\|`pads`); omit/null when clean. |
 

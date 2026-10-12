@@ -64,6 +64,7 @@ GuardTick _tick({_Frame? frame, bool muffleReward = true}) => GuardTick(
         featurePercentile,
         warnOver,
         ceilingOver,
+        railDeltaRel,
         clean,
         dirtyReason,
       }) {
@@ -75,7 +76,7 @@ GuardTick _tick({_Frame? frame, bool muffleReward = true}) => GuardTick(
 
 void main() {
   group('percentileWarnOver deltaRail', () {
-    test('rail on (default): absolute delta over 0.25 warns in both modes', () {
+    test('rail on (default): relative delta over the ceiling warns in both modes', () {
       for (final bandMath in [true, false]) {
         expect(
           percentileWarnOver(
@@ -83,6 +84,7 @@ void main() {
             lastDelta: 0.30,
             lastSleepDir: 0.0,
             threshold: 0.50,
+            railDeltaRel: 0.85,
           ),
           isTrue,
           reason: 'bandMath=$bandMath',
@@ -90,7 +92,7 @@ void main() {
       }
     });
 
-    test('rail off: absolute delta over 0.25 never warns', () {
+    test('rail off: relative delta over the ceiling never warns', () {
       for (final bandMath in [true, false]) {
         expect(
           percentileWarnOver(
@@ -98,6 +100,7 @@ void main() {
             lastDelta: 0.30,
             lastSleepDir: 0.0,
             threshold: 0.50,
+            railDeltaRel: 0.85,
             deltaRail: false,
           ),
           isFalse,
@@ -132,6 +135,77 @@ void main() {
     });
   });
 
+  group('relative δ rail value', () {
+    BandsDto b(int e, {double delta = 1, double rest = 1}) => BandsDto(
+      electrode: e,
+      timestamp: 0,
+      delta: delta,
+      theta: rest,
+      alpha: rest,
+      beta: rest,
+      gamma: rest,
+      lineNoiseRatio: 0,
+      signalQuality: 100,
+    );
+    GuardTick tick(List<double>? q) => GuardTick(
+      phase: FeedbackPhase.playing,
+      collectionEyes: null,
+      muffleReward: false,
+      sessionStartAt: null,
+      quality: q,
+      writeWarningMetadata:
+          ({
+            required sleepDir,
+            required delta,
+            required threshold,
+            required bandMath,
+          }) {},
+      updateComputed:
+          ({
+            required sleepDir,
+            required clarity,
+            required delta,
+            required warning,
+            threshold,
+            featurePercentile,
+            warnOver,
+            ceilingOver,
+            railDeltaRel,
+            clean,
+            dirtyReason,
+          }) {},
+    );
+
+    test('δ ÷ total over AF pads that pass the quality gate', () {
+      final l = GuardLane(guardOutput: _Guard(), rewardOutput: _Reward())
+        ..configure(
+          enabled: true,
+          bandMath: false,
+          featureId: 'ai.a_vig',
+          deltaElectrodes: const [1, 2],
+        );
+      final q = [100.0, 100.0, 100.0, 100.0];
+      l.onBands(b(1, delta: 6, rest: 1), tick(q)); // 6 / 10 = 0.6
+      l.onBands(b(2, delta: 36, rest: 1), tick(q)); // 36 / 40 = 0.9
+      expect(l.lastDeltaRel, closeTo(0.75, 1e-9));
+      expect(l.ceilingOver, isFalse); // 0.75 < 0.80
+      // Pad 2 drops below the gate: only pad 1 counts.
+      l.onBands(b(2, delta: 36, rest: 1), tick([100, 100, 50, 100]));
+      expect(l.lastDeltaRel, closeTo(0.6, 1e-9));
+      // Only pad 2 usable: 0.9 > ceiling.
+      l.onBands(b(1, delta: 6, rest: 1), tick([100, 50, 100, 100]));
+      expect(l.lastDeltaRel, closeTo(0.9, 1e-9));
+      expect(l.ceilingOver, isTrue);
+      // No usable pad: no rail value, cannot warn.
+      l.onBands(b(1, delta: 6, rest: 1), tick([0, 0, 0, 0]));
+      expect(l.lastDeltaRel.isNaN, isTrue);
+      expect(l.ceilingOver, isFalse);
+      expect(l.railDeltaRelOrNull, isNull);
+      // Absolute δ (recorded) is still the plain AF mean.
+      expect(l.lastDelta, closeTo(21, 1e-9));
+    });
+  });
+
   group('GuardLane deltaRail', () {
     setUp(() => _warningWrites = 0);
 
@@ -147,7 +221,8 @@ void main() {
       return l
         ..threshold = 0.5
         ..lastSleepDir = 0.1
-        ..lastDelta = 0.9; // far over the 0.25 ceiling, under nothing else
+        ..lastDelta = 0.9
+        ..lastDeltaRel = 0.9; // over the relative ceiling, under nothing else
     }
 
     test('configure defaults deltaRail to true', () {
@@ -173,7 +248,8 @@ void main() {
         )
         ..threshold = 0.5
         ..lastSleepDir = 0.1
-        ..lastDelta = 0.9;
+        ..lastDelta = 0.9
+        ..lastDeltaRel = 0.9;
       l.evaluateWarning(_tick());
       expect(l.warningActive, isTrue);
       expect(guard.lastActive, isTrue);
@@ -198,7 +274,8 @@ void main() {
           // the ceiling value; AI scores lastSleepDir.
           ..threshold = bandMath ? 2.0 : 0.5
           ..lastSleepDir = 0.1
-          ..lastDelta = 0.9;
+          ..lastDelta = 0.9
+          ..lastDeltaRel = 0.9;
         l.evaluateWarning(_tick());
         expect(l.warningActive, isFalse);
         expect(guard.lastActive, isFalse);

@@ -125,7 +125,10 @@ void main() {
     test('band.delta seed stays under the 0.25 ceiling', () {
       final samples = FeatureOverride.baselineSamples('band.delta');
       expect(samples, hasLength(FeatureOverride.baselineSampleCount));
-      expect(samples.every((v) => v < guardrailDeltaCeiling), isTrue);
+      expect(
+        samples.every((v) => v < legacyGuardrailDeltaCeilingAbs),
+        isTrue,
+      );
     });
 
     test('live-sim ATR baseline makes slider 0.8 miss; seed then hits', () {
@@ -172,7 +175,7 @@ void main() {
       );
       lane.finalizeBaseline(warningThresholdPercentile: 75);
       expect(lane.threshold, isNotNull);
-      expect(lane.threshold!, lessThan(guardrailDeltaCeiling));
+      expect(lane.threshold!, lessThan(legacyGuardrailDeltaCeilingAbs));
 
       GuardTick tick() => GuardTick(
         phase: FeedbackPhase.playing,
@@ -196,6 +199,7 @@ void main() {
               featurePercentile,
               warnOver,
               ceilingOver,
+              railDeltaRel,
               clean,
               dirtyReason,
             }) {},

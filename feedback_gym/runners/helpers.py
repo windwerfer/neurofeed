@@ -101,6 +101,7 @@ def percentile_warn_parts(
     threshold: float,
     delta_ceiling: float = 0.25,
     delta_rail: bool = True,
+    rail_values: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Split guard warn into feature / rail / combined.
 
@@ -115,7 +116,12 @@ def percentile_warn_parts(
     feat = np.asarray(feature_values, dtype=float)
     delta = np.asarray(delta_abs, dtype=float)
     warn_feature = feat > threshold
-    if band_math:
+    if rail_values is not None:
+        # App since 2026-10: the rail is relative frontal delta (δ ÷ total,
+        # quality-gated AF7/AF8) vs a relative ceiling, in both modes.
+        with np.errstate(invalid="ignore"):
+            warn_rail = np.asarray(rail_values, dtype=float) > delta_ceiling
+    elif band_math:
         # band path also treats feat > ceiling as an absolute rail
         warn_rail = (feat > delta_ceiling) | (delta > delta_ceiling)
     else:

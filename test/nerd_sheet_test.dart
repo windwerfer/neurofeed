@@ -172,10 +172,10 @@ void main() {
     expect(_snap(guard: _guard(enabled: true)).hasGuard, isTrue);
   });
 
-  test('band-math guard pile has δ ceiling tick; AI does not', () {
+  test('band-math guard pile has no δ ceiling tick (rail is relative δ)', () {
     final band = _snap(guard: _guard(enabled: true, bandMath: true));
-    expect(band.guardPile!.extraTick, guardrailDeltaCeiling);
-    expect(band.guardPile!.extraTickLabel, 'δ ceiling');
+    expect(band.guardPile!.extraTick, isNull);
+    expect(band.guardPile!.extraTickLabel, isNull);
     expect(band.guardRows.any((r) => r.id == NerdRowId.liveDelta), isFalse);
 
     final ai = _snap(guard: _guard(enabled: true, bandMath: false));

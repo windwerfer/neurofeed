@@ -2556,8 +2556,10 @@ class _GuardrailThresholdDialogState
               Text('δ ceiling', style: theme.textTheme.titleSmall),
               const SizedBox(height: 4),
               Text(
-                'Hard rail at ${guardrailDeltaCeiling.toStringAsFixed(2)}. '
-                'The second warn signal; not adjustable.',
+                'Hard rail at relative δ '
+                '${guardrailDeltaCeiling.toStringAsFixed(2)} (δ ÷ total power, '
+                'AF7/AF8 pads with good contact). The second warn signal; '
+                'not adjustable.',
                 style: theme.textTheme.bodySmall,
               ),
             ],

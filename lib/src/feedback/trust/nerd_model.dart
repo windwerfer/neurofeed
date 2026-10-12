@@ -344,7 +344,9 @@ NerdSheetSnapshot nerdSheetFromLanes({
     final samples = List<double>.of(guard.baselineSleepDir);
     final live = guard.bandMath ? guard.lastDelta : guard.lastSleepDir;
     final thr = guard.threshold;
-    final extra = guard.bandMath ? guardrailDeltaCeiling : null;
+    // The δ rail is relative δ since 2026-10; the band-math pile is
+    // absolute δ, so no ceiling tick on it.
+    const double? extra = null;
     final (gMean, gStd) = nerdMeanStd(samples);
     guardPile = NerdPileView(
       title: 'Guard pile ($guardLabel)',
@@ -452,10 +454,11 @@ NerdSheetSnapshot nerdSheetFromLanes({
         NerdInfoRowData(
           id: NerdRowId.liveDelta,
           label: 'Live δ',
-          value: nerdFixed(guard.lastDelta),
+          value: nerdFixed(guard.railDeltaRelOrNull),
           infoTitle: 'Live δ',
           infoBody:
-              'Native frontal AF7/AF8 δ. The hard rail, not the AI rest pile.',
+              'Relative frontal δ (δ ÷ total power), AF7/AF8 pads that pass '
+              'the quality gate. The hard rail, not the AI rest pile.',
           diagram: NerdDiagramKind.live,
         ),
         NerdInfoRowData(
@@ -464,7 +467,8 @@ NerdSheetSnapshot nerdSheetFromLanes({
           value: nerdFixed(guardrailDeltaCeiling),
           infoTitle: 'δ ceiling',
           infoBody:
-              'Hard rail at $guardrailDeltaCeiling. Over this trips the ceiling warn.',
+              'Hard rail at relative δ $guardrailDeltaCeiling. Over this trips '
+              'the ceiling warn when the protocol rails on δ.',
           diagram: NerdDiagramKind.threshold,
         ),
       ],

@@ -223,9 +223,10 @@ def test_guard_score_ignores_always_on_delta_rail(tmp_path):
 
     path = generate_synthetic_corpus(tmp_path, n=400, seed=11)
     corpus = load_corpus(path)
-    # Force absolute delta rail always-on (Sleep-EDF-like scale)
+    # Force the (relative) delta rail always-on
     n = len(corpus["ai_a_vig"])
     corpus["delta_abs"] = np.full(n, 50.0)
+    corpus["delta_rel"] = np.full(n, 0.95)
     grids = load_grids()
     meta = {"label": "A-vig", "source": "ai", "usableFor": ["guard"]}
     out = score_feature(
@@ -301,6 +302,7 @@ def test_simulate_protocol_reads_delta_rail_from_catalog(tmp_path):
     path = generate_synthetic_corpus(tmp_path, n=400, seed=11)
     corpus = load_corpus(path)
     corpus["delta_abs"] = np.full(len(corpus["ai_a_vig"]), 50.0)
+    corpus["delta_rel"] = np.full(len(corpus["ai_a_vig"]), 0.95)  # over the relative rail
     grids = load_grids()
     g = simulate_protocol(protocols["sleepGuard"], corpus, grids)["parts"]["guard"]
     assert g["delta_rail"] is False

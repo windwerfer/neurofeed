@@ -1,3 +1,5 @@
+import 'package:neurofeed/src/feedback/guard_lane.dart'
+    show guardrailDeltaCeiling, legacyGuardrailDeltaCeilingAbs;
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
@@ -19,7 +21,13 @@ class SessionTrust {
     required this.pctCeiling,
     required this.rewardChimes,
     required this.guardChimes,
+    this.deltaCeiling = guardrailDeltaCeiling,
   });
+
+  /// Ceiling the guard ceiling pane draws: [guardrailDeltaCeiling] (relative
+  /// δ) when frames carry `railDeltaRel`, else the pre-2026-10 absolute
+  /// [legacyGuardrailDeltaCeilingAbs] against the recorded `delta`.
+  final double deltaCeiling;
 
   final List<TrustRewardSample> reward;
   final List<TrustGuardSample> guard;
@@ -53,6 +61,7 @@ SessionTrust readSessionTrust({
   var guardClean = 0.0;
   var warning = 0.0;
   var ceiling = 0.0;
+  var anyRailRel = false;
 
   for (var i = 0; i < frames.length; i++) {
     final frame = frames[i];
@@ -108,7 +117,10 @@ SessionTrust readSessionTrust({
     final guardCleanFlag = gr.clean;
     if (guardCleanFlag != null) {
       final featurePercentile = gr.featurePercentile ?? 50.0;
-      final lastDelta = gr.delta;
+      // 2026-10+: the rail value is relative δ; older frames: absolute δ.
+      final railRel = gr.railDeltaRel;
+      if (railRel != null) anyRailRel = true;
+      final lastDelta = railRel ?? gr.delta;
       final double plotPct;
       final double plotDelta;
       if (!guardCleanFlag) {
@@ -163,6 +175,9 @@ SessionTrust readSessionTrust({
     pctCeiling: _percent(ceiling, guardClean),
     rewardChimes: rewardChimes,
     guardChimes: guardChimes,
+    deltaCeiling: anyRailRel || guard.isEmpty
+        ? guardrailDeltaCeiling
+        : legacyGuardrailDeltaCeilingAbs,
   );
 }
 

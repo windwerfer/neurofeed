@@ -352,6 +352,7 @@ void main() {
             featurePercentile,
             warnOver,
             ceilingOver,
+            railDeltaRel,
             clean,
             dirtyReason,
           }) {},
@@ -410,6 +411,7 @@ void main() {
               featurePercentile,
               warnOver,
               ceilingOver,
+              railDeltaRel,
               clean,
               dirtyReason,
             }) {},
@@ -456,6 +458,7 @@ void main() {
                 featurePercentile,
                 warnOver,
                 ceilingOver,
+                railDeltaRel,
                 clean,
                 dirtyReason,
               }) {},
@@ -504,14 +507,16 @@ void main() {
   });
 
   group('percentileWarn', () {
-    test('band-math uses native delta vs percentile and vs 0.25', () {
-      expect(guardrailDeltaCeiling, 0.25);
+    test('band-math uses native delta vs percentile; rail on relative delta', () {
+      expect(guardrailDeltaCeiling, 0.80);
+      expect(legacyGuardrailDeltaCeilingAbs, 0.25);
       expect(
         percentileWarnOver(
           bandMath: true,
           lastDelta: 0.30,
           lastSleepDir: 0.0,
           threshold: 0.50,
+          railDeltaRel: 0.85,
         ),
         isTrue,
       );
@@ -535,13 +540,14 @@ void main() {
       );
     });
 
-    test('AI uses sleep_dir vs percentile and absolute delta vs 0.25', () {
+    test('AI uses sleep_dir vs threshold and relative delta vs the rail', () {
       expect(
         percentileWarnOver(
           bandMath: false,
           lastDelta: 0.30,
           lastSleepDir: 0.10,
           threshold: 0.50,
+          railDeltaRel: 0.85,
         ),
         isTrue,
       );

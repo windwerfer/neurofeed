@@ -7,30 +7,44 @@ import 'package:neurofeed/src/feedback/feature_bus.dart';
 import 'package:neurofeed/src/feedback/feedback_phase.dart';
 import 'package:neurofeed/src/feedback/guardrail_mode.dart';
 import 'package:neurofeed/src/feedback/session_store.dart';
+import 'package:neurofeed/src/feedback/target_state.dart'
+    show atrUsableSignalThreshold;
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/reve.dart' as frb;
 
-/// Classical frontal-delta hard rail for the sleep guardrail (normalized FFT
-/// band power of the AF7/AF8 average). Overridden by the baseline percentile
-/// once real-device data is available — needs tuning.
+/// Frontal-delta hard rail for the sleep guardrail: **relative** delta
+/// (δ ÷ total band power) of AF7/AF8, averaged over the pads that pass the
+/// pad-quality gate ([atrUsableSignalThreshold], same gate as the reward).
+/// No usable pad → no rail value → the rail cannot warn.
 ///
-/// The comment claims normalized power; the code compares absolute µV²/Hz.
-/// Do not silently switch the rail to relative-δ.
-const double guardrailDeltaCeiling = 0.25;
+/// 2026-10: switched from absolute δ (µV²) > 0.25, which fired on ~100 % of
+/// rows in every gym corpus. Ceiling from `feedback_gym/runners/
+/// delta_rail_sweep.py` (see `feedback_gym/DELTA_RAIL_SWEEP.md`): 0.80 keeps
+/// false alarms on Muse awake rest ≤ 1 % (artifact task 4 %). Relative
+/// frontal δ does **not** separate wake from N1 (BA < 0.5 at every ceiling),
+/// so the rail is a safety net only and catalog / new user protocols ship
+/// with `deltaRail: false`.
+const double guardrailDeltaCeiling = 0.80;
+
+/// The pre-2026-10 rail: absolute frontal δ (µV²) above 0.25. Sessions whose
+/// computed frames carry no `railDeltaRel` were recorded with it; history
+/// charts compare their `delta` to this value.
+const double legacyGuardrailDeltaCeilingAbs = 0.25;
 
 /// `percentileWarn` split: band-math scores native `band.delta`; AI scores the
 /// FeatureDto scalar (P(class1) from the selected head) and, when
 /// [deltaRail] is on (protocol `guard.deltaRail`, default true), also rails
-/// on absolute frontal delta from always-on bands. With [deltaRail] off only
-/// the percentile rule can warn.
+/// on relative frontal delta ([railDeltaRel], NaN = no usable pad) from
+/// always-on bands. With [deltaRail] off only the threshold rule can warn.
 bool percentileWarnOver({
   required bool bandMath,
   required double lastDelta,
   required double lastSleepDir,
   required double threshold,
   bool deltaRail = true,
+  double railDeltaRel = double.nan,
 }) {
-  final rail = deltaRail && lastDelta > guardrailDeltaCeiling;
+  final rail = deltaRail && railDeltaRel > guardrailDeltaCeiling;
   if (bandMath) {
     return lastDelta > threshold || rail;
   }
@@ -50,7 +64,11 @@ class GuardTick {
     required this.updateComputed,
     this.sampleIsClean = true,
     this.acceptBaselineSample = false,
+    this.quality,
   });
+
+  /// Per-pad signal quality (0–100) for the δ-rail pad gate.
+  final List<double>? quality;
 
   final FeedbackPhase phase;
   final String? collectionEyes;
@@ -72,6 +90,7 @@ class GuardTick {
     double? featurePercentile,
     bool? warnOver,
     bool? ceilingOver,
+    double? railDeltaRel,
     bool? clean,
     String? dirtyReason,
   })
@@ -98,13 +117,17 @@ class GuardLane {
   double lastClarity = 1;
   double lastSleepDir = 0;
   double lastDelta = 0;
+
+  /// Relative frontal δ for the rail (NaN while no frontal pad is usable).
+  double lastDeltaRel = double.nan;
   bool warningActive = false;
   DateTime lastWarningChimeAt = DateTime.fromMillisecondsSinceEpoch(0);
   final Map<int, double> _frontalDelta = {};
+  final Map<int, BandsDto> _frontalBands = {};
   String featureId = guardFeatureBandDelta;
   List<int> deltaElectrodes = const [];
 
-  /// Protocol `guard.deltaRail`: whether the absolute frontal-delta ceiling
+  /// Protocol `guard.deltaRail`: whether the relative frontal-delta ceiling
   /// may warn. [ceilingOver] is computed (and recorded) either way.
   bool deltaRail = true;
 
@@ -177,16 +200,21 @@ class GuardLane {
     bandMath = false;
     thresholdMode = guardThresholdModePercentile;
     _frontalDelta.clear();
+    _frontalBands.clear();
+    lastDeltaRel = double.nan;
     lastSleepDir = 0;
     lastDelta = 0;
     lastClarity = 1;
   }
 
-  /// Always-on bands: absolute frontal delta rail (AI percentileWarn) and
-  /// V_clear capture during the eyes-open stage.
+  /// Always-on bands: frontal delta (absolute, recorded) and the relative δ
+  /// rail value behind the pad gate; V_clear capture during the eyes-open
+  /// stage.
   void onBands(BandsDto bands, GuardTick tick) {
     _frontalDelta[bands.electrode] = bands.delta;
+    _frontalBands[bands.electrode] = bands;
     lastDelta = _frontalDeltaAverage();
+    lastDeltaRel = _frontalDeltaRel(tick.quality);
     if (tick.phase == FeedbackPhase.calibrating &&
         tick.collectionEyes == 'open') {
       unawaited(tryCaptureClearAnchor());
@@ -249,6 +277,7 @@ class GuardLane {
       featurePercentile: percentileOf(native),
       warnOver: warnOver,
       ceilingOver: ceilingOver,
+      railDeltaRel: railDeltaRelOrNull,
       clean: tick.sampleIsClean,
       dirtyReason: null,
     );
@@ -314,10 +343,11 @@ class GuardLane {
     return lastSleepDir > t;
   }
 
-  /// Absolute frontal delta above [guardrailDeltaCeiling]. Recorded per
-  /// computed frame as a signal-dirty indicator even when [deltaRail] is off
-  /// (then it never warns).
-  bool get ceilingOver => lastDelta > guardrailDeltaCeiling;
+  /// Relative frontal delta above [guardrailDeltaCeiling]. Recorded per
+  /// computed frame even when [deltaRail] is off (then it never warns).
+  bool get ceilingOver => lastDeltaRel > guardrailDeltaCeiling;
+
+  double? get railDeltaRelOrNull => lastDeltaRel.isFinite ? lastDeltaRel : null;
 
   void recomputeThreshold(int percentile) {
     if (fixedMode || baselineSleepDir.isEmpty) {
@@ -369,6 +399,7 @@ class GuardLane {
       lastSleepDir: lastSleepDir,
       threshold: t,
       deltaRail: deltaRail,
+      railDeltaRel: lastDeltaRel,
     );
     if (!over) {
       warningActive = false;
@@ -399,6 +430,23 @@ class GuardLane {
         'delta ceiling=$guardrailDeltaCeiling${deltaRail ? '' : ' (rail off)'}',
       );
     }
+  }
+
+  /// Mean δ ÷ (δ+θ+α+β+γ) over frontal pads with quality ≥
+  /// [atrUsableSignalThreshold]; NaN when none is usable.
+  double _frontalDeltaRel(List<double>? quality) {
+    var sum = 0.0;
+    var n = 0;
+    for (final i in deltaElectrodes) {
+      final b = _frontalBands[i];
+      if (b == null || quality == null || i >= quality.length) continue;
+      if (quality[i] < atrUsableSignalThreshold) continue;
+      final total = b.delta + b.theta + b.alpha + b.beta + b.gamma;
+      if (!(total > 0)) continue;
+      sum += b.delta / total;
+      n++;
+    }
+    return n == 0 ? double.nan : sum / n;
   }
 
   double _frontalDeltaAverage() {

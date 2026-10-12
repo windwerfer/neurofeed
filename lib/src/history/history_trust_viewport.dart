@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:neurofeed/src/feedback/guard_lane.dart';
 import 'package:neurofeed/src/feedback/trust/trust_guard.dart';
 import 'package:neurofeed/src/feedback/trust/trust_inhibit.dart';
 import 'package:neurofeed/src/feedback/trust/trust_pane.dart';
@@ -309,7 +308,7 @@ class _HistoryTrustReplayState extends State<HistoryTrustReplay> {
           newestElapsed: newest,
           wallNow: 0,
           seriesColor: widget.guardColor,
-          ceiling: guardrailDeltaCeiling,
+          ceiling: trust.deltaCeiling,
         );
     }
   }

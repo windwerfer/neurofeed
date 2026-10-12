@@ -606,6 +606,10 @@ pub struct GuardrailInfo {
     pub warn_over: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ceiling_over: Option<bool>,
+    /// Relative frontal delta the δ rail compared to its ceiling (2026-10+).
+    /// None = older frame: the rail was absolute `delta` > 0.25.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rail_delta_rel: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clean: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -651,6 +655,7 @@ impl Default for GuardrailInfo {
             feature_percentile: None,
             warn_over: None,
             ceiling_over: None,
+            rail_delta_rel: None,
             clean: None,
             dirty_reason: None,
         }

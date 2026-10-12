@@ -85,6 +85,8 @@ class ComputedSampler {
     _crownSignalQuality = crown;
   }
 
+  double? _railDeltaRel;
+
   void updateGuardrail({
     required double sleepDir,
     required double clarity,
@@ -94,10 +96,12 @@ class ComputedSampler {
     double? featurePercentile,
     bool? warnOver,
     bool? ceilingOver,
+    double? railDeltaRel,
     bool? clean,
     String? dirtyReason,
   }) {
     _lastSleepDir = sleepDir;
+    _railDeltaRel = railDeltaRel;
     _lastClarity = clarity;
     _lastDelta = delta;
     _warningActive = warning;
@@ -222,6 +226,7 @@ class ComputedSampler {
         featurePercentile: _guardFeaturePercentile,
         warnOver: _guardWarnOver,
         ceilingOver: _guardCeilingOver,
+        railDeltaRel: _railDeltaRel,
         clean: _guardClean,
         dirtyReason: _guardDirtyReason,
       ),

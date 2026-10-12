@@ -80,7 +80,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
-        stem: 'rust_lib_neurofeed',
+        stem: 'UNKNOWN',
         ioDirectory: 'rust/target/release/',
         webPrefix: 'pkg/',
       );
@@ -3237,8 +3237,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   GuardrailInfo dco_decode_guardrail_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return GuardrailInfo(
       sleepDir: dco_decode_f_32(arr[0]),
       clarity: dco_decode_f_32(arr[1]),
@@ -3247,8 +3247,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       featurePercentile: dco_decode_opt_box_autoadd_f_32(arr[4]),
       warnOver: dco_decode_opt_box_autoadd_bool(arr[5]),
       ceilingOver: dco_decode_opt_box_autoadd_bool(arr[6]),
-      clean: dco_decode_opt_box_autoadd_bool(arr[7]),
-      dirtyReason: dco_decode_opt_String(arr[8]),
+      railDeltaRel: dco_decode_opt_box_autoadd_f_32(arr[7]),
+      clean: dco_decode_opt_box_autoadd_bool(arr[8]),
+      dirtyReason: dco_decode_opt_String(arr[9]),
     );
   }
 
@@ -4532,6 +4533,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_featurePercentile = sse_decode_opt_box_autoadd_f_32(deserializer);
     var var_warnOver = sse_decode_opt_box_autoadd_bool(deserializer);
     var var_ceilingOver = sse_decode_opt_box_autoadd_bool(deserializer);
+    var var_railDeltaRel = sse_decode_opt_box_autoadd_f_32(deserializer);
     var var_clean = sse_decode_opt_box_autoadd_bool(deserializer);
     var var_dirtyReason = sse_decode_opt_String(deserializer);
     return GuardrailInfo(
@@ -4542,6 +4544,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       featurePercentile: var_featurePercentile,
       warnOver: var_warnOver,
       ceilingOver: var_ceilingOver,
+      railDeltaRel: var_railDeltaRel,
       clean: var_clean,
       dirtyReason: var_dirtyReason,
     );
@@ -5929,6 +5932,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_f_32(self.featurePercentile, serializer);
     sse_encode_opt_box_autoadd_bool(self.warnOver, serializer);
     sse_encode_opt_box_autoadd_bool(self.ceilingOver, serializer);
+    sse_encode_opt_box_autoadd_f_32(self.railDeltaRel, serializer);
     sse_encode_opt_box_autoadd_bool(self.clean, serializer);
     sse_encode_opt_String(self.dirtyReason, serializer);
   }

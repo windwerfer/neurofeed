@@ -161,7 +161,7 @@ User IDs: `user.<slug>` where `slug` is `[a-z0-9-]{3,64}`. Catalog IDs are reser
 
 A protocol wires: optional `reward` (feature + output + policy + inhibit), optional `guard` (feature + output + policy + `muffleReward` + `defaultEnabled` + `deltaRail` + `requiresModel`), `background.kind`, calibration id, `calibrationKind`, electrode **names** (omit = Rust default), copy strings, color.
 
-- `guard.deltaRail` (bool, default `true`): whether the absolute frontal-delta ceiling (`guardrailDeltaCeiling` = 0.25) may warn next to the percentile rule, in AI and band mode. `false` = the ceiling never warns / chimes / muffles; computed frames still record `ceilingOver` as a signal-dirty indicator. Written to JSON only when `false`.
+- `guard.deltaRail` (bool, default `true` when absent, for old documents; the protocol builder creates new programs with `false`): whether the **relative** frontal-delta ceiling (`guardrailDeltaCeiling` = 0.80, δ ÷ total band power of AF7/AF8 pads that pass the pad-quality gate, ≥ 80) may warn next to the threshold rule, in AI and band mode. Switched from absolute δ µV² > 0.25 (2026-10; fired on ~100 % of rows). Relative frontal δ does not separate wake from N1 in the gym (`feedback_gym/DELTA_RAIL_SWEEP.md`), so the rail is a safety net only and a removal candidate. No usable pad = no rail value = no rail warning. `false` = the ceiling never warns / chimes / muffles; computed frames still record `ceilingOver` as a signal-dirty indicator. Written to JSON only when `false`.
 - `guard.thresholdMode` (`percentile` \| `fixed`, optional) + `guard.fixedThreshold` (0–1, optional): how the warning threshold is set. `ai.*` guards output class probabilities (P(hypnagogic) / P(light), high = drowsy) and default to **fixed**: warn while P > `fixedThreshold` (default `defaultAiGuardFixedThreshold` = 0.50, picked by `feedback_gym/runners/ai_threshold_sweep.py`, see `feedback_gym/AI_THRESHOLD_SWEEP.md`). `band.*` guards are always **percentile** of the calibration distribution (`warningThresholdPercentile`); `fixed` on a band feature is ignored. Absent = feature default; unknown values are ignored on parse (old / hand-edited documents still open). The user pref (`guard_threshold_mode`, `guard_fixed_threshold`) overrides the document. Session snapshots (`protocolJson`) and `sessionSettings.guardThresholdMode` / `guardFixedThreshold` record what ran. The gym (`simulate_protocol.py`) mirrors the same rule.
 - `guard.requiresModel` (bool, default `false`): the guard must run on an AI model. No band.delta fallback; a stored `band.delta` pick resolves to the catalog AI feature; Start shows the model gate (install / import, or wait for an installed model to finish loading) and `FeedbackState.startCalibration` / agent `POST /session/start` (412 `model_not_ready`) refuse while the engine is not Ready. Written only when `true`.
 - `calibrationKind` (`auto` default \| `staged`): `staged` always runs the staged calibration (artifacts → eyes-open clear → eyes-closed rest) and cannot be skipped.
@@ -215,12 +215,12 @@ Per-protocol remaining knobs: **on/off** and **band vs AI**. The installed model
 | Policy | Lane | Behavior |
 |---|---|---|
 | `percentileUptrain` | reward | `RatioEngine`: baseline percentile (default 40); `adapt()` every 30 s wall-clock; ceiling `baselineMean + 1.5·sd`; floor = initial percentile; success=0 circuit breaker. `isInTarget` = native > threshold, then inhibit AND-gates. |
-| `percentileWarn` (band-math) | guard | Rest native `band.delta` → warning percentile (default 75). Warn if live native > threshold **or** > `guardrailDeltaCeiling` (0.25). |
-| `percentileWarn` (AI) | guard | Rest `sleep_dir` → same percentile. Warn if live `sleep_dir` > threshold **or** absolute frontal delta > 0.25 (always-on bands, **not** the AI `FeatureDto`). |
+| `percentileWarn` (band-math) | guard | Rest native `band.delta` → warning percentile (default 75). Warn if live native > threshold **or** (deltaRail) relative frontal δ > `guardrailDeltaCeiling` (0.80). |
+| `percentileWarn` (AI) | guard | Rest `sleep_dir` → same percentile. Warn if live score > threshold (fixed P or percentile, see `guard.thresholdMode`) **or** (deltaRail) relative frontal δ > 0.80 (always-on bands behind the pad gate, **not** the AI `FeatureDto`). |
 
 `epochWindowSeconds = 75` (wall-clock). Do **not** switch to 30 one-Hz `FeatureDto` samples. `adaptIntervalSeconds = 30` stays wall-clock.
 
-The comment/code unit mismatch on `guardrailDeltaCeiling` (comment says normalized; code uses absolute µV²/Hz) is **preserved**. Fixing units is a later explicit science PR.
+`guardrailDeltaCeiling` is relative δ since 2026-10 (explicit, approved by windwerfer). History keeps old sessions correct: frames without `guardrail.railDeltaRel` plot their absolute `delta` against `legacyGuardrailDeltaCeilingAbs` (0.25).
 
 Cooldown `warningChimeCooldown` (20 s) for one-shots; continuous alarm ramps while active.
 
@@ -317,4 +317,4 @@ Reconnect does not re-enable; the orchestrator re-calls on session start.
 - Changing the `.neurofeed` (NFED6) container / raw body / computed columnar layout.
 - SQLite schema redesign.
 - Medical-device claims.
-- Silently switching `guardrailDeltaCeiling` to relative-δ.
+- Changing the δ-rail units or ceiling without a gym sweep (`feedback_gym/runners/delta_rail_sweep.py`).

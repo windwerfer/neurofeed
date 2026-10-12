@@ -75,7 +75,9 @@ class _ProtocolBuilderViewState extends ConsumerState<ProtocolBuilderView> {
   GuardrailSound _guardOutput = GuardrailSound.softBowl;
   bool _muffleReward = false;
   // Not editable in the builder; carried over when editing a saved document.
-  bool _guardDeltaRail = true;
+  // New programs: δ rail off (2026-10 gym: relative frontal δ does not
+  // separate wake from N1). Edited programs keep what they had.
+  bool _guardDeltaRail = false;
   bool _guardRequiresModel = false;
   final Set<String> _guardElectrodes = {};
 
