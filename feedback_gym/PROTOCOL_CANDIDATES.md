@@ -27,7 +27,6 @@ Sources pooled:
 | 3 | `openMonitor` | Soft awareness / mindfulness | `band.alpha` | — | `ai.a_vig` (light) | `eyes-closed-01` | α best reward score on Sleep-EDF board | **REPLACE** `mindfulness` |
 | 4 | `alertOpen` | Eyes-open alertness | `band.btr` | — | — | `eyes-open-01` single | Strongest gym composite; MW attention favors BTR | **KEEP** `alertnessOpen` |
 | 5 | `alertClosed` | Eyes-closed stay-sharp | `band.btr` | — | `ai.a_vig` | `eyes-closed-01` | BTR + real sleep tripwire | **KEEP** shape of `alertnessClosed`; fix guard |
-| 6 | `concentrate` | Steady attention, less grinding | `band.alpha` | `betaCeiling` (~0.25) | `ai.a_vig` optional | `eyes-closed-01` | Inhibit path real; “focus” claim modest until ATTLAPSE/ROAMM gym | **KEEP** `concentration`; drop δ default |
 
 ### Utility (keep — not training programs)
 
@@ -48,10 +47,11 @@ Sources pooled:
 | id (today) | Decision | Why |
 |------------|----------|-----|
 | `twilight` | **DROP** (lab-only until labeled) | TAR reward ~0.18 on Sleep-EDF; no trusted twilight label |
-| `relaxedConcentration` | **MERGE away** into `restAwake` + `concentrate` | Weaker composite; overlaps both |
+| `relaxedConcentration` | **MERGE away** into `restAwake` (+ `concentrate`, itself pulled 2026-10-07) | Weaker composite; overlaps both |
 | `drowsiness` | **Absorb** into `restAwake` | Name/recipe replaced; δ guard wrong default |
 | `mindfulness` | **Absorb** into `openMonitor` | Same |
 | `guardrailOnly` | **Absorb** into `sleepGuard` | Same job; must use AI not δ-only |
+| `concentrate` | **PULLED 2026-10-07** (re-add once a focus feature is confirmed) | No evidence alpha tracks focus: Rodriguez-Larios et al. 2021 found novices' alpha *rises* during mind-wandering, and in the fair gym round the `betaCeiling 0.25` blocked 37–47 % of Muse rows. Old sessions keep their `protocolJson` snapshot; the id (and `concentration`) alias to `openMonitor` for display / selection only |
 | `recordOnly` as “calibration substitute” | **No** — use `calibrateRecord` for staged AI baselines | Different product job |
 
 Optional second rest depth (`deepRest`): **do not add** unless we want two rest faces; prefer one `restAwake`.

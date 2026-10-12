@@ -118,12 +118,12 @@ def test_best_p_on_monotonic_reward_sweep(tmp_path):
     assert hrs[0] >= hrs[-1] - 1e-9
 
 
-def test_simulate_protocol_concentrate_has_inhibit(tmp_path):
+def test_simulate_protocol_beta_ceiling_inhibit(tmp_path):
     path = generate_synthetic_corpus(tmp_path, n=500, seed=1)
     corpus = load_corpus(path)
     grids = load_grids()
     protocol = {
-        "id": "concentrate",
+        "id": "user.betaCeilingDemo",
         "reward": {
             "feature": "band.alpha",
             "policy": "percentileUptrain",
@@ -271,10 +271,10 @@ def test_catalog_protocols_all_simulate(tmp_path):
         "openMonitor",
         "alertOpen",
         "alertClosed",
-        "concentrate",
         "calibrateRecord",
     ]
     assert "recordOnly" not in protocols  # retired → calibrateRecord
+    assert "concentrate" not in protocols  # pulled 2026-10-07 (no focus evidence)
     path = generate_synthetic_corpus(tmp_path, n=500, seed=3)
     corpus = load_corpus(path)
     grids = load_grids()
@@ -296,7 +296,7 @@ def test_simulate_protocol_reads_delta_rail_from_catalog(tmp_path):
 
     protocols, _features = load_catalog()
     assert protocols["sleepGuard"]["guard"]["deltaRail"] is False
-    for pid in ("restAwake", "openMonitor", "alertClosed", "concentrate"):
+    for pid in ("restAwake", "openMonitor", "alertClosed"):
         assert protocols[pid]["guard"]["deltaRail"] is False, pid
     path = generate_synthetic_corpus(tmp_path, n=400, seed=11)
     corpus = load_corpus(path)

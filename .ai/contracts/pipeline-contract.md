@@ -149,9 +149,9 @@ Catalog and user documents are the same type (`origin: catalog | user`). `Protoc
 
 ### Catalog IDs (on-disk forever)
 
-`sleepGuard`, `restAwake`, `openMonitor`, `alertOpen`, `alertClosed`, `concentrate`, `calibrateRecord`
+`sleepGuard`, `restAwake`, `openMonitor`, `alertOpen`, `alertClosed`, `calibrateRecord`
 
-Retired ids resolve through `legacyProtocolAliases` (`lib/src/feedback/protocol_ids.dart`) for display / selection only: `drowsiness`→`restAwake`, `mindfulness`→`openMonitor`, `alertnessOpen`→`alertOpen`, `alertnessClosed`→`alertClosed`, `concentration`→`concentrate`, `guardrailOnly`→`sleepGuard`, `twilight` / `relaxedConcentration`→`restAwake`, `recordOnly`→`calibrateRecord` (dropped 2026-10: `calibrateRecord` is the only catalog row without reward or guard). Saved sessions keep their stored id; charts and export use the session's `protocolJson` snapshot first.
+Retired ids resolve through `legacyProtocolAliases` (`lib/src/feedback/protocol_ids.dart`) for display / selection only: `drowsiness`→`restAwake`, `mindfulness`→`openMonitor`, `alertnessOpen`→`alertOpen`, `alertnessClosed`→`alertClosed`, `concentration` / `concentrate`→`openMonitor` (`concentrate` pulled 2026-10-07: no evidence alpha tracks focus), `guardrailOnly`→`sleepGuard`, `twilight` / `relaxedConcentration`→`restAwake`, `recordOnly`→`calibrateRecord` (dropped 2026-10: `calibrateRecord` is the only catalog row without reward or guard). Saved sessions keep their stored id; charts and export use the session's `protocolJson` snapshot first.
 
 Unknown IDs **must not** fall back to `restAwake` (`SessionMetadata`, SQLite list, crash recovery). List rows: `catalog.forName(id)?.copy` else raw id. Recent: catalog hit only (skip unknown). `protocolJson` is for detail / export / replay only.
 
@@ -182,7 +182,6 @@ Catalog rows lock `reward.feature` (and `inhibit` when non-empty). They do **not
 | `openMonitor` | `band.alpha` | none | `ai.a_vig` | false | true | **false** | false | `feature` | `eyes-closed-01` | auto | no |
 | `alertOpen` | `band.btr` | none | **omit** | — | — | — | — | `feature` | `eyes-open-01` | auto | no |
 | `alertClosed` | `band.btr` | none | `ai.a_vig` | false | true | **false** | false | `feature` | `eyes-closed-01` | auto | no |
-| `concentrate` | `band.alpha` | betaCeiling 0.25 | `ai.a_vig` | false | **false** | **false** | false | `feature`, `inhibit` | `eyes-closed-01` | auto | no |
 | `calibrateRecord` | **omit** | — | **omit** | — | — | — | — | — | `eyes-closed-01` | `staged` | no |
 
 Any document **with** a `guard` object defaults to its `guard.feature` when `defaultEnabled` and no pref exists (else `none`). A catalog-default AI head without a stored pref falls back to `band.delta` while no model is Ready, unless `guard.requiresModel`. Documents without `guard` default to **none**. Do not honor unused v3 `guardrailDefault: false`.

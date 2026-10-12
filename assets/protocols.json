@@ -39,11 +39,11 @@
       "copy": {
         "catchPhrase": "Rest Awake",
         "title": "Alpha over Theta (ATR), eyes closed, sleep guard",
-        "subtitle": "Rewards the alpha ÷ theta ratio (ATR) with the eyes closed. A sleep guard warns and muffles the reward when the sleep score crosses your threshold.",
-        "guideText": "Reward: ATR = alpha ÷ theta on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), once per second. The reward fires while the value is above a percentile of your calibration distribution; the threshold adapts during the session (dynamic adapt).\nGuard: default scorer ai.a_vig (Spur A: frozen CBraMod encoder + A-vig head, value = P(hypnagogic)), scored once per second over a rolling 2 s raw-EEG window. A warning sounds while the score is above the warning threshold (default: 75th percentile of the eyes-closed calibration distribution). The fixed frontal-delta ceiling does not trigger warnings in this program; time above it is only recorded as a signal-quality flag. Without a ready AI model the guard falls back to band.delta (frontal delta against the same percentile rule). The guard can be switched off or set to another installed scorer in the guard settings. During a warning the reward output is muffled.\nCalibration: staged (artifacts, eyes-open task, eyes-closed rest) when an AI guard runs, otherwise a single eyes-closed baseline.\n\nPlaceholder copy (recipe only); final descriptions pending.",
-        "algorithmDescription": "ATR reward (alpha ÷ theta, target-pair average) above a personal calibration percentile; threshold adapts. Guard ai.a_vig (band.delta fallback without a ready model) warns above the warning threshold and muffles the reward while warning; the frontal-delta ceiling is recorded as a signal-quality flag only.",
+        "subtitle": "Rewards the alpha \u00f7 theta ratio (ATR) with the eyes closed. A sleep guard warns and muffles the reward when the sleep score crosses your threshold.",
+        "guideText": "Reward: ATR = alpha \u00f7 theta on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), once per second. The reward fires while the value is above a percentile of your calibration distribution; the threshold adapts during the session (dynamic adapt).\nGuard: default scorer ai.a_vig (Spur A: frozen CBraMod encoder + A-vig head, value = P(hypnagogic)), scored once per second over a rolling 2 s raw-EEG window. A warning sounds while the score is above the warning threshold (default: 75th percentile of the eyes-closed calibration distribution). The fixed frontal-delta ceiling does not trigger warnings in this program; time above it is only recorded as a signal-quality flag. Without a ready AI model the guard falls back to band.delta (frontal delta against the same percentile rule). The guard can be switched off or set to another installed scorer in the guard settings. During a warning the reward output is muffled.\nCalibration: staged (artifacts, eyes-open task, eyes-closed rest) when an AI guard runs, otherwise a single eyes-closed baseline.\n\nPlaceholder copy (recipe only); final descriptions pending.",
+        "algorithmDescription": "ATR reward (alpha \u00f7 theta, target-pair average) above a personal calibration percentile; threshold adapts. Guard ai.a_vig (band.delta fallback without a ready model) warns above the warning threshold and muffles the reward while warning; the frontal-delta ceiling is recorded as a signal-quality flag only.",
         "expectedDelay": "~1s (ATR) + ~1s (AI model window)",
-        "metadataDescription": "Reward: Alpha-over-Theta ratio (ATR = alpha ÷ theta) on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), scored once per second, rewarded above a percentile of the eyes-closed calibration distribution; the threshold adapts during the session. Guard: ai.a_vig (Spur A CBraMod + A-vig head), band.delta fallback when no AI model is ready; warns above the warning threshold (default 75th percentile of the rest baseline) and muffles the reward while warning; time over the frontal-delta ceiling is recorded as a signal-quality flag only."
+        "metadataDescription": "Reward: Alpha-over-Theta ratio (ATR = alpha \u00f7 theta) on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), scored once per second, rewarded above a percentile of the eyes-closed calibration distribution; the threshold adapts during the session. Guard: ai.a_vig (Spur A CBraMod + A-vig head), band.delta fallback when no AI model is ready; warns above the warning threshold (default 75th percentile of the rest baseline) and muffles the reward while warning; time over the frontal-delta ceiling is recorded as a signal-quality flag only."
       },
       "color": 16738533,
       "calibration": "eyes-closed-01",
@@ -78,10 +78,10 @@
         "catchPhrase": "Open Monitor",
         "title": "Relative alpha, eyes closed, light sleep guard",
         "subtitle": "Rewards relative alpha power with the eyes closed. A sleep guard warns when the sleep score crosses your threshold; it does not muffle the reward.",
-        "guideText": "Reward: relative alpha (alpha ÷ total band power) on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), once per second. The reward fires while the value is above a percentile of your calibration distribution; the threshold adapts during the session (dynamic adapt).\nGuard: default scorer ai.a_vig (Spur A: frozen CBraMod encoder + A-vig head, value = P(hypnagogic)), scored once per second over a rolling 2 s raw-EEG window. A warning sounds while the score is above the warning threshold (default: 75th percentile of the eyes-closed calibration distribution). The fixed frontal-delta ceiling does not trigger warnings in this program; time above it is only recorded as a signal-quality flag. Without a ready AI model the guard falls back to band.delta (frontal delta against the same percentile rule). The guard can be switched off or set to another installed scorer in the guard settings. The reward is not muffled during a warning.\nCalibration: staged (artifacts, eyes-open task, eyes-closed rest) when an AI guard runs, otherwise a single eyes-closed baseline.\n\nPlaceholder copy (recipe only); final descriptions pending.",
-        "algorithmDescription": "Relative alpha reward (alpha ÷ total power, target-pair average) above a personal calibration percentile; threshold adapts. Guard ai.a_vig (band.delta fallback without a ready model) warns only; the reward is not muffled.",
+        "guideText": "Reward: relative alpha (alpha \u00f7 total band power) on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), once per second. The reward fires while the value is above a percentile of your calibration distribution; the threshold adapts during the session (dynamic adapt).\nGuard: default scorer ai.a_vig (Spur A: frozen CBraMod encoder + A-vig head, value = P(hypnagogic)), scored once per second over a rolling 2 s raw-EEG window. A warning sounds while the score is above the warning threshold (default: 75th percentile of the eyes-closed calibration distribution). The fixed frontal-delta ceiling does not trigger warnings in this program; time above it is only recorded as a signal-quality flag. Without a ready AI model the guard falls back to band.delta (frontal delta against the same percentile rule). The guard can be switched off or set to another installed scorer in the guard settings. The reward is not muffled during a warning.\nCalibration: staged (artifacts, eyes-open task, eyes-closed rest) when an AI guard runs, otherwise a single eyes-closed baseline.\n\nPlaceholder copy (recipe only); final descriptions pending.",
+        "algorithmDescription": "Relative alpha reward (alpha \u00f7 total power, target-pair average) above a personal calibration percentile; threshold adapts. Guard ai.a_vig (band.delta fallback without a ready model) warns only; the reward is not muffled.",
         "expectedDelay": "~1s (live band stream)",
-        "metadataDescription": "Reward: relative alpha power (alpha ÷ total band power) on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), scored once per second, rewarded above a percentile of the eyes-closed calibration distribution; the threshold adapts during the session. Guard: ai.a_vig (band.delta fallback when no AI model is ready), warning only (no reward muffle), above the warning threshold; the frontal-delta ceiling is recorded as a signal-quality flag only."
+        "metadataDescription": "Reward: relative alpha power (alpha \u00f7 total band power) on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), scored once per second, rewarded above a percentile of the eyes-closed calibration distribution; the threshold adapts during the session. Guard: ai.a_vig (band.delta fallback when no AI model is ready), warning only (no reward muffle), above the warning threshold; the frontal-delta ceiling is recorded as a signal-quality flag only."
       },
       "color": 16744519,
       "calibration": "eyes-closed-01",
@@ -115,11 +115,11 @@
       "copy": {
         "catchPhrase": "Alert, Eyes Open",
         "title": "Beta over Theta (BTR), eyes open",
-        "subtitle": "Rewards the beta ÷ theta ratio (BTR) with the eyes open, against an eyes-open baseline. No sleep guard.",
-        "guideText": "Reward: BTR = beta ÷ theta on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), once per second. The reward fires while the value is above a percentile of your calibration distribution; the threshold adapts during the session (dynamic adapt).\nGuard: none.\nCalibration: single eyes-open baseline (staged only when Settings → AI Calibration is set to always staged).\nEyes-open signal carries more blink and muscle artifact; contaminated samples are gated out.\n\nPlaceholder copy (recipe only); final descriptions pending.",
-        "algorithmDescription": "BTR reward (beta ÷ theta, target-pair average) above a personal eyes-open calibration percentile; threshold adapts. No guard lane.",
+        "subtitle": "Rewards the beta \u00f7 theta ratio (BTR) with the eyes open, against an eyes-open baseline. No sleep guard.",
+        "guideText": "Reward: BTR = beta \u00f7 theta on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), once per second. The reward fires while the value is above a percentile of your calibration distribution; the threshold adapts during the session (dynamic adapt).\nGuard: none.\nCalibration: single eyes-open baseline (staged only when Settings \u2192 AI Calibration is set to always staged).\nEyes-open signal carries more blink and muscle artifact; contaminated samples are gated out.\n\nPlaceholder copy (recipe only); final descriptions pending.",
+        "algorithmDescription": "BTR reward (beta \u00f7 theta, target-pair average) above a personal eyes-open calibration percentile; threshold adapts. No guard lane.",
         "expectedDelay": "~1s (live band stream)",
-        "metadataDescription": "Reward: Beta-over-Theta ratio (BTR = beta ÷ theta) on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), scored once per second, rewarded above a percentile of the eyes-open calibration distribution; the threshold adapts during the session. Movement- and artifact-contaminated samples are gated out. No guard lane."
+        "metadataDescription": "Reward: Beta-over-Theta ratio (BTR = beta \u00f7 theta) on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), scored once per second, rewarded above a percentile of the eyes-open calibration distribution; the threshold adapts during the session. Movement- and artifact-contaminated samples are gated out. No guard lane."
       },
       "color": 16764672,
       "calibration": "eyes-open-01",
@@ -144,11 +144,11 @@
       "copy": {
         "catchPhrase": "Alert, Eyes Closed",
         "title": "Beta over Theta (BTR), eyes closed, sleep guard",
-        "subtitle": "Rewards the beta ÷ theta ratio (BTR) with the eyes closed. A sleep guard warns when the sleep score crosses your threshold.",
-        "guideText": "Reward: BTR = beta ÷ theta on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), once per second. The reward fires while the value is above a percentile of your calibration distribution; the threshold adapts during the session (dynamic adapt).\nGuard: default scorer ai.a_vig (Spur A: frozen CBraMod encoder + A-vig head, value = P(hypnagogic)), scored once per second over a rolling 2 s raw-EEG window. A warning sounds while the score is above the warning threshold (default: 75th percentile of the eyes-closed calibration distribution). The fixed frontal-delta ceiling does not trigger warnings in this program; time above it is only recorded as a signal-quality flag. Without a ready AI model the guard falls back to band.delta (frontal delta against the same percentile rule). The guard can be switched off or set to another installed scorer in the guard settings. The reward is not muffled during a warning.\nCalibration: staged (artifacts, eyes-open task, eyes-closed rest) when an AI guard runs, otherwise a single eyes-closed baseline.\n\nPlaceholder copy (recipe only); final descriptions pending.",
-        "algorithmDescription": "BTR reward (beta ÷ theta, target-pair average) above a personal eyes-closed calibration percentile; threshold adapts. Guard ai.a_vig (band.delta fallback without a ready model) warns only.",
+        "subtitle": "Rewards the beta \u00f7 theta ratio (BTR) with the eyes closed. A sleep guard warns when the sleep score crosses your threshold.",
+        "guideText": "Reward: BTR = beta \u00f7 theta on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), once per second. The reward fires while the value is above a percentile of your calibration distribution; the threshold adapts during the session (dynamic adapt).\nGuard: default scorer ai.a_vig (Spur A: frozen CBraMod encoder + A-vig head, value = P(hypnagogic)), scored once per second over a rolling 2 s raw-EEG window. A warning sounds while the score is above the warning threshold (default: 75th percentile of the eyes-closed calibration distribution). The fixed frontal-delta ceiling does not trigger warnings in this program; time above it is only recorded as a signal-quality flag. Without a ready AI model the guard falls back to band.delta (frontal delta against the same percentile rule). The guard can be switched off or set to another installed scorer in the guard settings. The reward is not muffled during a warning.\nCalibration: staged (artifacts, eyes-open task, eyes-closed rest) when an AI guard runs, otherwise a single eyes-closed baseline.\n\nPlaceholder copy (recipe only); final descriptions pending.",
+        "algorithmDescription": "BTR reward (beta \u00f7 theta, target-pair average) above a personal eyes-closed calibration percentile; threshold adapts. Guard ai.a_vig (band.delta fallback without a ready model) warns only.",
         "expectedDelay": "~1s (live band stream)",
-        "metadataDescription": "Reward: Beta-over-Theta ratio (BTR = beta ÷ theta) on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), scored once per second, rewarded above a percentile of the eyes-closed calibration distribution; the threshold adapts during the session. Guard: ai.a_vig (band.delta fallback when no AI model is ready), warning only, above the warning threshold; the frontal-delta ceiling is recorded as a signal-quality flag only."
+        "metadataDescription": "Reward: Beta-over-Theta ratio (BTR = beta \u00f7 theta) on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), scored once per second, rewarded above a percentile of the eyes-closed calibration distribution; the threshold adapts during the session. Guard: ai.a_vig (band.delta fallback when no AI model is ready), warning only, above the warning threshold; the frontal-delta ceiling is recorded as a signal-quality flag only."
       },
       "color": 16757115,
       "calibration": "eyes-closed-01",
@@ -171,50 +171,6 @@
         "policy": "percentileWarn",
         "muffleReward": false,
         "defaultEnabled": true,
-        "deltaRail": false,
-        "locked": []
-      }
-    },
-    "concentrate": {
-      "id": "concentrate",
-      "origin": "catalog",
-      "schemaVersion": 1,
-      "copy": {
-        "catchPhrase": "Concentrate",
-        "title": "Relative alpha + beta ceiling, eyes closed",
-        "subtitle": "Rewards relative alpha only while relative beta stays at or below 0.25. An optional sleep guard (off by default) can be switched on.",
-        "guideText": "Reward: relative alpha (alpha ÷ total band power) on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), once per second. The reward fires while the value is above a percentile of your calibration distribution; the threshold adapts during the session (dynamic adapt).\nInhibit: the reward also requires relative beta ≤ 0.25 (beta ceiling, adjustable per session).\nGuard: optional, off by default. When switched on: default scorer ai.a_vig (Spur A: frozen CBraMod encoder + A-vig head, value = P(hypnagogic)), scored once per second over a rolling 2 s raw-EEG window. A warning sounds while the score is above the warning threshold (default: 75th percentile of the eyes-closed calibration distribution). The fixed frontal-delta ceiling does not trigger warnings in this program; time above it is only recorded as a signal-quality flag. Without a ready AI model the guard falls back to band.delta (frontal delta against the same percentile rule). The guard can be switched off or set to another installed scorer in the guard settings.\nCalibration: staged (artifacts, eyes-open task, eyes-closed rest) when an AI guard runs, otherwise a single eyes-closed baseline.\n\nPlaceholder copy (recipe only); final descriptions pending.",
-        "algorithmDescription": "Relative alpha reward (alpha ÷ total power, target-pair average) above a personal calibration percentile AND relative beta ≤ 0.25 (beta ceiling). Alpha threshold adapts. Optional guard (off by default): ai.a_vig, band.delta fallback without a ready model.",
-        "expectedDelay": "~1s (live band stream)",
-        "metadataDescription": "Reward: relative alpha power (alpha ÷ total band power) on the target electrode pair (Muse AF7/AF8, Crown PO3/PO4), rewarded above a percentile of the eyes-closed calibration distribution AND while relative beta ≤ 0.25 (beta ceiling); both conditions gate the reward; the alpha threshold adapts during the session. Optional guard, off by default: ai.a_vig (band.delta fallback when no AI model is ready)."
-      },
-      "color": 16741088,
-      "calibration": "eyes-closed-01",
-      "calibrationSkippable": false,
-      "background": {
-        "kind": "drone"
-      },
-      "reward": {
-        "feature": "band.alpha",
-        "output": "chime",
-        "policy": "percentileUptrain",
-        "inhibit": [
-          {
-            "type": "betaCeiling",
-            "max": 0.25
-          }
-        ],
-        "locked": [
-          "feature",
-          "inhibit"
-        ]
-      },
-      "guard": {
-        "feature": "ai.a_vig",
-        "output": "softBowl",
-        "policy": "percentileWarn",
-        "muffleReward": false,
-        "defaultEnabled": false,
         "deltaRail": false,
         "locked": []
       }

@@ -335,7 +335,7 @@ class Settings extends ChangeNotifier {
   }
 
   /// Move inhibit ceiling overrides stored under a renamed catalog id (e.g.
-  /// `concentration`) to the current id (`concentrate`) unless the current id
+  /// `mindfulness`) to the current id (`openMonitor`) unless the current id
   /// already has its own row; drop every retired-id row.
   static Future<void> _migrateLegacyInhibitPrefs(
     SharedPreferences prefs,

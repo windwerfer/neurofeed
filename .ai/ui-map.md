@@ -220,6 +220,7 @@ metric. Histogram/PSD have **no** Bands strip.
 | Create program | `Create program` | `ProtocolBuilderView` | `protocol_builder.dart` | |
 | Protocol card | catch phrase (e.g. `Sleep-Edge Rest`) | `ProtocolDocument` | `feedback_list.dart` | Tap → session route. Catalog copy names the reward electrodes as `the target electrode pair (Muse AF7/AF8, Crown PO3/PO4)`. |
 | calibrateRecord | catalog copy | id `calibrateRecord` | `assets/protocols.json` | Only catalog row without reward or guard. Staged calibration, not skippable. Retired `recordOnly` aliases here. Agent smoke uses `alertOpen` + skip-cal. |
+| Pulled protocols | — | `legacyProtocolAliases` | `protocol_ids.dart` | `concentrate` (and older `concentration`) were pulled 2026-10-07 (no focus evidence); they have no card and alias to `openMonitor` for display only. Old sessions open from their `protocolJson` snapshot. |
 
 ### Feedback session — `lib/src/views/feedback_session.dart`
 

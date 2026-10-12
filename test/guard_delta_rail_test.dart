@@ -271,7 +271,6 @@ void main() {
         'restAwake',
         'openMonitor',
         'alertClosed',
-        'concentrate',
       ]) {
         final guard = catalog.forName(id)!.guard!;
         expect(guard.deltaRail, isFalse, reason: id);

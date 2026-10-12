@@ -61,20 +61,14 @@ void main() {
     expect(d('alertClosed').guard!.feature, 'ai.a_vig');
     expect(d('alertClosed').calibration, 'eyes-closed-01');
 
-    final concentrate = d('concentrate');
-    expect(concentrate.reward!.feature, 'band.alpha');
-    expect(concentrate.conditions, hasLength(1));
-    expect(concentrate.conditions.single, isA<BetaCeiling>());
-    expect((concentrate.conditions.single as BetaCeiling).maxBetaRel, 0.25);
-    expect(concentrate.guard!.feature, 'ai.a_vig');
-    expect(concentrate.guard!.defaultEnabled, isFalse, reason: 'optional');
+    // concentrate was pulled 2026-10-07 (no evidence alpha tracks focus).
+    expect(catalog.byName.containsKey('concentrate'), isFalse);
 
     for (final id in [
       'restAwake',
       'openMonitor',
       'alertOpen',
       'alertClosed',
-      'concentrate',
     ]) {
       expect(d(id).requiresStagedCalibration, isFalse, reason: id);
       expect(d(id).calibrationSkippable, isFalse, reason: id);
@@ -149,6 +143,7 @@ void main() {
       'alertnessOpen',
       'alertnessClosed',
       'concentration',
+      'concentrate',
       'guardrailOnly',
       'recordOnly',
       'stressDownshift',
@@ -163,7 +158,8 @@ void main() {
       'mindfulness': 'openMonitor',
       'alertnessOpen': 'alertOpen',
       'alertnessClosed': 'alertClosed',
-      'concentration': 'concentrate',
+      'concentration': 'openMonitor',
+      'concentrate': 'openMonitor',
       'guardrailOnly': 'sleepGuard',
       'twilight': 'restAwake',
       'relaxedConcentration': 'restAwake',
@@ -178,6 +174,12 @@ void main() {
       expect(legacyProtocolRenames, isNot(contains('twilight')));
       expect(legacyProtocolRenames, isNot(contains('relaxedConcentration')));
       expect(legacyProtocolRenames, isNot(contains('recordOnly')));
+      expect(legacyProtocolRenames, isNot(contains('concentrate')));
+      expect(legacyProtocolRenames, isNot(contains('concentration')));
+      // No alias chain: every target is a live catalog id, never a retired one.
+      for (final target in legacyProtocolAliases.values) {
+        expect(isLegacyProtocolId(target), isFalse, reason: target);
+      }
     });
 
     test('canonicalProtocolId passes current and user ids through', () {
@@ -230,7 +232,26 @@ void main() {
           'reward': {'feature': 'not.a.feature'},
         },
       );
-      expect(broken!.id, 'concentrate');
+      expect(broken!.id, 'openMonitor');
+    });
+
+    test('old concentrate sessions keep what they ran', () {
+      final doc = savedProtocolDocument(
+        catalog,
+        protocol: 'concentrate',
+        protocolJson: const {
+          'id': 'concentrate',
+          'calibration': 'eyes-closed-01',
+          'reward': {'feature': 'band.alpha'},
+          'conditions': [
+            {'kind': 'betaCeiling', 'maxBetaRel': 0.25},
+          ],
+        },
+      );
+      expect(doc!.id, 'concentrate');
+      expect(doc.reward!.feature, 'band.alpha');
+      final fallback = savedProtocolDocument(catalog, protocol: 'concentrate');
+      expect(fallback!.id, 'openMonitor');
     });
 
     test('old recordOnly sessions keep what they ran', () {

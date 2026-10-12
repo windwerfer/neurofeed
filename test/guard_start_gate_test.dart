@@ -34,6 +34,7 @@ void main() {
         'alertOpen',
         'alertClosed',
         'concentrate',
+        'concentration',
         'calibrateRecord',
         'recordOnly',
       ]) {
