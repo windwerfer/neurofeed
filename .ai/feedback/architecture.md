@@ -113,6 +113,11 @@ Idle → Calibrating → Playing ⇄ Paused → Ended → Dashboard
                    └ interrupted (disconnect / bad signal, auto-resume)
 ```
 
+Link-loss law (the code still auto-ends; that end is retired):
+[../contracts/feedback-disconnect.md](../contracts/feedback-disconnect.md).
+A disconnect pauses the session and its audio cues. Only the same device
+continues it. Bad-signal wait is unchanged.
+
 Orchestrator: `lib/src/feedback/feedback_state.dart`. No ready phase — a
 finished baseline always calls `startPlaying()`.
 

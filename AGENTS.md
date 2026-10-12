@@ -78,6 +78,11 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   snake_case gestures; `duration: 0` instants; single SoT). **Base metadata vocabulary
   LOCKED**. Prefer those JSON keys; do not invent synonyms. Session-format FFI
   identifiers are unversioned (`containerEncode`, `parseHead`, …; container is NFED6).
+- Feedback link loss is frozen
+  ([`.ai/contracts/feedback-disconnect.md`](.ai/contracts/feedback-disconnect.md)):
+  a disconnect pauses the session and its audio cues. Only the same device
+  continues it. Do not auto-end on disconnect. The orchestrator still
+  auto-ends; that end is the bug the contract retires.
 - Do not reopen pipeline-contract Key Decisions. Do not unlock Crown
   sessions. Connect UX is frozen (`.ai/connect-simulator-ux.md`) — Neurosity
   is OSC LAN discovery only (`neurosity_osc.rs`, sim `tools/crown_osc_sim.py`);
@@ -113,7 +118,7 @@ Tests: [`.ai/test-matrix.md`](.ai/test-matrix.md). Audio engine:
 Format/cache: `README_feedback_format.md`, `README_history_cache.md`.
 Trust graphs: [`.ai/trust-graphs.md`](.ai/trust-graphs.md) (implemented).
 Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
-Frozen contracts: [`.ai/contracts/`](.ai/contracts/) — pipeline, data-plane, fileformat v6, app folder.
+Frozen contracts: [`.ai/contracts/`](.ai/contracts/) — pipeline, data-plane, fileformat v6, app folder, feedback disconnect.
 Historical spine handoff: [`.ai/archive/handoff-spine.md`](.ai/archive/handoff-spine.md).
 
 ## Project layout

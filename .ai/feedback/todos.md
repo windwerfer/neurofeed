@@ -19,7 +19,7 @@ Historical phase checklists: [../archive/feedback-todos-historical.md](../archiv
 - Calibration → auto-start; reward chimes; movement gates them.
 - Five volume sliders live; target settings; in-flight recalibrate.
 - Prefs survive restart. `[atr]` threshold stays ≤ ceiling.
-- Disconnect ~30 s silence → interrupted + grace; reconnect resumes.
+- Disconnect during a feedback session pauses it (no grace end). The same device continues it. Law: [../contracts/feedback-disconnect.md](../contracts/feedback-disconnect.md). The orchestrator still auto-ends; that is the open bug.
 - Staged REVE calibration (artifacts / eyes-open / eyes-closed).
 - Binaural + music + guard muffle on a real speaker.
 - Streaming to a real LSL / OSC / BrainFlow sink.

@@ -1,7 +1,8 @@
 # Frozen contracts
 
-Governing freezes for **landed** work. Read these for what must stay true —
-not how the series was implemented.
+Governing freezes. Read these for what must stay true — not how the series
+was implemented. [feedback-disconnect.md](feedback-disconnect.md) is frozen
+ahead of the code: the orchestrator still auto-ends on link loss.
 
 Queued work keeps its full spec under [../TODO/](../TODO/) until it lands.
 Athena optics stays there: [../TODO/athena-optics-contract.md](../TODO/athena-optics-contract.md).
@@ -13,6 +14,7 @@ Athena optics stays there: [../TODO/athena-optics-contract.md](../TODO/athena-op
 | [protocols_and_features.md](protocols_and_features.md) | **Implemented** | Electrodes: Rust per-device × per-feature defaults, `DeviceConfig` role pairs, protocol overrides, gate pads |
 | [fileformat_v6.md](fileformat_v6.md) | **Implemented / LOCKED** | `.neurofeed` v6 (NFED6): unified recording+feedback metadata, container layout, computed Trust extras. Human spec: [../../README_feedback_format.md](../../README_feedback_format.md) |
 | [app-folder.md](app-folder.md) | **Implemented** | App folder, cache, AI models, export, and the save-folder move. |
+| [feedback-disconnect.md](feedback-disconnect.md) | **Frozen** | Feedback link loss pauses the session and its audio. The same device continues it. A disconnect does not end the session. Code still auto-ends; that end is retired by this contract. |
 
 Archived (historical v5 / NFED5):
 [../archive/session-format-contract-v5.md](../archive/session-format-contract-v5.md).

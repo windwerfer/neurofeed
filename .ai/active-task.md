@@ -14,6 +14,12 @@ on the container raw section stays **deleted**, not dual-read. Bands Y is
 Spectrogram, Spectrogram FFT-window chrome, or `SMOOTH` / `REAL TIME` Bands
 chrome. Do not pause `SweepBuffer` / `BandCache` on view change.
 
+**Aside:** Feedback link loss is frozen in
+[contracts/feedback-disconnect.md](contracts/feedback-disconnect.md). A
+disconnect pauses the session and its audio; only the same device
+continues it. The orchestrator still auto-ends. Do not treat that end as
+law.
+
 **Aside:** Spur A / CBraMod encoder + A-vig guardrail lived on
 `feat/spur-a-cbramod-guardrail` — pack `assets/packs/cbramod-a-vig-full/`,
 Candle CPU forward latency still TBD. Do not mix Spur A into unrelated work

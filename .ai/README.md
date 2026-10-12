@@ -36,6 +36,7 @@ land (Athena optics keeps its implementer detail there).
 | [contracts/protocols_and_features.md](contracts/protocols_and_features.md) | **Implemented.** Electrode workflow: Rust defaults per device × feature, `DeviceConfig` role pairs, protocol overrides, gate pads in Rust. |
 | [contracts/fileformat_v6.md](contracts/fileformat_v6.md) | **Implemented / LOCKED.** `.neurofeed` v6 (NFED6). Human spec: [../README_feedback_format.md](../README_feedback_format.md) (update it if the contract changes). Historical v5: [archive/session-format-contract-v5.md](archive/session-format-contract-v5.md). |
 | [contracts/app-folder.md](contracts/app-folder.md) | **Implemented.** App folder, cache, AI models, export, save-folder move. |
+| [contracts/feedback-disconnect.md](contracts/feedback-disconnect.md) | **Frozen.** A feedback-session link loss pauses the session and its audio cues. Only the same device continues it. The session does not auto-end. |
 
 ## Feedback
 

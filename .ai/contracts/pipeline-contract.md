@@ -4,7 +4,7 @@
 |---|---|
 | Status | **Implemented** (PRs 1–7). |
 | Scope | Feature IDs, protocol documents, lane semantics, FFI, catalog mapping, Crown sessions. |
-| Not this | Capture writer ([data-plane-contract.md](data-plane-contract.md)); `.neurofeed` header / computed field set ([fileformat_v6.md](fileformat_v6.md)); Connect UX; SoLoud internals ([../audio-engine.md](../audio-engine.md)); Crown *session run*. |
+| Not this | Capture writer ([data-plane-contract.md](data-plane-contract.md)); `.neurofeed` header / computed field set ([fileformat_v6.md](fileformat_v6.md)); Connect UX; SoLoud internals ([../audio-engine.md](../audio-engine.md)); Crown *session run*; feedback link-loss pause ([feedback-disconnect.md](feedback-disconnect.md)). |
 
 Do not reopen [Key Decisions](#key-decisions).
 

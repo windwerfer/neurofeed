@@ -174,7 +174,7 @@ Do **not** dump full 1 Hz series into metadata.
 | Overshoot hold | **Chart-only (LOCKED).** Paint-time (`overshoot_hold.dart`); never a computed field or annotation. Absolute band power already lives in computed `bands`. |
 | User **pause** | **LOCKED:** stop **raw** capture and **computed** sampler for the pause span. That span contains **no raw samples and no computed frames** — the gap is not in the raw body. Write `annotations[]` `{type:"pause", onset, duration}` when the pause ends: `onset` is the frozen content clock (seconds from capture start) and `duration` is wall-clock length. Do not invent samples. `elapsedSeconds` / content clocks do not advance during pause (wall clock may). Resume restarts both streams. If the process dies while a pause is still open, close it at the end of the recorded capture: `duration` = max(0, last content time − onset). That end is the raw-body end, because raw already stopped. Do not use the wall time until the app is opened again. |
 | Disconnect during recording | No BLE packets → no new raw; UI may hold BandCache gaps. Capture lease policy unchanged until implementers touch it. Annotate `disconnect`. |
-| Feedback disconnect / badSignal | Phase → `interrupted`; annotate `bad_quality` / `disconnect` as appropriate. Distinct from user pause. |
+| Feedback disconnect / badSignal | Phase → `interrupted`; annotate `bad_quality` / `disconnect` as appropriate. Distinct from user pause. A disconnect does not end the session ([feedback-disconnect.md](feedback-disconnect.md)). |
 | Raw / computed during bad quality | **Still record** whatever arrives (raw samples + computed frames with `signalQuality`). Unusable ≠ dropped. Gate aggregates on usable seconds. |
 
 ---
