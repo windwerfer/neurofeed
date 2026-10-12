@@ -64,12 +64,7 @@ void main() {
     // concentrate was pulled 2026-10-07 (no evidence alpha tracks focus).
     expect(catalog.byName.containsKey('concentrate'), isFalse);
 
-    for (final id in [
-      'restAwake',
-      'openMonitor',
-      'alertOpen',
-      'alertClosed',
-    ]) {
+    for (final id in ['restAwake', 'openMonitor', 'alertOpen', 'alertClosed']) {
       expect(d(id).requiresStagedCalibration, isFalse, reason: id);
       expect(d(id).calibrationSkippable, isFalse, reason: id);
     }
@@ -242,14 +237,17 @@ void main() {
         protocolJson: const {
           'id': 'concentrate',
           'calibration': 'eyes-closed-01',
-          'reward': {'feature': 'band.alpha'},
-          'conditions': [
-            {'kind': 'betaCeiling', 'maxBetaRel': 0.25},
-          ],
+          'reward': {
+            'feature': 'band.alpha',
+            'inhibit': [
+              {'type': 'betaCeiling', 'max': 0.25},
+            ],
+          },
         },
       );
       expect(doc!.id, 'concentrate');
       expect(doc.reward!.feature, 'band.alpha');
+      expect(doc.conditions.single, isA<BetaCeiling>());
       final fallback = savedProtocolDocument(catalog, protocol: 'concentrate');
       expect(fallback!.id, 'openMonitor');
     });

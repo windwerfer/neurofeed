@@ -417,6 +417,11 @@ void main() {
       await pump(trustGuardPaneSpecs(guardFeatureAiDrowsiness));
       expect(find.byKey(const Key('trust-guard-warn-pane')), findsOneWidget);
       expect(find.byKey(const Key('trust-guard-ceiling-pane')), findsOneWidget);
+
+      // Catalog AI guards run with guard.deltaRail false: no δ ceiling chart.
+      await pump(trustGuardPaneSpecs(guardFeatureAiAVig, deltaRail: false));
+      expect(find.byKey(const Key('trust-guard-warn-pane')), findsOneWidget);
+      expect(find.byKey(const Key('trust-guard-ceiling-pane')), findsNothing);
     });
   });
 
@@ -429,6 +434,20 @@ void main() {
       expect(trustGuardPaneSpecs(guardFeatureAiDrowsiness), [
         TrustGuardPaneId.warn,
         TrustGuardPaneId.ceiling,
+      ]);
+    });
+
+    test('specs: δ ceiling pane only when the protocol rails on delta', () {
+      expect(trustGuardPaneSpecs(guardFeatureAiAVig, deltaRail: false), [
+        TrustGuardPaneId.warn,
+      ]);
+      expect(trustGuardPaneSpecs(guardFeatureAiAVig, deltaRail: true), [
+        TrustGuardPaneId.warn,
+        TrustGuardPaneId.ceiling,
+      ]);
+      // band.delta guard: the warn pane is the delta chart, rail or not.
+      expect(trustGuardPaneSpecs(guardFeatureBandDelta, deltaRail: false), [
+        TrustGuardPaneId.warn,
       ]);
     });
   });

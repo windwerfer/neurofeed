@@ -165,7 +165,10 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
                           settings.inhibitCeilingOverrides(fb.protocol),
                         ),
                       ),
-                      guardPanes: trustGuardPaneSpecs(guardFeature),
+                      guardPanes: trustGuardPaneSpecs(
+                        guardFeature,
+                        deltaRail: protocol.guard?.deltaRail ?? true,
+                      ),
                     ),
                   const SizedBox(height: 16),
                   if (fb.phase == FeedbackPhase.idle ||
@@ -2434,11 +2437,16 @@ class _GuardrailThresholdDialogState
     final fb = ref.watch(feedbackStateProvider);
     final settings = ref.watch(settingsProvider);
     final theme = Theme.of(context);
+    final protocol = protocolOrPlaceholder(
+      ref.watch(protocolCatalogProvider).valueOrNull,
+      fb.protocol,
+    );
     final panes = trustGuardPaneSpecs(
       settings.sessionGuardFeatureFor(
         fb.protocol,
         aiReady: ref.watch(modelEngineAvailabilityProvider),
       ),
+      deltaRail: protocol.guard?.deltaRail ?? true,
     );
     final showCeiling = panes.contains(TrustGuardPaneId.ceiling);
     return AlertDialog(

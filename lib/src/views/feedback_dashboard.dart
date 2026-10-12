@@ -251,7 +251,10 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         trust.reward.isNotEmpty && (loaded.protocolDoc?.hasReward ?? false);
     final guardLane =
         trust.guard.isNotEmpty &&
-        trustGuardPaneSpecs(loaded.guardFeature).isNotEmpty;
+        trustGuardPaneSpecs(
+          loaded.guardFeature,
+          deltaRail: loaded.protocolDoc?.guard?.deltaRail ?? true,
+        ).isNotEmpty;
     _rewardOn = rewardLane;
     _guardOn = !rewardLane && guardLane;
     final end = historyTrustLastT(trust);
@@ -535,7 +538,10 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       inhibit: trustInhibitSpecs(
         overlayInhibitCeilings(protocol.conditions, overrides),
       ),
-      guardPanes: trustGuardPaneSpecs(_guardFeature),
+      guardPanes: trustGuardPaneSpecs(
+        _guardFeature,
+        deltaRail: protocol.guard?.deltaRail ?? true,
+      ),
       rewardLabel: _rewardLabel,
       guardLabel: _guardLabel,
       rewardColor: protocol.color,
@@ -1205,6 +1211,10 @@ bool _feedbackLane(
   if (trust == null) return false;
   final reward = trust.reward.isNotEmpty && (protocol?.hasReward ?? false);
   final guard =
-      trust.guard.isNotEmpty && trustGuardPaneSpecs(guardFeature).isNotEmpty;
+      trust.guard.isNotEmpty &&
+      trustGuardPaneSpecs(
+        guardFeature,
+        deltaRail: protocol?.guard?.deltaRail ?? true,
+      ).isNotEmpty;
   return reward || guard;
 }

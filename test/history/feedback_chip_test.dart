@@ -27,6 +27,7 @@ final String _rustLibPath =
 const _rewardFooter = '10% in zone · 7 chimes · 1% inhibited';
 const _guardFooter = '50% warning · 2 chimes · 10% over ceiling';
 
+
 Float32List _band() =>
     Float32List.fromList(const [10.0, 20.0, 40.0, 15.0, 5.0]);
 
@@ -375,6 +376,42 @@ void main() {
       tester.widget<ToggleButtons>(find.byType(ToggleButtons)).isSelected,
       [true],
     );
+  });
+
+  testWidgets('δ ceiling chart and summary hidden when the protocol does not '
+      'rail on delta (catalog openMonitor, AI guard)', (tester) async {
+    final settings = await _settings(tester);
+    final file = await tester.runAsync(
+      () => _write(
+        _meta(
+          protocol: 'openMonitor',
+          sessionSettings: {'guardFeature': 'ai.a_vig'},
+          protocolJson: {
+            ..._concentrationSnapshot,
+            'id': 'openMonitor',
+            'reward': {'feature': 'band.alpha'},
+            'guard': {
+              'feature': 'ai.a_vig',
+              'policy': 'percentileWarn',
+              'deltaRail': false,
+            },
+          },
+          audioEvents: _audioEvents,
+        ),
+        _concentrationFrames(),
+      ),
+    );
+    _deleteLater(file!);
+    await _open(tester, settings, file.path);
+    await tester.tap(find.text('Feedback'));
+    await tester.pump();
+    await tester.tap(find.text('Guard'));
+    await tester.pump();
+    expect(find.byKey(const Key('trust-guard-warn-pane')), findsOneWidget);
+    expect(find.byKey(const Key('trust-guard-ceiling-pane')), findsNothing);
+    // Warning / chime totals stay under the A-vig chart.
+    expect(find.text('50% warning · 2 chimes'), findsOneWidget);
+    expect(find.textContaining('over ceiling'), findsNothing);
   });
 
   testWidgets('null percents render as an em dash', (tester) async {
