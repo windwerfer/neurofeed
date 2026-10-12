@@ -713,3 +713,18 @@ Gym runners now score only rows the app would score live: pad quality ch_af7_q/c
 
 ### Relative delta (app 2ce67ce: rail ceiling 0.80) under gating
 Gated, per-recording AUC for sleep: BOAS W vs N1 0.55, Muse Sleep-Onset wake vs pre-N2 0.36 (inverted). Fixed 0.80 rail warn rate wake/sleepy: BOAS 0.091/0.104, Muse Sleep-Onset 0.033/0.007, ds001787 (all awake) 0.15. On Lee cued artifacts it fires 4% vs 0.7% clean, so it is an artifact detector, not a drowsiness signal. **Recommendation: remove relative-delta as a sleep rail** (ai.a_vig gated: BOAS AUC 0.74, Muse Sleep-Onset 0.90 is the guard to keep).
+
+## Fair sleep-onset round on new corpora (2026-10-12, gated; results/20261012T083402Z_fair)
+
+Per-recording AUC in the sleep direction, median:
+
+| feature | BOAS W vs N1 (126 nights, AF7/AF8 headband) | Muse Sleep-Onset wake vs pre-N2 (312, LAB-ONLY aggregate) | ds001787 on-task vs MW (33, awake) |
+|---|---:|---:|---:|
+| ai.a_vig | **0.74** | **0.90** | — (no AI cols) |
+| relative theta | 0.58 | 0.60 | 0.44 |
+| TAR theta/alpha | 0.60 | 0.40 (inverted) | 0.51 |
+| BTR beta/theta | 0.62 | 0.43 (inverted) | 0.50 |
+| relative delta | 0.55 | 0.36 (inverted) | 0.54 |
+| absolute delta | 0.44 (inverted) | 0.23 (inverted) | 0.55 |
+
+Takeaways: AI heads are the only guard that holds on both new real-headband sleep-onset corpora. Relative theta is the only band feature with the right sign on both (0.58-0.60; weak). Alpha/delta-based band guards flip sign across corpora (Muse Sleep-Onset wake is eyes-closed alpha-rich, BOAS wake is mixed), so they are not dependable as sleep guards. Reward-lane proposal: rail on ai.a_vig (P>0.5, as at b676f86), drop the relative-delta rail, keep relative theta only as a secondary display, not a guard.
