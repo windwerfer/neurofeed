@@ -56,7 +56,14 @@ SessionTrust readSessionTrust({
   double? trainingStartOffsetSecs,
   List<SessionAnnotation> annotations = const [],
   List<Map<String, Object?>> audioEvents = const [],
+  double? guardFixedThreshold,
+  int? guardWarnPercentile,
 }) {
+  // Fixed-P sessions plot P × 100 against the P cut (the decision scale);
+  // percentile sessions plot the baseline percentile against their setting.
+  final double? warnLine = guardFixedThreshold != null
+      ? guardFixedThreshold * 100
+      : guardWarnPercentile?.toDouble();
   final weights = frameSeconds(frames);
   final reward = <TrustRewardSample>[];
   final guard = <TrustGuardSample>[];
@@ -128,7 +135,9 @@ SessionTrust readSessionTrust({
     final gr = frame.guardrail;
     final guardCleanFlag = gr.clean;
     if (guardCleanFlag != null) {
-      final featurePercentile = gr.featurePercentile ?? 50.0;
+      final featurePercentile = guardFixedThreshold != null
+          ? (gr.sleepDir * 100).clamp(0, 100).toDouble()
+          : (gr.featurePercentile ?? 50.0);
       // 2026-10+: the rail value is relative δ; older frames: absolute δ.
       final railRel = gr.railDeltaRel;
       if (railRel != null) anyRailRel = true;
@@ -157,6 +166,7 @@ SessionTrust readSessionTrust({
           dirtyReason: _dirtyReason(gr.dirtyReason),
           plotFeaturePercentile: plotPct,
           plotDelta: plotDelta,
+          warnLine: warnLine,
         ),
       );
       if (counted && guardCleanFlag) {

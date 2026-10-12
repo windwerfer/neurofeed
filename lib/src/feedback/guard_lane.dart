@@ -102,6 +102,21 @@ class GuardLane {
 
   bool get fixedMode => !bandMath && thresholdMode == guardThresholdModeFixed;
 
+  /// Warning percentile last used for the percentile threshold.
+  int warnPercentile = 75;
+
+  /// Trust warn-pane Y (0–100) for [native], on the scale the warn decision
+  /// uses: fixed mode → P × 100 (compared with [fixedThreshold]); percentile
+  /// mode → percentile of the calibration baseline. Null without a baseline
+  /// in percentile mode.
+  double? trustPlotValue(double native) => fixedMode
+      ? (native * 100).clamp(0, 100).toDouble()
+      : percentileOf(native);
+
+  /// Trust warn-pane line matching [trustPlotValue].
+  double get trustWarnLine =>
+      fixedMode ? fixedThreshold * 100 : warnPercentile.toDouble();
+
   void configure({
     required bool enabled,
     required bool bandMath,
@@ -244,6 +259,7 @@ class GuardLane {
     required int warningThresholdPercentile,
     bool captureAnchor = true,
   }) {
+    warnPercentile = warningThresholdPercentile;
     final list = List<double>.of(baselineSleepDir)..sort();
     if (fixedMode) {
       threshold = fixedThreshold;
@@ -301,6 +317,7 @@ class GuardLane {
   }
 
   void recomputeThreshold(int percentile) {
+    warnPercentile = percentile;
     if (fixedMode || baselineSleepDir.isEmpty) {
       return;
     }

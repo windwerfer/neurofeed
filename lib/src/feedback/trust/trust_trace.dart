@@ -87,7 +87,14 @@ class TrustGuardSample {
     this.dirtyReason,
     this.plotFeaturePercentile,
     this.plotDelta,
+    this.warnLine,
   });
+
+  /// Y (0–100) of the warn pane's threshold line, on the same scale as
+  /// [featurePercentile]: fixed mode → P cut × 100 with [featurePercentile]
+  /// = P × 100; percentile mode → the warning percentile. Null (older
+  /// sessions) draws the legacy 75.
+  final double? warnLine;
 
   final double t;
   final double featurePercentile;
@@ -114,6 +121,7 @@ class TrustGuardSample {
     dirtyReason: dirtyReason,
     plotFeaturePercentile: plotFeaturePercentile ?? this.plotFeaturePercentile,
     plotDelta: plotDelta ?? this.plotDelta,
+    warnLine: warnLine,
   );
 }
 

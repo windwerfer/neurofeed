@@ -625,6 +625,9 @@ void _paintInhibitRun(
   _paintRunStroke(canvas, pts, color: color, dashed: dashed);
 }
 
+/// Warn line for guard samples without [TrustGuardSample.warnLine].
+const double legacyGuardWarnLine = 75;
+
 class GuardWarnPainter extends CustomPainter {
   GuardWarnPainter({
     required this.samples,
@@ -659,7 +662,14 @@ class GuardWarnPainter extends CustomPainter {
     const yMax = 100.0;
     canvas.save();
     canvas.clipRect(plot);
-    _paintHLine(canvas, plot, _y(75, plot, yMin, yMax), color: axisColor);
+    final line =
+        (samples.isEmpty ? null : samples.last.warnLine) ?? legacyGuardWarnLine;
+    _paintHLine(
+      canvas,
+      plot,
+      _y(line.clamp(yMin, yMax), plot, yMin, yMax),
+      color: axisColor,
+    );
     _paintGuardSeries(
       canvas,
       plot,

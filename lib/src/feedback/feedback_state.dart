@@ -2393,7 +2393,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
                       lastBlinkAt: _lastBlinkDirtyAt,
                       buffer: movementBuffer,
                     ));
-        final featurePct = _guard.percentileOf(native) ?? 50.0;
+        final featurePct = _guard.trustPlotValue(native) ?? 50.0;
         _trust.pushGuard(
           TrustGuardSample(
             t: _trustElapsed(),
@@ -2405,6 +2405,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             lastDelta: _guard.lastDelta,
             clean: guardClean,
             dirtyReason: guardDirtyReason,
+            warnLine: _guard.trustWarnLine,
           ),
         );
         _computedSampler?.updateGuardrail(

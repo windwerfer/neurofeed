@@ -1177,6 +1177,11 @@ SessionTrust? _sessionTrustFor({
       trainingStartOffsetSecs: trainingStartOffsetSecs,
       annotations: meta.annotations,
       audioEvents: meta.audioEvents,
+      guardFixedThreshold:
+          meta.sessionSettings?.guardThresholdMode == guardThresholdModeFixed
+          ? meta.sessionSettings?.guardFixedThreshold
+          : null,
+      guardWarnPercentile: meta.sessionSettings?.warningThresholdPercentile,
     );
   } catch (_) {
     return null;
