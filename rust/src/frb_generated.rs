@@ -3333,6 +3333,7 @@ impl SseDecode for crate::api::session_format::GuardrailInfo {
         let mut var_featurePercentile = <Option<f32>>::sse_decode(deserializer);
         let mut var_warnOver = <Option<bool>>::sse_decode(deserializer);
         let mut var_ceilingOver = <Option<bool>>::sse_decode(deserializer);
+        let mut var_railDeltaRel = <Option<f32>>::sse_decode(deserializer);
         let mut var_clean = <Option<bool>>::sse_decode(deserializer);
         let mut var_dirtyReason = <Option<String>>::sse_decode(deserializer);
         return crate::api::session_format::GuardrailInfo {
@@ -3343,6 +3344,7 @@ impl SseDecode for crate::api::session_format::GuardrailInfo {
             feature_percentile: var_featurePercentile,
             warn_over: var_warnOver,
             ceiling_over: var_ceilingOver,
+            rail_delta_rel: var_railDeltaRel,
             clean: var_clean,
             dirty_reason: var_dirtyReason,
         };
@@ -5107,6 +5109,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::session_format::GuardrailInfo
             self.feature_percentile.into_into_dart().into_dart(),
             self.warn_over.into_into_dart().into_dart(),
             self.ceiling_over.into_into_dart().into_dart(),
+            self.rail_delta_rel.into_into_dart().into_dart(),
             self.clean.into_into_dart().into_dart(),
             self.dirty_reason.into_into_dart().into_dart(),
         ]
@@ -6000,6 +6003,7 @@ impl SseEncode for crate::api::session_format::GuardrailInfo {
         <Option<f32>>::sse_encode(self.feature_percentile, serializer);
         <Option<bool>>::sse_encode(self.warn_over, serializer);
         <Option<bool>>::sse_encode(self.ceiling_over, serializer);
+        <Option<f32>>::sse_encode(self.rail_delta_rel, serializer);
         <Option<bool>>::sse_encode(self.clean, serializer);
         <Option<String>>::sse_encode(self.dirty_reason, serializer);
     }

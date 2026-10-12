@@ -12,7 +12,8 @@ const List<String> catalogProtocolIds = [
   'openMonitor',
   'alertOpen',
   'alertClosed',
-  'concentrate',
+  // Experimental self-test (2026-10-12): no evidence yet; see the catalog copy.
+  'bandStability',
   'calibrateRecord',
 ];
 
@@ -44,6 +45,10 @@ const List<String> legacyCatalogProtocolIds = [
 /// `calibrateRecord`, the one catalog row without reward or guard; it maps
 /// there for display / selection fallback only (calibrateRecord's staged,
 /// required calibration is not what an old recordOnly session ran).
+/// `concentrate` (alpha reward + beta ceiling, "focus") was pulled
+/// 2026-10-07: no evidence alpha tracks focus. It and its older id
+/// `concentration` map to `openMonitor` for display / selection fallback only
+/// (not a rename: settings do not migrate).
 /// Their recipes differ, so anything that recomputes from the recipe (charts,
 /// export) must prefer the session's saved `protocolJson` snapshot first
 /// (see `savedProtocolDocument`).
@@ -52,7 +57,8 @@ const Map<String, String> legacyProtocolAliases = {
   'mindfulness': 'openMonitor',
   'alertnessOpen': 'alertOpen',
   'alertnessClosed': 'alertClosed',
-  'concentration': 'concentrate',
+  'concentration': 'openMonitor',
+  'concentrate': 'openMonitor',
   'guardrailOnly': 'sleepGuard',
   'twilight': 'restAwake',
   'relaxedConcentration': 'restAwake',
@@ -67,7 +73,6 @@ const Set<String> legacyProtocolRenames = {
   'mindfulness',
   'alertnessOpen',
   'alertnessClosed',
-  'concentration',
   'guardrailOnly',
 };
 

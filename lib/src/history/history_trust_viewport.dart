@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:neurofeed/src/feedback/guard_lane.dart';
 import 'package:neurofeed/src/feedback/trust/trust_guard.dart';
 import 'package:neurofeed/src/feedback/trust/trust_inhibit.dart';
 import 'package:neurofeed/src/feedback/trust/trust_pane.dart';
@@ -117,7 +116,11 @@ class HistoryTrustReplay extends StatefulWidget {
     required this.guardLabel,
     required this.rewardColor,
     required this.guardColor,
+    this.rewardChart = TrustRewardChart.percentile,
   });
+
+  /// See [TrustGraphsColumn.rewardChart].
+  final TrustRewardChart rewardChart;
 
   final SessionTrust trust;
   final HistoryTrustViewport viewport;
@@ -226,16 +229,28 @@ class _HistoryTrustReplayState extends State<HistoryTrustReplay> {
                   children: [
                     SizedBox(
                       height: 168,
-                      child: RewardTrustPane(
-                        key: const Key('trust-reward-pane'),
-                        samples: trust.reward,
-                        marks: trust.marks,
-                        viewport: widget.viewport,
-                        newestElapsed: newest,
-                        wallNow: 0,
-                        label: widget.rewardLabel,
-                        seriesColor: widget.rewardColor,
-                      ),
+                      child: widget.rewardChart == TrustRewardChart.stability
+                          ? StabilityTrustPane(
+                              key: const Key('trust-stability-pane'),
+                              samples: trust.reward,
+                              marks: trust.marks,
+                              viewport: widget.viewport,
+                              newestElapsed: newest,
+                              wallNow: 0,
+                              label:
+                                  '${widget.rewardLabel} steadiness (CV ÷ baseline)',
+                              seriesColor: widget.rewardColor,
+                            )
+                          : RewardTrustPane(
+                              key: const Key('trust-reward-pane'),
+                              samples: trust.reward,
+                              marks: trust.marks,
+                              viewport: widget.viewport,
+                              newestElapsed: newest,
+                              wallNow: 0,
+                              label: widget.rewardLabel,
+                              seriesColor: widget.rewardColor,
+                            ),
                     ),
                     for (final spec in widget.inhibit) ...[
                       const SizedBox(height: 8),
@@ -309,7 +324,7 @@ class _HistoryTrustReplayState extends State<HistoryTrustReplay> {
           newestElapsed: newest,
           wallNow: 0,
           seriesColor: widget.guardColor,
-          ceiling: guardrailDeltaCeiling,
+          ceiling: trust.deltaCeiling,
         );
     }
   }

@@ -301,7 +301,10 @@ void main() {
               guardLabel: 'δ',
               rewardColor: Colors.green,
               guardColor: Colors.blue,
-              guardPanes: trustGuardPaneSpecs(guardFeatureAiDrowsiness),
+              guardPanes: trustGuardPaneSpecs(
+                guardFeatureAiDrowsiness,
+                legacyCeiling: true,
+              ),
             ),
           ),
         ),
@@ -414,21 +417,39 @@ void main() {
       expect(find.byKey(const Key('trust-guard-warn-pane')), findsOneWidget);
       expect(find.byKey(const Key('trust-guard-ceiling-pane')), findsNothing);
 
-      await pump(trustGuardPaneSpecs(guardFeatureAiDrowsiness));
+      // History of an old railing session: legacy ceiling pane.
+      await pump(
+        trustGuardPaneSpecs(guardFeatureAiDrowsiness, legacyCeiling: true),
+      );
       expect(find.byKey(const Key('trust-guard-warn-pane')), findsOneWidget);
       expect(find.byKey(const Key('trust-guard-ceiling-pane')), findsOneWidget);
+
+      // Live (δ rail removed): no δ ceiling chart.
+      await pump(trustGuardPaneSpecs(guardFeatureAiAVig));
+      expect(find.byKey(const Key('trust-guard-warn-pane')), findsOneWidget);
+      expect(find.byKey(const Key('trust-guard-ceiling-pane')), findsNothing);
     });
   });
 
   group('guard panes', () {
-    test('specs: none empty; band-math warn only; AI warn + ceiling', () {
+    test('specs: none empty; live sessions warn pane only', () {
       expect(trustGuardPaneSpecs(guardFeatureNone), isEmpty);
       expect(trustGuardPaneSpecs(guardFeatureBandDelta), [
         TrustGuardPaneId.warn,
       ]);
       expect(trustGuardPaneSpecs(guardFeatureAiDrowsiness), [
         TrustGuardPaneId.warn,
+      ]);
+    });
+
+    test('specs: legacy δ ceiling pane for old AI sessions only', () {
+      expect(trustGuardPaneSpecs(guardFeatureAiAVig, legacyCeiling: true), [
+        TrustGuardPaneId.warn,
         TrustGuardPaneId.ceiling,
+      ]);
+      // band.delta guard: the warn pane is the delta chart.
+      expect(trustGuardPaneSpecs(guardFeatureBandDelta, legacyCeiling: true), [
+        TrustGuardPaneId.warn,
       ]);
     });
   });

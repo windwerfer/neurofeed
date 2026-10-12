@@ -849,3 +849,217 @@ void _paintGuardSeries(
   }
   flush(dirty, null);
 }
+
+/// Which chart the reward lane draws. [stability] = experimental
+/// `bandStability`: the fluctuation ratio r = CV ÷ baseline CV against the
+/// baseline (1.0) and the target threshold; replaces the percentile chart.
+enum TrustRewardChart { percentile, stability }
+
+/// Y range of the stability chart (fluctuation ratio).
+const double kStabilityYMax = 2.0;
+
+class StabilityTrustPane extends StatelessWidget {
+  const StabilityTrustPane({
+    super.key,
+    required this.samples,
+    required this.marks,
+    required this.viewport,
+    required this.newestElapsed,
+    required this.wallNow,
+    required this.label,
+    required this.seriesColor,
+  });
+
+  final List<TrustRewardSample> samples;
+  final List<TrustGestureMark> marks;
+  final TrustWindow viewport;
+  final double newestElapsed;
+  final double wallNow;
+  final String label;
+  final Color seriesColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return RepaintBoundary(
+      child: CustomPaint(
+        painter: StabilityTrustPainter(
+          samples: samples,
+          marks: marks,
+          visStart: viewport.visibleStart(newestElapsed, wallNow: wallNow),
+          visEnd: viewport.visibleEnd(newestElapsed, wallNow: wallNow),
+          windowSeconds: viewport.windowSeconds,
+          label: label,
+          seriesColor: seriesColor,
+          axisColor: theme.colorScheme.onSurfaceVariant,
+          onSurface: theme.colorScheme.onSurface,
+        ),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
+/// Steadiness over the session: r (lower = steadier) on 0–[kStabilityYMax],
+/// a faint baseline line at 1.0, the target threshold line (latest visible
+/// value), dashed strokes over dirty / gated spans (like the other charts).
+class StabilityTrustPainter extends CustomPainter {
+  StabilityTrustPainter({
+    required this.samples,
+    required this.marks,
+    required this.visStart,
+    required this.visEnd,
+    required this.windowSeconds,
+    required this.label,
+    required this.seriesColor,
+    required this.axisColor,
+    required this.onSurface,
+  });
+
+  final List<TrustRewardSample> samples;
+  final List<TrustGestureMark> marks;
+  final double visStart;
+  final double visEnd;
+  final double windowSeconds;
+  final String label;
+  final Color seriesColor;
+  final Color axisColor;
+  final Color onSurface;
+
+  static double plotValue(TrustRewardSample s) =>
+      (s.plotNative ?? s.native).clamp(0.0, kStabilityYMax).toDouble();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final plot = _chartRect(size);
+    if (plot.width <= 0 || plot.height <= 0) return;
+    final span = visEnd - visStart;
+    if (span <= 0) return;
+    const yMin = 0.0;
+    const yMax = kStabilityYMax;
+    final vis = [
+      for (final s in samples)
+        if (s.t >= visStart - 1 && s.t <= visEnd + 1) s,
+    ];
+    final live = vis.isEmpty ? null : vis.last.native;
+    _paintHeader(
+      canvas,
+      size,
+      left: label,
+      right: live == null
+          ? '${windowSeconds.round()}s'
+          : 'r ${live.toStringAsFixed(2)}',
+      color: axisColor,
+    );
+    _paintText(
+      canvas,
+      '2.0',
+      Offset(2, _y(2, plot, yMin, yMax) - 6),
+      axisColor,
+      9,
+    );
+    _paintText(
+      canvas,
+      '0',
+      Offset(2, _y(0, plot, yMin, yMax) - 6),
+      axisColor,
+      9,
+    );
+
+    canvas.save();
+    canvas.clipRect(plot);
+    // Baseline fluctuation (r = 1).
+    _paintHLine(
+      canvas,
+      plot,
+      _y(1.0, plot, yMin, yMax),
+      color: axisColor,
+      alpha: 0.25,
+    );
+    double? thr;
+    for (final s in vis.reversed) {
+      if (s.threshold != null) {
+        thr = s.threshold;
+        break;
+      }
+    }
+    if (thr != null) {
+      _paintHLine(
+        canvas,
+        plot,
+        _y(thr.clamp(yMin, yMax).toDouble(), plot, yMin, yMax),
+        color: axisColor,
+      );
+    }
+    final runs = rewardRuns(vis);
+    for (var i = 0; i < runs.length; i++) {
+      final run = runs[i];
+      final next = i + 1 < runs.length ? runs[i + 1].samples.first : null;
+      final stroke = runStrokeSamples(run.samples, next);
+      final pts = [
+        for (final s in stroke)
+          Offset(
+            _x(s.t, plot, visStart, span),
+            _y(plotValue(s), plot, yMin, yMax),
+          ),
+      ];
+      _paintRunStroke(
+        canvas,
+        pts,
+        color: seriesColor,
+        dashed: run.kind == TrustStrokeKind.dirty,
+      );
+      if (run.kind == TrustStrokeKind.dirty) {
+        final tag = rewardRunLabel(run);
+        if (tag != null) {
+          _paintText(
+            canvas,
+            tag,
+            Offset(_x(run.tStart, plot, visStart, span) + 2, plot.top + 2),
+            seriesColor,
+            10,
+          );
+        }
+      }
+    }
+    _paintMarks(
+      canvas,
+      plot,
+      marks: marks,
+      visStart: visStart,
+      span: span,
+      color: onSurface,
+    );
+    canvas.restore();
+    _paintText(
+      canvas,
+      'baseline',
+      Offset(plot.right - 44, _y(1.0, plot, yMin, yMax) - 12),
+      axisColor.withValues(alpha: 0.6),
+      9,
+    );
+    if (thr != null) {
+      _paintText(
+        canvas,
+        'target ${thr.toStringAsFixed(2)}',
+        Offset(plot.right - 64, _y(thr, plot, yMin, yMax) + 1),
+        axisColor,
+        9,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant StabilityTrustPainter old) =>
+      old.samples.length != samples.length ||
+      old.samples != samples ||
+      (samples.isNotEmpty &&
+          old.samples.isNotEmpty &&
+          old.samples.last.t != samples.last.t) ||
+      old.marks != marks ||
+      old.visStart != visStart ||
+      old.visEnd != visEnd ||
+      old.windowSeconds != windowSeconds ||
+      old.label != label ||
+      old.seriesColor != seriesColor;
+}

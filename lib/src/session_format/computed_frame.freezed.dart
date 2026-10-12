@@ -173,6 +173,10 @@ mixin _$GuardrailInfo {
   double? get featurePercentile => throw _privateConstructorUsedError;
   bool? get warnOver => throw _privateConstructorUsedError;
   bool? get ceilingOver => throw _privateConstructorUsedError;
+
+  /// Relative frontal δ the rail compared to its ceiling (2026-10+).
+  /// Absent = pre-2026-10 frame: the rail was absolute [delta] > 0.25.
+  double? get railDeltaRel => throw _privateConstructorUsedError;
   bool? get clean => throw _privateConstructorUsedError;
   String? get dirtyReason => throw _privateConstructorUsedError;
 
@@ -198,6 +202,7 @@ abstract class $GuardrailInfoCopyWith<$Res> {
     double? featurePercentile,
     bool? warnOver,
     bool? ceilingOver,
+    double? railDeltaRel,
     bool? clean,
     String? dirtyReason,
   });
@@ -225,6 +230,7 @@ class _$GuardrailInfoCopyWithImpl<$Res, $Val extends GuardrailInfo>
     Object? featurePercentile = freezed,
     Object? warnOver = freezed,
     Object? ceilingOver = freezed,
+    Object? railDeltaRel = freezed,
     Object? clean = freezed,
     Object? dirtyReason = freezed,
   }) {
@@ -258,6 +264,10 @@ class _$GuardrailInfoCopyWithImpl<$Res, $Val extends GuardrailInfo>
                 ? _value.ceilingOver
                 : ceilingOver // ignore: cast_nullable_to_non_nullable
                       as bool?,
+            railDeltaRel: freezed == railDeltaRel
+                ? _value.railDeltaRel
+                : railDeltaRel // ignore: cast_nullable_to_non_nullable
+                      as double?,
             clean: freezed == clean
                 ? _value.clean
                 : clean // ignore: cast_nullable_to_non_nullable
@@ -289,6 +299,7 @@ abstract class _$$GuardrailInfoImplCopyWith<$Res>
     double? featurePercentile,
     bool? warnOver,
     bool? ceilingOver,
+    double? railDeltaRel,
     bool? clean,
     String? dirtyReason,
   });
@@ -315,6 +326,7 @@ class __$$GuardrailInfoImplCopyWithImpl<$Res>
     Object? featurePercentile = freezed,
     Object? warnOver = freezed,
     Object? ceilingOver = freezed,
+    Object? railDeltaRel = freezed,
     Object? clean = freezed,
     Object? dirtyReason = freezed,
   }) {
@@ -348,6 +360,10 @@ class __$$GuardrailInfoImplCopyWithImpl<$Res>
             ? _value.ceilingOver
             : ceilingOver // ignore: cast_nullable_to_non_nullable
                   as bool?,
+        railDeltaRel: freezed == railDeltaRel
+            ? _value.railDeltaRel
+            : railDeltaRel // ignore: cast_nullable_to_non_nullable
+                  as double?,
         clean: freezed == clean
             ? _value.clean
             : clean // ignore: cast_nullable_to_non_nullable
@@ -372,6 +388,7 @@ class _$GuardrailInfoImpl implements _GuardrailInfo {
     this.featurePercentile,
     this.warnOver,
     this.ceilingOver,
+    this.railDeltaRel,
     this.clean,
     this.dirtyReason,
   });
@@ -390,6 +407,11 @@ class _$GuardrailInfoImpl implements _GuardrailInfo {
   final bool? warnOver;
   @override
   final bool? ceilingOver;
+
+  /// Relative frontal δ the rail compared to its ceiling (2026-10+).
+  /// Absent = pre-2026-10 frame: the rail was absolute [delta] > 0.25.
+  @override
+  final double? railDeltaRel;
   @override
   final bool? clean;
   @override
@@ -397,7 +419,7 @@ class _$GuardrailInfoImpl implements _GuardrailInfo {
 
   @override
   String toString() {
-    return 'GuardrailInfo(sleepDir: $sleepDir, clarity: $clarity, warning: $warning, delta: $delta, featurePercentile: $featurePercentile, warnOver: $warnOver, ceilingOver: $ceilingOver, clean: $clean, dirtyReason: $dirtyReason)';
+    return 'GuardrailInfo(sleepDir: $sleepDir, clarity: $clarity, warning: $warning, delta: $delta, featurePercentile: $featurePercentile, warnOver: $warnOver, ceilingOver: $ceilingOver, railDeltaRel: $railDeltaRel, clean: $clean, dirtyReason: $dirtyReason)';
   }
 
   @override
@@ -416,6 +438,8 @@ class _$GuardrailInfoImpl implements _GuardrailInfo {
                 other.warnOver == warnOver) &&
             (identical(other.ceilingOver, ceilingOver) ||
                 other.ceilingOver == ceilingOver) &&
+            (identical(other.railDeltaRel, railDeltaRel) ||
+                other.railDeltaRel == railDeltaRel) &&
             (identical(other.clean, clean) || other.clean == clean) &&
             (identical(other.dirtyReason, dirtyReason) ||
                 other.dirtyReason == dirtyReason));
@@ -431,6 +455,7 @@ class _$GuardrailInfoImpl implements _GuardrailInfo {
     featurePercentile,
     warnOver,
     ceilingOver,
+    railDeltaRel,
     clean,
     dirtyReason,
   );
@@ -453,6 +478,7 @@ abstract class _GuardrailInfo implements GuardrailInfo {
     final double? featurePercentile,
     final bool? warnOver,
     final bool? ceilingOver,
+    final double? railDeltaRel,
     final bool? clean,
     final String? dirtyReason,
   }) = _$GuardrailInfoImpl;
@@ -471,6 +497,11 @@ abstract class _GuardrailInfo implements GuardrailInfo {
   bool? get warnOver;
   @override
   bool? get ceilingOver;
+
+  /// Relative frontal δ the rail compared to its ceiling (2026-10+).
+  /// Absent = pre-2026-10 frame: the rail was absolute [delta] > 0.25.
+  @override
+  double? get railDeltaRel;
   @override
   bool? get clean;
   @override

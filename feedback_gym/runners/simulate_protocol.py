@@ -14,7 +14,10 @@ from runners.helpers import (
     inhibit_health,
     inhibit_passes,
     label_align,
-    percentile_warn_parts,
+    percentile_warn_over,
+    STABILITY_POLICY,
+    stability_in_target,
+    stability_ratio_rows,
     protocol_composite,
     round4,
     flip_stability,
@@ -26,6 +29,18 @@ from runners.helpers import (
 )
 
 
+# App guardrail_mode.dart defaultAiGuardFixedThreshold (ai_threshold_sweep.py).
+AI_GUARD_FIXED_THRESHOLD = 0.50
+
+
+def guard_threshold_mode_for(feature_id: str, declared: str | None = None) -> str:
+    """Mirror of app resolveGuardThresholdMode: band.* always percentile;
+    ai.* (probabilities) follow ``declared`` and default to fixed."""
+    if not feature_id.startswith("ai."):
+        return "percentile"
+    return declared if declared in ("percentile", "fixed") else "fixed"
+
+
 def simulate_protocol(
     protocol: dict[str, Any],
     corpus: dict[str, Any],
@@ -33,6 +48,11 @@ def simulate_protocol(
     *,
     reward_percentile: float | None = None,
     guard_percentile: float | None = None,
+    guard_threshold_mode: str | None = None,
+    guard_fixed_threshold: float | None = None,
+    stability_band: str | None = None,
+    stability_window: int | None = None,
+    stability_difficulty: float | None = None,
 ) -> dict[str, Any]:
     defaults = grids.get("defaults", {})
     rollup = grids.get("protocol_rollup", {})
@@ -50,7 +70,11 @@ def simulate_protocol(
         if guard_percentile is not None
         else defaults.get("guard_percentile", 75)
     )
-    delta_ceiling = float(defaults.get("guardrail_delta_ceiling", 0.25))
+    g_fixed = float(
+        guard_fixed_threshold
+        if guard_fixed_threshold is not None
+        else defaults.get("ai_guard_fixed_threshold", AI_GUARD_FIXED_THRESHOLD)
+    )
 
     plan = build_cal_plan(corpus)
     play = plan.play_idx
@@ -76,6 +100,25 @@ def simulate_protocol(
     if reward_cfg is None:
         result["parts"]["reward"] = None
         result["notes"].append("no reward lane")
+    elif reward_cfg.get("policy") == STABILITY_POLICY:
+        reward_score, inhibit_score = _simulate_stability(
+            reward_cfg,
+            corpus,
+            plan,
+            result,
+            rw,
+            band=stability_band or defaults.get("stability_band"),
+            window=int(
+                stability_window
+                if stability_window is not None
+                else defaults.get("stability_window_seconds", 10)
+            ),
+            difficulty=float(
+                stability_difficulty
+                if stability_difficulty is not None
+                else defaults.get("stability_difficulty", 0.10)
+            ),
+        )
     else:
         feat_id = reward_cfg["feature"]
         series = feature_series(corpus, feat_id)
@@ -164,8 +207,6 @@ def simulate_protocol(
             result["notes"].append(f"guard feature {feat_id} missing from corpus")
         else:
             band_math = feat_id.startswith("band.")
-            # Protocol guard.deltaRail (default True, app ProtocolGuard).
-            delta_rail = bool(guard_cfg.get("deltaRail", True))
             play_vals = np.asarray(series[play], dtype=float)
             finite = np.isfinite(play_vals)
             if not finite.any():
@@ -178,27 +219,30 @@ def simulate_protocol(
             else:
                 play_f = play_vals[finite]
                 labels_f = None if labels is None else np.asarray(labels)[finite]
-                thr_rows, thr_groups = play_thresholds(
-                    series, plan, g_p, finite_play=finite
+                mode = guard_threshold_mode_for(
+                    feat_id, guard_threshold_mode or guard_cfg.get("thresholdMode")
                 )
-                thr = summarize_threshold(plan, thr_groups)
-                delta_abs = np.asarray(
-                    corpus.get("delta_abs", corpus["band_delta"]), dtype=float
-                )[play][finite]
-                warn_feature, warn_rail, warn = percentile_warn_parts(
-                    band_math=band_math,
-                    feature_values=play_f,
-                    delta_abs=delta_abs,
-                    threshold=thr_rows,
-                    delta_ceiling=delta_ceiling,
-                    delta_rail=delta_rail,
+                if mode == "fixed":
+                    # App GuardLane fixed mode: warn while P > cut, no cal pick.
+                    cut = float(guard_cfg.get("fixedThreshold", g_fixed))
+                    if guard_fixed_threshold is not None:
+                        cut = g_fixed
+                    thr_rows = np.full(int(finite.sum()), cut)
+                    thr_groups = [cut for _ in plan.groups]
+                    thr = cut
+                else:
+                    thr_rows, thr_groups = play_thresholds(
+                        series, plan, g_p, finite_play=finite
+                    )
+                    thr = summarize_threshold(plan, thr_groups)
+                # App: threshold rule only (δ rail removed 2026-10).
+                warn = percentile_warn_over(
+                    band_math=band_math, feature_values=play_f, threshold=thr_rows
                 )
                 wr = warn_rate(warn)
-                wr_feat = warn_rate(warn_feature)
-                wr_rail = warn_rate(warn_rail)
-                stab = flip_stability(warn_feature)
-                la = label_align(warn_feature, labels_f)
-                la_combined = label_align(warn, labels_f)
+                wr_feat = wr
+                stab = flip_stability(warn)
+                la = label_align(warn, labels_f)
                 if la is not None:
                     guard_score = la
                 else:
@@ -212,16 +256,11 @@ def simulate_protocol(
                     "feature": feat_id,
                     "policy": guard_cfg.get("policy", "percentileWarn"),
                     "band_math": band_math,
-                    "delta_rail": delta_rail,
+                    "threshold_mode": mode,
                     "threshold": round4(thr),
                     "warn_rate": round4(wr),
-                    "warn_feature_rate": round4(wr_feat),
-                    "rail_rate": round4(wr_rail),
                     "stability": round4(stab),
                     "label_align": round4(la) if la is not None else None,
-                    "label_align_combined": round4(la_combined)
-                    if la_combined is not None
-                    else None,
                     "score": round4(guard_score),
                 }
                 if plan.per_recording:
@@ -240,3 +279,61 @@ def simulate_protocol(
     if reward_cfg is None and guard_cfg is None:
         result["notes"].append(f"{protocol['id']} — no lanes; composite N/A")
     return result
+
+
+def _simulate_stability(
+    reward_cfg: dict[str, Any],
+    corpus: dict[str, Any],
+    plan: Any,
+    result: dict[str, Any],
+    rw: dict[str, Any],
+    *,
+    band: str | None,
+    window: int,
+    difficulty: float,
+) -> tuple[float | None, float | None]:
+    """Experimental ``bandStability`` (app RewardLane stability path).
+
+    Approximations vs the app: fixed threshold 1 - difficulty (no adaptive
+    step, like every gym reward); the guard hold-back (no reward while the
+    guard warns) is not applied here, the guard part is scored separately.
+    """
+    feat_id = band or reward_cfg["feature"]
+    series = feature_series(corpus, feat_id)
+    if series is None:
+        result["parts"]["reward"] = {
+            "status": "unavailable",
+            "feature": feat_id,
+            "policy": STABILITY_POLICY,
+        }
+        result["notes"].append(f"reward feature {feat_id} missing from corpus")
+        result["parts"]["inhibit"] = None
+        return None, None
+    r, base_cvs = stability_ratio_rows(series, plan, window)
+    decided = np.isfinite(r)
+    in_target = stability_in_target(r, difficulty)[decided]
+    hr = hit_rate(in_target)
+    stab = flip_stability(in_target)
+    score = float(
+        float(rw.get("hit_rate", 0.7)) * hr + float(rw.get("stability", 0.3)) * stab
+    ) if in_target.size else None
+    finite_base = [b for b in base_cvs if np.isfinite(b)]
+    result["parts"]["reward"] = {
+        "feature": feat_id,
+        "policy": STABILITY_POLICY,
+        "window_seconds": int(window),
+        "difficulty": round4(difficulty),
+        "threshold": round4(1.0 - difficulty),
+        "baseline_cv_median": round4(float(np.median(finite_base)))
+        if finite_base
+        else None,
+        "ratio_median": round4(float(np.nanmedian(r))) if decided.any() else None,
+        "hit_rate": round4(hr) if in_target.size else None,
+        "stability": round4(stab) if in_target.size else None,
+        "score": round4(score),
+        "n_play": int(r.size),
+        "n_decided": int(decided.sum()),
+    }
+    result["parts"]["inhibit"] = {"items": [], "score": 1.0}
+    result["notes"].append("experimental: no evidence (STABILITY.md)")
+    return score, 1.0

@@ -19,7 +19,6 @@ UI dashboard: [`ui/index.html`](ui/index.html) (loads `ui/data/latest.json`).
 | openMonitor | 0.836 | 0.892 | 1.000 | 0.634 | off | 0.789 | 0.634 |  |
 | alertOpen | 0.880 | 0.831 | 1.000 | — | — | — | — | no guard lane |
 | alertClosed | 0.806 | 0.831 | 1.000 | 0.634 | off | 0.789 | 0.634 |  |
-| concentrate | 0.748 | 0.731 | 0.963 | 0.634 | off | 0.789 | 0.634 |  |
 | calibrateRecord | N/A | — | — | — | — | — | — | no reward lane; no guard lane; calibrateRecord — no lanes; composite N/A |
 
 ## Features (standalone board)

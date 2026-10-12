@@ -46,7 +46,7 @@ import 'package:neurofeed/src/util/timezone.dart';
 
 export 'package:neurofeed/src/feedback/feedback_phase.dart';
 export 'package:neurofeed/src/feedback/guard_lane.dart'
-    show guardrailDeltaCeiling, warningChimeCooldown;
+    show warningChimeCooldown;
 
 class FeedbackState {
   final FeedbackPhase phase;
@@ -354,7 +354,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
     final info = catalog?.forName(protocolId);
     protocolId = info?.id ?? canonicalProtocolId(protocolId);
-    _engine.featureId = info?.reward?.feature ?? 'band.atr';
+    _engine.featureId = _rewardFeatureFor(info) ?? 'band.atr';
     final settings = _ref.read(settingsProvider);
     final output = resolveRewardOutputId(
       hasReward: info?.hasReward ?? false,
@@ -475,7 +475,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final spec = catalog?.forName(state.protocol);
     final settings = _ref.read(settingsProvider);
     final ids = <String>[];
-    final reward = spec?.reward?.feature;
+    final reward = _rewardFeatureFor(spec);
     if (reward != null) {
       ids.add(reward);
     }
@@ -640,6 +640,71 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   void resetTargetSettings() {
     setDynamicAdapt(true);
     setResponsiveness(0.5);
+    setRewardDwellSeconds(defaultRewardDwellSeconds);
+    if (_specDocument?.isStabilityReward ?? false) {
+      setStabilityBand(defaultStabilityBand);
+      setStabilityWindowSeconds(StabilityConfig.defaultWindowSeconds);
+      setStabilityDifficulty(StabilityConfig.defaultDifficulty);
+    }
+  }
+
+  /// Reward feature this session runs: the protocol's, except the
+  /// experimental stability policy, which tracks the band chosen in Target
+  /// Settings ([Settings.stabilityBand]).
+  String? _rewardFeatureFor(ProtocolDocument? spec) {
+    final reward = spec?.reward;
+    if (reward == null) return null;
+    if (reward.isStability) return _ref.read(settingsProvider).stabilityBand;
+    return reward.feature;
+  }
+
+  /// Dwell time before the reward chime (all reward protocols). Read live by
+  /// the chime output.
+  double get rewardDwellSeconds =>
+      _ref.read(settingsProvider).rewardDwellSeconds;
+
+  void setRewardDwellSeconds(double seconds) {
+    _ref.read(settingsProvider).setRewardDwellSeconds(seconds);
+    _writeSessionFacts();
+  }
+
+  bool get _sessionRunning =>
+      state.phase == FeedbackPhase.calibrating ||
+      state.phase == FeedbackPhase.playing ||
+      state.phase == FeedbackPhase.paused ||
+      state.phase == FeedbackPhase.interrupted;
+
+  /// Band for the stability reward. Saved now; a running session keeps its
+  /// band (the calibration baseline belongs to it) and the next uses this.
+  void setStabilityBand(String featureId) {
+    _ref.read(settingsProvider).setStabilityBand(featureId);
+    if (!_sessionRunning) {
+      _engine.featureId = featureId;
+    }
+  }
+
+  /// Rolling stability window (seconds). Applies live: the live window
+  /// restarts and the baseline CV is re-derived for the new length.
+  void setStabilityWindowSeconds(int seconds) {
+    _ref.read(settingsProvider).setStabilityWindowSeconds(seconds);
+    final v = _ref.read(settingsProvider).stabilityWindowSeconds;
+    if (_engine.stability != null) {
+      _engine.setStabilityWindow(v);
+      state = state.copyWith(currentThreshold: _engine.threshold);
+    }
+    _writeSessionFacts();
+  }
+
+  /// Fraction steadier than baseline needed. Applies live: the threshold
+  /// re-anchors at 1 − difficulty (adaptive steps may move it again).
+  void setStabilityDifficulty(double difficulty) {
+    _ref.read(settingsProvider).setStabilityDifficulty(difficulty);
+    final v = _ref.read(settingsProvider).stabilityDifficulty;
+    if (_engine.stability != null) {
+      _engine.setStabilityDifficulty(v);
+      state = state.copyWith(currentThreshold: _engine.threshold);
+    }
+    _writeSessionFacts();
   }
 
   /// REVE sleep-guardrail warning threshold (percentile of the eyes-closed
@@ -656,6 +721,34 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             state.phase == FeedbackPhase.interrupted)) {
       _guard.recomputeThreshold(percentile);
     }
+    _writeSessionFacts();
+  }
+
+  ProtocolDocument? get _specDocument =>
+      _ref.read(protocolCatalogProvider).valueOrNull?.forName(state.protocol);
+
+  String get guardThresholdMode => _guardThresholdModeFor(_sessionGuardFeature);
+
+  String _guardThresholdModeFor(String feature) =>
+      _ref.read(settingsProvider).guardThresholdModeFor(_specDocument, feature);
+
+  void setAiGuardThresholdMode(String mode) {
+    _ref.read(settingsProvider).setAiGuardThresholdMode(mode);
+    _guard.setThresholdMode(
+      _guardThresholdModeFor(_guard.featureId),
+      warningThresholdPercentile: warningThresholdPercentile,
+    );
+    _writeSessionFacts();
+  }
+
+  double get aiGuardFixedThreshold =>
+      _ref.read(settingsProvider).aiGuardFixedThresholdFor(_specDocument);
+
+  void setAiGuardFixedThreshold(double value) {
+    final v = clampAiGuardFixedThreshold(value);
+    _ref.read(settingsProvider).setAiGuardFixedThreshold(v);
+    _guard.setFixedThreshold(v);
+    _writeSessionFacts();
   }
 
   void setInhibitCeiling(String tag, double max) {
@@ -867,17 +960,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// null between sessions.
   String? _lockedGuardFeature;
 
-  /// Protocol `guard.deltaRail` (default true): whether the absolute
-  /// frontal-delta ceiling may warn this session.
-  bool get _specDeltaRail =>
-      _ref
-          .read(protocolCatalogProvider)
-          .valueOrNull
-          ?.forName(state.protocol)
-          ?.guard
-          ?.deltaRail ??
-      true;
-
   /// Whether this session's guard runs band math (no AI model).
   bool get _guardIsBandMath => _sessionGuardFeature == guardFeatureBandDelta;
 
@@ -935,7 +1017,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
     // Protocol overrides (none = registry default), then the gate pads.
     final ids = <String>[];
-    final rewardFeature = spec?.reward?.feature;
+    final rewardFeature = _rewardFeatureFor(spec);
     if (rewardFeature != null) {
       await _applyElectrodeOverride(rewardFeature, spec!.reward!.electrodes);
       ids.add(rewardFeature);
@@ -975,9 +1057,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       ))
         if (i < montage.length) montage[i],
     ];
+    _engine.setStability(
+      (spec?.isStabilityReward ?? false)
+          ? StabilityConfig(
+              windowSeconds: settings.stabilityWindowSeconds,
+              difficulty: settings.stabilityDifficulty,
+            )
+          : null,
+    );
     _reward.configure(
       hasReward: spec?.hasReward ?? false,
-      featureId: spec?.reward?.feature,
+      featureId: rewardFeature,
       inhibit: overlayInhibitCeilings(
         spec?.conditions ?? const [],
         settings.inhibitCeilingOverrides(state.protocol),
@@ -985,14 +1075,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       electrodeNames: rewardNames,
       montageNames: montage,
     );
+    final laneFeature = guardFeature == guardFeatureNone
+        ? guardFeatureBandDelta
+        : guardFeature;
     _guard.configure(
       enabled: false,
       bandMath: _guardIsBandMath,
-      featureId: guardFeature == guardFeatureNone
-          ? guardFeatureBandDelta
-          : guardFeature,
-      deltaRail: _specDeltaRail,
+      featureId: laneFeature,
       deltaElectrodes: frontal,
+      thresholdMode: _guardThresholdModeFor(laneFeature),
+      fixedThreshold: aiGuardFixedThreshold,
     );
   }
 
@@ -1022,7 +1114,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         enabled: true,
         bandMath: true,
         featureId: guardFeatureBandDelta,
-        deltaRail: _specDeltaRail,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       debugPrint('[guardrail] enabled (band math — no model)');
@@ -1035,16 +1126,18 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     }
     final ffId = settings.guardModel ?? defaultModelKind.ffId;
     final featureId = _sessionGuardFeature;
+    final laneFeature = guardFeatureIsAi(featureId)
+        ? featureId
+        : guardFeatureAiAVigReve;
     try {
       final ok = await frb.guardrailEnable(kind: ffId);
       _guard.configure(
         enabled: ok,
         bandMath: false,
-        featureId: guardFeatureIsAi(featureId)
-            ? featureId
-            : guardFeatureAiAVigReve,
-        deltaRail: _specDeltaRail,
+        featureId: laneFeature,
         deltaElectrodes: _guard.deltaElectrodes,
+        thresholdMode: _guardThresholdModeFor(laneFeature),
+        fixedThreshold: aiGuardFixedThreshold,
       );
       if (ok) {
         debugPrint('[guardrail] enabled ($ffId, feature=$featureId)');
@@ -1053,11 +1146,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       _guard.configure(
         enabled: false,
         bandMath: false,
-        featureId: guardFeatureIsAi(featureId)
-            ? featureId
-            : guardFeatureAiAVigReve,
-        deltaRail: _specDeltaRail,
+        featureId: laneFeature,
         deltaElectrodes: _guard.deltaElectrodes,
+        thresholdMode: _guardThresholdModeFor(laneFeature),
+        fixedThreshold: aiGuardFixedThreshold,
       );
       debugPrint('[guardrail] enable failed: $e');
     }
@@ -1727,6 +1819,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final feature = _sessionGuardFeature;
     final model = settings.guardModel;
     final overrides = settings.inhibitCeilingOverrides(fb.protocol);
+    final guardActive = guardrailEnabled && feature != guardFeatureNone;
     return SessionSettings(
       dynamicAdapt: dynamicAdapt,
       responsiveness: responsiveness,
@@ -1738,6 +1831,12 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       guardFeature: feature,
       guardModel: model,
       warningThresholdPercentile: settings.warningThresholdPercentile,
+      guardThresholdMode: guardActive ? _guardThresholdModeFor(feature) : null,
+      guardFixedThreshold:
+          guardActive &&
+              _guardThresholdModeFor(feature) == guardThresholdModeFixed
+          ? aiGuardFixedThreshold
+          : null,
       warningSound: settings.warningSoundName,
       musicFolder: settings.musicFolder,
       musicMinCutoffHz: settings.musicMinCutoffHz,
@@ -1754,6 +1853,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       eyeMarkersEnabled: settings.eyeMarkersEnabled,
       inhibitCeilingOverrides: overrides.isEmpty ? null : overrides,
       crownQualitySource: app.crownQualitySource?.name,
+      rewardDwellSeconds: settings.rewardDwellSeconds,
+      stability: _engine.stability == null
+          ? null
+          : StabilitySessionSettings(
+              band: _reward.featureId,
+              windowSeconds: _engine.stability!.windowSeconds,
+              difficulty: _engine.stability!.difficulty,
+              baselineCv: _engine.baselineCv,
+            ),
     );
   }
 
@@ -1764,7 +1872,16 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final protocol = catalog?.forName(state.protocol);
     final feature = _sessionGuardFeature;
     final description = protocol?.metadataDescription;
-    final protocolJson = protocol?.resolved(guardFeature: feature).toJson();
+    final protocolJson = protocol
+        ?.resolved(
+          guardFeature: feature,
+          guardThresholdMode: _guardThresholdModeFor(feature),
+          guardFixedThreshold: aiGuardFixedThreshold,
+          rewardFeature: (protocol.isStabilityReward && _reward.hasReward)
+              ? _reward.featureId
+              : null,
+        )
+        .toJson();
     final userId = settings.subjectInfo.id;
     _recorder.writeMetadata({
       'type': 'session',
@@ -1842,7 +1959,13 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       drowsiness: drowsy,
       music: sessionMusic,
       metadataDescription: protocol?.metadataDescription,
-      protocolJson: protocol?.resolved(guardFeature: feature).toJson(),
+      protocolJson: protocol
+          ?.resolved(
+            guardFeature: feature,
+            guardThresholdMode: _guardThresholdModeFor(feature),
+            guardFixedThreshold: aiGuardFixedThreshold,
+          )
+          .toJson(),
       protocolVersion: '1',
       sessionSettings: _currentSessionSettings(),
       avgSpo2: stats?.avgSpo2,
@@ -2124,6 +2247,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       acceptBaselineSample: acceptBaselineSample,
       sampleIsClean: _sampleIsClean,
       quality: quality,
+      guardBlocks:
+          _guard.enabled &&
+          _guard.warningActive &&
+          (_specDocument?.isStabilityReward ?? false),
       dirtyReason: artifactDirtyReason(
         now: DateTime.now(),
         lastMovementAt: _lastMovementAt,
@@ -2182,7 +2309,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             threshold,
             featurePercentile,
             warnOver,
-            ceilingOver,
             clean,
             dirtyReason,
           }) {
@@ -2194,7 +2320,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
               threshold: threshold,
               featurePercentile: featurePercentile,
               warnOver: warnOver,
-              ceilingOver: ceilingOver,
               clean: clean,
               dirtyReason: dirtyReason,
             );
@@ -2221,6 +2346,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     );
     if (state.phase == FeedbackPhase.playing &&
         _reward.hasReward &&
+        _reward.lastProduced &&
         sample.id == _reward.featureId &&
         sample.value.isFinite) {
       _trust.pushReward(
@@ -2229,6 +2355,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           native: _reward.lastNative ?? sample.value,
           percentile: _reward.lastPercentile ?? 50,
           thresholdPercentile: _reward.lastThresholdPercentile,
+          threshold: _engine.threshold,
           inTarget: _reward.lastInTarget,
           heldBack: _reward.lastHeldBack,
           inhibitTags: List<String>.of(_reward.lastInhibitTags),
@@ -2273,7 +2400,8 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             featurePercentile: featurePct,
             warningActive: _guard.warningActive,
             warnOver: _guard.warnOver,
-            ceilingOver: _guard.ceilingOver,
+            // δ rail removed 2026-10: no ceiling signal on live sessions.
+            ceilingOver: false,
             lastDelta: _guard.lastDelta,
             clean: guardClean,
             dirtyReason: guardDirtyReason,
@@ -2287,7 +2415,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           threshold: _guard.threshold,
           featurePercentile: featurePct,
           warnOver: _guard.warnOver,
-          ceilingOver: _guard.ceilingOver,
           clean: guardClean,
           dirtyReason: guardDirtyReason?.name,
         );

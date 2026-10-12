@@ -21,6 +21,10 @@ abstract class GuardrailInfo with _$GuardrailInfo {
     double? featurePercentile,
     bool? warnOver,
     bool? ceilingOver,
+
+    /// Relative frontal δ the rail compared to its ceiling (2026-10+).
+    /// Absent = pre-2026-10 frame: the rail was absolute [delta] > 0.25.
+    double? railDeltaRel,
     bool? clean,
     String? dirtyReason,
   }) = _GuardrailInfo;
@@ -128,6 +132,7 @@ GuardrailInfo _guardrailInfoFromJson(Map<String, dynamic> json) => GuardrailInfo
       featurePercentile: (json['featurePercentile'] as num?)?.toDouble(),
       warnOver: json['warnOver'] as bool?,
       ceilingOver: json['ceilingOver'] as bool?,
+      railDeltaRel: (json['railDeltaRel'] as num?)?.toDouble(),
       clean: json['clean'] as bool?,
       dirtyReason: json['dirtyReason'] as String?,
     );
@@ -163,6 +168,7 @@ extension GuardrailInfoJson on GuardrailInfo {
         if (featurePercentile != null) 'featurePercentile': featurePercentile,
         if (warnOver != null) 'warnOver': warnOver,
         if (ceilingOver != null) 'ceilingOver': ceilingOver,
+        if (railDeltaRel != null) 'railDeltaRel': railDeltaRel,
         if (clean != null) 'clean': clean,
         if (dirtyReason != null) 'dirtyReason': dirtyReason,
       };

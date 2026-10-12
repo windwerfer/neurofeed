@@ -7,6 +7,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neurofeed/src/feedback/trust/trust_pane.dart'
+    show TrustRewardChart;
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
 import 'package:neurofeed/src/session_format/stats_assemble.dart';
@@ -251,7 +253,12 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         trust.reward.isNotEmpty && (loaded.protocolDoc?.hasReward ?? false);
     final guardLane =
         trust.guard.isNotEmpty &&
-        trustGuardPaneSpecs(loaded.guardFeature).isNotEmpty;
+        trustGuardPaneSpecs(
+          loaded.guardFeature,
+          legacyCeiling:
+              (loaded.protocolDoc?.guard?.deltaRail ?? true) &&
+              trust.hasCeilingData,
+        ).isNotEmpty;
     _rewardOn = rewardLane;
     _guardOn = !rewardLane && guardLane;
     final end = historyTrustLastT(trust);
@@ -535,11 +542,18 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       inhibit: trustInhibitSpecs(
         overlayInhibitCeilings(protocol.conditions, overrides),
       ),
-      guardPanes: trustGuardPaneSpecs(_guardFeature),
+      guardPanes: trustGuardPaneSpecs(
+        _guardFeature,
+        legacyCeiling:
+            (protocol.guard?.deltaRail ?? true) && trust.hasCeilingData,
+      ),
       rewardLabel: _rewardLabel,
       guardLabel: _guardLabel,
       rewardColor: protocol.color,
       guardColor: bandColors[0],
+      rewardChart: protocol.isStabilityReward
+          ? TrustRewardChart.stability
+          : TrustRewardChart.percentile,
     );
   }
 
@@ -1205,6 +1219,11 @@ bool _feedbackLane(
   if (trust == null) return false;
   final reward = trust.reward.isNotEmpty && (protocol?.hasReward ?? false);
   final guard =
-      trust.guard.isNotEmpty && trustGuardPaneSpecs(guardFeature).isNotEmpty;
+      trust.guard.isNotEmpty &&
+      trustGuardPaneSpecs(
+        guardFeature,
+        legacyCeiling:
+            (protocol?.guard?.deltaRail ?? true) && trust.hasCeilingData,
+      ).isNotEmpty;
   return reward || guard;
 }

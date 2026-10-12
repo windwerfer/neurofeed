@@ -149,9 +149,9 @@ Catalog and user documents are the same type (`origin: catalog | user`). `Protoc
 
 ### Catalog IDs (on-disk forever)
 
-`sleepGuard`, `restAwake`, `openMonitor`, `alertOpen`, `alertClosed`, `concentrate`, `calibrateRecord`
+`sleepGuard`, `restAwake`, `openMonitor`, `alertOpen`, `alertClosed`, `bandStability` (experimental, 2026-10-12), `calibrateRecord`
 
-Retired ids resolve through `legacyProtocolAliases` (`lib/src/feedback/protocol_ids.dart`) for display / selection only: `drowsiness`→`restAwake`, `mindfulness`→`openMonitor`, `alertnessOpen`→`alertOpen`, `alertnessClosed`→`alertClosed`, `concentration`→`concentrate`, `guardrailOnly`→`sleepGuard`, `twilight` / `relaxedConcentration`→`restAwake`, `recordOnly`→`calibrateRecord` (dropped 2026-10: `calibrateRecord` is the only catalog row without reward or guard). Saved sessions keep their stored id; charts and export use the session's `protocolJson` snapshot first.
+Retired ids resolve through `legacyProtocolAliases` (`lib/src/feedback/protocol_ids.dart`) for display / selection only: `drowsiness`→`restAwake`, `mindfulness`→`openMonitor`, `alertnessOpen`→`alertOpen`, `alertnessClosed`→`alertClosed`, `concentration` / `concentrate`→`openMonitor` (`concentrate` pulled 2026-10-07: no evidence alpha tracks focus), `guardrailOnly`→`sleepGuard`, `twilight` / `relaxedConcentration`→`restAwake`, `recordOnly`→`calibrateRecord` (dropped 2026-10: `calibrateRecord` is the only catalog row without reward or guard). Saved sessions keep their stored id; charts and export use the session's `protocolJson` snapshot first.
 
 Unknown IDs **must not** fall back to `restAwake` (`SessionMetadata`, SQLite list, crash recovery). List rows: `catalog.forName(id)?.copy` else raw id. Recent: catalog hit only (skip unknown). `protocolJson` is for detail / export / replay only.
 
@@ -161,7 +161,8 @@ User IDs: `user.<slug>` where `slug` is `[a-z0-9-]{3,64}`. Catalog IDs are reser
 
 A protocol wires: optional `reward` (feature + output + policy + inhibit), optional `guard` (feature + output + policy + `muffleReward` + `defaultEnabled` + `deltaRail` + `requiresModel`), `background.kind`, calibration id, `calibrationKind`, electrode **names** (omit = Rust default), copy strings, color.
 
-- `guard.deltaRail` (bool, default `true`): whether the absolute frontal-delta ceiling (`guardrailDeltaCeiling` = 0.25) may warn next to the percentile rule, in AI and band mode. `false` = the ceiling never warns / chimes / muffles; computed frames still record `ceilingOver` as a signal-dirty indicator. Written to JSON only when `false`.
+- `guard.deltaRail` (legacy bool): **the frontal-δ rail was removed 2026-10** (windwerfer's rule: remove relative δ if still bad after the gym improvements; gated AUC 0.55 BOAS / 0.36 Muse Sleep-Onset, BA < 0.5 on Sleep-EDF, `feedback_gym/DELTA_RAIL_SWEEP.md`). The key is still parsed (no live effect) so history can tell whether an old session's recorded `ceilingOver` was a warn signal. The catalog no longer writes it; new computed frames carry no `ceilingOver` / `railDeltaRel`.
+- `guard.thresholdMode` (`percentile` \| `fixed`, optional) + `guard.fixedThreshold` (0–1, optional): how the warning threshold is set. `ai.*` guards output class probabilities (P(hypnagogic) / P(light), high = drowsy) and default to **fixed**: warn while P > `fixedThreshold` (default `defaultAiGuardFixedThreshold` = 0.50, picked by `feedback_gym/runners/ai_threshold_sweep.py`, see `feedback_gym/AI_THRESHOLD_SWEEP.md`). `band.*` guards are always **percentile** of the calibration distribution (`warningThresholdPercentile`); `fixed` on a band feature is ignored. Absent = feature default; unknown values are ignored on parse (old / hand-edited documents still open). The user pref (`guard_threshold_mode`, `guard_fixed_threshold`) overrides the document. Session snapshots (`protocolJson`) and `sessionSettings.guardThresholdMode` / `guardFixedThreshold` record what ran. The gym (`simulate_protocol.py`) mirrors the same rule.
 - `guard.requiresModel` (bool, default `false`): the guard must run on an AI model. No band.delta fallback; a stored `band.delta` pick resolves to the catalog AI feature; Start shows the model gate (install / import, or wait for an installed model to finish loading) and `FeedbackState.startCalibration` / agent `POST /session/start` (412 `model_not_ready`) refuse while the engine is not Ready. Written only when `true`.
 - `calibrationKind` (`auto` default \| `staged`): `staged` always runs the staged calibration (artifacts → eyes-open clear → eyes-closed rest) and cannot be skipped.
 
@@ -182,7 +183,7 @@ Catalog rows lock `reward.feature` (and `inhibit` when non-empty). They do **not
 | `openMonitor` | `band.alpha` | none | `ai.a_vig` | false | true | **false** | false | `feature` | `eyes-closed-01` | auto | no |
 | `alertOpen` | `band.btr` | none | **omit** | — | — | — | — | `feature` | `eyes-open-01` | auto | no |
 | `alertClosed` | `band.btr` | none | `ai.a_vig` | false | true | **false** | false | `feature` | `eyes-closed-01` | auto | no |
-| `concentrate` | `band.alpha` | betaCeiling 0.25 | `ai.a_vig` | false | **false** | **false** | false | `feature`, `inhibit` | `eyes-closed-01` | auto | no |
+| `bandStability` | `band.alpha` (user pick: `band.alpha` / `band.theta` / `band.beta`, pref `stabilityBand`) | none | `ai.a_vig` | true | true | — | false | `feature` | `eyes-closed-01` | auto | no |
 | `calibrateRecord` | **omit** | — | **omit** | — | — | — | — | — | `eyes-closed-01` | `staged` | no |
 
 Any document **with** a `guard` object defaults to its `guard.feature` when `defaultEnabled` and no pref exists (else `none`). A catalog-default AI head without a stored pref falls back to `band.delta` while no model is Ready, unless `guard.requiresModel`. Documents without `guard` default to **none**. Do not honor unused v3 `guardrailDefault: false`.
@@ -215,12 +216,13 @@ Per-protocol remaining knobs: **on/off** and **band vs AI**. The installed model
 | Policy | Lane | Behavior |
 |---|---|---|
 | `percentileUptrain` | reward | `RatioEngine`: baseline percentile (default 40); `adapt()` every 30 s wall-clock; ceiling `baselineMean + 1.5·sd`; floor = initial percentile; success=0 circuit breaker. `isInTarget` = native > threshold, then inhibit AND-gates. |
-| `percentileWarn` (band-math) | guard | Rest native `band.delta` → warning percentile (default 75). Warn if live native > threshold **or** > `guardrailDeltaCeiling` (0.25). |
-| `percentileWarn` (AI) | guard | Rest `sleep_dir` → same percentile. Warn if live `sleep_dir` > threshold **or** absolute frontal delta > 0.25 (always-on bands, **not** the AI `FeatureDto`). |
+| `stabilityDowntrain` | reward | **Experimental** (`bandStability`; no evidence it trains anything). `RatioEngine` stability mode (`StabilityConfig`): raw band values; baseline CV = median of rolling CVs (window N clean samples, default 10, 1–30; N=1 → 2). Live r = CV(last N clean samples) ÷ baseline CV; warm-up (fewer than N clean) produces nothing. In target when r ≤ threshold; threshold starts at 1 − difficulty (default 10 %, 0–50 %). `adapt()` reuses responsiveness steps mirrored (harder = lower), clamped to [max(0.05, min(mean − 1.5·sd of baseline ratios, initial − 0.3)), initial]; success = 0 resets to initial. Dirty samples (quality / movement) never enter the window and are not counted as unsteady. An AI-guard warning holds the second back (`inhibitTags: ['guard']`) so drowsy steadiness is not rewarded. Continuous outputs get `stabilityOutputPercentile(r, thr)`: r ≥ 1.5 → 0, r = thr → 60, r ≤ thr − min(0.3, thr) → 100, linear between. |
+| `percentileWarn` (band-math) | guard | Rest native `band.delta` → warning percentile (default 75). Warn if live native > threshold. |
+| `percentileWarn` (AI) | guard | Rest `sleep_dir` → same percentile. Warn if live score > threshold (fixed P or percentile, see `guard.thresholdMode`). |
 
 `epochWindowSeconds = 75` (wall-clock). Do **not** switch to 30 one-Hz `FeatureDto` samples. `adaptIntervalSeconds = 30` stays wall-clock.
 
-The comment/code unit mismatch on `guardrailDeltaCeiling` (comment says normalized; code uses absolute µV²/Hz) is **preserved**. Fixing units is a later explicit science PR.
+The δ rail is gone (2026-10). History keeps old sessions readable: `SessionTrust.hasCeilingData` (any frame with `ceilingOver`) + the saved snapshot's `guard.deltaRail` bring back the ceiling pane; frames with `railDeltaRel` plot against `legacyGuardrailDeltaCeilingRel` (0.80), older frames their absolute `delta` against `legacyGuardrailDeltaCeilingAbs` (0.25) (`history/session_trust.dart`).
 
 Cooldown `warningChimeCooldown` (20 s) for one-shots; continuous alarm ramps while active.
 
@@ -317,4 +319,4 @@ Reconnect does not re-enable; the orchestrator re-calls on session start.
 - Changing the `.neurofeed` (NFED6) container / raw body / computed columnar layout.
 - SQLite schema redesign.
 - Medical-device claims.
-- Silently switching `guardrailDeltaCeiling` to relative-δ.
+- Changing the δ-rail units or ceiling without a gym sweep (`feedback_gym/runners/delta_rail_sweep.py`).

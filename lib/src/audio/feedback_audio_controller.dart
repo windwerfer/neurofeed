@@ -13,6 +13,8 @@ import 'package:neurofeed/src/settings.dart';
 /// feedback. Music feedback (folder + low-pass filter) lives in
 /// [MusicController].
 class FeedbackAudioController {
+  /// Default dwell time (sustained in-target time before a reward chime).
+  /// The live value is [dwell] (Settings → Target Settings → Dwell time).
   static const Duration targetHoldDuration = Duration(milliseconds: 2500);
   static const Duration rewardCooldown = Duration(seconds: 8);
   static const Duration movementBuffer = Duration(seconds: 1);
@@ -41,6 +43,11 @@ class FeedbackAudioController {
   final List<SoundHandle> _chimeHandles = [];
 
   DateTime? _inTargetSince;
+
+  /// Dwell time, read live from [Settings.rewardDwellSeconds] (default
+  /// [targetHoldDuration]).
+  Duration get dwell =>
+      Duration(milliseconds: (_settings.rewardDwellSeconds * 1000).round());
   DateTime _lastRewardAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Fired when a one-shot reward/guard chime actually plays (Trust metadata).
@@ -338,7 +345,7 @@ class FeedbackAudioController {
     if (now.isBefore(_movingUntil)) {
       return;
     }
-    if (now.difference(_inTargetSince!) < targetHoldDuration) {
+    if (now.difference(_inTargetSince!) < dwell) {
       return;
     }
     if (_lastRewardAt.isAfter(now.subtract(rewardCooldown))) {

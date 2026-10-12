@@ -10,31 +10,24 @@ import 'package:neurofeed/src/feedback/session_store.dart';
 import 'package:neurofeed/src/rust/api/muse.dart';
 import 'package:neurofeed/src/rust/api/reve.dart' as frb;
 
-/// Classical frontal-delta hard rail for the sleep guardrail (normalized FFT
-/// band power of the AF7/AF8 average). Overridden by the baseline percentile
-/// once real-device data is available — needs tuning.
-///
-/// The comment claims normalized power; the code compares absolute µV²/Hz.
-/// Do not silently switch the rail to relative-δ.
-const double guardrailDeltaCeiling = 0.25;
+/// The frontal-delta hard rail was removed 2026-10 (relative δ: BA < 0.5 on
+/// Sleep-EDF, gated AUC 0.55 BOAS / 0.36 Muse Sleep-Onset — see
+/// `feedback_gym/DELTA_RAIL_SWEEP.md`). The guard warns only on its threshold
+/// rule. Old sessions that recorded `ceilingOver` still render their ceiling
+/// pane in history (`session_trust.dart`).
 
 /// `percentileWarn` split: band-math scores native `band.delta`; AI scores the
-/// FeatureDto scalar (P(class1) from the selected head) and, when
-/// [deltaRail] is on (protocol `guard.deltaRail`, default true), also rails
-/// on absolute frontal delta from always-on bands. With [deltaRail] off only
-/// the percentile rule can warn.
+/// FeatureDto scalar (P(class1) from the selected head). Threshold rule only.
 bool percentileWarnOver({
   required bool bandMath,
   required double lastDelta,
   required double lastSleepDir,
   required double threshold,
-  bool deltaRail = true,
 }) {
-  final rail = deltaRail && lastDelta > guardrailDeltaCeiling;
   if (bandMath) {
-    return lastDelta > threshold || rail;
+    return lastDelta > threshold;
   }
-  return lastSleepDir > threshold || rail;
+  return lastSleepDir > threshold;
 }
 
 /// Minimum gap between guardrail warning chimes while drifting into sleep.
@@ -71,7 +64,6 @@ class GuardTick {
     double? threshold,
     double? featurePercentile,
     bool? warnOver,
-    bool? ceilingOver,
     bool? clean,
     String? dirtyReason,
   })
@@ -98,28 +90,68 @@ class GuardLane {
   double lastClarity = 1;
   double lastSleepDir = 0;
   double lastDelta = 0;
+
   bool warningActive = false;
   DateTime lastWarningChimeAt = DateTime.fromMillisecondsSinceEpoch(0);
   final Map<int, double> _frontalDelta = {};
   String featureId = guardFeatureBandDelta;
   List<int> deltaElectrodes = const [];
 
-  /// Protocol `guard.deltaRail`: whether the absolute frontal-delta ceiling
-  /// may warn. [ceilingOver] is computed (and recorded) either way.
-  bool deltaRail = true;
+  String thresholdMode = guardThresholdModePercentile;
+  double fixedThreshold = defaultAiGuardFixedThreshold;
+
+  bool get fixedMode => !bandMath && thresholdMode == guardThresholdModeFixed;
 
   void configure({
     required bool enabled,
     required bool bandMath,
     required String featureId,
     required List<int> deltaElectrodes,
-    bool deltaRail = true,
+    String thresholdMode = guardThresholdModePercentile,
+    double fixedThreshold = defaultAiGuardFixedThreshold,
   }) {
+    final wasFixed = fixedMode;
     this.enabled = enabled;
     this.bandMath = bandMath;
     this.featureId = featureId;
     this.deltaElectrodes = deltaElectrodes;
-    this.deltaRail = deltaRail;
+    this.thresholdMode = resolveGuardThresholdMode(
+      feature: featureId,
+      declared: bandMath ? guardThresholdModePercentile : thresholdMode,
+    );
+    this.fixedThreshold = fixedThreshold;
+    if (fixedMode) {
+      threshold = fixedThreshold;
+    } else if (wasFixed) {
+      threshold = null;
+    }
+  }
+
+  /// Switch percentile ↔ fixed mid-session. Band-math guards stay
+  /// percentile. Percentile mode re-reads the captured baseline.
+  void setThresholdMode(
+    String mode, {
+    required int warningThresholdPercentile,
+  }) {
+    thresholdMode = resolveGuardThresholdMode(
+      feature: featureId,
+      declared: bandMath ? guardThresholdModePercentile : mode,
+    );
+    if (fixedMode) {
+      threshold = fixedThreshold;
+    } else if (baselineSleepDir.isNotEmpty) {
+      recomputeThreshold(warningThresholdPercentile);
+    } else {
+      threshold = null;
+    }
+  }
+
+  void setFixedThreshold(double value) {
+    fixedThreshold = value;
+    if (fixedMode) {
+      threshold = value;
+      debugPrint('[guardrail] fixed threshold P > ${value.toStringAsFixed(2)}');
+    }
   }
 
   void resetSession() {
@@ -130,14 +162,15 @@ class GuardLane {
     baselineSleepDir.clear();
     warningActive = false;
     bandMath = false;
+    thresholdMode = guardThresholdModePercentile;
     _frontalDelta.clear();
     lastSleepDir = 0;
     lastDelta = 0;
     lastClarity = 1;
   }
 
-  /// Always-on bands: absolute frontal delta rail (AI percentileWarn) and
-  /// V_clear capture during the eyes-open stage.
+  /// Always-on bands: frontal delta (absolute, recorded); V_clear capture
+  /// during the eyes-open stage.
   void onBands(BandsDto bands, GuardTick tick) {
     _frontalDelta[bands.electrode] = bands.delta;
     lastDelta = _frontalDeltaAverage();
@@ -202,7 +235,6 @@ class GuardLane {
       threshold: threshold,
       featurePercentile: percentileOf(native),
       warnOver: warnOver,
-      ceilingOver: ceilingOver,
       clean: tick.sampleIsClean,
       dirtyReason: null,
     );
@@ -213,7 +245,13 @@ class GuardLane {
     bool captureAnchor = true,
   }) {
     final list = List<double>.of(baselineSleepDir)..sort();
-    if (list.isNotEmpty) {
+    if (fixedMode) {
+      threshold = fixedThreshold;
+      debugPrint(
+        '[guardrail] baseline n=${baselineSleepDir.length} '
+        'fixed threshold P > ${fixedThreshold.toStringAsFixed(2)}',
+      );
+    } else if (list.isNotEmpty) {
       final idx = ((warningThresholdPercentile / 100) * (list.length - 1))
           .round();
       threshold = list[idx];
@@ -262,13 +300,8 @@ class GuardLane {
     return lastSleepDir > t;
   }
 
-  /// Absolute frontal delta above [guardrailDeltaCeiling]. Recorded per
-  /// computed frame as a signal-dirty indicator even when [deltaRail] is off
-  /// (then it never warns).
-  bool get ceilingOver => lastDelta > guardrailDeltaCeiling;
-
   void recomputeThreshold(int percentile) {
-    if (baselineSleepDir.isEmpty) {
+    if (fixedMode || baselineSleepDir.isEmpty) {
       return;
     }
     final list = List<double>.of(baselineSleepDir)..sort();
@@ -316,7 +349,6 @@ class GuardLane {
       lastDelta: lastDelta,
       lastSleepDir: lastSleepDir,
       threshold: t,
-      deltaRail: deltaRail,
     );
     if (!over) {
       warningActive = false;
@@ -343,8 +375,7 @@ class GuardLane {
       debugPrint(
         '[guardrail] WARNING sleep_dir=${lastSleepDir.toStringAsFixed(3)} '
         'delta=${lastDelta.toStringAsFixed(3)} '
-        'thr=${t.toStringAsFixed(3)} '
-        'delta ceiling=$guardrailDeltaCeiling${deltaRail ? '' : ' (rail off)'}',
+        'thr=${t.toStringAsFixed(3)}',
       );
     }
   }

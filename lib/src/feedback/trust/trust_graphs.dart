@@ -4,7 +4,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:neurofeed/src/feedback/guard_lane.dart';
+import 'package:neurofeed/src/history/session_trust.dart'
+    show legacyGuardrailDeltaCeilingRel;
 import 'package:neurofeed/src/feedback/trust/trust_guard.dart';
 import 'package:neurofeed/src/feedback/trust/trust_inhibit.dart';
 import 'package:neurofeed/src/feedback/trust/trust_more.dart';
@@ -26,6 +27,7 @@ class TrustGraphsColumn extends StatefulWidget {
     required this.guardColor,
     this.inhibit = const [],
     this.guardPanes = const [TrustGuardPaneId.warn],
+    this.rewardChart = TrustRewardChart.percentile,
   });
 
   final TrustTrace trace;
@@ -39,6 +41,10 @@ class TrustGraphsColumn extends StatefulWidget {
   final Color guardColor;
   final List<TrustInhibitSpec> inhibit;
   final List<TrustGuardPaneId> guardPanes;
+
+  /// [TrustRewardChart.stability] swaps the percentile chart for the
+  /// steadiness chart (experimental `bandStability`).
+  final TrustRewardChart rewardChart;
 
   @override
   State<TrustGraphsColumn> createState() => _TrustGraphsColumnState();
@@ -144,16 +150,28 @@ class _TrustGraphsColumnState extends State<TrustGraphsColumn>
             if (widget.showReward) ...[
               SizedBox(
                 height: 168,
-                child: RewardTrustPane(
-                  key: const Key('trust-reward-pane'),
-                  samples: widget.trace.reward,
-                  marks: widget.trace.marks,
-                  viewport: widget.viewport,
-                  newestElapsed: newest,
-                  wallNow: wallNow,
-                  label: widget.rewardLabel,
-                  seriesColor: widget.rewardColor,
-                ),
+                child: widget.rewardChart == TrustRewardChart.stability
+                    ? StabilityTrustPane(
+                        key: const Key('trust-stability-pane'),
+                        samples: widget.trace.reward,
+                        marks: widget.trace.marks,
+                        viewport: widget.viewport,
+                        newestElapsed: newest,
+                        wallNow: wallNow,
+                        label:
+                            '${widget.rewardLabel} steadiness (CV ÷ baseline)',
+                        seriesColor: widget.rewardColor,
+                      )
+                    : RewardTrustPane(
+                        key: const Key('trust-reward-pane'),
+                        samples: widget.trace.reward,
+                        marks: widget.trace.marks,
+                        viewport: widget.viewport,
+                        newestElapsed: newest,
+                        wallNow: wallNow,
+                        label: widget.rewardLabel,
+                        seriesColor: widget.rewardColor,
+                      ),
               ),
               for (final spec in widget.inhibit) ...[
                 const SizedBox(height: 8),
@@ -231,7 +249,7 @@ class _TrustGraphsColumnState extends State<TrustGraphsColumn>
           newestElapsed: newest,
           wallNow: wallNow,
           seriesColor: widget.guardColor,
-          ceiling: guardrailDeltaCeiling,
+          ceiling: legacyGuardrailDeltaCeilingRel,
         );
     }
   }

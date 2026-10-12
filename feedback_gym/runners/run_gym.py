@@ -237,12 +237,11 @@ def write_protocol_stats(run: dict, out_path: Path) -> None:
         "",
         "## Protocols (composite + parts)",
         "",
-        "`guard` = feature-only label alignment (the score); `rail` = protocol "
-        "`guard.deltaRail`; `warn` / `warn acc` = rate and label alignment "
-        "of the app-fidelity warning (feature OR delta rail when the rail is on).",
+        "`guard` = label alignment of the warning (threshold rule only; the "
+        "δ rail was removed 2026-10); `warn` = warn rate.",
         "",
-        "| id | final | reward | inhibit | guard | rail | warn | warn acc | notes |",
-        "|----|------:|-------:|--------:|------:|:----:|-----:|---------:|-------|",
+        "| id | final | reward | inhibit | guard | warn | notes |",
+        "|----|------:|-------:|--------:|------:|-----:|-------|",
     ]
     for p in run["protocols"]:
         parts = p.get("parts") or {}
@@ -262,14 +261,12 @@ def write_protocol_stats(run: dict, out_path: Path) -> None:
         final = p.get("final")
         final_s = f"{final:.3f}" if isinstance(final, (int, float)) else "N/A"
         if g and g.get("status") not in ("unavailable", "n/a"):
-            rail_s = "on" if g.get("delta_rail", True) else "off"
             warn_s = _s(g, "warn_rate")
-            wacc_s = _s(g, "label_align_combined")
         else:
-            rail_s = warn_s = wacc_s = "—"
+            warn_s = "—"
         lines.append(
             f"| {p['id']} | {final_s} | {_s(r)} | {_s(i)} | {_s(g)} "
-            f"| {rail_s} | {warn_s} | {wacc_s} | {notes} |"
+            f"| {warn_s} | {notes} |"
         )
 
     lines += [
@@ -305,8 +302,8 @@ def write_protocol_stats(run: dict, out_path: Path) -> None:
         "- Fixed calibration threshold (no EMA dynamic adapt).",
         "- No dirty-pad / quality gating.",
         "- AI uses precomputed emb_cache + linear heads (no CBraMod/REVE forward).",
-        "- Guard **scores** use `warn_feature` (percentile only); combined warn + rail "
-        "still reported (Sleep-EDF abs delta often trips the 0.25 rail).",
+        "- Guard warns on its threshold rule only (no δ rail, as in the app since "
+        "2026-10).",
         "- REVE columns are subsample-aligned (≤80/class/rec) and NaN-padded — Diggus: "
         "directional only vs full CBraMod.",
         "- Crown `device.*` marked N/A (no corpus).",
@@ -339,6 +336,7 @@ def _corpus_meta(corpus: dict) -> dict[str, Any]:
         "label_names": _s("label_names"),
         "cal_policy": _s("cal_policy"),
         "n": int(len(corpus["delta_rel"])),
+        "gating": corpus.get("gating"),
     }
 
 
@@ -659,7 +657,17 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="when building sleep-edf-test, cap windows per recording",
     )
+    parser.add_argument(
+        "--no-gate",
+        action="store_true",
+        help="score every row (default: app-matching live gating: pad quality >= 80 on a "
+        "feature pad, movement score <= 0.05 where the corpus has imu_movement)",
+    )
     args = parser.parse_args(argv)
+    if args.no_gate:
+        import runners.helpers as _h
+
+        _h.GATE_DEFAULT = False
     corpus_root = args.corpus_root if args.corpus_root is not None else default_corpus_root()
 
     if args.presets and (args.corpus or args.preset):

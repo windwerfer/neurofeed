@@ -24,6 +24,7 @@ ffi.ComputedFrame _frame({
   bool? ceilingOver,
   double featurePercentile = 50,
   double guardDelta = 0,
+  double? railDeltaRel,
   String? guardDirty,
 }) {
   return ffi.ComputedFrame(
@@ -39,6 +40,7 @@ ffi.ComputedFrame _frame({
       featurePercentile: guardClean == null ? null : featurePercentile,
       warnOver: warnOver,
       ceilingOver: ceilingOver,
+      railDeltaRel: railDeltaRel,
       clean: guardClean,
       dirtyReason: guardDirty,
     ),
@@ -61,6 +63,45 @@ ffi.ComputedFrame _frame({
 }
 
 void main() {
+  group('δ rail migration', () {
+    test('old frames (no railDeltaRel): absolute delta vs 0.25', () {
+      final read = readSessionTrust(
+        frames: [
+          for (var i = 0; i < 4; i++)
+            _frame(
+              t: i.toDouble(),
+              guardClean: true,
+              ceilingOver: true,
+              guardDelta: 12.0,
+            ),
+        ],
+      );
+      expect(read.deltaCeiling, legacyGuardrailDeltaCeilingAbs);
+      expect(read.guard.first.lastDelta, 12.0);
+      expect(read.pctCeiling, 100);
+    });
+
+    test('new frames: relative delta vs the relative ceiling', () {
+      final read = readSessionTrust(
+        frames: [
+          for (var i = 0; i < 4; i++)
+            _frame(
+              t: i.toDouble(),
+              guardClean: true,
+              ceilingOver: i == 0,
+              guardDelta: 12.0,
+              railDeltaRel: i == 0 ? 0.9 : 0.4,
+            ),
+        ],
+      );
+      expect(read.deltaCeiling, legacyGuardrailDeltaCeilingRel);
+      expect(read.hasCeilingData, isTrue);
+      expect(read.guard.first.lastDelta, 0.9);
+      expect(read.guard.last.lastDelta, 0.4);
+      expect(read.pctCeiling, 25);
+    });
+  });
+
   test('dirty second holds the previous clean percentile', () {
     final read = readSessionTrust(
       frames: [

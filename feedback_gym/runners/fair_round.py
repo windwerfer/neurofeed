@@ -299,9 +299,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lee-eo-ec", type=Path, default=ext / "lee2026_eo_ec.npz")
     ap.add_argument("--lee-artifacts", type=Path, default=ext / "lee2026_artifacts.npz")
     ap.add_argument("--universe", type=Path, default=ext / "universe_stress.npz")
+    ap.add_argument("--boas", type=Path, default=ext / "boas_wake_n1.npz")
+    ap.add_argument("--muse-sleeponset", type=Path, default=Path("/workspace/lab_only_out/muse_sleeponset.npz"),
+                    help="LAB-ONLY (CC-BY-NC-SA); aggregates only")
+    ap.add_argument("--ds001787", type=Path, default=ext / "ds001787_mw_muse.npz")
+    ap.add_argument("--rl2021", type=Path, default=ext / "rl2021_mw_muse.npz")
     ap.add_argument("--catalog", type=Path, default=GYM_ROOT.parent / "assets" / "protocols.json")
+    ap.add_argument("--no-gate", action="store_true", help="disable app-matching gating (pad quality / movement)")
     ap.add_argument("--out-dir", type=Path, default=None)
     args = ap.parse_args(argv)
+    if args.no_gate:
+        import runners.helpers as _h
+
+        _h.GATE_DEFAULT = False
 
     corpora: dict[str, dict[str, Any]] = {}
     notes = {
@@ -309,12 +319,20 @@ def main(argv: list[str] | None = None) -> int:
         "lee-eo-ec": "label 0 = eyes-open rest, 1 = eyes-closed rest (both awake); EO baseline",
         "lee-artifacts": "label 0 = clean rest, 1 = cued artifact task (both awake); clean-rest baseline",
         "universe": "label 0 = relax / low load, 1 = stress / high load (both awake); relax baseline",
+        "boas": "BOAS headband AF7/AF8 (no TP): label 0 = W, 1 = N1; per-night wake baseline",
+        "muse-sleeponset (LAB-ONLY)": "Muse 2: label 0 = early wake, 1 = last 300 s before first N2; aggregates only",
+        "ds001787": "Muse-proxy, label 0 = on-task, 1 = mind-wandering at probe (awake); pre-task baseline",
+        "rl2021": "Muse-proxy, label 0 = on-task, 1 = mind-wandering at probe (awake)",
     }
     paths = {
         "sleep-edf": args.sleep_edf,
         "lee-eo-ec": args.lee_eo_ec,
         "lee-artifacts": args.lee_artifacts,
         "universe": args.universe,
+        "boas": args.boas,
+        "muse-sleeponset (LAB-ONLY)": args.muse_sleeponset,
+        "ds001787": args.ds001787,
+        "rl2021": args.rl2021,
     }
     for k, p in paths.items():
         if p.exists():

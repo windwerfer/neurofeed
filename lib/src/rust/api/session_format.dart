@@ -220,6 +220,7 @@ sealed class GuardrailInfo with _$GuardrailInfo {
     double? featurePercentile,
     bool? warnOver,
     bool? ceilingOver,
+    double? railDeltaRel,
     bool? clean,
     String? dirtyReason,
   }) = _GuardrailInfo;

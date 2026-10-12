@@ -63,6 +63,9 @@ curl -sS -X POST $BASE/session/end -H 'Content-Type: application/json' -d '{}'
 curl -sS -X POST $BASE/session/reset -H 'Content-Type: application/json' -d '{}'
 ```
 
+- Catalog protocol ids: `sleepGuard`, `restAwake`, `openMonitor`, `alertOpen`,
+  `alertClosed`, `calibrateRecord`. `concentrate` / `concentration` were pulled
+  (2026-10-07) and resolve to `openMonitor`; don't use them in smoke runs.
 - Connect **Muse 2** (`sim:muse-2`) or **Muse S** (`sim:muse-s`). After connect,
   `scanMessage` must be null. Never Crown/Notion for a playing session.
 - `POST /view {"view":"settings"}` (or `bands` / `rawEeg`) uses `AppView.name`.

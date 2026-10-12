@@ -1,7 +1,8 @@
 import 'package:neurofeed/src/reve/models.dart';
 
 const String guardFeatureBandDelta = 'band.delta';
-const String guardFeatureAiDrowsiness = 'ai.drowsiness'; // deprecated alias → ai.a_vig
+const String guardFeatureAiDrowsiness =
+    'ai.drowsiness'; // deprecated alias → ai.a_vig
 const String guardFeatureAiAVig = 'ai.a_vig';
 const String guardFeatureAiWakeLight = 'ai.wake_light';
 const String guardFeatureAiAVigReve = 'ai.a_vig_reve';
@@ -34,17 +35,15 @@ bool guardFeatureIsAi(String feature) => guardFeatureAiIds.contains(feature);
 bool guardFeatureIsCbramod(String feature) =>
     guardFeatureCbramodIds.contains(feature);
 
-bool guardFeatureIsReve(String feature) => guardFeatureReveIds.contains(feature);
+bool guardFeatureIsReve(String feature) =>
+    guardFeatureReveIds.contains(feature);
 
 bool guardFeatureIsBandMath(String feature) => feature == guardFeatureBandDelta;
 
 /// Writes today's historical `GuardrailMode.name` into session metadata
 /// (`drowsinessMath`, `drowsinessCbramodAVig`, …). Do not write `bandMath` /
 /// raw ffIds here.
-String guardrailEngineName({
-  required String feature,
-  String? model,
-}) {
+String guardrailEngineName({required String feature, String? model}) {
   if (feature == guardFeatureNone) return 'none';
   if (feature == guardFeatureBandDelta) return 'drowsinessMath';
   return switch (model) {
@@ -128,3 +127,45 @@ String guardFeatureLabel(String feature) => switch (feature) {
   guardFeatureAiDrowsiness => 'AI drowsiness (legacy)',
   _ => feature,
 };
+
+const String guardThresholdModePercentile = 'percentile';
+
+const String guardThresholdModeFixed = 'fixed';
+
+const Set<String> guardThresholdModes = {
+  guardThresholdModePercentile,
+  guardThresholdModeFixed,
+};
+
+/// Default fixed probability cut for `ai.*` guards (warn while P > this).
+/// Picked by `feedback_gym/runners/ai_threshold_sweep.py` (2026-10): on the
+/// fair Sleep-EDF W/N1 corpus with per-recording cal, P > 0.50 gives the best
+/// per-recording balanced accuracy for ai.a_vig (0.84 median, 0.77 pooled;
+/// 25% warnings on wake vs 53% for p90 of cal) and ~2% warnings on Lee 2026
+/// awake rest rows.
+const double defaultAiGuardFixedThreshold = 0.50;
+
+const double minAiGuardFixedThreshold = 0.05;
+const double maxAiGuardFixedThreshold = 0.95;
+
+/// AI guard features are class probabilities in 0–1 (high = drowsy), so a
+/// fixed cut means the same thing for every user. Band features are not.
+bool guardFeatureIsProbability(String feature) => feature.startsWith('ai.');
+
+/// Threshold mode for a guard: band features are always `percentile`; AI
+/// features follow [declared] (user pref or protocol) and default to `fixed`.
+/// Unknown [declared] strings fall back to the default.
+
+String resolveGuardThresholdMode({required String feature, String? declared}) {
+  if (!guardFeatureIsProbability(feature)) {
+    return guardThresholdModePercentile;
+  }
+  return guardThresholdModes.contains(declared)
+      ? declared!
+      : guardThresholdModeFixed;
+}
+
+double clampAiGuardFixedThreshold(double value) {
+  final v = value.clamp(minAiGuardFixedThreshold, maxAiGuardFixedThreshold);
+  return (v * 100).roundToDouble() / 100;
+}

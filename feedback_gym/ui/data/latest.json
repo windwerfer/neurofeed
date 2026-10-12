@@ -165,49 +165,6 @@
       "final": 0.806
     },
     {
-      "id": "concentrate",
-      "reward_percentile": 40.0,
-      "guard_percentile": 75.0,
-      "parts": {
-        "reward": {
-          "feature": "band.alpha",
-          "policy": "percentileUptrain",
-          "threshold": 0.0326,
-          "hit_rate": 0.6753,
-          "stability": 0.86,
-          "score": 0.7307,
-          "n_play": 61646
-        },
-        "inhibit": {
-          "items": [
-            {
-              "type": "betaCeiling",
-              "max": 0.25,
-              "inhibit_block": 0.2315,
-              "health": 0.963
-            }
-          ],
-          "score": 0.963
-        },
-        "guard": {
-          "feature": "ai.a_vig",
-          "policy": "percentileWarn",
-          "band_math": false,
-          "delta_rail": false,
-          "threshold": 0.1874,
-          "warn_rate": 0.7892,
-          "warn_feature_rate": 0.7892,
-          "rail_rate": 1.0,
-          "stability": 0.9611,
-          "label_align": 0.6343,
-          "label_align_combined": 0.6343,
-          "score": 0.6343
-        }
-      },
-      "notes": [],
-      "final": 0.7482
-    },
-    {
       "id": "calibrateRecord",
       "reward_percentile": 40.0,
       "guard_percentile": 75.0,
@@ -425,8 +382,7 @@
       ],
       "orphan": false,
       "roles_in_protocols": [
-        "reward@openMonitor",
-        "reward@concentrate"
+        "reward@openMonitor"
       ],
       "latency": "~1s",
       "status": "ok",
@@ -636,8 +592,7 @@
         "guard@sleepGuard",
         "guard@restAwake",
         "guard@openMonitor",
-        "guard@alertClosed",
-        "guard@concentrate"
+        "guard@alertClosed"
       ],
       "latency": "~2s window / 1 Hz tick",
       "status": "ok",

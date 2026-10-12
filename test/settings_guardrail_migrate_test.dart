@@ -57,8 +57,6 @@ void main() {
         expect(settings.guardFeatureFor(id), guardFeatureAiAVig, reason: id);
         expect(settings.hasGuardFeaturePref(id), isFalse, reason: id);
       }
-      // concentrate: optional guard, defaultEnabled false.
-      expect(settings.guardFeatureFor('concentrate'), guardFeatureNone);
       expect(settings.guardFeatureFor('alertOpen'), guardFeatureNone);
       expect(settings.guardFeatureFor('recordOnly'), guardFeatureNone);
       expect(settings.guardFeatureFor('calibrateRecord'), guardFeatureNone);
@@ -98,7 +96,7 @@ void main() {
       guardFeatureNone,
     );
     expect(
-      settings.sessionGuardFeatureFor('concentrate', aiReady: true),
+      settings.sessionGuardFeatureFor('calibrateRecord', aiReady: true),
       guardFeatureNone,
     );
   });
@@ -112,8 +110,8 @@ void main() {
       settings.sessionGuardFeatureFor('restAwake', aiReady: false),
       guardFeatureAiWakeLight,
     );
-    await settings.setGuardFeature('concentrate', guardFeatureBandDelta);
-    expect(settings.guardFeatureFor('concentrate'), guardFeatureBandDelta);
+    await settings.setGuardFeature('openMonitor', guardFeatureBandDelta);
+    expect(settings.guardFeatureFor('openMonitor'), guardFeatureBandDelta);
   });
 
   test(
@@ -178,26 +176,28 @@ void main() {
   test('inhibit ceiling overrides persist per protocol', () async {
     SharedPreferences.setMockInitialValues({});
     final settings = await Settings.load();
-    expect(settings.inhibitCeilingOverrides('concentrate'), isEmpty);
-    await settings.setInhibitCeiling('concentrate', 'beta', 0.22);
-    expect(settings.inhibitCeilingOverrides('concentrate')['beta'], 0.22);
+    expect(settings.inhibitCeilingOverrides('openMonitor'), isEmpty);
+    await settings.setInhibitCeiling('openMonitor', 'beta', 0.22);
+    expect(settings.inhibitCeilingOverrides('openMonitor')['beta'], 0.22);
     // The legacy id reads the same row.
-    expect(settings.inhibitCeilingOverrides('concentration')['beta'], 0.22);
+    expect(settings.inhibitCeilingOverrides('mindfulness')['beta'], 0.22);
     expect(settings.inhibitCeilingOverrides('restAwake'), isEmpty);
-    await settings.clearInhibitCeilingOverrides('concentrate');
-    expect(settings.inhibitCeilingOverrides('concentrate'), isEmpty);
+    await settings.clearInhibitCeilingOverrides('openMonitor');
+    expect(settings.inhibitCeilingOverrides('openMonitor'), isEmpty);
   });
 
   test('legacy inhibit overrides move to the renamed protocol', () async {
     SharedPreferences.setMockInitialValues({
       'inhibit_ceilings': jsonEncode({
-        'concentration': {'beta': 0.3},
+        'mindfulness': {'beta': 0.3},
+        'concentration': {'beta': 0.21},
+        'concentrate': {'beta': 0.22},
         'relaxedConcentration': {'beta': 0.2, 'delta': 0.4},
       }),
     });
     final settings = await Settings.load();
-    expect(settings.inhibitCeilingOverrides('concentrate'), {'beta': 0.3});
-    // Merged-away rows are dropped, not mapped onto restAwake.
+    expect(settings.inhibitCeilingOverrides('openMonitor'), {'beta': 0.3});
+    // Merged-away / pulled rows are dropped, not mapped onto their alias.
     expect(settings.inhibitCeilingOverrides('restAwake'), isEmpty);
     final stored =
         jsonDecode(
@@ -206,6 +206,6 @@ void main() {
               )!,
             )
             as Map;
-    expect(stored.keys, ['concentrate']);
+    expect(stored.keys, ['openMonitor']);
   });
 }

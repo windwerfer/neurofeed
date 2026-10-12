@@ -11,6 +11,8 @@ import 'package:neurofeed/src/reve/models.dart';
 import 'package:neurofeed/src/feedback/last_calibration_baseline.dart';
 import 'package:neurofeed/src/agent/agent_flags.dart';
 import 'package:neurofeed/src/feedback/protocol.dart';
+import 'package:neurofeed/src/feedback/target_state.dart'
+    show StabilityConfig, clampStabilityDifficulty, clampStabilityWindow;
 import 'package:neurofeed/src/feedback/protocol_catalog.dart';
 import 'package:neurofeed/src/rust/api/device_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -128,6 +130,15 @@ class SubjectInfo {
 enum AppAppearance { system, light, dark }
 
 /// Persistent app settings backed by SharedPreferences.
+/// Dwell time (sustained-in-target time before the reward chime), seconds.
+const double defaultRewardDwellSeconds = 2.5;
+const double minRewardDwellSeconds = 2.0;
+const double maxRewardDwellSeconds = 20.0;
+
+double clampRewardDwell(double s) => s.isFinite
+    ? s.clamp(minRewardDwellSeconds, maxRewardDwellSeconds).toDouble()
+    : defaultRewardDwellSeconds;
+
 class Settings extends ChangeNotifier {
   Settings._(this._prefs, this._catalog);
 
@@ -148,6 +159,10 @@ class Settings extends ChangeNotifier {
   static const String _bellVolumeKey = 'bell_volume';
   static const String _dynamicAdaptKey = 'dynamic_adapt';
   static const String _responsivenessKey = 'responsiveness';
+  static const String _rewardDwellKey = 'reward_dwell_seconds';
+  static const String _stabilityBandKey = 'stability_band';
+  static const String _stabilityWindowKey = 'stability_window_seconds';
+  static const String _stabilityDifficultyKey = 'stability_difficulty';
   static const String _baselinePercentileKey = 'baseline_percentile';
   static const String _soundNameKey = 'sound_name';
   static const String _feedbackModeKey = 'feedback_mode';
@@ -166,6 +181,8 @@ class Settings extends ChangeNotifier {
       'history_dashboard_more_expanded';
   static const String _warningThresholdPercentileKey =
       'reve_warning_threshold_percentile';
+  static const String _aiGuardFixedThresholdKey = 'guard_fixed_threshold';
+  static const String _aiGuardThresholdModeKey = 'guard_threshold_mode';
   static const String _inhibitCeilingsKey = 'inhibit_ceilings';
   static const String _guardrailModeKey = 'guardrail_mode';
   static const String _guardModelKey = 'guard_model';
@@ -335,7 +352,7 @@ class Settings extends ChangeNotifier {
   }
 
   /// Move inhibit ceiling overrides stored under a renamed catalog id (e.g.
-  /// `concentration`) to the current id (`concentrate`) unless the current id
+  /// `mindfulness`) to the current id (`openMonitor`) unless the current id
   /// already has its own row; drop every retired-id row.
   static Future<void> _migrateLegacyInhibitPrefs(
     SharedPreferences prefs,
@@ -485,6 +502,55 @@ class Settings extends ChangeNotifier {
 
   Future<void> setResponsiveness(double value) async {
     await _prefs.setDouble(_responsivenessKey, value);
+    notifyListeners();
+  }
+
+  /// Dwell time: how long the reward must stay in target before the chime
+  /// (all reward protocols; sustained-reward criterion). Default 2.5 s keeps
+  /// the historic hold. Range [minRewardDwellSeconds]–[maxRewardDwellSeconds].
+  double get rewardDwellSeconds => clampRewardDwell(
+    _prefs.getDouble(_rewardDwellKey) ?? defaultRewardDwellSeconds,
+  );
+
+  Future<void> setRewardDwellSeconds(double value) async {
+    await _prefs.setDouble(_rewardDwellKey, clampRewardDwell(value));
+    notifyListeners();
+  }
+
+  /// Experimental `bandStability`: tracked band (feature id).
+  String get stabilityBand {
+    final v = _prefs.getString(_stabilityBandKey);
+    return stabilityBandFeatures.contains(v) ? v! : defaultStabilityBand;
+  }
+
+  Future<void> setStabilityBand(String featureId) async {
+    if (!stabilityBandFeatures.contains(featureId)) return;
+    await _prefs.setString(_stabilityBandKey, featureId);
+    notifyListeners();
+  }
+
+  /// Experimental `bandStability`: rolling window, seconds (1–30, default 10).
+  int get stabilityWindowSeconds => clampStabilityWindow(
+    _prefs.getInt(_stabilityWindowKey) ?? StabilityConfig.defaultWindowSeconds,
+  );
+
+  Future<void> setStabilityWindowSeconds(int value) async {
+    await _prefs.setInt(_stabilityWindowKey, clampStabilityWindow(value));
+    notifyListeners();
+  }
+
+  /// Experimental `bandStability`: fraction steadier than baseline needed
+  /// (0–0.50, default 0.10).
+  double get stabilityDifficulty => clampStabilityDifficulty(
+    _prefs.getDouble(_stabilityDifficultyKey) ??
+        StabilityConfig.defaultDifficulty,
+  );
+
+  Future<void> setStabilityDifficulty(double value) async {
+    await _prefs.setDouble(
+      _stabilityDifficultyKey,
+      clampStabilityDifficulty(value),
+    );
     notifyListeners();
   }
 
@@ -675,6 +741,44 @@ class Settings extends ChangeNotifier {
 
   Future<void> setWarningThresholdPercentile(int value) async {
     await _prefs.setInt(_warningThresholdPercentileKey, value);
+    notifyListeners();
+  }
+
+  /// User pick for AI guards (`percentile` | `fixed`); null = protocol /
+  /// default (fixed). Band guards ignore it (always percentile).
+  String? get aiGuardThresholdModePref {
+    final v = _prefs.getString(_aiGuardThresholdModeKey);
+    return guardThresholdModes.contains(v) ? v : null;
+  }
+
+  Future<void> setAiGuardThresholdMode(String mode) async {
+    if (!guardThresholdModes.contains(mode)) return;
+    await _prefs.setString(_aiGuardThresholdModeKey, mode);
+    notifyListeners();
+  }
+
+  /// Effective mode for [feature] under [protocol].
+  String guardThresholdModeFor(ProtocolDocument? protocol, String feature) =>
+      resolveGuardThresholdMode(
+        feature: feature,
+        declared: aiGuardThresholdModePref ?? protocol?.guard?.thresholdMode,
+      );
+
+  double? get aiGuardFixedThresholdPref {
+    final v = _prefs.getDouble(_aiGuardFixedThresholdKey);
+    return v == null ? null : clampAiGuardFixedThreshold(v);
+  }
+
+  double aiGuardFixedThresholdFor(ProtocolDocument? protocol) =>
+      aiGuardFixedThresholdPref ??
+      protocol?.guard?.fixedThreshold ??
+      defaultAiGuardFixedThreshold;
+
+  Future<void> setAiGuardFixedThreshold(double value) async {
+    await _prefs.setDouble(
+      _aiGuardFixedThresholdKey,
+      clampAiGuardFixedThreshold(value),
+    );
     notifyListeners();
   }
 

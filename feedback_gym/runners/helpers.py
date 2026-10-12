@@ -93,54 +93,99 @@ def inhibit_passes(
     return all_pass, fails
 
 
-def percentile_warn_parts(
-    *,
-    band_math: bool,
-    feature_values: np.ndarray,
-    delta_abs: np.ndarray,
-    threshold: float,
-    delta_ceiling: float = 0.25,
-    delta_rail: bool = True,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Split guard warn into feature / rail / combined.
-
-    - ``warn_feature``: feature vs percentile threshold only (no delta rail)
-    - ``warn_rail``: absolute delta-ceiling over (plus band abs ceiling).
-      Always computed — with ``delta_rail`` off it is the signal-dirty
-      indicator only (app records it as ``ceilingOver``) and never warns.
-    - ``warn``: combined — fidelity to app ``percentileWarnOver``; OR of
-      feature and rail when ``delta_rail`` (protocol ``guard.deltaRail``,
-      default True), else the feature alone.
-    """
-    feat = np.asarray(feature_values, dtype=float)
-    delta = np.asarray(delta_abs, dtype=float)
-    warn_feature = feat > threshold
-    if band_math:
-        # band path also treats feat > ceiling as an absolute rail
-        warn_rail = (feat > delta_ceiling) | (delta > delta_ceiling)
-    else:
-        warn_rail = delta > delta_ceiling
-    warn = (warn_feature | warn_rail) if delta_rail else warn_feature.copy()
-    return warn_feature, warn_rail, warn
-
-
 def percentile_warn_over(
     *,
-    band_math: bool,
     feature_values: np.ndarray,
-    delta_abs: np.ndarray,
-    threshold: float,
-    delta_ceiling: float = 0.25,
+    threshold: float | np.ndarray,
+    band_math: bool = False,
+    **_legacy: Any,
 ) -> np.ndarray:
-    """Mirrors guard_lane.percentileWarnOver (combined feature | rail)."""
-    _, _, warn = percentile_warn_parts(
-        band_math=band_math,
-        feature_values=feature_values,
-        delta_abs=delta_abs,
-        threshold=threshold,
-        delta_ceiling=delta_ceiling,
-    )
-    return warn
+    """Mirrors guard_lane.percentileWarnOver: feature over threshold, both
+    modes (band math scores native δ, AI the model probability).
+
+    The frontal-δ hard rail was removed 2026-10 (app + gym): relative δ had
+    BA < 0.5 on Sleep-EDF and gated AUC 0.55 BOAS / 0.36 Muse Sleep-Onset
+    (DELTA_RAIL_SWEEP.md). Old ``delta_abs`` / ``delta_ceiling`` kwargs are
+    accepted and ignored.
+    """
+    feat = np.asarray(feature_values, dtype=float)
+    return feat > threshold
+
+
+# --- Band stability (experimental bandStability) -------------------------------
+
+STABILITY_POLICY = "stabilityDowntrain"
+
+
+def coefficient_of_variation(values: np.ndarray) -> float:
+    """Population SD / |mean| (app target_state.coefficientOfVariation)."""
+    v = np.asarray(values, dtype=float)
+    if v.size < 2:
+        return float("nan")
+    m = float(np.mean(v))
+    if abs(m) < 1e-12:
+        return float("nan")
+    return float(np.std(v) / abs(m))
+
+
+def rolling_cvs(values: np.ndarray, window: int) -> np.ndarray:
+    """CVs of every full window of ``window`` consecutive values; one CV over
+    all values when there are fewer (>= 2). Mirrors app ``rollingCvs``."""
+    w = max(2, int(window))
+    v = np.asarray(values, dtype=float)
+    v = v[np.isfinite(v)]
+    if v.size < 2:
+        return np.array([])
+    if v.size < w:
+        cv = coefficient_of_variation(v)
+        return np.array([cv]) if np.isfinite(cv) else np.array([])
+    out = [coefficient_of_variation(v[i : i + w]) for i in range(v.size - w + 1)]
+    out = np.asarray(out, dtype=float)
+    return out[np.isfinite(out)]
+
+
+def stability_ratio_rows(
+    series: np.ndarray, plan: "CalPlan", window: int
+) -> tuple[np.ndarray, list[float]]:
+    """Per play row r = CV(last ``window`` clean values) / baseline CV.
+
+    Baseline CV = median rolling-window CV of that row's calibration block
+    (app ``RatioEngine`` stability mode: ``sorted[n ~/ 2]``). Rows are the
+    gated (clean) stream, so dirty seconds are already excluded, as in the
+    app. NaN during warm-up (window not full) and for non-finite values.
+    """
+    s = np.asarray(series, dtype=float)
+    w = max(2, int(window))
+    r = np.full(plan.play_idx.size, np.nan)
+    base_cvs: list[float] = []
+    for g in plan.groups:
+        cvs = rolling_cvs(s[g.cal_idx], w)
+        if cvs.size == 0:
+            base_cvs.append(float("nan"))
+            continue
+        base = float(np.sort(cvs)[cvs.size // 2])
+        base_cvs.append(base)
+        if not base > 0:
+            continue
+        buf: list[float] = []
+        for pos in np.sort(g.play_pos):
+            v = s[plan.play_idx[pos]]
+            if not np.isfinite(v):
+                continue
+            buf.append(float(v))
+            if len(buf) > w:
+                buf.pop(0)
+            if len(buf) == w:
+                cv = coefficient_of_variation(np.asarray(buf))
+                if np.isfinite(cv):
+                    r[pos] = cv / base
+    return r, base_cvs
+
+
+def stability_in_target(r: np.ndarray, difficulty: float) -> np.ndarray:
+    """In target when r <= 1 - difficulty (NaN warm-up → False)."""
+    with np.errstate(invalid="ignore"):
+        return np.asarray(r, dtype=float) <= (1.0 - float(difficulty))
 
 
 # --- Metrics ------------------------------------------------------------------
@@ -399,6 +444,10 @@ FEATURE_COLUMN = {
     "band.tar": "band_tar",
     "band.btr": "band_btr",
     "band.alpha": "band_alpha",
+    # Relative theta / beta (app band.theta / band.beta, bandStability band
+    # choice). Same app-math relative columns the inhibit mirror reads.
+    "band.theta": "theta_rel",
+    "band.beta": "beta_rel",
     "band.delta": "band_delta",
     "ai.a_vig": "ai_a_vig",
     "ai.wake_light": "ai_wake_light",
@@ -408,16 +457,184 @@ FEATURE_COLUMN = {
 }
 
 
-def load_corpus(path: Path) -> dict[str, Any]:
+GATE_DEFAULT = True  # app-matching live gating; runners expose --no-gate
+
+
+def load_corpus(path: Path, *, gate: bool | None = None) -> dict[str, Any]:
     # allow_pickle for optional metadata (recording_id, label_names, cal_policy)
     data = np.load(path, allow_pickle=True)
     out: dict[str, Any] = {k: data[k] for k in data.files}
     cal = int(out.get("cal_n", [90])[0])
     out["cal_n"] = cal
     out["labels"] = out.get("labels")
+    if "label_valid" in out:
+        out = drop_invalid_label_rows(out)
+    if GATE_DEFAULT if gate is None else gate:
+        out = apply_app_gating(out)
+    else:
+        out["gating"] = {"applied": False}
     if "cal_starts" in out or "cal_lens" in out:
         # Fail fast on a malformed per-recording calibration block.
         build_cal_plan(out)
+    return out
+
+
+def drop_rows(corpus: dict[str, Any], keep: np.ndarray, *, protect_cal: bool) -> dict[str, Any]:
+    """Subset every (N,)-leading array to ``keep`` and remap ``cal_starts``/``cal_lens``.
+
+    ``protect_cal=True`` keeps every calibration row (label filtering); ``False``
+    lets dropped rows shrink a recording's cal block (app gating: the app never
+    feeds a dirty sample into its baseline). A block that loses every row gets
+    ``cal_len = 0`` (that recording is then skipped by the per-recording plan).
+    Recordings that lose every row disappear from ``cal_starts``/``cal_lens``.
+    """
+    n = corpus_length(corpus)
+    keep = np.asarray(keep, dtype=bool).copy()
+    if keep.shape != (n,):
+        raise ValueError("keep must have shape (N,)")
+    starts = corpus.get("cal_starts")
+    lens = corpus.get("cal_lens")
+    per_rec = starts is not None and lens is not None
+    if protect_cal:
+        if per_rec:
+            for s0, ln in zip(np.asarray(starts), np.asarray(lens)):
+                keep[int(s0) : int(s0) + int(ln)] = True
+        elif "cal_n" in corpus:
+            keep[: int(corpus["cal_n"])] = True
+    out = dict(corpus)
+    for k, v in corpus.items():
+        if isinstance(v, np.ndarray) and v.ndim >= 1 and v.shape[0] == n and k not in ("cal_starts", "cal_lens"):
+            out[k] = v[keep]
+    if per_rec and corpus.get("recording_id") is not None:
+        old_order = unique_in_order(corpus["recording_id"])
+        newpos = np.cumsum(keep) - 1
+        first: dict[str, int] = {}
+        for i, r in enumerate(out["recording_id"]):
+            first.setdefault(str(r), i)
+        ns, nl = [], []
+        for r, s0, ln in zip(old_order, np.asarray(starts), np.asarray(lens)):
+            if r not in first:
+                continue  # recording lost every row
+            blk = np.arange(int(s0), int(s0) + int(ln))
+            kept = blk[keep[blk]] if ln else blk
+            if int(ln) > 0 and kept.size:
+                ns.append(int(newpos[kept[0]]))
+                nl.append(int(kept.size))
+            else:
+                ns.append(first[r])
+                nl.append(0)
+        out["cal_starts"] = np.asarray(ns, dtype=np.int32)
+        out["cal_lens"] = np.asarray(nl, dtype=np.int32)
+    elif not protect_cal and "cal_n" in corpus:
+        out["cal_n"] = max(1, int(keep[: int(corpus["cal_n"])].sum()))
+    return out
+
+
+def drop_invalid_label_rows(corpus: dict[str, Any]) -> dict[str, Any]:
+    """Drop rows whose ``label_valid`` is False (e.g. ambiguous probes), keeping cal rows."""
+    keep = np.asarray(corpus["label_valid"], dtype=bool)
+    if keep.shape != (corpus_length(corpus),):
+        raise ValueError("label_valid must have shape (N,)")
+    out = drop_rows(corpus, keep, protect_cal=True)
+    out.pop("label_valid", None)
+    out["rows_dropped_label_invalid"] = int(corpus_length(corpus) - corpus_length(out))
+    return out
+
+
+# --- App-matching live gating (pad quality + movement) ----------------------
+
+PAD_Q_USABLE = 80.0  # lib/src/feedback/target_state.dart atrUsableSignalThreshold
+MOVEMENT_GATE = 0.05  # target_state.dart movementGateThreshold (g, SD of |accel| over 2 s)
+FEATURE_PADS = ("af7", "af8")
+_BANDS5 = ("delta", "theta", "alpha", "beta", "gamma")
+
+
+def gating_masks(corpus: dict[str, Any]) -> dict[str, Any]:
+    """Per-row app gates. Missing inputs -> gate not applicable (all True).
+
+    pad gate: the app drops pads with quality < 80 from the relative-band
+    aggregate and scores nothing when no feature pad (AF7/AF8) is usable
+    (reward_lane.padsUsable). Needs ``ch_af7_q``/``ch_af8_q`` (builder --pad-mix).
+    movement gate: ``imu_movement`` = the app's movement score (Rust
+    compute_movement: SD of the accelerometer magnitude over the last 2 s at
+    52 Hz, in g). A score > 0.05 marks the sample dirty and keeps it dirty for
+    movementBuffer = 1 s, i.e. this tick and the next one.
+    """
+    n = corpus_length(corpus)
+    out: dict[str, Any] = {"pad_ok": np.ones(n, bool), "move_ok": np.ones(n, bool), "pad_gate": False, "move_gate": False}
+    qs = [corpus.get(f"ch_{p}_q") for p in FEATURE_PADS]
+    if all(q is not None for q in qs):
+        good = np.stack([np.nan_to_num(np.asarray(q, float), nan=-1.0) >= PAD_Q_USABLE for q in qs])
+        out["pad_ok"] = good.any(axis=0)
+        out["pad_good"] = good
+        out["pad_gate"] = True
+    mv = corpus.get("imu_movement")
+    if mv is not None:
+        dirty = np.nan_to_num(np.asarray(mv, float), nan=0.0) > MOVEMENT_GATE
+        prev = np.concatenate([[False], dirty[:-1]])
+        rid = corpus.get("recording_id")
+        if rid is not None:
+            r = np.asarray(rid).astype(str)
+            prev &= np.concatenate([[False], r[1:] == r[:-1]])
+        out["move_ok"] = ~(dirty | prev)
+        out["move_gate"] = True
+    return out
+
+
+def regate_bands(corpus: dict[str, Any], pad_good: np.ndarray) -> dict[str, Any]:
+    """Recompute band_* / *_rel from usable pads only (app RelativeBandAggregator)."""
+    B = []
+    for p in FEATURE_PADS:
+        keys = [f"ch_{p}_{b}" for b in _BANDS5]
+        if not all(k in corpus for k in keys):
+            return corpus
+        B.append(np.stack([np.asarray(corpus[k], float) for k in keys], axis=-1))
+    B = np.stack(B)  # (2, N, 5)
+    tot = B.sum(axis=-1, keepdims=True)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        R = np.where(tot > 0, B / tot, np.nan)
+    W = pad_good.astype(float)[..., None]
+    den = W.sum(axis=0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rel = np.where(den > 0, (np.nan_to_num(R) * W).sum(axis=0) / den, np.nan)
+        absb = np.where(den > 0, (np.nan_to_num(B) * W).sum(axis=0) / den, np.nan)
+    out = dict(corpus)
+    ok = den[:, 0] > 0
+    def put(key, val):  # noqa: E306
+        if key in corpus:
+            v = np.asarray(corpus[key], float).copy()
+            v[ok] = val[ok]
+            out[key] = v
+    put("delta_rel", rel[:, 0]); put("theta_rel", rel[:, 1]); put("alpha_rel", rel[:, 2]); put("beta_rel", rel[:, 3])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        put("band_atr", rel[:, 2] / rel[:, 1]); put("band_tar", rel[:, 1] / rel[:, 2]); put("band_btr", rel[:, 3] / rel[:, 1])
+    put("band_alpha", rel[:, 2]); put("band_delta", absb[:, 0]); put("delta_abs", absb[:, 0])
+    return out
+
+
+def apply_app_gating(corpus: dict[str, Any]) -> dict[str, Any]:
+    """Drop rows the app would not score live; per-pad band re-aggregation first.
+
+    Adds ``gating`` (dict) describing coverage. Idempotent (``gating`` present -> no-op).
+    """
+    if corpus.get("gating", {}).get("applied"):
+        return corpus
+    n = corpus_length(corpus)
+    m = gating_masks(corpus)
+    out = regate_bands(corpus, m["pad_good"]) if m["pad_gate"] else dict(corpus)
+    keep = m["pad_ok"] & m["move_ok"]
+    out = drop_rows(out, keep, protect_cal=False)
+    out["gating"] = {
+        "applied": True,
+        "pad_gate": m["pad_gate"],
+        "move_gate": m["move_gate"],
+        "rows": n,
+        "dropped_pad": int((~m["pad_ok"]).sum()),
+        "dropped_move": int((~m["move_ok"]).sum()),
+        "dropped_any": int((~keep).sum()),
+        "note": ("pad gate: ch_af7_q/ch_af8_q >= 80 (rebuild with --pad-mix if missing); "
+                 "movement gate: imu_movement > 0.05 g (no corpus column -> not applied)"),
+    }
     return out
 
 

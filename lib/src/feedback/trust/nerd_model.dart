@@ -344,7 +344,9 @@ NerdSheetSnapshot nerdSheetFromLanes({
     final samples = List<double>.of(guard.baselineSleepDir);
     final live = guard.bandMath ? guard.lastDelta : guard.lastSleepDir;
     final thr = guard.threshold;
-    final extra = guard.bandMath ? guardrailDeltaCeiling : null;
+    // The δ rail is relative δ since 2026-10; the band-math pile is
+    // absolute δ, so no ceiling tick on it.
+    const double? extra = null;
     final (gMean, gStd) = nerdMeanStd(samples);
     guardPile = NerdPileView(
       title: 'Guard pile ($guardLabel)',
@@ -383,11 +385,15 @@ NerdSheetSnapshot nerdSheetFromLanes({
       NerdInfoRowData(
         id: NerdRowId.warnThr,
         label: 'Warn thr',
-        value: '${nerdFixed(thr)}  from p$warningThresholdPercentile',
+        value: guard.fixedMode
+            ? '${nerdFixed(thr)}  fixed'
+            : '${nerdFixed(thr)}  from p$warningThresholdPercentile',
         infoTitle: 'Warn threshold',
-        infoBody:
-            'Which pick of the rest pile (guard default p75). '
-            'Over this line is the personal warn tripwire.',
+        infoBody: guard.fixedMode
+            ? 'Fixed model probability (AI guard default 0.50). '
+                  'Over this line is the warn tripwire.'
+            : 'Which pick of the rest pile (guard default p75). '
+                  'Over this line is the personal warn tripwire.',
         diagram: NerdDiagramKind.threshold,
       ),
       NerdInfoRowData(
@@ -444,26 +450,6 @@ NerdSheetSnapshot nerdSheetFromLanes({
             'Minimum 20 s between warning bowls. Sparse vs the continuous warning.',
         diagram: NerdDiagramKind.cooldown,
       ),
-      if (!guard.bandMath) ...[
-        NerdInfoRowData(
-          id: NerdRowId.liveDelta,
-          label: 'Live δ',
-          value: nerdFixed(guard.lastDelta),
-          infoTitle: 'Live δ',
-          infoBody:
-              'Native frontal AF7/AF8 δ. The hard rail, not the AI rest pile.',
-          diagram: NerdDiagramKind.live,
-        ),
-        NerdInfoRowData(
-          id: NerdRowId.deltaCeiling,
-          label: 'δ ceiling',
-          value: nerdFixed(guardrailDeltaCeiling),
-          infoTitle: 'δ ceiling',
-          infoBody:
-              'Hard rail at $guardrailDeltaCeiling. Over this trips the ceiling warn.',
-          diagram: NerdDiagramKind.threshold,
-        ),
-      ],
     ];
   }
 

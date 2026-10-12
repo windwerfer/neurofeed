@@ -23,7 +23,9 @@ from runners.helpers import (  # noqa: E402
 from runners.score_feature import score_feature  # noqa: E402
 from runners.simulate_protocol import simulate_protocol  # noqa: E402
 
-AI_GUARD = {"id": "aiGuard", "guard": {"feature": "ai.a_vig", "policy": "percentileWarn"}}
+# Percentile mode explicitly: these tests cover per-recording calibration picks
+# (ai.* guards default to a fixed P cut otherwise).
+AI_GUARD = {"id": "aiGuard", "guard": {"feature": "ai.a_vig", "policy": "percentileWarn", "thresholdMode": "percentile"}}
 ATR_REWARD = {
     "id": "atrReward",
     "reward": {"feature": "band.atr", "policy": "percentileUptrain", "inhibit": []},

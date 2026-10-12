@@ -60,7 +60,7 @@ Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) asyn
       build: (context) => [
         pw.Text(
           '${meta.protocol} — session report',
-          style: const pw.TextStyle(
+          style: pw.TextStyle(
             fontSize: 20,
             fontWeight: pw.FontWeight.bold,
           ),
@@ -81,7 +81,7 @@ Future<Uint8List?> buildPdfPage(SessionSummary session, SessionStore store) asyn
         for (final chart in charts) ...[
           pw.Text(
             chart.title,
-            style: const pw.TextStyle(
+            style: pw.TextStyle(
               fontSize: 13,
               fontWeight: pw.FontWeight.bold,
             ),

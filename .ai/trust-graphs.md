@@ -55,6 +55,12 @@ above-the-line **and** inhibit fail. Priority: noisy > held back > below
 
 ---
 
+### Stability pane (`bandStability`)
+
+`TrustRewardChart.stability` (`StabilityTrustPane`, key `trust-stability-pane`) replaces the percentile pane live (`TrustGraphsColumn`) and in history (`HistoryTrustReplay`) when the protocol's reward policy is `stabilityDowntrain`. Y = r (rolling CV ÷ baseline CV), 0–2. Lines: baseline 1.0 and the live target (threshold). Dirty spans dashed, same as the reward pane. History frames carry ratio = r and threshold = r threshold.
+
+---
+
 ## Inhibit panes
 
 Shown under Reward when the protocol has inhibit (`betaCeiling` /

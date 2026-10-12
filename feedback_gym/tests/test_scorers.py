@@ -68,27 +68,16 @@ def test_warn_rate_and_label_align():
     assert label_align(warn, labels) == pytest.approx(2 / 3)
 
 
-def test_percentile_warn_band_math_uses_ceiling():
-    feat = np.array([0.1, 0.3, 0.1])
-    delta = np.array([0.1, 0.1, 0.1])
-    # threshold 0.2; second sample over thr; ceiling 0.25 not hit by feat alone except #1
-    over = percentile_warn_over(
-        band_math=True,
-        feature_values=feat,
-        delta_abs=delta,
-        threshold=0.2,
-        delta_ceiling=0.25,
-    )
-    assert list(over) == [False, True, False]
-    # absolute delta rail
-    over2 = percentile_warn_over(
-        band_math=True,
-        feature_values=np.array([0.1]),
-        delta_abs=np.array([0.3]),
-        threshold=0.5,
-        delta_ceiling=0.25,
-    )
-    assert bool(over2[0]) is True
+def test_percentile_warn_threshold_rule_only():
+    """App percentileWarnOver: feature > threshold; no δ rail (removed 2026-10)."""
+    for band_math in (True, False):
+        over = percentile_warn_over(
+            band_math=band_math,
+            feature_values=np.array([0.1, 0.3, 0.1]),
+            delta_abs=np.array([50.0, 0.1, 50.0]),  # ignored
+            threshold=0.2,
+        )
+        assert list(over) == [False, True, False]
 
 
 def test_best_p_on_monotonic_reward_sweep(tmp_path):
@@ -118,12 +107,12 @@ def test_best_p_on_monotonic_reward_sweep(tmp_path):
     assert hrs[0] >= hrs[-1] - 1e-9
 
 
-def test_simulate_protocol_concentrate_has_inhibit(tmp_path):
+def test_simulate_protocol_beta_ceiling_inhibit(tmp_path):
     path = generate_synthetic_corpus(tmp_path, n=500, seed=1)
     corpus = load_corpus(path)
     grids = load_grids()
     protocol = {
-        "id": "concentrate",
+        "id": "user.betaCeilingDemo",
         "reward": {
             "feature": "band.alpha",
             "policy": "percentileUptrain",
@@ -170,62 +159,17 @@ def test_uptrain_strict_greater():
     ]
 
 
-def test_percentile_warn_parts_split():
-    from runners.helpers import percentile_warn_parts
-
-    feat = np.array([0.1, 0.3, 0.1])
-    delta = np.array([0.4, 0.1, 0.1])  # first sample trips rail
-    wf, wr, w = percentile_warn_parts(
-        band_math=False,
-        feature_values=feat,
-        delta_abs=delta,
-        threshold=0.2,
-        delta_ceiling=0.25,
-    )
-    assert list(wf) == [False, True, False]
-    assert list(wr) == [True, False, False]
-    assert list(w) == [True, True, False]
-
-
-def test_percentile_warn_parts_delta_rail_off():
-    """guard.deltaRail false: rail mask still reported, never warns."""
-    from runners.helpers import percentile_warn_parts
-
-    feat = np.array([0.1, 0.3, 0.1])
-    delta = np.array([0.4, 0.1, 0.4])
-    for band_math in (False, True):
-        wf, wr, w = percentile_warn_parts(
-            band_math=band_math,
-            feature_values=feat,
-            delta_abs=delta,
-            threshold=0.2,
-            delta_ceiling=0.25,
-            delta_rail=False,
-        )
-        assert bool(wr[0]) and bool(wr[2])  # rail mask still computed
-        assert list(w) == list(wf)
-    # band path with the rail on also trips on feat > ceiling
-    _, _, w_on = percentile_warn_parts(
-        band_math=True,
-        feature_values=feat,
-        delta_abs=delta,
-        threshold=0.2,
-        delta_ceiling=0.25,
-    )
-    assert list(w_on) == [True, True, True]
-
-
-def test_guard_score_ignores_always_on_delta_rail(tmp_path):
-    """High-sep series + constant delta>ceiling still scores well via warn_feature."""
+def test_guard_ignores_high_delta(tmp_path):
+    """High-sep series + constant high δ: the guard scores on its feature only."""
     from runners.helpers import generate_synthetic_corpus, load_corpus, load_grids
     from runners.score_feature import score_feature
     from runners.simulate_protocol import simulate_protocol
 
     path = generate_synthetic_corpus(tmp_path, n=400, seed=11)
     corpus = load_corpus(path)
-    # Force absolute delta rail always-on (Sleep-EDF-like scale)
     n = len(corpus["ai_a_vig"])
     corpus["delta_abs"] = np.full(n, 50.0)
+    corpus["delta_rel"] = np.full(n, 0.95)
     grids = load_grids()
     meta = {"label": "A-vig", "source": "ai", "usableFor": ["guard"]}
     out = score_feature(
@@ -238,24 +182,18 @@ def test_guard_score_ignores_always_on_delta_rail(tmp_path):
     )
     assert out["status"] == "ok"
     assert out["sep"] is not None and out["sep"] > 0.7
-    # Combined warn would be ~always on → label_align≈0.5; feature path must beat that
     assert out["score"] is not None and out["score"] > 0.65
-    assert out["best_label_align"] is not None and out["best_label_align"] > 0.55
-    # Sweep still reports combined warn_rate / rail_rate
     assert out["sweep"]
-    assert out["sweep"][0].get("rail_rate") == 1.0
-    assert out["sweep"][0].get("warn_rate") == 1.0
-    assert out["sweep"][0].get("warn_feature_rate") is not None
+    assert "rail_rate" not in out["sweep"][0]
+    assert out["sweep"][0]["warn_rate"] < 1.0
 
-    # Protocol guard also prefers warn_feature label_align and reports rail
     protocol = {
         "id": "sleepGuard",
         "guard": {"feature": "ai.a_vig", "policy": "percentileWarn"},
     }
-    res = simulate_protocol(protocol, corpus, grids)
-    g = res["parts"]["guard"]
-    assert g["rail_rate"] == 1.0
-    assert g["warn_rate"] == 1.0
+    g = simulate_protocol(protocol, corpus, grids)["parts"]["guard"]
+    assert "rail_rate" not in g and "delta_rail" not in g
+    assert g["warn_rate"] < 1.0
     assert g["label_align"] is not None and g["label_align"] > 0.55
     assert g["score"] == g["label_align"]
 
@@ -271,10 +209,11 @@ def test_catalog_protocols_all_simulate(tmp_path):
         "openMonitor",
         "alertOpen",
         "alertClosed",
-        "concentrate",
+        "bandStability",
         "calibrateRecord",
     ]
     assert "recordOnly" not in protocols  # retired → calibrateRecord
+    assert "concentrate" not in protocols  # pulled 2026-10-07 (no focus evidence)
     path = generate_synthetic_corpus(tmp_path, n=500, seed=3)
     corpus = load_corpus(path)
     grids = load_grids()
@@ -290,28 +229,46 @@ def test_catalog_protocols_all_simulate(tmp_path):
     assert protocols["sleepGuard"]["guard"]["feature"] == "ai.a_vig"
 
 
-def test_simulate_protocol_reads_delta_rail_from_catalog(tmp_path):
-    """sleepGuard (deltaRail false in the catalog): combined warn == feature."""
+def test_catalog_has_no_delta_rail_keys():
+    """δ rail removed 2026-10: no catalog guard carries deltaRail."""
     from runners.helpers import load_catalog
 
     protocols, _features = load_catalog()
-    assert protocols["sleepGuard"]["guard"]["deltaRail"] is False
-    for pid in ("restAwake", "openMonitor", "alertClosed", "concentrate"):
-        assert protocols[pid]["guard"]["deltaRail"] is False, pid
-    path = generate_synthetic_corpus(tmp_path, n=400, seed=11)
-    corpus = load_corpus(path)
-    corpus["delta_abs"] = np.full(len(corpus["ai_a_vig"]), 50.0)
-    grids = load_grids()
-    g = simulate_protocol(protocols["sleepGuard"], corpus, grids)["parts"]["guard"]
-    assert g["delta_rail"] is False
-    assert g["rail_rate"] == 1.0  # still reported (signal-dirty indicator)
-    assert g["warn_rate"] == g["warn_feature_rate"] < 1.0
-    assert g["label_align_combined"] == g["label_align"]
+    for pid, proto in protocols.items():
+        assert "deltaRail" not in (proto.get("guard") or {}), pid
 
-    # Same protocol with the rail on (default) is always-on.
-    on = dict(protocols["sleepGuard"])
-    on["guard"] = {k: v for k, v in on["guard"].items() if k != "deltaRail"}
-    g_on = simulate_protocol(on, corpus, grids)["parts"]["guard"]
-    assert g_on["delta_rail"] is True
-    assert g_on["warn_rate"] == 1.0
-    assert g_on["label_align_combined"] == 0.5
+
+def test_guard_threshold_mode_mirrors_app(tmp_path):
+    """ai.* guards default to a fixed P cut (app defaultAiGuardFixedThreshold);
+    band.* guards always use the percentile of calibration."""
+    from runners.simulate_protocol import (
+        AI_GUARD_FIXED_THRESHOLD,
+        guard_threshold_mode_for,
+    )
+
+    assert AI_GUARD_FIXED_THRESHOLD == 0.50
+    assert guard_threshold_mode_for("ai.a_vig") == "fixed"
+    assert guard_threshold_mode_for("ai.a_vig", "percentile") == "percentile"
+    assert guard_threshold_mode_for("band.delta", "fixed") == "percentile"
+    path = generate_synthetic_corpus(tmp_path, n=400, seed=5)
+    corpus = load_corpus(path)
+    grids = load_grids()
+    proto = {"id": "user.t", "guard": {"feature": "ai.a_vig"}}
+    g = simulate_protocol(proto, corpus, grids)["parts"]["guard"]
+    assert g["threshold_mode"] == "fixed"
+    assert g["threshold"] == 0.5
+    g2 = simulate_protocol(proto, corpus, grids, guard_fixed_threshold=0.7)["parts"]["guard"]
+    assert g2["threshold"] == 0.7
+    assert g2["warn_rate"] <= g["warn_rate"]
+    gp = simulate_protocol(
+        {"id": "user.t", "guard": {"feature": "ai.a_vig", "thresholdMode": "percentile"}},
+        corpus,
+        grids,
+    )["parts"]["guard"]
+    assert gp["threshold_mode"] == "percentile"
+    gb = simulate_protocol(
+        {"id": "user.b", "guard": {"feature": "band.delta", "thresholdMode": "fixed"}},
+        corpus,
+        grids,
+    )["parts"]["guard"]
+    assert gb["threshold_mode"] == "percentile"

@@ -93,7 +93,7 @@ Written by `buildSessionMetadata()`:
 - Flat device: `deviceName`, `deviceModel`, `deviceId` (not nested `device`)
 - `recordedChannels`, `recordedData` (stream name list)
 - `gestures[]` (`type`, `at` seconds) when markers enabled — **v6:** fold into root `annotations[]` (see Annotations model); do not keep a parallel `feedback.gestures` list
-- Nested: `calibration`, `drowsiness`, `music`, `sessionSettings` (incl. `guardFeature` / `guardModel`), optional `protocolJson`
+- Nested: `calibration`, `drowsiness`, `music`, `sessionSettings` (incl. `guardFeature` / `guardModel`; optional `rewardDwellSeconds`; optional `stability` {`band`, `windowSeconds`, `difficulty`, `baselineCv`} for `bandStability`), optional `protocolJson` (`reward.feature` = the band actually run). For `bandStability` computed `ratio` = r (CV ÷ baseline CV) and `threshold` = r threshold (lower is better).
 - Optional save-time `stats` blob: `peakAlphaFreq/Power`, `targetPct`, `stillnessPct`, `avgBpm`, `avgAlphaRel`
 - Flat mirrors (when stats present): `avgSpo2`, `peakAlphaHz`, `peakAlphaPower`, `pctInTarget`, `avgSleepDir`
 
@@ -118,6 +118,7 @@ Written by `buildSessionMetadata()`:
 **`guardrail{}` per second (LOCKED keep + add):**
 - **KEEP:** `sleepDir`, `clarity`, `warning`, `delta`
 - **ADD:** `featurePercentile`, `warnOver`, `ceilingOver`, `clean`, `dirtyReason`
+- **2026-10: no longer written** (δ rail removed; readers keep both for old files). **ADD (2026-10):** `railDeltaRel` — relative frontal δ (δ ÷ total, quality-gated AF7/AF8) the δ rail compared to its ceiling (0.80); omitted when no pad was usable. `ceilingOver` = `railDeltaRel` > 0.80. Frames without it (older sessions) used the absolute rail: `delta` > 0.25; readers plot those against 0.25.
 
 Recordings: zeroed legacy `guardrail`/`feedback` keys may still be present for chart shape; **omit/null the NEW Trust extras** (never fake `percentile:0` / `clean:false`). Wire = camelCase JSONL (Dart `ComputedFrame.toJson`); Rust extract must accept those keys (serde rename).
 
@@ -903,6 +904,8 @@ Uses locked base vocabulary. `feedback` holds only what base does not.
       "guardFeature": "ai.drowsiness",
       "guardModel": "cbramod_a_vig",
       "warningThresholdPercentile": 80,
+      "guardThresholdMode": "fixed",
+      "guardFixedThreshold": 0.5,
       "warningSound": "softBell",
       "inhibitCeilingOverrides": { "beta": 0.35, "delta": 0.40 },
       "musicFolder": null,
@@ -1083,6 +1086,7 @@ Dart writes **camelCase** JSONL (`ComputedFrame.toJson` dialect). Rust extract m
 | `featurePercentile` | **ADD** | Guard feature percentile this second. |
 | `warnOver` | **ADD** | Warn-threshold overshoot flag / value as implemented in live Trust. |
 | `ceilingOver` | **ADD** | Ceiling-overshoot flag / value as implemented in live Trust. |
+| `railDeltaRel` | **ADD (2026-10)** | Relative frontal δ for the rail; absent = legacy absolute rail (`delta` vs 0.25). |
 | `clean` | **ADD** | bool — guard sample quality clean. |
 | `dirtyReason` | **ADD** | Same vocab as feedback (`movement`\|`blink`\|`jaw`\|`pads`); omit/null when clean. |
 
@@ -1237,7 +1241,7 @@ Full example + migrated-away table: **Feedback extension — LOCKED** above. Do 
 | `calibration` (+ optional `calibrationProfile`) | Nested calibration blob |
 | ~~`drowsiness`~~ → `outcomeScalars.guardWarnPct` / `avgSleepDir` / `guardThreshold` | Folded; no protocol-named nest |
 | `music` | Tracks / cutoff series |
-| `sessionSettings` | Incl. `guardFeature` / `guardModel` / `guardrailEngine`, markers flags, music/binaural knobs; optional `modelSnapshot`; **`inhibitCeilingOverrides?`** (`beta`/`delta` slider overlays); **`crownQualitySource?`** (Crown only) |
+| `sessionSettings` | Incl. `guardFeature` / `guardModel` / `guardrailEngine`, markers flags, music/binaural knobs; optional `modelSnapshot`; **`inhibitCeilingOverrides?`** (`beta`/`delta` slider overlays); **`crownQualitySource?`** (Crown only); **`guardThresholdMode?`** (`percentile` \| `fixed`, present when a guard ran) + **`guardFixedThreshold?`** (0–1, only when `fixed`). Absent mode (sessions before 2026-10, or no guard) = percentile of calibration (`warningThresholdPercentile`). The `protocolJson` snapshot's `guard` carries the same `thresholdMode` / `fixedThreshold`. |
 | `calibration.baselineSamples` (+ per-recal) | Raw native reward samples for `percentileOf` (~50 doubles); keep `baseline` stats summary |
 | `audioEvents[]` `{onset,type}` | Sparse one-shot play log (`reward_chime`\|`guard_chime`); not annotations |
 | `outcomeScalars.pctInTarget` (← `targetPct` / `pctInTarget`) | Feedback-only reward outcome |

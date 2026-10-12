@@ -19,7 +19,18 @@ class SessionTrust {
     required this.pctCeiling,
     required this.rewardChimes,
     required this.guardChimes,
+    this.deltaCeiling = legacyGuardrailDeltaCeilingRel,
+    this.hasCeilingData = false,
   });
+
+  /// Ceiling the (legacy) guard ceiling pane draws:
+  /// [legacyGuardrailDeltaCeilingRel] when frames carry `railDeltaRel`, else
+  /// the older absolute [legacyGuardrailDeltaCeilingAbs] against `delta`.
+  final double deltaCeiling;
+
+  /// Whether any guard frame recorded `ceilingOver` (sessions from before
+  /// the δ rail was removed). Sessions without it get no ceiling pane.
+  final bool hasCeilingData;
 
   final List<TrustRewardSample> reward;
   final List<TrustGuardSample> guard;
@@ -31,6 +42,13 @@ class SessionTrust {
   final int rewardChimes;
   final int guardChimes;
 }
+
+/// The removed (2026-10) frontal-δ rail, kept for history replay of old
+/// sessions only. Frames with `railDeltaRel` railed on relative δ above
+/// [legacyGuardrailDeltaCeilingRel]; older frames on absolute δ (µV²) above
+/// [legacyGuardrailDeltaCeilingAbs].
+const double legacyGuardrailDeltaCeilingRel = 0.80;
+const double legacyGuardrailDeltaCeilingAbs = 0.25;
 
 /// Builds [SessionTrust] from v6 computed frames. Does not use [TrustTrace].
 SessionTrust readSessionTrust({
@@ -53,6 +71,8 @@ SessionTrust readSessionTrust({
   var guardClean = 0.0;
   var warning = 0.0;
   var ceiling = 0.0;
+  var anyRailRel = false;
+  var anyCeiling = false;
 
   for (var i = 0; i < frames.length; i++) {
     final frame = frames[i];
@@ -85,6 +105,7 @@ SessionTrust readSessionTrust({
           native: fb.ratio,
           percentile: percentile,
           thresholdPercentile: fb.thresholdPercentile ?? 0,
+          threshold: fb.threshold,
           inTarget: fb.inTarget,
           heldBack: fb.heldBack ?? false,
           inhibitTags: List<String>.of(fb.inhibitTags ?? const <String>[]),
@@ -108,7 +129,11 @@ SessionTrust readSessionTrust({
     final guardCleanFlag = gr.clean;
     if (guardCleanFlag != null) {
       final featurePercentile = gr.featurePercentile ?? 50.0;
-      final lastDelta = gr.delta;
+      // 2026-10+: the rail value is relative δ; older frames: absolute δ.
+      final railRel = gr.railDeltaRel;
+      if (railRel != null) anyRailRel = true;
+      if (gr.ceilingOver != null) anyCeiling = true;
+      final lastDelta = railRel ?? gr.delta;
       final double plotPct;
       final double plotDelta;
       if (!guardCleanFlag) {
@@ -163,6 +188,10 @@ SessionTrust readSessionTrust({
     pctCeiling: _percent(ceiling, guardClean),
     rewardChimes: rewardChimes,
     guardChimes: guardChimes,
+    deltaCeiling: anyRailRel || guard.isEmpty
+        ? legacyGuardrailDeltaCeilingRel
+        : legacyGuardrailDeltaCeilingAbs,
+    hasCeilingData: anyCeiling,
   );
 }
 
