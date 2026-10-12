@@ -78,6 +78,7 @@ jobs:
           bundle: neurofeed.flatpak
           manifest-path: org.windwerfer.neurofeed.yml
           cache-key: flatpak-neurofeed-25.08
+          upload-artifact: false
 
       - name: Name the bundle
         shell: bash
