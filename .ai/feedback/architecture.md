@@ -34,7 +34,7 @@ JSON names IDs. Rust owns `(device, feature)` electrodes and autodrop.
 | Feature registry | `rust/src/api/features.rs` | `available_features` / `set_enabled_features` / `set_feature_electrodes`; 8 v1 ids |
 | FeatureBus | `lib/src/feedback/feature_bus.dart` | Fan-out `FeatureDto` by id; missing ticks are not published as 0 |
 | RewardLane | `lib/src/feedback/reward_lane.dart` | Native value → `RatioEngine` threshold + inhibit → reward output |
-| GuardLane | `lib/src/feedback/guard_lane.dart` | Native value → percentile warn + delta rail → guard output |
+| GuardLane | `lib/src/feedback/guard_lane.dart` | Native value → threshold warn (fixed P / percentile) → guard output |
 | FeedbackEngine | `lib/src/feedback/feedback_engine.dart` | Interface; `RatioEngine` implements it (`target_state.dart`) |
 | CalibrationRunner | `lib/src/feedback/calibration_runner.dart` | Compose stages from subscribed features |
 | Gate names | `lib/src/feedback/gate_electrodes.dart` | Names, never indices, resolved against the device montage |

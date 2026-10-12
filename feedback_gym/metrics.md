@@ -41,12 +41,9 @@ calibration rows are never scored.
 |----|---------|---------|-------|
 | `hit_rate` | reward / protocol | Fraction of 1 Hz samples that are in-target after the inhibit AND-gate | 0–1 |
 | `inhibit_block` | each inhibit | Share of otherwise-in-target samples blocked by that inhibit | 0–1 |
-| `warn_feature` | guard | Feature vs percentile threshold only (no delta rail) | 0–1 binary |
-| `warn_rail` | guard | Absolute delta-ceiling over (`delta > 0.25`; band also `feat > 0.25`). Always computed; with protocol `guard.deltaRail: false` it is the signal-dirty indicator only (app `ceilingOver`) | 0–1 binary |
-| `warn` | guard | App fidelity: `warn_feature | warn_rail` when `guard.deltaRail` (default true), else `warn_feature` | 0–1 binary |
-| `label_align_combined` | guard, labels | Align of combined **`warn`** vs labels (reported as "warn acc"; not the score) | 0–1 |
-| `warn_rate` / `warn_feature_rate` / `rail_rate` | guard | Means of the three warn masks | 0–1 |
-| `label_align` | when labels exist | Align of **`warn_feature`** (not combined) vs labels — used for scoring | 0–1 |
+| `warn` | guard | App fidelity: feature > threshold (fixed P or calibration percentile). The δ rail was removed 2026-10 | 0–1 binary |
+| `warn_rate` | guard | Mean of `warn` | 0–1 |
+| `label_align` | when labels exist | Align of `warn` vs labels — used for scoring | 0–1 |
 | `stability` | reward & guard | `1 - flip_rate` of binary decisions sample-to-sample | 0–1 |
 | `sep` | feature alone | Direction-invariant class separation max(AUC, 1-AUC) when labels exist | 0–1 |
 | `latency` | feature | Documented expected latency (metadata; not measured here) | text |
@@ -55,7 +52,7 @@ calibration rows are never scored.
 ### label_align (detail)
 
 Given binary labels `drowsy=1` / `wake=0` (Sleep-EDF: hypnagogic=1) and binary
-**`warn_feature`** (percentile threshold only — **not** the delta rail):
+**`warn`** (threshold rule only):
 
 ```
 label_align = 0.5 * TPR + 0.5 * (1 - FPR)
@@ -64,14 +61,7 @@ label_align = 0.5 * TPR + 0.5 * (1 - FPR)
 where `TPR = TP / (TP+FN)`, `FPR = FP / (FP+TN)`. Missing labels → metric is
 `null` (shown as N/A).
 
-**Why not combined `warn`?** On Sleep-EDF, absolute `delta_abs` is often ≫ 0.25
-µV²-scale, so the delta rail is near always-on → combined `label_align≈0.5` even
-when the continuous feature separates well (`sep≈0.85`). Scoring on
-`warn_feature` recovers threshold quality; combined `warn_rate` / `rail_rate`
-remain reported for app fidelity. Protocols that set `guard.deltaRail: false`
-(all AI-guarded catalog rows since the evidence catalog) do not warn on the
-rail, so their combined `warn` equals `warn_feature` and
-`label_align_combined == label_align`.
+(Before 2026-10 the gym also reported a δ-rail mask and a combined warn; both went with the rail, see DELTA_RAIL_SWEEP.md.)
 
 ### stability (detail)
 

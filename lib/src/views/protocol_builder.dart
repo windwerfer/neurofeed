@@ -75,9 +75,6 @@ class _ProtocolBuilderViewState extends ConsumerState<ProtocolBuilderView> {
   GuardrailSound _guardOutput = GuardrailSound.softBowl;
   bool _muffleReward = false;
   // Not editable in the builder; carried over when editing a saved document.
-  // New programs: δ rail off (2026-10 gym: relative frontal δ does not
-  // separate wake from N1). Edited programs keep what they had.
-  bool _guardDeltaRail = false;
   bool _guardRequiresModel = false;
   final Set<String> _guardElectrodes = {};
 
@@ -146,7 +143,6 @@ class _ProtocolBuilderViewState extends ConsumerState<ProtocolBuilderView> {
       _guardFeature = existing.guard?.feature ?? 'band.delta';
       _guardOutput = GuardrailSound.fromName(existing.guard?.output);
       _muffleReward = existing.guard?.muffleReward ?? false;
-      _guardDeltaRail = existing.guard?.deltaRail ?? true;
       _guardRequiresModel = existing.guard?.requiresModel ?? false;
       _guardElectrodes.addAll(existing.guard?.electrodes ?? const []);
     }
@@ -320,7 +316,6 @@ class _ProtocolBuilderViewState extends ConsumerState<ProtocolBuilderView> {
               policy: 'percentileWarn',
               muffleReward: _muffleReward,
               defaultEnabled: true,
-              deltaRail: _guardDeltaRail,
               requiresModel: _guardRequiresModel,
               electrodes: _guardElectrodes.isEmpty
                   ? null

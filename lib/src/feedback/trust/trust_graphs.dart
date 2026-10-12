@@ -4,7 +4,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:neurofeed/src/feedback/guard_lane.dart';
+import 'package:neurofeed/src/history/session_trust.dart'
+    show legacyGuardrailDeltaCeilingRel;
 import 'package:neurofeed/src/feedback/trust/trust_guard.dart';
 import 'package:neurofeed/src/feedback/trust/trust_inhibit.dart';
 import 'package:neurofeed/src/feedback/trust/trust_more.dart';
@@ -231,7 +232,7 @@ class _TrustGraphsColumnState extends State<TrustGraphsColumn>
           newestElapsed: newest,
           wallNow: wallNow,
           seriesColor: widget.guardColor,
-          ceiling: guardrailDeltaCeiling,
+          ceiling: legacyGuardrailDeltaCeilingRel,
         );
     }
   }

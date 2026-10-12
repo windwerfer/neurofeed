@@ -37,7 +37,6 @@ class _Guard implements GuardOutput {
 class _Frame {
   bool? warning;
   bool? warnOver;
-  bool? ceilingOver;
 }
 
 int _warningWrites = 0;
@@ -63,180 +62,64 @@ GuardTick _tick({_Frame? frame, bool muffleReward = true}) => GuardTick(
         threshold,
         featurePercentile,
         warnOver,
-        ceilingOver,
-        railDeltaRel,
         clean,
         dirtyReason,
       }) {
         frame?.warning = warning;
         frame?.warnOver = warnOver;
-        frame?.ceilingOver = ceilingOver;
       },
 );
 
 void main() {
-  group('percentileWarnOver deltaRail', () {
-    test('rail on (default): relative delta over the ceiling warns in both modes', () {
-      for (final bandMath in [true, false]) {
-        expect(
-          percentileWarnOver(
-            bandMath: bandMath,
-            lastDelta: 0.30,
-            lastSleepDir: 0.0,
-            threshold: 0.50,
-            railDeltaRel: 0.85,
-          ),
-          isTrue,
-          reason: 'bandMath=$bandMath',
-        );
-      }
-    });
+  // The frontal-δ rail was removed 2026-10 (feedback_gym/DELTA_RAIL_SWEEP.md):
+  // the guard warns on its threshold rule only.
+  group('no δ rail', () {
+    setUp(() => _warningWrites = 0);
 
-    test('rail off: relative delta over the ceiling never warns', () {
-      for (final bandMath in [true, false]) {
-        expect(
-          percentileWarnOver(
-            bandMath: bandMath,
-            lastDelta: 0.30,
-            lastSleepDir: 0.0,
-            threshold: 0.50,
-            railDeltaRel: 0.85,
-            deltaRail: false,
-          ),
-          isFalse,
-          reason: 'bandMath=$bandMath',
-        );
-      }
-    });
-
-    test('rail off: the percentile rule still warns', () {
-      // AI: score above threshold.
+    test('percentileWarnOver: high δ never warns an AI guard', () {
       expect(
         percentileWarnOver(
           bandMath: false,
-          lastDelta: 0.10,
+          lastDelta: 50,
+          lastSleepDir: 0.10,
+          threshold: 0.50,
+        ),
+        isFalse,
+      );
+      expect(
+        percentileWarnOver(
+          bandMath: false,
+          lastDelta: 0,
           lastSleepDir: 0.60,
           threshold: 0.50,
-          deltaRail: false,
         ),
         isTrue,
       );
-      // Band: delta above its percentile threshold (below the ceiling).
+    });
+
+    test('band math still scores native δ against its threshold', () {
       expect(
         percentileWarnOver(
           bandMath: true,
           lastDelta: 0.20,
-          lastSleepDir: 0.0,
+          lastSleepDir: 0,
           threshold: 0.10,
-          deltaRail: false,
         ),
         isTrue,
       );
-    });
-  });
-
-  group('relative δ rail value', () {
-    BandsDto b(int e, {double delta = 1, double rest = 1}) => BandsDto(
-      electrode: e,
-      timestamp: 0,
-      delta: delta,
-      theta: rest,
-      alpha: rest,
-      beta: rest,
-      gamma: rest,
-      lineNoiseRatio: 0,
-      signalQuality: 100,
-    );
-    GuardTick tick(List<double>? q) => GuardTick(
-      phase: FeedbackPhase.playing,
-      collectionEyes: null,
-      muffleReward: false,
-      sessionStartAt: null,
-      quality: q,
-      writeWarningMetadata:
-          ({
-            required sleepDir,
-            required delta,
-            required threshold,
-            required bandMath,
-          }) {},
-      updateComputed:
-          ({
-            required sleepDir,
-            required clarity,
-            required delta,
-            required warning,
-            threshold,
-            featurePercentile,
-            warnOver,
-            ceilingOver,
-            railDeltaRel,
-            clean,
-            dirtyReason,
-          }) {},
-    );
-
-    test('δ ÷ total over AF pads that pass the quality gate', () {
-      final l = GuardLane(guardOutput: _Guard(), rewardOutput: _Reward())
-        ..configure(
-          enabled: true,
-          bandMath: false,
-          featureId: 'ai.a_vig',
-          deltaElectrodes: const [1, 2],
-        );
-      final q = [100.0, 100.0, 100.0, 100.0];
-      l.onBands(b(1, delta: 6, rest: 1), tick(q)); // 6 / 10 = 0.6
-      l.onBands(b(2, delta: 36, rest: 1), tick(q)); // 36 / 40 = 0.9
-      expect(l.lastDeltaRel, closeTo(0.75, 1e-9));
-      expect(l.ceilingOver, isFalse); // 0.75 < 0.80
-      // Pad 2 drops below the gate: only pad 1 counts.
-      l.onBands(b(2, delta: 36, rest: 1), tick([100, 100, 50, 100]));
-      expect(l.lastDeltaRel, closeTo(0.6, 1e-9));
-      // Only pad 2 usable: 0.9 > ceiling.
-      l.onBands(b(1, delta: 6, rest: 1), tick([100, 50, 100, 100]));
-      expect(l.lastDeltaRel, closeTo(0.9, 1e-9));
-      expect(l.ceilingOver, isTrue);
-      // No usable pad: no rail value, cannot warn.
-      l.onBands(b(1, delta: 6, rest: 1), tick([0, 0, 0, 0]));
-      expect(l.lastDeltaRel.isNaN, isTrue);
-      expect(l.ceilingOver, isFalse);
-      expect(l.railDeltaRelOrNull, isNull);
-      // Absolute δ (recorded) is still the plain AF mean.
-      expect(l.lastDelta, closeTo(21, 1e-9));
-    });
-  });
-
-  group('GuardLane deltaRail', () {
-    setUp(() => _warningWrites = 0);
-
-    GuardLane lane({required bool deltaRail, required bool bandMath}) {
-      final l = GuardLane(guardOutput: _Guard(), rewardOutput: _Reward());
-      l.configure(
-        enabled: true,
-        bandMath: bandMath,
-        featureId: bandMath ? 'band.delta' : 'ai.a_vig',
-        deltaElectrodes: const [],
-        deltaRail: deltaRail,
+      expect(
+        percentileWarnOver(
+          bandMath: true,
+          lastDelta: 0.05,
+          lastSleepDir: 0.99,
+          threshold: 0.10,
+        ),
+        isFalse,
       );
-      return l
-        ..threshold = 0.5
-        ..lastSleepDir = 0.1
-        ..lastDelta = 0.9
-        ..lastDeltaRel = 0.9; // over the relative ceiling, under nothing else
-    }
-
-    test('configure defaults deltaRail to true', () {
-      final l = GuardLane(guardOutput: _Guard(), rewardOutput: _Reward())
-        ..configure(
-          enabled: true,
-          bandMath: false,
-          featureId: 'ai.a_vig',
-          deltaElectrodes: const [],
-        );
-      expect(l.deltaRail, isTrue);
     });
 
-    test('rail on: ceiling warns, chimes and muffles (AI)', () {
+    test('GuardLane: AI score under threshold + high δ → no warn, chime '
+        'or muffle', () {
       final reward = _Reward();
       final guard = _Guard();
       final l = GuardLane(guardOutput: guard, rewardOutput: reward)
@@ -248,61 +131,39 @@ void main() {
         )
         ..threshold = 0.5
         ..lastSleepDir = 0.1
-        ..lastDelta = 0.9
-        ..lastDeltaRel = 0.9;
+        ..lastDelta = 50;
       l.evaluateWarning(_tick());
-      expect(l.warningActive, isTrue);
-      expect(guard.lastActive, isTrue);
-      expect(reward.muffle, isTrue);
-      expect(_warningWrites, 1);
+      expect(l.warningActive, isFalse);
+      expect(guard.lastActive, isFalse);
+      expect(reward.muffle, isFalse);
+      expect(_warningWrites, 0);
+
+      final frame = _Frame();
+      l.onReveExtras(
+        const ReveDto(
+          timestamp: 0,
+          kind: 'cbramod',
+          clarity: 1,
+          sleepDir: 0.1,
+          delta: 50,
+          dim: 0,
+        ),
+        _tick(frame: frame),
+      );
+      expect(frame.warning, isFalse);
+      expect(frame.warnOver, isFalse);
     });
 
-    for (final bandMath in [false, true]) {
-      test('rail off (bandMath=$bandMath): no warning / chime / muffle, '
-          'ceilingOver still recorded', () {
-        final reward = _Reward();
-        final guard = _Guard();
-        final l = GuardLane(guardOutput: guard, rewardOutput: reward)
-          ..configure(
-            enabled: true,
-            bandMath: bandMath,
-            featureId: bandMath ? 'band.delta' : 'ai.a_vig',
-            deltaElectrodes: const [],
-            deltaRail: false,
-          )
-          // Band math scores lastDelta itself, so give it a threshold above
-          // the ceiling value; AI scores lastSleepDir.
-          ..threshold = bandMath ? 2.0 : 0.5
-          ..lastSleepDir = 0.1
-          ..lastDelta = 0.9
-          ..lastDeltaRel = 0.9;
-        l.evaluateWarning(_tick());
-        expect(l.warningActive, isFalse);
-        expect(guard.lastActive, isFalse);
-        expect(reward.muffle, isFalse);
-        expect(_warningWrites, 0);
-        expect(l.ceilingOver, isTrue);
-
-        final frame = _Frame();
-        l.onReveExtras(
-          const ReveDto(
-            timestamp: 0,
-            kind: 'cbramod',
-            clarity: 1,
-            sleepDir: 0.1,
-            delta: 0.9,
-            dim: 0,
-          ),
-          _tick(frame: frame),
-        );
-        expect(frame.ceilingOver, isTrue, reason: 'signal-dirty flag');
-        expect(frame.warning, isFalse);
-        expect(frame.warnOver, isFalse);
-      });
-    }
-
-    test('rail off: the feature over threshold still warns', () {
-      final l = lane(deltaRail: false, bandMath: false)..lastSleepDir = 0.8;
+    test('GuardLane: AI score over threshold warns', () {
+      final l = GuardLane(guardOutput: _Guard(), rewardOutput: _Reward())
+        ..configure(
+          enabled: true,
+          bandMath: false,
+          featureId: 'ai.a_vig',
+          deltaElectrodes: const [],
+        )
+        ..threshold = 0.5
+        ..lastSleepDir = 0.8;
       l.evaluateWarning(_tick());
       expect(l.warningActive, isTrue);
       expect(_warningWrites, 1);
@@ -310,7 +171,7 @@ void main() {
   });
 
   group('protocol guard flags', () {
-    test('deltaRail / requiresModel default and round-trip', () async {
+    test('legacy deltaRail / requiresModel default and round-trip', () async {
       TestWidgetsFlutterBinding.ensureInitialized();
       final features = FeatureCatalog.fromJson(
         jsonDecode(await rootBundle.loadString(FeatureCatalog.asset)) as Map,
@@ -339,8 +200,8 @@ void main() {
       expect(back.requiresModel, isTrue);
     });
 
-    test('catalog: AI-guarded rows turn the rail off; only sleepGuard '
-        'requires the model', () async {
+    test('catalog: no row carries the removed deltaRail key; only '
+        'sleepGuard requires the model', () async {
       TestWidgetsFlutterBinding.ensureInitialized();
       final catalog = await ProtocolCatalog.load();
       for (final id in [
@@ -350,7 +211,7 @@ void main() {
         'alertClosed',
       ]) {
         final guard = catalog.forName(id)!.guard!;
-        expect(guard.deltaRail, isFalse, reason: id);
+        expect(guard.toJson().containsKey('deltaRail'), isFalse, reason: id);
         expect(guard.requiresModel, id == 'sleepGuard', reason: id);
       }
       // recordOnly: retired id, resolves to calibrateRecord.

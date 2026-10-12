@@ -14,7 +14,7 @@ from runners.helpers import (
     inhibit_health,
     inhibit_passes,
     label_align,
-    percentile_warn_parts,
+    percentile_warn_over,
     protocol_composite,
     round4,
     flip_stability,
@@ -64,8 +64,6 @@ def simulate_protocol(
         if guard_percentile is not None
         else defaults.get("guard_percentile", 75)
     )
-    # App δ rail (2026-10+): relative frontal delta vs a relative ceiling.
-    delta_ceiling = float(defaults.get("guardrail_delta_rel_ceiling", 0.80))
     g_fixed = float(
         guard_fixed_threshold
         if guard_fixed_threshold is not None
@@ -184,8 +182,6 @@ def simulate_protocol(
             result["notes"].append(f"guard feature {feat_id} missing from corpus")
         else:
             band_math = feat_id.startswith("band.")
-            # Protocol guard.deltaRail (default True, app ProtocolGuard).
-            delta_rail = bool(guard_cfg.get("deltaRail", True))
             play_vals = np.asarray(series[play], dtype=float)
             finite = np.isfinite(play_vals)
             if not finite.any():
@@ -214,27 +210,14 @@ def simulate_protocol(
                         series, plan, g_p, finite_play=finite
                     )
                     thr = summarize_threshold(plan, thr_groups)
-                rail_rel = np.asarray(
-                    corpus.get("delta_rel", np.full(len(series), np.nan)), dtype=float
-                )[play][finite]
-                delta_abs = np.asarray(
-                    corpus.get("delta_abs", corpus["band_delta"]), dtype=float
-                )[play][finite]
-                warn_feature, warn_rail, warn = percentile_warn_parts(
-                    band_math=band_math,
-                    feature_values=play_f,
-                    delta_abs=delta_abs,
-                    threshold=thr_rows,
-                    delta_ceiling=delta_ceiling,
-                    rail_values=rail_rel,
-                    delta_rail=delta_rail,
+                # App: threshold rule only (δ rail removed 2026-10).
+                warn = percentile_warn_over(
+                    band_math=band_math, feature_values=play_f, threshold=thr_rows
                 )
                 wr = warn_rate(warn)
-                wr_feat = warn_rate(warn_feature)
-                wr_rail = warn_rate(warn_rail)
-                stab = flip_stability(warn_feature)
-                la = label_align(warn_feature, labels_f)
-                la_combined = label_align(warn, labels_f)
+                wr_feat = wr
+                stab = flip_stability(warn)
+                la = label_align(warn, labels_f)
                 if la is not None:
                     guard_score = la
                 else:
@@ -249,16 +232,10 @@ def simulate_protocol(
                     "policy": guard_cfg.get("policy", "percentileWarn"),
                     "band_math": band_math,
                     "threshold_mode": mode,
-                    "delta_rail": delta_rail,
                     "threshold": round4(thr),
                     "warn_rate": round4(wr),
-                    "warn_feature_rate": round4(wr_feat),
-                    "rail_rate": round4(wr_rail),
                     "stability": round4(stab),
                     "label_align": round4(la) if la is not None else None,
-                    "label_align_combined": round4(la_combined)
-                    if la_combined is not None
-                    else None,
                     "score": round4(guard_score),
                 }
                 if plan.per_recording:

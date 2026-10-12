@@ -1,5 +1,3 @@
-import 'package:neurofeed/src/feedback/guard_lane.dart'
-    show guardrailDeltaCeiling, legacyGuardrailDeltaCeilingAbs;
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 import 'package:neurofeed/src/rust/api/session_format.dart' as ffi;
@@ -21,13 +19,18 @@ class SessionTrust {
     required this.pctCeiling,
     required this.rewardChimes,
     required this.guardChimes,
-    this.deltaCeiling = guardrailDeltaCeiling,
+    this.deltaCeiling = legacyGuardrailDeltaCeilingRel,
+    this.hasCeilingData = false,
   });
 
-  /// Ceiling the guard ceiling pane draws: [guardrailDeltaCeiling] (relative
-  /// δ) when frames carry `railDeltaRel`, else the pre-2026-10 absolute
-  /// [legacyGuardrailDeltaCeilingAbs] against the recorded `delta`.
+  /// Ceiling the (legacy) guard ceiling pane draws:
+  /// [legacyGuardrailDeltaCeilingRel] when frames carry `railDeltaRel`, else
+  /// the older absolute [legacyGuardrailDeltaCeilingAbs] against `delta`.
   final double deltaCeiling;
+
+  /// Whether any guard frame recorded `ceilingOver` (sessions from before
+  /// the δ rail was removed). Sessions without it get no ceiling pane.
+  final bool hasCeilingData;
 
   final List<TrustRewardSample> reward;
   final List<TrustGuardSample> guard;
@@ -39,6 +42,13 @@ class SessionTrust {
   final int rewardChimes;
   final int guardChimes;
 }
+
+/// The removed (2026-10) frontal-δ rail, kept for history replay of old
+/// sessions only. Frames with `railDeltaRel` railed on relative δ above
+/// [legacyGuardrailDeltaCeilingRel]; older frames on absolute δ (µV²) above
+/// [legacyGuardrailDeltaCeilingAbs].
+const double legacyGuardrailDeltaCeilingRel = 0.80;
+const double legacyGuardrailDeltaCeilingAbs = 0.25;
 
 /// Builds [SessionTrust] from v6 computed frames. Does not use [TrustTrace].
 SessionTrust readSessionTrust({
@@ -62,6 +72,7 @@ SessionTrust readSessionTrust({
   var warning = 0.0;
   var ceiling = 0.0;
   var anyRailRel = false;
+  var anyCeiling = false;
 
   for (var i = 0; i < frames.length; i++) {
     final frame = frames[i];
@@ -120,6 +131,7 @@ SessionTrust readSessionTrust({
       // 2026-10+: the rail value is relative δ; older frames: absolute δ.
       final railRel = gr.railDeltaRel;
       if (railRel != null) anyRailRel = true;
+      if (gr.ceilingOver != null) anyCeiling = true;
       final lastDelta = railRel ?? gr.delta;
       final double plotPct;
       final double plotDelta;
@@ -176,8 +188,9 @@ SessionTrust readSessionTrust({
     rewardChimes: rewardChimes,
     guardChimes: guardChimes,
     deltaCeiling: anyRailRel || guard.isEmpty
-        ? guardrailDeltaCeiling
+        ? legacyGuardrailDeltaCeilingRel
         : legacyGuardrailDeltaCeilingAbs,
+    hasCeilingData: anyCeiling,
   );
 }
 

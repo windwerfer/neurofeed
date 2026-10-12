@@ -13,10 +13,10 @@ class ComputedSampler {
     this.channelCount = 4,
     this.interval = const Duration(seconds: 1),
     DateTime Function()? now,
-  })  : _recordingStart = recordingStart,
-        _now = now ?? DateTime.now,
-        _bands = BandSecondAverage(channelCount),
-        _latestSignalQuality = List.filled(channelCount, 0);
+  }) : _recordingStart = recordingStart,
+       _now = now ?? DateTime.now,
+       _bands = BandSecondAverage(channelCount),
+       _latestSignalQuality = List.filled(channelCount, 0);
 
   final void Function(ComputedFrame) onFrame;
 
@@ -54,7 +54,6 @@ class ComputedSampler {
   double? _feedbackDeltaRel;
   double? _guardFeaturePercentile;
   bool? _guardWarnOver;
-  bool? _guardCeilingOver;
   bool? _guardClean;
   String? _guardDirtyReason;
   final List<String> _latestGestures = [];
@@ -85,8 +84,6 @@ class ComputedSampler {
     _crownSignalQuality = crown;
   }
 
-  double? _railDeltaRel;
-
   void updateGuardrail({
     required double sleepDir,
     required double clarity,
@@ -95,13 +92,10 @@ class ComputedSampler {
     double? threshold,
     double? featurePercentile,
     bool? warnOver,
-    bool? ceilingOver,
-    double? railDeltaRel,
     bool? clean,
     String? dirtyReason,
   }) {
     _lastSleepDir = sleepDir;
-    _railDeltaRel = railDeltaRel;
     _lastClarity = clarity;
     _lastDelta = delta;
     _warningActive = warning;
@@ -110,9 +104,6 @@ class ComputedSampler {
     }
     if (warnOver != null) {
       _guardWarnOver = warnOver;
-    }
-    if (ceilingOver != null) {
-      _guardCeilingOver = ceilingOver;
     }
     if (clean != null) {
       _guardClean = clean;
@@ -225,8 +216,8 @@ class ComputedSampler {
         delta: _lastDelta,
         featurePercentile: _guardFeaturePercentile,
         warnOver: _guardWarnOver,
-        ceilingOver: _guardCeilingOver,
-        railDeltaRel: _railDeltaRel,
+        // δ rail removed 2026-10: new frames carry no ceilingOver /
+        // railDeltaRel (old files still read them for history).
         clean: _guardClean,
         dirtyReason: _guardDirtyReason,
       ),

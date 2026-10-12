@@ -93,60 +93,23 @@ def inhibit_passes(
     return all_pass, fails
 
 
-def percentile_warn_parts(
-    *,
-    band_math: bool,
-    feature_values: np.ndarray,
-    delta_abs: np.ndarray,
-    threshold: float,
-    delta_ceiling: float = 0.25,
-    delta_rail: bool = True,
-    rail_values: np.ndarray | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Split guard warn into feature / rail / combined.
-
-    - ``warn_feature``: feature vs percentile threshold only (no delta rail)
-    - ``warn_rail``: absolute delta-ceiling over (plus band abs ceiling).
-      Always computed — with ``delta_rail`` off it is the signal-dirty
-      indicator only (app records it as ``ceilingOver``) and never warns.
-    - ``warn``: combined — fidelity to app ``percentileWarnOver``; OR of
-      feature and rail when ``delta_rail`` (protocol ``guard.deltaRail``,
-      default True), else the feature alone.
-    """
-    feat = np.asarray(feature_values, dtype=float)
-    delta = np.asarray(delta_abs, dtype=float)
-    warn_feature = feat > threshold
-    if rail_values is not None:
-        # App since 2026-10: the rail is relative frontal delta (δ ÷ total,
-        # quality-gated AF7/AF8) vs a relative ceiling, in both modes.
-        with np.errstate(invalid="ignore"):
-            warn_rail = np.asarray(rail_values, dtype=float) > delta_ceiling
-    elif band_math:
-        # band path also treats feat > ceiling as an absolute rail
-        warn_rail = (feat > delta_ceiling) | (delta > delta_ceiling)
-    else:
-        warn_rail = delta > delta_ceiling
-    warn = (warn_feature | warn_rail) if delta_rail else warn_feature.copy()
-    return warn_feature, warn_rail, warn
-
-
 def percentile_warn_over(
     *,
-    band_math: bool,
     feature_values: np.ndarray,
-    delta_abs: np.ndarray,
-    threshold: float,
-    delta_ceiling: float = 0.25,
+    threshold: float | np.ndarray,
+    band_math: bool = False,
+    **_legacy: Any,
 ) -> np.ndarray:
-    """Mirrors guard_lane.percentileWarnOver (combined feature | rail)."""
-    _, _, warn = percentile_warn_parts(
-        band_math=band_math,
-        feature_values=feature_values,
-        delta_abs=delta_abs,
-        threshold=threshold,
-        delta_ceiling=delta_ceiling,
-    )
-    return warn
+    """Mirrors guard_lane.percentileWarnOver: feature over threshold, both
+    modes (band math scores native δ, AI the model probability).
+
+    The frontal-δ hard rail was removed 2026-10 (app + gym): relative δ had
+    BA < 0.5 on Sleep-EDF and gated AUC 0.55 BOAS / 0.36 Muse Sleep-Onset
+    (DELTA_RAIL_SWEEP.md). Old ``delta_abs`` / ``delta_ceiling`` kwargs are
+    accepted and ignored.
+    """
+    feat = np.asarray(feature_values, dtype=float)
+    return feat > threshold
 
 
 # --- Metrics ------------------------------------------------------------------

@@ -155,7 +155,6 @@ void main() {
         bandMath: band,
         featureId: band ? 'band.delta' : 'ai.a_vig',
         deltaElectrodes: const [],
-        deltaRail: false,
         thresholdMode: mode,
         fixedThreshold: 0.5,
       );

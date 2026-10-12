@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:neurofeed/src/feedback/guard_lane.dart';
 import 'package:neurofeed/src/feedback/session_metadata.dart';
 import 'package:neurofeed/src/feedback/trust/trust_trace.dart';
 import 'package:neurofeed/src/history/session_trust.dart';
@@ -95,7 +94,8 @@ void main() {
             ),
         ],
       );
-      expect(read.deltaCeiling, guardrailDeltaCeiling);
+      expect(read.deltaCeiling, legacyGuardrailDeltaCeilingRel);
+      expect(read.hasCeilingData, isTrue);
       expect(read.guard.first.lastDelta, 0.9);
       expect(read.guard.last.lastDelta, 0.4);
       expect(read.pctCeiling, 25);

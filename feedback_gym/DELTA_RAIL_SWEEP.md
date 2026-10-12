@@ -39,3 +39,8 @@ Lee AF gate coverage: EO/EC 0.94, artifacts 0.86. Old absolute rail (delta_abs >
 | 0.80 | 0.465 | 0.12 | 0.04 | 0.01 | 0.01 | 0.01 | 0.04 |
 | 0.85 | 0.479 | 0.07 | 0.02 | 0.00 | 0.00 | 0.00 | 0.01 |
 | 0.90 | 0.492 | 0.03 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+
+
+## Decision (2026-10-12): rail removed
+
+windwerfer's rule was to remove relative δ if it was still bad after the gym improvements. Gated results: AUC 0.55 BOAS, 0.36 Muse Sleep-Onset (FAIR_BANDMATH.md). The δ rail is removed from the app (`GuardLane` warns on its threshold rule only; new frames carry no `ceilingOver` / `railDeltaRel`; old sessions still render their ceiling pane in history) and from the gym (`helpers.percentile_warn_over` = feature > threshold; no `rail_rate` / `delta_rail` fields). This runner stays as the evidence record.

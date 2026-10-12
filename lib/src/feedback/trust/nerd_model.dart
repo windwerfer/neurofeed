@@ -450,28 +450,6 @@ NerdSheetSnapshot nerdSheetFromLanes({
             'Minimum 20 s between warning bowls. Sparse vs the continuous warning.',
         diagram: NerdDiagramKind.cooldown,
       ),
-      if (!guard.bandMath) ...[
-        NerdInfoRowData(
-          id: NerdRowId.liveDelta,
-          label: 'Live δ',
-          value: nerdFixed(guard.railDeltaRelOrNull),
-          infoTitle: 'Live δ',
-          infoBody:
-              'Relative frontal δ (δ ÷ total power), AF7/AF8 pads that pass '
-              'the quality gate. The hard rail, not the AI rest pile.',
-          diagram: NerdDiagramKind.live,
-        ),
-        NerdInfoRowData(
-          id: NerdRowId.deltaCeiling,
-          label: 'δ ceiling',
-          value: nerdFixed(guardrailDeltaCeiling),
-          infoTitle: 'δ ceiling',
-          infoBody:
-              'Hard rail at relative δ $guardrailDeltaCeiling. Over this trips '
-              'the ceiling warn when the protocol rails on δ.',
-          diagram: NerdDiagramKind.threshold,
-        ),
-      ],
     ];
   }
 

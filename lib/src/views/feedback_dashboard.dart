@@ -253,7 +253,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
         trust.guard.isNotEmpty &&
         trustGuardPaneSpecs(
           loaded.guardFeature,
-          deltaRail: loaded.protocolDoc?.guard?.deltaRail ?? true,
+          legacyCeiling:
+              (loaded.protocolDoc?.guard?.deltaRail ?? true) &&
+              trust.hasCeilingData,
         ).isNotEmpty;
     _rewardOn = rewardLane;
     _guardOn = !rewardLane && guardLane;
@@ -540,7 +542,8 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       ),
       guardPanes: trustGuardPaneSpecs(
         _guardFeature,
-        deltaRail: protocol.guard?.deltaRail ?? true,
+        legacyCeiling:
+            (protocol.guard?.deltaRail ?? true) && trust.hasCeilingData,
       ),
       rewardLabel: _rewardLabel,
       guardLabel: _guardLabel,
@@ -1214,7 +1217,8 @@ bool _feedbackLane(
       trust.guard.isNotEmpty &&
       trustGuardPaneSpecs(
         guardFeature,
-        deltaRail: protocol?.guard?.deltaRail ?? true,
+        legacyCeiling:
+            (protocol?.guard?.deltaRail ?? true) && trust.hasCeilingData,
       ).isNotEmpty;
   return reward || guard;
 }

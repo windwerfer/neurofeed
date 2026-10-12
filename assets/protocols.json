@@ -27,7 +27,6 @@
         "policy": "percentileWarn",
         "muffleReward": false,
         "defaultEnabled": true,
-        "deltaRail": false,
         "requiresModel": true,
         "locked": []
       }
@@ -66,7 +65,6 @@
         "policy": "percentileWarn",
         "muffleReward": true,
         "defaultEnabled": true,
-        "deltaRail": false,
         "locked": []
       }
     },
@@ -104,7 +102,6 @@
         "policy": "percentileWarn",
         "muffleReward": false,
         "defaultEnabled": true,
-        "deltaRail": false,
         "locked": []
       }
     },
@@ -171,7 +168,6 @@
         "policy": "percentileWarn",
         "muffleReward": false,
         "defaultEnabled": true,
-        "deltaRail": false,
         "locked": []
       }
     },

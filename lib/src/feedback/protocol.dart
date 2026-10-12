@@ -293,11 +293,10 @@ class ProtocolGuard {
         declared: thresholdMode,
       );
 
-  /// Whether the relative frontal-delta ceiling ([guardrailDeltaCeiling] in
-  /// `guard_lane.dart`) may trigger a warning (chime / muffle) next to the
-  /// percentile rule. Default true (historic behavior). When false the
-  /// ceiling is still evaluated and recorded per computed frame
-  /// (`ceilingOver`) as a signal-dirty indicator, but never warns.
+  /// Legacy (pre-2026-10): whether the old frontal-δ rail could warn. The
+  /// rail was removed (no evidence it separates wake from sleep onset); the
+  /// key is still parsed so history can tell whether an old session's
+  /// recorded `ceilingOver` was a warn signal (ceiling pane). No live effect.
   final bool deltaRail;
 
   /// Whether this guard must run on an AI model. When true there is no

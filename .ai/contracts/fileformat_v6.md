@@ -118,7 +118,7 @@ Written by `buildSessionMetadata()`:
 **`guardrail{}` per second (LOCKED keep + add):**
 - **KEEP:** `sleepDir`, `clarity`, `warning`, `delta`
 - **ADD:** `featurePercentile`, `warnOver`, `ceilingOver`, `clean`, `dirtyReason`
-- **ADD (2026-10):** `railDeltaRel` — relative frontal δ (δ ÷ total, quality-gated AF7/AF8) the δ rail compared to its ceiling (0.80); omitted when no pad was usable. `ceilingOver` = `railDeltaRel` > 0.80. Frames without it (older sessions) used the absolute rail: `delta` > 0.25; readers plot those against 0.25.
+- **2026-10: no longer written** (δ rail removed; readers keep both for old files). **ADD (2026-10):** `railDeltaRel` — relative frontal δ (δ ÷ total, quality-gated AF7/AF8) the δ rail compared to its ceiling (0.80); omitted when no pad was usable. `ceilingOver` = `railDeltaRel` > 0.80. Frames without it (older sessions) used the absolute rail: `delta` > 0.25; readers plot those against 0.25.
 
 Recordings: zeroed legacy `guardrail`/`feedback` keys may still be present for chart shape; **omit/null the NEW Trust extras** (never fake `percentile:0` / `clean:false`). Wire = camelCase JSONL (Dart `ComputedFrame.toJson`); Rust extract must accept those keys (serde rename).
 

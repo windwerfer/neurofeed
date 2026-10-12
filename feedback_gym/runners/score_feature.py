@@ -14,7 +14,7 @@ from runners.helpers import (
     hit_rate,
     label_align,
     latency_for,
-    percentile_warn_parts,
+    percentile_warn_over,
     play_thresholds,
     roc_auc,
     roc_auc_up,
@@ -116,18 +116,9 @@ def score_feature(
     prune_cfg = grids.get("prune", {})
     prune_on = bool(prune_cfg.get("enabled", True))
     patience = int(prune_cfg.get("patience", 2))
-    # App δ rail (2026-10+): relative frontal delta vs a relative ceiling.
-    delta_ceiling = float(grids.get("defaults", {}).get("guardrail_delta_rel_ceiling", 0.80))
     gw = grids.get("protocol_rollup", {}).get("guard", {})
     sep_w = float(gw.get("sep_weight", 0.6))
     la_w = float(gw.get("label_align_weight", 0.4))
-    delta_abs_full = np.asarray(
-        corpus.get("delta_abs", corpus.get("band_delta", series)), dtype=float
-    )[play]
-    delta_abs = delta_abs_full[finite_play]
-    rail_rel = np.asarray(
-        corpus.get("delta_rel", np.full(len(series), np.nan)), dtype=float
-    )[play][finite_play]
 
     sweep_rows: list[dict[str, Any]] = []
     best_p = None
@@ -157,21 +148,14 @@ def score_feature(
             }
         else:
             band_math = feature_id.startswith("band.")
-            warn_feature, warn_rail, warn = percentile_warn_parts(
-                band_math=band_math,
-                feature_values=play_vals_f,
-                delta_abs=delta_abs,
-                threshold=thr_rows,
-                delta_ceiling=delta_ceiling,
-                rail_values=rail_rel,
+            # App: threshold rule only (δ rail removed 2026-10).
+            warn = percentile_warn_over(
+                band_math=band_math, feature_values=play_vals_f, threshold=thr_rows
             )
             wr = warn_rate(warn)
-            wr_feat = warn_rate(warn_feature)
-            wr_rail = warn_rate(warn_rail)
-            stab = flip_stability(warn_feature)
-            # Score / best_p use warn_feature (not combined rail) when labels exist
-            la = label_align(warn_feature, labels_play_f)
-            la_combined = label_align(warn, labels_play_f)
+            wr_feat = wr
+            stab = flip_stability(warn)
+            la = label_align(warn, labels_play_f)
             if la is not None:
                 primary = la
             else:
@@ -183,13 +167,8 @@ def score_feature(
                 "p": p,
                 "threshold": round4(thr),
                 "warn_rate": round4(wr),
-                "warn_feature_rate": round4(wr_feat),
-                "rail_rate": round4(wr_rail),
                 "stability": round4(stab),
                 "label_align": round4(la) if la is not None else None,
-                "label_align_combined": round4(la_combined)
-                if la_combined is not None
-                else None,
                 "primary": round4(float(primary)),
             }
 

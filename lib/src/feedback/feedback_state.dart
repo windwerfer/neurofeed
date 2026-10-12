@@ -46,7 +46,7 @@ import 'package:neurofeed/src/util/timezone.dart';
 
 export 'package:neurofeed/src/feedback/feedback_phase.dart';
 export 'package:neurofeed/src/feedback/guard_lane.dart'
-    show guardrailDeltaCeiling, warningChimeCooldown;
+    show warningChimeCooldown;
 
 class FeedbackState {
   final FeedbackPhase phase;
@@ -895,17 +895,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   /// null between sessions.
   String? _lockedGuardFeature;
 
-  /// Protocol `guard.deltaRail` (default true): whether the relative
-  /// frontal-delta ceiling may warn this session.
-  bool get _specDeltaRail =>
-      _ref
-          .read(protocolCatalogProvider)
-          .valueOrNull
-          ?.forName(state.protocol)
-          ?.guard
-          ?.deltaRail ??
-      true;
-
   /// Whether this session's guard runs band math (no AI model).
   bool get _guardIsBandMath => _sessionGuardFeature == guardFeatureBandDelta;
 
@@ -1020,7 +1009,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       enabled: false,
       bandMath: _guardIsBandMath,
       featureId: laneFeature,
-      deltaRail: _specDeltaRail,
       deltaElectrodes: frontal,
       thresholdMode: _guardThresholdModeFor(laneFeature),
       fixedThreshold: aiGuardFixedThreshold,
@@ -1053,7 +1041,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         enabled: true,
         bandMath: true,
         featureId: guardFeatureBandDelta,
-        deltaRail: _specDeltaRail,
         deltaElectrodes: _guard.deltaElectrodes,
       );
       debugPrint('[guardrail] enabled (band math — no model)');
@@ -1075,7 +1062,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         enabled: ok,
         bandMath: false,
         featureId: laneFeature,
-        deltaRail: _specDeltaRail,
         deltaElectrodes: _guard.deltaElectrodes,
         thresholdMode: _guardThresholdModeFor(laneFeature),
         fixedThreshold: aiGuardFixedThreshold,
@@ -1088,7 +1074,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
         enabled: false,
         bandMath: false,
         featureId: laneFeature,
-        deltaRail: _specDeltaRail,
         deltaElectrodes: _guard.deltaElectrodes,
         thresholdMode: _guardThresholdModeFor(laneFeature),
         fixedThreshold: aiGuardFixedThreshold,
@@ -2204,7 +2189,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       sessionStartAt: _sessionStartAt,
       acceptBaselineSample: acceptBaselineSample,
       sampleIsClean: _sampleIsClean && _reward.padsUsable(quality),
-      quality: quality,
       writeWarningMetadata:
           ({
             required sleepDir,
@@ -2236,8 +2220,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             threshold,
             featurePercentile,
             warnOver,
-            ceilingOver,
-            railDeltaRel,
             clean,
             dirtyReason,
           }) {
@@ -2249,8 +2231,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
               threshold: threshold,
               featurePercentile: featurePercentile,
               warnOver: warnOver,
-              ceilingOver: ceilingOver,
-              railDeltaRel: railDeltaRel,
               clean: clean,
               dirtyReason: dirtyReason,
             );
@@ -2329,9 +2309,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
             featurePercentile: featurePct,
             warningActive: _guard.warningActive,
             warnOver: _guard.warnOver,
-            ceilingOver: _guard.ceilingOver,
-            // Rail value the ceiling pane plots (relative δ, gated pads).
-            lastDelta: _guard.railDeltaRelOrNull ?? 0,
+            // δ rail removed 2026-10: no ceiling signal on live sessions.
+            ceilingOver: false,
+            lastDelta: _guard.lastDelta,
             clean: guardClean,
             dirtyReason: guardDirtyReason,
           ),
@@ -2344,8 +2324,6 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           threshold: _guard.threshold,
           featurePercentile: featurePct,
           warnOver: _guard.warnOver,
-          ceilingOver: _guard.ceilingOver,
-          railDeltaRel: _guard.railDeltaRelOrNull,
           clean: guardClean,
           dirtyReason: guardDirtyReason?.name,
         );

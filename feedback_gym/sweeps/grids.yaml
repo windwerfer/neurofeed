@@ -8,8 +8,6 @@ guard_percentiles:  [50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
 defaults:
   reward_percentile: 40
   guard_percentile: 75
-  guardrail_delta_ceiling: 0.25  # legacy absolute rail (pre-2026-10)
-  guardrail_delta_rel_ceiling: 0.80  # app guardrailDeltaCeiling (relative δ), runners/delta_rail_sweep.py
 
 # Prune rule for sweeps: stop extending higher if primary metric is
 # monotonically worse for `prune_patience` consecutive steps.

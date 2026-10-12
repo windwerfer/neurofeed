@@ -172,7 +172,7 @@ void main() {
     expect(_snap(guard: _guard(enabled: true)).hasGuard, isTrue);
   });
 
-  test('band-math guard pile has no δ ceiling tick (rail is relative δ)', () {
+  test('no δ rail rows or ceiling tick (rail removed 2026-10)', () {
     final band = _snap(guard: _guard(enabled: true, bandMath: true));
     expect(band.guardPile!.extraTick, isNull);
     expect(band.guardPile!.extraTickLabel, isNull);
@@ -180,8 +180,8 @@ void main() {
 
     final ai = _snap(guard: _guard(enabled: true, bandMath: false));
     expect(ai.guardPile!.extraTick, isNull);
-    expect(ai.guardRows.any((r) => r.id == NerdRowId.liveDelta), isTrue);
-    expect(ai.guardRows.any((r) => r.id == NerdRowId.deltaCeiling), isTrue);
+    expect(ai.guardRows.any((r) => r.id == NerdRowId.liveDelta), isFalse);
+    expect(ai.guardRows.any((r) => r.id == NerdRowId.deltaCeiling), isFalse);
   });
 
   test('chime cooldown remaining is nerd-only math', () {

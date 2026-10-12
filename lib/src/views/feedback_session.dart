@@ -165,10 +165,7 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
                           settings.inhibitCeilingOverrides(fb.protocol),
                         ),
                       ),
-                      guardPanes: trustGuardPaneSpecs(
-                        guardFeature,
-                        deltaRail: protocol.guard?.deltaRail ?? true,
-                      ),
+                      guardPanes: trustGuardPaneSpecs(guardFeature),
                     ),
                   const SizedBox(height: 16),
                   if (fb.phase == FeedbackPhase.idle ||
@@ -2485,11 +2482,6 @@ class _GuardrailThresholdDialogState
       fb.protocol,
       aiReady: ref.watch(modelEngineAvailabilityProvider),
     );
-    final panes = trustGuardPaneSpecs(
-      guardFeature,
-      deltaRail: protocol.guard?.deltaRail ?? true,
-    );
-    final showCeiling = panes.contains(TrustGuardPaneId.ceiling);
     final isAi = guardFeatureIsProbability(guardFeature);
     final mode = settings.guardThresholdModeFor(protocol, guardFeature);
     final fixed = isAi && mode == guardThresholdModeFixed;
@@ -2551,18 +2543,6 @@ class _GuardrailThresholdDialogState
                   notifier.setWarningThresholdPercentile(v);
                 },
               ),
-            if (showCeiling) ...[
-              const SizedBox(height: 12),
-              Text('δ ceiling', style: theme.textTheme.titleSmall),
-              const SizedBox(height: 4),
-              Text(
-                'Hard rail at relative δ '
-                '${guardrailDeltaCeiling.toStringAsFixed(2)} (δ ÷ total power, '
-                'AF7/AF8 pads with good contact). The second warn signal; '
-                'not adjustable.',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
           ],
         ),
       ),
