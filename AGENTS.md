@@ -289,7 +289,10 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `.ai/btleplug.md`.
 - **Vendored `rlx-cpu`** (`vendor/rlx-cpu-0.2.14`): `[patch.crates-io]`,
   default `blas` cleared. Keep `version = "0.2.14"` compatible with
-  `rlx-runtime 0.2.14`.
+  `rlx-runtime 0.2.14`. Clearing `blas` does not remove the macOS
+  Accelerate calls (BNNS in `rlx-ir`, vForce in `rlx-cpu`). The macOS
+  podspec must pass `-framework Accelerate`; `#[link(framework)]` does
+  not reach the Xcode link of the staticlib.
 - **Model engine is git deps, not submodules.** Workflows still init
   `third_party/reve-rs` as reference copy only (do not revive luna-rs).
 - **Gated weights live in `.local/`**, never commit them. `#[ignore]`d smoke
