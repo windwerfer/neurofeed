@@ -1,0 +1,6 @@
+{
+  "rust_lib": {
+    "cargo_locks": ["rust"],
+    "extra_pubspecs": ["rust_builder/cargokit/build_tool"]
+  }
+}

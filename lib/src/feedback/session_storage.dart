@@ -8,8 +8,9 @@ import 'package:neurofeed/src/settings.dart';
 
 /// Default app folder when the user has not picked one.
 ///
-/// Linux and Windows: `~/Documents/neurofeed`. Android, iOS, and macOS: the
-/// system app support directory (the sandbox container on macOS).
+/// Unpackaged Linux and Windows: `~/Documents/neurofeed`. Android, iOS,
+/// macOS, and Flatpak: the system app support directory (the sandbox
+/// container on macOS and inside Flatpak).
 Future<Directory> defaultSessionDir({
   AppDataLayout? layout,
   Future<Directory> Function()? readSystemAppFolder,
@@ -26,9 +27,9 @@ Future<Directory> defaultSessionDir({
 
 /// Live scratch directory. This is the same path as the SQLite cache.
 ///
-/// Desktop: `{app folder}/.cache`. Mobile, and any SAF app folder: `{system
-/// app folder}/.cache`. Never the system cache directory and never
-/// [Directory.systemTemp].
+/// Unpackaged Linux and Windows: `{app folder}/.cache`. Android, iOS,
+/// macOS, Flatpak, and any SAF app folder: `{system app folder}/.cache`.
+/// Never the system cache directory and never [Directory.systemTemp].
 Future<Directory> scratchDirectory(
   SessionStorage history, {
   AppDataLayout? layout,

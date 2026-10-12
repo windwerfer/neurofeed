@@ -63,3 +63,8 @@ feedback_gym/results/*/
 
 # feedback_gym: built external corpora (rebuild via runners/build_corpus_sleep_edf.py)
 feedback_gym/corpora/external/*.npz
+
+# flatpak-flutter output (release-flatpak.yml). The input manifest is flatpak/.
+/org.windwerfer.neurofeed.yml
+/generated/
+/.flatpak-builder/

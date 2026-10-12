@@ -58,6 +58,13 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   bookmark channel). Ad-hoc signed, not notarized. iOS is not a target.
 - **Windows**: CI-only (`release-windows.yml`). Committed
   `windows/CMakeLists.txt` (MSVC workaround); the rest is generated in CI.
+- **Flatpak**: CI-only (`release-flatpak.yml`). Manifest input is
+  `flatpak/flatpak-flutter.yml`; CI runs `flatpak-flutter` so the build
+  sandbox has no network. Runtime `org.freedesktop.Platform//25.08`.
+  App id `org.windwerfer.neurofeed`. The app git source sets
+  `disable-submodules` (cargo git deps are vendored; `third_party/` is not
+  built). When `FLATPAK_ID` is set, the save folder follows the
+  Android/macOS container rule.
 
 ## Core rules (do / don't)
 - **NEVER** assume a library is available — check `Cargo.toml` / `pubspec.yaml` first.
@@ -312,7 +319,9 @@ assets/                     protocols.json, calibrations.json, features.json, au
   Devices, AI, Recording, About. Debug mode is the last card, inside About.
 - **flutter_soloud Linux Xiph libs are glibc-2.43-built** unless
   `TRY_SYSTEM_LIBS_FIRST=1` + system `libopus-dev` etc. (devcontainer and
-  `release-linux.yml` already do this).
+  `release-linux.yml` already do this). The Flatpak runtime is glibc 2.42,
+  so `release-flatpak.yml` builds ogg, opus, vorbis, and flac into `/app/lib`
+  and sets the same flag.
 - **Container has no ALSA card** — `libasound2-plugins` +
   `/etc/alsa/conf.d/99-pulseaudio-default.conf` (copied from `.example` in
   the Dockerfile) or playback is silent.
@@ -338,7 +347,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `permission_handler_windows`.
 - **Android ships arm64-only.** No x86 emulator / armeabi-v7a.
 - **Release version is tag-derived**, not `pubspec.yaml`. Logic in
-  `release-{android,windows,linux,macos}.yml`.
+  `release-{android,windows,linux,macos,flatpak}.yml`.
 - **macOS runner is generated in CI.** Do not commit `macos/`. Keep the App
   Sandbox on. `scripts/prepare-macos-runner.sh` writes the sandbox
   entitlements (network, Bluetooth, user-selected files, app-scoped
@@ -395,18 +404,21 @@ assets/                     protocols.json, calibrations.json, features.json, au
   `recording_active`). Feedback refuses Record. Record does not keep
   pre-click tmp bytes.
 - **App folder**: [`.ai/contracts/app-folder.md`](.ai/contracts/app-folder.md).
-  Linux and Windows default is `~/Documents/neurofeed` (create `Documents`
+  Unpackaged Linux and Windows default is `~/Documents/neurofeed` (create `Documents`
   and `neurofeed` when `xdg-user-dir DOCUMENTS` is missing, fails, empty,
   or `$HOME`). macOS default is the sandbox container
-  (`getApplicationSupportDirectory()`), same as Android and iOS. Never
-  `/tmp`. Never `getApplicationCacheDirectory`. On Android, iOS, and macOS,
-  cache and `ai_models` stay in `getApplicationSupportDirectory()` even
-  when the save folder is a picked path or a SAF tree. Export is always
-  `{app folder}/export`.
+  (`getApplicationSupportDirectory()`), same as Android and iOS. Flatpak
+  (`FLATPAK_ID` set) uses that same contained layout: the default folder
+  is `getApplicationSupportDirectory()` under the sandbox
+  `XDG_DATA_HOME`. Never `/tmp`. Never `getApplicationCacheDirectory`.
+  On Android, iOS, macOS, and Flatpak, cache and `ai_models` stay in
+  `getApplicationSupportDirectory()` even when the save folder is a
+  picked path or a SAF tree. A Flatpak picked folder is the document
+  portal path. Export is always `{app folder}/export`.
   A folder change asks **Move existing files?** only when something would
-  move. **Reset to default folder** uses the same dialog. Linux and Windows move
+  move. **Reset to default folder** uses the same dialog. Unpackaged Linux and Windows move
   history containers, `export/`, `.cache`, and `ai_models/`. Android, iOS,
-  and macOS move history containers and `export/` only. Cache `tmp_*` does not count and
+  macOS, and Flatpak move history containers and `export/` only. Cache `tmp_*` does not count and
   is deleted. Refuse while a session or recording is open. The card shows
   the current folder. Settings card is **Save files to folder**.
 - **Signal gate**: before calibration, gate pads green for 3 s; after

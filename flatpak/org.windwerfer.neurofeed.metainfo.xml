@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.windwerfer.neurofeed</id>
+  <name>NeuroFeed</name>
+  <summary>Companion for Muse and Crown EEG headsets</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <description>
+    <p>
+      NeuroFeed connects an Interaxon Muse over Bluetooth, or a Neurosity
+      Crown over the local network, and runs live monitor and biofeedback
+      sessions.
+    </p>
+  </description>
+  <developer id="org.windwerfer">
+    <name>windwerfer</name>
+  </developer>
+  <categories>
+    <category>Science</category>
+  </categories>
+  <url type="homepage">https://github.com/windwerfer/neurofeed</url>
+  <url type="bugtracker">https://github.com/windwerfer/neurofeed/issues</url>
+  <launchable type="desktop-id">org.windwerfer.neurofeed.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="VERSION_PLACEHOLDER" date="DATE_PLACEHOLDER"/>
+  </releases>
+</component>

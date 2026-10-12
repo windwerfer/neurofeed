@@ -18,12 +18,16 @@ Implementer notes that produced this: [../TODO/handoff-app-folder.md](../TODO/ha
 
 ## Four cases
 
-1. **Linux / Windows, default.** appFolder is `~/Documents/neurofeed`. If `xdg-user-dir DOCUMENTS` is missing, fails, is empty, is not absolute, or is `$HOME`, use that exact path and create `Documents` and `neurofeed`. If it returns another documents directory, appFolder is `{that}/neurofeed`. Cache is `appFolder/.cache`. Models are `appFolder/ai_models`. Export is `appFolder/export`.
-2. **Linux / Windows, folder changed.** Cache, models, and export follow the picked path.
-3. **Android / iOS / macOS, default.** appFolder is systemAppFolder. Cache is `systemAppFolder/.cache`. Models are `systemAppFolder/ai_models`. Export is `systemAppFolder/export`. On a sandboxed macOS app, systemAppFolder is the container the sandbox already allows (`getApplicationSupportDirectory()`).
-4. **Android / iOS / macOS, folder changed** (Android may be a SAF `content://` tree). Export is `{appFolder}/export`. Cache and models stay in systemAppFolder. They do not move onto the picked folder.
+1. **Unpackaged Linux / Windows, default.** appFolder is `~/Documents/neurofeed`. If `xdg-user-dir DOCUMENTS` is missing, fails, is empty, is not absolute, or is `$HOME`, use that exact path and create `Documents` and `neurofeed`. If it returns another documents directory, appFolder is `{that}/neurofeed`. Cache is `appFolder/.cache`. Models are `appFolder/ai_models`. Export is `appFolder/export`.
+2. **Unpackaged Linux / Windows, folder changed.** Cache, models, and export follow the picked path.
+3. **Android / iOS / macOS / Flatpak, default.** appFolder is systemAppFolder. Cache is `systemAppFolder/.cache`. Models are `systemAppFolder/ai_models`. Export is `systemAppFolder/export`. On a sandboxed macOS app, systemAppFolder is the container the sandbox already allows (`getApplicationSupportDirectory()`). Inside Flatpak it is the same call: Flatpak sets `XDG_DATA_HOME` to `~/.var/app/org.windwerfer.neurofeed/data`, and `path_provider` adds the GTK application id, so the directory is `~/.var/app/org.windwerfer.neurofeed/data/org.windwerfer.neurofeed`.
+4. **Android / iOS / macOS / Flatpak, folder changed** (Android may be a SAF `content://` tree). Export is `{appFolder}/export`. Cache and models stay in systemAppFolder. They do not move onto the picked folder.
 
-Linux and Windows have no app container, so their default stays `~/Documents/neurofeed`. macOS keeps the App Sandbox, so it uses case 3–4 with Android and iOS. A macOS picked folder is a real path plus an app-scoped security-scoped bookmark (`session_folder_bookmark`). The bookmark is what lets the sandbox open that folder again on the next launch. The music folder has its own bookmark (`music_folder_bookmark`). No backwards compatibility with `~/Documents/meditation feedback` or a `/tmp` fallback. There is no migration of that old folder.
+Unpackaged Linux and Windows have no app container, so their default stays `~/Documents/neurofeed`. macOS keeps the App Sandbox, so it uses case 3–4 with Android and iOS. Flatpak is case 3–4 as well, and only when `FLATPAK_ID` is set. The tarball and the AppImage stay on case 1–2.
+
+A macOS picked folder is a real path plus an app-scoped security-scoped bookmark (`session_folder_bookmark`). The bookmark is what lets the sandbox open that folder again on the next launch. The music folder has its own bookmark (`music_folder_bookmark`). A Flatpak picked folder is the document-portal path from the file chooser (`GtkFileChooserNative` with the portal). The portal grant persists, so the stored path is enough. No bookmark key. No `--filesystem=home` and no `--filesystem=xdg-documents`.
+
+No backwards compatibility with `~/Documents/meditation feedback` or a `/tmp` fallback. There is no migration of that old folder.
 
 ## Folder change
 
@@ -33,8 +37,8 @@ Applies to picking a folder and to **Reset to default folder** (shown when a cus
 - Count what would actually move. Empty `export/`, `.cache`, and `ai_models/` do not count. A `.cache` file named `tmp_*` does not count. If the count is 0, do not ask. Switch the folder and delete those `tmp_*` files.
 - If the count is greater than 0, ask. Title: **Move existing files?** Confirm: **Move**. **No** switches the folder and leaves the files. Dismissing the dialog keeps the current folder. `tmp_*` in cache is still deleted when the folder actually changes.
 - What moves:
-  - Linux / Windows: `session_*.neurofeed`, `recording_*.neurofeed`, `export/`, `.cache` (except `tmp_*`), and `ai_models/`.
-  - Android / iOS / macOS: history containers and `export/` only.
+  - Unpackaged Linux / Windows: `session_*.neurofeed`, `recording_*.neurofeed`, `export/`, `.cache` (except `tmp_*`), and `ai_models/`.
+  - Android / iOS / macOS / Flatpak: history containers and `export/` only.
 - Picking the current folder does nothing.
 - A destination that already has the same relative name fails before anything is overwritten.
 - Copy every item, check it, then delete sources. Stream the bytes. Do not read a whole container into RAM. If any copy fails: delete destination files created by this attempt, keep every source, and do not change `session_folder`.

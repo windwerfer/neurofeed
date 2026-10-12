@@ -7,26 +7,40 @@ import 'package:path_provider/path_provider.dart';
 /// Where saved sessions, recordings, and export live, and where cache and
 /// AI models sit relative to that folder.
 ///
-/// Linux and Windows keep cache and models inside the save folder. Android,
-/// iOS, and macOS keep them in the system app folder when the user picks a
-/// different folder for recordings. On macOS that system folder is the
-/// sandbox container.
+/// Unpackaged Linux and Windows keep cache and models inside the save
+/// folder. Android, iOS, macOS, and Flatpak keep them in the system app
+/// folder when the user picks a different folder for recordings. On macOS
+/// that system folder is the sandbox container. Inside Flatpak it is
+/// [getApplicationSupportDirectory], which follows the sandbox
+/// `XDG_DATA_HOME`.
 enum AppDataLayout { desktop, mobile }
 
-/// [AppDataLayout.mobile] is the contained layout: Android, iOS, and macOS.
+/// [AppDataLayout.mobile] is the contained layout: Android, iOS, macOS,
+/// and Flatpak.
 AppDataLayout layoutFor({
   required bool android,
   required bool ios,
   required bool macos,
-}) => android || ios || macos ? AppDataLayout.mobile : AppDataLayout.desktop;
+  bool flatpak = false,
+}) => android || ios || macos || flatpak
+    ? AppDataLayout.mobile
+    : AppDataLayout.desktop;
+
+/// True when Flatpak set `FLATPAK_ID`. That is the sandbox signal.
+bool flatpakSandbox([Map<String, String>? env]) {
+  final id = (env ?? Platform.environment)['FLATPAK_ID'];
+  return id != null && id.isNotEmpty;
+}
 
 AppDataLayout currentAppDataLayout() => layoutFor(
   android: Platform.isAndroid,
   ios: Platform.isIOS,
   macos: Platform.isMacOS,
+  flatpak: flatpakSandbox(),
 );
 
-/// Cache and `ai_models` move with the save folder on Linux and Windows only.
+/// Cache and `ai_models` move with the save folder on unpackaged Linux and
+/// Windows only.
 bool includesPrivateAppDirs({AppDataLayout? layout}) =>
     (layout ?? currentAppDataLayout()) == AppDataLayout.desktop;
 
@@ -69,7 +83,7 @@ Future<String?> readXdgDocumentsDir() {
 /// `$HOME/Documents/neurofeed`, creating `Documents` and `neurofeed`.
 ///
 /// [readXdg] is called on Linux when omitted. A throw from it is the same
-/// as a missing documents directory. macOS does not use this path.
+/// as a missing documents directory. Contained layouts do not use this path.
 Future<Directory> desktopNeurofeedDir({
   Map<String, String>? env,
   Future<String?> Function()? readXdg,
@@ -101,9 +115,10 @@ String? _homeFrom(Map<String, String> env) {
   return null;
 }
 
-/// Default app folder. Android, iOS, and macOS use
-/// [getApplicationSupportDirectory] (the macOS sandbox container when the
-/// app is sandboxed). Linux and Windows use [desktopNeurofeedDir].
+/// Default app folder. Android, iOS, macOS, and Flatpak use
+/// [getApplicationSupportDirectory] (the sandbox container on macOS, and
+/// the Flatpak `XDG_DATA_HOME` directory when `FLATPAK_ID` is set).
+/// Unpackaged Linux and Windows use [desktopNeurofeedDir].
 Future<Directory> defaultAppFolder({
   AppDataLayout? layout,
   Future<Directory> Function()? readSystemAppFolder,

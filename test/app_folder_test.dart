@@ -78,6 +78,17 @@ void main() {
     expect(includesPrivateAppDirs(layout: AppDataLayout.mobile), isFalse);
   });
 
+  test('Flatpak uses the contained layout', () {
+    expect(
+      layoutFor(android: false, ios: false, macos: false, flatpak: true),
+      AppDataLayout.mobile,
+    );
+    expect(flatpakSandbox({'FLATPAK_ID': 'org.windwerfer.neurofeed'}), isTrue);
+    expect(flatpakSandbox({}), isFalse);
+    expect(flatpakSandbox({'FLATPAK_ID': ''}), isFalse);
+    expect(includesPrivateAppDirs(layout: AppDataLayout.mobile), isFalse);
+  });
+
   test('mobile cache and models stay in the system app folder', () async {
     final support = await Directory.systemTemp.createTemp('nf_support_');
     addTearDown(() => support.delete(recursive: true));

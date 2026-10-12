@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=NeuroFeed
+GenericName=EEG headset companion
+Comment=Connect a Muse or Crown headset and run a feedback session
+Exec=neurofeed
+Icon=org.windwerfer.neurofeed
+Terminal=false
+Type=Application
+Categories=Science;AudioVideo;
+Keywords=EEG;Muse;neurofeedback;
+StartupWMClass=org.windwerfer.neurofeed

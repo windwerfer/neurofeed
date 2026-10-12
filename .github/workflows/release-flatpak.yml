@@ -1,0 +1,108 @@
+name: release-flatpak
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to attach the bundle to (empty = build only, no upload)
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.41.7"
+  RUST_VERSION: "1.97.1"
+
+jobs:
+  flatpak:
+    name: Build Flatpak
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          if [ -n "$TAG" ]; then
+            BASE="${TAG#v}"
+            VERSION="${BASE%%[-_]*}"
+          else
+            VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+            VERSION="${VERSION%%+*}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Pin the manifest to this commit
+        shell: bash
+        run: |
+          if ! grep -q "tag: '${FLUTTER_VERSION}'" flatpak/flatpak-flutter.yml; then
+            echo "flatpak flutter tag must match FLUTTER_VERSION=${FLUTTER_VERSION}" >&2
+            exit 1
+          fi
+          if ! grep -q "rustup-${RUST_VERSION}.json" flatpak/flatpak-flutter.yml; then
+            echo "flatpak rustup module must match RUST_VERSION=${RUST_VERSION}" >&2
+            exit 1
+          fi
+          sed -i "s|COMMIT_PLACEHOLDER|${GITHUB_SHA}|" flatpak/flatpak-flutter.yml
+          sed -i "s|__VERSION__|${{ steps.version.outputs.version }}|g; s|__DATE__|${{ steps.version.outputs.date }}|g" flatpak/flatpak-flutter.yml
+
+      - name: Generate the offline manifest
+        shell: bash
+        run: |
+          git clone --depth 1 --branch 0.15.0 https://github.com/TheAppgineer/flatpak-flutter.git /tmp/flatpak-flutter
+          if ! python3 -m venv /tmp/flatpak-flutter-venv; then
+            if command -v dnf >/dev/null; then
+              dnf install -y python3-pip
+            elif command -v apt-get >/dev/null; then
+              apt-get update
+              apt-get install -y python3-pip python3-venv
+            fi
+            python3 -m venv /tmp/flatpak-flutter-venv
+          fi
+          /tmp/flatpak-flutter-venv/bin/pip install -r /tmp/flatpak-flutter/requirements.txt
+          /tmp/flatpak-flutter-venv/bin/python /tmp/flatpak-flutter/flatpak-flutter.py flatpak/flatpak-flutter.yml
+          test -f org.windwerfer.neurofeed.yml
+
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: neurofeed.flatpak
+          manifest-path: org.windwerfer.neurofeed.yml
+          cache-key: flatpak-neurofeed-25.08
+
+      - name: Name the bundle
+        shell: bash
+        run: mv neurofeed.flatpak "neurofeed-${{ steps.version.outputs.version }}.flatpak"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: neurofeed-*.flatpak
+          if-no-files-found: error
+
+  publish:
+    name: Upload Flatpak to the release
+    needs: flatpak
+    if: ${{ github.event.release.tag_name || inputs.tag }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: flatpak
+
+      - name: Upload to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          gh release upload "$TAG" neurofeed-*.flatpak --clobber

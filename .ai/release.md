@@ -10,10 +10,11 @@ workflow file**, so you can enable/disable them individually (rename a file to
 | Linux | `release-linux.yml` | `release` (published) | `neurofeed-<ver>-linux-x86_64.tar.gz` + best-effort `.AppImage` |
 | Windows | `release-windows.yml` | `release` (published) | `neurofeed-<ver>-windows-x64.zip` |
 | macOS | `release-macos.yml` | `release` (published) | `neurofeed-<ver>-macos-arm64.zip` |
+| Flatpak | `release-flatpak.yml` | `release` (published) | `neurofeed-<ver>.flatpak` |
 | Reproducibility check | `repro-android.yml` | manual (`workflow_dispatch`) | byte-identical APK verification |
 | Shared Android build | `_build-apk.yml` | called by Android workflows (do not trigger) | — |
 
-The Android, Linux, Windows, and macOS release workflows also accept
+The Android, Linux, Windows, macOS, and Flatpak release workflows also accept
 `workflow_dispatch` with an optional `tag` input: leave it empty to do a
 **build-only test run** (nothing is uploaded), or fill it in to attach assets
 to an existing release.
@@ -37,7 +38,7 @@ Release assets are named after the **release tag**, not `pubspec.yaml`:
   part of `pubspec.yaml`.
 - A `workflow_dispatch` with an **empty** `tag` (build-only test run) falls
   back to the `pubspec.yaml` version so the zip/tarball names stay sane.
-- Keep the extraction logic identical in `release-{android,windows,linux,macos}.yml`;
+- Keep the extraction logic identical in `release-{android,windows,linux,macos,flatpak}.yml`;
   android resolves it once in a `version` job shared by the build (`_build-apk.yml`)
   and the attach job.
 
@@ -197,6 +198,39 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
   End-user machines with a real sound server need `libasound2-plugins` too if
   the default ALSA device can't be opened.
 
+## Flatpak
+
+- `neurofeed-<ver>.flatpak` is a single-file bundle built for x86_64.
+  Install it with `flatpak install --user neurofeed-<ver>.flatpak`. A newer
+  bundle with the same app id replaces the installed one. It does not
+  update by itself. The GitHub releases page is not a Flatpak remote.
+- The app id is `org.windwerfer.neurofeed`. Runtime is
+  `org.freedesktop.Platform//25.08`.
+- CI generates an offline manifest with
+  [flatpak-flutter](https://github.com/TheAppgineer/flatpak-flutter) 0.15.0
+  from `flatpak/flatpak-flutter.yml`, then `flatpak-builder` builds that
+  manifest with no network inside the sandbox. The generated
+  `org.windwerfer.neurofeed.yml` and `generated/` are not committed.
+  The app checkout sets `disable-submodules`: Rust git crates are vendored
+  from the lockfile, and `third_party/` is not part of this build. The
+  build clones `https://github.com/windwerfer/neurofeed.git` at the
+  workflow commit, so the bundle contains only what is already pushed.
+- When `FLATPAK_ID` is set, the default save folder is
+  `getApplicationSupportDirectory()` (the sandbox data directory). A folder
+  the user picks comes from the document portal. Cache and AI models stay
+  in the sandbox folder. See [contracts/app-folder.md](contracts/app-folder.md).
+- Finish args are Wayland, X11 as fallback, IPC, GPU (`dri`), the
+  PulseAudio socket, network, and `--system-talk-name=org.bluez`.
+  `GTK_USE_PORTAL=1` sends the file chooser through the document portal.
+  There is no home or Documents filesystem permission.
+- Audio links ogg, opus, vorbis, and flac built into the Flatpak
+  (`TRY_SYSTEM_LIBS_FIRST=1`). Those replace the glibc-2.43 copies shipped
+  with flutter_soloud. The runtime's ALSA default device goes through the
+  PulseAudio socket.
+- Rust is the same pin as the other workflows (`1.97.1`). flatpak-flutter
+  installs that toolchain and points `stable` at it, because cargokit
+  calls `rustup run stable`.
+
 ## Windows (optional)
 
 - The Windows runner scaffolds the `windows/` platform folder itself
@@ -226,8 +260,9 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
   (`getApplicationSupportDirectory()`), the directory macOS already grants
   the app. **Save files to folder** still lets the user pick another folder
   for sessions, recordings, and export. Cache and AI models stay in the
-  container. That is the Android / iOS split. Linux and Windows stay on
-  `~/Documents/neurofeed` because they have no container. A picked macOS
+  container. That is the Android / iOS split. Unpackaged Linux and Windows
+  stay on `~/Documents/neurofeed` because they have no container. Flatpak
+  uses the contained layout; see the Flatpak section. A picked macOS
   folder is stored with an app-scoped security-scoped bookmark so the
   sandbox can open it again on the next launch. The music folder has its
   own bookmark.
