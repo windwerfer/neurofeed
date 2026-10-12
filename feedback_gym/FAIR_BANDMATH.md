@@ -706,3 +706,10 @@ eye-movement features
 | sem_ratio_8s (↑) | 0.21 → 0.08 | 0.20 → 0.21 | 0.17 → 0.48 | 0.20 → 0.41 | 0.16 → 0.34 | 0.11 / 0.11 | 0.70 |
 | veog_2s (↑) | 0.13 → 0.65 | 0.11 → 0.32 | 0.14 → 0.40 | 0.13 → 0.50 | 0.14 → 0.46 | 0.14 / 0.12 | 0.96 |
 | veog_8s (↑) | 0.12 → 0.63 | 0.15 → 0.36 | 0.16 → 0.59 | 0.18 → 0.62 | 0.16 → 0.58 | 0.14 / 0.14 | 0.82 |
+
+## Gating (2026-10-12, app-matching gating now ON by default; `--no-gate` to disable)
+
+Gym runners now score only rows the app would score live: pad quality ch_af7_q/ch_af8_q >= 80 with per-pad band re-aggregation, and the movement gate (imu_movement > 0.05 g). No corpus has an IMU column, so the movement gate is **not testable offline**; the head-movement hypothesis stays open (needs a Muse recording with accelerometer). Pad gate alone catches 58% of Lee head-turn rows (MVO) vs 12% of their clean-rest rows, 28% of blinks, 14-15% of jaw/chew. Rows removed: Lee artifacts 12%, EO/EC 7%, UNIVERSE 11%, ds001787 5%, BOAS 31%, Muse Sleep-Onset 26% (lab-only, aggregate). Full tables: `results/20261012T083253Z_gating/gating_tables.md`.
+
+### Relative delta (app 2ce67ce: rail ceiling 0.80) under gating
+Gated, per-recording AUC for sleep: BOAS W vs N1 0.55, Muse Sleep-Onset wake vs pre-N2 0.36 (inverted). Fixed 0.80 rail warn rate wake/sleepy: BOAS 0.091/0.104, Muse Sleep-Onset 0.033/0.007, ds001787 (all awake) 0.15. On Lee cued artifacts it fires 4% vs 0.7% clean, so it is an artifact detector, not a drowsiness signal. **Recommendation: remove relative-delta as a sleep rail** (ai.a_vig gated: BOAS AUC 0.74, Muse Sleep-Onset 0.90 is the guard to keep).

@@ -414,7 +414,10 @@ FEATURE_COLUMN = {
 }
 
 
-def load_corpus(path: Path) -> dict[str, Any]:
+GATE_DEFAULT = True  # app-matching live gating; runners expose --no-gate
+
+
+def load_corpus(path: Path, *, gate: bool | None = None) -> dict[str, Any]:
     # allow_pickle for optional metadata (recording_id, label_names, cal_policy)
     data = np.load(path, allow_pickle=True)
     out: dict[str, Any] = {k: data[k] for k in data.files}
@@ -423,6 +426,10 @@ def load_corpus(path: Path) -> dict[str, Any]:
     out["labels"] = out.get("labels")
     if "label_valid" in out:
         out = drop_invalid_label_rows(out)
+    if GATE_DEFAULT if gate is None else gate:
+        out = apply_app_gating(out)
+    else:
+        out["gating"] = {"applied": False}
     if "cal_starts" in out or "cal_lens" in out:
         # Fail fast on a malformed per-recording calibration block.
         build_cal_plan(out)
@@ -488,6 +495,103 @@ def drop_invalid_label_rows(corpus: dict[str, Any]) -> dict[str, Any]:
     out = drop_rows(corpus, keep, protect_cal=True)
     out.pop("label_valid", None)
     out["rows_dropped_label_invalid"] = int(corpus_length(corpus) - corpus_length(out))
+    return out
+
+
+# --- App-matching live gating (pad quality + movement) ----------------------
+
+PAD_Q_USABLE = 80.0  # lib/src/feedback/target_state.dart atrUsableSignalThreshold
+MOVEMENT_GATE = 0.05  # target_state.dart movementGateThreshold (g, SD of |accel| over 2 s)
+FEATURE_PADS = ("af7", "af8")
+_BANDS5 = ("delta", "theta", "alpha", "beta", "gamma")
+
+
+def gating_masks(corpus: dict[str, Any]) -> dict[str, Any]:
+    """Per-row app gates. Missing inputs -> gate not applicable (all True).
+
+    pad gate: the app drops pads with quality < 80 from the relative-band
+    aggregate and scores nothing when no feature pad (AF7/AF8) is usable
+    (reward_lane.padsUsable). Needs ``ch_af7_q``/``ch_af8_q`` (builder --pad-mix).
+    movement gate: ``imu_movement`` = the app's movement score (Rust
+    compute_movement: SD of the accelerometer magnitude over the last 2 s at
+    52 Hz, in g). A score > 0.05 marks the sample dirty and keeps it dirty for
+    movementBuffer = 1 s, i.e. this tick and the next one.
+    """
+    n = corpus_length(corpus)
+    out: dict[str, Any] = {"pad_ok": np.ones(n, bool), "move_ok": np.ones(n, bool), "pad_gate": False, "move_gate": False}
+    qs = [corpus.get(f"ch_{p}_q") for p in FEATURE_PADS]
+    if all(q is not None for q in qs):
+        good = np.stack([np.nan_to_num(np.asarray(q, float), nan=-1.0) >= PAD_Q_USABLE for q in qs])
+        out["pad_ok"] = good.any(axis=0)
+        out["pad_good"] = good
+        out["pad_gate"] = True
+    mv = corpus.get("imu_movement")
+    if mv is not None:
+        dirty = np.nan_to_num(np.asarray(mv, float), nan=0.0) > MOVEMENT_GATE
+        prev = np.concatenate([[False], dirty[:-1]])
+        rid = corpus.get("recording_id")
+        if rid is not None:
+            r = np.asarray(rid).astype(str)
+            prev &= np.concatenate([[False], r[1:] == r[:-1]])
+        out["move_ok"] = ~(dirty | prev)
+        out["move_gate"] = True
+    return out
+
+
+def regate_bands(corpus: dict[str, Any], pad_good: np.ndarray) -> dict[str, Any]:
+    """Recompute band_* / *_rel from usable pads only (app RelativeBandAggregator)."""
+    B = []
+    for p in FEATURE_PADS:
+        keys = [f"ch_{p}_{b}" for b in _BANDS5]
+        if not all(k in corpus for k in keys):
+            return corpus
+        B.append(np.stack([np.asarray(corpus[k], float) for k in keys], axis=-1))
+    B = np.stack(B)  # (2, N, 5)
+    tot = B.sum(axis=-1, keepdims=True)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        R = np.where(tot > 0, B / tot, np.nan)
+    W = pad_good.astype(float)[..., None]
+    den = W.sum(axis=0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rel = np.where(den > 0, (np.nan_to_num(R) * W).sum(axis=0) / den, np.nan)
+        absb = np.where(den > 0, (np.nan_to_num(B) * W).sum(axis=0) / den, np.nan)
+    out = dict(corpus)
+    ok = den[:, 0] > 0
+    def put(key, val):  # noqa: E306
+        if key in corpus:
+            v = np.asarray(corpus[key], float).copy()
+            v[ok] = val[ok]
+            out[key] = v
+    put("delta_rel", rel[:, 0]); put("theta_rel", rel[:, 1]); put("alpha_rel", rel[:, 2]); put("beta_rel", rel[:, 3])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        put("band_atr", rel[:, 2] / rel[:, 1]); put("band_tar", rel[:, 1] / rel[:, 2]); put("band_btr", rel[:, 3] / rel[:, 1])
+    put("band_alpha", rel[:, 2]); put("band_delta", absb[:, 0]); put("delta_abs", absb[:, 0])
+    return out
+
+
+def apply_app_gating(corpus: dict[str, Any]) -> dict[str, Any]:
+    """Drop rows the app would not score live; per-pad band re-aggregation first.
+
+    Adds ``gating`` (dict) describing coverage. Idempotent (``gating`` present -> no-op).
+    """
+    if corpus.get("gating", {}).get("applied"):
+        return corpus
+    n = corpus_length(corpus)
+    m = gating_masks(corpus)
+    out = regate_bands(corpus, m["pad_good"]) if m["pad_gate"] else dict(corpus)
+    keep = m["pad_ok"] & m["move_ok"]
+    out = drop_rows(out, keep, protect_cal=False)
+    out["gating"] = {
+        "applied": True,
+        "pad_gate": m["pad_gate"],
+        "move_gate": m["move_gate"],
+        "rows": n,
+        "dropped_pad": int((~m["pad_ok"]).sum()),
+        "dropped_move": int((~m["move_ok"]).sum()),
+        "dropped_any": int((~keep).sum()),
+        "note": ("pad gate: ch_af7_q/ch_af8_q >= 80 (rebuild with --pad-mix if missing); "
+                 "movement gate: imu_movement > 0.05 g (no corpus column -> not applied)"),
+    }
     return out
 
 

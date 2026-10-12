@@ -300,8 +300,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lee-artifacts", type=Path, default=ext / "lee2026_artifacts.npz")
     ap.add_argument("--universe", type=Path, default=ext / "universe_stress.npz")
     ap.add_argument("--catalog", type=Path, default=GYM_ROOT.parent / "assets" / "protocols.json")
+    ap.add_argument("--no-gate", action="store_true", help="disable app-matching gating (pad quality / movement)")
     ap.add_argument("--out-dir", type=Path, default=None)
     args = ap.parse_args(argv)
+    if args.no_gate:
+        import runners.helpers as _h
+
+        _h.GATE_DEFAULT = False
 
     corpora: dict[str, dict[str, Any]] = {}
     notes = {

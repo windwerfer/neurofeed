@@ -339,6 +339,7 @@ def _corpus_meta(corpus: dict) -> dict[str, Any]:
         "label_names": _s("label_names"),
         "cal_policy": _s("cal_policy"),
         "n": int(len(corpus["delta_rel"])),
+        "gating": corpus.get("gating"),
     }
 
 
@@ -659,7 +660,17 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="when building sleep-edf-test, cap windows per recording",
     )
+    parser.add_argument(
+        "--no-gate",
+        action="store_true",
+        help="score every row (default: app-matching live gating: pad quality >= 80 on a "
+        "feature pad, movement score <= 0.05 where the corpus has imu_movement)",
+    )
     args = parser.parse_args(argv)
+    if args.no_gate:
+        import runners.helpers as _h
+
+        _h.GATE_DEFAULT = False
     corpus_root = args.corpus_root if args.corpus_root is not None else default_corpus_root()
 
     if args.presets and (args.corpus or args.preset):

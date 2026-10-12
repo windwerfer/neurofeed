@@ -42,3 +42,13 @@ def test_load_corpus_applies_label_valid(tmp_path):
     np.savez(p, **{k: v for k, v in _corpus().items() if k != "cal_n"}, cal_n=np.array([2], np.int32))
     c = load_corpus(p)
     assert len(c["labels"]) == 7
+
+
+def test_gating_applies_after_no_gate_load():
+    import numpy as np
+    from runners.helpers import apply_app_gating
+    n = 10
+    c = {"delta_rel": np.ones(n), "labels": np.zeros(n), "cal_n": 2, "gating": {"applied": False},
+         "ch_af7_q": np.r_[np.full(5, 100.0), np.full(5, 10.0)], "ch_af8_q": np.r_[np.full(5, 100.0), np.full(5, 10.0)]}
+    g = apply_app_gating(c)
+    assert g["gating"]["applied"] and g["gating"]["dropped_pad"] >= 5
