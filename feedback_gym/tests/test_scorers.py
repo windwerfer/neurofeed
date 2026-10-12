@@ -209,6 +209,7 @@ def test_catalog_protocols_all_simulate(tmp_path):
         "openMonitor",
         "alertOpen",
         "alertClosed",
+        "bandStability",
         "calibrateRecord",
     ]
     assert "recordOnly" not in protocols  # retired → calibrateRecord

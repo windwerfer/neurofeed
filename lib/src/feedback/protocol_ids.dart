@@ -12,6 +12,8 @@ const List<String> catalogProtocolIds = [
   'openMonitor',
   'alertOpen',
   'alertClosed',
+  // Experimental self-test (2026-10-12): no evidence yet; see the catalog copy.
+  'bandStability',
   'calibrateRecord',
 ];
 

@@ -19,6 +19,20 @@ const Set<String> calibrationKinds = {
   calibrationKindStaged,
 };
 
+/// Reward policies. [stabilityPolicy] = experimental `bandStability`: reward
+/// while the reward band's rolling coefficient of variation is at least the
+/// difficulty below the calibration baseline CV (RatioEngine stability mode).
+const String uptrainPolicy = 'percentileUptrain';
+const String stabilityPolicy = 'stabilityDowntrain';
+
+/// Bands the stability reward may track (relative band power, Rust 1 Hz).
+const List<String> stabilityBandFeatures = [
+  'band.alpha',
+  'band.theta',
+  'band.beta',
+];
+const String defaultStabilityBand = 'band.alpha';
+
 final RegExp userProtocolIdPattern = RegExp(r'^user\.[a-z0-9-]{3,64}$');
 
 Map<String, Object?> jsonObject(Object? value) =>
@@ -250,6 +264,8 @@ class ProtocolReward {
     if (electrodes != null) 'electrodes': electrodes,
     'locked': locked,
   };
+
+  bool get isStability => policy == stabilityPolicy;
 
   ProtocolReward copyWith({String? feature}) => ProtocolReward(
     feature: feature ?? this.feature,
@@ -498,20 +514,26 @@ class ProtocolDocument {
     if (guard != null) 'guard': guard!.toJson(),
   };
 
-  ProtocolDocument copyWith({ProtocolGuard? guard, bool clearGuard = false}) =>
-      ProtocolDocument(
-        id: id,
-        origin: origin,
-        schemaVersion: schemaVersion,
-        copy: copy,
-        colorValue: colorValue,
-        calibration: calibration,
-        calibrationSkippable: calibrationSkippable,
-        calibrationKind: calibrationKind,
-        background: background,
-        reward: reward,
-        guard: clearGuard ? null : (guard ?? this.guard),
-      );
+  ProtocolDocument copyWith({
+    ProtocolGuard? guard,
+    bool clearGuard = false,
+    ProtocolReward? reward,
+  }) => ProtocolDocument(
+    id: id,
+    origin: origin,
+    schemaVersion: schemaVersion,
+    copy: copy,
+    colorValue: colorValue,
+    calibration: calibration,
+    calibrationSkippable: calibrationSkippable,
+    calibrationKind: calibrationKind,
+    background: background,
+    reward: reward ?? this.reward,
+    guard: clearGuard ? null : (guard ?? this.guard),
+  );
+
+  /// Whether the reward lane runs the experimental stability policy.
+  bool get isStabilityReward => reward?.isStability ?? false;
 
   factory ProtocolDocument.placeholder({String id = ''}) => ProtocolDocument(
     id: id,
@@ -528,7 +550,19 @@ class ProtocolDocument {
     String? guardFeature,
     String? guardThresholdMode,
     double? guardFixedThreshold,
+    String? rewardFeature,
   }) {
+    if (rewardFeature != null &&
+        reward != null &&
+        rewardFeature != reward!.feature) {
+      return copyWith(
+        reward: reward!.copyWith(feature: rewardFeature),
+      ).resolved(
+        guardFeature: guardFeature,
+        guardThresholdMode: guardThresholdMode,
+        guardFixedThreshold: guardFixedThreshold,
+      );
+    }
     if (guard == null) return this;
     if (guardFeature == null || guardFeature == 'none') {
       return copyWith(clearGuard: true);

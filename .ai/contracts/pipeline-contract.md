@@ -149,7 +149,7 @@ Catalog and user documents are the same type (`origin: catalog | user`). `Protoc
 
 ### Catalog IDs (on-disk forever)
 
-`sleepGuard`, `restAwake`, `openMonitor`, `alertOpen`, `alertClosed`, `calibrateRecord`
+`sleepGuard`, `restAwake`, `openMonitor`, `alertOpen`, `alertClosed`, `bandStability` (experimental, 2026-10-12), `calibrateRecord`
 
 Retired ids resolve through `legacyProtocolAliases` (`lib/src/feedback/protocol_ids.dart`) for display / selection only: `drowsiness`→`restAwake`, `mindfulness`→`openMonitor`, `alertnessOpen`→`alertOpen`, `alertnessClosed`→`alertClosed`, `concentration` / `concentrate`→`openMonitor` (`concentrate` pulled 2026-10-07: no evidence alpha tracks focus), `guardrailOnly`→`sleepGuard`, `twilight` / `relaxedConcentration`→`restAwake`, `recordOnly`→`calibrateRecord` (dropped 2026-10: `calibrateRecord` is the only catalog row without reward or guard). Saved sessions keep their stored id; charts and export use the session's `protocolJson` snapshot first.
 
@@ -183,6 +183,7 @@ Catalog rows lock `reward.feature` (and `inhibit` when non-empty). They do **not
 | `openMonitor` | `band.alpha` | none | `ai.a_vig` | false | true | **false** | false | `feature` | `eyes-closed-01` | auto | no |
 | `alertOpen` | `band.btr` | none | **omit** | — | — | — | — | `feature` | `eyes-open-01` | auto | no |
 | `alertClosed` | `band.btr` | none | `ai.a_vig` | false | true | **false** | false | `feature` | `eyes-closed-01` | auto | no |
+| `bandStability` | `band.alpha` (user pick: `band.alpha` / `band.theta` / `band.beta`, pref `stabilityBand`) | none | `ai.a_vig` | true | true | — | false | `feature` | `eyes-closed-01` | auto | no |
 | `calibrateRecord` | **omit** | — | **omit** | — | — | — | — | — | `eyes-closed-01` | `staged` | no |
 
 Any document **with** a `guard` object defaults to its `guard.feature` when `defaultEnabled` and no pref exists (else `none`). A catalog-default AI head without a stored pref falls back to `band.delta` while no model is Ready, unless `guard.requiresModel`. Documents without `guard` default to **none**. Do not honor unused v3 `guardrailDefault: false`.
@@ -215,6 +216,7 @@ Per-protocol remaining knobs: **on/off** and **band vs AI**. The installed model
 | Policy | Lane | Behavior |
 |---|---|---|
 | `percentileUptrain` | reward | `RatioEngine`: baseline percentile (default 40); `adapt()` every 30 s wall-clock; ceiling `baselineMean + 1.5·sd`; floor = initial percentile; success=0 circuit breaker. `isInTarget` = native > threshold, then inhibit AND-gates. |
+| `stabilityDowntrain` | reward | **Experimental** (`bandStability`; no evidence it trains anything). `RatioEngine` stability mode (`StabilityConfig`): raw band values; baseline CV = median of rolling CVs (window N clean samples, default 10, 1–30; N=1 → 2). Live r = CV(last N clean samples) ÷ baseline CV; warm-up (fewer than N clean) produces nothing. In target when r ≤ threshold; threshold starts at 1 − difficulty (default 10 %, 0–50 %). `adapt()` reuses responsiveness steps mirrored (harder = lower), clamped to [max(0.05, min(mean − 1.5·sd of baseline ratios, initial − 0.3)), initial]; success = 0 resets to initial. Dirty samples (quality / movement) never enter the window and are not counted as unsteady. An AI-guard warning holds the second back (`inhibitTags: ['guard']`) so drowsy steadiness is not rewarded. Continuous outputs get `stabilityOutputPercentile(r, thr)`: r ≥ 1.5 → 0, r = thr → 60, r ≤ thr − min(0.3, thr) → 100, linear between. |
 | `percentileWarn` (band-math) | guard | Rest native `band.delta` → warning percentile (default 75). Warn if live native > threshold. |
 | `percentileWarn` (AI) | guard | Rest `sleep_dir` → same percentile. Warn if live score > threshold (fixed P or percentile, see `guard.thresholdMode`). |
 

@@ -23,10 +23,20 @@ class TrustRewardSample {
     this.deltaRel,
     this.plotBetaRel,
     this.plotDeltaRel,
+    this.threshold,
+    this.plotNative,
   });
 
   final double t;
+
+  /// Reward scalar. For `bandStability` this is r = CV ÷ baseline CV.
   final double native;
+
+  /// Native-unit threshold at this sample (stability chart line).
+  final double? threshold;
+
+  /// [native] held at the last clean value across dirty spans (plots).
+  final double? plotNative;
   final double percentile;
   final double thresholdPercentile;
   final bool inTarget;
@@ -44,6 +54,7 @@ class TrustRewardSample {
     double? plotPercentile,
     double? plotBetaRel,
     double? plotDeltaRel,
+    double? plotNative,
   }) => TrustRewardSample(
     t: t,
     native: native,
@@ -59,6 +70,8 @@ class TrustRewardSample {
     deltaRel: deltaRel,
     plotBetaRel: plotBetaRel ?? this.plotBetaRel,
     plotDeltaRel: plotDeltaRel ?? this.plotDeltaRel,
+    threshold: threshold,
+    plotNative: plotNative ?? this.plotNative,
   );
 }
 

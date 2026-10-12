@@ -18,6 +18,11 @@ pub(crate) const ID_ATR: &str = "band.atr";
 pub(crate) const ID_TAR: &str = "band.tar";
 pub(crate) const ID_BTR: &str = "band.btr";
 pub(crate) const ID_ALPHA: &str = "band.alpha";
+/// Relative theta (theta ÷ total). Reward-lane only; added for the
+/// experimental `bandStability` protocol (band choice).
+pub(crate) const ID_THETA: &str = "band.theta";
+/// Relative beta (beta ÷ total). Reward-lane only; see [`ID_THETA`].
+pub(crate) const ID_BETA: &str = "band.beta";
 pub(crate) const ID_DELTA: &str = "band.delta";
 /// Deprecated alias → [`ID_A_VIG`] (protocol compat).
 pub(crate) const ID_DROWSINESS: &str = "ai.drowsiness";
@@ -146,6 +151,30 @@ const SPECS: &[Spec] = &[
     },
     Spec {
         id: ID_ALPHA,
+        source: FeatureSource::Band,
+        usable_for: &[FeatureLane::Reward],
+        muse_electrodes: &["AF7", "AF8"],
+        crown_electrodes: &["PO3", "PO4"],
+        native_rate_hz: 1.0,
+        muse_available: true,
+        crown_available: true,
+        unavailable_muse: None,
+        unavailable_crown: None,
+    },
+    Spec {
+        id: ID_THETA,
+        source: FeatureSource::Band,
+        usable_for: &[FeatureLane::Reward],
+        muse_electrodes: &["AF7", "AF8"],
+        crown_electrodes: &["PO3", "PO4"],
+        native_rate_hz: 1.0,
+        muse_available: true,
+        crown_available: true,
+        unavailable_muse: None,
+        unavailable_crown: None,
+    },
+    Spec {
+        id: ID_BETA,
         source: FeatureSource::Band,
         usable_for: &[FeatureLane::Reward],
         muse_electrodes: &["AF7", "AF8"],
@@ -653,6 +682,8 @@ pub(crate) fn aggregate_band_feature(id: &str, pads: &[ChannelBands]) -> Option<
             b / t
         }
         ID_ALPHA => a,
+        ID_THETA => t,
+        ID_BETA => b,
         _ => return None,
     };
     if !value.is_finite() {
@@ -886,10 +917,26 @@ mod tests {
     }
 
     #[test]
+    fn relative_theta_and_beta_features() {
+        let pad = ChannelBands {
+            delta: 1.0,
+            theta: 2.0,
+            alpha: 3.0,
+            beta: 4.0,
+            gamma: 0.0,
+            line_noise_ratio: 0.0,
+        };
+        let t = aggregate_band_feature(ID_THETA, &[pad]).unwrap();
+        let b = aggregate_band_feature(ID_BETA, &[pad]).unwrap();
+        assert!((t - 0.2).abs() < 1e-12);
+        assert!((b - 0.4).abs() < 1e-12);
+    }
+
+    #[test]
     fn drowsiness_is_muse_only_focus_is_crown_only() {
         let muse = available_features(DeviceKind::Muse);
         let crown = available_features(DeviceKind::Neurosity);
-        assert_eq!(muse.len(), 12);
+        assert_eq!(muse.len(), 14);
         assert!(
             !crown
                 .iter()

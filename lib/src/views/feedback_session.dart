@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neurofeed/src/feedback/target_state.dart' show StabilityConfig;
+import 'package:neurofeed/src/feedback/trust/trust_pane.dart'
+    show TrustRewardChart;
 import 'package:neurofeed/src/audio/audio_service.dart';
 import 'package:neurofeed/src/audio/binaural_beat_controller.dart';
 import 'package:neurofeed/src/audio/guardrail_sound.dart';
@@ -166,6 +169,9 @@ class _FeedbackSessionViewState extends ConsumerState<FeedbackSessionView> {
                         ),
                       ),
                       guardPanes: trustGuardPaneSpecs(guardFeature),
+                      rewardChart: protocol.isStabilityReward
+                          ? TrustRewardChart.stability
+                          : TrustRewardChart.percentile,
                     ),
                   const SizedBox(height: 16),
                   if (fb.phase == FeedbackPhase.idle ||
@@ -949,18 +955,24 @@ class _FeedbackTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fb = ref.watch(feedbackStateProvider);
+    final stability = protocolOrPlaceholder(
+      ref.watch(protocolCatalogProvider).valueOrNull,
+      fb.protocol,
+    ).isStabilityReward;
+    final settings = ref.watch(settingsProvider);
+    final target = stability
+        ? '${(settings.stabilityDifficulty * 100).round()} % steadier'
+        : '${fb.baselinePercentile}th percentile';
     return ListTile(
       leading: const Icon(Icons.headphones),
       title: const Text('Feedback Sound'),
-      subtitle: Text(
-        '${fb.rewardOutput.label} • ${fb.baselinePercentile}th percentile',
-      ),
+      subtitle: Text('${fb.rewardOutput.label} • $target'),
       trailing: IconButton(
         icon: const Icon(Icons.settings),
         tooltip: 'Target settings',
         onPressed: () => showDialog<void>(
           context: context,
-          builder: (_) => const _TargetSettingsDialog(),
+          builder: (_) => const TargetSettingsDialog(),
         ),
       ),
       onTap: () async {
@@ -1898,18 +1910,24 @@ class _VolumeDialogState extends State<_VolumeDialog> {
   }
 }
 
-class _TargetSettingsDialog extends ConsumerStatefulWidget {
-  const _TargetSettingsDialog();
+/// Gear-icon Target Settings on the Feedback Sound tile. Public for widget
+/// tests.
+class TargetSettingsDialog extends ConsumerStatefulWidget {
+  const TargetSettingsDialog({super.key});
 
   @override
-  ConsumerState<_TargetSettingsDialog> createState() =>
-      _TargetSettingsDialogState();
+  ConsumerState<TargetSettingsDialog> createState() =>
+      TargetSettingsDialogState();
 }
 
-class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
+class TargetSettingsDialogState extends ConsumerState<TargetSettingsDialog> {
   late bool _dynamicAdapt;
   late double _responsiveness;
   late int _percentile;
+  late double _dwell;
+  late String _band;
+  late int _window;
+  late double _difficulty;
 
   @override
   void initState() {
@@ -1918,6 +1936,15 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
     _dynamicAdapt = engine.dynamicAdapt;
     _responsiveness = engine.responsiveness;
     _percentile = ref.read(feedbackStateProvider).baselinePercentile;
+    _readStoredValues();
+  }
+
+  void _readStoredValues() {
+    final settings = ref.read(settingsProvider);
+    _dwell = settings.rewardDwellSeconds;
+    _band = settings.stabilityBand;
+    _window = settings.stabilityWindowSeconds;
+    _difficulty = settings.stabilityDifficulty;
   }
 
   void _reset() {
@@ -1927,8 +1954,83 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
     setState(() {
       _dynamicAdapt = notifier.dynamicAdapt;
       _responsiveness = notifier.responsiveness;
+      _readStoredValues();
     });
   }
+
+  List<Widget> _stabilitySection(
+    ThemeData theme,
+    FeedbackStateNotifier notifier,
+  ) => [
+    Text('Steadiness (experimental)', style: theme.textTheme.titleSmall),
+    const SizedBox(height: 4),
+    Text(
+      'Self-test only: there is no evidence yet that a steadier band tracks '
+      'attention. Rewards while the band fluctuates less than in your '
+      'calibration (coefficient of variation over the window, clean seconds '
+      'only).',
+      style: theme.textTheme.bodySmall,
+    ),
+    const SizedBox(height: 8),
+    SegmentedButton<String>(
+      key: const Key('stability-band'),
+      segments: const [
+        ButtonSegment(value: 'band.alpha', label: Text('Alpha')),
+        ButtonSegment(value: 'band.theta', label: Text('Theta')),
+        ButtonSegment(value: 'band.beta', label: Text('Beta')),
+      ],
+      selected: {_band},
+      onSelectionChanged: (v) {
+        setState(() => _band = v.first);
+        notifier.setStabilityBand(v.first);
+      },
+    ),
+    Text(
+      'Relative band power. A change applies from the next session.',
+      style: theme.textTheme.bodySmall,
+    ),
+    const SizedBox(height: 12),
+    Text('Stability window: $_window s', style: theme.textTheme.titleSmall),
+    Slider(
+      key: const Key('stability-window-slider'),
+      value: _window.toDouble(),
+      min: StabilityConfig.minWindowSeconds.toDouble(),
+      max: StabilityConfig.maxWindowSeconds.toDouble(),
+      divisions:
+          StabilityConfig.maxWindowSeconds - StabilityConfig.minWindowSeconds,
+      label: '$_window s',
+      onChanged: (v) {
+        setState(() => _window = v.round());
+        notifier.setStabilityWindowSeconds(v.round());
+      },
+    ),
+    Text(
+      'Seconds of clean signal the fluctuation is measured over.',
+      style: theme.textTheme.bodySmall,
+    ),
+    const SizedBox(height: 12),
+    Text(
+      'Difficulty: ${(_difficulty * 100).round()} % steadier than baseline',
+      style: theme.textTheme.titleSmall,
+    ),
+    Slider(
+      key: const Key('stability-difficulty-slider'),
+      value: _difficulty,
+      min: 0,
+      max: StabilityConfig.maxDifficulty,
+      divisions: 50,
+      label: '${(_difficulty * 100).round()} %',
+      onChanged: (v) {
+        setState(() => _difficulty = v);
+        notifier.setStabilityDifficulty(v);
+      },
+    ),
+    Text(
+      'Starting target. With Dynamic target on it still steps with your '
+      'success rate, but never gets easier than this.',
+      style: theme.textTheme.bodySmall,
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -2006,20 +2108,47 @@ class _TargetSettingsDialogState extends ConsumerState<_TargetSettingsDialog> {
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 8),
-            Text('Reward threshold', style: theme.textTheme.titleSmall),
-            const SizedBox(height: 4),
+            if (protocol.isStabilityReward)
+              ..._stabilitySection(theme, notifier)
+            else ...[
+              Text('Reward threshold', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(
+                'The baseline percentile that sets your target — how strict '
+                'it is versus your calibration. 40% (default) keeps the '
+                'target near your typical ratio.',
+                style: theme.textTheme.bodySmall,
+              ),
+              _PercentileSlider(
+                value: _percentile,
+                onChanged: (v) {
+                  setState(() => _percentile = v);
+                  notifier.selectPercentile(v);
+                },
+              ),
+            ],
+            const SizedBox(height: 12),
             Text(
-              'The baseline percentile that sets your target — how strict it '
-              'is versus your calibration. 40% (default) keeps the target near '
-              'your typical ratio.',
-              style: theme.textTheme.bodySmall,
+              'Dwell time: ${_dwell.toStringAsFixed(1)} s',
+              style: theme.textTheme.titleSmall,
             ),
-            _PercentileSlider(
-              value: _percentile,
+            Slider(
+              key: const Key('reward-dwell-slider'),
+              value: _dwell,
+              min: minRewardDwellSeconds,
+              max: maxRewardDwellSeconds,
+              divisions: ((maxRewardDwellSeconds - minRewardDwellSeconds) * 2)
+                  .round(),
+              label: '${_dwell.toStringAsFixed(1)} s',
               onChanged: (v) {
-                setState(() => _percentile = v);
-                notifier.selectPercentile(v);
+                setState(() => _dwell = v);
+                notifier.setRewardDwellSeconds(v);
               },
+            ),
+            Text(
+              'How long you must stay in target before the chime plays '
+              '(then at most one chime per 8 s).',
+              style: theme.textTheme.bodySmall,
             ),
             for (final c in inhibit) ...[
               const SizedBox(height: 12),
@@ -2081,6 +2210,16 @@ class _TargetSettingsInfoDialog extends StatelessWidget {
               'sooner. If the target ever feels unreachable, slide towards '
               'Gentle or turn Dynamic target off — the target is always '
               'kept within reach of your baseline.',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Text('Dwell time', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'The sustained-reward criterion: the chime needs this many '
+              'seconds in target in a row. Leaving the target, a dirty pad '
+              'or movement restarts the count. Continuous sounds (rain, '
+              'music, binaural) follow every second and ignore it.',
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 12),

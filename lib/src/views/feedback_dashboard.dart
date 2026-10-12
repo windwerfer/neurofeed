@@ -7,6 +7,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neurofeed/src/feedback/trust/trust_pane.dart'
+    show TrustRewardChart;
 import 'package:neurofeed/src/settings.dart';
 import 'package:neurofeed/src/session_format/metadata.dart';
 import 'package:neurofeed/src/session_format/stats_assemble.dart';
@@ -549,6 +551,9 @@ class _FeedbackDashboardViewState extends ConsumerState<FeedbackDashboardView> {
       guardLabel: _guardLabel,
       rewardColor: protocol.color,
       guardColor: bandColors[0],
+      rewardChart: protocol.isStabilityReward
+          ? TrustRewardChart.stability
+          : TrustRewardChart.percentile,
     );
   }
 

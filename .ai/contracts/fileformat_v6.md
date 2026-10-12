@@ -93,7 +93,7 @@ Written by `buildSessionMetadata()`:
 - Flat device: `deviceName`, `deviceModel`, `deviceId` (not nested `device`)
 - `recordedChannels`, `recordedData` (stream name list)
 - `gestures[]` (`type`, `at` seconds) when markers enabled — **v6:** fold into root `annotations[]` (see Annotations model); do not keep a parallel `feedback.gestures` list
-- Nested: `calibration`, `drowsiness`, `music`, `sessionSettings` (incl. `guardFeature` / `guardModel`), optional `protocolJson`
+- Nested: `calibration`, `drowsiness`, `music`, `sessionSettings` (incl. `guardFeature` / `guardModel`; optional `rewardDwellSeconds`; optional `stability` {`band`, `windowSeconds`, `difficulty`, `baselineCv`} for `bandStability`), optional `protocolJson` (`reward.feature` = the band actually run). For `bandStability` computed `ratio` = r (CV ÷ baseline CV) and `threshold` = r threshold (lower is better).
 - Optional save-time `stats` blob: `peakAlphaFreq/Power`, `targetPct`, `stillnessPct`, `avgBpm`, `avgAlphaRel`
 - Flat mirrors (when stats present): `avgSpo2`, `peakAlphaHz`, `peakAlphaPower`, `pctInTarget`, `avgSleepDir`
 

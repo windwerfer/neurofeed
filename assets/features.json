@@ -41,6 +41,26 @@
       "rewardCopy": "Rewards relative alpha on the feature electrodes.",
       "guardCopy": null
     },
+    "band.theta": {
+      "label": "Relative theta",
+      "shortLabel": "θ",
+      "source": "band",
+      "usableFor": [
+        "reward"
+      ],
+      "rewardCopy": "Rewards relative theta on the feature electrodes.",
+      "guardCopy": null
+    },
+    "band.beta": {
+      "label": "Relative beta",
+      "shortLabel": "β",
+      "source": "band",
+      "usableFor": [
+        "reward"
+      ],
+      "rewardCopy": "Rewards relative beta on the feature electrodes.",
+      "guardCopy": null
+    },
     "band.delta": {
       "label": "Delta (band math)",
       "shortLabel": "δ",

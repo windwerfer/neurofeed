@@ -105,6 +105,7 @@ SessionTrust readSessionTrust({
           native: fb.ratio,
           percentile: percentile,
           thresholdPercentile: fb.thresholdPercentile ?? 0,
+          threshold: fb.threshold,
           inTarget: fb.inTarget,
           heldBack: fb.heldBack ?? false,
           inhibitTags: List<String>.of(fb.inhibitTags ?? const <String>[]),

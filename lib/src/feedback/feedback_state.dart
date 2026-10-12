@@ -354,7 +354,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final catalog = _ref.read(protocolCatalogProvider).valueOrNull;
     final info = catalog?.forName(protocolId);
     protocolId = info?.id ?? canonicalProtocolId(protocolId);
-    _engine.featureId = info?.reward?.feature ?? 'band.atr';
+    _engine.featureId = _rewardFeatureFor(info) ?? 'band.atr';
     final settings = _ref.read(settingsProvider);
     final output = resolveRewardOutputId(
       hasReward: info?.hasReward ?? false,
@@ -475,7 +475,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     final spec = catalog?.forName(state.protocol);
     final settings = _ref.read(settingsProvider);
     final ids = <String>[];
-    final reward = spec?.reward?.feature;
+    final reward = _rewardFeatureFor(spec);
     if (reward != null) {
       ids.add(reward);
     }
@@ -640,6 +640,71 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
   void resetTargetSettings() {
     setDynamicAdapt(true);
     setResponsiveness(0.5);
+    setRewardDwellSeconds(defaultRewardDwellSeconds);
+    if (_specDocument?.isStabilityReward ?? false) {
+      setStabilityBand(defaultStabilityBand);
+      setStabilityWindowSeconds(StabilityConfig.defaultWindowSeconds);
+      setStabilityDifficulty(StabilityConfig.defaultDifficulty);
+    }
+  }
+
+  /// Reward feature this session runs: the protocol's, except the
+  /// experimental stability policy, which tracks the band chosen in Target
+  /// Settings ([Settings.stabilityBand]).
+  String? _rewardFeatureFor(ProtocolDocument? spec) {
+    final reward = spec?.reward;
+    if (reward == null) return null;
+    if (reward.isStability) return _ref.read(settingsProvider).stabilityBand;
+    return reward.feature;
+  }
+
+  /// Dwell time before the reward chime (all reward protocols). Read live by
+  /// the chime output.
+  double get rewardDwellSeconds =>
+      _ref.read(settingsProvider).rewardDwellSeconds;
+
+  void setRewardDwellSeconds(double seconds) {
+    _ref.read(settingsProvider).setRewardDwellSeconds(seconds);
+    _writeSessionFacts();
+  }
+
+  bool get _sessionRunning =>
+      state.phase == FeedbackPhase.calibrating ||
+      state.phase == FeedbackPhase.playing ||
+      state.phase == FeedbackPhase.paused ||
+      state.phase == FeedbackPhase.interrupted;
+
+  /// Band for the stability reward. Saved now; a running session keeps its
+  /// band (the calibration baseline belongs to it) and the next uses this.
+  void setStabilityBand(String featureId) {
+    _ref.read(settingsProvider).setStabilityBand(featureId);
+    if (!_sessionRunning) {
+      _engine.featureId = featureId;
+    }
+  }
+
+  /// Rolling stability window (seconds). Applies live: the live window
+  /// restarts and the baseline CV is re-derived for the new length.
+  void setStabilityWindowSeconds(int seconds) {
+    _ref.read(settingsProvider).setStabilityWindowSeconds(seconds);
+    final v = _ref.read(settingsProvider).stabilityWindowSeconds;
+    if (_engine.stability != null) {
+      _engine.setStabilityWindow(v);
+      state = state.copyWith(currentThreshold: _engine.threshold);
+    }
+    _writeSessionFacts();
+  }
+
+  /// Fraction steadier than baseline needed. Applies live: the threshold
+  /// re-anchors at 1 − difficulty (adaptive steps may move it again).
+  void setStabilityDifficulty(double difficulty) {
+    _ref.read(settingsProvider).setStabilityDifficulty(difficulty);
+    final v = _ref.read(settingsProvider).stabilityDifficulty;
+    if (_engine.stability != null) {
+      _engine.setStabilityDifficulty(v);
+      state = state.copyWith(currentThreshold: _engine.threshold);
+    }
+    _writeSessionFacts();
   }
 
   /// REVE sleep-guardrail warning threshold (percentile of the eyes-closed
@@ -952,7 +1017,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
 
     // Protocol overrides (none = registry default), then the gate pads.
     final ids = <String>[];
-    final rewardFeature = spec?.reward?.feature;
+    final rewardFeature = _rewardFeatureFor(spec);
     if (rewardFeature != null) {
       await _applyElectrodeOverride(rewardFeature, spec!.reward!.electrodes);
       ids.add(rewardFeature);
@@ -992,9 +1057,17 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       ))
         if (i < montage.length) montage[i],
     ];
+    _engine.setStability(
+      (spec?.isStabilityReward ?? false)
+          ? StabilityConfig(
+              windowSeconds: settings.stabilityWindowSeconds,
+              difficulty: settings.stabilityDifficulty,
+            )
+          : null,
+    );
     _reward.configure(
       hasReward: spec?.hasReward ?? false,
-      featureId: spec?.reward?.feature,
+      featureId: rewardFeature,
       inhibit: overlayInhibitCeilings(
         spec?.conditions ?? const [],
         settings.inhibitCeilingOverrides(state.protocol),
@@ -1780,6 +1853,15 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       eyeMarkersEnabled: settings.eyeMarkersEnabled,
       inhibitCeilingOverrides: overrides.isEmpty ? null : overrides,
       crownQualitySource: app.crownQualitySource?.name,
+      rewardDwellSeconds: settings.rewardDwellSeconds,
+      stability: _engine.stability == null
+          ? null
+          : StabilitySessionSettings(
+              band: _reward.featureId,
+              windowSeconds: _engine.stability!.windowSeconds,
+              difficulty: _engine.stability!.difficulty,
+              baselineCv: _engine.baselineCv,
+            ),
     );
   }
 
@@ -1795,6 +1877,9 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           guardFeature: feature,
           guardThresholdMode: _guardThresholdModeFor(feature),
           guardFixedThreshold: aiGuardFixedThreshold,
+          rewardFeature: (protocol.isStabilityReward && _reward.hasReward)
+              ? _reward.featureId
+              : null,
         )
         .toJson();
     final userId = settings.subjectInfo.id;
@@ -2162,6 +2247,10 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
       acceptBaselineSample: acceptBaselineSample,
       sampleIsClean: _sampleIsClean,
       quality: quality,
+      guardBlocks:
+          _guard.enabled &&
+          _guard.warningActive &&
+          (_specDocument?.isStabilityReward ?? false),
       dirtyReason: artifactDirtyReason(
         now: DateTime.now(),
         lastMovementAt: _lastMovementAt,
@@ -2257,6 +2346,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
     );
     if (state.phase == FeedbackPhase.playing &&
         _reward.hasReward &&
+        _reward.lastProduced &&
         sample.id == _reward.featureId &&
         sample.value.isFinite) {
       _trust.pushReward(
@@ -2265,6 +2355,7 @@ class FeedbackStateNotifier extends StateNotifier<FeedbackState> {
           native: _reward.lastNative ?? sample.value,
           percentile: _reward.lastPercentile ?? 50,
           thresholdPercentile: _reward.lastThresholdPercentile,
+          threshold: _engine.threshold,
           inTarget: _reward.lastInTarget,
           heldBack: _reward.lastHeldBack,
           inhibitTags: List<String>.of(_reward.lastInhibitTags),

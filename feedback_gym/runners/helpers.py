@@ -112,6 +112,82 @@ def percentile_warn_over(
     return feat > threshold
 
 
+# --- Band stability (experimental bandStability) -------------------------------
+
+STABILITY_POLICY = "stabilityDowntrain"
+
+
+def coefficient_of_variation(values: np.ndarray) -> float:
+    """Population SD / |mean| (app target_state.coefficientOfVariation)."""
+    v = np.asarray(values, dtype=float)
+    if v.size < 2:
+        return float("nan")
+    m = float(np.mean(v))
+    if abs(m) < 1e-12:
+        return float("nan")
+    return float(np.std(v) / abs(m))
+
+
+def rolling_cvs(values: np.ndarray, window: int) -> np.ndarray:
+    """CVs of every full window of ``window`` consecutive values; one CV over
+    all values when there are fewer (>= 2). Mirrors app ``rollingCvs``."""
+    w = max(2, int(window))
+    v = np.asarray(values, dtype=float)
+    v = v[np.isfinite(v)]
+    if v.size < 2:
+        return np.array([])
+    if v.size < w:
+        cv = coefficient_of_variation(v)
+        return np.array([cv]) if np.isfinite(cv) else np.array([])
+    out = [coefficient_of_variation(v[i : i + w]) for i in range(v.size - w + 1)]
+    out = np.asarray(out, dtype=float)
+    return out[np.isfinite(out)]
+
+
+def stability_ratio_rows(
+    series: np.ndarray, plan: "CalPlan", window: int
+) -> tuple[np.ndarray, list[float]]:
+    """Per play row r = CV(last ``window`` clean values) / baseline CV.
+
+    Baseline CV = median rolling-window CV of that row's calibration block
+    (app ``RatioEngine`` stability mode: ``sorted[n ~/ 2]``). Rows are the
+    gated (clean) stream, so dirty seconds are already excluded, as in the
+    app. NaN during warm-up (window not full) and for non-finite values.
+    """
+    s = np.asarray(series, dtype=float)
+    w = max(2, int(window))
+    r = np.full(plan.play_idx.size, np.nan)
+    base_cvs: list[float] = []
+    for g in plan.groups:
+        cvs = rolling_cvs(s[g.cal_idx], w)
+        if cvs.size == 0:
+            base_cvs.append(float("nan"))
+            continue
+        base = float(np.sort(cvs)[cvs.size // 2])
+        base_cvs.append(base)
+        if not base > 0:
+            continue
+        buf: list[float] = []
+        for pos in np.sort(g.play_pos):
+            v = s[plan.play_idx[pos]]
+            if not np.isfinite(v):
+                continue
+            buf.append(float(v))
+            if len(buf) > w:
+                buf.pop(0)
+            if len(buf) == w:
+                cv = coefficient_of_variation(np.asarray(buf))
+                if np.isfinite(cv):
+                    r[pos] = cv / base
+    return r, base_cvs
+
+
+def stability_in_target(r: np.ndarray, difficulty: float) -> np.ndarray:
+    """In target when r <= 1 - difficulty (NaN warm-up → False)."""
+    with np.errstate(invalid="ignore"):
+        return np.asarray(r, dtype=float) <= (1.0 - float(difficulty))
+
+
 # --- Metrics ------------------------------------------------------------------
 
 
@@ -368,6 +444,10 @@ FEATURE_COLUMN = {
     "band.tar": "band_tar",
     "band.btr": "band_btr",
     "band.alpha": "band_alpha",
+    # Relative theta / beta (app band.theta / band.beta, bandStability band
+    # choice). Same app-math relative columns the inhibit mirror reads.
+    "band.theta": "theta_rel",
+    "band.beta": "beta_rel",
     "band.delta": "band_delta",
     "ai.a_vig": "ai_a_vig",
     "ai.wake_light": "ai_wake_light",

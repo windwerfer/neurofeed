@@ -106,6 +106,15 @@ class RatioEngine implements FeedbackEngine {
   double _emaAlpha = defaultEmaAlpha;
   double? _emaThreshold;
 
+  /// Experimental `bandStability` mode (null = normal uptrain). See
+  /// [StabilityConfig]. In this mode the baseline pile holds the per-window
+  /// fluctuation ratios r = CV(window) ÷ baseline CV, [threshold] is a ratio
+  /// (in target when r ≤ threshold) and [adapt] steps it the other way.
+  StabilityConfig? _stability;
+  final List<double> _rawBaseline = [];
+  final List<double> _liveWindow = [];
+  double? _baselineCv;
+
   /// Wall-clock success window. Production is [epochWindowSeconds]; tests may
   /// pass a shorter duration.
   final Duration epochWindow;
@@ -115,6 +124,71 @@ class RatioEngine implements FeedbackEngine {
     this.featureId = 'band.atr',
     Duration? epochWindow,
   }) : epochWindow = epochWindow ?? const Duration(seconds: epochWindowSeconds);
+
+  StabilityConfig? get stability => _stability;
+
+  /// Baseline fluctuation (median rolling-window CV of the calibration
+  /// samples). Null outside stability mode or before [computeThreshold].
+  double? get baselineCv => _baselineCv;
+
+  /// Switch stability mode on ([config] non-null) or off. Clears the live
+  /// window; the baseline is re-derived on the next [computeThreshold].
+  void setStability(StabilityConfig? config) {
+    final wasOn = _stability != null;
+    _stability = config;
+    _liveWindow.clear();
+    if (config == null && wasOn) {
+      _baselineCv = null;
+    }
+  }
+
+  /// Change the difficulty mid-session: re-anchors the threshold at
+  /// 1 − difficulty (the adaptive step may move it again).
+  void setStabilityDifficulty(double difficulty) {
+    final cfg = _stability;
+    if (cfg == null) return;
+    _stability = cfg.copyWith(difficulty: difficulty);
+    if (_baselineCv != null) {
+      _threshold = _stability!.initialThreshold;
+      _initialThreshold = _threshold;
+    }
+  }
+
+  /// Change the window mid-session: clears the live window and re-derives
+  /// the baseline CV for the new length.
+  void setStabilityWindow(int seconds) {
+    final cfg = _stability;
+    if (cfg == null) return;
+    _stability = cfg.copyWith(windowSeconds: seconds);
+    _liveWindow.clear();
+    if (_rawBaseline.isNotEmpty) {
+      _initialThreshold = null;
+      computeThreshold();
+    }
+  }
+
+  /// Push one **clean** 1 Hz band value into the rolling stability window.
+  /// Returns r = CV(last N clean values) ÷ [baselineCv] once the window is
+  /// full, else null (warm-up). Dirty samples must not be pushed: they are
+  /// excluded, not counted as unstable.
+  double? pushStabilitySample(double value) {
+    final cfg = _stability;
+    final base = _baselineCv;
+    if (cfg == null || !value.isFinite) return null;
+    _liveWindow.add(value);
+    final n = cfg.effectiveWindow;
+    while (_liveWindow.length > n) {
+      _liveWindow.removeAt(0);
+    }
+    if (base == null || base <= 0 || _liveWindow.length < n) return null;
+    final cv = coefficientOfVariation(_liveWindow);
+    if (cv == null) return null;
+    return cv / base;
+  }
+
+  /// Live-window fill (clean samples so far, window length).
+  (int, int) get stabilityWindowFill =>
+      (_liveWindow.length, _stability?.effectiveWindow ?? 0);
 
   @override
   bool get hasBaseline => _baseline.isNotEmpty;
@@ -212,6 +286,9 @@ class RatioEngine implements FeedbackEngine {
     _threshold = null;
     _initialThreshold = null;
     _emaThreshold = null;
+    _rawBaseline.clear();
+    _liveWindow.clear();
+    _baselineCv = null;
   }
 
   @override
@@ -231,13 +308,47 @@ class RatioEngine implements FeedbackEngine {
 
   @override
   void addBaselineSample(double atr) {
+    if (_stability != null) {
+      _rawBaseline.add(atr);
+      return;
+    }
     _baseline.add(atr);
+  }
+
+  /// Stability mode: baseline CV = median of the rolling-window CVs over the
+  /// clean calibration samples (same window as live, so live and baseline
+  /// measure the same thing); the pile becomes those windows' ratios to it.
+  double? _computeStabilityThreshold() {
+    final cfg = _stability!;
+    final cvs = rollingCvs(_rawBaseline, cfg.effectiveWindow);
+    if (cvs.isEmpty) {
+      _baselineCv = null;
+      _threshold = null;
+      return null;
+    }
+    final sorted = [...cvs]..sort();
+    final median = sorted[sorted.length ~/ 2];
+    if (!(median > 0)) {
+      _baselineCv = null;
+      _threshold = null;
+      return null;
+    }
+    _baselineCv = median;
+    _baseline
+      ..clear()
+      ..addAll([for (final c in cvs) c / median]);
+    _threshold = cfg.initialThreshold;
+    _initialThreshold ??= _threshold;
+    return _threshold;
   }
 
   /// Sorts the baseline samples and picks the configured percentile as the
   /// initial threshold. Returns null if there is no baseline data.
   @override
   double? computeThreshold() {
+    if (_stability != null) {
+      return _computeStabilityThreshold();
+    }
     if (_baseline.isEmpty) {
       return null;
     }
@@ -253,6 +364,11 @@ class RatioEngine implements FeedbackEngine {
 
   @override
   bool isInTarget(double atr) {
+    if (_stability != null) {
+      // Lower fluctuation ratio = steadier.
+      final t = _threshold;
+      return t != null && atr <= t;
+    }
     final t = _threshold;
     if (t == null) {
       return atr > 1.0;
@@ -302,9 +418,16 @@ class RatioEngine implements FeedbackEngine {
     if (clean.length < minSamples) {
       return false;
     }
-    _baseline
-      ..clear()
-      ..addAll(clean);
+    if (_stability != null) {
+      _rawBaseline
+        ..clear()
+        ..addAll(clean);
+      _liveWindow.clear();
+    } else {
+      _baseline
+        ..clear()
+        ..addAll(clean);
+    }
     _epochs.clear();
     _epochStartedAt = null;
     _initialThreshold = null;
@@ -328,6 +451,10 @@ class RatioEngine implements FeedbackEngine {
     final t = _threshold;
     final initial = _initialThreshold;
     if (t == null || initial == null || !_epochWindowFull) {
+      return;
+    }
+    if (_stability != null) {
+      _adaptStability(t, initial);
       return;
     }
     final mean = baselineMean;
@@ -368,6 +495,37 @@ class RatioEngine implements FeedbackEngine {
     }
   }
 
+  /// Downtrain mirror of [adapt]: too easy (> [highSuccessRate]) lowers the
+  /// ratio threshold (needs steadier), too hard (< [lowSuccessRate]) raises
+  /// it, clamped to [floor, initial] where floor = mean − [ceilingStddevs]·sd
+  /// of the baseline window ratios (≥ [StabilityConfig.minThreshold]). Never
+  /// easier than the difficulty the user set; zero success resets.
+  void _adaptStability(double t, double initial) {
+    final mean = baselineMean;
+    final sd = baselineStddev;
+    final (raise, lower) = _steps;
+    // Allow at least 0.3 of headroom below the difficulty anchor even when
+    // the baseline spread is ~0 (mean − 1.5 sd would sit above it).
+    final spreadFloor = mean == null || sd == null
+        ? initial * lower
+        : mean - ceilingStddevs * sd;
+    var floor = spreadFloor < initial - 0.3 ? spreadFloor : initial - 0.3;
+    floor = floor.clamp(StabilityConfig.minThreshold, initial).toDouble();
+    final success = _epochs.where((e) => e.inTarget).length / _epochs.length;
+    if (success == 0.0) {
+      _threshold = initial;
+    } else if (success > highSuccessRate) {
+      // raise step < 1 → (2 − raise) is the mirrored "harder" factor.
+      _threshold = (t * (2 - raise)).clamp(floor, initial).toDouble();
+    } else if (success < lowSuccessRate) {
+      _threshold = (t * (2 - lower)).clamp(floor, initial).toDouble();
+    }
+    debugPrint(
+      '[stability] adapt: success=$success threshold $t -> $_threshold '
+      '(floor $floor, initial $initial)',
+    );
+  }
+
   /// Continuous EMA adaptation: updates the threshold toward the target
   /// percentile on each clean sample. This provides smoother, continuous
   /// adaptation compared to the window-based step adaptation.
@@ -375,7 +533,7 @@ class RatioEngine implements FeedbackEngine {
   /// Returns the updated threshold, or null if EMA adaptation is not enabled
   /// or no threshold exists yet.
   double? adaptEma(double value) {
-    if (!_useEmaAdapt || !_dynamicAdapt) {
+    if (!_useEmaAdapt || !_dynamicAdapt || _stability != null) {
       return null;
     }
     final t = _threshold;
@@ -406,6 +564,85 @@ class RatioEngine implements FeedbackEngine {
     );
     return _threshold;
   }
+}
+
+/// Settings of the experimental `bandStability` reward (policy
+/// [stabilityPolicy]). Reward while the chosen band's coefficient of
+/// variation over the last [windowSeconds] clean 1 Hz samples is at least
+/// [difficulty] (fraction) below the calibration baseline CV.
+@immutable
+class StabilityConfig {
+  const StabilityConfig({
+    this.windowSeconds = defaultWindowSeconds,
+    this.difficulty = defaultDifficulty,
+  });
+
+  static const int defaultWindowSeconds = 10;
+  static const int minWindowSeconds = 1;
+  static const int maxWindowSeconds = 30;
+  static const double defaultDifficulty = 0.10;
+  static const double maxDifficulty = 0.50;
+
+  /// Lowest ratio threshold the adaptive step may reach.
+  static const double minThreshold = 0.05;
+
+  final int windowSeconds;
+  final double difficulty;
+
+  /// A CV needs ≥ 2 samples: a 1 s window is computed over 2 clean samples.
+  int get effectiveWindow => windowSeconds < 2 ? 2 : windowSeconds;
+
+  /// In target when r = CV ÷ baseline CV ≤ 1 − difficulty.
+  double get initialThreshold => 1.0 - difficulty;
+
+  StabilityConfig copyWith({int? windowSeconds, double? difficulty}) =>
+      StabilityConfig(
+        windowSeconds: clampStabilityWindow(
+          windowSeconds ?? this.windowSeconds,
+        ),
+        difficulty: clampStabilityDifficulty(difficulty ?? this.difficulty),
+      );
+}
+
+int clampStabilityWindow(int s) => s
+    .clamp(StabilityConfig.minWindowSeconds, StabilityConfig.maxWindowSeconds)
+    .toInt();
+
+double clampStabilityDifficulty(double d) =>
+    d.isFinite ? d.clamp(0.0, StabilityConfig.maxDifficulty).toDouble() : 0.1;
+
+/// Population SD ÷ |mean|; null for < 2 values or a zero mean.
+double? coefficientOfVariation(List<double> values) {
+  if (values.length < 2) return null;
+  var sum = 0.0;
+  for (final v in values) {
+    sum += v;
+  }
+  final mean = sum / values.length;
+  if (mean.abs() < 1e-12) return null;
+  var ss = 0.0;
+  for (final v in values) {
+    ss += (v - mean) * (v - mean);
+  }
+  return sqrt(ss / values.length) / mean.abs();
+}
+
+/// CVs of every full rolling window of [window] consecutive [values]. When
+/// there are fewer values than [window] (≥ 2), one CV over all of them.
+List<double> rollingCvs(List<double> values, int window) {
+  final w = window < 2 ? 2 : window;
+  final out = <double>[];
+  if (values.length < 2) return out;
+  if (values.length < w) {
+    final cv = coefficientOfVariation(values);
+    if (cv != null) out.add(cv);
+    return out;
+  }
+  for (var i = 0; i + w <= values.length; i++) {
+    final cv = coefficientOfVariation(values.sublist(i, i + w));
+    if (cv != null) out.add(cv);
+  }
+  return out;
 }
 
 /// Relative-band aggregator for **inhibit + nerd-stats**, not the reward

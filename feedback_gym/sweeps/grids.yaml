@@ -8,6 +8,9 @@ guard_percentiles:  [50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
 defaults:
   reward_percentile: 40
   guard_percentile: 75
+  # Experimental bandStability (app StabilityConfig defaults).
+  stability_window_seconds: 10
+  stability_difficulty: 0.10
 
 # Prune rule for sweeps: stop extending higher if primary metric is
 # monotonically worse for `prune_patience` consecutive steps.

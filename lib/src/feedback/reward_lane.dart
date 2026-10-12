@@ -14,7 +14,12 @@ class RewardTick {
     required this.quality,
     this.acceptBaselineSample = false,
     this.dirtyReason,
+    this.guardBlocks = false,
   });
+
+  /// Stability policy only: the sleep guard is warning, so a steady sample
+  /// is held back (drowsy steadiness is not rewarded).
+  final bool guardBlocks;
 
   final FeedbackPhase phase;
   final bool sampleIsClean;
@@ -75,7 +80,14 @@ class RewardLane {
   List<String> lastInhibitTags = const [];
   RelativeTarget? lastRelative;
 
+  /// Whether the last [onFeature] produced a reward verdict worth plotting.
+  /// False in stability warm-up (window not full) and for dirty stability
+  /// samples before any ratio exists.
+  bool lastProduced = false;
+
   bool get hasReward => _hasReward;
+
+  bool get _stability => engine.stability != null;
 
   String get featureId => _featureId;
 
@@ -121,6 +133,12 @@ class RewardLane {
     if (tick.phase != FeedbackPhase.playing || !_hasReward) {
       return;
     }
+    lastProduced = false;
+    if (_stability) {
+      _onStabilitySample(sample.value, tick);
+      return;
+    }
+    lastProduced = true;
     final rel = _bands.evaluate(tick.quality);
     final padsDown = rel == null;
     if (rel != null) {
@@ -188,6 +206,81 @@ class RewardLane {
     _emit(sample.value, inTarget: inTarget);
   }
 
+  /// Experimental `bandStability`: clean samples feed the rolling window;
+  /// the reward scalar is r = CV(window) ÷ baseline CV (lower = steadier).
+  /// Dirty samples are excluded from the window (not counted as unstable),
+  /// skip [RatioEngine.recordEpoch] and [RewardOutput.onSample].
+  void _onStabilitySample(double raw, RewardTick tick) {
+    final rel = _bands.evaluate(tick.quality);
+    final padsDown = rel == null;
+    if (rel != null) lastRelative = rel;
+    final dirty = !tick.sampleIsClean || padsDown;
+    lastDirty = dirty;
+    lastDirtyReason = dirty
+        ? (padsDown ? TrustDirtyReason.pads : tick.dirtyReason)
+        : null;
+    lastHeldBack = false;
+    lastInhibitTags = const [];
+    engine.recordSessionSample(raw, clean: !dirty);
+    if (dirty) {
+      lastInTarget = false;
+      final r = lastNative;
+      if (r == null) return;
+      lastProduced = true;
+      onComputedFeedback(
+        ratio: r,
+        threshold: engine.threshold,
+        inTarget: false,
+        inTargetPct: engine.successRate ?? 0.0,
+        percentile: lastPercentile,
+        thresholdPercentile: lastThresholdPercentile,
+        heldBack: false,
+        inhibitTags: const [],
+        clean: false,
+        dirtyReason: lastDirtyReason?.name,
+        betaRel: lastRelative?.betaRel,
+        deltaRel: lastRelative?.deltaRel,
+      );
+      return;
+    }
+    final r = engine.pushStabilitySample(raw);
+    if (r == null) {
+      // Warm-up: window not full yet. No verdict, no output, no epoch.
+      lastInTarget = false;
+      return;
+    }
+    lastProduced = true;
+    final thr = engine.threshold;
+    final steady = engine.isInTarget(r);
+    final inTarget = steady && !tick.guardBlocks;
+    lastHeldBack = steady && tick.guardBlocks;
+    lastInhibitTags = lastHeldBack ? const ['guard'] : const [];
+    final pct = stabilityOutputPercentile(r, thr);
+    lastNative = r;
+    lastPercentile = pct;
+    lastThresholdPercentile = thr == null
+        ? 0
+        : stabilityOutputPercentile(thr, thr);
+    lastInTarget = inTarget;
+    engine.recordEpoch(inTarget);
+    onStats(r);
+    output.onSample(percentile: pct, inTarget: inTarget);
+    onComputedFeedback(
+      ratio: r,
+      threshold: thr,
+      inTarget: inTarget,
+      inTargetPct: engine.successRate ?? 0.0,
+      percentile: pct,
+      thresholdPercentile: lastThresholdPercentile,
+      heldBack: lastHeldBack,
+      inhibitTags: List<String>.of(lastInhibitTags),
+      clean: true,
+      dirtyReason: null,
+      betaRel: lastRelative?.betaRel,
+      deltaRel: lastRelative?.deltaRel,
+    );
+  }
+
   void _emit(double value, {required bool inTarget}) {
     final pct = engine.percentileOf(value) ?? 50.0;
     lastNative = value;
@@ -226,5 +319,24 @@ class RewardLane {
     lastDirtyReason = null;
     lastInhibitTags = const [];
     lastRelative = null;
+    lastProduced = false;
   }
+}
+
+/// Graded 0–100 "steadiness" for continuous outputs (rain, music, binaural)
+/// in `bandStability`. r = CV ÷ baseline CV, [threshold] = current target
+/// ratio. Piecewise linear: r ≥ 1.5 (50 % more fluctuation than baseline) →
+/// 0; r = threshold → 60; r ≤ threshold − 0.3 (or 0) → 100. With the
+/// default 10 % difficulty the baseline itself (r = 1) maps to 50 (rain
+/// stage 3), the target to 60 (stage 4) and 25 % steadier than baseline to
+/// 80 (stage 5, calmest).
+double stabilityOutputPercentile(double r, double? threshold) {
+  final thr = (threshold ?? 0.9).clamp(0.0, 1.4).toDouble();
+  if (!r.isFinite) return 0;
+  if (r >= thr) {
+    return (60 * (1.5 - r) / (1.5 - thr)).clamp(0.0, 60.0).toDouble();
+  }
+  final span = thr < 0.3 ? thr : 0.3;
+  if (span <= 0) return 100;
+  return (60 + 40 * (thr - r) / span).clamp(60.0, 100.0).toDouble();
 }

@@ -15,6 +15,9 @@ from runners.helpers import (
     inhibit_passes,
     label_align,
     percentile_warn_over,
+    STABILITY_POLICY,
+    stability_in_target,
+    stability_ratio_rows,
     protocol_composite,
     round4,
     flip_stability,
@@ -47,6 +50,9 @@ def simulate_protocol(
     guard_percentile: float | None = None,
     guard_threshold_mode: str | None = None,
     guard_fixed_threshold: float | None = None,
+    stability_band: str | None = None,
+    stability_window: int | None = None,
+    stability_difficulty: float | None = None,
 ) -> dict[str, Any]:
     defaults = grids.get("defaults", {})
     rollup = grids.get("protocol_rollup", {})
@@ -94,6 +100,25 @@ def simulate_protocol(
     if reward_cfg is None:
         result["parts"]["reward"] = None
         result["notes"].append("no reward lane")
+    elif reward_cfg.get("policy") == STABILITY_POLICY:
+        reward_score, inhibit_score = _simulate_stability(
+            reward_cfg,
+            corpus,
+            plan,
+            result,
+            rw,
+            band=stability_band or defaults.get("stability_band"),
+            window=int(
+                stability_window
+                if stability_window is not None
+                else defaults.get("stability_window_seconds", 10)
+            ),
+            difficulty=float(
+                stability_difficulty
+                if stability_difficulty is not None
+                else defaults.get("stability_difficulty", 0.10)
+            ),
+        )
     else:
         feat_id = reward_cfg["feature"]
         series = feature_series(corpus, feat_id)
@@ -254,3 +279,61 @@ def simulate_protocol(
     if reward_cfg is None and guard_cfg is None:
         result["notes"].append(f"{protocol['id']} — no lanes; composite N/A")
     return result
+
+
+def _simulate_stability(
+    reward_cfg: dict[str, Any],
+    corpus: dict[str, Any],
+    plan: Any,
+    result: dict[str, Any],
+    rw: dict[str, Any],
+    *,
+    band: str | None,
+    window: int,
+    difficulty: float,
+) -> tuple[float | None, float | None]:
+    """Experimental ``bandStability`` (app RewardLane stability path).
+
+    Approximations vs the app: fixed threshold 1 - difficulty (no adaptive
+    step, like every gym reward); the guard hold-back (no reward while the
+    guard warns) is not applied here, the guard part is scored separately.
+    """
+    feat_id = band or reward_cfg["feature"]
+    series = feature_series(corpus, feat_id)
+    if series is None:
+        result["parts"]["reward"] = {
+            "status": "unavailable",
+            "feature": feat_id,
+            "policy": STABILITY_POLICY,
+        }
+        result["notes"].append(f"reward feature {feat_id} missing from corpus")
+        result["parts"]["inhibit"] = None
+        return None, None
+    r, base_cvs = stability_ratio_rows(series, plan, window)
+    decided = np.isfinite(r)
+    in_target = stability_in_target(r, difficulty)[decided]
+    hr = hit_rate(in_target)
+    stab = flip_stability(in_target)
+    score = float(
+        float(rw.get("hit_rate", 0.7)) * hr + float(rw.get("stability", 0.3)) * stab
+    ) if in_target.size else None
+    finite_base = [b for b in base_cvs if np.isfinite(b)]
+    result["parts"]["reward"] = {
+        "feature": feat_id,
+        "policy": STABILITY_POLICY,
+        "window_seconds": int(window),
+        "difficulty": round4(difficulty),
+        "threshold": round4(1.0 - difficulty),
+        "baseline_cv_median": round4(float(np.median(finite_base)))
+        if finite_base
+        else None,
+        "ratio_median": round4(float(np.nanmedian(r))) if decided.any() else None,
+        "hit_rate": round4(hr) if in_target.size else None,
+        "stability": round4(stab) if in_target.size else None,
+        "score": round4(score),
+        "n_play": int(r.size),
+        "n_decided": int(decided.sum()),
+    }
+    result["parts"]["inhibit"] = {"items": [], "score": 1.0}
+    result["notes"].append("experimental: no evidence (STABILITY.md)")
+    return score, 1.0

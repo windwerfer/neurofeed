@@ -10,3 +10,7 @@ Runner: `runners/stability_round.py` → `results/20261012T084433Z_stability`. G
 
 ## Verdict
 Band stability is **not** a usable attention / mind-wandering signal on a Muse-like montage; don't build a reward lane on it. The only reproducible group effect (novice beta variability) is most likely EMG. Untested: the movement gate's effect (no IMU in any corpus).
+
+## App protocol `bandStability` (2026-10-12, experimental self-test)
+
+Despite the verdict above, the app ships an **experimental** `bandStability` protocol at the user's request, framed as a self-test with no evidence (catalog copy says so). Note that the analysis above tested within-epoch variability against mind-wandering; the app's lane instead rewards CV *below one's own calibration baseline*, which was not tested here either way. Gym mirror: `simulate_protocol(..., "bandStability", stability_band=, stability_window=, stability_difficulty=)` (grids.yaml defaults `stability_window_seconds` 10, `stability_difficulty` 0.10; helpers `rolling_cvs` / `stability_ratio_rows`). Gym uses a fixed threshold (no adaptive steps) and no guard hold-back. Tests: `tests/test_band_stability.py`.

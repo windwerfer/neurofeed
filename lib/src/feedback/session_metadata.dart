@@ -581,6 +581,8 @@ class SessionSettings {
     this.crownQualitySource,
     this.guardThresholdMode,
     this.guardFixedThreshold,
+    this.rewardDwellSeconds,
+    this.stability,
   });
 
   final bool dynamicAdapt;
@@ -627,6 +629,13 @@ class SessionSettings {
   /// Fixed probability cut; present only when [guardThresholdMode] is fixed.
   final double? guardFixedThreshold;
 
+  /// Dwell time (s) before the reward chime. Null for sessions saved before
+  /// 2026-10-12 (then: 2.5 s).
+  final double? rewardDwellSeconds;
+
+  /// Experimental `bandStability` settings; null for every other protocol.
+  final StabilitySessionSettings? stability;
+
   Map<String, Object?> toJson() => {
     'dynamicAdapt': dynamicAdapt,
     'responsiveness': responsiveness,
@@ -656,6 +665,8 @@ class SessionSettings {
     if (crownQualitySource != null) 'crownQualitySource': crownQualitySource,
     if (guardThresholdMode != null) 'guardThresholdMode': guardThresholdMode,
     if (guardFixedThreshold != null) 'guardFixedThreshold': guardFixedThreshold,
+    if (rewardDwellSeconds != null) 'rewardDwellSeconds': rewardDwellSeconds,
+    if (stability != null) 'stability': stability!.toJson(),
   };
 
   static SessionSettings? fromJson(Object? json) {
@@ -711,6 +722,49 @@ class SessionSettings {
         _ => null,
       },
       guardFixedThreshold: (json['guardFixedThreshold'] as num?)?.toDouble(),
+      rewardDwellSeconds: (json['rewardDwellSeconds'] as num?)?.toDouble(),
+      stability: StabilitySessionSettings.fromJson(json['stability']),
+    );
+  }
+}
+
+/// `sessionSettings.stability` for the experimental `bandStability` reward.
+class StabilitySessionSettings {
+  const StabilitySessionSettings({
+    required this.band,
+    required this.windowSeconds,
+    required this.difficulty,
+    this.baselineCv,
+  });
+
+  /// Reward feature id (`band.alpha` / `band.theta` / `band.beta`).
+  final String band;
+  final int windowSeconds;
+
+  /// Fraction steadier than baseline needed (0.10 = 10 %).
+  final double difficulty;
+
+  /// Calibration baseline CV (median rolling-window CV), when computed.
+  final double? baselineCv;
+
+  Map<String, Object?> toJson() => {
+    'band': band,
+    'windowSeconds': windowSeconds,
+    'difficulty': difficulty,
+    if (baselineCv != null) 'baselineCv': baselineCv,
+  };
+
+  static StabilitySessionSettings? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final band = json['band'];
+    final window = json['windowSeconds'];
+    final difficulty = json['difficulty'];
+    if (band is! String || window is! num || difficulty is! num) return null;
+    return StabilitySessionSettings(
+      band: band,
+      windowSeconds: window.toInt(),
+      difficulty: difficulty.toDouble(),
+      baselineCv: (json['baselineCv'] as num?)?.toDouble(),
     );
   }
 }
