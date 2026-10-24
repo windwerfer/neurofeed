@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:neurofeed/src/util/timezone.dart';
@@ -80,7 +78,6 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
       if (_selected.contains(s.id)) s,
   ];
 
-
   static const _importTypes = [
     XTypeGroup(label: 'EEG / CSV', extensions: ['edf', 'csv']),
   ];
@@ -122,9 +119,9 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
     } catch (e) {
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Import failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
       return;
     }
     if (!mounted) return;
@@ -133,11 +130,7 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
     try {
       final store = await ref.read(recordingStoreProvider.future);
       final storage = await ref.read(sessionStorageProvider.future);
-      await publishImportResult(
-        result: result,
-        store: store,
-        storage: storage,
-      );
+      await publishImportResult(result: result, store: store, storage: storage);
       if (!mounted) return;
       ref.invalidate(sessionListProvider);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -145,9 +138,9 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Import failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
     }
   }
 
@@ -284,7 +277,8 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
       );
       return;
     }
-    final files = '${result.fileCount} file(s) exported to ${result.location}.'
+    final files =
+        '${result.fileCount} file(s) exported to ${result.location}.'
         '${notices.isEmpty ? '' : '\n$notices'}';
     final problems = [
       for (final w in result.warnings) '• ${w.sessionId}: ${w.message}',
@@ -374,11 +368,11 @@ class _FeedbackHistoryViewState extends ConsumerState<FeedbackHistoryView> {
                       'PDF / PNG charts are feedback-session only.',
                     )
                   : hasRecording
-                      ? const Text(
-                          'PDF / PNG charts apply to feedback sessions only; '
-                          'CSV / EDF+ / thumbnail include recordings.',
-                        )
-                      : null,
+                  ? const Text(
+                      'PDF / PNG charts apply to feedback sessions only; '
+                      'CSV / EDF+ / thumbnail include recordings.',
+                    )
+                  : null,
             ),
             if (hasFeedback)
               _ExportOption(
@@ -697,10 +691,7 @@ class _HistoryTileState extends ConsumerState<_HistoryTile>
     final meta = widget.summary.metadata;
     final catalog = ref.watch(protocolCatalogProvider).valueOrNull;
     final stats = meta.stats;
-    final date = formatSessionWallClock(
-      meta.savedAt,
-      timeZone: meta.timeZone,
-    );
+    final date = formatSessionWallClock(meta.savedAt, timeZone: meta.timeZone);
 
     final detailParts = <String>[
       if (meta.deviceModel != null && meta.deviceModel!.isNotEmpty)

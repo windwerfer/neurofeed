@@ -101,7 +101,7 @@ modules:
         dest: rust_builder/cargokit
       - type: git
         url: https://github.com/flutter/flutter.git
-        tag: '3.41.7'
+        tag: '3.47.8'
         dest: flutter
         disable-submodules: true
     modules:

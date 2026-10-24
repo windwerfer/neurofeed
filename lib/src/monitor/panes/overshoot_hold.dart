@@ -1,6 +1,5 @@
-import 'package:neurofeed/src/charts/dashed_polyline.dart';
-
-export 'package:neurofeed/src/charts/dashed_polyline.dart' show paintDashedPolyline;
+export 'package:neurofeed/src/charts/dashed_polyline.dart'
+    show paintDashedPolyline;
 
 const kBandsOvershootHold = true;
 
@@ -84,8 +83,7 @@ List<OvershootPaintRun> buildOvershootPaintRuns(
     }
     final o = (elapsed: s.elapsed, y: hold.y);
 
-    if (hold.dashed != prevDashed &&
-        (solid.isNotEmpty || dashed.isNotEmpty)) {
+    if (hold.dashed != prevDashed && (solid.isNotEmpty || dashed.isNotEmpty)) {
       if (prevDashed) {
         // dashed → solid: do not append resume into dashed.
         flushDashed();

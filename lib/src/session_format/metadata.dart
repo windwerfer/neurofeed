@@ -37,8 +37,8 @@ Map<String, Object?> buildRecordingMetadata({
     'subject': subject.toJson(),
     'device': meta.device.toJson(),
     'streams': meta.streams.toJson(),
-    if (meta.provenance != null) 'import': meta.provenance!.toJson(),
-    if (stats != null) 'stats': stats,
+    'import': ?meta.provenance?.toJson(),
+    'stats': ?stats,
     if (annotations.isNotEmpty)
       'annotations': [for (final a in annotations) a.toJson()],
   };
@@ -79,41 +79,46 @@ Map<String, Object?> buildFeedbackMetadata({
     'notes': meta.notes,
     if (meta.sessionId != null) 'sessionId': meta.sessionId,
     'subject': subject.toJson(),
-    'device': (device ??
-            DeviceInfo(
-              name: meta.deviceName ?? '',
-              id: meta.deviceId ?? '',
-              firmware: meta.deviceModel ?? '',
-              model: meta.deviceModel ?? '',
-              sensors: meta.recordedChannels.isNotEmpty &&
-                      kCrownElectrodeNames.contains(meta.recordedChannels.first)
-                  ? const ['EEG', 'IMU']
-                  : const ['EEG', 'PPG', 'IMU'],
-              channelCount: meta.recordedChannels.isEmpty
-                  ? kMuseElectrodeNames.length
-                  : meta.recordedChannels.length,
-              channelLabels: meta.recordedChannels.isEmpty
-                  ? kMuseElectrodeNames
-                  : meta.recordedChannels,
-              rawFiltering: meta.rawFiltering,
-              conditioning: meta.conditioning,
-            ))
-        .toJson(),
-    'streams': (streams ??
-            RecordingMetadata.streamsConfig(
-              meta.recordedData.isEmpty
-                  ? RecordingStream.values.toSet()
-                  : meta.recordedData
-                      .map(
-                        (n) => RecordingStream.values
-                            .where((s) => s.name == n)
-                            .firstOrNull,
-                      )
-                      .whereType<RecordingStream>()
-                      .toSet(),
-            ))
-        .toJson(),
-    if (stats != null) 'stats': stats,
+    'device':
+        (device ??
+                DeviceInfo(
+                  name: meta.deviceName ?? '',
+                  id: meta.deviceId ?? '',
+                  firmware: meta.deviceModel ?? '',
+                  model: meta.deviceModel ?? '',
+                  sensors:
+                      meta.recordedChannels.isNotEmpty &&
+                          kCrownElectrodeNames.contains(
+                            meta.recordedChannels.first,
+                          )
+                      ? const ['EEG', 'IMU']
+                      : const ['EEG', 'PPG', 'IMU'],
+                  channelCount: meta.recordedChannels.isEmpty
+                      ? kMuseElectrodeNames.length
+                      : meta.recordedChannels.length,
+                  channelLabels: meta.recordedChannels.isEmpty
+                      ? kMuseElectrodeNames
+                      : meta.recordedChannels,
+                  rawFiltering: meta.rawFiltering,
+                  conditioning: meta.conditioning,
+                ))
+            .toJson(),
+    'streams':
+        (streams ??
+                RecordingMetadata.streamsConfig(
+                  meta.recordedData.isEmpty
+                      ? RecordingStream.values.toSet()
+                      : meta.recordedData
+                            .map(
+                              (n) => RecordingStream.values
+                                  .where((s) => s.name == n)
+                                  .firstOrNull,
+                            )
+                            .whereType<RecordingStream>()
+                            .toSet(),
+                ))
+            .toJson(),
+    'stats': ?stats,
     if (anns.isNotEmpty) 'annotations': [for (final a in anns) a.toJson()],
   };
 

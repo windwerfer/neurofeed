@@ -4,9 +4,9 @@ Global orientation. Maps and history live in [`.ai/README.md`](.ai/README.md).
 Current work: [`.ai/active-task.md`](.ai/active-task.md).
 
 ## Stack
-- **Flutter 3.41.7** in CI (`.github/workflows/` `FLUTTER_VERSION`). The
-  sandbox image may be newer (currently 3.44.8) — do not bump the workflow
-  pin without intending a release-toolchain change. Dart is bundled.
+- **Flutter 3.47.8** in CI (`.github/workflows/` `FLUTTER_VERSION`) and in
+  `.devcontainer/post-setup.sh`. Dart 3.13.7 is bundled. Do not bump the
+  workflow pin without intending a release-toolchain change.
 - **Rust** via `flutter_rust_bridge` **2.11.1** (pinned `=`, crate + Dart
   package + codegen CLI). Lib: `rust/` (`rust_lib_neurofeed`). Generated
   bindings `rust/src/frb_generated.rs` and `lib/src/rust/` are **both tracked**
@@ -45,7 +45,8 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   One feature source second counts once.
   Settings → AI Calibration is Default (AI labeling → staged, otherwise
   simple) or Always staged. Record-only stays skippable.
-- **Android**: NDK 27/28, Gradle 8.14, `targetSdk` from Flutter, arm64-only
+- **Android**: NDK is Flutter's default (`flutter.ndkVersion`; 28.2.13676358
+  on 3.47.8), Gradle 8.14, `targetSdk` from Flutter, arm64-only
   (`abiFilters = ["arm64-v8a"]`).
 - **JNI glue**: btleplug init from Dart **after** `RustLib.init()`. Kotlin
   `MainActivity` `ensureInitialized`; `connection_provider` calls

@@ -22,19 +22,20 @@ List<SessionAnnotation> assembleAnnotations({
   List<SessionAnnotation> intervals = const [],
   List<GestureMarker> gestures = const [],
 }) {
-  final out = <SessionAnnotation>[
-    ...intervals,
-    for (final g in gestures)
-      SessionAnnotation(
-        onset: g.offsetSeconds.toDouble(),
-        duration: 0,
-        type: gestureAnnotationType(g.type),
-      ),
-  ]..sort((a, b) {
-    final c = a.onset.compareTo(b.onset);
-    if (c != 0) return c;
-    return a.type.compareTo(b.type);
-  });
+  final out =
+      <SessionAnnotation>[
+        ...intervals,
+        for (final g in gestures)
+          SessionAnnotation(
+            onset: g.offsetSeconds.toDouble(),
+            duration: 0,
+            type: gestureAnnotationType(g.type),
+          ),
+      ]..sort((a, b) {
+        final c = a.onset.compareTo(b.onset);
+        if (c != 0) return c;
+        return a.type.compareTo(b.type);
+      });
   return mergeAdjacentIntervalAnnotations(out);
 }
 
@@ -219,10 +220,7 @@ Map<String, Object?>? assembleBaseStats({
     stats['annotationSeconds'] = annSecs;
   }
   if (batteryStartPct != null || batteryEndPct != null) {
-    stats['battery'] = {
-      ?'startPct': batteryStartPct,
-      ?'endPct': batteryEndPct,
-    };
+    stats['battery'] = {'startPct': ?batteryStartPct, 'endPct': ?batteryEndPct};
   }
   final experimental = assembleExperimentalBands(
     frames,
@@ -257,10 +255,7 @@ List<double> frameSecondsFromTimes(List<double> t) {
   final sorted = [...gaps]..sort();
   var median = sorted[sorted.length ~/ 2];
   if (median <= 0) median = 1.0;
-  return [
-    for (final g in gaps) g <= 0 ? 0.0 : math.min(g, median),
-    median,
-  ];
+  return [for (final g in gaps) g <= 0 ? 0.0 : math.min(g, median), median];
 }
 
 int? _labelIndex(List<String> labels, String label) {

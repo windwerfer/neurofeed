@@ -211,18 +211,18 @@ class SoLoudEngine {
   ) async {
     try {
       final source = await _loadAssetNative(path, stream: stream);
-      if (_epoch != key.epoch) {
-        await _disposeSourceNative(source);
-        if (!_ready) {
-          throw StateError('SoLoud engine closed during loadAsset');
-        }
-        return loadAsset(path, stream: stream);
+      if (_epoch == key.epoch) {
+        _assets[key] = source;
+        return source;
       }
-      _assets[key] = source;
-      return source;
+      await _disposeSourceNative(source);
+      if (!_ready) {
+        throw StateError('SoLoud engine closed during loadAsset');
+      }
     } finally {
       _assetInflight.remove(key);
     }
+    return loadAsset(path, stream: stream);
   }
 
   @visibleForTesting

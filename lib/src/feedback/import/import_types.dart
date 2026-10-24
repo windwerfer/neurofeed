@@ -70,8 +70,7 @@ String? mapImportAnnotationType(String raw) {
     'doubleclench' ||
     'double_clench' ||
     'double_jawclench' ||
-    'jaw_clench_double' =>
-      'double_jaw_clench',
+    'jaw_clench_double' => 'double_jaw_clench',
     'eyeup' || 'eyes_up' => 'eye_up',
     'eyedown' || 'eyes_down' => 'eye_down',
     'badquality' || 'bad_qual' || 'unusable' => 'bad_quality',
@@ -107,7 +106,7 @@ class ElementMark {
 /// numbered markers and unknown tokens get warnings. Never invent types
 /// outside [kLockedAnnotationTypes].
 ({List<SessionAnnotation> annotations, List<ImportWarning> warnings})
-    mapElementsToAnnotations(List<ElementMark> marks) {
+mapElementsToAnnotations(List<ElementMark> marks) {
   final warnings = <ImportWarning>[];
   final annotations = <SessionAnnotation>[];
   double? pendingBlinkAt;
@@ -129,11 +128,7 @@ class ElementMark {
   void flushJaw({required bool asDouble, required double at}) {
     if (asDouble) {
       annotations.add(
-        SessionAnnotation(
-          onset: at,
-          duration: 0,
-          type: 'double_jaw_clench',
-        ),
+        SessionAnnotation(onset: at, duration: 0, type: 'double_jaw_clench'),
       );
     } else {
       skippedSingles++;
@@ -147,11 +142,11 @@ class ElementMark {
     if (locked != null) {
       // Already a locked type (e.g. exported double_blink string).
       if (pendingBlinkAt != null) {
-        flushBlink(asDouble: false, at: pendingBlinkAt!);
+        flushBlink(asDouble: false, at: pendingBlinkAt);
         pendingBlinkAt = null;
       }
       if (pendingJawAt != null) {
-        flushJaw(asDouble: false, at: pendingJawAt!);
+        flushJaw(asDouble: false, at: pendingJawAt);
         pendingJawAt = null;
       }
       annotations.add(
@@ -161,26 +156,28 @@ class ElementMark {
     }
     final lower = token.toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_');
     final isBlink = lower == 'blink' || lower == '/muse/elements/blink';
-    final isJaw = lower == 'jaw_clench' ||
+    final isJaw =
+        lower == 'jaw_clench' ||
         lower == 'jawclench' ||
         lower == '/muse/elements/jaw_clench';
-    final isMarker = RegExp(r'^(/marker/)?\d+$').hasMatch(lower) ||
+    final isMarker =
+        RegExp(r'^(/marker/)?\d+$').hasMatch(lower) ||
         lower.startsWith('/marker/') ||
         lower.startsWith('marker_');
 
     if (isBlink) {
       if (pendingJawAt != null) {
-        flushJaw(asDouble: false, at: pendingJawAt!);
+        flushJaw(asDouble: false, at: pendingJawAt);
         pendingJawAt = null;
       }
       if (pendingBlinkAt != null &&
-          (m.onsetSeconds - pendingBlinkAt!) <=
+          (m.onsetSeconds - pendingBlinkAt) <=
               kElementsDoubleWindow.inMilliseconds / 1000.0) {
         flushBlink(asDouble: true, at: m.onsetSeconds);
         pendingBlinkAt = null;
       } else {
         if (pendingBlinkAt != null) {
-          flushBlink(asDouble: false, at: pendingBlinkAt!);
+          flushBlink(asDouble: false, at: pendingBlinkAt);
         }
         pendingBlinkAt = m.onsetSeconds;
       }
@@ -188,17 +185,17 @@ class ElementMark {
     }
     if (isJaw) {
       if (pendingBlinkAt != null) {
-        flushBlink(asDouble: false, at: pendingBlinkAt!);
+        flushBlink(asDouble: false, at: pendingBlinkAt);
         pendingBlinkAt = null;
       }
       if (pendingJawAt != null &&
-          (m.onsetSeconds - pendingJawAt!) <=
+          (m.onsetSeconds - pendingJawAt) <=
               kElementsDoubleWindow.inMilliseconds / 1000.0) {
         flushJaw(asDouble: true, at: m.onsetSeconds);
         pendingJawAt = null;
       } else {
         if (pendingJawAt != null) {
-          flushJaw(asDouble: false, at: pendingJawAt!);
+          flushJaw(asDouble: false, at: pendingJawAt);
         }
         pendingJawAt = m.onsetSeconds;
       }
@@ -211,10 +208,10 @@ class ElementMark {
     skippedUnknown++;
   }
   if (pendingBlinkAt != null) {
-    flushBlink(asDouble: false, at: pendingBlinkAt!);
+    flushBlink(asDouble: false, at: pendingBlinkAt);
   }
   if (pendingJawAt != null) {
-    flushJaw(asDouble: false, at: pendingJawAt!);
+    flushJaw(asDouble: false, at: pendingJawAt);
   }
   if (skippedSingles > 0) {
     warnings.add(

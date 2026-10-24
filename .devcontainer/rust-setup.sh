@@ -10,7 +10,7 @@ has_cmd() {
 echo "==> Running post-setup for fl_muse_brainflow_MVP"
 
 CACHE_DIR="/opt/backups"
-FLUTTER_VERSION="3.44.1"
+FLUTTER_VERSION="3.47.8"
 FLUTTER_TAR="flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
 FLUTTER_DIR="$HOME/flutter"
 

@@ -86,7 +86,7 @@ Pulse, X, Wayland, adb, or the Dart language-server.
 - App package: `org.windwerfer.neurofeed` (release). `flutter run` debug
   builds use `org.windwerfer.neurofeed.debug`.
 - Pick a device with `adb devices` / `flutter devices`. Do not hardcode a
-  serial. CI Flutter pin is **3.41.7**; the sandbox image may be newer.
+  serial. CI Flutter pin is **3.47.8** (Dart 3.13.7).
 
 ## The build/test loop (self-contained, no back-and-forth)
 The agent runs this itself. Steps:

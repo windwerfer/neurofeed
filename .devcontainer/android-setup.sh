@@ -96,9 +96,8 @@ setup_android_components() {
     local packages=(
         "platform-tools"
         "build-tools;34.0.0"
-        "platforms;android-34"
-        # "ndk;28.2.13676358"
-        "ndk;27.0.12077973"  # flet+flutter wants ndk 27.0.12077973 specifically
+        "platforms;android-36"
+        "ndk;28.2.13676358"
     )
 
     # Capture the installed list once (sdkmanager output is slow to produce)

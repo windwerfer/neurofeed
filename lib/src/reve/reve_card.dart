@@ -81,18 +81,12 @@ class _AiEngineCardState extends ConsumerState<AiEngineCard> {
                   style: theme.textTheme.bodySmall,
                 ),
               ),
-              TextButton(
-                onPressed: _uninstall,
-                child: const Text('Uninstall'),
-              ),
+              TextButton(onPressed: _uninstall, child: const Text('Uninstall')),
             ],
           ),
         ];
       case ModelEngineLoading():
-        return [
-          const SizedBox(height: 8),
-          ModelInstallBubble(kind: modelKind),
-        ];
+        return [const SizedBox(height: 8), ModelInstallBubble(kind: modelKind)];
       case ModelEngineError(:final message):
         return [
           Row(
@@ -116,16 +110,14 @@ class _AiEngineCardState extends ConsumerState<AiEngineCard> {
               Expanded(
                 child: Text(
                   [
-                    if (description != null && description!.isNotEmpty) description!,
+                    if (description != null && description.isNotEmpty)
+                      description,
                     reason,
                   ].join('\n'),
                   style: theme.textTheme.bodySmall,
                 ),
               ),
-              TextButton(
-                onPressed: _uninstall,
-                child: const Text('Uninstall'),
-              ),
+              TextButton(onPressed: _uninstall, child: const Text('Uninstall')),
             ],
           ),
           const SizedBox(height: 12),

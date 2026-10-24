@@ -118,7 +118,7 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
   (Actions → **repro-android** → *Run workflow*).
   For a real end-to-end check, configure the signing secrets first.
 - Tooling is pinned so rebuilds match:
-  - Flutter `3.41.7` stable (update `FLUTTER_VERSION` in the workflows when you
+  - Flutter `3.47.8` stable (update `FLUTTER_VERSION` in the workflows when you
     bump Flutter — keep it in sync with `.metadata`)
   - Rust `1.97.1` (via `rust/rust-toolchain.toml`; the toolchain file makes
     local builds match CI too)
@@ -234,7 +234,8 @@ The goal "an APK that can be given to F-Droid without changes" works like this:
   `src/pugixml` is missing, clones pugixml v1.15. The sandbox has no
   network, so `flatpak/foreign.json` places that tarball at
   `.pub-cache/hosted/pub.dev/liblsl-0.13.2+0/src/pugixml`. Move that
-  `dest` when the locked `liblsl` version changes.
+  `dest` when the locked `liblsl` version changes. 0.13.3+0 is not
+  usable: its published `src/liblsl-9f0b6122` tree is empty.
 
 ## Windows (optional)
 
