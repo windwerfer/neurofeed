@@ -31,7 +31,7 @@ See `Third-party → Rust → rlx / rlx-cpu` below.
 | shared_preferences | 2.5.5 | BSD-3-Clause | https://pub.dev/packages/shared_preferences |
 | path_provider | 2.1.6 | BSD-3-Clause | https://pub.dev/packages/path_provider |
 | file_selector | 1.1.0 | BSD-3-Clause | https://pub.dev/packages/file_selector |
-| permission_handler | 11.4.0 | MIT | https://pub.dev/packages/permission_handler |
+| permission_handler | 12.0.3 | MIT | https://pub.dev/packages/permission_handler |
 | device_info_plus | 10.1.2 | BSD-3-Clause | https://pub.dev/packages/device_info_plus |
 | crypto | 3.0.7 | BSD-3-Clause | https://pub.dev/packages/crypto |
 | url_launcher | 6.3.2 | BSD-3-Clause | https://pub.dev/packages/url_launcher |
