@@ -1724,7 +1724,6 @@ dependencies = [
 [[package]]
 name = "muse-rs"
 version = "0.1.0"
-source = "git+https://github.com/windwerfer/muse-rs.git?tag=0.1.2#e4891ba525e1e25d57b9649c2c89c2c1b184bb68"
 dependencies = [
  "anyhow",
  "btleplug",

@@ -7,14 +7,15 @@ Muse BLE protocol + transport. Direct dependency on our fork of
 muse-rs = { git = "https://github.com/windwerfer/muse-rs.git", tag = "0.1.2", default-features = false }
 ```
 
-Tag `0.1.2` is `e4891ba`. `third_party/muse-rs/` is the same commit,
-plus a local Cargo.toml that asks for crates.io btleplug `0.13.5` (not
-pushed). `default-features = false` keeps the TUI crates out. Published
-tag `0.1.2` still depends on btleplug `0.13.4` and patches crates.io to
-`github.com/windwerfer/btleplug` tag `0.13.4-muse-1` (`36ac8b0`). Cargo
-ignores that patch while muse-rs is a dependency. `rust/Cargo.toml`
-depends on crates.io btleplug `0.13.5`, and the two requirements
-unify onto that one copy.
+Tag `0.1.2` is `e4891ba`. `rust/Cargo.toml` currently depends on the
+local path `third_party/muse-rs` so the Linux scan fix is in the build.
+`scan_all` reads name and RSSI while discovery is still running, then
+stops. BlueZ removes `Device1.RSSI` when discovery stops, and `scan()`
+keeps only devices that still have an RSSI. Reading after `stop_scan`
+made every live Muse look stale, so the status bar stayed at 0 devices.
+Switch the dependency back to a git tag after this commit is pushed.
+`default-features = false` keeps the TUI crates out. The local crate
+depends on crates.io btleplug `0.13.5`.
 
 Classic presets, from BrainFlow `docs/SupportedBoards.rst` and
 `src/board_controller/muse/muse.cpp`. Do not use the old muse-rs table.
@@ -69,10 +70,11 @@ fraction and ×100; otherwise already 0–100.
 
 ## Protocol decoders
 
-Pure (no BLE): muse-rs `parse.rs` / `protocol.rs` / `types.rs`. RSSI filter:
-`scan_all()` keeps only `props.rssi.is_some()`; our `scan()` mirrors that (no
-`rssi` on `DeviceInfo`). Connect timeout: `setup_peripheral()` disconnects +
-500 ms sleep so retry is not stuck "In Progress".
+Pure (no BLE): muse-rs `parse.rs` / `protocol.rs` / `types.rs`. `scan()`
+keeps only devices with `rssi` (no `rssi` field on `DeviceInfo`).
+`scan_all` must sample that RSSI before `stop_scan` on Linux.
+Connect timeout: `setup_peripheral()` disconnects + 500 ms sleep so retry
+is not stuck "In Progress".
 
 ## Athena optical / fNIRS (not in this app)
 

@@ -14,14 +14,15 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
   breaks cargokit with `E0583`). Regenerate with
   `flutter_rust_bridge_codegen generate` when the FFI surface changes and
   commit both sides.
-- **muse-rs** — direct git dep on `windwerfer/muse-rs` tag `0.1.2`
-  (`e4891ba`), fork of `eugenehp/muse-rs` `0.1.0`.
-  `default-features = false`. See `.ai/muse-rs.md`.
+- **muse-rs** — fork of `eugenehp/muse-rs` `0.1.0`. The app currently
+  builds `third_party/muse-rs` (path) so Linux `scan_all` reads RSSI
+  before `stop_scan`. Published tag `0.1.2` (`e4891ba`) still stops
+  first and hides every live Muse. Switch back to a git tag after that
+  fix is pushed. `default-features = false`. See `.ai/muse-rs.md`.
 - **btleplug** — crates.io **`0.13.5`** (deviceplug tag `0.13.5`,
   `1af8299`). No fork patch. `QueueStream.pollNext` removes under the
   lock in this release. The 0.12 JNI attach, exception-clear, and
-  wake/close patches are in upstream. muse-rs tag `0.1.2` still asks for
-  `0.13.4`; Cargo unifies onto this copy. See `.ai/btleplug.md`.
+  wake/close patches are in upstream. See `.ai/btleplug.md`.
 - **`jni = "0.22"`** — must resolve to the same `jni` as btleplug (0.22.4)
   or you get link-time symbol conflicts. Android init uses
   `jni::EnvUnowned` (`jni` 0.22), not `JNIEnv::from_raw`.
@@ -286,7 +287,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
   semver-compatible with the dep or Cargo silently skips the patch.
   btleplug is crates.io `0.13.5` with no patch. Do not pin it back to
   `0.12.0` or `0.11.8`. The `rlx-cpu` patch target is `crates-io`.
-  muse-rs is a direct git dep, not a patch. See `.ai/btleplug.md`.
+  muse-rs is not a patch. See `.ai/btleplug.md`.
 - **Vendored `rlx-cpu`** (`vendor/rlx-cpu-0.2.14`): `[patch.crates-io]`,
   default `blas` cleared. Keep `version = "0.2.14"` compatible with
   `rlx-runtime 0.2.14`. Clearing `blas` does not remove the macOS

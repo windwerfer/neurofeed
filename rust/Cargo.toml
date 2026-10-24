@@ -8,8 +8,9 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 flutter_rust_bridge = "=2.11.1"
-# Fork of eugenehp/muse-rs 0.1.0. Tag 0.1.2 is e4891ba.
-muse-rs = { git = "https://github.com/windwerfer/muse-rs.git", tag = "0.1.2", default-features = false }
+# Local checkout while testing the Linux scan_all RSSI fix.
+# Tag 0.1.2 is e4891ba and still stops discovery before reading RSSI.
+muse-rs = { path = "../third_party/muse-rs", default-features = false }
 btleplug = "0.13.5"
 jni = "0.22"
 tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time", "net"] }
@@ -46,8 +47,7 @@ rubato = "5"
 
 # btleplug 0.13.5 is the crates.io release (deviceplug tag 0.13.5).
 # It already removes the QueueStream item inside the lock, so the
-# windwerfer 0.13.4-muse-1 patch is gone. muse-rs tag 0.1.2 still
-# asks for 0.13.4; that unifies onto this copy. rlx-cpu stays patched.
+# windwerfer 0.13.4-muse-1 patch is gone. rlx-cpu stays patched.
 [patch.crates-io]
 rlx-cpu = { path = "../vendor/rlx-cpu-0.2.14" }
 
