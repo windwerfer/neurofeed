@@ -1,6 +1,9 @@
 package org.windwerfer.neurofeed
 
+import android.annotation.SuppressLint
 import android.app.Activity
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -25,9 +28,11 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "neurofeed/saf"
         private const val INIT_CHANNEL = "neurofeed/init"
+        private const val BT_CHANNEL = "neurofeed/bluetooth"
         private const val WIFI_CHANNEL = "neurofeed/wifi"
         private const val REQ_PICK_DIR = 7401
         private const val REQ_PICK_FILE = 7402
+        private const val REQ_ENABLE_BT = 7403
         private const val TAG = "neurofeed_saf"
 
         // Defined in Rust (rust/src/api/muse.rs) — initializes btleplug's
@@ -40,6 +45,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private var pendingResult: Result? = null
+    private var pendingEnable: Result? = null
     private var lastTreeUri: String? = null
     private var multicastLock: WifiManager.MulticastLock? = null
 
@@ -53,6 +59,7 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 if (call.method == "ensureInitialized") {
                     try {
+                        BluetoothHost.setAppContext(applicationContext)
                         museAndroidInit(applicationContext)
                         result.success(true)
                     } catch (e: Exception) {
@@ -61,6 +68,18 @@ class MainActivity : FlutterActivity() {
                     }
                 } else {
                     result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BT_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "state" -> {
+                        BluetoothHost.setAppContext(applicationContext)
+                        result.success(bluetoothState())
+                    }
+                    "requestEnable" -> requestEnableBluetooth(result)
+                    else -> result.notImplemented()
                 }
             }
 
@@ -116,6 +135,12 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        val enable = pendingEnable
+        pendingEnable = null
+        try {
+            enable?.success(false)
+        } catch (_: Exception) {
+        }
         releaseMulticastLock()
         try {
             val engine = flutterEngine
@@ -133,8 +158,55 @@ class MainActivity : FlutterActivity() {
         super.onCreate(savedInstanceState)
     }
 
+    @SuppressLint("MissingPermission")
+    private fun bluetoothState(): String {
+        val manager = getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+        val adapter = manager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
+        return when {
+            adapter == null -> "absent"
+            adapter.isEnabled -> "on"
+            else -> "off"
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun requestEnableBluetooth(result: Result) {
+        BluetoothHost.setAppContext(applicationContext)
+        when (bluetoothState()) {
+            "on" -> {
+                result.success(true)
+                return
+            }
+            "absent" -> {
+                result.success(false)
+                return
+            }
+        }
+        if (pendingEnable != null) {
+            result.error("busy", "Bluetooth enable already in progress", null)
+            return
+        }
+        pendingEnable = result
+        try {
+            startActivityForResult(
+                Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE),
+                REQ_ENABLE_BT,
+            )
+        } catch (e: Exception) {
+            pendingEnable = null
+            Log.e(TAG, "bluetooth enable failed", e)
+            result.error("enable_failed", e.toString(), null)
+        }
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_ENABLE_BT) {
+            val pending = pendingEnable
+            pendingEnable = null
+            pending?.success(resultCode == Activity.RESULT_OK || bluetoothState() == "on")
+            return
+        }
         if (requestCode == REQ_PICK_DIR || requestCode == REQ_PICK_FILE) {
             val pending = pendingResult ?: return
             pendingResult = null

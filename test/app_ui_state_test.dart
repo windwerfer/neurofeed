@@ -31,4 +31,31 @@ void main() {
     expect(before.copyWith().scanMessage, 'Connecting… (attempt 1)');
     expect(before.copyWith(scanMessage: null).scanMessage, isNull);
   });
+
+  test('scan errors drop the anyhow backtrace', () {
+    const raw =
+        'AnyhowException(No Bluetooth adapter available\n'
+        '\n'
+        'Stack backtrace:\n'
+        '   0: <unknown>\n'
+        '   1: <unknown>';
+    expect(scanErrorMessage(raw), bluetoothOffMessage);
+    expect(
+      scanErrorMessage('AnyhowException(Bluetooth is turned off)'),
+      bluetoothOffMessage,
+    );
+    expect(
+      scanErrorMessage('AnyhowException(Device not found)'),
+      'Scan error: Device not found',
+    );
+  });
+
+  test('bluetooth block copy', () {
+    expect(bluetoothBlockMessage(BluetoothRadio.on), isNull);
+    expect(bluetoothBlockMessage(BluetoothRadio.off), bluetoothOffMessage);
+    expect(
+      bluetoothBlockMessage(BluetoothRadio.absent),
+      bluetoothAbsentMessage,
+    );
+  });
 }

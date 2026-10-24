@@ -37,6 +37,52 @@ const _linkReleaseTimeout = Duration(seconds: 70);
 /// Completes once the native btleplug context is guaranteed ready.
 final _btleplugReady = Completer<void>();
 
+enum BluetoothRadio { on, off, absent }
+
+const bluetoothOffMessage = 'Turn Bluetooth on, then tap Rescan.';
+
+const bluetoothAbsentMessage = 'This phone has no Bluetooth radio.';
+
+String? bluetoothBlockMessage(BluetoothRadio radio) => switch (radio) {
+  BluetoothRadio.on => null,
+  BluetoothRadio.off => bluetoothOffMessage,
+  BluetoothRadio.absent => bluetoothAbsentMessage,
+};
+
+String scanErrorMessage(Object error) {
+  var text = error.toString().split('\n').first.trim();
+  const prefix = 'AnyhowException(';
+  if (text.startsWith(prefix)) {
+    text = text.substring(prefix.length);
+    if (text.endsWith(')')) text = text.substring(0, text.length - 1);
+  }
+  if (text.contains('No Bluetooth adapter') ||
+      text.contains('Bluetooth is turned off')) {
+    return bluetoothOffMessage;
+  }
+  if (text.isEmpty) return 'Scan error';
+  return 'Scan error: $text';
+}
+
+Future<BluetoothRadio> prepareBluetoothRadio() async {
+  if (defaultTargetPlatform != TargetPlatform.android) {
+    return BluetoothRadio.on;
+  }
+  const channel = MethodChannel('neurofeed/bluetooth');
+  try {
+    final state = await channel.invokeMethod<String>('state');
+    debugPrint('[neurofeed] bluetooth radio: $state');
+    if (state == 'on') return BluetoothRadio.on;
+    if (state == 'absent') return BluetoothRadio.absent;
+    final enabled = await channel.invokeMethod<bool>('requestEnable');
+    debugPrint('[neurofeed] bluetooth enable: $enabled');
+    return enabled == true ? BluetoothRadio.on : BluetoothRadio.off;
+  } catch (e) {
+    debugPrint('[neurofeed] bluetooth prepare failed: $e');
+    return BluetoothRadio.off;
+  }
+}
+
 /// Ensures btleplug is initialized on Android before any BLE operation.
 /// On non-Android platforms, completes immediately.
 Future<void> ensureBtleplugReady() async {
@@ -232,6 +278,15 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         );
         return false;
       }
+      if (!await _bluetoothReadyForScan(
+        () =>
+            _scanEnabled &&
+            _allowAutoReconnect &&
+            !state.status.connected &&
+            state.connectSource == ConnectSource.muse,
+      )) {
+        return false;
+      }
       var chunks = 0;
       while (_scanEnabled &&
           _allowAutoReconnect &&
@@ -278,7 +333,10 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     } catch (e) {
       debugPrint('[neurofeed] autoconnect error: $e');
       if (_scanEnabled && _allowAutoReconnect) {
-        state = state.copyWith(scanning: false, scanMessage: 'Scan error: $e');
+        state = state.copyWith(
+          scanning: false,
+          scanMessage: scanErrorMessage(e),
+        );
       }
     }
     return state.status.connected;
@@ -351,6 +409,7 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
         }
         return;
       }
+      if (!await _bluetoothReadyForScan(ownScan)) return;
 
       var allDevices = <DeviceInfo>[];
 
@@ -385,9 +444,21 @@ class AppStateNotifier extends StateNotifier<AppUiState> {
     } catch (e) {
       debugPrint('[neurofeed] continuous scan error: $e');
       if (ownScan()) {
-        state = state.copyWith(scanning: false, scanMessage: 'Scan error: $e');
+        state = state.copyWith(
+          scanning: false,
+          scanMessage: scanErrorMessage(e),
+        );
       }
     }
+  }
+
+  Future<bool> _bluetoothReadyForScan(bool Function() stillOurs) async {
+    final radio = await prepareBluetoothRadio();
+    if (!stillOurs()) return false;
+    final block = bluetoothBlockMessage(radio);
+    if (block == null) return true;
+    state = state.copyWith(scanning: false, scanMessage: block);
+    return false;
   }
 
   /// OSC LAN discovery for the Neurosity source. Lists Crowns seen on the

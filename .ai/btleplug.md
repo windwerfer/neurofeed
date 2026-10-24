@@ -30,9 +30,21 @@ a dependency's patch, and the two version requirements unify onto
 btleplug (lockfile: 0.22.4). Do not pin btleplug back to `0.12.0` or
 `0.11.8`.
 
-Android Java under `android/app/src/main/java/` is a copy of
-`src/droidplug/java` from `0.13.5`. Keep them identical.
-`third_party/btleplug` branch `muse-0.13.5` is that same commit. It is
+Android Java under `android/app/src/main/java/com/nonpolynomial/btleplug/`
+is a copy of `src/droidplug/java` from `0.13.5`, plus one NeuroFeed change:
+`Adapter` and `Peripheral` take the radio from
+`org.windwerfer.neurofeed.BluetoothHost` instead of
+`BluetoothAdapter.getDefaultAdapter()`. Scan runs on a tokio thread that
+btleplug attaches with JNI. `getDefaultAdapter()` builds that thread's
+`AttributionSource`, which is not the app, so the adapter or its LE
+scanner is null and startScan throws `NoBluetoothAdapterException`.
+`BluetoothHost` uses the application `Context` captured on the main thread
+(`BluetoothManager.getAdapter()`). `MainActivity` sets that context in
+`ensureInitialized` before `museAndroidInit`. Re-apply this when copying a
+newer btleplug Java tree. `setLegacy(false)` is only set when the radio
+reports extended advertising; otherwise that call throws and the scan
+never starts.
+`third_party/btleplug` branch `muse-0.13.5` is upstream `0.13.5`. It is
 not what the app compiles.
 
 ## Historical patches (upstream as of 0.13.4)

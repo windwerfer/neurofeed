@@ -21,6 +21,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import org.windwerfer.neurofeed.BluetoothHost;
+
 import io.github.gedgygedgy.rust.future.Future;
 import io.github.gedgygedgy.rust.stream.QueueStream;
 import io.github.gedgygedgy.rust.future.SimpleFuture;
@@ -75,7 +77,7 @@ class Peripheral {
     private CommandCallback commandCallback;
 
     public Peripheral(Adapter adapter, String address) {
-        BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        BluetoothAdapter bluetoothAdapter = BluetoothHost.adapter();
         if (bluetoothAdapter == null) {
             throw new NoBluetoothAdapterException();
         }
