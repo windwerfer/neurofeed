@@ -35,7 +35,7 @@ reve-rs = { git = "https://github.com/eugenehp/reve-rs", rev = "9c8d8564b8793ce2
 # The direct `rlx` dep is for the public `rlx::Device` type used when loading
 # the encoder; feature `cpu` matches reveal-rs `rlx-cpu` so both unify onto one
 # copy of rlx 0.2.
-rlx = { version = "=0.2.13", default-features = false, features = ["cpu"] }
+rlx = { version = "=0.2.14", default-features = false, features = ["cpu"] }
 
 # Spur A CBraMod frozen encoder (CPU Candle path — pure Rust, mobile/desktop).
 candle-core = "0.11.0"
