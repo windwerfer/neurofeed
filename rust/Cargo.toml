@@ -10,7 +10,7 @@ crate-type = ["cdylib", "staticlib"]
 flutter_rust_bridge = "=2.11.1"
 # Fork of eugenehp/muse-rs 0.1.0. Tag 0.1.2 is e4891ba.
 muse-rs = { git = "https://github.com/windwerfer/muse-rs.git", tag = "0.1.2", default-features = false }
-btleplug = "0.13.4"
+btleplug = "0.13.5"
 jni = "0.22"
 tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time", "net"] }
 socket2 = "0.6"
@@ -44,14 +44,11 @@ rustfft = "6"
 # Import resampling (foreign EDF / MU-01 220 Hz CSV → 256 Hz), anti-aliased.
 rubato = "5"
 
-# Both rust_lib_neurofeed and muse-rs depend on btleplug from
-# crates.io. This patch replaces every copy with the fork, so one
-# JavaVM is linked. muse-rs's own [patch] is ignored while it is a
-# dependency. The fork tag is upstream 0.13.4 plus the QueueStream
-# lock fix. Local third_party/btleplug master tracks upstream and
-# does not include that fix.
+# btleplug 0.13.5 is the crates.io release (deviceplug tag 0.13.5).
+# It already removes the QueueStream item inside the lock, so the
+# windwerfer 0.13.4-muse-1 patch is gone. muse-rs tag 0.1.2 still
+# asks for 0.13.4; that unifies onto this copy. rlx-cpu stays patched.
 [patch.crates-io]
-btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.13.4-muse-1" }
 rlx-cpu = { path = "../vendor/rlx-cpu-0.2.14" }
 
 [target.'cfg(target_os = "linux")'.dependencies]

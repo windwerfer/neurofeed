@@ -7,12 +7,14 @@ Muse BLE protocol + transport. Direct dependency on our fork of
 muse-rs = { git = "https://github.com/windwerfer/muse-rs.git", tag = "0.1.2", default-features = false }
 ```
 
-Tag `0.1.2` is `e4891ba`. `third_party/muse-rs/` is the same commit.
-`default-features = false` keeps the TUI crates out. That crate depends
-on btleplug `0.13.4` and patches crates.io to
+Tag `0.1.2` is `e4891ba`. `third_party/muse-rs/` is the same commit,
+plus a local Cargo.toml that asks for crates.io btleplug `0.13.5` (not
+pushed). `default-features = false` keeps the TUI crates out. Published
+tag `0.1.2` still depends on btleplug `0.13.4` and patches crates.io to
 `github.com/windwerfer/btleplug` tag `0.13.4-muse-1` (`36ac8b0`). Cargo
-ignores that patch while muse-rs is a dependency, so `rust/Cargo.toml`
-repeats it.
+ignores that patch while muse-rs is a dependency. `rust/Cargo.toml`
+depends on crates.io btleplug `0.13.5`, and the two requirements
+unify onto that one copy.
 
 Classic presets, from BrainFlow `docs/SupportedBoards.rst` and
 `src/board_controller/muse/muse.cpp`. Do not use the old muse-rs table.

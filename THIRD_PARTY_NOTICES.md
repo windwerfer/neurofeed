@@ -46,7 +46,7 @@ See `Third-party → Rust → rlx / rlx-cpu` below.
 |-------|---------|---------|--------|
 | flutter_rust_bridge (Rust crate) | =2.11.1 | MIT | https://github.com/fzyzcjy/flutter_rust_bridge |
 | muse-rs (fork) | 0.1.2 (patches eugenehp 0.1.0) | Apache-2.0 | https://github.com/windwerfer/muse-rs |
-| btleplug (fork) | 0.13.4-muse-1 (`36ac8b0`) | BSD-3-Clause (© 2020–2021 Nonpolynomial) | https://github.com/windwerfer/btleplug |
+| btleplug | 0.13.5 | MIT / Apache-2.0 / BSD-3-Clause (© 2020–2021 Nonpolynomial) | https://github.com/deviceplug/btleplug |
 | jni | 0.22.4 | MIT / Apache-2.0 | https://github.com/jni-rs/jni-rs |
 | tokio | 1.53.1 | MIT | https://github.com/tokio-rs/tokio |
 | anyhow | 1.0.104 | MIT / Apache-2.0 | https://github.com/dtolnay/anyhow |

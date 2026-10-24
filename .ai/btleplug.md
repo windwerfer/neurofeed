@@ -1,47 +1,39 @@
-# btleplug fork — upstream 0.13.4 + QueueStream lock
+# btleplug — crates.io 0.13.5
 
 ## Purpose
 
-Track upstream btleplug **0.13.4** (`jni` 0.22). Upstream already attaches
-detached tokio threads, clears pending JNI exceptions, and reference-counts
-`FnAdapter` so a concurrent wake/close does not SIGSEGV. The one patch still
-applied on this fork is `QueueStream.pollNext`: the item is removed inside
-the monitor, and the lambda returns that value. Upstream still calls
-`LinkedList.remove()` from the lambda, which races `add()` on the binder
-thread.
+NeuroFeed depends on crates.io btleplug **0.13.5** (`jni` 0.22), which is
+deviceplug tag `0.13.5` (`1af8299`). Upstream already attaches detached
+tokio threads, clears pending JNI exceptions, and reference-counts
+`FnAdapter` so a concurrent wake/close does not SIGSEGV. `0.13.5` also
+removes the `QueueStream` item inside the lock (#497), so the
+windwerfer fork tag `0.13.4-muse-1` is not used.
 
-The notification-stream `log::warn` is not carried forward. On 0.13.4 a
-sticky error is a different bug (busy-loop), and a log line inside
-`FilterMap` does not stop it.
+The notification-stream `log::warn` is not carried forward. A sticky
+error is a different bug (busy-loop), and a log line inside `FilterMap`
+does not stop it.
 
-## Where is the fork
+## Where it is pinned
 
-**Tag:** `0.13.4-muse-1` at `36ac8b05276716fc96bbbbf7d60374572f0b321d`
-(branch `muse-0.13.4`). `third_party/btleplug` `master` tracks upstream
-`0.13.4` and does not contain this patch.
-
-`rust/Cargo.toml` depends on `btleplug = "0.13.4"` and patches crates.io
-to that tag, so muse-rs and the app link one copy:
+`rust/Cargo.toml`:
 
 ```toml
-btleplug = "0.13.4"
-
-[patch.crates-io]
-btleplug = { git = "https://github.com/windwerfer/btleplug.git", tag = "0.13.4-muse-1" }
+btleplug = "0.13.5"
 ```
 
-**Version matching:** the fork crate `version` is `"0.13.4"`, matching
-`btleplug = "0.13.4"`. If those diverge by semver, Cargo **silently
-ignores** `[patch.crates-io]` and you link unpatched crates.io btleplug
-(two JNI copies). Do not pin the fork back to `0.12.0` or `0.11.8`.
+There is no btleplug `[patch.crates-io]`. muse-rs tag `0.1.2` still
+requests `0.13.4` and patches crates.io to `0.13.4-muse-1`. Cargo ignores
+a dependency's patch, and the two version requirements unify onto
+`0.13.5`. One copy, one `JavaVM`.
+
 `jni = "0.22"` in `rust/Cargo.toml` must resolve to the same crate as
-btleplug (lockfile: 0.22.4). The patch target must be `crates-io`, not a
-git URL, so muse-rs's transitive dep is replaced too.
+btleplug (lockfile: 0.22.4). Do not pin btleplug back to `0.12.0` or
+`0.11.8`.
 
 Android Java under `android/app/src/main/java/` is a copy of
-`src/droidplug/java` at tag `0.13.4-muse-1`. Keep them identical.
-`third_party/btleplug` `master` is upstream and does not have the
-`pollNext` fix.
+`src/droidplug/java` from `0.13.5`. Keep them identical.
+`third_party/btleplug` branch `muse-0.13.5` is that same commit. It is
+not what the app compiles.
 
 ## Historical patches (upstream as of 0.13.4)
 

@@ -17,12 +17,11 @@ Current work: [`.ai/active-task.md`](.ai/active-task.md).
 - **muse-rs** — direct git dep on `windwerfer/muse-rs` tag `0.1.2`
   (`e4891ba`), fork of `eugenehp/muse-rs` `0.1.0`.
   `default-features = false`. See `.ai/muse-rs.md`.
-- **btleplug** — `github.com/windwerfer/btleplug` tag **`0.13.4-muse-1`**
-  (`36ac8b0`, branch `muse-0.13.4`), crate version **`0.13.4`** (must match
-  `btleplug = "0.13.4"` or Cargo silently skips the patch). Upstream 0.13.4
-  plus `QueueStream.pollNext` removing under the lock. The 0.12 JNI
-  attach, exception-clear, and wake/close patches are already in upstream.
-  `[patch.crates-io]` so muse-rs's dep shares one copy. See `.ai/btleplug.md`.
+- **btleplug** — crates.io **`0.13.5`** (deviceplug tag `0.13.5`,
+  `1af8299`). No fork patch. `QueueStream.pollNext` removes under the
+  lock in this release. The 0.12 JNI attach, exception-clear, and
+  wake/close patches are in upstream. muse-rs tag `0.1.2` still asks for
+  `0.13.4`; Cargo unifies onto this copy. See `.ai/btleplug.md`.
 - **`jni = "0.22"`** — must resolve to the same `jni` as btleplug (0.22.4)
   or you get link-time symbol conflicts. Android init uses
   `jni::EnvUnowned` (`jni` 0.22), not `JNIEnv::from_raw`.
@@ -207,7 +206,7 @@ assets/                     protocols.json, calibrations.json, features.json, au
 
 ## Where things live
 - BLE: `rust/src/api/muse.rs` (`scan`, `connect`, `subscribe_events`).
-- Android JNI: `btleplug::platform::init` from `Java_org_windwerfer_neurofeed_MainActivity_museAndroidInit` (`rust/src/api/muse.rs`). Thread attach is `JavaVM::attach_current_thread` inside btleplug 0.13 (`jni` 0.22). Bundled Java matches tag `0.13.4-muse-1` (`src/droidplug/java`), not `third_party/btleplug` `master`.
+- Android JNI: `btleplug::platform::init` from `Java_org_windwerfer_neurofeed_MainActivity_museAndroidInit` (`rust/src/api/muse.rs`). Thread attach is `JavaVM::attach_current_thread` inside btleplug 0.13 (`jni` 0.22). Bundled Java matches crates.io `0.13.5` (`src/droidplug/java`).
 - Devices: `DeviceKind` is Muse | Neurosity (`device_config.rs`). Connect
   dropdown is Dart `ConnectSource` (`connect_source.dart`). Simulation is
   `simulate` + `sim:*` ids (`simulator.rs`), not extra kind variants.
@@ -284,10 +283,10 @@ assets/                     protocols.json, calibrations.json, features.json, au
 
 ## Known hot spots
 - **Cargo `[patch]` version trap**: patched crate `version` must be
-  semver-compatible with the dep. btleplug fork is `0.13.4` matching
-  `btleplug = "0.13.4"`. **Do not pin the fork back to `0.12.0` or `0.11.8`.** Patch
-  target is `crates-io`. muse-rs is a direct git dep, not a patch. See
-  `.ai/btleplug.md`.
+  semver-compatible with the dep or Cargo silently skips the patch.
+  btleplug is crates.io `0.13.5` with no patch. Do not pin it back to
+  `0.12.0` or `0.11.8`. The `rlx-cpu` patch target is `crates-io`.
+  muse-rs is a direct git dep, not a patch. See `.ai/btleplug.md`.
 - **Vendored `rlx-cpu`** (`vendor/rlx-cpu-0.2.14`): `[patch.crates-io]`,
   default `blas` cleared. Keep `version = "0.2.14"` compatible with
   `rlx-runtime 0.2.14`. Clearing `blas` does not remove the macOS
