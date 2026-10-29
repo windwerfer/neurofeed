@@ -12,5 +12,8 @@ serde_json.workspace = true
 rmcp = { version = "3.8", default-features = false, features = ["server", "transport-io"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "sync"] }
 
+[dev-dependencies]
+nf-format.workspace = true
+
 [lints]
 workspace = true

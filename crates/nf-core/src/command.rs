@@ -5,6 +5,7 @@
 //! an `examples()` entry, then handle it in `Session`. Tests fail on drift.
 //! Input schemas are derived with schemars from the variant fields.
 
+use crate::recording::ExportFormat;
 use crate::state::{AppState, BandScale, View};
 use crate::CoreError;
 use schemars::JsonSchema;
@@ -37,18 +38,32 @@ pub enum Command {
     SimConfigure {
         #[serde(default)]
         seed: Option<u64>,
-        /// 0..=3 log units.
+        /// Alpha amplitude, 0..=200 µV.
         #[serde(default)]
-        alpha_gain: Option<f32>,
-        /// 0..=1 log units.
+        alpha_uv: Option<f64>,
+        /// White noise, 0..=200 µV.
         #[serde(default)]
-        noise: Option<f32>,
+        noise_uv: Option<f64>,
+        /// Mains hum amplitude, 0..=1000 µV.
+        #[serde(default)]
+        mains_uv: Option<f64>,
+        /// Mains frequency: 50 or 60.
+        #[serde(default)]
+        mains_hz: Option<f64>,
+        /// Electrode DC offset, -5000..=5000 µV.
+        #[serde(default)]
+        dc_uv: Option<f64>,
     },
     /// Advance session time (0 < seconds <= 3600) in 0.1 s steps.
     #[serde(rename = "clock.advance")]
     ClockAdvance { seconds: f64 },
     #[serde(rename = "events.drain")]
     EventsDrain,
+    /// Start recording the connected device (raw EEG + bands) in memory.
+    #[serde(rename = "recording.start")]
+    RecordingStart,
+    #[serde(rename = "recording.stop")]
+    RecordingStop,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -67,6 +82,37 @@ pub enum Query {
     DeviceList,
     #[serde(rename = "device.status")]
     DeviceStatus,
+    /// Recent samples per channel.
+    #[serde(rename = "raw.get")]
+    RawGet {
+        /// 0 < seconds <= 10; default 1.
+        #[serde(default)]
+        seconds: Option<f64>,
+        /// Conditioned (high-pass + notch) instead of as received; default true.
+        #[serde(default)]
+        filtered: Option<bool>,
+    },
+    /// Power spectral density of the last 1 s window per channel.
+    #[serde(rename = "psd.get")]
+    PsdGet {
+        /// Only this channel (by name, e.g. "TP9").
+        #[serde(default)]
+        channel: Option<String>,
+        /// Upper frequency, 1..=64 Hz; default 50.
+        #[serde(default)]
+        max_hz: Option<f64>,
+    },
+    #[serde(rename = "recording.status")]
+    RecordingStatus,
+    /// Encode the last finished recording; returns base64 bytes.
+    #[serde(rename = "recording.export")]
+    RecordingExport {
+        format: ExportFormat,
+        /// EDF start (year, month, day, hour, minute, second); the core has
+        /// no wall clock. Default 1985-01-01 00:00:00.
+        #[serde(default)]
+        start: Option<[u16; 6]>,
+    },
 }
 
 /// Either kind, as parsed from an id + JSON params.
@@ -111,6 +157,37 @@ fn can_resume(s: &AppState) -> Result<(), String> {
     }
 }
 
+fn has_signal(s: &AppState) -> Result<(), String> {
+    needs_device(s)?;
+    if s.bands.latest().is_some() {
+        Ok(())
+    } else {
+        Err("no signal yet (needs 1 s of data)".into())
+    }
+}
+fn can_record(s: &AppState) -> Result<(), String> {
+    needs_device(s)?;
+    if s.recording.as_ref().is_some_and(|r| r.active) {
+        Err("already recording".into())
+    } else {
+        Ok(())
+    }
+}
+fn is_recording(s: &AppState) -> Result<(), String> {
+    if s.recording.as_ref().is_some_and(|r| r.active) {
+        Ok(())
+    } else {
+        Err("not recording".into())
+    }
+}
+fn has_recording(s: &AppState) -> Result<(), String> {
+    match &s.recording {
+        Some(r) if !r.active => Ok(()),
+        Some(_) => Err("recording in progress; stop it first".into()),
+        None => Err("nothing recorded yet".into()),
+    }
+}
+
 const fn spec(
     id: &'static str,
     label: &'static str,
@@ -136,7 +213,27 @@ pub const SPECS: &[CommandSpec] = &[
     spec("device.connect", "Connect", "device", false, "Connect a device by id, e.g. sim:muse or sim:crown.", always),
     spec("device.disconnect", "Disconnect", "device", false, "Disconnect the current device.", needs_device),
     spec("device.status", "Device status", "device", true, "Connected device and buffered snapshot count.", always),
-    spec("sim.configure", "Configure simulator", "device", false, "Seed, alpha gain, noise. Reconnects a running simulator.", always),
+    spec(
+        "sim.configure",
+        "Configure simulator",
+        "device",
+        false,
+        "Seed, alpha/noise/mains/DC in µV. Reconnects a running simulator.",
+        always,
+    ),
+    spec("raw.get", "Raw EEG", "signal", true, "Last N seconds of samples per channel (filtered or as received), µV.", needs_device),
+    spec("psd.get", "Spectrum", "signal", true, "PSD (µV²/Hz) of the last 1 s per channel, with alpha peak.", has_signal),
+    spec("recording.start", "Start recording", "recording", false, "Record raw EEG + band snapshots in memory.", can_record),
+    spec("recording.stop", "Stop recording", "recording", false, "Stop and keep the recording for export.", is_recording),
+    spec("recording.status", "Recording status", "recording", true, "Active or last recording: device, duration, samples, bytes.", always),
+    spec(
+        "recording.export",
+        "Export recording",
+        "recording",
+        true,
+        "Encode the last recording as nfed6, raw_body or edf (base64).",
+        has_recording,
+    ),
     spec("clock.advance", "Advance clock", "time", false, "Advance session time (headless/tests). Max 3600 s per call.", always),
     spec("events.drain", "Drain events", "app", false, "Return and clear events since the last drain.", always),
 ];
@@ -176,14 +273,20 @@ pub fn examples() -> Vec<Request> {
         C(Command::ScaleSet { scale: BandScale::Relative }),
         C(Command::DeviceConnect { id: "sim:muse".into() }),
         C(Command::DeviceDisconnect),
-        C(Command::SimConfigure { seed: Some(1), alpha_gain: None, noise: None }),
+        C(Command::SimConfigure { seed: Some(1), alpha_uv: Some(20.0), noise_uv: None, mains_uv: None, mains_hz: None, dc_uv: None }),
         C(Command::ClockAdvance { seconds: 1.0 }),
         C(Command::EventsDrain),
+        C(Command::RecordingStart),
+        C(Command::RecordingStop),
         Q(Query::AppStatus),
         Q(Query::ViewList),
         Q(Query::BandsGet { scale: None }),
         Q(Query::DeviceList),
         Q(Query::DeviceStatus),
+        Q(Query::RawGet { seconds: Some(2.0), filtered: None }),
+        Q(Query::PsdGet { channel: Some("TP9".into()), max_hz: None }),
+        Q(Query::RecordingStatus),
+        Q(Query::RecordingExport { format: ExportFormat::Edf, start: None }),
     ]
 }
 

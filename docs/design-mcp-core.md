@@ -49,9 +49,9 @@ Risks:
 ```text
 crates/
   nf-types     L0  ids, units, stream descriptors, DTOs (serde + schemars)       [done: bands, DeviceInfo, traits]
-  nf-dsp       L1  filters, PSD, band powers, quality (copied from rust/)          [phase 2]
-  nf-sim       L1  deterministic seeded simulators (Muse 4ch, Crown 8ch)           [done: band level; raw port phase 2]
-  nf-format    L1  NFED6 container, EDF export (copied)                            [phase 2]
+  nf-dsp       L1  biquads/EegFilter, FFT, PSD, band powers, line-noise ratio     [done phase 2; quality, mains detector, features todo]
+  nf-sim       L1  deterministic seeded raw 256 Hz simulators (Muse 4ch, Crown 8ch) [done phase 2; PPG/IMU, scenarios todo]
+  nf-format    L1  NFEDBIN records/body, NFED6 container, EDF+ (ruzstd, wasm-ok)  [done phase 2]
   nf-core      L2  Session + command registry + event log; no egui/tokio; wasm     [done]
   nf-device    L3  btleplug Muse, Crown OSC (native); DeviceProvider impls          [phase 6]
   nf-store     L3  history behind HistoryStore trait (SQLite native)               [phase 5]
@@ -125,14 +125,17 @@ progress for long runs.
 
 ## 5. Simulator design (nf-sim)
 
-- Implements `BandSource`, opened through a `DeviceProvider` (`sim:muse`,
-  `sim:crown`), exactly like real devices.
-- Today: band-power level, 1/f baseline, slow alpha swell, seeded xorshift
-  noise; `sim.configure {seed, alpha_gain, noise}`.
-- Phase 2: port `rust/src/api/simulator.rs` to emit **raw** samples (+PPG/IMU
-  descriptors) so nf-dsp runs unchanged; scripted scenarios (eyes closed,
-  focus, blinks, jaw, electrode pop, contact loss, battery, dropouts);
-  `Replay` source for NFED6 recordings (golden tests vs the Dart engine).
+- Implements `DeviceSource` (raw `EegPacket`s, 12 samples at 256 Hz, µV),
+  opened through a `DeviceProvider` (`sim:muse`, `sim:crown`), exactly like
+  real devices. Core conditions (nf-dsp `EegFilter`: 0.5 Hz HP + 50/60 Hz
+  notches) and computes bands every 0.1 s over a 1 s window.
+- Done (phase 2): 10 Hz alpha with slow swell (edge pads full, inner 55 %),
+  1/f background (sines every 1.5 Hz, `6/sqrt(f)` µV), seeded noise,
+  optional mains hum and DC offset;
+  `sim.configure {seed, alpha_uv, noise_uv, mains_uv, mains_hz, dc_uv}`.
+- Todo: PPG/IMU streams; scripted scenarios (eyes closed, focus, blinks, jaw,
+  electrode pop, contact loss, battery, dropouts); `Replay` source for NFED6
+  recordings (golden tests vs the Dart engine).
 - Data, not assumptions: channels, rates, streams, montage, units come from
   the descriptor; nothing below the device layer branches on `DeviceKind`.
 

@@ -13,6 +13,8 @@ publish = false
 
 [workspace.dependencies]
 nf-types = { path = "crates/nf-types" }
+nf-dsp = { path = "crates/nf-dsp" }
+nf-format = { path = "crates/nf-format" }
 nf-sim = { path = "crates/nf-sim" }
 nf-core = { path = "crates/nf-core" }
 nf-mcp = { path = "crates/nf-mcp" }

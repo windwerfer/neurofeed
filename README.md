@@ -1,10 +1,13 @@
 # NeuroFeed (Rust)
 
 Rust-only rewrite of NeuroFeed: a headless core (`nf-core`), an MCP server
-exposing every command (`nf-mcp`), deterministic device simulators
+exposing every command (`nf-mcp`), signal processing (`nf-dsp`), recording
+formats NFED6/EDF+ (`nf-format`), deterministic raw-sample device simulators
 (`nf-sim`), and an egui/eframe UI for desktop and web (Android later).
 
-Status: Phase 1. Only the **Bands** view is functional (simulated Muse/Crown).
+Status: Phase 2. Only the **Bands** view is functional (simulated Muse/Crown,
+bands computed from raw samples). Raw EEG, PSD and recording/export are
+reachable via MCP (`raw.get`, `psd.get`, `recording.*`) but have no UI yet.
 
 ```sh
 cargo run --release -p neurofeed-egui                 # desktop

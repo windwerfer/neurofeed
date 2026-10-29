@@ -109,6 +109,8 @@ pub struct AppState {
     pub bands: BandHistory,
     /// Session time in seconds (advanced by `tick` / `clock_advance`).
     pub time: f64,
+    /// Active or last finished recording.
+    pub recording: Option<crate::recording::RecordingInfo>,
     /// Bumped on every state change (not on time/data ticks).
     pub revision: u64,
 }
@@ -123,6 +125,7 @@ impl Default for AppState {
             device: None,
             bands: BandHistory::default(),
             time: 0.0,
+            recording: None,
             revision: 0,
         }
     }

@@ -1,0 +1,12 @@
+[package]
+name = "nf-dsp"
+description = "L1: EEG signal processing (filters, FFT, PSD, band powers). Pure Rust, no deps, WASM-safe."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

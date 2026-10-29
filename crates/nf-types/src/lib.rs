@@ -89,14 +89,27 @@ pub struct DeviceInfo {
     pub name: String,
     pub kind: DeviceKind,
     pub channels: Vec<String>,
+    /// EEG sample rate (data, not an assumption: Muse and Crown are 256 Hz today).
+    pub sample_rate_hz: f64,
     pub simulated: bool,
 }
 
-/// A connected data source. `poll` is called from `Session::tick` with the
-/// session time; it must never block (WASM, UI thread).
-pub trait BandSource: Send {
+/// A block of raw EEG samples for one electrode, in µV.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct EegPacket {
+    /// Session time (s) of the **last** sample in the block.
+    pub time: f64,
+    /// Index into `DeviceInfo::channels`.
+    pub electrode: u16,
+    pub samples: Vec<f32>,
+}
+
+/// A connected device. `poll` is called from `Session::tick` with the session
+/// time and returns all raw packets due up to `now`. It must never block
+/// (WASM, UI thread) and never read a clock itself.
+pub trait DeviceSource: Send {
     fn info(&self) -> DeviceInfo;
-    fn poll(&mut self, now: f64) -> Option<BandSnapshot>;
+    fn poll(&mut self, now: f64) -> Vec<EegPacket>;
 }
 
 /// Something that can list and open devices: the simulator registry, a
@@ -106,7 +119,7 @@ pub trait DeviceProvider: Send {
     /// Id prefix this provider owns, e.g. `sim` or `ble`.
     fn scheme(&self) -> &'static str;
     fn list(&self) -> Vec<DeviceInfo>;
-    fn open(&mut self, id: &str) -> Result<Box<dyn BandSource>, String>;
+    fn open(&mut self, id: &str) -> Result<Box<dyn DeviceSource>, String>;
 }
 
 #[cfg(test)]

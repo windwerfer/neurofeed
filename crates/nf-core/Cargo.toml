@@ -9,6 +9,8 @@ publish.workspace = true
 [dependencies]
 nf-types.workspace = true
 nf-sim.workspace = true
+nf-dsp.workspace = true
+nf-format.workspace = true
 serde.workspace = true
 schemars.workspace = true
 serde_json.workspace = true

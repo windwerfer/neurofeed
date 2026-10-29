@@ -8,11 +8,14 @@
 #![forbid(unsafe_code)]
 
 mod command;
+mod recording;
 mod session;
+mod signal;
 mod state;
 
 pub use command::{examples, find, input_schema, Command, CommandSpec, EnabledFn, Query, Request, SPECS};
-pub use nf_types::{Band, BandSnapshot, BandSource, DeviceInfo, DeviceKind, DeviceProvider};
+pub use nf_types::{Band, BandSnapshot, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket};
+pub use recording::{ExportFormat, RecordingInfo};
 pub use session::{Event, Session};
 pub use state::{AppState, BandHistory, BandScale, View};
 
