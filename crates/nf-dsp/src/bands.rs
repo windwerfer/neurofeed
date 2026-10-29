@@ -37,7 +37,7 @@ impl Psd {
     }
 }
 
-/// Hann-windowed, mean-removed periodogram of the largest power-of-two
+/// Hamming-windowed (as the legacy `compute_fft_bands`), mean-removed periodogram of the largest power-of-two
 /// prefix of the **last** samples (at least 16). Bins up to `MAX_PSD_HZ`.
 pub fn psd(samples: &[f32], rate_hz: f64) -> Option<Psd> {
     if rate_hz <= 0.0 || samples.len() < 16 {
@@ -49,7 +49,7 @@ pub fn psd(samples: &[f32], rate_hz: f64) -> Option<Psd> {
     let mut re = Vec::with_capacity(n);
     let mut wsum = 0.0;
     for (i, &x) in tail.iter().enumerate() {
-        let w = 0.5 - 0.5 * (2.0 * PI * i as f64 / n as f64).cos();
+        let w = 0.54 - 0.46 * (2.0 * PI * i as f64 / (n - 1) as f64).cos();
         wsum += w * w;
         re.push((f64::from(x) - mean) * w);
     }
@@ -73,15 +73,56 @@ pub fn psd(samples: &[f32], rate_hz: f64) -> Option<Psd> {
     Some(Psd { df, power })
 }
 
-/// log10 of the mean PSD in each band (δ θ α β γ), floored at 1e-6 µV²/Hz.
-/// This is the scale the Bands view plots ("absolute").
+/// Band power in µV²: PSD summed over the band's bins × bin width (legacy
+/// `compute_fft_bands`).
+pub fn band_powers_linear(p: &Psd) -> [f64; 5] {
+    BANDS_HZ.map(|(lo, hi)| p.mean_in(lo, hi).map_or(0.0, |m| m * (hi - lo)))
+}
+
+/// log10 band powers (µV², floored at 1e-6). This is the scale the Bands
+/// view plots ("absolute").
 pub fn band_powers(samples: &[f32], rate_hz: f64) -> Option<[f32; 5]> {
-    let p = psd(samples, rate_hz)?;
-    let mut out = [0.0_f32; 5];
-    for (o, (lo, hi)) in out.iter_mut().zip(BANDS_HZ) {
-        *o = p.mean_in(lo, hi).unwrap_or(0.0).max(1e-6).log10() as f32;
+    Some(band_powers_linear(&psd(samples, rate_hz)?).map(|v| v.max(1e-6).log10() as f32))
+}
+
+/// Power (density × df) in the mains bins (±1 bin around `hz`).
+fn mains_bin_power(p: &Psd, hz: f64) -> f64 {
+    let c = (hz / p.df).round() as usize;
+    (c.saturating_sub(1)..=c + 1).filter_map(|k| p.power.get(k)).sum::<f64>() * p.df
+}
+
+/// Line-noise / impedance proxy used by pad quality: fraction of total
+/// power in the 50 or 60 Hz mains bins, whichever is larger (legacy).
+/// Needs a PSD that reaches 61 Hz.
+pub fn line_noise_fraction(p: &Psd) -> f64 {
+    let total: f64 = p.power.iter().skip(1).sum::<f64>() * p.df;
+    let mains = mains_bin_power(p, 50.0).max(mains_bin_power(p, 60.0));
+    if total > 0.0 {
+        mains / total
+    } else {
+        0.0
     }
-    Some(out)
+}
+
+/// 10·log10 of each PSD bin (dB re 1 µV²/Hz), floored at -120 dB.
+pub fn psd_db(p: &Psd) -> Vec<f32> {
+    p.power.iter().map(|&v| (10.0 * v.max(1e-12).log10()) as f32).collect()
+}
+
+/// Amplitude histogram: `bins` equal bins over `[-half_range, half_range)`
+/// µV after removing the mean; out-of-range samples go to the edge bins.
+pub fn histogram(samples: &[f32], bins: usize, half_range: f64) -> Vec<u32> {
+    let mut h = vec![0u32; bins];
+    if bins == 0 || samples.is_empty() || half_range <= 0.0 {
+        return h;
+    }
+    let mean = samples.iter().map(|&x| f64::from(x)).sum::<f64>() / samples.len() as f64;
+    for &x in samples {
+        let u = (f64::from(x) - mean + half_range) / (2.0 * half_range);
+        let i = ((u * bins as f64).floor().max(0.0) as usize).min(bins - 1);
+        h[i] += 1;
+    }
+    h
 }
 
 /// Index of the band with the largest **total** power (density × width).
@@ -101,8 +142,8 @@ pub fn peak_frequency(p: &Psd, lo: f64, hi: f64) -> Option<f64> {
 }
 
 /// Mains bins (±1 bin at `mains_hz`) relative to the median of the
-/// neighbouring non-mains bins (±8 Hz), as in the legacy line-noise ratio.
-pub fn line_noise_ratio(p: &Psd, mains_hz: f64) -> Option<f64> {
+/// neighbouring non-mains bins (±8 Hz): the legacy `mains_peak_ratios` vote.
+pub fn mains_peak_ratio(p: &Psd, mains_hz: f64) -> Option<f64> {
     let c = (mains_hz / p.df).round() as i64;
     let at = |k: i64| usize::try_from(k).ok().and_then(|k| p.power.get(k).copied());
     let peak: Vec<f64> = (c - 1..=c + 1).filter_map(at).collect();
