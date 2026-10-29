@@ -1,24 +1,23 @@
 //! Bands view: per-channel bar chart of delta/theta/alpha/beta/gamma power.
 
-use crate::data::{Band, BandSnapshot};
-use crate::state::{Action, AppState, BandScale};
 use crate::ui::theme;
 use egui::{Align2, FontId, Rect, Sense, Stroke, Vec2};
+use nf_core::{AppState, Band, BandScale, BandSnapshot, Command};
 
 /// Display range for absolute log10 power.
 const ABS_MIN: f32 = -1.0;
 const ABS_MAX: f32 = 2.0;
 
-pub fn show(ui: &mut egui::Ui, state: &AppState, actions: &mut Vec<Action>) {
+pub fn show(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
     ui.horizontal(|ui| {
         ui.heading("Band powers");
-        if state.device.simulated {
+        if state.device.as_ref().is_some_and(|d| d.simulated) {
             ui.weak("(simulated data)");
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             for (scale, label) in [(BandScale::Relative, "Relative %"), (BandScale::Absolute, "Absolute (log)")] {
                 if ui.selectable_label(state.band_scale == scale, label).clicked() {
-                    actions.push(Action::SetBandScale(scale));
+                    out.push(Command::ScaleSet { scale });
                 }
             }
         });
@@ -26,23 +25,25 @@ pub fn show(ui: &mut egui::Ui, state: &AppState, actions: &mut Vec<Action>) {
     legend(ui);
     ui.separator();
 
+    let Some(device) = &state.device else {
+        ui.label("No device connected. Pick a simulator in the top bar.");
+        return;
+    };
     let Some(snapshot) = state.bands.latest() else {
         ui.label("Waiting for data…");
         return;
     };
 
-    let n = state.device.channels.len().max(1);
+    let n = device.channels.len().max(1);
     let avail = ui.available_size();
-    let cols = if avail.x > 700.0 { n.min(4) } else { 2.min(n) };
+    let cols = if avail.x > 700.0 { n.min(4) } else { n.min(2) };
     let rows = n.div_ceil(cols);
     let gap = 12.0;
-    let cell = Vec2::new(
-        (avail.x - gap * (cols as f32 - 1.0)) / cols as f32,
-        ((avail.y - gap * (rows as f32 - 1.0)) / rows as f32).max(120.0),
-    );
+    let cell =
+        Vec2::new((avail.x - gap * (cols as f32 - 1.0)) / cols as f32, ((avail.y - gap * (rows as f32 - 1.0)) / rows as f32).max(120.0));
 
     egui::Grid::new("bands_grid").spacing([gap, gap]).show(ui, |ui| {
-        for (ch, name) in state.device.channels.iter().enumerate() {
+        for (ch, name) in device.channels.iter().enumerate() {
             channel_card(ui, cell, name, ch, snapshot, state.band_scale);
             if (ch + 1) % cols == 0 {
                 ui.end_row();
@@ -62,14 +63,7 @@ fn legend(ui: &mut egui::Ui) {
     });
 }
 
-fn channel_card(
-    ui: &mut egui::Ui,
-    size: Vec2,
-    name: &str,
-    ch: usize,
-    snapshot: &BandSnapshot,
-    scale: BandScale,
-) {
+fn channel_card(ui: &mut egui::Ui, size: Vec2, name: &str, ch: usize, snapshot: &BandSnapshot, scale: BandScale) {
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let painter = ui.painter_at(rect);
     let visuals = ui.visuals();
@@ -98,6 +92,12 @@ fn channel_card(
         painter.rect_filled(Rect::from_min_max(egui::pos2(x0, top), egui::pos2(x1, baseline)), 3.0, theme::band_color(*band));
         let cx = (x0 + x1) / 2.0;
         painter.text(egui::pos2(cx, top - 2.0), Align2::CENTER_BOTTOM, text, FontId::monospace(11.0), visuals.text_color());
-        painter.text(egui::pos2(cx, baseline + 4.0), Align2::CENTER_TOP, &band.name()[..1], FontId::proportional(12.0), visuals.weak_text_color());
+        painter.text(
+            egui::pos2(cx, baseline + 4.0),
+            Align2::CENTER_TOP,
+            &band.name()[..1],
+            FontId::proportional(12.0),
+            visuals.weak_text_color(),
+        );
     }
 }

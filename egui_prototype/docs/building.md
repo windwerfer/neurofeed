@@ -6,12 +6,13 @@ Linux desktop needs the usual X11/Wayland + OpenGL libraries.
 
 | Task | Command |
 |---|---|
-| Desktop run | `cargo run --release` |
-| Web dev server | `trunk serve --release` → http://127.0.0.1:8080 |
-| Web static build | `trunk build --release` → `dist/` |
+| Desktop run | `cargo run --release -p neurofeed-egui` |
+| MCP server (stdio) | `cargo run -p neurofeed-mcp -- [--manual-clock] [--device sim:crown]` |
+| Web dev server | `cd apps/neurofeed-egui && trunk serve --release` → http://127.0.0.1:8080 |
+| Web static build | `cd apps/neurofeed-egui && trunk build --release` → `dist/` |
 | Tests | `cargo test` |
-| Lints | `cargo clippy --all-targets` |
-| WASM type check | `cargo check --target wasm32-unknown-unknown` |
+| Lints | `cargo clippy --all-targets -- -D warnings` and `cargo fmt --all --check` |
+| WASM type check | `cargo check -p neurofeed-egui --target wasm32-unknown-unknown` (nf-mcp is native only) |
 
 Rendering uses eframe's `glow` (OpenGL / WebGL) backend to keep the dependency
 tree small. Switch to `wgpu` in `Cargo.toml` if needed.

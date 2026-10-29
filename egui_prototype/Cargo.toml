@@ -1,33 +1,32 @@
-[package]
-name = "neurofeed-egui"
+# Standalone workspace (not part of any parent Cargo workspace).
+[workspace]
+resolver = "2"
+members = ["crates/*", "apps/*"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
-publish = false
-description = "egui/eframe prototype of the NeuroFeed UI (desktop + web)"
 license = "MIT"
+publish = false
 
-# Standalone: not part of any parent Cargo workspace.
-[workspace]
-
-[dependencies]
-eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow"] }
-egui = "0.29"
+[workspace.dependencies]
+nf-types = { path = "crates/nf-types" }
+nf-sim = { path = "crates/nf-sim" }
+nf-core = { path = "crates/nf-core" }
+nf-mcp = { path = "crates/nf-mcp" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "1"
+thiserror = "2"
 log = "0.4"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-env_logger = "0.11"
-eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ["Document", "Window", "Element", "HtmlCanvasElement"] }
-
-[lints.rust]
+[workspace.lints.rust]
 unsafe_code = "forbid"
 
-[lints.clippy]
-unwrap_used = "warn"
-expect_used = "warn"
-
-[profile.release]
-opt-level = 2
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"

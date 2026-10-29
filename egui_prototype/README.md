@@ -1,30 +1,16 @@
-# NeuroFeed egui prototype
+# NeuroFeed (Rust)
 
-A clean-room [egui](https://github.com/emilk/egui)/eframe prototype of the
-NeuroFeed UI: left sidebar, top bar, and a main view area. One codebase runs
-as a native desktop app and in the browser (WebAssembly via trunk).
+Rust-only rewrite of NeuroFeed: a headless core (`nf-core`), an MCP server
+exposing every command (`nf-mcp`), deterministic device simulators
+(`nf-sim`), and an egui/eframe UI for desktop and web (Android later).
 
-Status: **prototype**. Only the **Bands** view is functional and it shows
-simulated EEG band powers. Every other sidebar item shows "Not implemented yet".
-
-## Run
+Status: Phase 1. Only the **Bands** view is functional (simulated Muse/Crown).
 
 ```sh
-# desktop
-cargo run --release
-
-# web (needs: rustup target add wasm32-unknown-unknown; cargo install trunk --locked)
-trunk serve --release      # open http://127.0.0.1:8080
-trunk build --release      # static files in dist/
+cargo run --release -p neurofeed-egui                 # desktop
+cd apps/neurofeed-egui && trunk serve --release       # web, http://127.0.0.1:8080
+cargo run -p neurofeed-mcp -- --manual-clock          # MCP over stdio
+cargo test && cargo clippy --all-targets -- -D warnings
 ```
 
-## Check
-
-```sh
-cargo build
-cargo test
-cargo clippy --all-targets
-cargo check --target wasm32-unknown-unknown
-```
-
-See [AGENTS.md](AGENTS.md) and [docs/](docs/) for structure and conventions.
+Read [AGENTS.md](AGENTS.md), then [docs/](docs/).

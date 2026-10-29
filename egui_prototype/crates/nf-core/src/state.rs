@@ -1,9 +1,13 @@
-//! Application state and the actions that change it. No egui in here.
+//! Application state. Plain data; changed only by `Session`.
 
-use crate::data::{BandSnapshot, DeviceInfo};
+use nf_types::{BandSnapshot, DeviceInfo};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 
-/// Top-level views, in sidebar order (mirrors the Flutter app).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Top-level views, in sidebar order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum View {
     Feedback,
     History,
@@ -45,21 +49,26 @@ impl View {
             View::Settings => "Settings",
         }
     }
+
+    /// Only Bands is implemented so far.
+    pub fn implemented(self) -> bool {
+        self == View::Bands
+    }
 }
 
-/// How the bands view scales its bars.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum BandScale {
     /// log10 absolute power.
     Absolute,
-    /// Share of the channel total (0..100 %).
+    /// Share of the channel total.
     Relative,
 }
 
-/// Rolling buffer of recent snapshots.
-#[derive(Debug, Default)]
+/// Bounded ring buffer of recent snapshots.
+#[derive(Debug, Clone, Default)]
 pub struct BandHistory {
-    snapshots: std::collections::VecDeque<BandSnapshot>,
+    snapshots: VecDeque<BandSnapshot>,
 }
 
 impl BandHistory {
@@ -83,46 +92,38 @@ impl BandHistory {
     pub fn is_empty(&self) -> bool {
         self.snapshots.is_empty()
     }
+
+    pub fn clear(&mut self) {
+        self.snapshots.clear();
+    }
 }
 
-/// Everything the UI renders from.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AppState {
     pub view: View,
     pub sidebar_open: bool,
     pub paused: bool,
     pub band_scale: BandScale,
-    pub device: DeviceInfo,
+    /// Connected device, if any.
+    pub device: Option<DeviceInfo>,
     pub bands: BandHistory,
+    /// Session time in seconds (advanced by `tick` / `clock_advance`).
+    pub time: f64,
+    /// Bumped on every state change (not on time/data ticks).
+    pub revision: u64,
 }
 
-/// User intents emitted by the UI; applied after the frame is drawn.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Action {
-    SelectView(View),
-    ToggleSidebar,
-    TogglePause,
-    SetBandScale(BandScale),
-}
-
-impl AppState {
-    pub fn new(device: DeviceInfo) -> Self {
+impl Default for AppState {
+    fn default() -> Self {
         Self {
             view: View::Bands,
             sidebar_open: true,
             paused: false,
             band_scale: BandScale::Absolute,
-            device,
+            device: None,
             bands: BandHistory::default(),
-        }
-    }
-
-    pub fn apply(&mut self, action: Action) {
-        match action {
-            Action::SelectView(v) => self.view = v,
-            Action::ToggleSidebar => self.sidebar_open = !self.sidebar_open,
-            Action::TogglePause => self.paused = !self.paused,
-            Action::SetBandScale(s) => self.band_scale = s,
+            time: 0.0,
+            revision: 0,
         }
     }
 }

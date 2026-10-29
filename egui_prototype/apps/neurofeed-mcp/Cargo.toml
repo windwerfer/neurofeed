@@ -1,0 +1,17 @@
+[package]
+name = "neurofeed-mcp"
+description = "MCP server binary (stdio) over a headless nf-core Session"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nf-core.workspace = true
+nf-mcp.workspace = true
+rmcp = { version = "3.8", default-features = false, features = ["server", "transport-io"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std"] }
+serde_json.workspace = true
+
+[lints]
+workspace = true

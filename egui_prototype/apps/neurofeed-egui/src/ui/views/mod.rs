@@ -3,11 +3,11 @@
 mod bands;
 mod placeholder;
 
-use crate::state::{Action, AppState, View};
+use nf_core::{AppState, Command, View};
 
-pub fn show(ui: &mut egui::Ui, state: &AppState, actions: &mut Vec<Action>) {
+pub fn show(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
     match state.view {
-        View::Bands => bands::show(ui, state, actions),
+        View::Bands => bands::show(ui, state, out),
         other => placeholder::show(ui, other),
     }
 }

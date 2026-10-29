@@ -1,0 +1,33 @@
+//! # nf-core (L2)
+//!
+//! The NeuroFeed application core: a [`Session`] that owns all state, takes
+//! every user/agent action as a serde [`Command`] (or read-only [`Query`]),
+//! and advances time only through [`Session::tick`]. The egui app and the MCP
+//! server are thin shells over it. No UI toolkit, no async runtime, no
+//! threads or filesystem: compiles to wasm32.
+#![forbid(unsafe_code)]
+
+mod command;
+mod session;
+mod state;
+
+pub use command::{examples, find, input_schema, Command, CommandSpec, EnabledFn, Query, Request, SPECS};
+pub use nf_types::{Band, BandSnapshot, BandSource, DeviceInfo, DeviceKind, DeviceProvider};
+pub use session::{Event, Session};
+pub use state::{AppState, BandHistory, BandScale, View};
+
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
+pub enum CoreError {
+    #[error("unknown command `{0}`")]
+    UnknownCommand(String),
+    #[error("invalid arguments: {0}")]
+    InvalidArgs(String),
+    #[error("device: {0}")]
+    Device(String),
+    #[error("`{id}` is disabled: {reason}")]
+    Disabled { id: String, reason: String },
+    #[error("{0}")]
+    BadRequest(String),
+}
+
+pub type Reply = serde_json::Value;

@@ -1,7 +1,7 @@
 //! Colors and global style.
 
-use crate::data::Band;
 use egui::Color32;
+use nf_core::Band;
 
 pub const SIDEBAR_WIDTH: f32 = 170.0;
 pub const TOPBAR_HEIGHT: f32 = 44.0;
