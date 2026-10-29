@@ -5,7 +5,7 @@
 //! DSP included, is testable without hardware.
 #![forbid(unsafe_code)]
 
-use nf_types::{DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket};
+use nf_types::{DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, PpgPacket};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::TAU;
@@ -14,6 +14,16 @@ use std::f64::consts::TAU;
 pub const SAMPLE_RATE_HZ: f64 = 256.0;
 /// Samples per packet, as Muse BLE EEG notifications.
 pub const SAMPLES_PER_PACKET: usize = 12;
+/// PPG rate and packet size of the Muse S / Athena optics (legacy `PPG_HZ`).
+pub const PPG_RATE_HZ: f64 = 64.0;
+pub const PPG_SAMPLES_PER_PACKET: usize = 6;
+/// PPG channel names (legacy channel 0 ambient, 1 infrared, 2 red).
+pub const PPG_CHANNELS: [&str; 3] = ["ambient", "infrared", "red"];
+/// Optical DC levels and IR pulse amplitude (legacy `ppg_sample`).
+const IR_DC: f64 = 200_000.0;
+const RED_DC: f64 = 180_000.0;
+const IR_AC: f64 = 8_000.0;
+const AMBIENT_DC: f64 = 800.0;
 
 /// Tunables, changeable at runtime via the `sim.configure` command.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -30,11 +40,41 @@ pub struct SimConfig {
     pub mains_hz: f64,
     /// Constant electrode offset in µV (raw Muse data sits far from 0).
     pub dc_uv: f64,
+    /// Mean heart rate (PPG devices), bpm.
+    #[serde(default = "default_hr")]
+    pub hr_bpm: f64,
+    /// Oxygen saturation the optics encode via the red/IR ratio, %.
+    #[serde(default = "default_spo2")]
+    pub spo2_pct: f64,
+    /// Heart-rate variability: respiratory (0.25 Hz) modulation of the
+    /// beat interval, ± ms, plus seeded jitter of a fifth of that.
+    #[serde(default = "default_hrv")]
+    pub hrv_ms: f64,
+}
+
+fn default_hr() -> f64 {
+    60.0
+}
+fn default_spo2() -> f64 {
+    97.0
+}
+fn default_hrv() -> f64 {
+    40.0
 }
 
 impl Default for SimConfig {
     fn default() -> Self {
-        Self { seed: 0x9E37_79B9_7F4A_7C15, alpha_uv: 15.0, noise_uv: 1.0, mains_uv: 0.0, mains_hz: 50.0, dc_uv: 0.0 }
+        Self {
+            seed: 0x9E37_79B9_7F4A_7C15,
+            alpha_uv: 15.0,
+            noise_uv: 1.0,
+            mains_uv: 0.0,
+            mains_hz: 50.0,
+            dc_uv: 0.0,
+            hr_bpm: 60.0,
+            spo2_pct: 97.0,
+            hrv_ms: 40.0,
+        }
     }
 }
 
@@ -49,6 +89,10 @@ pub struct SimDevice {
     start: Option<f64>,
     next: u64,
     rng: u64,
+    ppg_next: u64,
+    /// Upcoming beat onsets (device seconds), oldest first.
+    beats: Vec<f64>,
+    beat_rng: u64,
 }
 
 /// Background: sines near every 1.5 Hz from 1.5 to ~44 Hz with amplitude
@@ -60,7 +104,52 @@ const BACKGROUND_COMPONENTS: usize = 29;
 
 impl SimDevice {
     pub fn new(kind: DeviceKind, config: SimConfig) -> Self {
-        Self { info: sim_info(kind), config, start: None, next: 0, rng: config.seed.max(1) }
+        Self::with_info(sim_info(kind), config)
+    }
+
+    pub fn with_info(info: DeviceInfo, config: SimConfig) -> Self {
+        let beat_rng = (config.seed ^ 0xD1B5_4A32_D192_ED03).max(1);
+        Self { info, config, start: None, next: 0, rng: config.seed.max(1), ppg_next: 0, beats: vec![0.2], beat_rng }
+    }
+
+    /// Normalised pulse at `t` (device s): systolic peak (1.0 at 0.12 s
+    /// after onset) plus a dicrotic shoulder; beat intervals follow
+    /// `hr_bpm` with respiratory HRV and seeded jitter.
+    pub fn pulse(&mut self, t: f64) -> f64 {
+        let mean_rr = 60.0 / self.config.hr_bpm.clamp(20.0, 250.0);
+        let hrv = self.config.hrv_ms / 1000.0;
+        while self.beats.last().is_some_and(|&b| b < t + 1.0) {
+            let last = self.beats.last().copied().unwrap_or(0.0);
+            self.beat_rng ^= self.beat_rng << 13;
+            self.beat_rng ^= self.beat_rng >> 7;
+            self.beat_rng ^= self.beat_rng << 17;
+            let jitter = ((self.beat_rng >> 11) as f64 / (1u64 << 53) as f64 - 0.5) * 0.4 * hrv;
+            let rr = (mean_rr + hrv * (TAU * 0.25 * last).sin() + jitter).max(0.25);
+            self.beats.push(last + rr);
+        }
+        let keep = self.beats.iter().position(|&b| b > t - 2.0).unwrap_or(0).saturating_sub(1);
+        self.beats.drain(..keep);
+        self.beats
+            .iter()
+            .filter(|&&b| b <= t)
+            .map(|&b| {
+                let p = t - b;
+                (-((p - 0.12) / 0.06).powi(2)).exp() + 0.3 * (-((p - 0.35) / 0.1).powi(2)).exp()
+            })
+            .sum()
+    }
+
+    /// Optical sample of PPG channel `ch` at `t`. Red AC is scaled so the
+    /// ratio of ratios gives `spo2_pct` (SpO2 = 110 - 25 R).
+    pub fn ppg_sample(&mut self, t: f64, ch: usize) -> f64 {
+        let pulse = self.pulse(t);
+        let r = (110.0 - self.config.spo2_pct) / 25.0;
+        match ch {
+            0 => AMBIENT_DC + 15.0 * pulse,
+            1 => IR_DC + IR_AC * pulse,
+            2 => RED_DC + r * (IR_AC / IR_DC) * RED_DC * pulse,
+            _ => 0.0,
+        }
     }
 
     /// xorshift64*: uniform in -1.0..1.0.
@@ -114,11 +203,60 @@ impl DeviceSource for SimDevice {
         }
         out
     }
+
+    fn poll_ppg(&mut self, now: f64) -> Vec<PpgPacket> {
+        let (Some(start), Some(rate)) = (self.start, self.info.ppg_rate_hz) else { return Vec::new() };
+        let due = ((now - start) * rate + 1e-6).floor().max(-1.0) as i64 + 1;
+        let mut out = Vec::new();
+        while (self.ppg_next + PPG_SAMPLES_PER_PACKET as u64) as i64 <= due {
+            let first = self.ppg_next;
+            // Samples in time order, then split per channel (pulse() walks beats forward).
+            let rows: Vec<Vec<f32>> = (0..PPG_SAMPLES_PER_PACKET as u64)
+                .map(|k| {
+                    let t = (first + k) as f64 / rate;
+                    (0..self.info.ppg_channels.len()).map(|ch| self.ppg_sample(t, ch) as f32).collect()
+                })
+                .collect();
+            for ch in 0..self.info.ppg_channels.len() {
+                out.push(PpgPacket {
+                    time: start + (first + PPG_SAMPLES_PER_PACKET as u64 - 1) as f64 / rate,
+                    channel: u16::try_from(ch).unwrap_or(u16::MAX),
+                    samples: rows.iter().map(|r| r[ch]).collect(),
+                });
+            }
+            self.ppg_next += PPG_SAMPLES_PER_PACKET as u64;
+        }
+        out
+    }
+}
+
+/// Simulator ids. `sim:muse` is kept as an alias of `sim:muse_s`.
+pub const SIM_IDS: [&str; 3] = ["sim:muse_s", "sim:athena", "sim:crown"];
+
+/// Descriptor for a simulator id (aliases resolved), or `None`.
+pub fn sim_info_for(id: &str) -> Option<DeviceInfo> {
+    let mut info = match id {
+        "sim:muse_s" | "sim:muse" => sim_info(DeviceKind::Muse),
+        "sim:athena" => {
+            // Same EEG montage and legacy 3-channel PPG view of the optics;
+            // Athena AUX (4) and fNIRS channels are not simulated.
+            let mut i = sim_info(DeviceKind::Muse);
+            i.id = "sim:athena".into();
+            i.name = "Muse S Athena (simulated)".into();
+            i
+        }
+        "sim:crown" => sim_info(DeviceKind::Crown),
+        _ => return None,
+    };
+    if id == "sim:muse" {
+        info.id = "sim:muse_s".into();
+    }
+    Some(info)
 }
 
 pub fn sim_info(kind: DeviceKind) -> DeviceInfo {
     let (id, name, channels): (&str, &str, &[&str]) = match kind {
-        DeviceKind::Muse => ("sim:muse", "Muse S (simulated)", &["TP9", "AF7", "AF8", "TP10"]),
+        DeviceKind::Muse => ("sim:muse_s", "Muse S (simulated)", &["TP9", "AF7", "AF8", "TP10"]),
         DeviceKind::Crown => ("sim:crown", "Crown (simulated)", &["CP3", "C3", "F5", "PO3", "PO4", "F6", "C4", "CP4"]),
     };
     DeviceInfo {
@@ -128,6 +266,8 @@ pub fn sim_info(kind: DeviceKind) -> DeviceInfo {
         channels: channels.iter().map(|c| (*c).to_owned()).collect(),
         sample_rate_hz: SAMPLE_RATE_HZ,
         simulated: true,
+        ppg_channels: if kind == DeviceKind::Muse { PPG_CHANNELS.iter().map(|c| (*c).to_owned()).collect() } else { Vec::new() },
+        ppg_rate_hz: (kind == DeviceKind::Muse).then_some(PPG_RATE_HZ),
     }
 }
 
@@ -143,16 +283,12 @@ impl DeviceProvider for SimProvider {
     }
 
     fn list(&self) -> Vec<DeviceInfo> {
-        vec![sim_info(DeviceKind::Muse), sim_info(DeviceKind::Crown)]
+        SIM_IDS.iter().filter_map(|id| sim_info_for(id)).collect()
     }
 
     fn open(&mut self, id: &str) -> Result<Box<dyn DeviceSource>, String> {
-        let kind = match id {
-            "sim:muse" => DeviceKind::Muse,
-            "sim:crown" => DeviceKind::Crown,
-            other => return Err(format!("unknown simulator `{other}`")),
-        };
-        Ok(Box::new(SimDevice::new(kind, self.config)))
+        let info = sim_info_for(id).ok_or_else(|| format!("unknown simulator `{id}`; have {}", SIM_IDS.join(", ")))?;
+        Ok(Box::new(SimDevice::with_info(info, self.config)))
     }
 }
 
@@ -181,5 +317,27 @@ mod tests {
         let src = p.open("sim:crown").ok();
         assert_eq!(src.map(|s| s.info().channels.len()), Some(8));
         assert!(p.open("sim:nope").is_err());
+        assert_eq!(p.open("sim:muse").ok().map(|s| s.info().id), Some("sim:muse_s".into()));
+        assert!(p.open("sim:crown").ok().is_some_and(|s| !s.info().has_ppg()));
+    }
+
+    #[test]
+    fn ppg_heart_rate_and_spo2_round_trip_through_dsp() {
+        for (id, hr, spo2) in [("sim:muse_s", 60.0, 97.0), ("sim:athena", 90.0, 92.0)] {
+            let cfg = SimConfig { hr_bpm: hr, spo2_pct: spo2, ..SimConfig::default() };
+            let mut p = SimProvider { config: cfg };
+            let Ok(mut d) = p.open(id) else { panic!("{id}") };
+            d.poll(0.0);
+            let mut ch = [Vec::new(), Vec::new(), Vec::new()];
+            d.poll(10.0);
+            for pk in d.poll_ppg(10.0) {
+                ch[usize::from(pk.channel)].extend(pk.samples.iter().map(|&x| f64::from(x)));
+            }
+            assert_eq!(ch[1].len(), 636, "64 Hz, whole packets of 6");
+            let (bpm, conf) = nf_dsp::heart_rate(&ch[1], PPG_RATE_HZ).unwrap_or_default();
+            assert!((bpm - hr).abs() < 3.0 && conf > 0.8, "{id}: {bpm} {conf}");
+            let (s, _) = nf_dsp::spo2(&ch[1], &ch[2], PPG_RATE_HZ).unwrap_or_default();
+            assert!((s - spo2).abs() < 1.0, "{id}: {s}");
+        }
     }
 }

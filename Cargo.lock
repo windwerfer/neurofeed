@@ -1750,6 +1750,7 @@ dependencies = [
 name = "nf-sim"
 version = "0.1.0"
 dependencies = [
+ "nf-dsp",
  "nf-types",
  "schemars",
  "serde",

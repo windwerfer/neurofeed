@@ -135,3 +135,34 @@ fn histogram_and_features() {
     let a = band_feature("band.atr", &band_powers_linear(&p)).unwrap();
     assert!(a > 50.0, "{a}");
 }
+
+/// Pulse-like IR/red at 64 Hz: systolic peak + dicrotic shoulder, red AC
+/// scaled to ratio `r`.
+fn ppg(bpm: f64, r: f64, secs: f64) -> (Vec<f64>, Vec<f64>) {
+    let fs = 64.0;
+    let rr = 60.0 / bpm;
+    let shape = |t: f64| {
+        let ph = (t / rr).fract() * rr;
+        (-((ph - 0.12) / 0.06).powi(2)).exp() + 0.3 * (-((ph - 0.35) / 0.1).powi(2)).exp()
+    };
+    let n = (secs * fs) as usize;
+    let ir = (0..n).map(|i| 200_000.0 + 8_000.0 * shape(i as f64 / fs)).collect();
+    let red = (0..n).map(|i| 180_000.0 + r * 8_000.0 / 200_000.0 * 180_000.0 * shape(i as f64 / fs)).collect();
+    (ir, red)
+}
+
+#[test]
+fn heart_rate_and_spo2_known_answers() {
+    for bpm in [50.0, 60.0, 72.0, 120.0] {
+        let (ir, _) = ppg(bpm, 0.5, 10.0);
+        let (hr, conf) = heart_rate(&ir, 64.0).unwrap();
+        assert!((hr - bpm).abs() < 2.0, "{bpm} -> {hr}");
+        assert!(conf > 0.9);
+    }
+    // SpO2 = 110 - 25 R: R 0.52 -> 97 %.
+    let (ir, red) = ppg(60.0, 0.52, 10.0);
+    let (s, _) = spo2(&ir, &red, 64.0).unwrap();
+    assert!((s - 97.0).abs() < 0.5, "{s}");
+    assert_eq!(spo2(&ir[..200], &red[..200], 64.0), None, "needs 4 s");
+    assert_eq!(heart_rate(&[200_000.0; 640], 64.0), None, "flat light");
+}

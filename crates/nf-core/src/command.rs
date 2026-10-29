@@ -54,6 +54,15 @@ pub enum Command {
         /// Electrode DC offset, -5000..=5000 µV.
         #[serde(default)]
         dc_uv: Option<f64>,
+        /// Simulated heart rate (PPG devices), 40..=180 bpm.
+        #[serde(default)]
+        hr_bpm: Option<f64>,
+        /// Simulated SpO2, 80..=100 %.
+        #[serde(default)]
+        spo2_pct: Option<f64>,
+        /// Beat-interval variability, 0..=150 ms.
+        #[serde(default)]
+        hrv_ms: Option<f64>,
     },
     /// Advance session time (0 < seconds <= 3600) in 0.1 s steps.
     #[serde(rename = "clock.advance")]
@@ -114,6 +123,19 @@ pub enum Query {
         /// Upper frequency, 1..=64 Hz; default 50.
         #[serde(default)]
         max_hz: Option<f64>,
+    },
+    /// Heart rate from PPG (latest, confidence, history), every 1 s.
+    #[serde(rename = "hr.get")]
+    HrGet,
+    /// SpO2 from PPG (ratio of ratios), every 1 s.
+    #[serde(rename = "spo2.get")]
+    Spo2Get,
+    /// Recent raw optical samples per PPG channel.
+    #[serde(rename = "ppg.get")]
+    PpgGet {
+        /// 0 < seconds <= 30; default 5.
+        #[serde(default)]
+        seconds: Option<f64>,
     },
     /// Mains detection / notch and per-pad quality (usable >= 80).
     #[serde(rename = "signal.status")]
@@ -199,6 +221,14 @@ fn can_resume(s: &AppState) -> Result<(), String> {
     }
 }
 
+fn has_ppg(s: &AppState) -> Result<(), String> {
+    needs_device(s)?;
+    if s.device.as_ref().is_some_and(|d| d.has_ppg()) {
+        Ok(())
+    } else {
+        Err("connected device has no PPG".into())
+    }
+}
 fn has_signal(s: &AppState) -> Result<(), String> {
     needs_device(s)?;
     if s.bands.latest().is_some() {
@@ -267,6 +297,9 @@ pub const SPECS: &[CommandSpec] = &[
     spec("psd.get", "Spectrum", "signal", true, "PSD (µV²/Hz) of the last 1 s per channel, with alpha peak.", has_signal),
     spec("recording.start", "Start recording", "recording", false, "Record raw EEG + band snapshots in memory.", can_record),
     spec("recording.stop", "Stop recording", "recording", false, "Stop and keep the recording for export.", is_recording),
+    spec("hr.get", "Heart rate", "optics", true, "Heart rate (bpm) from PPG with confidence and history.", has_ppg),
+    spec("spo2.get", "SpO2", "optics", true, "Blood oxygen (%) from PPG IR/red with confidence and history.", has_ppg),
+    spec("ppg.get", "PPG samples", "optics", true, "Last N seconds of raw optical samples per PPG channel.", has_ppg),
     spec("signal.status", "Signal status", "signal", true, "Mains detected/applied, notch lock, per-pad quality and usability.", always),
     spec("features.get", "Features", "signal", true, "Band ratio features averaged over usable pads.", has_signal),
     spec("histogram.get", "Histogram", "signal", true, "Amplitude histogram of the conditioned signal per channel.", has_signal),
@@ -321,7 +354,17 @@ pub fn examples() -> Vec<Request> {
         C(Command::ScaleSet { scale: BandScale::Relative }),
         C(Command::DeviceConnect { id: "sim:muse".into() }),
         C(Command::DeviceDisconnect),
-        C(Command::SimConfigure { seed: Some(1), alpha_uv: Some(20.0), noise_uv: None, mains_uv: None, mains_hz: None, dc_uv: None }),
+        C(Command::SimConfigure {
+            seed: Some(1),
+            alpha_uv: Some(20.0),
+            noise_uv: None,
+            mains_uv: None,
+            mains_hz: None,
+            dc_uv: None,
+            hr_bpm: Some(72.0),
+            spo2_pct: None,
+            hrv_ms: None,
+        }),
         C(Command::ClockAdvance { seconds: 1.0 }),
         C(Command::EventsDrain),
         C(Command::RecordingStart { wall_clock_unix_ms: Some(1_793_000_000_000.0) }),
@@ -329,6 +372,9 @@ pub fn examples() -> Vec<Request> {
         C(Command::MainsSet { mode: MainsMode::Hz60 }),
         C(Command::ChannelSet { channel: "AF7".into() }),
         Q(Query::SignalStatus),
+        Q(Query::HrGet),
+        Q(Query::Spo2Get),
+        Q(Query::PpgGet { seconds: Some(3.0) }),
         Q(Query::FeaturesGet),
         Q(Query::HistogramGet { seconds: Some(1.0), bins: Some(32), half_range_uv: None }),
         Q(Query::SpectrogramGet { channel: None, max_hz: Some(40.0) }),

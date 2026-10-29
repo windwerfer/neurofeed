@@ -51,7 +51,7 @@ impl View {
     }
 
     pub fn implemented(self) -> bool {
-        matches!(self, View::Bands | View::RawEeg | View::Histogram | View::Spectrogram | View::Psd)
+        matches!(self, View::Bands | View::HeartRate | View::RawEeg | View::Histogram | View::Spectrogram | View::Psd)
     }
 }
 

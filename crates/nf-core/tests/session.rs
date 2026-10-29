@@ -49,7 +49,7 @@ fn batch_is_atomic() {
     ];
     assert!(s.batch(&steps).is_err());
     assert_eq!(s.state().view, View::Bands);
-    assert_eq!(s.state().device.as_ref().map(|d| d.id.as_str()), Some("sim:muse"));
+    assert_eq!(s.state().device.as_ref().map(|d| d.id.as_str()), Some("sim:muse_s"));
     assert_eq!(s.state().revision, rev);
     // pre-validation: unknown id fails before anything runs
     assert!(s.batch(&[("view.set".into(), json!({ "view": "psd" })), ("nope".into(), json!({}))]).is_err());

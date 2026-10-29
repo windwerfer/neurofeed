@@ -11,5 +11,8 @@ nf-types.workspace = true
 serde.workspace = true
 schemars.workspace = true
 
+[dev-dependencies]
+nf-dsp.workspace = true
+
 [lints]
 workspace = true

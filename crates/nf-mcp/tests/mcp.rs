@@ -56,7 +56,7 @@ fn disabled_reason_is_exposed() {
 fn full_session_via_tools_with_manual_clock() {
     let s = server();
     let devices = ok(&s, "device_list", json!({}));
-    assert!(devices.as_array().is_some_and(|d| d.iter().any(|d| d["id"] == "sim:muse")));
+    assert!(devices.as_array().is_some_and(|d| d.iter().any(|d| d["id"] == "sim:muse_s")));
 
     let rev0 = ok(&s, "status", json!({}))["revision"].as_u64();
     run(&s, "device.connect", json!({ "id": "sim:muse" }));
@@ -245,7 +245,7 @@ fn record_stop_and_export_all_formats() {
 
     let c = nf_format::decode_container(&exp("nfed6")).unwrap_or_else(|e| panic!("{e}"));
     let meta: Value = serde_json::from_slice(&c.metadata_json).unwrap_or_default();
-    assert_eq!(meta["device"]["id"], json!("sim:muse"));
+    assert_eq!(meta["device"]["id"], json!("sim:muse_s"));
     assert_eq!(nf_format::parse_body(&c.raw_body).map(|r| r.len()), Ok(records.len()));
 
     let edf = nf_format::edf::decode_edf_plus(&exp("edf")).unwrap_or_else(|e| panic!("{e:?}"));
@@ -358,4 +358,33 @@ fn histogram_and_spectrogram_queries() {
     assert_eq!(peak, Some(10));
     assert!(s.call("command_run", json!({ "id": "channel.set", "params": { "channel": "XX" } })).is_err());
     assert!(s.call("command_run", json!({ "id": "histogram.get", "params": { "bins": 1 } })).is_err());
+}
+
+#[test]
+fn hr_and_spo2_from_simulated_ppg() {
+    let s = server();
+    run(&s, "sim.configure", json!({ "hr_bpm": 60.0, "spo2_pct": 96.0 }));
+    for id in ["sim:muse_s", "sim:athena", "sim:muse"] {
+        run(&s, "device.connect", json!({ "id": id }));
+        run(&s, "clock.advance", json!({ "seconds": 12.0 }));
+        let hr = run(&s, "hr.get", json!({}));
+        let v = hr["value"].as_f64().unwrap_or_default();
+        assert!((v - 60.0).abs() < 3.0, "{id}: {hr}");
+        assert!(hr["history"].as_array().is_some_and(|h| h.len() >= 8));
+        let sp = run(&s, "spo2.get", json!({}));
+        assert!((sp["value"].as_f64().unwrap_or_default() - 96.0).abs() < 1.0, "{id}: {sp}");
+        let p = run(&s, "ppg.get", json!({ "seconds": 2.0 }));
+        assert_eq!(p["channels"][1]["channel"], "infrared");
+        assert_eq!(p["channels"][1]["samples"].as_array().map(Vec::len), Some(128));
+    }
+    let st = run(&s, "device.status", json!({}));
+    assert_eq!(st["device"]["id"], "sim:muse_s", "sim:muse is an alias");
+    run(&s, "sim.configure", json!({ "hr_bpm": 100.0 }));
+    run(&s, "clock.advance", json!({ "seconds": 12.0 }));
+    let v = run(&s, "hr.get", json!({}))["value"].as_f64().unwrap_or_default();
+    assert!((v - 100.0).abs() < 4.0, "{v}");
+    run(&s, "device.connect", json!({ "id": "sim:crown" }));
+    let d = ok(&s, "command_describe", json!({ "id": "hr.get" }));
+    assert_eq!(d["disabled_reason"], "connected device has no PPG");
+    assert!(s.call("command_run", json!({ "id": "sim.configure", "params": { "hr_bpm": 500 } })).is_err());
 }

@@ -92,6 +92,34 @@ pub struct DeviceInfo {
     /// EEG sample rate (data, not an assumption: Muse and Crown are 256 Hz today).
     pub sample_rate_hz: f64,
     pub simulated: bool,
+    /// Optical (PPG) channels, e.g. `["ambient", "infrared", "red"]` on Muse
+    /// S / Athena; empty when the device has no PPG.
+    #[serde(default)]
+    pub ppg_channels: Vec<String>,
+    /// PPG sample rate (runtime data; Muse streams 64 Hz).
+    #[serde(default)]
+    pub ppg_rate_hz: Option<f64>,
+}
+
+impl DeviceInfo {
+    pub fn has_ppg(&self) -> bool {
+        self.ppg_rate_hz.is_some() && !self.ppg_channels.is_empty()
+    }
+
+    /// Index of a PPG channel by name.
+    pub fn ppg_index(&self, name: &str) -> Option<usize> {
+        self.ppg_channels.iter().position(|c| c == name)
+    }
+}
+
+/// A block of raw optical samples for one PPG channel (sensor counts).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct PpgPacket {
+    /// Session time (s) of the **last** sample in the block.
+    pub time: f64,
+    /// Index into `DeviceInfo::ppg_channels`.
+    pub channel: u16,
+    pub samples: Vec<f32>,
 }
 
 /// A block of raw EEG samples for one electrode, in µV.
@@ -110,6 +138,10 @@ pub struct EegPacket {
 pub trait DeviceSource: Send {
     fn info(&self) -> DeviceInfo;
     fn poll(&mut self, now: f64) -> Vec<EegPacket>;
+    /// PPG packets due up to `now` (same rules as `poll`). Default: none.
+    fn poll_ppg(&mut self, _now: f64) -> Vec<PpgPacket> {
+        Vec::new()
+    }
 }
 
 /// Something that can list and open devices: the simulator registry, a

@@ -15,7 +15,7 @@ impl NeuroFeedApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         ui::theme::apply(&cc.egui_ctx);
         let mut app = Self::with_session(Session::new());
-        app.run(Command::DeviceConnect { id: "sim:muse".into() });
+        app.run(Command::DeviceConnect { id: "sim:muse_s".into() });
         // Optional start view (screenshots/demos), e.g. NF_VIEW=psd.
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(view) = std::env::var("NF_VIEW").ok().and_then(|v| serde_json::from_value(serde_json::Value::String(v)).ok()) {

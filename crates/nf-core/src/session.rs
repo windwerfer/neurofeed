@@ -33,6 +33,7 @@ pub enum Event {
 #[derive(Clone, Default)]
 struct Live {
     signal: Option<Signal>,
+    optics: Option<crate::optics::Optics>,
     recorder: Option<Recorder>,
     finished: Option<Finished>,
 }
@@ -155,6 +156,12 @@ impl Session {
         // Always drain the device (no backlog burst on resume); pause only
         // freezes what the views show. Recording continues while paused.
         let packets = src.poll(now);
+        let optical = src.poll_ppg(now);
+        if !self.state.paused {
+            if let Some(o) = self.live.optics.as_mut() {
+                optical.iter().for_each(|p| o.push(p));
+            }
+        }
         let mut full = false;
         for p in &packets {
             if let Some(r) = self.live.recorder.as_mut() {
@@ -264,7 +271,7 @@ impl Session {
             }
             Command::DeviceConnect { id } => self.connect(&id)?,
             Command::DeviceDisconnect => self.disconnect(),
-            Command::SimConfigure { seed, alpha_uv, noise_uv, mains_uv, mains_hz, dc_uv } => {
+            Command::SimConfigure { seed, alpha_uv, noise_uv, mains_uv, mains_hz, dc_uv, hr_bpm, spo2_pct, hrv_ms } => {
                 let check = |name: &str, v: Option<f64>, lo: f64, hi: f64| match v {
                     Some(x) if !(x.is_finite() && (lo..=hi).contains(&x)) => {
                         Err(CoreError::InvalidArgs(format!("{name} must be in [{lo}, {hi}]")))
@@ -275,6 +282,9 @@ impl Session {
                 check("noise_uv", noise_uv, 0.0, 200.0)?;
                 check("mains_uv", mains_uv, 0.0, 1000.0)?;
                 check("dc_uv", dc_uv, -5000.0, 5000.0)?;
+                check("hr_bpm", hr_bpm, 40.0, 180.0)?;
+                check("spo2_pct", spo2_pct, 80.0, 100.0)?;
+                check("hrv_ms", hrv_ms, 0.0, 150.0)?;
                 if mains_hz.is_some_and(|h| h != 50.0 && h != 60.0) {
                     return Err(CoreError::InvalidArgs("mains_hz must be 50 or 60".into()));
                 }
@@ -285,6 +295,9 @@ impl Session {
                 c.mains_uv = mains_uv.unwrap_or(c.mains_uv);
                 c.mains_hz = mains_hz.unwrap_or(c.mains_hz);
                 c.dc_uv = dc_uv.unwrap_or(c.dc_uv);
+                c.hr_bpm = hr_bpm.unwrap_or(c.hr_bpm);
+                c.spo2_pct = spo2_pct.unwrap_or(c.spo2_pct);
+                c.hrv_ms = hrv_ms.unwrap_or(c.hrv_ms);
                 let reconnect = self.state.device.as_ref().filter(|d| d.simulated).map(|d| d.id.clone());
                 if let Some(id) = reconnect {
                     self.connect(&id)?;
@@ -359,6 +372,7 @@ impl Session {
         self.disconnect();
         let info = src.info();
         self.live.signal = Some(Signal::new(&info, self.state.mains_mode));
+        self.live.optics = crate::optics::Optics::new(&info);
         self.emit(Event::Connected { id: info.id.clone() });
         self.state.device = Some(info);
         self.source = Some(src);
@@ -369,6 +383,7 @@ impl Session {
         self.stop_recording("device disconnected");
         self.source = None;
         self.live.signal = None;
+        self.live.optics = None;
         self.state.bands.clear();
         if let Some(d) = self.state.device.take() {
             self.emit(Event::Disconnected { id: d.id });
@@ -407,6 +422,9 @@ impl Session {
             }),
             Query::RawGet { seconds, filtered } => self.raw_json(seconds.unwrap_or(1.0), filtered.unwrap_or(true))?,
             Query::PsdGet { channel, max_hz } => self.psd_json(channel.as_deref(), max_hz.unwrap_or(50.0))?,
+            Query::HrGet => self.estimate_json(true)?,
+            Query::Spo2Get => self.estimate_json(false)?,
+            Query::PpgGet { seconds } => self.ppg_json(seconds.unwrap_or(5.0))?,
             Query::SignalStatus => self.signal_status(),
             Query::FeaturesGet => self.features_json()?,
             Query::HistogramGet { seconds, bins, half_range_uv } => {
@@ -435,6 +453,39 @@ impl Session {
     /// Typed read access for views: connected device and its signal path.
     pub fn live_signal(&self) -> Option<(&nf_types::DeviceInfo, &Signal)> {
         self.signal().ok()
+    }
+
+    /// Typed read access for the HR+SpO2 view.
+    pub fn optics(&self) -> Option<&crate::optics::Optics> {
+        self.live.optics.as_ref()
+    }
+
+    fn optics_or_err(&self) -> Result<&crate::optics::Optics, CoreError> {
+        self.live.optics.as_ref().ok_or_else(|| CoreError::Device("connected device has no PPG".into()))
+    }
+
+    fn estimate_json(&self, hr: bool) -> Result<Reply, CoreError> {
+        let o = self.optics_or_err()?;
+        let h = if hr { &o.hr } else { &o.spo2 };
+        let cur = crate::optics::Optics::current(h, o.time);
+        Ok(json!({
+            "time": o.time,
+            "unit": if hr { "bpm" } else { "%" },
+            "value": cur.map(|e| e.value),
+            "confidence": cur.map(|e| e.confidence),
+            "history": h.iter().map(|e| [e.time, e.value]).collect::<Vec<_>>(),
+        }))
+    }
+
+    fn ppg_json(&self, seconds: f64) -> Result<Reply, CoreError> {
+        if !(seconds.is_finite() && seconds > 0.0 && seconds <= crate::optics::PPG_BUFFER_S) {
+            return Err(CoreError::InvalidArgs(format!("seconds must be in (0, {}]", crate::optics::PPG_BUFFER_S)));
+        }
+        let o = self.optics_or_err()?;
+        let names = self.state.device.as_ref().map(|d| d.ppg_channels.clone()).unwrap_or_default();
+        let n = (seconds * o.rate).round() as usize;
+        let channels: Vec<_> = names.iter().enumerate().map(|(i, c)| json!({ "channel": c, "samples": o.last(i, n) })).collect();
+        Ok(json!({ "time": o.time, "rate_hz": o.rate, "unit": "counts", "channels": channels }))
     }
 
     fn channel_index(dev: &nf_types::DeviceInfo, channel: Option<&str>) -> Result<Option<usize>, CoreError> {

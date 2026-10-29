@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 mod command;
+pub mod optics;
 mod recording;
 mod session;
 pub mod signal;
@@ -16,7 +17,7 @@ mod state;
 pub use command::{examples, find, input_schema, Command, CommandSpec, EnabledFn, Query, Request, SPECS};
 /// DSP primitives for views that render core buffers (pure functions).
 pub use nf_dsp as dsp;
-pub use nf_types::{Band, BandSnapshot, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket};
+pub use nf_types::{Band, BandSnapshot, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, PpgPacket};
 pub use recording::{ExportFormat, RecordingInfo};
 pub use session::{Event, Session};
 pub use signal::{mains_name, MainsMode, Signal};

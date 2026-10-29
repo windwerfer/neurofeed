@@ -11,6 +11,7 @@ mod features;
 mod fft;
 mod filter;
 mod mains;
+mod ppg;
 mod quality;
 
 pub use bands::{
@@ -21,4 +22,5 @@ pub use features::{band_feature, FEATURE_IDS};
 pub use fft::fft_in_place;
 pub use filter::{notch_frequencies, Biquad, EegFilter, Mains, HIGHPASS_HZ, NOTCH_Q};
 pub use mains::{mains_vote, MainsDetector, DETECT_WINDOW, LOCK_VOTES, PEAK_RATIO, SWITCH_VOTES};
+pub use ppg::{heart_rate, pulse_ac, spo2, PPG_WINDOW_S, PULSE_MIN_S, SPO2_A, SPO2_B, SPO2_MIN_S};
 pub use quality::{pad_quality, sample_std, MIN_QUALITY_SAMPLES, USABLE_QUALITY};

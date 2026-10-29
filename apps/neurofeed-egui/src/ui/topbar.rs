@@ -4,7 +4,8 @@ use super::theme;
 use nf_core::{mains_name, Command, MainsMode, Session};
 
 /// Devices offered in the picker (real providers will add theirs later).
-const DEVICES: [(&str, &str); 2] = [("sim:muse", "Muse S (simulated)"), ("sim:crown", "Crown (simulated)")];
+const DEVICES: [(&str, &str); 3] =
+    [("sim:muse_s", "Muse S (simulated)"), ("sim:athena", "Muse S Athena (simulated)"), ("sim:crown", "Crown (simulated)")];
 
 pub fn show(ctx: &egui::Context, session: &Session, error: Option<&str>, out: &mut Vec<Command>) {
     let state = session.state();
