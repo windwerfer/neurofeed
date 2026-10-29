@@ -364,7 +364,7 @@ fn histogram_and_spectrogram_queries() {
 fn hr_and_spo2_from_simulated_ppg() {
     let s = server();
     run(&s, "sim.configure", json!({ "hr_bpm": 60.0, "spo2_pct": 96.0 }));
-    for id in ["sim:muse_s", "sim:athena", "sim:muse"] {
+    for id in ["sim:muse_s", "sim:muse2", "sim:muse"] {
         run(&s, "device.connect", json!({ "id": id }));
         run(&s, "clock.advance", json!({ "seconds": 12.0 }));
         let hr = run(&s, "hr.get", json!({}));
@@ -383,8 +383,12 @@ fn hr_and_spo2_from_simulated_ppg() {
     run(&s, "clock.advance", json!({ "seconds": 12.0 }));
     let v = run(&s, "hr.get", json!({}))["value"].as_f64().unwrap_or_default();
     assert!((v - 100.0).abs() < 4.0, "{v}");
-    run(&s, "device.connect", json!({ "id": "sim:crown" }));
-    let d = ok(&s, "command_describe", json!({ "id": "hr.get" }));
-    assert_eq!(d["disabled_reason"], "connected device has no PPG");
+    for (id, name) in [("sim:crown", "Crown (simulated)"), ("sim:athena", "Muse S Athena (simulated)")] {
+        run(&s, "device.connect", json!({ "id": id }));
+        for q in ["hr.get", "spo2.get", "ppg.get"] {
+            let d = ok(&s, "command_describe", json!({ "id": q }));
+            assert_eq!(d["disabled_reason"], format!("{name} has no PPG (HR/SpO2: Muse 2 and Muse S only)"));
+        }
+    }
     assert!(s.call("command_run", json!({ "id": "sim.configure", "params": { "hr_bpm": 500 } })).is_err());
 }

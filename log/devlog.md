@@ -36,9 +36,9 @@
 
 ## 2026-10-29: PPG, heart rate, SpO2
 - nf-types: DeviceInfo.ppg_channels + ppg_rate_hz (runtime data), PpgPacket, DeviceSource::poll_ppg (default none).
-- nf-sim: sim:muse_s and sim:athena with 3-channel PPG (ambient/infrared/red, 64 Hz, legacy DC levels); pulse =
+- nf-sim: sim:muse_s and sim:muse2 (sim:athena: no PPG, corrected) with 3-channel PPG (ambient/infrared/red, 64 Hz, legacy DC levels); pulse =
   systolic peak + dicrotic shoulder, beat intervals from hr_bpm with respiratory HRV (hrv_ms) and seeded jitter;
-  red AC set so ratio-of-ratios yields spo2_pct. sim:muse aliases sim:muse_s. Athena AUX/fNIRS not simulated.
+  red AC set so ratio-of-ratios yields spo2_pct. sim:muse aliases sim:muse_s. Athena optics/AUX: later patch set.
 - nf-dsp: heart_rate / spo2 / pulse_ac ported from rust/src/api/muse.rs (rate parameterised).
 - nf-core: Optics (30 s buffers, estimates every 1 s, 120-entry history); hr.get, spo2.get, ppg.get; sim.configure
   hr_bpm/spo2_pct/hrv_ms. egui HR+SpO2 view (values, IR wave, trend).

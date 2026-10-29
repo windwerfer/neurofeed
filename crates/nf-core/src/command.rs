@@ -226,7 +226,7 @@ fn has_ppg(s: &AppState) -> Result<(), String> {
     if s.device.as_ref().is_some_and(|d| d.has_ppg()) {
         Ok(())
     } else {
-        Err("connected device has no PPG".into())
+        Err(format!("{} has no PPG (HR/SpO2: Muse 2 and Muse S only)", s.device.as_ref().map_or("device", |d| d.name.as_str())))
     }
 }
 fn has_signal(s: &AppState) -> Result<(), String> {

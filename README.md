@@ -6,7 +6,7 @@ formats NFED6/EDF+ (`nf-format`), deterministic raw-sample device simulators
 (`nf-sim`), and an egui/eframe UI for desktop and web (Android later).
 
 Status: Phase 3 + PPG. Functional views: **Bands, Raw EEG, PSD, Spectrogram,
-Histogram, HR+SpO2** (simulators `sim:muse_s`, `sim:athena`, `sim:crown`;
+Histogram, HR+SpO2** (simulators `sim:muse_s`, `sim:muse2`, `sim:athena` (no PPG), `sim:crown`;
 `sim:muse` is an alias of `sim:muse_s`), plus record/stop and an auto/50/60/off
 notch with per-pad quality in the top bar. Everything is also reachable via
 MCP (`raw.get`, `psd.get`, `spectrogram.get`, `histogram.get`,

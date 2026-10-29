@@ -231,18 +231,26 @@ impl DeviceSource for SimDevice {
 }
 
 /// Simulator ids. `sim:muse` is kept as an alias of `sim:muse_s`.
-pub const SIM_IDS: [&str; 3] = ["sim:muse_s", "sim:athena", "sim:crown"];
+pub const SIM_IDS: [&str; 4] = ["sim:muse_s", "sim:muse2", "sim:athena", "sim:crown"];
 
 /// Descriptor for a simulator id (aliases resolved), or `None`.
 pub fn sim_info_for(id: &str) -> Option<DeviceInfo> {
     let mut info = match id {
         "sim:muse_s" | "sim:muse" => sim_info(DeviceKind::Muse),
+        "sim:muse2" => {
+            let mut i = sim_info(DeviceKind::Muse);
+            i.id = "sim:muse2".into();
+            i.name = "Muse 2 (simulated)".into();
+            i
+        }
         "sim:athena" => {
-            // Same EEG montage and legacy 3-channel PPG view of the optics;
-            // Athena AUX (4) and fNIRS channels are not simulated.
+            // Same EEG montage, no PPG: Athena optics (and AUX) come later
+            // in their own patch set.
             let mut i = sim_info(DeviceKind::Muse);
             i.id = "sim:athena".into();
             i.name = "Muse S Athena (simulated)".into();
+            i.ppg_channels.clear();
+            i.ppg_rate_hz = None;
             i
         }
         "sim:crown" => sim_info(DeviceKind::Crown),
@@ -319,11 +327,13 @@ mod tests {
         assert!(p.open("sim:nope").is_err());
         assert_eq!(p.open("sim:muse").ok().map(|s| s.info().id), Some("sim:muse_s".into()));
         assert!(p.open("sim:crown").ok().is_some_and(|s| !s.info().has_ppg()));
+        assert!(p.open("sim:athena").ok().is_some_and(|s| !s.info().has_ppg()));
+        assert!(p.open("sim:muse2").ok().is_some_and(|s| s.info().has_ppg()));
     }
 
     #[test]
     fn ppg_heart_rate_and_spo2_round_trip_through_dsp() {
-        for (id, hr, spo2) in [("sim:muse_s", 60.0, 97.0), ("sim:athena", 90.0, 92.0)] {
+        for (id, hr, spo2) in [("sim:muse_s", 60.0, 97.0), ("sim:muse2", 90.0, 92.0)] {
             let cfg = SimConfig { hr_bpm: hr, spo2_pct: spo2, ..SimConfig::default() };
             let mut p = SimProvider { config: cfg };
             let Ok(mut d) = p.open(id) else { panic!("{id}") };

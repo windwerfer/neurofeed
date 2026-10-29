@@ -461,7 +461,7 @@ impl Session {
     }
 
     fn optics_or_err(&self) -> Result<&crate::optics::Optics, CoreError> {
-        self.live.optics.as_ref().ok_or_else(|| CoreError::Device("connected device has no PPG".into()))
+        self.live.optics.as_ref().ok_or_else(|| CoreError::Device("connected device has no PPG (HR/SpO2: Muse 2 and Muse S only)".into()))
     }
 
     fn estimate_json(&self, hr: bool) -> Result<Reply, CoreError> {

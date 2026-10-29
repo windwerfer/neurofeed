@@ -17,7 +17,11 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
     });
     ui.separator();
     let Some(o) = session.optics() else {
-        ui.label(if session.state().device.is_some() { "This device has no PPG sensor." } else { "No device connected." });
+        ui.label(if session.state().device.is_some() {
+            "No PPG on this device. HR/SpO2 are available on Muse 2 and Muse S."
+        } else {
+            "No device connected."
+        });
         return;
     };
     let hr = Optics::current(&o.hr, o.time);
