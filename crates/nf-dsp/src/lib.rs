@@ -18,7 +18,7 @@ pub use bands::{
     BANDS_HZ, MAX_PSD_HZ,
 };
 pub use features::{band_feature, FEATURE_IDS};
-pub use mains::{mains_vote, MainsDetector, DETECT_WINDOW, LOCK_VOTES, PEAK_RATIO, SWITCH_VOTES};
-pub use quality::{pad_quality, sample_std, MIN_QUALITY_SAMPLES, USABLE_QUALITY};
 pub use fft::fft_in_place;
 pub use filter::{notch_frequencies, Biquad, EegFilter, Mains, HIGHPASS_HZ, NOTCH_Q};
+pub use mains::{mains_vote, MainsDetector, DETECT_WINDOW, LOCK_VOTES, PEAK_RATIO, SWITCH_VOTES};
+pub use quality::{pad_quality, sample_std, MIN_QUALITY_SAMPLES, USABLE_QUALITY};

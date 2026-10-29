@@ -8,7 +8,7 @@ pub const FEATURE_IDS: [&str; 7] = ["band.atr", "band.tar", "band.btr", "band.al
 /// `None` for unknown ids, zero totals or non-finite results.
 pub fn band_feature(id: &str, linear: &[f64; 5]) -> Option<f64> {
     let total: f64 = linear.iter().sum();
-    if !(total > 0.0) {
+    if total.is_nan() || total <= 0.0 {
         return None;
     }
     let [d, t, a, b, _] = linear.map(|v| v / total);

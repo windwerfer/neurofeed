@@ -10,13 +10,14 @@
 mod command;
 mod recording;
 mod session;
-mod signal;
+pub mod signal;
 mod state;
 
 pub use command::{examples, find, input_schema, Command, CommandSpec, EnabledFn, Query, Request, SPECS};
 pub use nf_types::{Band, BandSnapshot, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket};
 pub use recording::{ExportFormat, RecordingInfo};
 pub use session::{Event, Session};
+pub use signal::{mains_name, MainsMode, Signal};
 pub use state::{AppState, BandHistory, BandScale, View};
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]

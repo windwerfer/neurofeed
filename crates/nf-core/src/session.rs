@@ -2,7 +2,7 @@
 
 use crate::command::{find, Command, CommandSpec, Query, Request, SPECS};
 use crate::recording::{base64, export, Finished, Recorder};
-use crate::signal::Signal;
+use crate::signal::{mains_name, Signal, SPEC_HOP_S};
 use crate::state::{AppState, BandScale, View};
 use crate::{CoreError, Reply};
 use nf_sim::SimProvider;
@@ -26,6 +26,7 @@ pub enum Event {
     ScaleChanged { scale: BandScale },
     RecordingStarted { device: String },
     RecordingStopped { duration: f64, eeg_samples: u64, reason: String },
+    MainsChanged { applied: String, detected: String },
 }
 
 /// Data-path state that is not plain `AppState` (cloned for batch rollback).
@@ -162,7 +163,14 @@ impl Session {
             if self.state.paused {
                 continue;
             }
-            if let Some(snap) = self.live.signal.as_mut().and_then(|s| s.push(p)) {
+            let Some(sig) = self.live.signal.as_mut() else { continue };
+            let before = sig.applied();
+            let snap = sig.push(p);
+            let (after, detected) = (sig.applied(), sig.detected());
+            if after != before {
+                self.emit(Event::MainsChanged { applied: mains_name(after).into(), detected: mains_name(detected).into() });
+            }
+            if let Some(snap) = snap {
                 if let Some(r) = self.live.recorder.as_mut() {
                     r.bands(&snap);
                 }
@@ -180,6 +188,12 @@ impl Session {
 
     fn stop_recording(&mut self, reason: &str) {
         if let Some(r) = self.live.recorder.take() {
+            if let Some(sig) = self.live.signal.as_mut() {
+                if sig.lock(false) {
+                    let (a, d) = (mains_name(sig.applied()).into(), mains_name(sig.detected()).into());
+                    self.emit(Event::MainsChanged { applied: a, detected: d });
+                }
+            }
             let f = r.finish();
             self.emit(Event::RecordingStopped { duration: f.info.duration, eeg_samples: f.info.eeg_samples, reason: reason.into() });
             self.state.recording = Some(f.info.clone());
@@ -299,6 +313,27 @@ impl Session {
                 self.emit(Event::RecordingStarted { device: r.info.device.clone() });
                 self.state.recording = Some(r.info.clone());
                 self.live.recorder = Some(r);
+                if let Some(sig) = self.live.signal.as_mut() {
+                    sig.lock(true);
+                }
+            }
+            Command::MainsSet { mode } => {
+                self.state.mains_mode = mode;
+                if let Some(sig) = self.live.signal.as_mut() {
+                    if sig.set_mode(mode) {
+                        let (a, d) = (mains_name(sig.applied()).into(), mains_name(sig.detected()).into());
+                        self.emit(Event::MainsChanged { applied: a, detected: d });
+                    }
+                }
+                return Ok(self.signal_status());
+            }
+            Command::ChannelSet { channel } => {
+                let names = self.state.device.as_ref().map(|d| d.channels.clone()).unwrap_or_default();
+                let i = names
+                    .iter()
+                    .position(|n| *n == channel)
+                    .ok_or_else(|| CoreError::InvalidArgs(format!("unknown channel `{channel}`; have {}", names.join(", "))))?;
+                self.state.channel = i;
             }
             Command::RecordingStop => {
                 self.stop_recording("stopped");
@@ -323,7 +358,7 @@ impl Session {
         let src = self.open(id)?; // fails before touching state
         self.disconnect();
         let info = src.info();
-        self.live.signal = Some(Signal::new(&info));
+        self.live.signal = Some(Signal::new(&info, self.state.mains_mode));
         self.emit(Event::Connected { id: info.id.clone() });
         self.state.device = Some(info);
         self.source = Some(src);
@@ -372,6 +407,12 @@ impl Session {
             }),
             Query::RawGet { seconds, filtered } => self.raw_json(seconds.unwrap_or(1.0), filtered.unwrap_or(true))?,
             Query::PsdGet { channel, max_hz } => self.psd_json(channel.as_deref(), max_hz.unwrap_or(50.0))?,
+            Query::SignalStatus => self.signal_status(),
+            Query::FeaturesGet => self.features_json()?,
+            Query::HistogramGet { seconds, bins, half_range_uv } => {
+                self.histogram_json(seconds.unwrap_or(2.0), bins.unwrap_or(64), half_range_uv.unwrap_or(100.0))?
+            }
+            Query::SpectrogramGet { channel, max_hz } => self.spectrogram_json(channel.as_deref(), max_hz.unwrap_or(50.0))?,
             Query::RecordingStatus => json!({ "recording": s.recording }),
             Query::RecordingExport { format, start } => {
                 let f = self.live.finished.as_ref().ok_or_else(|| CoreError::BadRequest("nothing recorded yet".into()))?;
@@ -389,6 +430,89 @@ impl Session {
                 })
             }
         })
+    }
+
+    /// Typed read access for views: connected device and its signal path.
+    pub fn live_signal(&self) -> Option<(&nf_types::DeviceInfo, &Signal)> {
+        self.signal().ok()
+    }
+
+    fn channel_index(dev: &nf_types::DeviceInfo, channel: Option<&str>) -> Result<Option<usize>, CoreError> {
+        channel
+            .map(|c| {
+                dev.channels
+                    .iter()
+                    .position(|n| n == c)
+                    .ok_or_else(|| CoreError::InvalidArgs(format!("unknown channel `{c}`; have {}", dev.channels.join(", "))))
+            })
+            .transpose()
+    }
+
+    fn signal_status(&self) -> Reply {
+        let Ok((dev, sig)) = self.signal() else {
+            return json!({ "connected": false, "mains_mode": self.state.mains_mode });
+        };
+        let pads: Vec<_> = dev
+            .channels
+            .iter()
+            .enumerate()
+            .map(|(i, n)| json!({ "channel": n, "quality": sig.quality[i], "usable": sig.usable(i), "line_noise": sig.line_noise[i] }))
+            .collect();
+        json!({
+            "connected": true,
+            "time": sig.time,
+            "mains_mode": sig.mode(),
+            "mains_detected": mains_name(sig.detected()),
+            "mains_applied": mains_name(sig.applied()),
+            "notch_locked": sig.locked(),
+            "usable_threshold": nf_dsp::USABLE_QUALITY,
+            "pads": pads,
+        })
+    }
+
+    fn features_json(&self) -> Result<Reply, CoreError> {
+        let (dev, sig) = self.signal()?;
+        let usable: Vec<usize> = (0..dev.channels.len()).filter(|&i| sig.usable(i)).collect();
+        let mut out = serde_json::Map::new();
+        for id in nf_dsp::FEATURE_IDS {
+            let vals: Vec<f64> = usable.iter().filter_map(|&i| nf_dsp::band_feature(id, &sig.bands_linear[i])).collect();
+            let mean = (!vals.is_empty()).then(|| vals.iter().sum::<f64>() / vals.len() as f64);
+            out.insert(id.into(), json!(mean));
+        }
+        let names: Vec<_> = usable.iter().map(|&i| &dev.channels[i]).collect();
+        Ok(json!({ "time": sig.time, "usable_pads": names, "features": out }))
+    }
+
+    fn histogram_json(&self, seconds: f64, bins: usize, half_range: f64) -> Result<Reply, CoreError> {
+        if !(seconds.is_finite() && seconds > 0.0 && seconds <= crate::signal::BUFFER_S) {
+            return Err(CoreError::InvalidArgs(format!("seconds must be in (0, {}]", crate::signal::BUFFER_S)));
+        }
+        if !(2..=512).contains(&bins) || !(half_range.is_finite() && (1.0..=10_000.0).contains(&half_range)) {
+            return Err(CoreError::InvalidArgs("bins must be in [2, 512], half_range_uv in [1, 10000]".into()));
+        }
+        let (dev, sig) = self.signal()?;
+        let n = (seconds * sig.rate).round() as usize;
+        let channels: Vec<_> = dev
+            .channels
+            .iter()
+            .enumerate()
+            .map(|(i, name)| json!({ "channel": name, "counts": nf_dsp::histogram(&sig.last(i, n, true), bins, half_range) }))
+            .collect();
+        Ok(json!({ "time": sig.time, "bins": bins, "half_range_uv": half_range, "unit": "uV", "channels": channels }))
+    }
+
+    fn spectrogram_json(&self, channel: Option<&str>, max_hz: f64) -> Result<Reply, CoreError> {
+        if !(max_hz.is_finite() && (1.0..=nf_dsp::MAX_PSD_HZ).contains(&max_hz)) {
+            return Err(CoreError::InvalidArgs(format!("max_hz must be in [1, {}]", nf_dsp::MAX_PSD_HZ)));
+        }
+        let (dev, sig) = self.signal()?;
+        let i = Self::channel_index(dev, channel)?.unwrap_or(self.state.channel);
+        let df = 1.0 / crate::signal::WINDOW_S;
+        let keep = (max_hz / df).floor() as usize + 1;
+        let cols: Vec<_> = sig.spectrogram[i].iter().map(|c| &c[..keep.min(c.len())]).collect();
+        Ok(
+            json!({ "time": sig.time, "channel": dev.channels[i], "hop_s": SPEC_HOP_S, "df_hz": df, "unit": "dB re uV^2/Hz", "columns": cols }),
+        )
     }
 
     fn signal(&self) -> Result<(&nf_types::DeviceInfo, &Signal), CoreError> {
@@ -414,11 +538,7 @@ impl Session {
             return Err(CoreError::InvalidArgs(format!("max_hz must be in [1, {}]", nf_dsp::MAX_PSD_HZ)));
         }
         let (dev, sig) = self.signal()?;
-        if let Some(c) = channel {
-            if !dev.channels.iter().any(|n| n == c) {
-                return Err(CoreError::InvalidArgs(format!("unknown channel `{c}`; have {}", dev.channels.join(", "))));
-            }
-        }
+        Self::channel_index(dev, channel)?;
         let w = sig.window_len();
         let mut df = None;
         let mut out = Vec::new();

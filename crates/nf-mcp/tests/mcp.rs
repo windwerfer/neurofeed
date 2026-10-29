@@ -288,3 +288,74 @@ fn wall_clock_is_injected_and_export_writes_files() {
     run(&m, "recording.start", json!({}));
     assert_eq!(run(&m, "recording.status", json!({}))["recording"]["wall_clock_unix_ms"], Value::Null);
 }
+
+fn sim(s: &NfMcp, cfg: Value) {
+    run(s, "sim.configure", cfg);
+    run(s, "device.connect", json!({ "id": "sim:muse" }));
+}
+
+#[test]
+fn mains_autodetects_60_and_recording_locks_the_notch() {
+    let s = server();
+    sim(&s, json!({ "mains_uv": 40.0, "mains_hz": 60.0 }));
+    let st = run(&s, "signal.status", json!({}));
+    assert_eq!(st["mains_applied"], "unknown");
+    // 8 votes = 2 windows of 256 samples on each of the 4 pads.
+    run(&s, "clock.advance", json!({ "seconds": 9.0 }));
+    let st = run(&s, "signal.status", json!({}));
+    assert_eq!(st["mains_detected"], "60", "{st}");
+    assert_eq!(st["mains_applied"], "60");
+    let ev = run(&s, "events.drain", json!({}));
+    assert!(ev.as_array().is_some_and(|e| e.iter().any(|e| e["event"] == "mains_changed" && e["applied"] == "60")), "{ev}");
+
+    // Recording freezes the notch: a manual change only applies after stop.
+    run(&s, "recording.start", json!({}));
+    let st = run(&s, "mains.set", json!({ "mode": "off" }));
+    assert_eq!((st["mains_applied"].as_str(), st["notch_locked"].as_bool()), (Some("60"), Some(true)));
+    run(&s, "recording.stop", json!({}));
+    let st = run(&s, "signal.status", json!({}));
+    assert_eq!((st["mains_applied"].as_str(), st["notch_locked"].as_bool()), (Some("none"), Some(false)));
+}
+
+#[test]
+fn clean_sim_decides_no_mains_and_good_quality_then_noise_degrades() {
+    let s = server();
+    sim(&s, json!({}));
+    run(&s, "clock.advance", json!({ "seconds": 9.0 }));
+    let st = run(&s, "signal.status", json!({}));
+    assert_eq!(st["mains_detected"], "none", "{st}");
+    let pads = st["pads"].as_array().cloned().unwrap_or_default();
+    assert!(pads.iter().all(|p| p["usable"] == true), "{st}");
+    let f = run(&s, "features.get", json!({}));
+    assert_eq!(f["usable_pads"].as_array().map(Vec::len), Some(4));
+    assert!(f["features"]["band.atr"].as_f64().is_some_and(|v| v > 1.0), "{f}");
+
+    sim(&s, json!({ "noise_uv": 120.0 }));
+    run(&s, "clock.advance", json!({ "seconds": 3.0 }));
+    let st = run(&s, "signal.status", json!({}));
+    assert!(st["pads"].as_array().is_some_and(|p| p.iter().all(|p| p["usable"] == false)), "{st}");
+    let f = run(&s, "features.get", json!({}));
+    assert!(f["features"]["band.atr"].is_null());
+}
+
+#[test]
+fn histogram_and_spectrogram_queries() {
+    let s = server();
+    sim(&s, json!({}));
+    run(&s, "clock.advance", json!({ "seconds": 5.0 }));
+    let h = run(&s, "histogram.get", json!({ "seconds": 2.0, "bins": 32 }));
+    let counts = h["channels"][0]["counts"].as_array().cloned().unwrap_or_default();
+    assert_eq!(counts.len(), 32);
+    assert_eq!(counts.iter().filter_map(Value::as_u64).sum::<u64>(), 512);
+    run(&s, "channel.set", json!({ "channel": "AF7" }));
+    let sp = run(&s, "spectrogram.get", json!({ "max_hz": 40.0 }));
+    assert_eq!(sp["channel"], "AF7");
+    let cols = sp["columns"].as_array().cloned().unwrap_or_default();
+    assert!((14..=18).contains(&cols.len()), "{}", cols.len()); // 4 s of 1 s windows at 4 Hz
+    let col: Vec<f64> = cols[cols.len() - 1].as_array().map(|c| c.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
+    assert_eq!(col.len(), 41);
+    let peak = col.iter().enumerate().skip(2).max_by(|a, b| a.1.total_cmp(b.1)).map(|(i, _)| i);
+    assert_eq!(peak, Some(10));
+    assert!(s.call("command_run", json!({ "id": "channel.set", "params": { "channel": "XX" } })).is_err());
+    assert!(s.call("command_run", json!({ "id": "histogram.get", "params": { "bins": 1 } })).is_err());
+}

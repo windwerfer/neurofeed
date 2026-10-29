@@ -6,6 +6,7 @@
 //! Input schemas are derived with schemars from the variant fields.
 
 use crate::recording::ExportFormat;
+use crate::signal::MainsMode;
 use crate::state::{AppState, BandScale, View};
 use crate::CoreError;
 use schemars::JsonSchema;
@@ -69,6 +70,13 @@ pub enum Command {
     },
     #[serde(rename = "recording.stop")]
     RecordingStop,
+    /// Notch: auto (detected 50/60 Hz, sticky), 50, 60 or off. A running
+    /// recording keeps the notch it started with until it stops.
+    #[serde(rename = "mains.set")]
+    MainsSet { mode: MainsMode },
+    /// Channel for single-channel views (spectrogram), by name.
+    #[serde(rename = "channel.set")]
+    ChannelSet { channel: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -101,6 +109,35 @@ pub enum Query {
     #[serde(rename = "psd.get")]
     PsdGet {
         /// Only this channel (by name, e.g. "TP9").
+        #[serde(default)]
+        channel: Option<String>,
+        /// Upper frequency, 1..=64 Hz; default 50.
+        #[serde(default)]
+        max_hz: Option<f64>,
+    },
+    /// Mains detection / notch and per-pad quality (usable >= 80).
+    #[serde(rename = "signal.status")]
+    SignalStatus,
+    /// Band features (atr, tar, btr, relative alpha/theta/beta/delta), mean over usable pads.
+    #[serde(rename = "features.get")]
+    FeaturesGet,
+    /// Amplitude histogram of the conditioned signal per channel.
+    #[serde(rename = "histogram.get")]
+    HistogramGet {
+        /// 0 < seconds <= 10; default 2.
+        #[serde(default)]
+        seconds: Option<f64>,
+        /// 2..=512; default 64.
+        #[serde(default)]
+        bins: Option<usize>,
+        /// Range ±µV around the mean, 1..=10000; default 100.
+        #[serde(default)]
+        half_range_uv: Option<f64>,
+    },
+    /// Spectrogram columns (oldest first, every 0.25 s, last 30 s) for one channel.
+    #[serde(rename = "spectrogram.get")]
+    SpectrogramGet {
+        /// Channel name; default the selected channel.
         #[serde(default)]
         channel: Option<String>,
         /// Upper frequency, 1..=64 Hz; default 50.
@@ -230,6 +267,12 @@ pub const SPECS: &[CommandSpec] = &[
     spec("psd.get", "Spectrum", "signal", true, "PSD (µV²/Hz) of the last 1 s per channel, with alpha peak.", has_signal),
     spec("recording.start", "Start recording", "recording", false, "Record raw EEG + band snapshots in memory.", can_record),
     spec("recording.stop", "Stop recording", "recording", false, "Stop and keep the recording for export.", is_recording),
+    spec("signal.status", "Signal status", "signal", true, "Mains detected/applied, notch lock, per-pad quality and usability.", always),
+    spec("features.get", "Features", "signal", true, "Band ratio features averaged over usable pads.", has_signal),
+    spec("histogram.get", "Histogram", "signal", true, "Amplitude histogram of the conditioned signal per channel.", has_signal),
+    spec("spectrogram.get", "Spectrogram", "signal", true, "PSD dB columns every 0.25 s for one channel (last 30 s).", has_signal),
+    spec("mains.set", "Set notch", "signal", false, "Notch mode: auto, 50, 60 or off.", always),
+    spec("channel.set", "Select channel", "signal", false, "Channel for single-channel views.", needs_device),
     spec("recording.status", "Recording status", "recording", true, "Active or last recording: device, duration, samples, bytes.", always),
     spec(
         "recording.export",
@@ -283,6 +326,12 @@ pub fn examples() -> Vec<Request> {
         C(Command::EventsDrain),
         C(Command::RecordingStart { wall_clock_unix_ms: Some(1_793_000_000_000.0) }),
         C(Command::RecordingStop),
+        C(Command::MainsSet { mode: MainsMode::Hz60 }),
+        C(Command::ChannelSet { channel: "AF7".into() }),
+        Q(Query::SignalStatus),
+        Q(Query::FeaturesGet),
+        Q(Query::HistogramGet { seconds: Some(1.0), bins: Some(32), half_range_uv: None }),
+        Q(Query::SpectrogramGet { channel: None, max_hz: Some(40.0) }),
         Q(Query::AppStatus),
         Q(Query::ViewList),
         Q(Query::BandsGet { scale: None }),

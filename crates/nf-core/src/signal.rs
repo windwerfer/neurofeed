@@ -1,16 +1,48 @@
-//! Live signal path: raw packets → per-channel conditioning (nf-dsp) →
-//! rolling buffers → band snapshots every `BAND_INTERVAL_S`.
+//! Live signal path: raw packets → mains detection + per-channel
+//! conditioning (nf-dsp) → rolling buffers → band snapshots every
+//! `BAND_INTERVAL_S`, pad quality, and spectrogram columns every `SPEC_HOP_S`.
 
-use nf_dsp::{band_powers, EegFilter, Mains};
+use nf_dsp::{
+    band_powers_linear, line_noise_fraction, pad_quality, psd, psd_db, sample_std, EegFilter, Mains, MainsDetector, USABLE_QUALITY,
+};
 use nf_types::{BandSnapshot, DeviceInfo, EegPacket};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
 /// Seconds of raw and filtered signal kept per channel.
 pub const BUFFER_S: f64 = 10.0;
-/// FFT window for bands / PSD (1 s at 256 Hz).
+/// FFT window for bands / PSD / quality (1 s at 256 Hz).
 pub const WINDOW_S: f64 = 1.0;
 /// Band snapshot cadence (matches the legacy 10 Hz band stream).
 pub const BAND_INTERVAL_S: f64 = 0.1;
+/// Spectrogram hop (legacy STFT hop 64 samples at 256 Hz).
+pub const SPEC_HOP_S: f64 = 0.25;
+/// Spectrogram columns kept per channel (30 s).
+pub const SPEC_COLUMNS: usize = 120;
+
+/// User notch choice. `Auto` follows the detector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MainsMode {
+    #[default]
+    Auto,
+    #[serde(rename = "50")]
+    Hz50,
+    #[serde(rename = "60")]
+    Hz60,
+    Off,
+}
+
+/// Mains as a stable string for status / UI.
+pub fn mains_name(m: Mains) -> &'static str {
+    match m {
+        Mains::Unknown => "unknown",
+        Mains::Hz50 => "50",
+        Mains::Hz60 => "60",
+        Mains::None => "none",
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Signal {
@@ -22,23 +54,107 @@ pub struct Signal {
     /// Time of the newest sample.
     pub time: Option<f64>,
     next_band: Option<f64>,
+    next_spec: Option<f64>,
+    detector: MainsDetector,
+    mode: MainsMode,
+    /// Notch frozen by a running recording.
+    lock: Option<Mains>,
+    applied: Mains,
+    /// Per channel, 0..=100 (legacy pad quality of the last 1 s).
+    pub quality: Vec<f32>,
+    /// Per channel, fraction of power in the mains bins (unfiltered).
+    pub line_noise: Vec<f32>,
+    /// Per channel, linear band powers (µV²) of the last snapshot.
+    pub bands_linear: Vec<[f64; 5]>,
+    /// Per channel, columns of PSD dB (0..=`MAX_PSD_HZ`, df = 1/WINDOW_S).
+    pub spectrogram: Vec<VecDeque<Vec<f32>>>,
 }
 
 impl Signal {
-    pub fn new(info: &DeviceInfo) -> Self {
+    pub fn new(info: &DeviceInfo, mode: MainsMode) -> Self {
         let n = info.channels.len();
         let rate = info.sample_rate_hz;
         let cap = (BUFFER_S * rate).ceil() as usize;
-        Self {
+        let mut s = Self {
             rate,
             cap,
-            // Mains detection is not ported yet: notch both 50 and 60 Hz.
-            filters: vec![EegFilter::new(rate, Mains::Unknown); n],
+            filters: Vec::new(),
             raw: vec![VecDeque::with_capacity(cap); n],
             filtered: vec![VecDeque::with_capacity(cap); n],
             time: None,
             next_band: None,
+            next_spec: None,
+            detector: MainsDetector::new(rate, n),
+            mode,
+            lock: None,
+            applied: Mains::Unknown,
+            quality: vec![0.0; n],
+            line_noise: vec![0.0; n],
+            bands_linear: vec![[0.0; 5]; n],
+            spectrogram: vec![VecDeque::new(); n],
+        };
+        s.applied = s.wanted();
+        s.filters = vec![EegFilter::new(rate, s.applied); n];
+        s
+    }
+
+    pub fn detected(&self) -> Mains {
+        self.detector.mains()
+    }
+    pub fn applied(&self) -> Mains {
+        self.applied
+    }
+    pub fn locked(&self) -> bool {
+        self.lock.is_some()
+    }
+    pub fn mode(&self) -> MainsMode {
+        self.mode
+    }
+    pub fn usable(&self, ch: usize) -> bool {
+        self.quality.get(ch).is_some_and(|&q| f64::from(q) >= USABLE_QUALITY)
+    }
+
+    fn wanted(&self) -> Mains {
+        self.lock.unwrap_or(match self.mode {
+            MainsMode::Auto => self.detector.mains(),
+            MainsMode::Hz50 => Mains::Hz50,
+            MainsMode::Hz60 => Mains::Hz60,
+            MainsMode::Off => Mains::None,
+        })
+    }
+
+    /// Rebuild the filters when the wanted notch changed. Returns true if so.
+    fn reapply(&mut self) -> bool {
+        let want = self.wanted();
+        if want == self.applied {
+            return false;
         }
+        self.applied = want;
+        // Warm the new filters on the last 2 s of raw input (no restart transient).
+        let warm = (2.0 * self.rate) as usize;
+        self.filters = self
+            .raw
+            .iter()
+            .map(|r| {
+                let mut f = EegFilter::new(self.rate, want);
+                r.iter().skip(r.len().saturating_sub(warm)).for_each(|&x| {
+                    f.process(f64::from(x));
+                });
+                f
+            })
+            .collect();
+        true
+    }
+
+    pub fn set_mode(&mut self, mode: MainsMode) -> bool {
+        self.mode = mode;
+        self.reapply()
+    }
+
+    /// Freeze (Some) or release (None) the notch for a recording.
+    pub fn lock(&mut self, on: bool) -> bool {
+        self.lock = on.then_some(self.applied);
+        self.reapply()
     }
 
     pub fn window_len(&self) -> usize {
@@ -48,26 +164,54 @@ impl Signal {
     /// Ingest one packet; returns a band snapshot when one is due.
     pub fn push(&mut self, p: &EegPacket) -> Option<BandSnapshot> {
         let ch = usize::from(p.electrode);
-        let (Some(f), Some(raw), Some(out)) = (self.filters.get_mut(ch), self.raw.get_mut(ch), self.filtered.get_mut(ch)) else {
+        if ch >= self.filters.len() {
             return None;
-        };
+        }
+        if self.detector.feed(ch, &p.samples).is_some() {
+            self.reapply();
+        }
+        let (f, raw, out) = (&mut self.filters[ch], &mut self.raw[ch], &mut self.filtered[ch]);
         for &x in &p.samples {
             push_capped(raw, x, self.cap);
             push_capped(out, f.process(f64::from(x)) as f32, self.cap);
         }
-        // Snapshot on the last channel of a packet group so all channels are current.
+        // Derived data on the last channel of a packet group so all channels are current.
         if ch + 1 != self.filters.len() {
             return None;
         }
         self.time = Some(p.time);
-        let due = *self.next_band.get_or_insert(p.time);
-        if p.time + 1e-9 < due {
+        if due(&mut self.next_spec, p.time, SPEC_HOP_S) {
+            self.spectrogram_column();
+        }
+        if !due(&mut self.next_band, p.time, BAND_INTERVAL_S) {
             return None;
         }
-        self.next_band = Some(due + BAND_INTERVAL_S * ((p.time - due) / BAND_INTERVAL_S).floor().max(0.0) + BAND_INTERVAL_S);
         let w = self.window_len();
-        let powers = self.filtered.iter().map(|b| tail(b, w).and_then(|t| band_powers(&t, self.rate))).collect::<Option<Vec<_>>>()?;
+        let mut powers = Vec::with_capacity(self.filters.len());
+        for i in 0..self.filters.len() {
+            let fp = psd(&tail(&self.filtered[i], w)?, self.rate)?;
+            let raw = tail(&self.raw[i], w)?;
+            let noise = psd(&raw, self.rate).map_or(-1.0, |rp| line_noise_fraction(&rp));
+            let std = sample_std(&tail(&self.filtered[i], w)?);
+            self.quality[i] = std.map_or(0.0, |s| pad_quality(s, noise)) as f32;
+            self.line_noise[i] = noise as f32;
+            let lin = band_powers_linear(&fp);
+            self.bands_linear[i] = lin;
+            powers.push(lin.map(|v| v.max(1e-6).log10() as f32));
+        }
         Some(BandSnapshot { time: p.time, powers })
+    }
+
+    fn spectrogram_column(&mut self) {
+        let w = self.window_len();
+        for i in 0..self.filtered.len() {
+            let Some(col) = tail(&self.filtered[i], w).and_then(|t| psd(&t, self.rate)).map(|p| psd_db(&p)) else { continue };
+            let s = &mut self.spectrogram[i];
+            if s.len() >= SPEC_COLUMNS {
+                s.pop_front();
+            }
+            s.push_back(col);
+        }
     }
 
     /// Last `n` samples of channel `ch` (fewer if not buffered yet).
@@ -75,6 +219,16 @@ impl Signal {
         let buf = if filtered { &self.filtered } else { &self.raw };
         buf.get(ch).map(|b| b.iter().skip(b.len().saturating_sub(n)).copied().collect()).unwrap_or_default()
     }
+}
+
+/// True when `next` is reached; then schedules the following tick on the grid.
+fn due(next: &mut Option<f64>, t: f64, step: f64) -> bool {
+    let d = *next.get_or_insert(t);
+    if t + 1e-9 < d {
+        return false;
+    }
+    *next = Some(d + step * ((t - d) / step).floor().max(0.0) + step);
+    true
 }
 
 fn push_capped(b: &mut VecDeque<f32>, x: f32, cap: usize) {

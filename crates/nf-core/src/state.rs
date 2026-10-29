@@ -50,9 +50,8 @@ impl View {
         }
     }
 
-    /// Only Bands is implemented so far.
     pub fn implemented(self) -> bool {
-        self == View::Bands
+        matches!(self, View::Bands | View::RawEeg | View::Histogram | View::Spectrogram | View::Psd)
     }
 }
 
@@ -109,6 +108,10 @@ pub struct AppState {
     pub bands: BandHistory,
     /// Session time in seconds (advanced by `tick` / `clock_advance`).
     pub time: f64,
+    /// Notch choice (auto = detected mains).
+    pub mains_mode: crate::MainsMode,
+    /// Channel shown by single-channel views (spectrogram).
+    pub channel: usize,
     /// Active or last finished recording.
     pub recording: Option<crate::recording::RecordingInfo>,
     /// Bumped on every state change (not on time/data ticks).
@@ -125,6 +128,8 @@ impl Default for AppState {
             device: None,
             bands: BandHistory::default(),
             time: 0.0,
+            mains_mode: crate::MainsMode::Auto,
+            channel: 0,
             recording: None,
             revision: 0,
         }
