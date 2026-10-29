@@ -16,6 +16,7 @@ nf-types = { path = "crates/nf-types" }
 nf-dsp = { path = "crates/nf-dsp" }
 nf-format = { path = "crates/nf-format" }
 nf-sim = { path = "crates/nf-sim" }
+nf-feedback = { path = "crates/nf-feedback" }
 nf-core = { path = "crates/nf-core" }
 nf-mcp = { path = "crates/nf-mcp" }
 serde = { version = "1", features = ["derive"] }
