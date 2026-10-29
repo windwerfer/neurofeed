@@ -51,8 +51,10 @@ pub struct SimDevice {
     rng: u64,
 }
 
-/// Background: sines every 1.5 Hz from 1.5 to 43.5 Hz with amplitude
-/// `6/sqrt(f)` µV, i.e. a 1/f power spectrum like resting EEG.
+/// Background: sines near every 1.5 Hz from 1.5 to ~44 Hz with amplitude
+/// `6/sqrt(f)` µV, i.e. a 1/f power spectrum like resting EEG. Frequencies
+/// are detuned (golden-ratio offsets) and phases quadratic (Schroeder) so
+/// the sum is not a periodic pulse train.
 const BACKGROUND_STEP_HZ: f64 = 1.5;
 const BACKGROUND_COMPONENTS: usize = 29;
 
@@ -80,8 +82,10 @@ impl SimDevice {
         let alpha = c.alpha_uv * edge * swell * (TAU * 10.0 * t + phi).sin();
         let background: f64 = (1..=BACKGROUND_COMPONENTS)
             .map(|i| {
-                let hz = i as f64 * BACKGROUND_STEP_HZ;
-                6.0 / hz.sqrt() * (TAU * hz * t + phi + i as f64 * 2.399).sin()
+                let fi = i as f64;
+                let hz = fi * BACKGROUND_STEP_HZ + 0.6 * ((fi * 0.618_034).fract() - 0.5);
+                let schroeder = std::f64::consts::PI * fi * fi / BACKGROUND_COMPONENTS as f64;
+                6.0 / hz.sqrt() * (TAU * hz * t + phi * fi + schroeder).sin()
             })
             .sum();
         let hum = c.mains_uv * (TAU * c.mains_hz * t).sin();
