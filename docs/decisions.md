@@ -8,3 +8,4 @@
 - 2026-10-29: No Dart NFED6 import compatibility work (Flutter is dropped). nf-format keeps the legacy byte layout, but the computed JSONL/thumbnail sections stay empty and band records hold our log10 values; Rust is the only reader.
 - 2026-10-29: Wall clock is injected by shells: `recording.start {wall_clock_unix_ms}` is filled by the egui app (web-time) and by neurofeed-mcp in wall-clock mode; manual-clock MCP injects nothing (deterministic). Core never reads a clock.
 - 2026-10-29: File output is a shell concern: MCP tool `recording_export {format, start?, path?}` writes natively when `path` is given; core `recording.export` only returns base64.
+- 2026-10-29: Mains detection votes per channel window into one shared counter (as legacy); the notch is rebuilt warm (replaying 2 s of raw) on change; recordings freeze the notch in effect at start. Views may call pure `nf_core::dsp` functions on core buffers; all state stays in the Session.

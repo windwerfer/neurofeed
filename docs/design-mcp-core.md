@@ -1,6 +1,6 @@
 # Design: NeuroFeed Rust core + MCP + simulators
 
-Status: Phase 1 implemented (2026-10-29), see `log/devlog.md`. Revised after
+Status: Phases 1-3 implemented (2026-10-29), see `log/devlog.md`. Revised after
 `lessons-from-photocraft-solidcraft.md`. Modeled on PhotoCraft (`crates/engine` =
 Session + command registry, `crates/automation` = rmcp MCP server with a
 headless mode and a bridge mode to the running app, `apps/*` thin shells).
@@ -146,8 +146,8 @@ progress for long runs.
 | 0 | Prototype | egui shell, mock bands | done |
 | 1 | Core + MCP + sim skeleton | this commit: Session, 15 commands, 8 MCP tools, 19 tests, egui on core | done |
 | 1b | Gate | `cargo xtask ci` (fmt, clippy -D, layers, wasm, test), output schemas | 0.5 d |
-| 2 | Copy DSP/format/raw simulator from `rust/` into nf-dsp/nf-format/nf-sim | Bands from real DSP on simulated raw | 3-5 d |
-| 3 | Monitor state in core | Raw EEG, PSD, Spectrogram, Histogram views | 1-2 wk |
+| 2 | Copy DSP/format/raw simulator from `rust/` into nf-dsp/nf-format/nf-sim | Bands from real DSP on simulated raw | done |
+| 3 | Monitor state in core | Raw EEG, PSD, Spectrogram, Histogram views, mains/quality/features | done (HR/SpO2 open) |
 | 4 | Feedback engine + protocols + calibration (golden tests vs Dart replay) | Feedback view + tools; **then delete Dart in one commit** | 2-4 wk |
 | 5 | History store + export | History view | 1 wk |
 | 6 | nf-device (btleplug Muse, Crown OSC), bridge-mode MCP, screenshot | real hardware on desktop | 1 wk |

@@ -5,9 +5,12 @@ exposing every command (`nf-mcp`), signal processing (`nf-dsp`), recording
 formats NFED6/EDF+ (`nf-format`), deterministic raw-sample device simulators
 (`nf-sim`), and an egui/eframe UI for desktop and web (Android later).
 
-Status: Phase 2. Only the **Bands** view is functional (simulated Muse/Crown,
-bands computed from raw samples). Raw EEG, PSD and recording/export are
-reachable via MCP (`raw.get`, `psd.get`, `recording.*`) but have no UI yet.
+Status: Phase 3. Functional views: **Bands, Raw EEG, PSD, Spectrogram,
+Histogram** (simulated Muse/Crown), plus record/stop and an auto/50/60/off
+notch with per-pad quality in the top bar. Everything is also reachable via
+MCP (`raw.get`, `psd.get`, `spectrogram.get`, `histogram.get`,
+`signal.status`, `features.get`, `mains.set`, `recording.*`).
+Desktop start view: `NF_VIEW=psd cargo run -p neurofeed-egui`.
 
 ```sh
 cargo run --release -p neurofeed-egui                 # desktop

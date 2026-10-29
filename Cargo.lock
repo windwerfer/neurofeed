@@ -1690,6 +1690,7 @@ dependencies = [
  "env_logger",
  "log",
  "nf-core",
+ "serde_json",
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
