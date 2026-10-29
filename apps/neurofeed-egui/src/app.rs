@@ -24,7 +24,11 @@ impl NeuroFeedApp {
         Self { session, last_error: None }
     }
 
-    fn run(&mut self, cmd: Command) {
+    fn run(&mut self, mut cmd: Command) {
+        // Shell-side injection: the core never reads a clock.
+        if let Command::RecordingStart { wall_clock_unix_ms: w @ None } = &mut cmd {
+            *w = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).ok().map(|d| d.as_secs_f64() * 1000.0);
+        }
         if let Err(e) = self.session.execute(cmd) {
             log::warn!("{e}");
             self.last_error = Some(e.to_string());

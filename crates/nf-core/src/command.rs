@@ -61,7 +61,12 @@ pub enum Command {
     EventsDrain,
     /// Start recording the connected device (raw EEG + bands) in memory.
     #[serde(rename = "recording.start")]
-    RecordingStart,
+    RecordingStart {
+        /// Wall-clock start (Unix ms, UTC), injected by the shell; the core
+        /// never reads a clock. Used for EDF start and NFED6 metadata.
+        #[serde(default)]
+        wall_clock_unix_ms: Option<f64>,
+    },
     #[serde(rename = "recording.stop")]
     RecordingStop,
 }
@@ -108,8 +113,8 @@ pub enum Query {
     #[serde(rename = "recording.export")]
     RecordingExport {
         format: ExportFormat,
-        /// EDF start (year, month, day, hour, minute, second); the core has
-        /// no wall clock. Default 1985-01-01 00:00:00.
+        /// EDF start (year, month, day, hour, minute, second, UTC). Default:
+        /// the recording's injected wall clock, else 1985-01-01 00:00:00.
         #[serde(default)]
         start: Option<[u16; 6]>,
     },
@@ -276,7 +281,7 @@ pub fn examples() -> Vec<Request> {
         C(Command::SimConfigure { seed: Some(1), alpha_uv: Some(20.0), noise_uv: None, mains_uv: None, mains_hz: None, dc_uv: None }),
         C(Command::ClockAdvance { seconds: 1.0 }),
         C(Command::EventsDrain),
-        C(Command::RecordingStart),
+        C(Command::RecordingStart { wall_clock_unix_ms: Some(1_793_000_000_000.0) }),
         C(Command::RecordingStop),
         Q(Query::AppStatus),
         Q(Query::ViewList),

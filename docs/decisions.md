@@ -5,3 +5,6 @@
 - 2026-10-29: MCP surface = generic command_list/describe/run/batch + a few typed session tools. Add a command, not a tool.
 - 2026-10-29: Command ids are dotted (`area.verb`); MCP tool names use underscores.
 - 2026-10-29: Rust workspace moved to repo root; Flutter docs renamed AGENTS.flutter.md / README.flutter.md.
+- 2026-10-29: No Dart NFED6 import compatibility work (Flutter is dropped). nf-format keeps the legacy byte layout, but the computed JSONL/thumbnail sections stay empty and band records hold our log10 values; Rust is the only reader.
+- 2026-10-29: Wall clock is injected by shells: `recording.start {wall_clock_unix_ms}` is filled by the egui app (web-time) and by neurofeed-mcp in wall-clock mode; manual-clock MCP injects nothing (deterministic). Core never reads a clock.
+- 2026-10-29: File output is a shell concern: MCP tool `recording_export {format, start?, path?}` writes natively when `path` is given; core `recording.export` only returns base64.

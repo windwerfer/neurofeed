@@ -23,6 +23,8 @@ pub struct RecordingInfo {
     pub duration: f64,
     pub eeg_samples: u64,
     pub bytes: usize,
+    /// Injected wall-clock start (Unix ms, UTC), if the shell provided one.
+    pub wall_clock_unix_ms: Option<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -34,8 +36,16 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    pub fn start(device: DeviceInfo, now: f64) -> Self {
-        let info = RecordingInfo { active: true, device: device.id.clone(), started: now, duration: 0.0, eeg_samples: 0, bytes: 12 };
+    pub fn start(device: DeviceInfo, now: f64, wall_clock_unix_ms: Option<f64>) -> Self {
+        let info = RecordingInfo {
+            active: true,
+            device: device.id.clone(),
+            started: now,
+            duration: 0.0,
+            eeg_samples: 0,
+            bytes: 12,
+            wall_clock_unix_ms,
+        };
         Self { device, writer: BodyWriter::new(), last_flush: now, info }
     }
 
@@ -114,7 +124,8 @@ pub fn export(f: &Finished, format: ExportFormat, start: (u16, u16, u16, u16, u1
                 "started": f.info.started,
                 "duration": f.info.duration,
                 "eeg_samples": f.info.eeg_samples,
-                "clock": "session seconds",
+                "wall_clock_unix_ms": f.info.wall_clock_unix_ms,
+                "clock": "record timestamps are session seconds; started = session time at wall_clock_unix_ms",
             });
             Ok(nf_format::encode_container(&nf_format::Container {
                 thumbnail: Vec::new(),
@@ -153,4 +164,42 @@ pub fn base64(bytes: &[u8]) -> String {
         }
     }
     out
+}
+
+/// UTC civil time (y, m, d, h, min, s) of a Unix-ms timestamp (Howard
+/// Hinnant's days-from-civil inverse). Pure arithmetic, no clock.
+pub fn civil_utc(unix_ms: f64) -> (u16, u16, u16, u16, u16, u16) {
+    let secs = (unix_ms / 1000.0).floor() as i64;
+    let (days, sod) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    let c = |v: i64| u16::try_from(v).unwrap_or(0);
+    (c(y), c(m), c(d), c(sod / 3600), c(sod % 3600 / 60), c(sod % 60))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn civil_known_answers() {
+        assert_eq!(civil_utc(0.0), (1970, 1, 1, 0, 0, 0));
+        assert_eq!(civil_utc(951_782_400_000.0), (2000, 2, 29, 0, 0, 0));
+        assert_eq!(civil_utc(1_793_267_696_000.0), (2026, 10, 29, 9, 54, 56));
+    }
+
+    #[test]
+    fn base64_known_answers() {
+        assert_eq!(base64(b""), "");
+        assert_eq!(base64(b"f"), "Zg==");
+        assert_eq!(base64(b"fo"), "Zm8=");
+        assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+    }
 }

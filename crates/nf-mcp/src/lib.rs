@@ -121,7 +121,42 @@ const TOOLS: &[ToolDef] = &[
         read_only: false,
         schema: || schema(json!({ "seconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 3600 } }), &["seconds"]),
     },
+    ToolDef {
+        name: "recording_export",
+        description: "Native shell only: like command_run recording.export, but with `path` writes the file there and returns \
+                      {path, bytes} instead of base64. Without `path` it returns base64.",
+        read_only: false,
+        schema: || {
+            schema(
+                json!({
+                    "format": { "enum": ["nfed6", "raw_body", "edf"] },
+                    "start": { "type": "array", "items": { "type": "integer" }, "minItems": 6, "maxItems": 6 },
+                    "path": { "type": "string" },
+                }),
+                &["format"],
+            )
+        },
+    },
 ];
+
+/// Shell-side injection: in wall-clock mode the MCP shell stamps
+/// `recording.start` with the real start time (the core never reads a clock).
+/// Manual-clock mode stays deterministic and injects nothing.
+fn inject(clock: ClockMode, id: &str, params: Value) -> Value {
+    if id != "recording.start" || !matches!(clock, ClockMode::Wall(_)) {
+        return params;
+    }
+    let mut m = match params {
+        Value::Object(m) => m,
+        Value::Null => serde_json::Map::new(),
+        other => return other,
+    };
+    if !m.contains_key("wall_clock_unix_ms") {
+        let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64() * 1000.0).unwrap_or(0.0);
+        m.insert("wall_clock_unix_ms".into(), json!(ms));
+    }
+    Value::Object(m)
+}
 
 impl NfMcp {
     pub fn new(session: Session, clock: ClockMode) -> Self {
@@ -163,7 +198,8 @@ impl NfMcp {
             s.tick(start.elapsed().as_secs_f64());
         }
         let session: &mut Session = &mut s;
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| dispatch(session, tool, args)))
+        let clock = self.clock;
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| dispatch(session, clock, tool, args)))
             .unwrap_or_else(|_| Err(ToolError::Failed("internal error (panic caught); session kept".into())))
     }
 }
@@ -180,7 +216,7 @@ fn spec_json(s: &Session, spec: &nf_core::CommandSpec) -> Value {
     })
 }
 
-fn dispatch(s: &mut Session, tool: &str, args: serde_json::Map<String, Value>) -> Result<Value, ToolError> {
+fn dispatch(s: &mut Session, clock: ClockMode, tool: &str, args: serde_json::Map<String, Value>) -> Result<Value, ToolError> {
     match tool {
         "command_list" => {
             let group = args.get("group").and_then(Value::as_str);
@@ -195,7 +231,7 @@ fn dispatch(s: &mut Session, tool: &str, args: serde_json::Map<String, Value>) -
         }
         "command_run" => {
             let id = str_arg(&args, "id")?;
-            s.call(id, args.get("params").cloned().unwrap_or(Value::Null)).map_err(failed)
+            s.call(id, inject(clock, id, args.get("params").cloned().unwrap_or(Value::Null))).map_err(failed)
         }
         "command_batch" => {
             let steps =
@@ -204,7 +240,7 @@ fn dispatch(s: &mut Session, tool: &str, args: serde_json::Map<String, Value>) -
                 .iter()
                 .map(|st| {
                     let id = st.get("id").and_then(Value::as_str).ok_or_else(|| ToolError::Invalid("each step needs `id`".into()))?;
-                    Ok((id.to_owned(), st.get("params").cloned().unwrap_or(Value::Null)))
+                    Ok((id.to_owned(), inject(clock, id, st.get("params").cloned().unwrap_or(Value::Null))))
                 })
                 .collect::<Result<Vec<_>, ToolError>>()?;
             s.batch(&steps).map_err(failed)
@@ -213,6 +249,21 @@ fn dispatch(s: &mut Session, tool: &str, args: serde_json::Map<String, Value>) -
         "bands_get" => s.call("bands.get", Value::Object(args)).map_err(failed),
         "device_list" => s.call("device.list", Value::Null).map_err(failed),
         "clock_advance" => s.call("clock.advance", Value::Object(args)).map_err(failed),
+        "recording_export" => {
+            let mut params = args.clone();
+            let path = params.remove("path");
+            let mut reply = s.call("recording.export", Value::Object(params)).map_err(failed)?;
+            let Some(path) = path else { return Ok(reply) };
+            let path = path.as_str().ok_or_else(|| ToolError::Invalid("`path` must be a string".into()))?;
+            let bytes = decode_base64(reply["base64"].as_str().unwrap_or_default())
+                .ok_or_else(|| ToolError::Failed("internal: bad base64 from core".into()))?;
+            std::fs::write(path, &bytes).map_err(|e| ToolError::Failed(format!("write {path}: {e}")))?;
+            if let Some(m) = reply.as_object_mut() {
+                m.remove("base64");
+                m.insert("path".into(), json!(path));
+            }
+            Ok(reply)
+        }
         other => Err(ToolError::Invalid(format!("unknown tool `{other}`"))),
     }
 }
@@ -238,4 +289,31 @@ impl ServerHandler for NfMcp {
         };
         Ok(result.into())
     }
+}
+
+fn decode_base64(s: &str) -> Option<Vec<u8>> {
+    let val = |c: u8| -> Option<u32> {
+        Some(u32::from(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        }))
+    };
+    if !s.len().is_multiple_of(4) {
+        return None;
+    }
+    let mut out = Vec::with_capacity(s.len() / 4 * 3);
+    for chunk in s.as_bytes().chunks(4) {
+        let pad = chunk.iter().rev().take_while(|&&c| c == b'=').count();
+        let mut n = 0u32;
+        for &c in &chunk[..4 - pad] {
+            n = (n << 6) | val(c)?;
+        }
+        n <<= 6 * pad as u32;
+        out.extend_from_slice(&n.to_be_bytes()[1..4 - pad]);
+    }
+    Some(out)
 }

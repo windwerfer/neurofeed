@@ -28,7 +28,17 @@ fn every_command_is_listed_and_described_with_a_schema() {
         assert_eq!(d["params_schema"]["additionalProperties"], false);
     }
     let tools: Vec<_> = NfMcp::tools().into_iter().map(|t| t.name.to_string()).collect();
-    for t in ["command_list", "command_describe", "command_run", "command_batch", "status", "bands_get", "device_list", "clock_advance"] {
+    for t in [
+        "command_list",
+        "command_describe",
+        "command_run",
+        "command_batch",
+        "status",
+        "bands_get",
+        "device_list",
+        "clock_advance",
+        "recording_export",
+    ] {
         assert!(tools.contains(&t.to_owned()), "{t}");
     }
 }
@@ -247,4 +257,34 @@ fn record_stop_and_export_all_formats() {
     run(&s, "device.disconnect", json!({}));
     let ev = run(&s, "events.drain", json!({}));
     assert!(ev.to_string().contains("device disconnected"), "{ev}");
+}
+
+#[test]
+fn wall_clock_is_injected_and_export_writes_files() {
+    // Wall mode: the shell stamps recording.start; core stays clock-free.
+    let s = NfMcp::new(Session::new(), ClockMode::Wall(std::time::Instant::now()));
+    run(&s, "device.connect", json!({ "id": "sim:muse" }));
+    let r = run(&s, "recording.start", json!({}));
+    assert_eq!(r["ok"], json!(true));
+    let st = run(&s, "recording.status", json!({}));
+    assert!(st["recording"]["wall_clock_unix_ms"].as_f64().unwrap_or(0.0) > 1.7e12, "{st}");
+    ok(&s, "clock_advance", json!({ "seconds": 1 }));
+    run(&s, "recording.stop", json!({}));
+    let dir = std::env::temp_dir().join(format!("nf-mcp-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap_or_default();
+    let path = dir.join("rec.edf");
+    let out = ok(&s, "recording_export", json!({ "format": "edf", "path": path.to_string_lossy() }));
+    assert!(out.get("base64").is_none());
+    let bytes = std::fs::read(&path).unwrap_or_default();
+    assert_eq!(out["bytes"].as_u64(), Some(bytes.len() as u64));
+    let edf = nf_format::edf::decode_edf_plus(&bytes).unwrap_or_else(|e| panic!("{e:?}"));
+    assert!(edf.start.0 >= 2025, "EDF start from injected wall clock: {:?}", edf.start);
+    assert!(ok(&s, "recording_export", json!({ "format": "raw_body" }))["base64"].is_string());
+    std::fs::remove_dir_all(&dir).unwrap_or_default();
+
+    // Manual mode injects nothing (deterministic).
+    let m = server();
+    run(&m, "device.connect", json!({ "id": "sim:muse" }));
+    run(&m, "recording.start", json!({}));
+    assert_eq!(run(&m, "recording.status", json!({}))["recording"]["wall_clock_unix_ms"], Value::Null);
 }

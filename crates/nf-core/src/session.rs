@@ -290,9 +290,12 @@ impl Session {
                 return Ok(json!({ "time": self.state.time }));
             }
             Command::EventsDrain => return Ok(serde_json::to_value(self.drain_events()).unwrap_or_default()),
-            Command::RecordingStart => {
+            Command::RecordingStart { wall_clock_unix_ms } => {
+                if wall_clock_unix_ms.is_some_and(|t| !t.is_finite() || t < 0.0) {
+                    return Err(CoreError::InvalidArgs("wall_clock_unix_ms must be a finite, non-negative Unix time".into()));
+                }
                 let dev = self.state.device.clone().ok_or_else(|| CoreError::Device("no device connected".into()))?;
-                let r = Recorder::start(dev, self.state.time);
+                let r = Recorder::start(dev, self.state.time, wall_clock_unix_ms);
                 self.emit(Event::RecordingStarted { device: r.info.device.clone() });
                 self.state.recording = Some(r.info.clone());
                 self.live.recorder = Some(r);
@@ -372,8 +375,12 @@ impl Session {
             Query::RecordingStatus => json!({ "recording": s.recording }),
             Query::RecordingExport { format, start } => {
                 let f = self.live.finished.as_ref().ok_or_else(|| CoreError::BadRequest("nothing recorded yet".into()))?;
-                let [y, mo, d, h, mi, se] = start.unwrap_or([1985, 1, 1, 0, 0, 0]);
-                let bytes = export(f, *format, (y, mo, d, h, mi, se)).map_err(CoreError::BadRequest)?;
+                let start = match (start, f.info.wall_clock_unix_ms) {
+                    (Some([y, mo, d, h, mi, se]), _) => (*y, *mo, *d, *h, *mi, *se),
+                    (None, Some(ms)) => crate::recording::civil_utc(ms),
+                    (None, None) => (1985, 1, 1, 0, 0, 0),
+                };
+                let bytes = export(f, *format, start).map_err(CoreError::BadRequest)?;
                 json!({
                     "format": format,
                     "extension": format.extension(),
