@@ -16,6 +16,11 @@ impl NeuroFeedApp {
         ui::theme::apply(&cc.egui_ctx);
         let mut app = Self::with_session(Session::new());
         app.run(Command::DeviceConnect { id: "sim:muse".into() });
+        // Optional start view (screenshots/demos), e.g. NF_VIEW=psd.
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(view) = std::env::var("NF_VIEW").ok().and_then(|v| serde_json::from_value(serde_json::Value::String(v)).ok()) {
+            app.run(Command::ViewSet { view });
+        }
         app
     }
 
@@ -40,7 +45,7 @@ impl eframe::App for NeuroFeedApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.session.tick(ctx.input(|i| i.time));
         let _ = self.session.drain_events(); // no UI consumer yet
-        for cmd in ui::show(ctx, self.session.state(), self.last_error.as_deref()) {
+        for cmd in ui::show(ctx, &self.session, self.last_error.as_deref()) {
             self.run(cmd);
         }
         ctx.request_repaint_after(REPAINT_INTERVAL);

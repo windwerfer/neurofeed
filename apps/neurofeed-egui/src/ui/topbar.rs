@@ -1,12 +1,13 @@
-//! Top bar: sidebar toggle, device picker/status, pause.
+//! Top bar: sidebar toggle, device picker/status, mains/quality, record, pause.
 
 use super::theme;
-use nf_core::{AppState, Command};
+use nf_core::{mains_name, Command, MainsMode, Session};
 
 /// Devices offered in the picker (real providers will add theirs later).
 const DEVICES: [(&str, &str); 2] = [("sim:muse", "Muse S (simulated)"), ("sim:crown", "Crown (simulated)")];
 
-pub fn show(ctx: &egui::Context, state: &AppState, error: Option<&str>, out: &mut Vec<Command>) {
+pub fn show(ctx: &egui::Context, session: &Session, error: Option<&str>, out: &mut Vec<Command>) {
+    let state = session.state();
     egui::TopBottomPanel::top("topbar").exact_height(theme::TOPBAR_HEIGHT).show(ctx, |ui| {
         ui.horizontal_centered(|ui| {
             if ui.button("☰").on_hover_text("Toggle sidebar").clicked() {
@@ -42,6 +43,32 @@ pub fn show(ctx: &egui::Context, state: &AppState, error: Option<&str>, out: &mu
                     out.push(if state.paused { Command::StreamResume } else { Command::StreamPause });
                 }
                 ui.weak(format!("t = {:.0} s", state.time));
+                let rec = state.recording.as_ref().filter(|r| r.active);
+                if let Some(r) = rec {
+                    if ui.button(format!("⏹ Stop ({:.0} s)", r.duration)).clicked() {
+                        out.push(Command::RecordingStop);
+                    }
+                } else if ui.add_enabled(state.device.is_some(), egui::Button::new("⏺ Record")).clicked() {
+                    out.push(Command::RecordingStart { wall_clock_unix_ms: None });
+                }
+                if let Some((_, sig)) = session.live_signal() {
+                    let notch = match sig.applied() {
+                        nf_core::dsp::Mains::Unknown => "50+60".to_owned(),
+                        m => mains_name(m).to_owned(),
+                    };
+                    let lock = if sig.locked() { " 🔒" } else { "" };
+                    egui::ComboBox::from_id_salt("mains").selected_text(format!("notch {notch}{lock}")).show_ui(ui, |ui| {
+                        for (mode, label) in
+                            [(MainsMode::Auto, "auto"), (MainsMode::Hz50, "50 Hz"), (MainsMode::Hz60, "60 Hz"), (MainsMode::Off, "off")]
+                        {
+                            if ui.selectable_label(state.mains_mode == mode, label).clicked() {
+                                out.push(Command::MainsSet { mode });
+                            }
+                        }
+                    });
+                    let good = (0..sig.quality.len()).filter(|&i| sig.usable(i)).count();
+                    ui.weak(format!("pads {good}/{}", sig.quality.len()));
+                }
             });
         });
     });

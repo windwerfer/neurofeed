@@ -4,9 +4,9 @@ use crate::ui::theme;
 use egui::{Align2, FontId, Rect, Sense, Stroke, Vec2};
 use nf_core::{AppState, Band, BandScale, BandSnapshot, Command};
 
-/// Display range for absolute log10 power.
+/// Display range for absolute log10 band power (µV²).
 const ABS_MIN: f32 = -1.0;
-const ABS_MAX: f32 = 2.0;
+const ABS_MAX: f32 = 3.0;
 
 pub fn show(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
     ui.horizontal(|ui| {
