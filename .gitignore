@@ -68,3 +68,5 @@ feedback_gym/corpora/external/*.npz
 /org.windwerfer.neurofeed.yml
 /generated/
 /.flatpak-builder/
+target/
+dist/

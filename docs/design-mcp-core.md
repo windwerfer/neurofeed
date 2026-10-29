@@ -171,5 +171,3 @@ progress for long runs.
 
 - Web BLE (WebBluetooth `DeviceProvider`)? Not needed for phase 1-6.
 - MCP over loopback HTTP in addition to stdio? (bridge mode uses TCP anyway)
-- Rename `egui_prototype/` to a permanent path (e.g. repo root or `app/`)
-  before phase 2.

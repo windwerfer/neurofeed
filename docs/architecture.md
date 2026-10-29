@@ -2,7 +2,7 @@
 
 ## Current state (2026-10-29)
 
-Cargo workspace in `egui_prototype/`: `crates/nf-types` (L0), `crates/nf-sim`
+Cargo workspace at the repo root: `crates/nf-types` (L0), `crates/nf-sim`
 (L1), `crates/nf-core` (L2), `crates/nf-mcp` (L4), `apps/neurofeed-egui`,
 `apps/neurofeed-mcp`. Only the Bands view is functional, fed by simulators.
 Plan and phases: `design-mcp-core.md`. This section overrides anything below.

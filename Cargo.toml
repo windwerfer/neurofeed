@@ -1,7 +1,9 @@
-# Standalone workspace (not part of any parent Cargo workspace).
+# NeuroFeed Rust workspace (repo root).
 [workspace]
 resolver = "2"
 members = ["crates/*", "apps/*"]
+# Flutter-era code kept as reference until migrated.
+exclude = ["rust", "rust_builder", "third_party", "vendor", "feedback_gym"]
 
 [workspace.package]
 version = "0.1.0"
