@@ -1,0 +1,33 @@
+[package]
+name = "neurofeed-egui"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "egui/eframe prototype of the NeuroFeed UI (desktop + web)"
+license = "MIT"
+
+# Standalone: not part of any parent Cargo workspace.
+[workspace]
+
+[dependencies]
+eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow"] }
+egui = "0.29"
+log = "0.4"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger = "0.11"
+eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Document", "Window", "Element", "HtmlCanvasElement"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+
+[profile.release]
+opt-level = 2
