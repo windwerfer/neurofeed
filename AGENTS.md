@@ -43,6 +43,7 @@ Do not add Flutter, Tauri, Electron or a webview UI. Read this file, then
 crates/
   nf-types            L0  ids, units, stream descriptors, DTOs (serde, schemars)
   nf-dsp nf-format nf-sim  L1  filters/FFT/bands; NFEDBIN/NFED6/EDF formats; seeded raw simulators
+  nf-feedback         L1  feedback engine math (threshold, adaptation, stability, inhibit, guard); sample-time, no clock
   nf-format           L1  .neurofeed NFED6 container (the only owner of the byte layout)
   nf-core             L2  Session + command registry + event log + Clock (no egui, no tokio, wasm-clean)
   nf-device nf-store  L3  real devices (btleplug, OSC; native) ; history/storage behind traits
