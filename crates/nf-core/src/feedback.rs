@@ -133,6 +133,8 @@ pub struct Trainer {
     /// Last baseline per `device|protocol`.
     pub baselines: BTreeMap<String, CalibrationResult>,
     pub device: Option<String>,
+    /// User setting for stability protocols (Band Stability).
+    pub stability: nf_feedback::StabilityConfig,
     cal: Option<Calibration>,
     engine: Option<Engine>,
     sample_t: f64,
@@ -151,6 +153,7 @@ impl Default for Trainer {
             protocol,
             minutes: protocol.default_minutes,
             percentile: nf_feedback::DEFAULT_PERCENTILE,
+            stability: nf_feedback::StabilityConfig::default(),
             phase: Phase::Idle,
             pads: Vec::new(),
             green_for: 0,
@@ -186,6 +189,15 @@ fn pad_list(names: &[String]) -> String {
 }
 
 impl Trainer {
+    /// Protocol config with the user's stability setting applied.
+    pub fn engine_config(&self) -> nf_feedback::Config {
+        let mut c = self.protocol.config(self.percentile);
+        if c.stability.is_some() {
+            c.stability = Some(self.stability);
+        }
+        c
+    }
+
     fn key(&self) -> Option<String> {
         self.device.as_ref().map(|d| format!("{d}|{}", self.protocol.id))
     }
@@ -235,7 +247,7 @@ impl Trainer {
     /// fit check → calibrating.
     pub fn calibrate(&mut self, out: &mut Vec<Change>) {
         self.message = None;
-        self.cal = Some(Calibration::new(&self.protocol.config(self.percentile), CalibrationKind::Single));
+        self.cal = Some(Calibration::new(&self.engine_config(), CalibrationKind::Single));
         self.calibration = Some(CalibrationProgress {
             valid_s: 0,
             wall_s: 0,
@@ -277,7 +289,7 @@ impl Trainer {
     }
 
     fn play(&mut self, res: &CalibrationResult, out: &mut Vec<Change>) {
-        let engine = Engine::from_calibration(self.protocol.config(self.percentile), res);
+        let engine = Engine::from_calibration(self.engine_config(), res);
         self.threshold_start = engine.threshold();
         self.engine = Some(engine);
         self.calibration = None;
@@ -460,5 +472,18 @@ impl Trainer {
             chime: false,
             record: None,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_stability_overrides_only_stability_protocols() {
+        let mut t = Trainer { stability: nf_feedback::StabilityConfig { window: 20, difficulty: 0.3 }, ..Trainer::default() };
+        assert_eq!(t.engine_config().stability, None);
+        t.protocol = nf_feedback::protocol("bandStability").unwrap_or(t.protocol);
+        assert_eq!(t.engine_config().stability.map(|s| s.window), Some(20));
     }
 }

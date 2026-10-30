@@ -264,6 +264,9 @@ impl Session {
     /// Feed wall-clock time (seconds, any origin). Advances session time by
     /// the delta since the previous call. Call once per UI frame.
     pub fn tick(&mut self, now: f64) {
+        if self.store.take_changed() {
+            self.refresh_history();
+        }
         let dt = match self.last_tick {
             Some(last) if now > last => now - last,
             _ => 0.0,
@@ -545,6 +548,23 @@ impl Session {
                 }
                 return Ok(serde_json::to_value(self.sim.config).unwrap_or_default());
             }
+            Command::StabilitySet { window, difficulty, reset } => {
+                use nf_feedback::StabilityConfig as S;
+                if window.is_some_and(|w| !(S::MIN_WINDOW..=S::MAX_WINDOW).contains(&w)) {
+                    return Err(CoreError::InvalidArgs(format!("window must be in [{}, {}]", S::MIN_WINDOW, S::MAX_WINDOW)));
+                }
+                if difficulty.is_some_and(|d| !(0.0..=S::MAX_DIFFICULTY).contains(&d)) {
+                    return Err(CoreError::InvalidArgs(format!("difficulty must be in [0, {}]", S::MAX_DIFFICULTY)));
+                }
+                let st = &mut self.state.feedback.stability;
+                if reset {
+                    *st = S::default();
+                }
+                st.window = window.unwrap_or(st.window);
+                st.difficulty = difficulty.unwrap_or(st.difficulty);
+                let v = json!(*st);
+                return Ok(v);
+            }
             Command::ProtocolSet { id, minutes } => {
                 let p = nf_feedback::protocol(&id).ok_or_else(|| CoreError::InvalidArgs(format!("unknown protocol `{id}`")))?;
                 let (lo, hi) = crate::feedback::MINUTES;
@@ -721,6 +741,7 @@ impl Session {
                     "protocol": f.protocol.id,
                     "minutes": f.minutes,
                     "percentile": f.percentile,
+                    "stability": f.stability,
                     "phase": f.phase,
                     "fit": { "pads": f.pads, "green_s": f.green_for, "ready": f.fit_ready() },
                     "calibration": f.calibration,

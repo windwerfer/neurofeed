@@ -3,7 +3,7 @@
 
 use super::plot::{label, to_screen, trace};
 use egui::{Align2, Color32, RichText, Sense, Stroke, Vec2};
-use nf_core::{civil_utc, Command, ExportFormat, Query, Session, SessionMeta};
+use nf_core::{Command, ExportFormat, Query, Session, SessionMeta};
 
 const CALM: Color32 = Color32::from_rgb(0x4D, 0xB6, 0xAC);
 const THR: Color32 = Color32::from_rgb(0xFF, 0xB7, 0x4D);
@@ -20,10 +20,17 @@ struct Ui {
 }
 
 fn date(m: &SessionMeta) -> String {
-    m.started_unix_ms.map_or("(no date)".into(), |ms| {
-        let (y, mo, d, h, mi, _) = civil_utc(ms);
-        format!("{y}-{mo:02}-{d:02} {h:02}:{mi:02} UTC")
-    })
+    m.started_unix_ms.map_or("(no date)".into(), local_time)
+}
+
+/// `YYYY-MM-DD HH:MM` in the viewer's local zone (shell concern; the core
+/// stores UTC Unix ms).
+pub fn local_time(unix_ms: f64) -> String {
+    use chrono::TimeZone;
+    match chrono::Local.timestamp_millis_opt(unix_ms as i64) {
+        chrono::LocalResult::Single(t) | chrono::LocalResult::Ambiguous(t, _) => t.format("%Y-%m-%d %H:%M").to_string(),
+        chrono::LocalResult::None => "(bad date)".into(),
+    }
 }
 
 fn mmss(s: f64) -> String {

@@ -71,3 +71,10 @@ Window 10 s, difficulty 0.10 (legacy Dart `StabilityConfig`; bounds window 1..30
 - Every `feedback.start` auto-starts a recording unless one is running; it stops when the session ends. Every finished recording is saved (protocol + summary when it has feedback seconds).
 - Commands: `history.list`, `history.get` (meta + per-second feedback), `history.export` (nfed6/raw_body/edf), `history.delete {id, confirm}` (needs confirm=true; disabled with "no saved sessions").
 - Desktop: `NF_DB` or the user data dir (`~/.local/share/neurofeed/history.sqlite`, macOS Application Support, Windows %APPDATA%). `neurofeed-mcp`: memory unless `--db`/`NF_DB`. Web: memory only for now.
+
+## Leftovers after History (2026-10-30)
+- **Web history = IndexedDB** (`nf-store` feature `indexeddb`, wasm only): the sync `Store` is a cache over IDB; rows load async on start and `Store::take_changed` makes the session re-list on the next tick. Sessions saved before the load finished are renumbered above the persisted ids. Verified in headless Chrome: 3 demo sessions survive a reload (`/workspace/web-history-idb.png`).
+- **Local time**: the core stores UTC Unix ms; only the shell formats in the viewer's zone (chrono `Local`, `wasmbind` on web).
+- **Band Stability settings**: `stability.set {window?, difficulty?, reset?}` (locked while a session runs), value in `feedback.status.stability`; applies only to stability protocols. Settings view has sliders (one command per drag release).
+- **Start params on web**: `?view=…&demo=…` mirror `NF_VIEW`/`NF_DEMO`.
+- **CI**: workflow staged at `ci/rust-ci.yml` (the bot token lacks the `workflow` scope, so it cannot push into `.github/workflows/`); `git mv ci/rust-ci.yml .github/workflows/` to enable. Runs every gate; installs `libasound2-dev libdbus-1-dev`.

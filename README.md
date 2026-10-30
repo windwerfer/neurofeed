@@ -14,9 +14,12 @@ MCP (`raw.get`, `psd.get`, `spectrogram.get`, `histogram.get`,
 Desktop start view: `NF_VIEW=psd cargo run -p neurofeed-egui`.
 
 ```sh
-cargo run --release -p neurofeed-egui                 # desktop
-cd apps/neurofeed-egui && trunk serve --release       # web, http://127.0.0.1:8080
-cargo run -p neurofeed-mcp -- --manual-clock          # MCP over stdio
+# prerequisites: rustup target add wasm32-unknown-unknown; cargo install trunk
+# Linux desktop audio (cpal) needs ALSA headers: apt install libasound2-dev pkg-config
+#   (Fedora: alsa-lib-devel) -- or build without sound: --no-default-features
+cargo run --release -p neurofeed-egui                       # desktop (repo root)
+cd apps/neurofeed-egui && trunk serve --release             # web, http://127.0.0.1:8080
+cargo run --release -p neurofeed-mcp -- --device sim:muse_s # MCP over stdio
 cargo test && cargo clippy --all-targets -- -D warnings
 ```
 

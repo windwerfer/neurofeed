@@ -63,3 +63,32 @@ fn sqlite_store_contract_and_persistence() {
     assert_eq!(again.get(id).unwrap().unwrap().body, [9]);
     std::fs::remove_dir_all(dir).ok();
 }
+
+#[test]
+fn merge_loaded_keeps_ids_and_renumbers_local_rows() {
+    use nf_store::{MemoryStore, SessionMeta, Store, StoredSession};
+    let row = |id| StoredSession {
+        meta: SessionMeta {
+            id,
+            started_unix_ms: None,
+            duration_s: 1.0,
+            device_id: "d".into(),
+            device_name: "D".into(),
+            protocol: None,
+            summary: None,
+            eeg_samples: 0,
+            ppg_samples: 0,
+            feedback_seconds: 0,
+            bytes: 0,
+        },
+        device_json: "{}".into(),
+        body: vec![id as u8],
+    };
+    let mut m = MemoryStore::default();
+    assert_eq!(m.insert(row(0)).ok(), Some(1));
+    let renumbered = m.merge_loaded(vec![row(4), row(7)]);
+    assert_eq!(renumbered, vec![8]);
+    let ids: Vec<u64> = m.list().unwrap_or_default().iter().map(|s| s.id).collect();
+    assert_eq!(ids, vec![8, 7, 4]);
+    assert_eq!(m.insert(row(0)).ok(), Some(9));
+}

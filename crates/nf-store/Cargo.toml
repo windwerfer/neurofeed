@@ -7,6 +7,8 @@ description = "Session history storage: trait + in-memory (wasm/tests) + SQLite 
 [features]
 ## Native SQLite backend (bundled libsqlite3; not for wasm).
 sqlite = ["dep:rusqlite"]
+## Browser IndexedDB backend (wasm32 only; write-through cache).
+indexeddb = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys", "dep:web-sys"]
 
 [dependencies]
 serde.workspace = true
@@ -15,6 +17,12 @@ thiserror.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rusqlite = { version = "0.32", features = ["bundled"], optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true, features = ["Window", "IdbFactory", "IdbDatabase", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction", "IdbTransactionMode", "IdbObjectStore", "IdbObjectStoreParameters", "DomStringList", "IdbVersionChangeEvent", "Event"] }
 
 [lints]
 workspace = true

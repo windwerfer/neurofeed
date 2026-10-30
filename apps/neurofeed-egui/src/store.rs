@@ -1,5 +1,5 @@
 //! History backend for the shell: SQLite on desktop (`NF_DB` or the user
-//! data dir), memory on the web (not persisted yet).
+//! data dir), IndexedDB on the web (memory if unavailable).
 
 use nf_store::Store;
 
@@ -27,6 +27,11 @@ pub fn open() -> Box<dyn Store> {
             Ok(s) => return Box::new(s),
             Err(e) => log::warn!("history at {}: {e}; using memory", p.display()),
         }
+    }
+    #[cfg(target_arch = "wasm32")]
+    match nf_store::IdbStore::open() {
+        Ok(s) => return Box::new(s),
+        Err(e) => log::warn!("history: {e}; using memory"),
     }
     Box::new(nf_store::MemoryStore::default())
 }

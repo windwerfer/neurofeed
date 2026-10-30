@@ -7,6 +7,17 @@ use nf_core::{Command, Event, Session};
 /// How often the UI repaints to show fresh band data.
 const REPAINT_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
+/// Start parameter: env `NF_<NAME>` (desktop) or URL query `name` (web).
+fn param(name: &str) -> Option<String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    return std::env::var(format!("NF_{}", name.to_uppercase())).ok();
+    #[cfg(target_arch = "wasm32")]
+    return web_sys::window()
+        .and_then(|w| w.location().search().ok())
+        .and_then(|q| web_sys::UrlSearchParams::new_with_str(&q).ok())
+        .and_then(|p| p.get(name));
+}
+
 pub struct NeuroFeedApp {
     session: Session,
     last_error: Option<String>,
@@ -18,14 +29,13 @@ impl NeuroFeedApp {
         ui::theme::apply(&cc.egui_ctx);
         let mut app = Self::with_session(Session::new().with_store(crate::store::open()));
         app.run(Command::DeviceConnect { id: "sim:muse_s".into() });
-        // Optional start view (screenshots/demos), e.g. NF_VIEW=psd.
-        #[cfg(not(target_arch = "wasm32"))]
-        if let Some(view) = std::env::var("NF_VIEW").ok().and_then(|v| serde_json::from_value(serde_json::Value::String(v)).ok()) {
-            app.run(Command::ViewSet { view });
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        if let Ok(demo) = std::env::var("NF_DEMO") {
+        // Optional start view / demo (screenshots): NF_VIEW=psd NF_DEMO=history
+        // on desktop, `?view=psd&demo=history` on the web.
+        if let Some(demo) = param("demo") {
             app.demo(&demo);
+        }
+        if let Some(view) = param("view").and_then(|v| serde_json::from_value(serde_json::Value::String(v)).ok()) {
+            app.run(Command::ViewSet { view });
         }
         app
     }
@@ -36,7 +46,6 @@ impl NeuroFeedApp {
     }
 
     /// Screenshot/demo states of the feedback flow (NF_DEMO=fit|calibrating|training|paused|summary|history).
-    #[cfg(not(target_arch = "wasm32"))]
     fn demo(&mut self, which: &str) {
         let adv = |s: f64| Command::ClockAdvance { seconds: s };
         let fault = |pads: &[&str]| Command::SimFault {

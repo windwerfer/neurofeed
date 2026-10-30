@@ -20,6 +20,7 @@ pub use command::{examples, find, input_schema, Command, CommandSpec, EnabledFn,
 /// DSP primitives for views that render core buffers (pure functions).
 pub use nf_dsp as dsp;
 pub use nf_feedback;
+pub use nf_feedback::StabilityConfig;
 pub use nf_format::feedback_flags;
 pub use nf_store::SessionMeta;
 pub use nf_types::{Band, BandSnapshot, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, PpgPacket};

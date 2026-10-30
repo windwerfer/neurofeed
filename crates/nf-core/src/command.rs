@@ -95,6 +95,17 @@ pub enum Command {
         #[serde(default)]
         minutes: Option<u32>,
     },
+    /// Band Stability settings (window in clean samples, difficulty 0..=0.5).
+    #[serde(rename = "stability.set")]
+    StabilitySet {
+        #[serde(default)]
+        window: Option<u32>,
+        #[serde(default)]
+        difficulty: Option<f64>,
+        /// Reset both to the defaults (10, 0.10) first.
+        #[serde(default)]
+        reset: bool,
+    },
     /// Start a session: enters the fit check.
     #[serde(rename = "feedback.start")]
     FeedbackStart {
@@ -526,6 +537,7 @@ pub const SPECS: &[CommandSpec] = &[
     spec("protocol.list", "Protocols", "feedback", true, "Built-in protocols with availability.", always),
     spec("protocol.get", "Protocol", "feedback", true, "One protocol (default the selected one).", always),
     spec("protocol.set", "Choose protocol", "feedback", false, "Select the training protocol.", fb_idle),
+    spec("stability.set", "Stability settings", "feedback", false, "Band Stability window (1..=30) and difficulty (0..=0.5).", fb_idle),
     spec("feedback.start", "Start session", "feedback", false, "Start a session (fit check first).", fb_can_start),
     spec("feedback.stop", "End session", "feedback", false, "End the session and build the summary.", fb_active),
     spec("feedback.pause", "Pause training", "feedback", false, "Pause training.", fb_playing),
@@ -601,6 +613,7 @@ pub fn examples() -> Vec<Request> {
         C(Command::MainsSet { mode: MainsMode::Hz60 }),
         C(Command::ChannelSet { channel: "AF7".into() }),
         C(Command::ProtocolSet { id: "openMonitor".into(), minutes: Some(20) }),
+        C(Command::StabilitySet { window: Some(12), difficulty: Some(0.2), reset: false }),
         C(Command::FeedbackStart { minutes: Some(5), wall_clock_unix_ms: None }),
         C(Command::FeedbackStop),
         C(Command::HistoryDelete { id: 1, confirm: true }),
