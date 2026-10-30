@@ -8,6 +8,7 @@ mod histogram;
 mod history;
 mod import;
 mod plot;
+mod protocol_builder;
 mod psd;
 mod raw;
 mod settings;

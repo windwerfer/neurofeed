@@ -63,6 +63,10 @@ pub trait Store: Send {
     fn delete(&mut self, id: u64) -> Result<bool>;
     /// Where the data lives (for status / UI), e.g. `memory` or a file path.
     fn location(&self) -> String;
+    /// A small named JSON document (custom protocols, ...).
+    fn get_doc(&self, key: &str) -> Result<Option<String>>;
+    /// Write a named document; `None` removes it.
+    fn put_doc(&mut self, key: &str, value: Option<&str>) -> Result<()>;
     /// True once after the backend changed behind the caller's back (e.g. an
     /// async IndexedDB load finished); the session then re-lists.
     fn take_changed(&mut self) -> bool {
@@ -75,6 +79,7 @@ pub trait Store: Send {
 pub struct MemoryStore {
     next: u64,
     rows: Vec<StoredSession>,
+    docs: std::collections::BTreeMap<String, String>,
 }
 
 impl MemoryStore {
@@ -110,5 +115,15 @@ impl Store for MemoryStore {
     }
     fn location(&self) -> String {
         "memory".into()
+    }
+    fn get_doc(&self, key: &str) -> Result<Option<String>> {
+        Ok(self.docs.get(key).cloned())
+    }
+    fn put_doc(&mut self, key: &str, value: Option<&str>) -> Result<()> {
+        match value {
+            Some(v) => self.docs.insert(key.to_owned(), v.to_owned()),
+            None => self.docs.remove(key),
+        };
+        Ok(())
     }
 }

@@ -117,6 +117,8 @@ pub struct AppState {
     /// Feedback session (phases, results, stored baselines).
     pub feedback: crate::feedback::Trainer,
     pub audio: nf_audio::AudioSettings,
+    /// Protocols made in the Protocol Builder (built-ins are not listed here).
+    pub custom_protocols: Vec<nf_feedback::Protocol>,
     /// OSC streaming out.
     pub streaming: crate::streaming::StreamState,
     /// Folder the desktop shell loads music from (`music` reward output).
@@ -149,6 +151,7 @@ impl Default for AppState {
             feedback: crate::feedback::Trainer::default(),
             audio: nf_audio::AudioSettings::default(),
             streaming: crate::streaming::StreamState::default(),
+            custom_protocols: Vec::new(),
             music_dir: None,
             history: Vec::new(),
             scanners: Vec::new(),

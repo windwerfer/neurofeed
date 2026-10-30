@@ -43,10 +43,10 @@ fn success(m: &SessionMeta) -> Option<f64> {
     m.summary.as_ref()?.get("success")?.as_f64()
 }
 
-fn title(m: &SessionMeta) -> String {
+fn title(m: &SessionMeta, custom: &[nf_core::nf_feedback::Protocol]) -> String {
     m.protocol.clone().map_or_else(
         || if m.import.is_some() { "Imported recording".into() } else { "Recording".into() },
-        |p| nf_core::nf_feedback::PROTOCOLS.iter().find(|x| x.id == p).map_or(p, |x| x.title.to_owned()),
+        |p| nf_core::protocols::find(custom, &p).map_or(p, |x| x.title),
     )
 }
 
@@ -76,7 +76,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
                     let on = selected == Some(m.id);
                     let text = format!(
                         "{}\n{} · {} · {}",
-                        title(m),
+                        title(m, &state.custom_protocols),
                         date(m),
                         mmss(m.duration_s),
                         success(m).map_or("--".into(), |x| format!("{:.0} % in target", x * 100.0))
@@ -99,7 +99,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
 }
 
 fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, out: &mut Vec<Command>) {
-    ui.label(RichText::new(title(m)).size(20.0).strong());
+    ui.label(RichText::new(title(m, &session.state().custom_protocols)).size(20.0).strong());
     ui.weak(format!("{} · {} · {}", date(m), m.device_name, mmss(m.duration_s)));
     ui.add_space(8.0);
     let s = m.summary.as_ref();

@@ -13,6 +13,7 @@ mod command;
 pub mod feedback;
 pub mod import;
 pub mod optics;
+pub mod protocols;
 mod recording;
 mod session;
 pub mod signal;

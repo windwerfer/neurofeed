@@ -4,23 +4,23 @@
 //! as an opt-in instead; Sleep Guard itself needs the model (the legacy spec
 //! has no band.delta fallback for it) and stays unavailable.
 
-use crate::{Config, Feature, StabilityConfig};
-use serde::Serialize;
+use crate::{Config, Feature, Inhibit, StabilityConfig};
+use serde::{Deserialize, Serialize};
 
 /// Which eyes state the calibration and training expect.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Eyes {
     Open,
     Closed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Protocol {
-    pub id: &'static str,
-    pub title: &'static str,
+    pub id: String,
+    pub title: String,
     /// One line for the protocol card.
-    pub summary: &'static str,
+    pub summary: String,
     pub eyes: Eyes,
     pub feature: Feature,
     /// `Some` = reward steadiness (stability downtrain).
@@ -28,13 +28,19 @@ pub struct Protocol {
     pub default_minutes: u32,
     pub experimental: bool,
     /// `Some(reason)` = shown but cannot be started.
-    pub unavailable: Option<&'static str>,
+    pub unavailable: Option<String>,
     /// Drowsiness guard lane (`None` = protocol has no guard).
     pub guard: Option<GuardSpec>,
+    /// Extra reward conditions (band ceilings); all must pass.
+    #[serde(default)]
+    pub inhibit: Vec<Inhibit>,
+    /// Made in the Protocol Builder (editable, deletable).
+    #[serde(default)]
+    pub custom: bool,
 }
 
 /// Guard lane of a protocol.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GuardSpec {
     /// Mute (and withhold) reward while the warning is active.
     pub muffle_reward: bool,
@@ -50,7 +56,7 @@ const fn guard(muffle_reward: bool) -> Option<GuardSpec> {
 impl Protocol {
     /// Engine config for this protocol at `percentile`.
     pub fn config(&self, percentile: u8) -> Config {
-        Config { feature: self.feature, percentile, stability: self.stability, ..Config::default() }
+        Config { feature: self.feature, percentile, stability: self.stability, inhibit: self.inhibit.clone(), ..Config::default() }
     }
 
     /// Engine config with the band-math guard switched on (if the protocol has one).
@@ -60,11 +66,11 @@ impl Protocol {
     }
 }
 
-const fn p(id: &'static str, title: &'static str, summary: &'static str, eyes: Eyes, feature: Feature) -> Protocol {
+fn p(id: &str, title: &str, summary: &str, eyes: Eyes, feature: Feature) -> Protocol {
     Protocol {
-        id,
-        title,
-        summary,
+        id: id.into(),
+        title: title.into(),
+        summary: summary.into(),
         eyes,
         feature,
         stability: None,
@@ -72,47 +78,53 @@ const fn p(id: &'static str, title: &'static str, summary: &'static str, eyes: E
         experimental: false,
         unavailable: None,
         guard: None,
+        inhibit: Vec::new(),
+        custom: false,
     }
 }
 
 /// Default protocol.
 pub const DEFAULT_PROTOCOL: &str = "restAwake";
 
-pub const PROTOCOLS: &[Protocol] = &[
-    Protocol {
-        guard: guard(true),
-        ..p("restAwake", "Rest Awake", "Rewards alpha over theta (ATR) with eyes closed.", Eyes::Closed, Feature::Atr)
-    },
-    Protocol {
-        guard: guard(false),
-        ..p("openMonitor", "Open Monitor", "Rewards relative alpha with eyes closed.", Eyes::Closed, Feature::Alpha)
-    },
-    p("alertOpen", "Alert, Eyes Open", "Rewards beta over theta (BTR) with eyes open.", Eyes::Open, Feature::Btr),
-    Protocol {
-        guard: guard(false),
-        ..p("alertClosed", "Alert, Eyes Closed", "Rewards beta over theta (BTR) with eyes closed.", Eyes::Closed, Feature::Btr)
-    },
-    Protocol {
-        stability: Some(StabilityConfig { window: StabilityConfig::DEFAULT_WINDOW, difficulty: StabilityConfig::DEFAULT_DIFFICULTY }),
-        experimental: true,
-        guard: guard(true),
-        ..p(
-            "bandStability",
-            "Band Stability",
-            "Experimental: rewards steadier alpha than in your calibration.",
-            Eyes::Closed,
-            Feature::Alpha,
-        )
-    },
-    Protocol {
-        unavailable: Some("needs the sleep model (coming later)"),
-        guard: guard(false),
-        ..p("sleepGuard", "Sleep Guard", "No reward; warns when you drift towards sleep.", Eyes::Closed, Feature::Atr)
-    },
-];
+/// The built-in catalog, in display order.
+pub fn builtin() -> Vec<Protocol> {
+    vec![
+        Protocol {
+            guard: guard(true),
+            ..p("restAwake", "Rest Awake", "Rewards alpha over theta (ATR) with eyes closed.", Eyes::Closed, Feature::Atr)
+        },
+        Protocol {
+            guard: guard(false),
+            ..p("openMonitor", "Open Monitor", "Rewards relative alpha with eyes closed.", Eyes::Closed, Feature::Alpha)
+        },
+        p("alertOpen", "Alert, Eyes Open", "Rewards beta over theta (BTR) with eyes open.", Eyes::Open, Feature::Btr),
+        Protocol {
+            guard: guard(false),
+            ..p("alertClosed", "Alert, Eyes Closed", "Rewards beta over theta (BTR) with eyes closed.", Eyes::Closed, Feature::Btr)
+        },
+        Protocol {
+            stability: Some(StabilityConfig { window: StabilityConfig::DEFAULT_WINDOW, difficulty: StabilityConfig::DEFAULT_DIFFICULTY }),
+            experimental: true,
+            guard: guard(true),
+            ..p(
+                "bandStability",
+                "Band Stability",
+                "Experimental: rewards steadier alpha than in your calibration.",
+                Eyes::Closed,
+                Feature::Alpha,
+            )
+        },
+        Protocol {
+            unavailable: Some("needs the sleep model (coming later)".into()),
+            guard: guard(false),
+            ..p("sleepGuard", "Sleep Guard", "No reward; warns when you drift towards sleep.", Eyes::Closed, Feature::Atr)
+        },
+    ]
+}
 
-pub fn protocol(id: &str) -> Option<&'static Protocol> {
-    PROTOCOLS.iter().find(|p| p.id == id)
+/// A built-in protocol by id.
+pub fn protocol(id: &str) -> Option<Protocol> {
+    builtin().into_iter().find(|p| p.id == id)
 }
 
 #[cfg(test)]

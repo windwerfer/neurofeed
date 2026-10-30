@@ -17,9 +17,10 @@ const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS sessions (
     device_json TEXT NOT NULL,
     body BLOB NOT NULL,
     import_json TEXT
-);";
-/// Schema version; v2 added `import_json` (import provenance).
-const VERSION: i64 = 2;
+);
+CREATE TABLE IF NOT EXISTS docs (key TEXT PRIMARY KEY, value TEXT NOT NULL);";
+/// Schema version; v2 added `import_json` (import provenance), v3 `docs`.
+const VERSION: i64 = 3;
 
 const META: &str = "id, started_unix_ms, duration_s, device_id, device_name, protocol, summary_json, eeg_samples, ppg_samples, feedback_seconds, length(body), import_json";
 
@@ -114,6 +115,19 @@ impl Store for SqliteStore {
 
     fn location(&self) -> String {
         self.location.clone()
+    }
+
+    fn get_doc(&self, key: &str) -> Result<Option<String>> {
+        self.conn.query_row("SELECT value FROM docs WHERE key = ?1", [key], |r| r.get(0)).optional().map_err(err)
+    }
+
+    fn put_doc(&mut self, key: &str, value: Option<&str>) -> Result<()> {
+        match value {
+            Some(v) => self.conn.execute("INSERT OR REPLACE INTO docs (key, value) VALUES (?1, ?2)", params![key, v]),
+            None => self.conn.execute("DELETE FROM docs WHERE key = ?1", [key]),
+        }
+        .map(|_| ())
+        .map_err(err)
     }
 }
 

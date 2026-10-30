@@ -3,7 +3,7 @@
 
 use egui::{Align2, Color32, FontId, Pos2, RichText, Sense, Stroke, Vec2};
 use nf_core::feedback::{PadFit, PauseReason, Phase, Trainer, FIT_GREEN_S};
-use nf_core::nf_feedback::{Eyes, PROTOCOLS};
+use nf_core::nf_feedback::{Eyes, Protocol};
 use nf_core::{Command, Session};
 
 const GOOD: Color32 = Color32::from_rgb(0x66, 0xBB, 0x6A);
@@ -64,6 +64,37 @@ fn eyes(e: Eyes) -> &'static str {
     }
 }
 
+/// One protocol card (picker and builder preview).
+pub(super) fn card(ui: &mut egui::Ui, p: &Protocol, selected: bool, w: f32) -> egui::Response {
+    let stroke =
+        if selected { Stroke::new(2.0_f32, CALM) } else { Stroke::new(1.0_f32, ui.visuals().widgets.noninteractive.bg_stroke.color) };
+    egui::Frame::group(ui.style())
+        .stroke(stroke)
+        .rounding(10.0)
+        .inner_margin(12.0)
+        .show(ui, |ui| {
+            ui.set_width(w);
+            ui.set_height(92.0);
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(&p.title).strong().size(17.0));
+                    if p.experimental {
+                        ui.label(RichText::new("experimental").small().color(FAIR));
+                    }
+                    if p.custom {
+                        ui.label(RichText::new("custom").small().color(CALM));
+                    }
+                });
+                ui.label(&p.summary);
+                ui.weak(match &p.unavailable {
+                    Some(r) => format!("Not available: {r}"),
+                    None => format!("{} · {} min", eyes(p.eyes), p.default_minutes),
+                });
+            });
+        })
+        .response
+}
+
 fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
     header(ui, "Choose a protocol", "Pick what to train, then start. Calibration takes about 45 seconds.");
     if let Some(m) = &t.message {
@@ -71,47 +102,30 @@ fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
         ui.add_space(8.0);
     }
     let w = ((ui.available_width() - 3.0 * 26.0 - 24.0) / 3.0).max(200.0);
+    let all = nf_core::protocols::all(&session.state().custom_protocols);
     egui::Grid::new("protocol_cards").spacing([12.0, 12.0]).show(ui, |ui| {
-        for (i, p) in PROTOCOLS.iter().enumerate() {
+        for (i, p) in all.iter().enumerate() {
             let selected = p.id == t.protocol.id;
-            let stroke = if selected {
-                Stroke::new(2.0_f32, CALM)
-            } else {
-                Stroke::new(1.0_f32, ui.visuals().widgets.noninteractive.bg_stroke.color)
-            };
-            let resp = egui::Frame::group(ui.style()).stroke(stroke).rounding(10.0).inner_margin(12.0).show(ui, |ui| {
-                ui.set_width(w);
-                ui.set_height(92.0);
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(p.title).strong().size(17.0));
-                        if p.experimental {
-                            ui.label(RichText::new("experimental").small().color(FAIR));
-                        }
-                    });
-                    ui.label(p.summary);
-                    ui.weak(match p.unavailable {
-                        Some(r) => format!("Not available: {r}"),
-                        None => format!("{} · {} min", eyes(p.eyes), p.default_minutes),
-                    });
-                });
-            });
-            let resp = ui.interact(resp.response.rect, ui.id().with(p.id), Sense::click());
+            let rect = card(ui, p, selected, w).rect;
+            let resp = ui.interact(rect, ui.id().with(&p.id), Sense::click());
             if resp.clicked() && !selected {
-                out.push(Command::ProtocolSet { id: p.id.into(), minutes: None });
+                out.push(Command::ProtocolSet { id: p.id.clone(), minutes: None });
             }
             if i % 3 == 2 {
                 ui.end_row();
             }
         }
     });
+    ui.add_space(6.0);
+    super::protocol_builder::launcher(ui, session);
+    super::protocol_builder::window(ui.ctx(), session, out);
     ui.add_space(14.0);
     super::sound::guard_row(ui, session, out);
     ui.horizontal(|ui| {
         ui.label("Length:");
         for m in MINUTES {
             if ui.selectable_label(t.minutes == m, format!("{m} min")).clicked() {
-                out.push(Command::ProtocolSet { id: t.protocol.id.into(), minutes: Some(m) });
+                out.push(Command::ProtocolSet { id: t.protocol.id.clone(), minutes: Some(m) });
             }
         }
         ui.add_space(16.0);
@@ -268,7 +282,7 @@ fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Com
         _ => ("Training".to_owned(), CALM),
     };
     ui.horizontal(|ui| {
-        ui.heading(t.protocol.title);
+        ui.heading(&t.protocol.title);
         ui.weak(format!("{} left", mmss(t.total_s().saturating_sub(t.played_s))));
     });
     let avail = ui.available_size();
@@ -339,7 +353,7 @@ fn summary(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Comm
             "protocol.set",
             "Choose protocol",
             false,
-            Command::ProtocolSet { id: t.protocol.id.into(), minutes: None },
+            Command::ProtocolSet { id: t.protocol.id.clone(), minutes: None },
             out,
         );
     });

@@ -45,6 +45,10 @@ Read [AGENTS.md](AGENTS.md), then [docs/](docs/).
 
 History → **Import…** (or drop a file on the window) accepts EDF/EDF+, Mind Monitor CSV (constant or interval mode), `.neurofeed` and raw NFEDBIN. A preview lists what is kept and what is lost before anything is saved. MCP: `history.import_preview` / `history.import` with `{file_name, data_base64}`.
 
+### Protocol Builder
+
+Feedback → "New protocol…" (starts from the selected protocol) or "Edit …" on a custom one. Set the title, reward feature, eyes, length, up to two band ceilings (beta, delta) and whether the drowsiness guard is offered (still off until switched on). The card preview and problems update as you type. Custom protocols are saved with history (SQLite on desktop, localStorage in the browser). MCP: `protocol.validate`, `protocol.draft`, `protocol.save`, `protocol.delete`.
+
 ### Streaming (OSC)
 
 Streaming → enable, set IP/port/prefix. Messages `<prefix>/eeg|ppg|imu|bands` with `[t, values…]` float32. MCP: `streaming.set`, `streaming.status`. Desktop only (browsers cannot send UDP). LSL is not available yet.

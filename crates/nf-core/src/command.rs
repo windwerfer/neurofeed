@@ -103,6 +103,21 @@ pub enum Command {
         #[serde(default)]
         minutes: Option<u32>,
     },
+    /// Create or (with `replace`) update a custom protocol.
+    #[serde(rename = "protocol.save")]
+    ProtocolSave {
+        draft: crate::protocols::ProtocolDraft,
+        /// Overwrite the custom protocol with the same id.
+        #[serde(default)]
+        replace: bool,
+    },
+    /// Delete a custom protocol. `confirm` must be true.
+    #[serde(rename = "protocol.delete")]
+    ProtocolDelete {
+        id: String,
+        #[serde(default)]
+        confirm: bool,
+    },
     /// Band Stability settings (window in clean samples, difficulty 0..=0.5).
     #[serde(rename = "stability.set")]
     StabilitySet {
@@ -299,6 +314,20 @@ pub enum Query {
         #[serde(default)]
         id: Option<String>,
     },
+    /// Check a draft without saving: `{ok, problems: [{field, message}]}`.
+    #[serde(rename = "protocol.validate")]
+    ProtocolValidate {
+        draft: crate::protocols::ProtocolDraft,
+        #[serde(default)]
+        replace: bool,
+    },
+    /// Builder draft from a protocol: a custom one as is, a built-in as a
+    /// copy with a free id. Default the selected one.
+    #[serde(rename = "protocol.draft")]
+    ProtocolDraft {
+        #[serde(default)]
+        id: Option<String>,
+    },
     /// Phase, fit, calibration progress, last second, summary.
     #[serde(rename = "feedback.status")]
     FeedbackStatus,
@@ -421,7 +450,7 @@ fn fb_idle(s: &AppState) -> Result<(), String> {
 fn fb_can_start(s: &AppState) -> Result<(), String> {
     needs_device(s)?;
     fb_idle(s)?;
-    match s.feedback.protocol.unavailable {
+    match &s.feedback.protocol.unavailable {
         Some(r) => Err(format!("{}: {r}", s.feedback.protocol.title)),
         None => Ok(()),
     }
@@ -479,6 +508,12 @@ fn fb_threshold(s: &AppState) -> Result<(), String> {
         return Err("locked during calibration".into());
     }
     Ok(())
+}
+fn can_delete_protocol(s: &AppState) -> Result<(), String> {
+    if s.custom_protocols.is_empty() {
+        return Err("no custom protocols".into());
+    }
+    fb_idle(s)
 }
 fn has_history(s: &AppState) -> Result<(), String> {
     if s.history.is_empty() {
@@ -593,7 +628,32 @@ pub const SPECS: &[CommandSpec] = &[
         "Encode the last recording as nfed6, raw_body or edf (base64).",
         has_recording,
     ),
-    spec("protocol.list", "Protocols", "feedback", true, "Built-in protocols with availability.", always),
+    spec("protocol.list", "Protocols", "feedback", true, "Built-in and custom protocols with availability.", always),
+    spec(
+        "protocol.validate",
+        "Check protocol draft",
+        "feedback",
+        true,
+        "Validate a Protocol Builder draft: problems per field (id, title, summary, minutes, inhibit, muffle_reward).",
+        always,
+    ),
+    spec(
+        "protocol.draft",
+        "Protocol draft",
+        "feedback",
+        true,
+        "Builder draft from a protocol (built-ins as a copy) and notes on what is lost.",
+        always,
+    ),
+    spec(
+        "protocol.save",
+        "Save protocol",
+        "feedback",
+        false,
+        "Create a custom protocol from a draft, or update one with replace=true.",
+        fb_idle,
+    ),
+    spec("protocol.delete", "Delete protocol", "feedback", false, "Delete a custom protocol; requires confirm=true.", can_delete_protocol),
     spec("protocol.get", "Protocol", "feedback", true, "One protocol (default the selected one).", always),
     spec("protocol.set", "Choose protocol", "feedback", false, "Select the training protocol.", fb_idle),
     spec("stability.set", "Stability settings", "feedback", false, "Band Stability window (1..=30) and difficulty (0..=0.5).", fb_idle),
@@ -728,6 +788,10 @@ pub fn examples() -> Vec<Request> {
         C(Command::SimFault { bad_pads: vec!["AF7".into()], dropout: false, motion: false, blink: false, clench: false, drowsy: false }),
         Q(Query::ProtocolList),
         Q(Query::ProtocolGet { id: None }),
+        Q(Query::ProtocolDraft { id: Some("restAwake".into()) }),
+        Q(Query::ProtocolValidate { draft: crate::protocols::example_draft(), replace: false }),
+        C(Command::ProtocolSave { draft: crate::protocols::example_draft(), replace: false }),
+        C(Command::ProtocolDelete { id: "calm-focus".into(), confirm: true }),
         Q(Query::FeedbackStatus),
         Q(Query::AudioStatus),
         Q(Query::StreamingStatus),

@@ -46,6 +46,12 @@ fn contract(s: &mut dyn Store) {
     assert!(!s.delete(a).unwrap());
     assert!(s.get(a).unwrap().is_none());
     assert_eq!(s.list().unwrap().len(), 1);
+    assert_eq!(s.get_doc("k").unwrap(), None);
+    s.put_doc("k", Some("[1]")).unwrap();
+    s.put_doc("k", Some("[2]")).unwrap();
+    assert_eq!(s.get_doc("k").unwrap().as_deref(), Some("[2]"));
+    s.put_doc("k", None).unwrap();
+    assert_eq!(s.get_doc("k").unwrap(), None);
 }
 
 #[test]
@@ -59,9 +65,13 @@ fn sqlite_store_contract_and_persistence() {
     contract(&mut nf_store::SqliteStore::in_memory().unwrap());
     let dir = std::env::temp_dir().join(format!("nf-store-{}", std::process::id()));
     let path = dir.join("h.sqlite");
-    let id = nf_store::SqliteStore::open(&path).unwrap().insert(session("p", &[9])).unwrap();
+    let mut first = nf_store::SqliteStore::open(&path).unwrap();
+    let id = first.insert(session("p", &[9])).unwrap();
+    first.put_doc("protocols", Some("[]")).unwrap();
+    drop(first);
     let again = nf_store::SqliteStore::open(&path).unwrap();
     assert_eq!(again.get(id).unwrap().unwrap().body, [9]);
+    assert_eq!(again.get_doc("protocols").unwrap().as_deref(), Some("[]"));
     std::fs::remove_dir_all(dir).ok();
 }
 

@@ -124,3 +124,22 @@ way). Older sessions have no trust records; their non-clean seconds report
 `dirty: "unknown"`. Trade-off: readers older than this tag reject the new
 record, so files written now do not open in builds from before this change.
 Seconds with no feature at all (no verdict, not an artifact) are `no_signal`.
+
+## Protocol Builder (custom protocols)
+
+`Protocol` is now owned data (`String` fields, `builtin()` instead of a
+`'static` table) so custom protocols and built-ins share one type. Custom
+protocols are stored as `ProtocolDraft`s (schemars-checked, the same shape the
+`protocol.save` command takes) in a named store document `custom_protocols`:
+a `docs` table in SQLite (schema v3) and `localStorage` in the browser (read
+synchronously at startup; IndexedDB stays for sessions). Drafts that no longer
+validate on load are skipped with a store error event rather than failing the
+start-up.
+
+The builder offers only what the engine runs today: percentile uptrain on one
+of the six band features, eyes, length, beta/delta ceilings and the band-math
+guard lane (offered, still off by default). The stability policy, sounds,
+calibration variants and colours of the legacy builder are not editable; a
+copy of Band Stability or Sleep Guard says so in `notes`. Ids are slugs and
+cannot shadow a built-in; saving an existing id needs `replace`. A batch that
+fails after `protocol.save` rolls the document back as well.

@@ -118,7 +118,7 @@ pub struct Summary {
 
 #[derive(Debug, Clone)]
 pub struct Trainer {
-    pub protocol: &'static Protocol,
+    pub protocol: Protocol,
     pub minutes: u32,
     pub percentile: u8,
     pub phase: Phase,
@@ -150,10 +150,10 @@ pub struct Trainer {
 
 impl Default for Trainer {
     fn default() -> Self {
-        let protocol = nf_feedback::protocol(nf_feedback::DEFAULT_PROTOCOL).unwrap_or(&nf_feedback::PROTOCOLS[0]);
+        let protocol = nf_feedback::protocol(nf_feedback::DEFAULT_PROTOCOL).unwrap_or_else(|| nf_feedback::builtin().swap_remove(0));
         Self {
-            protocol,
             minutes: protocol.default_minutes,
+            protocol,
             percentile: nf_feedback::DEFAULT_PERCENTILE,
             stability: nf_feedback::StabilityConfig::default(),
             guard: false,
@@ -250,7 +250,7 @@ impl Trainer {
     pub fn start(&mut self, device: &str, out: &mut Vec<Change>) {
         let baselines = std::mem::take(&mut self.baselines);
         *self = Self {
-            protocol: self.protocol,
+            protocol: self.protocol.clone(),
             minutes: self.minutes,
             percentile: self.percentile,
             stability: self.stability,
@@ -337,7 +337,7 @@ impl Trainer {
         let counted = played.iter().filter(|r| r.counted).count() as u32;
         let hits = played.iter().filter(|r| r.in_target).count() as u32;
         self.summary = Some(Summary {
-            protocol: self.protocol.id.into(),
+            protocol: self.protocol.id.clone(),
             played_s: self.played_s,
             counted_s: counted,
             in_target_s: hits,
@@ -504,7 +504,7 @@ mod tests {
     fn user_stability_overrides_only_stability_protocols() {
         let mut t = Trainer { stability: nf_feedback::StabilityConfig { window: 20, difficulty: 0.3 }, ..Trainer::default() };
         assert_eq!(t.engine_config().stability, None);
-        t.protocol = nf_feedback::protocol("bandStability").unwrap_or(t.protocol);
+        t.protocol = nf_feedback::protocol("bandStability").unwrap();
         assert_eq!(t.engine_config().stability.map(|s| s.window), Some(20));
     }
 }

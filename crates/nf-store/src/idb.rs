@@ -4,6 +4,8 @@
 //! the meantime) and from then on every write is mirrored to IndexedDB.
 //! DB `neurofeed`, object store `sessions`, key = id, value =
 //! `{ meta: <json>, device: <json>, body: Uint8Array }`.
+//! Named documents (small JSON) live in `localStorage` under `neurofeed.doc.<key>`
+//! so they are readable synchronously at startup.
 
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
@@ -75,6 +77,10 @@ fn apply(db: &IdbDatabase, op: &Op) -> std::result::Result<(), String> {
         Op::Delete(id) => os.delete(&JsValue::from_f64(*id as f64)).map(|_| ()),
     }
     .map_err(err)
+}
+
+fn local_storage() -> Result<web_sys::Storage> {
+    web_sys::window().and_then(|w| w.local_storage().ok().flatten()).ok_or_else(|| StoreError("localStorage unavailable".into()))
 }
 
 impl IdbStore {
@@ -180,6 +186,19 @@ impl Store for IdbStore {
             Some(e) => format!("indexeddb (error: {e})"),
             None => "indexeddb".into(),
         }
+    }
+    fn get_doc(&self, key: &str) -> Result<Option<String>> {
+        let ls = local_storage()?;
+        ls.get_item(&format!("neurofeed.doc.{key}")).map_err(|e| StoreError(err(e)))
+    }
+    fn put_doc(&mut self, key: &str, value: Option<&str>) -> Result<()> {
+        let ls = local_storage()?;
+        let k = format!("neurofeed.doc.{key}");
+        match value {
+            Some(v) => ls.set_item(&k, v),
+            None => ls.remove_item(&k),
+        }
+        .map_err(|e| StoreError(err(e)))
     }
     fn take_changed(&mut self) -> bool {
         let mut s = lock(&self.shared);

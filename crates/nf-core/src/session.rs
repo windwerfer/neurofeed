@@ -145,7 +145,55 @@ impl Session {
     pub fn with_store(mut self, store: Box<dyn nf_store::Store>) -> Self {
         self.store = store;
         self.refresh_history();
+        self.load_protocols();
         self
+    }
+
+    fn load_protocols(&mut self) {
+        let (custom, errors) = crate::protocols::load(self.store.as_ref());
+        self.state.custom_protocols = custom;
+        for message in errors {
+            self.emit(Event::StoreError { message });
+        }
+    }
+
+    fn persist_protocols(&mut self) -> Result<(), CoreError> {
+        crate::protocols::save(self.store.as_mut(), &self.state.custom_protocols).map_err(CoreError::BadRequest)
+    }
+
+    fn protocol_save(&mut self, draft: &crate::protocols::ProtocolDraft, replace: bool) -> Result<serde_json::Value, CoreError> {
+        let problems = crate::protocols::validate(draft, &self.state.custom_protocols, replace);
+        if let Some(p) = problems.first() {
+            return Err(CoreError::InvalidArgs(format!("{}: {}", p.field, p.message)));
+        }
+        let p = crate::protocols::to_protocol(draft);
+        let list = &mut self.state.custom_protocols;
+        match list.iter_mut().find(|x| x.id == p.id) {
+            Some(x) => *x = p.clone(),
+            None => list.push(p.clone()),
+        }
+        if self.state.feedback.protocol.id == p.id {
+            self.state.feedback.protocol = p.clone();
+        }
+        self.persist_protocols()?;
+        Ok(json!(p))
+    }
+
+    fn protocol_delete(&mut self, id: &str, confirm: bool) -> Result<(), CoreError> {
+        if !confirm {
+            return Err(CoreError::InvalidArgs("deleting is permanent; pass confirm=true".into()));
+        }
+        let n = self.state.custom_protocols.len();
+        self.state.custom_protocols.retain(|p| p.id != id);
+        if self.state.custom_protocols.len() == n {
+            return Err(CoreError::InvalidArgs(format!("no custom protocol `{id}`")));
+        }
+        if self.state.feedback.protocol.id == id {
+            let d = crate::feedback::Trainer::default();
+            self.state.feedback.minutes = d.minutes;
+            self.state.feedback.protocol = d.protocol;
+        }
+        self.persist_protocols()
     }
 
     fn refresh_history(&mut self) {
@@ -316,7 +364,11 @@ impl Session {
                 None => None,
             };
         }
+        let protocols_changed = self.state.custom_protocols != state.custom_protocols;
         self.state = state;
+        if protocols_changed && self.persist_protocols().is_err() {
+            self.emit(Event::StoreError { message: "custom protocols could not be restored after a rolled-back batch".into() });
+        }
     }
 
     pub fn drain_events(&mut self) -> Vec<crate::Event> {
@@ -730,7 +782,8 @@ impl Session {
                 return Ok(v);
             }
             Command::ProtocolSet { id, minutes } => {
-                let p = nf_feedback::protocol(&id).ok_or_else(|| CoreError::InvalidArgs(format!("unknown protocol `{id}`")))?;
+                let p = crate::protocols::find(&self.state.custom_protocols, &id)
+                    .ok_or_else(|| CoreError::InvalidArgs(format!("unknown protocol `{id}`")))?;
                 let (lo, hi) = crate::feedback::MINUTES;
                 if minutes.is_some_and(|m| !(lo..=hi).contains(&m)) {
                     return Err(CoreError::InvalidArgs(format!("minutes must be in [{lo}, {hi}]")));
@@ -805,6 +858,8 @@ impl Session {
             }
             Command::EventsDrain => return Ok(serde_json::to_value(self.drain_events()).unwrap_or_default()),
             Command::RecordingStart { wall_clock_unix_ms } => self.start_recording(wall_clock_unix_ms)?,
+            Command::ProtocolSave { draft, replace } => return self.protocol_save(&draft, replace),
+            Command::ProtocolDelete { id, confirm } => self.protocol_delete(&id, confirm)?,
             Command::HistoryDelete { id, confirm } => {
                 if !confirm {
                     return Err(CoreError::InvalidArgs("deleting is permanent; pass confirm=true".into()));
@@ -892,16 +947,30 @@ impl Session {
                 "time": s.time,
                 "revision": s.revision,
             }),
-            Query::ProtocolList => json!(nf_feedback::PROTOCOLS
+            Query::ProtocolList => json!(crate::protocols::all(&s.custom_protocols)
                 .iter()
                 .map(|p| json!({ "protocol": p, "selected": p.id == s.feedback.protocol.id }))
                 .collect::<Vec<_>>()),
             Query::ProtocolGet { id } => {
                 let p = match id {
-                    Some(id) => nf_feedback::protocol(id).ok_or_else(|| CoreError::InvalidArgs(format!("unknown protocol `{id}`")))?,
-                    None => s.feedback.protocol,
+                    Some(id) => crate::protocols::find(&s.custom_protocols, id)
+                        .ok_or_else(|| CoreError::InvalidArgs(format!("unknown protocol `{id}`")))?,
+                    None => s.feedback.protocol.clone(),
                 };
                 json!(p)
+            }
+            Query::ProtocolDraft { id } => {
+                let p = match id {
+                    Some(id) => crate::protocols::find(&s.custom_protocols, id)
+                        .ok_or_else(|| CoreError::InvalidArgs(format!("unknown protocol `{id}`")))?,
+                    None => s.feedback.protocol.clone(),
+                };
+                let (draft, notes) = crate::protocols::to_draft(&p);
+                json!({ "draft": draft, "notes": notes })
+            }
+            Query::ProtocolValidate { draft, replace } => {
+                let problems = crate::protocols::validate(draft, &s.custom_protocols, *replace);
+                json!({ "ok": problems.is_empty(), "problems": problems })
             }
             Query::AudioStatus => crate::audio::status(s),
             Query::FeedbackTrust => json!(crate::trust::build(crate::trust::rows_from_results(&s.feedback.results), Vec::new())),
