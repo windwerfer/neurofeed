@@ -4,7 +4,7 @@
 
 use nf_format::body::BodyWriter;
 use nf_format::Record;
-use nf_types::{BandSnapshot, DeviceInfo, EegPacket};
+use nf_types::{BandSnapshot, DeviceInfo, EegPacket, PpgPacket};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +22,8 @@ pub struct RecordingInfo {
     pub started: f64,
     pub duration: f64,
     pub eeg_samples: u64,
+    pub ppg_samples: u64,
+    pub feedback_seconds: u64,
     pub bytes: usize,
     /// Injected wall-clock start (Unix ms, UTC), if the shell provided one.
     pub wall_clock_unix_ms: Option<f64>,
@@ -32,6 +34,8 @@ pub struct Recorder {
     pub device: DeviceInfo,
     writer: BodyWriter,
     last_flush: f64,
+    /// Feedback seconds, appended at the end of the body (see nf-format tag 11).
+    feedback: Vec<Record>,
     pub info: RecordingInfo,
 }
 
@@ -43,10 +47,12 @@ impl Recorder {
             started: now,
             duration: 0.0,
             eeg_samples: 0,
+            ppg_samples: 0,
+            feedback_seconds: 0,
             bytes: 12,
             wall_clock_unix_ms,
         };
-        Self { device, writer: BodyWriter::new(), last_flush: now, info }
+        Self { device, writer: BodyWriter::new(), last_flush: now, feedback: Vec::new(), info }
     }
 
     /// Returns false once the size cap is reached (caller stops).
@@ -59,6 +65,34 @@ impl Recorder {
         self.info.eeg_samples += p.samples.len() as u64;
         self.info.bytes = self.writer.len();
         self.info.bytes < MAX_BODY_BYTES
+    }
+
+    pub fn ppg(&mut self, p: &PpgPacket) {
+        self.writer.push(&Record::Ppg { ts: p.time, channel: i16::try_from(p.channel).unwrap_or(i16::MAX), samples: p.samples.clone() });
+        self.info.ppg_samples += p.samples.len() as u64;
+    }
+
+    pub fn feedback(&mut self, r: &crate::feedback::SecondResult) {
+        use crate::feedback::Phase;
+        use nf_format::feedback_flags as f;
+        let rec = r.record.as_ref();
+        let mut flags = 0;
+        for (on, bit) in [
+            (r.counted, f::COUNTED),
+            (r.in_target, f::IN_TARGET),
+            (r.chime, f::CHIME),
+            (rec.is_some_and(|x| x.dirty.is_some()) || (r.second.is_some() && !r.counted), f::DIRTY),
+            (rec.is_some_and(|x| x.held_back.as_ref().is_some_and(|h| !h.is_empty())), f::HELD_BACK),
+            (matches!(r.phase, Phase::Paused { .. }), f::PAUSED),
+            (r.phase == Phase::Calibrating, f::CALIBRATING),
+        ] {
+            if on {
+                flags |= bit;
+            }
+        }
+        let nan = |v: Option<f64>| v.map_or(f32::NAN, |x| x as f32);
+        self.feedback.push(Record::Feedback { ts: r.time, value: nan(r.value), threshold: nan(r.threshold), flags });
+        self.info.feedback_seconds += 1;
     }
 
     pub fn bands(&mut self, s: &BandSnapshot) {
@@ -79,7 +113,12 @@ impl Recorder {
     pub fn finish(self) -> Finished {
         let mut info = self.info;
         info.active = false;
-        let body = self.writer.finish();
+        let mut writer = self.writer;
+        writer.flush_frame();
+        for r in &self.feedback {
+            writer.push(r);
+        }
+        let body = writer.finish();
         info.bytes = body.len();
         Finished { device: self.device, info, body }
     }

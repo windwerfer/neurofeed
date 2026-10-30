@@ -17,7 +17,7 @@ pub mod record;
 
 pub use body::{parse_body, BodyWriter};
 pub use container::{decode_container, encode_container, Container, ContainerHeader};
-pub use record::Record;
+pub use record::{feedback_flags, Record, TAG_FEEDBACK};
 
 /// Format errors carry a human-readable reason (they reach MCP clients).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

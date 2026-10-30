@@ -11,6 +11,11 @@
 //! | 8   | Movement      | ts f64, score f32                              |
 //! | 9   | PeakAlpha     | ts f64, freq f32, power f32                    |
 //! | 10  | SpO2          | ts f64, spo2 f32, conf f32                     |
+//! | 11  | Feedback      | ts f64, value f32, threshold f32, flags u16    |
+//!
+//! Tag 11 is new (not in the legacy app). Legacy readers stop at the first
+//! unknown tag, so writers append all feedback records at the end of the
+//! body; older readers then still see every other record.
 
 pub const TAG_EEG: u8 = 1;
 pub const TAG_TELEMETRY: u8 = 2;
@@ -22,19 +27,80 @@ pub const TAG_PULSE: u8 = 7;
 pub const TAG_MOVEMENT: u8 = 8;
 pub const TAG_PEAK_ALPHA: u8 = 9;
 pub const TAG_SPO2: u8 = 10;
+pub const TAG_FEEDBACK: u8 = 11;
+
+/// `Record::Feedback` flag bits.
+pub mod feedback_flags {
+    pub const COUNTED: u16 = 1;
+    pub const IN_TARGET: u16 = 1 << 1;
+    pub const CHIME: u16 = 1 << 2;
+    /// Artifact or no usable pad.
+    pub const DIRTY: u16 = 1 << 3;
+    /// Above threshold but withheld (inhibit/guard).
+    pub const HELD_BACK: u16 = 1 << 4;
+    pub const PAUSED: u16 = 1 << 5;
+    pub const CALIBRATING: u16 = 1 << 6;
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Record {
-    Eeg { ts: f64, electrode: i16, samples: Vec<f32> },
-    Telemetry { ts: f64, battery: f32, fuel: f32, temp: u16 },
-    Accelerometer { ts: f64, seq: u16, xyz: Vec<[f32; 3]> },
-    Gyroscope { ts: f64, seq: u16, xyz: Vec<[f32; 3]> },
-    Ppg { ts: f64, channel: i16, samples: Vec<f32> },
-    Bands { ts: f64, electrode: i16, bands: [f32; 5] },
-    Pulse { ts: f64, bpm: f32, confidence: f32 },
-    Movement { ts: f64, score: f32 },
-    PeakAlpha { ts: f64, frequency: f32, power: f32 },
-    SpO2 { ts: f64, spo2: f32, confidence: f32 },
+    Eeg {
+        ts: f64,
+        electrode: i16,
+        samples: Vec<f32>,
+    },
+    Telemetry {
+        ts: f64,
+        battery: f32,
+        fuel: f32,
+        temp: u16,
+    },
+    Accelerometer {
+        ts: f64,
+        seq: u16,
+        xyz: Vec<[f32; 3]>,
+    },
+    Gyroscope {
+        ts: f64,
+        seq: u16,
+        xyz: Vec<[f32; 3]>,
+    },
+    Ppg {
+        ts: f64,
+        channel: i16,
+        samples: Vec<f32>,
+    },
+    Bands {
+        ts: f64,
+        electrode: i16,
+        bands: [f32; 5],
+    },
+    Pulse {
+        ts: f64,
+        bpm: f32,
+        confidence: f32,
+    },
+    Movement {
+        ts: f64,
+        score: f32,
+    },
+    PeakAlpha {
+        ts: f64,
+        frequency: f32,
+        power: f32,
+    },
+    SpO2 {
+        ts: f64,
+        spo2: f32,
+        confidence: f32,
+    },
+    /// One feedback second; `value`/`threshold` NaN when absent.
+    Feedback {
+        ts: f64,
+        value: f32,
+        threshold: f32,
+        flags: u16,
+    },
 }
 
 fn len_u16(n: usize) -> u16 {
@@ -102,6 +168,12 @@ impl Record {
                 head(out, tag, *ts);
                 out.extend_from_slice(&a.to_le_bytes());
                 out.extend_from_slice(&b.to_le_bytes());
+            }
+            Record::Feedback { ts, value, threshold, flags } => {
+                head(out, TAG_FEEDBACK, *ts);
+                out.extend_from_slice(&value.to_le_bytes());
+                out.extend_from_slice(&threshold.to_le_bytes());
+                out.extend_from_slice(&flags.to_le_bytes());
             }
             Record::Movement { ts, score } => {
                 head(out, TAG_MOVEMENT, *ts);
@@ -176,6 +248,7 @@ impl Reader<'_> {
             TAG_MOVEMENT => Record::Movement { ts, score: self.f32()? },
             TAG_PEAK_ALPHA => Record::PeakAlpha { ts, frequency: self.f32()?, power: self.f32()? },
             TAG_SPO2 => Record::SpO2 { ts, spo2: self.f32()?, confidence: self.f32()? },
+            TAG_FEEDBACK => Record::Feedback { ts, value: self.f32()?, threshold: self.f32()?, flags: self.u16()? },
             _ => return None,
         })
     }

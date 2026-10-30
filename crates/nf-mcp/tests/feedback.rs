@@ -173,3 +173,46 @@ fn start_anyway_finishes_calibration_early_and_rollback_restores_phase() {
     run(&s, "calibration.skip", Value::Null);
     assert_eq!(phase(&s), "playing");
 }
+fn b64decode(s: &str) -> Vec<u8> {
+    let val = |c: u8| match c {
+        b'A'..=b'Z' => c - b'A',
+        b'a'..=b'z' => c - b'a' + 26,
+        b'0'..=b'9' => c - b'0' + 52,
+        b'+' => 62,
+        _ => 63,
+    };
+    let mut out = Vec::new();
+    for chunk in s.as_bytes().chunks(4) {
+        let pad = chunk.iter().filter(|&&c| c == b'=').count();
+        let n = chunk.iter().fold(0u32, |n, &c| (n << 6) | u32::from(if c == b'=' { 0 } else { val(c) }));
+        out.extend_from_slice(&n.to_be_bytes()[1..4 - pad]);
+    }
+    out
+}
+
+#[test]
+fn recording_carries_feedback_seconds_and_ppg_at_the_end() {
+    use nf_format::{feedback_flags as f, Record};
+    let s = server();
+    run(&s, "device.connect", json!({ "id": "sim:muse_s" }));
+    adv(&s, 2.0);
+    run(&s, "recording.start", Value::Null);
+    run(&s, "feedback.start", json!({ "minutes": 1 }));
+    run(&s, "calibration.start", json!({ "anyway": true }));
+    adv(&s, 80.0);
+    run(&s, "recording.stop", Value::Null);
+    let st = run(&s, "recording.status", Value::Null)["recording"].clone();
+    assert!(st["ppg_samples"].as_u64().unwrap() > 0);
+    let fb_n = st["feedback_seconds"].as_u64().unwrap();
+    assert!(fb_n >= 75, "{st}");
+    let b64 = run(&s, "recording.export", json!({ "format": "raw_body" }));
+    let body = b64decode(b64["base64"].as_str().unwrap());
+    let recs = nf_format::parse_body(&body).unwrap();
+    let first = recs.iter().position(|r| matches!(r, Record::Feedback { .. })).unwrap();
+    assert!(recs[first..].iter().all(|r| matches!(r, Record::Feedback { .. })), "feedback appended at the end");
+    assert_eq!((recs.len() - first) as u64, fb_n);
+    assert!(recs.iter().any(|r| matches!(r, Record::Ppg { .. })));
+    let flags: Vec<u16> = recs[first..].iter().map(|r| if let Record::Feedback { flags, .. } = r { *flags } else { 0 }).collect();
+    assert!(flags.iter().any(|x| x & f::CALIBRATING != 0));
+    assert!(flags.iter().any(|x| x & f::COUNTED != 0));
+}

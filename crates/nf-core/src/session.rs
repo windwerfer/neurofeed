@@ -219,6 +219,9 @@ impl Session {
                 *x += (FAULT_UV * (std::f64::consts::TAU * 3.0 * t).sin()) as f32;
             }
         }
+        if let Some(r) = self.live.recorder.as_mut() {
+            optical.iter().for_each(|p| r.ppg(p));
+        }
         if !self.state.paused {
             if let Some(o) = self.live.optics.as_mut() {
                 optical.iter().for_each(|p| o.push(p));
@@ -263,7 +266,11 @@ impl Session {
             self.live.fb_next += 1.0;
             let obs = self.observation(t);
             let mut out = Vec::new();
+            let n = self.state.feedback.results.len();
             self.state.feedback.second(t, &obs, &mut out);
+            if let Some(r) = self.live.recorder.as_mut() {
+                self.state.feedback.results[n..].iter().for_each(|x| r.feedback(x));
+            }
             self.changes(out);
         }
     }

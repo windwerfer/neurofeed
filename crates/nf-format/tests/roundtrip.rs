@@ -14,6 +14,7 @@ fn all_records() -> Vec<Record> {
         Record::Movement { ts: 2.6, score: 0.1 },
         Record::PeakAlpha { ts: 2.7, frequency: 10.0, power: 1.2 },
         Record::SpO2 { ts: 2.8, spo2: 97.0, confidence: 0.8 },
+        Record::Feedback { ts: 2.9, value: 1.25, threshold: 1.1, flags: feedback_flags::COUNTED | feedback_flags::IN_TARGET },
     ]
 }
 
@@ -87,4 +88,21 @@ fn edf_roundtrip() {
     println!("{d:?}");
     let dbg = format!("{d:?}");
     assert!(dbg.contains("TP9") && dbg.contains("AF7"));
+}
+
+#[test]
+fn feedback_record_layout_and_unknown_tag_stops_reader() {
+    let mut b = Vec::new();
+    Record::Feedback { ts: 1.0, value: f32::NAN, threshold: 2.0, flags: 5 }.encode(&mut b);
+    assert_eq!(b.len(), 1 + 8 + 4 + 4 + 2);
+    assert_eq!(b[0], TAG_FEEDBACK);
+    let r = nf_format::record::decode_records(&b);
+    assert!(matches!(r[..], [Record::Feedback { value, threshold, flags: 5, .. }] if value.is_nan() && threshold == 2.0));
+    // Legacy behaviour: an unknown tag stops decoding; records before it survive.
+    let mut body = Vec::new();
+    Record::Pulse { ts: 1.0, bpm: 60.0, confidence: 1.0 }.encode(&mut body);
+    body.push(99);
+    body.extend_from_slice(&[0; 20]);
+    Record::Pulse { ts: 2.0, bpm: 61.0, confidence: 1.0 }.encode(&mut body);
+    assert_eq!(nf_format::record::decode_records(&body).len(), 1);
 }
