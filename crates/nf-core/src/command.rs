@@ -613,7 +613,7 @@ pub const SPECS: &[CommandSpec] = &[
         "One saved session with its summary and per-second feedback (value, threshold, flags).",
         always,
     ),
-    spec("history.export", "Export session", "history", true, "Export a saved session as nfed6 | raw_body | edf (base64).", always),
+    spec("history.export", "Export session", "history", true, "Export a saved session as nfed6 | raw_body | edf | pdf (base64).", always),
     spec(
         "history.import",
         "Import recording",

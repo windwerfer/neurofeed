@@ -56,7 +56,7 @@ fn contract(s: &NfMcp) {
     assert!(fb.iter().any(|r| r["value"].is_number() && r["threshold"].is_number()));
     assert_eq!(got["device"]["id"], "sim:muse_s");
 
-    for (format, magic) in [("nfed6", &b"NFED"[..]), ("edf", &b"0       "[..])] {
+    for (format, magic) in [("nfed6", &b"NFED"[..]), ("edf", &b"0       "[..]), ("pdf", &b"%PDF-1.4"[..])] {
         let e = run(s, "history.export", json!({ "id": id, "format": format }));
         let bytes = b64(e["base64"].as_str().unwrap());
         assert!(bytes.starts_with(magic), "{format}");

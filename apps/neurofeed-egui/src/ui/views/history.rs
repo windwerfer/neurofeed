@@ -122,7 +122,9 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
     super::meta::notes(ui, session, m.id, out);
     ui.add_space(10.0);
     ui.horizontal(|ui| {
-        for (fmt, name) in [(ExportFormat::Nfed6, "Export .neurofeed"), (ExportFormat::Edf, "Export EDF")] {
+        for (fmt, name) in
+            [(ExportFormat::Nfed6, "Export .neurofeed"), (ExportFormat::Edf, "Export EDF"), (ExportFormat::Pdf, "Export PDF")]
+        {
             let r = ui.add_enabled(cfg!(not(target_arch = "wasm32")), egui::Button::new(name));
             let r = r.on_disabled_hover_text("export from the web build is not available yet");
             if r.clicked() {

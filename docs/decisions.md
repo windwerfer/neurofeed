@@ -153,3 +153,7 @@ All user settings live in one store doc `settings` (`nf_core::settings::Persiste
 
 ## Settings sections, About and onboarding
 Settings is a section rail (General, Devices, Training, AI, Recording, About) with cards from one `CARDS` table; the search box matches section + title + terms across all sections. The AI card is a placeholder until the REVE / CBraMod decision. About embeds THIRD_PARTY_NOTICES.md. The first-run tour (five pages, Skip / Back / Next / Start) shows while `settings.onboarded` is false; runs started with NF_DEMO / NF_VIEW skip it without persisting anything.
+
+## Nerd sheet and PDF export
+- Nerd sheet (`feedback.nerd`): reward pile histogram (24 bins, threshold/live markers kept inside), live value, threshold percentile, mean, spread, n, success rate; guard pile when a guard runs. Anchored bottom-right so the header toggles and trust pane stay usable.
+- PDF report: own minimal PDF 1.4 writer in nf-format (`pdf.rs`, Helvetica/WinAnsi, text/rect/polyline, ~150 lines) instead of a crate — wasm-clean, no font embedding. Non-Latin-1 characters become `?` (accepted for now; embedding a TTF would be the upgrade). `history.export` format `pdf`; `recording.export` rejects it (needs the stored session). One page: title, info, totals, percentile/threshold plot + trust strip, notes, recording context.

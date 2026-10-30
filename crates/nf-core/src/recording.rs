@@ -135,6 +135,8 @@ pub enum ExportFormat {
     RawBody,
     /// EDF+ (EEG channels only, raw µV).
     Edf,
+    /// One-page PDF session report (trust plot, totals, notes, context).
+    Pdf,
 }
 
 impl ExportFormat {
@@ -143,6 +145,7 @@ impl ExportFormat {
             ExportFormat::Nfed6 => "neurofeed",
             ExportFormat::RawBody => "raw",
             ExportFormat::Edf => "edf",
+            ExportFormat::Pdf => "pdf",
         }
     }
 }
@@ -167,6 +170,7 @@ pub fn export(f: &Finished, format: ExportFormat, start: (u16, u16, u16, u16, u1
                 raw_body: f.body.clone(),
             }))
         }
+        ExportFormat::Pdf => Err("pdf export needs the stored session (history.export)".into()),
         ExportFormat::Edf => {
             let records = nf_format::parse_body(&f.body).map_err(|e| e.0)?;
             let req = nf_format::edf::EdfRequest {

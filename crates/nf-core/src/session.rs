@@ -239,6 +239,10 @@ impl Session {
 
     /// Export a saved session (typed; `history.export` wraps it).
     pub fn history_export(&self, id: u64, format: crate::ExportFormat) -> Result<Vec<u8>, CoreError> {
+        if format == crate::ExportFormat::Pdf {
+            let trust = self.history_trust(id)?;
+            return Ok(crate::report::pdf(&self.stored(id)?.meta, &trust));
+        }
         let s = self.stored(id)?;
         let device: DeviceInfo = serde_json::from_str(&s.device_json).map_err(|e| CoreError::BadRequest(format!("stored device: {e}")))?;
         let info = crate::recording::RecordingInfo {

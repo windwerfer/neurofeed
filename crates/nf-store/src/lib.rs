@@ -21,7 +21,7 @@ pub struct StoreError(pub String);
 pub type Result<T> = std::result::Result<T, StoreError>;
 
 /// What a list row shows (no body).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SessionMeta {
     /// Assigned by the store, increasing.
     pub id: u64,

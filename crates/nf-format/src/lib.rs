@@ -13,6 +13,7 @@
 pub mod body;
 pub mod container;
 pub mod edf;
+pub mod pdf;
 pub mod record;
 
 pub use body::{parse_body, BodyWriter};
