@@ -111,3 +111,16 @@ Window 10 s, difficulty 0.10 (legacy Dart `StabilityConfig`; bounds window 1..30
 - Legacy wire format kept: `<prefix>/<group>`, `[t_first, row-major values]`, chunks EEG 12 / PPG 6 / IMU 3 / Bands 1, EEG = conditioned signal, defaults `192.168.1.100:9000`, `/muse`.
 - Differences: time is session seconds (not device epoch); IMU is accelerometer only (3 ch, no gyro in our sources); bands are 10 Hz snapshots (log10 µV²). Streaming follows Pause (the signal pipeline is paused too). Settings are in-memory like audio.
 - LSL / BrainFlow: not ported yet (LSL needs the C liblsl; decision pending).
+
+## Trust model (per-second trust records)
+
+Each feedback second now writes a `Record::Trust` (tag 12) right after its
+`Feedback` record, with the same timestamp: native value, percent, threshold
+percent and a bit field (dirty reason in the low 3 bits — movement, blink, jaw,
+pads, no_signal — then held-back reasons, guard warn/chime/muted, produced).
+We chose a new binary record over JSON in the meta so live and saved sessions
+go through one encoder (`feedback.trust` and `history.trust` build rows the same
+way). Older sessions have no trust records; their non-clean seconds report
+`dirty: "unknown"`. Trade-off: readers older than this tag reject the new
+record, so files written now do not open in builds from before this change.
+Seconds with no feature at all (no verdict, not an artifact) are `no_signal`.

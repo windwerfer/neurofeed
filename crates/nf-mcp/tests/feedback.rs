@@ -230,8 +230,10 @@ fn recording_carries_feedback_seconds_and_ppg_at_the_end() {
     let body = b64decode(b64["base64"].as_str().unwrap());
     let recs = nf_format::parse_body(&body).unwrap();
     let first = recs.iter().position(|r| matches!(r, Record::Feedback { .. })).unwrap();
-    assert!(recs[first..].iter().all(|r| matches!(r, Record::Feedback { .. })), "feedback appended at the end");
-    assert_eq!((recs.len() - first) as u64, fb_n);
+    let tail = &recs[first..];
+    assert!(tail.iter().all(|r| matches!(r, Record::Feedback { .. } | Record::Trust { .. })), "feedback appended at the end");
+    assert_eq!(tail.iter().filter(|r| matches!(r, Record::Feedback { .. })).count() as u64, fb_n);
+    assert_eq!(tail.iter().filter(|r| matches!(r, Record::Trust { .. })).count() as u64, fb_n, "one trust record per second");
     assert!(recs.iter().any(|r| matches!(r, Record::Ppg { .. })));
     let flags: Vec<u16> = recs[first..].iter().map(|r| if let Record::Feedback { flags, .. } = r { *flags } else { 0 }).collect();
     assert!(flags.iter().any(|x| x & f::CALIBRATING != 0));

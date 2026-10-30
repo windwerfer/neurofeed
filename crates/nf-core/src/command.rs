@@ -303,6 +303,10 @@ pub enum Query {
     #[serde(rename = "feedback.status")]
     FeedbackStatus,
     /// Audio settings, the live cue and the guard state.
+    #[serde(rename = "feedback.trust")]
+    FeedbackTrust,
+    #[serde(rename = "history.trust")]
+    HistoryTrust { id: u64 },
     #[serde(rename = "streaming.status")]
     StreamingStatus,
     #[serde(rename = "audio.status")]
@@ -601,6 +605,15 @@ pub const SPECS: &[CommandSpec] = &[
         "OSC out over UDP: enabled, ip, port, prefix (/muse), separate_groups (PPG/IMU/bands too).",
         always,
     ),
+    spec(
+        "feedback.trust",
+        "Live trust trace",
+        "feedback",
+        true,
+        "Per-second trust rows (clean/dirty reason, percentile vs threshold, held back, guard) and totals of the current run.",
+        always,
+    ),
+    spec("history.trust", "Session trust", "history", true, "Trust rows, totals and gesture marks of a saved session.", always),
     spec("streaming.status", "Streaming status", "streaming", true, "OSC settings, groups/addresses, packets and bytes sent.", always),
     spec(
         "audio.set",
@@ -718,6 +731,8 @@ pub fn examples() -> Vec<Request> {
         Q(Query::FeedbackStatus),
         Q(Query::AudioStatus),
         Q(Query::StreamingStatus),
+        Q(Query::FeedbackTrust),
+        Q(Query::HistoryTrust { id: 1 }),
         C(Command::StreamingSet(crate::streaming::StreamPatch {
             ip: Some("127.0.0.1".into()),
             port: Some(9000),

@@ -28,6 +28,29 @@ pub const TAG_MOVEMENT: u8 = 8;
 pub const TAG_PEAK_ALPHA: u8 = 9;
 pub const TAG_SPO2: u8 = 10;
 pub const TAG_FEEDBACK: u8 = 11;
+pub const TAG_TRUST: u8 = 12;
+
+/// `Record::Trust` bits: dirty reason in the low 3 bits, then flags.
+pub mod trust_bits {
+    pub const DIRTY_MASK: u16 = 0b111;
+    pub const DIRTY_MOVEMENT: u16 = 1;
+    pub const DIRTY_BLINK: u16 = 2;
+    pub const DIRTY_JAW: u16 = 3;
+    pub const DIRTY_PADS: u16 = 4;
+    /// No verdict: no usable feature this second (not an artifact).
+    pub const DIRTY_NO_SIGNAL: u16 = 5;
+    pub const HELD_BETA: u16 = 1 << 3;
+    pub const HELD_DELTA: u16 = 1 << 4;
+    pub const HELD_GUARD: u16 = 1 << 5;
+    pub const HELD_NO_THRESHOLD: u16 = 1 << 6;
+    pub const WARN: u16 = 1 << 7;
+    pub const GUARD_CHIME: u16 = 1 << 8;
+    pub const MUTED: u16 = 1 << 9;
+    /// The protocol ran a guard lane this second.
+    pub const HAS_GUARD: u16 = 1 << 10;
+    /// The engine produced a reward verdict this second.
+    pub const PRODUCED: u16 = 1 << 11;
+}
 
 /// `Record::Feedback` flag bits.
 pub mod feedback_flags {
@@ -100,6 +123,16 @@ pub enum Record {
         value: f32,
         threshold: f32,
         flags: u16,
+    },
+    /// Trust details of one feedback second (written after its `Feedback`):
+    /// native feature, output percentile, threshold percentile (NaN when
+    /// absent) and [`trust_bits`].
+    Trust {
+        ts: f64,
+        native: f32,
+        pct: f32,
+        thr_pct: f32,
+        bits: u16,
     },
 }
 
@@ -175,6 +208,13 @@ impl Record {
                 out.extend_from_slice(&threshold.to_le_bytes());
                 out.extend_from_slice(&flags.to_le_bytes());
             }
+            Record::Trust { ts, native, pct, thr_pct, bits } => {
+                head(out, TAG_TRUST, *ts);
+                for v in [native, pct, thr_pct] {
+                    out.extend_from_slice(&v.to_le_bytes());
+                }
+                out.extend_from_slice(&bits.to_le_bytes());
+            }
             Record::Movement { ts, score } => {
                 head(out, TAG_MOVEMENT, *ts);
                 out.extend_from_slice(&score.to_le_bytes());
@@ -249,6 +289,7 @@ impl Reader<'_> {
             TAG_PEAK_ALPHA => Record::PeakAlpha { ts, frequency: self.f32()?, power: self.f32()? },
             TAG_SPO2 => Record::SpO2 { ts, spo2: self.f32()?, confidence: self.f32()? },
             TAG_FEEDBACK => Record::Feedback { ts, value: self.f32()?, threshold: self.f32()?, flags: self.u16()? },
+            TAG_TRUST => Record::Trust { ts, native: self.f32()?, pct: self.f32()?, thr_pct: self.f32()?, bits: self.u16()? },
             _ => return None,
         })
     }

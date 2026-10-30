@@ -479,6 +479,14 @@ impl Session {
         }
     }
 
+    /// Trust trace of a saved session.
+    pub fn history_trust(&self, id: u64) -> Result<crate::trust::Trust, CoreError> {
+        let s = self.stored(id)?;
+        let records = nf_format::parse_body(&s.body).map_err(|e| CoreError::BadRequest(e.0))?;
+        let marks = crate::trust::marks(s.meta.import.as_ref());
+        Ok(crate::trust::build(crate::trust::rows_from_records(&records), marks))
+    }
+
     /// Register the network transport for streaming out (desktop shells).
     pub fn set_stream_sink(&mut self, sink: Box<dyn crate::streaming::DatagramSink>) {
         self.sink = Some(sink);
@@ -896,6 +904,8 @@ impl Session {
                 json!(p)
             }
             Query::AudioStatus => crate::audio::status(s),
+            Query::FeedbackTrust => json!(crate::trust::build(crate::trust::rows_from_results(&s.feedback.results), Vec::new())),
+            Query::HistoryTrust { id } => json!(self.history_trust(*id)?),
             Query::StreamingStatus => crate::streaming::status(&s.streaming, s.device.as_ref()),
             Query::HistoryImportPreview(req) => json!(self.import_prepare(req)?.preview()),
             Query::FeedbackStatus => {

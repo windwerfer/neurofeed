@@ -157,7 +157,8 @@ fn set_ts(r: &mut Record, f: impl Fn(f64) -> f64) {
         | Record::Movement { ts, .. }
         | Record::PeakAlpha { ts, .. }
         | Record::SpO2 { ts, .. }
-        | Record::Feedback { ts, .. } => *ts = f(*ts),
+        | Record::Feedback { ts, .. }
+        | Record::Trust { ts, .. } => *ts = f(*ts),
     }
 }
 

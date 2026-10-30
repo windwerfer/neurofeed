@@ -15,6 +15,7 @@ fn all_records() -> Vec<Record> {
         Record::PeakAlpha { ts: 2.7, frequency: 10.0, power: 1.2 },
         Record::SpO2 { ts: 2.8, spo2: 97.0, confidence: 0.8 },
         Record::Feedback { ts: 2.9, value: 1.25, threshold: 1.1, flags: feedback_flags::COUNTED | feedback_flags::IN_TARGET },
+        Record::Trust { ts: 2.9, native: 0.5, pct: 61.0, thr_pct: 50.0, bits: nf_format::trust_bits::HAS_GUARD | 2 },
     ]
 }
 

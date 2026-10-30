@@ -84,25 +84,8 @@ impl Recorder {
     }
 
     pub fn feedback(&mut self, r: &crate::feedback::SecondResult) {
-        use crate::feedback::Phase;
-        use nf_format::feedback_flags as f;
-        let rec = r.record.as_ref();
-        let mut flags = 0;
-        for (on, bit) in [
-            (r.counted, f::COUNTED),
-            (r.in_target, f::IN_TARGET),
-            (r.chime, f::CHIME),
-            (rec.is_some_and(|x| x.dirty.is_some()) || (r.second.is_some() && !r.counted), f::DIRTY),
-            (rec.is_some_and(|x| x.held_back.as_ref().is_some_and(|h| !h.is_empty())), f::HELD_BACK),
-            (matches!(r.phase, Phase::Paused { .. }), f::PAUSED),
-            (r.phase == Phase::Calibrating, f::CALIBRATING),
-        ] {
-            if on {
-                flags |= bit;
-            }
-        }
-        let nan = |v: Option<f64>| v.map_or(f32::NAN, |x| x as f32);
-        self.feedback.push(Record::Feedback { ts: r.time, value: nan(r.value), threshold: nan(r.threshold), flags });
+        self.feedback.push(feedback_record(r));
+        self.feedback.push(crate::trust::record(r));
         self.info.feedback_seconds += 1;
     }
 
@@ -232,6 +215,29 @@ pub fn civil_utc(unix_ms: f64) -> (u16, u16, u16, u16, u16, u16) {
     let y = yoe + era * 400 + i64::from(m <= 2);
     let c = |v: i64| u16::try_from(v).unwrap_or(0);
     (c(y), c(m), c(d), c(sod / 3600), c(sod % 3600 / 60), c(sod % 60))
+}
+
+/// The `Feedback` record of one engine second.
+pub fn feedback_record(r: &crate::feedback::SecondResult) -> Record {
+    use crate::feedback::Phase;
+    use nf_format::feedback_flags as f;
+    let rec = r.record.as_ref();
+    let mut flags = 0;
+    for (on, bit) in [
+        (r.counted, f::COUNTED),
+        (r.in_target, f::IN_TARGET),
+        (r.chime, f::CHIME),
+        (rec.is_some_and(|x| x.dirty.is_some()) || (r.second.is_some() && !r.counted), f::DIRTY),
+        (rec.is_some_and(|x| x.held_back.as_ref().is_some_and(|h| !h.is_empty())), f::HELD_BACK),
+        (matches!(r.phase, Phase::Paused { .. }), f::PAUSED),
+        (r.phase == Phase::Calibrating, f::CALIBRATING),
+    ] {
+        if on {
+            flags |= bit;
+        }
+    }
+    let nan = |v: Option<f64>| v.map_or(f32::NAN, |x| x as f32);
+    Record::Feedback { ts: r.time, value: nan(r.value), threshold: nan(r.threshold), flags }
 }
 
 #[cfg(test)]
