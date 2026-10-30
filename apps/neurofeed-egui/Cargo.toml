@@ -23,6 +23,7 @@ native-audio = ["dep:cpal"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 nf-device.workspace = true
+nf-ai.workspace = true
 egui = { version = "0.29", features = ["accesskit"] }
 nf-mcp = { workspace = true, default-features = false }
 png = "0.18"

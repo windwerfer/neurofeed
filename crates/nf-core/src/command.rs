@@ -134,6 +134,35 @@ pub enum Command {
     StreamingSet(crate::streaming::StreamPatch),
     #[serde(rename = "audio.set")]
     AudioSet(crate::audio::AudioPatch),
+    /// AI guard choices: model / scorer, threshold mode, fixed cut, auto-load.
+    #[serde(rename = "ai.set")]
+    AiSet(crate::ai::AiPatch),
+    /// Install a model: download it (public weights) or import a local file.
+    #[serde(rename = "ai.install")]
+    AiInstall {
+        /// Default: the selected model.
+        #[serde(default)]
+        model: Option<nf_types::AiModel>,
+        /// Absolute path of a weights file to import; omitted = download.
+        #[serde(default)]
+        path: Option<String>,
+    },
+    /// Load a model into memory (it then scores once per second).
+    #[serde(rename = "ai.load")]
+    AiLoad {
+        #[serde(default)]
+        model: Option<nf_types::AiModel>,
+    },
+    /// Unload the loaded model (frees memory; stays installed).
+    #[serde(rename = "ai.unload")]
+    AiUnload,
+    /// Delete an installed model's files; requires confirm=true.
+    #[serde(rename = "ai.remove")]
+    AiRemove {
+        model: nf_types::AiModel,
+        #[serde(default)]
+        confirm: bool,
+    },
     /// Import an EDF/EDF+, Mind Monitor CSV, `.neurofeed` or raw body file
     /// into History. Returns the new session id and what was lost.
     #[serde(rename = "history.import")]
@@ -350,6 +379,9 @@ pub enum Query {
     HistoryTrust { id: u64 },
     #[serde(rename = "streaming.status")]
     StreamingStatus,
+    /// AI models (install / load state), scorer, threshold and live scores.
+    #[serde(rename = "ai.status")]
+    AiStatus,
     #[serde(rename = "audio.status")]
     AudioStatus,
     /// Parse an import without saving: kept / lost summary for the dialog.
@@ -462,9 +494,36 @@ fn fb_idle(s: &AppState) -> Result<(), String> {
 fn fb_can_start(s: &AppState) -> Result<(), String> {
     needs_device(s)?;
     fb_idle(s)?;
-    match &s.feedback.protocol.unavailable {
-        Some(r) => Err(format!("{}: {r}", s.feedback.protocol.title)),
-        None => Ok(()),
+    let p = &s.feedback.protocol;
+    if let Some(r) = &p.unavailable {
+        return Err(format!("{}: {r}", p.title));
+    }
+    if p.guard_only {
+        s.ai.ready_reason().map_err(|r| format!("{} needs the AI model (no band-math fallback): {r}", p.title))?;
+    }
+    Ok(())
+}
+fn has_ai(s: &AppState) -> Result<(), String> {
+    if s.ai.runtime {
+        Ok(())
+    } else {
+        Err(crate::ai::NO_RUNTIME.into())
+    }
+}
+fn ai_loaded(s: &AppState) -> Result<(), String> {
+    has_ai(s)?;
+    if s.ai.models.iter().any(|m| matches!(m.state, nf_types::AiModelState::Ready { .. } | nf_types::AiModelState::Loading)) {
+        Ok(())
+    } else {
+        Err("no model loaded".into())
+    }
+}
+fn ai_idle(s: &AppState) -> Result<(), String> {
+    has_ai(s)?;
+    if s.feedback.phase.active() && s.ai.ready() {
+        Err("the AI guard is in use; stop the session first".into())
+    } else {
+        Ok(())
     }
 }
 fn fb_active(s: &AppState) -> Result<(), String> {
@@ -711,6 +770,19 @@ pub const SPECS: &[CommandSpec] = &[
         always,
     ),
     spec("history.trust", "Session trust", "history", true, "Trust rows, totals and gesture marks of a saved session.", always),
+    spec("ai.status", "AI status", "ai", true, "AI models (install/load state, folder, guide), scorer, threshold mode and the live head scores.", always),
+    spec(
+        "ai.set",
+        "AI settings",
+        "ai",
+        false,
+        "model (cbramod_a_vig|reve_base) or scorer (ai.a_vig|ai.wake_light|ai.a_vig_reve|ai.wake_light_reve), threshold_mode (fixed|percentile), fixed_threshold 0.05..=0.95, auto_load.",
+        has_ai,
+    ),
+    spec("ai.install", "Install AI model", "ai", false, "Download the model (CBraMod), or import a weights file by path (REVE is gated: import). SHA-256 checked.", has_ai),
+    spec("ai.load", "Load AI model", "ai", false, "Load an installed model; it then scores once per second.", has_ai),
+    spec("ai.unload", "Unload AI model", "ai", false, "Unload the model (stays installed).", ai_loaded),
+    spec("ai.remove", "Remove AI model", "ai", false, "Delete a model's files; requires confirm=true.", ai_idle),
     spec("streaming.status", "Streaming status", "streaming", true, "OSC settings, groups/addresses, packets and bytes sent.", always),
     spec(
         "audio.set",
@@ -782,8 +854,26 @@ pub fn input_schema(id: &str) -> Option<Value> {
     Some(v)
 }
 
+fn ai_examples() -> Vec<Request> {
+    use Request::{Command as C, Query as Q};
+    vec![
+        Q(Query::AiStatus),
+        C(Command::AiSet(crate::ai::AiPatch { scorer: Some("ai.a_vig".into()), fixed_threshold: Some(0.5), ..Default::default() })),
+        C(Command::AiInstall { model: Some(nf_types::AiModel::ReveBase), path: Some("/home/me/Downloads/model.safetensors".into()) }),
+        C(Command::AiLoad { model: None }),
+        C(Command::AiUnload),
+        C(Command::AiRemove { model: nf_types::AiModel::ReveBase, confirm: true }),
+    ]
+}
+
 /// One instance of every variant (keeps tests honest).
 pub fn examples() -> Vec<Request> {
+    let mut v = base_examples();
+    v.extend(ai_examples());
+    v
+}
+
+fn base_examples() -> Vec<Request> {
     use Request::{Command as C, Query as Q};
     vec![
         C(Command::ViewSet { view: View::Psd }),

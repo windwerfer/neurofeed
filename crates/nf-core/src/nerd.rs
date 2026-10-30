@@ -117,9 +117,14 @@ pub fn build(t: &Trainer, now: f64) -> Nerd {
     let guard = e.config().guard.map(|g| {
         let gb = e.guard_baseline();
         let gthr = e.guard_threshold();
+        let ai = g.source == nf_feedback::GuardSource::Ai;
+        let from = match g.fixed {
+            Some(_) => "fixed".to_owned(),
+            None => format!("p{}", g.percentile),
+        };
         Section {
             pile: Pile {
-                title: "Guard pile (band.delta, eyes closed)".into(),
+                title: if ai { "Guard pile (AI P(drowsy), eyes closed)" } else { "Guard pile (band.delta, eyes closed)" }.into(),
                 hist: Histogram::of(gb.samples(), &[gthr]),
                 threshold: gthr,
                 live: None,
@@ -128,8 +133,12 @@ pub fn build(t: &Trainer, now: f64) -> Nerd {
             rows: vec![
                 row(
                     "Warn threshold",
-                    format!("{}  from p{}", fixed(gthr, 3), g.percentile),
-                    "Delta above this pick of the rest pile counts as drowsy.",
+                    format!("{}  from {from}", fixed(gthr, 3)),
+                    if ai {
+                        "AI drowsiness probability above this counts as drowsy."
+                    } else {
+                        "Delta above this pick of the rest pile counts as drowsy."
+                    },
                 ),
                 row("Mean", fixed(gb.mean(), 3), "Centre of the eyes-closed rest pile."),
                 row("Spread (sd)", fixed(gb.sd(), 3), "How varied rest calibration was."),

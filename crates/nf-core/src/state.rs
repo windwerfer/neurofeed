@@ -121,6 +121,8 @@ pub struct AppState {
     pub custom_protocols: Vec<nf_feedback::Protocol>,
     /// OSC streaming out.
     pub streaming: crate::streaming::StreamState,
+    /// AI sleep guard: models, scorer, live scores.
+    pub ai: crate::ai::AiState,
     /// Folder the desktop shell loads music from (`music` reward output).
     pub music_dir: Option<String>,
     /// Appearance, subject, onboarding, debug (persisted).
@@ -153,6 +155,7 @@ impl Default for AppState {
             feedback: crate::feedback::Trainer::default(),
             audio: nf_audio::AudioSettings::default(),
             streaming: crate::streaming::StreamState::default(),
+            ai: crate::ai::AiState::default(),
             settings: crate::settings::UserSettings::default(),
             custom_protocols: Vec::new(),
             music_dir: None,

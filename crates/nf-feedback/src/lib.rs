@@ -13,8 +13,9 @@ mod engine;
 pub mod protocol;
 mod stats;
 
-pub use calibration::{Calibration, CalibrationKind, CalibrationResult};
+pub use calibration::{CalStage, Calibration, CalibrationKind, CalibrationResult};
 pub use engine::Engine;
+pub mod anchors;
 pub use protocol::{builtin, protocol, Eyes, GuardSpec, Protocol, DEFAULT_PROTOCOL, GUARD_PERCENTILE};
 pub use stats::{coefficient_of_variation, rolling_cvs, stability_output_percentile, Baseline};
 
@@ -104,14 +105,36 @@ impl StabilityConfig {
     }
 }
 
-/// Band-math guard (`band.delta`, `percentileWarn`).
+/// Drowsiness guard: warns while the guard value is above a threshold.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct GuardConfig {
     /// Baseline percentile for the warning threshold.
     pub percentile: u8,
     /// Mute (and withhold) reward while the warning is active.
     pub muffle: bool,
+    /// What the guard reads (absolute delta or an AI head probability).
+    #[serde(default)]
+    pub source: GuardSource,
+    /// `Some(p)` = fixed cut (AI probabilities) instead of the percentile.
+    #[serde(default)]
+    pub fixed: Option<f64>,
 }
+
+/// Guard value source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GuardSource {
+    /// `band.delta`: absolute delta power (opt-in fallback).
+    #[default]
+    BandDelta,
+    /// `Input::ai`: P(drowsy) from the selected AI head.
+    Ai,
+}
+
+/// Default fixed AI cut (legacy `defaultAiGuardFixedThreshold`, P > 0.50).
+pub const AI_FIXED_THRESHOLD: f64 = 0.50;
+/// Allowed fixed AI cut range (legacy clamp, 2 decimals).
+pub const AI_FIXED_RANGE: (f64, f64) = (0.05, 0.95);
 
 /// Engine configuration (resolved once from protocol + user settings).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -125,6 +148,9 @@ pub struct Config {
     pub inhibit: Vec<Inhibit>,
     #[serde(default)]
     pub guard: Option<GuardConfig>,
+    /// No reward lane at all (Sleep Guard): only the guard runs.
+    #[serde(default)]
+    pub guard_only: bool,
     /// `Some` = stability policy, `None` = percentile uptrain.
     #[serde(default)]
     pub stability: Option<StabilityConfig>,
@@ -139,6 +165,7 @@ impl Default for Config {
             dynamic_adapt: true,
             inhibit: Vec::new(),
             guard: None,
+            guard_only: false,
             stability: None,
         }
     }
@@ -186,6 +213,20 @@ pub struct Input {
     pub quality: Vec<f64>,
     #[serde(rename = "art", default)]
     pub artifact: Option<Artifact>,
+    /// Fresh AI guard probability this second (`None` = no score).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai: Option<f64>,
+}
+
+impl Input {
+    /// The guard value for `cfg` (absolute delta or AI probability).
+    pub fn guard_value(&self, cfg: &GuardConfig) -> Option<f64> {
+        match cfg.source {
+            GuardSource::BandDelta => self.rel_bands().map(|r| r.abs_delta),
+            GuardSource::Ai => self.ai,
+        }
+        .filter(|v| v.is_finite())
+    }
 }
 
 /// Relative band power averaged over usable pads.

@@ -68,7 +68,7 @@ impl Engine {
         e.compute_threshold();
         if let Some(g) = e.cfg.guard {
             e.guard_baseline = Baseline::new(cal.guard_samples.clone());
-            e.guard_thr = e.guard_baseline.at_percentile(f64::from(g.percentile));
+            e.guard_thr = g.fixed.or_else(|| e.guard_baseline.at_percentile(f64::from(g.percentile)));
         }
         e
     }
@@ -107,6 +107,16 @@ impl Engine {
 
     /// Change the reward percentile and re-derive the threshold from the
     /// baseline (live difficulty). No effect for the stability policy.
+    /// Switch the guard cut mid-session: `Some` = fixed, `None` = the
+    /// calibration percentile. Returns the new guard threshold.
+    pub fn set_guard_fixed(&mut self, fixed: Option<f64>) -> Option<f64> {
+        let g = self.cfg.guard.as_mut()?;
+        g.fixed = fixed;
+        let pct = f64::from(g.percentile);
+        self.guard_thr = fixed.or_else(|| self.guard_baseline.at_percentile(pct));
+        self.guard_thr
+    }
+
     pub fn set_percentile(&mut self, percentile: u8) -> Option<f64> {
         if self.cfg.stability.is_some() {
             return self.threshold;
@@ -273,18 +283,23 @@ impl Engine {
         let value = rel.and_then(|r| r.feature(self.cfg.feature)).filter(|v| v.is_finite());
         // Fix (decisions 2026-10-29): guard muffle withholds reward in both policies.
         let guard_blocks = self.warning && self.cfg.guard.is_some_and(|g| g.muffle);
-        if let (Some(v), Some(rel)) = (value, rel) {
-            let dirty = input.artifact.map(|a| match a {
-                crate::Artifact::Movement => Dirty::Movement,
-                crate::Artifact::Blink => Dirty::Blink,
-                crate::Artifact::Jaw => Dirty::Jaw,
-            });
+        let dirty = input.artifact.map(|a| match a {
+            crate::Artifact::Movement => Dirty::Movement,
+            crate::Artifact::Blink => Dirty::Blink,
+            crate::Artifact::Jaw => Dirty::Jaw,
+        });
+        if self.cfg.guard_only {
+            // Guard-only (Sleep Guard): no reward verdict; a usable second is "produced".
+            rec.produced = rel.is_some();
+            rec.dirty = dirty;
+        } else if let (Some(v), Some(rel)) = (value, rel) {
             match self.cfg.stability {
                 Some(st) => self.step_stability(&mut rec, st, v, dirty, guard_blocks),
                 None => self.step_percentile(&mut rec, v, &rel, dirty, guard_blocks),
             }
         }
-        self.step_guard(&mut rec, rel.map(|r| r.abs_delta), input.artifact.is_none());
+        let gv = self.cfg.guard.and_then(|g| input.guard_value(&g));
+        self.step_guard(&mut rec, gv, input.artifact.is_none());
         rec.success_rate = self.success_rate(now);
         self.adapt_tick += 1;
         if self.adapt_tick >= ADAPT_INTERVAL_S {
@@ -372,12 +387,12 @@ impl Engine {
         });
     }
 
-    /// Delta guard (drowsiness): warning, rate-limited chime, muffle.
-    fn step_guard(&mut self, rec: &mut Record, abs_delta: Option<f64>, clean: bool) {
+    /// Drowsiness guard (delta or AI): warning, rate-limited chime, muffle.
+    fn step_guard(&mut self, rec: &mut Record, value: Option<f64>, clean: bool) {
         let Some(g) = self.cfg.guard else { return };
         let now = rec.t;
         let mut chime = false;
-        if let (Some(d), Some(thr), true) = (abs_delta, self.guard_thr, clean) {
+        if let (Some(d), Some(thr), true) = (value, self.guard_thr, clean) {
             self.warning = d > thr;
             if self.warning && self.last_chime.is_none_or(|l| now - l >= WARNING_COOLDOWN_S) {
                 self.last_chime = Some(now);

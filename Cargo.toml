@@ -22,6 +22,7 @@ nf-mcp = { path = "crates/nf-mcp" }
 nf-store = { path = "crates/nf-store" }
 nf-device = { path = "crates/nf-device" }
 nf-import = { path = "crates/nf-import" }
+nf-ai = { path = "crates/nf-ai" }
 nf-audio = { path = "crates/nf-audio", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -42,3 +43,7 @@ unreachable = "deny"
 cognitive_complexity = "deny"
 too_many_arguments = "deny"
 too_many_lines = "warn"
+
+# rlx-cpu 0.2.14 with its default BLAS feature disabled (pure Rust kernels).
+[patch.crates-io]
+rlx-cpu = { path = "vendor/rlx-cpu-0.2.14" }

@@ -1,5 +1,6 @@
 //! One module per functional view.
 
+mod ai;
 mod bands;
 mod devices;
 mod feedback;

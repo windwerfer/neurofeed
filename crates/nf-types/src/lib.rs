@@ -245,3 +245,177 @@ mod tests {
         assert!(s.relative(3, Band::Alpha).is_none());
     }
 }
+
+// ── AI sleep scorers (implemented natively by `nf-ai`) ─────────────────────
+
+/// An EEG foundation model behind the AI sleep guard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AiModel {
+    /// Frozen CBraMod encoder (Apache-2.0) + A-vig / wake-light heads, 2 s windows.
+    CbramodAVig,
+    /// REVE base (gated on Hugging Face), 4 s windows, experimental heads.
+    ReveBase,
+}
+
+impl AiModel {
+    pub const ALL: [Self; 2] = [Self::CbramodAVig, Self::ReveBase];
+
+    /// Stable id (folder name, legacy `ffId`).
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::CbramodAVig => "cbramod_a_vig",
+            Self::ReveBase => "reve_base",
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::CbramodAVig => "CBraMod A-vig",
+            Self::ReveBase => "REVE Base",
+        }
+    }
+    /// Approximate weights download size.
+    pub fn size_mb(self) -> u32 {
+        match self {
+            Self::CbramodAVig => 20,
+            Self::ReveBase => 280,
+        }
+    }
+    /// Samples per scored window at 256 Hz.
+    pub fn window_samples(self) -> usize {
+        match self {
+            Self::CbramodAVig => 512,
+            Self::ReveBase => 1024,
+        }
+    }
+    /// Weights file the user downloads or imports.
+    pub fn weights_file(self) -> &'static str {
+        match self {
+            Self::CbramodAVig => "pretrained_weights.pth",
+            Self::ReveBase => "model.safetensors",
+        }
+    }
+    /// SHA-256 of the weights file.
+    pub fn sha256(self) -> &'static str {
+        match self {
+            Self::CbramodAVig => "0792cb808c14e6b7a2bb2ce1dff379bc47bc54c49a779825bdfeb33bf8157178",
+            Self::ReveBase => "8ecc650619598748286c2457f81f5c6bd12e8bb59db44f7b02af1955c44de8fe",
+        }
+    }
+    pub fn page_url(self) -> &'static str {
+        match self {
+            Self::CbramodAVig => "https://huggingface.co/weighting666/CBraMod",
+            Self::ReveBase => "https://huggingface.co/brain-bzh/reve-base/tree/main",
+        }
+    }
+    /// Direct download, `None` when gated (import only).
+    pub fn download_url(self) -> Option<&'static str> {
+        match self {
+            Self::CbramodAVig => Some("https://huggingface.co/weighting666/CBraMod/resolve/main/pretrained_weights.pth"),
+            Self::ReveBase => None,
+        }
+    }
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::CbramodAVig => "Open vigilance head on the frozen CBraMod encoder (Apache-2.0). Scores 2 s windows; the guard value is P(hypnagogic). The heads ship with the app; the ~20 MB encoder weights are downloaded once.",
+            Self::ReveBase => "REVE base (67M parameters), gated on Hugging Face. Scores 4 s windows; its heads are experimental (subsample-trained).",
+        }
+    }
+    pub fn guide(self) -> &'static str {
+        match self {
+            Self::CbramodAVig => "Download the encoder weights (pretrained_weights.pth, Apache-2.0, no login), or import a copy you already have.",
+            Self::ReveBase => "REVE is gated: open Hugging Face, log in, accept the responsible-use agreement, download model.safetensors (~280 MB), then import it here.",
+        }
+    }
+    /// Scorer ids (feature ids) this model's heads produce.
+    pub fn scorers(self) -> &'static [&'static str] {
+        match self {
+            Self::CbramodAVig => &["ai.a_vig", "ai.wake_light"],
+            Self::ReveBase => &["ai.a_vig_reve", "ai.wake_light_reve"],
+        }
+    }
+    /// The model behind a scorer id (`ai.drowsiness` = legacy alias of `ai.a_vig`).
+    pub fn for_scorer(id: &str) -> Option<Self> {
+        match id {
+            "ai.a_vig" | "ai.wake_light" | "ai.drowsiness" => Some(Self::CbramodAVig),
+            "ai.a_vig_reve" | "ai.wake_light_reve" => Some(Self::ReveBase),
+            _ => None,
+        }
+    }
+}
+
+/// Install / load state of one model.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum AiModelState {
+    /// Weights not on disk.
+    Missing,
+    /// Download or import running; `progress` 0..1 when the size is known.
+    Installing {
+        progress: Option<f64>,
+    },
+    /// Verified on disk, not loaded.
+    Installed,
+    Loading,
+    /// Loaded and scoring.
+    Ready {
+        description: String,
+    },
+    Failed {
+        message: String,
+    },
+}
+
+/// Where `install` gets the weights from.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AiSource {
+    /// The model's public download URL.
+    Download,
+    /// A local weights file (checked against the pinned SHA-256).
+    Import { path: String },
+}
+
+/// One window to score: 4 rows (frontal L/R, temporal L/R) × `n_times`
+/// conditioned µV samples at 256 Hz, row-major.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AiWindow {
+    pub model: AiModel,
+    /// Session time of the window's last sample.
+    pub t: f64,
+    pub n_times: usize,
+    pub signal: Vec<f32>,
+}
+
+/// Result of one scored window.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct AiScore {
+    pub model: AiModel,
+    pub t: f64,
+    /// Pooled encoder embedding (anchors / clarity).
+    pub embedding: Vec<f32>,
+    /// `(scorer id, P(class 1))` for every loaded head of this model.
+    pub heads: Vec<(String, f32)>,
+    /// Inference time.
+    pub ms: f64,
+}
+
+/// Native AI runtime: install, load and run the models off the UI thread.
+/// All calls return immediately; long work runs in the background and shows
+/// up in `state` / `poll`.
+pub trait AiRuntime: Send {
+    fn state(&self, model: AiModel) -> AiModelState;
+    /// Folder holding the model files (for the model card).
+    fn folder(&self, model: AiModel) -> Option<String>;
+    fn install(&mut self, model: AiModel, source: AiSource) -> Result<(), String>;
+    /// Delete the downloaded / imported weights.
+    fn remove(&mut self, model: AiModel) -> Result<(), String>;
+    /// Load `model` (unloads any other: one model at a time).
+    fn load(&mut self, model: AiModel) -> Result<(), String>;
+    fn unload(&mut self);
+    /// Queue a window. `false` while the previous one is still running
+    /// (the caller skips that second instead of stacking work).
+    fn submit(&mut self, window: AiWindow) -> bool;
+    /// Finished scores since the last poll.
+    fn poll(&mut self) -> Vec<AiScore>;
+}

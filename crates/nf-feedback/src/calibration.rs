@@ -15,6 +15,15 @@ pub enum CalibrationKind {
     Staged,
 }
 
+/// Where a calibration is (staged: artifacts 15 s, eyes open 30 s, eyes closed).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CalStage {
+    Artifacts,
+    EyesOpen,
+    EyesClosed,
+}
+
 /// Outcome of a finished calibration.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CalibrationResult {
@@ -24,7 +33,7 @@ pub struct CalibrationResult {
     pub wall_seconds: u32,
     /// Raw reward-feature samples (clean, all green).
     pub reward_samples: Vec<f64>,
-    /// Raw guard `band.delta` samples (eyes closed, clean, all green).
+    /// Raw guard samples (`band.delta` or AI probability; eyes closed, clean, all green).
     pub guard_samples: Vec<f64>,
 }
 
@@ -54,6 +63,15 @@ impl Calibration {
             reward: Vec::new(),
             guard: Vec::new(),
             done_at: None,
+        }
+    }
+
+    /// Current stage (`EyesClosed` = the collected baseline window).
+    pub fn stage(&self) -> CalStage {
+        match self.timed_left {
+            0 => CalStage::EyesClosed,
+            n if n > STAGED_TIMED_S - 15 => CalStage::Artifacts,
+            _ => CalStage::EyesOpen,
         }
     }
 
@@ -96,10 +114,11 @@ impl Calibration {
         if self.last_second != Some(second) {
             self.last_second = Some(second);
             let rel = input.rel_bands();
-            let reward = rel.and_then(|r| r.feature(self.cfg.feature)).filter(|v| v.is_finite());
-            let guard = rel.filter(|_| self.cfg.guard.is_some()).map(|r| r.abs_delta).filter(|v| v.is_finite());
+            let reward = rel.and_then(|r| r.feature(self.cfg.feature)).filter(|v| v.is_finite() && !self.cfg.guard_only);
+            let guard = self.cfg.guard.and_then(|g| input.guard_value(&g));
             let accept = input.artifact.is_none() && input.all_green();
-            if accept && (reward.is_some() || guard.is_some()) {
+            let usable = if self.cfg.guard_only { guard.is_some() } else { reward.is_some() || guard.is_some() };
+            if accept && usable {
                 self.valid += 1;
                 self.reward.extend(reward);
                 self.guard.extend(guard);

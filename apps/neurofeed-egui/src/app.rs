@@ -41,6 +41,7 @@ impl NeuroFeedApp {
         {
             session.set_stream_sink(Box::new(nf_device::UdpSink::new()));
             session.set_stream_outlets(Box::new(nf_device::LslOutlets::new()));
+            session.set_ai_runtime(Box::new(nf_ai::NativeAi::with_default_root()));
         }
         let mut app = Self::with_session(session);
         #[cfg(not(target_arch = "wasm32"))]

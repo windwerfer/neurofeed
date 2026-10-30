@@ -86,6 +86,9 @@ pub(super) fn card(ui: &mut egui::Ui, p: &Protocol, selected: bool, w: f32) -> e
                     if p.custom {
                         ui.label(RichText::new("custom").small().color(CALM));
                     }
+                    if p.guard_only {
+                        ui.label(RichText::new("needs AI model").small().color(FAIR));
+                    }
                 });
                 ui.label(&p.summary);
                 ui.weak(match &p.unavailable {
@@ -245,9 +248,13 @@ fn fit_check(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
 
 fn calibrating(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
     let Some(c) = &t.calibration else { return };
-    let instruction = match t.protocol.eyes {
-        Eyes::Closed => "Close your eyes, relax and sit still.",
-        Eyes::Open => "Keep your eyes open on a calm point and sit still.",
+    use nf_core::nf_feedback::CalStage;
+    let instruction = match (t.protocol.guard_only, c.stage, t.protocol.eyes) {
+        (true, CalStage::Artifacts, _) => "Step 1/3: sit still, eyes open, while the signal settles.",
+        (true, CalStage::EyesOpen, _) => "Step 2/3: eyes open, look at a calm point — this is your 'awake' reference.",
+        (true, CalStage::EyesClosed, _) => "Step 3/3: close your eyes and relax — this sets your drowsiness baseline.",
+        (false, _, Eyes::Closed) => "Close your eyes, relax and sit still.",
+        (false, _, Eyes::Open) => "Keep your eyes open on a calm point and sit still.",
     };
     header(ui, "Calibrating", instruction);
     ui.add(

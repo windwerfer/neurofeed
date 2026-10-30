@@ -53,7 +53,9 @@ const CARDS: &[(Section, &str, &str, CardFn)] = &[
     (Section::Devices, "Mains notch", "notch 50 60 hz mains power line filter", |ui, s, o, _| mains(ui, s, o)),
     (Section::Training, "Band Stability", "stability window difficulty steadier", |ui, s, o, _| stability(ui, s, o)),
     (Section::Training, "Protocols", "protocol builder custom new edit", |ui, s, o, _| protocols(ui, s, o)),
-    (Section::Ai, "Guardrail AI engine", "spur cbramod reve model sleep drowsiness", |ui, _, _, _| ai(ui)),
+    (Section::Ai, "AI sleep guard", "spur cbramod reve model sleep drowsiness import download scorer threshold", |ui, s, o, _| {
+        super::ai::show(ui, s, o)
+    }),
     (Section::Recording, "Storage", "folder storage database sqlite indexeddb", |ui, s, _, _| storage(ui, s)),
     (Section::Recording, "Gesture markers", "eye blink clench markers", |ui, s, o, _| gestures(ui, s, o)),
     (Section::About, "About NeuroFeed", "about version licenses credits notices", |ui, _, _, _| super::about::card(ui)),
@@ -188,10 +190,6 @@ fn protocols(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     if ui.button("Open Feedback").clicked() {
         out.push(Command::ViewSet { view: nf_core::View::Feedback });
     }
-}
-
-fn ai(ui: &mut egui::Ui) {
-    ui.weak("The AI sleep/drowsiness models (REVE, CBraMod) are not part of this build yet; their port is an open decision. Until then the band-math guard (off by default, per protocol) is the only drowsiness check.");
 }
 
 fn storage(ui: &mut egui::Ui, session: &Session) {

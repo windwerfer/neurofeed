@@ -95,6 +95,8 @@ pub struct Persisted {
     pub guard: bool,
     /// Streaming destination and protocol; `enabled` is never restored on (always starts off).
     pub streaming: crate::streaming::StreamSettings,
+    #[serde(default)]
+    pub ai: crate::ai::AiSettings,
 }
 
 impl Default for Persisted {
@@ -115,6 +117,7 @@ impl Persisted {
             stability: s.feedback.stability,
             guard: s.feedback.guard,
             streaming: crate::streaming::StreamSettings { enabled: false, ..s.streaming.settings.clone() },
+            ai: s.ai.settings.clone(),
         }
     }
 
@@ -127,6 +130,7 @@ impl Persisted {
         s.feedback.stability = self.stability;
         s.feedback.guard = self.guard;
         s.streaming.settings = crate::streaming::StreamSettings { enabled: s.streaming.settings.enabled, ..self.streaming };
+        s.ai.settings = self.ai;
     }
 }
 

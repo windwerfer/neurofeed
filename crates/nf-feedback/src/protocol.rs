@@ -37,6 +37,10 @@ pub struct Protocol {
     /// Made in the Protocol Builder (editable, deletable).
     #[serde(default)]
     pub custom: bool,
+    /// No reward lane: only the AI guard runs (Sleep Guard). Needs a ready
+    /// AI model and the staged calibration; there is no band-math fallback.
+    #[serde(default)]
+    pub guard_only: bool,
 }
 
 /// Guard lane of a protocol.
@@ -61,8 +65,34 @@ impl Protocol {
 
     /// Engine config with the band-math guard switched on (if the protocol has one).
     pub fn config_with_guard(&self, percentile: u8) -> Config {
-        let guard = self.guard.map(|g| crate::GuardConfig { percentile: GUARD_PERCENTILE, muffle: g.muffle_reward });
-        Config { guard, ..self.config(percentile) }
+        let guard = self.guard.map(|g| crate::GuardConfig {
+            percentile: GUARD_PERCENTILE,
+            muffle: g.muffle_reward,
+            source: crate::GuardSource::BandDelta,
+            fixed: None,
+        });
+        Config { guard, guard_only: self.guard_only, ..self.config(percentile) }
+    }
+
+    /// Engine config with the AI guard (`fixed` cut, else the guard percentile).
+    pub fn config_with_ai_guard(&self, percentile: u8, guard_percentile: u8, fixed: Option<f64>) -> Config {
+        let guard = self.guard.map(|g| crate::GuardConfig {
+            percentile: guard_percentile,
+            muffle: g.muffle_reward,
+            source: crate::GuardSource::Ai,
+            fixed,
+        });
+        Config { guard, guard_only: self.guard_only, ..self.config(percentile) }
+    }
+
+    /// Calibration recipe: Sleep Guard uses the staged one (artifacts,
+    /// eyes-open counting for the clear anchor, then eyes closed).
+    pub fn calibration(&self) -> crate::CalibrationKind {
+        if self.guard_only {
+            crate::CalibrationKind::Staged
+        } else {
+            crate::CalibrationKind::Single
+        }
     }
 }
 
@@ -80,6 +110,7 @@ fn p(id: &str, title: &str, summary: &str, eyes: Eyes, feature: Feature) -> Prot
         guard: None,
         inhibit: Vec::new(),
         custom: false,
+        guard_only: false,
     }
 }
 
@@ -115,8 +146,8 @@ pub fn builtin() -> Vec<Protocol> {
             )
         },
         Protocol {
-            unavailable: Some("needs the sleep model (coming later)".into()),
             guard: guard(false),
+            guard_only: true,
             ..p("sleepGuard", "Sleep Guard", "No reward; warns when you drift towards sleep.", Eyes::Closed, Feature::Atr)
         },
     ]
@@ -150,7 +181,7 @@ mod stability_defaults {
             [Some(true), Some(false), None, Some(false), Some(true)]
         );
         let c = protocol("restAwake").unwrap().config_with_guard(60);
-        assert_eq!(c.guard, Some(crate::GuardConfig { percentile: 75, muffle: true }));
+        assert_eq!(c.guard, Some(crate::GuardConfig { percentile: 75, muffle: true, source: crate::GuardSource::BandDelta, fixed: None }));
         assert_eq!(protocol("alertOpen").unwrap().config_with_guard(60).guard, None);
     }
 }

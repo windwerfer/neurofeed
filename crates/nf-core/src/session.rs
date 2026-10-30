@@ -1,5 +1,7 @@
 //! The Session: single owner of state; the only way to change it.
 
+mod ai_glue;
+
 use crate::command::{find, Command, CommandSpec, Query, Request, SPECS};
 use crate::feedback::{Change, Observation, Phase};
 use crate::recording::{base64, export, Finished, Recorder};
@@ -104,6 +106,11 @@ struct Live {
     /// The recording was started by `feedback.start` (stops with it).
     auto_recording: bool,
     streamer: crate::streaming::Streamer,
+    /// Session time of the next AI window.
+    ai_next: f64,
+    anchors: nf_feedback::anchors::Anchors,
+    /// Eyes-closed scores seen after V_clear: capture V_sleep at play.
+    ai_sleep_pending: bool,
 }
 
 /// Longest accepted session notes.
@@ -116,6 +123,9 @@ pub struct Session {
     source: Option<Box<dyn DeviceSource>>,
     sink: Option<Box<dyn crate::streaming::DatagramSink>>,
     outlets: Option<Box<dyn nf_types::StreamOutlets>>,
+    ai: Option<Box<dyn nf_types::AiRuntime>>,
+    /// Models auto-loaded once (cleared on install / remove).
+    ai_autoloaded: Vec<nf_types::AiModel>,
     /// (device id, separate groups) the LSL outlets are open for.
     lsl_open: Option<(String, bool)>,
     live: Live,
@@ -143,6 +153,8 @@ impl Session {
             source: None,
             sink: None,
             outlets: None,
+            ai: None,
+            ai_autoloaded: Vec::new(),
             lsl_open: None,
             live: Live::default(),
             store: Box::new(nf_store::MemoryStore::default()),
@@ -501,6 +513,7 @@ impl Session {
                 self.stop_recording("size limit reached");
             }
         }
+        self.ai_tick();
         self.feedback_tick(now);
     }
 
@@ -698,6 +711,7 @@ impl Session {
             let t = self.live.fb_next;
             self.live.fb_next += 1.0;
             let mut obs = self.observation(t);
+            obs.ai = self.state.ai.value_at(self.state.time);
             if let Some(a) = self.live.artifacts.as_mut() {
                 obs.artifact = a.second(t);
                 if let (Some(r), Some(s)) = (self.live.recorder.as_mut(), a.status.movement_score) {
@@ -740,6 +754,7 @@ impl Session {
             pads: idx.iter().map(|&i| sig.bands_linear.get(i).copied().unwrap_or_default()).collect(),
             quality: idx.iter().map(|&i| if fresh { f64::from(sig.quality.get(i).copied().unwrap_or(0.0)) } else { 0.0 }).collect(),
             artifact: None,
+            ai: None,
         }
     }
 
@@ -907,6 +922,11 @@ impl Session {
             }
             Command::AudioSet(patch) => return crate::audio::set(&mut self.state, &patch),
             Command::StreamingSet(patch) => return crate::streaming::set(&mut self.state.streaming, &patch),
+            cmd @ (Command::AiSet(_)
+            | Command::AiInstall { .. }
+            | Command::AiLoad { .. }
+            | Command::AiUnload
+            | Command::AiRemove { .. }) => return self.ai_apply(cmd),
             Command::HistoryImport(req) => return self.history_import(&req),
             Command::GuardSet { enabled } => {
                 self.state.feedback.guard = enabled;
@@ -1125,6 +1145,7 @@ impl Session {
             Query::AudioStatus => crate::audio::status(s),
             Query::FeedbackTrust => json!(crate::trust::build(crate::trust::rows_from_results(&s.feedback.results), Vec::new())),
             Query::HistoryTrust { id } => json!(self.history_trust(*id)?),
+            Query::AiStatus => crate::ai::status_json(&s.ai),
             Query::StreamingStatus => crate::streaming::status(&s.streaming, s.device.as_ref()),
             Query::HistoryImportPreview(req) => json!(self.import_prepare(req)?.preview()),
             Query::FeedbackStatus => {

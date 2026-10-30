@@ -118,10 +118,13 @@ pub fn status(state: &AppState) -> Value {
 
 pub fn guard_status(state: &AppState) -> Value {
     let f = &state.feedback;
+    let ai = f.ai_guard.is_some() && f.protocol.guard.is_some();
     json!({
         "available": f.protocol.guard.is_some(),
-        "enabled": f.guard && f.protocol.guard.is_some(),
-        "scorer": "band.delta",
+        "enabled": (ai || f.guard) && f.protocol.guard.is_some(),
+        "band_math": f.guard,
+        "scorer": if ai { state.ai.settings.scorer.as_str() } else if f.guard { "band.delta" } else { "none" },
+        "threshold_mode": if ai { serde_json::to_value(state.ai.settings.threshold_mode).unwrap_or_default() } else { json!("percentile") },
         "percentile": nf_feedback::GUARD_PERCENTILE,
         "muffle_reward": f.protocol.guard.map(|g| g.muffle_reward),
         "threshold": f.guard_threshold(),

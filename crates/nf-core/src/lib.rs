@@ -7,6 +7,7 @@
 //! threads or filesystem: compiles to wasm32.
 #![forbid(unsafe_code)]
 
+pub mod ai;
 pub mod artifacts;
 pub mod audio;
 mod command;
@@ -33,7 +34,9 @@ pub use nf_feedback::StabilityConfig;
 pub use nf_format::feedback_flags;
 pub use nf_import;
 pub use nf_store::SessionMeta;
-pub use nf_types::{Band, BandSnapshot, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, LinkState, PpgPacket};
+pub use nf_types::{
+    AiModel, AiModelState, Band, BandSnapshot, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, LinkState, PpgPacket,
+};
 pub use recording::{civil_utc, ExportFormat, RecordingInfo};
 pub use session::{Event, Session, MAX_NOTES};
 pub use signal::{mains_name, MainsMode, Signal};

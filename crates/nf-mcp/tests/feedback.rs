@@ -57,7 +57,7 @@ fn start_and_fit_check(s: &NfMcp) {
     run(&s, "device.connect", json!({ "id": "sim:muse_s" }));
     adv(&s, 3.0);
     let protos = run(&s, "protocol.list", Value::Null);
-    assert!(protos.as_array().unwrap().iter().any(|p| p["protocol"]["unavailable"].is_string()));
+    assert!(protos.as_array().unwrap().iter().any(|p| p["protocol"]["guard_only"] == true), "Sleep Guard listed");
     run(&s, "protocol.set", json!({ "id": "restAwake" }));
     assert!(fails(&s, "feedback.pause", Value::Null).contains("not training"));
 

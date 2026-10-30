@@ -164,3 +164,15 @@ Settings is a section rail (General, Devices, Training, AI, Recording, About) wi
 - Protocol 1.10 only (1.00 → 505), little-endian, timestamps = local monotonic clock at send. Slow consumers drop chunks (bounded queue), counted.
 - NeuroFeed: `StreamOutlets` trait in nf-types, `LslOutlets` in nf-device (feature `lsl`, native only); web build has no transport and `streaming.set {protocol:"lsl"}` errors there.
 - Interop: tests/interop.rs (pylsl, gated on PURE_LSL_PYTHON), scripts/lsl_e2e.py for the whole app.
+
+## AI models (nf-ai) — 2026-10-30
+
+- Reused the existing Rust REVE (reve-rs, rlx pinned `=0.2.14`, vendored rlx-cpu patch) and CBraMod (Candle) inference as the `nf-ai` crate; no flutter_rust_bridge layer. Heads ship embedded (f32bin).
+- Runtime boundary: `nf_types::AiRuntime` trait; `nf_ai::NativeAi` (one worker thread, one model loaded at a time, skip-if-busy, one window/s). Registered only on native builds.
+- Web: models are desktop-only. `nf-ai` core compiles to wasm without features, but Candle pulls getrandom (no wasm_js), weights are 20–280 MB, and REVE takes ~530 ms/window natively single-threaded. The web build reports "AI models run in the desktop app only" and gates every `ai.*` command plus Sleep Guard via `has_ai`.
+- Sleep Guard is AI-only (`guard_only`): staged calibration (artifacts → eyes open → eyes closed), no reward lane, no band-math fallback; start is blocked with the model's not-ready reason.
+- AI guard is the default for guard-lane protocols when the selected model is Ready; band math stays opt-in (`guard.set`, off by default).
+- Threshold: fixed 0.50 by default (0.05–0.95), or p75 of the eyes-closed calibration AI samples; switchable mid-session.
+- REVE keeps the legacy 4 s window although its manifest says 2 s (open item). AI baseline samples are not gated on V_clear capture (legacy did). `ai.*` runtime side effects (install/load) are not rolled back by batches.
+- REVE is gated on Hugging Face: import only; CBraMod downloads (sha256-verified, .part + rename).
+- Verified: CBraMod vs Python reference max_abs 1.6e-7; REVE runs on the real weights (dim 512).

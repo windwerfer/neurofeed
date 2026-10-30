@@ -6,7 +6,7 @@
 //! owns phases, timing rules and the per-second [`SecondResult`] that the
 //! UI, MCP (and later the recording) consume.
 
-use nf_feedback::{Calibration, CalibrationKind, CalibrationResult, Dirty, Engine, HeldBack, Input, Protocol, Record, SIGNAL_GOOD};
+use nf_feedback::{Calibration, CalibrationResult, Dirty, Engine, HeldBack, Input, Protocol, Record, SIGNAL_GOOD};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
@@ -67,6 +67,8 @@ pub struct Observation {
     pub quality: Vec<f64>,
     /// Artifact detected this second (movement / blink / jaw).
     pub artifact: Option<nf_feedback::Artifact>,
+    /// Fresh AI guard probability (selected scorer).
+    pub ai: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -77,6 +79,8 @@ pub struct CalibrationProgress {
     pub max_s: u32,
     /// Why this second did not count, if it did not.
     pub waiting: Option<String>,
+    /// Staged recipe position (artifacts → eyes open → eyes closed).
+    pub stage: nf_feedback::CalStage,
 }
 
 /// The per-second result record.
@@ -139,6 +143,9 @@ pub struct Trainer {
     pub stability: nf_feedback::StabilityConfig,
     /// Band-math drowsiness guard on (protocols with a guard lane).
     pub guard: bool,
+    /// AI guard in use (set by the session while the selected model is
+    /// ready): `Some(fixed cut)` / `Some(None)` = percentile.
+    pub ai_guard: Option<Option<f64>>,
     cal: Option<Calibration>,
     engine: Option<Engine>,
     sample_t: f64,
@@ -159,6 +166,7 @@ impl Default for Trainer {
             percentile: nf_feedback::DEFAULT_PERCENTILE,
             stability: nf_feedback::StabilityConfig::default(),
             guard: false,
+            ai_guard: None,
             phase: Phase::Idle,
             pads: Vec::new(),
             green_for: 0,
@@ -199,7 +207,11 @@ fn pad_list(names: &[String]) -> String {
 impl Trainer {
     /// Protocol config with the user's stability setting applied.
     pub fn engine_config(&self) -> nf_feedback::Config {
-        let mut c = if self.guard { self.protocol.config_with_guard(self.percentile) } else { self.protocol.config(self.percentile) };
+        let mut c = match self.ai_guard {
+            Some(fixed) => self.protocol.config_with_ai_guard(self.percentile, nf_feedback::GUARD_PERCENTILE, fixed),
+            None if self.guard => self.protocol.config_with_guard(self.percentile),
+            None => nf_feedback::Config { guard_only: self.protocol.guard_only, ..self.protocol.config(self.percentile) },
+        };
         if c.stability.is_some() {
             c.stability = Some(self.stability);
         }
@@ -263,6 +275,7 @@ impl Trainer {
             percentile: self.percentile,
             stability: self.stability,
             guard: self.guard,
+            ai_guard: self.ai_guard,
             baselines,
             ..Self::default()
         };
@@ -273,13 +286,14 @@ impl Trainer {
     /// fit check → calibrating.
     pub fn calibrate(&mut self, out: &mut Vec<Change>) {
         self.message = None;
-        self.cal = Some(Calibration::new(&self.engine_config(), CalibrationKind::Single));
+        self.cal = Some(Calibration::new(&self.engine_config(), self.protocol.calibration()));
         self.calibration = Some(CalibrationProgress {
             valid_s: 0,
             wall_s: 0,
             needed_s: nf_feedback::BASELINE_VALID_S,
             max_s: nf_feedback::BASELINE_MAX_S as u32,
             waiting: None,
+            stage: self.cal.as_ref().map_or(nf_feedback::CalStage::EyesClosed, Calibration::stage),
         });
         self.set(Phase::Calibrating, out);
     }
@@ -330,6 +344,14 @@ impl Trainer {
     pub fn resume(&mut self, out: &mut Vec<Change>) {
         self.bad_for = 0;
         self.set(Phase::Playing, out);
+    }
+
+    /// Switch the AI guard cut mid-session (`None` = percentile).
+    pub fn set_guard_fixed(&mut self, fixed: Option<f64>) -> Option<f64> {
+        if self.ai_guard.is_some() {
+            self.ai_guard = Some(fixed);
+        }
+        self.engine.as_mut().and_then(|e| e.set_guard_fixed(fixed))
     }
 
     pub fn set_percentile(&mut self, p: u8) -> Option<f64> {
@@ -400,7 +422,7 @@ impl Trainer {
         if self.lost_since.take().is_some() && self.phase == (Phase::Paused { reason: PauseReason::Disconnected }) {
             self.resume(out);
         }
-        let input = Input { t: self.sample_t, pads: obs.pads.clone(), quality: obs.quality.clone(), artifact: obs.artifact };
+        let input = Input { t: self.sample_t, pads: obs.pads.clone(), quality: obs.quality.clone(), artifact: obs.artifact, ai: obs.ai };
         match self.phase {
             Phase::FitCheck => {
                 self.green_for = if all_green { self.green_for + 1 } else { 0 };
@@ -410,8 +432,9 @@ impl Trainer {
                 self.sample_t += 1.0;
                 let consumed = cal.push(&input);
                 let wall = self.calibration.as_ref().map_or(0, |c| c.wall_s);
-                let (valid, done) = (cal.valid_seconds(), cal.is_done());
+                let (valid, done, stage) = (cal.valid_seconds(), cal.is_done(), cal.stage());
                 if let Some(c) = self.calibration.as_mut() {
+                    c.stage = stage;
                     c.valid_s = valid;
                     c.wall_s = wall + u32::from(consumed);
                     c.waiting = (!all_green).then(|| format!("waiting for good signal on {}", pad_list(&bad)));
@@ -444,7 +467,9 @@ impl Trainer {
         let names: Vec<String> = self.pads.iter().filter(|p| !p.good).map(|p| p.name.clone()).collect();
         let counted = rec.produced && rec.dirty.is_none();
         let in_target = rec.in_target == Some(true);
-        let reason = if !rec.produced || rec.dirty == Some(Dirty::Pads) {
+        let reason = if self.protocol.guard_only && rec.produced && rec.dirty.is_none() {
+            (rec.warn == Some(true)).then(|| "sleep guard warning: drifting towards sleep".to_owned())
+        } else if !rec.produced || rec.dirty == Some(Dirty::Pads) {
             Some(format!("no good signal on {}", pad_list(&names)))
         } else if let Some(d) = rec.dirty {
             Some(format!("{d:?} artifact").to_lowercase())
