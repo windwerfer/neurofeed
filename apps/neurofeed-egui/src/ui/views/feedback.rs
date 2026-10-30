@@ -114,7 +114,15 @@ fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
             }
         }
         ui.add_space(16.0);
-        action(ui, session, "feedback.start", &format!("Start {}", t.protocol.title), true, Command::FeedbackStart { minutes: None }, out);
+        action(
+            ui,
+            session,
+            "feedback.start",
+            &format!("Start {}", t.protocol.title),
+            true,
+            Command::FeedbackStart { minutes: None, wall_clock_unix_ms: None },
+            out,
+        );
     });
 }
 
@@ -319,7 +327,7 @@ fn summary(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Comm
     ));
     ui.add_space(20.0);
     ui.horizontal(|ui| {
-        action(ui, session, "feedback.start", "Train again", true, Command::FeedbackStart { minutes: None }, out);
+        action(ui, session, "feedback.start", "Train again", true, Command::FeedbackStart { minutes: None, wall_clock_unix_ms: None }, out);
         action(
             ui,
             session,

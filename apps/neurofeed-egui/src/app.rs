@@ -16,7 +16,7 @@ pub struct NeuroFeedApp {
 impl NeuroFeedApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         ui::theme::apply(&cc.egui_ctx);
-        let mut app = Self::with_session(Session::new());
+        let mut app = Self::with_session(Session::new().with_store(crate::store::open()));
         app.run(Command::DeviceConnect { id: "sim:muse_s".into() });
         // Optional start view (screenshots/demos), e.g. NF_VIEW=psd.
         #[cfg(not(target_arch = "wasm32"))]
@@ -47,9 +47,9 @@ impl NeuroFeedApp {
             clench: false,
         };
         let mut steps = vec![Command::ViewSet { view: nf_core::View::Feedback }, adv(3.0)];
-        let start = [Command::FeedbackStart { minutes: Some(10) }, adv(4.0)];
+        let start = [Command::FeedbackStart { minutes: Some(10), wall_clock_unix_ms: None }, adv(4.0)];
         match which {
-            "fit" => steps.extend([Command::FeedbackStart { minutes: None }, fault(&["AF7"]), adv(3.0)]),
+            "fit" => steps.extend([Command::FeedbackStart { minutes: None, wall_clock_unix_ms: None }, fault(&["AF7"]), adv(3.0)]),
             "calibrating" => {
                 steps.extend(start.into_iter().chain([Command::CalibrationStart { anyway: false }, adv(20.0), fault(&["AF8"]), adv(3.0)]))
             }
@@ -62,7 +62,7 @@ impl NeuroFeedApp {
                 adv(12.0),
             ])),
             "summary" => steps.extend([
-                Command::FeedbackStart { minutes: Some(2) },
+                Command::FeedbackStart { minutes: Some(2), wall_clock_unix_ms: None },
                 adv(4.0),
                 Command::CalibrationStart { anyway: false },
                 adv(50.0),
@@ -76,7 +76,10 @@ impl NeuroFeedApp {
     fn run(&mut self, mut cmd: Command) {
         // Shell-side injection: the core never reads a clock.
         if let Command::RecordingStart { wall_clock_unix_ms: w @ None } = &mut cmd {
-            *w = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).ok().map(|d| d.as_secs_f64() * 1000.0);
+            *w = wall_ms();
+        }
+        if let Command::FeedbackStart { wall_clock_unix_ms: w @ None, .. } = &mut cmd {
+            *w = wall_ms();
         }
         if let Err(e) = self.session.execute(cmd) {
             log::warn!("{e}");
@@ -98,4 +101,8 @@ impl eframe::App for NeuroFeedApp {
         }
         ctx.request_repaint_after(REPAINT_INTERVAL);
     }
+}
+
+fn wall_ms() -> Option<f64> {
+    web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).ok().map(|d| d.as_secs_f64() * 1000.0)
 }

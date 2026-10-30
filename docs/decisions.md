@@ -64,3 +64,10 @@ Window 10 s, difficulty 0.10 (legacy Dart `StabilityConfig`; bounds window 1..30
 ## 2026-10-30 Desktop chime (cpal)
 
 `native-audio` feature (default) plays the same 660 Hz / 0.85 s envelope as Web Audio through cpal 0.16; one stream opened lazily on the first chime, triggered via an atomic counter (no locks in the callback). No device: logs once and stays silent. Linux builds need `libasound2-dev` + `pkg-config` (or `--no-default-features`).
+
+## 2026-10-30 History (nf-store)
+
+- `nf-store` (L1, UI-free): `Store` trait; `MemoryStore` (wasm, tests) and `SqliteStore` (feature `sqlite`, rusqlite bundled, native only). One `sessions` table, body as BLOB (`PRAGMA user_version = 1`).
+- Every `feedback.start` auto-starts a recording unless one is running; it stops when the session ends. Every finished recording is saved (protocol + summary when it has feedback seconds).
+- Commands: `history.list`, `history.get` (meta + per-second feedback), `history.export` (nfed6/raw_body/edf), `history.delete {id, confirm}` (needs confirm=true; disabled with "no saved sessions").
+- Desktop: `NF_DB` or the user data dir (`~/.local/share/neurofeed/history.sqlite`, macOS Application Support, Windows %APPDATA%). `neurofeed-mcp`: memory unless `--db`/`NF_DB`. Web: memory only for now.

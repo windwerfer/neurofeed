@@ -101,6 +101,16 @@ pub enum Command {
         /// Training length, 1..=120 min; default the protocol's.
         #[serde(default)]
         minutes: Option<u32>,
+        /// Wall clock for the session recording (injected by the shell).
+        #[serde(default)]
+        wall_clock_unix_ms: Option<f64>,
+    },
+    /// Permanently delete a saved session. `confirm` must be true.
+    #[serde(rename = "history.delete")]
+    HistoryDelete {
+        id: u64,
+        #[serde(default)]
+        confirm: bool,
     },
     /// End the session now and build the summary.
     #[serde(rename = "feedback.stop")]
@@ -227,6 +237,15 @@ pub enum Query {
         #[serde(default)]
         max_hz: Option<f64>,
     },
+    /// Saved sessions, newest first.
+    #[serde(rename = "history.list")]
+    HistoryList,
+    /// One saved session: metadata, summary and its feedback seconds.
+    #[serde(rename = "history.get")]
+    HistoryGet { id: u64 },
+    /// Export a saved session (base64).
+    #[serde(rename = "history.export")]
+    HistoryExport { id: u64, format: ExportFormat },
     #[serde(rename = "recording.status")]
     RecordingStatus,
     /// Encode the last finished recording; returns base64 bytes.
@@ -408,6 +427,13 @@ fn fb_threshold(s: &AppState) -> Result<(), String> {
     }
     Ok(())
 }
+fn has_history(s: &AppState) -> Result<(), String> {
+    if s.history.is_empty() {
+        return Err("no saved sessions".into());
+    }
+    Ok(())
+}
+
 fn sim_device(s: &AppState) -> Result<(), String> {
     match &s.device {
         Some(d) if d.simulated => Ok(()),
@@ -470,6 +496,24 @@ pub const SPECS: &[CommandSpec] = &[
     spec("spectrogram.get", "Spectrogram", "signal", true, "PSD dB columns every 0.25 s for one channel (last 30 s).", has_signal),
     spec("mains.set", "Set notch", "signal", false, "Notch mode: auto, 50, 60 or off.", always),
     spec("channel.set", "Select channel", "signal", false, "Channel for single-channel views.", needs_device),
+    spec(
+        "history.list",
+        "List sessions",
+        "history",
+        true,
+        "Saved sessions (newest first): date, device, protocol, duration, summary.",
+        always,
+    ),
+    spec(
+        "history.get",
+        "Get session",
+        "history",
+        true,
+        "One saved session with its summary and per-second feedback (value, threshold, flags).",
+        always,
+    ),
+    spec("history.export", "Export session", "history", true, "Export a saved session as nfed6 | raw_body | edf (base64).", always),
+    spec("history.delete", "Delete session", "history", false, "Permanently delete a saved session; requires confirm=true.", has_history),
     spec("recording.status", "Recording status", "recording", true, "Active or last recording: device, duration, samples, bytes.", always),
     spec(
         "recording.export",
@@ -557,8 +601,9 @@ pub fn examples() -> Vec<Request> {
         C(Command::MainsSet { mode: MainsMode::Hz60 }),
         C(Command::ChannelSet { channel: "AF7".into() }),
         C(Command::ProtocolSet { id: "openMonitor".into(), minutes: Some(20) }),
-        C(Command::FeedbackStart { minutes: Some(5) }),
+        C(Command::FeedbackStart { minutes: Some(5), wall_clock_unix_ms: None }),
         C(Command::FeedbackStop),
+        C(Command::HistoryDelete { id: 1, confirm: true }),
         C(Command::FeedbackPause),
         C(Command::FeedbackResume),
         C(Command::CalibrationStart { anyway: false }),
@@ -586,6 +631,9 @@ pub fn examples() -> Vec<Request> {
         Q(Query::RawGet { seconds: Some(2.0), filtered: None }),
         Q(Query::PsdGet { channel: Some("TP9".into()), max_hz: None }),
         Q(Query::RecordingStatus),
+        Q(Query::HistoryList),
+        Q(Query::HistoryGet { id: 1 }),
+        Q(Query::HistoryExport { id: 1, format: ExportFormat::Nfed6 }),
         Q(Query::RecordingExport { format: ExportFormat::Edf, start: None }),
     ]
 }

@@ -53,6 +53,13 @@ pub enum Event {
     },
     /// Play the reward chime.
     Chime,
+    /// A finished recording was saved to history.
+    SessionSaved {
+        id: u64,
+    },
+    StoreError {
+        message: String,
+    },
 }
 
 /// Simulator faults (`sim.fault`).
@@ -84,6 +91,8 @@ struct Live {
     last_data: Option<f64>,
     /// Session time of the next feedback second.
     fb_next: f64,
+    /// The recording was started by `feedback.start` (stops with it).
+    auto_recording: bool,
 }
 
 pub struct Session {
@@ -92,6 +101,7 @@ pub struct Session {
     providers: Vec<Box<dyn DeviceProvider>>,
     source: Option<Box<dyn DeviceSource>>,
     live: Live,
+    store: Box<dyn nf_store::Store>,
     events: Vec<Event>,
     /// Last absolute time passed to `tick` (tick works on deltas).
     last_tick: Option<f64>,
@@ -112,9 +122,57 @@ impl Session {
             providers: Vec::new(),
             source: None,
             live: Live::default(),
+            store: Box::new(nf_store::MemoryStore::default()),
             events: Vec::new(),
             last_tick: None,
         }
+    }
+
+    /// Use `store` for history (default: in memory).
+    pub fn with_store(mut self, store: Box<dyn nf_store::Store>) -> Self {
+        self.store = store;
+        self.refresh_history();
+        self
+    }
+
+    fn refresh_history(&mut self) {
+        self.state.history_location = self.store.location();
+        match self.store.list() {
+            Ok(l) => self.state.history = l,
+            Err(e) => self.emit(Event::StoreError { message: e.to_string() }),
+        }
+    }
+
+    fn stored(&self, id: u64) -> Result<nf_store::StoredSession, CoreError> {
+        self.store
+            .get(id)
+            .map_err(|e| CoreError::BadRequest(e.to_string()))?
+            .ok_or_else(|| CoreError::InvalidArgs(format!("no session {id}")))
+    }
+
+    /// Persist a finished recording (with its feedback summary).
+    fn save(&mut self, f: &Finished) {
+        let fb = &self.state.feedback;
+        let trained = f.info.feedback_seconds > 0;
+        let meta = nf_store::SessionMeta {
+            id: 0,
+            started_unix_ms: f.info.wall_clock_unix_ms,
+            duration_s: f.info.duration,
+            device_id: f.device.id.clone(),
+            device_name: f.device.name.clone(),
+            protocol: trained.then(|| fb.protocol.id.to_owned()),
+            summary: if trained { fb.summary.as_ref().and_then(|s| serde_json::to_value(s).ok()) } else { None },
+            eeg_samples: f.info.eeg_samples,
+            ppg_samples: f.info.ppg_samples,
+            feedback_seconds: f.info.feedback_seconds,
+            bytes: f.body.len() as u64,
+        };
+        let s = nf_store::StoredSession { meta, device_json: serde_json::to_string(&f.device).unwrap_or_default(), body: f.body.clone() };
+        match self.store.insert(s) {
+            Ok(id) => self.emit(Event::SessionSaved { id }),
+            Err(e) => self.emit(Event::StoreError { message: e.to_string() }),
+        }
+        self.refresh_history();
     }
 
     /// Add a real device provider (desktop BLE, Android JNI transport, ...).
@@ -299,6 +357,9 @@ impl Session {
     }
 
     fn changes(&mut self, out: Vec<Change>) {
+        if self.live.auto_recording && out.contains(&Change::Phase(Phase::Ended)) {
+            self.stop_recording("feedback ended");
+        }
         for c in out {
             self.emit(match c {
                 Change::Phase(phase) => Event::Feedback { phase },
@@ -336,6 +397,21 @@ impl Session {
         &self.state.feedback
     }
 
+    fn start_recording(&mut self, wall_clock_unix_ms: Option<f64>) -> Result<(), CoreError> {
+        if wall_clock_unix_ms.is_some_and(|t| !t.is_finite() || t < 0.0) {
+            return Err(CoreError::InvalidArgs("wall_clock_unix_ms must be a finite, non-negative Unix time".into()));
+        }
+        let dev = self.state.device.clone().ok_or_else(|| CoreError::Device("no device connected".into()))?;
+        let r = Recorder::start(dev, self.state.time, wall_clock_unix_ms);
+        self.emit(Event::RecordingStarted { device: r.info.device.clone() });
+        self.state.recording = Some(r.info.clone());
+        self.live.recorder = Some(r);
+        if let Some(sig) = self.live.signal.as_mut() {
+            sig.lock(true);
+        }
+        Ok(())
+    }
+
     fn stop_recording(&mut self, reason: &str) {
         if let Some(r) = self.live.recorder.take() {
             if let Some(sig) = self.live.signal.as_mut() {
@@ -347,6 +423,8 @@ impl Session {
             let f = r.finish();
             self.emit(Event::RecordingStopped { duration: f.info.duration, eeg_samples: f.info.eeg_samples, reason: reason.into() });
             self.state.recording = Some(f.info.clone());
+            self.live.auto_recording = false;
+            self.save(&f);
             self.live.finished = Some(f);
         }
     }
@@ -460,7 +538,7 @@ impl Session {
                 fb.protocol = p;
                 fb.summary = None;
             }
-            Command::FeedbackStart { minutes } => {
+            Command::FeedbackStart { minutes, wall_clock_unix_ms } => {
                 let (lo, hi) = crate::feedback::MINUTES;
                 if let Some(m) = minutes {
                     if !(lo..=hi).contains(&m) {
@@ -471,6 +549,12 @@ impl Session {
                 let dev = self.state.device.as_ref().map(|d| d.id.clone()).unwrap_or_default();
                 self.live.fb_next = self.state.time + 1.0;
                 self.feedback(|t, o| t.start(&dev, o));
+                // Every training is recorded (legacy behaviour); a manual
+                // recording already running is kept as is.
+                if self.live.recorder.is_none() && self.state.feedback.phase.active() {
+                    self.start_recording(wall_clock_unix_ms)?;
+                    self.live.auto_recording = true;
+                }
             }
             Command::FeedbackStop => self.feedback(|t, o| t.stop("stopped", o)),
             Command::FeedbackPause => self.feedback(|t, o| t.pause(o)),
@@ -516,18 +600,15 @@ impl Session {
                 return Ok(json!({ "time": self.state.time }));
             }
             Command::EventsDrain => return Ok(serde_json::to_value(self.drain_events()).unwrap_or_default()),
-            Command::RecordingStart { wall_clock_unix_ms } => {
-                if wall_clock_unix_ms.is_some_and(|t| !t.is_finite() || t < 0.0) {
-                    return Err(CoreError::InvalidArgs("wall_clock_unix_ms must be a finite, non-negative Unix time".into()));
+            Command::RecordingStart { wall_clock_unix_ms } => self.start_recording(wall_clock_unix_ms)?,
+            Command::HistoryDelete { id, confirm } => {
+                if !confirm {
+                    return Err(CoreError::InvalidArgs("deleting is permanent; pass confirm=true".into()));
                 }
-                let dev = self.state.device.clone().ok_or_else(|| CoreError::Device("no device connected".into()))?;
-                let r = Recorder::start(dev, self.state.time, wall_clock_unix_ms);
-                self.emit(Event::RecordingStarted { device: r.info.device.clone() });
-                self.state.recording = Some(r.info.clone());
-                self.live.recorder = Some(r);
-                if let Some(sig) = self.live.signal.as_mut() {
-                    sig.lock(true);
+                if !self.store.delete(id).map_err(|e| CoreError::BadRequest(e.to_string()))? {
+                    return Err(CoreError::InvalidArgs(format!("no session {id}")));
                 }
+                self.refresh_history();
             }
             Command::MainsSet { mode } => {
                 self.state.mains_mode = mode;
@@ -670,6 +751,41 @@ impl Session {
             }
             Query::SpectrogramGet { channel, max_hz } => self.spectrogram_json(channel.as_deref(), max_hz.unwrap_or(50.0))?,
             Query::RecordingStatus => json!({ "recording": s.recording }),
+            Query::HistoryList => json!({ "location": self.state.history_location, "sessions": self.state.history }),
+            Query::HistoryGet { id } => {
+                let s = self.stored(*id)?;
+                let records = nf_format::parse_body(&s.body).map_err(|e| CoreError::BadRequest(e.0))?;
+                let feedback: Vec<_> = records
+                    .iter()
+                    .filter_map(|r| match r {
+                        nf_format::Record::Feedback { ts, value, threshold, flags } => {
+                            Some(json!({ "t": ts, "value": finite(*value), "threshold": finite(*threshold), "flags": flags }))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                json!({ "meta": s.meta, "device": serde_json::from_str::<serde_json::Value>(&s.device_json).unwrap_or_default(), "records": records.len(), "feedback": feedback })
+            }
+            Query::HistoryExport { id, format } => {
+                let s = self.stored(*id)?;
+                let device: DeviceInfo =
+                    serde_json::from_str(&s.device_json).map_err(|e| CoreError::BadRequest(format!("stored device: {e}")))?;
+                let info = crate::recording::RecordingInfo {
+                    active: false,
+                    device: device.id.clone(),
+                    started: 0.0,
+                    duration: s.meta.duration_s,
+                    eeg_samples: s.meta.eeg_samples,
+                    ppg_samples: s.meta.ppg_samples,
+                    feedback_seconds: s.meta.feedback_seconds,
+                    bytes: s.body.len(),
+                    wall_clock_unix_ms: s.meta.started_unix_ms,
+                };
+                let f = Finished { device, info, body: s.body };
+                let start = f.info.wall_clock_unix_ms.map_or((1985, 1, 1, 0, 0, 0), crate::recording::civil_utc);
+                let bytes = export(&f, *format, start).map_err(CoreError::BadRequest)?;
+                json!({ "id": id, "format": format, "extension": format.extension(), "bytes": bytes.len(), "base64": base64(&bytes) })
+            }
             Query::RecordingExport { format, start } => {
                 let f = self.live.finished.as_ref().ok_or_else(|| CoreError::BadRequest("nothing recorded yet".into()))?;
                 let start = match (start, f.info.wall_clock_unix_ms) {
@@ -909,4 +1025,8 @@ fn inject_artifacts(f: &Fault, dev: &DeviceInfo, eeg: &mut [EegPacket], accel: &
             }
         }
     }
+}
+
+fn finite(v: f32) -> Option<f32> {
+    v.is_finite().then_some(v)
 }

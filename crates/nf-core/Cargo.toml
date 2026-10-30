@@ -11,6 +11,7 @@ nf-types.workspace = true
 nf-sim.workspace = true
 nf-dsp.workspace = true
 nf-feedback.workspace = true
+nf-store.workspace = true
 nf-format.workspace = true
 serde.workspace = true
 schemars.workspace = true

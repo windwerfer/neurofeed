@@ -116,6 +116,10 @@ pub struct AppState {
     pub recording: Option<crate::recording::RecordingInfo>,
     /// Feedback session (phases, results, stored baselines).
     pub feedback: crate::feedback::Trainer,
+    /// Saved sessions, newest first (cache of the store's list).
+    pub history: Vec<nf_store::SessionMeta>,
+    /// Where history is stored (`memory` or a file).
+    pub history_location: String,
     /// Bumped on every state change (not on time/data ticks).
     pub revision: u64,
 }
@@ -134,6 +138,8 @@ impl Default for AppState {
             channel: 0,
             recording: None,
             feedback: crate::feedback::Trainer::default(),
+            history: Vec::new(),
+            history_location: "memory".into(),
             revision: 0,
         }
     }

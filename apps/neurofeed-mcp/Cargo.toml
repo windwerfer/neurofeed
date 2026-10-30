@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 nf-core.workspace = true
 nf-mcp.workspace = true
+nf-store = { workspace = true, features = ["sqlite"] }
 rmcp = { version = "3.8", default-features = false, features = ["server", "transport-io"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std"] }
 serde_json.workspace = true

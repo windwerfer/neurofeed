@@ -14,6 +14,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "syn
 
 [dev-dependencies]
 nf-format.workspace = true
+nf-store = { workspace = true, features = ["sqlite"] }
 
 [lints]
 workspace = true

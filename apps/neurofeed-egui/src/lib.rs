@@ -3,6 +3,7 @@
 
 pub mod app;
 pub mod audio;
+pub mod store;
 pub mod ui;
 
 pub use app::NeuroFeedApp;

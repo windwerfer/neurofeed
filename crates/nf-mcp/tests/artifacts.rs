@@ -69,7 +69,6 @@ fn artifact_seconds_are_dirty_never_counted_and_flagged_in_the_recording() {
         adv(&s, 1.0);
     }
     assert_eq!(phase(&s), "playing");
-    run(&s, "recording.start", Value::Null);
     adv(&s, 5.0);
     run(&s, "sim.fault", json!({ "motion": true }));
     adv(&s, 6.0);
