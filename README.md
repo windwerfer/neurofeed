@@ -15,12 +15,28 @@ Desktop start view: `NF_VIEW=psd cargo run -p neurofeed-egui`.
 
 ```sh
 # prerequisites: rustup target add wasm32-unknown-unknown; cargo install trunk
-# Linux desktop audio (cpal) needs ALSA headers: apt install libasound2-dev pkg-config
-#   (Fedora: alsa-lib-devel) -- or build without sound: --no-default-features
+# Linux: apt install pkg-config libasound2-dev libdbus-1-dev
+#   (Fedora: alsa-lib-devel dbus-devel); ALSA = chime sound (skip with
+#   --no-default-features), D-Bus = Bluetooth (BlueZ) for the Muse
 cargo run --release -p neurofeed-egui                       # desktop (repo root)
 cd apps/neurofeed-egui && trunk serve --release             # web, http://127.0.0.1:8080
-cargo run --release -p neurofeed-mcp -- --device sim:muse_s # MCP over stdio
+cargo run --release -p neurofeed-mcp -- --device sim:muse_s # MCP over stdio (headless)
+NF_BRIDGE=1 cargo run --release -p neurofeed-egui           # desktop + agent bridge, then:
+cargo run --release -p neurofeed-mcp -- --bridge            # MCP driving the live app
 cargo test && cargo clippy --all-targets -- -D warnings
 ```
+
+Real devices (desktop): Settings > Devices > Scan finds a Muse over Bluetooth
+and a Crown streaming OSC to UDP 9000 on this machine (Neurosity app / SDK
+OSC output), then Connect. MCP: `device.scan`, `device.list`, `device.connect`.
+The web build has simulators only.
+
+Agent bridge: with `NF_BRIDGE=1` or Settings > Agents, the app listens on
+127.0.0.1 (random port) and writes the port + a random token to
+`~/.local/share/neurofeed/bridge.json` (0600; macOS `~/Library/Application
+Support/NeuroFeed`, Windows `%APPDATA%\NeuroFeed`, or `NF_BRIDGE_FILE`).
+`neurofeed-mcp --bridge` then drives the running app with the same tools plus
+`screenshot` and `ui_inspect` (widget tree). MCP client config:
+`{"command": "neurofeed-mcp", "args": ["--bridge"]}`.
 
 Read [AGENTS.md](AGENTS.md), then [docs/](docs/).

@@ -120,6 +120,10 @@ pub struct AppState {
     pub history: Vec<nf_store::SessionMeta>,
     /// Where history is stored (`memory` or a file).
     pub history_location: String,
+    /// Schemes of registered providers that can scan (`muse`, `crown`).
+    pub scanners: Vec<String>,
+    /// Transport state of the connected device.
+    pub link: Option<nf_types::LinkState>,
     /// Bumped on every state change (not on time/data ticks).
     pub revision: u64,
 }
@@ -139,6 +143,8 @@ impl Default for AppState {
             recording: None,
             feedback: crate::feedback::Trainer::default(),
             history: Vec::new(),
+            scanners: Vec::new(),
+            link: None,
             history_location: "memory".into(),
             revision: 0,
         }

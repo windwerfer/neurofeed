@@ -23,7 +23,7 @@ pub use nf_feedback;
 pub use nf_feedback::StabilityConfig;
 pub use nf_format::feedback_flags;
 pub use nf_store::SessionMeta;
-pub use nf_types::{Band, BandSnapshot, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, PpgPacket};
+pub use nf_types::{Band, BandSnapshot, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, LinkState, PpgPacket};
 pub use recording::{civil_utc, ExportFormat, RecordingInfo};
 pub use session::{Event, Session};
 pub use signal::{mains_name, MainsMode, Signal};

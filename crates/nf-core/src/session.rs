@@ -26,6 +26,10 @@ pub enum Event {
     Connected {
         id: String,
     },
+    /// Transport state of the connected device changed.
+    LinkChanged {
+        link: nf_types::LinkState,
+    },
     Disconnected {
         id: String,
     },
@@ -197,7 +201,29 @@ impl Session {
 
     /// Add a real device provider (desktop BLE, Android JNI transport, ...).
     pub fn register_provider(&mut self, provider: Box<dyn DeviceProvider>) {
+        if provider.can_scan() {
+            self.state.scanners.push(provider.scheme().to_owned());
+        }
         self.providers.push(provider);
+    }
+
+    /// Simulators plus everything the providers currently see.
+    pub fn device_list(&self) -> Vec<DeviceInfo> {
+        let mut all = self.sim.list();
+        for p in &self.providers {
+            all.extend(p.list());
+        }
+        all
+    }
+
+    /// Schemes of providers with a scan running.
+    pub fn scanning(&self) -> Vec<&'static str> {
+        self.providers.iter().filter(|p| p.scanning()).map(|p| p.scheme()).collect()
+    }
+
+    /// `scheme: error` of providers that reported one.
+    pub fn provider_errors(&self) -> Vec<String> {
+        self.providers.iter().filter_map(|p| p.last_error().map(|e| format!("{}: {e}", p.scheme()))).collect()
     }
 
     pub fn state(&self) -> &AppState {
@@ -291,6 +317,12 @@ impl Session {
         let mut packets = src.poll(now);
         let mut optical = src.poll_ppg(now);
         let mut accel = src.poll_accel(now);
+        let link = src.link();
+        if self.state.link.as_ref() != Some(&link) {
+            self.state.link = Some(link.clone());
+            self.state.revision += 1;
+            self.emit(Event::LinkChanged { link });
+        }
         if self.live.fault.dropout {
             packets.clear();
             optical.clear();
@@ -515,6 +547,24 @@ impl Session {
             }
             Command::DeviceConnect { id } => self.connect(&id)?,
             Command::DeviceDisconnect => self.disconnect(),
+            Command::DeviceScan { seconds } => {
+                let secs = seconds.unwrap_or(8.0);
+                if !(1.0..=60.0).contains(&secs) {
+                    return Err(CoreError::InvalidArgs("seconds must be in [1, 60]".into()));
+                }
+                let mut started = Vec::new();
+                let mut errors = Vec::new();
+                for p in self.providers.iter_mut().filter(|p| p.can_scan()) {
+                    match p.scan(secs) {
+                        Ok(()) => started.push(p.scheme()),
+                        Err(e) => errors.push(format!("{}: {e}", p.scheme())),
+                    }
+                }
+                if started.is_empty() {
+                    return Err(CoreError::Device(errors.join("; ")));
+                }
+                return Ok(json!({ "scanning": started, "seconds": secs, "errors": errors }));
+            }
             Command::SimConfigure { seed, alpha_uv, noise_uv, mains_uv, mains_hz, dc_uv, hr_bpm, spo2_pct, hrv_ms } => {
                 let check = |name: &str, v: Option<f64>, lo: f64, hi: f64| match v {
                     Some(x) if !(x.is_finite() && (lo..=hi).contains(&x)) => {
@@ -695,6 +745,7 @@ impl Session {
         self.live.optics = crate::optics::Optics::new(&info);
         self.live.artifacts = Some(crate::artifacts::Artifacts::new(&info));
         self.emit(Event::Connected { id: info.id.clone() });
+        self.state.link = Some(src.link());
         self.state.device = Some(info);
         self.source = Some(src);
         Ok(())
@@ -703,6 +754,7 @@ impl Session {
     fn disconnect(&mut self) {
         self.stop_recording("device disconnected");
         self.source = None;
+        self.state.link = None;
         self.live.signal = None;
         self.live.optics = None;
         self.live.artifacts = None;
@@ -764,15 +816,12 @@ impl Session {
                 .map(|v| json!({ "id": v, "label": v.label(), "implemented": v.implemented(), "active": *v == s.view }))
                 .collect::<Vec<_>>()),
             Query::BandsGet { scale } => self.bands_json(scale.unwrap_or(s.band_scale)),
-            Query::DeviceList => {
-                let mut all = self.sim.list();
-                for p in &self.providers {
-                    all.extend(p.list());
-                }
-                serde_json::to_value(all).unwrap_or_default()
-            }
+            Query::DeviceList => serde_json::to_value(self.device_list()).unwrap_or_default(),
             Query::DeviceStatus => json!({
                 "connected": s.device.is_some(),
+                "link": s.link,
+                "scanning": self.scanning(),
+                "provider_errors": self.provider_errors(),
                 "device": s.device,
                 "snapshots": s.bands.len(),
                 "paused": s.paused,

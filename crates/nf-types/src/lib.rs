@@ -157,6 +157,23 @@ pub trait DeviceSource: Send {
     fn poll_accel(&mut self, _now: f64) -> Vec<AccelPacket> {
         Vec::new()
     }
+    /// Transport state (real devices connect asynchronously). Default: streaming.
+    fn link(&self) -> LinkState {
+        LinkState::Streaming
+    }
+}
+
+/// Transport state of a [`DeviceSource`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum LinkState {
+    /// Opening the link (BLE connect, service discovery, waiting for data).
+    Connecting,
+    Streaming,
+    /// The link failed or dropped; the source stays open but delivers nothing.
+    Lost {
+        reason: String,
+    },
 }
 
 /// Something that can list and open devices: the simulator registry, a
@@ -167,6 +184,23 @@ pub trait DeviceProvider: Send {
     fn scheme(&self) -> &'static str;
     fn list(&self) -> Vec<DeviceInfo>;
     fn open(&mut self, id: &str) -> Result<Box<dyn DeviceSource>, String>;
+    /// Whether `scan` does anything (BLE, LAN discovery).
+    fn can_scan(&self) -> bool {
+        false
+    }
+    /// Start discovery for `seconds` in the background (never blocks); found
+    /// devices show up in `list` as they arrive.
+    fn scan(&mut self, _seconds: f64) -> Result<(), String> {
+        Ok(())
+    }
+    /// A scan is running.
+    fn scanning(&self) -> bool {
+        false
+    }
+    /// Last background error (no BLE adapter, UDP port busy, ...).
+    fn last_error(&self) -> Option<String> {
+        None
+    }
 }
 
 #[cfg(test)]

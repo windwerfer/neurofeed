@@ -15,7 +15,7 @@ mod spectrogram;
 
 use nf_core::{Command, Session, View};
 
-pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
+pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>, shell: &mut super::Shell) {
     let state = session.state();
     match state.view {
         View::Feedback => feedback::show(ui, session, out),
@@ -26,7 +26,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         View::HeartRate => heart::show(ui, session),
         View::Histogram => histogram::show(ui, session),
         View::Spectrogram => spectrogram::show(ui, session, out),
-        View::Settings => settings::show(ui, session, out),
+        View::Settings => settings::show(ui, session, out, shell),
         other => placeholder::show(ui, other),
     }
 }

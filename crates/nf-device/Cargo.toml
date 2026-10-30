@@ -1,0 +1,27 @@
+[package]
+name = "nf-device"
+description = "L1 (native only): real device transports behind DeviceProvider/DeviceSource: Muse over BLE (muse-rs + btleplug), Crown over OSC/UDP, and a push provider for external transports (Android JNI)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["ble", "osc"]
+## Muse over Bluetooth LE (muse-rs + btleplug; Linux needs libdbus-1-dev).
+ble = ["dep:muse-rs", "dep:btleplug", "dep:tokio", "dep:anyhow"]
+## Neurosity Crown over OSC/UDP (port 9000 by default).
+osc = ["dep:rosc"]
+
+[dependencies]
+nf-types.workspace = true
+log.workspace = true
+rosc = { version = "0.11", optional = true }
+# windwerfer fork, main (tag 0.1.2 + docs); default features pull a TUI.
+muse-rs = { git = "https://github.com/windwerfer/muse-rs", rev = "e4891ba52", default-features = false, optional = true }
+btleplug = { version = "0.13.5", optional = true }
+anyhow = { version = "1", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"], optional = true }
+
+[lints]
+workspace = true

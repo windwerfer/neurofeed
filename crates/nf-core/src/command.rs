@@ -35,6 +35,14 @@ pub enum Command {
     DeviceConnect { id: String },
     #[serde(rename = "device.disconnect")]
     DeviceDisconnect,
+    /// Start background discovery on every scanning provider (BLE Muse,
+    /// Crown OSC); results appear in `device.list` as they arrive.
+    #[serde(rename = "device.scan")]
+    DeviceScan {
+        /// 1..=60 s, default 8.
+        #[serde(default)]
+        seconds: Option<f64>,
+    },
     /// Tune the simulator; reconnects a running simulator.
     #[serde(rename = "sim.configure")]
     SimConfigure {
@@ -311,6 +319,13 @@ pub struct CommandSpec {
 fn always(_: &AppState) -> Result<(), String> {
     Ok(())
 }
+fn can_scan(s: &AppState) -> Result<(), String> {
+    if s.scanners.is_empty() {
+        Err("no real-device providers (simulators only)".into())
+    } else {
+        Ok(())
+    }
+}
 fn needs_device(s: &AppState) -> Result<(), String> {
     s.device.as_ref().map(|_| ()).ok_or_else(|| "no device connected".to_owned())
 }
@@ -476,6 +491,7 @@ pub const SPECS: &[CommandSpec] = &[
     spec("bands.get", "Band powers", "bands", true, "Latest band powers per channel (delta..gamma).", always),
     spec("device.list", "List devices", "device", true, "Connectable devices (simulators and registered providers).", always),
     spec("device.connect", "Connect", "device", false, "Connect a device by id, e.g. sim:muse or sim:crown.", always),
+    spec("device.scan", "Scan", "device", false, "Discover real devices (Muse BLE, Crown OSC) in the background.", can_scan),
     spec("device.disconnect", "Disconnect", "device", false, "Disconnect the current device.", needs_device),
     spec("device.status", "Device status", "device", true, "Connected device and buffered snapshot count.", always),
     spec(
@@ -595,6 +611,7 @@ pub fn examples() -> Vec<Request> {
         C(Command::ScaleSet { scale: BandScale::Relative }),
         C(Command::DeviceConnect { id: "sim:muse".into() }),
         C(Command::DeviceDisconnect),
+        C(Command::DeviceScan { seconds: Some(5.0) }),
         C(Command::SimConfigure {
             seed: Some(1),
             alpha_uv: Some(20.0),

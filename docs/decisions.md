@@ -78,3 +78,12 @@ Window 10 s, difficulty 0.10 (legacy Dart `StabilityConfig`; bounds window 1..30
 - **Band Stability settings**: `stability.set {window?, difficulty?, reset?}` (locked while a session runs), value in `feedback.status.stability`; applies only to stability protocols. Settings view has sliders (one command per drag release).
 - **Start params on web**: `?view=…&demo=…` mirror `NF_VIEW`/`NF_DEMO`.
 - **CI**: workflow staged at `ci/rust-ci.yml` (the bot token lacks the `workflow` scope, so it cannot push into `.github/workflows/`); `git mv ci/rust-ci.yml .github/workflows/` to enable. Runs every gate; installs `libasound2-dev libdbus-1-dev`.
+
+## Phase 6: real devices + agent bridge (2026-10-30)
+
+- **`nf-device`** (native only; features `ble`, `osc`): `MuseProvider` (muse-rs fork + btleplug, lazy tokio runtime, 18 s connect timeout, ids `muse:<ble id>`), `CrownProvider` (std UDP hub on 9000, layout detection, ids `crown:<device id>`, 5 s seen TTL), `PushProvider` (any platform wrapper — e.g. the future Android app — pushes blocks/announces devices via a handle). `nf-core` does not depend on it (layers test).
+- **Provider trait** gains `can_scan/scan/scanning/last_error`; `DeviceSource::link()` → `connecting|streaming|lost{reason}` in `device.status.link` + `Event::LinkChanged`. No auto-reconnect yet (Lost stays until the user reconnects).
+- **`device.scan {seconds 1..=60, default 8}`**: disabled with reason when only simulators are registered (web, `--no-hardware`). Provider errors (no BLE adapter, port busy) are in `device.status.provider_errors` and shown in Settings.
+- **Bridge**: 127.0.0.1 TCP + 256-bit token in a 0600 discovery file (portable incl. Windows; Unix sockets would not be). Newline JSON; requests run on the UI thread via `nf_mcp::run_tool` (same dispatcher as the stdio server, `ClockMode::Host`). Opt-in (`NF_BRIDGE=1` / Settings toggle) because it grants full control. `nf-mcp` feature `server` (rmcp/tokio) is off in the app.
+- **`ui_inspect`** re-runs the UI once off-screen with AccessKit on and returns the tree (role, label, value, disabled, toggled, rect). Side effect: eframe `accesskit` is on, so the desktop app is now screen-reader visible.
+- **`screenshot`** uses `ViewportCommand::Screenshot` (real window pixels, PNG); 5 s timeout if the window is minimized.

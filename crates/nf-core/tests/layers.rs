@@ -24,10 +24,17 @@ fn low_layers_stay_clean() {
 #[test]
 fn l1_does_not_depend_upward() {
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    for name in ["nf-types", "nf-dsp", "nf-format", "nf-sim", "nf-feedback", "nf-store"] {
+    for name in ["nf-types", "nf-dsp", "nf-format", "nf-sim", "nf-feedback", "nf-store", "nf-device"] {
         let text = std::fs::read_to_string(crates.join(name).join("Cargo.toml")).unwrap_or_default();
         for up in ["nf-core", "nf-mcp"] {
             assert!(!text.contains(up), "{name} must not depend on {up}");
         }
     }
+}
+
+/// Real transports stay out of the wasm-clean core.
+#[test]
+fn core_does_not_depend_on_transports() {
+    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")).unwrap_or_default();
+    assert!(!text.contains("nf-device"));
 }

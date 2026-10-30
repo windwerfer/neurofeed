@@ -15,13 +15,27 @@ thread_local! {
     static UI: std::cell::RefCell<SettingsUi> = std::cell::RefCell::new(SettingsUi::default());
 }
 
-pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
+pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>, shell: &mut crate::ui::Shell) {
     ui.add_space(6.0);
     ui.heading(RichText::new("Settings").size(24.0));
     ui.add_space(8.0);
     super::devices::show(ui, session, out);
     ui.add_space(12.0);
     stability(ui, session, out);
+    if let Some(bridge) = &shell.bridge {
+        ui.add_space(12.0);
+        ui.group(|ui| {
+            ui.label(RichText::new("Agents").strong().size(17.0));
+            let mut on = bridge.is_some();
+            if ui.checkbox(&mut on, "Allow AI agents to control this app (MCP bridge)").changed() {
+                shell.set_bridge = Some(on);
+            }
+            match bridge {
+                Some(addr) => ui.weak(format!("Listening on {addr} (local only, token in bridge.json). Run: neurofeed-mcp --bridge")),
+                None => ui.weak("Off. Also enabled by starting with NF_BRIDGE=1."),
+            };
+        });
+    }
 }
 
 fn stability(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {

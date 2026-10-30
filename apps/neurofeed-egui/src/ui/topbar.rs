@@ -3,14 +3,6 @@
 use super::theme;
 use nf_core::{mains_name, Command, MainsMode, Session};
 
-/// Devices offered in the picker (real providers will add theirs later).
-const DEVICES: [(&str, &str); 4] = [
-    ("sim:muse_s", "Muse S (simulated)"),
-    ("sim:muse2", "Muse 2 (simulated)"),
-    ("sim:athena", "Muse S Athena (simulated)"),
-    ("sim:crown", "Crown (simulated)"),
-];
-
 pub fn show(ctx: &egui::Context, session: &Session, error: Option<&str>, out: &mut Vec<Command>) {
     let state = session.state();
     egui::TopBottomPanel::top("topbar").exact_height(theme::TOPBAR_HEIGHT).show(ctx, |ui| {
@@ -20,16 +12,27 @@ pub fn show(ctx: &egui::Context, session: &Session, error: Option<&str>, out: &m
             }
             ui.strong("NeuroFeed");
             ui.separator();
-            let live = state.device.is_some() && !state.paused;
-            let dot = if live { egui::Color32::from_rgb(0x66, 0xBB, 0x6A) } else { egui::Color32::GRAY };
+            let dot = match (&state.device, &state.link) {
+                (None, _) => egui::Color32::GRAY,
+                (Some(_), Some(nf_core::LinkState::Connecting)) => egui::Color32::from_rgb(0xE6, 0xAA, 0x3C),
+                (Some(_), Some(nf_core::LinkState::Lost { .. })) => egui::Color32::from_rgb(0xE5, 0x39, 0x35),
+                _ if state.paused => egui::Color32::GRAY,
+                _ => egui::Color32::from_rgb(0x66, 0xBB, 0x6A),
+            };
             let (r, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
             ui.painter().circle_filled(r.center(), 4.5, dot);
             let current = state.device.as_ref().map_or("No device", |d| d.name.as_str());
             egui::ComboBox::from_id_salt("device").selected_text(current).show_ui(ui, |ui| {
-                for (id, name) in DEVICES {
-                    let selected = state.device.as_ref().is_some_and(|d| d.id == id);
-                    if ui.selectable_label(selected, name).clicked() && !selected {
-                        out.push(Command::DeviceConnect { id: id.into() });
+                for d in session.device_list() {
+                    let selected = state.device.as_ref().is_some_and(|c| c.id == d.id);
+                    if ui.selectable_label(selected, &d.name).on_hover_text(&d.id).clicked() && !selected {
+                        out.push(Command::DeviceConnect { id: d.id });
+                    }
+                }
+                if session.enabled("device.scan").is_ok() {
+                    let label = if session.scanning().is_empty() { "Scan for devices…" } else { "Scanning…" };
+                    if ui.selectable_label(false, label).clicked() {
+                        out.push(Command::DeviceScan { seconds: None });
                     }
                 }
                 if ui.selectable_label(state.device.is_none(), "Disconnect").clicked() {
@@ -38,6 +41,15 @@ pub fn show(ctx: &egui::Context, session: &Session, error: Option<&str>, out: &m
             });
             if let Some(d) = &state.device {
                 ui.weak(format!("{} ch", d.channels.len()));
+            }
+            match &state.link {
+                Some(nf_core::LinkState::Connecting) => {
+                    ui.weak("connecting…");
+                }
+                Some(nf_core::LinkState::Lost { reason }) => {
+                    ui.colored_label(ui.visuals().error_fg_color, reason);
+                }
+                _ => {}
             }
             if let Some(e) = error {
                 ui.colored_label(ui.visuals().error_fg_color, e);
