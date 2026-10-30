@@ -361,7 +361,7 @@ fn indicator(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
     let h = (avail.y - 120.0).max(200.0);
     let (rect, _) = ui.allocate_exact_size(Vec2::new(avail.x, h), Sense::hover());
     let p = ui.painter_at(rect);
-    let r = h.min(avail.x) * 0.32;
+    let r = (h * 0.32).min((avail.x - 140.0) * 0.36).max(40.0);
     let glow = if in_target { GOOD } else { CALM.gamma_multiply(0.35) };
     for k in 0..6 {
         let f = 1.0 + k as f32 * 0.08;
@@ -370,7 +370,7 @@ fn indicator(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
     p.circle_filled(rect.center(), r, glow.gamma_multiply(0.55));
     p.circle_stroke(rect.center(), r, Stroke::new(2.0_f32, glow));
     let rec = last.and_then(|x| x.record.as_ref());
-    let bar = egui::Rect::from_center_size(rect.center() + Vec2::new(r * 1.55, 0.0), Vec2::new(14.0, r * 1.8));
+    let bar = egui::Rect::from_center_size(Pos2::new((rect.center().x + r * 1.45).min(rect.right() - 80.0), rect.center().y), Vec2::new(14.0, r * 1.8));
     if bar.right() + 60.0 < rect.right() {
         meter(&p, bar, rec.and_then(|x| x.pct), rec.and_then(|x| x.thr_pct), if in_target { GOOD } else { CALM });
     }
