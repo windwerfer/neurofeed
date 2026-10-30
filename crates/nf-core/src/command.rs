@@ -702,6 +702,14 @@ pub const SPECS: &[CommandSpec] = &[
         "Per-second trust rows (clean/dirty reason, percentile vs threshold, held back, guard) and totals of the current run.",
         always,
     ),
+    spec(
+        "feedback.nerd",
+        "Nerd sheet",
+        "feedback",
+        true,
+        "Reward pile and guard internals: histograms, threshold, live value, mean, spread, success rate.",
+        always,
+    ),
     spec("history.trust", "Session trust", "history", true, "Trust rows, totals and gesture marks of a saved session.", always),
     spec("streaming.status", "Streaming status", "streaming", true, "OSC settings, groups/addresses, packets and bytes sent.", always),
     spec(
