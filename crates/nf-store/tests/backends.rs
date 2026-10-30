@@ -17,6 +17,7 @@ fn session(name: &str, body: &[u8]) -> StoredSession {
             ppg_samples: 200,
             feedback_seconds: 60,
             bytes: body.len() as u64,
+            import: Some(serde_json::json!({ "source_format": "edf" })),
         },
         device_json: "{}".into(),
         body: body.to_vec(),
@@ -64,6 +65,29 @@ fn sqlite_store_contract_and_persistence() {
     std::fs::remove_dir_all(dir).ok();
 }
 
+#[cfg(feature = "sqlite")]
+#[test]
+fn sqlite_v1_database_is_migrated() {
+    let dir = std::env::temp_dir().join(format!("nf-store-v1-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("old.sqlite");
+    let old = "CREATE TABLE sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, started_unix_ms REAL, duration_s REAL NOT NULL, \
+        device_id TEXT NOT NULL, device_name TEXT NOT NULL, protocol TEXT, summary_json TEXT, eeg_samples INTEGER NOT NULL, \
+        ppg_samples INTEGER NOT NULL, feedback_seconds INTEGER NOT NULL, device_json TEXT NOT NULL, body BLOB NOT NULL); \
+        INSERT INTO sessions VALUES (NULL, NULL, 1.0, 'd', 'Old', NULL, NULL, 0, 0, 0, '{}', x'01'); PRAGMA user_version = 1;";
+    rusqlite_exec(&path, old);
+    let mut s = nf_store::SqliteStore::open(&path).unwrap();
+    assert_eq!(s.list().unwrap()[0].import, None);
+    let id = s.insert(session("new", &[2])).unwrap();
+    assert_eq!(s.get(id).unwrap().unwrap().meta.import, Some(serde_json::json!({ "source_format": "edf" })));
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[cfg(feature = "sqlite")]
+fn rusqlite_exec(path: &std::path::Path, sql: &str) {
+    nf_store::sqlite_exec_for_tests(path, sql).unwrap();
+}
+
 #[test]
 fn merge_loaded_keeps_ids_and_renumbers_local_rows() {
     use nf_store::{MemoryStore, SessionMeta, Store, StoredSession};
@@ -80,6 +104,7 @@ fn merge_loaded_keeps_ids_and_renumbers_local_rows() {
             ppg_samples: 0,
             feedback_seconds: 0,
             bytes: 0,
+            import: None,
         },
         device_json: "{}".into(),
         body: vec![id as u8],

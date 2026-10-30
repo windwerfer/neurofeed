@@ -96,3 +96,11 @@ Window 10 s, difficulty 0.10 (legacy Dart `StabilityConfig`; bounds window 1..30
 - **Guard**: legacy default scorer is the AI model `ai.a_vig` (not ported). Protocols with a guard lane get an **opt-in** band-math guard (`guard.set`, `band.delta` > p75 of calibration, legacy muffleReward per protocol). Off by default because it is not the legacy scorer. **Sleep Guard stays unavailable**: its legacy spec says "no band.delta fallback".
 - **Fix**: `feedback.start` reset the Band Stability setting to defaults; the trainer now keeps stability + guard across starts.
 - Audio settings are not persisted yet (in-memory like the other settings); `music_dir` lives in `AppState` so MCP can set it, only the desktop shell reads the folder.
+
+## Import (EDF/EDF+, Mind Monitor CSV, .neurofeed / raw)
+
+- New L1 crate `nf-import` (wasm-clean): format sniffing, montage matching (Muse 4 + AUX or Crown 8; anything else is refused with the labels found), resampling (`nf_dsp::resample`, windowed sinc) to the device rate, provenance (dropped channels, resampled, reference, prefiltering, interval coverage, warnings, annotations).
+- **Bands**: files with raw EEG get bands by replaying it through the live `Signal` pipeline (same cadence as a live recording, 0.1 s); files that only carry bands (Mind Monitor interval CSV, band-labelled EDF) keep them (`bands_from_file`).
+- **Time**: EDF and Mind Monitor stamp local time; the shell injects `utc_offset_minutes`. NeuroFeed's own EDF export stamps UTC (recording field ends in `neurofeed`) and is read as UTC. Legacy `.neurofeed` (ms timestamps, ISO startedAt) is rebased to session seconds.
+- Annotations (EDF+ TALs, Mind Monitor Elements, EDF+D gaps → disconnect) and provenance live in `SessionMeta.import` (sqlite schema v2, v1 migrated with `ALTER TABLE`).
+- Commands: `history.import_preview` (query, nothing saved) and `history.import` (saves). The UI dialog shows kept / not imported / warnings before saving; desktop: path field or drop, web: file picker or drop. Max 96 MB.

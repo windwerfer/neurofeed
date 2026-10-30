@@ -117,6 +117,10 @@ pub enum Command {
     /// Feedback audio: reward output, background, guard sound, volumes.
     #[serde(rename = "audio.set")]
     AudioSet(crate::audio::AudioPatch),
+    /// Import an EDF/EDF+, Mind Monitor CSV, `.neurofeed` or raw body file
+    /// into History. Returns the new session id and what was lost.
+    #[serde(rename = "history.import")]
+    HistoryImport(crate::import::ImportRequest),
     /// Band-math drowsiness guard on/off (protocols with a guard lane).
     #[serde(rename = "guard.set")]
     GuardSet { enabled: bool },
@@ -299,6 +303,9 @@ pub enum Query {
     /// Audio settings, the live cue and the guard state.
     #[serde(rename = "audio.status")]
     AudioStatus,
+    /// Parse an import without saving: kept / lost summary for the dialog.
+    #[serde(rename = "history.import_preview")]
+    HistoryImportPreview(crate::import::ImportRequest),
     /// Per-second results of the current/last session.
     #[serde(rename = "feedback.result.get")]
     FeedbackResultGet {
@@ -552,6 +559,22 @@ pub const SPECS: &[CommandSpec] = &[
         always,
     ),
     spec("history.export", "Export session", "history", true, "Export a saved session as nfed6 | raw_body | edf (base64).", always),
+    spec(
+        "history.import",
+        "Import recording",
+        "history",
+        false,
+        "Import EDF/EDF+, Mind Monitor CSV, .neurofeed or raw body (base64) into History; one Muse or Crown montage is kept.",
+        always,
+    ),
+    spec(
+        "history.import_preview",
+        "Preview import",
+        "history",
+        true,
+        "Parse an import file without saving: channels, duration, and what the import loses.",
+        always,
+    ),
     spec("history.delete", "Delete session", "history", false, "Permanently delete a saved session; requires confirm=true.", has_history),
     spec("recording.status", "Recording status", "recording", true, "Active or last recording: device, duration, samples, bytes.", always),
     spec(
@@ -687,6 +710,16 @@ pub fn examples() -> Vec<Request> {
             ..Default::default()
         })),
         C(Command::GuardSet { enabled: true }),
+        C(Command::HistoryImport(crate::import::ImportRequest {
+            file_name: "session.edf".into(),
+            data_base64: "MCAgICAgIA==".into(),
+            utc_offset_minutes: Some(60),
+        })),
+        Q(Query::HistoryImportPreview(crate::import::ImportRequest {
+            file_name: "mind_monitor.csv".into(),
+            data_base64: "VGltZVN0YW1w".into(),
+            utc_offset_minutes: None,
+        })),
         Q(Query::FeedbackResultGet { last: Some(10) }),
         Q(Query::SignalStatus),
         Q(Query::ArtifactStatus),

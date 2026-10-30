@@ -4,7 +4,7 @@
 
 use crate::record::Record;
 use crate::FormatError;
-pub use edf_export::{decode_edf_plus, EdfAnnotation, EdfDecoded};
+pub use edf_export::{decode_edf_plus, encode_edf_plus, EdfAnnotation, EdfDecoded, EdfFileSpec, EdfSignal};
 
 pub struct EdfRequest<'a> {
     pub labels: &'a [String],

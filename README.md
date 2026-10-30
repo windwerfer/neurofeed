@@ -40,3 +40,7 @@ Support/NeuroFeed`, Windows `%APPDATA%\NeuroFeed`, or `NF_BRIDGE_FILE`).
 `{"command": "neurofeed-mcp", "args": ["--bridge"]}`.
 
 Read [AGENTS.md](AGENTS.md), then [docs/](docs/).
+
+### Importing recordings
+
+History → **Import…** (or drop a file on the window) accepts EDF/EDF+, Mind Monitor CSV (constant or interval mode), `.neurofeed` and raw NFEDBIN. A preview lists what is kept and what is lost before anything is saved. MCP: `history.import_preview` / `history.import` with `{file_name, data_base64}`.

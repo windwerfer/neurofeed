@@ -2475,6 +2475,7 @@ dependencies = [
  "eframe",
  "egui",
  "env_logger",
+ "js-sys",
  "log",
  "nf-audio",
  "nf-core",
@@ -2483,6 +2484,7 @@ dependencies = [
  "nf-store",
  "png",
  "serde_json",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
@@ -2518,6 +2520,7 @@ dependencies = [
  "nf-dsp",
  "nf-feedback",
  "nf-format",
+ "nf-import",
  "nf-sim",
  "nf-store",
  "nf-types",
@@ -2559,6 +2562,19 @@ dependencies = [
  "crc32fast",
  "edf_export",
  "ruzstd",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "nf-import"
+version = "0.1.0"
+dependencies = [
+ "nf-dsp",
+ "nf-format",
+ "nf-types",
+ "schemars",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
 ]
 

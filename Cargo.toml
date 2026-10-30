@@ -21,6 +21,7 @@ nf-core = { path = "crates/nf-core" }
 nf-mcp = { path = "crates/nf-mcp" }
 nf-store = { path = "crates/nf-store" }
 nf-device = { path = "crates/nf-device" }
+nf-import = { path = "crates/nf-import" }
 nf-audio = { path = "crates/nf-audio", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -14,6 +14,7 @@ mod filter;
 mod mains;
 mod ppg;
 mod quality;
+mod resample;
 
 pub use artifact::{
     GestureDetector, GestureReport, MovementDetector, BLINK_MIN_ENERGY, BLINK_MULT, CLENCH_MULT, MOVEMENT_GATE, MOVEMENT_WINDOW_S,
@@ -28,3 +29,4 @@ pub use filter::{notch_frequencies, Biquad, EegFilter, Mains, HIGHPASS_HZ, NOTCH
 pub use mains::{mains_vote, MainsDetector, DETECT_WINDOW, LOCK_VOTES, PEAK_RATIO, SWITCH_VOTES};
 pub use ppg::{heart_rate, pulse_ac, spo2, PPG_WINDOW_S, PULSE_MIN_S, SPO2_A, SPO2_B, SPO2_MIN_S};
 pub use quality::{pad_quality, sample_std, MIN_QUALITY_SAMPLES, USABLE_QUALITY};
+pub use resample::{resample, RESAMPLE_HALF_TAPS};

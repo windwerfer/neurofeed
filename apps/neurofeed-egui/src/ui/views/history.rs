@@ -54,7 +54,10 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let state = session.state();
     ui.add_space(6.0);
     ui.heading(RichText::new("History").size(24.0));
-    ui.weak(format!("{} saved session(s) · {}", state.history.len(), state.history_location));
+    ui.horizontal(|ui| {
+        ui.weak(format!("{} saved session(s) · {}", state.history.len(), state.history_location));
+        super::import::show(ui, session, out);
+    });
     ui.add_space(10.0);
     if state.history.is_empty() {
         ui.label("No sessions yet. Every training is saved here when it ends.");
@@ -120,6 +123,7 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
         m.feedback_seconds,
         m.bytes as f64 / 1e6
     ));
+    provenance(ui, m);
     ui.add_space(8.0);
     if st.trace.as_ref().is_none_or(|(i, _)| *i != m.id) {
         let pts = session
@@ -167,6 +171,26 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
     });
     if let Some(n) = &st.note {
         ui.weak(n);
+    }
+}
+
+/// Where an imported session came from and what was lost on the way.
+fn provenance(ui: &mut egui::Ui, m: &SessionMeta) {
+    let Some(p) = &m.import else { return };
+    let s = |k: &str| p[k].as_str().unwrap_or("?").to_owned();
+    let mut line = format!("Imported from {} ({})", s("source_file_name"), s("source_format"));
+    if p["resampled"].as_bool() == Some(true) {
+        line += &format!(" · resampled from {} Hz", p["original_rate_hz"].as_f64().unwrap_or(0.0));
+    }
+    if p["bands_from_file"].as_bool() == Some(true) {
+        line += " · bands from file";
+    }
+    if let Some(n) = p["annotations"].as_array().map(Vec::len).filter(|n| *n > 0) {
+        line += &format!(" · {n} note(s)");
+    }
+    ui.label(RichText::new(line).color(THR));
+    for w in p["warnings"].as_array().into_iter().flatten().filter_map(|w| w.as_str()) {
+        ui.weak(format!("⚠ {w}"));
     }
 }
 

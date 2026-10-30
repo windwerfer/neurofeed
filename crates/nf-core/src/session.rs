@@ -173,6 +173,32 @@ impl Session {
         export(&f, format, start).map_err(CoreError::BadRequest)
     }
 
+    fn import_prepare(&self, req: &crate::import::ImportRequest) -> Result<crate::import::Prepared, CoreError> {
+        let bytes = crate::import::base64_decode(&req.data_base64)?;
+        self.import_bytes(&bytes, &req.file_name, req.utc_offset_minutes.unwrap_or(0))
+    }
+
+    /// Parse (and band) an import without saving (typed; the UI uses it so
+    /// the dialog does not round-trip megabytes through base64).
+    pub fn import_bytes(&self, bytes: &[u8], file_name: &str, utc_offset_minutes: i32) -> Result<crate::import::Prepared, CoreError> {
+        crate::import::prepare(bytes, file_name, utc_offset_minutes, self.state.mains_mode)
+    }
+
+    fn history_import(&mut self, req: &crate::import::ImportRequest) -> Result<Reply, CoreError> {
+        let p = self.import_prepare(req)?;
+        let summary = p.preview().summary;
+        let id = self.import_save(p.into_stored())?;
+        Ok(json!({ "id": id, "summary": summary }))
+    }
+
+    /// Store a prepared import; emits `SessionSaved`.
+    pub fn import_save(&mut self, s: nf_store::StoredSession) -> Result<u64, CoreError> {
+        let id = self.store.insert(s).map_err(|e| CoreError::BadRequest(e.to_string()))?;
+        self.emit(Event::SessionSaved { id });
+        self.refresh_history();
+        Ok(id)
+    }
+
     fn stored(&self, id: u64) -> Result<nf_store::StoredSession, CoreError> {
         self.store
             .get(id)
@@ -196,6 +222,7 @@ impl Session {
             ppg_samples: f.info.ppg_samples,
             feedback_seconds: f.info.feedback_seconds,
             bytes: f.body.len() as u64,
+            import: None,
         };
         let s = nf_store::StoredSession { meta, device_json: serde_json::to_string(&f.device).unwrap_or_default(), body: f.body.clone() };
         match self.store.insert(s) {
@@ -621,6 +648,7 @@ impl Session {
                 return Ok(serde_json::to_value(self.sim.config).unwrap_or_default());
             }
             Command::AudioSet(patch) => return crate::audio::set(&mut self.state, &patch),
+            Command::HistoryImport(req) => return self.history_import(&req),
             Command::GuardSet { enabled } => {
                 self.state.feedback.guard = enabled;
                 return Ok(crate::audio::guard_status(&self.state));
@@ -817,6 +845,7 @@ impl Session {
                 json!(p)
             }
             Query::AudioStatus => crate::audio::status(s),
+            Query::HistoryImportPreview(req) => json!(self.import_prepare(req)?.preview()),
             Query::FeedbackStatus => {
                 let f = &s.feedback;
                 json!({

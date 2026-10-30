@@ -6,6 +6,7 @@ mod feedback;
 mod heart;
 mod histogram;
 mod history;
+mod import;
 mod placeholder;
 mod plot;
 mod psd;

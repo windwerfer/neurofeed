@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "sqlite", not(target_arch = "wasm32")))]
 mod sqlite;
 #[cfg(all(feature = "sqlite", not(target_arch = "wasm32")))]
-pub use sqlite::SqliteStore;
+pub use sqlite::{sqlite_exec_for_tests, SqliteStore};
 #[cfg(all(feature = "indexeddb", target_arch = "wasm32"))]
 mod idb;
 #[cfg(all(feature = "indexeddb", target_arch = "wasm32"))]
@@ -38,6 +38,9 @@ pub struct SessionMeta {
     pub ppg_samples: u64,
     pub feedback_seconds: u64,
     pub bytes: u64,
+    /// Import provenance (`nf_import::Provenance` as JSON) for imported sessions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub import: Option<serde_json::Value>,
 }
 
 /// A full stored session.
