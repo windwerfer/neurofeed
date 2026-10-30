@@ -7,7 +7,7 @@ use crate::signal::{mains_name, Signal, SPEC_HOP_S};
 use crate::state::{AppState, BandScale, View};
 use crate::{CoreError, Reply};
 use nf_sim::SimProvider;
-use nf_types::{Band, DeviceProvider, DeviceSource};
+use nf_types::{Band, DeviceInfo, DeviceProvider, DeviceSource, EegPacket};
 use serde::Serialize;
 use serde_json::json;
 
@@ -60,6 +60,9 @@ pub enum Event {
 struct Fault {
     bad: Vec<usize>,
     dropout: bool,
+    motion: bool,
+    blink: bool,
+    clench: bool,
 }
 
 /// Data older than this counts as no data (disconnect grace starts).
@@ -77,6 +80,7 @@ struct Live {
     recorder: Option<Recorder>,
     finished: Option<Finished>,
     fault: Fault,
+    artifacts: Option<crate::artifacts::Artifacts>,
     last_data: Option<f64>,
     /// Session time of the next feedback second.
     fb_next: f64,
@@ -205,9 +209,14 @@ impl Session {
         // freezes what the views show. Recording continues while paused.
         let mut packets = src.poll(now);
         let mut optical = src.poll_ppg(now);
+        let mut accel = src.poll_accel(now);
         if self.live.fault.dropout {
             packets.clear();
             optical.clear();
+            accel.clear();
+        }
+        if let Some(dev) = &self.state.device {
+            inject_artifacts(&self.live.fault, dev, &mut packets, &mut accel);
         }
         if !packets.is_empty() {
             self.live.last_data = Some(now);
@@ -219,8 +228,13 @@ impl Session {
                 *x += (FAULT_UV * (std::f64::consts::TAU * 3.0 * t).sin()) as f32;
             }
         }
+        if let Some(a) = self.live.artifacts.as_mut() {
+            accel.iter().for_each(|p| a.accel(p));
+            packets.iter().for_each(|p| a.eeg(p));
+        }
         if let Some(r) = self.live.recorder.as_mut() {
             optical.iter().for_each(|p| r.ppg(p));
+            accel.iter().for_each(|p| r.accel(p));
         }
         if !self.state.paused {
             if let Some(o) = self.live.optics.as_mut() {
@@ -246,6 +260,9 @@ impl Session {
                 if let Some(r) = self.live.recorder.as_mut() {
                     r.bands(&snap);
                 }
+                if let Some(a) = self.live.artifacts.as_mut() {
+                    a.gamma(&snap.powers);
+                }
                 self.state.bands.push(snap);
             }
         }
@@ -264,7 +281,13 @@ impl Session {
         while self.state.feedback.phase.active() && now + 1e-9 >= self.live.fb_next {
             let t = self.live.fb_next;
             self.live.fb_next += 1.0;
-            let obs = self.observation(t);
+            let mut obs = self.observation(t);
+            if let Some(a) = self.live.artifacts.as_mut() {
+                obs.artifact = a.second(t);
+                if let (Some(r), Some(s)) = (self.live.recorder.as_mut(), a.status.movement_score) {
+                    r.movement(t, s);
+                }
+            }
             let mut out = Vec::new();
             let n = self.state.feedback.results.len();
             self.state.feedback.second(t, &obs, &mut out);
@@ -296,6 +319,7 @@ impl Session {
             names: idx.iter().map(|&i| dev.channels[i].clone()).collect(),
             pads: idx.iter().map(|&i| sig.bands_linear.get(i).copied().unwrap_or_default()).collect(),
             quality: idx.iter().map(|&i| if fresh { f64::from(sig.quality.get(i).copied().unwrap_or(0.0)) } else { 0.0 }).collect(),
+            artifact: None,
         }
     }
 
@@ -471,13 +495,13 @@ impl Session {
                 let thr = self.state.feedback.set_percentile(percentile);
                 return Ok(json!({ "percentile": percentile, "threshold": thr }));
             }
-            Command::SimFault { bad_pads, dropout } => {
+            Command::SimFault { bad_pads, dropout, motion, blink, clench } => {
                 let chans = self.state.device.as_ref().map(|d| d.channels.clone()).unwrap_or_default();
                 let bad = bad_pads
                     .iter()
                     .map(|n| chans.iter().position(|c| c == n).ok_or_else(|| CoreError::InvalidArgs(format!("unknown pad `{n}`"))))
                     .collect::<Result<Vec<_>, _>>()?;
-                self.live.fault = Fault { bad, dropout };
+                self.live.fault = Fault { bad, dropout, motion, blink, clench };
             }
             Command::ClockAdvance { seconds } => {
                 if !(seconds.is_finite() && seconds > 0.0 && seconds <= MAX_ADVANCE_S) {
@@ -548,6 +572,7 @@ impl Session {
         let info = src.info();
         self.live.signal = Some(Signal::new(&info, self.state.mains_mode));
         self.live.optics = crate::optics::Optics::new(&info);
+        self.live.artifacts = Some(crate::artifacts::Artifacts::new(&info));
         self.emit(Event::Connected { id: info.id.clone() });
         self.state.device = Some(info);
         self.source = Some(src);
@@ -559,6 +584,7 @@ impl Session {
         self.source = None;
         self.live.signal = None;
         self.live.optics = None;
+        self.live.artifacts = None;
         self.state.bands.clear();
         if let Some(d) = self.state.device.take() {
             self.emit(Event::Disconnected { id: d.id });
@@ -635,6 +661,9 @@ impl Session {
             Query::Spo2Get => self.estimate_json(false)?,
             Query::PpgGet { seconds } => self.ppg_json(seconds.unwrap_or(5.0))?,
             Query::SignalStatus => self.signal_status(),
+            Query::ArtifactStatus => {
+                json!({ "connected": self.live.artifacts.is_some(), "status": self.live.artifacts.as_ref().map(|a| &a.status) })
+            }
             Query::FeaturesGet => self.features_json()?,
             Query::HistogramGet { seconds, bins, half_range_uv } => {
                 self.histogram_json(seconds.unwrap_or(2.0), bins.unwrap_or(64), half_range_uv.unwrap_or(100.0))?
@@ -837,5 +866,47 @@ impl Session {
             })
             .collect();
         json!({ "time": snap.time, "scale": scale, "channels": channels })
+    }
+}
+
+/// Blink bump amplitude (µV) and width (samples) injected by `sim.fault blink`.
+const BLINK_UV: f64 = 300.0;
+const BLINK_SAMPLES: f64 = 28.0;
+/// Jaw-clench EMG (µV at 37 Hz) on temporal pads.
+const CLENCH_UV: f64 = 20.0;
+/// Head nod amplitude (g at 2 Hz) on the accelerometer.
+const MOTION_G: f64 = 0.3;
+
+/// Simulated artifacts (`sim.fault motion/blink/clench`).
+fn inject_artifacts(f: &Fault, dev: &DeviceInfo, eeg: &mut [EegPacket], accel: &mut [nf_types::AccelPacket]) {
+    let rate = dev.sample_rate_hz;
+    let is = |e: u16, names: &[&str]| dev.channels.get(usize::from(e)).is_some_and(|c| names.contains(&c.as_str()));
+    for p in eeg.iter_mut() {
+        let (blink, clench) =
+            (f.blink && is(p.electrode, &["AF7", "AF8", "F5", "F6"]), f.clench && is(p.electrode, &["TP9", "TP10", "CP3", "CP4"]));
+        let n = p.samples.len();
+        for (k, x) in p.samples.iter_mut().enumerate() {
+            let t = p.time - (n - 1 - k) as f64 / rate;
+            if blink {
+                // One ~110 ms half-sine bump every 2 s (inside one 125 ms detector bin).
+                let i = ((t.rem_euclid(2.0) - 0.38) * rate).round();
+                if (0.0..BLINK_SAMPLES).contains(&i) {
+                    *x += (BLINK_UV * (std::f64::consts::PI * i / BLINK_SAMPLES).sin()) as f32;
+                }
+            }
+            if clench {
+                *x += (CLENCH_UV * (std::f64::consts::TAU * 37.0 * t).sin()) as f32;
+            }
+        }
+    }
+    if f.motion {
+        let rate = dev.accel_rate_hz.unwrap_or(52.0);
+        for p in accel.iter_mut() {
+            let n = p.samples.len();
+            for (k, s) in p.samples.iter_mut().enumerate() {
+                let t = p.time - (n - 1 - k) as f64 / rate;
+                s[2] += (MOTION_G * (std::f64::consts::TAU * 2.0 * t).sin()) as f32;
+            }
+        }
     }
 }

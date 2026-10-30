@@ -134,6 +134,15 @@ pub enum Command {
         /// Deliver no data (looks like a disconnect).
         #[serde(default)]
         dropout: bool,
+        /// Nod the head (accelerometer movement artifact).
+        #[serde(default)]
+        motion: bool,
+        /// One eye blink every 2 s on the frontal pads.
+        #[serde(default)]
+        blink: bool,
+        /// Jaw-clench EMG on the temporal pads.
+        #[serde(default)]
+        clench: bool,
     },
 }
 
@@ -189,6 +198,9 @@ pub enum Query {
     /// Mains detection / notch and per-pad quality (usable >= 80).
     #[serde(rename = "signal.status")]
     SignalStatus,
+    /// Last evaluated artifact second.
+    #[serde(rename = "artifact.status")]
+    ArtifactStatus,
     /// Band features (atr, tar, btr, relative alpha/theta/beta/delta), mean over usable pads.
     #[serde(rename = "features.get")]
     FeaturesGet,
@@ -444,6 +456,14 @@ pub const SPECS: &[CommandSpec] = &[
     spec("hr.get", "Heart rate", "optics", true, "Heart rate (bpm) from PPG with confidence and history.", has_ppg),
     spec("spo2.get", "SpO2", "optics", true, "Blood oxygen (%) from PPG IR/red with confidence and history.", has_ppg),
     spec("ppg.get", "PPG samples", "optics", true, "Last N seconds of raw optical samples per PPG channel.", has_ppg),
+    spec(
+        "artifact.status",
+        "Artifact status",
+        "signal",
+        true,
+        "Last second's movement score (g), blink count, jaw clench and the artifact fed to feedback.",
+        always,
+    ),
     spec("signal.status", "Signal status", "signal", true, "Mains detected/applied, notch lock, per-pad quality and usability.", always),
     spec("features.get", "Features", "signal", true, "Band ratio features averaged over usable pads.", has_signal),
     spec("histogram.get", "Histogram", "signal", true, "Amplitude histogram of the conditioned signal per channel.", has_signal),
@@ -472,7 +492,14 @@ pub const SPECS: &[CommandSpec] = &[
     spec("calibration.skip", "Start now", "feedback", false, "Finish calibration early with what was collected.", fb_calibrating),
     spec("calibration.reuse", "Reuse last baseline", "feedback", false, "Skip calibration using the last baseline.", fb_reuse),
     spec("threshold.set", "Difficulty", "feedback", false, "Reward percentile 1..=99 (live while training).", fb_threshold),
-    spec("sim.fault", "Simulate faults", "device", false, "Corrupt pads or drop data on a simulator (tests).", sim_device),
+    spec(
+        "sim.fault",
+        "Simulate faults",
+        "device",
+        false,
+        "Corrupt pads, drop data, or inject motion/blink/clench artifacts on a simulator (tests).",
+        sim_device,
+    ),
     spec("clock.advance", "Advance clock", "time", false, "Advance session time (headless/tests). Max 3600 s per call.", always),
     spec("events.drain", "Drain events", "app", false, "Return and clear events since the last drain.", always),
 ];
@@ -538,12 +565,13 @@ pub fn examples() -> Vec<Request> {
         C(Command::CalibrationSkip),
         C(Command::CalibrationReuse),
         C(Command::ThresholdSet { percentile: 50 }),
-        C(Command::SimFault { bad_pads: vec!["AF7".into()], dropout: false }),
+        C(Command::SimFault { bad_pads: vec!["AF7".into()], dropout: false, motion: false, blink: false, clench: false }),
         Q(Query::ProtocolList),
         Q(Query::ProtocolGet { id: None }),
         Q(Query::FeedbackStatus),
         Q(Query::FeedbackResultGet { last: Some(10) }),
         Q(Query::SignalStatus),
+        Q(Query::ArtifactStatus),
         Q(Query::HrGet),
         Q(Query::Spo2Get),
         Q(Query::PpgGet { seconds: Some(3.0) }),

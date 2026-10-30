@@ -5,7 +5,7 @@
 //! DSP included, is testable without hardware.
 #![forbid(unsafe_code)]
 
-use nf_types::{DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, PpgPacket};
+use nf_types::{AccelPacket, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, PpgPacket};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::f64::consts::TAU;
@@ -17,6 +17,9 @@ pub const SAMPLES_PER_PACKET: usize = 12;
 /// PPG rate and packet size of the Muse S / Athena optics (legacy `PPG_HZ`).
 pub const PPG_RATE_HZ: f64 = 64.0;
 pub const PPG_SAMPLES_PER_PACKET: usize = 6;
+/// Accelerometer (Muse: 52 Hz, 3 samples per packet).
+pub const ACCEL_RATE_HZ: f64 = 52.0;
+pub const ACCEL_SAMPLES_PER_PACKET: usize = 3;
 /// PPG channel names (legacy channel 0 ambient, 1 infrared, 2 red).
 pub const PPG_CHANNELS: [&str; 3] = ["ambient", "infrared", "red"];
 /// Optical DC levels and IR pulse amplitude (legacy `ppg_sample`).
@@ -90,6 +93,7 @@ pub struct SimDevice {
     next: u64,
     rng: u64,
     ppg_next: u64,
+    accel_next: u64,
     /// Upcoming beat onsets (device seconds), oldest first.
     beats: Vec<f64>,
     beat_rng: u64,
@@ -109,7 +113,7 @@ impl SimDevice {
 
     pub fn with_info(info: DeviceInfo, config: SimConfig) -> Self {
         let beat_rng = (config.seed ^ 0xD1B5_4A32_D192_ED03).max(1);
-        Self { info, config, start: None, next: 0, rng: config.seed.max(1), ppg_next: 0, beats: vec![0.2], beat_rng }
+        Self { info, config, start: None, next: 0, rng: config.seed.max(1), ppg_next: 0, accel_next: 0, beats: vec![0.2], beat_rng }
     }
 
     /// Normalised pulse at `t` (device s): systolic peak (1.0 at 0.12 s
@@ -183,6 +187,26 @@ impl SimDevice {
 }
 
 impl DeviceSource for SimDevice {
+    /// Head at rest: gravity on z plus a little sensor noise.
+    fn poll_accel(&mut self, now: f64) -> Vec<AccelPacket> {
+        let (Some(start), Some(rate)) = (self.start, self.info.accel_rate_hz) else { return Vec::new() };
+        let due = ((now - start) * rate + 1e-6).floor().max(-1.0) as i64 + 1;
+        let mut out = Vec::new();
+        while (self.accel_next + ACCEL_SAMPLES_PER_PACKET as u64) as i64 <= due {
+            let first = self.accel_next;
+            // Own deterministic jitter so the EEG noise stream is unchanged.
+            let samples = (first..first + ACCEL_SAMPLES_PER_PACKET as u64)
+                .map(|n| {
+                    let p = n as f64 * 2.399;
+                    [(0.002 * p.sin()) as f32, (0.002 * (1.7 * p).cos()) as f32, 1.0]
+                })
+                .collect();
+            out.push(AccelPacket { time: start + (first + ACCEL_SAMPLES_PER_PACKET as u64 - 1) as f64 / rate, samples });
+            self.accel_next += ACCEL_SAMPLES_PER_PACKET as u64;
+        }
+        out
+    }
+
     fn info(&self) -> DeviceInfo {
         self.info.clone()
     }
@@ -276,6 +300,7 @@ pub fn sim_info(kind: DeviceKind) -> DeviceInfo {
         simulated: true,
         ppg_channels: if kind == DeviceKind::Muse { PPG_CHANNELS.iter().map(|c| (*c).to_owned()).collect() } else { Vec::new() },
         ppg_rate_hz: (kind == DeviceKind::Muse).then_some(PPG_RATE_HZ),
+        accel_rate_hz: Some(ACCEL_RATE_HZ),
     }
 }
 

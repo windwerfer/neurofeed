@@ -36,6 +36,7 @@ pub struct Recorder {
     last_flush: f64,
     /// Feedback seconds, appended at the end of the body (see nf-format tag 11).
     feedback: Vec<Record>,
+    accel_seq: u16,
     pub info: RecordingInfo,
 }
 
@@ -52,7 +53,7 @@ impl Recorder {
             bytes: 12,
             wall_clock_unix_ms,
         };
-        Self { device, writer: BodyWriter::new(), last_flush: now, feedback: Vec::new(), info }
+        Self { device, writer: BodyWriter::new(), last_flush: now, feedback: Vec::new(), accel_seq: 0, info }
     }
 
     /// Returns false once the size cap is reached (caller stops).
@@ -70,6 +71,16 @@ impl Recorder {
     pub fn ppg(&mut self, p: &PpgPacket) {
         self.writer.push(&Record::Ppg { ts: p.time, channel: i16::try_from(p.channel).unwrap_or(i16::MAX), samples: p.samples.clone() });
         self.info.ppg_samples += p.samples.len() as u64;
+    }
+
+    pub fn accel(&mut self, p: &nf_types::AccelPacket) {
+        self.writer.push(&Record::Accelerometer { ts: p.time, seq: self.accel_seq, xyz: p.samples.clone() });
+        self.accel_seq = self.accel_seq.wrapping_add(1);
+    }
+
+    /// 1 Hz movement score (legacy tag 8).
+    pub fn movement(&mut self, t: f64, score: f64) {
+        self.writer.push(&Record::Movement { ts: t, score: score as f32 });
     }
 
     pub fn feedback(&mut self, r: &crate::feedback::SecondResult) {

@@ -7,6 +7,7 @@
 //! threads or filesystem: compiles to wasm32.
 #![forbid(unsafe_code)]
 
+pub mod artifacts;
 mod command;
 pub mod feedback;
 pub mod optics;

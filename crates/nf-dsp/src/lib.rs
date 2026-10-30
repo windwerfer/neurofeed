@@ -6,6 +6,7 @@
 //! sample rate) plus a self-contained radix-2 FFT, Hamming single-window
 //! PSD, mains detection, pad quality, band features, and the five-band power math the Bands view and features use.
 
+mod artifact;
 mod bands;
 mod features;
 mod fft;
@@ -14,6 +15,9 @@ mod mains;
 mod ppg;
 mod quality;
 
+pub use artifact::{
+    GestureDetector, GestureReport, MovementDetector, BLINK_MIN_ENERGY, BLINK_MULT, CLENCH_MULT, MOVEMENT_GATE, MOVEMENT_WINDOW_S,
+};
 pub use bands::{
     band_powers, band_powers_linear, dominant_band, histogram, line_noise_fraction, mains_peak_ratio, peak_frequency, psd, psd_db, Psd,
     BANDS_HZ, MAX_PSD_HZ,

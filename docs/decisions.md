@@ -49,3 +49,10 @@ The hybrid plan from `docs/review-feedback-engine.md` is approved, with the curr
 - One `SecondResult` per second (`feedback.result.get`, UI). The reward chime fires on the rising edge into target (`Event::Chime`).
 - The AI sleep guard (`ai.a_vig`) is not ported: Sleep Guard is listed as unavailable, and the other protocols run without a guard.
 - `sim.fault` (bad pads / dropout) is a test hook; it does not reconnect.
+
+## 2026-10-30 Artifact detection (movement, blink, jaw)
+
+- Ported legacy `compute_movement` (std of |accel| over 2 s, gate 0.05 g) and `GestureDetector` blink/clench (5x / 100 µV bin energy, 3x gamma) into `nf-dsp::artifact`; eye up/down not ported (experimental, not used for gating).
+- Deviation: the blink baseline learns only from quiet bins (legacy learned from every bin, so blinks every ~2 s stopped being counted). Clench already did this.
+- Legacy `_sampleIsClean` uses a 1 s buffer after the last event, which at 1 Hz ticks means only the current second is dirty; we do the same. Priority movement > blink > jaw.
+- Recordings now carry accelerometer (tag 3) and 1 Hz movement score (tag 8). `sim.fault` gains `motion`, `blink` (one ~110 ms 300 µV bump every 2 s), `clench` (20 µV 37 Hz). New query `artifact.status`.

@@ -65,6 +65,8 @@ pub struct Observation {
     pub names: Vec<String>,
     pub pads: Vec<[f64; 5]>,
     pub quality: Vec<f64>,
+    /// Artifact detected this second (movement / blink / jaw).
+    pub artifact: Option<nf_feedback::Artifact>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -360,7 +362,7 @@ impl Trainer {
         if self.lost_since.take().is_some() && self.phase == (Phase::Paused { reason: PauseReason::Disconnected }) {
             self.resume(out);
         }
-        let input = Input { t: self.sample_t, pads: obs.pads.clone(), quality: obs.quality.clone(), artifact: None };
+        let input = Input { t: self.sample_t, pads: obs.pads.clone(), quality: obs.quality.clone(), artifact: obs.artifact };
         match self.phase {
             Phase::FitCheck => {
                 self.green_for = if all_green { self.green_for + 1 } else { 0 };

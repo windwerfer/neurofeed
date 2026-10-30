@@ -99,6 +99,9 @@ pub struct DeviceInfo {
     /// PPG sample rate (runtime data; Muse streams 64 Hz).
     #[serde(default)]
     pub ppg_rate_hz: Option<f64>,
+    /// Accelerometer rate (Muse 52 Hz), `None` without one.
+    #[serde(default)]
+    pub accel_rate_hz: Option<f64>,
 }
 
 impl DeviceInfo {
@@ -122,6 +125,14 @@ pub struct PpgPacket {
     pub samples: Vec<f32>,
 }
 
+/// A block of accelerometer samples (g), x/y/z.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct AccelPacket {
+    /// Session time (s) of the **last** sample in the block.
+    pub time: f64,
+    pub samples: Vec<[f32; 3]>,
+}
+
 /// A block of raw EEG samples for one electrode, in µV.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct EegPacket {
@@ -140,6 +151,10 @@ pub trait DeviceSource: Send {
     fn poll(&mut self, now: f64) -> Vec<EegPacket>;
     /// PPG packets due up to `now` (same rules as `poll`). Default: none.
     fn poll_ppg(&mut self, _now: f64) -> Vec<PpgPacket> {
+        Vec::new()
+    }
+    /// Accelerometer packets due up to `now`. Default: none.
+    fn poll_accel(&mut self, _now: f64) -> Vec<AccelPacket> {
         Vec::new()
     }
 }
