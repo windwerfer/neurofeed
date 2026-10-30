@@ -114,6 +114,8 @@ pub struct AppState {
     pub channel: usize,
     /// Active or last finished recording.
     pub recording: Option<crate::recording::RecordingInfo>,
+    /// Feedback session (phases, results, stored baselines).
+    pub feedback: crate::feedback::Trainer,
     /// Bumped on every state change (not on time/data ticks).
     pub revision: u64,
 }
@@ -131,6 +133,7 @@ impl Default for AppState {
             mains_mode: crate::MainsMode::Auto,
             channel: 0,
             recording: None,
+            feedback: crate::feedback::Trainer::default(),
             revision: 0,
         }
     }

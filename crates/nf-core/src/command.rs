@@ -5,6 +5,7 @@
 //! an `examples()` entry, then handle it in `Session`. Tests fail on drift.
 //! Input schemas are derived with schemars from the variant fields.
 
+use crate::feedback::{PauseReason, Phase};
 use crate::recording::ExportFormat;
 use crate::signal::MainsMode;
 use crate::state::{AppState, BandScale, View};
@@ -86,6 +87,49 @@ pub enum Command {
     /// Channel for single-channel views (spectrogram), by name.
     #[serde(rename = "channel.set")]
     ChannelSet { channel: String },
+    /// Choose the training protocol (locked while a session runs).
+    #[serde(rename = "protocol.set")]
+    ProtocolSet { id: String },
+    /// Start a session: enters the fit check.
+    #[serde(rename = "feedback.start")]
+    FeedbackStart {
+        /// Training length, 1..=120 min; default the protocol's.
+        #[serde(default)]
+        minutes: Option<u32>,
+    },
+    /// End the session now and build the summary.
+    #[serde(rename = "feedback.stop")]
+    FeedbackStop,
+    #[serde(rename = "feedback.pause")]
+    FeedbackPause,
+    #[serde(rename = "feedback.resume")]
+    FeedbackResume,
+    /// Fit check → calibration (45 good seconds, at most 60 s).
+    #[serde(rename = "calibration.start")]
+    CalibrationStart {
+        /// Start even though the fit check has not passed.
+        #[serde(default)]
+        anyway: bool,
+    },
+    /// Finish calibration now with the good seconds collected (>= 10).
+    #[serde(rename = "calibration.skip")]
+    CalibrationSkip,
+    /// Skip calibration and reuse the last baseline of this device + protocol.
+    #[serde(rename = "calibration.reuse")]
+    CalibrationReuse,
+    /// Reward percentile 1..=99 (difficulty); live while training.
+    #[serde(rename = "threshold.set")]
+    ThresholdSet { percentile: u8 },
+    /// Simulator faults (tests): make pads bad and/or stop data (radio dropout).
+    #[serde(rename = "sim.fault")]
+    SimFault {
+        /// Pad names to corrupt (huge artifact); empty = none.
+        #[serde(default)]
+        bad_pads: Vec<String>,
+        /// Deliver no data (looks like a disconnect).
+        #[serde(default)]
+        dropout: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -177,6 +221,24 @@ pub enum Query {
         #[serde(default)]
         start: Option<[u16; 6]>,
     },
+    #[serde(rename = "protocol.list")]
+    ProtocolList,
+    /// One protocol; default the selected one.
+    #[serde(rename = "protocol.get")]
+    ProtocolGet {
+        #[serde(default)]
+        id: Option<String>,
+    },
+    /// Phase, fit, calibration progress, last second, summary.
+    #[serde(rename = "feedback.status")]
+    FeedbackStatus,
+    /// Per-second results of the current/last session.
+    #[serde(rename = "feedback.result.get")]
+    FeedbackResultGet {
+        /// Only the last N; default all.
+        #[serde(default)]
+        last: Option<usize>,
+    },
 }
 
 /// Either kind, as parsed from an id + JSON params.
@@ -260,6 +322,83 @@ fn has_recording(s: &AppState) -> Result<(), String> {
     }
 }
 
+fn fb_idle(s: &AppState) -> Result<(), String> {
+    if s.feedback.phase.active() {
+        Err("locked during a session; stop it first".into())
+    } else {
+        Ok(())
+    }
+}
+fn fb_can_start(s: &AppState) -> Result<(), String> {
+    needs_device(s)?;
+    fb_idle(s)?;
+    match s.feedback.protocol.unavailable {
+        Some(r) => Err(format!("{}: {r}", s.feedback.protocol.title)),
+        None => Ok(()),
+    }
+}
+fn fb_active(s: &AppState) -> Result<(), String> {
+    if s.feedback.phase.active() {
+        Ok(())
+    } else {
+        Err("no session running".into())
+    }
+}
+fn fb_playing(s: &AppState) -> Result<(), String> {
+    match s.feedback.phase {
+        Phase::Playing => Ok(()),
+        Phase::Paused { .. } => Err("already paused".into()),
+        _ => Err("not training".into()),
+    }
+}
+fn fb_paused(s: &AppState) -> Result<(), String> {
+    match s.feedback.phase {
+        Phase::Paused { reason: PauseReason::User } => Ok(()),
+        Phase::Paused { reason: PauseReason::BadSignal } => Err("waiting for good signal; resumes by itself".into()),
+        Phase::Paused { reason: PauseReason::Disconnected } => Err("waiting for the device to reconnect".into()),
+        _ => Err("not paused".into()),
+    }
+}
+fn fb_fit(s: &AppState) -> Result<(), String> {
+    if s.feedback.phase == Phase::FitCheck {
+        Ok(())
+    } else {
+        Err("only from the fit check".into())
+    }
+}
+fn fb_calibrating(s: &AppState) -> Result<(), String> {
+    if s.feedback.phase != Phase::Calibrating {
+        return Err("not calibrating".into());
+    }
+    let v = s.feedback.calibration.as_ref().map_or(0, |c| c.valid_s);
+    if v < crate::feedback::MIN_CALIBRATION_S {
+        return Err(format!("only {v} good seconds so far; needs {}", crate::feedback::MIN_CALIBRATION_S));
+    }
+    Ok(())
+}
+fn fb_reuse(s: &AppState) -> Result<(), String> {
+    if !matches!(s.feedback.phase, Phase::FitCheck | Phase::Calibrating) {
+        return Err("only before training starts".into());
+    }
+    s.feedback.last_baseline().map(|_| ()).ok_or_else(|| "no stored baseline for this device and protocol".into())
+}
+fn fb_threshold(s: &AppState) -> Result<(), String> {
+    if s.feedback.protocol.stability.is_some() {
+        return Err("this protocol rewards steadiness; it has no percentile".into());
+    }
+    if s.feedback.phase == Phase::Calibrating {
+        return Err("locked during calibration".into());
+    }
+    Ok(())
+}
+fn sim_device(s: &AppState) -> Result<(), String> {
+    match &s.device {
+        Some(d) if d.simulated => Ok(()),
+        Some(_) => Err("only for simulated devices".into()),
+        None => Err("no device connected".into()),
+    }
+}
+
 const fn spec(
     id: &'static str,
     label: &'static str,
@@ -315,6 +454,20 @@ pub const SPECS: &[CommandSpec] = &[
         "Encode the last recording as nfed6, raw_body or edf (base64).",
         has_recording,
     ),
+    spec("protocol.list", "Protocols", "feedback", true, "Built-in protocols with availability.", always),
+    spec("protocol.get", "Protocol", "feedback", true, "One protocol (default the selected one).", always),
+    spec("protocol.set", "Choose protocol", "feedback", false, "Select the training protocol.", fb_idle),
+    spec("feedback.start", "Start session", "feedback", false, "Start a session (fit check first).", fb_can_start),
+    spec("feedback.stop", "End session", "feedback", false, "End the session and build the summary.", fb_active),
+    spec("feedback.pause", "Pause training", "feedback", false, "Pause training.", fb_playing),
+    spec("feedback.resume", "Resume training", "feedback", false, "Resume a user pause.", fb_paused),
+    spec("feedback.status", "Session status", "feedback", true, "Phase, fit, calibration, last second, summary.", always),
+    spec("feedback.result.get", "Session results", "feedback", true, "Per-second results of the current or last session.", always),
+    spec("calibration.start", "Calibrate", "feedback", false, "Start calibration (45 good s, max 60 s).", fb_fit),
+    spec("calibration.skip", "Start now", "feedback", false, "Finish calibration early with what was collected.", fb_calibrating),
+    spec("calibration.reuse", "Reuse last baseline", "feedback", false, "Skip calibration using the last baseline.", fb_reuse),
+    spec("threshold.set", "Difficulty", "feedback", false, "Reward percentile 1..=99 (live while training).", fb_threshold),
+    spec("sim.fault", "Simulate faults", "device", false, "Corrupt pads or drop data on a simulator (tests).", sim_device),
     spec("clock.advance", "Advance clock", "time", false, "Advance session time (headless/tests). Max 3600 s per call.", always),
     spec("events.drain", "Drain events", "app", false, "Return and clear events since the last drain.", always),
 ];
@@ -371,6 +524,20 @@ pub fn examples() -> Vec<Request> {
         C(Command::RecordingStop),
         C(Command::MainsSet { mode: MainsMode::Hz60 }),
         C(Command::ChannelSet { channel: "AF7".into() }),
+        C(Command::ProtocolSet { id: "openMonitor".into() }),
+        C(Command::FeedbackStart { minutes: Some(5) }),
+        C(Command::FeedbackStop),
+        C(Command::FeedbackPause),
+        C(Command::FeedbackResume),
+        C(Command::CalibrationStart { anyway: false }),
+        C(Command::CalibrationSkip),
+        C(Command::CalibrationReuse),
+        C(Command::ThresholdSet { percentile: 50 }),
+        C(Command::SimFault { bad_pads: vec!["AF7".into()], dropout: false }),
+        Q(Query::ProtocolList),
+        Q(Query::ProtocolGet { id: None }),
+        Q(Query::FeedbackStatus),
+        Q(Query::FeedbackResultGet { last: Some(10) }),
         Q(Query::SignalStatus),
         Q(Query::HrGet),
         Q(Query::Spo2Get),

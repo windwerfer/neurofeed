@@ -10,10 +10,12 @@
 
 mod calibration;
 mod engine;
+pub mod protocol;
 mod stats;
 
 pub use calibration::{Calibration, CalibrationKind, CalibrationResult};
 pub use engine::Engine;
+pub use protocol::{protocol, Eyes, Protocol, DEFAULT_PROTOCOL, PROTOCOLS};
 pub use stats::{coefficient_of_variation, rolling_cvs, stability_output_percentile, Baseline};
 
 use serde::{Deserialize, Serialize};

@@ -89,6 +89,17 @@ impl Engine {
         self.guard_thr
     }
 
+    /// Change the reward percentile and re-derive the threshold from the
+    /// baseline (live difficulty). No effect for the stability policy.
+    pub fn set_percentile(&mut self, percentile: u8) -> Option<f64> {
+        if self.cfg.stability.is_some() {
+            return self.threshold;
+        }
+        self.cfg.percentile = percentile.clamp(1, 99);
+        self.initial = None;
+        self.compute_threshold()
+    }
+
     fn compute_threshold(&mut self) -> Option<f64> {
         if let Some(st) = self.cfg.stability {
             return self.compute_stability_threshold(st);

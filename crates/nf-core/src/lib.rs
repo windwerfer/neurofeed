@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 mod command;
+pub mod feedback;
 pub mod optics;
 mod recording;
 mod session;

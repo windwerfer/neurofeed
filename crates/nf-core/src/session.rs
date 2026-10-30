@@ -1,6 +1,7 @@
 //! The Session: single owner of state; the only way to change it.
 
 use crate::command::{find, Command, CommandSpec, Query, Request, SPECS};
+use crate::feedback::{Change, Observation, Phase};
 use crate::recording::{base64, export, Finished, Recorder};
 use crate::signal::{mains_name, Signal, SPEC_HOP_S};
 use crate::state::{AppState, BandScale, View};
@@ -19,15 +20,54 @@ const MAX_EVENTS: usize = 1000;
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum Event {
-    ViewChanged { view: View },
-    Connected { id: String },
-    Disconnected { id: String },
-    Paused { paused: bool },
-    ScaleChanged { scale: BandScale },
-    RecordingStarted { device: String },
-    RecordingStopped { duration: f64, eeg_samples: u64, reason: String },
-    MainsChanged { applied: String, detected: String },
+    ViewChanged {
+        view: View,
+    },
+    Connected {
+        id: String,
+    },
+    Disconnected {
+        id: String,
+    },
+    Paused {
+        paused: bool,
+    },
+    ScaleChanged {
+        scale: BandScale,
+    },
+    RecordingStarted {
+        device: String,
+    },
+    RecordingStopped {
+        duration: f64,
+        eeg_samples: u64,
+        reason: String,
+    },
+    MainsChanged {
+        applied: String,
+        detected: String,
+    },
+    /// Feedback phase changed.
+    Feedback {
+        phase: Phase,
+    },
+    /// Play the reward chime.
+    Chime,
 }
+
+/// Simulator faults (`sim.fault`).
+#[derive(Clone, Default)]
+struct Fault {
+    bad: Vec<usize>,
+    dropout: bool,
+}
+
+/// Data older than this counts as no data (disconnect grace starts).
+const STALE_S: f64 = 1.5;
+/// Pad pairs the reward uses (legacy target electrodes); else all pads.
+const TARGET_PADS: [[&str; 2]; 2] = [["AF7", "AF8"], ["PO3", "PO4"]];
+/// Fault artifact: 200 µV at 3 Hz (pad quality 0).
+const FAULT_UV: f64 = 200.0;
 
 /// Data-path state that is not plain `AppState` (cloned for batch rollback).
 #[derive(Clone, Default)]
@@ -36,6 +76,10 @@ struct Live {
     optics: Option<crate::optics::Optics>,
     recorder: Option<Recorder>,
     finished: Option<Finished>,
+    fault: Fault,
+    last_data: Option<f64>,
+    /// Session time of the next feedback second.
+    fb_next: f64,
 }
 
 pub struct Session {
@@ -152,11 +196,29 @@ impl Session {
         }
         self.state.time += dt;
         let now = self.state.time;
+        if self.source.is_none() {
+            self.feedback_tick(now);
+            return;
+        }
         let Some(src) = self.source.as_mut() else { return };
         // Always drain the device (no backlog burst on resume); pause only
         // freezes what the views show. Recording continues while paused.
-        let packets = src.poll(now);
-        let optical = src.poll_ppg(now);
+        let mut packets = src.poll(now);
+        let mut optical = src.poll_ppg(now);
+        if self.live.fault.dropout {
+            packets.clear();
+            optical.clear();
+        }
+        if !packets.is_empty() {
+            self.live.last_data = Some(now);
+        }
+        for p in packets.iter_mut().filter(|p| self.live.fault.bad.contains(&usize::from(p.electrode))) {
+            let n = p.samples.len();
+            for (k, x) in p.samples.iter_mut().enumerate() {
+                let t = p.time - (n - 1 - k) as f64 / 256.0;
+                *x += (FAULT_UV * (std::f64::consts::TAU * 3.0 * t).sin()) as f32;
+            }
+        }
         if !self.state.paused {
             if let Some(o) = self.live.optics.as_mut() {
                 optical.iter().for_each(|p| o.push(p));
@@ -191,6 +253,56 @@ impl Session {
         if full {
             self.stop_recording("size limit reached");
         }
+        self.feedback_tick(now);
+    }
+
+    /// Run the feedback state machine for every whole second up to `now`.
+    fn feedback_tick(&mut self, now: f64) {
+        while self.state.feedback.phase.active() && now + 1e-9 >= self.live.fb_next {
+            let t = self.live.fb_next;
+            self.live.fb_next += 1.0;
+            let obs = self.observation(t);
+            let mut out = Vec::new();
+            self.state.feedback.second(t, &obs, &mut out);
+            self.changes(out);
+        }
+    }
+
+    fn changes(&mut self, out: Vec<Change>) {
+        for c in out {
+            self.emit(match c {
+                Change::Phase(phase) => Event::Feedback { phase },
+                Change::Chime => Event::Chime,
+            });
+        }
+    }
+
+    fn observation(&self, now: f64) -> Observation {
+        let (Some(dev), Some(sig)) = (&self.state.device, &self.live.signal) else { return Observation::default() };
+        let fresh = self.live.last_data.is_some_and(|t| now - t <= STALE_S) && sig.bands_linear.len() == dev.channels.len();
+        let idx: Vec<usize> = TARGET_PADS
+            .iter()
+            .find_map(|pair| pair.iter().map(|n| dev.channels.iter().position(|c| c == n)).collect::<Option<Vec<_>>>())
+            .unwrap_or_else(|| (0..dev.channels.len()).collect());
+        Observation {
+            connected: fresh,
+            names: idx.iter().map(|&i| dev.channels[i].clone()).collect(),
+            pads: idx.iter().map(|&i| sig.bands_linear.get(i).copied().unwrap_or_default()).collect(),
+            quality: idx.iter().map(|&i| if fresh { f64::from(sig.quality.get(i).copied().unwrap_or(0.0)) } else { 0.0 }).collect(),
+        }
+    }
+
+    /// Apply a feedback transition; emits its events.
+    fn feedback<T>(&mut self, f: impl FnOnce(&mut crate::feedback::Trainer, &mut Vec<Change>) -> T) -> T {
+        let mut out = Vec::new();
+        let r = f(&mut self.state.feedback, &mut out);
+        self.changes(out);
+        r
+    }
+
+    /// Typed access for views.
+    pub fn trainer(&self) -> &crate::feedback::Trainer {
+        &self.state.feedback
     }
 
     fn stop_recording(&mut self, reason: &str) {
@@ -304,6 +416,56 @@ impl Session {
                 }
                 return Ok(serde_json::to_value(self.sim.config).unwrap_or_default());
             }
+            Command::ProtocolSet { id } => {
+                let p = nf_feedback::protocol(&id).ok_or_else(|| CoreError::InvalidArgs(format!("unknown protocol `{id}`")))?;
+                let fb = &mut self.state.feedback;
+                fb.protocol = p;
+                fb.minutes = p.default_minutes;
+                fb.summary = None;
+            }
+            Command::FeedbackStart { minutes } => {
+                let (lo, hi) = crate::feedback::MINUTES;
+                if let Some(m) = minutes {
+                    if !(lo..=hi).contains(&m) {
+                        return Err(CoreError::InvalidArgs(format!("minutes must be in [{lo}, {hi}]")));
+                    }
+                    self.state.feedback.minutes = m;
+                }
+                let dev = self.state.device.as_ref().map(|d| d.id.clone()).unwrap_or_default();
+                self.live.fb_next = self.state.time + 1.0;
+                self.feedback(|t, o| t.start(&dev, o));
+            }
+            Command::FeedbackStop => self.feedback(|t, o| t.stop("stopped", o)),
+            Command::FeedbackPause => self.feedback(|t, o| t.pause(o)),
+            Command::FeedbackResume => self.feedback(|t, o| t.resume(o)),
+            Command::CalibrationStart { anyway } => {
+                if !anyway && !self.state.feedback.fit_ready() {
+                    let bad: Vec<String> = self.state.feedback.pads.iter().filter(|p| !p.good).map(|p| p.name.clone()).collect();
+                    return Err(CoreError::InvalidArgs(format!(
+                        "fit check not passed (needs {} s of good signal{}); pass anyway=true to start anyway",
+                        crate::feedback::FIT_GREEN_S,
+                        if bad.is_empty() { String::new() } else { format!("; check {}", bad.join(", ")) }
+                    )));
+                }
+                self.feedback(|t, o| t.calibrate(o));
+            }
+            Command::CalibrationSkip => self.feedback(|t, o| t.finish_calibration(o)).map_err(CoreError::InvalidArgs)?,
+            Command::CalibrationReuse => self.feedback(|t, o| t.reuse(o)).map_err(CoreError::InvalidArgs)?,
+            Command::ThresholdSet { percentile } => {
+                if !(1..=99).contains(&percentile) {
+                    return Err(CoreError::InvalidArgs("percentile must be in [1, 99]".into()));
+                }
+                let thr = self.state.feedback.set_percentile(percentile);
+                return Ok(json!({ "percentile": percentile, "threshold": thr }));
+            }
+            Command::SimFault { bad_pads, dropout } => {
+                let chans = self.state.device.as_ref().map(|d| d.channels.clone()).unwrap_or_default();
+                let bad = bad_pads
+                    .iter()
+                    .map(|n| chans.iter().position(|c| c == n).ok_or_else(|| CoreError::InvalidArgs(format!("unknown pad `{n}`"))))
+                    .collect::<Result<Vec<_>, _>>()?;
+                self.live.fault = Fault { bad, dropout };
+            }
             Command::ClockAdvance { seconds } => {
                 if !(seconds.is_finite() && seconds > 0.0 && seconds <= MAX_ADVANCE_S) {
                     return Err(CoreError::InvalidArgs(format!("seconds must be in (0, {MAX_ADVANCE_S}]")));
@@ -402,6 +564,40 @@ impl Session {
                 "time": s.time,
                 "revision": s.revision,
             }),
+            Query::ProtocolList => json!(nf_feedback::PROTOCOLS
+                .iter()
+                .map(|p| json!({ "protocol": p, "selected": p.id == s.feedback.protocol.id }))
+                .collect::<Vec<_>>()),
+            Query::ProtocolGet { id } => {
+                let p = match id {
+                    Some(id) => nf_feedback::protocol(id).ok_or_else(|| CoreError::InvalidArgs(format!("unknown protocol `{id}`")))?,
+                    None => s.feedback.protocol,
+                };
+                json!(p)
+            }
+            Query::FeedbackStatus => {
+                let f = &s.feedback;
+                json!({
+                    "protocol": f.protocol.id,
+                    "minutes": f.minutes,
+                    "percentile": f.percentile,
+                    "phase": f.phase,
+                    "fit": { "pads": f.pads, "green_s": f.green_for, "ready": f.fit_ready() },
+                    "calibration": f.calibration,
+                    "last_baseline": f.last_baseline().map(|b| json!({ "valid_s": b.valid_seconds, "wall_s": b.wall_seconds })),
+                    "threshold": f.threshold(),
+                    "played_s": f.played_s,
+                    "total_s": f.total_s(),
+                    "last": f.last(),
+                    "summary": f.summary,
+                    "message": f.message,
+                })
+            }
+            Query::FeedbackResultGet { last } => {
+                let r = &s.feedback.results;
+                let n = last.unwrap_or(r.len()).min(r.len());
+                json!(&r[r.len() - n..])
+            }
             Query::ViewList => json!(View::ALL
                 .iter()
                 .map(|v| json!({ "id": v, "label": v.label(), "implemented": v.implemented(), "active": *v == s.view }))

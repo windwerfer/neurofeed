@@ -1712,6 +1712,7 @@ name = "nf-core"
 version = "0.1.0"
 dependencies = [
  "nf-dsp",
+ "nf-feedback",
  "nf-format",
  "nf-sim",
  "nf-types",
