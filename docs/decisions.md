@@ -60,3 +60,7 @@ The hybrid plan from `docs/review-feedback-engine.md` is approved, with the curr
 ## 2026-10-30 Band Stability defaults
 
 Window 10 s, difficulty 0.10 (legacy Dart `StabilityConfig`; bounds window 1..30, difficulty 0..0.5). Replaces the earlier guess of 0.2.
+
+## 2026-10-30 Desktop chime (cpal)
+
+`native-audio` feature (default) plays the same 660 Hz / 0.85 s envelope as Web Audio through cpal 0.16; one stream opened lazily on the first chime, triggered via an atomic counter (no locks in the callback). No device: logs once and stays silent. Linux builds need `libasound2-dev` + `pkg-config` (or `--no-default-features`).
