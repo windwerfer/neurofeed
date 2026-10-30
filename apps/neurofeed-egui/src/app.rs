@@ -38,7 +38,10 @@ impl NeuroFeedApp {
             session.register_provider(p);
         }
         #[cfg(not(target_arch = "wasm32"))]
-        session.set_stream_sink(Box::new(nf_device::UdpSink::new()));
+        {
+            session.set_stream_sink(Box::new(nf_device::UdpSink::new()));
+            session.set_stream_outlets(Box::new(nf_device::LslOutlets::new()));
+        }
         let mut app = Self::with_session(session);
         #[cfg(not(target_arch = "wasm32"))]
         if param("bridge").is_some_and(|v| v != "0") {

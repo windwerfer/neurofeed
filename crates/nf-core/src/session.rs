@@ -115,6 +115,9 @@ pub struct Session {
     providers: Vec<Box<dyn DeviceProvider>>,
     source: Option<Box<dyn DeviceSource>>,
     sink: Option<Box<dyn crate::streaming::DatagramSink>>,
+    outlets: Option<Box<dyn nf_types::StreamOutlets>>,
+    /// (device id, separate groups) the LSL outlets are open for.
+    lsl_open: Option<(String, bool)>,
     live: Live,
     store: Box<dyn nf_store::Store>,
     events: Vec<Event>,
@@ -139,6 +142,8 @@ impl Session {
             providers: Vec::new(),
             source: None,
             sink: None,
+            outlets: None,
+            lsl_open: None,
             live: Live::default(),
             store: Box::new(nf_store::MemoryStore::default()),
             events: Vec::new(),
@@ -483,6 +488,7 @@ impl Session {
         }
         self.state.time += dt;
         let now = self.state.time;
+        self.sync_lsl();
         if let Some((mut packets, optical, accel)) = self.poll_device(now) {
             self.route_side_streams(&packets, &optical, &accel);
             let full = self.process_eeg(&mut packets);
@@ -593,7 +599,11 @@ impl Session {
     /// Streaming is on and a device is connected (syncs the streamer).
     fn streaming(&mut self) -> bool {
         let s = &self.state.streaming.settings;
-        match (&self.state.device, s.enabled && self.sink.is_some()) {
+        let transport = match s.protocol {
+            crate::streaming::StreamProtocol::Osc => self.sink.is_some(),
+            crate::streaming::StreamProtocol::Lsl => self.outlets.is_some(),
+        };
+        match (&self.state.device, s.enabled && transport) {
             (Some(d), true) => {
                 self.live.streamer.sync(d, s);
                 true
@@ -602,8 +612,51 @@ impl Session {
         }
     }
 
-    /// Hand encoded OSC datagrams to the shell's sink.
+    /// Open, reopen or close the LSL outlets to match settings and device.
+    fn sync_lsl(&mut self) {
+        let st = &mut self.state.streaming;
+        let Some(outlets) = self.outlets.as_mut() else { return };
+        let s = &st.settings;
+        let want = match &self.state.device {
+            Some(d) if s.enabled && s.protocol == crate::streaming::StreamProtocol::Lsl => Some((d.id.clone(), s.separate_groups)),
+            _ => None,
+        };
+        if want != self.lsl_open {
+            outlets.close();
+            if want.is_some() {
+                let specs = crate::streaming::outlet_specs(self.state.device.as_ref(), s.separate_groups);
+                if let Err(e) = outlets.open(&specs) {
+                    st.stats.last_error = Some(e);
+                }
+            }
+            self.lsl_open = want;
+        }
+        st.stats.lsl_consumers = if self.lsl_open.is_some() { outlets.consumers() } else { 0 };
+    }
+
+    /// Push complete chunks to the LSL outlets.
+    fn flush_lsl(&mut self) {
+        let (rows, dropped) = self.live.streamer.take_rows();
+        let st = &mut self.state.streaming;
+        st.stats.dropped_samples += dropped;
+        let Some(o) = self.outlets.as_mut().filter(|_| self.lsl_open.is_some()) else { return };
+        for (i, v) in rows {
+            match o.push(i, &v) {
+                Ok(()) => {
+                    st.stats.packets_sent += 1;
+                    st.stats.bytes_sent += 4 * v.len() as u64;
+                }
+                Err(e) => st.stats.last_error = Some(e),
+            }
+        }
+    }
+
+    /// Hand encoded OSC datagrams to the shell's sink (or rows to LSL).
     fn flush_stream(&mut self) {
+        if self.state.streaming.settings.protocol == crate::streaming::StreamProtocol::Lsl {
+            self.sync_lsl();
+            return self.flush_lsl();
+        }
         let (out, dropped) = self.live.streamer.take();
         let st = &mut self.state.streaming;
         st.stats.dropped_samples += dropped;
@@ -625,6 +678,12 @@ impl Session {
         let records = nf_format::parse_body(&s.body).map_err(|e| CoreError::BadRequest(e.0))?;
         let marks = crate::trust::marks(s.meta.import.as_ref());
         Ok(crate::trust::build(crate::trust::rows_from_records(&records), marks))
+    }
+
+    /// Register the LSL outlet transport (desktop shells).
+    pub fn set_stream_outlets(&mut self, outlets: Box<dyn nf_types::StreamOutlets>) {
+        self.outlets = Some(outlets);
+        self.state.streaming.lsl_transport = true;
     }
 
     /// Register the network transport for streaming out (desktop shells).

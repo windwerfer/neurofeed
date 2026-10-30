@@ -20,10 +20,14 @@ pub use nf_types::{AccelPacket, DeviceInfo, DeviceKind, DeviceProvider, DeviceSo
 
 #[cfg(feature = "osc")]
 mod crown;
+#[cfg(feature = "lsl")]
+mod lsl;
 #[cfg(feature = "ble")]
 mod muse;
 mod push;
 mod udp;
+#[cfg(feature = "lsl")]
+pub use lsl::LslOutlets;
 
 #[cfg(feature = "osc")]
 pub use crown::{CrownProvider, CROWN_OSC_PORT};

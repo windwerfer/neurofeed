@@ -19,6 +19,7 @@ default = ["server"]
 server = ["dep:rmcp", "dep:tokio"]
 
 [dev-dependencies]
+nf-types.workspace = true
 nf-device = { workspace = true, features = ["osc"], default-features = false }
 rosc = "0.11"
 nf-format.workspace = true

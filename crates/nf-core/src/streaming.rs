@@ -1,4 +1,4 @@
-//! Streaming out over OSC (UDP). The core decides *what* goes on the wire
+//! Streaming out over OSC (UDP) or Lab Streaming Layer (LSL outlets, desktop only). The core decides *what* goes on the wire
 //! and encodes the datagrams; a shell-registered [`DatagramSink`] sends them
 //! (desktop: `nf_device::UdpSink`; the web build has no UDP).
 //!
@@ -22,9 +22,22 @@ pub const MAX_QUEUED: usize = 128;
 /// Nominal accelerometer rate (Muse), used to spread per-row timestamps.
 const ACCEL_HZ: f64 = 52.0;
 
+/// Wire protocol for streaming out.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum StreamProtocol {
+    /// OSC datagrams to one ip:port.
+    #[default]
+    Osc,
+    /// One LSL outlet per group, discoverable on the network (LabRecorder, pylsl, OpenViBE).
+    Lsl,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct StreamSettings {
     pub enabled: bool,
+    #[serde(default)]
+    pub protocol: StreamProtocol,
     pub ip: String,
     pub port: u16,
     /// OSC address prefix, e.g. `/muse` → `/muse/eeg`.
@@ -35,7 +48,14 @@ pub struct StreamSettings {
 
 impl Default for StreamSettings {
     fn default() -> Self {
-        Self { enabled: false, ip: "192.168.1.100".into(), port: 9000, prefix: "/muse".into(), separate_groups: false }
+        Self {
+            enabled: false,
+            protocol: StreamProtocol::Osc,
+            ip: "192.168.1.100".into(),
+            port: 9000,
+            prefix: "/muse".into(),
+            separate_groups: false,
+        }
     }
 }
 
@@ -45,6 +65,9 @@ impl Default for StreamSettings {
 pub struct StreamPatch {
     #[serde(default)]
     pub enabled: Option<bool>,
+    /// osc | lsl (lsl needs the desktop app).
+    #[serde(default)]
+    pub protocol: Option<StreamProtocol>,
     /// IPv4 or IPv6 destination.
     #[serde(default)]
     pub ip: Option<String>,
@@ -63,6 +86,9 @@ pub struct StreamStats {
     pub bytes_sent: u64,
     /// Samples dropped because one channel ran ahead of the others.
     pub dropped_samples: u64,
+    /// LSL: inlets connected right now (LabRecorder, pylsl, ...).
+    #[serde(default)]
+    pub lsl_consumers: usize,
     pub last_error: Option<String>,
 }
 
@@ -72,6 +98,9 @@ pub struct StreamState {
     pub settings: StreamSettings,
     /// A shell registered a network transport.
     pub transport: bool,
+    /// A shell registered an LSL outlet transport.
+    #[serde(default)]
+    pub lsl_transport: bool,
     pub stats: StreamStats,
 }
 
@@ -93,11 +122,17 @@ pub fn set(st: &mut StreamState, p: &StreamPatch) -> Result<Value, CoreError> {
         s.prefix = normalize_prefix(pre)?;
     }
     s.separate_groups = p.separate_groups.unwrap_or(s.separate_groups);
-    if p.enabled == Some(true) && !st.transport {
-        return Err(CoreError::Disabled {
-            id: "streaming.set".into(),
-            reason: "no network transport in this build (the web app cannot send UDP)".into(),
-        });
+    s.protocol = p.protocol.unwrap_or(s.protocol);
+    let available = match s.protocol {
+        StreamProtocol::Osc => st.transport,
+        StreamProtocol::Lsl => st.lsl_transport,
+    };
+    if p.enabled.unwrap_or(s.enabled) && !available {
+        let reason = match s.protocol {
+            StreamProtocol::Osc => "no network transport in this build (the web app cannot send UDP)",
+            StreamProtocol::Lsl => "LSL needs the desktop app (no LSL transport in this build)",
+        };
+        return Err(CoreError::Disabled { id: "streaming.set".into(), reason: reason.into() });
     }
     s.enabled = p.enabled.unwrap_or(s.enabled);
     if s.enabled && !st.settings.enabled {
@@ -124,13 +159,14 @@ pub fn status(st: &StreamState, dev: Option<&DeviceInfo>) -> Value {
         .map(|g| json!({ "id": g.id, "address": format!("{}/{}", st.settings.prefix, g.id), "channels": g.channels, "rate_hz": g.rate, "chunk": g.chunk }))
         .collect();
     json!({
-        "protocol": "osc",
+        "protocol": st.settings.protocol,
         "settings": st.settings,
         "transport": st.transport,
+        "lsl_transport": st.lsl_transport,
+        "lsl_streams": outlet_specs(dev, st.settings.separate_groups).iter().map(|o| json!({ "name": o.name, "type": o.kind, "source_id": o.source_id })).collect::<Vec<_>>(),
         "active": st.settings.enabled && dev.is_some(),
         "stats": st.stats,
         "groups": groups,
-        "lsl": "not available yet",
     })
 }
 
@@ -157,6 +193,30 @@ pub fn groups(dev: Option<&DeviceInfo>, separate: bool) -> Vec<Group> {
     let bands = d.channels.iter().flat_map(|c| ["delta", "theta", "alpha", "beta", "gamma"].map(|b| format!("{c}_{b}"))).collect();
     g.push(Group { id: "bands", channels: bands, rate: 10.0, chunk: 1 });
     g
+}
+
+/// LSL outlets for the streamed groups (one per group).
+pub fn outlet_specs(dev: Option<&DeviceInfo>, separate: bool) -> Vec<nf_types::OutletSpec> {
+    let Some(d) = dev else { return Vec::new() };
+    groups(dev, separate)
+        .into_iter()
+        .map(|g| {
+            let (kind, unit) = match g.id {
+                "eeg" => ("EEG", "microvolts"),
+                "ppg" => ("PPG", "raw"),
+                "imu" => ("Accelerometer", "g"),
+                _ => ("EEG-bands", "log-power"),
+            };
+            nf_types::OutletSpec {
+                name: format!("NeuroFeed {} {}", d.name, kind),
+                kind: kind.into(),
+                channels: g.channels,
+                unit: unit.into(),
+                rate_hz: g.rate,
+                source_id: format!("neurofeed:{}:{}", d.id, g.id),
+            }
+        })
+        .collect()
 }
 
 /// Per-channel queues recombined into lockstep rows (legacy `GroupMixer`).
@@ -260,6 +320,19 @@ impl Streamer {
         }
     }
 
+    /// Complete chunks as (group index, row-major values) and samples dropped.
+    pub fn take_rows(&mut self) -> (Vec<(usize, Vec<f32>)>, u64) {
+        let mut dropped = 0;
+        let mut out = Vec::new();
+        let mut chunks = Vec::new();
+        for (i, m) in self.mixers.iter_mut().enumerate() {
+            m.drain(&mut chunks);
+            out.extend(chunks.drain(..).map(|(_, v)| (i, v)));
+            dropped += std::mem::take(&mut m.dropped);
+        }
+        (out, dropped)
+    }
+
     /// Encode complete chunks; returns the datagrams and samples dropped.
     pub fn take(&mut self) -> (Vec<Vec<u8>>, u64) {
         let mut dropped = 0;
@@ -354,5 +427,9 @@ mod tests {
         let v = set(&mut st, &StreamPatch { enabled: Some(true), prefix: Some("/nf/".into()), ..Default::default() }).unwrap();
         assert_eq!((v["prefix"].as_str(), v["enabled"].as_bool()), (Some("/nf"), Some(true)));
         assert!(set(&mut st, &StreamPatch { prefix: Some("x y".into()), ..Default::default() }).is_err());
+        let lsl = StreamPatch { protocol: Some(StreamProtocol::Lsl), ..Default::default() };
+        assert!(set(&mut st, &lsl).unwrap_err().to_string().contains("desktop"), "still enabled, no LSL transport");
+        st.lsl_transport = true;
+        assert_eq!(set(&mut st, &lsl).unwrap()["protocol"], "lsl");
     }
 }

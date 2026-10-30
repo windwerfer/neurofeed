@@ -2539,6 +2539,7 @@ dependencies = [
  "log",
  "muse-rs",
  "nf-types",
+ "pure-lsl",
  "rosc",
  "tokio",
 ]
@@ -2587,6 +2588,7 @@ dependencies = [
  "nf-device",
  "nf-format",
  "nf-store",
+ "nf-types",
  "rmcp",
  "rosc",
  "serde_json",

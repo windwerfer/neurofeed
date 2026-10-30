@@ -209,6 +209,30 @@ pub trait DatagramSink: Send {
     fn send(&mut self, ip: &str, port: u16, bytes: &[u8]) -> Result<(), String>;
 }
 
+/// One stream a [`StreamOutlets`] transport should announce.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OutletSpec {
+    pub name: String,
+    /// Content type (`EEG`, `PPG`, `Accelerometer`, ...).
+    pub kind: String,
+    pub channels: Vec<String>,
+    pub unit: String,
+    pub rate_hz: f64,
+    pub source_id: String,
+}
+
+/// Lab Streaming Layer style outlets (streaming out). Desktop shells
+/// provide one; the web build has none.
+pub trait StreamOutlets: Send {
+    /// Replace any open outlets with these.
+    fn open(&mut self, specs: &[OutletSpec]) -> Result<(), String>;
+    /// Push row-major float32 rows to outlet `index`, the last row stamped now.
+    fn push(&mut self, index: usize, rows: &[f32]) -> Result<(), String>;
+    fn close(&mut self);
+    /// Connected consumers over all outlets.
+    fn consumers(&self) -> usize;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

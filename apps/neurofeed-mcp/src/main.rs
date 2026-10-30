@@ -62,6 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         session.set_stream_sink(Box::new(nf_device::UdpSink::new()));
+        session.set_stream_outlets(Box::new(nf_device::LslOutlets::new()));
         let server = NfMcp::new(session, clock);
         if let Some(id) = device {
             connect(&server, &id).await?;

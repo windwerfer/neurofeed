@@ -7,7 +7,9 @@ license.workspace = true
 publish.workspace = true
 
 [features]
-default = ["ble", "osc"]
+default = ["ble", "osc", "lsl"]
+## Lab Streaming Layer outlets (pure Rust, `pure-lsl`).
+lsl = ["dep:pure-lsl"]
 ## Muse over Bluetooth LE (muse-rs + btleplug; Linux needs libdbus-1-dev).
 ble = ["dep:muse-rs", "dep:btleplug", "dep:tokio", "dep:anyhow"]
 ## Neurosity Crown over OSC/UDP (port 9000 by default).
@@ -16,6 +18,7 @@ osc = ["dep:rosc"]
 [dependencies]
 nf-types.workspace = true
 log.workspace = true
+pure-lsl = { path = "../pure-lsl", optional = true }
 rosc = { version = "0.11", optional = true }
 # windwerfer fork, main (tag 0.1.2 + docs); default features pull a TUI.
 muse-rs = { git = "https://github.com/windwerfer/muse-rs", rev = "e4891ba52", default-features = false, optional = true }

@@ -157,3 +157,10 @@ Settings is a section rail (General, Devices, Training, AI, Recording, About) wi
 ## Nerd sheet and PDF export
 - Nerd sheet (`feedback.nerd`): reward pile histogram (24 bins, threshold/live markers kept inside), live value, threshold percentile, mean, spread, n, success rate; guard pile when a guard runs. Anchored bottom-right so the header toggles and trust pane stay usable.
 - PDF report: own minimal PDF 1.4 writer in nf-format (`pdf.rs`, Helvetica/WinAnsi, text/rect/polyline, ~150 lines) instead of a crate — wasm-clean, no font embedding. Non-Latin-1 characters become `?` (accepted for now; embedding a TTF would be the upgrade). `history.export` format `pdf`; `recording.export` rejects it (needs the stored session). One page: title, info, totals, percentile/threshold plot + trust strip, notes, recording context.
+
+## LSL: own pure-Rust crate `pure-lsl`, sending only (2026-10-30)
+- Existing pure-Rust crates exist (rlsl 0.0.6, labstream 0.1.2, lsl-core 0.0.1; `lsl`/`lsl-sys` are liblsl bindings). We still wrote our own, designed from the protocol (liblsl studied, not translated); publishing is the owner's call (`publish = false` for now).
+- Outlet only: ~1.3k lines. An inlet (resolver, XML parse, TCP client, time correction) estimated +65% > 30% budget → not built.
+- Protocol 1.10 only (1.00 → 505), little-endian, timestamps = local monotonic clock at send. Slow consumers drop chunks (bounded queue), counted.
+- NeuroFeed: `StreamOutlets` trait in nf-types, `LslOutlets` in nf-device (feature `lsl`, native only); web build has no transport and `streaming.set {protocol:"lsl"}` errors there.
+- Interop: tests/interop.rs (pylsl, gated on PURE_LSL_PYTHON), scripts/lsl_e2e.py for the whole app.
