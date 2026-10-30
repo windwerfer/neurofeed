@@ -416,11 +416,17 @@ impl Session {
                 }
                 return Ok(serde_json::to_value(self.sim.config).unwrap_or_default());
             }
-            Command::ProtocolSet { id } => {
+            Command::ProtocolSet { id, minutes } => {
                 let p = nf_feedback::protocol(&id).ok_or_else(|| CoreError::InvalidArgs(format!("unknown protocol `{id}`")))?;
+                let (lo, hi) = crate::feedback::MINUTES;
+                if minutes.is_some_and(|m| !(lo..=hi).contains(&m)) {
+                    return Err(CoreError::InvalidArgs(format!("minutes must be in [{lo}, {hi}]")));
+                }
                 let fb = &mut self.state.feedback;
+                if fb.protocol.id != p.id || minutes.is_some() {
+                    fb.minutes = minutes.unwrap_or(p.default_minutes);
+                }
                 fb.protocol = p;
-                fb.minutes = p.default_minutes;
                 fb.summary = None;
             }
             Command::FeedbackStart { minutes } => {

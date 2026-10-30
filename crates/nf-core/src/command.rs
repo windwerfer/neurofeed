@@ -89,7 +89,12 @@ pub enum Command {
     ChannelSet { channel: String },
     /// Choose the training protocol (locked while a session runs).
     #[serde(rename = "protocol.set")]
-    ProtocolSet { id: String },
+    ProtocolSet {
+        id: String,
+        /// Session length, 1..=120 min; default the protocol's.
+        #[serde(default)]
+        minutes: Option<u32>,
+    },
     /// Start a session: enters the fit check.
     #[serde(rename = "feedback.start")]
     FeedbackStart {
@@ -524,7 +529,7 @@ pub fn examples() -> Vec<Request> {
         C(Command::RecordingStop),
         C(Command::MainsSet { mode: MainsMode::Hz60 }),
         C(Command::ChannelSet { channel: "AF7".into() }),
-        C(Command::ProtocolSet { id: "openMonitor".into() }),
+        C(Command::ProtocolSet { id: "openMonitor".into(), minutes: Some(20) }),
         C(Command::FeedbackStart { minutes: Some(5) }),
         C(Command::FeedbackStop),
         C(Command::FeedbackPause),

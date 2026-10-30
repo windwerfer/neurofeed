@@ -389,7 +389,7 @@ impl Trainer {
                     self.good_for = 0;
                     self.resume(out);
                 }
-                self.push(time, None, false, Some(format!("paused: no good signal on {}", pad_list(&bad))));
+                self.push(time, None, false, Some(format!("no good signal on {}", pad_list(&bad))));
             }
             _ => {}
         }

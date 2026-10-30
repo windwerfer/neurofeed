@@ -38,3 +38,14 @@ The hybrid plan from `docs/review-feedback-engine.md` is approved, with the curr
    - The legacy engine blocked only in stability mode, ignoring the flag; in uptrain it only muted the audio while still counting the reward.
 
 **Small behaviour change.** Legacy `clamp(initial, max)` throws when initial > max; we let max win.
+
+## 2026-10-29: feedback session state machine (nf-core::feedback)
+
+- Phases idle → fit_check → calibrating → playing ⇄ paused{user|bad_signal|disconnected} → ended. Driven once per session second by `Session` (injected clock; `clock.advance` in tests).
+- Reward uses the legacy target pads (AF7/AF8, Crown PO3/PO4, else all); the fit check passes after 3 s of all target pads ≥ 80.
+- Calibration: 45 good seconds or 60 s of sample time, whichever first (bad signal extends it to 60 s). Sample time stops while no data arrives, so a dropout does not use up the window. Fewer than 10 good seconds goes back to the fit check. "Start now" (`calibration.skip`) needs ≥ 10. The last baseline is stored per device+protocol for `calibration.reuse`.
+- Timing: no usable target pad for 10 s → auto-pause; it auto-resumes after 2 good s. No data for 1.5 s counts as disconnected: paused, and the session ends after a 10 s grace (before training, it is cancelled to idle).
+- Protocol and length are locked while a session runs. `threshold.set` (percentile) is the one live control; it is disabled for stability and during calibration.
+- One `SecondResult` per second (`feedback.result.get`, UI). The reward chime fires on the rising edge into target (`Event::Chime`).
+- The AI sleep guard (`ai.a_vig`) is not ported: Sleep Guard is listed as unavailable, and the other protocols run without a guard.
+- `sim.fault` (bad pads / dropout) is a test hook; it does not reconnect.
