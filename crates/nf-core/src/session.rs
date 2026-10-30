@@ -143,6 +143,26 @@ impl Session {
         }
     }
 
+    /// Export a saved session (typed; `history.export` wraps it).
+    pub fn history_export(&self, id: u64, format: crate::ExportFormat) -> Result<Vec<u8>, CoreError> {
+        let s = self.stored(id)?;
+        let device: DeviceInfo = serde_json::from_str(&s.device_json).map_err(|e| CoreError::BadRequest(format!("stored device: {e}")))?;
+        let info = crate::recording::RecordingInfo {
+            active: false,
+            device: device.id.clone(),
+            started: 0.0,
+            duration: s.meta.duration_s,
+            eeg_samples: s.meta.eeg_samples,
+            ppg_samples: s.meta.ppg_samples,
+            feedback_seconds: s.meta.feedback_seconds,
+            bytes: s.body.len(),
+            wall_clock_unix_ms: s.meta.started_unix_ms,
+        };
+        let f = Finished { device, info, body: s.body };
+        let start = f.info.wall_clock_unix_ms.map_or((1985, 1, 1, 0, 0, 0), crate::recording::civil_utc);
+        export(&f, format, start).map_err(CoreError::BadRequest)
+    }
+
     fn stored(&self, id: u64) -> Result<nf_store::StoredSession, CoreError> {
         self.store
             .get(id)
@@ -767,23 +787,7 @@ impl Session {
                 json!({ "meta": s.meta, "device": serde_json::from_str::<serde_json::Value>(&s.device_json).unwrap_or_default(), "records": records.len(), "feedback": feedback })
             }
             Query::HistoryExport { id, format } => {
-                let s = self.stored(*id)?;
-                let device: DeviceInfo =
-                    serde_json::from_str(&s.device_json).map_err(|e| CoreError::BadRequest(format!("stored device: {e}")))?;
-                let info = crate::recording::RecordingInfo {
-                    active: false,
-                    device: device.id.clone(),
-                    started: 0.0,
-                    duration: s.meta.duration_s,
-                    eeg_samples: s.meta.eeg_samples,
-                    ppg_samples: s.meta.ppg_samples,
-                    feedback_seconds: s.meta.feedback_seconds,
-                    bytes: s.body.len(),
-                    wall_clock_unix_ms: s.meta.started_unix_ms,
-                };
-                let f = Finished { device, info, body: s.body };
-                let start = f.info.wall_clock_unix_ms.map_or((1985, 1, 1, 0, 0, 0), crate::recording::civil_utc);
-                let bytes = export(&f, *format, start).map_err(CoreError::BadRequest)?;
+                let bytes = self.history_export(*id, *format)?;
                 json!({ "id": id, "format": format, "extension": format.extension(), "bytes": bytes.len(), "base64": base64(&bytes) })
             }
             Query::RecordingExport { format, start } => {

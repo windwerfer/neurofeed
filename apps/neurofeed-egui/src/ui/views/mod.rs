@@ -4,6 +4,7 @@ mod bands;
 mod feedback;
 mod heart;
 mod histogram;
+mod history;
 mod placeholder;
 mod plot;
 mod psd;
@@ -16,6 +17,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let state = session.state();
     match state.view {
         View::Feedback => feedback::show(ui, session, out),
+        View::History => history::show(ui, session, out),
         View::Bands => bands::show(ui, state, out),
         View::RawEeg => raw::show(ui, session),
         View::Psd => psd::show(ui, session),

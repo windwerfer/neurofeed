@@ -35,7 +35,7 @@ impl NeuroFeedApp {
         Self { session, last_error: None, audio: audio::platform() }
     }
 
-    /// Screenshot/demo states of the feedback flow (NF_DEMO=fit|calibrating|training|paused|summary).
+    /// Screenshot/demo states of the feedback flow (NF_DEMO=fit|calibrating|training|paused|summary|history).
     #[cfg(not(target_arch = "wasm32"))]
     fn demo(&mut self, which: &str) {
         let adv = |s: f64| Command::ClockAdvance { seconds: s };
@@ -68,6 +68,23 @@ impl NeuroFeedApp {
                 adv(50.0),
                 adv(125.0),
             ]),
+            "history" => {
+                for (i, p) in ["restAwake", "alertOpen", "openMonitor"].into_iter().enumerate() {
+                    let blink = |on| Command::SimFault { bad_pads: Vec::new(), dropout: false, motion: false, blink: on, clench: false };
+                    steps.extend([
+                        Command::ProtocolSet { id: p.into(), minutes: None },
+                        Command::FeedbackStart { minutes: Some(2 + i as u32), wall_clock_unix_ms: None },
+                        adv(4.0),
+                        Command::CalibrationStart { anyway: false },
+                        adv(60.0),
+                        blink(i == 1),
+                        adv(30.0),
+                        blink(false),
+                        adv(200.0),
+                    ]);
+                }
+                steps.push(Command::ViewSet { view: nf_core::View::History });
+            }
             _ => {}
         }
         steps.into_iter().for_each(|c| self.run(c));
