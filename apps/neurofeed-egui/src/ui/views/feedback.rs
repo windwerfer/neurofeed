@@ -3,8 +3,10 @@
 
 use egui::{Align2, Color32, FontId, Pos2, RichText, Sense, Stroke, Vec2};
 use nf_core::feedback::{PadFit, PauseReason, Phase, Trainer, FIT_GREEN_S};
-use nf_core::nf_feedback::{Eyes, Protocol};
+use nf_core::nf_feedback::{Eyes, HeldBack, Protocol};
+use nf_core::trust::Trust;
 use nf_core::{Command, Session};
+use std::sync::Arc;
 
 const GOOD: Color32 = Color32::from_rgb(0x66, 0xBB, 0x6A);
 const FAIR: Color32 = Color32::from_rgb(0xFF, 0xB7, 0x4D);
@@ -271,20 +273,90 @@ fn mmss(s: u32) -> String {
     format!("{}:{:02}", s / 60, s % 60)
 }
 
-fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
+/// Dashboard view state (per app run).
+#[derive(Clone, Default)]
+struct Dash {
+    show_trust: bool,
+    plot: super::trust::Plot,
+    /// (results seen, trust built from them).
+    cache: Option<(usize, f64, Arc<Trust>)>,
+}
+
+fn dash_id() -> egui::Id {
+    egui::Id::new("feedback_dashboard")
+}
+
+/// Trust of the current run, rebuilt only when a second was added.
+fn live_trust(t: &Trainer, d: &mut Dash) -> Arc<Trust> {
+    let key = (t.results.len(), t.results.last().map_or(0.0, |r| r.time));
+    match &d.cache {
+        Some((n, at, tr)) if (*n, *at) == key => tr.clone(),
+        _ => {
+            let tr = Arc::new(nf_core::trust::build(nf_core::trust::rows_from_results(&t.results), Vec::new()));
+            d.cache = Some((key.0, key.1, tr.clone()));
+            tr
+        }
+    }
+}
+
+/// Status chip text and colour for the training screen.
+fn status(t: &Trainer) -> (String, Color32) {
     let last = t.last();
-    let in_target = last.is_some_and(|r| r.in_target) && t.phase == Phase::Playing;
-    let (status, color) = match t.phase {
+    let rec = last.and_then(|r| r.record.as_ref());
+    let held = rec.and_then(|r| r.held_back.as_ref()).and_then(|h| h.first());
+    match t.phase {
         Phase::Paused { reason: PauseReason::User } => ("Paused".to_owned(), FAIR),
         Phase::Paused { reason: PauseReason::BadSignal } => ("Paused: waiting for good signal".to_owned(), FAIR),
         Phase::Paused { reason: PauseReason::Disconnected } => ("Paused: device disconnected".to_owned(), BAD),
-        _ if in_target => ("In target".to_owned(), GOOD),
+        _ if last.is_some_and(|r| r.in_target) => ("In target".to_owned(), GOOD),
+        _ if held.is_some() => {
+            (format!("Held back ({})", format!("{:?}", held.copied().unwrap_or(HeldBack::NoThreshold)).to_lowercase()), FAIR)
+        }
         _ => ("Training".to_owned(), CALM),
-    };
+    }
+}
+
+fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
+    let mut d: Dash = ui.data(|x| x.get_temp(dash_id())).unwrap_or_default();
     ui.horizontal(|ui| {
         ui.heading(&t.protocol.title);
         ui.weak(format!("{} left", mmss(t.total_s().saturating_sub(t.played_s))));
+        let frac = t.played_s as f32 / t.total_s().max(1) as f32;
+        ui.add(egui::ProgressBar::new(frac).desired_width(160.0).desired_height(6.0));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.toggle_value(&mut d.show_trust, "Trust").on_hover_text("Live trust trace: what each second really was");
+        });
     });
+    if d.show_trust {
+        let trust = live_trust(t, &mut d);
+        ui.columns(2, |c| {
+            indicator(&mut c[0], session, t, out);
+            super::trust::pane(&mut c[1], &trust, &mut d.plot, 180.0, false);
+        });
+    } else {
+        indicator(ui, session, t, out);
+    }
+    ui.data_mut(|x| x.insert_temp(dash_id(), d));
+}
+
+/// Percentile meter: fill = last percentile, tick = threshold percentile.
+fn meter(p: &egui::Painter, rect: egui::Rect, pct: Option<f64>, thr: Option<f64>, color: Color32) {
+    p.rect(rect, 4.0, color.gamma_multiply(0.12), Stroke::new(1.0_f32, color.gamma_multiply(0.6)));
+    let y = |v: f64| rect.bottom() - (v.clamp(0.0, 100.0) as f32 / 100.0) * rect.height();
+    if let Some(v) = pct {
+        p.rect_filled(egui::Rect::from_min_max(Pos2::new(rect.left(), y(v)), rect.right_bottom()), 4.0, color.gamma_multiply(0.7));
+    }
+    if let Some(v) = thr {
+        let yy = y(v);
+        p.line_segment([Pos2::new(rect.left() - 6.0, yy), Pos2::new(rect.right() + 6.0, yy)], Stroke::new(2.0_f32, FAIR));
+        p.text(Pos2::new(rect.right() + 9.0, yy), Align2::LEFT_CENTER, "threshold", FontId::proportional(11.0), FAIR);
+    }
+}
+
+fn indicator(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
+    let last = t.last();
+    let in_target = last.is_some_and(|r| r.in_target) && t.phase == Phase::Playing;
+    let (status, color) = status(t);
     let avail = ui.available_size();
     let h = (avail.y - 120.0).max(200.0);
     let (rect, _) = ui.allocate_exact_size(Vec2::new(avail.x, h), Sense::hover());
@@ -297,9 +369,14 @@ fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Com
     }
     p.circle_filled(rect.center(), r, glow.gamma_multiply(0.55));
     p.circle_stroke(rect.center(), r, Stroke::new(2.0_f32, glow));
+    let rec = last.and_then(|x| x.record.as_ref());
+    let bar = egui::Rect::from_center_size(rect.center() + Vec2::new(r * 1.55, 0.0), Vec2::new(14.0, r * 1.8));
+    if bar.right() + 60.0 < rect.right() {
+        meter(&p, bar, rec.and_then(|x| x.pct), rec.and_then(|x| x.thr_pct), if in_target { GOOD } else { CALM });
+    }
     ui.vertical_centered(|ui| {
         chip(ui, &status, color);
-        if last.and_then(|r| r.record.as_ref()).and_then(|r| r.warn) == Some(true) {
+        if rec.and_then(|r| r.warn) == Some(true) {
             ui.add_space(4.0);
             chip(ui, "Drowsiness warning", FAIR);
         }
@@ -322,29 +399,21 @@ fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Com
 fn summary(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
     let Some(s) = &t.summary else { return };
     header(ui, "Session complete", &format!("{} · ended: {}", t.protocol.title, s.ended_by));
-    let stat = |ui: &mut egui::Ui, label: &str, value: String| {
-        ui.vertical(|ui| {
-            ui.weak(label);
-            ui.label(RichText::new(value).size(30.0).strong());
-        });
-        ui.add_space(30.0);
-    };
-    ui.horizontal(|ui| {
-        stat(ui, "Time in target", s.success.map_or("--".into(), |x| format!("{:.0} %", x * 100.0)));
-        stat(ui, "Trained", mmss(s.played_s));
-        stat(ui, "Counted seconds", format!("{}", s.counted_s));
-        stat(ui, "Rewards", format!("{}", s.chimes));
-    });
-    ui.add_space(10.0);
+    let mut d: Dash = ui.data(|x| x.get_temp(dash_id())).unwrap_or_default();
+    let trust = live_trust(t, &mut d);
+    ui.allocate_ui(Vec2::new(ui.available_width().min(900.0), 360.0), |ui| super::trust::pane(ui, &trust, &mut d.plot, 200.0, true));
+    ui.data_mut(|x| x.insert_temp(dash_id(), d));
+    ui.add_space(6.0);
     let thr = |x: Option<f64>| x.map_or("--".into(), |v| format!("{v:.3}"));
     ui.weak(format!(
-        "Threshold {} to {} ({} adjustments) · {} pauses",
+        "Threshold {} to {} ({} adjustments) · {} counted seconds · {} pauses · saved to History",
         thr(s.threshold_start),
         thr(s.threshold_end),
         s.adapt_steps,
+        s.counted_s,
         s.pauses
     ));
-    ui.add_space(20.0);
+    ui.add_space(14.0);
     ui.horizontal(|ui| {
         action(ui, session, "feedback.start", "Train again", true, Command::FeedbackStart { minutes: None, wall_clock_unix_ms: None }, out);
         action(
@@ -356,5 +425,6 @@ fn summary(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Comm
             Command::ProtocolSet { id: t.protocol.id.clone(), minutes: None },
             out,
         );
+        action(ui, session, "view.set", "Open History", false, Command::ViewSet { view: nf_core::View::History }, out);
     });
 }

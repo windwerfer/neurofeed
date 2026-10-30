@@ -15,6 +15,7 @@ mod settings;
 mod sound;
 mod spectrogram;
 mod streaming;
+mod trust;
 
 use nf_core::{Command, Session, View};
 

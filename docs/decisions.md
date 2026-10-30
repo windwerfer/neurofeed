@@ -143,3 +143,6 @@ calibration variants and colours of the legacy builder are not editable; a
 copy of Band Stability or Sleep Guard says so in `notes`. Ids are slugs and
 cannot shadow a built-in; saving an existing id needs `replace`. A batch that
 fails after `protocol.save` rolls the document back as well.
+
+## Trust pane and feedback dashboard
+One `views::trust::pane` renders live training, the end-of-session summary and History detail: percentile/value plot with calibration shading, per-second state strip (in zone / below / held / dirty / idle), hover explanations, totals and dirty breakdown. The live pane is cached on result count and last timestamp. The training header shows progress and a Trust toggle; the indicator adds a percentile meter with the threshold tick.
