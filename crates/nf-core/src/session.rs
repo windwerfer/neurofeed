@@ -1092,6 +1092,7 @@ impl Session {
                 .iter()
                 .map(|v| json!({ "id": v, "label": v.label(), "implemented": v.implemented(), "active": *v == s.view }))
                 .collect::<Vec<_>>()),
+            Query::FeedbackNerd => serde_json::to_value(crate::nerd::build(&s.feedback, s.time)).unwrap_or_default(),
             Query::SettingsGet => serde_json::to_value(crate::settings::Persisted::of(s)).unwrap_or_default(),
             Query::BandsGet { scale } => self.bands_json(scale.unwrap_or(s.band_scale)),
             Query::DeviceList => serde_json::to_value(self.device_list()).unwrap_or_default(),

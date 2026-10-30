@@ -277,6 +277,7 @@ fn mmss(s: u32) -> String {
 #[derive(Clone, Default)]
 struct Dash {
     show_trust: bool,
+    show_nerd: bool,
     plot: super::trust::Plot,
     /// (results seen, trust built from them).
     cache: Option<(usize, f64, Arc<Trust>)>,
@@ -324,9 +325,14 @@ fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Com
         let frac = t.played_s as f32 / t.total_s().max(1) as f32;
         ui.add(egui::ProgressBar::new(frac).desired_width(160.0).desired_height(6.0));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.toggle_value(&mut d.show_nerd, "Nerd").on_hover_text("The numbers behind the reward decision");
             ui.toggle_value(&mut d.show_trust, "Trust").on_hover_text("Live trust trace: what each second really was");
         });
     });
+    if d.show_nerd {
+        let n = nf_core::nerd::build(t, session.state().time);
+        super::nerd::window(ui.ctx(), &mut d.show_nerd, &n);
+    }
     if d.show_trust {
         let trust = live_trust(t, &mut d);
         ui.columns(2, |c| {

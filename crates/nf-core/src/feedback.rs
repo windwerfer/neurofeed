@@ -231,6 +231,11 @@ impl Trainer {
         self.engine.is_some()
     }
 
+    /// The running engine (after calibration).
+    pub fn engine(&self) -> Option<&Engine> {
+        self.engine.as_ref()
+    }
+
     pub fn last(&self) -> Option<&SecondResult> {
         self.results.last()
     }

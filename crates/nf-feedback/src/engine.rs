@@ -88,6 +88,22 @@ impl Engine {
     pub fn guard_threshold(&self) -> Option<f64> {
         self.guard_thr
     }
+    /// Eyes-closed rest pile of the guard (empty without a guard).
+    pub fn guard_baseline(&self) -> &Baseline {
+        &self.guard_baseline
+    }
+    /// Guard warning currently active.
+    pub fn warning(&self) -> bool {
+        self.warning
+    }
+    /// Seconds until another warning chime may sound (0 = ready).
+    pub fn chime_cooldown(&self, now: f64) -> f64 {
+        self.last_chime.map_or(0.0, |t| (WARNING_COOLDOWN_S - (now - t)).max(0.0))
+    }
+    /// Raw stability calibration samples (empty for uptrain).
+    pub fn raw_baseline(&self) -> &[f64] {
+        &self.raw_baseline
+    }
 
     /// Change the reward percentile and re-derive the threshold from the
     /// baseline (live difficulty). No effect for the stability policy.

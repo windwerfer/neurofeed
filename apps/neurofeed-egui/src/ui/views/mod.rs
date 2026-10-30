@@ -12,6 +12,7 @@ pub const MARKS_ID: &str = "nf_gesture_markers";
 
 mod about;
 mod meta;
+mod nerd;
 mod plot;
 mod protocol_builder;
 mod psd;

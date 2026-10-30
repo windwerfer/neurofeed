@@ -337,6 +337,9 @@ pub enum Query {
     /// Phase, fit, calibration progress, last second, summary.
     #[serde(rename = "feedback.status")]
     FeedbackStatus,
+    /// Nerd sheet: the numbers behind the reward / guard decision.
+    #[serde(rename = "feedback.nerd")]
+    FeedbackNerd,
     /// All persisted settings.
     #[serde(rename = "settings.get")]
     SettingsGet,
@@ -807,6 +810,7 @@ pub fn examples() -> Vec<Request> {
         C(Command::HistoryDelete { id: 1, confirm: true }),
         C(Command::SettingsSet(crate::settings::SettingsPatch { subject: Some("p01".into()), ..Default::default() })),
         Q(Query::SettingsGet),
+        Q(Query::FeedbackNerd),
         C(Command::HistoryNotes { id: 1, notes: "felt calm".into() }),
         C(Command::FeedbackPause),
         C(Command::FeedbackResume),

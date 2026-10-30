@@ -12,6 +12,7 @@ pub mod audio;
 mod command;
 pub mod feedback;
 pub mod import;
+pub mod nerd;
 pub mod optics;
 pub mod protocols;
 mod recording;
