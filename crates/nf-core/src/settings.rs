@@ -93,6 +93,8 @@ pub struct Persisted {
     pub music_dir: Option<String>,
     pub stability: nf_feedback::StabilityConfig,
     pub guard: bool,
+    /// Streaming destination and protocol; `enabled` is never restored on (always starts off).
+    pub streaming: crate::streaming::StreamSettings,
 }
 
 impl Default for Persisted {
@@ -112,6 +114,7 @@ impl Persisted {
             music_dir: s.music_dir.clone(),
             stability: s.feedback.stability,
             guard: s.feedback.guard,
+            streaming: crate::streaming::StreamSettings { enabled: false, ..s.streaming.settings.clone() },
         }
     }
 
@@ -123,6 +126,7 @@ impl Persisted {
         s.music_dir = self.music_dir;
         s.feedback.stability = self.stability;
         s.feedback.guard = self.guard;
+        s.streaming.settings = crate::streaming::StreamSettings { enabled: s.streaming.settings.enabled, ..self.streaming };
     }
 }
 

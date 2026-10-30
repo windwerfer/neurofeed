@@ -42,3 +42,15 @@ fn notes_are_validated_saved_and_rolled_back() {
     assert!(bad.is_err());
     assert_eq!(s.store().list().unwrap()[0].notes, "sleepy after lunch", "store restored");
 }
+
+#[test]
+fn streaming_protocol_and_destination_survive_a_restart_but_start_off() {
+    let mut s = Session::new().with_store(Box::new(MemoryStore::default()));
+    run(&mut s, "streaming.set", json!({ "protocol": "lsl", "port": 9100, "separate_groups": true })).unwrap();
+    let doc = s.store().get_doc("settings").unwrap().unwrap();
+    let mut store = MemoryStore::default();
+    store.put_doc("settings", Some(&doc)).unwrap();
+    let s2 = Session::new().with_store(Box::new(store));
+    let st = &s2.state().streaming.settings;
+    assert_eq!((st.protocol, st.port, st.separate_groups, st.enabled), (nf_core::streaming::StreamProtocol::Lsl, 9100, true, false));
+}
