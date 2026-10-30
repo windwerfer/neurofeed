@@ -18,6 +18,8 @@ fn session(name: &str, body: &[u8]) -> StoredSession {
             feedback_seconds: 60,
             bytes: body.len() as u64,
             import: Some(serde_json::json!({ "source_format": "edf" })),
+            notes: String::new(),
+            context: Some(serde_json::json!({ "app_version": "t" })),
         },
         device_json: "{}".into(),
         body: body.to_vec(),
@@ -42,6 +44,10 @@ fn contract(s: &mut dyn Store) {
         m.id = a;
         m
     });
+    assert!(s.set_notes(a, "calm").unwrap());
+    assert!(!s.set_notes(999, "x").unwrap());
+    assert_eq!(s.get(a).unwrap().unwrap().meta.notes, "calm");
+    assert_eq!(s.get(a).unwrap().unwrap().meta.context, Some(serde_json::json!({ "app_version": "t" })));
     assert!(s.delete(a).unwrap());
     assert!(!s.delete(a).unwrap());
     assert!(s.get(a).unwrap().is_none());
@@ -115,6 +121,8 @@ fn merge_loaded_keeps_ids_and_renumbers_local_rows() {
             feedback_seconds: 0,
             bytes: 0,
             import: None,
+            notes: String::new(),
+            context: None,
         },
         device_json: "{}".into(),
         body: vec![id as u8],

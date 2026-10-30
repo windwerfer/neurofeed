@@ -129,6 +129,8 @@ pub fn meta(p: &Prepared) -> nf_store::SessionMeta {
         feedback_seconds: 0,
         bytes: p.body.len() as u64,
         import: serde_json::to_value(&i.provenance).ok(),
+        notes: String::new(),
+        context: None,
     }
 }
 

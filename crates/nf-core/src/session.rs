@@ -106,6 +106,9 @@ struct Live {
     streamer: crate::streaming::Streamer,
 }
 
+/// Longest accepted session notes.
+pub const MAX_NOTES: usize = 4000;
+
 pub struct Session {
     state: AppState,
     sim: SimProvider,
@@ -117,6 +120,8 @@ pub struct Session {
     events: Vec<Event>,
     /// Last absolute time passed to `tick` (tick works on deltas).
     last_tick: Option<f64>,
+    /// Last settings doc written (or loaded).
+    settings_doc: String,
 }
 
 impl Default for Session {
@@ -138,6 +143,7 @@ impl Session {
             store: Box::new(nf_store::MemoryStore::default()),
             events: Vec::new(),
             last_tick: None,
+            settings_doc: String::new(),
         }
     }
 
@@ -146,7 +152,34 @@ impl Session {
         self.store = store;
         self.refresh_history();
         self.load_protocols();
+        self.load_settings();
         self
+    }
+
+    fn load_settings(&mut self) {
+        match self.store.get_doc(crate::settings::DOC_KEY) {
+            Ok(Some(doc)) => match serde_json::from_str::<crate::settings::Persisted>(&doc) {
+                Ok(p) => {
+                    p.restore(&mut self.state);
+                    self.settings_doc = doc;
+                }
+                Err(e) => self.emit(Event::StoreError { message: format!("settings ignored: {e}") }),
+            },
+            Ok(None) => {}
+            Err(e) => self.emit(Event::StoreError { message: e.to_string() }),
+        }
+    }
+
+    /// Write the settings doc if it changed since the last write.
+    fn persist_settings(&mut self) {
+        let doc = serde_json::to_string(&crate::settings::Persisted::of(&self.state)).unwrap_or_default();
+        if doc == self.settings_doc {
+            return;
+        }
+        match self.store.put_doc(crate::settings::DOC_KEY, Some(&doc)) {
+            Ok(()) => self.settings_doc = doc,
+            Err(e) => self.emit(Event::StoreError { message: format!("settings not saved: {e}") }),
+        }
     }
 
     fn load_protocols(&mut self) {
@@ -257,6 +290,32 @@ impl Session {
             .ok_or_else(|| CoreError::InvalidArgs(format!("no session {id}")))
     }
 
+    fn set_notes(&mut self, id: u64, notes: &str) -> Result<(), CoreError> {
+        if notes.chars().count() > MAX_NOTES {
+            return Err(CoreError::InvalidArgs(format!("notes are limited to {MAX_NOTES} characters")));
+        }
+        if !self.store.set_notes(id, notes).map_err(|e| CoreError::BadRequest(e.to_string()))? {
+            return Err(CoreError::InvalidArgs(format!("no session {id}")));
+        }
+        self.refresh_history();
+        Ok(())
+    }
+
+    /// What was in effect while recording (kept with the session).
+    fn context(&self, trained: bool) -> serde_json::Value {
+        let s = &self.state;
+        json!({
+            "app_version": env!("CARGO_PKG_VERSION"),
+            "protocol": trained.then_some(&s.feedback.protocol),
+            "minutes": s.feedback.minutes,
+            "percentile": s.feedback.percentile,
+            "guard": s.feedback.guard,
+            "mains": s.mains_mode,
+            "audio": s.audio,
+            "settings": s.settings,
+        })
+    }
+
     /// Persist a finished recording (with its feedback summary).
     fn save(&mut self, f: &Finished) {
         let fb = &self.state.feedback;
@@ -274,10 +333,17 @@ impl Session {
             feedback_seconds: f.info.feedback_seconds,
             bytes: f.body.len() as u64,
             import: None,
+            notes: String::new(),
+            context: Some(self.context(trained)),
         };
         let s = nf_store::StoredSession { meta, device_json: serde_json::to_string(&f.device).unwrap_or_default(), body: f.body.clone() };
         match self.store.insert(s) {
-            Ok(id) => self.emit(Event::SessionSaved { id }),
+            Ok(id) => {
+                if trained {
+                    self.state.feedback.saved_id = Some(id);
+                }
+                self.emit(Event::SessionSaved { id });
+            }
             Err(e) => self.emit(Event::StoreError { message: e.to_string() }),
         }
         self.refresh_history();
@@ -293,7 +359,8 @@ impl Session {
 
     /// Simulators plus everything the providers currently see.
     pub fn device_list(&self) -> Vec<DeviceInfo> {
-        let mut all = self.sim.list();
+        // Simulators only in debug mode (on by default).
+        let mut all = if self.state.settings.debug { self.sim.list() } else { Vec::new() };
         for p in &self.providers {
             all.extend(p.list());
         }
@@ -308,6 +375,11 @@ impl Session {
     /// `scheme: error` of providers that reported one.
     pub fn provider_errors(&self) -> Vec<String> {
         self.providers.iter().filter_map(|p| p.last_error().map(|e| format!("{}: {e}", p.scheme()))).collect()
+    }
+
+    /// The history / document store (read-only).
+    pub fn store(&self) -> &dyn nf_store::Store {
+        self.store.as_ref()
     }
 
     pub fn state(&self) -> &AppState {
@@ -365,9 +437,21 @@ impl Session {
             };
         }
         let protocols_changed = self.state.custom_protocols != state.custom_protocols;
+        self.restore_notes(&state.history);
         self.state = state;
         if protocols_changed && self.persist_protocols().is_err() {
             self.emit(Event::StoreError { message: "custom protocols could not be restored after a rolled-back batch".into() });
+        }
+        self.persist_settings();
+    }
+
+    /// Undo note edits of a rolled-back batch.
+    fn restore_notes(&mut self, before: &[nf_store::SessionMeta]) {
+        for m in before {
+            let now = self.state.history.iter().find(|h| h.id == m.id);
+            if now.is_some_and(|h| h.notes != m.notes) && self.store.set_notes(m.id, &m.notes).is_err() {
+                self.emit(Event::StoreError { message: format!("notes of session {} could not be restored", m.id) });
+            }
         }
     }
 
@@ -677,6 +761,7 @@ impl Session {
         let bumps = !matches!(cmd, Command::ClockAdvance { .. } | Command::EventsDrain);
         let reply = self.apply(cmd)?;
         if bumps {
+            self.persist_settings();
             self.state.revision += 1;
         }
         Ok(reply)
@@ -869,6 +954,8 @@ impl Session {
                 }
                 self.refresh_history();
             }
+            Command::SettingsSet(p) => crate::settings::apply(&mut self.state.settings, &p).map_err(CoreError::InvalidArgs)?,
+            Command::HistoryNotes { id, notes } => self.set_notes(id, &notes)?,
             Command::MainsSet { mode } => {
                 self.state.mains_mode = mode;
                 if let Some(sig) = self.live.signal.as_mut() {
@@ -1005,6 +1092,7 @@ impl Session {
                 .iter()
                 .map(|v| json!({ "id": v, "label": v.label(), "implemented": v.implemented(), "active": *v == s.view }))
                 .collect::<Vec<_>>()),
+            Query::SettingsGet => serde_json::to_value(crate::settings::Persisted::of(s)).unwrap_or_default(),
             Query::BandsGet { scale } => self.bands_json(scale.unwrap_or(s.band_scale)),
             Query::DeviceList => serde_json::to_value(self.device_list()).unwrap_or_default(),
             Query::DeviceStatus => json!({

@@ -181,6 +181,13 @@ impl Store for IdbStore {
         }
         Ok(had)
     }
+    fn set_notes(&mut self, id: u64, notes: &str) -> Result<bool> {
+        let had = self.cache.set_notes(id, notes)?;
+        if let Some(row) = self.cache.get(id)?.filter(|_| had) {
+            self.write(Op::Put(row));
+        }
+        Ok(had)
+    }
     fn location(&self) -> String {
         match self.last_error() {
             Some(e) => format!("indexeddb (error: {e})"),

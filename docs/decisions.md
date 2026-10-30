@@ -146,3 +146,7 @@ fails after `protocol.save` rolls the document back as well.
 
 ## Trust pane and feedback dashboard
 One `views::trust::pane` renders live training, the end-of-session summary and History detail: percentile/value plot with calibration shading, per-second state strip (in zone / below / held / dirty / idle), hover explanations, totals and dirty breakdown. The live pane is cached on result count and last timestamp. The training header shows progress and a Trust toggle; the indicator adds a percentile meter with the threshold tick.
+
+## Session metadata and persisted settings
+`SessionMeta` gains `notes` (user text, ≤ 4000 chars, edited via `history.notes`) and `context` (snapshot at save: protocol, minutes, percentile, guard, mains, audio, user settings, app version). SQLite schema v4 adds the two columns (migrated from v1–v3). A rolled-back batch restores edited notes in the store.
+All user settings live in one store doc `settings` (`nf_core::settings::Persisted`: user settings, audio, mains, band scale, music folder, Band Stability, guard flag). It is rewritten after any successful state-changing command when its JSON changed, loaded in `with_store`, and re-written after a rollback. New `settings.set` / `settings.get`. Debug mode (default on) controls whether simulators are listed.

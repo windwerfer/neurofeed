@@ -189,7 +189,8 @@ fn hover(ui: &egui::Ui, p: &egui::Painter, t: &Trust, (r, x, y): Axes, pos: egui
     let top = to_screen(r, x, y, row.t as f32 + 0.5, y.1);
     p.line_segment([top, top.down(r.height() + 26.0)], Stroke::new(1.0_f32, Color32::GRAY));
     egui::show_tooltip_at_pointer(ui.ctx(), ui.layer_id(), egui::Id::new("trust_hover"), |ui| {
-        ui.label(RichText::new(format!("{:.0} s", row.t)).strong());
+        let at = (row.t as f32 - x.0).max(0.0) as u32;
+        ui.label(RichText::new(format!("{}:{:02} into the session", at / 60, at % 60)).strong());
         ui.label(describe(row));
         let fmt = |v: Option<f64>, d: usize| v.map_or("--".into(), |v| format!("{v:.d$}"));
         match plot {

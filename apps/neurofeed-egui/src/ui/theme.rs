@@ -10,6 +10,19 @@ pub fn apply(ctx: &egui::Context) {
     ctx.set_visuals(egui::Visuals::dark());
 }
 
+/// Follow the Appearance setting (cheap; egui ignores an unchanged value).
+pub fn follow(ctx: &egui::Context, a: nf_core::settings::Appearance) {
+    use nf_core::settings::Appearance;
+    let want = match a {
+        Appearance::System => egui::ThemePreference::System,
+        Appearance::Light => egui::ThemePreference::Light,
+        Appearance::Dark => egui::ThemePreference::Dark,
+    };
+    if ctx.options(|o| o.theme_preference) != want {
+        ctx.set_theme(want);
+    }
+}
+
 pub fn band_color(band: Band) -> Color32 {
     match band {
         Band::Delta => Color32::from_rgb(0xE5, 0x73, 0x73),

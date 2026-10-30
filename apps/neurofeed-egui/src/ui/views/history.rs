@@ -110,6 +110,7 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
         m.bytes as f64 / 1e6
     ));
     provenance(ui, m);
+    super::meta::context(ui, m.context.as_ref());
     ui.add_space(8.0);
     if st.trust.as_ref().is_none_or(|(i, _)| *i != m.id) {
         st.trust = Some((m.id, std::sync::Arc::new(session.history_trust(m.id).unwrap_or_default())));
@@ -117,6 +118,8 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
     if let Some((_, t)) = st.trust.clone() {
         ui.allocate_ui(Vec2::new(ui.available_width().min(820.0), 320.0), |ui| super::trust::pane(ui, &t, &mut st.plot, 200.0, true));
     }
+    ui.add_space(8.0);
+    super::meta::notes(ui, session, m.id, out);
     ui.add_space(10.0);
     ui.horizontal(|ui| {
         for (fmt, name) in [(ExportFormat::Nfed6, "Export .neurofeed"), (ExportFormat::Edf, "Export EDF")] {

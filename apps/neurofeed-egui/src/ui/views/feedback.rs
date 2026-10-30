@@ -370,7 +370,10 @@ fn indicator(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
     p.circle_filled(rect.center(), r, glow.gamma_multiply(0.55));
     p.circle_stroke(rect.center(), r, Stroke::new(2.0_f32, glow));
     let rec = last.and_then(|x| x.record.as_ref());
-    let bar = egui::Rect::from_center_size(Pos2::new((rect.center().x + r * 1.45).min(rect.right() - 80.0), rect.center().y), Vec2::new(14.0, r * 1.8));
+    let bar = egui::Rect::from_center_size(
+        Pos2::new((rect.center().x + r * 1.45).min(rect.right() - 80.0), rect.center().y),
+        Vec2::new(14.0, r * 1.8),
+    );
     if bar.right() + 60.0 < rect.right() {
         meter(&p, bar, rec.and_then(|x| x.pct), rec.and_then(|x| x.thr_pct), if in_target { GOOD } else { CALM });
     }
@@ -413,6 +416,10 @@ fn summary(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Comm
         s.counted_s,
         s.pauses
     ));
+    if let Some(id) = t.saved_id {
+        ui.add_space(8.0);
+        super::meta::notes(ui, session, id, out);
+    }
     ui.add_space(14.0);
     ui.horizontal(|ui| {
         action(ui, session, "feedback.start", "Train again", true, Command::FeedbackStart { minutes: None, wall_clock_unix_ms: None }, out);

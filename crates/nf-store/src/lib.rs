@@ -41,6 +41,12 @@ pub struct SessionMeta {
     /// Import provenance (`nf_import::Provenance` as JSON) for imported sessions.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub import: Option<serde_json::Value>,
+    /// Free-text notes the user wrote about the session (editable later).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
+    /// Recording context snapshot (time zone, protocol, settings, app version).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<serde_json::Value>,
 }
 
 /// A full stored session.
@@ -63,6 +69,8 @@ pub trait Store: Send {
     fn delete(&mut self, id: u64) -> Result<bool>;
     /// Where the data lives (for status / UI), e.g. `memory` or a file path.
     fn location(&self) -> String;
+    /// Replace a session's notes. True if the session exists.
+    fn set_notes(&mut self, id: u64, notes: &str) -> Result<bool>;
     /// A small named JSON document (custom protocols, ...).
     fn get_doc(&self, key: &str) -> Result<Option<String>>;
     /// Write a named document; `None` removes it.
@@ -112,6 +120,9 @@ impl Store for MemoryStore {
         let n = self.rows.len();
         self.rows.retain(|s| s.meta.id != id);
         Ok(self.rows.len() != n)
+    }
+    fn set_notes(&mut self, id: u64, notes: &str) -> Result<bool> {
+        Ok(self.rows.iter_mut().find(|s| s.meta.id == id).map(|s| s.meta.notes = notes.to_owned()).is_some())
     }
     fn location(&self) -> String {
         "memory".into()

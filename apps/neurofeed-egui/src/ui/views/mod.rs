@@ -7,6 +7,7 @@ mod heart;
 mod histogram;
 mod history;
 mod import;
+mod meta;
 mod plot;
 mod protocol_builder;
 mod psd;

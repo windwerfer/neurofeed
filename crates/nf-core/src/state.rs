@@ -123,6 +123,8 @@ pub struct AppState {
     pub streaming: crate::streaming::StreamState,
     /// Folder the desktop shell loads music from (`music` reward output).
     pub music_dir: Option<String>,
+    /// Appearance, subject, onboarding, debug (persisted).
+    pub settings: crate::settings::UserSettings,
     /// Saved sessions, newest first (cache of the store's list).
     pub history: Vec<nf_store::SessionMeta>,
     /// Where history is stored (`memory` or a file).
@@ -151,6 +153,7 @@ impl Default for AppState {
             feedback: crate::feedback::Trainer::default(),
             audio: nf_audio::AudioSettings::default(),
             streaming: crate::streaming::StreamState::default(),
+            settings: crate::settings::UserSettings::default(),
             custom_protocols: Vec::new(),
             music_dir: None,
             history: Vec::new(),

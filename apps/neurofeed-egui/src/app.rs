@@ -166,6 +166,7 @@ impl eframe::App for NeuroFeedApp {
             }
         }
         let state = self.session.state();
+        ui::theme::follow(ctx, state.settings.appearance);
         self.audio.update(&nf_core::audio::cue(state), state.music_dir.as_deref());
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(b) = &mut self.bridge {

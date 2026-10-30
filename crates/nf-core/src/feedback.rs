@@ -128,6 +128,8 @@ pub struct Trainer {
     pub played_s: u32,
     pub results: Vec<SecondResult>,
     pub summary: Option<Summary>,
+    /// History id the finished session was saved under (for notes).
+    pub saved_id: Option<u64>,
     /// Last notice (e.g. why calibration failed).
     pub message: Option<String>,
     /// Last baseline per `device|protocol`.
@@ -164,6 +166,7 @@ impl Default for Trainer {
             played_s: 0,
             results: Vec::new(),
             summary: None,
+            saved_id: None,
             message: None,
             baselines: BTreeMap::new(),
             device: None,

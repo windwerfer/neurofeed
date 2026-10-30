@@ -16,6 +16,7 @@ pub mod optics;
 pub mod protocols;
 mod recording;
 mod session;
+pub mod settings;
 pub mod signal;
 mod state;
 pub mod streaming;
@@ -32,7 +33,7 @@ pub use nf_import;
 pub use nf_store::SessionMeta;
 pub use nf_types::{Band, BandSnapshot, DeviceInfo, DeviceKind, DeviceProvider, DeviceSource, EegPacket, LinkState, PpgPacket};
 pub use recording::{civil_utc, ExportFormat, RecordingInfo};
-pub use session::{Event, Session};
+pub use session::{Event, Session, MAX_NOTES};
 pub use signal::{mains_name, MainsMode, Signal};
 pub use state::{AppState, BandHistory, BandScale, View};
 

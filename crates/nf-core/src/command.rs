@@ -158,6 +158,12 @@ pub enum Command {
         #[serde(default)]
         confirm: bool,
     },
+    /// Change user settings (appearance, subject, onboarding, debug).
+    #[serde(rename = "settings.set")]
+    SettingsSet(crate::settings::SettingsPatch),
+    /// Replace a saved session's notes (≤ 4000 characters).
+    #[serde(rename = "history.notes")]
+    HistoryNotes { id: u64, notes: String },
     /// End the session now and build the summary.
     #[serde(rename = "feedback.stop")]
     FeedbackStop,
@@ -331,6 +337,9 @@ pub enum Query {
     /// Phase, fit, calibration progress, last second, summary.
     #[serde(rename = "feedback.status")]
     FeedbackStatus,
+    /// All persisted settings.
+    #[serde(rename = "settings.get")]
+    SettingsGet,
     /// Audio settings, the live cue and the guard state.
     #[serde(rename = "feedback.trust")]
     FeedbackTrust,
@@ -619,6 +628,23 @@ pub const SPECS: &[CommandSpec] = &[
         always,
     ),
     spec("history.delete", "Delete session", "history", false, "Permanently delete a saved session; requires confirm=true.", has_history),
+    spec(
+        "settings.set",
+        "Change settings",
+        "settings",
+        false,
+        "Appearance, subject id, onboarding done, debug mode, gesture markers.",
+        always,
+    ),
+    spec(
+        "settings.get",
+        "Settings",
+        "settings",
+        true,
+        "All persisted settings: user, audio, mains, band scale, music folder, stability, guard.",
+        always,
+    ),
+    spec("history.notes", "Session notes", "history", false, "Replace the free-text notes of a saved session.", has_history),
     spec("recording.status", "Recording status", "recording", true, "Active or last recording: device, duration, samples, bytes.", always),
     spec(
         "recording.export",
@@ -779,6 +805,9 @@ pub fn examples() -> Vec<Request> {
         C(Command::FeedbackStart { minutes: Some(5), wall_clock_unix_ms: None }),
         C(Command::FeedbackStop),
         C(Command::HistoryDelete { id: 1, confirm: true }),
+        C(Command::SettingsSet(crate::settings::SettingsPatch { subject: Some("p01".into()), ..Default::default() })),
+        Q(Query::SettingsGet),
+        C(Command::HistoryNotes { id: 1, notes: "felt calm".into() }),
         C(Command::FeedbackPause),
         C(Command::FeedbackResume),
         C(Command::CalibrationStart { anyway: false }),
