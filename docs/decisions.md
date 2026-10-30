@@ -150,3 +150,6 @@ One `views::trust::pane` renders live training, the end-of-session summary and H
 ## Session metadata and persisted settings
 `SessionMeta` gains `notes` (user text, ≤ 4000 chars, edited via `history.notes`) and `context` (snapshot at save: protocol, minutes, percentile, guard, mains, audio, user settings, app version). SQLite schema v4 adds the two columns (migrated from v1–v3). A rolled-back batch restores edited notes in the store.
 All user settings live in one store doc `settings` (`nf_core::settings::Persisted`: user settings, audio, mains, band scale, music folder, Band Stability, guard flag). It is rewritten after any successful state-changing command when its JSON changed, loaded in `with_store`, and re-written after a rollback. New `settings.set` / `settings.get`. Debug mode (default on) controls whether simulators are listed.
+
+## Settings sections, About and onboarding
+Settings is a section rail (General, Devices, Training, AI, Recording, About) with cards from one `CARDS` table; the search box matches section + title + terms across all sections. The AI card is a placeholder until the REVE / CBraMod decision. About embeds THIRD_PARTY_NOTICES.md. The first-run tour (five pages, Skip / Back / Next / Start) shows while `settings.onboarded` is false; runs started with NF_DEMO / NF_VIEW skip it without persisting anything.

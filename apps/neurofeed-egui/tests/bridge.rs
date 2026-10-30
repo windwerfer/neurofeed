@@ -49,10 +49,8 @@ fn agent_drives_live_ui() {
     let (_, status, tree, bad) = agent.join().unwrap();
     assert_eq!(status["view"], "settings");
     assert_eq!(session.state().view, nf_core::View::Settings, "the app's own session changed");
-    let scan = find(&tree, "Scan").expect("Scan button in tree");
-    assert_eq!(scan["role"], "Button");
-    assert_eq!(scan["disabled"], true, "simulators only -> scan disabled");
-    assert!(find(&tree, "Band Stability").is_some(), "{tree}");
+    assert!(find(&tree, "Appearance").is_some(), "General section first: {tree}");
+    assert!(find(&tree, "Skip tour").is_some(), "first-run tour on a fresh session");
     assert!(bad.is_err());
     drop(bridge);
     assert!(!file.exists());

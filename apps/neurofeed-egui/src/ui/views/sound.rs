@@ -1,7 +1,6 @@
 //! Feedback sound settings (Settings view) and the guard row used on the
 //! protocol picker. Every change is one `audio.set` / `guard.set`.
 
-use egui::RichText;
 use nf_core::audio::AudioPatch;
 use nf_core::nf_audio::{AudioSettings, Background, BinauralPreset, GuardSound, RewardOutput};
 use nf_core::{Command, Session};
@@ -41,8 +40,7 @@ fn send(out: &mut Vec<Command>, p: AudioPatch) {
 
 pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let a = session.state().audio;
-    ui.group(|ui| {
-        ui.label(RichText::new("Feedback sound").strong().size(17.0));
+    ui.scope(|ui| {
         ui.weak("Changes apply live, also during a session.");
         reward_row(ui, a, out);
         choice_rows(ui, a, out);

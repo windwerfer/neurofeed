@@ -24,6 +24,8 @@ pub struct NeuroFeedApp {
     audio: Box<dyn Audio>,
     #[cfg(not(target_arch = "wasm32"))]
     bridge: Option<crate::bridge::Bridge>,
+    /// Demo / start-view runs skip the first-run tour (not persisted).
+    no_tour: bool,
 }
 
 impl NeuroFeedApp {
@@ -45,6 +47,7 @@ impl NeuroFeedApp {
         app.run(Command::DeviceConnect { id: "sim:muse_s".into() });
         // Optional start view / demo (screenshots): NF_VIEW=psd NF_DEMO=history
         // on desktop, `?view=psd&demo=history` on the web.
+        app.no_tour = param("demo").is_some() || param("view").is_some();
         if let Some(demo) = param("demo") {
             app.demo(&demo);
         }
@@ -62,6 +65,7 @@ impl NeuroFeedApp {
             audio: audio::platform(),
             #[cfg(not(target_arch = "wasm32"))]
             bridge: None,
+            no_tour: false,
         }
     }
 
@@ -176,7 +180,7 @@ impl eframe::App for NeuroFeedApp {
         let bridge = Some(self.bridge.as_ref().map(crate::bridge::Bridge::addr));
         #[cfg(target_arch = "wasm32")]
         let bridge: Option<Option<String>> = None;
-        let mut shell = ui::Shell { bridge, ..Default::default() };
+        let mut shell = ui::Shell { bridge, no_tour: self.no_tour, ..Default::default() };
         for cmd in ui::show_with(ctx, &self.session, self.last_error.as_deref(), &mut shell) {
             self.run(cmd);
         }

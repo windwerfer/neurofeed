@@ -7,6 +7,10 @@ mod heart;
 mod histogram;
 mod history;
 mod import;
+/// egui temp-data key mirroring the gesture-markers setting.
+pub const MARKS_ID: &str = "nf_gesture_markers";
+
+mod about;
 mod meta;
 mod plot;
 mod protocol_builder;

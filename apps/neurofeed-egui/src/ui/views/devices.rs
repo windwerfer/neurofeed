@@ -1,12 +1,10 @@
 //! Devices: scan (Muse BLE, Crown OSC on desktop), list, connect, link state.
 
-use egui::RichText;
 use nf_core::{Command, LinkState, Session};
 
 pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let state = session.state();
-    ui.group(|ui| {
-        ui.label(RichText::new("Devices").strong().size(17.0));
+    ui.scope(|ui| {
         ui.horizontal(|ui| {
             let scan = session.enabled("device.scan");
             let r = ui.add_enabled(scan.is_ok(), egui::Button::new("Scan"));

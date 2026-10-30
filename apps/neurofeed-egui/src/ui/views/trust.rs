@@ -148,7 +148,8 @@ fn draw_plot(p: &egui::Painter, ui: &egui::Ui, t: &Trust, plot: Plot, r: Rect, x
     let (a, b) = series(t, plot);
     lines(p, t, &b, r, x, y, THR);
     lines(p, t, &a, r, x, y, LINE);
-    for m in &t.marks {
+    let show = ui.data(|d| d.get_temp::<bool>(super::MARKS_ID.into())).unwrap_or(true);
+    for m in t.marks.iter().filter(|_| show) {
         let top = to_screen(r, x, y, m.t as f32, y.1);
         p.line_segment([top, Pos2Ext::down(top, r.height())], Stroke::new(1.0_f32, MARK));
     }
