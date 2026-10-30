@@ -11,6 +11,7 @@ mod plot;
 mod psd;
 mod raw;
 mod settings;
+mod sound;
 mod spectrogram;
 
 use nf_core::{Command, Session, View};

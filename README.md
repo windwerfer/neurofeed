@@ -16,7 +16,7 @@ Desktop start view: `NF_VIEW=psd cargo run -p neurofeed-egui`.
 ```sh
 # prerequisites: rustup target add wasm32-unknown-unknown; cargo install trunk
 # Linux: apt install pkg-config libasound2-dev libdbus-1-dev
-#   (Fedora: alsa-lib-devel dbus-devel); ALSA = chime sound (skip with
+#   (Fedora: alsa-lib-devel dbus-devel); ALSA = feedback audio (skip with
 #   --no-default-features), D-Bus = Bluetooth (BlueZ) for the Muse
 cargo run --release -p neurofeed-egui                       # desktop (repo root)
 cd apps/neurofeed-egui && trunk serve --release             # web, http://127.0.0.1:8080

@@ -85,6 +85,7 @@ impl NeuroFeedApp {
             motion: false,
             blink: false,
             clench: false,
+            drowsy: false,
         };
         let mut steps = vec![Command::ViewSet { view: nf_core::View::Feedback }, adv(3.0)];
         let start = [Command::FeedbackStart { minutes: Some(10), wall_clock_unix_ms: None }, adv(4.0)];
@@ -110,7 +111,14 @@ impl NeuroFeedApp {
             ]),
             "history" => {
                 for (i, p) in ["restAwake", "alertOpen", "openMonitor"].into_iter().enumerate() {
-                    let blink = |on| Command::SimFault { bad_pads: Vec::new(), dropout: false, motion: false, blink: on, clench: false };
+                    let blink = |on| Command::SimFault {
+                        bad_pads: Vec::new(),
+                        dropout: false,
+                        motion: false,
+                        blink: on,
+                        clench: false,
+                        drowsy: false,
+                    };
                     steps.extend([
                         Command::ProtocolSet { id: p.into(), minutes: None },
                         Command::FeedbackStart { minutes: Some(2 + i as u32), wall_clock_unix_ms: None },
@@ -149,10 +157,14 @@ impl eframe::App for NeuroFeedApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.session.tick(ctx.input(|i| i.time));
         for e in self.session.drain_events() {
-            if e == Event::Chime {
-                self.audio.chime();
+            match e {
+                Event::Chime => self.audio.trigger(nf_core::nf_audio::OneShot::Reward),
+                Event::GuardChime => self.audio.trigger(nf_core::nf_audio::OneShot::Guard),
+                _ => {}
             }
         }
+        let state = self.session.state();
+        self.audio.update(&nf_core::audio::cue(state), state.music_dir.as_deref());
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(b) = &mut self.bridge {
             b.poll(ctx, &mut self.session, self.last_error.as_deref());

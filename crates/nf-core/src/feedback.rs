@@ -135,6 +135,8 @@ pub struct Trainer {
     pub device: Option<String>,
     /// User setting for stability protocols (Band Stability).
     pub stability: nf_feedback::StabilityConfig,
+    /// Band-math drowsiness guard on (protocols with a guard lane).
+    pub guard: bool,
     cal: Option<Calibration>,
     engine: Option<Engine>,
     sample_t: f64,
@@ -154,6 +156,7 @@ impl Default for Trainer {
             minutes: protocol.default_minutes,
             percentile: nf_feedback::DEFAULT_PERCENTILE,
             stability: nf_feedback::StabilityConfig::default(),
+            guard: false,
             phase: Phase::Idle,
             pads: Vec::new(),
             green_for: 0,
@@ -182,6 +185,8 @@ impl Default for Trainer {
 pub enum Change {
     Phase(Phase),
     Chime,
+    /// Guard warning sound (rate-limited by the engine).
+    GuardChime,
 }
 
 fn pad_list(names: &[String]) -> String {
@@ -191,7 +196,7 @@ fn pad_list(names: &[String]) -> String {
 impl Trainer {
     /// Protocol config with the user's stability setting applied.
     pub fn engine_config(&self) -> nf_feedback::Config {
-        let mut c = self.protocol.config(self.percentile);
+        let mut c = if self.guard { self.protocol.config_with_guard(self.percentile) } else { self.protocol.config(self.percentile) };
         if c.stability.is_some() {
             c.stability = Some(self.stability);
         }
@@ -212,6 +217,11 @@ impl Trainer {
 
     pub fn threshold(&self) -> Option<f64> {
         self.engine.as_ref().and_then(Engine::threshold)
+    }
+
+    /// Guard warning threshold (absolute delta) once calibrated.
+    pub fn guard_threshold(&self) -> Option<f64> {
+        self.engine.as_ref().and_then(Engine::guard_threshold)
     }
 
     pub fn has_engine(&self) -> bool {
@@ -239,7 +249,15 @@ impl Trainer {
     /// idle/ended → fit check.
     pub fn start(&mut self, device: &str, out: &mut Vec<Change>) {
         let baselines = std::mem::take(&mut self.baselines);
-        *self = Self { protocol: self.protocol, minutes: self.minutes, percentile: self.percentile, baselines, ..Self::default() };
+        *self = Self {
+            protocol: self.protocol,
+            minutes: self.minutes,
+            percentile: self.percentile,
+            stability: self.stability,
+            guard: self.guard,
+            baselines,
+            ..Self::default()
+        };
         self.device = Some(device.to_owned());
         self.set(Phase::FitCheck, out);
     }
@@ -434,6 +452,9 @@ impl Trainer {
         self.was_in_target = in_target;
         if chime {
             out.push(Change::Chime);
+        }
+        if rec.chime == Some(true) {
+            out.push(Change::GuardChime);
         }
         self.bad_for = if input.rel_bands().is_none() { self.bad_for + 1 } else { 0 };
         let r = SecondResult {

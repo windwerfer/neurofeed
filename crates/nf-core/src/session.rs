@@ -60,6 +60,8 @@ pub enum Event {
     },
     /// Play the reward chime.
     Chime,
+    /// Play the guard warning sound.
+    GuardChime,
     /// A finished recording was saved to history.
     SessionSaved {
         id: u64,
@@ -77,6 +79,7 @@ struct Fault {
     motion: bool,
     blink: bool,
     clench: bool,
+    drowsy: bool,
 }
 
 /// Data older than this counts as no data (disconnect grace starts).
@@ -435,6 +438,7 @@ impl Session {
             self.emit(match c {
                 Change::Phase(phase) => Event::Feedback { phase },
                 Change::Chime => Event::Chime,
+                Change::GuardChime => Event::GuardChime,
             });
         }
     }
@@ -616,6 +620,11 @@ impl Session {
                 }
                 return Ok(serde_json::to_value(self.sim.config).unwrap_or_default());
             }
+            Command::AudioSet(patch) => return crate::audio::set(&mut self.state, &patch),
+            Command::GuardSet { enabled } => {
+                self.state.feedback.guard = enabled;
+                return Ok(crate::audio::guard_status(&self.state));
+            }
             Command::StabilitySet { window, difficulty, reset } => {
                 use nf_feedback::StabilityConfig as S;
                 if window.is_some_and(|w| !(S::MIN_WINDOW..=S::MAX_WINDOW).contains(&w)) {
@@ -687,13 +696,13 @@ impl Session {
                 let thr = self.state.feedback.set_percentile(percentile);
                 return Ok(json!({ "percentile": percentile, "threshold": thr }));
             }
-            Command::SimFault { bad_pads, dropout, motion, blink, clench } => {
+            Command::SimFault { bad_pads, dropout, motion, blink, clench, drowsy } => {
                 let chans = self.state.device.as_ref().map(|d| d.channels.clone()).unwrap_or_default();
                 let bad = bad_pads
                     .iter()
                     .map(|n| chans.iter().position(|c| c == n).ok_or_else(|| CoreError::InvalidArgs(format!("unknown pad `{n}`"))))
                     .collect::<Result<Vec<_>, _>>()?;
-                self.live.fault = Fault { bad, dropout, motion, blink, clench };
+                self.live.fault = Fault { bad, dropout, motion, blink, clench, drowsy };
             }
             Command::ClockAdvance { seconds } => {
                 if !(seconds.is_finite() && seconds > 0.0 && seconds <= MAX_ADVANCE_S) {
@@ -807,6 +816,7 @@ impl Session {
                 };
                 json!(p)
             }
+            Query::AudioStatus => crate::audio::status(s),
             Query::FeedbackStatus => {
                 let f = &s.feedback;
                 json!({
@@ -1084,6 +1094,8 @@ const BLINK_UV: f64 = 300.0;
 const BLINK_SAMPLES: f64 = 28.0;
 /// Jaw-clench EMG (µV at 37 Hz) on temporal pads.
 const CLENCH_UV: f64 = 20.0;
+/// Drowsy delta (µV at 2 Hz) on every pad.
+const DROWSY_UV: f64 = 10.0;
 /// Head nod amplitude (g at 2 Hz) on the accelerometer.
 const MOTION_G: f64 = 0.3;
 
@@ -1109,6 +1121,9 @@ fn inject_artifacts(f: &Fault, dev: &DeviceInfo, eeg: &mut [EegPacket], accel: &
             }
         }
     }
+    if f.drowsy {
+        inject_drowsy(rate, eeg);
+    }
     if f.motion {
         let rate = dev.accel_rate_hz.unwrap_or(52.0);
         for p in accel.iter_mut() {
@@ -1117,6 +1132,16 @@ fn inject_artifacts(f: &Fault, dev: &DeviceInfo, eeg: &mut [EegPacket], accel: &
                 let t = p.time - (n - 1 - k) as f64 / rate;
                 s[2] += (MOTION_G * (std::f64::consts::TAU * 2.0 * t).sin()) as f32;
             }
+        }
+    }
+}
+
+fn inject_drowsy(rate: f64, eeg: &mut [EegPacket]) {
+    for p in eeg.iter_mut() {
+        let n = p.samples.len();
+        for (k, x) in p.samples.iter_mut().enumerate() {
+            let t = p.time - (n - 1 - k) as f64 / rate;
+            *x += (DROWSY_UV * (std::f64::consts::TAU * 2.0 * t).sin()) as f32;
         }
     }
 }

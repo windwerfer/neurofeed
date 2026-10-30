@@ -116,6 +116,9 @@ pub struct AppState {
     pub recording: Option<crate::recording::RecordingInfo>,
     /// Feedback session (phases, results, stored baselines).
     pub feedback: crate::feedback::Trainer,
+    pub audio: nf_audio::AudioSettings,
+    /// Folder the desktop shell loads music from (`music` reward output).
+    pub music_dir: Option<String>,
     /// Saved sessions, newest first (cache of the store's list).
     pub history: Vec<nf_store::SessionMeta>,
     /// Where history is stored (`memory` or a file).
@@ -142,6 +145,8 @@ impl Default for AppState {
             channel: 0,
             recording: None,
             feedback: crate::feedback::Trainer::default(),
+            audio: nf_audio::AudioSettings::default(),
+            music_dir: None,
             history: Vec::new(),
             scanners: Vec::new(),
             link: None,

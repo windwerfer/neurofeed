@@ -1,4 +1,4 @@
-//! Settings: Band Stability (and devices, see `devices`).
+//! Settings: devices, feedback sound, Band Stability, agents.
 
 use egui::RichText;
 use nf_core::{Command, Session};
@@ -20,6 +20,8 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>, shell:
     ui.heading(RichText::new("Settings").size(24.0));
     ui.add_space(8.0);
     super::devices::show(ui, session, out);
+    ui.add_space(12.0);
+    super::sound::show(ui, session, out);
     ui.add_space(12.0);
     stability(ui, session, out);
     if let Some(bridge) = &shell.bridge {

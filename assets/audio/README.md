@@ -32,3 +32,20 @@ flutter_soloud 4.x bundles the Xiph decoders (`libopus`/`libogg`/`libvorbis`)
 and decodes Opus natively on Android and Linux.
 
 Consolidated notices: `THIRD_PARTY_NOTICES.md` (repo root).
+## `ogg/` (bundled into the Rust app)
+
+Ogg Vorbis re-encodes of the clips above (`ffmpeg -c:a libvorbis`, 44.1 kHz),
+because the pure-Rust decoder (symphonia) has no Opus support. Same works,
+same licenses and attribution as listed above; only the container/codec
+changed. Calibration voice clips are not bundled.
+
+| File | Source |
+| --- | --- |
+| rain.ogg | rain/346562__lebaston100__rain-without-thunder.opus (CC BY 4.0, lebaston100) |
+| drone.ogg | drone/845842__frame__complex-shifting-ambient-drone-8-1min.opus |
+| drone-loop.ogg | drone/859763__kkenny101__drone-loop-ambient-background-texture.opus |
+| bowl-low.ogg | bowl/bowl_low-531269__asuriya__…opus (reward chime) |
+| bowl-high.ogg | bowl/bowl_high-421829__dersinnsspace__…opus (= guardrail-softBowl-01) |
+| bell.ogg | bell/864397__valerie-vivegnis__2607.opus (= guardrail-chime-01) |
+| guard-cough-0{1,2,3}.ogg | guardrail-cough-0{1,2,3}.opus |
+| guard-alarm.ogg | guardrail-alarm-01.opus (CC BY-NC, see above) |

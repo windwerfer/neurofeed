@@ -106,6 +106,7 @@ fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
         }
     });
     ui.add_space(14.0);
+    super::sound::guard_row(ui, session, out);
     ui.horizontal(|ui| {
         ui.label("Length:");
         for m in MINUTES {
@@ -284,6 +285,10 @@ fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Com
     p.circle_stroke(rect.center(), r, Stroke::new(2.0_f32, glow));
     ui.vertical_centered(|ui| {
         chip(ui, &status, color);
+        if last.and_then(|r| r.record.as_ref()).and_then(|r| r.warn) == Some(true) {
+            ui.add_space(4.0);
+            chip(ui, "Drowsiness warning", FAIR);
+        }
         ui.add_space(6.0);
         let why = last.and_then(|r| (!r.counted).then(|| r.reason.clone()).flatten());
         ui.weak(why.map_or(" ".to_owned(), |w| format!("Last second didn't count: {w}")));

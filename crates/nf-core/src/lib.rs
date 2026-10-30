@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 pub mod artifacts;
+pub mod audio;
 mod command;
 pub mod feedback;
 pub mod optics;
@@ -18,6 +19,7 @@ mod state;
 
 pub use command::{examples, find, input_schema, Command, CommandSpec, EnabledFn, Query, Request, SPECS};
 /// DSP primitives for views that render core buffers (pure functions).
+pub use nf_audio;
 pub use nf_dsp as dsp;
 pub use nf_feedback;
 pub use nf_feedback::StabilityConfig;

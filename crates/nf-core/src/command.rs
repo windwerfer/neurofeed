@@ -114,6 +114,12 @@ pub enum Command {
         #[serde(default)]
         reset: bool,
     },
+    /// Feedback audio: reward output, background, guard sound, volumes.
+    #[serde(rename = "audio.set")]
+    AudioSet(crate::audio::AudioPatch),
+    /// Band-math drowsiness guard on/off (protocols with a guard lane).
+    #[serde(rename = "guard.set")]
+    GuardSet { enabled: bool },
     /// Start a session: enters the fit check.
     #[serde(rename = "feedback.start")]
     FeedbackStart {
@@ -172,6 +178,9 @@ pub enum Command {
         /// Jaw-clench EMG on the temporal pads.
         #[serde(default)]
         clench: bool,
+        /// Drowsiness: extra 2 Hz delta on every pad (trips the guard).
+        #[serde(default)]
+        drowsy: bool,
     },
 }
 
@@ -287,6 +296,9 @@ pub enum Query {
     /// Phase, fit, calibration progress, last second, summary.
     #[serde(rename = "feedback.status")]
     FeedbackStatus,
+    /// Audio settings, the live cue and the guard state.
+    #[serde(rename = "audio.status")]
+    AudioStatus,
     /// Per-second results of the current/last session.
     #[serde(rename = "feedback.result.get")]
     FeedbackResultGet {
@@ -554,6 +566,30 @@ pub const SPECS: &[CommandSpec] = &[
     spec("protocol.get", "Protocol", "feedback", true, "One protocol (default the selected one).", always),
     spec("protocol.set", "Choose protocol", "feedback", false, "Select the training protocol.", fb_idle),
     spec("stability.set", "Stability settings", "feedback", false, "Band Stability window (1..=30) and difficulty (0..=0.5).", fb_idle),
+    spec(
+        "audio.set",
+        "Audio settings",
+        "audio",
+        false,
+        "Reward output (chime|rain|binaural|music|none), background, guard sound, volumes.",
+        always,
+    ),
+    spec(
+        "audio.status",
+        "Audio status",
+        "audio",
+        true,
+        "Audio settings, what should sound now (cue), guard state and binaural presets.",
+        always,
+    ),
+    spec(
+        "guard.set",
+        "Drowsiness guard",
+        "feedback",
+        false,
+        "Band-math (delta, p75) drowsiness guard on/off; warns and may mute reward.",
+        crate::audio::can_set_guard,
+    ),
     spec("feedback.start", "Start session", "feedback", false, "Start a session (fit check first).", fb_can_start),
     spec("feedback.stop", "End session", "feedback", false, "End the session and build the summary.", fb_active),
     spec("feedback.pause", "Pause training", "feedback", false, "Pause training.", fb_playing),
@@ -569,7 +605,7 @@ pub const SPECS: &[CommandSpec] = &[
         "Simulate faults",
         "device",
         false,
-        "Corrupt pads, drop data, or inject motion/blink/clench artifacts on a simulator (tests).",
+        "Corrupt pads, drop data, inject motion/blink/clench artifacts or drowsy delta on a simulator (tests).",
         sim_device,
     ),
     spec("clock.advance", "Advance clock", "time", false, "Advance session time (headless/tests). Max 3600 s per call.", always),
@@ -640,10 +676,17 @@ pub fn examples() -> Vec<Request> {
         C(Command::CalibrationSkip),
         C(Command::CalibrationReuse),
         C(Command::ThresholdSet { percentile: 50 }),
-        C(Command::SimFault { bad_pads: vec!["AF7".into()], dropout: false, motion: false, blink: false, clench: false }),
+        C(Command::SimFault { bad_pads: vec!["AF7".into()], dropout: false, motion: false, blink: false, clench: false, drowsy: false }),
         Q(Query::ProtocolList),
         Q(Query::ProtocolGet { id: None }),
         Q(Query::FeedbackStatus),
+        Q(Query::AudioStatus),
+        C(Command::AudioSet(crate::audio::AudioPatch {
+            reward_output: Some(nf_audio::RewardOutput::Rain),
+            feedback_volume: Some(0.8),
+            ..Default::default()
+        })),
+        C(Command::GuardSet { enabled: true }),
         Q(Query::FeedbackResultGet { last: Some(10) }),
         Q(Query::SignalStatus),
         Q(Query::ArtifactStatus),
