@@ -2,6 +2,7 @@
 //! `nf_core::Session`; the UI reads `AppState` and emits `Command`s.
 
 pub mod app;
+pub mod audio;
 pub mod ui;
 
 pub use app::NeuroFeedApp;
