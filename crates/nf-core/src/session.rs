@@ -7,7 +7,10 @@ use crate::signal::{mains_name, Signal, SPEC_HOP_S};
 use crate::state::{AppState, BandScale, View};
 use crate::{CoreError, Reply};
 use nf_sim::SimProvider;
-use nf_types::{Band, DeviceInfo, DeviceProvider, DeviceSource, EegPacket};
+use nf_types::{AccelPacket, Band, DeviceInfo, DeviceProvider, DeviceSource, EegPacket, PpgPacket};
+
+/// One poll of the device: EEG, optical, accelerometer.
+type Polled = (Vec<EegPacket>, Vec<PpgPacket>, Vec<AccelPacket>);
 use serde::Serialize;
 use serde_json::json;
 
@@ -307,13 +310,24 @@ impl Session {
         }
         self.state.time += dt;
         let now = self.state.time;
-        if self.source.is_none() {
-            self.feedback_tick(now);
-            return;
+        if let Some((mut packets, optical, accel)) = self.poll_device(now) {
+            self.route_side_streams(&packets, &optical, &accel);
+            let full = self.process_eeg(&mut packets);
+            if let Some(r) = self.live.recorder.as_mut() {
+                r.tick(now);
+                self.state.recording = Some(r.info.clone());
+            }
+            if full {
+                self.stop_recording("size limit reached");
+            }
         }
-        let Some(src) = self.source.as_mut() else { return };
-        // Always drain the device (no backlog burst on resume); pause only
-        // freezes what the views show. Recording continues while paused.
+        self.feedback_tick(now);
+    }
+
+    /// Drain the device (always, so resume has no backlog burst; pause only
+    /// freezes the views), track the link and apply simulated faults.
+    fn poll_device(&mut self, now: f64) -> Option<Polled> {
+        let src = self.source.as_mut()?;
         let mut packets = src.poll(now);
         let mut optical = src.poll_ppg(now);
         let mut accel = src.poll_accel(now);
@@ -341,6 +355,11 @@ impl Session {
                 *x += (FAULT_UV * (std::f64::consts::TAU * 3.0 * t).sin()) as f32;
             }
         }
+        Some((packets, optical, accel))
+    }
+
+    /// Artifact detector, recorder (recording continues while paused), optics.
+    fn route_side_streams(&mut self, packets: &[EegPacket], optical: &[PpgPacket], accel: &[AccelPacket]) {
         if let Some(a) = self.live.artifacts.as_mut() {
             accel.iter().for_each(|p| a.accel(p));
             packets.iter().for_each(|p| a.eeg(p));
@@ -354,8 +373,13 @@ impl Session {
                 optical.iter().for_each(|p| o.push(p));
             }
         }
+    }
+
+    /// Record and condition EEG into band snapshots. Returns true when the
+    /// recorder hit its size limit.
+    fn process_eeg(&mut self, packets: &mut [EegPacket]) -> bool {
         let mut full = false;
-        for p in &packets {
+        for p in packets.iter() {
             if let Some(r) = self.live.recorder.as_mut() {
                 full |= !r.eeg(p);
             }
@@ -369,24 +393,16 @@ impl Session {
             if after != before {
                 self.emit(Event::MainsChanged { applied: mains_name(after).into(), detected: mains_name(detected).into() });
             }
-            if let Some(snap) = snap {
-                if let Some(r) = self.live.recorder.as_mut() {
-                    r.bands(&snap);
-                }
-                if let Some(a) = self.live.artifacts.as_mut() {
-                    a.gamma(&snap.powers);
-                }
-                self.state.bands.push(snap);
+            let Some(snap) = snap else { continue };
+            if let Some(r) = self.live.recorder.as_mut() {
+                r.bands(&snap);
             }
+            if let Some(a) = self.live.artifacts.as_mut() {
+                a.gamma(&snap.powers);
+            }
+            self.state.bands.push(snap);
         }
-        if let Some(r) = self.live.recorder.as_mut() {
-            r.tick(now);
-            self.state.recording = Some(r.info.clone());
-        }
-        if full {
-            self.stop_recording("size limit reached");
-        }
-        self.feedback_tick(now);
+        full
     }
 
     /// Run the feedback state machine for every whole second up to `now`.
@@ -525,6 +541,8 @@ impl Session {
         Ok(reply)
     }
 
+    // Flat dispatch match: one short arm per command (AGENTS.md, complexity exception).
+    #[allow(clippy::too_many_lines)]
     fn apply(&mut self, cmd: Command) -> Result<Reply, CoreError> {
         match cmd {
             Command::ViewSet { view } => {
@@ -764,6 +782,8 @@ impl Session {
         }
     }
 
+    // Flat dispatch match: one short arm per query (AGENTS.md, complexity exception).
+    #[allow(clippy::too_many_lines)]
     pub fn query(&self, q: &Query) -> Result<Reply, CoreError> {
         let s = &self.state;
         Ok(match q {

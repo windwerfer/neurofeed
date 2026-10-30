@@ -44,6 +44,15 @@ fn fault(s: &NfMcp, pads: &[&str], dropout: bool) {
 #[test]
 fn full_session_calibration_adaptation_pauses_grace_summary() {
     let s = server();
+    start_and_fit_check(&s);
+    extended_calibration(&s);
+    training_adapts(&s);
+    pauses_and_dropouts(&s);
+    reuse_baseline(&s);
+}
+
+fn start_and_fit_check(s: &NfMcp) {
+    let s = s.clone();
     assert!(fails(&s, "feedback.start", Value::Null).contains("no device"));
     run(&s, "device.connect", json!({ "id": "sim:muse_s" }));
     adv(&s, 3.0);
@@ -63,7 +72,10 @@ fn full_session_calibration_adaptation_pauses_grace_summary() {
     fault(&s, &[], false);
     adv(&s, 4.0);
     assert_eq!(status(&s)["fit"]["ready"], true);
+}
 
+fn extended_calibration(s: &NfMcp) {
+    let s = s.clone();
     // Calibration with 20 s of bad signal: extends to the 60 s cap.
     run(&s, "calibration.start", Value::Null);
     adv(&s, 5.0);
@@ -78,7 +90,10 @@ fn full_session_calibration_adaptation_pauses_grace_summary() {
     assert_eq!(b["wall_s"], 60, "{b}");
     assert!(b["valid_s"].as_u64().unwrap() < 45, "{b}");
     assert!(waited > 25, "extended past 45 s ({waited})");
+}
 
+fn training_adapts(s: &NfMcp) {
+    let s = s.clone();
     // Training with adaptation (75 s window, every 30 s).
     adv(&s, 120.0);
     let res = run(&s, "feedback.result.get", Value::Null);
@@ -89,7 +104,10 @@ fn full_session_calibration_adaptation_pauses_grace_summary() {
     let thr0 = status(&s)["threshold"].as_f64().unwrap();
     let t = run(&s, "threshold.set", json!({ "percentile": 70 }));
     assert!(t["threshold"].as_f64().unwrap() > thr0);
+}
 
+fn pauses_and_dropouts(s: &NfMcp) {
+    let s = s.clone();
     // Bad signal on both target pads for 10 s auto-pauses; recovers by itself.
     fault(&s, &["AF7", "AF8"], false);
     let w = until(&s, "paused:bad_signal", 15);
@@ -124,7 +142,10 @@ fn full_session_calibration_adaptation_pauses_grace_summary() {
     assert!(sum["success"].as_f64().is_some());
     let ev = run(&s, "events.drain", Value::Null);
     assert!(ev.as_array().unwrap().iter().any(|e| e["event"] == "chime"));
+}
 
+fn reuse_baseline(s: &NfMcp) {
+    let s = s.clone();
     // Next session reuses the stored baseline; stop builds a summary.
     fault(&s, &[], false);
     adv(&s, 2.0);

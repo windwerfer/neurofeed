@@ -3,7 +3,7 @@
 use crate::calibration::CalibrationResult;
 use crate::stats::{rolling_cvs, stability_output_percentile, Baseline};
 use crate::{
-    AdaptStep, Config, Dirty, HeldBack, Inhibit, Input, Record, StabilityConfig, ADAPT_INTERVAL_S, CEILING_SD, EPOCH_WINDOW_S,
+    AdaptStep, Config, Dirty, HeldBack, Inhibit, Input, Record, RelBands, StabilityConfig, ADAPT_INTERVAL_S, CEILING_SD, EPOCH_WINDOW_S,
     HIGH_SUCCESS, LOW_SUCCESS, RECENT_WINDOW_S, WARNING_COOLDOWN_S,
 };
 use std::collections::VecDeque;
@@ -263,87 +263,12 @@ impl Engine {
                 crate::Artifact::Blink => Dirty::Blink,
                 crate::Artifact::Jaw => Dirty::Jaw,
             });
-            if let Some(st) = self.cfg.stability {
-                self.record_recent(now, v, dirty.is_none());
-                if let Some(d) = dirty {
-                    if let Some(n) = self.last_native {
-                        rec.produced = true;
-                        rec.native = Some(n);
-                        rec.pct = self.last_pct;
-                        rec.thr = self.threshold;
-                        rec.thr_pct = Some(self.last_thr_pct);
-                        rec.in_target = Some(false);
-                        rec.held_back = Some(Vec::new());
-                        rec.dirty = Some(d);
-                    }
-                } else if let Some(r) = self.push_stability(st, v) {
-                    let thr = self.threshold;
-                    let steady = self.in_target(r);
-                    let hit = steady && !guard_blocks;
-                    self.last_native = Some(r);
-                    self.last_pct = Some(stability_output_percentile(r, thr));
-                    self.last_thr_pct = thr.map_or(0.0, |t| stability_output_percentile(t, Some(t)));
-                    self.record_epoch(now, hit);
-                    rec.produced = true;
-                    rec.native = Some(r);
-                    rec.pct = self.last_pct;
-                    rec.thr = thr;
-                    rec.thr_pct = Some(self.last_thr_pct);
-                    rec.in_target = Some(hit);
-                    rec.held_back = Some(if steady && guard_blocks { vec![HeldBack::Guard] } else { Vec::new() });
-                }
-            } else {
-                rec.produced = true;
-                rec.native = Some(v);
-                rec.pct = Some(self.baseline.rank(v).unwrap_or(50.0));
-                rec.thr = self.threshold;
-                self.last_thr_pct = self.threshold.and_then(|t| self.baseline.rank(t)).unwrap_or(0.0);
-                rec.thr_pct = Some(self.last_thr_pct);
-                if let Some(d) = dirty {
-                    self.record_recent(now, v, false);
-                    rec.in_target = Some(false);
-                    rec.held_back = Some(Vec::new());
-                    rec.dirty = Some(d);
-                } else {
-                    let above = self.in_target(v);
-                    let mut held = Vec::new();
-                    for c in &self.cfg.inhibit {
-                        match *c {
-                            Inhibit::BetaCeiling(m) if rel.beta > m => held.push(HeldBack::Beta),
-                            Inhibit::DeltaCeiling(m) if rel.delta > m => held.push(HeldBack::Delta),
-                            _ => {}
-                        }
-                    }
-                    if guard_blocks {
-                        held.push(HeldBack::Guard);
-                    }
-                    let hit = above && held.is_empty();
-                    self.record_epoch(now, hit);
-                    self.record_recent(now, v, true);
-                    rec.in_target = Some(hit);
-                    rec.held_back = Some(if self.threshold.is_none() {
-                        vec![HeldBack::NoThreshold]
-                    } else if above {
-                        held
-                    } else {
-                        Vec::new()
-                    });
-                }
+            match self.cfg.stability {
+                Some(st) => self.step_stability(&mut rec, st, v, dirty, guard_blocks),
+                None => self.step_percentile(&mut rec, v, &rel, dirty, guard_blocks),
             }
         }
-        if let Some(g) = self.cfg.guard {
-            let mut chime = false;
-            if let (Some(d), Some(thr), None) = (rel.map(|r| r.abs_delta), self.guard_thr, input.artifact) {
-                self.warning = d > thr;
-                if self.warning && self.last_chime.is_none_or(|l| now - l >= WARNING_COOLDOWN_S) {
-                    self.last_chime = Some(now);
-                    chime = true;
-                }
-            }
-            rec.warn = Some(self.warning);
-            rec.chime = Some(chime);
-            rec.muted = Some(self.warning && g.muffle);
-        }
+        self.step_guard(&mut rec, rel.map(|r| r.abs_delta), input.artifact.is_none());
         rec.success_rate = self.success_rate(now);
         self.adapt_tick += 1;
         if self.adapt_tick >= ADAPT_INTERVAL_S {
@@ -353,5 +278,98 @@ impl Engine {
             rec.adapt = Some(AdaptStep { from, to: self.threshold });
         }
         rec
+    }
+
+    /// Band Stability: reward a steadier alpha than calibration.
+    fn step_stability(&mut self, rec: &mut Record, st: StabilityConfig, v: f64, dirty: Option<Dirty>, guard_blocks: bool) {
+        let now = rec.t;
+        self.record_recent(now, v, dirty.is_none());
+        if let Some(d) = dirty {
+            // Dirty second: repeat the last value, no reward.
+            if let Some(n) = self.last_native {
+                rec.produced = true;
+                rec.native = Some(n);
+                rec.pct = self.last_pct;
+                rec.thr = self.threshold;
+                rec.thr_pct = Some(self.last_thr_pct);
+                rec.in_target = Some(false);
+                rec.held_back = Some(Vec::new());
+                rec.dirty = Some(d);
+            }
+            return;
+        }
+        let Some(r) = self.push_stability(st, v) else { return };
+        let thr = self.threshold;
+        let steady = self.in_target(r);
+        let hit = steady && !guard_blocks;
+        self.last_native = Some(r);
+        self.last_pct = Some(stability_output_percentile(r, thr));
+        self.last_thr_pct = thr.map_or(0.0, |t| stability_output_percentile(t, Some(t)));
+        self.record_epoch(now, hit);
+        rec.produced = true;
+        rec.native = Some(r);
+        rec.pct = self.last_pct;
+        rec.thr = thr;
+        rec.thr_pct = Some(self.last_thr_pct);
+        rec.in_target = Some(hit);
+        rec.held_back = Some(if steady && guard_blocks { vec![HeldBack::Guard] } else { Vec::new() });
+    }
+
+    /// Percentile policy: reward above the threshold unless an inhibit holds back.
+    fn step_percentile(&mut self, rec: &mut Record, v: f64, rel: &RelBands, dirty: Option<Dirty>, guard_blocks: bool) {
+        let now = rec.t;
+        rec.produced = true;
+        rec.native = Some(v);
+        rec.pct = Some(self.baseline.rank(v).unwrap_or(50.0));
+        rec.thr = self.threshold;
+        self.last_thr_pct = self.threshold.and_then(|t| self.baseline.rank(t)).unwrap_or(0.0);
+        rec.thr_pct = Some(self.last_thr_pct);
+        if let Some(d) = dirty {
+            self.record_recent(now, v, false);
+            rec.in_target = Some(false);
+            rec.held_back = Some(Vec::new());
+            rec.dirty = Some(d);
+            return;
+        }
+        let above = self.in_target(v);
+        let mut held: Vec<HeldBack> = self
+            .cfg
+            .inhibit
+            .iter()
+            .filter_map(|c| match *c {
+                Inhibit::BetaCeiling(m) if rel.beta > m => Some(HeldBack::Beta),
+                Inhibit::DeltaCeiling(m) if rel.delta > m => Some(HeldBack::Delta),
+                _ => None,
+            })
+            .collect();
+        if guard_blocks {
+            held.push(HeldBack::Guard);
+        }
+        let hit = above && held.is_empty();
+        self.record_epoch(now, hit);
+        self.record_recent(now, v, true);
+        rec.in_target = Some(hit);
+        rec.held_back = Some(match (self.threshold.is_none(), above) {
+            (true, _) => vec![HeldBack::NoThreshold],
+            (false, true) => held,
+            (false, false) => Vec::new(),
+        });
+    }
+
+    /// Delta guard (drowsiness): warning, rate-limited chime, muffle.
+    fn step_guard(&mut self, rec: &mut Record, abs_delta: Option<f64>, clean: bool) {
+        let Some(g) = self.cfg.guard else { return };
+        let now = rec.t;
+        let mut chime = false;
+        if let (Some(d), Some(thr), true) = (abs_delta, self.guard_thr, clean) {
+            self.warning = d > thr;
+            if self.warning && self.last_chime.is_none_or(|l| now - l >= WARNING_COOLDOWN_S) {
+                self.last_chime = Some(now);
+                chime = true;
+            }
+        }
+        rec.warn = Some(self.warning);
+        rec.chime = Some(chime);
+        rec.muted = Some(self.warning && g.muffle);
     }
 }

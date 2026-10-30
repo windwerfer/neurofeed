@@ -76,6 +76,17 @@ must produce an error the user or agent can act on, never a panic.
   `unreachable!`, `todo!` or `unimplemented!`. Return the crate's error
   type and use `?`. Workspace lints `deny` these, and tests are allowed
   them via `clippy.toml`. Every crate has `[lints] workspace = true`.
+- **Keep functions small** (SonarCloud-style; PhotoCraft uses the same
+  clippy lints). `clippy.toml`: `cognitive-complexity-threshold = 25`,
+  `too-many-lines-threshold = 100`, `too-many-arguments-threshold = 7`;
+  workspace lints `deny` `cognitive_complexity` and `too_many_arguments`
+  and `warn` `too_many_lines` (fatal in CI via `-D warnings`). Split long
+  functions into named phases, egui views into sub-panel functions, and
+  long test scenarios into helper steps. The only exception is a **flat
+  dispatch match** (one short arm per command/query/tool, e.g.
+  `Session::apply`, `Session::query`): it may carry
+  `#[allow(clippy::too_many_lines)]` with a one-line comment saying so.
+  Never allow `cognitive_complexity`.
 - **No `unsafe`** (`unsafe_code = "forbid"`). The future Android/JNI
   wrapper is the one isolated exception, and every `unsafe` block there
   needs a `SAFETY:` comment.
