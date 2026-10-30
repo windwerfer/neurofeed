@@ -81,7 +81,19 @@ pub struct StabilityConfig {
     pub difficulty: f64,
 }
 
+impl Default for StabilityConfig {
+    fn default() -> Self {
+        Self { window: Self::DEFAULT_WINDOW, difficulty: Self::DEFAULT_DIFFICULTY }
+    }
+}
+
 impl StabilityConfig {
+    /// Legacy Dart `StabilityConfig` defaults and bounds (target_state.dart).
+    pub const DEFAULT_WINDOW: u32 = 10;
+    pub const MIN_WINDOW: u32 = 1;
+    pub const MAX_WINDOW: u32 = 30;
+    pub const DEFAULT_DIFFICULTY: f64 = 0.10;
+    pub const MAX_DIFFICULTY: f64 = 0.50;
     /// Lowest threshold adaptation may reach.
     pub const MIN_THRESHOLD: f64 = 0.05;
     pub(crate) fn effective_window(&self) -> usize {

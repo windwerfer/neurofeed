@@ -56,3 +56,7 @@ The hybrid plan from `docs/review-feedback-engine.md` is approved, with the curr
 - Deviation: the blink baseline learns only from quiet bins (legacy learned from every bin, so blinks every ~2 s stopped being counted). Clench already did this.
 - Legacy `_sampleIsClean` uses a 1 s buffer after the last event, which at 1 Hz ticks means only the current second is dirty; we do the same. Priority movement > blink > jaw.
 - Recordings now carry accelerometer (tag 3) and 1 Hz movement score (tag 8). `sim.fault` gains `motion`, `blink` (one ~110 ms 300 µV bump every 2 s), `clench` (20 µV 37 Hz). New query `artifact.status`.
+
+## 2026-10-30 Band Stability defaults
+
+Window 10 s, difficulty 0.10 (legacy Dart `StabilityConfig`; bounds window 1..30, difficulty 0..0.5). Replaces the earlier guess of 0.2.

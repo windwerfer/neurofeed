@@ -39,7 +39,13 @@ impl NeuroFeedApp {
     #[cfg(not(target_arch = "wasm32"))]
     fn demo(&mut self, which: &str) {
         let adv = |s: f64| Command::ClockAdvance { seconds: s };
-        let fault = |pads: &[&str]| Command::SimFault { bad_pads: pads.iter().map(|p| (*p).to_owned()).collect(), dropout: false, motion: false, blink: false, clench: false };
+        let fault = |pads: &[&str]| Command::SimFault {
+            bad_pads: pads.iter().map(|p| (*p).to_owned()).collect(),
+            dropout: false,
+            motion: false,
+            blink: false,
+            clench: false,
+        };
         let mut steps = vec![Command::ViewSet { view: nf_core::View::Feedback }, adv(3.0)];
         let start = [Command::FeedbackStart { minutes: Some(10) }, adv(4.0)];
         match which {

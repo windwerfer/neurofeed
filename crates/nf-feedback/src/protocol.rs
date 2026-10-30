@@ -49,7 +49,7 @@ pub const PROTOCOLS: &[Protocol] = &[
     p("alertOpen", "Alert, Eyes Open", "Rewards beta over theta (BTR) with eyes open.", Eyes::Open, Feature::Btr),
     p("alertClosed", "Alert, Eyes Closed", "Rewards beta over theta (BTR) with eyes closed.", Eyes::Closed, Feature::Btr),
     Protocol {
-        stability: Some(StabilityConfig { window: 10, difficulty: 0.2 }),
+        stability: Some(StabilityConfig { window: StabilityConfig::DEFAULT_WINDOW, difficulty: StabilityConfig::DEFAULT_DIFFICULTY }),
         experimental: true,
         ..p(
             "bandStability",
@@ -67,4 +67,18 @@ pub const PROTOCOLS: &[Protocol] = &[
 
 pub fn protocol(id: &str) -> Option<&'static Protocol> {
     PROTOCOLS.iter().find(|p| p.id == id)
+}
+
+#[cfg(test)]
+mod stability_defaults {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+
+    /// Legacy Dart `StabilityConfig`: window 10 s, difficulty 0.10.
+    #[test]
+    fn band_stability_uses_legacy_defaults() {
+        let s = protocol("bandStability").unwrap().stability.unwrap();
+        assert_eq!((s.window, s.difficulty), (10, 0.10));
+        assert_eq!(StabilityConfig::default(), s);
+    }
 }
