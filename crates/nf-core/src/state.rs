@@ -117,6 +117,8 @@ pub struct AppState {
     /// Feedback session (phases, results, stored baselines).
     pub feedback: crate::feedback::Trainer,
     pub audio: nf_audio::AudioSettings,
+    /// OSC streaming out.
+    pub streaming: crate::streaming::StreamState,
     /// Folder the desktop shell loads music from (`music` reward output).
     pub music_dir: Option<String>,
     /// Saved sessions, newest first (cache of the store's list).
@@ -146,6 +148,7 @@ impl Default for AppState {
             recording: None,
             feedback: crate::feedback::Trainer::default(),
             audio: nf_audio::AudioSettings::default(),
+            streaming: crate::streaming::StreamState::default(),
             music_dir: None,
             history: Vec::new(),
             scanners: Vec::new(),

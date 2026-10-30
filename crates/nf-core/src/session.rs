@@ -103,6 +103,7 @@ struct Live {
     fb_next: f64,
     /// The recording was started by `feedback.start` (stops with it).
     auto_recording: bool,
+    streamer: crate::streaming::Streamer,
 }
 
 pub struct Session {
@@ -110,6 +111,7 @@ pub struct Session {
     sim: SimProvider,
     providers: Vec<Box<dyn DeviceProvider>>,
     source: Option<Box<dyn DeviceSource>>,
+    sink: Option<Box<dyn crate::streaming::DatagramSink>>,
     live: Live,
     store: Box<dyn nf_store::Store>,
     events: Vec<Event>,
@@ -131,6 +133,7 @@ impl Session {
             sim: SimProvider::default(),
             providers: Vec::new(),
             source: None,
+            sink: None,
             live: Live::default(),
             store: Box::new(nf_store::MemoryStore::default()),
             events: Vec::new(),
@@ -343,6 +346,7 @@ impl Session {
         if let Some((mut packets, optical, accel)) = self.poll_device(now) {
             self.route_side_streams(&packets, &optical, &accel);
             let full = self.process_eeg(&mut packets);
+            self.flush_stream();
             if let Some(r) = self.live.recorder.as_mut() {
                 r.tick(now);
                 self.state.recording = Some(r.info.clone());
@@ -398,6 +402,10 @@ impl Session {
             optical.iter().for_each(|p| r.ppg(p));
             accel.iter().for_each(|p| r.accel(p));
         }
+        if self.streaming() {
+            optical.iter().for_each(|p| self.live.streamer.ppg(p));
+            accel.iter().for_each(|p| self.live.streamer.accel(p));
+        }
         if !self.state.paused {
             if let Some(o) = self.live.optics.as_mut() {
                 optical.iter().for_each(|p| o.push(p));
@@ -419,11 +427,18 @@ impl Session {
             let Some(sig) = self.live.signal.as_mut() else { continue };
             let before = sig.applied();
             let snap = sig.push(p);
+            if self.state.streaming.settings.enabled {
+                let ch = usize::from(p.electrode);
+                self.live.streamer.eeg(ch, p.time, &sig.last(ch, p.samples.len(), true));
+            }
             let (after, detected) = (sig.applied(), sig.detected());
             if after != before {
                 self.emit(Event::MainsChanged { applied: mains_name(after).into(), detected: mains_name(detected).into() });
             }
             let Some(snap) = snap else { continue };
+            if self.state.streaming.settings.enabled {
+                self.live.streamer.bands(&snap);
+            }
             if let Some(r) = self.live.recorder.as_mut() {
                 r.bands(&snap);
             }
@@ -433,6 +448,41 @@ impl Session {
             self.state.bands.push(snap);
         }
         full
+    }
+
+    /// Streaming is on and a device is connected (syncs the streamer).
+    fn streaming(&mut self) -> bool {
+        let s = &self.state.streaming.settings;
+        match (&self.state.device, s.enabled && self.sink.is_some()) {
+            (Some(d), true) => {
+                self.live.streamer.sync(d, s);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Hand encoded OSC datagrams to the shell's sink.
+    fn flush_stream(&mut self) {
+        let (out, dropped) = self.live.streamer.take();
+        let st = &mut self.state.streaming;
+        st.stats.dropped_samples += dropped;
+        let Some(sink) = self.sink.as_mut().filter(|_| st.settings.enabled) else { return };
+        for d in out {
+            match sink.send(&st.settings.ip, st.settings.port, &d) {
+                Ok(()) => {
+                    st.stats.packets_sent += 1;
+                    st.stats.bytes_sent += d.len() as u64;
+                }
+                Err(e) => st.stats.last_error = Some(e),
+            }
+        }
+    }
+
+    /// Register the network transport for streaming out (desktop shells).
+    pub fn set_stream_sink(&mut self, sink: Box<dyn crate::streaming::DatagramSink>) {
+        self.sink = Some(sink);
+        self.state.streaming.transport = true;
     }
 
     /// Run the feedback state machine for every whole second up to `now`.
@@ -648,6 +698,7 @@ impl Session {
                 return Ok(serde_json::to_value(self.sim.config).unwrap_or_default());
             }
             Command::AudioSet(patch) => return crate::audio::set(&mut self.state, &patch),
+            Command::StreamingSet(patch) => return crate::streaming::set(&mut self.state.streaming, &patch),
             Command::HistoryImport(req) => return self.history_import(&req),
             Command::GuardSet { enabled } => {
                 self.state.feedback.guard = enabled;
@@ -845,6 +896,7 @@ impl Session {
                 json!(p)
             }
             Query::AudioStatus => crate::audio::status(s),
+            Query::StreamingStatus => crate::streaming::status(&s.streaming, s.device.as_ref()),
             Query::HistoryImportPreview(req) => json!(self.import_prepare(req)?.preview()),
             Query::FeedbackStatus => {
                 let f = &s.feedback;

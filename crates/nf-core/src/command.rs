@@ -115,6 +115,8 @@ pub enum Command {
         reset: bool,
     },
     /// Feedback audio: reward output, background, guard sound, volumes.
+    #[serde(rename = "streaming.set")]
+    StreamingSet(crate::streaming::StreamPatch),
     #[serde(rename = "audio.set")]
     AudioSet(crate::audio::AudioPatch),
     /// Import an EDF/EDF+, Mind Monitor CSV, `.neurofeed` or raw body file
@@ -301,6 +303,8 @@ pub enum Query {
     #[serde(rename = "feedback.status")]
     FeedbackStatus,
     /// Audio settings, the live cue and the guard state.
+    #[serde(rename = "streaming.status")]
+    StreamingStatus,
     #[serde(rename = "audio.status")]
     AudioStatus,
     /// Parse an import without saving: kept / lost summary for the dialog.
@@ -590,6 +594,15 @@ pub const SPECS: &[CommandSpec] = &[
     spec("protocol.set", "Choose protocol", "feedback", false, "Select the training protocol.", fb_idle),
     spec("stability.set", "Stability settings", "feedback", false, "Band Stability window (1..=30) and difficulty (0..=0.5).", fb_idle),
     spec(
+        "streaming.set",
+        "Streaming settings",
+        "streaming",
+        false,
+        "OSC out over UDP: enabled, ip, port, prefix (/muse), separate_groups (PPG/IMU/bands too).",
+        always,
+    ),
+    spec("streaming.status", "Streaming status", "streaming", true, "OSC settings, groups/addresses, packets and bytes sent.", always),
+    spec(
         "audio.set",
         "Audio settings",
         "audio",
@@ -704,6 +717,13 @@ pub fn examples() -> Vec<Request> {
         Q(Query::ProtocolGet { id: None }),
         Q(Query::FeedbackStatus),
         Q(Query::AudioStatus),
+        Q(Query::StreamingStatus),
+        C(Command::StreamingSet(crate::streaming::StreamPatch {
+            ip: Some("127.0.0.1".into()),
+            port: Some(9000),
+            separate_groups: Some(true),
+            ..Default::default()
+        })),
         C(Command::AudioSet(crate::audio::AudioPatch {
             reward_output: Some(nf_audio::RewardOutput::Rain),
             feedback_volume: Some(0.8),

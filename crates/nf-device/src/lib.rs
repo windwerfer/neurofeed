@@ -23,12 +23,14 @@ mod crown;
 #[cfg(feature = "ble")]
 mod muse;
 mod push;
+mod udp;
 
 #[cfg(feature = "osc")]
 pub use crown::{CrownProvider, CROWN_OSC_PORT};
 #[cfg(feature = "ble")]
 pub use muse::{map_muse_event, MuseProvider};
 pub use push::{PushHandle, PushProvider};
+pub use udp::UdpSink;
 
 /// Re-anchor a stream's timeline when it is this far from the poll time.
 pub const REANCHOR_S: f64 = 0.5;

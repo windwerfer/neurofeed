@@ -1,4 +1,4 @@
-//! One module per functional view; everything else is a placeholder.
+//! One module per functional view.
 
 mod bands;
 mod devices;
@@ -7,13 +7,13 @@ mod heart;
 mod histogram;
 mod history;
 mod import;
-mod placeholder;
 mod plot;
 mod psd;
 mod raw;
 mod settings;
 mod sound;
 mod spectrogram;
+mod streaming;
 
 use nf_core::{Command, Session, View};
 
@@ -28,7 +28,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>, shell:
         View::HeartRate => heart::show(ui, session),
         View::Histogram => histogram::show(ui, session),
         View::Spectrogram => spectrogram::show(ui, session, out),
+        View::Streaming => streaming::show(ui, session, out),
         View::Settings => settings::show(ui, session, out, shell),
-        other => placeholder::show(ui, other),
     }
 }

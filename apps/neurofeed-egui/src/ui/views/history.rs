@@ -14,7 +14,8 @@ const BAD: Color32 = Color32::from_rgb(0xE5, 0x73, 0x73);
 struct Ui {
     selected: Option<u64>,
     confirm: Option<u64>,
-    note: Option<String>,
+    /// (session id, message) of the last export.
+    note: Option<(u64, String)>,
     /// (id, [t, value, threshold, flags]) of the selected session.
     trace: Option<(u64, Vec<[f32; 4]>)>,
 }
@@ -43,9 +44,10 @@ fn success(m: &SessionMeta) -> Option<f64> {
 }
 
 fn title(m: &SessionMeta) -> String {
-    m.protocol
-        .clone()
-        .map_or("Recording".into(), |p| nf_core::nf_feedback::PROTOCOLS.iter().find(|x| x.id == p).map_or(p, |x| x.title.to_owned()))
+    m.protocol.clone().map_or_else(
+        || if m.import.is_some() { "Imported recording".into() } else { "Recording".into() },
+        |p| nf_core::nf_feedback::PROTOCOLS.iter().find(|x| x.id == p).map_or(p, |x| x.title.to_owned()),
+    )
 }
 
 pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
@@ -148,7 +150,7 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
             let r = ui.add_enabled(cfg!(not(target_arch = "wasm32")), egui::Button::new(name));
             let r = r.on_disabled_hover_text("export from the web build is not available yet");
             if r.clicked() {
-                st.note = Some(export(session, m.id, fmt));
+                st.note = Some((m.id, export(session, m.id, fmt)));
             }
         }
         ui.add_space(20.0);
@@ -169,7 +171,7 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
             }
         }
     });
-    if let Some(n) = &st.note {
+    if let Some((_, n)) = st.note.as_ref().filter(|(id, _)| *id == m.id) {
         ui.weak(n);
     }
 }

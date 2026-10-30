@@ -203,6 +203,12 @@ pub trait DeviceProvider: Send {
     }
 }
 
+/// Sends one UDP datagram (streaming out). Shells provide it; the web build
+/// has none.
+pub trait DatagramSink: Send {
+    fn send(&mut self, ip: &str, port: u16, bytes: &[u8]) -> Result<(), String>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

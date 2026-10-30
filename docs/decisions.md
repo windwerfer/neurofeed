@@ -104,3 +104,10 @@ Window 10 s, difficulty 0.10 (legacy Dart `StabilityConfig`; bounds window 1..30
 - **Time**: EDF and Mind Monitor stamp local time; the shell injects `utc_offset_minutes`. NeuroFeed's own EDF export stamps UTC (recording field ends in `neurofeed`) and is read as UTC. Legacy `.neurofeed` (ms timestamps, ISO startedAt) is rebased to session seconds.
 - Annotations (EDF+ TALs, Mind Monitor Elements, EDF+D gaps → disconnect) and provenance live in `SessionMeta.import` (sqlite schema v2, v1 migrated with `ALTER TABLE`).
 - Commands: `history.import_preview` (query, nothing saved) and `history.import` (saves). The UI dialog shows kept / not imported / warnings before saving; desktop: path field or drop, web: file picker or drop. Max 96 MB.
+
+## Streaming out (OSC)
+
+- Core (`nf_core::streaming`, wasm-clean) chooses the groups, aligns channels (legacy `GroupMixer`, 128-sample queues) and encodes OSC 1.0 (big-endian float32). The shell registers a `nf_types::DatagramSink` (desktop: `nf_device::UdpSink`); the web build has none, so `streaming.set {enabled:true}` is refused with that reason.
+- Legacy wire format kept: `<prefix>/<group>`, `[t_first, row-major values]`, chunks EEG 12 / PPG 6 / IMU 3 / Bands 1, EEG = conditioned signal, defaults `192.168.1.100:9000`, `/muse`.
+- Differences: time is session seconds (not device epoch); IMU is accelerometer only (3 ch, no gyro in our sources); bands are 10 Hz snapshots (log10 µV²). Streaming follows Pause (the signal pipeline is paused too). Settings are in-memory like audio.
+- LSL / BrainFlow: not ported yet (LSL needs the C liblsl; decision pending).

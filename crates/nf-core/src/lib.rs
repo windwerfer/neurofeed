@@ -17,6 +17,7 @@ mod recording;
 mod session;
 pub mod signal;
 mod state;
+pub mod streaming;
 
 pub use command::{examples, find, input_schema, Command, CommandSpec, EnabledFn, Query, Request, SPECS};
 /// DSP primitives for views that render core buffers (pure functions).
