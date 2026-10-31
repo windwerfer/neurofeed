@@ -1,0 +1,53 @@
+# Android APK (apps/neurofeed-android): cargo-ndk builds libneurofeed.so for
+# arm64-v8a + x86_64, Gradle packages it. Versions match app/build.gradle.kts
+# (compileSdk 35, NDK 27.2.12479018, JDK 17, minSdk 26).
+name: android
+on:
+  push:
+    branches: [main, android-ci]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+  NDK_VERSION: 27.2.12479018
+  ABIS: arm64-v8a,x86_64
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # versionName comes from the newest git tag
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Android SDK platform 35 + NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-35" "build-tools;35.0.0" "ndk;$NDK_VERSION" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Debug + unsigned release APK
+        working-directory: apps/neurofeed-android/android
+        run: ./gradlew --no-daemon assembleDebug assembleRelease -Pabis=$ABIS
+      - run: ls -la apps/neurofeed-android/android/app/build/outputs/apk/*/
+      - uses: actions/upload-artifact@v6
+        with:
+          name: neurofeed-android-apk
+          path: apps/neurofeed-android/android/app/build/outputs/apk/*/*.apk
+          if-no-files-found: error
