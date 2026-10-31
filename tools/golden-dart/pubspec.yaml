@@ -1,5 +1,0 @@
-name: nf_golden
-description: Headless golden-fixture generator for the legacy Dart feedback engine (dev tool, delete with lib/).
-publish_to: none
-environment:
-  sdk: ^3.5.0

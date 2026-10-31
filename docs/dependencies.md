@@ -2,7 +2,7 @@
 
 Checked 2026-10-31 with `cargo deny check` (cargo-deny 0.20.2) and `cargo audit`.
 Policy: `deny.toml`; rule for new deps: AGENTS.md "Adding a dependency".
-CI: `deny` job in `ci/rust-ci.yml` on every push and weekly (Mon 05:17 UTC).
+CI: `deny` job in `.github/workflows/rust-ci.yml` on every push and weekly (Mon 05:17 UTC).
 
 ## Ignored advisories (all transitive, no semver-compatible fix)
 

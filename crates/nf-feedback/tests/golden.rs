@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! Golden tests against fixtures generated from the legacy Dart engine by
-//! `tools/golden-dart/gen.sh`. `div_*` fixtures are intentional divergences
+//! `tools/golden-dart/gen.sh` (removed; tag `pre-rust-port`). `div_*` fixtures are intentional divergences
 //! (docs/decisions.md 2026-10-29): their dedicated tests assert the fix.
 
 use nf_feedback::{Calibration, CalibrationKind, Config, Engine, HeldBack, Input, Record};

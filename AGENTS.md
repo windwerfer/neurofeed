@@ -8,11 +8,10 @@ NeuroFeed is an EEG neurofeedback app written in **Rust only**:
 - Devices are simulated deterministically for tests and agents.
 - A thin native Android wrapper comes later.
 
-Repo layout during migration: the Rust workspace is the repo root
-(`Cargo.toml`, `crates/`, `apps/`). Flutter-era code (`lib/`, `rust/`,
-`android/`, `pubspec.yaml`, `AGENTS.flutter.md`, `README.flutter.md`) stays
-as **read-only reference** until ported, then is deleted in one commit.
-Copy useful code out of `rust/`; never make new crates depend on it.
+Repo layout: the Rust workspace is the repo root (`Cargo.toml`, `crates/`,
+`apps/`). The Flutter app (`lib/`, `rust/`, `android/`, `pubspec.yaml`, ...)
+was removed on 2026-10-31; tag `pre-rust-port` and git history keep it for
+reference (`git show pre-rust-port:lib/...`).
 
 Do not add Flutter, Tauri, Electron or a webview UI. Read this file, then
 `docs/`.
@@ -186,7 +185,7 @@ must produce an error the user or agent can act on, never a panic.
     - Never commit secrets, tokens, gated model weights (`.local/`) or
       recorded EEG of real people **(ours)**.
     - Test corpora are fetched by pinned hash and never committed.
-12. **Don't translate Dart 1:1** **(ours)**. Use the Flutter app for
+12. **Don't translate Dart 1:1** **(ours)**. Use the Flutter app (tag `pre-rust-port`) for
     behaviour and naming, not for structure.
 
 ### Adding a dependency

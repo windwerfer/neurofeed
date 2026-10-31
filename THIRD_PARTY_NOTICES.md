@@ -9,30 +9,10 @@ The overall project is licensed under the Apache License 2.0 (see `LICENSE.txt`)
 
 ---
 
-## Third-party → Dart/Flutter
-
-| Package | Version | License | Source |
-|---------|---------|---------|--------|
-| Flutter SDK | — | BSD-3-Clause | https://github.com/flutter/flutter |
-| flutter_rust_bridge | 2.11.1 | MIT | https://pub.dev/packages/flutter_rust_bridge |
-| flutter_riverpod / riverpod / riverpod_annotation | 2.6.1 | MIT | https://pub.dev/packages/flutter_riverpod |
-| shared_preferences | 2.5.5 | BSD-3-Clause | https://pub.dev/packages/shared_preferences |
-| path_provider | 2.1.6 | BSD-3-Clause | https://pub.dev/packages/path_provider |
-| file_selector | 1.1.0 | BSD-3-Clause | https://pub.dev/packages/file_selector |
-| permission_handler | 12.0.3 | MIT | https://pub.dev/packages/permission_handler |
-| device_info_plus | 10.1.2 | BSD-3-Clause | https://pub.dev/packages/device_info_plus |
-| crypto | 3.0.7 | BSD-3-Clause | https://pub.dev/packages/crypto |
-| url_launcher | 6.3.2 | BSD-3-Clause | https://pub.dev/packages/url_launcher |
-| flutter_soloud | 4.1.7 | MIT | https://pub.dev/packages/flutter_soloud |
-| freezed / freezed_annotation | 2.5.8 / 2.4.4 | MIT | https://pub.dev/packages/freezed |
-| build_runner | 2.5.4 | BSD-3-Clause | https://pub.dev/packages/build_runner |
-| blake3 (via package deps) | — | CC0-1.0 | — |
-
 ## Third-party → Rust
 
 | Crate | Version | License | Source |
 |-------|---------|---------|--------|
-| flutter_rust_bridge (Rust crate) | =2.11.1 | MIT | https://github.com/fzyzcjy/flutter_rust_bridge |
 | muse-rs (fork) | 0.1.2 (patches eugenehp 0.1.0) | Apache-2.0 | https://github.com/windwerfer/muse-rs |
 | btleplug | 0.13.5 | MIT / Apache-2.0 / BSD-3-Clause (© 2020–2021 Nonpolynomial) | https://github.com/deviceplug/btleplug |
 | jni | 0.22.4 | MIT / Apache-2.0 | https://github.com/jni-rs/jni-rs |
@@ -94,11 +74,8 @@ Sound assets are bundled by file. Attribution and license follow Freesound
 
 - **Apache License 2.0** — `LICENSE.txt` (this project); `muse-rs`,
   `reveal-rs`, `jni` (optionally).
-- **BSD-3-Clause** — Flutter SDK, `shared_preferences`, `path_provider`,
-  `file_selector`, `device_info_plus`, `crypto`, `url_launcher`, `build_runner`,
-  `btleplug` (© Nonpolynomial).
-- **MIT** — `flutter_rust_bridge`, `flutter_riverpod`/`riverpod`,
-  `permission_handler`, `flutter_soloud`, `freezed`, `tokio`, `anyhow`, `log`,
+- **BSD-3-Clause** — `btleplug` (© Nonpolynomial).
+- **MIT** — `tokio`, `anyhow`, `log`,
   `env_logger`, `android_logger`, `zstd`, `jni`.
 - **MIT / Apache-2.0** — `candle-core`, `candle-nn`, `rustfft` (Spur A Candle
   CBraMod encoder path); `rlx` 0.2.19 and vendored `rlx-cpu` 0.2.19 (REVE).

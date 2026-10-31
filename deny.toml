@@ -1,5 +1,5 @@
 # cargo-deny: supply-chain gate (`cargo deny check`). See AGENTS.md "Adding a dependency".
-# Runs in /tmp/gates.sh-style local gates and in ci/rust-ci.yml (every push + weekly).
+# Runs in /tmp/gates.sh-style local gates and in .github/workflows/rust-ci.yml (every push + weekly).
 
 [graph]
 all-features = false

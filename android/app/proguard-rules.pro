@@ -1,4 +1,0 @@
--keep class com.nonpolynomial.btleplug.android.impl.** { *; }
--keep class io.github.gedgygedgy.rust.** { *; }
--keep class org.windwerfer.neurofeed.CaptureForegroundService { *; }
--keep class org.windwerfer.neurofeed.BluetoothHost { *; }

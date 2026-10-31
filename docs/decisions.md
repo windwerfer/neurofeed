@@ -1,5 +1,6 @@
 # Decisions (dated, append-only)
 
+- 2026-10-31: Flutter app removed (lib/, rust/, android/, linux/, windows/, test/, pubspec, rust_builder, Flutter release workflows, tools/golden-dart harness). Reference: tag `pre-rust-port`. Golden fixtures stay in `crates/nf-feedback/tests/golden`; regenerating them needs the Dart harness from that tag.
 - 2026-10-29: Flutter dropped; Rust-only, egui on desktop/web/Android. Dart stays as reference until the feedback engine is ported, then is deleted in one commit.
 - 2026-10-29: Android = thin native wrapper (permissions, BLE scan/transport via JNI if needed) hosting the same Rust core; it supplies a `DeviceProvider`, and talks to the core through the same command JSON surface.
 - 2026-10-29: MCP surface = generic command_list/describe/run/batch + a few typed session tools. Add a command, not a tool.
@@ -22,7 +23,7 @@ The hybrid plan from `docs/review-feedback-engine.md` is approved, with the curr
 - guard at P75 with a 20 s chime cooldown;
 - 45 valid / 60 max calibration seconds.
 
-`nf-feedback` (L1, no clock, WASM-safe) reproduces the legacy Dart engine. Golden fixtures pin it (`tools/golden-dart`, `crates/nf-feedback/tests/golden`). It differs from the legacy engine only in these four ways; each has its own `div_*` fixture and test:
+`nf-feedback` (L1, no clock, WASM-safe) reproduces the legacy Dart engine. Golden fixtures pin it (`crates/nf-feedback/tests/golden`; generator `tools/golden-dart` at tag `pre-rust-port`). It differs from the legacy engine only in these four ways; each has its own `div_*` fixture and test:
 
 1. **Sample time, not wall clock.**
    - The success window, recalibration window, guard cooldown and calibration max-time all use `Input::t`, which is active session time with pauses excluded.
@@ -77,7 +78,7 @@ Window 10 s, difficulty 0.10 (legacy Dart `StabilityConfig`; bounds window 1..30
 - **Local time**: the core stores UTC Unix ms; only the shell formats in the viewer's zone (chrono `Local`, `wasmbind` on web).
 - **Band Stability settings**: `stability.set {window?, difficulty?, reset?}` (locked while a session runs), value in `feedback.status.stability`; applies only to stability protocols. Settings view has sliders (one command per drag release).
 - **Start params on web**: `?view=…&demo=…` mirror `NF_VIEW`/`NF_DEMO`.
-- **CI**: workflow staged at `ci/rust-ci.yml` (the bot token lacks the `workflow` scope, so it cannot push into `.github/workflows/`); `git mv ci/rust-ci.yml .github/workflows/` to enable. Runs every gate; installs `libasound2-dev libdbus-1-dev`.
+- **CI**: `.github/workflows/rust-ci.yml` (moved from `ci/` on 2026-10-31) on pushes to egui-prototype and main, PRs, weekly. Runs every gate; installs `libasound2-dev libdbus-1-dev`.
 
 ## Phase 6: real devices + agent bridge (2026-10-30)
 

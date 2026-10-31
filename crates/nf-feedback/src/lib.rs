@@ -5,7 +5,7 @@
 //! Everything is driven by **sample time** `t` (seconds), carried on each
 //! [`Input`]; nothing here reads a clock. One [`Input`] per second goes in and
 //! one [`Record`] per second comes out. Behaviour is pinned by golden fixtures
-//! generated from the legacy Dart code (`tools/golden-dart`). Four deliberate
+//! generated from the legacy Dart code (`tools/golden-dart` (removed; see tag `pre-rust-port`)). Four deliberate
 //! fixes are documented in `docs/decisions.md` (2026-10-29, nf-feedback).
 
 mod calibration;
