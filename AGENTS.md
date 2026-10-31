@@ -1,480 +1,337 @@
-# AGENTS.md — NeuroFeed (Flutter + Rust BLE headset app)
+# AGENTS.md: guide for AI agents and contributors
 
-Global orientation. Maps and history live in [`.ai/README.md`](.ai/README.md).
-Current work: [`.ai/active-task.md`](.ai/active-task.md).
+NeuroFeed is an EEG neurofeedback app written in **Rust only**:
+- `nf-core` is the headless engine. It has no UI and builds for wasm.
+- Every feature is reachable through MCP (rmcp).
+- The egui/eframe UI is one codebase for desktop and web, with Android
+  later.
+- Devices are simulated deterministically for tests and agents.
+- A thin native Android wrapper comes later.
 
-## Stack
-- **Flutter 3.47.8** in CI (`.github/workflows/` `FLUTTER_VERSION`) and in
-  `.devcontainer/post-setup.sh`. Dart 3.13.7 is bundled. Do not bump the
-  workflow pin without intending a release-toolchain change.
-- **Rust** via `flutter_rust_bridge` **2.11.1** (pinned `=`, crate + Dart
-  package + codegen CLI). Lib: `rust/` (`rust_lib_neurofeed`). Generated
-  bindings `rust/src/frb_generated.rs` and `lib/src/rust/` are **both tracked**
-  (commit `7543478`: CI never runs codegen; a missing `frb_generated.rs`
-  breaks cargokit with `E0583`). Regenerate with
-  `flutter_rust_bridge_codegen generate` when the FFI surface changes and
-  commit both sides.
-- **muse-rs** — fork of `eugenehp/muse-rs` `0.1.0`. The app currently
-  builds `third_party/muse-rs` (path) so Linux `scan_all` reads RSSI
-  before `stop_scan`. Published tag `0.1.2` (`e4891ba`) still stops
-  first and hides every live Muse. Switch back to a git tag after that
-  fix is pushed. `default-features = false`. See `.ai/muse-rs.md`.
-- **btleplug** — crates.io **`0.13.5`** (deviceplug tag `0.13.5`,
-  `1af8299`). No fork patch. `QueueStream.pollNext` removes under the
-  lock in this release. The 0.12 JNI attach, exception-clear, and
-  wake/close patches are in upstream. See `.ai/btleplug.md`.
-- **`jni = "0.22"`** — must resolve to the same `jni` as btleplug (0.22.4)
-  or you get link-time symbol conflicts. Android init uses
-  `jni::EnvUnowned` (`jni` 0.22), not `JNIEnv::from_raw`.
-- **CBraMod Spur A + optional REVE** (on-device drowsiness): pack `assets/packs/cbramod-a-vig-full/` + Candle encoder in `rust/src/analysis/cbramod_encoder.rs` (loads SHA-pinned `pretrained_weights.pth`, mean-pool 200-d → HeadALinear). Ready requires Rust `encoder_forward_ready` (Candle actually loaded) — SHA OK alone is not Ready (`kCbramodEncoderForwardReady` is compile-time link only). **CPU/mobile forward latency is TBD** (not profiled on-device yet). REVE via `reve-rs`/RLX CPU. FFI `rust/src/api/reve.rs`. LUNA removed from ship path; Dart `lib/src/reve/`.
-- **Feature pipeline** (implemented): Rust registry produces
-  `MuseEventDto::Feature`; Dart `FeatureBus` → `RewardLane` / `GuardLane`.
-  Copy in `assets/features.json`; electrodes in `rust/src/api/features.rs`.
-  Guard **only warns**, never modulates reward. Frozen:
-  `.ai/contracts/pipeline-contract.md`. Crown sessions use PO3/PO4 by default.
-- **Protocols** are JSON documents (`origin: catalog | user`). Catalog:
-  `assets/protocols.json`. User: `user_protocol_store.dart` +
-  `lib/src/views/protocol_builder.dart`. `ProtocolType` / `GuardrailMode`
-  enums are gone — ids are strings; guard is a feature id (`band.delta` /
-  `ai.drowsiness` / `none`).
-- **Calibration** (`assets/calibrations.json` v2): `eyes-closed-01` /
-  `eyes-open-01`, each with `single` and `staged` (artifacts 15 s /
-  eyes-open challenge 30 s / rest). The simple window and the staged rest
-  share one live baseline: 45 clean frames, or 60 s of wall time. A clean
-  frame is all head electrodes ≥ 80 and a quiet movement/gesture buffer.
-  One feature source second counts once.
-  Settings → AI Calibration is Default (AI labeling → staged, otherwise
-  simple) or Always staged. Record-only stays skippable.
-- **Android**: NDK is Flutter's default (`flutter.ndkVersion`; 28.2.13676358
-  on 3.47.8), Gradle 8.14, `targetSdk` from Flutter, arm64-only
-  (`abiFilters = ["arm64-v8a"]`).
-- **JNI glue**: btleplug init from Dart **after** `RustLib.init()`. Kotlin
-  `MainActivity` `ensureInitialized`; `connection_provider` calls
-  `ensureBtleplugReady()` before scan/connect. Java under
-  `android/app/src/main/java/com/nonpolynomial/btleplug/` and
-  `io/github/gedgygedgy/rust/`.
-- **macOS**: CI-only (`release-macos.yml`), Apple Silicon, App Sandbox on.
-  `flutter create` then `scripts/prepare-macos-runner.sh` (sandbox
-  entitlements, Bluetooth and local-network usage strings, security-scoped
-  bookmark channel). Ad-hoc signed, not notarized. iOS is not a target.
-- **Windows**: CI-only (`release-windows.yml`). Committed
-  `windows/CMakeLists.txt` (MSVC workaround); the rest is generated in CI.
-- **Flatpak**: CI-only (`release-flatpak.yml`). Manifest input is
-  `flatpak/flatpak-flutter.yml`; CI runs `flatpak-flutter` so the build
-  sandbox has no network. Runtime `org.freedesktop.Platform//25.08`.
-  App id `org.windwerfer.neurofeed`. The app git source sets
-  `disable-submodules` (cargo git deps are vendored; `third_party/` is not
-  built). `liblsl` 0.13.2+0 clones pugixml at build time; `flatpak/foreign.json`
-  vendors pugixml v1.15 into that package dir so the sandbox stays offline.
-  When `FLATPAK_ID` is set, the save folder follows the
-  Android/macOS container rule.
+Repo layout: the Rust workspace is the repo root (`Cargo.toml`, `crates/`,
+`apps/`). The Flutter app (`lib/`, `rust/`, `android/`, `pubspec.yaml`, ...)
+was removed on 2026-10-31; tag `pre-rust-port` and git history keep it for
+reference (`git show pre-rust-port:lib/...`).
 
-## Core rules (do / don't)
-- **NEVER** assume a library is available — check `Cargo.toml` / `pubspec.yaml` first.
-- **NEVER** commit secrets/keys.
-- **NEVER** add code comments unless explicitly asked.
-- Do not run `git` commit/push/PR unless explicitly requested.
-- When editing Rust under `rust/src/api/`, run `flutter_rust_bridge` codegen
-  if the FFI surface changes (commit both generated sides).
-  `cargo check --target aarch64-linux-android` is NOT reliable here — use
-  `flutter run`. See `.ai/testing-guide.md`.
-- `flutter analyze lib/src` must stay clean after edits.
-- Format changes land in `rust/src/api/session_format.rs`; keep
-  `cargo test --lib session_format` green. Frozen law:
-  [`.ai/contracts/fileformat_v6.md`](.ai/contracts/fileformat_v6.md)
-  (NFED6 / formatVersion 6). Historical v5:
-  [`.ai/archive/session-format-contract-v5.md`](.ai/archive/session-format-contract-v5.md).
-  Update `README_feedback_format.md` in the same change.
-- **File format v6 (Implemented / LOCKED):**
-  [`.ai/contracts/fileformat_v6.md`](.ai/contracts/fileformat_v6.md) —
-  NFED6 / `formatVersion: 6`. **Annotations model LOCKED** (`{onset,duration,type}`; pause/bad_quality/disconnect +
-  snake_case gestures; `duration: 0` instants; single SoT). **Base metadata vocabulary
-  LOCKED**. Prefer those JSON keys; do not invent synonyms. Session-format FFI
-  identifiers are unversioned (`containerEncode`, `parseHead`, …; container is NFED6).
-- Feedback link loss is frozen
-  ([`.ai/contracts/feedback-disconnect.md`](.ai/contracts/feedback-disconnect.md)):
-  a disconnect pauses the session and its audio cues. Only the same device
-  continues it. Do not auto-end on disconnect. The orchestrator still
-  auto-ends; that end is the bug the contract retires.
-- Do not reopen pipeline-contract Key Decisions. Do not unlock Crown
-  sessions. Connect UX is frozen (`.ai/connect-simulator-ux.md`) — Neurosity
-  is OSC LAN discovery only (`neurosity_osc.rs`, sim `tools/crown_osc_sim.py`);
-  do not mix Crown Start into it. `DeviceKind` is Muse | Neurosity
-  only; do not restore Simulated*. Audio-engine Key Decisions
-  (`.ai/audio-engine.md`) are frozen: do not duck unmodulated background;
-  do not deinit SoLoud from a controller; do not restore
-  `AudioService.setMusicMuffle`. Monitor spec (`.ai/monitor.md` rev 6) is
-  implemented (product PRs 0–7). Draw-path perf PRs 1–7 landed; PR 8
-  skipped. Do not add Spectrogram `FFT 1s ▾`, averaging, or a Bands strip
-  on Spectrogram. Do not restore Bands `SMOOTH` / `REAL TIME` chrome.
-  Bands Follow lead is 1 s (Spectrogram stays flush-right). Do not pause
-  `SweepBuffer` / `BandCache` on view change. Hidden graphs stay unmounted
-  (`AppShell` `switch`, not `IndexedStack`). Trust graphs
-  (`.ai/trust-graphs.md`) are implemented: Follow-only; gray wash is
-  inhibit-out only (not dirty, not below-the-line without a failed
-  inhibit); reward stroke stays series color; do not reuse monitor graph
-  widgets.
-- Data-plane / recording spine: **implemented**. Follow [`.ai/contracts/data-plane-contract.md`](.ai/contracts/data-plane-contract.md) (Frozen Key Decisions). Do not restore Dart live encode, outer zstd on the container raw section, or whole-raw `readAsBytes` / `extractRaw` on keepable captures. Do not add `rust/src/spine/normalize/`. Intentional deviations need a written why. Sibling to the feedback pipeline contract — do not reopen feedback Key Decisions for spine work. Historical coordinator steps: [`.ai/archive/handoff-spine.md`](.ai/archive/handoff-spine.md).
-- If you change on-screen copy or primary chrome (status bar, sidebar, connect
-  window, session Start/Pause/End), update `.ai/ui-map.md` in the same change.
-  Glossary *mirrors* frozen connect/pipeline names; do not invent synonyms.
-- Spoken UI names: `.ai/ui-map.md`. What to run: `.ai/test-matrix.md`. Linux
-  agent drive: debug HTTP (`--dart-define=NEUROFEED_AGENT=true`), skill
-  `neurofeed-run-linux`. How-to: `.ai/testing-guide.md` Linux agent.
+Do not add Flutter, Tauri, Electron or a webview UI. Read this file, then
+`docs/`.
 
-## Docs
-Index: [`.ai/README.md`](.ai/README.md). UI names: [`.ai/ui-map.md`](.ai/ui-map.md).
-Tests: [`.ai/test-matrix.md`](.ai/test-matrix.md). Audio engine:
-[`.ai/audio-engine.md`](.ai/audio-engine.md). Monitor:
-[`.ai/monitor.md`](.ai/monitor.md) (implemented). Fit:
-[`.ai/headset-fit.md`](.ai/headset-fit.md). Export: [`.ai/export.md`](.ai/export.md).
-Format/cache: `README_feedback_format.md`, `README_history_cache.md`.
-Trust graphs: [`.ai/trust-graphs.md`](.ai/trust-graphs.md) (implemented).
-Queued (not this branch): [`.ai/TODO/`](.ai/TODO/) Athena optics raw stream.
-Frozen contracts: [`.ai/contracts/`](.ai/contracts/) — pipeline, data-plane, fileformat v6, app folder, feedback disconnect.
-Historical spine handoff: [`.ai/archive/handoff-spine.md`](.ai/archive/handoff-spine.md).
+## Git rules (owner, binding)
 
-## Project layout
-```
-lib/src/                    Flutter UI + Riverpod
-  connection_provider.dart  AppStateNotifier: scan/connect
-  connect_source.dart       ConnectSource + simulator catalog
-  app.dart                  main(), permissions
-  agent/                    debug loopback HTTP (`NEUROFEED_AGENT`, compile-out)
-  connect_window.dart       ConnectOverlay (every view with a status bar)
-  settings.dart, status_bar.dart, version.dart
-  views/                    session, history, dashboard, protocol_builder, streaming, …
-    music_settings_panel.dart  shared music options — don't fork
-lib/src/feedback/           session orchestrator + lanes
-  feedback_state.dart       orchestrator (idle→calibrating→playing⇄paused→ended)
-  reward_lane.dart / guard_lane.dart / feature_bus.dart / calibration_runner.dart
-  target_state.dart         RatioEngine (FeedbackEngine): threshold, EMA, recalibrate
-  protocol.dart / protocol_catalog.dart / user_protocol_store.dart
-  feature_catalog.dart      assets/features.json copy
-  computed_sampler.dart     1 Hz JSONL; Pulse/SpO₂/PeakAlpha from `_onEvent`
-  feedback_recorder.dart    facade over spine SessionRecorder + assembleScratch
-  session_assembler.dart    re-export of spine/assemble.dart
-  crash_recovery.dart       leftover `session_*` reopens session summary
-  session_store*.dart / session_sqlite.dart / session_metadata.dart
-  session_export.dart / session_pdf_export.dart / session_chart_data.dart
-  app_folder.dart           app folder, cache, models; scratch == sqlite cache
-  folder_move.dart          copy-then-delete save-folder change
-  trust/                    live Reward / Guard / inhibit graphs + nerd sheet
-lib/src/spine/              capture / assemble Dart adapters
-  capture_client.dart       start/stop/assemble/sidecar FFI
-  capture_foreground.dart   Android FGS start/stop for keepable capture
-  scratch_writer.dart       SessionRecorder (prefix default `session`)
-  assemble.dart             assembleContainer, writeScratch(prefix:)
-lib/src/session_format/         interim FFI helpers / ComputedFrame / DeviceInfo
-  computed_frame.dart       Dart ComputedFrame (+ .freezed.dart)
-  models.dart               DeviceInfo, StreamsConfig
-  placeholder_webp.dart     placeholder WebP (re-exported from spine/assemble)
-lib/src/monitor/            live graphs + recording
-  monitor_controller.dart   constructed in main(); hydrates if already connected
-  graph_shell.dart          Follow/Inspect + Record / Stop
-  graph_cinema.dart         mobile landscape hides chrome; desktop F11 same hide
-  viewport_controller.dart  Follow / Inspect; elapsed domain; Bands Follow lead 1 s
-  electrode_toggles.dart    non-EEG average membership (chrome)
-  band_toggles.dart         in-pane delta/theta/alpha/beta/gamma chips
-  cache/band_cache.dart     1 Hz bands, 30 min cap; no EEG LiveCache
-  cache/sweep_buffer.dart   5 min EEG RAM + display ring (moved from charts/)
-  cache/stft_ring.dart      Follow STFT columns (Inspect / electrodes / window = full)
-  cache/sliding_spectrum.dart  Follow Welch / histogram (Inspect = full)
-  panes/sweep_pane.dart     one electrode, theme wipe / Inspect fill-right
-  panes/time_series_pane.dart  Bands strip; PCHIP; Follow ticker when lead > 0
-  panes/bands_context_strip.dart  ~30% Bands map under Histogram/PSD
-  views/bands_view.dart     GraphShell Bands; in-pane BandToggles
-  views/raw_eeg_view.dart   N stacked SweepPanes (Muse-4 / Crown-8)
-  views/histogram_view.dart 70/30 split; ±100 µV, 64 bins
-  views/psd_view.dart       Welch; GraphShell title Power Spectral Density
-  views/spectrogram_view.dart heatmap; mag ▾; 256-pt FFT (no size chrome)
-  views/recording_dashboard.dart  History row; Follow disabled
-  dsp.dart                  Hamming FFT 1/N²; n parameterized (default 256)
-  recording/                lease, MonitorRecorder facade, crash_recovery, store
-lib/src/audio/              SoLoudEngine + AudioService, reward/guard/background
-lib/src/reve/               model download/import/load UI
-lib/src/streaming/          OSC / LSL / BrainFlow
-lib/src/charts/             band_style, SessionReader, smooth_path (writer is spine/)
-rust/src/api/
-  muse.rs, features.rs, device_config.rs, neurosity_osc.rs, simulator.rs
-  reve.rs, session_format.rs, edf_export.rs, capture.rs (FRB re-exports)
-rust/src/spine/             capture writer, assemble-on-temps, soak
-  capture.rs, soak.rs
-rust/src/analysis/          gesture, cbramod (+ cbramod_encoder), reve, guardrail, ai_heads
-assets/                     protocols.json, calibrations.json, features.json, audio/
-.ai/                        project docs (see .ai/README.md)
+- Commit as `Thomas Grok Bot Barth <windwerfer@gmail.com>`.
+- Never push to `main`. Push working branches only (HTTPS; SSH is blocked).
+- Never open pull requests.
+- Do not disturb other people's uncommitted work: use a `git worktree`
+  under `/workspace` when the main checkout is dirty.
+
+## 1. Orientation
+
+| Read | Why |
+|---|---|
+| `docs/architecture.md` | Crate map, layers, the core/UI seam. Its dated "Current state" section overrides the plan below it. |
+| `docs/design-mcp-core.md` | Command model, MCP surface, simulators, migration phases |
+| `docs/decisions.md` | Dated decisions and frozen contracts. Do not reopen them without a new entry. |
+| `docs/building.md` | Toolchain, desktop/web builds, the CI gate |
+| `docs/ui-structure.md` | Views, panels, theme, how to add a view |
+| `docs/contracts/` | Frozen product contracts carried over from the Flutter app (file format NFED6, pipeline, data plane, feedback disconnect, app folder) |
+| `log/devlog.md` | What landed recently and what is still open |
+
+## 2. Workspace map
+
+```text
+crates/
+  nf-types            L0  ids, units, stream descriptors, DTOs (serde, schemars)
+  nf-dsp nf-format nf-sim  L1  filters/FFT/bands; NFEDBIN/NFED6/EDF formats; seeded raw simulators
+  nf-feedback         L1  feedback engine math (threshold, adaptation, stability, inhibit, guard); sample-time, no clock
+  nf-format           L1  .neurofeed NFED6 container (the only owner of the byte layout)
+  nf-core             L2  Session + command registry + event log + Clock (no egui, no tokio, wasm-clean)
+  nf-device nf-store  L3  real devices (btleplug, OSC; native) ; history/storage behind traits
+  nf-mcp              L4  MCP server over nf-core (native only)
+apps/
+  neurofeed-egui      desktop + web UI (eframe; trunk for web); control channel on desktop
+  neurofeed-mcp       headless MCP binary (in-process Session + simulator), or a bridge to the app
+xtask/                cargo xtask ci | layers | wasm   (to add)
 ```
 
-## Where things live
-- BLE: `rust/src/api/muse.rs` (`scan`, `connect`, `subscribe_events`).
-- Android JNI: `btleplug::platform::init` from `Java_org_windwerfer_neurofeed_MainActivity_museAndroidInit` (`rust/src/api/muse.rs`). Thread attach is `JavaVM::attach_current_thread` inside btleplug 0.13 (`jni` 0.22). Bundled Java matches crates.io `0.13.5` (`src/droidplug/java`).
-- Devices: `DeviceKind` is Muse | Neurosity (`device_config.rs`). Connect
-  dropdown is Dart `ConnectSource` (`connect_source.dart`). Simulation is
-  `simulate` + `sim:*` ids (`simulator.rs`), not extra kind variants.
-  `connect_with_options(simulate: true)` calls `spawn_simulator` on the
-  existing tokio runtime and emits headset events only (`Eeg` / `Ppg` /
-  IMU / `Telemetry`). The event forwarder derives bands, features, pulse,
-  SpO₂, quality — same as a live Muse. `DeviceSimulator` is Rust-only
-  (`#[frb(ignore)]`). Crown OSC: `neurosity_osc.rs` (no discovery API yet).
-- Feature registry: `rust/src/api/features.rs`. Dart bus/lanes as above.
-- Session byte layout: `rust/src/api/session_format.rs` only. Dart is FFI.
-  Freeze: `.ai/contracts/fileformat_v6.md` (NFED6). Human spec:
-  `README_feedback_format.md`.
-- Session assemble: `lib/src/spine/assemble.dart`
-  (`assembleContainer`, `writeScratch`). Placeholder WebP stays in
-  `session_format/placeholder_webp.dart`. Scratch writer:
-  `lib/src/spine/scratch_writer.dart` (`SessionRecorder`). Capture FFI:
-  `lib/src/spine/capture_client.dart` over `rust/src/spine/capture.rs`
-  (FRB `rust/src/api/capture.rs`). Android keepable-capture FGS:
-  `lib/src/spine/capture_foreground.dart` + `CaptureForegroundService`
-  (`connectedDevice`, same process; not `tmp_`). Legacy re-exports:
-  `session_format/assemble.dart`, `session_format/scratch_writer.dart`,
-  `feedback/session_assembler.dart`, `charts/session_recorder.dart`,
-  `feedback/computed_frame.dart` (canonical models: `session_format/models.dart`).
-- Monitor: `lib/src/monitor/` — `MonitorController` is constructed in `main()`
-  from the same `ProviderContainer` as `AppStateNotifier`, and hydrates if
-  already connected. Band ring is `monitor/cache/band_cache.dart`. EEG RAM is
-  `monitor/cache/sweep_buffer.dart` (5 min). Raw EEG is N stacked `SweepPane`s
-  in `monitor/views/raw_eeg_view.dart`. Histogram / PSD / Spectrogram are
-  `monitor/views/{histogram,psd,spectrogram}_view.dart`. Histogram and PSD
-  have a ~30% Bands context strip; Spectrogram does not. FFT is 256-pt
-  Hamming (`kDefaultFftN`); no size dropdown. Bands traces are PCHIP;
-  Follow on 1 Hz strips uses `bandsFollowLeadSeconds` (1 s) and a vsync
-  ticker in `TimeSeriesPane`. In-pane `BandToggles` hide series (last-one
-  stays); strip legend is painted, not tappable. EEG notify is
-  vsync-coalesced (RAM writes stay 256 Hz). Follow Spectrogram STFT,
-  PSD Welch, and Histogram are incremental; Inspect / electrodes / window
-  still full recompute. Raw EEG traces min/max-downsample per pixel;
-  `RawEegView.dispose` sets wipe-ring window 0. `bandNames` / `bandColors`
-  stay in `lib/src/charts/band_style.dart`. Pad quality for both devices is a
-  Rust `PadQuality` event (1 Hz, from the forwarder's 1 s EEG ring). Neurosity
-  resolves `crown_quality_source` (headset vs in-app) and records
-  `signalQualitySource` on computed frames. Muse events carry the in-app
-  score only; frames keep `signalQuality` and omit the source. Each `Bands`
-  event also carries `signal_quality` for that FFT window (Muse: std + that
-  window's line noise; Neurosity Crown source: the resolved 1 Hz score when
-  present). The live dash and the playing-session sampler stamp that field.
-  The raw record does not store it.
-- Crash recovery: feedback `lib/src/feedback/crash_recovery.dart` scans
-  `scratchDirectory` for `session_*` only and reopens the session summary
-  (Save/Discard; Back blocked). Monitor
-  `lib/src/monitor/recording/crash_recovery.dart` scans `recording_*`;
-  launch glob-deletes leftover `tmp_*`. Neither scanner crosses prefixes.
-- History cache: `lib/src/feedback/session_sqlite.dart`
-  (`session_metadata.db`, thumbnail BLOB, `kind` `feedback`|`recording`).
-  `SessionStore.list()` is sqlite-only (no orphan-file backfill).
-  `RecordingStore.publish` upserts the same DB.
-- SAF: MethodChannel `neurofeed/saf` in `MainActivity.kt`.
-- Guard feature ids: `lib/src/feedback/guardrail_mode.dart` (string helpers,
-  not an enum). Per-protocol prefs migrate from old `GuardrailMode.name`.
-- Audio engine: `lib/src/audio/soloud_engine.dart` (init/deinit, epoch,
-  bundled `loadAsset` cache). Session facade `audio_service.dart`.
-  `RewardOutput.setMuffle` is the live muffle API (`guard_lane.dart`
-  already calls it). Bundled files: `SoLoudEngine.loadAsset`. User music:
-  `loadFile`, uncached. Spec: `.ai/audio-engine.md`.
-- Audio outputs: `lib/src/audio/output_ids.dart`.
-- Protocol builder: `lib/src/views/protocol_builder.dart`.
-- Trust graphs: `lib/src/feedback/trust/` — Follow-only session plots, not
-  GraphShell. Reward pane always while Reward is on; 0–2 inhibit panes
-  (same window) from `betaCeiling` / `deltaCeiling`. Guard is 1–2 panes
-  from distinct warn signals. Gray wash on reward only while inhibit is
-  out. Spec: `.ai/trust-graphs.md`.
-- Release CI: `.ai/release.md`. Toolchain: `rust/rust-toolchain.toml` (1.97.1)
-  kept in sync with workflow `RUST_VERSION`.
+**Layering is enforced** by `cargo xtask layers` (to add). A crate may
+depend only on lower layers, and a new crate must be registered in the
+layers table. Nothing below the apps may use egui, eframe, winit, rfd,
+tokio or btleplug, except `nf-device` (btleplug) and `nf-mcp` (tokio).
+Third-party engines are quarantined to one crate each:
+- BLE and OSC live in `nf-device`;
+- ML models (Candle, REVE) go in an optional crate behind a cargo
+  feature;
+- the app must work without them.
 
-## Known hot spots
-- **Cargo `[patch]` version trap**: patched crate `version` must be
-  semver-compatible with the dep or Cargo silently skips the patch.
-  btleplug is crates.io `0.13.5` with no patch. Do not pin it back to
-  `0.12.0` or `0.11.8`. The `rlx-cpu` patch target is `crates-io`.
-  muse-rs is not a patch. See `.ai/btleplug.md`.
-- **Vendored `rlx-cpu`** (`vendor/rlx-cpu-0.2.14`): `[patch.crates-io]`,
-  default `blas` cleared. Keep `version = "0.2.14"` compatible with
-  `rlx-runtime 0.2.14`. Clearing `blas` does not remove the macOS
-  Accelerate calls (BNNS in `rlx-ir`, vForce in `rlx-cpu`). The macOS
-  podspec must pass `-framework Accelerate` and `-lbz2`. `#[link]`
-  directives do not reach the Xcode link of the staticlib. `-lbz2` covers
-  `npyz` → `zip` 0.6 → `bzip2-sys`, which uses system libbz2 when
-  pkg-config finds it.
-- **Model engine is git deps, not submodules.** Workflows still init
-  `third_party/reve-rs` as reference copy only (do not revive luna-rs).
-- **Gated weights live in `.local/`**, never commit them. `#[ignore]`d smoke
-  tests in `rust/src/analysis/{cbramod,cbramod_encoder,reve,guardrail,ai_heads}.rs`.
-- **Session format is Rust-owned.** Never edit the `.neurofeed`
-  layout in Dart. Some container fns are `#[frb(sync)]`.
-- **Never put a `LayoutBuilder` inside dialog content** (AlertDialog +
-  IntrinsicWidth). Use `Align` / `FractionallySizedBox`.
-- **Model install UI is shared** (`lib/src/reve/model_selector.dart`) —
-  don't fork it between settings and the guardrail dialog.
-- **Range sliders for cutoffs are log-space**; the label is `label.round()`.
-  Persist music cutoff on `onChangeEnd`, not every `onChanged` tick. Never
-  copy a raw slider position into prefs or tests.
-- **Don't wrap a bounded `DecoratedBox` around a `ListTile` subtitle**
-  (Material ink assertion).
-- **Connect overlay must exist in every view with a status bar**
-  (`AppShell` and `FeedbackSessionView` each host one). Dropdown is Muse |
-  Neurosity | Simulator (`ConnectSource`). Simulator only in Debug mode
-  (`enable_simulated_devices`). Muse = BLE, keep Muse only. Neurosity =
-  never BLE (empty OSC list is OK). Simulator = static catalog, no BLE,
-  no OSC; hide Rescan. Debug off + Simulator selected → Muse. Ignore
-  `sim:*` `lastDeviceId` when debug is off.
-- **`DeviceKind` is two values** (Muse, Neurosity). FFI enum — regenerate
-  FRB if it changes. `deviceKindIsCrown` is `kind == neurosity`. Crown
-  sessions (real and simulated) record 8 channels; gate/reward default is
-  `DeviceConfig.targetElectrodes` (PO3/PO4).
-- **Settings has no “AI sleep guardrail” card.** Guard is per-protocol in
-  the builder + `Settings.guardFeatureFor`. Settings sections are General,
-  Devices, AI, Recording, About. Debug mode is the last card, inside About.
-- **flutter_soloud Linux Xiph libs are glibc-2.43-built** unless
-  `TRY_SYSTEM_LIBS_FIRST=1` + system `libopus-dev` etc. (devcontainer and
-  `release-linux.yml` already do this). The Flatpak runtime is glibc 2.42,
-  so `release-flatpak.yml` builds ogg, opus, vorbis, and flac into `/app/lib`
-  and sets the same flag.
-- **Container has no ALSA card** — `libasound2-plugins` +
-  `/etc/alsa/conf.d/99-pulseaudio-default.conf` (copied from `.example` in
-  the Dockerfile) or playback is silent.
-- **Audio latency profile only matters on Android.** "Reduce audio stutter"
-  (`Settings.audioStableMode`) is Android-only. Session start calls
-  `AudioService.ensureReady(reopenIfProfileDiffers: true)` (falls back to
-  low-latency if the conservative AAudio path cannot start). A Settings
-  toggle does nothing until the next session start. Controllers may
-  `SoLoudEngine.ensureInit()` with no args (no-op if ready).
-- **Do not deinit SoLoud from a controller.** `FeedbackAudioController.dispose`
-  must not call `SoLoudEngine.deinit`; `AudioService.dispose` is the only
-  teardown. Bundled audio uses `SoLoudEngine.loadAsset`, never `loadFile`
-  (rain used to `loadFile` an asset key — that fails on Android).
-- **Muffle is `RewardOutput.setMuffle`.** Do not add `AudioService.setMusicMuffle`.
-  Duck modulated reward + both binaural controllers. Do **not** duck
-  unmodulated background (drone / static music / rain-as-background).
-  Do not edit `guard_lane.dart` for muffle.
-- **Flutter directory assets** only bundle files directly in the declared
-  directory. `pubspec.yaml` lists every `assets/audio/` subdir. Guard:
-  `test/calibration_assets_test.dart`.
-- **Windows MSVC coroutine**: `windows/CMakeLists.txt` defines
-  `_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS` for
-  `permission_handler_windows`.
-- **Android ships arm64-only.** No x86 emulator / armeabi-v7a.
-- **Release version is tag-derived**, not `pubspec.yaml`. Logic in
-  `release-{android,windows,linux,macos,flatpak}.yml`.
-- **macOS runner is generated in CI.** Do not commit `macos/`. Keep the App
-  Sandbox on. `scripts/prepare-macos-runner.sh` writes the sandbox
-  entitlements (network, Bluetooth, user-selected files, app-scoped
-  bookmarks) and copies `scripts/macos/MainFlutterWindow.swift`. Default
-  save folder is the sandbox container, same split as Android: a picked
-  folder holds recordings and export; cache and AI models stay in the
-  container. A picked path without its bookmark will not open on the next
-  launch. Gatekeeper still blocks the first open of the ad-hoc zip.
-- **Android BLE init** must happen from JNI before scan or
-  `"Droidplug has not been initialized"`.
-- **Muse startup** is `connect_with_options` → `handle.start(true, true)`
-  (PPG always on; commit `217cefe`). Classic preset is `p50`: that turns on
-  the 5th EEG channel (`273e0007`) and PPG. `p21` leaves the 5th off. `p20`
-  is not the AUX preset. AUX is always subscribed. Devices → Muse Aux
-  channels shows it (default off, immediate). Record AUX (default on)
-  filters the next recording. Athena stays `p1045` and keeps electrodes
-  4..7 in the stream. The Crown has no AUX channel. Revert `217cefe` if
-  Classic stability regresses. Preset law: `.ai/muse-rs.md`.
-- **Simulator connect must `tokio::spawn` `DeviceSimulator::start`.** Do
-  not drop the Future (the old std-thread bridge never ran). Do not emit
-  derived `Bands` / Pulse / SpO₂ / Gestures from the sim — the forwarder
-  owns those. EEG std must stay in `1..15` µV so pad quality ≥ 80.
-  A simulated Muse emits AUX and reports it: Classic electrode 4, Athena
-  electrodes 4..7. Devices → Muse Aux channels shows or hides them.
-  Crown simulation stays 8 channels and `auxChannels` 0.
-  `cargo test --lib simulator`.
-- **Athena optical ≠ Classic PPG.** muse-rs maps optical tags `0x34` /
-  `0x35` **first 3 channels only** into `MuseEvent::Ppg` (as if they were
-  ambient/IR/red) and **skips** `0x36` (16-ch). Extra fNIRS optodes are
-  not in this app. Do not add them without Athena hardware. See
-  `.ai/muse-rs.md`.
-- **SpO₂** from PPG IR+Red in `compute_spo2()` (`muse.rs`, commit `4bc0300`).
-  Classic 3-ch PPG only; Athena 8/16-ch optics are not a drop-in.
-- **Event forwarder** polls `guard.events` every 1 s; 30 s silence →
-  `Disconnected`. Never `watch::changed()` on a clone of an unpolled primary
-  (commit `3078904` / fix `53e3e8f`).
-- **Auto-scan only on saved device.** Fresh launch with no `lastDeviceId`
-  opens the connect window but does not scan.
-- **JNI trace spam**: call `log::set_max_level(Debug)` after
-  `android_logger::init_once` (`muse.rs` `init_app()`).
-- **QueueStream race**: `QueueStream.java:pollNext()` must remove inside
-  `synchronized`.
-- **Epoch window is wall-clock 75 s** (`RatioEngine.epochWindowSeconds`),
-  not 300 events. `successRate` is null until the window fills. Zero-success
-  window → circuit breaker resets to the baseline percentile.
-- **In-flight recalibrate**: ≥ 60 s elapsed and ≥ 30 clean samples from the
-  90 s rolling buffer.
-- **Storage resolution is async** (`sessionStorageProvider` FutureProvider).
-  Always `ref.read(sessionStoreProvider.future)`.
-- **SAF is history-only.** Live capture always goes to scratch
-  (`scratchDirectory()`): `tmp_` on connect, `recording_` on Record,
-  `session_` on feedback. Exclusive lease — at most one writer.
-- **Record vs Start Session:** recording refuses Start (dialog + agent 409
-  `recording_active`). Feedback refuses Record. Record does not keep
-  pre-click tmp bytes.
-- **App folder**: [`.ai/contracts/app-folder.md`](.ai/contracts/app-folder.md).
-  Unpackaged Linux and Windows default is `~/Documents/neurofeed` (create `Documents`
-  and `neurofeed` when `xdg-user-dir DOCUMENTS` is missing, fails, empty,
-  or `$HOME`). macOS default is the sandbox container
-  (`getApplicationSupportDirectory()`), same as Android and iOS. Flatpak
-  (`FLATPAK_ID` set) uses that same contained layout: the default folder
-  is `getApplicationSupportDirectory()` under the sandbox
-  `XDG_DATA_HOME`. Never `/tmp`. Never `getApplicationCacheDirectory`.
-  On Android, iOS, macOS, and Flatpak, cache and `ai_models` stay in
-  `getApplicationSupportDirectory()` even when the save folder is a
-  picked path or a SAF tree. A Flatpak picked folder is the document
-  portal path. Export is always `{app folder}/export`.
-  A folder change asks **Move existing files?** only when something would
-  move. **Reset to default folder** uses the same dialog. Unpackaged Linux and Windows move
-  history containers, `export/`, `.cache`, and `ai_models/`. Android, iOS,
-  macOS, and Flatpak move history containers and `export/` only. Cache `tmp_*` does not count and
-  is deleted. Refuse while a session or recording is open. The card shows
-  the current folder. Settings card is **Save files to folder**.
-- **Signal gate**: before calibration, gate pads green for 3 s; after
-  baseline, no re-lock. Playing pauses only when all gate pads are critical
-  for 10 s; never auto-ends. Names in `gate_electrodes.dart`, default Muse
-  AF7/AF8.
-- **Line-noise**: `BandsDto.line_noise_ratio` from the 256-point FFT
-  (50/60 Hz ±1 bin). Folded into the pad-quality formula (status dots, the
-  band-window score, Rust autodrop). `encode_session_event` does not write
-  `line_noise_ratio` or `signal_quality`.
-- **Gesture markers are metadata-only** (not a `RecordingStream`). Gated by
-  `Settings.markersInFeedbackEnabled` / `eyeMarkersEnabled`.
-- **Blink/clench gate cleanliness**: `_sampleIsClean` needs movement and
-  gesture buffers ≥ 1 s old.
-- **BrainFlow datagrams** that are not exactly `batch_size × num_rows`
-  doubles are dropped by the receiver. Extend loopback tests when touching
-  the wire format.
-- **All session writes are crash-safe** (`writeFileAtomic`).
-- **Band/EEG timestamps in the raw body are ms epochs.** CSV bucketing
-  divides by 1000 before flooring.
-- **FFI-backed `flutter test` needs the host Rust lib**
-  (`cargo build --manifest-path rust/Cargo.toml` first).
-- **Stale `rust/target/release/` lib breaks `flutter run`** (content-hash
-  mismatch). Rebuild release after codegen; debug/cargokit rebuilds are not
-  loaded. See `.ai/testing-guide.md`.
-- **`updateNotes` rewrites the container head** via `rewriteHeadToPath`
-  (container is NFED6; copies raw section). There is no
-  `SessionContainer` Dart wrapper anymore.
-- **Assemble `.neurofeed` at `end()`** into scratch (placeholder WebP) **before**
-  `phase = ended`. Live summary cannot pop — Save `publishSession` to
-  history or Discard deletes the scratch file. One wrapper:
-  `spine/assemble.dart` (`writeScratch` / `assembleContainer`).
-- **Crash recovery** is prefix-strict. Feedback: leftover
-  `session_*.neurofeed` and orphan `.raw` / `.computed` / `.metadata`
-  reopen the session summary. Monitor: leftover `recording_*` (dialog
-  **Incomplete recording detected**).
-  `tmp_*` is deleted, never assembled. Temps go through `writeScratch`.
-  Never `decodeImage` on empty bytes.
-- **ComputedSampler.t** is seconds from recording start, not unix epoch.
-  `_onEvent` must latch Pulse / SpO₂ / PeakAlpha (same as the monitor
-  sampler). Do not leave those cases as `default`.
-- **Charts** plot computed 1 Hz (`extractComputed`; NFED6 →
-  `prepareChartDataFromContainer` / `prepareChartDataFromComputed`). Pulse/SpO₂
-  fall back to the raw body when computed frames omitted them. There is
-  no `SessionOverview` / 400-bucket `metadata.summary`. The list sparkline
-  is the WebP thumbnail.
-- **Unsaved ended session cannot be dropped.** Live summary `canPop:
-  false`; protocol tap reopens it; `reset()` / Start refuse while scratch
-  remains. Agent `POST /session/start` and `/session/reset` return 409
-  `unsaved_session`. Classic Muse startup is still `p50` (not `p21`). `p50`
-  is the preset that enables the 5th EEG channel.
+## 3. Golden rules
+
+### Never crash (outranks feature work)
+
+A session is someone's hour of recording. A malformed file, a bad command
+or MCP param, a BLE disconnect, a corrupt settings file or a full disk
+must produce an error the user or agent can act on, never a panic.
+
+- **Non-test code never panics.** No `unwrap`, `expect`, `panic!`,
+  `unreachable!`, `todo!` or `unimplemented!`. Return the crate's error
+  type and use `?`. Workspace lints `deny` these, and tests are allowed
+  them via `clippy.toml`. Every crate has `[lints] workspace = true`.
+- **Keep functions small** (SonarCloud-style; PhotoCraft uses the same
+  clippy lints). `clippy.toml`: `cognitive-complexity-threshold = 25`,
+  `too-many-lines-threshold = 100`, `too-many-arguments-threshold = 7`;
+  workspace lints `deny` `cognitive_complexity` and `too_many_arguments`
+  and `warn` `too_many_lines` (fatal in CI via `-D warnings`). Split long
+  functions into named phases, egui views into sub-panel functions, and
+  long test scenarios into helper steps. The only exception is a **flat
+  dispatch match** (one short arm per command/query/tool, e.g.
+  `Session::apply`, `Session::query`): it may carry
+  `#[allow(clippy::too_many_lines)]` with a one-line comment saying so.
+  Never allow `cognitive_complexity`.
+- **No `unsafe`** (`unsafe_code = "forbid"`). The future Android/JNI
+  wrapper is the one isolated exception, and every `unsafe` block there
+  needs a `SAFETY:` comment.
+- **Input-derived numbers are hostile.** This covers device packets,
+  files, command params and sample counts:
+  - use `get()` instead of indexing;
+  - use `checked_*`/`saturating_*` arithmetic;
+  - guard against divide-by-zero and NaN/inf;
+  - cap allocations sized by input;
+  - never decode an empty buffer **(ours)**.
+- **Don't cascade.** Handle lock poisoning
+  (`unwrap_or_else(PoisonError::into_inner)`). Thread and task joins are
+  `Result`s.
+- **Last-resort guard.** The app and the MCP server catch a panic around
+  command dispatch, report it, and keep the session.
+- **Every write that matters is atomic** **(ours)**: write a temp file,
+  then rename it. A recording is recoverable after a crash.
+- **Prove it.** Every crash fix includes a regression test that failed
+  before the fix. `panic_hunt` (to add) fuzzes every command with
+  adversarial params and must stay green.
+
+### Rules
+
+1. **Everything is a command.** New user-visible behaviour is a
+   `Command` in `nf-core` and needs:
+   - a dotted id (`device.connect`, `session.start`, `view.set`);
+   - a label;
+   - typed params and a typed reply (serde + schemars);
+   - `enabled(&Session) -> Result<(), DisabledReason>`;
+   - tests.
+
+   The UI, MCP, CLI, the control channel and the Android wrapper all
+   dispatch commands. **Programmatic calls never open dialogs.** A dialog
+   is a form that builds a command's params. Only pure view chrome that no
+   one else needs (hover, scroll offset, an open combo box) stays in the
+   UI.
+2. **One rule, every entry point.** A behaviour that must hold however you
+   got there belongs in `nf-core`, never in a UI handler. Examples:
+   - disconnect pauses and never ends a session;
+   - Record and Start Session exclude each other;
+   - an unsaved session blocks reset.
+
+   A command that fails leaves the state unchanged.
+3. **Data, not assumptions.** Channel count, names and montage, sample
+   rates, which streams exist (EEG/PPG/IMU/AUX/optics) and units are all
+   runtime data in the stream descriptors. Nothing in DSP, core or UI
+   assumes "4 channels at 256 Hz" or switches on the device model.
+   **(ours)** Names carry units: `_ms`, `_s`, `_hz`, `_uv`. Timestamps say
+   whether they are epoch ms or seconds from the start of the recording.
+4. **The UI is thin and data-driven.** UI state is serde data in the app's
+   state module, so `ui_inspect`/`ui_set` can read and drive it. Views
+   read `&Session` state and emit commands; they never mutate the core
+   directly. State machines live in `nf-core`, including Follow/Inspect,
+   recording, calibration and feedback phases.
+5. **Theme tokens and the UI kit only.** Colours, spacing, radii and type
+   come from `theme::Tokens`, with no literal colours outside `theme.rs`.
+   Panels, rows, sliders and confirmations use the shared kit components.
+   **(ours)** Don't fork a shared widget: one music-settings panel, one
+   model selector, one connect overlay. Graphs share one viewport and
+   input path.
+6. **Verify UI changes visually.** Render offscreen (egui_kittest
+   snapshot) or run the app with its control channel and take a
+   screenshot. Look at the PNG and attach it to the PR. **(ours)** When
+   you change on-screen names, update the UI name map
+   (`docs/ui-map.md`) in the same change.
+7. **Never break wasm.** Everything below the apps must pass
+   `cargo check --target wasm32-unknown-unknown` (`cargo xtask wasm`).
+   Filesystem, threads, BLE and tokio go through injected traits
+   (`DeviceSource`, `HistoryStore`, `Clock`, platform services), never
+   through `cfg` scattered in shared code. Do not add a dependency that
+   cannot build for wasm below the apps.
+8. **Time is injected.** Core logic reads time only from `Clock`:
+   - no `Instant::now()`/`SystemTime::now()` in `nf-core`, `nf-dsp` or
+     `nf-sim`;
+   - never `ctx.input().time` for logic;
+   - in egui, count frames with `ctx.cumulative_frame_nr()`;
+   - tests use a manual clock and never depend on wall-clock timing.
+9. **Performance is a feature.**
+   - Never scan or FFT full buffers in `ui()`. Read prepared ring buffers
+     and caches keyed by a revision, and downsample min/max per pixel.
+   - Long work (export, model load, file load) runs beside the UI thread
+     and is applied when done.
+   - Measure before you claim a speed-up: release build, medians with
+     range, before/after in the devlog, and proof that the output did not
+     change.
+   - No perf rewrite lands without a benchmark and an equivalence test.
+10. **Frozen means frozen.** `docs/decisions.md` and `docs/contracts/` are
+    law **(ours)**. The file format NFED6, the feedback pipeline Key
+    Decisions, the data plane and feedback-disconnect are examples.
+    - Change them only with a new dated decision entry that says why.
+    - Use the vocabulary they define; do not invent synonyms.
+    - A changed default keeps the old behaviour behind a preference.
+    - A preference that does nothing is a bug.
+11. **Clean dependencies and secrets.**
+    - Check `Cargo.toml` before using a crate **(ours)**.
+    - Pin git dependencies and forks by tag or rev.
+    - Never commit secrets, tokens, gated model weights (`.local/`) or
+      recorded EEG of real people **(ours)**.
+    - Test corpora are fetched by pinned hash and never committed.
+12. **Don't translate Dart 1:1** **(ours)**. Use the Flutter app (tag `pre-rust-port`) for
+    behaviour and naming, not for structure.
+
+### Adding a dependency
+
+- Justify it: std or a crate already in the tree is not enough.
+- Prefer the maintained, widely used option with minimal features (`default-features = false` plus what you need), at the latest compatible version.
+- Check the license (Apache-2.0 compatible, see `deny.toml`) and RustSec advisories.
+- Pin git deps to a `rev`, and add the repo to `[sources] allow-git` in `deny.toml`.
+- Run `cargo deny check` before committing (it is part of the gates).
+
+## 4. MCP and the control channel
+
+- **Add a command, not a tool.** Tools are:
+  - the generic `command_list`, `command_describe` (input and output JSON
+    Schema), `command_run` and `command_batch`;
+  - a few session tools: `status` (includes `revision`), `bands_get`,
+    `screenshot`, `clock_advance`, `device_list`, `recording_export`;
+  - in bridge mode, `ui_inspect`/`ui_set`.
+
+  A new tool needs a reason that is about the session itself.
+- Tool names use underscores; command ids are dotted.
+- Every tool has a `title` and honest annotations (read-only,
+  destructive, idempotent, open-world).
+- Arguments are `additionalProperties: false`. Unknown or invalid
+  arguments get `-32602`, and the error lists the valid ones. Domain
+  failures are `isError: true` with an actionable message.
+- `command_batch` pre-validates every step and rolls back on failure. The
+  reply names the failing step and lists what was applied and what was
+  not run.
+- Replies stay small by default (compact mode, no unfiltered dumps), and
+  screenshots are downscaled. Long jobs report progress and can be
+  cancelled.
+- Two modes:
+  - **headless**: an in-process Session plus a simulator, the default for
+    tests;
+  - **bridge**: loopback TCP JSON lines to the running app, with a
+    per-launch token read from a file.
+
+  Never paste the token anywhere. There is no MCP on web.
+- Files: tools reach only the app folder, scratch and `--allow-path`
+  folders. Paths are resolved before they are compared.
+- Keep `docs/mcp.md` and any bundled agent skills in step with the
+  commands. A test fails when a doc names a tool or command that no
+  longer exists (to add).
+
+## 5. egui pitfalls
+
+- `ui()` and logic may run several times per rendered frame (multi-pass,
+  sizing passes, `request_discard`). Hidden windows get ticks with stale
+  input. Therefore:
+  - every side effect is idempotent, or drains a queue once, guarded by a
+    revision;
+  - no counters in closures;
+  - a sizing pass never emits a command.
+- **One user action → one command → one history step.** Sliders and drags
+  preview locally and commit on release **(ours)**. Never store a raw
+  slider position; store the value it maps to.
+- Hidden views do no work **(ours)**: they are not drawn and they compute
+  nothing. Data buffers keep filling in the core regardless of which view
+  is shown.
+
+## 6. Tests
+
+- Every change comes with tests. A failing test without its fix does not
+  merge; otherwise mark it `#[ignore = "fails until #N"]`.
+- Regression tests go into the area's existing test file, never a file
+  named after the bug.
+- DSP and feature tests use **oracles**: synthetic signals with
+  closed-form answers. Never set an expected value by copying the code's
+  output.
+- Simulators are seeded and deterministic. NFED6 recordings replay as a
+  `DeviceSource`. Golden outputs are per-second features and events
+  (JSON); there are a few UI PNG goldens via egui_kittest.
+- MCP end-to-end tests drive simulator → calibrate → session → record →
+  export **only through MCP**, with a manual clock.
+- **(ours)** The `nf-format` encoder destructures every field, so a new
+  field that is not serialised fails to compile. Format changes ship with
+  round-trip tests and the human spec update in the same change.
+- Heavy or corpus tests are opt-in (cargo feature or nextest group) and
+  run in CI.
+
+## 7. Before you finish a task
+
+```sh
+cargo xtask ci        # (to add) = all of the below
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace            # or: cargo nextest run --profile ci
+cargo xtask layers                # (to add)
+cargo xtask wasm                  # (to add) = cargo check --target wasm32-unknown-unknown for L0–L2 and the web app
+```
+
+If you added or changed commands, also run `panic_hunt` (to add). If you
+touched a hot path, add a benchmark and put the numbers in the devlog. If
+you changed UI, add a screenshot.
+
+Then append a terse entry to `log/devlog.md`: what landed, numbers, and
+what is still open. Sessions end abruptly, so a green tree plus the devlog
+is how the next agent picks up. Keep the tree building at every step.
+
+## 8. Parallel agents
+
+- Use your own `CARGO_TARGET_DIR=target/agent-<name>`, and edit only the
+  files you own.
+- Re-read shared files (the command registry, `lib.rs`, the UI state
+  module) before making small, surgical edits.
+- Put new commands in a new module (`nf-core/src/cmds/<area>.rs`) rather
+  than growing a shared file.
+- If someone else's in-progress edit breaks the build, wait and retry.
+  Don't fix their files.
+- Keep every `Cargo.toml` valid at all times, because one broken manifest
+  breaks everyone's build. Write manifests atomically: write a temp file,
+  then `mv` it.
+- When you revert something, also remove the comments and docs that
+  describe the reverted design.
+
+## 9. Docs
+
+- `docs/architecture.md` starts with a dated "Current state" section.
+- Decisions go in `docs/decisions.md`, one dated entry each.
+- Generated docs are produced by `xtask`, never hand-edited.
+- When this file grows past one screen per topic, split topics into
+  `skills/<area>/SKILL.md` and keep this file as a router. Every rule
+  should name the check that enforces it.
+
+---
+
+## Appendix: our previous rules that were dropped, and why
+
+Sources: `/workspace/neurofeed/AGENTS.md`, `.ai/README.md`,
+`.grok/skills/neurofeed-*`, and the prototype's `AGENTS.md`. The rules we
+kept are marked **(ours)** above.
+
+| Dropped rule | Why |
+|---|---|
+| "NEVER add code comments unless explicitly asked" | Conflicts with both references, which keep crate/module doc comments and fix stale ones (PhotoCraft `40b3bf9b`). Replaced by: keep comments true, and remove stale ones with a revert. |
+| Flutter / Dart / flutter_rust_bridge rules: version pins, FRB codegen and committed generated bindings, `flutter analyze`, `flutter test` loader traps, `cargo check --target aarch64-linux-android` is unreliable | No Flutter or FRB in the pure-Rust app. `clippy -D warnings` replaces `flutter analyze`. The Android wrapper calls the same command JSON surface instead of a generated FFI. |
+| Flutter widget traps (no `LayoutBuilder` in dialogs, `DecoratedBox` around a `ListTile`, directory assets, `IndexedStack`) | Toolkit-specific. The egui equivalents are in §5. |
+| Product UI freezes in AGENTS.md (no Spectrogram `FFT 1s ▾`, no Bands `SMOOTH`/`REAL TIME` chrome, 1 s Bands Follow lead, trust-graph wash rules, Settings card list, connect-dropdown details) | These are product specs, not agent guidelines. Their AGENTS.md files stay generic and route to docs. Move them to `docs/contracts/` or the per-view specs, which Rule 10 makes binding. |
+| Audio engine rules (SoLoud init/deinit, `setMuffle` placement, Android latency profile) | The implementation is Flutter/SoLoud-specific. The product decision (don't duck unmodulated background) moves to the audio contract doc. |
+| Android/macOS/Windows/Flatpak packaging notes, glibc/ALSA container notes, release-tag versioning | Packaging is not a code rule here yet. Move to `docs/release.md` when the Rust app ships. |
+| btleplug `[patch]` version trap, `jni` version match, JNI init order, QueueStream race, Muse presets (`p50`), Athena optics mapping | Still true, but device-crate knowledge. Move to `crates/nf-device/README.md` (or a `skills/devices` file) when `nf-device` lands. The AGENTS.md golden rules stay generic, as in their files. |
+| "Debug HTTP agent (`NEUROFEED_AGENT`) for Linux driving" | Replaced by the control channel + MCP bridge (§4), which both references use. |
+| "Simulator only in Debug mode"; "`DeviceKind` is Muse \| Neurosity only; do not restore Simulated*" | The new design makes simulators first-class `DeviceSource`s for tests, agents and demos. Whether they are visible in release UI is a product setting, not an agent rule. |
+| "Simulator must not emit derived Bands/Pulse/SpO₂" (as a separate rule) | Covered by Rule 2: simulators emit raw device events only, and derived data comes from the same pipeline as real devices. |
+| Specific numbers (75 s epoch window, 45 clean frames, 30 s silence → Disconnected, 60 s recalibrate) | Product constants. They belong in typed config/constants in `nf-core` plus the pipeline contract, and are tested there. Wall-clock dependence is replaced by the injected `Clock` (Rule 8). |
+| Long "Project layout / Where things live" file maps of the Dart tree | They describe the old app. The workspace map in §2 replaces them, and crate READMEs hold details, as in PhotoCraft. |
+| Prototype: "platform-specific code only in `main.rs`; no threads/filesystem in shared code" | Refined, not dropped. Platform capabilities are injected traits and services (Rule 7), as PhotoCraft's `Services` does. `cfg(target_arch)` stays in apps. |
+| `.ai/active-task.md` as the single "current work" file | Replaced by `log/devlog.md` (append-only, survives parallel agents), as in PhotoCraft. |

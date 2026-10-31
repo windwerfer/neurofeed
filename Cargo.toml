@@ -1,0 +1,49 @@
+# NeuroFeed Rust workspace (repo root).
+[workspace]
+resolver = "2"
+members = ["crates/*", "apps/*"]
+# Flutter-era code kept as reference until migrated.
+exclude = ["third_party", "vendor", "feedback_gym"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+nf-types = { path = "crates/nf-types" }
+nf-dsp = { path = "crates/nf-dsp" }
+nf-format = { path = "crates/nf-format" }
+nf-sim = { path = "crates/nf-sim" }
+nf-feedback = { path = "crates/nf-feedback" }
+nf-core = { path = "crates/nf-core" }
+nf-mcp = { path = "crates/nf-mcp" }
+nf-store = { path = "crates/nf-store" }
+nf-device = { path = "crates/nf-device" }
+nf-import = { path = "crates/nf-import" }
+nf-ai = { path = "crates/nf-ai" }
+nf-audio = { path = "crates/nf-audio", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "1"
+thiserror = "2"
+log = "0.4"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+cognitive_complexity = "deny"
+too_many_arguments = "deny"
+too_many_lines = "warn"
+
+# rlx-cpu 0.2.19 with its default BLAS feature disabled (pure Rust kernels).
+[patch.crates-io]
+rlx-cpu = { path = "vendor/rlx-cpu-0.2.19" }

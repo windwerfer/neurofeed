@@ -1,0 +1,20 @@
+[package]
+name = "pure-lsl"
+description = "Lab Streaming Layer (LSL) outlets in pure Rust: discovery, stream info, protocol 1.10 data feed. Interoperates with liblsl, pylsl and LabRecorder."
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+readme = "README.md"
+keywords = ["lsl", "lab-streaming-layer", "eeg", "neuroscience", "streaming"]
+categories = ["network-programming", "science"]
+repository = "https://github.com/windwerfer/neurofeed"
+publish = false
+
+[dependencies]
+socket2 = { version = "0.6", features = ["all"] }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", default-features = false, features = ["std", "time", "system"] }
+
+[lints]
+workspace = true

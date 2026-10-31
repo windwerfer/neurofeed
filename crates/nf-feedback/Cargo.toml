@@ -1,0 +1,16 @@
+[package]
+name = "nf-feedback"
+description = "L1: neurofeedback engine math (baseline, threshold, adaptation, stability, inhibit, guard). Sample-time driven, no clock, no I/O, WASM-safe."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

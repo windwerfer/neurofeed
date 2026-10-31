@@ -1,0 +1,19 @@
+[package]
+name = "nf-import"
+description = "L1: import EDF/EDF+, Mind Monitor CSV and native .neurofeed / raw bodies into NeuroFeed records. Pure Rust, WASM-safe."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nf-types.workspace = true
+nf-dsp.workspace = true
+nf-format.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

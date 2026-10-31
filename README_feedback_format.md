@@ -1,5 +1,8 @@
 # NeuroFeed — `.neurofeed` v6
 
+> **Historical:** written for the Flutter app (removed 2026-10-31, tag `pre-rust-port`). The `lib/` and `rust/` paths below refer to that tag. Rust implementation: `crates/nf-format` (container) and `crates/nf-store` (history).
+
+
 **Format version:** 6  
 **Container:** `[68-byte header][WebP thumbnail][metadata (zstd)][computed 1 Hz (zstd)][raw body]`
 

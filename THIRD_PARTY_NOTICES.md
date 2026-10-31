@@ -9,30 +9,10 @@ The overall project is licensed under the Apache License 2.0 (see `LICENSE.txt`)
 
 ---
 
-## Third-party → Dart/Flutter
-
-| Package | Version | License | Source |
-|---------|---------|---------|--------|
-| Flutter SDK | — | BSD-3-Clause | https://github.com/flutter/flutter |
-| flutter_rust_bridge | 2.11.1 | MIT | https://pub.dev/packages/flutter_rust_bridge |
-| flutter_riverpod / riverpod / riverpod_annotation | 2.6.1 | MIT | https://pub.dev/packages/flutter_riverpod |
-| shared_preferences | 2.5.5 | BSD-3-Clause | https://pub.dev/packages/shared_preferences |
-| path_provider | 2.1.6 | BSD-3-Clause | https://pub.dev/packages/path_provider |
-| file_selector | 1.1.0 | BSD-3-Clause | https://pub.dev/packages/file_selector |
-| permission_handler | 12.0.3 | MIT | https://pub.dev/packages/permission_handler |
-| device_info_plus | 10.1.2 | BSD-3-Clause | https://pub.dev/packages/device_info_plus |
-| crypto | 3.0.7 | BSD-3-Clause | https://pub.dev/packages/crypto |
-| url_launcher | 6.3.2 | BSD-3-Clause | https://pub.dev/packages/url_launcher |
-| flutter_soloud | 4.1.7 | MIT | https://pub.dev/packages/flutter_soloud |
-| freezed / freezed_annotation | 2.5.8 / 2.4.4 | MIT | https://pub.dev/packages/freezed |
-| build_runner | 2.5.4 | BSD-3-Clause | https://pub.dev/packages/build_runner |
-| blake3 (via package deps) | — | CC0-1.0 | — |
-
 ## Third-party → Rust
 
 | Crate | Version | License | Source |
 |-------|---------|---------|--------|
-| flutter_rust_bridge (Rust crate) | =2.11.1 | MIT | https://github.com/fzyzcjy/flutter_rust_bridge |
 | muse-rs (fork) | 0.1.2 (patches eugenehp 0.1.0) | Apache-2.0 | https://github.com/windwerfer/muse-rs |
 | btleplug | 0.13.5 | MIT / Apache-2.0 / BSD-3-Clause (© 2020–2021 Nonpolynomial) | https://github.com/deviceplug/btleplug |
 | jni | 0.22.4 | MIT / Apache-2.0 | https://github.com/jni-rs/jni-rs |
@@ -43,11 +23,17 @@ The overall project is licensed under the Apache License 2.0 (see `LICENSE.txt`)
 | android_logger | 0.14.1 | MIT / Apache-2.0 | https://github.com/NeoLegends/rust-android-logger |
 | zstd | 0.13.3 | MIT / Apache-2.0 | https://github.com/gyscos/zstd-rs |
 | reveal-rs | (git rev 9c8d856…) | Apache-2.0 | https://github.com/eugenehp/reve-rs |
-| rlx | =0.2.14 | MIT / Apache-2.0 | https://crates.io/crates/rlx |
-| rlx-cpu | 0.2.14 (vendored, patched) | MIT / Apache-2.0 | https://crates.io/crates/rlx-cpu; local copy at `vendor/rlx-cpu-0.2.14` |
+| rlx | =0.2.19 | MIT / Apache-2.0 | https://crates.io/crates/rlx |
+| rlx-cpu | 0.2.19 (vendored, patched) | MIT / Apache-2.0 | https://crates.io/crates/rlx-cpu; local copy at `vendor/rlx-cpu-0.2.19` |
 | candle-core | 0.11.0 | MIT / Apache-2.0 | https://github.com/huggingface/candle |
 | candle-nn | 0.11.0 | MIT / Apache-2.0 | https://github.com/huggingface/candle |
 | rustfft | 6.4.1 | MIT / Apache-2.0 | https://github.com/ejmahler/RustFFT |
+| socket2 | 0.6 | MIT / Apache-2.0 | https://github.com/rust-lang/socket2 |
+| rustix | 1 | Apache-2.0 WITH LLVM-exception / Apache-2.0 / MIT | https://github.com/bytecodealliance/rustix |
+
+**liblsl** (protocol reference for `crates/pure-lsl`, no code copied; not linked or shipped) — MIT, Copyright (C) 2012 Christian A. Kothe, https://github.com/sccn/liblsl. pylsl is used only as a test tool. Full notice:
+
+> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Model weights: Spur A ships the A-vig **head** pack; the CBraMod encoder (~20 MB Apache-2.0) downloads
 from Hugging Face with SHA-256 verification; REVE (gated) is user-imported.
@@ -88,14 +74,18 @@ Sound assets are bundled by file. Attribution and license follow Freesound
 
 - **Apache License 2.0** — `LICENSE.txt` (this project); `muse-rs`,
   `reveal-rs`, `jni` (optionally).
-- **BSD-3-Clause** — Flutter SDK, `shared_preferences`, `path_provider`,
-  `file_selector`, `device_info_plus`, `crypto`, `url_launcher`, `build_runner`,
-  `btleplug` (© Nonpolynomial).
-- **MIT** — `flutter_rust_bridge`, `flutter_riverpod`/`riverpod`,
-  `permission_handler`, `flutter_soloud`, `freezed`, `tokio`, `anyhow`, `log`,
+- **BSD-3-Clause** — `btleplug` (© Nonpolynomial).
+- **MIT** — `tokio`, `anyhow`, `log`,
   `env_logger`, `android_logger`, `zstd`, `jni`.
 - **MIT / Apache-2.0** — `candle-core`, `candle-nn`, `rustfft` (Spur A Candle
-  CBraMod encoder path); `rlx` 0.2.14 and vendored `rlx-cpu` 0.2.14 (REVE).
+  CBraMod encoder path); `rlx` 0.2.19 and vendored `rlx-cpu` 0.2.19 (REVE).
 - **CC0 1.0** — most freesound audio.
 - **CC BY 4.0** — rain, singing-bowl, bell/chime freesound audio.
 - **CC BY-NC 4.0** — `guardrail-alarm-01.opus` (NonCommercial).
+
+## DejaVu Sans (subset) — apps/neurofeed-egui/assets/arrows.ttf
+
+A glyph subset (arrows, math signs, play/pause) of DejaVu Sans, used as a
+fallback font in the egui app. DejaVu fonts are based on Bitstream Vera:
+Copyright (c) 2003 Bitstream, Inc. (Bitstream Vera license); DejaVu changes are
+in the public domain. https://dejavu-fonts.github.io/License.html

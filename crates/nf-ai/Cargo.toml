@@ -1,0 +1,31 @@
+[package]
+name = "nf-ai"
+description = "NeuroFeed AI sleep scorers: CBraMod and REVE encoders, linear heads, model install."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+default = ["cbramod", "reve", "download"]
+# Frozen CBraMod encoder on Candle (pure Rust CPU).
+cbramod = ["dep:candle-core", "dep:candle-nn", "dep:rustfft"]
+# REVE base on the RLX CPU runtime (vendored rlx-cpu, see workspace patch).
+reve = ["dep:reve-rs", "dep:rlx"]
+# `AiSource::Download` over HTTPS.
+download = ["dep:ureq"]
+
+[dependencies]
+nf-types.workspace = true
+anyhow = "1"
+log.workspace = true
+sha2 = "0.10"
+candle-core = { version = "0.11.0", optional = true }
+candle-nn = { version = "0.11.0", optional = true }
+rustfft = { version = "6", optional = true }
+reve-rs = { git = "https://github.com/eugenehp/reve-rs", rev = "9c8d8564b8793ce2a2b926f226c09eefb5e46781", default-features = false, features = ["rlx-cpu"], optional = true }
+rlx = { version = "=0.2.19", default-features = false, features = ["cpu"], optional = true }
+ureq = { version = "3", optional = true }
+
+[lints]
+workspace = true

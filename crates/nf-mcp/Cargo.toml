@@ -1,0 +1,29 @@
+[package]
+name = "nf-mcp"
+description = "L4: MCP server (rmcp) exposing every nf-core command as a tool. Native only."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nf-core.workspace = true
+serde_json.workspace = true
+getrandom = "0.3"
+rmcp = { version = "3.8", default-features = false, features = ["server", "transport-io"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "sync"], optional = true }
+
+[features]
+default = ["server"]
+## The rmcp stdio server (`NfMcp`). Off: dispatcher + bridge only.
+server = ["dep:rmcp", "dep:tokio"]
+
+[dev-dependencies]
+nf-types.workspace = true
+nf-device = { workspace = true, features = ["osc"], default-features = false }
+rosc = "0.11"
+nf-format.workspace = true
+nf-store = { workspace = true, features = ["sqlite"] }
+
+[lints]
+workspace = true

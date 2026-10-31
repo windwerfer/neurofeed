@@ -1,5 +1,8 @@
 # NeuroFeed — History Metadata Cache (SQLite)
 
+> **Historical:** written for the Flutter app (removed 2026-10-31, tag `pre-rust-port`). The `lib/` and `rust/` paths below refer to that tag. Rust implementation: `crates/nf-format` (container) and `crates/nf-store` (history).
+
+
 ## Overview
 
 File format authority: [`.ai/contracts/fileformat_v6.md`](.ai/contracts/fileformat_v6.md) (NFED6 / `formatVersion: 6`). Human layout: [README_feedback_format.md](README_feedback_format.md).
