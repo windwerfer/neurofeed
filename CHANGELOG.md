@@ -1,0 +1,32 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [Unreleased] — EXPERIMENTAL: Rust/egui rewrite
+
+> **Experimental.** The Flutter app is replaced by a Rust/egui rewrite.
+> It is not yet verified on real hardware. This is most likely the direction
+> going forward, but expect rough edges.
+
+### Added
+- One Rust/egui codebase for desktop, web (WASM) and Android (APK built in CI).
+- MCP agent interface, so AI agents can drive and inspect the app.
+- Device simulators with fault injection for testing without hardware.
+- Feedback engine and AI models.
+- Session import/export.
+- LSL and OSC streaming.
+
+### Removed
+- The Flutter app. Its last version is tagged `pre-rust-port`
+  (`git checkout pre-rust-port` to go back).
+
+### Not yet verified
+- Real Muse and Neurosity Crown hardware.
+- Android: BLE connection and background streaming.
+- Android safe-area insets (notch and navigation bar).
+
+### Known limits
+- The AI models run on desktop only.
+- On Android, sessions only advance while the app is in the foreground.
+- PDF export prints characters outside Latin-1 as "?".
