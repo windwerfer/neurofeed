@@ -1,47 +1,36 @@
 {
-    "name": "flutter_muse_ml",
+    // Rust + Android container for this repo. No Flutter SDK.
+    // First start, from the repo root:
+    //   bash .devcontainer_rs/post-setup.sh
+    //   bash .devcontainer_rs/rust-setup.sh
+    //   bash .devcontainer_rs/android-setup.sh
+    //   bash .devcontainer_rs/verify-setup.sh
+    // Optional shell tools: bash .devcontainer_rs/quality_of_life.sh
+    // Home is the volume neurofeed_home, separate from the Flutter container.
+    // /opt/backups is the shared cache, so the Android cmdline-tools zip is reused.
+    "name": "neurofeed",
     "build": {
         "dockerfile": "Dockerfile"
-        // "options": ["-t", "thomas/tts_th:latest"],
     },
     "mounts": [
         {
             "type": "volume",
-            "source": "flutter_muse_ml_home",
-            "target": "/home/vscode",
+            "source": "neurofeed_home",
+            "target": "/home/vscode"
         },
         {
             "type": "volume",
             "source": "shared_backups",
             "target": "/opt/backups"
-        },
-        // {
-        //     "type": "volume",
-        //     "source": "flutter_muse_ml_worktrees",
-        //     "target": "/workspaces/worktrees",
-        // },
-        // {
-        //     "type": "volume",
-        //     "source": "flutter_muse_ml_tauri",
-        //     "target": "/workspaces/tauri",
-        // },
-        // {
-        //     "type": "volume",
-        //     "source": "flutter_muse_ml_third_party",
-        //     "target": "/workspaces/third_party",
-        // },
-
-
+        }
     ],
-    // "postCreateCommand": "uv sync --extra dev && echo '✅ Python environment ready with uv!'",
     "remoteUser": "vscode",
     "containerUser": "vscode",
     "updateRemoteUserUID": true,
-    // name the container "tts" so it's easy to identify
     "runArgs": [
         "--userns=keep-id:uid=1000,gid=1000",
         "--name",
-        "flutter_muse_ml",
+        "neurofeed",
 
         // pass usb into container (for adb, if you dont forward adb from the host with: 'adb -a nodaemon server start')
         // "--privileged",
@@ -62,16 +51,13 @@
         // fix: if display 1 is not found (is rm after restart)
         // ln -sf $XDG_RUNTIME_DIR/wayland-1 $XDG_RUNTIME_DIR/wayland-0
 
-
         // Mount host's PulseAudio / PipeWire-Pulse socket into the container
         "-v", "${localEnv:XDG_RUNTIME_DIR}/pulse/native:/tmp/pulse-socket:ro",
 
         // respect timezone of host
         "-v", "/etc/localtime:/etc/localtime:ro",
-        "-v", "/etc/timezone:/etc/timezone:ro"
-
+        // "-v", "/etc/timezone:/etc/timezone:ro"
     ],
-    // use zsh as the default shell
     "settings": {
         "terminal.integrated.defaultProfile.linux": "zsh"
     },
@@ -80,22 +66,16 @@
         "UV_CACHE_DIR": "/home/vscode/.cache/uv",
         "DEBUGPY_PROCESS_SPAWN_TIMEOUT": "90",
         "ANDROID_ADB_SERVER_ADDRESS": "127.0.0.1",
-        "VIRTUAL_ENV": "/workspaces/flutter_muse_ml/.venv",
-        "ANDROID_HOME":     "/home/vscode/android-sdk",
+        "VIRTUAL_ENV": "/workspaces/neurofeed/.venv",
+        "ANDROID_HOME": "/home/vscode/android-sdk",
         "ANDROID_SDK_ROOT": "/home/vscode/android-sdk",
-        "ANDROID_NDK_HOME": "${ANDROID_HOME}/ndk/28.2.13676358",
+        "ANDROID_NDK_HOME": "/home/vscode/android-sdk/ndk/27.2.12479018",
         "JAVA_HOME": "/usr/lib/jvm/java-21-openjdk-amd64",
-
-        // this probably will not work..
-        // "PATH": "${containerEnv:PATH}:${containerEnv:ANDROID_HOME}/platform-tools:${containerEnv:ANDROID_HOME}/cmdline-tools/latest/bin",
-
         "PULSE_SERVER": "unix:/tmp/pulse-socket"
-
     },
-    "forwardPorts": [5678], // forward port for debugpy
+    // debugpy. With --net=host, trunk's 8080 is already on the host.
+    // "forwardPorts": [5678],
     "customizations": {
-        "zed": {
-            // "extensions": ["mcp-server-sequential-thinking", "mcp-server-context7"],
-        }
+        "zed": {}
     }
 }

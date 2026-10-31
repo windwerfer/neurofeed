@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/python:3.12-trixie
+FROM mcr.microsoft.com/devcontainers/python:3.13-trixie
 
 # Best way in Docker: copy the pre-built binary
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
@@ -20,53 +20,43 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2-dev \
     libasound2-plugins \
     pulseaudio-utils \
-    libopus-dev \
-    libogg-dev \
-    libvorbis-dev \
-    libflac-dev \
+    libdbus-1-dev \
+    libx11-dev \
+    libxkbcommon-dev \
+    libwayland-dev \
+    libegl1-mesa-dev \
+    libgl1-mesa-dev \
     && rm -rf /var/lib/apt/lists/*
-
-# flutter_soloud ships glibc-2.43-precompiled Xiph libs; link the system ones
-# instead (Debian trixie / CI runners have an older glibc).
-ENV TRY_SYSTEM_LIBS_FIRST=1
 
 # Container has no ALSA card: route ALSA's default PCM through the
 # PulseAudio/PipeWire socket mounted at /tmp/pulse-socket (PULSE_SERVER is set
-# in devcontainer.json). libasound2-plugins ships the config only as a
-# ".example", so activate it here — otherwise flutter_soloud's ALSA backend
-# fails with "Unknown PCM default" and no sound plays.
+# in devcontainer.json). Desktop feedback audio is cpal. libasound2-plugins
+# ships the config only as a ".example", so activate it here — otherwise the
+# ALSA backend fails with "Unknown PCM default" and no sound plays.
 RUN cp /etc/alsa/conf.d/99-pulseaudio-default.conf.example \
       /etc/alsa/conf.d/99-pulseaudio-default.conf
-
-
-
 
 ARG USERNAME=vscode
 
 RUN chsh -s /usr/bin/zsh vscode
 
-
 # Pre-create volume targets and assign ownership to vscode
 RUN mkdir -p /opt/download-cache /home/vscode
 RUN chown -R vscode:vscode /home/vscode /opt/download-cache
 
-
 USER $USERNAME
-WORKDIR /workspaces/flutter_muse_ml
+WORKDIR /workspaces/neurofeed
 
-RUN mkdir -p /home/vscode/android-sdk /home/vscode/flutter
+RUN mkdir -p /home/vscode/android-sdk
 
-
-# additional PATH var - just in case
-# These will be populated by named volumes + post-setup.sh
+# Populated by the neurofeed_home volume + rust-setup.sh / android-setup.sh.
+# NDK matches apps/neurofeed-android/android/app/build.gradle.kts (ndkVersion).
 ENV ANDROID_HOME="/home/vscode/android-sdk"
-ENV ANDROID_NDK_HOME="${ANDROID_HOME}/ndk/28.2.13676358"
-ENV PATH="/home/vscode/flutter/bin:/home/vscode/.cargo/bin:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
-ENV PATH="/workspaces/flutter_muse_ml/.venv/bin:/root/.local/bin:/home/vscode/.local/bin:/home/vscode/.opencode/bin:/home/vscode/.grok/bin:${PATH}"
-
-
+ENV ANDROID_NDK_HOME="${ANDROID_HOME}/ndk/27.2.12479018"
+ENV JAVA_HOME="/usr/lib/jvm/java-21-openjdk-amd64"
+ENV PATH="/home/vscode/.cargo/bin:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
+ENV PATH="/workspaces/neurofeed/.venv/bin:/root/.local/bin:/home/vscode/.local/bin:/home/vscode/.opencode/bin:/home/vscode/.grok/bin:${PATH}"
 
 # Best-effort: mark helper scripts executable in the image.
-# Note: the workspace is usually bind-mounted at runtime, so post-setup.sh
-# also does a chmod (see post-setup.sh). This helps in some build/copy scenarios.
+# The workspace is bind-mounted at runtime, so post-setup.sh also chmod's.
 RUN chmod +x .devcontainer/*.sh 2>/dev/null || true

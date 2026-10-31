@@ -3,26 +3,23 @@ set -euo pipefail
 
 #  ====================
 #
-#   Muse dev container backup/restore script
+#   NeuroFeed Rust dev container backup/restore script
 #   Run this FROM INSIDE the container (as vscode user).
 #
 #   Backs up:
 #     - ~/.cargo + ~/.rustup   → one file (rust)
 #     - ~/.gradle              → one file (gradle)
-    # - ~/.local/share/zed       → one file (agents)
-#     - ~/flutter               → one file
-#     - ~/android-sdk           → one file
+#     - ~/.local/share/zed     → one file (agents)
+#     - ~/android-sdk          → one file
 #
-#   Destination: /opt/download-cache/backups/
-#
-#   Excludes re-fetchable cache directories to keep backups smaller.
+#   Destination: /opt/backups/neurofeed/
 #
 # ====================
 
 # =====================
 # Configuration
 # =====================
-DEFAULT_BACKUP_DIR="/opt/backups/flutter_muse_ml/"
+DEFAULT_BACKUP_DIR="/opt/backups/neurofeed/"
 
 # =====================
 # Helper Functions
@@ -48,7 +45,7 @@ do_backup() {
     log "Run subfolder: ${ts}"
     echo
 
-    # --- Rust: ~/.cargo + ~/.rustup (exclude cargo's download cache) ---
+    # --- Rust: ~/.cargo + ~/.rustup ---
     local rust_file="${run_dir}/rust-backup-${ts}.tar.zst"
     local rust_paths=()
     [[ -d "$HOME/.cargo" ]] && rust_paths+=(".cargo")
@@ -60,29 +57,12 @@ do_backup() {
 
         local size
         size=$(du -h "${rust_file}" | cut -f1)
-        log "✅ Created $(basename "${rust_file}") (${size})"
+        log "Created $(basename "${rust_file}") (${size})"
     else
-        log "⚠ No Rust directories found — skipping rust backup"
+        log "No Rust directories found — skipping rust backup"
     fi
 
-    # --- Flutter: ~/flutter + ~/.pub-cache (exclude heavy bin/cache) ---
-    local flutter_file="${run_dir}/flutter-backup-${ts}.tar.zst"
-    local flutter_paths=()
-    [[ -d "$HOME/flutter" ]] && flutter_paths+=("flutter")
-    [[ -d "$HOME/.pub-cache" ]] && flutter_paths+=(".pub-cache")
-
-    if (( ${#flutter_paths[@]} > 0 )); then
-        log "Backing up Flutter (~/flutter + ~/.pub-cache)"
-        tar -C "$HOME" --zstd -cf "$flutter_file" "${flutter_paths[@]}"
-
-        local size
-        size=$(du -h "${flutter_file}" | cut -f1)
-        log "✅ Created $(basename "${flutter_file}") (${size})"
-    else
-        log "⚠ Neither ~/flutter nor ~/.pub-cache found — skipping flutter backup"
-    fi
-
-    # --- Android SDK: ~/android-sdk (exclude large emulator images + temps) ---
+    # --- Android SDK: ~/android-sdk (exclude large temps) ---
     local android_file="${run_dir}/android-sdk-backup-${ts}.tar.zst"
     if [[ -d "$HOME/android-sdk" ]]; then
         log "Backing up Android SDK (~/android-sdk)"
@@ -93,9 +73,9 @@ do_backup() {
 
         local size
         size=$(du -h "${android_file}" | cut -f1)
-        log "✅ Created $(basename "${android_file}") (${size})"
+        log "Created $(basename "${android_file}") (${size})"
     else
-        log "⚠ ~/android-sdk not found — skipping android-sdk backup"
+        log "~/android-sdk not found — skipping android-sdk backup"
     fi
 
     # --- Gradle: ~/.gradle (exclude build caches + daemon + transforms) ---
@@ -112,9 +92,9 @@ do_backup() {
 
         local size
         size=$(du -h "${gradle_file}" | cut -f1)
-        log "✅ Created $(basename "${gradle_file}") (${size})"
+        log "Created $(basename "${gradle_file}") (${size})"
     else
-        log "⚠ ~/.gradle not found — skipping gradle backup"
+        log "~/.gradle not found — skipping gradle backup"
     fi
 
     # --- Agents: ~/.local/share/zed (agents history only, exclude re-fetchable caches) ---
@@ -132,9 +112,9 @@ do_backup() {
 
         local size
         size=$(du -h "${agents_file}" | cut -f1)
-        log "✅ Created $(basename "${agents_file}") (${size})"
+        log "Created $(basename "${agents_file}") (${size})"
     else
-        log "⚠ ~/.local/share/zed not found — skipping agents backup"
+        log "~/.local/share/zed not found — skipping agents backup"
     fi
 
     echo
@@ -192,33 +172,12 @@ do_restore() {
             rm -rf "$HOME/.cargo" "$HOME/.rustup" 2>/dev/null || true
             log "Restoring..."
             tar -C "$HOME" --zstd -xf "${latest_rust}"
-            log "✅ Restored rust"
+            log "Restored rust"
         else
             log "Skipped rust."
         fi
     else
         log "No rust backup found in ${run_dir}"
-    fi
-    echo
-
-    # --- Flutter ---
-    local latest_flutter
-    latest_flutter=$(ls -t "${run_dir}"/flutter-backup-*.tar.zst 2>/dev/null | head -n1 || true)
-    if [[ -n "${latest_flutter}" ]]; then
-        echo "Flutter backup found: $(basename "${latest_flutter}")"
-        echo "  WARNING: This will erase ~/flutter, then restore the backup."
-        read -r -p "  Restore flutter? (YES/no): " reply
-        if [[ "${reply}" == "YES" ]]; then
-            log "Erasing old Flutter directory..."
-            rm -rf "$HOME/flutter" 2>/dev/null || true
-            log "Restoring..."
-            tar -C "$HOME" --zstd -xf "${latest_flutter}"
-            log "✅ Restored flutter"
-        else
-            log "Skipped flutter."
-        fi
-    else
-        log "No flutter backup found in ${run_dir}"
     fi
     echo
 
@@ -234,7 +193,7 @@ do_restore() {
             rm -rf "$HOME/android-sdk" 2>/dev/null || true
             log "Restoring..."
             tar -C "$HOME" --zstd -xf "${latest_android}"
-            log "✅ Restored android-sdk"
+            log "Restored android-sdk"
         else
             log "Skipped android-sdk."
         fi
@@ -255,7 +214,7 @@ do_restore() {
             rm -rf "$HOME/.gradle" 2>/dev/null || true
             log "Restoring..."
             tar -C "$HOME" --zstd -xf "${latest_gradle}"
-            log "✅ Restored gradle"
+            log "Restored gradle"
         else
             log "Skipped gradle."
         fi
@@ -276,7 +235,7 @@ do_restore() {
             rm -rf "$HOME/.local/share/zed" 2>/dev/null || true
             log "Restoring..."
             tar -C "$HOME/.local/share" --zstd -xf "${latest_agents}"
-            log "✅ Restored agents"
+            log "Restored agents"
         else
             log "Skipped agents."
         fi
@@ -286,8 +245,6 @@ do_restore() {
 
     echo
     log "Restore complete."
-    log "All SDKs, caches, engines, and agent histories are fully restored!"
-
 }
 
 # =====================
@@ -295,18 +252,18 @@ do_restore() {
 # =====================
 if [ $# -eq 0 ]; then
     echo "Usage: $0 [backup|restore] [backup_directory]"
-    echo "   backup  - Create timestamped zstd-compressed tar backups of rust, gradle, agents (~/.local/share/zed), flutter, and android-sdk (all under ~/)"
-    echo "   restore - Selectively restore the most recent backup of each component"
+    echo "   backup  - Create timestamped zstd-compressed tar backups of rust, gradle, agents (~/.local/share/zed), and android-sdk"
+    echo "   restore - Selectively restore one backup run of each component"
     echo "   (second argument = path to backup folder, defaults to ${DEFAULT_BACKUP_DIR})"
     echo
     echo "This script is intended to run from *inside* the dev container."
     echo
     echo "Recommended ways to run (works after fresh git clone):"
-    echo "    bash .devcontainer/backup.sh backup"
-    echo "    bash .devcontainer/backup.sh restore"
+    echo "    bash .devcontainer_rs/backup.sh backup"
+    echo "    bash .devcontainer_rs/backup.sh restore"
     echo
     echo "If the script is executable you can also use:"
-    echo "    ./.devcontainer/backup.sh backup"
+    echo "    ./.devcontainer_rs/backup.sh backup"
     exit 1
 fi
 

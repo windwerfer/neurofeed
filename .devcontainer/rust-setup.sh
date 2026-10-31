@@ -6,29 +6,19 @@ has_cmd() {
     command -v "$1" >/dev/null 2>&1
 }
 
-
-echo "==> Running post-setup for fl_muse_brainflow_MVP"
-
-CACHE_DIR="/opt/backups"
-FLUTTER_VERSION="3.47.8"
-FLUTTER_TAR="flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
-FLUTTER_DIR="$HOME/flutter"
+echo "==> Running rust-setup for neurofeed"
 
 # =====================
 # OWNERSHIP (safe to run again)
 # =====================
 echo "==> Fixing volume permissions..."
+mkdir -p "$HOME/.cargo" "$HOME/android-sdk"
 sudo chown -R vscode:vscode \
     "$HOME/.cargo" \
     "$HOME/android-sdk" \
-    "$HOME/flutter" \
     /opt/backups
 
-# Make .devcontainer shell scripts executable.
-# Git does not reliably preserve +x after clone (especially cross-platform or via some UIs).
-# This runs after the workspace is mounted, so it actually affects what you see.
-chmod +x .devcontainer/*.sh 2>/dev/null || true
-
+chmod +x .devcontainer_rs/*.sh 2>/dev/null || true
 
 # =====================
 # RUST
@@ -42,17 +32,28 @@ else
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 fi
 
+# shellcheck disable=SC1091
+[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
+
 rustup toolchain install stable
+rustup default stable
 rustup component add clippy rustfmt
 
-echo "==> Post-setup complete."
-echo "    Run './verify-setup.sh' to see full status."
-
-# Install flutter_rust_bridge_codegen if not already present (idempotent)
-if has_cmd flutter_rust_bridge_codegen; then
-    echo "    [x] flutter_rust_bridge_codegen already installed"
+if rustup target list --installed 2>/dev/null | grep -q '^wasm32-unknown-unknown$'; then
+    echo "    [x] wasm32-unknown-unknown target present"
 else
-    echo "    Installing flutter_rust_bridge_codegen..."
-    cargo install --locked flutter_rust_bridge_codegen --version 2.11.1
-    echo "    [x] flutter_rust_bridge_codegen installed"
+    echo "    Adding wasm32-unknown-unknown..."
+    rustup target add wasm32-unknown-unknown
 fi
+
+# trunk serves the egui web app (apps/neurofeed-egui, port 8080).
+if has_cmd trunk; then
+    echo "    [x] trunk already installed"
+else
+    echo "    Installing trunk..."
+    cargo install trunk --locked
+    echo "    [x] trunk installed"
+fi
+
+echo "==> Rust setup complete."
+echo "    Run 'bash .devcontainer_rs/android-setup.sh' next, then verify-setup.sh."

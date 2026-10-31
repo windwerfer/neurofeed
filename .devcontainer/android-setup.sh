@@ -1,15 +1,18 @@
 #!/bin/bash
 set -e
 
-echo "==> Running android-setup for fl_muse_brainflow_MVP"
+echo "==> Running android-setup for neurofeed"
 
 CACHE_DIR="/opt/backups"
 ANDROID_HOME="$HOME/android-sdk"
+# Pinned by apps/neurofeed-android/android/app/build.gradle.kts
+NDK_VERSION="27.2.12479018"
 
 # =====================
 # OWNERSHIP (safe to run again)
 # =====================
 echo "==> Fixing ownership..."
+mkdir -p "${ANDROID_HOME}"
 sudo chown -R vscode:vscode \
     "${ANDROID_HOME}" \
     "${CACHE_DIR}"
@@ -63,7 +66,7 @@ setup_cmdline_tools() {
             echo "    Cached for future container recreates."
         else
             echo "    Download failed or was interrupted."
-            rm -f "$partial"   # clean up so next run starts fresh
+            rm -f "$partial"
             exit 1
         fi
     fi
@@ -93,11 +96,12 @@ setup_android_components() {
     echo "==> Accepting Android licenses (non-interactive)..."
     yes | sdkmanager --licenses || true
 
+    # compileSdk 35 + ndkVersion in apps/neurofeed-android.
     local packages=(
         "platform-tools"
-        "build-tools;34.0.0"
-        "platforms;android-36"
-        "ndk;28.2.13676358"
+        "build-tools;35.0.0"
+        "platforms;android-35"
+        "ndk;${NDK_VERSION}"
     )
 
     # Capture the installed list once (sdkmanager output is slow to produce)
@@ -106,8 +110,6 @@ setup_android_components() {
 
     for pkg in "${packages[@]}"; do
         # Use fixed-string match (-F) on the distinctive package id.
-        # This is more reliable than a plain substring grep against the
-        # multi-column / sectioned output of --list_installed.
         if echo "$installed_list" | grep -F -q "$pkg"; then
             echo "    [x] $pkg already installed"
         else
@@ -119,16 +121,23 @@ setup_android_components() {
 }
 
 # =====================
-# RUST ANDROID (only needed for Android builds)
+# RUST ANDROID
 # =====================
 setup_rust_android() {
     echo "==> Setting up Rust Android targets + cargo-ndk..."
 
+    if ! command -v rustup >/dev/null 2>&1; then
+        echo "    rustup is missing. Run bash .devcontainer_rs/rust-setup.sh first."
+        exit 1
+    fi
+
     # Make sure Cargo environment is loaded
+    # shellcheck disable=SC1091
     [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 
-    # Rust targets (both arm64 + arm32 as requested)
-    for target in aarch64-linux-android armv7-linux-androideabi; do
+    # ABIs in apps/neurofeed-android/android/gradle.properties:
+    # arm64-v8a, armeabi-v7a, x86_64
+    for target in aarch64-linux-android armv7-linux-androideabi x86_64-linux-android; do
         if rustup target list --installed 2>/dev/null | grep -q "$target"; then
             echo "    [x] $target target present"
         else
@@ -137,21 +146,15 @@ setup_rust_android() {
         fi
     done
 
-    # cargo-ndk (pinned for reproducibility + known good compatibility with NDK r28)
-    # Unlike flutter_rust_bridge_codegen (which generates code and must match the exact
-    # runtime version in Cargo.toml), cargo-ndk is "only" a build helper. However we still
-    # pin it here because:
-    # - the real Android .so build is invoked from Gradle via `cargo ndk ...`
-    # - we use a very specific NDK (28.2.13676358)
-    # - historical cargo-ndk <-> NDK version incompatibilities have bitten people before
+    # cargo-ndk is the build helper Gradle calls (`cargo ndk -t <abi>`).
+    # Pinned because this tree uses one NDK (27.2.12479018).
     if [ -x "$HOME/.cargo/bin/cargo-ndk" ] || type -P cargo-ndk > /dev/null 2>&1; then
         echo "    [x] cargo-ndk already installed"
     else
         echo "    Installing cargo-ndk..."
         cargo install cargo-ndk --version 4.1.2 --locked
         echo "    [x] cargo-ndk installed"
-
-        # Refresh PATH immediately
+        # shellcheck disable=SC1091
         [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
     fi
 }
@@ -161,10 +164,11 @@ setup_rust_android() {
 # =====================
 setup_cmdline_tools
 setup_android_components
-# setup_rust_android
+setup_rust_android
 
 sudo chown -R vscode:vscode "${ANDROID_HOME}"
 
 echo ""
 echo "==> Android setup complete!"
-echo "    Run './verify-setup.sh' to see status."
+echo "    Run 'bash .devcontainer_rs/verify-setup.sh' to see status."
+echo "    Build: cd apps/neurofeed-android/android && ./gradlew assembleDebug"

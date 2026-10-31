@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo "=============================================="
-echo "   fl_muse_brainflow_MVP  —  Setup Verification"
+echo "   neurofeed  —  Setup Verification"
 echo "=============================================="
 echo ""
 
@@ -14,9 +14,9 @@ print_check() {
     local label="$1"
     local state="$2"
     if [ "$state" = "ok" ]; then
-        printf "  ${GREEN}[x]${NC} %-35s\n" "$label"
+        printf "  ${GREEN}[x]${NC} %-42s\n" "$label"
     else
-        printf "  ${RED}[ ]${NC} %-35s\n" "$label"
+        printf "  ${RED}[ ]${NC} %-42s\n" "$label"
     fi
 }
 
@@ -26,16 +26,10 @@ has_cmd() {
 }
 
 # =====================
-# LINUX / DESKTOP
+# RUST / DESKTOP
 # =====================
-echo "📱 Linux / Desktop"
+echo "Rust / desktop"
 echo "----------------------------------------------"
-
-if has_cmd flutter; then
-    print_check "Flutter" "ok"
-else
-    print_check "Flutter" "missing"
-fi
 
 if has_cmd rustc; then
     print_check "Rust (rustc)" "ok"
@@ -49,10 +43,34 @@ else
     print_check "Cargo" "missing"
 fi
 
-if has_cmd flutter_rust_bridge_codegen; then
-    print_check "flutter_rust_bridge_codegen" "ok"
+if has_cmd cargo-clippy; then
+    print_check "Clippy" "ok"
 else
-    print_check "flutter_rust_bridge_codegen" "missing"
+    print_check "Clippy" "missing"
+fi
+
+if has_cmd rustfmt; then
+    print_check "rustfmt" "ok"
+else
+    print_check "rustfmt" "missing"
+fi
+
+if rustup target list --installed 2>/dev/null | grep -q '^wasm32-unknown-unknown$'; then
+    print_check "Rust target: wasm32-unknown-unknown" "ok"
+else
+    print_check "Rust target: wasm32-unknown-unknown" "missing"
+fi
+
+if has_cmd trunk; then
+    print_check "trunk (web, :8080)" "ok"
+else
+    print_check "trunk (web, :8080)" "missing"
+fi
+
+if pkg-config --exists alsa dbus-1 2>/dev/null; then
+    print_check "libasound + libdbus (cpal, BlueZ)" "ok"
+else
+    print_check "libasound + libdbus (cpal, BlueZ)" "missing"
 fi
 
 echo ""
@@ -60,7 +78,7 @@ echo ""
 # =====================
 # ANDROID
 # =====================
-echo "🤖 Android"
+echo "Android"
 echo "----------------------------------------------"
 
 if has_cmd java && java -version 2>&1 | grep -q "21"; then
@@ -87,34 +105,40 @@ else
     print_check "platform-tools (adb)" "missing"
 fi
 
-if [ -d "${ANDROID_HOME}/build-tools/34.0.0" ]; then
-    print_check "build-tools;34.0.0" "ok"
+if [ -d "${ANDROID_HOME}/build-tools/35.0.0" ]; then
+    print_check "build-tools;35.0.0" "ok"
 else
-    print_check "build-tools;34.0.0" "missing"
+    print_check "build-tools;35.0.0" "missing"
 fi
 
-if [ -d "${ANDROID_HOME}/platforms/android-34" ]; then
-    print_check "platforms;android-34" "ok"
+if [ -d "${ANDROID_HOME}/platforms/android-35" ]; then
+    print_check "platforms;android-35" "ok"
 else
-    print_check "platforms;android-34" "missing"
+    print_check "platforms;android-35" "missing"
 fi
 
-if [ -d "${ANDROID_HOME}/ndk/28.2.13676358" ]; then
-    print_check "NDK 28.2.13676358" "ok"
+if [ -d "${ANDROID_HOME}/ndk/27.2.12479018" ]; then
+    print_check "NDK 27.2.12479018" "ok"
 else
-    print_check "NDK 28.2.13676358" "missing"
+    print_check "NDK 27.2.12479018" "missing"
 fi
 
 if rustup target list --installed 2>/dev/null | grep -q "aarch64-linux-android"; then
-    print_check "Rust target: aarch64-linux-android   (64bit)" "ok"
+    print_check "Rust target: aarch64-linux-android" "ok"
 else
-    print_check "Rust target: aarch64-linux-android   (64bit)" "missing"
+    print_check "Rust target: aarch64-linux-android" "missing"
 fi
 
 if rustup target list --installed 2>/dev/null | grep -q "armv7-linux-androideabi"; then
-    print_check "Rust target: armv7-linux-androideabi (32bit)" "ok"
+    print_check "Rust target: armv7-linux-androideabi" "ok"
 else
-    print_check "Rust target: armv7-linux-androideabi (32bit)" "missing"
+    print_check "Rust target: armv7-linux-androideabi" "missing"
+fi
+
+if rustup target list --installed 2>/dev/null | grep -q "x86_64-linux-android"; then
+    print_check "Rust target: x86_64-linux-android" "ok"
+else
+    print_check "Rust target: x86_64-linux-android" "missing"
 fi
 
 if has_cmd cargo-ndk; then
@@ -124,15 +148,8 @@ else
 fi
 
 echo ""
-
-# =====================
-# WINDOWS (future)
-# =====================
-echo "🪟 Windows (placeholder / future)"
-echo "----------------------------------------------"
-print_check "Windows toolchain (not yet implemented)" "missing"
-echo ""
-
 echo "=============================================="
-echo "Tip: Run 'flutter doctor -v' for the official Flutter report."
+echo "Desktop:  cargo run --release -p neurofeed-egui"
+echo "Web:      cd apps/neurofeed-egui && trunk serve --release"
+echo "Android:  cd apps/neurofeed-android/android && ./gradlew assembleDebug"
 echo "=============================================="

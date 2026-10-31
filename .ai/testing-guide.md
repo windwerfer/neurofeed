@@ -99,7 +99,7 @@ The agent runs this itself. Steps:
 2. **Clear logcat and launch detached** (so the command returns):
    ```bash
    adb logcat -c
-   cd /workspaces/flutter_muse_ml
+   cd /workspaces/neurofeed
    DEVICE=$(adb devices | awk 'NR==2 {print $1}')
    setsid flutter run --device-id "$DEVICE" > /tmp/opencode/flutter_run.log 2>&1 < /dev/null & disown
    ```

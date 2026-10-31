@@ -28,7 +28,7 @@ cargo build --release --manifest-path rust/Cargo.toml
 
 mkdir -p /tmp/neurofeed-agent
 : > /tmp/neurofeed-agent/flutter_run.log
-cd /workspaces/flutter_muse_ml
+cd /workspaces/neurofeed
 GDK_BACKEND=wayland setsid flutter run -d linux \
   --dart-define=NEUROFEED_AGENT=true \
   --dart-define=NEUROFEED_DEBUG=true \
