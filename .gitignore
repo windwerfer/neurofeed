@@ -73,3 +73,4 @@ dist/
 /flatpak/cargo-sources.json
 /.flatpak-repo/
 /flatpak/VERSION
+local/
