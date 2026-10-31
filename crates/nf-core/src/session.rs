@@ -91,15 +91,20 @@ const TARGET_PADS: [[&str; 2]; 2] = [["AF7", "AF8"], ["PO3", "PO4"]];
 /// Fault artifact: 200 µV at 3 Hz (pad quality 0).
 const FAULT_UV: f64 = 200.0;
 
-/// Data-path state that is not plain `AppState` (cloned for batch rollback).
+/// A pad with out-of-range samples scores 0 for this long (one band window).
+const OOB_HOLD_S: f64 = 2.0;
 /// A Crown quality frame counts for this long (it arrives about once a second).
 const CROWN_Q_MAX_AGE_S: f64 = 1.5;
 
+/// Data-path state that is not plain `AppState` (cloned for batch rollback).
 #[derive(Clone, Default)]
 struct Live {
     signal: Option<Signal>,
     /// Session time of the next crash-recovery checkpoint.
     next_checkpoint: f64,
+    /// Per channel: last session time a NaN / inf / beyond-ADC sample arrived.
+    oob: Vec<f64>,
+    next_fault: u32,
     /// Latest Crown-reported pad quality (0..=1 per pad) and its time.
     crown_q: Option<(Vec<f64>, f64)>,
     side: Option<crate::side::Side>,
@@ -500,6 +505,19 @@ impl Session {
             .enumerate()
             .map(|(i, (id, p))| Request::parse(id, p.clone()).map_err(|e| CoreError::BadRequest(format!("step {i}: {e}"))))
             .collect::<Result<Vec<_>, _>>()?;
+        let irreversible = |r: &Request| {
+            matches!(
+                r,
+                Request::Command(
+                    Command::HistoryDelete { .. } | Command::HistoryImport(_) | Command::RecoveryRestore | Command::RecoveryDiscard
+                )
+            )
+        };
+        if let Some(i) = parsed.iter().position(irreversible) {
+            return Err(CoreError::BadRequest(format!(
+                "step {i}: history.delete / history.import / recovery.restore / recovery.discard change saved data and cannot be rolled back; run them on their own, outside a batch"
+            )));
+        }
         if let Some(i) = parsed.iter().position(|r| matches!(r, Request::Command(Command::AiInstall { .. } | Command::AiRemove { .. }))) {
             return Err(CoreError::BadRequest(format!(
                 "step {i}: ai.install / ai.remove write or delete model files (a download runs in the background) and cannot be rolled back; run them on their own, outside a batch"
@@ -544,6 +562,8 @@ impl Session {
             self.emit(Event::StoreError { message: "custom protocols could not be restored after a rolled-back batch".into() });
         }
         self.persist_settings();
+        // Sessions saved inside the batch (a stopped recording) stay saved.
+        self.refresh_history();
     }
 
     /// Undo note edits of a rolled-back batch.
@@ -617,6 +637,68 @@ impl Session {
         self.live.crown_q = Some((sum, self.state.time));
     }
 
+    fn mark_oob(&mut self, ch: usize) {
+        let now = self.state.time;
+        if self.live.oob.len() <= ch {
+            self.live.oob.resize(ch + 1, f64::NEG_INFINITY);
+        }
+        self.live.oob[ch] = now;
+    }
+
+    /// Drop faults whose duration (or auto-reconnect) has passed.
+    fn expire_faults(&mut self, now: f64) {
+        let before = self.state.faults.len();
+        self.state.faults.retain(|f| f.end().is_none_or(|e| now < e));
+        if self.state.faults.len() != before {
+            self.state.revision += 1;
+        }
+    }
+
+    /// Quality overrides after each snapshot: a pad that delivered NaN /
+    /// inf / beyond-ADC samples in the last window scores 0; then Crown.
+    fn apply_quality_overrides(&mut self) {
+        let now = self.state.time;
+        if let Some(sig) = self.live.signal.as_mut() {
+            for (q, t) in sig.quality.iter_mut().zip(&self.live.oob) {
+                if now - t < OOB_HOLD_S {
+                    *q = 0.0;
+                }
+            }
+        }
+        self.apply_crown_quality();
+    }
+
+    fn add_fault(&mut self, kind: crate::faults::FaultKind, duration_s: Option<f64>, channels: Vec<String>) -> Result<Reply, CoreError> {
+        let bad = |m: &str| CoreError::InvalidArgs(m.into());
+        if duration_s.is_some_and(|d| !(d.is_finite() && d > 0.0 && d <= MAX_ADVANCE_S)) {
+            return Err(bad("duration_s must be in (0, 3600]"));
+        }
+        match kind {
+            crate::faults::FaultKind::Noise { clean_fraction } if !(0.0..=1.0).contains(&clean_fraction) => {
+                return Err(bad("clean_fraction must be in [0, 1]"))
+            }
+            crate::faults::FaultKind::Disconnect { reconnect_after_s: Some(r) } if !(r.is_finite() && r > 0.0) => {
+                return Err(bad("reconnect_after_s must be > 0"))
+            }
+            _ => {}
+        }
+        if self.state.faults.len() >= crate::faults::MAX_FAULTS {
+            return Err(bad("too many faults; clear some first"));
+        }
+        let chans = self.state.device.as_ref().map(|d| d.channels.clone()).unwrap_or_default();
+        let idx = channels
+            .iter()
+            .map(|n| chans.iter().position(|c| c == n).ok_or_else(|| CoreError::InvalidArgs(format!("unknown channel `{n}`"))))
+            .collect::<Result<Vec<_>, _>>()?;
+        self.live.next_fault += 1;
+        let now = self.state.time;
+        let f =
+            crate::faults::ActiveFault { id: self.live.next_fault, kind, channels, started: now, until: duration_s.map(|d| now + d), idx };
+        let reply = json!({ "id": f.id, "ends": f.end() });
+        self.state.faults.push(f);
+        Ok(reply)
+    }
+
     /// Settings → Devices "Crown signal quality": replace the app score with
     /// the Crown's own of the last [`CROWN_Q_MAX_AGE_S`]; without a fresh
     /// one the app score stays. Legacy `resolve_pad_quality`.
@@ -644,8 +726,14 @@ impl Session {
         let mut optical = src.poll_ppg(now);
         let mut accel = src.poll_accel(now);
         let quality = src.poll_quality(now);
-        let link = src.link();
+        let mut link = src.link();
         self.crown_quality(quality);
+        self.expire_faults(now);
+        if let Some(dev) = &self.state.device {
+            if crate::faults::inject(&self.state.faults, dev, &mut packets, &mut optical, &mut accel) {
+                link = nf_types::LinkState::Lost { reason: "simulated disconnect".into() };
+            }
+        }
         if self.state.link.as_ref() != Some(&link) {
             self.state.link = Some(link.clone());
             self.state.revision += 1;
@@ -720,7 +808,11 @@ impl Session {
     /// recorder hit its size limit.
     fn process_eeg(&mut self, packets: &mut [EegPacket]) -> bool {
         let mut full = false;
-        for p in packets.iter() {
+        for p in packets.iter_mut() {
+            let bad = crate::faults::sanitize(p);
+            if bad {
+                self.mark_oob(usize::from(p.electrode));
+            }
             if let Some(r) = self.live.recorder.as_mut() {
                 full |= !r.eeg(p);
             }
@@ -729,7 +821,7 @@ impl Session {
             }
             let Some(sig) = self.live.signal.as_mut() else { continue };
             let before = sig.applied();
-            let snap = sig.push(p);
+            let snap = sig.push_flagged(p, bad);
             if self.state.streaming.settings.enabled {
                 let ch = usize::from(p.electrode);
                 self.live.streamer.eeg(ch, p.time, &sig.last(ch, p.samples.len(), true));
@@ -739,7 +831,7 @@ impl Session {
                 self.emit(Event::MainsChanged { applied: mains_name(after).into(), detected: mains_name(detected).into() });
             }
             let Some(snap) = snap else { continue };
-            self.apply_crown_quality();
+            self.apply_quality_overrides();
             if self.state.streaming.settings.enabled {
                 self.live.streamer.bands(&snap);
             }
@@ -1212,6 +1304,18 @@ impl Session {
                 let thr = self.state.feedback.set_percentile(percentile);
                 return Ok(json!({ "percentile": percentile, "threshold": thr }));
             }
+            Command::SimFaultAdd { kind, reconnect_after_s, clean_fraction, value, duration_s, channels } => {
+                let kind =
+                    crate::faults::FaultKind::build(kind, reconnect_after_s, clean_fraction, value).map_err(CoreError::InvalidArgs)?;
+                return self.add_fault(kind, duration_s, channels);
+            }
+            Command::SimFaultClear { id } => {
+                let before = self.state.faults.len();
+                self.state.faults.retain(|f| id.is_some_and(|i| i != f.id));
+                if id.is_some() && before == self.state.faults.len() {
+                    return Err(CoreError::InvalidArgs(format!("no fault {}", id.unwrap_or_default())));
+                }
+            }
             Command::SimFault { bad_pads, dropout, motion, blink, clench, drowsy } => {
                 let chans = self.state.device.as_ref().map(|d| d.channels.clone()).unwrap_or_default();
                 let bad = bad_pads
@@ -1347,6 +1451,7 @@ impl Session {
                 "device": s.device.as_ref().map(|d| &d.id),
                 "time": s.time,
                 "revision": s.revision,
+                "faults": s.faults,
             }),
             Query::ProtocolList => json!(crate::protocols::all(&s.custom_protocols)
                 .iter()

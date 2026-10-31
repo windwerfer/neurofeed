@@ -232,6 +232,32 @@ pub enum Command {
     #[serde(rename = "threshold.set")]
     ThresholdSet { percentile: u8 },
     /// Simulator faults (tests): make pads bad and/or stop data (radio dropout).
+    /// Add a timed simulator fault (see `nf_core::faults`). Returns its id.
+    #[serde(rename = "sim.fault.add")]
+    SimFaultAdd {
+        kind: crate::faults::FaultTag,
+        /// `disconnect` only: reconnect after this many seconds.
+        #[serde(default)]
+        reconnect_after_s: Option<f64>,
+        /// `noise` only: probability each channel-second is clean (default 0.5).
+        #[serde(default)]
+        clean_fraction: Option<f64>,
+        /// `out_of_range` only: nan (default), inf or rail.
+        #[serde(default)]
+        value: Option<crate::faults::BadValue>,
+        /// Seconds until it clears itself (default: until `sim.fault.clear`).
+        #[serde(default)]
+        duration_s: Option<f64>,
+        /// Channel names to affect (default: the kind's usual pads or all).
+        #[serde(default)]
+        channels: Vec<String>,
+    },
+    /// Clear one fault by id, or all (`id` omitted).
+    #[serde(rename = "sim.fault.clear")]
+    SimFaultClear {
+        #[serde(default)]
+        id: Option<u32>,
+    },
     #[serde(rename = "sim.fault")]
     SimFault {
         /// Pad names to corrupt (huge artifact); empty = none.
@@ -859,6 +885,15 @@ pub const SPECS: &[CommandSpec] = &[
         "Corrupt pads, drop data, inject motion/blink/clench artifacts or drowsy delta on a simulator (tests).",
         sim_device,
     ),
+    spec(
+        "sim.fault.add",
+        "Add simulated fault",
+        "device",
+        false,
+        "Timed fault: disconnect (auto-reconnect), movement, blink, clench, noise (clean_fraction), spikes, glitch, out_of_range.",
+        sim_device,
+    ),
+    spec("sim.fault.clear", "Clear simulated faults", "device", false, "Clear one fault by id, or all.", always),
     spec("clock.advance", "Advance clock", "time", false, "Advance session time (headless/tests). Max 3600 s per call.", always),
     spec("events.drain", "Drain events", "app", false, "Return and clear events since the last drain.", always),
 ];
@@ -956,6 +991,15 @@ fn base_examples() -> Vec<Request> {
         C(Command::CalibrationReuse),
         C(Command::ThresholdSet { percentile: 50 }),
         C(Command::SimFault { bad_pads: vec!["AF7".into()], dropout: false, motion: false, blink: false, clench: false, drowsy: false }),
+        C(Command::SimFaultAdd {
+            kind: crate::faults::FaultTag::Noise,
+            reconnect_after_s: None,
+            clean_fraction: Some(0.2),
+            value: None,
+            duration_s: Some(30.0),
+            channels: vec!["AF7".into()],
+        }),
+        C(Command::SimFaultClear { id: None }),
         Q(Query::ProtocolList),
         Q(Query::ProtocolGet { id: None }),
         Q(Query::ProtocolDraft { id: Some("restAwake".into()) }),
@@ -1013,6 +1057,17 @@ fn base_examples() -> Vec<Request> {
     ]
 }
 
+/// Param names a schema accepts: its `properties`, plus those of any
+/// `oneOf` / `anyOf` / `allOf` branch (flattened tagged enums).
+fn schema_keys(schema: &Value) -> std::collections::BTreeSet<&str> {
+    let mut keys: std::collections::BTreeSet<&str> =
+        schema.get("properties").and_then(Value::as_object).map(|p| p.keys().map(String::as_str).collect()).unwrap_or_default();
+    for branch in ["oneOf", "anyOf", "allOf"].iter().filter_map(|k| schema.get(*k).and_then(Value::as_array)).flatten() {
+        keys.extend(schema_keys(branch));
+    }
+    keys
+}
+
 impl Request {
     pub fn id(&self) -> String {
         let v = match self {
@@ -1032,8 +1087,8 @@ impl Request {
             _ => return Err(CoreError::InvalidArgs("params must be an object".into())),
         };
         let schema = input_schema(id).unwrap_or_default();
-        let allowed = schema.get("properties").and_then(Value::as_object);
-        if let Some(key) = map.keys().find(|k| !allowed.is_some_and(|p| p.contains_key(*k))) {
+        let allowed = schema_keys(&schema);
+        if let Some(key) = map.keys().find(|k| !allowed.contains(k.as_str())) {
             return Err(CoreError::InvalidArgs(format!("unknown param `{key}` for {id}")));
         }
         map.insert("cmd".into(), Value::String(id.to_owned()));

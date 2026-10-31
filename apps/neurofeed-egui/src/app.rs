@@ -57,6 +57,13 @@ impl NeuroFeedApp {
         if let Some(demo) = param("demo") {
             app.demo(&demo);
         }
+        // NF_FAULTS / `?faults=` : a JSON list of `sim.fault.add` params (screenshots).
+        let faults: Vec<serde_json::Value> = param("faults").and_then(|f| serde_json::from_str(&f).ok()).unwrap_or_default();
+        for p in faults {
+            if let Ok(nf_core::Request::Command(c)) = nf_core::Request::parse("sim.fault.add", p) {
+                app.run(c);
+            }
+        }
         if let Some(view) = param("view").and_then(|v| serde_json::from_value(serde_json::Value::String(v)).ok()) {
             app.run(Command::ViewSet { view });
         }

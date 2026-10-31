@@ -31,13 +31,14 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
     names.extend(aux.iter().map(|(n, _)| format!("{n} (AUX)")));
     let n_eeg = dev.channels.len();
     let resp = plot::cards_resp(ui, &names, |p, r, ch| {
-        let s = if ch < n_eeg {
+        let (s, flags) = if ch < n_eeg {
             let all = sig.last(ch, n + skip, true);
-            all[..all.len().saturating_sub(skip)].to_vec()
+            let fl = sig.last_flags(ch, n + skip);
+            (all[..all.len().saturating_sub(skip)].to_vec(), fl[..fl.len().saturating_sub(skip)].to_vec())
         } else {
-            aux.get(ch - n_eeg).map(|a| a.1.clone()).unwrap_or_default()
+            (aux.get(ch - n_eeg).map(|a| a.1.clone()).unwrap_or_default(), Vec::new())
         };
-        draw(p, r, &s, n);
+        draw(p, r, &s, &flags, n);
         let end = if back > 0.05 { format!("-{back:.1} s") } else { "now".into() };
         plot::label(p, r.right_bottom(), Align2::RIGHT_TOP, end);
         plot::label(p, r.left_bottom(), Align2::LEFT_TOP, format!("-{:.0} s", vp.window_s + back));
@@ -58,15 +59,55 @@ fn tail(it: impl Iterator<Item = f32>, len: usize, n: usize, skip: usize) -> Vec
     it.take(end).skip(end.saturating_sub(n)).collect()
 }
 
-fn draw(p: &egui::Painter, r: egui::Rect, s: &[f32], n: usize) {
+const TRACE: Color32 = Color32::from_rgb(0x4F, 0xC3, 0xF7);
+const BAD: Color32 = Color32::from_rgb(0xEF, 0x53, 0x50);
+
+/// Draw one channel: the trace breaks across gaps (no data: grey band),
+/// samples the device sent as NaN / inf / out of range get a red band, and
+/// values past the ±range are clipped and drawn red at the edge.
+fn draw(p: &egui::Painter, r: egui::Rect, s: &[f32], flags: &[u8], n: usize) {
     let step = (s.len() as f32 / r.width()).max(1.0);
     let off = n.saturating_sub(s.len()) as f32;
-    let pts = (0..(s.len() as f32 / step) as usize)
-        .filter_map(|i| s.get((i as f32 * step) as usize).map(|&y| (off + i as f32 * step, y)))
-        .map(|(i, y)| plot::to_screen(r, (0.0, n as f32), (-RANGE_UV, RANGE_UV), i, y))
-        .collect();
+    let x_of = |i: f32| plot::to_screen(r, (0.0, n as f32), (-RANGE_UV, RANGE_UV), off + i, 0.0).x;
+    shade(p, r, flags, &x_of);
     p.line_segment([r.left_center(), r.right_center()], (0.5_f32, Color32::DARK_GRAY));
-    plot::trace(p, pts, Color32::from_rgb(0x4F, 0xC3, 0xF7));
+    let mut run: Vec<egui::Pos2> = Vec::new();
+    let mut clipped = Vec::new();
+    for i in (0..(s.len() as f32 / step) as usize).map(|i| (i as f32 * step) as usize) {
+        let (Some(&y), fl) = (s.get(i), flags.get(i).copied().unwrap_or(nf_core::signal::FLAG_OK)) else { break };
+        if fl == nf_core::signal::FLAG_GAP {
+            plot::trace(p, std::mem::take(&mut run), TRACE);
+            continue;
+        }
+        let pt = plot::to_screen(r, (0.0, n as f32), (-RANGE_UV, RANGE_UV), off + i as f32, y.clamp(-RANGE_UV, RANGE_UV));
+        if y.abs() > RANGE_UV {
+            clipped.push(pt);
+        }
+        run.push(pt);
+    }
+    plot::trace(p, run, TRACE);
+    for c in clipped {
+        p.circle_filled(c, 1.6, BAD);
+    }
     plot::label(p, r.left_top(), Align2::RIGHT_TOP, format!("{RANGE_UV:.0} "));
     plot::label(p, r.left_bottom(), Align2::RIGHT_BOTTOM, format!("-{RANGE_UV:.0} "));
+}
+
+/// Background bands for flagged runs (gap grey, bad red).
+fn shade(p: &egui::Painter, r: egui::Rect, flags: &[u8], x_of: &dyn Fn(f32) -> f32) {
+    let mut i = 0;
+    while i < flags.len() {
+        let f = flags[i];
+        let start = i;
+        while i < flags.len() && flags[i] == f {
+            i += 1;
+        }
+        let fill = match f {
+            nf_core::signal::FLAG_GAP => Color32::from_rgba_unmultiplied(0x90, 0x90, 0x90, 40),
+            nf_core::signal::FLAG_BAD => Color32::from_rgba_unmultiplied(0xEF, 0x53, 0x50, 50),
+            _ => continue,
+        };
+        let band = egui::Rect::from_x_y_ranges(x_of(start as f32)..=x_of(i as f32), r.y_range());
+        p.rect_filled(band, 0.0, fill);
+    }
 }

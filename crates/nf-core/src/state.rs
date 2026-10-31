@@ -153,6 +153,8 @@ pub struct AppState {
     pub history_location: String,
     /// A recording interrupted by a crash, waiting for Recover / Discard.
     pub recovery: Option<crate::recovery::Pending>,
+    /// Active simulator faults (`sim.fault.add`).
+    pub faults: Vec<crate::faults::ActiveFault>,
     /// Schemes of registered providers that can scan (`muse`, `crown`).
     pub scanners: Vec<String>,
     /// Transport state of the connected device.
@@ -186,6 +188,7 @@ impl Default for AppState {
             link: None,
             history_location: "memory".into(),
             recovery: None,
+            faults: Vec::new(),
             revision: 0,
         }
     }

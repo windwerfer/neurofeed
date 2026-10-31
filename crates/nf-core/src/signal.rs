@@ -44,6 +44,14 @@ pub fn mains_name(m: Mains) -> &'static str {
     }
 }
 
+pub const FLAG_OK: u8 = 0;
+/// No data arrived for this sample time.
+pub const FLAG_GAP: u8 = 1;
+/// The device sent NaN / inf / beyond-ADC values (shown zeroed).
+pub const FLAG_BAD: u8 = 2;
+/// Fewer missing samples than this are jitter, not a gap.
+const GAP_MIN_SAMPLES: f64 = 3.0;
+
 #[derive(Debug, Clone)]
 pub struct Signal {
     pub rate: f64,
@@ -51,6 +59,10 @@ pub struct Signal {
     filters: Vec<EegFilter>,
     pub raw: Vec<VecDeque<f32>>,
     pub filtered: Vec<VecDeque<f32>>,
+    /// Per sample, aligned with `raw`: [`FLAG_OK`], [`FLAG_GAP`] or [`FLAG_BAD`].
+    pub flags: Vec<VecDeque<u8>>,
+    /// Per channel, time of its newest sample (gap detection).
+    last_t: Vec<Option<f64>>,
     /// Time of the newest sample.
     pub time: Option<f64>,
     next_band: Option<f64>,
@@ -81,6 +93,8 @@ impl Signal {
             filters: Vec::new(),
             raw: vec![VecDeque::with_capacity(cap); n],
             filtered: vec![VecDeque::with_capacity(cap); n],
+            flags: vec![VecDeque::with_capacity(cap); n],
+            last_t: vec![None; n],
             time: None,
             next_band: None,
             next_spec: None,
@@ -163,9 +177,37 @@ impl Signal {
 
     /// Ingest one packet; returns a band snapshot when one is due.
     pub fn push(&mut self, p: &EegPacket) -> Option<BandSnapshot> {
+        self.push_flagged(p, false)
+    }
+
+    /// Fill a time gap (dropped packets, disconnect) with flagged zeros so
+    /// plots show the hole instead of splicing the two sides together.
+    fn fill_gap(&mut self, ch: usize, first_sample: f64) {
+        let Some(t) = self.last_t[ch] else { return };
+        let missing = ((first_sample - t) * self.rate).round() - 1.0;
+        if missing < GAP_MIN_SAMPLES {
+            return;
+        }
+        let n = (missing as usize).min(self.cap);
+        for _ in 0..n {
+            push_capped(&mut self.raw[ch], 0.0, self.cap);
+            push_capped(&mut self.filtered[ch], 0.0, self.cap);
+            push_capped(&mut self.flags[ch], FLAG_GAP, self.cap);
+        }
+    }
+
+    /// [`Self::push`], marking the packet's samples bad (they were NaN / inf
+    /// / beyond the ADC and got zeroed) when `bad`.
+    pub fn push_flagged(&mut self, p: &EegPacket, bad: bool) -> Option<BandSnapshot> {
         let ch = usize::from(p.electrode);
         if ch >= self.filters.len() {
             return None;
+        }
+        self.fill_gap(ch, p.time - (p.samples.len() as f64 - 1.0) / self.rate);
+        self.last_t[ch] = Some(p.time);
+        let flag = if bad { FLAG_BAD } else { FLAG_OK };
+        for _ in &p.samples {
+            push_capped(&mut self.flags[ch], flag, self.cap);
         }
         if self.detector.feed(ch, &p.samples).is_some() {
             self.reapply();
@@ -214,6 +256,11 @@ impl Signal {
         }
     }
 
+    /// Flags of the last `n` samples of channel `ch`.
+    pub fn last_flags(&self, ch: usize, n: usize) -> Vec<u8> {
+        self.flags.get(ch).map(|b| b.iter().skip(b.len().saturating_sub(n)).copied().collect()).unwrap_or_default()
+    }
+
     /// Last `n` samples of channel `ch` (fewer if not buffered yet).
     pub fn last(&self, ch: usize, n: usize, filtered: bool) -> Vec<f32> {
         let buf = if filtered { &self.filtered } else { &self.raw };
@@ -231,7 +278,7 @@ fn due(next: &mut Option<f64>, t: f64, step: f64) -> bool {
     true
 }
 
-fn push_capped(b: &mut VecDeque<f32>, x: f32, cap: usize) {
+fn push_capped<T>(b: &mut VecDeque<T>, x: T, cap: usize) {
     if b.len() >= cap {
         b.pop_front();
     }

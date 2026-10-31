@@ -69,3 +69,27 @@ fn disabled_commands_report_reason_and_change_nothing() {
     assert!(s.call("device.connect", json!({ "id": "ble:x" })).is_err());
     assert!(s.state().device.is_none());
 }
+
+#[test]
+fn dropped_and_bad_samples_are_flagged_for_the_plots() {
+    use nf_core::signal::{FLAG_BAD, FLAG_GAP, FLAG_OK};
+    let mut s = Session::new();
+    s.call("device.connect", json!({ "id": "sim:muse_s" })).unwrap_or_default();
+    s.call("clock.advance", json!({ "seconds": 3.0 })).unwrap_or_default();
+    s.call("sim.fault.add", json!({ "kind": "disconnect", "reconnect_after_s": 1.0 })).unwrap_or_default();
+    s.call("sim.fault.add", json!({ "kind": "out_of_range", "value": "inf", "channels": ["AF8"], "duration_s": 2.0 })).unwrap_or_default();
+    for _ in 0..30 {
+        s.call("clock.advance", json!({ "seconds": 0.1 })).unwrap_or_default();
+    }
+    let Some((_, sig)) = s.live_signal() else { panic!("no signal") };
+    let count = |ch: usize, f: u8| sig.last_flags(ch, 2560).iter().filter(|x| **x == f).count();
+    let rate = sig.rate as usize;
+    // ~1 s gap on every channel, ~1 s of bad AF8 after it, the rest ok.
+    for ch in 0..4 {
+        assert!((rate * 8 / 10..=rate * 12 / 10).contains(&count(ch, FLAG_GAP)), "ch {ch}: gap {}", count(ch, FLAG_GAP));
+    }
+    assert!(count(2, FLAG_BAD) > rate / 2, "AF8 bad {}", count(2, FLAG_BAD));
+    assert_eq!(count(1, FLAG_BAD), 0);
+    assert!(count(1, FLAG_OK) > rate * 3);
+    assert!(sig.last(2, 2560, true).iter().all(|x| x.is_finite()));
+}

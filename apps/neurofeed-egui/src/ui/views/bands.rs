@@ -2,7 +2,7 @@
 //! the chosen electrodes, one line per visible band), or per-channel bars.
 
 use crate::ui::theme;
-use egui::{Align2, FontId, Pos2, Rect, Sense, Stroke, Vec2};
+use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use std::cell::RefCell;
 
 /// View-local chips (not app state, like legacy): over-time vs bars,
@@ -159,18 +159,31 @@ fn over_time(ui: &mut egui::Ui, state: &AppState, n: usize, chips: Chips) {
     super::plot::label(&p, plot.right_bottom() + Vec2::new(0.0, 4.0), Align2::RIGHT_TOP, end);
     super::plot::label(&p, plot.left_top() + Vec2::new(4.0, 0.0), Align2::LEFT_TOP, unit);
     for band in Band::ALL.into_iter().filter(|b| chips.bands[b.index()]) {
-        let pts: Vec<Pos2> = state
-            .bands
-            .iter()
-            .filter_map(|s| {
-                let x = s.time as f32 - now;
-                let v = value(s, n, chips.electrodes, band, state.band_scale)?;
-                (x >= -span && x <= 0.0).then(|| super::plot::to_screen(plot, (-span, 0.0), (y0, y1), x, v.clamp(y0, y1)))
-            })
-            .collect();
-        super::plot::trace(&p, pts, theme::band_color(band));
+        // Break the line where snapshots stop (disconnect, dropped data);
+        // values off the axis are clipped and marked red at the edge.
+        let (mut run, mut prev) = (Vec::new(), f64::NEG_INFINITY);
+        for s in state.bands.iter() {
+            let x = s.time as f32 - now;
+            let Some(v) = value(s, n, chips.electrodes, band, state.band_scale) else { continue };
+            if !(x >= -span && x <= 0.0) {
+                continue;
+            }
+            if s.time - prev > GAP_S {
+                super::plot::trace(&p, std::mem::take(&mut run), theme::band_color(band));
+            }
+            prev = s.time;
+            let pt = super::plot::to_screen(plot, (-span, 0.0), (y0, y1), x, v.clamp(y0, y1));
+            if !(y0..=y1).contains(&v) {
+                p.circle_filled(pt, 1.6, Color32::from_rgb(0xEF, 0x53, 0x50));
+            }
+            run.push(pt);
+        }
+        super::plot::trace(&p, run, theme::band_color(band));
     }
 }
+
+/// Snapshots come at 10 Hz; a longer silence is a gap.
+const GAP_S: f64 = 0.5;
 
 fn channel_card(ui: &mut egui::Ui, size: Vec2, name: &str, ch: usize, snapshot: &BandSnapshot, scale: BandScale) {
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());

@@ -11,6 +11,7 @@ pub mod ai;
 pub mod artifacts;
 pub mod audio;
 mod command;
+pub mod faults;
 pub mod feedback;
 pub mod import;
 pub mod nerd;

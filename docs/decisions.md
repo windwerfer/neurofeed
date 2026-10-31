@@ -232,3 +232,8 @@ Settings is a section rail (General, Devices, Training, AI, Recording, About) wi
   cpal's AAudio buffer size is the matching knob.
 - Arrow glyphs (→ ▶ ⏸ …) come from a 12 KB DejaVu Sans subset as a font
   fallback (DejaVu licence in THIRD_PARTY_NOTICES.md).
+
+## 2026-10-31 — simulator faults
+- `sim.fault.add {kind, duration_s?, channels?, reconnect_after_s?, clean_fraction?, value?}` / `sim.fault.clear {id?}` (kinds: disconnect, movement, blink, clench, noise, spikes, glitch, out_of_range). They show in `app.status.faults`. Options are flat and typed (`kind` is an enum), and an option for the wrong kind is refused.
+- Every device's NaN / inf / |x| > 2000 µV samples are zeroed before the recorder and filters see them (protects the IIR state). The pad scores 0 for 2 s, and its samples are flagged `FLAG_BAD`. Missing sample time is filled with flagged zeros (`FLAG_GAP`). Raw EEG shades gaps grey and bad data red, and draws clipped points red. Bands break the line on gaps.
+- Batch limits: see docs/batch-limits.md. history.delete / history.import / recovery.* are now refused in batches, like ai.install / ai.remove.
