@@ -20,7 +20,7 @@ jobs:
   deny:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check advisories bans licenses sources
@@ -28,7 +28,7 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: System libs (ALSA for cpal, D-Bus for btleplug)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2-dev libdbus-1-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
@@ -43,7 +43,7 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -52,8 +52,8 @@ jobs:
       - name: Core crates stay wasm-clean
         run: cargo check --target wasm32-unknown-unknown -p nf-types -p nf-dsp -p nf-format -p nf-sim -p nf-feedback -p nf-store -p nf-core
       - run: cargo clippy --target wasm32-unknown-unknown -p neurofeed-egui -- -D warnings
-      - uses: jetli/trunk-action@v0.5.0
+      - uses: taiki-e/install-action@v2
         with:
-          version: latest
+          tool: trunk
       - run: trunk build --release
         working-directory: apps/neurofeed-egui
