@@ -290,6 +290,65 @@ fn debug(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     if ui.checkbox(&mut on, "Show simulated devices and fault injection").changed() {
         set(out, SettingsPatch { debug: Some(on), ..Default::default() });
     }
+    if on {
+        faults(ui, session, out);
+    }
+}
+
+/// Debug: inject timed simulator faults mid-stream (`sim.fault.add` / `.clear`).
+fn faults(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
+    use nf_core::faults::{BadValue, FaultTag};
+    if let Err(why) = session.enabled("sim.fault.add") {
+        ui.weak(format!("Fault injection: {why}"));
+        return;
+    }
+    let id = egui::Id::new("fault_duration");
+    let mut dur: f64 = ui.data(|d| d.get_temp(id)).unwrap_or(5.0);
+    ui.horizontal(|ui| {
+        ui.label("Inject fault for");
+        ui.add(egui::DragValue::new(&mut dur).range(1.0..=600.0).suffix(" s"));
+        ui.weak("(all pads; disconnect reconnects after it)");
+    });
+    ui.data_mut(|d| d.insert_temp(id, dur));
+    let kinds = [
+        ("Disconnect", FaultTag::Disconnect),
+        ("Movement", FaultTag::Movement),
+        ("Blink", FaultTag::Blink),
+        ("Jaw clench", FaultTag::Clench),
+        ("Noise 20 % clean", FaultTag::Noise),
+        ("Spikes", FaultTag::Spikes),
+        ("Glitch", FaultTag::Glitch),
+        ("NaN values", FaultTag::OutOfRange),
+    ];
+    ui.horizontal_wrapped(|ui| {
+        for (label, kind) in kinds {
+            if ui.button(label).clicked() {
+                let disc = kind == FaultTag::Disconnect;
+                out.push(Command::SimFaultAdd {
+                    kind,
+                    reconnect_after_s: disc.then_some(dur),
+                    clean_fraction: (kind == FaultTag::Noise).then_some(0.2),
+                    value: (kind == FaultTag::OutOfRange).then_some(BadValue::Nan),
+                    duration_s: (!disc).then_some(dur),
+                    channels: Vec::new(),
+                });
+            }
+        }
+    });
+    let now = session.state().time;
+    for f in &session.state().faults {
+        ui.horizontal(|ui| {
+            let left = f.end().map_or("until cleared".into(), |e| format!("{:.0} s left", (e - now).max(0.0)));
+            let chans = if f.channels.is_empty() { "all".into() } else { f.channels.join(", ") };
+            ui.monospace(format!("#{} {:?} · {chans} · {left}", f.id, f.kind));
+            if ui.small_button("Clear").clicked() {
+                out.push(Command::SimFaultClear { id: Some(f.id) });
+            }
+        });
+    }
+    if !session.state().faults.is_empty() && ui.button("Clear all faults").clicked() {
+        out.push(Command::SimFaultClear { id: None });
+    }
 }
 
 fn agents(ui: &mut egui::Ui, shell: &mut crate::ui::Shell) {

@@ -196,6 +196,20 @@ impl Signal {
         }
     }
 
+    /// While no data arrives (disconnect): extend every channel's gap up to
+    /// `now` so plots keep scrolling and show the dropout as it happens.
+    pub fn pad_to(&mut self, now: f64) {
+        for ch in 0..self.raw.len() {
+            let Some(t) = self.last_t[ch] else { continue };
+            let n = ((now - t) * self.rate).floor();
+            if n >= GAP_MIN_SAMPLES {
+                self.quality[ch] = 0.0;
+                self.fill_gap(ch, t + (n + 1.0) / self.rate);
+                self.last_t[ch] = Some(t + n / self.rate);
+            }
+        }
+    }
+
     /// [`Self::push`], marking the packet's samples bad (they were NaN / inf
     /// / beyond the ADC and got zeroed) when `bad`.
     pub fn push_flagged(&mut self, p: &EegPacket, bad: bool) -> Option<BandSnapshot> {
@@ -229,6 +243,17 @@ impl Signal {
             return None;
         }
         let w = self.window_len();
+        // A window spanning a dropout has no meaningful band powers: no
+        // snapshot (plots break the line) and those pads score 0.
+        let gapped: Vec<bool> = self.flags.iter().map(|f| f.iter().rev().take(w).any(|x| *x == FLAG_GAP)).collect();
+        if gapped.iter().any(|g| *g) {
+            for (q, g) in self.quality.iter_mut().zip(&gapped) {
+                if *g {
+                    *q = 0.0;
+                }
+            }
+            return None;
+        }
         let mut powers = Vec::with_capacity(self.filters.len());
         for i in 0..self.filters.len() {
             let fp = psd(&tail(&self.filtered[i], w)?, self.rate)?;

@@ -732,6 +732,9 @@ impl Session {
         if let Some(dev) = &self.state.device {
             if crate::faults::inject(&self.state.faults, dev, &mut packets, &mut optical, &mut accel) {
                 link = nf_types::LinkState::Lost { reason: "simulated disconnect".into() };
+                if let Some(sig) = self.live.signal.as_mut().filter(|_| !self.state.paused) {
+                    sig.pad_to(now);
+                }
             }
         }
         if self.state.link.as_ref() != Some(&link) {

@@ -146,3 +146,14 @@ fn bad_fault_params_are_rejected() {
     assert!(fails(&s, "sim.fault.add", json!({ "kind": "blink", "clean_fraction": 0.5 })).contains("does not apply"));
     assert!(s.call("command_run", json!({ "id": "sim.fault.add", "params": { "kind": "warp" } })).is_err());
 }
+
+#[test]
+fn mid_stream_disconnect_zeroes_quality_and_pauses_band_snapshots() {
+    let s = sim();
+    run(&s, "sim.fault.add", json!({ "kind": "disconnect", "reconnect_after_s": 3.0 }));
+    adv(&s, 2);
+    assert!(pads(&s).iter().all(|(_, q)| *q == 0.0), "{:?}", pads(&s));
+    adv(&s, 5);
+    assert_eq!(link(&s), "streaming");
+    assert!(pads(&s).iter().all(|(_, q)| *q >= 60.0), "recovers: {:?}", pads(&s));
+}
