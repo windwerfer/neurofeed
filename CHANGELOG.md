@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Feedback engine and AI models.
 - Session import/export.
 - LSL and OSC streaming.
+- Release packaging (`release.yml`, `docs/release.md`): signed Android APKs per ABI
+  (arm64-v8a, armeabi-v7a), Linux tarball + AppImage, Flatpak, Windows x64 zip,
+  macOS arm64 DMG. Reproducible-APK check (`repro-android.yml`) and local build
+  scripts under `scripts/`.
 
 ### Removed
 - The Flutter app. Its last version is tagged `pre-rust-port`

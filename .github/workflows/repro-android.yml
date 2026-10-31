@@ -1,0 +1,57 @@
+# Reproducibility check: build the release APKs twice on separate runners with the same
+# throwaway key and compare sha256 per ABI. Manual + weekly.
+name: repro-android
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 4 * * 0"
+jobs:
+  keystore:
+    runs-on: ubuntu-24.04
+    outputs:
+      keystore-b64: ${{ steps.gen.outputs.keystore-b64 }}
+    steps:
+      - id: gen
+        run: |
+          keytool -genkeypair -keystore /tmp/repro.jks -alias release -keyalg RSA -keysize 2048 \
+            -validity 10000 -storepass android123 -keypass android123 -dname "CN=NeuroFeed repro check"
+          echo "keystore-b64=$(base64 -w0 /tmp/repro.jks)" >> "$GITHUB_OUTPUT"
+  build1:
+    needs: keystore
+    uses: ./.github/workflows/_android-apk.yml
+    with:
+      artifact-name: apk-1
+      version: 0.0.0-repro
+      keystore-b64: ${{ needs.keystore.outputs.keystore-b64 }}
+  build2:
+    needs: keystore
+    uses: ./.github/workflows/_android-apk.yml
+    with:
+      artifact-name: apk-2
+      version: 0.0.0-repro
+      keystore-b64: ${{ needs.keystore.outputs.keystore-b64 }}
+  compare:
+    needs: [build1, build2]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v7
+        with: { name: apk-1, path: a }
+      - uses: actions/download-artifact@v7
+        with: { name: apk-2, path: b }
+      - name: Compare sha256 per ABI
+        run: |
+          fail=0
+          for f in a/*.apk; do
+            n=$(basename "$f")
+            h1=$(sha256sum "a/$n" | cut -d' ' -f1); h2=$(sha256sum "b/$n" | cut -d' ' -f1)
+            echo "$n  build1=$h1  build2=$h2"
+            if [ "$h1" = "$h2" ]; then echo "OK: $n is byte-identical"
+            else echo "::error::$n differs between the two builds"; fail=1
+              (cd a && unzip -qo "$n" -d "x-$n"); (cd b && unzip -qo "$n" -d "x-$n")
+              diff -rq "a/x-$n" "b/x-$n" || true
+            fi
+          done
+          { echo "| APK | build 1 | build 2 |"; echo "|---|---|---|"
+            for f in a/*.apk; do n=$(basename "$f"); echo "| $n | \`$(sha256sum "a/$n"|cut -c1-16)\` | \`$(sha256sum "b/$n"|cut -c1-16)\` |"; done
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $fail

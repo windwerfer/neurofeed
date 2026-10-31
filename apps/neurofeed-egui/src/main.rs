@@ -1,4 +1,5 @@
 //! Entry points. The only platform-specific code in the crate lives here.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")] // no console window in release
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result<()> {

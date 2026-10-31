@@ -1,5 +1,7 @@
-# Android APK (apps/neurofeed-android): cargo-ndk builds libneurofeed.so for
-# arm64-v8a + x86_64, Gradle packages it. Versions match app/build.gradle.kts
+# Android push CI (no secrets): unsigned per-ABI release APKs for arm64-v8a +
+# armeabi-v7a and an x86_64 debug APK for the emulator, via scripts/build-android.sh.
+# Signed release APKs: release.yml; reproducibility check: repro-android.yml.
+# Versions match app/build.gradle.kts
 # (compileSdk 35, NDK 27.2.12479018, JDK 17, minSdk 26).
 name: android
 on:
@@ -14,7 +16,6 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   NDK_VERSION: 27.2.12479018
-  ABIS: arm64-v8a,x86_64
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -34,7 +35,7 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
       - uses: Swatinem/rust-cache@v2
         with:
           key: android
@@ -42,12 +43,12 @@ jobs:
         with:
           tool: cargo-ndk
       - uses: gradle/actions/setup-gradle@v5
-      - name: Debug + unsigned release APK
-        working-directory: apps/neurofeed-android/android
-        run: ./gradlew --no-daemon assembleDebug assembleRelease -Pabis=$ABIS
-      - run: ls -la apps/neurofeed-android/android/app/build/outputs/apk/*/
+      - name: x86_64 debug APK (emulator)
+        run: scripts/build-android.sh --debug --abis x86_64
+      - name: Unsigned release APKs (arm64-v8a, armeabi-v7a)
+        run: scripts/build-android.sh
       - uses: actions/upload-artifact@v6
         with:
           name: neurofeed-android-apk
-          path: apps/neurofeed-android/android/app/build/outputs/apk/*/*.apk
+          path: dist/*.apk
           if-no-files-found: error

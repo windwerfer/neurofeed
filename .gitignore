@@ -70,3 +70,5 @@ feedback_gym/corpora/external/*.npz
 /.flatpak-builder/
 target/
 dist/
+/flatpak/cargo-sources.json
+/.flatpak-repo/

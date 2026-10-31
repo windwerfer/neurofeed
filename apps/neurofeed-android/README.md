@@ -17,6 +17,7 @@ There's no Flutter and no webview.
 cd apps/neurofeed-android/android
 ./gradlew assembleDebug                   # all ABIs: arm64-v8a, armeabi-v7a, x86_64
 ./gradlew assembleDebug -Pabis=x86_64     # emulator only
+../../../scripts/build-android.sh           # release APK per ARM ABI -> dist/ (docs/release.md)
 ```
 
 Gradle calls `cargo ndk` (`cargo install cargo-ndk`; rustup targets aarch64/armv7/x86_64-linux-android).

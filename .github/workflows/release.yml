@@ -1,0 +1,134 @@
+# Release packaging for every platform; assets are attached to the GitHub release.
+#   release published          -> build everything, upload to that release
+#   workflow_dispatch tag=vX.Y.Z -> same for an existing release (dry-run = build only)
+# Local equivalents: scripts/build-android.sh, scripts/package-{linux,flatpak,macos}.sh,
+# scripts/package-windows.ps1 (docs/release.md).
+name: release
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach to (e.g. v0.10.0); empty = version from Cargo.toml, no upload
+        required: false
+        type: string
+      dry-run:
+        description: Build everything but do not upload
+        required: false
+        type: boolean
+        default: true
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  cancel-in-progress: false
+env:
+  RUST_VERSION: "1.99.1"
+  CARGO_TERM_COLOR: always
+jobs:
+  meta:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      upload: ${{ steps.v.outputs.upload }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          DRY: ${{ inputs.dry-run }}
+        run: |
+          if [ -n "$TAG" ]; then V="${TAG#v}"; else V=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1); fi
+          UPLOAD=false
+          if [ -n "$TAG" ] && [ "$DRY" != "true" ]; then
+            if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then UPLOAD=true
+            else echo "::warning::no GitHub release '$TAG'; building without upload"; fi
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"; echo "tag=$TAG" >> "$GITHUB_OUTPUT"; echo "upload=$UPLOAD" >> "$GITHUB_OUTPUT"
+          echo "version=$V tag=$TAG upload=$UPLOAD"
+
+  android:
+    needs: meta
+    uses: ./.github/workflows/_android-apk.yml
+    with:
+      artifact-name: release-android
+      version: ${{ needs.meta.outputs.version }}
+      require-signing: true
+    secrets: inherit
+
+  linux:
+    needs: meta
+    # Oldest supported hosted runner: the binary needs glibc >= 2.35.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2-dev libdbus-1-dev pkg-config libfuse2 file
+      - uses: dtolnay/rust-toolchain@master
+        with: { toolchain: "${{ env.RUST_VERSION }}" }
+      - run: scripts/package-linux.sh --version "${{ needs.meta.outputs.version }}"
+      - uses: actions/upload-artifact@v6
+        with: { name: release-linux, path: "dist/*", if-no-files-found: error }
+
+  flatpak:
+    needs: meta
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Offline cargo sources + metainfo release entry
+        run: |
+          python3 -m pip install --user aiohttp tomlkit 2>/dev/null || { dnf install -y python3-aiohttp python3-tomlkit || true; }
+          scripts/package-flatpak.sh --version "${{ needs.meta.outputs.version }}" --sources-only
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: neurofeed-${{ needs.meta.outputs.version }}-x86_64.flatpak
+          manifest-path: flatpak/org.windwerfer.neurofeed.yml
+          cache-key: flatpak-neurofeed-25.08-${{ hashFiles('Cargo.lock') }}
+          upload-artifact: false
+      - uses: actions/upload-artifact@v6
+        with: { name: release-flatpak, path: "*.flatpak", if-no-files-found: error }
+
+  windows:
+    needs: meta
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with: { toolchain: "${{ env.RUST_VERSION }}", targets: x86_64-pc-windows-msvc }
+      - run: pwsh scripts/package-windows.ps1 -Version "${{ needs.meta.outputs.version }}"
+      - uses: actions/upload-artifact@v6
+        with: { name: release-windows, path: "dist/*", if-no-files-found: error }
+
+  macos:
+    needs: meta
+    runs-on: macos-14 # Apple Silicon
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with: { toolchain: "${{ env.RUST_VERSION }}", targets: aarch64-apple-darwin }
+      - run: scripts/package-macos.sh --version "${{ needs.meta.outputs.version }}"
+      - uses: actions/upload-artifact@v6
+        with: { name: release-macos, path: "dist/*", if-no-files-found: error }
+
+  upload:
+    needs: [meta, android, linux, flatpak, windows, macos]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v7
+        with: { pattern: "release-*", path: out, merge-multiple: true }
+      - name: Checksums
+        run: cd out && sha256sum * | tee SHA256SUMS.txt && { echo '```'; cat SHA256SUMS.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload to the release
+        if: needs.meta.outputs.upload == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ needs.meta.outputs.tag }}" out/* --clobber -R "$GITHUB_REPOSITORY"
+      - if: needs.meta.outputs.upload != 'true'
+        run: echo "Dry run / no release - nothing uploaded."

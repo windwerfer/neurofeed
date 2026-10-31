@@ -12,6 +12,8 @@ Linux desktop needs the usual X11/Wayland + OpenGL libraries.
 | Web static build | `cd apps/neurofeed-egui && trunk build --release` → `dist/` |
 | Tests | `cargo test` |
 | Lints | `cargo clippy --all-targets -- -D warnings` and `cargo fmt --all --check` |
+| Android APKs (per ABI) | `scripts/build-android.sh` (see [release.md](release.md)) |
+| Release packages | `scripts/package-{linux,flatpak,macos}.sh`, `scripts/package-windows.ps1` ([release.md](release.md)) |
 | WASM type check | `cargo check -p neurofeed-egui --target wasm32-unknown-unknown` (nf-mcp is native only) |
 
 Rendering uses eframe's `glow` (OpenGL / WebGL) backend to keep the dependency
