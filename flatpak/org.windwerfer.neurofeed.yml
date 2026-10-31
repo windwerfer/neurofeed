@@ -1,5 +1,6 @@
 # Plain Rust Flatpak manifest. Offline cargo sources: flatpak/cargo-sources.json is generated
-# from Cargo.lock by scripts/package-flatpak.sh (flatpak-cargo-generator); not committed.
+# from Cargo.lock by scripts/package-flatpak.sh (flatpak-cargo-generator); not committed,
+# nor is flatpak/VERSION.
 id: org.windwerfer.neurofeed
 runtime: org.freedesktop.Platform
 runtime-version: "25.08"
@@ -25,7 +26,8 @@ modules:
   - name: neurofeed
     buildsystem: simple
     build-commands:
-      - cargo --offline build --release --locked -p neurofeed-egui
+      # flatpak/VERSION is written by scripts/package-flatpak.sh (scripts/version.sh); absent = Cargo.toml.
+      - if [ -s flatpak/VERSION ]; then export NEUROFEED_VERSION="$(cat flatpak/VERSION)"; fi; cargo --offline build --release --locked -p neurofeed-egui
       - install -Dm755 target/release/neurofeed-egui /app/bin/neurofeed
       - install -Dm644 flatpak/org.windwerfer.neurofeed.desktop /app/share/applications/org.windwerfer.neurofeed.desktop
       - install -Dm644 flatpak/org.windwerfer.neurofeed.metainfo.xml /app/share/metainfo/org.windwerfer.neurofeed.metainfo.xml

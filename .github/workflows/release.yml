@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to attach to (e.g. v0.10.0); empty = version from Cargo.toml, no upload
+        description: Release tag to attach to (e.g. v0.61.0); empty = version from git describe, no upload
         required: false
         type: string
       dry-run:
@@ -35,13 +35,16 @@ jobs:
       upload: ${{ steps.v.outputs.upload }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # tags for scripts/version.sh
       - id: v
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
           DRY: ${{ inputs.dry-run }}
         run: |
-          if [ -n "$TAG" ]; then V="${TAG#v}"; else V=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1); fi
+          # One version for every job: the release tag, else scripts/version.sh (git describe / Cargo.toml).
+          if [ -n "$TAG" ]; then V="${TAG#v}"; else V=$(scripts/version.sh); fi
           UPLOAD=false
           if [ -n "$TAG" ] && [ "$DRY" != "true" ]; then
             if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then UPLOAD=true

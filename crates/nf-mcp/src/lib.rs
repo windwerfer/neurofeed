@@ -367,7 +367,7 @@ fn dispatch(s: &mut Session, clock: ClockMode, tool: &str, args: serde_json::Map
 impl ServerHandler for NfMcp {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("neurofeed", env!("CARGO_PKG_VERSION")))
+            .with_server_info(Implementation::new("neurofeed", nf_core::APP_VERSION))
             .with_instructions(INSTRUCTIONS)
     }
 

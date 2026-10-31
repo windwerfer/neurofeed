@@ -15,7 +15,10 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-[[ -n "$VERSION" ]] || VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)"
+# Version: --version > $NEUROFEED_VERSION > git tag > Cargo.toml (scripts/version.sh); baked into the binary.
+[[ -n "$VERSION" ]] && export NEUROFEED_VERSION="$VERSION"
+VERSION="$("$ROOT/scripts/version.sh")"
+export NEUROFEED_VERSION="$VERSION"
 APPIMAGETOOL_VERSION=1.9.0
 ID=org.windwerfer.neurofeed
 export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$ROOT" log -1 --format=%ct)}"

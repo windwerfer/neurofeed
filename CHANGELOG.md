@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (arm64-v8a, armeabi-v7a), Linux tarball + AppImage, Flatpak, Windows x64 zip,
   macOS arm64 DMG. Reproducible-APK check (`repro-android.yml`) and local build
   scripts under `scripts/`.
+- Build version from the git tag (`scripts/version.sh`; override with
+  `NEUROFEED_VERSION` or `--version`), shown in About, sessions and MCP.
+
+### Changed
+- License metadata is Apache-2.0 everywhere (Cargo workspace said MIT by mistake).
+  `crates/pure-lsl` stays MIT.
 
 ### Removed
 - The Flutter app. Its last version is tagged `pre-rust-port`

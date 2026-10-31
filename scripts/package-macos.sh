@@ -16,7 +16,10 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-[[ -n "$VERSION" ]] || VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)"
+# Version: --version > $NEUROFEED_VERSION > git tag > Cargo.toml (scripts/version.sh); baked into the binary.
+[[ -n "$VERSION" ]] && export NEUROFEED_VERSION="$VERSION"
+VERSION="$("$ROOT/scripts/version.sh")"
+export NEUROFEED_VERSION="$VERSION"
 export MACOSX_DEPLOYMENT_TARGET=11.0 # keep in sync with LSMinimumSystemVersion
 IDENTITY="${MACOS_SIGN_IDENTITY:--}"
 TARGET=aarch64-apple-darwin
@@ -27,7 +30,7 @@ WORK="$TARGET_DIR/macos-package"; APP="$WORK/NeuroFeed.app"
 DMG="$ROOT/dist/neurofeed-$VERSION-macos-arm64.dmg"
 rm -rf "$WORK"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$ROOT/dist"
 cp "$TARGET_DIR/$TARGET/release/neurofeed-egui" "$APP/Contents/MacOS/NeuroFeed"
-sed "s/@VERSION@/$VERSION/g" "$ROOT/packaging/macos/Info.plist.in" >"$APP/Contents/Info.plist"
+sed -e "s/@VERSION@/$VERSION/g" -e "s/@SHORT_VERSION@/${VERSION%%-*}/g" "$ROOT/packaging/macos/Info.plist.in" >"$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist"
 printf 'APPL????' >"$APP/Contents/PkgInfo"
 cp "$ROOT/LICENSE.txt" "$ROOT/THIRD_PARTY_NOTICES.md" "$APP/Contents/Resources/"

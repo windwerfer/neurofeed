@@ -14,12 +14,16 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-[[ -n "$VERSION" ]] || VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)"
+# Version: --version > $NEUROFEED_VERSION > git tag > Cargo.toml (scripts/version.sh); baked into the binary.
+[[ -n "$VERSION" ]] && export NEUROFEED_VERSION="$VERSION"
+VERSION="$("$ROOT/scripts/version.sh")"
+export NEUROFEED_VERSION="$VERSION"
 # Pinned flatpak-builder-tools commit for the generator.
 GEN_REV=master
 GEN="${TMPDIR:-/tmp}/flatpak-cargo-generator.py"
 curl -fsSL -o "$GEN" "https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/$GEN_REV/cargo/flatpak-cargo-generator.py"
 python3 "$GEN" "$ROOT/Cargo.lock" -o "$ROOT/flatpak/cargo-sources.json"
+printf '%s\n' "$VERSION" >"$ROOT/flatpak/VERSION"
 # Release entry in the metainfo for this build.
 DATE="$(date -u -d "@$(git -C "$ROOT" log -1 --format=%ct)" +%F)"
 sed -i -e "s/VERSION_PLACEHOLDER/$VERSION/" -e "s/DATE_PLACEHOLDER/$DATE/" "$ROOT/flatpak/org.windwerfer.neurofeed.metainfo.xml"

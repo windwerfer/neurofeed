@@ -8,24 +8,16 @@ plugins {
 val repoRoot = rootDir.resolve("../../..").canonicalFile
 val abiList = (findProperty("abis") as String).split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
-/** Version from the newest git tag (`X.Y.Z` or `vX.Y.Z`); 0.1.0 when untagged. */
-fun gitVersion(): Pair<String, Int> {
-    val tag = try {
-        providers.exec {
-            commandLine("git", "-C", repoRoot.path, "describe", "--tags", "--abbrev=0", "--match", "[v0-9]*")
-            isIgnoreExitValue = true
-        }.standardOutput.asText.get().trim()
-    } catch (e: Exception) { "" }
-    val m = Regex("""^v?(\d+)\.(\d+)\.(\d+)""").find(tag) ?: return "0.1.0" to 100
-    val (a, b, c) = m.destructured
-    return "$a.$b.$c" to (a.toInt() * 10000 + b.toInt() * 100 + c.toInt()).coerceAtLeast(1)
-}
-val (gitVerName, gitVerCode) = gitVersion()
-
-/** `-PversionName=1.2.3` (release workflows pass the tag) overrides git describe. */
-val verName = (findProperty("versionName") as String?)?.removePrefix("v") ?: gitVerName
+/**
+ * Version name: `-PversionName=…` > scripts/version.sh ($NEUROFEED_VERSION > git tag on/before
+ * HEAD > Cargo.toml). Base versionCode from its X.Y.Z: X*10000 + Y*100 + Z (Y, Z < 100).
+ */
+val verName = (findProperty("versionName") as String?)?.removePrefix("v")
+    ?: providers.exec { commandLine(repoRoot.resolve("scripts/version.sh").path) }
+        .standardOutput.asText.get().trim()
 val verCode = Regex("""^(\d+)\.(\d+)\.(\d+)""").find(verName)?.destructured
-    ?.let { (a, b, c) -> (a.toInt() * 10000 + b.toInt() * 100 + c.toInt()).coerceAtLeast(1) } ?: gitVerCode
+    ?.let { (a, b, c) -> (a.toInt() * 10000 + b.toInt() * 100 + c.toInt()).coerceAtLeast(1) }
+    ?: error("version '$verName' does not start with X.Y.Z")
 
 /**
  * Per-ABI versionCode (docs/release.md): `base * 10 + abiDigit`, base = X*10000+Y*100+Z.
@@ -119,6 +111,7 @@ dependencies {
  */
 fun cargoTask(name: String, release: Boolean) = tasks.register<Exec>(name) {
     workingDir = repoRoot
+    environment("NEUROFEED_VERSION", verName) // nf_core::APP_VERSION in the .so
     val args = mutableListOf("cargo", "ndk", "-P", "26", "-o", file("src/main/jniLibs").path)
     abiList.forEach { args += listOf("-t", it) }
     args += listOf("build", "-p", "neurofeed-android")

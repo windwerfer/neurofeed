@@ -7,6 +7,13 @@
 //! threads or filesystem: compiles to wasm32.
 #![forbid(unsafe_code)]
 
+/// App version shown in the UI, sessions and MCP: `NEUROFEED_VERSION` at build time
+/// (set by `scripts/version.sh` / the release workflows from the git tag), else Cargo.toml.
+pub const APP_VERSION: &str = match option_env!("NEUROFEED_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 pub mod ai;
 pub mod artifacts;
 pub mod audio;

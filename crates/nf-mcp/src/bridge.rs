@@ -184,7 +184,7 @@ fn serve(stream: TcpStream, token: &str, tx: &Sender<Request>, waker: &Waker, st
         return;
     }
     let _ = r.get_ref().set_read_timeout(None);
-    if send(&mut w, &json!({ "ok": "neurofeed", "version": env!("CARGO_PKG_VERSION") })).is_err() {
+    if send(&mut w, &json!({ "ok": "neurofeed", "version": nf_core::APP_VERSION })).is_err() {
         return;
     }
     while !stop.load(Ordering::Relaxed) {

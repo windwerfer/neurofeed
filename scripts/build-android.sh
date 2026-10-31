@@ -26,8 +26,10 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-[[ -n "$VERSION" ]] || VERSION="$(git -C "$ROOT" describe --tags --abbrev=0 --match '[v0-9]*' 2>/dev/null || echo 0.1.0)"
-VERSION="${VERSION#v}"
+# Version: --version > $NEUROFEED_VERSION > git tag > Cargo.toml (scripts/version.sh); baked into the binary.
+[[ -n "$VERSION" ]] && export NEUROFEED_VERSION="$VERSION"
+VERSION="$("$ROOT/scripts/version.sh")"
+export NEUROFEED_VERSION="$VERSION"
 : "${ANDROID_HOME:?set ANDROID_HOME}"
 export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/27.2.12479018}"
 BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"

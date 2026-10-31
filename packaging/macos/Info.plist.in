@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- scripts/package-macos.sh substitutes @VERSION@. -->
+<!-- scripts/package-macos.sh substitutes @VERSION@ and @SHORT_VERSION@ (numeric X.Y.Z). -->
 <plist version="1.0">
 <dict>
   <key>CFBundleDevelopmentRegion</key><string>en</string>
@@ -10,8 +10,8 @@
   <key>CFBundleIdentifier</key><string>org.windwerfer.neurofeed</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>@VERSION@</string>
-  <key>CFBundleVersion</key><string>@VERSION@</string>
+  <key>CFBundleShortVersionString</key><string>@SHORT_VERSION@</string>
+  <key>CFBundleVersion</key><string>@SHORT_VERSION@</string>
   <key>CFBundleIconFile</key><string>NeuroFeed</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.healthcare-fitness</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>

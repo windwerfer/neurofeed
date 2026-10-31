@@ -5,7 +5,7 @@ use egui::RichText;
 const NOTICES: &str = include_str!("../../../../../THIRD_PARTY_NOTICES.md");
 
 pub(super) fn card(ui: &mut egui::Ui) {
-    ui.label(format!("NeuroFeed {} · Rust / egui build", env!("CARGO_PKG_VERSION")));
+    ui.label(format!("NeuroFeed {} · Rust / egui build", nf_core::APP_VERSION));
     ui.weak("Open-source EEG neurofeedback for Muse and similar headbands. Not a medical device: it does not diagnose or treat anything.");
     ui.horizontal(|ui| {
         ui.hyperlink_to("Source code", "https://github.com/windwerfer/neurofeed");

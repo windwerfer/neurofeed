@@ -16,6 +16,22 @@ Test run without a release: *Actions → release → Run workflow* with `dry-run
 everything builds, the artifacts stay on the run, nothing is uploaded. With a `tag` and
 `dry-run` off, the assets go to that existing release.
 
+## Version
+
+Every build takes its version from `scripts/version.sh` (Gradle, all `scripts/package-*`,
+`release.yml`), in this order:
+
+1. `--version X.Y.Z` on a script (`-Version` for `package-windows.ps1`, `-PversionName` for Gradle),
+   or the env var `NEUROFEED_VERSION` (local override)
+2. a release tag `X.Y.Z` / `vX.Y.Z` on HEAD → `X.Y.Z`
+3. the nearest such tag, `git describe` style → `X.Y.Z-<commits>-g<sha>` (dev builds)
+4. no tag at all (source tarball, shallow clone) → `version` in `Cargo.toml`
+
+Only plain release tags count (`0.1.0-ai_guardrail-01` and the like are ignored). A published
+release uses its tag. The scripts export `NEUROFEED_VERSION` into the cargo build, so the About
+view, session files and MCP server report it (`nf_core::APP_VERSION`, Cargo.toml version when
+unset). The version is a pure function of the commit, so reproducible builds stay reproducible.
+
 ## Android
 
 - One APK per ABI, ARM only (a fat APK is twice the size). x86_64 only as a debug APK in push CI
@@ -23,7 +39,7 @@ everything builds, the artifacts stay on the run, nothing is uploaded. With a `t
 - **versionCode** = `(X*10000 + Y*100 + Z) * 10 + abi`, abi digit `1` armeabi-v7a, `2` arm64-v8a,
   `3` x86, `4` x86_64, `0` universal. Example 0.9.2: armv7 `9021`, arm64 `9022`. arm64 is higher so
   64-bit devices always take it; this is the scheme F-Droid's `VercodeOperation` expects
-  (`10 * %c + 1`, `10 * %c + 2`). Version name comes from the tag (`-PversionName`), else `git describe`.
+  (`10 * %c + 1`, `10 * %c + 2`). versionName is the version above; versionCode uses its `X.Y.Z` (so Y and Z must stay below 100).
 - Signing: repo secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEYSTORE_ALIAS`, `KEY_PASSWORD`
   (APK Signature Scheme v2 + v3; minSdk 26). The release job fails without them and verifies
   every APK with `apksigner`. Without secrets the release APK is unsigned (push CI, F-Droid).

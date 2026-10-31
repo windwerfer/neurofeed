@@ -408,7 +408,7 @@ impl Session {
     fn context(&self, trained: bool) -> serde_json::Value {
         let s = &self.state;
         json!({
-            "app_version": env!("CARGO_PKG_VERSION"),
+            "app_version": crate::APP_VERSION,
             "protocol": trained.then_some(&s.feedback.protocol),
             "minutes": s.feedback.minutes,
             "percentile": s.feedback.percentile,
