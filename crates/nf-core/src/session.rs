@@ -199,6 +199,13 @@ impl Session {
         self.store.copy_to(path).map_err(|e| CoreError::BadRequest(e.0))
     }
 
+    /// Checkpoint the running recording right away (app going to the
+    /// background on mobile, where the OS may kill it without warning).
+    pub fn checkpoint_now(&mut self) {
+        self.live.next_checkpoint = f64::NEG_INFINITY;
+        self.checkpoint();
+    }
+
     /// Every [`crate::recovery::CHECKPOINT_S`] of recording: append the new
     /// body bytes and refresh the recovery doc.
     fn checkpoint(&mut self) {

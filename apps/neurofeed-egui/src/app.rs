@@ -28,6 +28,8 @@ pub struct NeuroFeedApp {
     no_tour: bool,
     /// Result of the last Settings → Storage move.
     store_note: Option<String>,
+    /// Last value sent to [`crate::platform::Platform::keep_screen_on`].
+    screen_on: bool,
 }
 
 impl NeuroFeedApp {
@@ -80,6 +82,7 @@ impl NeuroFeedApp {
             bridge: None,
             no_tour: false,
             store_note: None,
+            screen_on: false,
         }
     }
 
@@ -213,7 +216,23 @@ impl eframe::App for NeuroFeedApp {
                 crate::store::move_to(&mut self.session, std::path::Path::new(dir.trim())).unwrap_or_else(|e| format!("Move failed: {e}")),
             );
         }
+        self.platform_frame();
         ctx.request_repaint_after(REPAINT_INTERVAL);
+    }
+}
+
+impl NeuroFeedApp {
+    /// Android hooks: screen on while training, checkpoint when backgrounded.
+    fn platform_frame(&mut self) {
+        let Some(p) = crate::platform::get() else { return };
+        let training = self.session.state().feedback.phase.active();
+        if self.screen_on != training {
+            self.screen_on = training;
+            p.keep_screen_on(training);
+        }
+        if p.take_paused() {
+            self.session.checkpoint_now();
+        }
     }
 }
 

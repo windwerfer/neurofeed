@@ -268,6 +268,13 @@ fn export(session: &Session, id: u64, format: ExportFormat) -> String {
         Err(e) => return e.to_string(),
     };
     let ext = format.extension();
+    if let Some(p) = crate::platform::get() {
+        let mime = match format {
+            ExportFormat::Pdf => "application/pdf",
+            _ => "application/octet-stream",
+        };
+        return p.export(&format!("neurofeed-session-{id}.{ext}"), mime, bytes).unwrap_or_else(|e| format!("Export failed: {e}"));
+    }
     let dir = std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join("Downloads")).unwrap_or_else(std::env::temp_dir);
     let path = dir.join(format!("neurofeed-session-{id}.{ext}"));
     match std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&path, bytes)) {

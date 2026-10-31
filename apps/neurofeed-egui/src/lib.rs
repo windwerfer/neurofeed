@@ -5,6 +5,7 @@ pub mod app;
 pub mod audio;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod bridge;
+pub mod platform;
 pub mod store;
 pub mod ui;
 

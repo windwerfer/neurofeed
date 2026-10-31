@@ -189,6 +189,14 @@ must produce an error the user or agent can act on, never a panic.
 12. **Don't translate Dart 1:1** **(ours)**. Use the Flutter app for
     behaviour and naming, not for structure.
 
+### Adding a dependency
+
+- Justify it: std or a crate already in the tree is not enough.
+- Prefer the maintained, widely used option with minimal features (`default-features = false` plus what you need), at the latest compatible version.
+- Check the license (Apache-2.0 compatible, see `deny.toml`) and RustSec advisories.
+- Pin git deps to a `rev`, and add the repo to `[sources] allow-git` in `deny.toml`.
+- Run `cargo deny check` before committing (it is part of the gates).
+
 ## 4. MCP and the control channel
 
 - **Add a command, not a tool.** Tools are:

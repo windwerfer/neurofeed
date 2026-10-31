@@ -97,7 +97,7 @@ fn window(ui: &mut egui::Ui, session: &Session, st: &mut Ui, out: &mut Vec<Comma
 /// Desktop: a path field; web: the browser's file picker.
 fn source(ui: &mut egui::Ui, session: &Session, st: &mut Ui) {
     ui.horizontal(|ui| {
-        if cfg!(target_arch = "wasm32") {
+        if cfg!(target_arch = "wasm32") || crate::platform::get().is_some() {
             if ui.button("Choose file…").clicked() {
                 open_picker();
             }
@@ -156,11 +156,15 @@ fn read_path(_: &Session, path: &str) -> Pending {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn open_picker() {}
+fn open_picker() {
+    if let Some(p) = crate::platform::get() {
+        p.pick_import();
+    }
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 fn picked() -> Option<(String, Vec<u8>)> {
-    None
+    crate::platform::get()?.take_picked()
 }
 
 #[cfg(target_arch = "wasm32")]

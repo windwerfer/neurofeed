@@ -1,0 +1,1 @@
+EEG neurofeedback training with a Muse headband — native, offline, open source.

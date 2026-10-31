@@ -5,8 +5,11 @@ on:
   push:
     branches: [egui-prototype]
   pull_request:
-    paths: ["crates/**", "apps/**", "Cargo.toml", "Cargo.lock", ".github/workflows/rust-ci.yml"]
+    paths: ["crates/**", "apps/**", "Cargo.toml", "Cargo.lock", "deny.toml", ".github/workflows/rust-ci.yml"]
   workflow_dispatch:
+  # Weekly: new RustSec advisories appear for unchanged crates.
+  schedule:
+    - cron: "17 5 * * 1"
 concurrency:
   group: rust-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -14,7 +17,15 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
 jobs:
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories bans licenses sources
   native:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +40,7 @@ jobs:
       - run: cargo test --workspace
       - run: cargo build --release -p neurofeed-egui -p neurofeed-mcp
   wasm:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

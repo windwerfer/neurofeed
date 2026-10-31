@@ -210,6 +210,16 @@ fn calibration(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
 fn storage(ui: &mut egui::Ui, session: &Session, shell: &mut crate::ui::Shell) {
     let loc = &session.state().history_location;
     ui.label(format!("Sessions and settings are stored in: {loc}"));
+    if let Some(p) = crate::platform::get() {
+        ui.weak("Android: the database stays in app-private storage (removed with the app). Exports go to a folder you choose.");
+        ui.horizontal(|ui| {
+            ui.label(format!("Export folder: {}", p.folder_label().unwrap_or_else(|| "ask each time".into())));
+            if ui.button("Choose folder…").clicked() {
+                p.pick_folder();
+            }
+        });
+        return;
+    }
     ui.weak("Desktop: SQLite file (NF_DB overrides the path). Web: IndexedDB in this browser.");
     if cfg!(target_arch = "wasm32") || !std::path::Path::new(loc).is_file() {
         return;

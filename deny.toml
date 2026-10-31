@@ -1,0 +1,81 @@
+# cargo-deny: supply-chain gate (`cargo deny check`). See AGENTS.md "Adding a dependency".
+# Runs in /tmp/gates.sh-style local gates and in ci/rust-ci.yml (every push + weekly).
+
+[graph]
+all-features = false
+# Android + wasm are shipped targets too; check their dep trees.
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+  "aarch64-apple-darwin",
+  "aarch64-linux-android",
+  "wasm32-unknown-unknown",
+]
+exclude-dev = false
+
+[advisories]
+# RustSec: vulnerabilities always fail; unmaintained/yanked reported (see below).
+version = 2
+yanked = "deny"
+unmaintained = "workspace"   # direct deps of workspace crates only
+# All current findings are transitive and have no semver-compatible fix in the
+# lockfile (checked 2026-10-31). Each is reachable only through code paths we
+# do not feed untrusted input; revisit when the parent crate is updated
+# (see docs/dependencies.md).
+ignore = [
+  # zip <9 extract(): symlink/permission/SUID issues. Only *extraction to disk*
+  # is affected; we never call extract(). Pulled by candle-core 0.11 (zip 8),
+  # rlx 0.2.14 (zip 2 via rlx-dduf, zip 0.6 via npyz).
+  { id = "RUSTSEC-2026-0367", reason = "zip extract() unused; via candle-core/rlx" },
+  { id = "RUSTSEC-2026-0368", reason = "zip extract() unused; via candle-core/rlx" },
+  { id = "RUSTSEC-2026-0369", reason = "zip extract() unused; via candle-core/rlx" },
+  # zstd/zstd-safe: decoder issues on malformed input. Only used by rlx to read
+  # model packages we bundle ourselves (trusted input). Pinned rlx =0.2.14.
+  { id = "RUSTSEC-2026-0391", reason = "rlx-pkg reads only bundled model files" },
+  { id = "RUSTSEC-2026-0398", reason = "rlx-pkg reads only bundled model files" },
+  { id = "RUSTSEC-2026-0403", reason = "rlx-pkg reads only bundled model files" },
+  # quick-xml 0.30: DoS on hostile XML. Only parses D-Bus introspection XML from
+  # the local session bus (accesskit/atspi on Linux, egui 0.29). Fixed by egui bump.
+  { id = "RUSTSEC-2026-0194", reason = "local D-Bus introspection XML only; egui 0.29" },
+  { id = "RUSTSEC-2026-0195", reason = "local D-Bus introspection XML only; egui 0.29" },
+]
+
+[licenses]
+version = 2
+# Apache-2.0-compatible (permissive + weak copyleft file-level MPL).
+allow = [
+  "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "MIT", "MIT-0",
+  "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "0BSD", "CC0-1.0",
+  "Unicode-3.0", "Unicode-DFS-2016", "BSL-1.0", "MPL-2.0", "OFL-1.1",
+  "Ubuntu-font-1.0", "CDLA-Permissive-2.0", "Unlicense", "bzip2-1.0.6",
+  "LicenseRef-UFL-1.0",  # Ubuntu Font Licence, epaint_default_fonts (bundled font)
+]
+confidence-threshold = 0.8
+# Our own crates are unpublished workspace members.
+[licenses.private]
+ignore = true
+
+# muse-rs (our fork) has an Apache-2.0 LICENSE file but no `license` field.
+[[licenses.clarify]]
+name = "muse-rs"
+expression = "Apache-2.0"
+license-files = [{ path = "LICENSE", hash = 0x0 }]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# Known git deps, all pinned to a rev in Cargo.toml.
+allow-git = [
+  "https://github.com/windwerfer/muse-rs",   # our fork of eugenehp/muse-rs
+  "https://github.com/eugenehp/reve-rs",     # REVE EEG model (upstream)
+]
+# Note: rlx-cpu is vendored at vendor/rlx-cpu-0.2.14 via [patch.crates-io]
+# (patched to disable the default BLAS feature, commit f8411d4); path deps are
+# not checked as sources. Its
+# advisories are still matched against crates.io rlx-cpu 0.2.14.

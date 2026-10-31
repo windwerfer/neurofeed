@@ -1,0 +1,10 @@
+NeuroFeed is an open-source neurofeedback trainer for Muse EEG headbands.
+
+* Connects directly to the headband over Bluetooth LE — no cloud, no account.
+* Live raw EEG, band power, signal quality and movement views.
+* Guided calibration and feedback training sessions with audio/visual feedback.
+* Session history with PDF / data export via the system file picker.
+* Built-in simulator to try the app without a headband.
+
+All data stays in app-private storage on your phone unless you export it.
+Network streaming and the LAN bridge are off by default.
