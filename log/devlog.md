@@ -42,3 +42,11 @@
 - nf-dsp: heart_rate / spo2 / pulse_ac ported from rust/src/api/muse.rs (rate parameterised).
 - nf-core: Optics (30 s buffers, estimates every 1 s, 120-entry history); hr.get, spo2.get, ppg.get; sim.configure
   hr_bpm/spo2_pct/hrv_ms. egui HR+SpO2 view (values, IR wave, trend).
+
+## 2026-10-31: edf_export joins the workspace
+- Moved our EDF+ codec from `third_party/edf_export` to `crates/edf_export` (workspace member, zero deps).
+  `nf-format` takes it from `workspace.dependencies`. `third_party/` had no other tracked files and is gone.
+- `decode_edf_plus` split so the crate passes workspace clippy. Golden layout tests unchanged
+  (10 in edf_export, `edf_roundtrip` in nf-format, layers includes the crate). wasm `cargo check` ok.
+- Open: `.gitmodules` still names `third_party/{btleplug,muse-rs,reve-rs,luna-rs,brainflow,neurofeed.wiki}`;
+  those gitlinks are not in the index.

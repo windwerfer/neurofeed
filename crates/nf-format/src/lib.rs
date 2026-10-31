@@ -1,5 +1,5 @@
 //! L1 NeuroFeed recording formats, ported from `rust/src/api/session_format.rs`
-//! and wrapping `third_party/edf_export`:
+//! and wrapping the `edf_export` crate:
 //!
 //! - [`record`]: the tagged little-endian record codec (tags 1–10).
 //! - [`body`]: the NFEDBIN raw body (`magic, version 5, [u32 len][zstd frame]*`).

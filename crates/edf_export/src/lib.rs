@@ -43,14 +43,7 @@ pub struct EdfSignal {
 impl EdfSignal {
     /// Builds a signal with the standard EEG physical range ±2000 µV.
     pub fn eeg(label: impl Into<String>, samples_per_record: usize, data: Vec<f32>) -> Self {
-        Self {
-            label: label.into(),
-            samples_per_record,
-            physical_min: -2000.0,
-            physical_max: 2000.0,
-            prefiltering: String::new(),
-            data,
-        }
+        Self { label: label.into(), samples_per_record, physical_min: -2000.0, physical_max: 2000.0, prefiltering: String::new(), data }
     }
 }
 
@@ -177,14 +170,10 @@ fn validate(signals: &[EdfSignal], spec: &EdfFileSpec) -> Result<(), EdfError> {
         }
     }
     if spec.physical_dimension.len() > 8 {
-        return Err(EdfError::DimensionTooLong(
-            spec.physical_dimension.to_string(),
-        ));
+        return Err(EdfError::DimensionTooLong(spec.physical_dimension.to_string()));
     }
     let (y, m, d, h, mi, se) = spec.start;
-    if !(1985..=2084).contains(&y) || !(1..=12).contains(&m) || !(1..=31).contains(&d)
-        || h > 23 || mi > 59 || se > 59
-    {
+    if !(1985..=2084).contains(&y) || !(1..=12).contains(&m) || !(1..=31).contains(&d) || h > 23 || mi > 59 || se > 59 {
         return Err(EdfError::InvalidStart("(y, m, d, h, min, s)"));
     }
     Ok(())
@@ -194,7 +183,7 @@ fn pad_field(buf: &mut Vec<u8>, text: &str, width: usize) {
     let bytes = text.as_bytes();
     let n = bytes.len().min(width);
     buf.extend_from_slice(&bytes[..n]);
-    buf.extend(std::iter::repeat(b' ').take(width - n));
+    buf.extend(std::iter::repeat_n(b' ', width - n));
 }
 
 fn num_field(buf: &mut Vec<u8>, value: impl std::fmt::Display, width: usize) {
@@ -204,7 +193,7 @@ fn num_field(buf: &mut Vec<u8>, value: impl std::fmt::Display, width: usize) {
         text.truncate(width);
     }
     let pad = width - text.len();
-    buf.extend(std::iter::repeat(b' ').take(pad));
+    buf.extend(std::iter::repeat_n(b' ', pad));
     buf.extend_from_slice(text.as_bytes());
 }
 
@@ -217,13 +206,7 @@ fn scaled_header_value(v: f64) -> String {
 }
 
 /// Writes the 256-byte header plus one 256-byte block per signal.
-fn write_header(
-    out: &mut Vec<u8>,
-    signals: &[EdfSignal],
-    spec: &EdfFileSpec,
-    records: usize,
-    ann_samples: usize,
-) {
+fn write_header(out: &mut Vec<u8>, signals: &[EdfSignal], spec: &EdfFileSpec, records: usize, ann_samples: usize) {
     let nsig = signals.len() + 1; // + annotation channel
     let header_len = EDF_HEADER_BLOCK + nsig * EDF_HEADER_BLOCK;
     let (y, m, d, h, mi, se) = spec.start;
@@ -239,11 +222,7 @@ fn write_header(
     pad_field(out, &date, 8);
     pad_field(out, &time, 8);
     num_field(out, header_len, 8);
-    let reserved = if spec.discontinuous_starts.is_some() {
-        "EDF+D"
-    } else {
-        "EDF+C"
-    };
+    let reserved = if spec.discontinuous_starts.is_some() { "EDF+D" } else { "EDF+C" };
     pad_field(out, reserved, 44);
     num_field(out, records, 8);
     num_field(out, 1, 8); // record duration in seconds
@@ -293,11 +272,7 @@ fn encode_sample(s: &EdfSignal, value: f32) -> [u8; 2] {
     let dig_min = -32768.0f64;
     let dig_max = 32767.0f64;
     let span_p = s.physical_max - s.physical_min;
-    let dig = if span_p == 0.0 {
-        0.0
-    } else {
-        (value as f64 - s.physical_min) / span_p * (dig_max - dig_min) + dig_min
-    };
+    let dig = if span_p == 0.0 { 0.0 } else { (value as f64 - s.physical_min) / span_p * (dig_max - dig_min) + dig_min };
     let dig_i = dig.clamp(dig_min, dig_max).round() as i16;
     dig_i.to_le_bytes()
 }
@@ -347,10 +322,7 @@ fn record_annotations(spec: &EdfFileSpec, record: usize) -> Vec<u8> {
 
 /// Emit `disconnect` annotations for gaps between consecutive record starts
 /// larger than the nominal record duration (plus a small epsilon).
-pub fn disconnect_annotations_from_record_starts(
-    record_starts: &[f64],
-    record_duration: f64,
-) -> Vec<EdfAnnotation> {
+pub fn disconnect_annotations_from_record_starts(record_starts: &[f64], record_duration: f64) -> Vec<EdfAnnotation> {
     let mut out = Vec::new();
     if record_starts.len() < 2 || record_duration <= 0.0 {
         return out;
@@ -360,23 +332,13 @@ pub fn disconnect_annotations_from_record_starts(
         let expected_next = record_starts[i] + record_duration;
         let gap = record_starts[i + 1] - expected_next;
         if gap > EPS {
-            out.push(EdfAnnotation {
-                onset_seconds: expected_next,
-                duration_seconds: gap,
-                text: "disconnect".to_string(),
-            });
+            out.push(EdfAnnotation { onset_seconds: expected_next, duration_seconds: gap, text: "disconnect".to_string() });
         }
     }
     out
 }
 
-fn write_records(
-    out: &mut Vec<u8>,
-    signals: &[EdfSignal],
-    spec: &EdfFileSpec,
-    records: usize,
-    ann_samples: usize,
-) {
+fn write_records(out: &mut Vec<u8>, signals: &[EdfSignal], spec: &EdfFileSpec, records: usize, ann_samples: usize) {
     let rate = signals[0].samples_per_record;
     let ann_bytes = ann_samples * 2;
     for r in 0..records {
@@ -401,7 +363,6 @@ fn write_records(
         out.extend_from_slice(&ann);
     }
 }
-
 
 /// Decoded EDF+ file (subset sufficient for neurofeed import round-trips).
 #[derive(Debug, Clone, PartialEq)]
@@ -453,10 +414,7 @@ fn parse_ascii_int(field: &[u8]) -> Result<i64, EdfDecodeError> {
     if t.is_empty() {
         return Ok(0);
     }
-    std::str::from_utf8(t)
-        .ok()
-        .and_then(|s| s.trim().parse().ok())
-        .ok_or(EdfDecodeError::BadHeaderField("int"))
+    std::str::from_utf8(t).ok().and_then(|s| s.trim().parse().ok()).ok_or(EdfDecodeError::BadHeaderField("int"))
 }
 
 fn parse_ascii_f64(field: &[u8]) -> Result<f64, EdfDecodeError> {
@@ -464,10 +422,24 @@ fn parse_ascii_f64(field: &[u8]) -> Result<f64, EdfDecodeError> {
     if t.is_empty() {
         return Ok(0.0);
     }
-    std::str::from_utf8(t)
-        .ok()
-        .and_then(|s| s.trim().parse().ok())
-        .ok_or(EdfDecodeError::BadHeaderField("float"))
+    std::str::from_utf8(t).ok().and_then(|s| s.trim().parse().ok()).ok_or(EdfDecodeError::BadHeaderField("float"))
+}
+
+/// Field-major signal-header columns used while decoding samples.
+struct SignalColumns {
+    labels: Vec<Vec<u8>>,
+    pmin: Vec<Vec<u8>>,
+    pmax: Vec<Vec<u8>>,
+    dmin: Vec<Vec<u8>>,
+    dmax: Vec<Vec<u8>>,
+    pre: Vec<Vec<u8>>,
+    samples_per: Vec<usize>,
+}
+
+struct DecodedRecords {
+    record_starts: Vec<f64>,
+    signals: Vec<EdfSignal>,
+    annotations: Vec<EdfAnnotation>,
 }
 
 /// Decode an EDF / EDF+ file produced by this crate (and typical EDF+C writers).
@@ -494,8 +466,33 @@ pub fn decode_edf_plus(bytes: &[u8]) -> Result<EdfDecoded, EdfDecodeError> {
         return Err(EdfDecodeError::Truncated);
     }
 
-    // Signal header layout: for each field, nsig consecutive  width-bytes slots.
-    let sh = &bytes[EDF_HEADER_BLOCK..header_len];
+    let cols = read_signal_columns(&bytes[EDF_HEADER_BLOCK..header_len], nsig)?;
+    let record_bytes: usize = cols.samples_per.iter().map(|n| n * 2).sum();
+    let data = &bytes[header_len..];
+    if n_records > 0 && data.len() < n_records * record_bytes {
+        return Err(EdfDecodeError::Truncated);
+    }
+
+    let (day, month, yy) = parse_dotted_u16(date)?;
+    let (hour, minute, second) = parse_dotted_u16(time)?;
+    let year = if yy >= 85 { 1900 + yy } else { 2000 + yy };
+    let record_duration = if header_record_duration > 0.0 { header_record_duration } else { 1.0 };
+    let body = decode_records(data, n_records, record_bytes, record_duration, &cols)?;
+
+    Ok(EdfDecoded {
+        patient_id,
+        recording_id,
+        start: (year, month, day, hour, minute, second),
+        reserved,
+        record_duration,
+        record_starts: body.record_starts,
+        signals: body.signals,
+        annotations: body.annotations,
+    })
+}
+
+/// Signal header layout: for each field, `nsig` consecutive width-byte slots.
+fn read_signal_columns(sh: &[u8], nsig: usize) -> Result<SignalColumns, EdfDecodeError> {
     let mut off = 0usize;
     let mut take_owned = |width: usize, n: usize| -> Result<Vec<Vec<u8>>, EdfDecodeError> {
         let need = width * n;
@@ -519,64 +516,57 @@ pub fn decode_edf_plus(bytes: &[u8]) -> Result<EdfDecoded, EdfDecodeError> {
     let pre = take_owned(80, nsig)?;
     let nsamp = take_owned(8, nsig)?;
     let _reserved_s = take_owned(32, nsig)?;
+    let samples_per = nsamp.iter().map(|f| parse_ascii_int(f.as_slice()).map(|v| v as usize)).collect::<Result<_, _>>()?;
+    Ok(SignalColumns { labels, pmin, pmax, dmin, dmax, pre, samples_per })
+}
 
-    let samples_per: Vec<usize> = nsamp
-        .iter()
-        .map(|f| parse_ascii_int(f.as_slice()).map(|v| v as usize))
-        .collect::<Result<_, _>>()?;
-    let record_bytes: usize = samples_per.iter().map(|n| n * 2).sum();
-    let data = &bytes[header_len..];
-    if n_records > 0 && data.len() < n_records * record_bytes {
-        return Err(EdfDecodeError::Truncated);
+/// `dd.mm.yy` or `hh.mm.ss`.
+fn parse_dotted_u16(s: &[u8]) -> Result<(u16, u16, u16), EdfDecodeError> {
+    let s = std::str::from_utf8(s).map_err(|_| EdfDecodeError::BadHeaderField("date"))?;
+    let parts: Vec<_> = s.split('.').collect();
+    if parts.len() != 3 {
+        return Err(EdfDecodeError::BadHeaderField("date"));
     }
+    let a: u16 = parts[0].parse().map_err(|_| EdfDecodeError::BadHeaderField("date"))?;
+    let b: u16 = parts[1].parse().map_err(|_| EdfDecodeError::BadHeaderField("date"))?;
+    let c: u16 = parts[2].parse().map_err(|_| EdfDecodeError::BadHeaderField("date"))?;
+    Ok((a, b, c))
+}
 
-    // Parse start date/time dd.mm.yy / hh.mm.ss
-    let parse_dot = |s: &[u8]| -> Result<(u16, u16, u16), EdfDecodeError> {
-        let s = std::str::from_utf8(s).map_err(|_| EdfDecodeError::BadHeaderField("date"))?;
-        let parts: Vec<_> = s.split('.').collect();
-        if parts.len() != 3 {
-            return Err(EdfDecodeError::BadHeaderField("date"));
-        }
-        let a: u16 = parts[0].parse().map_err(|_| EdfDecodeError::BadHeaderField("date"))?;
-        let b: u16 = parts[1].parse().map_err(|_| EdfDecodeError::BadHeaderField("date"))?;
-        let c: u16 = parts[2].parse().map_err(|_| EdfDecodeError::BadHeaderField("date"))?;
-        Ok((a, b, c))
-    };
-    let (day, month, yy) = parse_dot(date)?;
-    let (hour, minute, second) = parse_dot(time)?;
-    let year = if yy >= 85 { 1900 + yy } else { 2000 + yy };
-
-    // Accumulate samples per non-annotation signal; parse TAL texts.
+/// Samples, timekeeping onsets and annotations for every data record.
+fn decode_records(
+    data: &[u8],
+    n_records: usize,
+    record_bytes: usize,
+    record_duration: f64,
+    cols: &SignalColumns,
+) -> Result<DecodedRecords, EdfDecodeError> {
+    let nsig = cols.labels.len();
     let mut signal_data: Vec<Vec<f32>> = vec![Vec::new(); nsig];
     let mut annotations = Vec::new();
     let mut record_starts = Vec::with_capacity(n_records);
-    let record_duration = if header_record_duration > 0.0 {
-        header_record_duration
-    } else {
-        1.0
-    };
     for r in 0..n_records {
         let mut roff = r * record_bytes;
         let mut tk_onset: Option<f64> = None;
-        for si in 0..nsig {
-            let n = samples_per[si];
+        for (si, samples) in signal_data.iter_mut().enumerate() {
+            let n = cols.samples_per[si];
             let chunk = &data[roff..roff + n * 2];
             roff += n * 2;
-            let label = String::from_utf8_lossy(trim_ascii(&labels[si]));
+            let label = String::from_utf8_lossy(trim_ascii(&cols.labels[si]));
             if label.as_ref() == EDF_ANNOTATION_LABEL {
                 parse_tals(chunk, &mut annotations, &mut tk_onset);
                 continue;
             }
-            let phys_min = parse_ascii_f64(&pmin[si])?;
-            let phys_max = parse_ascii_f64(&pmax[si])?;
-            let dig_min = parse_ascii_int(&dmin[si])? as f64;
-            let dig_max = parse_ascii_int(&dmax[si])? as f64;
+            let phys_min = parse_ascii_f64(&cols.pmin[si])?;
+            let phys_max = parse_ascii_f64(&cols.pmax[si])?;
+            let dig_min = parse_ascii_int(&cols.dmin[si])? as f64;
+            let dig_max = parse_ascii_int(&cols.dmax[si])? as f64;
             let span_d = (dig_max - dig_min).max(1.0);
             let span_p = phys_max - phys_min;
             for i in 0..n {
                 let dig = i16::from_le_bytes([chunk[i * 2], chunk[i * 2 + 1]]) as f64;
                 let phys = phys_min + (dig - dig_min) * span_p / span_d;
-                signal_data[si].push(phys as f32);
+                samples.push(phys as f32);
             }
         }
         record_starts.push(tk_onset.unwrap_or(r as f64 * record_duration));
@@ -584,41 +574,24 @@ pub fn decode_edf_plus(bytes: &[u8]) -> Result<EdfDecoded, EdfDecodeError> {
     // Gaps between timekeeping onsets → disconnect annotations (EDF+D).
     let gaps = disconnect_annotations_from_record_starts(&record_starts, record_duration);
     annotations.extend(gaps);
-    annotations.sort_by(|a, b| {
-        a.onset_seconds
-            .partial_cmp(&b.onset_seconds)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    annotations.sort_by(|a, b| a.onset_seconds.partial_cmp(&b.onset_seconds).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut signals = Vec::new();
-    for si in 0..nsig {
-        let label = String::from_utf8_lossy(trim_ascii(&labels[si])).into_owned();
+    for (si, data) in signal_data.into_iter().enumerate() {
+        let label = String::from_utf8_lossy(trim_ascii(&cols.labels[si])).into_owned();
         if label == EDF_ANNOTATION_LABEL {
             continue;
         }
-        let rate = samples_per[si];
-        let phys_min = parse_ascii_f64(&pmin[si])?;
-        let phys_max = parse_ascii_f64(&pmax[si])?;
         signals.push(EdfSignal {
             label,
-            samples_per_record: rate,
-            physical_min: phys_min,
-            physical_max: phys_max,
-            prefiltering: String::from_utf8_lossy(trim_ascii(&pre[si])).into_owned(),
-            data: signal_data[si].clone(),
+            samples_per_record: cols.samples_per[si],
+            physical_min: parse_ascii_f64(&cols.pmin[si])?,
+            physical_max: parse_ascii_f64(&cols.pmax[si])?,
+            prefiltering: String::from_utf8_lossy(trim_ascii(&cols.pre[si])).into_owned(),
+            data,
         });
     }
-
-    Ok(EdfDecoded {
-        patient_id,
-        recording_id,
-        start: (year, month, day, hour, minute, second),
-        reserved,
-        record_duration,
-        record_starts,
-        signals,
-        annotations,
-    })
+    Ok(DecodedRecords { record_starts, signals, annotations })
 }
 
 fn parse_tals(buf: &[u8], out: &mut Vec<EdfAnnotation>, timekeeping: &mut Option<f64>) {
@@ -683,11 +656,7 @@ fn parse_tals(buf: &[u8], out: &mut Vec<EdfAnnotation>, timekeeping: &mut Option
             continue;
         }
         for text in texts {
-            out.push(EdfAnnotation {
-                onset_seconds: onset_abs,
-                duration_seconds: duration.unwrap_or(0.0),
-                text,
-            });
+            out.push(EdfAnnotation { onset_seconds: onset_abs, duration_seconds: duration.unwrap_or(0.0), text });
         }
     }
 }
@@ -764,7 +733,7 @@ mod tests {
         assert_eq!(read_i16(2), -17); // -1 µV
         assert_eq!(read_i16(4), 32767); // +2000
         assert_eq!(read_i16(6), -32768); // -2000
-        // Record 1 after record 0 (512+512 data + 6 ann bytes): hold last = -2000.
+                                         // Record 1 after record 0 (512+512 data + 6 ann bytes): hold last = -2000.
         assert_eq!(read_i16(1030), -32768);
         assert_eq!(read_i16(1032), -32768);
     }
@@ -787,10 +756,7 @@ mod tests {
         assert_eq!(rec1, b"+1\x14\x14\x00+1.25\x14Eye up\x14\x00");
         // Constant record size.
         let n_records = 2;
-        assert_eq!(
-            bytes.len(),
-            header_len + n_records * (512 + ann_bytes)
-        );
+        assert_eq!(bytes.len(), header_len + n_records * (512 + ann_bytes));
     }
 
     #[test]
@@ -798,13 +764,11 @@ mod tests {
         let signals = vec![EdfSignal::eeg("TP9", 256, vec![5.0; 300])];
         let bytes = encode_edf_plus(&signals, &spec(&[])).unwrap();
         let header_len = 256 + 2 * 256;
-        let read_i16 = |off: usize| {
-            i16::from_le_bytes([bytes[header_len + off], bytes[header_len + off + 1]])
-        };
+        let read_i16 = |off: usize| i16::from_le_bytes([bytes[header_len + off], bytes[header_len + off + 1]]);
         // 5 µV → (5+2000)/4000*65535 - 32768 ≈ 81.42 → 81
         assert_eq!(read_i16(0), 81);
         assert_eq!(read_i16(512 - 2), 81); // record 0 last sample
-        // Record 1 starts after record 0 (512 data + 6 annotation bytes padded).
+                                           // Record 1 starts after record 0 (512 data + 6 annotation bytes padded).
         assert_eq!(read_i16(518), 81);
         assert_eq!(read_i16(518 + 510), 81);
     }
@@ -815,19 +779,10 @@ mod tests {
         assert_eq!(encode_edf_plus(&[], &spec), Err(EdfError::EmptySignals));
         let a = EdfSignal::eeg("TP9", 256, vec![0.0; 10]);
         let b = EdfSignal::eeg("AF7", 512, vec![0.0; 10]);
+        assert_eq!(encode_edf_plus(&[a, b], &spec), Err(EdfError::MixedSampleRate));
+        assert_eq!(encode_edf_plus(&[EdfSignal::eeg("TP9", 256, vec![])], &spec), Err(EdfError::EmptySignal(0)));
         assert_eq!(
-            encode_edf_plus(&[a, b], &spec),
-            Err(EdfError::MixedSampleRate)
-        );
-        assert_eq!(
-            encode_edf_plus(&[EdfSignal::eeg("TP9", 256, vec![])], &spec),
-            Err(EdfError::EmptySignal(0))
-        );
-        assert_eq!(
-            encode_edf_plus(
-                &[EdfSignal::eeg("a-very-long-electrode-name", 256, vec![0.0; 4])],
-                &spec
-            ),
+            encode_edf_plus(&[EdfSignal::eeg("a-very-long-electrode-name", 256, vec![0.0; 4])], &spec),
             Err(EdfError::LabelTooLong("a-very-long-electrode-name".to_string()))
         );
         let mut bad = EdfFileSpec {
@@ -838,10 +793,7 @@ mod tests {
             annotations: &[],
             discontinuous_starts: None,
         };
-        assert_eq!(
-            encode_edf_plus(&[EdfSignal::eeg("TP9", 256, vec![0.0; 4])], &bad),
-            Err(EdfError::InvalidStart("(y, m, d, h, min, s)"))
-        );
+        assert_eq!(encode_edf_plus(&[EdfSignal::eeg("TP9", 256, vec![0.0; 4])], &bad), Err(EdfError::InvalidStart("(y, m, d, h, min, s)")));
         bad.start = (2026, 1, 1, 0, 0, 0);
         assert!(encode_edf_plus(&[EdfSignal::eeg("TP9", 256, vec![0.0; 4])], &bad).is_ok());
     }
@@ -860,10 +812,7 @@ mod tests {
             EdfAnnotation { onset_seconds: 0.5, duration_seconds: 0.0, text: "double_blink".to_string() },
             EdfAnnotation { onset_seconds: 1.25, duration_seconds: 0.0, text: "eye_up".to_string() },
         ];
-        let signals = vec![
-            EdfSignal::eeg("TP9", 256, vec![1.0; 400]),
-            EdfSignal::eeg("AF7", 256, vec![-1.0; 400]),
-        ];
+        let signals = vec![EdfSignal::eeg("TP9", 256, vec![1.0; 400]), EdfSignal::eeg("AF7", 256, vec![-1.0; 400])];
         let bytes = encode_edf_plus(&signals, &spec(&annotations)).unwrap();
         let dec = decode_edf_plus(&bytes).unwrap();
         assert_eq!(dec.patient_id, PATIENT);
@@ -881,35 +830,18 @@ mod tests {
         assert!(texts.contains(&"eye_up"));
     }
 
-
     #[test]
     fn duration_round_trip_in_tal() {
         let signals = two_signals();
         let annotations = [
-            EdfAnnotation {
-                onset_seconds: 0.5,
-                duration_seconds: 15.0,
-                text: "bad_quality".to_string(),
-            },
-            EdfAnnotation {
-                onset_seconds: 1.25,
-                duration_seconds: 0.0,
-                text: "double_blink".to_string(),
-            },
+            EdfAnnotation { onset_seconds: 0.5, duration_seconds: 15.0, text: "bad_quality".to_string() },
+            EdfAnnotation { onset_seconds: 1.25, duration_seconds: 0.0, text: "double_blink".to_string() },
         ];
         let bytes = encode_edf_plus(&signals, &spec(&annotations)).unwrap();
         let dec = decode_edf_plus(&bytes).unwrap();
-        let bq = dec
-            .annotations
-            .iter()
-            .find(|a| a.text == "bad_quality")
-            .expect("bad_quality");
+        let bq = dec.annotations.iter().find(|a| a.text == "bad_quality").expect("bad_quality");
         assert!((bq.duration_seconds - 15.0).abs() < 1e-9, "got {}", bq.duration_seconds);
-        let db = dec
-            .annotations
-            .iter()
-            .find(|a| a.text == "double_blink")
-            .expect("double_blink");
+        let db = dec.annotations.iter().find(|a| a.text == "double_blink").expect("double_blink");
         assert!((db.duration_seconds).abs() < 1e-9);
     }
 
@@ -927,16 +859,10 @@ mod tests {
             discontinuous_starts: Some(&starts),
         };
         let bytes = encode_edf_plus(&signals, &spec).unwrap();
-        assert!(
-            std::str::from_utf8(&bytes[192..236]).unwrap().trim().starts_with("EDF+D")
-        );
+        assert!(std::str::from_utf8(&bytes[192..236]).unwrap().trim().starts_with("EDF+D"));
         let dec = decode_edf_plus(&bytes).unwrap();
         assert_eq!(dec.record_starts, vec![0.0, 5.0]);
-        let disc = dec
-            .annotations
-            .iter()
-            .find(|a| a.text == "disconnect")
-            .expect("disconnect");
+        let disc = dec.annotations.iter().find(|a| a.text == "disconnect").expect("disconnect");
         assert!((disc.onset_seconds - 1.0).abs() < 1e-9);
         assert!((disc.duration_seconds - 4.0).abs() < 1e-9);
     }

@@ -1,5 +1,5 @@
 //! EEG records → EDF+ (continuous, 1-second data records) via
-//! `third_party/edf_export`. Packets are concatenated per electrode in
+//! the `edf_export` crate. Packets are concatenated per electrode in
 //! order; the shortest channel bounds the length so all signals align.
 
 use crate::record::Record;

@@ -2,8 +2,8 @@
 [workspace]
 resolver = "2"
 members = ["crates/*", "apps/*"]
-# Flutter-era code kept as reference until migrated.
-exclude = ["third_party", "vendor", "feedback_gym"]
+# Patched upstream (vendor) and the Python gym are not workspace crates.
+exclude = ["vendor", "feedback_gym"]
 
 [workspace.package]
 version = "0.1.0"
@@ -24,6 +24,7 @@ nf-device = { path = "crates/nf-device" }
 nf-import = { path = "crates/nf-import" }
 nf-ai = { path = "crates/nf-ai" }
 nf-audio = { path = "crates/nf-audio", default-features = false }
+edf_export = { path = "crates/edf_export" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schemars = "1"

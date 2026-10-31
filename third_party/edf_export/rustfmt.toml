@@ -1,3 +1,0 @@
-# Reference code: nf-format depends on it by path, so `cargo fmt --all` visits it.
-# Leave it byte-identical.
-disable_all_formatting = true

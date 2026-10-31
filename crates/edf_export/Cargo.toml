@@ -1,0 +1,12 @@
+[package]
+name = "edf_export"
+description = "Minimal EDF+ writer and reader for EEG time-series export. Dependency-free, WASM-safe."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
