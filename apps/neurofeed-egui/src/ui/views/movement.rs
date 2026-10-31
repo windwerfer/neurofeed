@@ -46,7 +46,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
         ui.label(if session.live_signal().is_some() {
             "This device sends no accelerometer data."
         } else {
-            "No device connected. Pick a simulator in the top bar."
+            "No device connected. Use Connect device in the top bar."
         });
         return;
     };

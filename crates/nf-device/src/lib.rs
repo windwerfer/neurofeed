@@ -60,6 +60,7 @@ pub fn muse_info(id: &str, name: &str) -> DeviceInfo {
         ppg_rate_hz: Some(64.0),
         accel_rate_hz: Some(52.0),
         aux_channels: MUSE_AUX.iter().map(|c| (*c).to_owned()).collect(),
+        rssi: None,
     }
 }
 
@@ -76,6 +77,7 @@ pub fn crown_info(id: &str, name: &str) -> DeviceInfo {
         ppg_rate_hz: None,
         accel_rate_hz: None,
         aux_channels: Vec::new(),
+        rssi: None,
     }
 }
 
@@ -92,6 +94,8 @@ pub enum Block {
     Link(LinkState),
     /// Device-reported pad quality, one value 0..=1 per EEG channel (Crown).
     Quality(Vec<f32>),
+    /// Battery charge in percent (0..=100).
+    Battery(f32),
 }
 
 /// Transport side of a [`LiveSource`]. Cheap to clone; `send` fails once
@@ -117,6 +121,9 @@ impl Feed {
     }
     pub fn quality(&self, per_pad: Vec<f32>) -> bool {
         self.send(Block::Quality(per_pad))
+    }
+    pub fn battery(&self, percent: f32) -> bool {
+        self.send(Block::Battery(percent))
     }
 }
 
@@ -152,6 +159,7 @@ pub struct LiveSource {
     ppg: VecDeque<PpgPacket>,
     accel: VecDeque<AccelPacket>,
     quality: Vec<Vec<f32>>,
+    battery: Option<f32>,
     /// Called on drop (transport teardown, e.g. BLE disconnect).
     on_drop: Option<Box<dyn FnOnce() + Send>>,
 }
@@ -173,6 +181,7 @@ impl LiveSource {
             ppg: VecDeque::new(),
             accel: VecDeque::new(),
             quality: Vec::new(),
+            battery: None,
             on_drop: None,
         };
         (s, Feed(tx))
@@ -214,6 +223,8 @@ impl LiveSource {
                 }
                 Block::Link(l) => self.link = l,
                 Block::Quality(q) => self.quality.push(q),
+                Block::Battery(b) if b.is_finite() => self.battery = Some(b.clamp(0.0, 100.0)),
+                Block::Battery(_) => {}
             }
         }
     }
@@ -248,6 +259,9 @@ impl DeviceSource for LiveSource {
     fn poll_quality(&mut self, now: f64) -> Vec<Vec<f32>> {
         self.drain(now);
         std::mem::take(&mut self.quality)
+    }
+    fn battery(&self) -> Option<f32> {
+        self.battery
     }
     fn link(&self) -> LinkState {
         self.link.clone()

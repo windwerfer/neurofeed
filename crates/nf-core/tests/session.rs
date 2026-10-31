@@ -93,3 +93,70 @@ fn dropped_and_bad_samples_are_flagged_for_the_plots() {
     assert!(count(1, FLAG_OK) > rate * 3);
     assert!(sig.last(2, 2560, true).iter().all(|x| x.is_finite()));
 }
+
+/// A provider that can scan and counts how often it was asked to.
+struct Scanner(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+impl nf_core::DeviceProvider for Scanner {
+    fn scheme(&self) -> &'static str {
+        "fake"
+    }
+    fn list(&self) -> Vec<nf_core::DeviceInfo> {
+        Vec::new()
+    }
+    fn open(&mut self, id: &str) -> Result<Box<dyn nf_core::DeviceSource>, String> {
+        Err(format!("no {id}"))
+    }
+    fn can_scan(&self) -> bool {
+        true
+    }
+    fn scan(&mut self, _seconds: f64) -> Result<(), String> {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Ok(())
+    }
+}
+
+#[test]
+fn device_dialog_opens_closes_and_auto_scans() {
+    let mut s = Session::new();
+    // Simulators only: opening works, nothing to scan.
+    let r = s.call("device.dialog", json!({ "open": true })).unwrap_or_default();
+    assert_eq!(r["scanning"], json!([]));
+    assert!(s.state().device_dialog);
+    s.call("device.dialog", json!({ "open": false })).unwrap_or_default();
+    assert!(!s.state().device_dialog);
+    let n = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    s.register_provider(Box::new(Scanner(n.clone())));
+    let r = s.call("device.dialog", json!({ "open": true })).unwrap_or_default();
+    assert_eq!(r["scanning"], json!(["fake"]));
+    assert_eq!(n.load(std::sync::atomic::Ordering::Relaxed), 1, "opening starts one scan");
+    assert_eq!(s.call("device.status", json!({})).unwrap_or_default()["dialog_open"], json!(true));
+}
+
+#[test]
+fn battery_and_streaming_in_device_status() {
+    let mut s = Session::new();
+    s.call("device.connect", json!({ "id": "sim:muse" })).unwrap_or_default();
+    s.call("clock.advance", json!({ "seconds": 1.0 })).unwrap_or_default();
+    let st = s.call("device.status", json!({})).unwrap_or_default();
+    assert_eq!(st["battery"], json!(87.0));
+    assert_eq!(st["streaming"], json!(null), "no transport registered");
+    let list = s.call("device.list", json!({})).unwrap_or_default();
+    assert!(list.as_array().is_some_and(|l| l.iter().all(|d| d["rssi"].is_i64())), "simulators carry an RSSI");
+    s.call("device.disconnect", json!(null)).unwrap_or_default();
+    assert_eq!(s.call("device.status", json!({})).unwrap_or_default()["battery"], json!(null));
+}
+
+#[test]
+fn stream_running_needs_enabled_and_transport() {
+    let mut st = nf_core::streaming::StreamState::default();
+    assert_eq!(st.running(), None);
+    st.settings.enabled = true;
+    assert_eq!(st.running(), None, "no transport");
+    st.transport = true;
+    assert_eq!(st.running(), Some("OSC"));
+    st.settings.protocol = nf_core::streaming::StreamProtocol::Lsl;
+    assert_eq!(st.running(), None);
+    st.lsl_transport = true;
+    assert_eq!(st.running(), Some("LSL"));
+}

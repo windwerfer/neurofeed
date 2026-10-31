@@ -106,6 +106,10 @@ pub struct DeviceInfo {
     /// `channels.len() + k`. Not EEG: they never feed bands or feedback.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub aux_channels: Vec<String>,
+    /// Advertised signal strength (dBm) from the last scan; `None` when
+    /// the transport has none (Crown OSC, replays).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rssi: Option<i16>,
 }
 
 impl DeviceInfo {
@@ -165,6 +169,10 @@ pub trait DeviceSource: Send {
     /// 0..=1 per EEG channel (Neurosity Crown `signalQuality`). Default: none.
     fn poll_quality(&mut self, _now: f64) -> Vec<Vec<f32>> {
         Vec::new()
+    }
+    /// Battery charge in percent (0..=100) as last reported. Default: unknown.
+    fn battery(&self) -> Option<f32> {
+        None
     }
     /// Transport state (real devices connect asynchronously). Default: streaming.
     fn link(&self) -> LinkState {

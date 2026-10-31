@@ -26,6 +26,7 @@ pub fn map_muse_event(ev: MuseEvent) -> Vec<Block> {
         }
         MuseEvent::Ppg(r) if r.ppg_channel < 3 => vec![Block::Ppg(r.ppg_channel as u16, r.samples.iter().map(|&x| x as f32).collect())],
         MuseEvent::Accelerometer(imu) => vec![Block::Accel(imu.samples.iter().map(|s| [s.x, s.y, s.z]).collect())],
+        MuseEvent::Telemetry(t) => vec![Block::Battery(t.battery_level)],
         MuseEvent::Disconnected => vec![Block::Link(LinkState::Lost { reason: "headset disconnected".into() })],
         _ => Vec::new(),
     }
@@ -72,7 +73,8 @@ impl DeviceProvider for MuseProvider {
     }
     fn list(&self) -> Vec<DeviceInfo> {
         let s = lock(&self.shared);
-        let mut v: Vec<DeviceInfo> = s.found.values().map(|d| muse_info(&format!("muse:{}", d.id), &d.name)).collect();
+        let mut v: Vec<DeviceInfo> =
+            s.found.values().map(|d| DeviceInfo { rssi: d.rssi, ..muse_info(&format!("muse:{}", d.id), &d.name) }).collect();
         v.sort_by(|a, b| a.id.cmp(&b.id));
         v
     }
@@ -165,7 +167,7 @@ impl DeviceProvider for MuseProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use muse_rs::prelude::{EegReading, ImuData, PpgReading, XyzSample};
+    use muse_rs::prelude::{EegReading, ImuData, PpgReading, TelemetryData, XyzSample};
 
     #[test]
     fn muse_events_map_to_blocks() {
@@ -178,6 +180,8 @@ mod tests {
         let xyz = XyzSample { x: 0.0, y: 0.1, z: 1.0 };
         let acc = MuseEvent::Accelerometer(ImuData { sequence_id: 0, samples: [xyz; 3] });
         assert_eq!(map_muse_event(acc), vec![Block::Accel(vec![[0.0, 0.1, 1.0]; 3])]);
+        let tel = MuseEvent::Telemetry(TelemetryData { sequence_id: 0, battery_level: 81.5, fuel_gauge_voltage: 0.0, temperature: 0 });
+        assert_eq!(map_muse_event(tel), vec![Block::Battery(81.5)]);
         assert!(matches!(map_muse_event(MuseEvent::Disconnected).as_slice(), [Block::Link(LinkState::Lost { .. })]));
     }
 }

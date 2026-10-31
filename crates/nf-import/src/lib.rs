@@ -216,6 +216,7 @@ pub(crate) fn device(kind: DeviceKind, channels: Vec<String>, source: &str) -> D
         ppg_rate_hz: None,
         accel_rate_hz: None,
         aux_channels: Vec::new(),
+        rssi: None,
     }
 }
 

@@ -1,6 +1,6 @@
-//! Top bar: sidebar toggle, device picker/status, mains/quality, record, pause.
+//! Top bar: sidebar toggle, device area (opens the Device dialog), mains, record, pause.
 
-use super::theme;
+use super::{device_dialog, quality, theme};
 use nf_core::{mains_name, AppState, Command, LinkState, MainsMode, Session};
 
 pub fn show(root: &mut egui::Ui, session: &Session, error: Option<&str>, out: &mut Vec<Command>) {
@@ -10,8 +10,6 @@ pub fn show(root: &mut egui::Ui, session: &Session, error: Option<&str>, out: &m
             if ui.button("☰").on_hover_text("Toggle sidebar").clicked() {
                 out.push(Command::SidebarSet { open: !state.sidebar_open });
             }
-            ui.strong("NeuroFeed");
-            ui.separator();
             device(ui, session, out);
             if let Some(e) = error {
                 ui.colored_label(ui.visuals().error_fg_color, e);
@@ -24,53 +22,44 @@ pub fn show(root: &mut egui::Ui, session: &Session, error: Option<&str>, out: &m
     });
 }
 
-fn link_dot(state: &AppState) -> egui::Color32 {
-    match (&state.device, &state.link) {
-        (None, _) => egui::Color32::GRAY,
-        (Some(_), Some(LinkState::Connecting)) => egui::Color32::from_rgb(0xE6, 0xAA, 0x3C),
-        (Some(_), Some(LinkState::Lost { .. })) => egui::Color32::from_rgb(0xE5, 0x39, 0x35),
-        _ if state.paused => egui::Color32::GRAY,
-        _ => egui::Color32::from_rgb(0x66, 0xBB, 0x6A),
-    }
-}
-
-/// Status dot, device picker (with scan/disconnect), channel count, link note.
+/// Device area: `[ Connect device ]` when disconnected; else
+/// `Muse S · <name>`, pad quality glyphs, battery, and a green LSL/OSC dot
+/// while a stream server runs. Any click opens the Device dialog.
 fn device(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let state = session.state();
-    let (r, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
-    ui.painter().circle_filled(r.center(), 4.5, link_dot(state));
-    let current = state.device.as_ref().map_or("No device", |d| d.name.as_str());
-    egui::ComboBox::from_id_salt("device").selected_text(current).show_ui(ui, |ui| device_menu(ui, session, out));
-    if let Some(d) = &state.device {
-        ui.weak(format!("{} ch", d.channels.len()));
-    }
-    match &state.link {
-        Some(LinkState::Connecting) => {
-            ui.weak("connecting…");
+    let open = Command::DeviceDialog { open: true };
+    let Some(d) = &state.device else {
+        if ui.button("Connect device").clicked() {
+            out.push(open);
         }
-        Some(LinkState::Lost { reason }) => {
-            ui.colored_label(ui.visuals().error_fg_color, reason);
+        return;
+    };
+    let area = ui.horizontal(|ui| {
+        ui.label(device_dialog::label(d));
+        match &state.link {
+            Some(LinkState::Connecting) => {
+                ui.spinner();
+                ui.weak("connecting…");
+            }
+            Some(LinkState::Lost { reason }) => {
+                ui.colored_label(ui.visuals().error_fg_color, reason);
+            }
+            _ => {
+                quality::row(ui, &device_dialog::scores(session), d.channels.len(), device_dialog::shown_aux(session, d));
+            }
         }
-        _ => {}
-    }
-}
-
-fn device_menu(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
-    let state = session.state();
-    for d in session.device_list() {
-        let selected = state.device.as_ref().is_some_and(|c| c.id == d.id);
-        if ui.selectable_label(selected, &d.name).on_hover_text(&d.id).clicked() && !selected {
-            out.push(Command::DeviceConnect { id: d.id });
+        if let Some(b) = state.battery {
+            ui.label(format!("{b:.0}%")).on_hover_text("Battery");
         }
-    }
-    if session.enabled("device.scan").is_ok() {
-        let label = if session.scanning().is_empty() { "Scan for devices…" } else { "Scanning…" };
-        if ui.selectable_label(false, label).clicked() {
-            out.push(Command::DeviceScan { seconds: None });
+        if let Some(proto) = state.streaming.running() {
+            let (r, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+            ui.painter().circle_filled(r.center(), 4.5, theme::STREAM_ON);
+            ui.weak(proto);
         }
-    }
-    if ui.selectable_label(state.device.is_none(), "Disconnect").clicked() {
-        out.push(Command::DeviceDisconnect);
+    });
+    let r = ui.interact(area.response.rect, egui::Id::unique("device-area"), egui::Sense::click());
+    if r.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text("Device").clicked() {
+        out.push(open);
     }
 }
 

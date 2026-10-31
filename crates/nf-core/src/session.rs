@@ -734,7 +734,11 @@ impl Session {
         let mut accel = src.poll_accel(now);
         let quality = src.poll_quality(now);
         let mut link = src.link();
+        let battery = src.battery();
         self.crown_quality(quality);
+        if battery.is_some() && self.state.battery != battery {
+            self.state.battery = battery;
+        }
         self.expire_faults(now);
         if let Some(dev) = &self.state.device {
             if crate::faults::inject(&self.state.faults, dev, &mut packets, &mut optical, &mut accel) {
@@ -1171,6 +1175,15 @@ impl Session {
             }
             Command::DeviceConnect { id } => self.connect(&id)?,
             Command::DeviceDisconnect => self.disconnect(),
+            Command::DeviceDialog { open } => {
+                self.state.device_dialog = open;
+                if open && !self.state.scanners.is_empty() && self.scanning().is_empty() {
+                    let started: Vec<&str> =
+                        self.providers.iter_mut().filter(|p| p.can_scan()).filter_map(|p| p.scan(8.0).ok().map(|()| p.scheme())).collect();
+                    return Ok(json!({ "open": true, "scanning": started }));
+                }
+                return Ok(json!({ "open": open, "scanning": self.scanning() }));
+            }
             Command::DeviceScan { seconds } => {
                 let secs = seconds.unwrap_or(8.0);
                 if !(1.0..=60.0).contains(&secs) {
@@ -1438,6 +1451,7 @@ impl Session {
         self.stop_recording("device disconnected");
         self.source = None;
         self.state.link = None;
+        self.state.battery = None;
         self.live.signal = None;
         self.live.optics = None;
         self.live.artifacts = None;
@@ -1534,6 +1548,9 @@ impl Session {
                 "scanning": self.scanning(),
                 "provider_errors": self.provider_errors(),
                 "device": s.device,
+                "battery": s.battery,
+                "streaming": s.streaming.running(),
+                "dialog_open": s.device_dialog,
                 "snapshots": s.bands.len(),
                 "paused": s.paused,
             }),

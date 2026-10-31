@@ -35,6 +35,10 @@ pub enum Command {
     DeviceConnect { id: String },
     #[serde(rename = "device.disconnect")]
     DeviceDisconnect,
+    /// Open or close the Device dialog. Opening starts a scan when a real
+    /// provider can scan (errors show in the dialog, not here).
+    #[serde(rename = "device.dialog")]
+    DeviceDialog { open: bool },
     /// Start background discovery on every scanning provider (BLE Muse,
     /// Crown OSC); results appear in `device.list` as they arrive.
     #[serde(rename = "device.scan")]
@@ -681,6 +685,14 @@ pub const SPECS: &[CommandSpec] = &[
     spec("device.connect", "Connect", "device", false, "Connect a device by id, e.g. sim:muse or sim:crown.", always),
     spec("device.scan", "Scan", "device", false, "Discover real devices (Muse BLE, Crown OSC) in the background.", can_scan),
     spec("device.disconnect", "Disconnect", "device", false, "Disconnect the current device.", needs_device),
+    spec(
+        "device.dialog",
+        "Device dialog",
+        "device",
+        false,
+        "Open/close the Device dialog (current device, battery, pad quality, scan list); opening auto-scans.",
+        always,
+    ),
     spec("device.status", "Device status", "device", true, "Connected device and buffered snapshot count.", always),
     spec(
         "sim.configure",
@@ -953,6 +965,7 @@ fn base_examples() -> Vec<Request> {
         C(Command::ScaleSet { scale: BandScale::Relative }),
         C(Command::DeviceConnect { id: "sim:muse".into() }),
         C(Command::DeviceDisconnect),
+        C(Command::DeviceDialog { open: true }),
         C(Command::DeviceScan { seconds: Some(5.0) }),
         C(Command::SimConfigure {
             seed: Some(1),

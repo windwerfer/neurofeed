@@ -44,3 +44,20 @@ pub fn band_color(band: Band) -> Color32 {
         Band::Gamma => Color32::from_rgb(0xBA, 0x68, 0xC8),
     }
 }
+
+/// Pad quality colours of the legacy status bar (`_signalColor`):
+/// green ≥ 80, orange ≥ 40, red below.
+pub fn quality_color(score: f32) -> Color32 {
+    if score >= 80.0 {
+        Color32::from_rgb(0x4C, 0xAF, 0x50)
+    } else if score >= 40.0 {
+        Color32::from_rgb(0xFF, 0x98, 0x00)
+    } else {
+        Color32::from_rgb(0xF4, 0x43, 0x36)
+    }
+}
+
+/// A pad with no score yet (AUX before data).
+pub const QUALITY_NONE: Color32 = Color32::from_rgb(0x75, 0x75, 0x75);
+/// The "streaming server running" dot.
+pub const STREAM_ON: Color32 = Color32::from_rgb(0x4C, 0xAF, 0x50);

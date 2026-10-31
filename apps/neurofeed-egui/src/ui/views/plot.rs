@@ -12,7 +12,7 @@ pub fn header<'a>(ui: &mut egui::Ui, session: &'a Session, title: &str, note: &s
     ui.separator();
     let live = session.live_signal();
     if live.is_none() {
-        ui.label("No device connected. Pick a simulator in the top bar.");
+        ui.label("No device connected. Use Connect device in the top bar.");
     }
     live
 }

@@ -104,6 +104,20 @@ pub struct StreamState {
     pub stats: StreamStats,
 }
 
+impl StreamState {
+    /// `"LSL"` / `"OSC"` while a stream server is actually running (enabled
+    /// and the shell registered that transport), else `None`.
+    pub fn running(&self) -> Option<&'static str> {
+        if !self.settings.enabled {
+            return None;
+        }
+        match self.settings.protocol {
+            StreamProtocol::Lsl => self.lsl_transport.then_some("LSL"),
+            StreamProtocol::Osc => self.transport.then_some("OSC"),
+        }
+    }
+}
+
 /// Validate and apply a patch.
 pub fn set(st: &mut StreamState, p: &StreamPatch) -> Result<Value, CoreError> {
     let mut s = st.settings.clone();

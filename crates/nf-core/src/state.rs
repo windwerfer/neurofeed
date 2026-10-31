@@ -159,6 +159,10 @@ pub struct AppState {
     pub scanners: Vec<String>,
     /// Transport state of the connected device.
     pub link: Option<nf_types::LinkState>,
+    /// Battery of the connected device in percent, once it reported one.
+    pub battery: Option<f32>,
+    /// The Device dialog (current device + scan list) is open.
+    pub device_dialog: bool,
     /// Bumped on every state change (not on time/data ticks).
     pub revision: u64,
 }
@@ -186,6 +190,8 @@ impl Default for AppState {
             history: Vec::new(),
             scanners: Vec::new(),
             link: None,
+            battery: None,
+            device_dialog: false,
             history_location: "memory".into(),
             recovery: None,
             faults: Vec::new(),

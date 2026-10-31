@@ -63,7 +63,7 @@ pub fn show(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) {
     ui.separator();
 
     let Some(device) = &state.device else {
-        ui.label("No device connected. Pick a simulator in the top bar.");
+        ui.label("No device connected. Use Connect device in the top bar.");
         return;
     };
     let Some(snapshot) = state.bands.latest() else {

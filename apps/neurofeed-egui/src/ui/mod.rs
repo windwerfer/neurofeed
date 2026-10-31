@@ -1,7 +1,9 @@
 //! egui rendering. Views read the `Session` (state + typed signal
 //! accessors) and push `Command`s; they never mutate state directly.
 
+pub(crate) mod device_dialog;
 mod onboarding;
+mod quality;
 mod sidebar;
 pub mod theme;
 mod topbar;
@@ -44,6 +46,7 @@ pub fn show_with(root: &mut egui::Ui, session: &Session, error: Option<&str>, sh
         recovery(ui, session, &mut out);
         views::show(ui, session, &mut out, shell);
     });
+    device_dialog::show(ctx, session, &mut out);
     if !state.settings.onboarded && !shell.no_tour {
         onboarding::show(ctx, &mut out);
     }

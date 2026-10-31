@@ -14,7 +14,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     });
     let Some((dev, sig)) = session.live_signal() else {
         ui.separator();
-        ui.label("No device connected. Pick a simulator in the top bar.");
+        ui.label("No device connected. Use Connect device in the top bar.");
         return;
     };
     ui.horizontal(|ui| {

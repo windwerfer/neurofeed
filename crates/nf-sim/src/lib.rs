@@ -224,6 +224,11 @@ impl DeviceSource for SimDevice {
         self.info.clone()
     }
 
+    /// A fixed charge once streaming, so the top bar has something to show.
+    fn battery(&self) -> Option<f32> {
+        self.start.map(|_| if self.info.kind == DeviceKind::Crown { 64.0 } else { 87.0 })
+    }
+
     /// Every whole packet whose last sample is due by `now`.
     fn poll(&mut self, now: f64) -> Vec<EegPacket> {
         let start = *self.start.get_or_insert(now);
@@ -313,6 +318,13 @@ pub fn sim_info_for(id: &str) -> Option<DeviceInfo> {
     if id == "sim:muse" {
         info.id = "sim:muse_s".into();
     }
+    // Fixed advertised strength per simulator (the Device dialog's bars).
+    info.rssi = Some(match info.id.as_str() {
+        "sim:muse_s" => -52,
+        "sim:muse2" => -64,
+        "sim:athena" => -78,
+        _ => -58,
+    });
     Some(info)
 }
 
@@ -332,6 +344,7 @@ pub fn sim_info(kind: DeviceKind) -> DeviceInfo {
         ppg_rate_hz: (kind == DeviceKind::Muse).then_some(PPG_RATE_HZ),
         accel_rate_hz: Some(ACCEL_RATE_HZ),
         aux_channels: if kind == DeviceKind::Muse { vec!["AUX1".into()] } else { Vec::new() },
+        rssi: None,
     }
 }
 
@@ -385,6 +398,15 @@ mod tests {
         assert!(p.open("sim:crown").ok().is_some_and(|s| !s.info().has_ppg()));
         assert!(p.open("sim:athena").ok().is_some_and(|s| !s.info().has_ppg()));
         assert!(p.open("sim:muse2").ok().is_some_and(|s| s.info().has_ppg()));
+        assert!(p.list().iter().all(|d| d.rssi.is_some()), "simulators advertise a signal strength");
+    }
+
+    #[test]
+    fn battery_once_streaming() {
+        let mut d = SimDevice::new(DeviceKind::Muse, SimConfig::default());
+        assert_eq!(d.battery(), None);
+        d.poll(0.0);
+        assert_eq!(d.battery(), Some(87.0));
     }
 
     #[test]
