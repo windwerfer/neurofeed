@@ -12,7 +12,7 @@ struct Draft(Option<String>);
 /// Notes editor with Save / Revert; saving sends `history.notes`.
 pub(super) fn notes(ui: &mut egui::Ui, session: &Session, id: u64, out: &mut Vec<Command>) {
     let saved = session.state().history.iter().find(|m| m.id == id).map(|m| m.notes.clone()).unwrap_or_default();
-    let key = Id::new(("notes", id));
+    let key = Id::unique(("notes", id));
     let mut d: Draft = ui.data(|x| x.get_temp(key)).unwrap_or_default();
     let mut text = d.0.clone().unwrap_or_else(|| saved.clone());
     ui.label(RichText::new("Notes").strong());

@@ -64,7 +64,7 @@ fn unavailable(lsl: bool) -> &'static str {
 fn protocol_tabs(ui: &mut egui::Ui, st: &nf_core::streaming::StreamState, out: &mut Vec<Command>) {
     ui.horizontal(|ui| {
         for (p, label, ok) in [(StreamProtocol::Osc, "OSC", st.transport), (StreamProtocol::Lsl, "LSL", st.lsl_transport)] {
-            let r = ui.add_enabled(ok, egui::SelectableLabel::new(st.settings.protocol == p, label));
+            let r = ui.add_enabled(ok, egui::Button::selectable(st.settings.protocol == p, label));
             let r = r.on_disabled_hover_text(unavailable(p == StreamProtocol::Lsl));
             if r.clicked() && st.settings.protocol != p {
                 out.push(Command::StreamingSet(StreamPatch { protocol: Some(p), ..Default::default() }));

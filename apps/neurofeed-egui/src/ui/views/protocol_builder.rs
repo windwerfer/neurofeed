@@ -28,7 +28,7 @@ struct Edit {
 }
 
 fn state_id() -> egui::Id {
-    egui::Id::new("protocol_builder")
+    egui::Id::unique("protocol_builder")
 }
 
 /// Open the builder on a draft of protocol `id` (custom: edit; built-in: copy).

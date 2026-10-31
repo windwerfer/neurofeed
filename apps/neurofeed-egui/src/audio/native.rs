@@ -121,12 +121,12 @@ fn open() -> Result<(cpal::Stream, Shared), String> {
     let device = cpal::default_host().default_output_device().ok_or("no output device")?;
     let cfg = device.default_output_config().map_err(|e| e.to_string())?;
     let channels = usize::from(cfg.channels());
-    let mixer: Shared = Arc::new(Mutex::new(Mixer::new(cfg.sample_rate().0)));
+    let mixer: Shared = Arc::new(Mutex::new(Mixer::new(cfg.sample_rate())));
     let err = |e| log::warn!("audio stream: {e}");
     let m = Arc::clone(&mixer);
     let stream = match cfg.sample_format() {
         cpal::SampleFormat::F32 => device.build_output_stream(
-            &cfg.into(),
+            cfg.into(),
             move |d: &mut [f32], _: &_| match m.lock() {
                 Ok(mut m) => m.render(d, channels),
                 Err(_) => d.fill(0.0),
@@ -137,7 +137,7 @@ fn open() -> Result<(cpal::Stream, Shared), String> {
         cpal::SampleFormat::I16 => {
             let mut buf = Vec::new();
             device.build_output_stream(
-                &cfg.into(),
+                cfg.into(),
                 move |d: &mut [i16], _: &_| {
                     buf.resize(d.len(), 0.0f32);
                     if let Ok(mut m) = m.lock() {

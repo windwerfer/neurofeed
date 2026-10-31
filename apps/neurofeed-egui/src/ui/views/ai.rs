@@ -154,7 +154,7 @@ fn card(ui: &mut egui::Ui, session: &Session, m: &ModelStatus, selected: bool, i
 
 fn import_row(ui: &mut egui::Ui, m: &ModelStatus, i: usize, out: &mut Vec<Command>) {
     ui.weak(m.guide);
-    let dropped = ui.ctx().input(|x| x.raw.dropped_files.first().and_then(|f| f.path.clone()));
+    let dropped = ui.ctx().input(|x| x.raw.dropped_files.first().map(|f| f.path().to_path_buf()));
     PATH.with(|p| {
         let mut p = p.borrow_mut();
         if let Some(d) = dropped.filter(|d| d.file_name().is_some_and(|n| n == m.weights_file)) {

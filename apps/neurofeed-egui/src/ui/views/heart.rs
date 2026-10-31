@@ -68,7 +68,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session) {
         ui.visuals().strong_text_color(),
     );
     let r = Rect::from_min_max(rect.left_top() + egui::vec2(44.0, 26.0), rect.right_bottom() - egui::vec2(44.0, 18.0));
-    p.rect_stroke(r, 0.0, Stroke::new(1.0_f32, ui.visuals().faint_bg_color));
+    p.rect_stroke(r, 0.0, Stroke::new(1.0_f32, ui.visuals().faint_bg_color), egui::StrokeKind::Inside);
     let now = o.time.unwrap_or(0.0) as f32;
     trend(&p, r, &o.hr, now, (40.0, 140.0), HR_COLOR);
     trend(&p, r, &o.spo2, now, (85.0, 100.0), SPO2_COLOR);

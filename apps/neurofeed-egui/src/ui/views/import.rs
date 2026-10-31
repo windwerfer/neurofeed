@@ -39,7 +39,7 @@ fn load(session: &Session, name: String, bytes: Vec<u8>) -> Pending {
 
 /// The "Import…" button plus its window; also accepts dropped files.
 pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
-    let id = ui.id().with("import");
+    let id = ui.scope_id().with("import");
     let mut st: Ui = ui.data(|d| d.get_temp(id)).unwrap_or_default();
     let en = session.enabled("history.import");
     let r = ui.add_enabled(en.is_ok(), egui::Button::new("Import…"));
@@ -133,12 +133,20 @@ fn summary(ui: &mut egui::Ui, pv: &Preview) {
 
 fn dropped(ctx: &egui::Context) -> Option<(String, Vec<u8>)> {
     let f = ctx.input(|i| i.raw.dropped_files.first().cloned())?;
-    if let Some(b) = f.bytes {
-        return Some((f.name, b.to_vec()));
-    }
-    let path = f.path?;
-    let name = path.file_name()?.to_string_lossy().into_owned();
-    std::fs::read(&path).ok().map(|b| (name, b))
+    let name = f.path().file_name()?.to_string_lossy().into_owned();
+    read_dropped(name, f)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn read_dropped(name: String, f: Arc<dyn egui::DroppedFile + Send + Sync>) -> Option<(String, Vec<u8>)> {
+    f.bytes().ok().map(|b| (name, b))
+}
+
+/// Browsers read dropped files asynchronously; the bytes arrive via [`picked`].
+#[cfg(target_arch = "wasm32")]
+fn read_dropped(name: String, f: Arc<dyn egui::DroppedFile + Send + Sync>) -> Option<(String, Vec<u8>)> {
+    web::read_dropped(name, f);
+    None
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -199,6 +207,14 @@ mod web {
         input.set_onchange(Some(on_change.as_ref().unchecked_ref()));
         on_change.forget();
         input.click();
+    }
+
+    pub fn read_dropped(name: String, f: std::sync::Arc<dyn egui::DroppedFile + Send + Sync>) {
+        wasm_bindgen_futures::spawn_local(async move {
+            if let Ok(bytes) = f.bytes_async().await {
+                PICKED.with(|p| *p.borrow_mut() = Some((name, bytes)));
+            }
+        });
     }
 
     async fn read(file: web_sys::File) {

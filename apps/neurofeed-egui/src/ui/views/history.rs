@@ -59,7 +59,7 @@ fn title(m: &SessionMeta, custom: &[nf_core::nf_feedback::Protocol]) -> String {
 }
 
 pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
-    let id = ui.id().with("history");
+    let id = ui.scope_id().with("history");
     let mut st: Ui = ui.data(|d| d.get_temp(id)).unwrap_or_default();
     let state = session.state();
     ui.add_space(6.0);

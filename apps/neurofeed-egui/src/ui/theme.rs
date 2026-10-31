@@ -15,7 +15,7 @@ pub fn apply(ctx: &egui::Context) {
 /// glyphs) as the last fallback, so "→" renders instead of a box.
 pub fn fonts() -> egui::FontDefinitions {
     let mut f = egui::FontDefinitions::default();
-    f.font_data.insert("arrows".into(), egui::FontData::from_static(include_bytes!("../../assets/arrows.ttf")));
+    f.font_data.insert("arrows".into(), std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../../assets/arrows.ttf"))));
     for fam in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
         f.families.entry(fam).or_default().push("arrows".into());
     }

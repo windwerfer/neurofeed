@@ -138,7 +138,12 @@ fn lines(p: &egui::Painter, t: &Trust, vals: &[Option<f64>], r: Rect, x: (f32, f
 }
 
 fn draw_plot(p: &egui::Painter, ui: &egui::Ui, t: &Trust, plot: Plot, r: Rect, x: (f32, f32)) -> (f32, f32) {
-    p.rect_stroke(r.expand2(Vec2::new(8.0, 14.0)), 6.0, Stroke::new(1.0_f32, ui.visuals().widgets.noninteractive.bg_stroke.color));
+    p.rect_stroke(
+        r.expand2(Vec2::new(8.0, 14.0)),
+        6.0,
+        Stroke::new(1.0_f32, ui.visuals().widgets.noninteractive.bg_stroke.color),
+        egui::StrokeKind::Inside,
+    );
     let y = y_range(t, plot);
     if let Some(end) = t.rows.iter().filter(|r| r.calibrating).map(|r| r.t as f32 + 1.0).reduce(f32::max) {
         let shade = Rect::from_two_pos(to_screen(r, x, y, x.0, y.1), to_screen(r, x, y, end, y.0));
@@ -148,7 +153,7 @@ fn draw_plot(p: &egui::Painter, ui: &egui::Ui, t: &Trust, plot: Plot, r: Rect, x
     let (a, b) = series(t, plot);
     lines(p, t, &b, r, x, y, THR);
     lines(p, t, &a, r, x, y, LINE);
-    let show = ui.data(|d| d.get_temp::<bool>(super::MARKS_ID.into())).unwrap_or(true);
+    let show = ui.data(|d| d.get_temp::<bool>(egui::Id::unique(super::MARKS_ID))).unwrap_or(true);
     for m in t.marks.iter().filter(|_| show) {
         let top = to_screen(r, x, y, m.t as f32, y.1);
         p.line_segment([top, Pos2Ext::down(top, r.height())], Stroke::new(1.0_f32, MARK));
@@ -189,7 +194,7 @@ fn hover(ui: &egui::Ui, p: &egui::Painter, t: &Trust, (r, x, y): Axes, pos: egui
     let Some(row) = t.rows.iter().find(|row| (row.t as f32..row.t as f32 + 1.0).contains(&sec)) else { return };
     let top = to_screen(r, x, y, row.t as f32 + 0.5, y.1);
     p.line_segment([top, top.down(r.height() + 26.0)], Stroke::new(1.0_f32, Color32::GRAY));
-    egui::show_tooltip_at_pointer(ui.ctx(), ui.layer_id(), egui::Id::new("trust_hover"), |ui| {
+    egui::Tooltip::always_open(ui.ctx().clone(), ui.layer_id(), egui::Id::unique("trust_hover"), egui::PopupAnchor::Pointer).show(|ui| {
         let at = (row.t as f32 - x.0).max(0.0) as u32;
         ui.label(RichText::new(format!("{}:{:02} into the session", at / 60, at % 60)).strong());
         ui.label(describe(row));

@@ -44,7 +44,7 @@ pub fn cards_resp(ui: &mut egui::Ui, names: &[String], mut draw: impl FnMut(&Pai
             p.rect_filled(rect, 6.0, v.extreme_bg_color);
             p.text(rect.left_top() + Vec2::new(8.0, 6.0), Align2::LEFT_TOP, name, FontId::proportional(14.0), v.strong_text_color());
             let plot = Rect::from_min_max(rect.left_top() + Vec2::new(44.0, 26.0), rect.right_bottom() - Vec2::new(10.0, 20.0));
-            p.rect_stroke(plot, 0.0, Stroke::new(1.0_f32, v.faint_bg_color));
+            p.rect_stroke(plot, 0.0, Stroke::new(1.0_f32, v.faint_bg_color), egui::StrokeKind::Inside);
             draw(&p, plot, ch);
             if (ch + 1) % cols == 0 {
                 ui.end_row();
@@ -97,7 +97,7 @@ impl Viewport {
 
 /// The chip row; returns the viewport to draw this frame.
 pub fn viewport(ui: &mut egui::Ui, key: &str, options: &[f64], now: f64) -> Viewport {
-    let id = egui::Id::new(("nf_viewport", key));
+    let id = egui::Id::unique(("nf_viewport", key));
     let mut vp = ui.data(|d| d.get_temp::<Viewport>(id)).unwrap_or(Viewport { window_s: options[options.len() / 2], anchor: None });
     ui.horizontal(|ui| {
         ui.weak("window");
@@ -129,7 +129,7 @@ pub fn drag(ui: &egui::Ui, key: &str, resp: &egui::Response, now: f64, max_back:
     if dx == 0.0 || resp.rect.width() <= 0.0 {
         return;
     }
-    let id = egui::Id::new(("nf_viewport", key));
+    let id = egui::Id::unique(("nf_viewport", key));
     if let Some(mut vp) = ui.data(|d| d.get_temp::<Viewport>(id)) {
         vp.pan(now, f64::from(dx / resp.rect.width()), max_back);
         ui.data_mut(|d| d.insert_temp(id, vp));

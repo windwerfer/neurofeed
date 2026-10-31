@@ -84,7 +84,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>, shell:
         ui.vertical(|ui| {
             ui.set_width(150.0);
             for (s, name) in SECTIONS {
-                if ui.add_sized([150.0, 28.0], egui::SelectableLabel::new(section == s && query.is_empty(), name)).clicked() {
+                if ui.add_sized([150.0, 28.0], egui::Button::selectable(section == s && query.is_empty(), name)).clicked() {
                     section = s;
                     query.clear();
                 }
@@ -224,7 +224,7 @@ fn storage(ui: &mut egui::Ui, session: &Session, shell: &mut crate::ui::Shell) {
     if cfg!(target_arch = "wasm32") || !std::path::Path::new(loc).is_file() {
         return;
     }
-    let id = ui.id().with("move-dir");
+    let id = ui.scope_id().with("move-dir");
     let mut dir: String = ui.data(|d| d.get_temp(id)).unwrap_or_default();
     ui.horizontal(|ui| {
         ui.add(egui::TextEdit::singleline(&mut dir).hint_text("new folder, e.g. /media/usb/neurofeed").desired_width(320.0));
@@ -312,7 +312,7 @@ fn faults(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         ui.weak(format!("Fault injection: {why}"));
         return;
     }
-    let id = egui::Id::new("fault_duration");
+    let id = egui::Id::unique("fault_duration");
     let mut dur: f64 = ui.data(|d| d.get_temp(id)).unwrap_or(5.0);
     ui.horizontal(|ui| {
         ui.label("Inject fault for");

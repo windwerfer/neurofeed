@@ -26,20 +26,21 @@ pub struct Shell {
 }
 
 /// Draw one frame and return the commands the user triggered.
-pub fn show(ctx: &egui::Context, session: &Session, error: Option<&str>) -> Vec<Command> {
-    show_with(ctx, session, error, &mut Shell::default())
+pub fn show(root: &mut egui::Ui, session: &Session, error: Option<&str>) -> Vec<Command> {
+    show_with(root, session, error, &mut Shell::default())
 }
 
 /// [`show`] with shell settings (bridge toggle).
-pub fn show_with(ctx: &egui::Context, session: &Session, error: Option<&str>, shell: &mut Shell) -> Vec<Command> {
+pub fn show_with(root: &mut egui::Ui, session: &Session, error: Option<&str>, shell: &mut Shell) -> Vec<Command> {
+    let ctx = &root.ctx().clone();
     let state = session.state();
     let mut out = Vec::new();
-    ctx.data_mut(|d| d.insert_temp(views::MARKS_ID.into(), state.settings.gesture_markers));
-    topbar::show(ctx, session, error, &mut out);
+    ctx.data_mut(|d| d.insert_temp(egui::Id::unique(views::MARKS_ID), state.settings.gesture_markers));
+    topbar::show(root, session, error, &mut out);
     if state.sidebar_open {
-        sidebar::show(ctx, state, &mut out);
+        sidebar::show(root, state, &mut out);
     }
-    egui::CentralPanel::default().show(ctx, |ui| {
+    egui::CentralPanel::default().show(root, |ui| {
         recovery(ui, session, &mut out);
         views::show(ui, session, &mut out, shell);
     });

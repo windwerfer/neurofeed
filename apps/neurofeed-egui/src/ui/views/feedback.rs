@@ -55,7 +55,7 @@ fn chip(ui: &mut egui::Ui, text: &str, color: Color32) {
     let galley = ui.painter().layout_no_wrap(text.to_owned(), FontId::proportional(15.0), color);
     let (rect, _) = ui.allocate_exact_size(galley.size() + Vec2::new(28.0, 12.0), Sense::hover());
     let p = ui.painter();
-    p.rect(rect, 14.0, color.gamma_multiply(0.2), Stroke::new(1.0_f32, color));
+    p.rect(rect, 14.0, color.gamma_multiply(0.2), Stroke::new(1.0_f32, color), egui::StrokeKind::Inside);
     p.galley(rect.center() - galley.size() / 2.0, galley, color);
 }
 
@@ -72,7 +72,7 @@ pub(super) fn card(ui: &mut egui::Ui, p: &Protocol, selected: bool, w: f32) -> e
         if selected { Stroke::new(2.0_f32, CALM) } else { Stroke::new(1.0_f32, ui.visuals().widgets.noninteractive.bg_stroke.color) };
     egui::Frame::group(ui.style())
         .stroke(stroke)
-        .rounding(10.0)
+        .corner_radius(10.0)
         .inner_margin(12.0)
         .show(ui, |ui| {
             ui.set_width(w);
@@ -121,7 +121,7 @@ fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
         for (i, p) in all.iter().enumerate() {
             let selected = p.id == t.protocol.id;
             let rect = card(ui, p, selected, w).rect;
-            let resp = ui.interact(rect, ui.id().with(&p.id), Sense::click());
+            let resp = ui.interact(rect, ui.scope_id().with(&p.id), Sense::click());
             if resp.clicked() && !selected {
                 out.push(Command::ProtocolSet { id: p.id.clone(), minutes: None });
             }
@@ -309,7 +309,7 @@ struct Dash {
 }
 
 fn dash_id() -> egui::Id {
-    egui::Id::new("feedback_dashboard")
+    egui::Id::unique("feedback_dashboard")
 }
 
 /// Trust of the current run, rebuilt only when a second was added.
@@ -375,7 +375,7 @@ fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Com
 
 /// Percentile meter: fill = last percentile, tick = threshold percentile.
 fn meter(p: &egui::Painter, rect: egui::Rect, pct: Option<f64>, thr: Option<f64>, color: Color32) {
-    p.rect(rect, 4.0, color.gamma_multiply(0.12), Stroke::new(1.0_f32, color.gamma_multiply(0.6)));
+    p.rect(rect, 4.0, color.gamma_multiply(0.12), Stroke::new(1.0_f32, color.gamma_multiply(0.6)), egui::StrokeKind::Inside);
     let y = |v: f64| rect.bottom() - (v.clamp(0.0, 100.0) as f32 / 100.0) * rect.height();
     if let Some(v) = pct {
         p.rect_filled(egui::Rect::from_min_max(Pos2::new(rect.left(), y(v)), rect.right_bottom()), 4.0, color.gamma_multiply(0.7));

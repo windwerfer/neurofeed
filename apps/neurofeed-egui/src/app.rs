@@ -177,7 +177,16 @@ impl NeuroFeedApp {
 }
 
 impl eframe::App for NeuroFeedApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    /// Keep the UI out from under the status / navigation bars (Android).
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        let Some(p) = crate::platform::get() else { return };
+        let ppp = ctx.pixels_per_point().max(0.1);
+        let [left, top, right, bottom] = p.safe_insets_px().map(|v| v / ppp);
+        raw.safe_area_insets = Some(egui::SafeAreaInsets(egui::epaint::MarginF32 { left, right, top, bottom }));
+    }
+
+    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = &root.ctx().clone();
         self.session.tick(ctx.input(|i| i.time));
         for e in self.session.drain_events() {
             match e {
@@ -203,7 +212,7 @@ impl eframe::App for NeuroFeedApp {
         #[cfg(target_arch = "wasm32")]
         let bridge: Option<Option<String>> = None;
         let mut shell = ui::Shell { bridge, no_tour: self.no_tour, store_note: self.store_note.clone(), ..Default::default() };
-        for cmd in ui::show_with(ctx, &self.session, self.last_error.as_deref(), &mut shell) {
+        for cmd in ui::show_with(root, &self.session, self.last_error.as_deref(), &mut shell) {
             self.run(cmd);
         }
         #[cfg(not(target_arch = "wasm32"))]

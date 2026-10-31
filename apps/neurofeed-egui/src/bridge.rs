@@ -9,7 +9,9 @@ use nf_core::Session;
 use nf_mcp::bridge::{BridgeServer, Request};
 use nf_mcp::{ClockMode, ToolError};
 use serde_json::{json, Value};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+
+type Shot = Arc<Mutex<Option<Arc<egui::ColorImage>>>>;
 
 /// Give up on a screenshot the window never delivered (minimized, ...).
 const SHOT_TIMEOUT_S: f64 = 5.0;
@@ -17,6 +19,8 @@ const SHOT_TIMEOUT_S: f64 = 5.0;
 pub struct Bridge {
     server: BridgeServer,
     shots: Vec<(Request, f64)>,
+    /// Filled by the screenshot callback (egui 0.37 delivers it there).
+    shot: Shot,
 }
 
 impl Bridge {
@@ -24,7 +28,7 @@ impl Bridge {
         let c = ctx.clone();
         let server = BridgeServer::start(nf_mcp::bridge::default_info_path(), Arc::new(move || c.request_repaint()))?;
         log::info!("MCP bridge on {} (neurofeed-mcp --bridge)", server.info().addr);
-        Ok(Self { server, shots: Vec::new() })
+        Ok(Self { server, shots: Vec::new(), shot: Shot::default() })
     }
 
     pub fn addr(&self) -> String {
@@ -34,12 +38,7 @@ impl Bridge {
     /// Answer pending requests. Returns true if a session tool ran.
     pub fn poll(&mut self, ctx: &egui::Context, session: &mut Session, last_error: Option<&str>) -> bool {
         let now = ctx.input(|i| i.time);
-        let shot = ctx.input(|i| {
-            i.raw.events.iter().find_map(|e| match e {
-                egui::Event::Screenshot { image, .. } => Some(image.clone()),
-                _ => None,
-            })
-        });
+        let shot = self.shot.lock().ok().and_then(|mut s| s.take());
         if let Some(img) = shot {
             let reply = png_reply(&img);
             self.shots.drain(..).for_each(|(r, _)| r.respond(reply.clone()));
@@ -51,7 +50,14 @@ impl Bridge {
         while let Some(req) = self.server.try_recv() {
             match req.tool.as_str() {
                 "screenshot" => {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot);
+                    let (slot, c) = (self.shot.clone(), ctx.clone());
+                    let cb = egui::ScreenshotCallback::new(move |img| {
+                        if let Ok(mut s) = slot.lock() {
+                            *s = Some(img);
+                        }
+                        c.request_repaint();
+                    });
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(cb));
                     self.shots.push((req, now));
                 }
                 "ui_inspect" => {
@@ -100,10 +106,12 @@ pub fn inspect(live: &egui::Context, session: &Session, last_error: Option<&str>
     let ctx = egui::Context::default();
     ui::theme::apply(&ctx);
     ctx.enable_accesskit();
-    let input = egui::RawInput { screen_rect: Some(live.screen_rect()), ..Default::default() };
+    let input = egui::RawInput { screen_rect: Some(live.viewport_rect()), ..Default::default() };
     // Two passes: layouts that size themselves on the first frame settle.
-    let _ = ctx.run(input.clone(), |c| drop(ui::show(c, session, last_error)));
-    let out = ctx.run(input, |c| drop(ui::show(c, session, last_error)));
+    // Nothing renders these passes; drop their texture uploads explicitly.
+    ctx.run_ui(input.clone(), |u| drop(ui::show(u, session, last_error))).textures_delta.clear();
+    let mut out = ctx.run_ui(input, |u| drop(ui::show(u, session, last_error)));
+    out.textures_delta.clear();
     let Some(update) = out.platform_output.accesskit_update else { return json!({ "error": "no accessibility output" }) };
     let nodes: std::collections::HashMap<_, _> = update.nodes.into_iter().collect();
     let root = update.tree.map(|t| t.root);
@@ -114,7 +122,9 @@ fn node_json(nodes: &std::collections::HashMap<accesskit::NodeId, accesskit::Nod
     let Some(n) = nodes.get(&id) else { return Value::Null };
     let mut v = serde_json::Map::new();
     v.insert("role".into(), json!(format!("{:?}", n.role())));
-    if let Some(s) = n.name() {
+    // AccessKit 0.25 carries a text label's words in `value`; keep `label` for agents.
+    let text_label = (n.role() == accesskit::Role::Label).then(|| n.value()).flatten();
+    if let Some(s) = n.label().or(text_label) {
         v.insert("label".into(), json!(s));
     }
     if let Some(s) = n.value() {

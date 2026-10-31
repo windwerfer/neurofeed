@@ -3,9 +3,9 @@
 use super::theme;
 use nf_core::{mains_name, AppState, Command, LinkState, MainsMode, Session};
 
-pub fn show(ctx: &egui::Context, session: &Session, error: Option<&str>, out: &mut Vec<Command>) {
+pub fn show(root: &mut egui::Ui, session: &Session, error: Option<&str>, out: &mut Vec<Command>) {
     let state = session.state();
-    egui::TopBottomPanel::top("topbar").exact_height(theme::TOPBAR_HEIGHT).show(ctx, |ui| {
+    egui::Panel::top("topbar").exact_size(theme::TOPBAR_HEIGHT).show(root, |ui| {
         ui.horizontal_centered(|ui| {
             if ui.button("☰").on_hover_text("Toggle sidebar").clicked() {
                 out.push(Command::SidebarSet { open: !state.sidebar_open });

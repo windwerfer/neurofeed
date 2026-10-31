@@ -55,10 +55,10 @@ const PAGES: [(&str, &str, &[&str]); 5] = [
 ];
 
 pub fn show(ctx: &egui::Context, out: &mut Vec<Command>) {
-    let key = Id::new("onboarding_page");
+    let key = Id::unique("onboarding_page");
     let mut page: usize = ctx.data(|d| d.get_temp(key)).unwrap_or(0).min(PAGES.len() - 1);
-    let screen = ctx.screen_rect();
-    egui::Area::new(Id::new("onboarding_dim")).fixed_pos(screen.min).order(egui::Order::Middle).show(ctx, |ui| {
+    let screen = ctx.content_rect();
+    egui::Area::new(Id::unique("onboarding_dim")).fixed_pos(screen.min).order(egui::Order::Middle).show(ctx, |ui| {
         ui.painter().rect_filled(screen, 0.0, Color32::from_black_alpha(160));
         ui.allocate_rect(screen, egui::Sense::click());
     });

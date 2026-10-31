@@ -12,6 +12,8 @@ import android.util.Log
 import android.view.WindowManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.google.androidgamesdk.GameActivity
 import java.io.File
 
@@ -31,6 +33,7 @@ class MainActivity : GameActivity() {
         @JvmStatic external fun nativePicked(name: String, data: ByteArray)
         @JvmStatic external fun nativeFolder(label: String)
         @JvmStatic external fun nativePaused()
+        @JvmStatic external fun nativeInsets(left: Int, top: Int, right: Int, bottom: Int)
     }
 
     private val openDoc = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -48,6 +51,12 @@ class MainActivity : GameActivity() {
         nativeInit(this) // btleplug/droidplug needs the app class loader
         folderUri()?.let { nativeFolder(labelOf(it)) }
         requestRuntimePermissions()
+        // Status/navigation bars and cutouts: Rust keeps the UI inside them.
+        ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { v, ins ->
+            val b = ins.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            nativeInsets(b.left, b.top, b.right, b.bottom)
+            ViewCompat.onApplyWindowInsets(v, ins)
+        }
     }
 
     override fun onPause() {

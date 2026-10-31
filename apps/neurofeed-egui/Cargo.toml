@@ -7,8 +7,9 @@ description = "egui/eframe prototype of the NeuroFeed UI (desktop + web)"
 
 
 [dependencies]
-eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow"] }
-egui = "0.29"
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow"] }
+# Monochrome emoji fonts: egui 0.37 no longer bundles ☰ ⏺ ⏸ by default.
+egui = { version = "0.37", features = ["monochrome_emoji_fonts"] }
 log.workspace = true
 nf-core.workspace = true
 nf-audio = { workspace = true, features = ["decode"] }
@@ -25,13 +26,12 @@ native-audio = ["dep:cpal"]
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 nf-device.workspace = true
 nf-ai.workspace = true
-egui = { version = "0.29", features = ["accesskit"] }
 nf-mcp = { workspace = true, default-features = false }
 png = "0.18"
-cpal = { version = "0.16", optional = true }
+cpal = { version = "0.18", optional = true }
 nf-store = { workspace = true, features = ["sqlite"] }
 env_logger = "0.11"
-eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow", "wayland", "x11", "accesskit"] }
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "wayland", "x11", "accesskit"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 nf-store = { workspace = true, features = ["indexeddb"] }

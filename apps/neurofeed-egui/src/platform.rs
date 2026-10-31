@@ -24,6 +24,11 @@ pub trait Platform: Send + Sync {
     fn keep_screen_on(&self, on: bool);
     /// True once after the app went to the background (checkpoint now).
     fn take_paused(&self) -> bool;
+    /// Screen edges covered by system bars / cutouts, in physical pixels,
+    /// as `[left, top, right, bottom]`. Desktop and web have none.
+    fn safe_insets_px(&self) -> [f32; 4] {
+        [0.0; 4]
+    }
 }
 
 static PLATFORM: OnceLock<Box<dyn Platform>> = OnceLock::new();

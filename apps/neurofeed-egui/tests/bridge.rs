@@ -37,10 +37,12 @@ fn agent_drives_live_ui() {
         ..Default::default()
     };
     for _ in 0..400 {
-        let _ = ctx.run(input(), |c| {
-            bridge.poll(c, &mut session, None);
-            drop(ui::show(c, &session, None));
-        });
+        ctx.run_ui(input(), |u| {
+            bridge.poll(&u.ctx().clone(), &mut session, None);
+            drop(ui::show(u, &session, None));
+        })
+        .textures_delta
+        .clear();
         if agent.is_finished() {
             break;
         }

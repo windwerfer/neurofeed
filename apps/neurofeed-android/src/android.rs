@@ -3,20 +3,23 @@
 //! Kotlin → Rust (`MainActivity` natives): `nativeInit` (btleplug/droidplug
 //! needs a JNI env on a Java thread with the app class loader), `nativePicked`
 //! (file from the system picker), `nativeFolder` (chosen export folder),
-//! `nativePaused` (activity went to the background).
+//! `nativePaused` (activity went to the background), `nativeInsets`
+//! (system-bar insets, so the UI stays out from under them).
 //! Rust → Kotlin (activity methods, via `ndk-context`): `pickImport`,
 //! `pickFolder`, `exportFile`, `keepScreenOn`.
 
 use jni::objects::{JByteArray, JClass, JObject, JString, JValue};
 use jni::{Env, EnvUnowned, JavaVM};
 use neurofeed_egui::platform::{self, Platform};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Mutex;
 use winit::platform::android::activity::AndroidApp;
 
 static PICKED: Mutex<Option<(String, Vec<u8>)>> = Mutex::new(None);
 static FOLDER: Mutex<Option<String>> = Mutex::new(None);
 static PAUSED: AtomicBool = AtomicBool::new(false);
+/// System-bar insets in px (left, top, right, bottom), stored as f32 bits.
+static INSETS: [AtomicU32; 4] = [AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0), AtomicU32::new(0)];
 
 #[no_mangle]
 fn android_main(app: AndroidApp) {
@@ -97,6 +100,9 @@ impl Platform for Hooks {
     fn take_paused(&self) -> bool {
         PAUSED.swap(false, Ordering::Relaxed)
     }
+    fn safe_insets_px(&self) -> [f32; 4] {
+        INSETS.each_ref().map(|a| f32::from_bits(a.load(Ordering::Relaxed)))
+    }
 }
 
 fn guard(env: *mut jni::sys::JNIEnv, name: &str, f: impl FnOnce(&mut Env) -> jni::errors::Result<()>) {
@@ -148,4 +154,18 @@ pub extern "system" fn Java_org_neurofeed_android_MainActivity_nativeFolder(env:
 #[no_mangle]
 pub extern "system" fn Java_org_neurofeed_android_MainActivity_nativePaused(_env: *mut jni::sys::JNIEnv, _c: JClass) {
     PAUSED.store(true, Ordering::Relaxed);
+}
+
+#[no_mangle]
+pub extern "system" fn Java_org_neurofeed_android_MainActivity_nativeInsets(
+    _env: *mut jni::sys::JNIEnv,
+    _c: JClass,
+    left: jni::sys::jint,
+    top: jni::sys::jint,
+    right: jni::sys::jint,
+    bottom: jni::sys::jint,
+) {
+    for (a, v) in INSETS.iter().zip([left, top, right, bottom]) {
+        a.store((v.max(0) as f32).to_bits(), Ordering::Relaxed);
+    }
 }
