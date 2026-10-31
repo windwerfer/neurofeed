@@ -8,7 +8,7 @@
 use crate::feedback::{Phase, SecondResult};
 use nf_feedback::{Dirty, HeldBack};
 use nf_format::{feedback_flags as ff, trust_bits as tb, Record};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// One second of the trust trace.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -55,8 +55,9 @@ pub struct Totals {
     pub guard_chimes: u32,
 }
 
-/// A gesture mark (import annotations: double blink / double jaw clench).
-#[derive(Debug, Clone, PartialEq, Serialize)]
+/// A gesture mark: double_blink | double_jaw_clench | eye_up | eye_down
+/// (live detector or import annotations).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Mark {
     pub t: f64,
     pub kind: String,
@@ -241,4 +242,9 @@ pub fn marks(import: Option<&serde_json::Value>) -> Vec<Mark> {
             Some(Mark { t: a["onset"].as_f64()?, kind: kind.to_owned() })
         })
         .collect()
+}
+
+/// Live gesture marks saved with a feedback session (`context.marks`).
+pub fn live_marks(context: Option<&serde_json::Value>) -> Vec<Mark> {
+    context.and_then(|c| serde_json::from_value(c["marks"].clone()).ok()).unwrap_or_default()
 }

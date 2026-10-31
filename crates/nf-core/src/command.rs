@@ -198,6 +198,12 @@ pub enum Command {
     FeedbackStop,
     #[serde(rename = "feedback.pause")]
     FeedbackPause,
+    /// Debug: replace the protocol feature with `value` (`null` = off).
+    #[serde(rename = "feedback.override")]
+    FeedbackOverride {
+        #[serde(default)]
+        value: Option<f64>,
+    },
     #[serde(rename = "feedback.resume")]
     FeedbackResume,
     /// Fit check → calibration (45 good seconds, at most 60 s).
@@ -416,6 +422,13 @@ pub struct CommandSpec {
     pub enabled: EnabledFn,
 }
 
+fn debug_on(s: &AppState) -> Result<(), String> {
+    if s.settings.debug {
+        Ok(())
+    } else {
+        Err("turn on debug mode first (Settings → Debug)".into())
+    }
+}
 fn always(_: &AppState) -> Result<(), String> {
     Ok(())
 }
@@ -810,6 +823,7 @@ pub const SPECS: &[CommandSpec] = &[
     ),
     spec("feedback.start", "Start session", "feedback", false, "Start a session (fit check first).", fb_can_start),
     spec("feedback.stop", "End session", "feedback", false, "End the session and build the summary.", fb_active),
+    spec("feedback.override", "Feature override", "feedback", false, "Debug: force the feature value (null = off).", debug_on),
     spec("feedback.pause", "Pause training", "feedback", false, "Pause training.", fb_playing),
     spec("feedback.resume", "Resume training", "feedback", false, "Resume a user pause.", fb_paused),
     spec("feedback.status", "Session status", "feedback", true, "Phase, fit, calibration, last second, summary.", always),
@@ -911,6 +925,7 @@ fn base_examples() -> Vec<Request> {
         Q(Query::FeedbackNerd),
         C(Command::HistoryNotes { id: 1, notes: "felt calm".into() }),
         C(Command::FeedbackPause),
+        C(Command::FeedbackOverride { value: Some(0.4) }),
         C(Command::FeedbackResume),
         C(Command::CalibrationStart { anyway: false }),
         C(Command::CalibrationSkip),

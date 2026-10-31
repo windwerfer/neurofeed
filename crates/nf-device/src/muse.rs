@@ -3,7 +3,8 @@
 //! the background; `scan`/`open` never block the caller.
 //!
 //! Limits (same as the legacy app): Athena firmware streams EEG ch 0–3 but
-//! its PPG is not decoded yet, and AUX/FPz channels are dropped.
+//! its PPG is not decoded yet. AUX inputs arrive as electrodes 4.. (the
+//! session shows / records them only when Settings asks for it).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,7 +21,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(18);
 /// Translate one muse-rs event into feed blocks.
 pub fn map_muse_event(ev: MuseEvent) -> Vec<Block> {
     match ev {
-        MuseEvent::Eeg(r) if r.electrode < MUSE_CHANNELS.len() => {
+        MuseEvent::Eeg(r) if r.electrode < MUSE_CHANNELS.len() + crate::MUSE_AUX.len() => {
             vec![Block::Eeg(r.electrode as u16, r.samples.iter().map(|&x| x as f32).collect())]
         }
         MuseEvent::Ppg(r) if r.ppg_channel < 3 => vec![Block::Ppg(r.ppg_channel as u16, r.samples.iter().map(|&x| x as f32).collect())],
@@ -120,7 +121,7 @@ impl DeviceProvider for MuseProvider {
         let stop2 = stop.clone();
         let shared = self.shared.clone();
         rt.spawn(async move {
-            let client = MuseClient::new(MuseClientConfig { enable_ppg: true, ..Default::default() });
+            let client = MuseClient::new(MuseClientConfig { enable_ppg: true, enable_aux: true, ..Default::default() });
             let conn = tokio::time::timeout(CONNECT_TIMEOUT, async {
                 let (rx, handle) = client.connect_to(dev).await?;
                 handle.start(true, false).await?;
@@ -170,7 +171,8 @@ mod tests {
     fn muse_events_map_to_blocks() {
         let eeg = |electrode| MuseEvent::Eeg(EegReading { index: 1, electrode, timestamp: 0.0, samples: vec![1.5; 12] });
         assert_eq!(map_muse_event(eeg(2)), vec![Block::Eeg(2, vec![1.5; 12])]);
-        assert!(map_muse_event(eeg(4)).is_empty(), "AUX / Athena extra channels are dropped");
+        assert_eq!(map_muse_event(eeg(4)).len(), 1, "AUX1 is forwarded");
+        assert!(map_muse_event(eeg(8)).is_empty(), "beyond AUX4 is dropped");
         let ppg = MuseEvent::Ppg(PpgReading { index: 1, ppg_channel: 1, timestamp: 0.0, samples: vec![70_000; 6] });
         assert_eq!(map_muse_event(ppg), vec![Block::Ppg(1, vec![70_000.0; 6])]);
         let xyz = XyzSample { x: 0.0, y: 0.1, z: 1.0 };

@@ -65,6 +65,58 @@ impl MovementDetector {
 pub struct GestureReport {
     pub blink_count: u32,
     pub clench: bool,
+    /// Vertical eye position (experimental): 0 neutral, 1 up, 2 down.
+    pub eye: u8,
+}
+
+/// EWMA rate of the eye EOG baseline (adapted only while neutral).
+const EYE_LEARN: f64 = 0.05;
+/// EOG deviation must exceed this multiple of its rolling magnitude scale.
+const EYE_MULT: f64 = 2.0;
+/// Absolute floor for the EOG deviation (µV).
+const EYE_MIN_UV: f64 = 20.0;
+
+/// Legacy eye up/down estimate: per-second mean of the raw frontal pads minus
+/// the temporal pads, against an adaptive baseline (legacy gesture.rs).
+#[derive(Debug, Clone, Default)]
+struct Eye {
+    sums: Vec<(f64, usize)>,
+    scale: f64,
+    baseline: f64,
+}
+
+impl Eye {
+    fn mean(&self, pads: &[usize]) -> Option<f64> {
+        let m: Vec<f64> = pads.iter().filter_map(|e| self.sums.get(*e).filter(|s| s.1 > 0).map(|s| s.0 / s.1 as f64)).collect();
+        (!m.is_empty()).then(|| m.iter().sum::<f64>() / m.len() as f64)
+    }
+
+    fn tick(&mut self, frontal: &[usize], temporal: &[usize]) -> u8 {
+        let state = match (self.mean(frontal), self.mean(temporal)) {
+            (Some(f), Some(p)) => self.update(f - p),
+            _ => 0,
+        };
+        self.sums.iter_mut().for_each(|s| *s = (0.0, 0));
+        state
+    }
+
+    fn update(&mut self, eog: f64) -> u8 {
+        if self.scale <= 0.0 {
+            self.scale = eog.abs();
+            self.baseline = eog;
+        }
+        let dev = eog - self.baseline;
+        let thr = (self.scale * EYE_MULT).max(EYE_MIN_UV);
+        if dev.abs() <= thr {
+            self.scale = self.scale * (1.0 - EYE_LEARN) + eog.abs() * EYE_LEARN;
+            self.baseline = self.baseline * (1.0 - EYE_LEARN) + eog * EYE_LEARN;
+            0
+        } else if dev > 0.0 {
+            1
+        } else {
+            2
+        }
+    }
 }
 
 /// Blink (frontal first-difference energy bursts) and jaw clench (temporal
@@ -80,6 +132,7 @@ pub struct GestureDetector {
     gamma: Vec<Option<f64>>,
     clench_baseline: f64,
     blinks: u32,
+    eye: Eye,
 }
 
 impl GestureDetector {
@@ -95,11 +148,16 @@ impl GestureDetector {
             gamma: vec![None; channels],
             clench_baseline: 0.0,
             blinks: 0,
+            eye: Eye { sums: vec![(0.0, 0); channels], ..Eye::default() },
         }
     }
 
     /// Feed one electrode's samples (µV) as they arrive.
     pub fn feed_eeg(&mut self, electrode: usize, samples: &[f32]) {
+        if let Some(s) = self.eye.sums.get_mut(electrode) {
+            s.0 += samples.iter().map(|x| f64::from(*x)).sum::<f64>();
+            s.1 += samples.len();
+        }
         if !self.frontal.contains(&electrode) {
             return;
         }
@@ -150,7 +208,8 @@ impl GestureDetector {
                 self.clench_baseline = self.clench_baseline * (1.0 - CLENCH_LEARN) + g * CLENCH_LEARN;
             }
         }
-        let r = GestureReport { blink_count: self.blinks, clench };
+        let eye = self.eye.tick(&self.frontal, &self.temporal);
+        let r = GestureReport { blink_count: self.blinks, clench, eye };
         self.blinks = 0;
         r
     }
@@ -160,6 +219,24 @@ impl GestureDetector {
 mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
+
+    #[test]
+    fn eye_up_and_down_follow_the_frontal_minus_temporal_level() {
+        let mut g = GestureDetector::new(4, vec![1, 2], vec![0, 3]);
+        let second = |g: &mut GestureDetector, front: f32| {
+            for e in 0..4 {
+                let v = if e == 1 || e == 2 { front } else { 0.0 };
+                g.feed_eeg(e, &[v; 256]);
+            }
+            g.tick().eye
+        };
+        for _ in 0..5 {
+            assert_eq!(second(&mut g, 2.0), 0);
+        }
+        assert_eq!(second(&mut g, 80.0), 1);
+        assert_eq!(second(&mut g, -80.0), 2);
+        assert_eq!(second(&mut g, 2.0), 0);
+    }
 
     #[test]
     fn still_head_is_not_movement_and_shaking_is() {
@@ -185,7 +262,7 @@ mod tests {
             .collect();
         g.feed_eeg(1, &blink);
         g.feed_gamma(0, 5.0);
-        assert_eq!(g.tick(), GestureReport { blink_count: 1, clench: true });
+        assert_eq!(g.tick(), GestureReport { blink_count: 1, clench: true, eye: 0 });
         // Repeated blinks keep counting (baseline learns from quiet bins only).
         for _ in 0..20 {
             g.feed_eeg(1, &blink);

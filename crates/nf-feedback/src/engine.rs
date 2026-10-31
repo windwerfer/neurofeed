@@ -280,7 +280,7 @@ impl Engine {
         let now = input.t;
         let mut rec = Record { t: now, ..Record::default() };
         let rel = input.rel_bands();
-        let value = rel.and_then(|r| r.feature(self.cfg.feature)).filter(|v| v.is_finite());
+        let value = input.feature_value(rel.as_ref(), self.cfg.feature);
         // Fix (decisions 2026-10-29): guard muffle withholds reward in both policies.
         let guard_blocks = self.warning && self.cfg.guard.is_some_and(|g| g.muffle);
         let dirty = input.artifact.map(|a| match a {

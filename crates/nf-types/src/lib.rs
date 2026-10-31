@@ -102,6 +102,10 @@ pub struct DeviceInfo {
     /// Accelerometer rate (Muse 52 Hz), `None` without one.
     #[serde(default)]
     pub accel_rate_hz: Option<f64>,
+    /// Auxiliary inputs (Muse AUX1..), sent as `EegPacket`s with electrode
+    /// `channels.len() + k`. Not EEG: they never feed bands or feedback.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aux_channels: Vec<String>,
 }
 
 impl DeviceInfo {
@@ -155,6 +159,11 @@ pub trait DeviceSource: Send {
     }
     /// Accelerometer packets due up to `now`. Default: none.
     fn poll_accel(&mut self, _now: f64) -> Vec<AccelPacket> {
+        Vec::new()
+    }
+    /// Device-reported pad quality frames since the last call, one value
+    /// 0..=1 per EEG channel (Neurosity Crown `signalQuality`). Default: none.
+    fn poll_quality(&mut self, _now: f64) -> Vec<Vec<f32>> {
         Vec::new()
     }
     /// Transport state (real devices connect asynchronously). Default: streaming.

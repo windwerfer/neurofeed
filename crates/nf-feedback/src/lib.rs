@@ -216,9 +216,19 @@ pub struct Input {
     /// Fresh AI guard probability this second (`None` = no score).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ai: Option<f64>,
+    /// Debug feature override (legacy FeatureOverride): replaces the
+    /// protocol feature computed from `pads`; pad gating still applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feature: Option<f64>,
 }
 
 impl Input {
+    /// The protocol feature this second (the override wins).
+    pub fn feature_value(&self, rel: Option<&RelBands>, f: Feature) -> Option<f64> {
+        rel?;
+        self.feature.or_else(|| rel.and_then(|r| r.feature(f))).filter(|v| v.is_finite())
+    }
+
     /// The guard value for `cfg` (absolute delta or AI probability).
     pub fn guard_value(&self, cfg: &GuardConfig) -> Option<f64> {
         match cfg.source {

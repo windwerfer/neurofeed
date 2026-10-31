@@ -95,6 +95,9 @@ const FAULT_UV: f64 = 200.0;
 #[derive(Clone, Default)]
 struct Live {
     signal: Option<Signal>,
+    /// Crown-reported pad quality since the last snapshot: (sums, frames).
+    crown_q: (Vec<f64>, u32),
+    side: Option<crate::side::Side>,
     optics: Option<crate::optics::Optics>,
     recorder: Option<Recorder>,
     finished: Option<Finished>,
@@ -335,6 +338,7 @@ impl Session {
             "mains": s.mains_mode,
             "audio": s.audio,
             "settings": s.settings,
+            "marks": if trained && s.settings.markers_in_feedback { s.feedback.marks.clone() } else { Vec::new() },
         })
     }
 
@@ -512,6 +516,7 @@ impl Session {
         let now = self.state.time;
         self.sync_lsl();
         if let Some((mut packets, optical, accel)) = self.poll_device(now) {
+            self.route_aux(&mut packets, &accel);
             self.route_side_streams(&packets, &optical, &accel);
             let full = self.process_eeg(&mut packets);
             self.flush_stream();
@@ -529,12 +534,46 @@ impl Session {
 
     /// Drain the device (always, so resume has no backlog burst; pause only
     /// freezes the views), track the link and apply simulated faults.
+    /// Queue device-reported pad quality (Crown) for the next snapshot; a
+    /// simulated bad pad reports poor quality too.
+    fn crown_quality(&mut self, frames: Vec<Vec<f32>>) {
+        for mut f in frames {
+            for &b in &self.live.fault.bad {
+                if let Some(q) = f.get_mut(b) {
+                    *q = 0.1;
+                }
+            }
+            let acc = &mut self.live.crown_q;
+            acc.0.resize(f.len(), 0.0);
+            acc.0.iter_mut().zip(&f).for_each(|(s, q)| *s += f64::from(*q));
+            acc.1 += 1;
+        }
+    }
+
+    /// Settings → Devices "Crown signal quality": replace the app score with
+    /// the Crown's own average of the last second (seconds without one keep
+    /// the app score). Legacy `resolve_pad_quality`.
+    fn apply_crown_quality(&mut self) {
+        let (sum, n) = std::mem::take(&mut self.live.crown_q);
+        let crown = self.state.device.as_ref().is_some_and(|d| d.kind == nf_types::DeviceKind::Crown);
+        if n == 0 || !crown || self.state.settings.crown_quality != crate::settings::QualitySource::Crown {
+            return;
+        }
+        if let Some(sig) = self.live.signal.as_mut() {
+            for (q, s) in sig.quality.iter_mut().zip(&sum) {
+                *q = crate::signal::crown_quality_to_score(s / f64::from(n)) as f32;
+            }
+        }
+    }
+
     fn poll_device(&mut self, now: f64) -> Option<Polled> {
         let src = self.source.as_mut()?;
         let mut packets = src.poll(now);
         let mut optical = src.poll_ppg(now);
         let mut accel = src.poll_accel(now);
+        let quality = src.poll_quality(now);
         let link = src.link();
+        self.crown_quality(quality);
         if self.state.link.as_ref() != Some(&link) {
             self.state.link = Some(link.clone());
             self.state.revision += 1;
@@ -559,6 +598,29 @@ impl Session {
             }
         }
         Some((packets, optical, accel))
+    }
+
+    /// Take AUX packets out of the EEG path: shown when Settings → Devices
+    /// "Muse AUX channels" is on, recorded when "Record AUX channels" is too.
+    /// Also feeds the Movement pane's accelerometer buffer.
+    fn route_aux(&mut self, packets: &mut Vec<EegPacket>, accel: &[AccelPacket]) {
+        let Some(side) = self.live.side.as_mut() else { return };
+        let (show, rec) = (self.state.settings.muse_aux, self.state.settings.muse_aux && self.state.settings.record_aux);
+        let paused = self.state.paused;
+        let recorder = &mut self.live.recorder;
+        packets.retain(|p| {
+            let Some(k) = side.aux_index(p) else { return usize::from(p.electrode) < side.aux_index_base() };
+            if show && !paused {
+                side.push_aux(k, &p.samples);
+            }
+            if let (true, Some(r)) = (rec, recorder.as_mut()) {
+                r.aux(p);
+            }
+            false
+        });
+        if !paused {
+            accel.iter().for_each(|p| side.push_accel(p));
+        }
     }
 
     /// Artifact detector, recorder (recording continues while paused), optics.
@@ -605,6 +667,7 @@ impl Session {
                 self.emit(Event::MainsChanged { applied: mains_name(after).into(), detected: mains_name(detected).into() });
             }
             let Some(snap) = snap else { continue };
+            self.apply_crown_quality();
             if self.state.streaming.settings.enabled {
                 self.live.streamer.bands(&snap);
             }
@@ -699,7 +762,8 @@ impl Session {
     pub fn history_trust(&self, id: u64) -> Result<crate::trust::Trust, CoreError> {
         let s = self.stored(id)?;
         let records = nf_format::parse_body(&s.body).map_err(|e| CoreError::BadRequest(e.0))?;
-        let marks = crate::trust::marks(s.meta.import.as_ref());
+        let mut marks = crate::trust::marks(s.meta.import.as_ref());
+        marks.extend(crate::trust::live_marks(s.meta.context.as_ref()));
         Ok(crate::trust::build(crate::trust::rows_from_records(&records), marks))
     }
 
@@ -740,7 +804,9 @@ impl Session {
                 obs.ai = None;
             }
             if let Some(a) = self.live.artifacts.as_mut() {
+                a.eye_markers = self.state.settings.eye_markers;
                 obs.artifact = a.second(t);
+                self.state.feedback.marks.append(&mut a.marks);
                 if let (Some(r), Some(s)) = (self.live.recorder.as_mut(), a.status.movement_score) {
                     r.movement(t, s);
                 }
@@ -1011,6 +1077,12 @@ impl Session {
             }
             Command::FeedbackStop => self.feedback(|t, o| t.stop("stopped", o)),
             Command::FeedbackPause => self.feedback(|t, o| t.pause(o)),
+            Command::FeedbackOverride { value } => {
+                if value.is_some_and(|v| !v.is_finite() || !(0.0..=10.0).contains(&v)) {
+                    return Err(CoreError::InvalidArgs("value must be in [0, 10]".into()));
+                }
+                self.state.feedback.feature_override = value;
+            }
             Command::FeedbackResume => self.feedback(|t, o| t.resume(o)),
             Command::CalibrationStart { anyway } => {
                 if !anyway && !self.state.feedback.fit_ready() {
@@ -1112,6 +1184,7 @@ impl Session {
         self.live.signal = Some(Signal::new(&info, self.state.mains_mode));
         self.live.optics = crate::optics::Optics::new(&info);
         self.live.artifacts = Some(crate::artifacts::Artifacts::new(&info));
+        self.live.side = Some(crate::side::Side::new(&info));
         self.emit(Event::Connected { id: info.id.clone() });
         self.state.link = Some(src.link());
         self.state.device = Some(info);
@@ -1126,6 +1199,7 @@ impl Session {
         self.live.signal = None;
         self.live.optics = None;
         self.live.artifacts = None;
+        self.live.side = None;
         self.state.bands.clear();
         if let Some(d) = self.state.device.take() {
             self.emit(Event::Disconnected { id: d.id });
@@ -1172,7 +1246,9 @@ impl Session {
                 json!({ "ok": problems.is_empty(), "problems": problems })
             }
             Query::AudioStatus => crate::audio::status(s),
-            Query::FeedbackTrust => json!(crate::trust::build(crate::trust::rows_from_results(&s.feedback.results), Vec::new())),
+            Query::FeedbackTrust => {
+                json!(crate::trust::build(crate::trust::rows_from_results(&s.feedback.results), s.feedback.marks.clone()))
+            }
             Query::HistoryTrust { id } => json!(self.history_trust(*id)?),
             Query::AiStatus => crate::ai::status_json(&s.ai),
             Query::StreamingStatus => crate::streaming::status(&s.streaming, s.device.as_ref()),
@@ -1276,6 +1352,11 @@ impl Session {
     }
 
     /// Typed read access for the HR+SpO2 view.
+    /// AUX and accelerometer buffers of the connected device.
+    pub fn side(&self) -> Option<&crate::side::Side> {
+        self.live.side.as_ref()
+    }
+
     pub fn optics(&self) -> Option<&crate::optics::Optics> {
         self.live.optics.as_ref()
     }

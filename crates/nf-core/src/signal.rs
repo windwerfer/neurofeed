@@ -241,3 +241,17 @@ fn push_capped(b: &mut VecDeque<f32>, x: f32, cap: usize) {
 fn tail(b: &VecDeque<f32>, n: usize) -> Option<Vec<f32>> {
     (b.len() >= n).then(|| b.iter().skip(b.len() - n).copied().collect())
 }
+
+/// Crown `signalQuality` that counts as adequate (legacy crown_quality.rs).
+pub const CROWN_QUALITY_ADEQUATE: f64 = 0.75;
+
+/// Map a Crown quality 0..=1 onto the app's 0..=100 pad score so "adequate"
+/// lands exactly on [`USABLE_QUALITY`].
+pub fn crown_quality_to_score(q: f64) -> f64 {
+    let q = q.clamp(0.0, 1.0);
+    if q <= CROWN_QUALITY_ADEQUATE {
+        q / CROWN_QUALITY_ADEQUATE * USABLE_QUALITY
+    } else {
+        USABLE_QUALITY + (q - CROWN_QUALITY_ADEQUATE) / (1.0 - CROWN_QUALITY_ADEQUATE) * (100.0 - USABLE_QUALITY)
+    }
+}

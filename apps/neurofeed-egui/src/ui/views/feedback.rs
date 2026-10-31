@@ -278,7 +278,7 @@ fn calibrating(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<
             ui.set_max_width(520.0);
             ui.label(RichText::new("No awake reference").strong().color(BAD));
             ui.label("The AI model gave no score during the eyes-open step, so Sleep Guard cannot learn your drowsiness baseline and these seconds do not count.");
-            ui.weak("Cancel, check the model is Ready (Settings > AI), then calibrate again.");
+            ui.weak("Cancel, check the model is Ready (Settings → AI), then calibrate again.");
         });
     } else {
         match &c.waiting {

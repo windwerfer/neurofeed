@@ -97,6 +97,8 @@ pub struct SimDevice {
     /// Upcoming beat onsets (device seconds), oldest first.
     beats: Vec<f64>,
     beat_rng: u64,
+    /// Whole seconds of Crown quality already sent.
+    quality_sent: u64,
 }
 
 /// Background: sines near every 1.5 Hz from 1.5 to ~44 Hz with amplitude
@@ -113,7 +115,18 @@ impl SimDevice {
 
     pub fn with_info(info: DeviceInfo, config: SimConfig) -> Self {
         let beat_rng = (config.seed ^ 0xD1B5_4A32_D192_ED03).max(1);
-        Self { info, config, start: None, next: 0, rng: config.seed.max(1), ppg_next: 0, accel_next: 0, beats: vec![0.2], beat_rng }
+        Self {
+            info,
+            config,
+            start: None,
+            next: 0,
+            rng: config.seed.max(1),
+            ppg_next: 0,
+            accel_next: 0,
+            beats: vec![0.2],
+            beat_rng,
+            quality_sent: 0,
+        }
     }
 
     /// Normalised pulse at `t` (device s): systolic peak (1.0 at 0.12 s
@@ -223,9 +236,26 @@ impl DeviceSource for SimDevice {
                 let electrode = u16::try_from(ch).unwrap_or(u16::MAX);
                 out.push(EegPacket { time: start + (first + 11) as f64 / SAMPLE_RATE_HZ, electrode, samples });
             }
+            // AUX: a slow 1 Hz, 40 µV sine (no RNG, so EEG noise is unchanged).
+            let n = self.info.channels.len();
+            for k in 0..self.info.aux_channels.len() {
+                let samples =
+                    (0..SAMPLES_PER_PACKET as u64).map(|i| (40.0 * (TAU * (first + i) as f64 / SAMPLE_RATE_HZ).sin()) as f32).collect();
+                let electrode = u16::try_from(n + k).unwrap_or(u16::MAX);
+                out.push(EegPacket { time: start + (first + 11) as f64 / SAMPLE_RATE_HZ, electrode, samples });
+            }
             self.next += SAMPLES_PER_PACKET as u64;
         }
         out
+    }
+
+    /// Simulated Crown: a per-pad `signalQuality` of 0.9 once per second.
+    fn poll_quality(&mut self, now: f64) -> Vec<Vec<f32>> {
+        let Some(start) = self.start.filter(|_| self.info.kind == DeviceKind::Crown) else { return Vec::new() };
+        let sec = (now - start).floor().max(0.0) as u64;
+        let n = sec.saturating_sub(self.quality_sent);
+        self.quality_sent = sec;
+        vec![vec![0.9; self.info.channels.len()]; usize::try_from(n.min(2)).unwrap_or(0)]
     }
 
     fn poll_ppg(&mut self, now: f64) -> Vec<PpgPacket> {
@@ -301,6 +331,7 @@ pub fn sim_info(kind: DeviceKind) -> DeviceInfo {
         ppg_channels: if kind == DeviceKind::Muse { PPG_CHANNELS.iter().map(|c| (*c).to_owned()).collect() } else { Vec::new() },
         ppg_rate_hz: (kind == DeviceKind::Muse).then_some(PPG_RATE_HZ),
         accel_rate_hz: Some(ACCEL_RATE_HZ),
+        aux_channels: if kind == DeviceKind::Muse { vec!["AUX1".into()] } else { Vec::new() },
     }
 }
 
@@ -339,7 +370,7 @@ mod tests {
         let split: Vec<_> = b.poll(0.5).into_iter().chain(b.poll(1.0)).collect();
         assert_eq!(pa, split);
         // 257 samples due → 21 whole packets × 4 channels.
-        assert_eq!(pa.len(), 21 * 4);
+        assert_eq!(pa.len(), 21 * 5, "4 EEG + AUX1");
         assert!(pa.iter().all(|p| p.samples.len() == SAMPLES_PER_PACKET && p.time <= 1.0));
         assert!(a.poll(1.0).is_empty());
     }

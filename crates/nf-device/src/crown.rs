@@ -146,6 +146,14 @@ impl Hub {
         if leaf == "raw" {
             self.routes.retain_mut(|r| r.id != id || r.raw(&m.args));
         }
+        if leaf == "signalQuality" {
+            let mut v = Vec::new();
+            floats(&m.args, &mut v);
+            // 8 per-pad values 0..=1; a single overall value is not per pad.
+            if v.len() == N && v.iter().all(|q| (0.0..=1.0).contains(q)) {
+                self.routes.retain(|r| r.id != id || r.feed.quality(v.clone()));
+            }
+        }
     }
 }
 

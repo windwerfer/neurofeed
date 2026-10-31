@@ -33,6 +33,25 @@ pub struct UserSettings {
     /// Run the staged calibration (artifacts, eyes open, baseline) for
     /// every protocol, not only Sleep Guard (legacy "Always staged").
     pub always_staged: bool,
+    /// Detect eye up/down movements as gesture marks (experimental).
+    pub eye_markers: bool,
+    /// Save gesture marks with feedback sessions.
+    pub markers_in_feedback: bool,
+    /// Show Muse AUX inputs in the status bar and monitors (applies on connect).
+    pub muse_aux: bool,
+    /// Save AUX in recordings (only while `muse_aux` is on).
+    pub record_aux: bool,
+    /// Neurosity Crown pad quality: the Crown's own or the app's score.
+    pub crown_quality: QualitySource,
+}
+
+/// Where Crown pad signal quality comes from (applies on the next connect).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum QualitySource {
+    #[default]
+    Crown,
+    App,
 }
 
 impl Default for UserSettings {
@@ -44,6 +63,11 @@ impl Default for UserSettings {
             debug: true,
             gesture_markers: true,
             always_staged: false,
+            eye_markers: false,
+            markers_in_feedback: true,
+            muse_aux: false,
+            record_aux: true,
+            crown_quality: QualitySource::Crown,
         }
     }
 }
@@ -63,6 +87,16 @@ pub struct SettingsPatch {
     pub gesture_markers: Option<bool>,
     #[serde(default)]
     pub always_staged: Option<bool>,
+    #[serde(default)]
+    pub eye_markers: Option<bool>,
+    #[serde(default)]
+    pub markers_in_feedback: Option<bool>,
+    #[serde(default)]
+    pub muse_aux: Option<bool>,
+    #[serde(default)]
+    pub record_aux: Option<bool>,
+    #[serde(default)]
+    pub crown_quality: Option<QualitySource>,
 }
 
 /// Apply `p` to `s`, validating first (nothing changes on error).
@@ -87,6 +121,21 @@ pub fn apply(s: &mut UserSettings, p: &SettingsPatch) -> Result<(), String> {
     }
     if let Some(v) = p.debug {
         s.debug = v;
+    }
+    if let Some(v) = p.muse_aux {
+        s.muse_aux = v;
+    }
+    if let Some(v) = p.record_aux {
+        s.record_aux = v;
+    }
+    if let Some(v) = p.crown_quality {
+        s.crown_quality = v;
+    }
+    if let Some(v) = p.eye_markers {
+        s.eye_markers = v;
+    }
+    if let Some(v) = p.markers_in_feedback {
+        s.markers_in_feedback = v;
     }
     if let Some(v) = p.always_staged {
         s.always_staged = v;

@@ -29,7 +29,18 @@ pub struct Artifacts {
     movement: Option<MovementDetector>,
     gesture: GestureDetector,
     pub status: ArtifactStatus,
+    /// Settings: emit eye up/down marks (experimental, off by default).
+    pub eye_markers: bool,
+    /// Gesture marks of the last evaluated second (drained by the session).
+    pub marks: Vec<crate::trust::Mark>,
+    last_blink: Option<f64>,
+    last_clench: Option<f64>,
+    clenching: bool,
+    eye: u8,
 }
+
+/// Two blinks (or two jaw clenches) within this window form a "double" mark.
+const DOUBLE_S: f64 = 2.0;
 
 fn pads(info: &DeviceInfo, names: &[&str]) -> Vec<usize> {
     info.channels.iter().enumerate().filter(|(_, c)| names.contains(&c.as_str())).map(|(i, _)| i).collect()
@@ -41,6 +52,12 @@ impl Artifacts {
             movement: info.accel_rate_hz.map(MovementDetector::new),
             gesture: GestureDetector::new(info.channels.len(), pads(info, &FRONTAL), pads(info, &TEMPORAL)),
             status: ArtifactStatus::default(),
+            eye_markers: false,
+            marks: Vec::new(),
+            last_blink: None,
+            last_clench: None,
+            clenching: false,
+            eye: 0,
         }
     }
 
@@ -75,6 +92,32 @@ impl Artifacts {
             None
         };
         self.status = ArtifactStatus { time: t, movement_score: score, blinks: g.blink_count, clench: g.clench, artifact };
+        self.mark(t, g);
         artifact
+    }
+
+    /// Legacy gesture marks: double blink, double jaw clench (two clench
+    /// onsets within [`DOUBLE_S`]) and, when enabled, eye up/down onsets.
+    fn mark(&mut self, t: f64, g: nf_dsp::GestureReport) {
+        let mut add = |kind: &str| self.marks.push(crate::trust::Mark { t, kind: kind.to_owned() });
+        if g.blink_count >= 2 || (g.blink_count == 1 && self.last_blink.is_some_and(|b| t - b <= DOUBLE_S)) {
+            add("double_blink");
+            self.last_blink = None;
+        } else if g.blink_count == 1 {
+            self.last_blink = Some(t);
+        }
+        if g.clench && !self.clenching {
+            if self.last_clench.is_some_and(|c| t - c <= DOUBLE_S + 1.0) {
+                add("double_jaw_clench");
+                self.last_clench = None;
+            } else {
+                self.last_clench = Some(t);
+            }
+        }
+        self.clenching = g.clench;
+        if self.eye_markers && g.eye != self.eye && g.eye != 0 {
+            add(if g.eye == 1 { "eye_up" } else { "eye_down" });
+        }
+        self.eye = g.eye;
     }
 }

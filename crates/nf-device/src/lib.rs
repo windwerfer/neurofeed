@@ -41,6 +41,9 @@ pub const REANCHOR_S: f64 = 0.5;
 
 /// Muse/Crown EEG channel names.
 pub const MUSE_CHANNELS: [&str; 4] = ["TP9", "AF7", "AF8", "TP10"];
+/// Muse auxiliary inputs: AUX1 on Classic (electrode 4), AUX1..AUX4 on
+/// Athena (electrodes 4..7: FPz, AUX_R, AUX_L, AUX in muse-rs order).
+pub const MUSE_AUX: [&str; 4] = ["AUX1", "AUX2", "AUX3", "AUX4"];
 pub const CROWN_CHANNELS: [&str; 8] = ["CP3", "C3", "F5", "PO3", "PO4", "F6", "C4", "CP4"];
 pub const PPG_CHANNELS: [&str; 3] = ["ambient", "infrared", "red"];
 
@@ -56,6 +59,7 @@ pub fn muse_info(id: &str, name: &str) -> DeviceInfo {
         ppg_channels: PPG_CHANNELS.iter().map(|c| (*c).to_owned()).collect(),
         ppg_rate_hz: Some(64.0),
         accel_rate_hz: Some(52.0),
+        aux_channels: MUSE_AUX.iter().map(|c| (*c).to_owned()).collect(),
     }
 }
 
@@ -71,6 +75,7 @@ pub fn crown_info(id: &str, name: &str) -> DeviceInfo {
         ppg_channels: Vec::new(),
         ppg_rate_hz: None,
         accel_rate_hz: None,
+        aux_channels: Vec::new(),
     }
 }
 
@@ -85,6 +90,8 @@ pub enum Block {
     Accel(Vec<[f32; 3]>),
     /// Link state change.
     Link(LinkState),
+    /// Device-reported pad quality, one value 0..=1 per EEG channel (Crown).
+    Quality(Vec<f32>),
 }
 
 /// Transport side of a [`LiveSource`]. Cheap to clone; `send` fails once
@@ -107,6 +114,9 @@ impl Feed {
     }
     pub fn link(&self, state: LinkState) -> bool {
         self.send(Block::Link(state))
+    }
+    pub fn quality(&self, per_pad: Vec<f32>) -> bool {
+        self.send(Block::Quality(per_pad))
     }
 }
 
@@ -141,6 +151,7 @@ pub struct LiveSource {
     eeg: VecDeque<EegPacket>,
     ppg: VecDeque<PpgPacket>,
     accel: VecDeque<AccelPacket>,
+    quality: Vec<Vec<f32>>,
     /// Called on drop (transport teardown, e.g. BLE disconnect).
     on_drop: Option<Box<dyn FnOnce() + Send>>,
 }
@@ -149,7 +160,7 @@ impl LiveSource {
     /// A source plus the feed its transport writes to.
     pub fn new(info: DeviceInfo) -> (Self, Feed) {
         let (tx, rx) = mpsc::channel();
-        let n_eeg = info.channels.len();
+        let n_eeg = info.channels.len() + info.aux_channels.len();
         let n_ppg = info.ppg_channels.len();
         let s = Self {
             info,
@@ -161,6 +172,7 @@ impl LiveSource {
             eeg: VecDeque::new(),
             ppg: VecDeque::new(),
             accel: VecDeque::new(),
+            quality: Vec::new(),
             on_drop: None,
         };
         (s, Feed(tx))
@@ -201,6 +213,7 @@ impl LiveSource {
                     self.accel.push_back(AccelPacket { time, samples });
                 }
                 Block::Link(l) => self.link = l,
+                Block::Quality(q) => self.quality.push(q),
             }
         }
     }
@@ -231,6 +244,10 @@ impl DeviceSource for LiveSource {
     fn poll_accel(&mut self, now: f64) -> Vec<AccelPacket> {
         self.drain(now);
         due(&mut self.accel, now, |p| p.time)
+    }
+    fn poll_quality(&mut self, now: f64) -> Vec<Vec<f32>> {
+        self.drain(now);
+        std::mem::take(&mut self.quality)
     }
     fn link(&self) -> LinkState {
         self.link.clone()

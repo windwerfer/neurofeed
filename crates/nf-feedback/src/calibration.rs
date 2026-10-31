@@ -114,7 +114,7 @@ impl Calibration {
         if self.last_second != Some(second) {
             self.last_second = Some(second);
             let rel = input.rel_bands();
-            let reward = rel.and_then(|r| r.feature(self.cfg.feature)).filter(|v| v.is_finite() && !self.cfg.guard_only);
+            let reward = input.feature_value(rel.as_ref(), self.cfg.feature).filter(|_| !self.cfg.guard_only);
             let guard = self.cfg.guard.and_then(|g| input.guard_value(&g));
             let accept = input.artifact.is_none() && input.all_green();
             let usable = if self.cfg.guard_only { guard.is_some() } else { reward.is_some() || guard.is_some() };

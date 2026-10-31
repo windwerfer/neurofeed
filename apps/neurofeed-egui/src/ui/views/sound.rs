@@ -158,7 +158,7 @@ pub fn guard_row(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         };
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("✔ AI drowsiness guard").color(egui::Color32::from_rgb(0x66, 0xBB, 0x6A)));
-            ui.weak(format!("{} warns{mute} when {thr}. Change it in Settings > AI.", ai.settings.model().label()));
+            ui.weak(format!("{} warns{mute} when {thr}. Change it in Settings → AI.", ai.settings.model().label()));
         });
         return;
     }
@@ -169,6 +169,6 @@ pub fn guard_row(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         if r.changed() {
             out.push(Command::GuardSet { enabled: on });
         }
-        ui.weak(format!("Warns{mute} when delta rises above your calibration (p75). Load an AI model (Settings > AI) for the AI guard."));
+        ui.weak(format!("Warns{mute} when delta rises above your calibration (p75). Load an AI model (Settings → AI) for the AI guard."));
     });
 }

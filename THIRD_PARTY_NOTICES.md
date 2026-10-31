@@ -105,3 +105,10 @@ Sound assets are bundled by file. Attribution and license follow Freesound
 - **CC0 1.0** — most freesound audio.
 - **CC BY 4.0** — rain, singing-bowl, bell/chime freesound audio.
 - **CC BY-NC 4.0** — `guardrail-alarm-01.opus` (NonCommercial).
+
+## DejaVu Sans (subset) — apps/neurofeed-egui/assets/arrows.ttf
+
+A glyph subset (arrows, math signs, play/pause) of DejaVu Sans, used as a
+fallback font in the egui app. DejaVu fonts are based on Bitstream Vera:
+Copyright (c) 2003 Bitstream, Inc. (Bitstream Vera license); DejaVu changes are
+in the public domain. https://dejavu-fonts.github.io/License.html

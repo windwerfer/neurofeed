@@ -89,7 +89,7 @@ pub struct CalibrationProgress {
 }
 
 /// Shown when [`CalibrationProgress::awake_missing`].
-pub const AWAKE_MISSING: &str = "no awake reference: the AI model gave no score during the eyes-open step, so these seconds do not count. Cancel and restart calibration (check the model is Ready in Settings > AI)";
+pub const AWAKE_MISSING: &str = "no awake reference: the AI model gave no score during the eyes-open step, so these seconds do not count. Cancel and restart calibration (check the model is Ready in Settings → AI)";
 
 /// The per-second result record.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -139,6 +139,8 @@ pub struct Trainer {
     pub calibration: Option<CalibrationProgress>,
     pub played_s: u32,
     pub results: Vec<SecondResult>,
+    /// Live gesture marks of this session (session time).
+    pub marks: Vec<crate::trust::Mark>,
     pub summary: Option<Summary>,
     /// History id the finished session was saved under (for notes).
     pub saved_id: Option<u64>,
@@ -156,6 +158,8 @@ pub struct Trainer {
     pub ai_guard: Option<Option<f64>>,
     /// Settings "Always staged" (synced by the session before calibrating).
     pub always_staged: bool,
+    /// Debug: replace the protocol feature with this value (Settings debug mode).
+    pub feature_override: Option<f64>,
     cal: Option<Calibration>,
     engine: Option<Engine>,
     sample_t: f64,
@@ -178,12 +182,14 @@ impl Default for Trainer {
             guard: false,
             ai_guard: None,
             always_staged: false,
+            feature_override: None,
             phase: Phase::Idle,
             pads: Vec::new(),
             green_for: 0,
             calibration: None,
             played_s: 0,
             results: Vec::new(),
+            marks: Vec::new(),
             summary: None,
             saved_id: None,
             message: None,
@@ -287,6 +293,7 @@ impl Trainer {
             stability: self.stability,
             guard: self.guard,
             ai_guard: self.ai_guard,
+            feature_override: self.feature_override,
             baselines,
             ..Self::default()
         };
@@ -436,7 +443,14 @@ impl Trainer {
         if self.lost_since.take().is_some() && self.phase == (Phase::Paused { reason: PauseReason::Disconnected }) {
             self.resume(out);
         }
-        let input = Input { t: self.sample_t, pads: obs.pads.clone(), quality: obs.quality.clone(), artifact: obs.artifact, ai: obs.ai };
+        let input = Input {
+            t: self.sample_t,
+            pads: obs.pads.clone(),
+            quality: obs.quality.clone(),
+            artifact: obs.artifact,
+            ai: obs.ai,
+            feature: self.feature_override,
+        };
         match self.phase {
             Phase::FitCheck => {
                 self.green_for = if all_green { self.green_for + 1 } else { 0 };

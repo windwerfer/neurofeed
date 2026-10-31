@@ -5,7 +5,7 @@
 use nf_feedback::{protocol, Calibration, Engine, Input, STAGED_TIMED_S};
 
 fn sec(t: f64, ai: Option<f64>) -> Input {
-    Input { t, pads: vec![[0.2, 0.2, 0.3, 0.2, 0.1]; 4], quality: vec![100.0; 4], artifact: None, ai }
+    Input { t, pads: vec![[0.2, 0.2, 0.3, 0.2, 0.1]; 4], quality: vec![100.0; 4], artifact: None, ai, feature: None }
 }
 
 fn calibrate(

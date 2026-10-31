@@ -152,9 +152,9 @@ impl AiState {
         let m = self.settings.model();
         match self.model_state(m) {
             Some(AiModelState::Ready { .. }) => Ok(()),
-            Some(AiModelState::Missing) | None => Err(format!("{} is not installed (Settings > AI)", m.label())),
+            Some(AiModelState::Missing) | None => Err(format!("{} is not installed (Settings → AI)", m.label())),
             Some(AiModelState::Installing { .. }) => Err(format!("{} is still installing", m.label())),
-            Some(AiModelState::Installed) => Err(format!("{} is installed but not loaded (Settings > AI > Load)", m.label())),
+            Some(AiModelState::Installed) => Err(format!("{} is installed but not loaded (Settings → AI → Load)", m.label())),
             Some(AiModelState::Loading) => Err(format!("{} is loading", m.label())),
             Some(AiModelState::Failed { message }) => Err(format!("{}: {message}", m.label())),
         }

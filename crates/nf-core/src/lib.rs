@@ -20,6 +20,7 @@ mod recording;
 pub mod report;
 mod session;
 pub mod settings;
+pub mod side;
 pub mod signal;
 mod state;
 pub mod streaming;

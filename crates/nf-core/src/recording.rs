@@ -71,6 +71,15 @@ impl Recorder {
         self.info.bytes < MAX_BODY_BYTES
     }
 
+    /// AUX input (electrode `channels.len() + k`, like the legacy recorder).
+    pub fn aux(&mut self, p: &EegPacket) {
+        self.writer.push(&Record::Eeg {
+            ts: p.time,
+            electrode: i16::try_from(p.electrode).unwrap_or(i16::MAX),
+            samples: p.samples.clone(),
+        });
+    }
+
     pub fn ppg(&mut self, p: &PpgPacket) {
         self.writer.push(&Record::Ppg { ts: p.time, channel: i16::try_from(p.channel).unwrap_or(i16::MAX), samples: p.samples.clone() });
         self.info.ppg_samples += p.samples.len() as u64;
@@ -153,6 +162,15 @@ impl ExportFormat {
     }
 }
 
+/// EEG labels plus the AUX inputs that were recorded (Settings → Recording).
+fn edf_labels(d: &DeviceInfo, records: &[Record]) -> Vec<String> {
+    let n = d.channels.len();
+    let top =
+        records.iter().filter_map(|r| if let Record::Eeg { electrode, .. } = r { usize::try_from(*electrode).ok() } else { None }).max();
+    let aux = top.map_or(0, |t| (t + 1).saturating_sub(n)).min(d.aux_channels.len());
+    d.channels.iter().chain(&d.aux_channels[..aux]).cloned().collect()
+}
+
 pub fn export(f: &Finished, format: ExportFormat, start: (u16, u16, u16, u16, u16, u16)) -> Result<Vec<u8>, String> {
     match format {
         ExportFormat::RawBody => Ok(f.body.clone()),
@@ -176,8 +194,9 @@ pub fn export(f: &Finished, format: ExportFormat, start: (u16, u16, u16, u16, u1
         ExportFormat::Pdf => Err("pdf export needs the stored session (history.export)".into()),
         ExportFormat::Edf => {
             let records = nf_format::parse_body(&f.body).map_err(|e| e.0)?;
+            let labels = edf_labels(&f.device, &records);
             let req = nf_format::edf::EdfRequest {
-                labels: &f.device.channels,
+                labels: &labels,
                 sample_rate_hz: f.device.sample_rate_hz.round() as usize,
                 start,
                 recording_id: "Startdate X X X neurofeed",

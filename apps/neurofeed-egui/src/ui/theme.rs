@@ -8,6 +8,18 @@ pub const TOPBAR_HEIGHT: f32 = 44.0;
 
 pub fn apply(ctx: &egui::Context) {
     ctx.set_visuals(egui::Visuals::dark());
+    ctx.set_fonts(fonts());
+}
+
+/// egui's default fonts plus a DejaVu Sans subset (arrows, ≤ ≥ ±, play/pause
+/// glyphs) as the last fallback, so "→" renders instead of a box.
+pub fn fonts() -> egui::FontDefinitions {
+    let mut f = egui::FontDefinitions::default();
+    f.font_data.insert("arrows".into(), egui::FontData::from_static(include_bytes!("../../assets/arrows.ttf")));
+    for fam in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        f.families.entry(fam).or_default().push("arrows".into());
+    }
+    f
 }
 
 /// Follow the Appearance setting (cheap; egui ignores an unchanged value).
