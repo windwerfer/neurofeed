@@ -154,7 +154,8 @@ pub fn record_ts(r: &Record) -> f64 {
         | Record::PeakAlpha { ts, .. }
         | Record::SpO2 { ts, .. }
         | Record::Feedback { ts, .. }
-        | Record::Trust { ts, .. } => *ts,
+        | Record::Trust { ts, .. }
+        | Record::Guard { ts, .. } => *ts,
     }
 }
 

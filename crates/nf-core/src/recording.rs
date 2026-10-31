@@ -100,6 +100,7 @@ impl Recorder {
     pub fn feedback(&mut self, r: &crate::feedback::SecondResult) {
         self.feedback.push(feedback_record(r));
         self.feedback.push(crate::trust::record(r));
+        self.feedback.extend(crate::trust::guard_record(r));
         self.info.feedback_seconds += 1;
     }
 

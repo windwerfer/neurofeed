@@ -17,6 +17,8 @@ pub const DIRTY: Color32 = Color32::from_rgb(0xE5, 0x73, 0x73);
 pub const IDLE: Color32 = Color32::from_rgb(0x55, 0x55, 0x55);
 const LINE: Color32 = Color32::from_rgb(0x4D, 0xB6, 0xAC);
 const THR: Color32 = Color32::from_rgb(0xFF, 0xB7, 0x4D);
+const GUARD: Color32 = Color32::from_rgb(0xBA, 0x68, 0xC8);
+const WARN_SHADE: Color32 = Color32::from_rgba_premultiplied(0x40, 0x10, 0x10, 0x40);
 const MARK: Color32 = Color32::from_rgb(0x90, 0xA4, 0xF0);
 
 /// What the plot shows.
@@ -96,7 +98,40 @@ pub fn pane(ui: &mut egui::Ui, t: &Trust, plot: &mut Plot, height: f32, big_tota
     if let Some(pos) = resp.hover_pos() {
         hover(ui, &painter, t, (inner, x, y), pos, *plot);
     }
+    guard_chart(ui, t, (height * 0.5).max(70.0), x);
     legend(ui, t);
+}
+
+/// Drowsiness guard on its decision scale (0–100): the guard value (fixed
+/// cut: P × 100; percentile: baseline rank) against its warn line, with
+/// warning seconds shaded. Only when the protocol ran a guard.
+fn guard_chart(ui: &mut egui::Ui, t: &Trust, height: f32, x: (f32, f32)) {
+    if !t.rows.iter().any(|r| r.warn.is_some()) {
+        return;
+    }
+    ui.add_space(4.0);
+    let w = ui.available_width();
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(w, height), Sense::hover());
+    let p = ui.painter_at(rect);
+    let r = rect.shrink2(Vec2::new(8.0, 14.0));
+    let y = (0.0, 100.0);
+    p.rect_stroke(rect, 6.0, Stroke::new(1.0_f32, ui.visuals().widgets.noninteractive.bg_stroke.color), egui::StrokeKind::Inside);
+    for row in t.rows.iter().filter(|r| r.warn == Some(true)) {
+        let a = to_screen(r, x, y, row.t as f32, y.1);
+        let b = to_screen(r, x, y, row.t as f32 + 1.0, y.0);
+        p.rect_filled(Rect::from_two_pos(a, b), 0.0, WARN_SHADE);
+    }
+    let line = guard_line(t);
+    let ly = to_screen(r, x, y, x.0, line.clamp(0.0, 100.0) as f32).y;
+    p.line_segment([egui::pos2(r.left(), ly), egui::pos2(r.right(), ly)], Stroke::new(1.0_f32, THR));
+    let vals: Vec<Option<f64>> = t.rows.iter().map(|r| r.guard_plot).collect();
+    lines(&p, t, &vals, r, x, y, GUARD);
+    label(&p, r.left_top() + Vec2::new(0.0, -12.0), Align2::LEFT_TOP, format!("drowsiness guard (0–100) · warn line {line:.0}"));
+}
+
+/// Warn line of the latest guarded second (legacy 75 when none was stored).
+pub fn guard_line(t: &Trust) -> f64 {
+    t.rows.iter().rev().filter(|r| r.warn.is_some()).find_map(|r| r.guard_line).unwrap_or(nf_core::trust::LEGACY_WARN_LINE)
 }
 
 fn span(t: &Trust) -> (f32, f32) {

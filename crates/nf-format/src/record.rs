@@ -12,6 +12,8 @@
 //! | 9   | PeakAlpha     | ts f64, freq f32, power f32                    |
 //! | 10  | SpO2          | ts f64, spo2 f32, conf f32                     |
 //! | 11  | Feedback      | ts f64, value f32, threshold f32, flags u16    |
+//! | 12  | Trust         | ts f64, native pct thr_pct f32, bits u16       |
+//! | 13  | Guard         | ts f64, value f32, line f32 (decision scale)   |
 //!
 //! Tag 11 is new (not in the legacy app). Legacy readers stop at the first
 //! unknown tag, so writers append all feedback records at the end of the
@@ -29,6 +31,7 @@ pub const TAG_PEAK_ALPHA: u8 = 9;
 pub const TAG_SPO2: u8 = 10;
 pub const TAG_FEEDBACK: u8 = 11;
 pub const TAG_TRUST: u8 = 12;
+pub const TAG_GUARD: u8 = 13;
 
 /// `Record::Trust` bits: dirty reason in the low 3 bits, then flags.
 pub mod trust_bits {
@@ -134,6 +137,13 @@ pub enum Record {
         thr_pct: f32,
         bits: u16,
     },
+    /// Drowsiness guard per feedback second (written after its `Trust`):
+    /// value and warn line on the decision scale 0–100 (NaN when absent).
+    Guard {
+        ts: f64,
+        value: f32,
+        line: f32,
+    },
 }
 
 fn len_u16(n: usize) -> u16 {
@@ -215,6 +225,11 @@ impl Record {
                 }
                 out.extend_from_slice(&bits.to_le_bytes());
             }
+            Record::Guard { ts, value, line } => {
+                head(out, TAG_GUARD, *ts);
+                out.extend_from_slice(&value.to_le_bytes());
+                out.extend_from_slice(&line.to_le_bytes());
+            }
             Record::Movement { ts, score } => {
                 head(out, TAG_MOVEMENT, *ts);
                 out.extend_from_slice(&score.to_le_bytes());
@@ -289,6 +304,7 @@ impl Reader<'_> {
             TAG_PEAK_ALPHA => Record::PeakAlpha { ts, frequency: self.f32()?, power: self.f32()? },
             TAG_SPO2 => Record::SpO2 { ts, spo2: self.f32()?, confidence: self.f32()? },
             TAG_FEEDBACK => Record::Feedback { ts, value: self.f32()?, threshold: self.f32()?, flags: self.u16()? },
+            TAG_GUARD => Record::Guard { ts, value: self.f32()?, line: self.f32()? },
             TAG_TRUST => Record::Trust { ts, native: self.f32()?, pct: self.f32()?, thr_pct: self.f32()?, bits: self.u16()? },
             _ => return None,
         })

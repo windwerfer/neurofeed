@@ -39,7 +39,15 @@ pub struct Row {
     pub reward_chime: bool,
     /// Percentile to draw: dirty seconds hold the last clean value.
     pub plot_pct: Option<f64>,
+    /// Guard value on the decision scale (0–100), see [`guard_record`].
+    pub guard_plot: Option<f64>,
+    /// Guard warn line on that scale; [`LEGACY_WARN_LINE`] for sessions
+    /// stored before it was saved.
+    pub guard_line: Option<f64>,
 }
+
+/// Warn line for guarded seconds without a stored one (legacy 75th percentile).
+pub const LEGACY_WARN_LINE: f64 = 75.0;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct Totals {
@@ -128,6 +136,12 @@ pub fn record(r: &SecondResult) -> Record {
     Record::Trust { ts: r.time, native: nan(x.native), pct: nan(x.pct), thr_pct: nan(x.thr_pct), bits }
 }
 
+/// The `Guard` record stored after `Trust` when the protocol ran a guard.
+pub fn guard_record(r: &SecondResult) -> Option<Record> {
+    let x = r.record.as_ref().filter(|x| x.warn.is_some())?;
+    Some(Record::Guard { ts: r.time, value: nan(x.guard_plot), line: nan(x.guard_line) })
+}
+
 /// Row from the stored pair (`trust` absent in sessions before trust records).
 fn stored_row(t: f64, value: f32, threshold: f32, flags: u16, trust: Option<(f32, f32, f32, u16)>) -> Row {
     let on = |b: u16| flags & b != 0;
@@ -174,7 +188,18 @@ pub fn rows_from_records(records: &[Record]) -> Vec<Row> {
         if trust.is_some() {
             it.next();
         }
-        rows.push(stored_row(*ts, *value, *threshold, *flags, trust));
+        let mut row = stored_row(*ts, *value, *threshold, *flags, trust);
+        if let Some(Record::Guard { ts: t3, value, line }) = it.peek().filter(|_| trust.is_some()) {
+            if t3 == ts {
+                row.guard_plot = opt(*value);
+                row.guard_line = opt(*line);
+                it.next();
+            }
+        }
+        if row.warn.is_some() && row.guard_line.is_none() {
+            row.guard_line = Some(LEGACY_WARN_LINE);
+        }
+        rows.push(row);
     }
     rows
 }
@@ -185,6 +210,7 @@ pub fn rows_from_results(results: &[SecondResult]) -> Vec<Row> {
     for r in results {
         recs.push(crate::recording::feedback_record(r));
         recs.push(record(r));
+        recs.extend(guard_record(r));
     }
     rows_from_records(&recs)
 }

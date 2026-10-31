@@ -346,6 +346,13 @@ pub struct Record {
     /// Reward audio muted by the guard.
     #[serde(default)]
     pub muted: Option<bool>,
+    /// Guard value on its decision scale (0–100): fixed cut → P × 100,
+    /// percentile → rank in the eyes-closed baseline. `None` without a value.
+    #[serde(default)]
+    pub guard_plot: Option<f64>,
+    /// The warn line on the same scale: fixed cut × 100 or the warning percentile.
+    #[serde(default)]
+    pub guard_line: Option<f64>,
     #[serde(default)]
     pub adapt: Option<AdaptStep>,
 }

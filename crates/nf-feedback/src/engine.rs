@@ -401,6 +401,11 @@ impl Engine {
         }
         rec.warn = Some(self.warning);
         rec.chime = Some(chime);
+        rec.guard_line = Some(g.fixed.map_or(f64::from(g.percentile), |f| f * 100.0));
+        rec.guard_plot = value.and_then(|v| match g.fixed {
+            Some(_) => Some((v * 100.0).clamp(0.0, 100.0)),
+            None => self.guard_baseline.rank(v),
+        });
         rec.muted = Some(self.warning && g.muffle);
     }
 }

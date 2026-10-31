@@ -64,3 +64,22 @@ fn ai_guard_on_rest_awake_keeps_the_reward_lane() {
     assert_eq!((r.warn, r.muted), (Some(true), Some(true)));
     assert!(r.in_target.is_some());
 }
+
+#[test]
+fn guard_decision_scale_fixed_and_percentile() {
+    let p = protocol("sleepGuard").unwrap();
+    let cfg = p.config_with_ai_guard(60, 75, Some(0.5));
+    let res = calibrate(&cfg, p.calibration(), |i| Some(0.1 + (i % 10) as f64 / 20.0));
+    let mut e = Engine::from_calibration(cfg, &res);
+    // Fixed cut: P × 100 against cut × 100.
+    let r = e.step(&sec(500.0, Some(0.7)));
+    assert!((r.guard_plot.unwrap() - 70.0).abs() < 1e-9);
+    assert!((r.guard_line.unwrap() - 50.0).abs() < 1e-9);
+    // Percentile: baseline rank against the warning percentile.
+    e.set_guard_fixed(None);
+    let r = e.step(&sec(501.0, Some(10.0)));
+    assert_eq!(r.guard_line, Some(75.0));
+    assert!(r.guard_plot.unwrap() > 99.0, "above every baseline sample");
+    let r = e.step(&sec(502.0, None));
+    assert_eq!((r.guard_plot, r.guard_line), (None, Some(75.0)));
+}
