@@ -19,6 +19,10 @@ pub struct Shell {
     pub set_bridge: Option<bool>,
     /// Never show the first-run tour (demo / screenshot runs).
     pub no_tour: bool,
+    /// Set by the UI: move the history database into this folder.
+    pub move_store: Option<String>,
+    /// Result of the last move (shown in Settings → Storage).
+    pub store_note: Option<String>,
 }
 
 /// Draw one frame and return the commands the user triggered.
@@ -35,9 +39,38 @@ pub fn show_with(ctx: &egui::Context, session: &Session, error: Option<&str>, sh
     if state.sidebar_open {
         sidebar::show(ctx, state, &mut out);
     }
-    egui::CentralPanel::default().show(ctx, |ui| views::show(ui, session, &mut out, shell));
+    egui::CentralPanel::default().show(ctx, |ui| {
+        recovery(ui, session, &mut out);
+        views::show(ui, session, &mut out, shell);
+    });
     if !state.settings.onboarded && !shell.no_tour {
         onboarding::show(ctx, &mut out);
     }
     out
+}
+
+/// Banner for a recording interrupted by a crash.
+fn recovery(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
+    let Some(p) = &session.state().recovery else { return };
+    egui::Frame::group(ui.style()).fill(egui::Color32::from_rgb(0x5D, 0x40, 0x37)).show(ui, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            let s = p.duration_s.max(0.0) as u64;
+            ui.label(
+                egui::RichText::new(format!(
+                    "⚠ NeuroFeed closed during a recording ({}, {}:{:02} saved). Recover it to History?",
+                    p.device_name,
+                    s / 60,
+                    s % 60
+                ))
+                .color(egui::Color32::WHITE),
+            );
+            if ui.button("Recover").clicked() {
+                out.push(Command::RecoveryRestore);
+            }
+            if ui.button("Discard").clicked() {
+                out.push(Command::RecoveryDiscard);
+            }
+        });
+    });
+    ui.add_space(6.0);
 }

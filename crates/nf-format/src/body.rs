@@ -42,6 +42,11 @@ impl BodyWriter {
         false
     }
 
+    /// Header plus the frames flushed so far (crash-recovery checkpoints).
+    pub fn flushed(&self) -> &[u8] {
+        &self.out
+    }
+
     pub fn pending_bytes(&self) -> usize {
         self.pending.len()
     }

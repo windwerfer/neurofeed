@@ -17,12 +17,13 @@ pub enum View {
     Spectrogram,
     Psd,
     HeartRate,
+    Movement,
     Streaming,
     Settings,
 }
 
 impl View {
-    pub const ALL: [View; 10] = [
+    pub const ALL: [View; 11] = [
         View::Feedback,
         View::History,
         View::Bands,
@@ -31,6 +32,7 @@ impl View {
         View::Spectrogram,
         View::Psd,
         View::HeartRate,
+        View::Movement,
         View::Streaming,
         View::Settings,
     ];
@@ -45,13 +47,24 @@ impl View {
             View::Spectrogram => "Spectrogram",
             View::Psd => "PSD",
             View::HeartRate => "HR+SpO2",
+            View::Movement => "Movement",
             View::Streaming => "Streaming",
             View::Settings => "Settings",
         }
     }
 
     pub fn implemented(self) -> bool {
-        matches!(self, View::Feedback | View::Bands | View::HeartRate | View::RawEeg | View::Histogram | View::Spectrogram | View::Psd)
+        matches!(
+            self,
+            View::Feedback
+                | View::Bands
+                | View::HeartRate
+                | View::Movement
+                | View::RawEeg
+                | View::Histogram
+                | View::Spectrogram
+                | View::Psd
+        )
     }
 }
 
@@ -71,7 +84,9 @@ pub struct BandHistory {
 }
 
 impl BandHistory {
-    pub const CAPACITY: usize = 600; // ~60 s at 10 Hz
+    pub const CAPACITY: usize = 1200; // ~120 s at 10 Hz
+    /// Seconds the history covers (the longest Bands viewport window).
+    pub const SECONDS: f64 = 120.0;
 
     pub fn push(&mut self, s: BandSnapshot) {
         if self.snapshots.len() >= Self::CAPACITY {
@@ -136,6 +151,8 @@ pub struct AppState {
     pub history: Vec<nf_store::SessionMeta>,
     /// Where history is stored (`memory` or a file).
     pub history_location: String,
+    /// A recording interrupted by a crash, waiting for Recover / Discard.
+    pub recovery: Option<crate::recovery::Pending>,
     /// Schemes of registered providers that can scan (`muse`, `crown`).
     pub scanners: Vec<String>,
     /// Transport state of the connected device.
@@ -168,6 +185,7 @@ impl Default for AppState {
             scanners: Vec::new(),
             link: None,
             history_location: "memory".into(),
+            recovery: None,
             revision: 0,
         }
     }

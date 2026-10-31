@@ -26,6 +26,8 @@ pub struct NeuroFeedApp {
     bridge: Option<crate::bridge::Bridge>,
     /// Demo / start-view runs skip the first-run tour (not persisted).
     no_tour: bool,
+    /// Result of the last Settings → Storage move.
+    store_note: Option<String>,
 }
 
 impl NeuroFeedApp {
@@ -70,6 +72,7 @@ impl NeuroFeedApp {
             #[cfg(not(target_arch = "wasm32"))]
             bridge: None,
             no_tour: false,
+            store_note: None,
         }
     }
 
@@ -189,13 +192,19 @@ impl eframe::App for NeuroFeedApp {
         let bridge = Some(self.bridge.as_ref().map(crate::bridge::Bridge::addr));
         #[cfg(target_arch = "wasm32")]
         let bridge: Option<Option<String>> = None;
-        let mut shell = ui::Shell { bridge, no_tour: self.no_tour, ..Default::default() };
+        let mut shell = ui::Shell { bridge, no_tour: self.no_tour, store_note: self.store_note.clone(), ..Default::default() };
         for cmd in ui::show_with(ctx, &self.session, self.last_error.as_deref(), &mut shell) {
             self.run(cmd);
         }
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(on) = shell.set_bridge {
             self.set_bridge(ctx, on);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(dir) = shell.move_store.take() {
+            self.store_note = Some(
+                crate::store::move_to(&mut self.session, std::path::Path::new(dir.trim())).unwrap_or_else(|e| format!("Move failed: {e}")),
+            );
         }
         ctx.request_repaint_after(REPAINT_INTERVAL);
     }

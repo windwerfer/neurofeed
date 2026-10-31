@@ -94,7 +94,7 @@ fn full_session_via_tools_with_manual_clock() {
     );
     let st = ok(&s, "status", json!({}));
     assert_eq!((st["view"].as_str(), st["sidebar_open"].as_bool(), st["paused"].as_bool()), (Some("settings"), Some(false), Some(false)));
-    assert_eq!(run(&s, "view.list", json!({})).as_array().map(Vec::len), Some(10));
+    assert_eq!(run(&s, "view.list", json!({})).as_array().map(Vec::len), Some(11));
 
     let events = run(&s, "events.drain", json!({}));
     let kinds: Vec<_> = events.as_array().into_iter().flatten().filter_map(|e| e["event"].as_str()).collect();

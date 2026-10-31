@@ -50,6 +50,8 @@ const CARDS: &[(Section, &str, &str, CardFn)] = &[
         super::sound::show(ui, s, o)
     }),
     (Section::Devices, "Devices", "muse crown bluetooth scan connect simulator", |ui, s, o, _| super::devices::show(ui, s, o)),
+    (Section::Devices, "Muse AUX channels", "muse aux auxiliary usb extra electrode", |ui, s, o, _| muse_aux(ui, s, o)),
+    (Section::Devices, "Crown signal quality", "crown neurosity signal quality source pads", |ui, s, o, _| crown_quality(ui, s, o)),
     (Section::Devices, "Mains notch", "notch 50 60 hz mains power line filter", |ui, s, o, _| mains(ui, s, o)),
     (Section::Training, "Band Stability", "stability window difficulty steadier", |ui, s, o, _| stability(ui, s, o)),
     (Section::Training, "Calibration", "calibration staged simple artifacts eyes open baseline", |ui, s, o, _| calibration(ui, s, o)),
@@ -57,8 +59,9 @@ const CARDS: &[(Section, &str, &str, CardFn)] = &[
     (Section::Ai, "AI sleep guard", "spur cbramod reve model sleep drowsiness import download scorer threshold", |ui, s, o, _| {
         super::ai::show(ui, s, o)
     }),
-    (Section::Recording, "Storage", "folder storage database sqlite indexeddb", |ui, s, _, _| storage(ui, s)),
-    (Section::Recording, "Gesture markers", "eye blink clench markers", |ui, s, o, _| gestures(ui, s, o)),
+    (Section::Recording, "Storage", "folder storage database sqlite indexeddb", |ui, s, _, sh| storage(ui, s, sh)),
+    (Section::Recording, "Record AUX", "aux auxiliary muse recording edf", |ui, s, o, _| record_aux(ui, s, o)),
+    (Section::Recording, "Gesture markers", "eye up down blink clench double markers feedback", |ui, s, o, _| gestures(ui, s, o)),
     (Section::About, "About NeuroFeed", "about version licenses credits notices", |ui, _, _, _| super::about::card(ui)),
     (Section::About, "Debug mode", "debug simulator sim fault", |ui, s, o, _| debug(ui, s, o)),
     (Section::About, "Agents", "mcp bridge agent ai control", |ui, _, _, sh| agents(ui, sh)),
@@ -204,9 +207,28 @@ fn calibration(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     ));
 }
 
-fn storage(ui: &mut egui::Ui, session: &Session) {
-    ui.label(format!("Sessions and settings are stored in: {}", session.state().history_location));
-    ui.weak("Desktop: SQLite file (NF_DB overrides the path). Web: IndexedDB in this browser. Export from History to move sessions.");
+fn storage(ui: &mut egui::Ui, session: &Session, shell: &mut crate::ui::Shell) {
+    let loc = &session.state().history_location;
+    ui.label(format!("Sessions and settings are stored in: {loc}"));
+    ui.weak("Desktop: SQLite file (NF_DB overrides the path). Web: IndexedDB in this browser.");
+    if cfg!(target_arch = "wasm32") || !std::path::Path::new(loc).is_file() {
+        return;
+    }
+    let id = ui.id().with("move-dir");
+    let mut dir: String = ui.data(|d| d.get_temp(id)).unwrap_or_default();
+    ui.horizontal(|ui| {
+        ui.add(egui::TextEdit::singleline(&mut dir).hint_text("new folder, e.g. /media/usb/neurofeed").desired_width(320.0));
+        let busy = session.state().recording.as_ref().is_some_and(|r| r.active);
+        let r = ui.add_enabled(!dir.trim().is_empty() && !busy, egui::Button::new("Move here"));
+        if r.on_disabled_hover_text("enter a folder; not while recording").clicked() {
+            shell.move_store = Some(dir.clone());
+        }
+    });
+    ui.data_mut(|d| d.insert_temp(id, dir));
+    ui.weak("Copies the database, checks it, switches to it and deletes the old file.");
+    if let Some(n) = &shell.store_note {
+        ui.weak(n);
+    }
 }
 
 fn gestures(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
@@ -215,6 +237,52 @@ fn gestures(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         set(out, SettingsPatch { gesture_markers: Some(on), ..Default::default() });
     }
     ui.weak("Gestures are always recorded; this only controls drawing them.");
+    let st = &session.state().settings;
+    let mut eye = st.eye_markers;
+    if ui.checkbox(&mut eye, "Detect eye up / down glances").changed() {
+        set(out, SettingsPatch { eye_markers: Some(eye), ..Default::default() });
+    }
+    let mut fb = st.markers_in_feedback;
+    if ui.checkbox(&mut fb, "Mark double blinks, double clenches and glances in trained sessions").changed() {
+        set(out, SettingsPatch { markers_in_feedback: Some(fb), ..Default::default() });
+    }
+    ui.weak("Double blink / double clench = two within 2 s. Marks are saved with the session and shown on its trust plot.");
+}
+
+fn muse_aux(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
+    let mut on = session.state().settings.muse_aux;
+    if ui.checkbox(&mut on, "Show Muse AUX channels").changed() {
+        set(out, SettingsPatch { muse_aux: Some(on), ..Default::default() });
+    }
+    ui.weak("Muse 2 / S: AUX1 (the micro-USB electrode); Muse S Athena: AUX1–4. AUX is shown in Raw EEG only and never feeds bands or training.");
+}
+
+fn record_aux(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
+    let st = &session.state().settings;
+    let mut on = st.record_aux;
+    ui.add_enabled_ui(st.muse_aux, |ui| {
+        if ui.checkbox(&mut on, "Record AUX channels").changed() {
+            set(out, SettingsPatch { record_aux: Some(on), ..Default::default() });
+        }
+    });
+    ui.weak(if st.muse_aux {
+        "AUX is saved with the recording and exported to EDF."
+    } else {
+        "Turn on Settings → Devices → Muse AUX channels first."
+    });
+}
+
+fn crown_quality(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
+    use nf_core::settings::QualitySource;
+    let cur = session.state().settings.crown_quality;
+    ui.horizontal(|ui| {
+        for (q, name) in [(QualitySource::Crown, "Crown (device)"), (QualitySource::App, "NeuroFeed (computed)")] {
+            if ui.selectable_label(cur == q, name).clicked() && cur != q {
+                set(out, SettingsPatch { crown_quality: Some(q), ..Default::default() });
+            }
+        }
+    });
+    ui.weak("Crown: pad colours use the headset's own signalQuality (0.75 = good); seconds without it fall back to the computed score.");
 }
 
 fn debug(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {

@@ -10,7 +10,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let state = session.state();
     ui.horizontal(|ui| {
         ui.heading("Spectrogram");
-        ui.weak("1 s Hamming windows every 0.25 s, last 30 s, 0–50 Hz, dB re µV²/Hz");
+        ui.weak("1 s Hamming windows every 0.25 s, 0–50 Hz, dB re µV²/Hz");
     });
     let Some((dev, sig)) = session.live_signal() else {
         ui.separator();
@@ -24,13 +24,21 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
             }
         }
     });
+    let vp = super::plot::viewport(ui, "spectrogram", &[10.0, 20.0, 30.0], state.time);
+    let max_back = 30.0 - vp.window_s;
+    let back = vp.back_s(state.time, max_back);
     ui.separator();
-    let cols = sig.spectrogram.get(state.channel).cloned().unwrap_or_default();
-    let (rect, _) = ui.allocate_exact_size(ui.available_size() - egui::vec2(0.0, 18.0), Sense::hover());
+    let all: Vec<_> = sig.spectrogram.get(state.channel).map(|d| d.iter().cloned().collect()).unwrap_or_default();
+    let per_s = nf_core::signal::SPEC_COLUMNS as f64 / 30.0;
+    let end = all.len().saturating_sub((back * per_s) as usize);
+    let shown = (vp.window_s * per_s) as usize;
+    let cols = &all[end.saturating_sub(shown)..end];
+    let (rect, resp) = ui.allocate_exact_size(ui.available_size() - egui::vec2(0.0, 18.0), Sense::drag());
+    super::plot::drag(ui, "spectrogram", &resp, state.time, max_back);
     let r = Rect::from_min_max(rect.left_top() + egui::vec2(36.0, 0.0), rect.right_bottom());
     let p = ui.painter_at(rect.expand(16.0));
     p.rect_filled(r, 0.0, Color32::BLACK);
-    let cw = r.width() / nf_core::signal::SPEC_COLUMNS as f32;
+    let cw = r.width() / shown.max(1) as f32;
     let bh = r.height() / (MAX_HZ + 1) as f32;
     let x0 = r.right() - cw * cols.len() as f32;
     for (c, col) in cols.iter().enumerate() {
@@ -44,8 +52,15 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         let y = r.bottom() - (hz as f32 + 0.5) * bh;
         p.text(egui::pos2(r.left() - 4.0, y), Align2::RIGHT_CENTER, format!("{hz}"), egui::FontId::monospace(10.0), Color32::GRAY);
     }
-    p.text(r.left_bottom() + egui::vec2(0.0, 4.0), Align2::LEFT_TOP, "-30 s", egui::FontId::monospace(10.0), Color32::GRAY);
-    p.text(r.right_bottom() + egui::vec2(0.0, 4.0), Align2::RIGHT_TOP, "now", egui::FontId::monospace(10.0), Color32::GRAY);
+    p.text(
+        r.left_bottom() + egui::vec2(0.0, 4.0),
+        Align2::LEFT_TOP,
+        format!("-{:.0} s", vp.window_s + back),
+        egui::FontId::monospace(10.0),
+        Color32::GRAY,
+    );
+    let now = if back > 0.05 { format!("-{back:.1} s") } else { "now".into() };
+    p.text(r.right_bottom() + egui::vec2(0.0, 4.0), Align2::RIGHT_TOP, now, egui::FontId::monospace(10.0), Color32::GRAY);
 }
 
 /// Dark blue → cyan → yellow → red over `DB_RANGE`.

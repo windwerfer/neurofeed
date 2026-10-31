@@ -13,6 +13,7 @@ pub const MARKS_ID: &str = "nf_gesture_markers";
 
 mod about;
 mod meta;
+mod movement;
 mod nerd;
 mod plot;
 mod protocol_builder;
@@ -35,6 +36,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>, shell:
         View::RawEeg => raw::show(ui, session),
         View::Psd => psd::show(ui, session),
         View::HeartRate => heart::show(ui, session),
+        View::Movement => movement::show(ui, session),
         View::Histogram => histogram::show(ui, session),
         View::Spectrogram => spectrogram::show(ui, session, out),
         View::Streaming => streaming::show(ui, session, out),

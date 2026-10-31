@@ -92,11 +92,16 @@ const TARGET_PADS: [[&str; 2]; 2] = [["AF7", "AF8"], ["PO3", "PO4"]];
 const FAULT_UV: f64 = 200.0;
 
 /// Data-path state that is not plain `AppState` (cloned for batch rollback).
+/// A Crown quality frame counts for this long (it arrives about once a second).
+const CROWN_Q_MAX_AGE_S: f64 = 1.5;
+
 #[derive(Clone, Default)]
 struct Live {
     signal: Option<Signal>,
-    /// Crown-reported pad quality since the last snapshot: (sums, frames).
-    crown_q: (Vec<f64>, u32),
+    /// Session time of the next crash-recovery checkpoint.
+    next_checkpoint: f64,
+    /// Latest Crown-reported pad quality (0..=1 per pad) and its time.
+    crown_q: Option<(Vec<f64>, f64)>,
     side: Option<crate::side::Side>,
     optics: Option<crate::optics::Optics>,
     recorder: Option<Recorder>,
@@ -173,7 +178,68 @@ impl Session {
         self.refresh_history();
         self.load_protocols();
         self.load_settings();
+        self.state.recovery = crate::recovery::load(self.store.as_ref());
         self
+    }
+
+    /// Swap the history store (Settings → Storage → Move) without touching
+    /// the live device. A recording in progress keeps checkpointing to the new one.
+    pub fn replace_store(&mut self, store: Box<dyn nf_store::Store>) {
+        self.store = store;
+        self.refresh_history();
+    }
+
+    /// Copy the store to `path` (file backends only).
+    pub fn copy_store_to(&self, path: &std::path::Path) -> Result<(), CoreError> {
+        self.store.copy_to(path).map_err(|e| CoreError::BadRequest(e.0))
+    }
+
+    /// Every [`crate::recovery::CHECKPOINT_S`] of recording: append the new
+    /// body bytes and refresh the recovery doc.
+    fn checkpoint(&mut self) {
+        let now = self.state.time;
+        if now < self.live.next_checkpoint || self.state.recovery.is_some() {
+            return;
+        }
+        self.live.next_checkpoint = now + crate::recovery::CHECKPOINT_S;
+        let trained = self.state.feedback.phase.active();
+        let context = self.context(trained);
+        let protocol = trained.then(|| self.state.feedback.protocol.id.clone());
+        let Some(r) = self.live.recorder.as_mut() else { return };
+        let (bytes, fb) = r.checkpoint();
+        let p = crate::recovery::Pending {
+            device_name: r.device.name.clone(),
+            device_id: r.device.id.clone(),
+            device_json: serde_json::to_string(&r.device).unwrap_or_default(),
+            started_unix_ms: r.info.wall_clock_unix_ms,
+            duration_s: r.info.duration,
+            eeg_samples: r.info.eeg_samples,
+            ppg_samples: r.info.ppg_samples,
+            feedback_seconds: r.info.feedback_seconds,
+            protocol,
+            context: Some(context),
+        };
+        let st = self.store.as_mut();
+        let res = st
+            .append_blob(crate::recovery::BODY, &bytes)
+            .and_then(|()| st.clear_blob(crate::recovery::FEEDBACK))
+            .and_then(|()| st.append_blob(crate::recovery::FEEDBACK, &fb))
+            .and_then(|()| st.put_doc(crate::recovery::DOC, serde_json::to_string(&p).ok().as_deref()));
+        if let Err(e) = res {
+            self.emit(Event::StoreError { message: e.to_string() });
+        }
+    }
+
+    fn recover(&mut self, keep: bool) -> Result<(), CoreError> {
+        let p = self.state.recovery.take().ok_or_else(|| CoreError::BadRequest("nothing to recover".into()))?;
+        if keep {
+            let s = crate::recovery::restore(self.store.as_ref(), &p).map_err(CoreError::BadRequest)?;
+            let id = self.store.insert(s).map_err(|e| CoreError::BadRequest(e.0))?;
+            self.emit(Event::SessionSaved { id });
+            self.refresh_history();
+        }
+        crate::recovery::clear(self.store.as_mut());
+        Ok(())
     }
 
     fn load_settings(&mut self) {
@@ -526,46 +592,52 @@ impl Session {
             }
             if full {
                 self.stop_recording("size limit reached");
+            } else if self.live.recorder.is_some() {
+                self.checkpoint();
             }
         }
         self.ai_tick();
         self.feedback_tick(now);
     }
 
-    /// Drain the device (always, so resume has no backlog burst; pause only
-    /// freezes the views), track the link and apply simulated faults.
-    /// Queue device-reported pad quality (Crown) for the next snapshot; a
-    /// simulated bad pad reports poor quality too.
+    /// Keep the latest device-reported pad quality (Crown), averaged over
+    /// the frames of this poll; a simulated bad pad reports poor quality too.
     fn crown_quality(&mut self, frames: Vec<Vec<f32>>) {
-        for mut f in frames {
-            for &b in &self.live.fault.bad {
-                if let Some(q) = f.get_mut(b) {
-                    *q = 0.1;
-                }
-            }
-            let acc = &mut self.live.crown_q;
-            acc.0.resize(f.len(), 0.0);
-            acc.0.iter_mut().zip(&f).for_each(|(s, q)| *s += f64::from(*q));
-            acc.1 += 1;
+        let n = frames.len();
+        let Some(len) = frames.first().map(Vec::len) else { return };
+        let mut sum = vec![0.0; len];
+        for f in &frames {
+            sum.iter_mut().zip(f).for_each(|(s, q)| *s += f64::from(*q) / n as f64);
         }
+        for &b in &self.live.fault.bad {
+            if let Some(q) = sum.get_mut(b) {
+                *q = 0.1;
+            }
+        }
+        self.live.crown_q = Some((sum, self.state.time));
     }
 
     /// Settings → Devices "Crown signal quality": replace the app score with
-    /// the Crown's own average of the last second (seconds without one keep
-    /// the app score). Legacy `resolve_pad_quality`.
+    /// the Crown's own of the last [`CROWN_Q_MAX_AGE_S`]; without a fresh
+    /// one the app score stays. Legacy `resolve_pad_quality`.
     fn apply_crown_quality(&mut self) {
-        let (sum, n) = std::mem::take(&mut self.live.crown_q);
         let crown = self.state.device.as_ref().is_some_and(|d| d.kind == nf_types::DeviceKind::Crown);
-        if n == 0 || !crown || self.state.settings.crown_quality != crate::settings::QualitySource::Crown {
+        if !crown || self.state.settings.crown_quality != crate::settings::QualitySource::Crown {
+            return;
+        }
+        let Some((q, t)) = &self.live.crown_q else { return };
+        if self.state.time - t > CROWN_Q_MAX_AGE_S {
             return;
         }
         if let Some(sig) = self.live.signal.as_mut() {
-            for (q, s) in sig.quality.iter_mut().zip(&sum) {
-                *q = crate::signal::crown_quality_to_score(s / f64::from(n)) as f32;
+            for (dst, src) in sig.quality.iter_mut().zip(q) {
+                *dst = crate::signal::crown_quality_to_score(*src) as f32;
             }
         }
     }
 
+    /// Drain the device (always, so resume has no backlog burst; pause only
+    /// freezes the views), track the link and apply simulated faults.
     fn poll_device(&mut self, now: f64) -> Option<Polled> {
         let src = self.source.as_mut()?;
         let mut packets = src.poll(now);
@@ -759,6 +831,30 @@ impl Session {
     }
 
     /// Trust trace of a saved session.
+    /// History thumbnail: up to `n` points 0..=1 — the per-second feedback
+    /// value (normalised by its max) or, for plain recordings, relative alpha.
+    pub fn history_thumb(&self, id: u64, n: usize) -> Result<Vec<f32>, CoreError> {
+        let s = self.stored(id)?;
+        let records = nf_format::parse_body(&s.body).map_err(|e| CoreError::BadRequest(e.0))?;
+        let mut v: Vec<f32> = records
+            .iter()
+            .filter_map(|r| if let nf_format::Record::Feedback { value, .. } = r { Some(*value).filter(|x| x.is_finite()) } else { None })
+            .collect();
+        if v.is_empty() {
+            v = records
+                .iter()
+                .filter_map(|r| match r {
+                    nf_format::Record::Bands { electrode: 0, bands, .. } => {
+                        let t: f32 = bands.iter().sum();
+                        (t > 0.0).then(|| bands[2] / t)
+                    }
+                    _ => None,
+                })
+                .collect();
+        }
+        Ok(crate::trust::downsample(&v, n))
+    }
+
     pub fn history_trust(&self, id: u64) -> Result<crate::trust::Trust, CoreError> {
         let s = self.stored(id)?;
         let records = nf_format::parse_body(&s.body).map_err(|e| CoreError::BadRequest(e.0))?;
@@ -870,6 +966,13 @@ impl Session {
             return Err(CoreError::InvalidArgs("wall_clock_unix_ms must be a finite, non-negative Unix time".into()));
         }
         let dev = self.state.device.clone().ok_or_else(|| CoreError::Device("no device connected".into()))?;
+        if crate::replay::is_replay(&dev.id) {
+            return Err(CoreError::Device("a replay is not recorded again".into()));
+        }
+        if self.state.recovery.is_none() {
+            crate::recovery::clear(self.store.as_mut());
+        }
+        self.live.next_checkpoint = self.state.time + crate::recovery::CHECKPOINT_S;
         let r = Recorder::start(dev, self.state.time, wall_clock_unix_ms);
         self.emit(Event::RecordingStarted { device: r.info.device.clone() });
         self.state.recording = Some(r.info.clone());
@@ -893,6 +996,9 @@ impl Session {
             self.state.recording = Some(f.info.clone());
             self.live.auto_recording = false;
             self.save(&f);
+            if self.state.recovery.is_none() {
+                crate::recovery::clear(self.store.as_mut());
+            }
             self.live.finished = Some(f);
         }
     }
@@ -1070,7 +1176,8 @@ impl Session {
                 self.feedback(|t, o| t.start(&dev, o));
                 // Every training is recorded (legacy behaviour); a manual
                 // recording already running is kept as is.
-                if self.live.recorder.is_none() && self.state.feedback.phase.active() {
+                let replay = crate::replay::is_replay(&dev);
+                if self.live.recorder.is_none() && self.state.feedback.phase.active() && !replay {
                     self.start_recording(wall_clock_unix_ms)?;
                     self.live.auto_recording = true;
                 }
@@ -1138,7 +1245,20 @@ impl Session {
                 }
                 self.refresh_history();
             }
-            Command::SettingsSet(p) => crate::settings::apply(&mut self.state.settings, &p).map_err(CoreError::InvalidArgs)?,
+            Command::SettingsSet(p) => {
+                crate::settings::apply(&mut self.state.settings, &p).map_err(CoreError::InvalidArgs)?;
+                if !self.state.settings.debug {
+                    self.state.feedback.feature_override = None;
+                }
+            }
+            Command::RecoveryRestore => self.recover(true)?,
+            Command::RecoveryDiscard => self.recover(false)?,
+            Command::HistoryOpen { id } => {
+                if self.state.feedback.phase.active() {
+                    return Err(CoreError::BadRequest("end the training session first".into()));
+                }
+                self.connect(&format!("{}:{id}", crate::replay::SCHEME))?;
+            }
             Command::HistoryNotes { id, notes } => self.set_notes(id, &notes)?,
             Command::MainsSet { mode } => {
                 self.state.mains_mode = mode;
@@ -1168,6 +1288,14 @@ impl Session {
 
     fn open(&mut self, id: &str) -> Result<Box<dyn DeviceSource>, CoreError> {
         let scheme = id.split(':').next().unwrap_or_default();
+        if scheme == crate::replay::SCHEME {
+            let n: u64 = id[scheme.len() + 1..].parse().map_err(|_| CoreError::InvalidArgs(format!("bad replay id `{id}`")))?;
+            let s = self.store.get(n).map_err(|e| CoreError::BadRequest(e.to_string()))?;
+            let s = s.ok_or_else(|| CoreError::InvalidArgs(format!("no session {n}")))?;
+            return crate::replay::Replay::new(n, &s.device_json, &s.body)
+                .map(|r| Box::new(r) as Box<dyn DeviceSource>)
+                .map_err(CoreError::Device);
+        }
         if scheme == self.sim.scheme() {
             return self.sim.open(id).map_err(CoreError::Device);
         }

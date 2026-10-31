@@ -181,6 +181,15 @@ pub enum Command {
         wall_clock_unix_ms: Option<f64>,
     },
     /// Permanently delete a saved session. `confirm` must be true.
+    /// Save the recording interrupted by a crash to History.
+    #[serde(rename = "recovery.restore")]
+    RecoveryRestore,
+    /// Drop the recording interrupted by a crash.
+    #[serde(rename = "recovery.discard")]
+    RecoveryDiscard,
+    /// Replay a saved session in the graph views (connects `replay:<id>`).
+    #[serde(rename = "history.open")]
+    HistoryOpen { id: u64 },
     #[serde(rename = "history.delete")]
     HistoryDelete {
         id: u64,
@@ -422,6 +431,13 @@ pub struct CommandSpec {
     pub enabled: EnabledFn,
 }
 
+fn has_recovery(s: &AppState) -> Result<(), String> {
+    if s.recovery.is_some() {
+        Ok(())
+    } else {
+        Err("no interrupted recording".into())
+    }
+}
 fn debug_on(s: &AppState) -> Result<(), String> {
     if s.settings.debug {
         Ok(())
@@ -702,6 +718,9 @@ pub const SPECS: &[CommandSpec] = &[
         "Parse an import file without saving: channels, duration, and what the import loses.",
         always,
     ),
+    spec("recovery.restore", "Recover recording", "history", false, "Save the recording interrupted by a crash.", has_recovery),
+    spec("recovery.discard", "Discard recovery", "history", false, "Drop the recording interrupted by a crash.", has_recovery),
+    spec("history.open", "Open in graphs", "history", false, "Replay a saved session as the live device (not recorded again).", has_history),
     spec("history.delete", "Delete session", "history", false, "Permanently delete a saved session; requires confirm=true.", has_history),
     spec(
         "settings.set",
@@ -887,6 +906,8 @@ pub fn examples() -> Vec<Request> {
     v
 }
 
+// Flat example list, one line per request (AGENTS.md, complexity exception).
+#[allow(clippy::too_many_lines)]
 fn base_examples() -> Vec<Request> {
     use Request::{Command as C, Query as Q};
     vec![
@@ -919,6 +940,9 @@ fn base_examples() -> Vec<Request> {
         C(Command::StabilitySet { window: Some(12), difficulty: Some(0.2), reset: false }),
         C(Command::FeedbackStart { minutes: Some(5), wall_clock_unix_ms: None }),
         C(Command::FeedbackStop),
+        C(Command::HistoryOpen { id: 1 }),
+        C(Command::RecoveryRestore),
+        C(Command::RecoveryDiscard),
         C(Command::HistoryDelete { id: 1, confirm: true }),
         C(Command::SettingsSet(crate::settings::SettingsPatch { subject: Some("p01".into()), ..Default::default() })),
         Q(Query::SettingsGet),

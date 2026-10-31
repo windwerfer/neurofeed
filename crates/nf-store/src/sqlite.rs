@@ -20,7 +20,8 @@ const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS sessions (
     notes TEXT NOT NULL DEFAULT '',
     context_json TEXT
 );
-CREATE TABLE IF NOT EXISTS docs (key TEXT PRIMARY KEY, value TEXT NOT NULL);";
+CREATE TABLE IF NOT EXISTS docs (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS blob_chunks (key TEXT NOT NULL, seq INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (key, seq));";
 /// Schema version; v2 added `import_json` (import provenance), v3 `docs`, v4 `notes` + `context_json`.
 const VERSION: i64 = 4;
 
@@ -143,6 +144,36 @@ impl Store for SqliteStore {
         }
         .map(|_| ())
         .map_err(err)
+    }
+
+    fn append_blob(&mut self, key: &str, bytes: &[u8]) -> Result<()> {
+        self.conn
+            .execute(
+                "INSERT INTO blob_chunks (key, seq, data) VALUES (?1, (SELECT COALESCE(MAX(seq), -1) + 1 FROM blob_chunks WHERE key = ?1), ?2)",
+                params![key, bytes],
+            )
+            .map(|_| ())
+            .map_err(err)
+    }
+
+    fn get_blob(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        let mut st = self.conn.prepare("SELECT data FROM blob_chunks WHERE key = ?1 ORDER BY seq").map_err(err)?;
+        let parts = st.query_map([key], |r| r.get::<_, Vec<u8>>(0)).map_err(err)?.collect::<rusqlite::Result<Vec<_>>>().map_err(err)?;
+        Ok((!parts.is_empty()).then(|| parts.concat()))
+    }
+
+    fn clear_blob(&mut self, key: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM blob_chunks WHERE key = ?1", [key]).map(|_| ()).map_err(err)
+    }
+
+    fn copy_to(&self, path: &std::path::Path) -> Result<()> {
+        if path.exists() {
+            return Err(StoreError(format!("{} already exists", path.display())));
+        }
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(err)?;
+        }
+        self.conn.execute("VACUUM INTO ?1", [path.to_string_lossy()]).map(|_| ()).map_err(err)
     }
 }
 

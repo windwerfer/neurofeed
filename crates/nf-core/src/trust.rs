@@ -248,3 +248,14 @@ pub fn marks(import: Option<&serde_json::Value>) -> Vec<Mark> {
 pub fn live_marks(context: Option<&serde_json::Value>) -> Vec<Mark> {
     context.and_then(|c| serde_json::from_value(c["marks"].clone()).ok()).unwrap_or_default()
 }
+
+/// Mean-pool `v` into at most `n` buckets scaled to 0..=1 by the max.
+pub fn downsample(v: &[f32], n: usize) -> Vec<f32> {
+    if v.is_empty() || n == 0 {
+        return Vec::new();
+    }
+    let k = v.len().div_ceil(n);
+    let pooled: Vec<f32> = v.chunks(k).map(|c| c.iter().sum::<f32>() / c.len() as f32).collect();
+    let max = pooled.iter().copied().fold(f32::MIN, f32::max);
+    pooled.iter().map(|x| if max > 0.0 { (x / max).clamp(0.0, 1.0) } else { 0.0 }).collect()
+}

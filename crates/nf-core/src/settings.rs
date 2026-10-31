@@ -45,7 +45,7 @@ pub struct UserSettings {
     pub crown_quality: QualitySource,
 }
 
-/// Where Crown pad signal quality comes from (applies on the next connect).
+/// Where Crown pad signal quality comes from (applies from the next second).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QualitySource {

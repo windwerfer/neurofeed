@@ -17,7 +17,7 @@ struct Chips {
 thread_local! {
     static CHIPS: RefCell<Chips> = const { RefCell::new(Chips { over_time: true, electrodes: u32::MAX, bands: [true; 5] }) };
 }
-use nf_core::{AppState, Band, BandScale, BandSnapshot, Command};
+use nf_core::{AppState, Band, BandHistory, BandScale, BandSnapshot, Command};
 
 /// Display range for absolute log10 band power (µV²).
 const ABS_MIN: f32 = -1.0;
@@ -131,7 +131,12 @@ fn value(s: &BandSnapshot, n: usize, mask: u32, band: Band, scale: BandScale) ->
 }
 
 fn over_time(ui: &mut egui::Ui, state: &AppState, n: usize, chips: Chips) {
-    let (rect, _) = ui.allocate_exact_size(ui.available_size().max(Vec2::new(200.0, 160.0)), Sense::hover());
+    let latest = state.bands.latest().map_or(0.0, |s| s.time);
+    let vp = super::plot::viewport(ui, "bands", &[15.0, 30.0, 60.0, 120.0], latest);
+    let max_back = BandHistory::SECONDS - vp.window_s;
+    let back = vp.back_s(latest, max_back);
+    let (rect, resp) = ui.allocate_exact_size(ui.available_size().max(Vec2::new(200.0, 160.0)), Sense::drag());
+    super::plot::drag(ui, "bands", &resp, latest, max_back);
     let p = ui.painter_at(rect);
     let vis = ui.visuals();
     p.rect_filled(rect, 6.0, vis.extreme_bg_color);
@@ -140,8 +145,8 @@ fn over_time(ui: &mut egui::Ui, state: &AppState, n: usize, chips: Chips) {
         BandScale::Absolute => (ABS_MIN, ABS_MAX, "log10 µV²"),
         BandScale::Relative => (0.0, 100.0, "%"),
     };
-    let span = 60.0_f32;
-    let now = state.bands.latest().map_or(0.0, |s| s.time) as f32;
+    let span = vp.window_s as f32;
+    let now = (latest - back) as f32;
     let grid = Stroke::new(0.5_f32, vis.weak_text_color().gamma_multiply(0.4));
     for k in 0..=4 {
         let y = y0 + (y1 - y0) * k as f32 / 4.0;
@@ -149,8 +154,9 @@ fn over_time(ui: &mut egui::Ui, state: &AppState, n: usize, chips: Chips) {
         p.line_segment([a, Pos2::new(plot.right(), a.y)], grid);
         super::plot::label(&p, Pos2::new(plot.left() - 4.0, a.y), Align2::RIGHT_CENTER, format!("{y:.0}"));
     }
-    super::plot::label(&p, plot.left_bottom() + Vec2::new(0.0, 4.0), Align2::LEFT_TOP, "-60 s");
-    super::plot::label(&p, plot.right_bottom() + Vec2::new(0.0, 4.0), Align2::RIGHT_TOP, "now");
+    super::plot::label(&p, plot.left_bottom() + Vec2::new(0.0, 4.0), Align2::LEFT_TOP, format!("-{:.0} s", vp.window_s + back));
+    let end = if back > 0.05 { format!("-{back:.1} s") } else { "now".into() };
+    super::plot::label(&p, plot.right_bottom() + Vec2::new(0.0, 4.0), Align2::RIGHT_TOP, end);
     super::plot::label(&p, plot.left_top() + Vec2::new(4.0, 0.0), Align2::LEFT_TOP, unit);
     for band in Band::ALL.into_iter().filter(|b| chips.bands[b.index()]) {
         let pts: Vec<Pos2> = state
@@ -159,7 +165,7 @@ fn over_time(ui: &mut egui::Ui, state: &AppState, n: usize, chips: Chips) {
             .filter_map(|s| {
                 let x = s.time as f32 - now;
                 let v = value(s, n, chips.electrodes, band, state.band_scale)?;
-                (x >= -span).then(|| super::plot::to_screen(plot, (-span, 0.0), (y0, y1), x, v.clamp(y0, y1)))
+                (x >= -span && x <= 0.0).then(|| super::plot::to_screen(plot, (-span, 0.0), (y0, y1), x, v.clamp(y0, y1)))
             })
             .collect();
         super::plot::trace(&p, pts, theme::band_color(band));

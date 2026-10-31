@@ -39,6 +39,8 @@ pub struct Recorder {
     /// Feedback seconds, appended at the end of the body (see nf-format tag 11).
     feedback: Vec<Record>,
     accel_seq: u16,
+    /// Flushed body bytes already handed out by [`Recorder::checkpoint`].
+    checkpointed: usize,
     pub info: RecordingInfo,
 }
 
@@ -56,7 +58,7 @@ impl Recorder {
             wall_clock_unix_ms,
             saved_id: None,
         };
-        Self { device, writer: BodyWriter::new(), last_flush: now, feedback: Vec::new(), accel_seq: 0, info }
+        Self { device, writer: BodyWriter::new(), last_flush: now, feedback: Vec::new(), accel_seq: 0, checkpointed: 0, info }
     }
 
     /// Returns false once the size cap is reached (caller stops).
@@ -116,6 +118,15 @@ impl Recorder {
         }
     }
 
+    /// Crash-recovery checkpoint: the flushed body bytes since the last
+    /// call, and the feedback seconds so far as one complete frame.
+    pub fn checkpoint(&mut self) -> (Vec<u8>, Vec<u8>) {
+        let out = self.writer.flushed();
+        let new = out[self.checkpointed.min(out.len())..].to_vec();
+        self.checkpointed = out.len();
+        (new, feedback_frame(&self.feedback))
+    }
+
     pub fn finish(self) -> Finished {
         let mut info = self.info;
         info.active = false;
@@ -128,6 +139,17 @@ impl Recorder {
         info.bytes = body.len();
         Finished { device: self.device, info, body }
     }
+}
+
+/// `records` as one body frame without the body header.
+pub fn feedback_frame(records: &[Record]) -> Vec<u8> {
+    if records.is_empty() {
+        return Vec::new();
+    }
+    let mut w = BodyWriter::new();
+    let header = w.len();
+    records.iter().for_each(|r| w.push(r));
+    w.finish()[header..].to_vec()
 }
 
 #[derive(Debug, Clone)]

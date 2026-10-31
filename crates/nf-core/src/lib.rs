@@ -17,6 +17,8 @@ pub mod nerd;
 pub mod optics;
 pub mod protocols;
 mod recording;
+pub mod recovery;
+pub mod replay;
 pub mod report;
 mod session;
 pub mod settings;

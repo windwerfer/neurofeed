@@ -80,6 +80,23 @@ pub trait Store: Send {
     fn take_changed(&mut self) -> bool {
         false
     }
+    /// Append bytes to a named blob (crash-recovery checkpoints). Backends
+    /// without blob support (IndexedDB today) keep nothing.
+    fn append_blob(&mut self, _key: &str, _bytes: &[u8]) -> Result<()> {
+        Ok(())
+    }
+    /// The whole blob, `None` if absent.
+    fn get_blob(&self, _key: &str) -> Result<Option<Vec<u8>>> {
+        Ok(None)
+    }
+    fn clear_blob(&mut self, _key: &str) -> Result<()> {
+        Ok(())
+    }
+    /// Copy the whole store to `path` (Settings → Storage → Move). Only file
+    /// backends support it.
+    fn copy_to(&self, _path: &std::path::Path) -> Result<()> {
+        Err(StoreError("this storage cannot be moved".into()))
+    }
 }
 
 /// Volatile store (wasm today, tests).
@@ -88,6 +105,7 @@ pub struct MemoryStore {
     next: u64,
     rows: Vec<StoredSession>,
     docs: std::collections::BTreeMap<String, String>,
+    blobs: std::collections::BTreeMap<String, Vec<u8>>,
 }
 
 impl MemoryStore {
@@ -135,6 +153,17 @@ impl Store for MemoryStore {
             Some(v) => self.docs.insert(key.to_owned(), v.to_owned()),
             None => self.docs.remove(key),
         };
+        Ok(())
+    }
+    fn append_blob(&mut self, key: &str, bytes: &[u8]) -> Result<()> {
+        self.blobs.entry(key.to_owned()).or_default().extend_from_slice(bytes);
+        Ok(())
+    }
+    fn get_blob(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        Ok(self.blobs.get(key).cloned())
+    }
+    fn clear_blob(&mut self, key: &str) -> Result<()> {
+        self.blobs.remove(key);
         Ok(())
     }
 }

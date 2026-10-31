@@ -17,7 +17,16 @@ struct Ui {
     /// Trust trace of the selected session.
     trust: Option<(u64, std::sync::Arc<nf_core::trust::Trust>)>,
     plot: super::trust::Plot,
+    /// Multi-select for bulk export.
+    picked: std::collections::BTreeSet<u64>,
+    /// Lazily computed sparklines.
+    thumbs: std::collections::HashMap<u64, std::sync::Arc<Vec<f32>>>,
+    bulk_note: Option<String>,
 }
+
+const THUMB_W: f32 = 70.0;
+/// Thumbnails computed per frame (each parses one body).
+const THUMBS_PER_FRAME: usize = 2;
 
 fn date(m: &SessionMeta) -> String {
     m.started_unix_ms.map_or("(no date)".into(), local_time)
@@ -67,9 +76,12 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         st.selected = None;
     }
     let selected = st.selected.or_else(|| state.history.first().map(|m| m.id));
+    st.picked.retain(|p| state.history.iter().any(|m| m.id == *p));
+    bulk_bar(ui, session, &mut st);
+    let mut budget = THUMBS_PER_FRAME;
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
-            ui.set_width(330.0);
+            ui.set_width(360.0);
             egui::ScrollArea::vertical().id_salt("history-list").show(ui, |ui| {
                 for m in &state.history {
                     let on = selected == Some(m.id);
@@ -80,12 +92,23 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
                         mmss(m.duration_s),
                         success(m).map_or("--".into(), |x| format!("{:.0} % in target", x * 100.0))
                     );
-                    let b = egui::Button::new(RichText::new(text).size(14.0)).min_size(Vec2::new(320.0, 48.0)).selected(on);
-                    if ui.add(b).clicked() {
-                        st.selected = Some(m.id);
-                        st.confirm = None;
-                        st.note = None;
-                    }
+                    ui.horizontal(|ui| {
+                        let mut p = st.picked.contains(&m.id);
+                        if ui.checkbox(&mut p, "").on_hover_text("Select for bulk export").changed() {
+                            if p {
+                                st.picked.insert(m.id)
+                            } else {
+                                st.picked.remove(&m.id)
+                            };
+                        }
+                        let b = egui::Button::new(RichText::new(text).size(14.0)).min_size(Vec2::new(220.0, 48.0)).selected(on);
+                        if ui.add(b).clicked() {
+                            st.selected = Some(m.id);
+                            st.confirm = None;
+                            st.note = None;
+                        }
+                        thumb(ui, session, m.id, &mut st.thumbs, &mut budget);
+                    });
                 }
             });
         });
@@ -131,6 +154,13 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
                 st.note = Some((m.id, export(session, m.id, fmt)));
             }
         }
+        let open = session.enabled("history.open");
+        let r = ui.add_enabled(open.is_ok(), egui::Button::new("Open in graphs"));
+        let r = r.on_hover_text("Replay this session as the live device in Bands, Raw EEG, Spectrogram, …");
+        if r.clicked() {
+            out.push(Command::HistoryOpen { id: m.id });
+            out.push(Command::ViewSet { view: nf_core::View::RawEeg });
+        }
         ui.add_space(20.0);
         if st.confirm == Some(m.id) {
             ui.label(RichText::new("Delete this session permanently?").color(BAD));
@@ -152,6 +182,63 @@ fn detail(ui: &mut egui::Ui, session: &Session, m: &SessionMeta, st: &mut Ui, ou
     if let Some((_, n)) = st.note.as_ref().filter(|(id, _)| *id == m.id) {
         ui.weak(n);
     }
+}
+
+/// Select all / none and export the picked sessions in one go.
+fn bulk_bar(ui: &mut egui::Ui, session: &Session, st: &mut Ui) {
+    let all: Vec<u64> = session.state().history.iter().map(|m| m.id).collect();
+    if all.is_empty() {
+        return;
+    }
+    ui.horizontal(|ui| {
+        let n = st.picked.len();
+        if ui.small_button(if n == all.len() { "Select none" } else { "Select all" }).clicked() {
+            st.picked = if n == all.len() { Default::default() } else { all.iter().copied().collect() };
+        }
+        ui.weak(format!("{n} selected"));
+        for (fmt, name) in [(ExportFormat::Nfed6, ".neurofeed"), (ExportFormat::Edf, "EDF"), (ExportFormat::Pdf, "PDF")] {
+            let en = n > 0 && cfg!(not(target_arch = "wasm32"));
+            if ui.add_enabled(en, egui::Button::new(format!("Export selected ({name})"))).clicked() {
+                let notes: Vec<String> = st.picked.iter().map(|&id| export(session, id, fmt)).collect();
+                let ok = notes.iter().filter(|s| s.starts_with("Saved")).count();
+                let dir = notes
+                    .iter()
+                    .find_map(|s| s.strip_prefix("Saved "))
+                    .and_then(|p| std::path::Path::new(p).parent().map(|d| d.display().to_string()));
+                st.bulk_note = Some(format!("Exported {ok} of {n} to {}", dir.unwrap_or_else(|| "?".into())));
+            }
+        }
+    });
+    if let Some(n) = &st.bulk_note {
+        ui.weak(n);
+    }
+    ui.add_space(4.0);
+}
+
+/// Sparkline of one session (computed lazily, a few per frame).
+fn thumb(
+    ui: &mut egui::Ui,
+    session: &Session,
+    id: u64,
+    cache: &mut std::collections::HashMap<u64, std::sync::Arc<Vec<f32>>>,
+    budget: &mut usize,
+) {
+    if !cache.contains_key(&id) && *budget > 0 {
+        *budget -= 1;
+        cache.insert(id, std::sync::Arc::new(session.history_thumb(id, 48).unwrap_or_default()));
+    }
+    let (r, _) = ui.allocate_exact_size(Vec2::new(THUMB_W, 40.0), egui::Sense::hover());
+    let p = ui.painter_at(r);
+    p.rect_filled(r, 4.0, ui.visuals().extreme_bg_color);
+    let Some(v) = cache.get(&id).filter(|v| v.len() > 1) else {
+        if !cache.contains_key(&id) {
+            ui.ctx().request_repaint();
+        }
+        return;
+    };
+    let r = r.shrink(4.0);
+    let pts = v.iter().enumerate().map(|(i, y)| super::plot::to_screen(r, (0.0, (v.len() - 1) as f32), (0.0, 1.0), i as f32, *y)).collect();
+    super::plot::trace(&p, pts, Color32::from_rgb(0x4F, 0xC3, 0xF7));
 }
 
 /// Where an imported session came from and what was lost on the way.

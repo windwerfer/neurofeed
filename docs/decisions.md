@@ -195,3 +195,40 @@ Settings is a section rail (General, Devices, Training, AI, Recording, About) wi
   Follow/Inspect scrolling; moving the save folder; debug feature override;
   "Reduce audio stutter"; Crown quality source; eye up/down markers.
   Android-only items (multicast lock, foreground capture) are N/A.
+
+## 2026-10-31 — last pre-Android port items
+
+- **Muse AUX** is a side stream (`nf_core::side`), never part of `Signal`,
+  bands or feedback, so pad / freshness logic is unchanged. Devices always
+  forward AUX (Classic AUX1, Athena electrodes 4–7 → AUX1–4); the session
+  filters by Settings (`muse_aux` off by default; `record_aux` only applies
+  while `muse_aux` is on), matching legacy semantics. Recorded AUX is
+  exported to EDF as extra signals.
+- **Crown signal quality source** (default Crown, legacy): the 8-float
+  `signalQuality` OSC leaf is mapped with the legacy curve (0.75 → the
+  usable threshold, linear to 100). A frame stays valid 1.5 s; without a
+  fresh one the computed score is used. The single overall value is ignored.
+- **Eye up / down markers** (legacy gesture.rs frontal − temporal level with
+  an EWMA baseline) plus double blink / double clench (two within 2 s) are
+  saved in the session context and shown on the trust plot; off by default.
+- **Feature override** is debug-only (`feedback.override`, cleared when
+  debug mode is turned off). It replaces the feature in calibration and
+  training; pad gating still applies, so it cannot reward a bad-signal second.
+- **Replay** (`history.open`, `replay:<id>`) drives a saved session through
+  the normal device path in real time; replays are never recorded again
+  (so a training on a replay is not saved).
+- **Crash recovery** checkpoints the flushed body to a `blob_chunks` table
+  every 10 s. IndexedDB (web) has no blob support yet, so the web build has
+  no crash recovery; noted for later.
+- **Move save folder**: `VACUUM INTO` the new folder, verify the row count,
+  switch, write a `history.location` pointer in the default data dir, then
+  delete the old file. Refused while recording and when `NF_DB` is set.
+- **Follow / Inspect** applies to Raw EEG (2/4/8/10 s), Bands over time
+  (15/30/60/120 s; history grown to 120 s), Spectrogram (10/20/30 s) and
+  Movement (5–30 s). Dragging enters Inspect, anchored to session time.
+- **"Reduce audio stutter" is not ported.** Legacy toggled SoLoud's AAudio
+  "stable" profile on Android only. Desktop cpal / web audio have no
+  equivalent problem today; revisit with the Android audio backend, where
+  cpal's AAudio buffer size is the matching knob.
+- Arrow glyphs (→ ▶ ⏸ …) come from a 12 KB DejaVu Sans subset as a font
+  fallback (DejaVu licence in THIRD_PARTY_NOTICES.md).

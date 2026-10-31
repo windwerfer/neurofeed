@@ -354,6 +354,9 @@ fn training(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Com
             ui.toggle_value(&mut d.show_trust, "Trust").on_hover_text("Live trust trace: what each second really was");
         });
     });
+    if session.state().settings.debug {
+        feature_override(ui, t, out);
+    }
     if d.show_nerd {
         let n = nf_core::nerd::build(t, session.state().time);
         super::nerd::window(ui.ctx(), &mut d.show_nerd, &n);
@@ -464,5 +467,28 @@ fn summary(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Comm
             out,
         );
         action(ui, session, "view.set", "Open History", false, Command::ViewSet { view: nf_core::View::History }, out);
+    });
+}
+
+/// Debug feature override (legacy `feature_override.dart`): latch the
+/// protocol feature to a slider value. Ratios 0..3 (start 0.4), shares 0..1 (start 0.3).
+fn feature_override(ui: &mut egui::Ui, t: &Trainer, out: &mut Vec<Command>) {
+    use nf_core::nf_feedback::Feature;
+    let (max, init) = match t.protocol.feature {
+        Feature::Atr | Feature::Tar | Feature::Btr => (3.0, 0.4),
+        _ => (1.0, 0.3),
+    };
+    ui.horizontal(|ui| {
+        ui.weak("Debug");
+        let mut on = t.feature_override.is_some();
+        if ui.checkbox(&mut on, "Override feature").changed() {
+            out.push(Command::FeedbackOverride { value: on.then_some(init) });
+        }
+        if let Some(mut v) = t.feature_override {
+            let r = ui.add(egui::Slider::new(&mut v, 0.0..=max).fixed_decimals(2));
+            if r.changed() {
+                out.push(Command::FeedbackOverride { value: Some(v) });
+            }
+        }
     });
 }
