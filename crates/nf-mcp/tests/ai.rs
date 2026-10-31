@@ -204,3 +204,49 @@ fn ai_settings_survive_a_restart() {
     let a = &s2.state().ai.settings;
     assert_eq!((a.scorer.as_str(), a.fixed_threshold, a.auto_load), ("ai.a_vig_reve", 0.42, false));
 }
+
+fn batch(s: &NfMcp, steps: Value) -> Result<Value, String> {
+    s.call("command_batch", json!({ "steps": steps })).map_err(|e| e.to_string())
+}
+
+#[test]
+fn no_ai_baseline_before_the_awake_reference() {
+    // Rest Awake is eyes-closed and unstaged: V_clear is never captured, so
+    // (legacy parity) no AI baseline samples and no percentile threshold.
+    let p = Arc::new(Mutex::new(0.3));
+    let s = server(&p, None);
+    run(&s, "ai.install", json!({ "path": "/dl/pretrained_weights.pth" }));
+    run(&s, "device.connect", json!({ "id": "sim:muse_s" }));
+    run(&s, "protocol.set", json!({ "id": "restAwake" }));
+    adv(&s, 5.0);
+    run(&s, "feedback.start", json!({ "minutes": 3 }));
+    adv(&s, 4.0);
+    run(&s, "calibration.start", Value::Null);
+    until_phase(&s, "playing", 130);
+    assert_eq!(run(&s, "ai.status", Value::Null)["anchors"]["clear"], false);
+    run(&s, "ai.set", json!({ "threshold_mode": "percentile" }));
+    let g = &run(&s, "audio.status", Value::Null)["guard"];
+    assert!(g["threshold"].is_null(), "no AI baseline without V_clear: {g}");
+}
+
+#[test]
+fn batches_undo_load_and_refuse_disk_steps() {
+    let p = Arc::new(Mutex::new(0.2));
+    let s = server(&p, None);
+    run(&s, "ai.set", json!({ "auto_load": false }));
+    run(&s, "ai.install", json!({ "path": "/dl/pretrained_weights.pth" }));
+    adv(&s, 1.0);
+    let e = batch(&s, json!([{ "id": "ai.load", "params": {} }, { "id": "ai.unload", "params": {} }, { "id": "ai.unload", "params": {} }]))
+        .unwrap_err();
+    assert!(e.contains("rolled back"), "{e}");
+    assert_eq!(run(&s, "ai.status", Value::Null)["models"][0]["state"], "installed", "load undone");
+    run(&s, "ai.load", Value::Null);
+    let e = batch(&s, json!([{ "id": "ai.unload", "params": {} }, { "id": "view.set", "params": { "view": "nowhere" } }])).unwrap_err();
+    assert!(e.contains("step 1"), "{e}");
+    let e = batch(&s, json!([{ "id": "ai.unload", "params": {} }, { "id": "ai.set", "params": { "fixed_threshold": 2.0 } }])).unwrap_err();
+    assert!(e.contains("rolled back"), "{e}");
+    assert_eq!(run(&s, "ai.status", Value::Null)["models"][0]["state"], "ready", "unload undone");
+    let e = batch(&s, json!([{ "id": "ai.remove", "params": { "model": "cbramod_a_vig", "confirm": true } }])).unwrap_err();
+    assert!(e.contains("cannot be rolled back"), "{e}");
+    assert_eq!(run(&s, "ai.status", Value::Null)["models"][0]["state"], "ready", "nothing ran");
+}

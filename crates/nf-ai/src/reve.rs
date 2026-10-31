@@ -5,7 +5,8 @@ use anyhow::Context;
 use reve_rs::ReveEncoder;
 use std::path::Path;
 
-pub const WINDOW_SAMPLES: usize = 1024;
+/// 2 s @ 256 Hz, as in the head packs' manifests (legacy app used 4 s).
+pub const WINDOW_SAMPLES: usize = 512;
 
 /// AF7, AF8, TP9, TP10 (mm), in model row order (legacy `MODEL_POSITIONS`).
 const POSITIONS: [f32; 12] = [-36.0, 30.0, 90.0, 36.0, 30.0, 90.0, -75.0, -18.0, -15.0, 75.0, -18.0, -15.0];

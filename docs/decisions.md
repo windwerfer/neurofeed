@@ -173,6 +173,8 @@ Settings is a section rail (General, Devices, Training, AI, Recording, About) wi
 - Sleep Guard is AI-only (`guard_only`): staged calibration (artifacts → eyes open → eyes closed), no reward lane, no band-math fallback; start is blocked with the model's not-ready reason.
 - AI guard is the default for guard-lane protocols when the selected model is Ready; band math stays opt-in (`guard.set`, off by default).
 - Threshold: fixed 0.50 by default (0.05–0.95), or p75 of the eyes-closed calibration AI samples; switchable mid-session.
-- REVE keeps the legacy 4 s window although its manifest says 2 s (open item). AI baseline samples are not gated on V_clear capture (legacy did). `ai.*` runtime side effects (install/load) are not rolled back by batches.
+- REVE scores 2 s windows (512 samples @ 256 Hz) as its head packs' manifests say; the legacy app fed 4 s (changed 2026-10-31, owner OK).
+- AI baseline samples wait for V_clear, as in legacy: V_clear comes from the staged eyes-open step, or from the whole baseline of an eyes-open protocol. Eyes-closed unstaged protocols (Rest Awake) therefore collect no AI baseline; percentile mode has no threshold there and the fixed threshold applies.
+- Batches: `ai.set` rolls back with the rest of the state; `ai.load`/`ai.unload` are undone by reloading or unloading the model that was loaded before the batch. `ai.install`/`ai.remove` are refused inside a batch before any step runs: they write or delete model files (a download keeps going on its own thread), so they cannot be rolled back.
 - REVE is gated on Hugging Face: import only; CBraMod downloads (sha256-verified, .part + rename).
 - Verified: CBraMod vs Python reference max_abs 1.6e-7; REVE runs on the real weights (dim 512).

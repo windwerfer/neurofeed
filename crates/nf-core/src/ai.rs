@@ -132,6 +132,11 @@ pub fn status(m: AiModel, state: AiModelState, folder: Option<String>) -> ModelS
 }
 
 impl AiState {
+    /// The model that is loaded or loading, if any.
+    pub fn loaded(&self) -> Option<AiModel> {
+        self.models.iter().find(|m| matches!(m.state, AiModelState::Ready { .. } | AiModelState::Loading)).map(|m| m.model)
+    }
+
     pub fn model_state(&self, m: AiModel) -> Option<&AiModelState> {
         self.models.iter().find(|s| s.model == m).map(|s| &s.state)
     }

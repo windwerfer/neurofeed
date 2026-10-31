@@ -54,11 +54,16 @@ impl Session {
     fn ai_take_scores(&mut self) {
         let Some(rt) = self.ai.as_mut() else { return };
         let scores = rt.poll();
-        let stage = self.state.feedback.calibration.as_ref().map(|c| c.stage);
+        let f = &self.state.feedback;
+        let stage = f.calibration.as_ref().map(|c| c.stage);
+        // Legacy: V_clear comes from eyes-open calibration (the staged
+        // eyes-open step, or the whole baseline of an eyes-open protocol).
+        let eyes_open = !f.protocol.guard_only && f.protocol.eyes == nf_feedback::Eyes::Open;
         for s in scores {
             let id = s.model.id();
             match stage {
                 Some(CalStage::EyesOpen) => self.live.anchors.capture_clear(id, &s.embedding),
+                Some(CalStage::EyesClosed) if eyes_open => self.live.anchors.capture_clear(id, &s.embedding),
                 Some(CalStage::Artifacts) | None => {}
                 Some(CalStage::EyesClosed) => self.live.ai_sleep_pending |= self.live.anchors.has_clear(),
             }
@@ -94,7 +99,7 @@ impl Session {
         for ch in rows {
             let r = sig.last(ch, n, true);
             if r.len() < n {
-                return; // buffering (first window after ~4 s)
+                return; // buffering (first window after ~2 s)
             }
             signal.extend(r);
         }
@@ -115,6 +120,24 @@ impl Session {
             }
             _ => Err(CoreError::BadRequest("not an ai command".into())),
         }
+    }
+
+    /// Batch rollback: put the runtime back to the model that was loaded
+    /// before the batch (ai.load / ai.unload are reversible).
+    pub(super) fn ai_restore_loaded(&mut self, before: Option<AiModel>) {
+        let Some(rt) = self.ai.as_mut() else { return };
+        let now = AiModel::ALL.iter().copied().find(|&m| matches!(rt.state(m), AiModelState::Ready { .. } | AiModelState::Loading));
+        if now == before {
+            return;
+        }
+        match before {
+            // A failure shows up as the model's `failed` state.
+            Some(m) => {
+                let _ = rt.load(m);
+            }
+            None => rt.unload(),
+        }
+        self.ai_sync();
     }
 
     fn ai_command(&mut self, cmd: AiCmd) -> Result<Reply, CoreError> {

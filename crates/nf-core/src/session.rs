@@ -427,6 +427,12 @@ impl Session {
             .enumerate()
             .map(|(i, (id, p))| Request::parse(id, p.clone()).map_err(|e| CoreError::BadRequest(format!("step {i}: {e}"))))
             .collect::<Result<Vec<_>, _>>()?;
+        if let Some(i) = parsed.iter().position(|r| matches!(r, Request::Command(Command::AiInstall { .. } | Command::AiRemove { .. }))) {
+            return Err(CoreError::BadRequest(format!(
+                "step {i}: ai.install / ai.remove write or delete model files (a download runs in the background) and cannot be rolled back; run them on their own, outside a batch"
+            )));
+        }
+        let loaded = self.state.ai.loaded();
         let checkpoint = (self.state.clone(), self.sim.config, self.events.len(), self.live.clone());
         let mut results = Vec::with_capacity(parsed.len());
         for (i, req) in parsed.into_iter().enumerate() {
@@ -434,6 +440,7 @@ impl Session {
                 Ok(v) => results.push(v),
                 Err(e) => {
                     self.rollback(checkpoint);
+                    self.ai_restore_loaded(loaded);
                     return Err(CoreError::BadRequest(format!(
                         "step {i} failed: {e}; applied {i}, not run {}, rolled back",
                         steps.len() - i - 1
@@ -712,6 +719,10 @@ impl Session {
             self.live.fb_next += 1.0;
             let mut obs = self.observation(t);
             obs.ai = self.state.ai.value_at(self.state.time);
+            // Legacy parity: no AI baseline sample before V_clear exists.
+            if self.state.feedback.phase == crate::feedback::Phase::Calibrating && !self.live.anchors.has_clear() {
+                obs.ai = None;
+            }
             if let Some(a) = self.live.artifacts.as_mut() {
                 obs.artifact = a.second(t);
                 if let (Some(r), Some(s)) = (self.live.recorder.as_mut(), a.status.movement_score) {

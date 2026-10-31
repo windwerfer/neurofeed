@@ -23,7 +23,7 @@ pub fn show(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
         ui.weak("Sleep Guard and the AI drowsiness guard need the desktop app. Other protocols run here with the band-math guard (opt-in under Feedback sound).");
         return;
     }
-    ui.weak("The AI guard scores 2–4 s of EEG once per second on this computer (nothing is uploaded). Sleep Guard needs it; Rest Awake, Open Monitor, Alert Eyes Closed and Band Stability use it for their drowsiness warning when a model is loaded.");
+    ui.weak("The AI guard scores 2 s of EEG once per second on this computer (nothing is uploaded). Sleep Guard needs it; Rest Awake, Open Monitor, Alert Eyes Closed and Band Stability use it for their drowsiness warning when a model is loaded.");
     ui.add_space(6.0);
     guard_settings(ui, session, out);
     ui.add_space(8.0);
@@ -179,7 +179,7 @@ fn live(ui: &mut egui::Ui, session: &Session) {
         if let Err(r) = s.ai.ready_reason() {
             ui.weak(format!("Not scoring: {r}"));
         } else {
-            ui.weak("Ready — scores appear once a headband streams (first after ~4 s).");
+            ui.weak("Ready — scores appear once a headband streams (first after ~2 s).");
         }
         return;
     };

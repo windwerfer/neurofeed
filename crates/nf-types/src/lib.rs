@@ -254,7 +254,7 @@ mod tests {
 pub enum AiModel {
     /// Frozen CBraMod encoder (Apache-2.0) + A-vig / wake-light heads, 2 s windows.
     CbramodAVig,
-    /// REVE base (gated on Hugging Face), 4 s windows, experimental heads.
+    /// REVE base (gated on Hugging Face), 2 s windows, experimental heads.
     ReveBase,
 }
 
@@ -285,7 +285,7 @@ impl AiModel {
     pub fn window_samples(self) -> usize {
         match self {
             Self::CbramodAVig => 512,
-            Self::ReveBase => 1024,
+            Self::ReveBase => 512,
         }
     }
     /// Weights file the user downloads or imports.
@@ -318,7 +318,7 @@ impl AiModel {
     pub fn description(self) -> &'static str {
         match self {
             Self::CbramodAVig => "Open vigilance head on the frozen CBraMod encoder (Apache-2.0). Scores 2 s windows; the guard value is P(hypnagogic). The heads ship with the app; the ~20 MB encoder weights are downloaded once.",
-            Self::ReveBase => "REVE base (67M parameters), gated on Hugging Face. Scores 4 s windows; its heads are experimental (subsample-trained).",
+            Self::ReveBase => "REVE base (67M parameters), gated on Hugging Face. Scores 2 s windows; its heads are experimental (subsample-trained).",
         }
     }
     pub fn guide(self) -> &'static str {
