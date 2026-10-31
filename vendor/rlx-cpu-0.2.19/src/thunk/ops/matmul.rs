@@ -1,0 +1,462 @@
+// RLX — versatile ML compiler + runtime.
+// Copyright (C) 2026 Eugene Hauptmann, Nataliya Kosmyna.
+// SPDX-License-Identifier: MIT OR Apache-2.0
+#![allow(unsafe_op_in_unsafe_fn)]
+use crate::thunk::*;
+
+#[allow(unused_variables)]
+pub(crate) fn compile_fused_mat_mul_bias_act(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::FusedMatMulBiasAct { activation } = &node.op else {
+        unreachable!()
+    };
+    {
+        let shape = &node.shape;
+        let n = shape.dim(shape.rank() - 1).unwrap_static();
+        let total = shape.num_elements().unwrap();
+        let m = total / n;
+        let a_len = get_len(graph, node.inputs[0]);
+        let k = a_len / m;
+        Thunk::FusedMmBiasAct {
+            a: node_offset(arena, node.inputs[0]),
+            w: node_offset(arena, node.inputs[1]),
+            bias: node_offset(arena, node.inputs[2]),
+            c: node_offset(arena, node.id),
+            m: m as u32,
+            k: k as u32,
+            n: n as u32,
+            act: *activation,
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_mat_mul(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::MatMul = &node.op else { unreachable!() };
+    {
+        let shape = &node.shape;
+        let a_shape = &graph.node(node.inputs[0]).shape;
+        let b_shape = &graph.node(node.inputs[1]).shape;
+        // Prefer inferred matmul shape from operands — ONNX bundle
+        // meta often over-ranks outputs (e.g. [seq, seq, H]).
+        let eff = rlx_ir::shape::matmul_shape(a_shape, b_shape).unwrap_or_else(|_| shape.clone());
+        let rank = eff.rank().max(2);
+        let n = eff.dim(rank - 1).unwrap_static();
+        let k_dim = a_shape.dim(a_shape.rank().max(2) - 1).unwrap_static();
+        if shape.dtype() == rlx_ir::DType::C64 {
+            // Complex GEMM (interleaved re/im). Handles 2D and
+            // 3D×2D (flatten M); both-operand batched C64 is not
+            // yet wired.
+            let both = a_shape.rank() >= 3 && b_shape.rank() >= 3;
+            assert!(!both, "batched (both-operand) C64 matmul not yet supported");
+            let m: usize = if a_shape.rank() >= 3 {
+                (0..a_shape.rank() - 1)
+                    .map(|d| a_shape.dim(d).unwrap_static())
+                    .product()
+            } else {
+                a_shape.dim(a_shape.rank() - 2).unwrap_static()
+            };
+            Thunk::CgemmC64 {
+                a: node_offset(arena, node.inputs[0]),
+                b: node_offset(arena, node.inputs[1]),
+                c: node_offset(arena, node.id),
+                m: m as u32,
+                k: k_dim as u32,
+                n: n as u32,
+            }
+        } else {
+            // Batched GEMM when both operands carry batch dimensions.
+            // 3D×2D (activations × shared weight) must flatten to one Sgemm.
+            let both_batched = a_shape.rank() >= 3 && b_shape.rank() >= 3;
+            // ...and when only `b` is batched. `matmul_shape` broadcasts a rank-2
+            // lhs across the rhs's batch, so the output IS batched — but the
+            // 2-D flatten below cannot express that. It would emit a single
+            // Sgemm against `b`'s first matrix and leave every later output
+            // batch holding whatever was already in the arena: a silent wrong
+            // answer, not a crash. `BatchedSgemm` handles it via `a_bcast`.
+            //
+            // This is the mirror of the case the `BatchedSgemm` doc comment
+            // already warns about; only the `a`-side was ever wired up.
+            let lhs_bcast_batched = a_shape.rank() < 3 && b_shape.rank() >= 3;
+            let batched_3d = rank >= 3
+                && (both_batched && a_shape.rank() + b_shape.rank() > 4 || lhs_bcast_batched);
+            // Per-operand batch counts: an operand whose batch product is 1
+            // (while the output batch is > 1) is BROADCAST across the batch.
+            let a_batch: usize = (0..a_shape.rank().saturating_sub(2))
+                .map(|d| a_shape.dim(d).unwrap_static())
+                .product();
+            let b_batch: usize = (0..b_shape.rank().saturating_sub(2))
+                .map(|d| b_shape.dim(d).unwrap_static())
+                .product();
+            if batched_3d && shape.dtype() == rlx_ir::DType::F64 {
+                let mut batch_prod = 1usize;
+                for d in 0..rank - 2 {
+                    batch_prod *= eff.dim(d).unwrap_static();
+                }
+                let m_dim = eff.dim(rank - 2).unwrap_static();
+                Thunk::BatchedDgemmF64 {
+                    a: node_offset(arena, node.inputs[0]),
+                    b: node_offset(arena, node.inputs[1]),
+                    c: node_offset(arena, node.id),
+                    batch: batch_prod as u32,
+                    m: m_dim as u32,
+                    k: k_dim as u32,
+                    n: n as u32,
+                    a_bcast: a_batch == 1 && batch_prod > 1,
+                    b_bcast: b_batch == 1 && batch_prod > 1,
+                }
+            } else if batched_3d && shape.dtype() == rlx_ir::DType::F32 {
+                let mut batch_prod = 1usize;
+                for d in 0..rank - 2 {
+                    batch_prod *= eff.dim(d).unwrap_static();
+                }
+                let m_dim = eff.dim(rank - 2).unwrap_static();
+                Thunk::BatchedSgemm {
+                    a: node_offset(arena, node.inputs[0]),
+                    b: node_offset(arena, node.inputs[1]),
+                    c: node_offset(arena, node.id),
+                    batch: batch_prod as u32,
+                    m: m_dim as u32,
+                    k: k_dim as u32,
+                    n: n as u32,
+                    a_bcast: a_batch == 1 && batch_prod > 1,
+                    b_bcast: b_batch == 1 && batch_prod > 1,
+                }
+            } else {
+                let m = if a_shape.rank() >= 3 && b_shape.rank() <= 2 {
+                    let mut m_prod = 1usize;
+                    for d in 0..a_shape.rank() - 1 {
+                        m_prod *= a_shape.dim(d).unwrap_static();
+                    }
+                    m_prod
+                } else if a_shape.rank() >= 2 {
+                    a_shape.dim(a_shape.rank() - 2).unwrap_static()
+                } else {
+                    eff.num_elements().unwrap_or(1) / n.max(1)
+                };
+                // Half-precision RHS: take the packed dequant-on-the-fly GEMM
+                // ONLY when the operand is a `Param`.
+                //
+                // `plan_memory_native_in_order` widens half **activations** to
+                // f32 (they are computed in f32) while half **params** stay
+                // packed at 2 B/elem. So the dtype alone does not say how the
+                // bytes are laid out, and reading a widened activation as
+                // `u16` is reading f32 bytes as pairs of halves. Under bf16
+                // autocast the RHS of a matmul is routinely a cast activation
+                // rather than a weight, which used to panic in
+                // `sgemm_bf16_rhs` ("range end index N out of range for slice
+                // of length 0") or silently compute garbage.
+                //
+                // Drive this off the real SLOT WIDTH rather than `Param`-ness
+                // or the declared dtype. A half tensor lives packed at 2 B/elem
+                // in some slots and widened to f32 in others, and the
+                // dequant-on-the-fly GEMM is correct for exactly one layout:
+                // `A` and `C` f32-wide, `B` packed half. Reading a widened
+                // slot as packed halves (or the reverse) is silent garbage.
+                let is_half =
+                    |d: rlx_ir::DType| matches!(d, rlx_ir::DType::BF16 | rlx_ir::DType::F16);
+                let wide = |id, d: rlx_ir::DType| {
+                    !is_half(d) || super::elementwise::half_slot_is_widened(graph, arena, id)
+                };
+                // `has_buffer` matters: a node with no slot reads back as an
+                // EMPTY slice, and the packed GEMM would index into it
+                // ("range end index 16 out of range for slice of length 0" —
+                // how the bf16 backward graph used to die).
+                let packed = |id, d: rlx_ir::DType| {
+                    is_half(d)
+                        && arena.has_buffer(id)
+                        && !super::elementwise::half_slot_is_widened(graph, arena, id)
+                };
+                let packed_rhs = packed(node.inputs[1], b_shape.dtype());
+                let use_packed_rhs = packed_rhs
+                    && wide(node.inputs[0], a_shape.dtype())
+                    && wide(node.id, shape.dtype());
+                // BF16 weight (rhs) with f32 output → dequant-on-the-fly GEMM
+                // (bf16-resident LM head: half the weight memory traffic).
+                if use_packed_rhs && b_shape.dtype() == rlx_ir::DType::BF16 {
+                    return Thunk::SgemmBf16 {
+                        a: node_offset(arena, node.inputs[0]),
+                        b: node_offset(arena, node.inputs[1]),
+                        c: node_offset(arena, node.id),
+                        m: m as u32,
+                        k: k_dim as u32,
+                        n: n as u32,
+                    };
+                }
+                // F16 weight (rhs) with f32 output → dequant-on-the-fly GEMM,
+                // IEEE-half twin of the BF16 path (else the F16 bytes are read as
+                // f32 garbage — the qwen35 vision F16-weight regression).
+                if use_packed_rhs && b_shape.dtype() == rlx_ir::DType::F16 {
+                    return Thunk::SgemmF16 {
+                        a: node_offset(arena, node.inputs[0]),
+                        b: node_offset(arena, node.inputs[1]),
+                        c: node_offset(arena, node.id),
+                        m: m as u32,
+                        k: k_dim as u32,
+                        n: n as u32,
+                    };
+                }
+                // Any remaining packed-half operand (a half ACTIVATION the
+                // planner left at 2 B, a packed LHS, or a packed destination)
+                // goes through the general widen→f32-GEMM→round path. The f32
+                // `Sgemm` below would read those 2-byte halves as f32.
+                let kind_of = |id, d: rlx_ir::DType| match d {
+                    rlx_ir::DType::BF16 if packed(id, d) => crate::thunk::HalfKind::Bf16,
+                    rlx_ir::DType::F16 if packed(id, d) => crate::thunk::HalfKind::F16,
+                    _ => crate::thunk::HalfKind::F32,
+                };
+                let a_kind = kind_of(node.inputs[0], a_shape.dtype());
+                let b_kind = kind_of(node.inputs[1], b_shape.dtype());
+                let c_kind = kind_of(node.id, shape.dtype());
+                if a_kind.packed() || b_kind.packed() || c_kind.packed() {
+                    return Thunk::SgemmHalf {
+                        a: node_offset(arena, node.inputs[0]),
+                        b: node_offset(arena, node.inputs[1]),
+                        c: node_offset(arena, node.id),
+                        m: m as u32,
+                        k: k_dim as u32,
+                        n: n as u32,
+                        a_kind,
+                        b_kind,
+                        c_kind,
+                    };
+                }
+                match shape.dtype() {
+                    rlx_ir::DType::F64 => Thunk::Dgemm {
+                        a: node_offset(arena, node.inputs[0]),
+                        b: node_offset(arena, node.inputs[1]),
+                        c: node_offset(arena, node.id),
+                        m: m as u32,
+                        k: k_dim as u32,
+                        n: n as u32,
+                    },
+                    _ => {
+                        if let Some(&(asrc, ta, bsrc, tb)) = matmul_fold.get(&node.id) {
+                            // Folded Transpose→MatMul: read pre-transpose
+                            // operands, do the transpose via cblas flags.
+                            Thunk::SgemmT {
+                                a: node_offset(arena, asrc),
+                                b: node_offset(arena, bsrc),
+                                c: node_offset(arena, node.id),
+                                m: m as u32,
+                                k: k_dim as u32,
+                                n: n as u32,
+                                ta,
+                                tb,
+                            }
+                        } else {
+                            Thunk::Sgemm {
+                                a: node_offset(arena, node.inputs[0]),
+                                b: node_offset(arena, node.inputs[1]),
+                                c: node_offset(arena, node.id),
+                                m: m as u32,
+                                k: k_dim as u32,
+                                n: n as u32,
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_lora_mat_mul(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::LoraMatMul { scale } = &node.op else {
+        unreachable!()
+    };
+    {
+        // x [m, k], w [k, n], a [k, r], b [r, n].
+        let n = node.shape.dim(node.shape.rank() - 1).unwrap_static();
+        let total = node.shape.num_elements().unwrap();
+        let m = total / n.max(1);
+        let x_total = graph.node(node.inputs[0]).shape.num_elements().unwrap();
+        let k = x_total / m.max(1);
+        let a_total = graph.node(node.inputs[2]).shape.num_elements().unwrap();
+        let r = a_total / k.max(1);
+        Thunk::LoraMatMul {
+            x: node_offset(arena, node.inputs[0]),
+            w: node_offset(arena, node.inputs[1]),
+            a: node_offset(arena, node.inputs[2]),
+            b: node_offset(arena, node.inputs[3]),
+            dst: node_offset(arena, node.id),
+            m: m as u32,
+            k: k as u32,
+            n: n as u32,
+            r: r as u32,
+            scale: *scale,
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_grouped_mat_mul(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::GroupedMatMul = &node.op else {
+        unreachable!()
+    };
+    {
+        // Inputs: [input(M, K), weight(E, K, N), expert_idx(M)]. The dims are
+        // checked against the declared output rather than trusted: `n` comes
+        // off the bank, `dst` is sized from `node.shape`, and a bank still in
+        // `[E, N, K]` order makes those two disagree — under- or over-writing
+        // the output slot with no other symptom. See `grouped_matmul_dims`.
+        let in_shape = &graph.node(node.inputs[0]).shape;
+        let w_shape = &graph.node(node.inputs[1]).shape;
+        let dims = rlx_ir::shape::grouped_matmul_dims(in_shape, w_shape, Some(&node.shape))
+            .unwrap_or_else(|e| panic!("rlx-cpu: node {:?}: {e}", node.id));
+        let (m, k_dim, n, num_experts) = (dims.m, dims.k, dims.n, dims.num_experts);
+        // A folded `Transpose(bank, [0, 2, 1])`: read the bank in its `[E, N, K]`
+        // form and let the GEMM transpose B, instead of copying the whole bank.
+        // `dims` still comes from the graph's declared (post-transpose) shapes,
+        // so only the buffer and the stride order change.
+        let (weight, w_transposed) = match matmul_fold.get(&node.id) {
+            Some(&(_, _, bsrc, true)) => (node_offset(arena, bsrc), true),
+            _ => (node_offset(arena, node.inputs[1]), false),
+        };
+        Thunk::GroupedMatMul {
+            input: node_offset(arena, node.inputs[0]),
+            weight,
+            expert_idx: node_offset(arena, node.inputs[2]),
+            dst: node_offset(arena, node.id),
+            m: m as u32,
+            k_dim: k_dim as u32,
+            n: n as u32,
+            num_experts: num_experts as u32,
+            w_transposed,
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_fused_mm_bias_act(t: &Thunk, base: *mut u8) {
+    let Thunk::FusedMmBiasAct {
+        a,
+        w,
+        bias,
+        c,
+        m,
+        k,
+        n,
+        act,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let (m, k, n) = (*m as usize, *k as usize, *n as usize);
+        unsafe {
+            let out = sl_mut(*c, base, m * n);
+            let bias_v = sl(*bias, base, n);
+            // Match torch `F.linear` / `addmm(bias, A, W)` association order.
+            for row in 0..m {
+                out[row * n..(row + 1) * n].copy_from_slice(bias_v);
+            }
+            crate::blas::sgemm_accumulate_auto(
+                sl(*a, base, m * k),
+                sl(*w, base, k * n),
+                out,
+                m,
+                k,
+                n,
+            );
+            if let Some(act) = act {
+                apply_activation_inplace(out, *act)
+            }
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_bias_add(t: &Thunk, base: *mut u8) {
+    let Thunk::BiasAdd {
+        src,
+        bias,
+        dst,
+        m,
+        n,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let (m, n) = (*m as usize, *n as usize);
+        let len = m * n;
+        unsafe {
+            let out = sl_mut(*dst, base, len);
+            if *src != *dst {
+                let src_ptr = base.add(*src) as *const f32;
+                let dst_ptr = base.add(*dst) as *mut f32;
+                if src_ptr != dst_ptr {
+                    std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, len);
+                }
+            }
+            crate::blas::bias_add(out, sl(*bias, base, n), m, n);
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_lora_mat_mul(t: &Thunk, base: *mut u8) {
+    let Thunk::LoraMatMul {
+        x,
+        w,
+        a,
+        b,
+        dst,
+        m,
+        k,
+        n,
+        r,
+        scale,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let (m, k, n, r) = (*m as usize, *k as usize, *n as usize, *r as usize);
+        unsafe {
+            let xs = sl(*x, base, m * k);
+            let ws = sl(*w, base, k * n);
+            let a_s = sl(*a, base, k * r);
+            let bs = sl(*b, base, r * n);
+            let out = sl_mut(*dst, base, m * n);
+            crate::blas::sgemm(xs, ws, out, m, k, n);
+            let mut tmp = vec![0f32; m * r];
+            crate::blas::sgemm(xs, a_s, &mut tmp, m, k, r);
+            if *scale != 1.0 {
+                for v in tmp.iter_mut() {
+                    *v *= *scale;
+                }
+            }
+            crate::blas::sgemm_accumulate(&tmp, bs, out, m, r, n);
+        }
+    }
+}

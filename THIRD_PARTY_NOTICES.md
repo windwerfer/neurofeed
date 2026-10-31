@@ -43,8 +43,8 @@ The overall project is licensed under the Apache License 2.0 (see `LICENSE.txt`)
 | android_logger | 0.14.1 | MIT / Apache-2.0 | https://github.com/NeoLegends/rust-android-logger |
 | zstd | 0.13.3 | MIT / Apache-2.0 | https://github.com/gyscos/zstd-rs |
 | reveal-rs | (git rev 9c8d856…) | Apache-2.0 | https://github.com/eugenehp/reve-rs |
-| rlx | =0.2.14 | MIT / Apache-2.0 | https://crates.io/crates/rlx |
-| rlx-cpu | 0.2.14 (vendored, patched) | MIT / Apache-2.0 | https://crates.io/crates/rlx-cpu; local copy at `vendor/rlx-cpu-0.2.14` |
+| rlx | =0.2.19 | MIT / Apache-2.0 | https://crates.io/crates/rlx |
+| rlx-cpu | 0.2.19 (vendored, patched) | MIT / Apache-2.0 | https://crates.io/crates/rlx-cpu; local copy at `vendor/rlx-cpu-0.2.19` |
 | candle-core | 0.11.0 | MIT / Apache-2.0 | https://github.com/huggingface/candle |
 | candle-nn | 0.11.0 | MIT / Apache-2.0 | https://github.com/huggingface/candle |
 | rustfft | 6.4.1 | MIT / Apache-2.0 | https://github.com/ejmahler/RustFFT |
@@ -101,7 +101,7 @@ Sound assets are bundled by file. Attribution and license follow Freesound
   `permission_handler`, `flutter_soloud`, `freezed`, `tokio`, `anyhow`, `log`,
   `env_logger`, `android_logger`, `zstd`, `jni`.
 - **MIT / Apache-2.0** — `candle-core`, `candle-nn`, `rustfft` (Spur A Candle
-  CBraMod encoder path); `rlx` 0.2.14 and vendored `rlx-cpu` 0.2.14 (REVE).
+  CBraMod encoder path); `rlx` 0.2.19 and vendored `rlx-cpu` 0.2.19 (REVE).
 - **CC0 1.0** — most freesound audio.
 - **CC BY 4.0** — rain, singing-bowl, bell/chime freesound audio.
 - **CC BY-NC 4.0** — `guardrail-alarm-01.opus` (NonCommercial).

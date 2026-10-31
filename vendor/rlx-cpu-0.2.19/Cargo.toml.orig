@@ -1,0 +1,150 @@
+[package]
+name = "rlx-cpu"
+version.workspace      = true
+edition.workspace      = true
+rust-version.workspace = true
+description = "CPU backend for RLX — SIMD kernels, BLAS dispatch, thread pool, arena executor"
+authors.workspace      = true
+license.workspace      = true
+keywords.workspace     = true
+categories.workspace   = true
+readme                 = "README.md"
+repository.workspace   = true
+documentation.workspace = true
+# `blas` is on by default and links the platform CBLAS (Accelerate on
+# macOS, OpenBLAS elsewhere). Disable with `--no-default-features` to
+# build a pure-Rust scalar fallback — slow, but useful on hosts that
+# don't have a system BLAS available (CI containers, fresh Win dev
+# boxes, or just verifying the kernels in isolation).
+#
+# `blas-mkl` opts in to Intel MKL on Windows / Linux x86_64 (replaces the
+# OpenBLAS link with `mkl_rt`, MKL's single-DLL "smart" dispatcher).
+# Honours `MKL_ROOT` to locate the import library; otherwise relies on
+# the system linker search path. macOS is unaffected and continues to
+# use Accelerate.
+[features]
+default = ["blas"]
+blas = []
+blas-mkl = ["blas"]
+# Route sgemm_auto through the `gemm` crate (the same CPU BLAS candle
+# uses) for bit-exact numerical parity with candle. Trades AMX
+# throughput for byte-equivalent output — useful for parity tests
+# and reproducibility-critical workloads.
+parity-gemm = ["dep:gemm"]
+# BLAS-less builds only (no `rlx_cpu_blas`: the PS5, cross targets, aarch64
+# Linux without OpenBLAS): the GEMM fallback runs the `gemm` crate's
+# cache-blocked, runtime-dispatched AVX2/FMA/NEON kernels instead of a plain
+# loop nest — 4–9× on prefill-shaped GEMMs and ~40× on transposed-B (attention
+# QKᵀ) on an AVX2 core. Small-m products keep the loop, which is faster there.
+# No effect when a real BLAS is linked.
+portable-gemm = ["dep:gemm"]
+# x86-64 AVX2 int8 decode GEMVs (`m == 1`) for Q4_K / Q5_K / Q6_K / Q8_0 /
+# Q4_0 / Q4_1, which otherwise dequantize each block to f32 before the dot.
+# Rounds the activation to int8 like llama.cpp, so it is not bit-identical to
+# the f32 path (`RLX_Q4K_EXACT_GEMV` keeps Q4_K on the f32-activation arm).
+# Takes effect where decode reaches the packed kernel: BLAS-less builds, or a
+# thrashing dequant cache.
+int8-gemv = []
+# Inter-thunk parallelism: runs of thunks with exact arena access summaries are
+# levelled by byte-range conflicts and each level runs concurrently on the
+# pool. Targets dispatch-bound schedules (decode, small models) where single
+# kernels cannot fill the cores. `RLX_CPU_WAVES=0` disables it at run time.
+wave-exec = []
+# 3D Gaussian splat (`Op::GaussianSplatRender*`) — executors registered from `rlx-splat`.
+splat = []
+
+# ── Apple AMX / SME matrix-coprocessor fast paths (Apple Silicon only) ──
+# Three independent, opt-in paths onto the Apple matrix hardware. Each is
+# gated so the base build never pays for them; build.rs only lights the
+# matching `rlx_cpu_amx_*` cfg on `target_vendor = "apple"`, so enabling a
+# feature on a non-Apple target is a harmless no-op (code compiles, path is
+# never taken). Runtime probes (sysctl `hw.optional.arm.FEAT_*`) then decide
+# whether the current chip actually has the unit before dispatching.
+#
+# `amx-bnns`  — BNNS-backed low-precision (int8 W8A8) matmul for quantized
+#               inference. Apple auto-dispatches BNNS to AMX (M1–M3) or SME
+#               (M4+), so we don't own undocumented asm. Not bit-exact with
+#               the f32 weight-only oracle — it's a genuine W8A8 mode.
+# `amx-dense` — Verification + benchmark harness proving Accelerate's sgemm
+#               already IS the AMX path for dense f32/f64; nothing to beat
+#               there, this just measures it (vs SIMD fallback, vs SME).
+# `amx-sme`   — Direct ARM SME2 GEMM microkernel (FMOPA outer products) via
+#               `global_asm!`, runtime-gated on FEAT_SME2. The M4+ documented
+#               path; hand-written, so feature-gated and parity-checked.
+amx-bnns = []
+amx-dense = []
+amx-sme = []
+
+[dependencies]
+libm = "0.2"
+rlx-ir = { workspace = true }
+rlx-pocketfft = { workspace = true }
+# Double-single (df) host arithmetic — the reference every df kernel matches.
+rlxsl = { workspace = true }
+rlx-opt = { workspace = true }
+# GGUF K-quant block decoders — used by Op::DequantMatMul's GGUF
+# schemes so packed weight bytes can stay in the arena until matmul
+# time instead of round-tripping through f32 at load.
+rlx-gguf = { workspace = true, features = ["ir"] }
+rlx-mlx-io = { workspace = true }
+# F16/BF16 conversion for the CastDtype thunk (and any future
+# half-precision kernel work). Already in the workspace via
+# rlx-runtime / rlx-metal.
+half = "2"
+# Work-stealing parallelism for elementwise kernels, BLAS tiling, and
+# Qwen3.5 `Op::GatedDeltaNet` head scans.
+rayon = "1.10"
+# Derives a zero-alloc `&'static str` variant name for EVERY `Thunk` variant
+# (profiler / tracing labels) so no op can silently fall into an "Other"
+# bucket — the hand-maintained match previously hid slow backward thunks.
+strum_macros = "0.28"
+# Optional same-as-candle CPU sgemm; gated behind `parity-gemm`.
+gemm = { version = "0.19", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+toml = { version = "0.8", default-features = false, features = ["parse"] }
+serde = { version = "1", features = ["derive"] }
+# Oracle test only: `tests/gpu_indexing_plan_parity.rs` replays the GPU indexing
+# kernels' addressing (planned in rlx-gpu-dispatch) against the CPU kernels here.
+# rlx-gpu-dispatch is dependency-free, so this adds nothing to the build graph.
+rlx-gpu-dispatch = { workspace = true }
+
+# ── Snippet micro-benches (plan #52) ──────────────────────────
+# Pattern: one .rs per kernel, cargo bench runs the lot.
+# `cargo bench --bench sgemm`, `cargo bench --bench sample`, etc.
+
+[[bench]]
+name = "sgemm"
+harness = false
+
+[[bench]]
+name = "sample"
+harness = false
+
+[[bench]]
+name = "cumsum"
+harness = false
+
+[[bench]]
+name = "vmath"
+harness = false
+
+# Plan #13: one driver that reads bench-configs/*.toml and
+# dispatches per-shape criterion timings. Add a new TOML to
+# extend coverage without writing a new .rs.
+[[bench]]
+name = "tuned"
+harness = false
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+features       = ["splat"]
+rustdoc-args   = ["--cfg", "docsrs"]
+all-features   = false
+
+[[example]]
+name = "wave_bench"
+required-features = ["wave-exec"]

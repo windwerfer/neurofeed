@@ -25,12 +25,12 @@ unmaintained = "workspace"   # direct deps of workspace crates only
 ignore = [
   # zip <9 extract(): symlink/permission/SUID issues. Only *extraction to disk*
   # is affected; we never call extract(). Pulled by candle-core 0.11 (zip 8),
-  # rlx 0.2.14 (zip 2 via rlx-dduf, zip 0.6 via npyz).
+  # rlx 0.2.19 (zip 2 via rlx-dduf, zip 0.6 via npyz).
   { id = "RUSTSEC-2026-0367", reason = "zip extract() unused; via candle-core/rlx" },
   { id = "RUSTSEC-2026-0368", reason = "zip extract() unused; via candle-core/rlx" },
   { id = "RUSTSEC-2026-0369", reason = "zip extract() unused; via candle-core/rlx" },
   # zstd/zstd-safe: decoder issues on malformed input. Only used by rlx to read
-  # model packages we bundle ourselves (trusted input). Pinned rlx =0.2.14.
+  # model packages we bundle ourselves (trusted input). Pinned rlx =0.2.19.
   { id = "RUSTSEC-2026-0391", reason = "rlx-pkg reads only bundled model files" },
   { id = "RUSTSEC-2026-0398", reason = "rlx-pkg reads only bundled model files" },
   { id = "RUSTSEC-2026-0403", reason = "rlx-pkg reads only bundled model files" },
@@ -75,7 +75,7 @@ allow-git = [
   "https://github.com/windwerfer/muse-rs",   # our fork of eugenehp/muse-rs
   "https://github.com/eugenehp/reve-rs",     # REVE EEG model (upstream)
 ]
-# Note: rlx-cpu is vendored at vendor/rlx-cpu-0.2.14 via [patch.crates-io]
+# Note: rlx-cpu is vendored at vendor/rlx-cpu-0.2.19 via [patch.crates-io]
 # (patched to disable the default BLAS feature, commit f8411d4); path deps are
 # not checked as sources. Its
-# advisories are still matched against crates.io rlx-cpu 0.2.14.
+# advisories are still matched against crates.io rlx-cpu 0.2.19.

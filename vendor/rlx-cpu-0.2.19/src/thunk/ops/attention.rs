@@ -1,0 +1,1092 @@
+// RLX — versatile ML compiler + runtime.
+// Copyright (C) 2026 Eugene Hauptmann, Nataliya Kosmyna.
+// SPDX-License-Identifier: MIT OR Apache-2.0
+#![allow(unsafe_op_in_unsafe_fn)]
+use crate::thunk::*;
+
+/// Apply a synthetic (kernel-generated) attention mask to a `[q_seq, k_seq]`
+/// scores matrix. Custom masks are read from a tensor and not handled here.
+/// `None` is a no-op so callers don't need to special-case it.
+#[inline]
+pub(crate) fn apply_synthetic_mask(
+    scores: &mut [f32],
+    q_seq: usize,
+    k_seq: usize,
+    kind: rlx_ir::op::MaskKind,
+) {
+    let neg = crate::config::RuntimeConfig::global().attn_mask_neg_inf;
+    let q_offset = k_seq.saturating_sub(q_seq);
+    match kind {
+        rlx_ir::op::MaskKind::None | rlx_ir::op::MaskKind::Custom | rlx_ir::op::MaskKind::Bias => {}
+        rlx_ir::op::MaskKind::Causal => {
+            for qi in 0..q_seq {
+                let abs_q = q_offset + qi;
+                for ki in (abs_q + 1)..k_seq {
+                    scores[qi * k_seq + ki] = neg;
+                }
+            }
+        }
+        rlx_ir::op::MaskKind::SlidingWindow(w) => {
+            for qi in 0..q_seq {
+                let abs_q = q_offset + qi;
+                let lo = abs_q.saturating_sub(w);
+                for ki in 0..k_seq {
+                    if ki < lo || ki > abs_q {
+                        scores[qi * k_seq + ki] = neg;
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_axial_rope2d(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::AxialRope2d {
+        end_x,
+        end_y,
+        head_dim,
+        num_heads,
+        theta,
+        repeat_factor,
+    } = &node.op
+    else {
+        unreachable!()
+    };
+    {
+        let in_shape = &graph.node(node.inputs[0]).shape;
+        let batch = in_shape.dim(0).unwrap_static() as u32;
+        let seq = in_shape.dim(1).unwrap_static() as u32;
+        let hidden = in_shape.dim(2).unwrap_static() as u32;
+        Thunk::AxialRope2d {
+            src: node_offset(arena, node.inputs[0]),
+            dst: node_offset(arena, node.id),
+            batch,
+            seq,
+            hidden,
+            end_x: *end_x as u32,
+            end_y: *end_y as u32,
+            head_dim: *head_dim as u32,
+            num_heads: *num_heads as u32,
+            theta: *theta,
+            repeat_factor: *repeat_factor as u32,
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_attention(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::Attention {
+        num_heads,
+        head_dim,
+        v_head_dim,
+        mask_kind,
+        score_scale,
+        attn_logit_softcap,
+    } = &node.op
+    else {
+        unreachable!()
+    };
+    // V/output per-head width; == head_dim unless asymmetric (MLA).
+    let v_head_dim = v_head_dim.unwrap_or(*head_dim);
+    {
+        // Layout dispatch: rank-4 input could be either
+        // `[B, S, H, D]` (CPU's historical convention) or
+        // `[B, H, S, D]` (the convention the GPU/TPU backends
+        // share). Disambiguate by which axis matches
+        // `num_heads`. Rank-3 is always `[B, S, H*D]`.
+        let q_shape = &graph.node(node.inputs[0]).shape;
+        let k_shape = &graph.node(node.inputs[1]).shape;
+        let rank = q_shape.rank();
+        let (batch, seq, kv_seq, bhsd) = if rank == 4 {
+            let d1 = q_shape.dim(1).unwrap_static();
+            let d2 = q_shape.dim(2).unwrap_static();
+            if d1 == *num_heads {
+                // [B, H, S, D]
+                (
+                    q_shape.dim(0).unwrap_static(),
+                    d2,
+                    k_shape.dim(2).unwrap_static(),
+                    true,
+                )
+            } else {
+                // [B, S, H, D]
+                (
+                    q_shape.dim(0).unwrap_static(),
+                    d1,
+                    k_shape.dim(1).unwrap_static(),
+                    false,
+                )
+            }
+        } else if rank >= 3 {
+            (
+                q_shape.dim(0).unwrap_static(),
+                q_shape.dim(1).unwrap_static(),
+                k_shape.dim(1).unwrap_static(),
+                false,
+            )
+        } else {
+            (
+                1,
+                q_shape.dim(0).unwrap_static(),
+                k_shape.dim(0).unwrap_static(),
+                false,
+            )
+        };
+        let mask_off = if matches!(
+            mask_kind,
+            rlx_ir::op::MaskKind::Custom | rlx_ir::op::MaskKind::Bias
+        ) {
+            node_offset(arena, node.inputs[3])
+        } else {
+            0
+        };
+        let hs = (*num_heads * *head_dim) as u32;
+        // GQA/MQA: KV-head count from K's element count over B·S_k·D (layout-
+        // independent). == num_heads for MHA; < num_heads only on the raw
+        // standalone path (real models fuse or replicate K/V to num_heads).
+        let k_numel = k_shape
+            .num_elements()
+            .unwrap_or(batch * kv_seq * *num_heads * *head_dim);
+        let nkv = (k_numel / (batch.max(1) * kv_seq.max(1) * (*head_dim).max(1))).max(1) as u32;
+        let kv_hs = nkv * *head_dim as u32;
+        let kv_hs_v = nkv * v_head_dim as u32; // V rows are v_head_dim-wide
+        Thunk::Attention {
+            q: node_offset(arena, node.inputs[0]),
+            k: node_offset(arena, node.inputs[1]),
+            v: node_offset(arena, node.inputs[2]),
+            mask: mask_off,
+            out: node_offset(arena, node.id),
+            batch: batch as u32,
+            seq: seq as u32,
+            kv_seq: kv_seq as u32,
+            heads: *num_heads as u32,
+            kv_heads: nkv,
+            head_dim: *head_dim as u32,
+            v_head_dim: v_head_dim as u32,
+            mask_kind: *mask_kind,
+            scale: score_scale.unwrap_or((*head_dim as f32).powf(-0.5)),
+            softcap: attn_logit_softcap.unwrap_or(0.0),
+            // Defaults: each input is its own contiguous buffer
+            // with row stride = hidden. Rewritten by the
+            // Narrow→Attention fusion when applicable.
+            q_row_stride: hs,
+            k_row_stride: kv_hs,
+            v_row_stride: kv_hs_v,
+            bhsd,
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_attention_backward(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::AttentionBackward {
+        num_heads,
+        head_dim,
+        mask_kind,
+        wrt,
+    } = &node.op
+    else {
+        unreachable!()
+    };
+    {
+        let q_shape = &graph.node(node.inputs[0]).shape;
+        let k_shape = &graph.node(node.inputs[1]).shape;
+        let rank = q_shape.rank();
+        let (batch, seq, kv_seq, bhsd) = if rank == 4 {
+            let d1 = q_shape.dim(1).unwrap_static();
+            let d2 = q_shape.dim(2).unwrap_static();
+            if d1 == *num_heads {
+                (
+                    q_shape.dim(0).unwrap_static(),
+                    d2,
+                    k_shape.dim(2).unwrap_static(),
+                    true,
+                )
+            } else {
+                (
+                    q_shape.dim(0).unwrap_static(),
+                    d1,
+                    k_shape.dim(1).unwrap_static(),
+                    false,
+                )
+            }
+        } else if rank >= 3 {
+            (
+                q_shape.dim(0).unwrap_static(),
+                q_shape.dim(1).unwrap_static(),
+                k_shape.dim(1).unwrap_static(),
+                false,
+            )
+        } else {
+            (
+                1,
+                q_shape.dim(0).unwrap_static(),
+                k_shape.dim(0).unwrap_static(),
+                false,
+            )
+        };
+        let mask_off = if matches!(
+            mask_kind,
+            rlx_ir::op::MaskKind::Custom | rlx_ir::op::MaskKind::Bias
+        ) {
+            node_offset(arena, node.inputs[4])
+        } else {
+            0
+        };
+        Thunk::AttentionBackward {
+            q: node_offset(arena, node.inputs[0]),
+            k: node_offset(arena, node.inputs[1]),
+            v: node_offset(arena, node.inputs[2]),
+            dy: node_offset(arena, node.inputs[3]),
+            mask: mask_off,
+            out: node_offset(arena, node.id),
+            batch: batch as u32,
+            seq: seq as u32,
+            kv_seq: kv_seq as u32,
+            heads: *num_heads as u32,
+            head_dim: *head_dim as u32,
+            mask_kind: *mask_kind,
+            wrt: *wrt,
+            bhsd,
+        }
+    }
+}
+
+/// Lower [`rlx_ir::Op::AttentionBackwardAll`] to the fused thunk. The node's own
+/// output slot is the packed `[3B,S,H,D]` buffer; dQ/dK/dV go to three disjoint
+/// byte sub-ranges of it (so the memory planner manages one live buffer, and the
+/// downstream axis-0 `Narrow`s alias into it).
+pub(crate) fn compile_attention_backward_all(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+) -> Thunk {
+    let Op::AttentionBackwardAll {
+        num_heads,
+        head_dim,
+        mask_kind,
+    } = &node.op
+    else {
+        unreachable!()
+    };
+    {
+        let q_shape = &graph.node(node.inputs[0]).shape;
+        let k_shape = &graph.node(node.inputs[1]).shape;
+        let rank = q_shape.rank();
+        let (batch, seq, kv_seq, bhsd) = if rank == 4 {
+            let d1 = q_shape.dim(1).unwrap_static();
+            let d2 = q_shape.dim(2).unwrap_static();
+            if d1 == *num_heads {
+                (
+                    q_shape.dim(0).unwrap_static(),
+                    d2,
+                    k_shape.dim(2).unwrap_static(),
+                    true,
+                )
+            } else {
+                (
+                    q_shape.dim(0).unwrap_static(),
+                    d1,
+                    k_shape.dim(1).unwrap_static(),
+                    false,
+                )
+            }
+        } else if rank >= 3 {
+            (
+                q_shape.dim(0).unwrap_static(),
+                q_shape.dim(1).unwrap_static(),
+                k_shape.dim(1).unwrap_static(),
+                false,
+            )
+        } else {
+            (
+                1,
+                q_shape.dim(0).unwrap_static(),
+                k_shape.dim(0).unwrap_static(),
+                false,
+            )
+        };
+        let mask_off = if matches!(
+            mask_kind,
+            rlx_ir::op::MaskKind::Custom | rlx_ir::op::MaskKind::Bias
+        ) {
+            node_offset(arena, node.inputs[4])
+        } else {
+            0
+        };
+        // Byte size of one gradient. dQ = dK = dV = q's shape (self-attention:
+        // the fusion pass only fires when q and k share a shape), so one
+        // gradient is exactly `q`'s element count.
+        let per_bytes =
+            graph.node(node.inputs[0]).shape.num_elements().unwrap() * std::mem::size_of::<f32>();
+        let base = node_offset(arena, node.id);
+        Thunk::AttentionBackwardAll {
+            q: node_offset(arena, node.inputs[0]),
+            k: node_offset(arena, node.inputs[1]),
+            v: node_offset(arena, node.inputs[2]),
+            dy: node_offset(arena, node.inputs[3]),
+            mask: mask_off,
+            out_q: base,
+            out_k: base + per_bytes,
+            out_v: base + 2 * per_bytes,
+            batch: batch as u32,
+            seq: seq as u32,
+            kv_seq: kv_seq as u32,
+            heads: *num_heads as u32,
+            head_dim: *head_dim as u32,
+            mask_kind: *mask_kind,
+            bhsd,
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_fused_attention_block(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::FusedAttentionBlock {
+        num_heads,
+        head_dim,
+        has_bias,
+        has_rope,
+    } = &node.op
+    else {
+        unreachable!()
+    };
+    {
+        let x_shape = &graph.node(node.inputs[0]).shape;
+        let (batch, seq) = if x_shape.rank() >= 3 {
+            (
+                x_shape.dim(0).unwrap_static(),
+                x_shape.dim(1).unwrap_static(),
+            )
+        } else {
+            let total = x_shape.num_elements().unwrap();
+            let s = x_shape.dim(x_shape.rank() - 2).unwrap_static();
+            (total / (s * num_heads * head_dim), s)
+        };
+        let hs = (*num_heads * *head_dim) as u32;
+        // Inputs: hidden, qkv_w, out_w, mask, [qkv_b, out_b], [cos, sin]
+        let mut idx = 4;
+        let (qkv_b_off, out_b_off) = if *has_bias {
+            let qb = node_offset(arena, node.inputs[idx]);
+            let ob = node_offset(arena, node.inputs[idx + 1]);
+            idx += 2;
+            (qb, ob)
+        } else {
+            (0, 0)
+        };
+        let (cos_off, sin_off, cl) = if *has_rope {
+            let c = node_offset(arena, node.inputs[idx]);
+            let s = node_offset(arena, node.inputs[idx + 1]);
+            let clen = get_len(graph, node.inputs[idx]);
+            (c, s, clen as u32)
+        } else {
+            (0, 0, 0)
+        };
+
+        Thunk::FusedAttnBlock {
+            hidden: node_offset(arena, node.inputs[0]),
+            qkv_w: node_offset(arena, node.inputs[1]),
+            out_w: node_offset(arena, node.inputs[2]),
+            mask: node_offset(arena, node.inputs[3]),
+            // The MIR `Op::FusedAttentionBlock` is emitted only for the
+            // BERT-style per-key padding mask (the MIR fusion pass is
+            // `Custom`-only), so the buffer mask is authoritative here.
+            mask_kind: rlx_ir::op::MaskKind::Custom,
+            out: node_offset(arena, node.id),
+            qkv_b: qkv_b_off,
+            out_b: out_b_off,
+            cos: cos_off,
+            sin: sin_off,
+            cos_len: cl,
+            batch: batch as u32,
+            seq: seq as u32,
+            hs,
+            nh: *num_heads as u32,
+            dh: *head_dim as u32,
+            // The MIR `Op::FusedAttentionBlock` is BERT-shaped: hidden == hs.
+            in_dim: hs,
+            out_dim: hs,
+            has_bias: *has_bias,
+            has_rope: *has_rope,
+            // The MIR `Op::FusedAttentionBlock` is BERT-only (NeoX rope).
+            interleaved: false,
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_rope(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::Rope {
+        head_dim,
+        n_rot,
+        style,
+    } = &node.op
+    else {
+        unreachable!()
+    };
+    {
+        let x_shape = &graph.node(node.inputs[0]).shape;
+        let (batch, seq, hidden) = if x_shape.rank() >= 3 {
+            // `exec_rope` walks `[batch, seq, hidden]`: positions index the
+            // second-to-last axis and each row holds `hidden / head_dim` heads.
+            // So fold every leading axis into `batch` rather than reading dims
+            // 0/1/2 positionally.
+            //
+            // Rank 3 `[B, S, H*D]` is unchanged. Rank 4 `[B, H, S, D]` — the
+            // BHSD multi-head packing that `rope` is fed after a
+            // `transpose(0,2,1,3)` — used to read `seq = H` and `hidden = S`,
+            // mistaking the head count for the sequence length. It then sized
+            // the output as `B*H*S` instead of `B*H*S*D` and wrote only that
+            // prefix, leaving the rest of the destination buffer zero: with
+            // `n_rot == head_dim` nothing copied the tail back either, so the
+            // rotated tensor came out almost entirely zeros. Attention over a
+            // near-zero K is uniform, which reads as a plausible-but-wrong
+            // model rather than a crash.
+            let rank = x_shape.rank();
+            let hidden = x_shape.dim(rank - 1).unwrap_static();
+            let seq = x_shape.dim(rank - 2).unwrap_static();
+            let batch: usize = (0..rank - 2)
+                .map(|i| x_shape.dim(i).unwrap_static())
+                .product();
+            (batch, seq, hidden)
+        } else {
+            let total = x_shape.num_elements().unwrap();
+            (
+                1,
+                x_shape.dim(0).unwrap_static(),
+                total / x_shape.dim(0).unwrap_static(),
+            )
+        };
+        let cos_len = get_len(graph, node.inputs[1]);
+        // The table's own row width (see `Thunk::Rope::cos_row_stride`).
+        let cos_row_stride =
+            rlx_ir::shape::rope_table_stride(&graph.node(node.inputs[1]).shape, *n_rot) as u32;
+        Thunk::Rope {
+            src: node_offset(arena, node.inputs[0]),
+            cos: node_offset(arena, node.inputs[1]),
+            sin: node_offset(arena, node.inputs[2]),
+            dst: node_offset(arena, node.id),
+            batch: batch as u32,
+            seq: seq as u32,
+            hidden: hidden as u32,
+            head_dim: *head_dim as u32,
+            n_rot: *n_rot as u32,
+            cos_len: cos_len as u32,
+            cos_row_stride,
+            // Default: source rows are tightly packed (rewritten
+            // by the Narrow→Rope fusion pass below if Rope ends
+            // up reading from a wider parent like QKV).
+            src_row_stride: hidden as u32,
+            interleaved: matches!(style, rlx_ir::op::RopeStyle::GptJ),
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_fused_swi_g_l_u(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::FusedSwiGLU {
+        cast_to: _,
+        gate_first,
+    } = &node.op
+    else {
+        unreachable!()
+    };
+    {
+        let n_half = node.shape.dim(node.shape.rank() - 1).unwrap_static();
+        let total = node.shape.num_elements().unwrap();
+        Thunk::FusedSwiGLU {
+            src: node_offset(arena, node.inputs[0]),
+            dst: node_offset(arena, node.id),
+            n_half: n_half as u32,
+            total: total as u32,
+            gate_first: *gate_first,
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_rope_backward(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::RopeBackward {
+        head_dim,
+        n_rot,
+        style,
+    } = &node.op
+    else {
+        unreachable!()
+    };
+    {
+        let dy_shape = &graph.node(node.inputs[0]).shape;
+        let (batch, seq, hidden) = if dy_shape.rank() >= 3 {
+            // Fold leading axes into `batch` rather than reading dims 0/1/2
+            // positionally — same defect as the forward path, on the gradient.
+            // Rank 3 `[B, S, H*D]` is unchanged; rank 4 `[B, H, S, D]` (BHSD,
+            // what `apply_rope_bhsd` produces) used to take `seq = H` and
+            // `hidden = S`, so most of the gradient was never written.
+            let rank = dy_shape.rank();
+            (
+                (0..rank - 2)
+                    .map(|i| dy_shape.dim(i).unwrap_static())
+                    .product::<usize>(),
+                dy_shape.dim(rank - 2).unwrap_static(),
+                dy_shape.dim(rank - 1).unwrap_static(),
+            )
+        } else {
+            (
+                1,
+                dy_shape.dim(0).unwrap_static(),
+                dy_shape.dim(1).unwrap_static(),
+            )
+        };
+        let cos_shape = &graph.node(node.inputs[1]).shape;
+        let cos_len = cos_shape.num_elements().unwrap();
+        // Mirrors `compile_rope`. Deriving it separately here would reintroduce
+        // the forward/backward split.
+        let cos_row_stride = rlx_ir::shape::rope_table_stride(cos_shape, *n_rot) as u32;
+        Thunk::RopeBackward {
+            dy: node_offset(arena, node.inputs[0]),
+            cos: node_offset(arena, node.inputs[1]),
+            sin: node_offset(arena, node.inputs[2]),
+            dx: node_offset(arena, node.id),
+            batch: batch as u32,
+            seq: seq as u32,
+            hidden: hidden as u32,
+            head_dim: *head_dim as u32,
+            n_rot: *n_rot as u32,
+            cos_len: cos_len as u32,
+            cos_row_stride,
+            interleaved: matches!(style, rlx_ir::op::RopeStyle::GptJ),
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_axial_rope2d(t: &Thunk, base: *mut u8) {
+    let Thunk::AxialRope2d {
+        src,
+        dst,
+        batch,
+        seq,
+        hidden,
+        end_x,
+        end_y,
+        head_dim,
+        num_heads,
+        theta,
+        repeat_factor,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let b = *batch as usize;
+        let s = *seq as usize;
+        let hdim = *head_dim as usize;
+        let nh = *num_heads as usize;
+        let plane = s * (*hidden as usize);
+        // `base` is a byte pointer; advance per-batch by element-stride
+        // bytes. (Was `base.add(bi * plane)` — 4× under-advance for
+        // batch>1; matches the corrected `execute_axial_rope2d_f32`.)
+        let plane_bytes = plane * std::mem::size_of::<f32>();
+        unsafe {
+            for bi in 0..b {
+                let input = sl(*src, base.add(bi * plane_bytes), plane);
+                let output = sl_mut(*dst, base.add(bi * plane_bytes), plane);
+                let rotated = rlx_ir::ops::axial_rope2d::apply_axial_rope2d(
+                    input,
+                    nh,
+                    s,
+                    hdim,
+                    *end_x as usize,
+                    *end_y as usize,
+                    *theta,
+                    *repeat_factor as usize,
+                );
+                output.copy_from_slice(&rotated);
+            }
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_attention_backward(t: &Thunk, base: *mut u8) {
+    let Thunk::AttentionBackward {
+        q,
+        k,
+        v,
+        dy,
+        mask,
+        out,
+        batch,
+        seq,
+        kv_seq,
+        heads,
+        head_dim,
+        mask_kind,
+        wrt,
+        bhsd,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let (b, q_s, k_s, nh, dh) = (
+            *batch as usize,
+            *seq as usize,
+            *kv_seq as usize,
+            *heads as usize,
+            *head_dim as usize,
+        );
+        unsafe {
+            let q_len = if *bhsd {
+                b * nh * q_s * dh
+            } else {
+                b * q_s * nh * dh
+            };
+            let k_len = if *bhsd {
+                b * nh * k_s * dh
+            } else {
+                b * k_s * nh * dh
+            };
+            let out_len = match wrt {
+                rlx_ir::op::AttentionBwdWrt::Key | rlx_ir::op::AttentionBwdWrt::Value => k_len,
+                rlx_ir::op::AttentionBwdWrt::Query => q_len,
+            };
+            let q_data = sl(*q, base, q_len);
+            let k_data = sl(*k, base, k_len);
+            let v_data = sl(*v, base, k_len);
+            let dy_data = sl(*dy, base, q_len);
+            let out_data = sl_mut(*out, base, out_len);
+            let mask_data: &[f32] = if *mask != 0 {
+                let ml = match mask_kind {
+                    rlx_ir::op::MaskKind::Custom => b * k_s,
+                    rlx_ir::op::MaskKind::Bias => b * nh * q_s * k_s,
+                    _ => 0,
+                };
+                sl(*mask, base, ml)
+            } else {
+                &[]
+            };
+            crate::attention_bwd::attention_backward(
+                *wrt, q_data, k_data, v_data, dy_data, out_data, b, nh, q_s, k_s, dh, *mask_kind,
+                mask_data, *bhsd,
+            );
+        }
+    }
+}
+
+pub(crate) fn exec_attention_backward_all(t: &Thunk, base: *mut u8) {
+    let Thunk::AttentionBackwardAll {
+        q,
+        k,
+        v,
+        dy,
+        mask,
+        out_q,
+        out_k,
+        out_v,
+        batch,
+        seq,
+        kv_seq,
+        heads,
+        head_dim,
+        mask_kind,
+        bhsd,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let (b, q_s, k_s, nh, dh) = (
+            *batch as usize,
+            *seq as usize,
+            *kv_seq as usize,
+            *heads as usize,
+            *head_dim as usize,
+        );
+        unsafe {
+            let q_len = if *bhsd {
+                b * nh * q_s * dh
+            } else {
+                b * q_s * nh * dh
+            };
+            let k_len = if *bhsd {
+                b * nh * k_s * dh
+            } else {
+                b * k_s * nh * dh
+            };
+            let q_data = sl(*q, base, q_len);
+            let k_data = sl(*k, base, k_len);
+            let v_data = sl(*v, base, k_len);
+            let dy_data = sl(*dy, base, q_len);
+            let out_q_data = sl_mut(*out_q, base, q_len);
+            let out_k_data = sl_mut(*out_k, base, k_len);
+            let out_v_data = sl_mut(*out_v, base, k_len);
+            let mask_data: &[f32] = if *mask != 0 {
+                let ml = match mask_kind {
+                    rlx_ir::op::MaskKind::Custom => b * k_s,
+                    rlx_ir::op::MaskKind::Bias => b * nh * q_s * k_s,
+                    _ => 0,
+                };
+                sl(*mask, base, ml)
+            } else {
+                &[]
+            };
+            crate::attention_bwd::attention_backward_all(
+                q_data, k_data, v_data, dy_data, out_q_data, out_k_data, out_v_data, b, nh, q_s,
+                k_s, dh, *mask_kind, mask_data, *bhsd,
+            );
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_rope(t: &Thunk, base: *mut u8) {
+    let Thunk::Rope {
+        src,
+        cos,
+        sin,
+        dst,
+        batch,
+        seq,
+        hidden,
+        head_dim,
+        n_rot,
+        cos_len,
+        cos_row_stride,
+        src_row_stride,
+        interleaved,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let interleaved = *interleaved;
+        let (b, s, hs, dh, nr) = (
+            *batch as usize,
+            *seq as usize,
+            *hidden as usize,
+            *head_dim as usize,
+            *n_rot as usize,
+        );
+        let rot_half = nr / 2;
+        let nh = hs / dh;
+        let cl = *cos_len as usize;
+        let src_rs = *src_row_stride as usize;
+        // Row stride comes from the table's own last dimension. It used to be
+        // assumed equal to `rot_half`, which is right for a tightly packed
+        // table (DeepSeek-V4 MLA) and wrong for one allocated at `head_dim/2`
+        // and only partly used (Qwen3.5) — there it read the wrong row for
+        // every position past the first. The shared CUDA/ROCm kernel assumed
+        // the opposite, `head_dim/2`, so the two agreed only when
+        // `n_rot == head_dim` and silently disagreed under partial rotation.
+        let tab_stride = (*cos_row_stride as usize).max(1);
+        let cos_rows = cl / tab_stride;
+        let per_token = cos_rows == b * s && cos_rows != s;
+        unsafe {
+            let x = sl(*src, base, b * s * src_rs);
+            let cos_tab = sl(*cos, base, cl);
+            let sin_tab = sl(*sin, base, cl);
+            let out = sl_mut(*dst, base, b * s * hs);
+
+            let total = b * s;
+            let x_ptr = x.as_ptr() as usize;
+            let o_ptr = out.as_mut_ptr() as usize;
+            let c_ptr = cos_tab.as_ptr() as usize;
+            let s_ptr = sin_tab.as_ptr() as usize;
+
+            crate::pool::par_for(total, 4, &|off, cnt| {
+                for idx in off..off + cnt {
+                    let bi = idx / s;
+                    let si = idx % s;
+                    let tab_off = if per_token { idx } else { si } * tab_stride;
+
+                    for hi in 0..nh {
+                        let src_base = bi * s * src_rs + si * src_rs + hi * dh;
+                        let dst_base = bi * s * hs + si * hs + hi * dh;
+                        let xp = (x_ptr as *const f32).add(src_base);
+                        let op = (o_ptr as *mut f32).add(dst_base);
+                        let cp = (c_ptr as *const f32).add(tab_off);
+                        let sp = (s_ptr as *const f32).add(tab_off);
+
+                        if interleaved {
+                            // GPT-J / llama.cpp-NORM: rotate adjacent
+                            // pairs (2i, 2i+1) by angle i.
+                            for i in 0..rot_half {
+                                let x1 = *xp.add(2 * i);
+                                let x2 = *xp.add(2 * i + 1);
+                                let cv = *cp.add(i);
+                                let sv = *sp.add(i);
+                                *op.add(2 * i) = x1 * cv - x2 * sv;
+                                *op.add(2 * i + 1) = x2 * cv + x1 * sv;
+                            }
+                        } else {
+                            // HF / NeoX rotate-half: pair (i, i+rot_half).
+                            for i in 0..rot_half {
+                                let x1 = *xp.add(i);
+                                let x2 = *xp.add(rot_half + i);
+                                let cv = *cp.add(i);
+                                let sv = *sp.add(i);
+                                *op.add(i) = x1 * cv - x2 * sv;
+                                *op.add(rot_half + i) = x2 * cv + x1 * sv;
+                            }
+                        }
+                        for j in nr..dh {
+                            *op.add(j) = *xp.add(j);
+                        }
+                    }
+                }
+            });
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_fused_swi_g_l_u(t: &Thunk, base: *mut u8) {
+    let Thunk::FusedSwiGLU {
+        src,
+        dst,
+        n_half,
+        total,
+        gate_first,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let n = *n_half as usize;
+        let t = *total as usize;
+        let outer = t / n;
+        let in_total = outer * 2 * n;
+        let gate_first = *gate_first;
+        unsafe {
+            let inp = sl(*src, base, in_total);
+            let out = sl_mut(*dst, base, t);
+            crate::kernels::swiglu_rows(inp, out, outer, n, gate_first);
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_rope_backward(t: &Thunk, base: *mut u8) {
+    let Thunk::RopeBackward {
+        dy,
+        cos,
+        sin,
+        dx,
+        batch,
+        seq,
+        hidden,
+        head_dim,
+        n_rot,
+        cos_len,
+        cos_row_stride,
+        interleaved,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let (b, s, hs, dh, nr, cl) = (
+            *batch as usize,
+            *seq as usize,
+            *hidden as usize,
+            *head_dim as usize,
+            *n_rot as usize,
+            *cos_len as usize,
+        );
+        let nh = hs / dh;
+        // `rot_half` is how many angles are *used* per position; `tab_stride` is
+        // how far apart positions sit in the table. They differ whenever the
+        // table is allocated at `head_dim/2` and only partly used under partial
+        // rotation (Qwen3.5), and coincide when it is packed tight (DeepSeek-V4
+        // MLA). Deriving the stride from `n_rot` — as this kernel used to —
+        // reads a later position's angles for every row past the first, so the
+        // adjoint stops being the transpose of the forward. Both come from the
+        // same place as `exec_rope` now.
+        let rot_half = nr / 2;
+        let tab_stride = (*cos_row_stride as usize).max(1);
+        let cos_rows = cl / tab_stride;
+        // A per-token table has one row per (batch, position) rather than one
+        // per position shared across the batch — the forward distinguishes the
+        // two the same way, and disagreeing here would be the same class of bug
+        // one level up.
+        let per_token = cos_rows == b * s && cos_rows != s;
+        unsafe {
+            let dys = sl(*dy, base, b * s * hs);
+            let cos_tab = sl(*cos, base, cl);
+            let sin_tab = sl(*sin, base, cl);
+            let out = sl_mut(*dx, base, b * s * hs);
+            for bi in 0..b {
+                for si in 0..s {
+                    let row = if per_token { bi * s + si } else { si };
+                    let tab_off = row.saturating_mul(tab_stride) % cl.max(1);
+                    let take = rot_half.min(cl.saturating_sub(tab_off));
+                    let cp = &cos_tab[tab_off..tab_off + take];
+                    let sp = &sin_tab[tab_off..tab_off + take];
+                    for hi in 0..nh {
+                        let base_idx = bi * s * hs + si * hs + hi * dh;
+                        crate::training_bwd::rope_backward_row_styled(
+                            &dys[base_idx..base_idx + dh],
+                            cp,
+                            sp,
+                            &mut out[base_idx..base_idx + dh],
+                            dh,
+                            nr,
+                            *interleaved,
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Host-fallback `Op::RopeBackward` for GPU backends without a native kernel.
+///
+/// `cos_row_stride` is the cos/sin table's own last dimension — see
+/// [`crate::thunk::Thunk::Rope`]'s field of the same name. It is a parameter
+/// rather than something derived here because `head_dim/2` and `n_rot/2` are
+/// both wrong for half the models in use, and this routine cannot see the
+/// shape. Passing the wrong one reads a later position's angles for every row
+/// past the first, which the cross-backend parity tests cannot catch — CUDA,
+/// ROCm and wgpu all reach this same function, so they would agree with each
+/// other while all three disagreed with the forward.
+#[allow(clippy::too_many_arguments)]
+pub unsafe fn execute_rope_backward_f32(
+    dy: usize,
+    cos: usize,
+    sin: usize,
+    dx: usize,
+    batch: u32,
+    seq: u32,
+    hidden: u32,
+    head_dim: u32,
+    n_rot: u32,
+    cos_len: u32,
+    cos_row_stride: u32,
+    base: *mut u8,
+) {
+    let (b, s, hs, dh, nr, cl) = (
+        batch as usize,
+        seq as usize,
+        hidden as usize,
+        head_dim as usize,
+        n_rot as usize,
+        cos_len as usize,
+    );
+    let nh = hs / dh;
+    let rot_half = nr / 2;
+    let tab_stride = (cos_row_stride as usize).max(1);
+    let cos_rows = cl / tab_stride;
+    let per_token = cos_rows == b * s && cos_rows != s;
+    let dys = sl(dy, base, b * s * hs);
+    let cos_tab = sl(cos, base, cl);
+    let sin_tab = sl(sin, base, cl);
+    let out = sl_mut(dx, base, b * s * hs);
+    for bi in 0..b {
+        for si in 0..s {
+            let row = if per_token { bi * s + si } else { si };
+            let tab_off = row.saturating_mul(tab_stride) % cl.max(1);
+            let take = rot_half.min(cl.saturating_sub(tab_off));
+            let cp = &cos_tab[tab_off..tab_off + take];
+            let sp = &sin_tab[tab_off..tab_off + take];
+            for hi in 0..nh {
+                let base_idx = bi * s * hs + si * hs + hi * dh;
+                crate::training_bwd::rope_backward_row(
+                    &dys[base_idx..base_idx + dh],
+                    cp,
+                    sp,
+                    &mut out[base_idx..base_idx + dh],
+                    dh,
+                    nr,
+                );
+            }
+        }
+    }
+}
+
+/// Host axial 2-D RoPE for Metal (and other) fallbacks on unified memory.
+pub unsafe fn execute_axial_rope2d_f32(
+    src: usize,
+    dst: usize,
+    batch: usize,
+    seq: usize,
+    hidden: usize,
+    end_x: usize,
+    end_y: usize,
+    head_dim: usize,
+    num_heads: usize,
+    theta: f32,
+    repeat_factor: usize,
+    base: *mut u8,
+) {
+    let plane = seq * hidden;
+    let plane_bytes = plane * std::mem::size_of::<f32>();
+    for bi in 0..batch {
+        let in_off = src + bi * plane_bytes;
+        let input = unsafe { sl(in_off, base, plane) };
+        let rotated = rlx_ir::ops::axial_rope2d::apply_axial_rope2d(
+            input,
+            num_heads,
+            seq,
+            head_dim,
+            end_x,
+            end_y,
+            theta,
+            repeat_factor,
+        );
+        let out_off = dst + bi * plane_bytes;
+        let output = unsafe { sl_mut(out_off, base, plane) };
+        output.copy_from_slice(&rotated);
+    }
+}

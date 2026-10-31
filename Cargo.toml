@@ -44,6 +44,6 @@ cognitive_complexity = "deny"
 too_many_arguments = "deny"
 too_many_lines = "warn"
 
-# rlx-cpu 0.2.14 with its default BLAS feature disabled (pure Rust kernels).
+# rlx-cpu 0.2.19 with its default BLAS feature disabled (pure Rust kernels).
 [patch.crates-io]
-rlx-cpu = { path = "vendor/rlx-cpu-0.2.14" }
+rlx-cpu = { path = "vendor/rlx-cpu-0.2.19" }

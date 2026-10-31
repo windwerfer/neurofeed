@@ -1,0 +1,1505 @@
+// RLX — versatile ML compiler + runtime.
+// Copyright (C) 2026 Eugene Hauptmann, Nataliya Kosmyna.
+// SPDX-License-Identifier: MIT OR Apache-2.0
+#![allow(unsafe_op_in_unsafe_fn)]
+use crate::thunk::*;
+
+/// Fused sampling step: logits → top-k filter → top-p truncation
+/// → softmax → multinomial sample. Operates on one row of length
+/// `vocab` and returns the sampled index. Plan #42.
+///
+/// Internal scratch is on the stack via SmallVec-style fallback —
+/// for `vocab > 8192` we heap-allocate a working buffer; below
+/// that we keep things in a fixed array. (TODO: thread the
+/// scratch through ThunkSchedule like sdpa_scores does.)
+pub(crate) fn sample_row(
+    logits: &[f32],
+    top_k: usize,
+    top_p: f32,
+    temperature: f32,
+    rng: &mut rlx_ir::Philox4x32,
+) -> usize {
+    let v = logits.len();
+    if v == 0 {
+        return 0;
+    }
+    let temp = temperature.max(1e-6);
+    // Copy + temperature-scale into a working buffer.
+    let mut scaled: Vec<f32> = logits.iter().map(|&x| x / temp).collect();
+
+    // Top-k: zero out everything but the k largest by setting to -inf.
+    if top_k > 0 && top_k < v {
+        // Partial selection: find k-th largest then mask below.
+        let mut indexed: Vec<(usize, f32)> = scaled.iter().copied().enumerate().collect();
+        // Sort descending; partial would be O(n log k), full sort is fine
+        // for typical vocab sizes (32k-128k) — single-row work.
+        indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        let cutoff = indexed[top_k - 1].1;
+        for x in scaled.iter_mut() {
+            if *x < cutoff {
+                *x = f32::NEG_INFINITY;
+            }
+        }
+    }
+
+    // Stable softmax.
+    let mut max_l = f32::NEG_INFINITY;
+    for &x in &scaled {
+        if x > max_l {
+            max_l = x;
+        }
+    }
+    let mut sum = 0.0f32;
+    for x in scaled.iter_mut() {
+        *x = crate::vmath::exp_poly(*x - max_l);
+        sum += *x;
+    }
+    let inv = 1.0 / sum.max(f32::MIN_POSITIVE);
+    for x in scaled.iter_mut() {
+        *x *= inv;
+    }
+
+    // Top-p: keep the smallest set of tokens whose cumulative
+    // probability exceeds top_p (after sorting descending).
+    if top_p < 1.0 {
+        let mut indexed: Vec<(usize, f32)> = scaled.iter().copied().enumerate().collect();
+        indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        let mut cum = 0.0f32;
+        let mut keep = vec![false; v];
+        for (idx, p) in indexed.iter() {
+            keep[*idx] = true;
+            cum += *p;
+            if cum >= top_p {
+                break;
+            }
+        }
+        let mut new_sum = 0.0f32;
+        for (i, x) in scaled.iter_mut().enumerate() {
+            if !keep[i] {
+                *x = 0.0;
+            }
+            new_sum += *x;
+        }
+        let inv = 1.0 / new_sum.max(f32::MIN_POSITIVE);
+        for x in scaled.iter_mut() {
+            *x *= inv;
+        }
+    }
+
+    // Multinomial sample via inverse-CDF.
+    let r = rng.next_f32();
+    let mut acc = 0.0f32;
+    for (i, &p) in scaled.iter().enumerate() {
+        acc += p;
+        if r <= acc {
+            return i;
+        }
+    }
+    v - 1 // floating-point edge case fallback
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_sample(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::Sample {
+        top_k,
+        top_p,
+        temperature,
+        seed,
+    } = &node.op
+    else {
+        unreachable!()
+    };
+    {
+        let in_shape = &graph.node(node.inputs[0]).shape;
+        // Logits are [..., vocab]: one draw per output element, from the
+        // leading rows in order (`[batch, vocab]` → `[batch]`; a multi-token
+        // step's `[batch, seq, vocab]` → `[batch, seq]`). `[vocab]` is one row.
+        let (batch, vocab) = if in_shape.rank() >= 2 {
+            let vocab = in_shape.dim(in_shape.rank() - 1).unwrap_static();
+            let rows = in_shape.num_elements().unwrap_or(0) / vocab.max(1);
+            (
+                rows.min(node.shape.num_elements().unwrap_or(1).max(1)),
+                vocab,
+            )
+        } else {
+            (1, in_shape.num_elements().unwrap_or(0))
+        };
+        Thunk::Sample {
+            logits: node_offset(arena, node.inputs[0]),
+            dst: node_offset(arena, node.id),
+            batch: batch as u32,
+            vocab: vocab as u32,
+            top_k: *top_k as u32,
+            top_p: *top_p,
+            temperature: *temperature,
+            seed: *seed,
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_rng_normal(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::RngNormal {
+        mean,
+        scale,
+        key,
+        op_seed,
+    } = &node.op
+    else {
+        unreachable!()
+    };
+    Thunk::RngNormal {
+        dst: node_offset(arena, node.id),
+        len: node.shape.num_elements().unwrap_or(0) as u32,
+        mean: *mean,
+        scale: *scale,
+        key: *key,
+        op_seed: *op_seed,
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_rng_uniform(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::RngUniform {
+        low,
+        high,
+        key,
+        op_seed,
+    } = &node.op
+    else {
+        unreachable!()
+    };
+    Thunk::RngUniform {
+        dst: node_offset(arena, node.id),
+        len: node.shape.num_elements().unwrap_or(0) as u32,
+        low: *low,
+        high: *high,
+        key: *key,
+        op_seed: *op_seed,
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_cumsum(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::Cumsum { axis, exclusive } = &node.op else {
+        unreachable!()
+    };
+    {
+        // For now CPU only supports last-axis cumsum (the
+        // common case for sampling / ragged offsets).
+        // Other axes can lower via Transpose → Cumsum →
+        // Transpose; not on the hot path today.
+        let rank = node.shape.rank();
+        let ax = if *axis < 0 {
+            (rank as i32 + axis) as usize
+        } else {
+            *axis as usize
+        };
+        assert_eq!(
+            ax,
+            rank - 1,
+            "Cumsum only supports the last axis on CPU today"
+        );
+        let cols = node.shape.dim(ax).unwrap_static();
+        let total = node.shape.num_elements().unwrap();
+        Thunk::Cumsum {
+            src: node_offset(arena, node.inputs[0]),
+            dst: node_offset(arena, node.id),
+            rows: (total / cols) as u32,
+            cols: cols as u32,
+            exclusive: *exclusive,
+            dtype: node.shape.dtype(),
+        }
+    }
+}
+
+/// Compile `Op::{CumProd, CumMax}` to a last-axis [`Thunk::CumScan`] (mirrors
+/// [`compile_cumsum`]; higher-axis scans lower via transpose upstream).
+pub(crate) fn compile_cum_scan(node: &rlx_ir::Node, arena: &crate::arena::Arena) -> Thunk {
+    let (axis, exclusive, is_max) = match &node.op {
+        Op::CumProd { axis, exclusive } => (*axis, *exclusive, false),
+        Op::CumMax { axis, exclusive } => (*axis, *exclusive, true),
+        _ => unreachable!(),
+    };
+    let rank = node.shape.rank();
+    let ax = if axis < 0 {
+        (rank as i32 + axis) as usize
+    } else {
+        axis as usize
+    };
+    assert_eq!(
+        ax,
+        rank - 1,
+        "CumProd/CumMax only support the last axis on CPU"
+    );
+    let cols = node.shape.dim(ax).unwrap_static();
+    let total = node.shape.num_elements().unwrap();
+    Thunk::CumScan {
+        src: node_offset(arena, node.inputs[0]),
+        dst: node_offset(arena, node.id),
+        rows: (total / cols) as u32,
+        cols: cols as u32,
+        exclusive,
+        is_max,
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_cum_scan(t: &Thunk, base: *mut u8) {
+    let Thunk::CumScan {
+        src,
+        dst,
+        rows,
+        cols,
+        exclusive,
+        is_max,
+    } = t
+    else {
+        unreachable!()
+    };
+    let (rows, cols) = (*rows as usize, *cols as usize);
+    unsafe {
+        let s = sl(*src, base, rows * cols);
+        let d = sl_mut(*dst, base, rows * cols);
+        for r in 0..rows {
+            // Identity: 1 for product, -inf for max.
+            let mut acc = if *is_max { f32::NEG_INFINITY } else { 1.0 };
+            for c in 0..cols {
+                let v = s[r * cols + c];
+                if *exclusive {
+                    d[r * cols + c] = acc;
+                    acc = if *is_max { acc.max(v) } else { acc * v };
+                } else {
+                    acc = if *is_max { acc.max(v) } else { acc * v };
+                    d[r * cols + c] = acc;
+                }
+            }
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_top_k(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::TopK { k } = &node.op else {
+        unreachable!()
+    };
+    {
+        let in_shape = &graph.node(node.inputs[0]).shape;
+        let rank = in_shape.rank();
+        let axis_dim = in_shape.dim(rank - 1).unwrap_static();
+        let outer = in_shape.num_elements().unwrap() / axis_dim;
+        let indices_i64 = u8::from(graph.node(node.id).shape.dtype() == rlx_ir::DType::I64);
+        Thunk::TopK {
+            src: node_offset(arena, node.inputs[0]),
+            dst: node_offset(arena, node.id),
+            outer: outer as u32,
+            axis_dim: axis_dim as u32,
+            k: *k as u32,
+            indices_i64,
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_reduce(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::Reduce {
+        op,
+        axes,
+        keep_dim: _,
+    } = &node.op
+    else {
+        unreachable!()
+    };
+    {
+        // Decompose the input shape into [outer, reduced, inner]
+        // around the reduced axis range. Non-contiguous reduced
+        // axes aren't supported here — caller must transpose them
+        // contiguous first (the coverage tool would surface the
+        // gap if a model needs it).
+        let in_shape = &graph.node(node.inputs[0]).shape;
+        let rank = in_shape.rank();
+        let mut sorted = axes.clone();
+        sorted.sort();
+        sorted.dedup();
+        let contiguous = sorted.windows(2).all(|w| w[1] == w[0] + 1)
+            && !sorted.is_empty()
+            && *sorted.last().unwrap() < rank;
+        if !contiguous {
+            // `Thunk::Nop` was the old answer here, which leaves the output
+            // buffer untouched — the reduction silently returns zeros. Every
+            // backend shares this restriction, so `Graph::reduce` now splits
+            // non-adjacent axes into a chain of single-axis reductions before
+            // a node like this can be built; anything that still reaches here
+            // was assembled by hand and would otherwise corrupt in silence.
+            panic!(
+                "rlx-cpu Reduce: axes {sorted:?} are not a contiguous range \
+                 (rank {rank}). Build it with `Graph::reduce`, which splits \
+                 non-adjacent axes, or reduce one axis at a time, highest first."
+            )
+        } else {
+            let first = sorted[0];
+            let last = *sorted.last().unwrap();
+            let outer: usize = (0..first)
+                .map(|i| in_shape.dim(i).unwrap_static())
+                .product::<usize>()
+                .max(1);
+            let reduced: usize = (first..=last)
+                .map(|i| in_shape.dim(i).unwrap_static())
+                .product();
+            let inner: usize = (last + 1..rank)
+                .map(|i| in_shape.dim(i).unwrap_static())
+                .product::<usize>()
+                .max(1);
+            let src = node_offset(arena, node.inputs[0]);
+            let dst = node_offset(arena, node.id);
+            if node.shape.dtype() == rlx_ir::DType::F64 && matches!(op, ReduceOp::Sum) {
+                Thunk::ReduceSumF64 {
+                    src,
+                    dst,
+                    outer: outer as u32,
+                    reduced: reduced as u32,
+                    inner: inner as u32,
+                }
+            } else {
+                Thunk::Reduce {
+                    src,
+                    dst,
+                    outer: outer as u32,
+                    reduced: reduced as u32,
+                    inner: inner as u32,
+                    op: *op,
+                }
+            }
+        }
+    }
+}
+
+/// Compile `Op::Histogram` to a `Thunk::Histogram`. The input's static element
+/// count is folded in at compile time; the kernel is a single O(n) pass.
+pub(crate) fn compile_histogram(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+) -> Thunk {
+    let Op::Histogram { bins, min, max } = &node.op else {
+        unreachable!()
+    };
+    let in_shape = &graph.node(node.inputs[0]).shape;
+    let n = in_shape.num_elements().unwrap_or(0);
+    Thunk::Histogram {
+        src: node_offset(arena, node.inputs[0]),
+        dst: node_offset(arena, node.id),
+        n: n as u32,
+        bins: *bins as u32,
+        min: *min,
+        max: *max,
+    }
+}
+
+/// Bucket `n` input elements into `bins` equal-width buckets over `[min, max]`.
+/// Half-open buckets closed at the top: out-of-range elements (and NaNs) are
+/// dropped, and `v == max` lands in the last bin (matches `numpy.histogram`).
+#[inline(always)]
+pub(crate) fn exec_histogram(t: &Thunk, base: *mut u8) {
+    let Thunk::Histogram {
+        src,
+        dst,
+        n,
+        bins,
+        min,
+        max,
+    } = t
+    else {
+        unreachable!()
+    };
+    let n = *n as usize;
+    let bins = *bins as usize;
+    let min = *min;
+    let max = *max;
+    unsafe {
+        let inp = sl(*src, base, n);
+        let out = sl_mut(*dst, base, bins);
+        for b in out.iter_mut() {
+            *b = 0.0;
+        }
+        // Degenerate range (bins == 0 or max <= min): leave counts at zero.
+        // `max > min` is also false when a bound is NaN, so this bails then too.
+        let range_valid = max > min;
+        if bins == 0 || !range_valid {
+            return;
+        }
+        let inv_width = bins as f32 / (max - min);
+        for &v in inp {
+            if v.is_nan() || v < min || v > max {
+                continue;
+            }
+            // `(f32 as usize)` truncates toward zero == floor for v >= min.
+            let mut idx = ((v - min) * inv_width) as usize;
+            if idx >= bins {
+                idx = bins - 1; // v == max (or FP rounding at the top edge)
+            }
+            out[idx] += 1.0;
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_cumsum_backward(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::CumsumBackward { exclusive, .. } = &node.op else {
+        unreachable!()
+    };
+    {
+        let dy_shape = &graph.node(node.inputs[0]).shape;
+        let rank = dy_shape.rank();
+        let cols = dy_shape.dim(rank - 1).unwrap_static();
+        let rows = dy_shape.num_elements().unwrap() / cols;
+        Thunk::CumsumBackward {
+            dy: node_offset(arena, node.inputs[0]),
+            dx: node_offset(arena, node.id),
+            rows: rows as u32,
+            cols: cols as u32,
+            exclusive: *exclusive,
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_softmax_cross_entropy(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::SoftmaxCrossEntropy = &node.op else {
+        unreachable!()
+    };
+    {
+        let logits_shape = &graph.node(node.inputs[0]).shape;
+        if logits_shape.rank() == 2 {
+            Thunk::SoftmaxCrossEntropyDense {
+                logits: node_offset(arena, node.inputs[0]),
+                targets: node_offset(arena, node.inputs[1]),
+                dst: node_offset(arena, node.id),
+                n: logits_shape.dim(0).unwrap_static() as u32,
+                c: logits_shape.dim(1).unwrap_static() as u32,
+            }
+        } else {
+            Thunk::Nop
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_softmax_cross_entropy_with_logits(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::SoftmaxCrossEntropyWithLogits = &node.op else {
+        unreachable!()
+    };
+    {
+        let logits_shape = &graph.node(node.inputs[0]).shape;
+        if logits_shape.rank() == 2 {
+            Thunk::SoftmaxCrossEntropy {
+                logits: node_offset(arena, node.inputs[0]),
+                labels: node_offset(arena, node.inputs[1]),
+                dst: node_offset(arena, node.id),
+                n: logits_shape.dim(0).unwrap_static() as u32,
+                c: logits_shape.dim(1).unwrap_static() as u32,
+            }
+        } else {
+            Thunk::Nop
+        }
+    }
+}
+
+#[allow(unused_variables)]
+pub(crate) fn compile_softmax_cross_entropy_backward(
+    node: &rlx_ir::Node,
+    graph: &Graph,
+    arena: &crate::arena::Arena,
+    matmul_fold: &std::collections::HashMap<NodeId, (NodeId, bool, NodeId, bool)>,
+    rng_shared: &std::sync::Arc<std::sync::RwLock<rlx_ir::RngOptions>>,
+    rng: rlx_ir::RngOptions,
+) -> Thunk {
+    let Op::SoftmaxCrossEntropyBackward = &node.op else {
+        unreachable!()
+    };
+    {
+        let logits_shape = &graph.node(node.inputs[0]).shape;
+        if logits_shape.rank() == 2 {
+            Thunk::SoftmaxCrossEntropyBackward {
+                logits: node_offset(arena, node.inputs[0]),
+                labels: node_offset(arena, node.inputs[1]),
+                d_loss: node_offset(arena, node.inputs[2]),
+                dlogits: node_offset(arena, node.id),
+                n: logits_shape.dim(0).unwrap_static() as u32,
+                c: logits_shape.dim(1).unwrap_static() as u32,
+            }
+        } else {
+            Thunk::Nop
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_reduce_sum_f64(t: &Thunk, base: *mut u8) {
+    let Thunk::ReduceSumF64 {
+        src,
+        dst,
+        outer,
+        reduced,
+        inner,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let (o, r, n) = (*outer as usize, *reduced as usize, *inner as usize);
+        unsafe {
+            let inp = sl_f64(*src, base, o * r * n);
+            let out = sl_mut_f64(*dst, base, o * n);
+            reduce_sum_f64(inp, out, o, r, n);
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_softmax(t: &Thunk, base: *mut u8) {
+    let Thunk::Softmax {
+        data,
+        rows,
+        cols,
+        inner,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let (rows, cols, inner) = (*rows as usize, *cols as usize, *inner as usize);
+        let d = unsafe { sl_mut(*data, base, rows * cols) };
+        if inner == 1 {
+            crate::kernels::neon_softmax(d, rows, cols);
+        } else {
+            softmax_strided(d, rows / inner, cols, inner);
+        }
+    }
+}
+
+/// Softmax along an axis that is not the last one.
+///
+/// The buffer is `[outer, cols, inner]` and each `(o, i)` pair is normalised
+/// over `cols`. Reached whenever `axis != rank-1` — a channel softmax on
+/// `[N,C,D,H,W]`, for instance, which is how a segmentation network turns
+/// logits into per-class probabilities.
+///
+/// Walks `inner` in chunks so each pass over a chunk is contiguous in memory:
+/// the naive ordering strides by `inner` on every access, which for a 160³
+/// volume is a cache miss per element, three times over.
+///
+/// `data` is expected to hold `outer * cols * inner` elements; a shorter slice
+/// panics on the first out-of-range index rather than reading past the end.
+pub(crate) fn softmax_strided(data: &mut [f32], outer: usize, cols: usize, inner: usize) {
+    if cols == 0 || inner == 0 {
+        return;
+    }
+    const CHUNK: usize = 8192;
+    let mut max = vec![0f32; CHUNK.min(inner)];
+    let mut sum = vec![0f32; CHUNK.min(inner)];
+    for o in 0..outer {
+        let plane = o * cols * inner;
+        let mut i0 = 0;
+        while i0 < inner {
+            let len = CHUNK.min(inner - i0);
+            max[..len].fill(f32::NEG_INFINITY);
+            sum[..len].fill(0.0);
+            for c in 0..cols {
+                let row = &data[plane + c * inner + i0..plane + c * inner + i0 + len];
+                for (m, &v) in max[..len].iter_mut().zip(row) {
+                    if v > *m {
+                        *m = v;
+                    }
+                }
+            }
+            for c in 0..cols {
+                let at = plane + c * inner + i0;
+                let row = &mut data[at..at + len];
+                for ((x, &m), s) in row.iter_mut().zip(&max[..len]).zip(sum[..len].iter_mut()) {
+                    // Subtracting the max before exponentiating is what keeps a
+                    // large logit from overflowing to inf and taking the whole
+                    // normalisation to NaN.
+                    let e = crate::vmath::exp_poly(*x - m);
+                    *x = e;
+                    *s += e;
+                }
+            }
+            for c in 0..cols {
+                let at = plane + c * inner + i0;
+                let row = &mut data[at..at + len];
+                for (x, &s) in row.iter_mut().zip(&sum[..len]) {
+                    *x /= s;
+                }
+            }
+            i0 += len;
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_cumsum(t: &Thunk, base: *mut u8) {
+    let Thunk::Cumsum {
+        src,
+        dst,
+        rows,
+        cols,
+        exclusive,
+        dtype,
+    } = t
+    else {
+        unreachable!()
+    };
+    unsafe {
+        cumsum_typed(
+            base,
+            *src,
+            *dst,
+            *rows as usize,
+            *cols as usize,
+            *exclusive,
+            *dtype,
+        );
+    }
+}
+
+/// Row-wise cumulative sum along the last axis, honoring the element dtype. f32 is
+/// the hot path (sampling / ragged offsets); I64 covers integer position ids /
+/// mask cumsums (the f32 path would reinterpret the 8-byte i64 buffer as f32 and
+/// scramble it, e.g. MOSS-TTS's RoPE `cumsum(attention_mask)`).
+pub(crate) unsafe fn cumsum_typed(
+    base: *mut u8,
+    src: usize,
+    dst: usize,
+    rows: usize,
+    cols: usize,
+    exclusive: bool,
+    dtype: rlx_ir::DType,
+) {
+    macro_rules! scan {
+        ($sl:expr, $slm:expr, $zero:expr) => {{
+            let s = $sl(src, base, rows * cols);
+            let d = $slm(dst, base, rows * cols);
+            for r in 0..rows {
+                let mut acc = $zero;
+                for c in 0..cols {
+                    if exclusive {
+                        d[r * cols + c] = acc;
+                        acc += s[r * cols + c];
+                    } else {
+                        acc += s[r * cols + c];
+                        d[r * cols + c] = acc;
+                    }
+                }
+            }
+        }};
+    }
+    match dtype {
+        rlx_ir::DType::I64 => scan!(sl_i64, sl_mut_i64, 0i64),
+        rlx_ir::DType::I32 => scan!(sl_i32, sl_mut_i32, 0i32),
+        _ => scan!(sl, sl_mut, 0.0f32),
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_sample(t: &Thunk, base: *mut u8) {
+    let Thunk::Sample {
+        logits,
+        dst,
+        batch,
+        vocab,
+        top_k,
+        top_p,
+        temperature,
+        seed,
+    } = t
+    else {
+        unreachable!()
+    };
+    unsafe {
+        execute_sample_f32(
+            *logits,
+            *dst,
+            *batch as usize,
+            *vocab as usize,
+            *top_k as usize,
+            *top_p,
+            *temperature,
+            *seed,
+            base,
+        );
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_reduce(t: &Thunk, base: *mut u8) {
+    let Thunk::Reduce {
+        src,
+        dst,
+        outer,
+        reduced,
+        inner,
+        op,
+    } = t
+    else {
+        unreachable!()
+    };
+    let (outer, reduced, inner) = (*outer as usize, *reduced as usize, *inner as usize);
+    unsafe {
+        let inp = sl(*src, base, outer * reduced * inner);
+        let out = sl_mut(*dst, base, outer * inner);
+        let parallel =
+            fast_conv_enabled() && crate::pool::should_parallelize(inp.len()) && out.len() > 1;
+        reduce_into(inp, out, reduced, inner, *op, parallel);
+    }
+}
+
+/// Reduce `inp`, laid out `[outer, reduced, inner]`, over its middle axis
+/// into `out` (`[outer, inner]`). Each output element reduces its own strip in
+/// `r` order; Sum and Mean accumulate in f64 (a sequential f32 sum over a long
+/// axis, like autodiff's broadcast reductions in a BatchNorm backward over
+/// B·C·P ≈ 10⁴ rows, loses ~3 digits to cancellation, and Adam turns that
+/// gradient noise into ±lr steps). With `inner > 1` the strips are strided, so
+/// whole rows of `inner` values are accumulated at a time (contiguous reads);
+/// each element still sees the same operations in the same order.
+pub(crate) fn reduce_into(
+    inp: &[f32],
+    out: &mut [f32],
+    reduced: usize,
+    inner: usize,
+    op: ReduceOp,
+    parallel: bool,
+) {
+    // outputs pos..pos+len, all within one outer index
+    let strip = |pos: usize, dst: &mut [f32]| {
+        let (o, i, len) = (pos / inner, pos % inner, dst.len());
+        let at = |r: usize| (o * reduced + r) * inner + i;
+        if len == 1 {
+            // a single strip (every strip, when the reduced axis is last)
+            dst[0] = match op {
+                ReduceOp::Sum | ReduceOp::Mean => {
+                    let sum = (0..reduced).fold(0f64, |a, r| a + inp[at(r)] as f64);
+                    (if matches!(op, ReduceOp::Mean) {
+                        sum / reduced as f64
+                    } else {
+                        sum
+                    }) as f32
+                }
+                ReduceOp::Max => (0..reduced).fold(f32::NEG_INFINITY, |a, r| a.max(inp[at(r)])),
+                ReduceOp::Min => (0..reduced).fold(f32::INFINITY, |a, r| a.min(inp[at(r)])),
+                ReduceOp::Prod => (0..reduced).fold(1.0f32, |a, r| a * inp[at(r)]),
+            };
+            return;
+        }
+        let row = |r: usize| &inp[at(r)..][..len];
+        match op {
+            ReduceOp::Sum | ReduceOp::Mean => {
+                let mut acc = vec![0f64; len];
+                for r in 0..reduced {
+                    for (a, v) in acc.iter_mut().zip(row(r)) {
+                        *a += *v as f64;
+                    }
+                }
+                let mean = matches!(op, ReduceOp::Mean);
+                for (d, a) in dst.iter_mut().zip(acc) {
+                    *d = (if mean { a / reduced as f64 } else { a }) as f32;
+                }
+            }
+            ReduceOp::Max | ReduceOp::Min | ReduceOp::Prod => {
+                dst.fill(match op {
+                    ReduceOp::Max => f32::NEG_INFINITY,
+                    ReduceOp::Min => f32::INFINITY,
+                    _ => 1.0,
+                });
+                for r in 0..reduced {
+                    for (d, v) in dst.iter_mut().zip(row(r)) {
+                        *d = match op {
+                            ReduceOp::Max => d.max(*v),
+                            ReduceOp::Min => d.min(*v),
+                            _ => *d * *v,
+                        };
+                    }
+                }
+            }
+        }
+    };
+    // a run of outputs, split where it crosses into the next outer index
+    let run = |start: usize, dst: &mut [f32]| {
+        let mut pos = start;
+        let end = start + dst.len();
+        while pos < end {
+            let len = (end - pos).min(inner - pos % inner);
+            strip(pos, &mut dst[pos - start..pos - start + len]);
+            pos += len;
+        }
+    };
+    if parallel {
+        let out_total = out.len();
+        let out_addr = out.as_mut_ptr() as usize;
+        crate::pool::par_for(
+            out_total,
+            crate::pool::outer_chunk(out_total),
+            &|off, cnt| {
+                // SAFETY: par_for hands out disjoint ranges of `out`.
+                let dst =
+                    unsafe { std::slice::from_raw_parts_mut((out_addr as *mut f32).add(off), cnt) };
+                run(off, dst);
+            },
+        );
+    } else {
+        run(0, out);
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_arg_reduce(t: &Thunk, base: *mut u8) {
+    let Thunk::ArgReduce {
+        src,
+        dst,
+        outer,
+        reduced,
+        inner,
+        is_max,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let outer = *outer as usize;
+        let reduced = *reduced as usize;
+        let inner = *inner as usize;
+        let in_total = outer * reduced * inner;
+        let out_total = outer * inner;
+        unsafe {
+            let inp = sl(*src, base, in_total);
+            let out = sl_mut(*dst, base, out_total);
+            for o in 0..outer {
+                for i in 0..inner {
+                    let mut best = inp[o * reduced * inner + i];
+                    let mut best_idx = 0usize;
+                    for r in 1..reduced {
+                        let v = inp[o * reduced * inner + r * inner + i];
+                        let better = if *is_max { v > best } else { v < best };
+                        if better {
+                            best = v;
+                            best_idx = r;
+                        }
+                    }
+                    out[o * inner + i] = best_idx as f32;
+                }
+            }
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_cumsum_backward(t: &Thunk, base: *mut u8) {
+    let Thunk::CumsumBackward {
+        dy,
+        dx,
+        rows,
+        cols,
+        exclusive,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let (rows, cols) = (*rows as usize, *cols as usize);
+        unsafe {
+            let dys = sl(*dy, base, rows * cols);
+            let out = sl_mut(*dx, base, rows * cols);
+            for r in 0..rows {
+                crate::training_bwd::cumsum_backward_row(
+                    &dys[r * cols..(r + 1) * cols],
+                    &mut out[r * cols..(r + 1) * cols],
+                    *exclusive,
+                );
+            }
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_softmax_cross_entropy_dense(t: &Thunk, base: *mut u8) {
+    let Thunk::SoftmaxCrossEntropyDense {
+        logits,
+        targets,
+        dst,
+        n,
+        c,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let n = *n as usize;
+        let c = *c as usize;
+        unsafe {
+            let lg = sl(*logits, base, n * c);
+            let tg = sl(*targets, base, n * c);
+            let out = sl_mut(*dst, base, n);
+            for ni in 0..n {
+                let row = &lg[ni * c..(ni + 1) * c];
+                let trow = &tg[ni * c..(ni + 1) * c];
+                // log-sum-exp: max-subtract for stability.
+                let mut m = f32::NEG_INFINITY;
+                for &v in row {
+                    if v > m {
+                        m = v;
+                    }
+                }
+                let mut sum = 0f32;
+                for &v in row {
+                    sum += crate::vmath::exp_poly(v - m);
+                }
+                let lse = m + sum.ln();
+                // loss = lse - Σ_c targets[c]·logits[c].
+                let mut dot = 0f32;
+                for k in 0..c {
+                    dot += trow[k] * row[k];
+                }
+                out[ni] = lse - dot;
+            }
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_softmax_cross_entropy(t: &Thunk, base: *mut u8) {
+    let Thunk::SoftmaxCrossEntropy {
+        logits,
+        labels,
+        dst,
+        n,
+        c,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let n = *n as usize;
+        let c = *c as usize;
+        unsafe {
+            let lg = sl(*logits, base, n * c);
+            let lb = sl(*labels, base, n);
+            let out = sl_mut(*dst, base, n);
+            for ni in 0..n {
+                let row = &lg[ni * c..(ni + 1) * c];
+                // log-sum-exp: max-subtract for stability.
+                let mut m = f32::NEG_INFINITY;
+                for &v in row {
+                    if v > m {
+                        m = v;
+                    }
+                }
+                let mut sum = 0f32;
+                for &v in row {
+                    sum += crate::vmath::exp_poly(v - m);
+                }
+                let lse = m + sum.ln();
+                let label_idx = lb[ni] as usize;
+                // loss = -(logits[label] - lse) = lse - logits[label].
+                out[ni] = lse - row[label_idx];
+            }
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) fn exec_softmax_cross_entropy_backward(t: &Thunk, base: *mut u8) {
+    let Thunk::SoftmaxCrossEntropyBackward {
+        logits,
+        labels,
+        d_loss,
+        dlogits,
+        n,
+        c,
+    } = t
+    else {
+        unreachable!()
+    };
+    {
+        let n = *n as usize;
+        let c = *c as usize;
+        unsafe {
+            let lg = sl(*logits, base, n * c);
+            let lb = sl(*labels, base, n);
+            let dl = sl(*d_loss, base, n);
+            let out = sl_mut(*dlogits, base, n * c);
+            for ni in 0..n {
+                let row = &lg[ni * c..(ni + 1) * c];
+                let label_idx = lb[ni] as usize;
+                let scale = dl[ni];
+                let mut m = f32::NEG_INFINITY;
+                for &v in row {
+                    if v > m {
+                        m = v;
+                    }
+                }
+                let mut sum = 0f32;
+                for &v in row {
+                    sum += crate::vmath::exp_poly(v - m);
+                }
+                let inv_sum = 1.0 / sum;
+                let dst_row = &mut out[ni * c..(ni + 1) * c];
+                for k in 0..c {
+                    let p = crate::vmath::exp_poly(row[k] - m) * inv_sum;
+                    let one_hot = if k == label_idx { 1.0 } else { 0.0 };
+                    dst_row[k] = (p - one_hot) * scale;
+                }
+            }
+        }
+    }
+}
+
+/// Reference for `Op::ArgMax`/`Op::ArgMin` (f32-encoded indices, first-hit
+/// tie-break). Reduces the middle `reduced` axis: input is logically
+/// `[outer, reduced, inner]`, output `[outer, inner]`. Shared by the CPU thunk
+/// and the Metal/WGPU host paths.
+pub unsafe fn execute_argreduce_f32(
+    src: usize,
+    dst: usize,
+    outer: usize,
+    reduced: usize,
+    inner: usize,
+    is_max: bool,
+    base: *mut u8,
+) {
+    let bptr = base as usize;
+    unsafe {
+        let inp = std::slice::from_raw_parts((bptr + src) as *const f32, outer * reduced * inner);
+        let out = std::slice::from_raw_parts_mut((bptr + dst) as *mut f32, outer * inner);
+        for o in 0..outer {
+            for i in 0..inner {
+                let mut best = inp[o * reduced * inner + i];
+                let mut best_idx = 0usize;
+                for r in 1..reduced {
+                    let v = inp[o * reduced * inner + r * inner + i];
+                    let better = if is_max { v > best } else { v < best };
+                    if better {
+                        best = v;
+                        best_idx = r;
+                    }
+                }
+                out[o * inner + i] = best_idx as f32;
+            }
+        }
+    }
+}
+
+/// Token-sampling reference. Shared by the CPU `Thunk::Sample` arm and the
+/// Metal unified-memory host fallback. `logits` is `[batch, vocab]` f32;
+/// writes one f32-encoded index per batch row to `dst`. With a fixed `seed`
+/// (and same top_k/top_p/temperature) the result is deterministic.
+pub unsafe fn execute_sample_f32(
+    logits: usize,
+    dst: usize,
+    batch: usize,
+    vocab: usize,
+    top_k: usize,
+    top_p: f32,
+    temperature: f32,
+    seed: u64,
+    base: *mut u8,
+) {
+    let (b, v) = (batch, vocab);
+    let k = top_k.min(v);
+    unsafe {
+        let lg = sl(logits, base, b * v);
+        let out = sl_mut(dst, base, b);
+        let mut rng = rlx_ir::Philox4x32::new(if seed == 0 { 0xDEADBEEF } else { seed });
+        for bi in 0..b {
+            let row = &lg[bi * v..(bi + 1) * v];
+            out[bi] = sample_row(row, k, top_p, temperature, &mut rng) as f32;
+        }
+    }
+}
+
+pub unsafe fn execute_cumsum_backward_f32(
+    dy: usize,
+    dx: usize,
+    rows: u32,
+    cols: u32,
+    exclusive: bool,
+    base: *mut u8,
+) {
+    let (rows, cols) = (rows as usize, cols as usize);
+    let dys = sl(dy, base, rows * cols);
+    let out = sl_mut(dx, base, rows * cols);
+    for r in 0..rows {
+        crate::training_bwd::cumsum_backward_row(
+            &dys[r * cols..(r + 1) * cols],
+            &mut out[r * cols..(r + 1) * cols],
+            exclusive,
+        );
+    }
+}
+
+/// f64 sum reduction over a contiguous middle range.
+/// Layout: input is `[outer, reduced, inner]`, output is `[outer, inner]`.
+pub(crate) fn reduce_sum_f64(
+    inp: &[f64],
+    out: &mut [f64],
+    outer: usize,
+    reduced: usize,
+    inner: usize,
+) {
+    for o in 0..outer {
+        for n in 0..inner {
+            let mut acc = 0.0_f64;
+            for r in 0..reduced {
+                acc += inp[o * reduced * inner + r * inner + n];
+            }
+            out[o * inner + n] = acc;
+        }
+    }
+}
+
+/// Host-side RNG fill against a byte arena (Metal/CUDA unified-memory fallback).
+///
+/// # Safety
+///
+/// `arena` must point to a valid allocation with at least `dst_off + len * 4` bytes.
+pub unsafe fn fill_rng_normal_arena(
+    dst_off: usize,
+    len: usize,
+    mean: f32,
+    scale: f32,
+    key: u64,
+    op_seed: Option<f32>,
+    opts: rlx_ir::RngOptions,
+    arena: *mut u8,
+) {
+    if len == 0 {
+        return;
+    }
+    unsafe {
+        let out = std::slice::from_raw_parts_mut((arena.add(dst_off)) as *mut f32, len);
+        rlx_ir::fill_normal_like(out, mean, scale, opts, key, op_seed);
+    }
+}
+
+pub unsafe fn fill_rng_uniform_arena(
+    dst_off: usize,
+    len: usize,
+    low: f32,
+    high: f32,
+    key: u64,
+    op_seed: Option<f32>,
+    opts: rlx_ir::RngOptions,
+    arena: *mut u8,
+) {
+    if len == 0 {
+        return;
+    }
+    unsafe {
+        let out = std::slice::from_raw_parts_mut((arena.add(dst_off)) as *mut f32, len);
+        rlx_ir::fill_uniform_like(out, low, high, opts, key, op_seed);
+    }
+}
+
+#[cfg(test)]
+mod softmax_axis_tests {
+    use super::*;
+
+    /// Softmax over `cols` for a contiguous row — the definition, used as the
+    /// reference the strided kernel has to reproduce.
+    fn reference(row: &[f32]) -> Vec<f32> {
+        let m = row.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        let e: Vec<f32> = row.iter().map(|x| crate::vmath::exp_poly(x - m)).collect();
+        let s: f32 = e.iter().sum();
+        e.iter().map(|x| x / s).collect()
+    }
+
+    #[test]
+    fn a_channel_softmax_normalises_across_channels_not_neighbours() {
+        // The bug this kernel exists for: `[N,C,D]` with axis 1 laid out as
+        // C-major. Treating it as contiguous rows normalises over neighbouring
+        // positions instead of over channels, which still sums to one per row
+        // and so looks entirely healthy.
+        let (outer, cols, inner) = (2usize, 4usize, 5usize);
+        let mut data: Vec<f32> = (0..outer * cols * inner)
+            .map(|i| ((i * 37) % 23) as f32 / 7.0 - 1.0)
+            .collect();
+        let original = data.clone();
+        softmax_strided(&mut data, outer, cols, inner);
+
+        for o in 0..outer {
+            for i in 0..inner {
+                let gathered: Vec<f32> = (0..cols)
+                    .map(|c| original[o * cols * inner + c * inner + i])
+                    .collect();
+                let want = reference(&gathered);
+                for c in 0..cols {
+                    let got = data[o * cols * inner + c * inner + i];
+                    assert!(
+                        (got - want[c]).abs() < 1e-6,
+                        "o={o} c={c} i={i}: {got} vs {}",
+                        want[c]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_position_sums_to_one_along_the_axis() {
+        let (outer, cols, inner) = (3usize, 7usize, 11usize);
+        let mut data: Vec<f32> = (0..outer * cols * inner).map(|i| (i % 13) as f32).collect();
+        softmax_strided(&mut data, outer, cols, inner);
+        for o in 0..outer {
+            for i in 0..inner {
+                let sum: f32 = (0..cols)
+                    .map(|c| data[o * cols * inner + c * inner + i])
+                    .sum();
+                assert!((sum - 1.0).abs() < 1e-5, "o={o} i={i} sums to {sum}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_inner_of_one_agrees_with_a_plain_row_softmax() {
+        // inner == 1 is the contiguous case the fast kernels still handle, so
+        // the two must not disagree at the boundary.
+        let (rows, cols) = (5usize, 9usize);
+        let data: Vec<f32> = (0..rows * cols)
+            .map(|i| ((i * 17) % 19) as f32 - 9.0)
+            .collect();
+        let mut strided = data.clone();
+        softmax_strided(&mut strided, rows, cols, 1);
+        for r in 0..rows {
+            let want = reference(&data[r * cols..(r + 1) * cols]);
+            for c in 0..cols {
+                assert!((strided[r * cols + c] - want[c]).abs() < 1e-6);
+            }
+        }
+    }
+
+    #[test]
+    fn a_large_logit_does_not_overflow_to_nan() {
+        // Without subtracting the max, exp(200) is inf and the normalisation
+        // becomes inf/inf.
+        let mut data = vec![200.0f32, 0.0, -200.0, 199.0, 1.0, -5.0];
+        softmax_strided(&mut data, 1, 3, 2);
+        assert!(data.iter().all(|x| x.is_finite()), "{data:?}");
+        assert!((data[0] + data[2] + data[4] - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn an_inner_larger_than_one_chunk_is_handled_in_pieces() {
+        // The chunking is 8192 wide; anything past that exercises a second
+        // pass, where a mis-set offset would corrupt only the tail.
+        let (outer, cols, inner) = (1usize, 3usize, 8192 + 37);
+        let mut data: Vec<f32> = (0..outer * cols * inner).map(|i| (i % 5) as f32).collect();
+        softmax_strided(&mut data, outer, cols, inner);
+        for i in [0usize, 8191, 8192, inner - 1] {
+            let sum: f32 = (0..cols).map(|c| data[c * inner + i]).sum();
+            assert!((sum - 1.0).abs() < 1e-5, "i={i} sums to {sum}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod reduce_tests {
+    use super::*;
+
+    /// The original kernel: one output element at a time, walking its strip
+    /// with stride `inner`. The definition `reduce_into` must reproduce.
+    fn reference(inp: &[f32], out: &mut [f32], reduced: usize, inner: usize, op: ReduceOp) {
+        for (oi, d) in out.iter_mut().enumerate() {
+            let (o, i) = (oi / inner, oi % inner);
+            if matches!(op, ReduceOp::Sum | ReduceOp::Mean) {
+                let mut acc = 0.0f64;
+                for r in 0..reduced {
+                    acc += inp[o * reduced * inner + r * inner + i] as f64;
+                }
+                if matches!(op, ReduceOp::Mean) {
+                    acc /= reduced as f64;
+                }
+                *d = acc as f32;
+                continue;
+            }
+            let mut acc = match op {
+                ReduceOp::Max => f32::NEG_INFINITY,
+                ReduceOp::Min => f32::INFINITY,
+                _ => 1.0f32,
+            };
+            for r in 0..reduced {
+                let v = inp[o * reduced * inner + r * inner + i];
+                acc = match op {
+                    ReduceOp::Max => acc.max(v),
+                    ReduceOp::Min => acc.min(v),
+                    _ => acc * v,
+                };
+            }
+            *d = acc;
+        }
+    }
+
+    /// Bit for bit against the original, serial and parallel, for every op,
+    /// over shapes whose parallel chunks cross outer boundaries, with NaN, ±0
+    /// and values that cancel in the sum (±1e17 against 1.0, so a sum in any
+    /// other order lands on different bits, even in f64).
+    #[test]
+    fn reduce_into_matches_the_strided_loop() {
+        let ops = [
+            ReduceOp::Sum,
+            ReduceOp::Mean,
+            ReduceOp::Max,
+            ReduceOp::Min,
+            ReduceOp::Prod,
+        ];
+        let mut cases = 0;
+        for &(outer, reduced, inner) in &[
+            (1usize, 1usize, 1usize),
+            (1, 7, 1),
+            (3, 5, 1),
+            (1, 4, 9),
+            (5, 3, 7),
+            (2, 1000, 3),
+            (64, 9, 129),
+            (7, 33, 1000),
+        ] {
+            let n = outer * reduced * inner;
+            let inp: Vec<f32> = (0..n)
+                .map(|k| match k % 97 {
+                    13 => f32::NAN,
+                    29 => -0.0,
+                    41 => 1.0e7,
+                    42 => -1.0e7,
+                    // order-sensitive even in f64: an ulp of 1e17 is 16, so a
+                    // 1.0 added next to it is lost or kept depending on when
+                    55 => 1.0e17,
+                    71 => -1.0e17,
+                    _ if k % 5 == 0 => 1.0,
+                    _ => ((k * 2654435761) % 1000) as f32 * 0.00137 - 0.6,
+                })
+                .collect();
+            for op in ops {
+                let mut want = vec![f32::NAN; outer * inner];
+                reference(&inp, &mut want, reduced, inner, op);
+                for parallel in [false, true] {
+                    let mut got = vec![f32::NAN; outer * inner];
+                    reduce_into(&inp, &mut got, reduced, inner, op, parallel);
+                    let same = got
+                        .iter()
+                        .zip(&want)
+                        .all(|(a, b)| a.to_bits() == b.to_bits());
+                    assert!(
+                        same,
+                        "{op:?} outer {outer} reduced {reduced} inner {inner} parallel {parallel}"
+                    );
+                    cases += 1;
+                }
+            }
+        }
+        assert_eq!(cases, 8 * 5 * 2);
+    }
+
+    /// Timing, not correctness: against the original on the reductions an
+    /// EEG decoder's backward runs (bias gradients over the batch, BatchNorm
+    /// statistics), alternating which runs first.
+    #[test]
+    #[ignore]
+    fn reduce_timing() {
+        // (name, outer, reduced, inner)
+        let shapes = [
+            ("bias grad [N,C,T]->[C]", 1, 64, 16 * 512),
+            ("batch mean [N,F]", 1, 128, 4096),
+            ("last axis", 4096, 128, 1),
+            ("per-channel [C,N*T]", 16, 64 * 512, 1),
+        ];
+        for (name, outer, reduced, inner) in shapes {
+            let inp: Vec<f32> = (0..outer * reduced * inner)
+                .map(|k| (k % 1000) as f32 * 0.001)
+                .collect();
+            let mut out = vec![0f32; outer * inner];
+            let reps = (20_000_000 / inp.len()).max(3);
+            let mut t = [0f64; 2];
+            for round in 0..6 {
+                for which in [round % 2, 1 - round % 2] {
+                    let t0 = std::time::Instant::now();
+                    for _ in 0..reps {
+                        if which == 0 {
+                            reference(&inp, &mut out, reduced, inner, ReduceOp::Sum);
+                        } else {
+                            reduce_into(&inp, &mut out, reduced, inner, ReduceOp::Sum, false);
+                        }
+                        std::hint::black_box(&out);
+                    }
+                    t[which] += t0.elapsed().as_secs_f64();
+                }
+            }
+            println!(
+                "reduce {name:24}: old {:.3}s  new {:.3}s  new/old {:.2}",
+                t[0],
+                t[1],
+                t[1] / t[0]
+            );
+        }
+    }
+}
