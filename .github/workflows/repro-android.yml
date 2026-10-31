@@ -21,14 +21,12 @@ jobs:
     uses: ./.github/workflows/_android-apk.yml
     with:
       artifact-name: apk-1
-      version: 0.0.0-repro
       keystore-b64: ${{ needs.keystore.outputs.keystore-b64 }}
   build2:
     needs: keystore
     uses: ./.github/workflows/_android-apk.yml
     with:
       artifact-name: apk-2
-      version: 0.0.0-repro
       keystore-b64: ${{ needs.keystore.outputs.keystore-b64 }}
   compare:
     needs: [build1, build2]

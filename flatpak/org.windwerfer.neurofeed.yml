@@ -29,7 +29,7 @@ modules:
       - install -Dm755 target/release/neurofeed-egui /app/bin/neurofeed
       - install -Dm644 flatpak/org.windwerfer.neurofeed.desktop /app/share/applications/org.windwerfer.neurofeed.desktop
       - install -Dm644 flatpak/org.windwerfer.neurofeed.metainfo.xml /app/share/metainfo/org.windwerfer.neurofeed.metainfo.xml
-      - install -Dm644 assets/neurofeed_icon.png /app/share/icons/hicolor/512x512/apps/org.windwerfer.neurofeed.png
+      - install -Dm644 flatpak/org.windwerfer.neurofeed.png /app/share/icons/hicolor/512x512/apps/org.windwerfer.neurofeed.png
     sources:
       - type: dir
         path: ..

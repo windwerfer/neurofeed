@@ -25,7 +25,7 @@ val (gitVerName, gitVerCode) = gitVersion()
 /** `-PversionName=1.2.3` (release workflows pass the tag) overrides git describe. */
 val verName = (findProperty("versionName") as String?)?.removePrefix("v") ?: gitVerName
 val verCode = Regex("""^(\d+)\.(\d+)\.(\d+)""").find(verName)?.destructured
-    ?.let { (a, b, c) -> a.toInt() * 10000 + b.toInt() * 100 + c.toInt() } ?: gitVerCode
+    ?.let { (a, b, c) -> (a.toInt() * 10000 + b.toInt() * 100 + c.toInt()).coerceAtLeast(1) } ?: gitVerCode
 
 /**
  * Per-ABI versionCode (docs/release.md): `base * 10 + abiDigit`, base = X*10000+Y*100+Z.

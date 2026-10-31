@@ -28,7 +28,7 @@ rm -rf "$WORK"; mkdir -p "$DIST" "$WORK/$NAME"
 stage() { # $1 = prefix dir (usr layout)
   install -Dm755 "$TARGET_DIR/release/neurofeed-egui" "$1/bin/neurofeed"
   install -Dm644 "$ROOT/flatpak/$ID.desktop" "$1/share/applications/$ID.desktop"
-  install -Dm644 "$ROOT/assets/neurofeed_icon.png" "$1/share/icons/hicolor/1024x1024/apps/$ID.png"
+  install -Dm644 "$ROOT/flatpak/$ID.png" "$1/share/icons/hicolor/512x512/apps/$ID.png"
   sed -e "s/VERSION_PLACEHOLDER/$VERSION/" -e "s/DATE_PLACEHOLDER/$(date -u -d "@$SOURCE_DATE_EPOCH" +%F)/" \
     "$ROOT/flatpak/$ID.metainfo.xml" | install -Dm644 /dev/stdin "$1/share/metainfo/$ID.metainfo.xml"
 }
@@ -41,7 +41,7 @@ if [[ "$APPIMAGE" = 1 ]]; then
   APPDIR="$WORK/NeuroFeed.AppDir"
   stage "$APPDIR/usr"
   cp "$ROOT/flatpak/$ID.desktop" "$APPDIR/"
-  cp "$ROOT/assets/neurofeed_icon.png" "$APPDIR/$ID.png"
+  cp "$ROOT/flatpak/$ID.png" "$APPDIR/$ID.png"
   cp "$APPDIR/usr/share/metainfo/$ID.metainfo.xml" "$APPDIR/usr/share/metainfo/$ID.appdata.xml"
   printf '#!/bin/sh\nHERE="$(dirname "$(readlink -f "$0")")"\nexec "$HERE/usr/bin/neurofeed" "$@"\n' >"$APPDIR/AppRun"
   chmod 755 "$APPDIR/AppRun"
