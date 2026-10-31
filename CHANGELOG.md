@@ -25,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - License metadata is Apache-2.0 everywhere (Cargo workspace said MIT by mistake).
-  `crates/pure-lsl` stays MIT.
+  `crates/pure-lsl` is dual `MIT OR Apache-2.0`.
 
 ### Removed
 - The Flutter app. Its last version is tagged `pre-rust-port`

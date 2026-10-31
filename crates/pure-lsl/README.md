@@ -40,4 +40,14 @@ PURE_LSL_PYTHON=.venv/bin/python cargo test
 
 ## License
 
-MIT. The protocol was studied from [liblsl](https://github.com/sccn/liblsl) (MIT, © 2012 Christian A. Kothe); see `LICENSE`.
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
+
+at your option. Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in this crate shall be dual licensed as above, without any
+additional terms or conditions.
+
+The protocol was studied from [liblsl](https://github.com/sccn/liblsl) (MIT, © 2012
+Christian A. Kothe); no code was copied. The liblsl notice is kept in `LICENSE-MIT`.
