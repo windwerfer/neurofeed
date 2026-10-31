@@ -48,6 +48,7 @@ if [[ "$APPIMAGE" = 1 ]]; then
   TOOL="$WORK/appimagetool"
   curl -fsSL -o "$TOOL" "https://github.com/AppImage/appimagetool/releases/download/$APPIMAGETOOL_VERSION/appimagetool-x86_64.AppImage"
   chmod +x "$TOOL"
-  ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" --no-appstream "$APPDIR" "$DIST/neurofeed-$VERSION-x86_64.AppImage"
+  # appimagetool passes its own mksquashfs timestamps, which conflict with SOURCE_DATE_EPOCH.
+  env -u SOURCE_DATE_EPOCH ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" --no-appstream "$APPDIR" "$DIST/neurofeed-$VERSION-x86_64.AppImage"
 fi
 ls -lh "$DIST"/neurofeed-"$VERSION"-*
