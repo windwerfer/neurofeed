@@ -10,12 +10,13 @@ CI: `deny` job in `ci/rust-ci.yml` on every push and weekly (Mon 05:17 UTC).
 |---|---|---|---|---|
 | RUSTSEC-2026-0367/0368/0369 | zip 0.6.6, 2.6.1, 8.6.0 | rlx 0.2.19 (npyz, rlx-dduf), candle-core 0.11 | only `extract()` to disk is affected; never called | rlx / candle releases on zip >= 9 |
 | RUSTSEC-2026-0391/0398/0403 | zstd 0.13.3, zstd-safe 5.0.2 / 7.3.0 | rlx-pkg, zip 0.6 | decodes only model packages we bundle (trusted) | rlx update |
-| RUSTSEC-2026-0194/0195 | quick-xml 0.30 | accesskit_unix → atspi → zbus_xml (Linux, egui 0.29) | parses local D-Bus introspection XML only | egui/eframe bump |
 
-Also reported (warnings, not failing): unmaintained bincode 1, paste, ttf-parser
-0.25, unsafe-libyaml, zbus_names 3 / zvariant 4 (old zbus via accesskit);
-"unsound" zstd-safe entries (same chain as above). 43 duplicate-version warnings
-(windows-*, hashbrown, getrandom, zip, zstd, jni 0.21/0.22, thiserror 1/2).
+Cleared by the 2026-10-31 update round: RUSTSEC-2026-0194/0195 (quick-xml 0.30,
+gone with egui/eframe 0.37 / accesskit 0.25) and the unmaintained / unsound
+warnings that came with it (bincode 1, paste, ttf-parser 0.25, unsafe-libyaml,
+zbus_names 3 / zvariant 4). Still reported (warnings, not failing): 28
+duplicate-version entries (objc2/windows-*, rustix, syn, base64, jni-sys, ...),
+4 allowed-but-unused licenses, and muse-rs without a license field (clarified).
 
 ## Exceptions
 

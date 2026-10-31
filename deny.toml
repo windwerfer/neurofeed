@@ -36,8 +36,6 @@ ignore = [
   { id = "RUSTSEC-2026-0403", reason = "rlx-pkg reads only bundled model files" },
   # quick-xml 0.30: DoS on hostile XML. Only parses D-Bus introspection XML from
   # the local session bus (accesskit/atspi on Linux, egui 0.29). Fixed by egui bump.
-  { id = "RUSTSEC-2026-0194", reason = "local D-Bus introspection XML only; egui 0.29" },
-  { id = "RUSTSEC-2026-0195", reason = "local D-Bus introspection XML only; egui 0.29" },
 ]
 
 [licenses]
