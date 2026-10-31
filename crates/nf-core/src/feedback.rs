@@ -81,7 +81,15 @@ pub struct CalibrationProgress {
     pub waiting: Option<String>,
     /// Staged recipe position (artifacts → eyes open → eyes closed).
     pub stage: nf_feedback::CalStage,
+    /// Sleep Guard: the eyes-open step produced no awake reference (no AI
+    /// score arrived), so eyes-closed seconds cannot count.
+    pub awake_missing: bool,
+    /// Staged recipe (Sleep Guard, or Settings "Always staged").
+    pub staged: bool,
 }
+
+/// Shown when [`CalibrationProgress::awake_missing`].
+pub const AWAKE_MISSING: &str = "no awake reference: the AI model gave no score during the eyes-open step, so these seconds do not count. Cancel and restart calibration (check the model is Ready in Settings > AI)";
 
 /// The per-second result record.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -146,6 +154,8 @@ pub struct Trainer {
     /// AI guard in use (set by the session while the selected model is
     /// ready): `Some(fixed cut)` / `Some(None)` = percentile.
     pub ai_guard: Option<Option<f64>>,
+    /// Settings "Always staged" (synced by the session before calibrating).
+    pub always_staged: bool,
     cal: Option<Calibration>,
     engine: Option<Engine>,
     sample_t: f64,
@@ -167,6 +177,7 @@ impl Default for Trainer {
             stability: nf_feedback::StabilityConfig::default(),
             guard: false,
             ai_guard: None,
+            always_staged: false,
             phase: Phase::Idle,
             pads: Vec::new(),
             green_for: 0,
@@ -286,7 +297,8 @@ impl Trainer {
     /// fit check → calibrating.
     pub fn calibrate(&mut self, out: &mut Vec<Change>) {
         self.message = None;
-        self.cal = Some(Calibration::new(&self.engine_config(), self.protocol.calibration()));
+        let kind = if self.always_staged { nf_feedback::CalibrationKind::Staged } else { self.protocol.calibration() };
+        self.cal = Some(Calibration::new(&self.engine_config(), kind));
         self.calibration = Some(CalibrationProgress {
             valid_s: 0,
             wall_s: 0,
@@ -294,6 +306,8 @@ impl Trainer {
             max_s: nf_feedback::BASELINE_MAX_S as u32,
             waiting: None,
             stage: self.cal.as_ref().map_or(nf_feedback::CalStage::EyesClosed, Calibration::stage),
+            awake_missing: false,
+            staged: kind == nf_feedback::CalibrationKind::Staged,
         });
         self.set(Phase::Calibrating, out);
     }

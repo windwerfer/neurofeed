@@ -80,6 +80,11 @@ impl BandHistory {
         self.snapshots.push_back(s);
     }
 
+    /// Oldest first.
+    pub fn iter(&self) -> impl Iterator<Item = &BandSnapshot> {
+        self.snapshots.iter()
+    }
+
     pub fn latest(&self) -> Option<&BandSnapshot> {
         self.snapshots.back()
     }

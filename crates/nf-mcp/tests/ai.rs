@@ -250,3 +250,24 @@ fn batches_undo_load_and_refuse_disk_steps() {
     assert!(e.contains("cannot be rolled back"), "{e}");
     assert_eq!(run(&s, "ai.status", Value::Null)["models"][0]["state"], "ready", "nothing ran");
 }
+
+#[test]
+fn sleep_guard_says_when_the_awake_reference_is_missing() {
+    let p = Arc::new(Mutex::new(0.2));
+    let s = server(&p, None);
+    run(&s, "ai.install", json!({ "path": "/dl/pretrained_weights.pth" }));
+    run(&s, "device.connect", json!({ "id": "sim:muse_s" }));
+    run(&s, "protocol.set", json!({ "id": "sleepGuard" }));
+    adv(&s, 5.0);
+    run(&s, "feedback.start", json!({ "minutes": 3 }));
+    adv(&s, 4.0);
+    run(&s, "calibration.start", Value::Null);
+    run(&s, "ai.unload", Value::Null); // no scores during eyes open
+    adv(&s, 46.0);
+    run(&s, "ai.load", Value::Null);
+    adv(&s, 6.0);
+    let c = &run(&s, "feedback.status", Value::Null)["calibration"];
+    assert_eq!((c["stage"].as_str(), c["awake_missing"].as_bool()), (Some("eyes_closed"), Some(true)), "{c}");
+    assert!(c["waiting"].as_str().unwrap().contains("no awake reference"), "{c}");
+    assert_eq!(c["valid_s"], 0);
+}

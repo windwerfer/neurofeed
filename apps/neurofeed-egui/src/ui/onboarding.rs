@@ -47,9 +47,9 @@ const PAGES: [(&str, &str, &[&str]); 5] = [
         "Your data stays here",
         "Recordings, notes and settings are stored only on this device.",
         &[
-            "Add a pseudonymous subject id in Settings → General if you want to tell sessions apart.",
+            "Add a pseudonymous subject id in Settings > General if you want to tell sessions apart.",
             "Export a session from History (.neurofeed or EDF) to share or analyse it.",
-            "AI agents can only control the app if you switch on the bridge in Settings → About.",
+            "AI agents can only control the app if you switch on the bridge in Settings > About.",
         ],
     ),
 ];

@@ -173,6 +173,11 @@ impl eframe::App for NeuroFeedApp {
                 _ => {}
             }
         }
+        // Legacy graph_cinema: F11 toggles fullscreen (desktop).
+        if ctx.input(|i| i.key_pressed(egui::Key::F11)) {
+            let full = ctx.input(|i| i.viewport().fullscreen.unwrap_or(false));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!full));
+        }
         let state = self.session.state();
         ui::theme::follow(ctx, state.settings.appearance);
         self.audio.update(&nf_core::audio::cue(state), state.music_dir.as_deref());

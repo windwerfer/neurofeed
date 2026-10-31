@@ -149,14 +149,26 @@ fn music(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
 pub fn guard_row(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     let t = &session.state().feedback;
     let Some(g) = t.protocol.guard else { return };
+    let mute = if g.muffle_reward { " and mutes the reward" } else { "" };
+    let ai = &session.state().ai;
+    if ai.ready() {
+        let thr = match ai.settings.threshold_mode {
+            nf_core::ai::ThresholdMode::Fixed => format!("P(drowsy) above {:.2}", ai.settings.fixed_threshold),
+            nf_core::ai::ThresholdMode::Percentile => "above your calibration (p75)".into(),
+        };
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("✔ AI drowsiness guard").color(egui::Color32::from_rgb(0x66, 0xBB, 0x6A)));
+            ui.weak(format!("{} warns{mute} when {thr}. Change it in Settings > AI.", ai.settings.model().label()));
+        });
+        return;
+    }
     ui.horizontal(|ui| {
         let mut on = t.guard;
         let enabled = session.enabled("guard.set");
-        let r = ui.add_enabled(enabled.is_ok(), egui::Checkbox::new(&mut on, "Drowsiness guard"));
+        let r = ui.add_enabled(enabled.is_ok(), egui::Checkbox::new(&mut on, "Band-math drowsiness guard"));
         if r.changed() {
             out.push(Command::GuardSet { enabled: on });
         }
-        let mute = if g.muffle_reward { " and mutes the reward" } else { "" };
-        ui.weak(format!("Warns{mute} when delta rises above your calibration (p75). Band math; the AI sleep model comes later."));
+        ui.weak(format!("Warns{mute} when delta rises above your calibration (p75). Load an AI model (Settings > AI) for the AI guard."));
     });
 }

@@ -85,8 +85,18 @@ fn stream_controls(ui: &mut egui::Ui, state: &AppState, out: &mut Vec<Command>) 
         if ui.button(format!("⏹ Stop ({:.0} s)", r.duration)).clicked() {
             out.push(Command::RecordingStop);
         }
-    } else if ui.add_enabled(state.device.is_some(), egui::Button::new("⏺ Record")).clicked() {
-        out.push(Command::RecordingStart { wall_clock_unix_ms: None });
+    } else {
+        if ui.add_enabled(state.device.is_some(), egui::Button::new("⏺ Record")).clicked() {
+            out.push(Command::RecordingStart { wall_clock_unix_ms: None });
+        }
+        // Legacy asked Save / Discard after Stop; here it is saved, and
+        // Discard stays one click away until the next recording.
+        let saved = state.recording.as_ref().and_then(|r| r.saved_id).filter(|id| state.history.iter().any(|h| h.id == *id));
+        if let Some(id) = saved {
+            if ui.small_button("Discard last recording").on_hover_text("It was saved to History; this deletes it").clicked() {
+                out.push(Command::HistoryDelete { id, confirm: true });
+            }
+        }
     }
 }
 

@@ -27,6 +27,8 @@ pub struct RecordingInfo {
     pub bytes: usize,
     /// Injected wall-clock start (Unix ms, UTC), if the shell provided one.
     pub wall_clock_unix_ms: Option<f64>,
+    /// History id once saved (after stop), so the shell can offer Discard.
+    pub saved_id: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +54,7 @@ impl Recorder {
             feedback_seconds: 0,
             bytes: 12,
             wall_clock_unix_ms,
+            saved_id: None,
         };
         Self { device, writer: BodyWriter::new(), last_flush: now, feedback: Vec::new(), accel_seq: 0, info }
     }

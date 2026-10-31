@@ -272,6 +272,7 @@ impl Session {
             feedback_seconds: s.meta.feedback_seconds,
             bytes: s.body.len(),
             wall_clock_unix_ms: s.meta.started_unix_ms,
+            saved_id: Some(id),
         };
         let f = Finished { device, info, body: s.body };
         let start = f.info.wall_clock_unix_ms.map_or((1985, 1, 1, 0, 0, 0), crate::recording::civil_utc);
@@ -362,6 +363,8 @@ impl Session {
             Ok(id) => {
                 if trained {
                     self.state.feedback.saved_id = Some(id);
+                } else if let Some(r) = self.state.recording.as_mut() {
+                    r.saved_id = Some(id);
                 }
                 self.emit(Event::SessionSaved { id });
             }
@@ -712,6 +715,19 @@ impl Session {
         self.state.streaming.transport = true;
     }
 
+    /// Sleep Guard: the eyes-closed seconds only count once the awake
+    /// reference (V_clear) exists; say so instead of silently stalling.
+    fn flag_missing_clear(&mut self) {
+        let f = &mut self.state.feedback;
+        let staged_closed = f.protocol.guard_only && f.calibration.as_ref().is_some_and(|c| c.stage == nf_feedback::CalStage::EyesClosed);
+        if staged_closed && !self.live.anchors.has_clear() {
+            if let Some(c) = f.calibration.as_mut() {
+                c.awake_missing = true;
+                c.waiting.get_or_insert_with(|| crate::feedback::AWAKE_MISSING.into());
+            }
+        }
+    }
+
     /// Run the feedback state machine for every whole second up to `now`.
     fn feedback_tick(&mut self, now: f64) {
         while self.state.feedback.phase.active() && now + 1e-9 >= self.live.fb_next {
@@ -732,6 +748,7 @@ impl Session {
             let mut out = Vec::new();
             let n = self.state.feedback.results.len();
             self.state.feedback.second(t, &obs, &mut out);
+            self.flag_missing_clear();
             if let Some(r) = self.live.recorder.as_mut() {
                 self.state.feedback.results[n..].iter().for_each(|x| r.feedback(x));
             }
@@ -1004,6 +1021,7 @@ impl Session {
                         if bad.is_empty() { String::new() } else { format!("; check {}", bad.join(", ")) }
                     )));
                 }
+                self.state.feedback.always_staged = self.state.settings.always_staged;
                 self.feedback(|t, o| t.calibrate(o));
             }
             Command::CalibrationSkip => self.feedback(|t, o| t.finish_calibration(o)).map_err(CoreError::InvalidArgs)?,

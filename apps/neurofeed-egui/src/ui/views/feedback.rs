@@ -101,7 +101,16 @@ pub(super) fn card(ui: &mut egui::Ui, p: &Protocol, selected: bool, w: f32) -> e
 }
 
 fn protocols(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
-    header(ui, "Choose a protocol", "Pick what to train, then start. Calibration takes about 45 seconds.");
+    let cal = if t.protocol.guard_only {
+        format!(
+            "{} calibrates in three steps, about {} s.",
+            t.protocol.title,
+            nf_core::nf_feedback::STAGED_TIMED_S + nf_core::nf_feedback::BASELINE_VALID_S
+        )
+    } else {
+        format!("Calibration takes about {} seconds.", nf_core::nf_feedback::BASELINE_VALID_S)
+    };
+    header(ui, "Choose a protocol", &format!("Pick what to train, then start. {cal}"));
     if let Some(m) = &t.message {
         chip(ui, m, FAIR);
         ui.add_space(8.0);
@@ -249,7 +258,7 @@ fn fit_check(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Co
 fn calibrating(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<Command>) {
     let Some(c) = &t.calibration else { return };
     use nf_core::nf_feedback::CalStage;
-    let instruction = match (t.protocol.guard_only, c.stage, t.protocol.eyes) {
+    let instruction = match (c.staged, c.stage, t.protocol.eyes) {
         (true, CalStage::Artifacts, _) => "Step 1/3: sit still, eyes open, while the signal settles.",
         (true, CalStage::EyesOpen, _) => "Step 2/3: eyes open, look at a calm point — this is your 'awake' reference.",
         (true, CalStage::EyesClosed, _) => "Step 3/3: close your eyes and relax — this sets your drowsiness baseline.",
@@ -264,9 +273,18 @@ fn calibrating(ui: &mut egui::Ui, session: &Session, t: &Trainer, out: &mut Vec<
     );
     ui.weak(format!("{} s elapsed · stops at {} s even if the signal was poor", c.wall_s, c.max_s));
     ui.add_space(10.0);
-    match &c.waiting {
-        Some(w) => chip(ui, &format!("Paused: {w}"), FAIR),
-        None => chip(ui, "Collecting", GOOD),
+    if c.awake_missing {
+        egui::Frame::group(ui.style()).stroke(Stroke::new(1.5_f32, BAD)).inner_margin(10.0).show(ui, |ui| {
+            ui.set_max_width(520.0);
+            ui.label(RichText::new("No awake reference").strong().color(BAD));
+            ui.label("The AI model gave no score during the eyes-open step, so Sleep Guard cannot learn your drowsiness baseline and these seconds do not count.");
+            ui.weak("Cancel, check the model is Ready (Settings > AI), then calibrate again.");
+        });
+    } else {
+        match &c.waiting {
+            Some(w) => chip(ui, &format!("Paused: {w}"), FAIR),
+            None => chip(ui, "Collecting", GOOD),
+        }
     }
     ui.add_space(16.0);
     ui.horizontal(|ui| {

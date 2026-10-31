@@ -30,11 +30,21 @@ pub struct UserSettings {
     pub debug: bool,
     /// Draw gesture markers (blink / clench) on trust plots.
     pub gesture_markers: bool,
+    /// Run the staged calibration (artifacts, eyes open, baseline) for
+    /// every protocol, not only Sleep Guard (legacy "Always staged").
+    pub always_staged: bool,
 }
 
 impl Default for UserSettings {
     fn default() -> Self {
-        Self { appearance: Appearance::Dark, subject: String::new(), onboarded: false, debug: true, gesture_markers: true }
+        Self {
+            appearance: Appearance::Dark,
+            subject: String::new(),
+            onboarded: false,
+            debug: true,
+            gesture_markers: true,
+            always_staged: false,
+        }
     }
 }
 
@@ -51,6 +61,8 @@ pub struct SettingsPatch {
     pub debug: Option<bool>,
     #[serde(default)]
     pub gesture_markers: Option<bool>,
+    #[serde(default)]
+    pub always_staged: Option<bool>,
 }
 
 /// Apply `p` to `s`, validating first (nothing changes on error).
@@ -75,6 +87,9 @@ pub fn apply(s: &mut UserSettings, p: &SettingsPatch) -> Result<(), String> {
     }
     if let Some(v) = p.debug {
         s.debug = v;
+    }
+    if let Some(v) = p.always_staged {
+        s.always_staged = v;
     }
     if let Some(v) = p.gesture_markers {
         s.gesture_markers = v;

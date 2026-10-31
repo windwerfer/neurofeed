@@ -178,3 +178,20 @@ Settings is a section rail (General, Devices, Training, AI, Recording, About) wi
 - Batches: `ai.set` rolls back with the rest of the state; `ai.load`/`ai.unload` are undone by reloading or unloading the model that was loaded before the batch. `ai.install`/`ai.remove` are refused inside a batch before any step runs: they write or delete model files (a download keeps going on its own thread), so they cannot be rolled back.
 - REVE is gated on Hugging Face: import only; CBraMod downloads (sha256-verified, .part + rename).
 - Verified: CBraMod vs Python reference max_abs 1.6e-7; REVE runs on the real weights (dim 512).
+
+## UI pass vs legacy Flutter (2026-10-31)
+
+- Sleep Guard calibration shows a red "No awake reference" banner when the
+  eyes-open step produced no AI score; those seconds do not count.
+- Recordings auto-save; the top bar offers "Discard last recording" instead of
+  the legacy Save/Discard modal.
+- Bands defaults to the legacy "Over time" chart (60 s, chosen electrodes,
+  toggleable bands); egui's bar view stays as an option.
+- Settings > Training > Calibration "Always staged" ported (off by default).
+- F11 toggles fullscreen (legacy cinema mode). UI strings use ">" (font lacks the arrow).
+- Not ported yet: crash recovery of interrupted sessions; history multi-select,
+  bulk export and thumbnails; opening a recording in the graph views; Movement
+  (IMU) and optical overview panes; Muse AUX channels / AUX recording;
+  Follow/Inspect scrolling; moving the save folder; debug feature override;
+  "Reduce audio stutter"; Crown quality source; eye up/down markers.
+  Android-only items (multicast lock, foreground capture) are N/A.

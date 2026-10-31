@@ -52,6 +52,7 @@ const CARDS: &[(Section, &str, &str, CardFn)] = &[
     (Section::Devices, "Devices", "muse crown bluetooth scan connect simulator", |ui, s, o, _| super::devices::show(ui, s, o)),
     (Section::Devices, "Mains notch", "notch 50 60 hz mains power line filter", |ui, s, o, _| mains(ui, s, o)),
     (Section::Training, "Band Stability", "stability window difficulty steadier", |ui, s, o, _| stability(ui, s, o)),
+    (Section::Training, "Calibration", "calibration staged simple artifacts eyes open baseline", |ui, s, o, _| calibration(ui, s, o)),
     (Section::Training, "Protocols", "protocol builder custom new edit", |ui, s, o, _| protocols(ui, s, o)),
     (Section::Ai, "AI sleep guard", "spur cbramod reve model sleep drowsiness import download scorer threshold", |ui, s, o, _| {
         super::ai::show(ui, s, o)
@@ -190,6 +191,17 @@ fn protocols(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
     if ui.button("Open Feedback").clicked() {
         out.push(Command::ViewSet { view: nf_core::View::Feedback });
     }
+}
+
+fn calibration(ui: &mut egui::Ui, session: &Session, out: &mut Vec<Command>) {
+    let mut on = session.state().settings.always_staged;
+    if ui.checkbox(&mut on, "Always staged").changed() {
+        set(out, SettingsPatch { always_staged: Some(on), ..Default::default() });
+    }
+    ui.weak(format!(
+        "Off: Sleep Guard runs the staged sequence (15 s artifacts, 30 s eyes open, then the baseline); other protocols only collect the {} s baseline of clean signal. On: every protocol runs the staged sequence first, which also gives the AI guard its awake reference.",
+        nf_core::nf_feedback::BASELINE_VALID_S
+    ));
 }
 
 fn storage(ui: &mut egui::Ui, session: &Session) {
